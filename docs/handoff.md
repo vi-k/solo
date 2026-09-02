@@ -134,7 +134,20 @@ Cancelled` как `handler`, стек `manual` у `cancel()`, неотменяе
 стоящую задачу, поэтому пара сценариев 1.x даёт один порт с проверкой
 `identical`. Сдвиг семантики против `Policy.droppable`: дубликат отменяется
 до `add`, и в журнале стоит `dropped Cancelled(manual)` без описания
-`duplicate`. Следующая — задача 16.
+`duplicate`. Задача 16 перенесла сценарии 1.x «Inner events» (21 тест) и
+«Check state on yield» (`test/scenario_children_test.dart`) на фикстуре
+`addNested`, где все ожидания идут через `pause` (`ctx.guard`): отменённое
+тело кончается в момент отметки, как в 1.x. Перенос 1.x завершён. Все
+ожидания выведены из правил движка до прогона и совпали с ним: правок ни в
+движке, ни в ожиданиях не понадобилось. Сдвиги семантики против 1.x: хука
+`checkStateOnExternalChange` нет, работает тип, поэтому `test2` переживает
+внешний `Working` и умирает позже на `stateAs<Preparing>`; собственный
+`keepWhile` ребёнка на `emit` не проверяется (проверка ленивая), поэтому
+вариант «Child yield an invalid state» кончается `Done`. Три сценария из
+шести в группе «Check state on yield» уже покрыты `test/children_test.dart`
+(задача 10), перенесены остальные три. `async.elapsed` после `flushTimers`
+считает и таймеры брошенных ожиданий, поэтому он больше момента последней
+строки журнала — как и в задаче 14. Следующая — задача 17.
 
 ## Открытые вопросы
 
@@ -164,7 +177,7 @@ Cancelled` как `handler`, стек `manual` у `cancel()`, неотменяе
   целевые (задача 1b): `meta: ^1.15.0`; dev — `fake_async: ^1.3.1`,
   `lints: ^5.1.1`, `test: ^1.26.3`. `clock` и `collection` убраны вместе с
   кодом 1.x.
-- `dart test` из `packages/solo`: 132 теста, все зелёные (4 — типы `Outcome`,
+- `dart test` из `packages/solo`: 156 тестов, все зелёные (4 — типы `Outcome`,
   3 — каркас `SoloBase` в `test/solo_base_test.dart`, 7 — последовательный
   движок в `test/sequential_test.dart`, 7 — правила старта в
   `test/start_rules_test.dart`, 9 — внешнее состояние, переоценка и ленивая
@@ -178,7 +191,8 @@ Cancelled` как `handler`, стек `manual` у `cancel()`, неотменяе
   10 — закрытие на сдвигах времени в `test/scenario_closing_test.dart`,
   13 — внешнее состояние на сдвигах времени в
   `test/scenario_external_test.dart`, 18 — политики через явные операции с
-  очередью в `test/scenario_queue_test.dart`).
+  очередью в `test/scenario_queue_test.dart`, 24 — вложенные задачи на
+  сдвигах времени в `test/scenario_children_test.dart`).
 - `dart analyze` из `packages/solo` чист; временных `// ignore:` в `lib/`
   не осталось: два последних (`comment_references` на `[close]` у
   `isClosed`, `unused_element` на `_drain`) сняты в задаче 12 вместе с
