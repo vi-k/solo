@@ -1,0 +1,23 @@
+name: flutter_solo
+description: >-
+  Flutter integration for solo: a ValueListenable face for Solo
+  controllers.
+version: 1.0.0
+
+environment:
+  sdk: ^3.6.0
+  flutter: '>=3.27.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  solo: ^1.0.0
+
+dependency_overrides:
+  solo:
+    path: ../solo
+
+dev_dependencies:
+  flutter_lints: ^5.0.0
+  flutter_test:
+    sdk: flutter

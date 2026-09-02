@@ -173,7 +173,34 @@ Cancelled` как `handler`, стек `manual` у `cancel()`, неотменяе
 `const Ready()` (линт `avoid_redundant_argument_values`; значение то же), а
 ссылка `[CameraController.reopen]` в доке `Broken` записана обратными
 кавычками (`camera_state.dart` не импортирует контроллер, `comment_references`
-её не разрешает). Следующая — задача 19 (`flutter_solo`).
+её не разрешает). Задача 19 добавила пакет `packages/flutter_solo`
+(`flutter_solo`, 1.0.0): `SoloListenable<S> extends Solo<S> implements
+ValueListenable<S>` — `value` зеркалит `state`, `addListener`/
+`removeListener` держат список слушателей, `publish` зовёт слушателей
+синхронно в порядке подписки после `super.publish` (событие уходит в
+стрим), `close` по образцу `Solo.close` запоминает футуру в `Completer`
+до `super.close()` и чистит список слушателей в `.then` — повторный и
+реентерабельный `close()` возвращают один и тот же объект (закреплено
+тестом на `identical`). `pubspec.yaml`: `solo: ^1.0.0` плюс
+`dependency_overrides: solo: path: ../solo` — `flutter pub get` принял
+связку без возражений, откат на путь без версии не понадобился.
+`analysis_options.yaml` — копия из `packages/solo` с `include:
+package:flutter_lints/flutter.yaml`; `flutter analyze` не назвал ни
+одного правила removed/deprecated или конфликтующего с `flutter.yaml`,
+список правил не менялся. TDD: `test/solo_listenable_test.dart` — шесть
+тестов брифа плюс седьмой на идентичность футуры `close()`; RED —
+компиляция падает без `flutter_solo.dart`, GREEN — все 7 зелёные. Сверх
+брифа: три места в тексте теста, где было два вызова подряд на одном
+receiver (`counter.addListener(...); counter.set(1);` дважды и
+`ctx.emit(5); ctx.emit(6);`), переписаны через каскад `..` — иначе
+`cascade_invocations` (унаследован из `packages/solo/analysis_options.yaml`)
+не давал чистый `flutter analyze`; порядок вызовов и поведение не
+изменились. Добавлены `README.md` (по-английски, с примером
+`ValueListenableBuilder`), `CHANGELOG.md` (`## 1.0.0`), `LICENSE` —
+копия корневого. Обновлена таблица пакетов в корневом `README.md`.
+`.gitignore` дополнен строкой `build/`: `flutter test`/`flutter analyze`
+создают эту папку в `packages/flutter_solo`, раньше Flutter-пакетов в
+монорепозитории не было. Следующая — задача 20 (документы).
 
 ## Открытые вопросы
 
@@ -195,9 +222,12 @@ Cancelled` как `handler`, стек `manual` у `cancel()`, неотменяе
 - Папка репозитория переименована владельцем в `solo`
   (`/Users/user/development/my/solo`).
 - Раскладка: корень — `AGENTS.md`, `CLAUDE.md`, `docs/`, `LICENSE`,
-  `README.md`, `.vscode/`; пакет — `packages/solo` со своими `LICENSE`,
-  `README.md`, `CHANGELOG.md`, `analysis_options.yaml`, `lib/` и `test/`.
-  `TODO.txt` и `example/conveyor_example.dart` удалены в задаче 1b.
+  `README.md`, `.vscode/`; пакет `packages/solo` со своими `LICENSE`,
+  `README.md`, `CHANGELOG.md`, `analysis_options.yaml`, `lib/`, `test/` и
+  `example/`; пакет `packages/flutter_solo` (задача 19) со своими
+  `LICENSE`, `README.md`, `CHANGELOG.md`, `analysis_options.yaml`, `lib/` и
+  `test/`. `TODO.txt` и `example/conveyor_example.dart` удалены в
+  задаче 1b.
 - Dart SDK локально 3.13.0, Flutter 3.47.0 (fvm). `packages/solo/pubspec.yaml`:
   `name: solo`, `version: 1.0.0`, `environment: sdk: ^3.6.0`; зависимости —
   целевые (задача 1b, подтверждены `dart pub outdated` в задаче 17):
@@ -248,6 +278,17 @@ Cancelled` как `handler`, стек `manual` у `cancel()`, неотменяе
   `fake_async: ^1.3.1`, `lints: ^5.1.1`, `test: ^1.26.3`. Не покрыты
   тестами ветка отказа железа внутри `reopen` (`FakeCameraHardware` не
   бросает из операций) и `resetFocusPoint`.
+- `packages/flutter_solo` (задача 19), `name: flutter_solo`,
+  `version: 1.0.0`, `environment: sdk: ^3.6.0, flutter: '>=3.27.0'`;
+  `solo: ^1.0.0` c `dependency_overrides: solo: path: ../solo` — принято
+  `flutter pub get` без возражений. Dev: `flutter_lints: ^5.0.0`,
+  `flutter_test: sdk: flutter`. Проверяется из своей папки: `flutter
+  analyze` — «No issues found!», `flutter test` — 7 тестов в
+  `test/solo_listenable_test.dart`, все зелёные (шесть из брифа плюс тест
+  на идентичность футуры повторного `close()`), `dart format
+  --set-exit-if-changed .` — 0 правок. `analysis_options.yaml` — копия
+  `packages/solo` с `include: package:flutter_lints/flutter.yaml`; ни
+  одно правило не снято, конфликтов с `flutter.yaml` не нашлось.
 - `packages/solo/README.md` устарел: на русском, про провайдер состояния
   1.x. Переписывается в задаче 20.
 - Пункты `packages/solo/TODO.txt`, не вошедшие в спецификацию (файл удалён
