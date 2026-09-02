@@ -1,4 +1,4 @@
-import 'package:conveyor/conveyor.dart';
+import 'package:solo/conveyor.dart';
 
 import 'state.dart';
 

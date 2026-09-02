@@ -1,9 +1,11 @@
-name: conveyor
-description: Conveyor
+name: solo
+description: >-
+  One job at a time: sequential jobs with exclusive state ownership,
+  declarative rules and cooperative cancellation. Pure Dart.
 version: 1.0.0
 
 environment:
-  sdk: ^3.3.4
+  sdk: ^3.6.0
 
 dependencies:
   clock: ^1.1.1

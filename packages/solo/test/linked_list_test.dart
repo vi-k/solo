@@ -1,7 +1,7 @@
 @Timeout(Duration(seconds: 5))
 library;
 
-import 'package:conveyor/src/linked_list/linked_list.dart';
+import 'package:solo/src/linked_list/linked_list.dart';
 import 'package:test/test.dart';
 
 final class Item extends LinkedListItem<Item> {

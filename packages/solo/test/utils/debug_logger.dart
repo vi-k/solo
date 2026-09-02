@@ -1,4 +1,4 @@
-import 'package:conveyor/src/debug_logger.dart';
+import 'package:solo/src/debug_logger.dart';
 
 final class TestConveyorDebugLogger extends ConveyorDebugLogger {
   final String prefix;

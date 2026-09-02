@@ -1,4 +1,4 @@
-import 'package:conveyor/src/conveyor.dart';
+import 'package:solo/src/conveyor.dart';
 
 import '../../utils/debug_logger.dart';
 import 'event.dart';

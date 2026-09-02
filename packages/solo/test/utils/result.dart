@@ -1,4 +1,4 @@
-import 'package:conveyor/conveyor.dart';
+import 'package:solo/conveyor.dart';
 
 extension ConveyorResultExt on ConveyorResult {
   void saveToResults(

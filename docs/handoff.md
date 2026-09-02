@@ -45,9 +45,8 @@
 
 ## В работе прямо сейчас
 
-Ничего. План написан, реализация не начата. Новая сессия при одобренном
-плане начинает с задачи 1; если владелец правит решения плана, сначала
-обновить план и его шапку.
+Задача 1 плана выполнена: пакет переименован в `solo` 1.0.0. Следующая —
+задача 1b (удаление реализации 1.x).
 
 ## Открытые вопросы
 
@@ -71,16 +70,17 @@
 - Раскладка: корень — `AGENTS.md`, `CLAUDE.md`, `docs/`, `LICENSE`,
   `README.md`, `.vscode/`; пакет — `packages/solo` со своими `LICENSE`,
   `README.md`, `CHANGELOG.md`, `analysis_options.yaml`, `TODO.txt`.
-- Dart SDK локально 3.13.0, Flutter 3.47.0 (fvm). В `pubspec.yaml` пока
-  `^3.3.4`; по решению владельца от 2026-09-02 пол SDK во всех пакетах —
-  `^3.6.0`, ставится в задаче 1 плана. Зависимости поднимаются в задаче
-  1b под Flutter 3.27 (первый с Dart 3.6): `meta ^1.15.0`,
-  `fake_async ^1.3.1`, `test ^1.26.3`, `lints ^5.1.1`,
-  `flutter_lints ^5.0.0`; правило — в «Глобальных ограничениях» плана.
-- `dart test` из `packages/solo`: 123 теста, зелёные (на начало сессии).
-- `dart analyze` из `packages/solo`: одно info в
-  `lib/src/linked_list/linked_list.dart` (`parameter_assignments`), уйдёт
-  вместе со старым кодом в задаче 1b.
+- Dart SDK локально 3.13.0, Flutter 3.47.0 (fvm). `packages/solo/pubspec.yaml`:
+  `name: solo`, `version: 1.0.0`, `environment: sdk: ^3.6.0` (задача 1
+  выполнена). Зависимости пока старые (1.x); поднимаются в задаче 1b под
+  Flutter 3.27 (первый с Dart 3.6): `meta ^1.15.0`, `fake_async ^1.3.1`,
+  `test ^1.26.3`, `lints ^5.1.1`; правило — в «Глобальных ограничениях» плана.
+- `dart test` из `packages/solo`: 123 теста, зелёные.
+- `dart analyze` из `packages/solo`: два info — старое в
+  `lib/src/linked_list/linked_list.dart` (`parameter_assignments`) и новое в
+  `test/test_conveyor_test.dart` (`directives_ordering`, из-за переименования
+  `package:conveyor/` → `package:solo/` в задаче 1); оба в коде, который
+  уходит целиком в задаче 1b.
 - `packages/solo/README.md` устарел: на русском, про провайдер состояния
   1.x. Переписывается в задаче 20.
 - `packages/solo/example/conveyor_example.dart` и `packages/solo/TODO.txt`

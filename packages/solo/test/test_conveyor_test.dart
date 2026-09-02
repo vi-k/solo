@@ -5,9 +5,9 @@ library;
 
 import 'dart:async';
 
-import 'package:conveyor/conveyor.dart';
-import 'package:conveyor/src/debug_logger.dart';
-import 'package:conveyor/utils.dart';
+import 'package:solo/conveyor.dart';
+import 'package:solo/src/debug_logger.dart';
+import 'package:solo/utils.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart';
 
