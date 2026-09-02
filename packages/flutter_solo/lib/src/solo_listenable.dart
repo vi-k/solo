@@ -16,12 +16,15 @@ class SoloListenable<S extends Object> extends Solo<S>
   /// Creates a controller in [initialState].
   SoloListenable(super.initialState);
 
+  /// The current state; the same object as [state].
   @override
   S get value => state;
 
+  /// Adds [listener], called on every state change until removed.
   @override
   void addListener(VoidCallback listener) => _listeners.add(listener);
 
+  /// Removes one registration of [listener]; unknown listeners are ignored.
   @override
   void removeListener(VoidCallback listener) => _listeners.remove(listener);
 
