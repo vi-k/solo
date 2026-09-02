@@ -112,7 +112,8 @@ void main() {
       final other = TestSolo();
       final foreign = other.job<TestState, void>((ctx) async {});
       expect(() => solo.add(foreign), throwsArgumentError);
-      other.cancelAll();
+      other.close();
+      async.flushMicrotasks();
     });
   });
 

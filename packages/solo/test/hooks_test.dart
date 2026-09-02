@@ -1,6 +1,8 @@
 @Timeout(Duration(seconds: 5))
 library;
 
+import 'dart:async';
+
 import 'package:fake_async/fake_async.dart';
 import 'package:solo/solo.dart';
 import 'package:test/test.dart';
@@ -64,6 +66,65 @@ void main() {
     });
   });
 
+  test('a throwing onFinish hook still completes done', () {
+    final journal = JournalObserver();
+    final errors = <String>[];
+    Outcome<void>? outcome;
+    var closed = false;
+    // The hook's error becomes an unhandled zone error; the zone keeps it
+    // out of the test output and lets the assertions below name it.
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          SoloBase.observer = journal;
+          final solo = _ThrowingFinish();
+          try {
+            solo
+                .run<TestState, void>(key: 'job', (ctx) async {})
+                .done
+                .then((value) => outcome = value);
+            async.flushMicrotasks();
+            solo.close().then((_) => closed = true);
+            async.flushTimers();
+          } finally {
+            SoloBase.observer = null;
+          }
+        });
+      },
+      (error, stackTrace) => errors.add('$error'),
+    );
+    expect(outcome, isA<Done<void>>());
+    expect(closed, isTrue);
+    expect(journal.take(), [
+      '[job] started',
+      '[job] finished Done(null)',
+      'closed',
+    ]);
+    expect(errors, ['Bad state: onFinish']);
+  });
+
+  test('a throwing onClose observer still completes close', () {
+    final errors = <String>[];
+    var closed = false;
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          SoloBase.observer = _ThrowingClose();
+          final solo = Solo<TestState>(const Initial());
+          try {
+            solo.close().then((_) => closed = true);
+            async.flushTimers();
+          } finally {
+            SoloBase.observer = null;
+          }
+        });
+      },
+      (error, stackTrace) => errors.add('$error'),
+    );
+    expect(closed, isTrue);
+    expect(errors, ['Bad state: onClose']);
+  });
+
   test('SoloBase.debug receives engine traces', () {
     final traces = <String>[];
     SoloBase.debug = traces.add;
@@ -82,6 +143,20 @@ void main() {
     expect(traces, contains('state: Preparing(progress: 0)'));
     expect(traces, contains('Job(job) finished: Done(null)'));
   });
+}
+
+/// Throws from the instance hook the engine calls while finishing a job.
+final class _ThrowingFinish extends Solo<TestState> {
+  _ThrowingFinish() : super(const Initial());
+
+  @override
+  void onFinish(Job<Object?> job) => throw StateError('onFinish');
+}
+
+/// Throws from the observer hook the engine calls while closing.
+final class _ThrowingClose extends SoloObserver {
+  @override
+  void onClose(SoloBase<Object> solo) => throw StateError('onClose');
 }
 
 final class _Hooked extends Solo<TestState> {

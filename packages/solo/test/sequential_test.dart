@@ -140,6 +140,8 @@ void main() {
       async.flushMicrotasks();
 
       expect(solo.idleInOnFinish, [true]);
+      solo.close();
+      async.flushTimers();
     });
   });
 }

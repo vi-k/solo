@@ -127,7 +127,9 @@ final class CameraController extends Solo<CameraState> {
   /// Replaces queued focus jobs of both kinds: a group of keys, so the
   /// queue is managed directly instead of through a policy.
   Job<void> setFocusPoint(Point<double> point) {
-    queue.removeWhere((job) => (job.key! as CameraKey).touchesFocus);
+    queue.removeWhere(
+      (job) => job.key is CameraKey && (job.key! as CameraKey).touchesFocus,
+    );
     return run<Ready, void>(
       key: CameraKey.setFocusPoint,
       describe: () => '$point',
@@ -141,7 +143,9 @@ final class CameraController extends Solo<CameraState> {
 
   /// Restores automatic focus, replacing queued focus jobs of both kinds.
   Job<void> resetFocusPoint() {
-    queue.removeWhere((job) => (job.key! as CameraKey).touchesFocus);
+    queue.removeWhere(
+      (job) => job.key is CameraKey && (job.key! as CameraKey).touchesFocus,
+    );
     return run<Ready, void>(
       key: CameraKey.resetFocusPoint,
       canStart: (state) => !state.paused,

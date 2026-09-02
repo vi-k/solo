@@ -1,6 +1,8 @@
 @Timeout(Duration(seconds: 5))
 library;
 
+import 'dart:async';
+
 import 'package:solo/solo.dart';
 import 'package:test/test.dart';
 
@@ -142,6 +144,47 @@ void main() {
       });
       async.elapse(const Duration(milliseconds: 50));
       solo.current!.cancel();
+      async.elapse(const Duration(milliseconds: 50));
+      expect(journal.take(), [
+        '[parent] started',
+        '> [child] started',
+        '>> [grandchild] started',
+        '>> [grandchild] finished Cancelled(parent)',
+        '> [child] finished Cancelled(parent)',
+        '[parent] finished Cancelled(manual)',
+      ]);
+    });
+  });
+
+  test('cancelling the parent marks children before itself', () {
+    runSolo((solo, journal, async) {
+      // Registered parent first, deepest child last: the recorded order can
+      // only come from the order in which the marks were set.
+      final marked = <String>[];
+      solo.run<TestState, void>(key: 'parent', (ctx) async {
+        unawaited(ctx.job.whenCancelled.then((_) => marked.add('parent')));
+        final child = solo.job<TestState, void>(key: 'child', (ctx) async {
+          unawaited(ctx.job.whenCancelled.then((_) => marked.add('child')));
+          final grandchild = solo.job<TestState, void>(
+            key: 'grandchild',
+            (ctx) async {
+              unawaited(
+                ctx.job.whenCancelled.then((_) => marked.add('grandchild')),
+              );
+              await delay(100);
+              ctx.check();
+            },
+          );
+          await ctx.run(grandchild).done;
+          ctx.check();
+        });
+        await ctx.run(child).done;
+        ctx.check();
+      });
+      async.elapse(const Duration(milliseconds: 50));
+      solo.current!.cancel();
+      async.flushMicrotasks();
+      expect(marked, ['grandchild', 'child', 'parent']);
       async.elapse(const Duration(milliseconds: 50));
       expect(journal.take(), [
         '[parent] started',

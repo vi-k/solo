@@ -25,6 +25,43 @@ void main() {
     });
   });
 
+  test('guard stops waiting when the action cancels the job itself', () {
+    runSolo((solo, journal, async) {
+      solo.run<TestState, void>(key: 'job', (ctx) async {
+        await ctx.guard(() {
+          solo.current!.cancel();
+          return delay(100);
+        });
+        ctx.emit(const Preparing());
+      });
+      async.flushMicrotasks();
+      expect(journal.take(), [
+        '[job] started',
+        '[job] finished Cancelled(manual)',
+      ]);
+      expect(async.elapsed, Duration.zero);
+    });
+  });
+
+  test('guard stops waiting when the action drops the job by a rule', () {
+    runSolo((solo, journal, async) {
+      solo.run<NotDisposed, void>(key: 'job', (ctx) async {
+        await ctx.guard(() {
+          solo.externalSetState(const Disposed());
+          return delay(100);
+        });
+        ctx.check();
+      });
+      async.flushMicrotasks();
+      expect(journal.take(), [
+        '[job] started',
+        'state: Disposed()',
+        '[job] finished Cancelled(rules: is not NotDisposed)',
+      ]);
+      expect(async.elapsed, Duration.zero);
+    });
+  });
+
   test('guard does not start the action when already cancelled', () {
     runSolo((solo, journal, async) {
       var started = false;

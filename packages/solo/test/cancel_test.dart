@@ -24,6 +24,23 @@ void main() {
     });
   });
 
+  test('whenCancelled completes for a job dropped from the queue', () {
+    runSolo((solo, journal, async) {
+      solo.run<TestState, void>(key: 'first', (ctx) async => delay(100));
+      final second = solo.run<TestState, void>(key: 'second', (ctx) async {});
+      async.flushMicrotasks();
+      var cancelled = false;
+      second.whenCancelled.then((_) => cancelled = true);
+      second.cancel();
+      async.flushMicrotasks();
+      expect(cancelled, isTrue);
+      expect(journal.take(), [
+        '[first] started',
+        '[second] dropped Cancelled(manual)',
+      ]);
+    });
+  });
+
   test('cancel of a running job fixes the outcome and waits for the body', () {
     runSolo((solo, journal, async) {
       final job = solo.run<TestState, int>(key: 'job', (ctx) async {

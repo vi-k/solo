@@ -153,6 +153,12 @@ final class _JobContext<S extends Object, W extends S, R>
     }
 
     _job._onCancel.add(onCancel);
+    // The action may have cancelled this job while it ran: `_markCancelled`
+    // already emptied `_onCancel`, so the registration above would never be
+    // called and the body would wait for the full action for nothing.
+    if (_job._pendingCancel != null) {
+      onCancel();
+    }
     unawaited(forward());
     return completer.future;
   }
@@ -190,7 +196,7 @@ final class _JobContext<S extends Object, W extends S, R>
       );
       return child;
     }
-    impl._start(_job.level + 1);
+    impl._start(impl.level);
     return child;
   }
 

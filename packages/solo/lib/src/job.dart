@@ -40,7 +40,8 @@ abstract interface class Job<T> {
   /// cancellation stack trace, or throws the body's error.
   Future<T> get value;
 
-  /// Completes when the job is marked cancelled, before the body finishes.
+  /// Completes when the job is marked cancelled, before the body finishes,
+  /// or, for a job cancelled before it started, when it is dropped.
   /// Never completes for a job that finishes without cancellation.
   Future<void> get whenCancelled;
 
@@ -169,8 +170,14 @@ final class _Job<S extends Object, W extends S, T> implements Job<T> {
     _status = _JobStatus.running;
     this.level = level;
     _solo._running.add(this);
-    _solo._notifyStart(this);
-    unawaited(_execute(_JobContext<S, W, T>(this)));
+    // A throwing `onStart` is an observer's or a hook's problem, not the
+    // job's: the body still runs, so the job still finishes and the engine
+    // still pumps. The error escapes to whoever started the job.
+    try {
+      _solo._notifyStart(this);
+    } finally {
+      unawaited(_execute(_JobContext<S, W, T>(this)));
+    }
   }
 
   Future<void> _execute(_JobContext<S, W, T> ctx) async {
@@ -224,8 +231,18 @@ final class _Job<S extends Object, W extends S, T> implements Job<T> {
   void _finish(Outcome<T> outcome) {
     _outcome = outcome;
     _status = _JobStatus.finished;
-    _solo._onJobFinished(this);
-    _done.complete(outcome);
+    // A job cancelled before it started never went through `_markCancelled`,
+    // so `whenCancelled` is still open here.
+    if (outcome is Cancelled && !_cancelled.isCompleted) {
+      _cancelled.complete();
+    }
+    // A throwing `onFinish` must not leave `done` hanging: `close` and
+    // `cancelAll` wait for it. The error escapes after the completer is done.
+    try {
+      _solo._onJobFinished(this);
+    } finally {
+      _done.complete(outcome);
+    }
   }
 
   void _markCancelled(Cancelled cancelled) {

@@ -182,6 +182,11 @@ abstract class SoloBase<S extends Object> {
 
   /// Sets the state from outside any job: hardware listeners, forced
   /// transitions. Re-evaluates the rules of every running job.
+  ///
+  /// Not blocked by [close]: after closing it still changes [state], calls
+  /// `onChange` and re-evaluates the rules, while a subclass channel that is
+  /// already closed — `Solo`'s stream, for one — drops the event. Stop the
+  /// source of external states before closing the controller.
   @protected
   void externalSetState(S state) {
     _debug(() => 'externalSetState: $state');
@@ -237,8 +242,13 @@ abstract class SoloBase<S extends Object> {
 
   void _finishClose(Completer<void> completer) {
     _debug(() => 'closed');
-    observer?.onClose(this);
-    completer.complete();
+    // A throwing `onClose` must not leave `close()` hanging; the error
+    // escapes after the completer is done.
+    try {
+      observer?.onClose(this);
+    } finally {
+      completer.complete();
+    }
   }
 
   /// Clears the queue and cancels the current job; `force` affects only the

@@ -112,6 +112,18 @@ void main() {
     });
   });
 
+  test('whenCancelled completes for a job added after close', () {
+    runSolo((solo, journal, async) {
+      solo.close();
+      final job = solo.run<TestState, void>(key: 'late', (ctx) async {});
+      var cancelled = false;
+      job.whenCancelled.then((_) => cancelled = true);
+      async.flushMicrotasks();
+      expect(cancelled, isTrue);
+      expect(journal.take(), ['[late] dropped Cancelled(closed)', 'closed']);
+    });
+  });
+
   test('close re-entered from a hook returns the same future', () {
     fakeAsync((async) {
       final solo = _CloseOnFinish()

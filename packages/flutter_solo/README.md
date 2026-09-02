@@ -19,6 +19,7 @@ dependencies:
 ## Usage
 
 ```dart
+import 'package:flutter/material.dart';
 import 'package:flutter_solo/flutter_solo.dart';
 
 sealed class CounterState {}
