@@ -57,10 +57,15 @@
 (`test/start_rules_test.dart`): порядок проверок тип → `canStart` →
 `keepWhile`, `Cancelled(rules, started: false)` с описаниями `'is not W'`,
 `'canStart'`, `'keepWhile'` — движок задачи 4 уже это реализует, правки не
-понадобились. Заглушки до своих задач: политики кроме `sequential` (9),
-`ctx.run` (10), `ctx.guard` (11) бросают `UnimplementedError`; `close`
-появится в задаче 12. Следующая — задача 6 (внешнее состояние, переоценка
-и ленивая самопроверка).
+понадобились. Задача 6 закрепила тестами внешнее состояние, переоценку
+правил и ленивую самопроверку (`test/external_state_test.dart`):
+`externalSetState` переоценивает работающие задачи кроме излучившей,
+излучившая проверяется лениво на следующем `ctx.state`/`check`/`stateAs`,
+стек `rules` берётся из последнего изменения состояния — движок задачи 4
+уже это реализует, правки не понадобились. Заглушки до своих задач:
+политики кроме `sequential` (9), `ctx.run` (10), `ctx.guard` (11) бросают
+`UnimplementedError`; `close` появится в задаче 12. Следующая — задача 7
+(отмена).
 
 До задачи 12 `runSolo` в `finally` зовёт `solo.cancelAll()` вместо
 `solo.close()`; вернуть `close` там же, где он появится.
@@ -93,10 +98,11 @@
   целевые (задача 1b): `meta: ^1.15.0`; dev — `fake_async: ^1.3.1`,
   `lints: ^5.1.1`, `test: ^1.26.3`. `clock` и `collection` убраны вместе с
   кодом 1.x.
-- `dart test` из `packages/solo`: 21 тест, все зелёные (4 — типы `Outcome`,
+- `dart test` из `packages/solo`: 30 тестов, все зелёные (4 — типы `Outcome`,
   3 — каркас `SoloBase` в `test/solo_base_test.dart`, 7 — последовательный
   движок в `test/sequential_test.dart`, 7 — правила старта в
-  `test/start_rules_test.dart`).
+  `test/start_rules_test.dart`, 9 — внешнее состояние, переоценка и ленивая
+  самопроверка в `test/external_state_test.dart`).
 - `dart analyze` из `packages/solo` чист; временных `// ignore:` осталось
   два, оба с комментарием о причине: `comment_references` на dartdoc-ссылке
   `[close]` у `isClosed` в `lib/src/solo_base.dart` и `unused_element` на
