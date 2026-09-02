@@ -108,15 +108,26 @@
 
 ### 3.1. Контроллер
 
+Иерархия линейная. База — движок и состояние, наследники добавляют способ
+доставки изменений:
+
+```
+SoloBase<S>        движок, state, очередь, хуки, externalSetState, close
+  └ Solo<S>        + stream                                   (пакет solo)
+      └ SoloListenable<S> implements ValueListenable<S>
+                   + value, addListener, removeListener      (пакет flutter_solo)
+```
+
 ```dart
-class Solo<S extends Object> {
-  Solo(S initialState);
+abstract class SoloBase<S extends Object> {
+  SoloBase(S initialState);
 
   S get state;
-  Stream<S> get stream;          // broadcast, sync
-  void addListener(void Function() listener);     // форма Listenable, без Flutter
-  void removeListener(void Function() listener);
   bool get isClosed;
+
+  /// Точка доставки для наследников. В базе пуста.
+  @protected @mustCallSuper
+  void publish(S previous, S current) {}
 
   /// Создать задачу, не ставя в очередь. Для фабрик вроде _closeCameraJob().
   Job<T> job<W extends S, T>(
@@ -152,6 +163,7 @@ class Solo<S extends Object> {
   @protected void externalSetState(S state);
 
   Future<void> cancelAll({bool force = false});
+  @mustCallSuper
   Future<void> close();
 
   // Хуки экземпляра. Пустые по умолчанию, super звать не обязательно.
@@ -165,8 +177,51 @@ class Solo<S extends Object> {
   static void Function(String message)? debug;   // отладка самого движка
 }
 
+/// Обычный контроллер для чистого Dart и StreamBuilder.
+class Solo<S extends Object> extends SoloBase<S> {
+  Solo(super.initialState);
+
+  Stream<S> get stream;          // broadcast, sync
+
+  @override
+  void publish(S previous, S current) {
+    super.publish(previous, current);
+    _controller.add(current);
+  }
+
+  @override
+  Future<void> close();          // закрывает стрим после super.close()
+}
+
 enum Policy { sequential, droppable, replace, restart }
 ```
+
+В пакете `flutter_solo`:
+
+```dart
+class SoloListenable<S extends Object> extends Solo<S>
+    implements ValueListenable<S> {
+  SoloListenable(super.initialState);
+
+  @override S get value => state;
+  @override void addListener(VoidCallback listener);
+  @override void removeListener(VoidCallback listener);
+
+  @override
+  void publish(S previous, S current) {
+    super.publish(previous, current);   // сначала стрим
+    _notifyListeners();                  // потом слушатели
+  }
+
+  @override
+  Future<void> close();                 // отписывает всех после super.close()
+}
+```
+
+`value` и `state` в одном классе — осознанный дубль: `value` есть потому,
+что этого требует интерфейс, а не как второе имя. Наружу только чтение и
+подписка, то есть `ValueListenable`, не `ValueNotifier`: сеттер `value` был
+бы дырой в гарантии владения.
 
 - `run<Ready, void>(...)` — каноническая запись. Два type-параметра — плата
   за возвращаемое значение: Dart не выводит часть параметров. Альтернатива:
@@ -178,24 +233,20 @@ enum Policy { sequential, droppable, replace, restart }
   `force` действует только на очередь.
 - `key` — любой объект, сравнение через `==`. Метаданные задачи удобно
   вешать на enum ключа (в камере это `reopensCamera`).
-- Состояние отдаётся тремя способами из одной точки: `state` для
-  синхронного чтения, `stream` для чистого Dart и `StreamBuilder`,
-  `addListener`/`removeListener` для Flutter. Ядро не зависит от Flutter,
-  поэтому `ValueListenable` оно не реализует: `implements` в Dart номинальный.
-  Адаптер на десять строк живёт в приложении:
-
-  ```dart
-  final class SoloListenable<S extends Object> implements ValueListenable<S> {
-    SoloListenable(this._solo);
-    final Solo<S> _solo;
-    @override S get value => _solo.state;
-    @override void addListener(VoidCallback l) => _solo.addListener(l);
-    @override void removeListener(VoidCallback l) => _solo.removeListener(l);
-  }
-  ```
-
-  Наружу только чтение и подписка, то есть `ValueListenable`, не
-  `ValueNotifier`: сеттер `value` был бы дырой в гарантии владения.
+- `state` живёт в базе: чтение состояния безопасно всегда, гарантию
+  нарушает только запись. Методы наследника читают его напрямую
+  (`if (state is! Ready) return`), хуки получают его в `onChange`, контекст и
+  `emit` говорят на языке «state». Наследники различаются только доставкой.
+- Цепочка линейная, а не вилка от базы: Flutter-контроллер сохраняет
+  `stream` (`where`, `distinct`, подписка в `initState` ради навигации по
+  `Failed`) и подходит везде, где ожидается `Solo`. Цена — один
+  `StreamController` на экземпляр. Обратный случай, контроллер из чистого
+  Dart-пакета внутри `ValueListenableBuilder`, требует адаптера при любой
+  иерархии.
+- `SoloBase` — точка расширения «принеси свою доставку»: signals,
+  riverpod-нотификатор, что угодно поверх `publish`.
+- Ядро не зависит от Flutter, поэтому `ValueListenable` реализует только
+  `flutter_solo`: `implements` в Dart номинальный.
 
 ### 3.2. Задача
 
@@ -285,13 +336,13 @@ abstract class SoloQueue {
 
 ```dart
 abstract class SoloObserver {
-  void onCreate(Solo<Object> solo) {}
-  void onStart(Solo<Object> solo, Job<Object?> job) {}
-  void onFinish(Solo<Object> solo, Job<Object?> job) {}
-  void onError(Solo<Object> solo, Job<Object?> job, Object error, StackTrace st) {}
-  void onChange(Solo<Object> solo, Object previous, Object current) {}
-  void onLog(Solo<Object> solo, Job<Object?> job, String message) {}
-  void onClose(Solo<Object> solo) {}
+  void onCreate(SoloBase<Object> solo) {}
+  void onStart(SoloBase<Object> solo, Job<Object?> job) {}
+  void onFinish(SoloBase<Object> solo, Job<Object?> job) {}
+  void onError(SoloBase<Object> solo, Job<Object?> job, Object error, StackTrace st) {}
+  void onChange(SoloBase<Object> solo, Object previous, Object current) {}
+  void onLog(SoloBase<Object> solo, Job<Object?> job, String message) {}
+  void onClose(SoloBase<Object> solo) {}
 }
 ```
 
@@ -387,9 +438,9 @@ switch (await camera.close().done) {
 
 ### 4.1. Состав
 
-`lib/src/`: `solo.dart`, `job.dart`, `job_context.dart`, `queue.dart`,
-`outcome.dart`, `policy.dart`, `observer.dart`. Очередь — `List<Job>`,
-связного списка нет.
+`lib/src/`: `solo_base.dart` (движок), `solo.dart` (`Solo` со стримом),
+`job.dart`, `job_context.dart`, `queue.dart`, `outcome.dart`, `policy.dart`,
+`observer.dart`. Очередь — `List<Job>`, связного списка нет.
 
 ### 4.2. Жизненный цикл задачи
 
@@ -457,12 +508,17 @@ false)`, включая неотменяемые, с `onFinish` каждой; т
 
 ### 4.8. Порядок уведомлений
 
-При любом изменении состояния, из `emit` или `externalSetState`: состояние
-записано, `observer.onChange`, хук `onChange`, `stream`, слушатели из
-`addListener` в порядке подписки, затем переоценка правил работающих задач.
-Всё синхронно. Слушатель, отписавшийся во время обхода, больше не
-вызывается; подписавшийся во время обхода получит только следующее
-изменение. `close()` отписывает всех слушателей.
+При любом изменении состояния, из `emit` или `externalSetState`, база
+делает: записать состояние, `observer.onChange`, хук `onChange`,
+`publish(previous, current)`, переоценка правил работающих задач. Всё
+синхронно. `Solo.publish` кладёт в стрим и зовёт `super`;
+`SoloListenable.publish` зовёт `super`, затем слушателей в порядке подписки.
+Итог: стрим, потом слушатели. Слушатель, отписавшийся во время обхода,
+больше не вызывается; подписавшийся во время обхода получит только
+следующее изменение.
+
+`close()` у каждого уровня закрывает своё после `super.close()`: `Solo` —
+стрим, `SoloListenable` — список слушателей.
 
 ### 4.9. Мелочи
 
@@ -627,8 +683,10 @@ false)`. Последующий `add` или `ctx.run` бросает `StateErro
 - повторный `add`, `add` завершённой, `cancel` до `add`;
 - observer раньше хука экземпляра, не зависит от `super`;
 - `add` после `close`, повторный `close`;
-- слушатели: порядок относительно `onChange` и `stream`, отписка во время
-  обхода, отписка всех при `close`;
+- `publish`: вызывается после `onChange` и до переоценки правил; наследник
+  `SoloBase` без стрима получает все изменения;
+- в `flutter_solo`: слушатели после стрима, отписка во время обхода, отписка
+  всех при `close`, `value == state`;
 - источник стека для `manual` и `rules`;
 - реентерабельность `externalSetState` из слушателя стрима;
 - `log` с уровнем; `describe` в журнале.
@@ -647,9 +705,19 @@ false)`. Последующий `add` или `ctx.run` бросает `StateErro
 сценарий «зум, фокус, затвор, и тут закрытие». `bin/main.dart` печатает
 журнал. README показывает куски из этого же кода.
 
-### 7.5. Проверки
+### 7.5. Пакет `flutter_solo`
+
+Обязателен с первого дня: без него у Flutter-пользователя нет
+`ValueListenable`. Содержимое: `SoloListenable<S>` и тесты на порядок
+уведомлений, отписку во время обхода и `close`. Виджеты (`SoloBuilder` с
+селектором, `SoloListener` для побочных эффектов) — позже, см. раздел 10.
+Где живёт пакет, отдельный репозиторий или `packages/` в этом, — открытый
+вопрос, на ядро не влияет.
+
+### 7.6. Проверки
 
 `dart analyze` без предупреждений, `dart test` в корне и в `example/`.
+`flutter test` в `flutter_solo`.
 
 ## 8. Что убрано из 1.x и почему
 
@@ -677,7 +745,7 @@ false)`. Последующий `add` или `ctx.run` бросает `StateErro
 
 | 1.x | 2.0 |
 |---|---|
-| `Conveyor<S, E>` | `Solo<S>` |
+| `Conveyor<S, E>` | `Solo<S>`; во Flutter `SoloListenable<S>` |
 | `ConveyorEvent<S, E, W>` + `queue.add` | `job<W, T>` + `add`, или `run<W, T>` |
 | `state.it` | `ctx.state` |
 | `state.isA<T>().it` / `.use(f)` | `ctx.stateAs<T>()` / `f(ctx.stateAs<T>())` |
@@ -702,9 +770,9 @@ false)`. Последующий `add` или `ctx.run` бросает `StateErro
 - Пауза очереди (пункт TODO 1.x).
 - `Policy.debounce(duration)`.
 - Типизированный ключ `Solo<S, K>`.
-- Пакет `flutter_solo`: появится, когда в нём будет что-то сверх адаптера
-  `SoloListenable` — `SoloBuilder` с селектором по части состояния,
-  `SoloListener` для побочных эффектов вроде навигации по `Failed`.
+- Виджеты в `flutter_solo` сверх `SoloListenable`: `SoloBuilder` с
+  селектором по части состояния, `SoloListener` для побочных эффектов вроде
+  навигации по `Failed`.
 
 Пункты TODO 1.x, вошедшие в дизайн: запрет двойного запуска задачи
 (`StateError`), неотменяемый ребёнок делает ожидание родителя неизбежным
@@ -716,4 +784,5 @@ false)`. Последующий `add` или `ctx.run` бросает `StateErro
 - Номер первой версии `solo`. Варианты: `1.0.0`; `2.0.0` как продолжение
   `conveyor`; `0.x` до стабилизации по итогам примера.
 - Переименование папки репозитория. На код не влияет.
+- Где живёт `flutter_solo`: отдельный репозиторий или `packages/` здесь.
 - Публикация на pub.dev — по правилам `AGENTS.md`, отдельным решением.
