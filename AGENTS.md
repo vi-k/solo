@@ -99,9 +99,12 @@ dartdoc-комментарии в `lib/`, сообщения коммитов, �
 
 ## Проверки
 
-Перед коммитом кода: `dart analyze` без предупреждений и `dart test` зелёный.
-Пример в `example/` со своим `pubspec.yaml` проверяется отдельно из его
-папки. Подробности в `docs/conventions.md`.
+Репозиторий — монорепозиторий: пакеты лежат в `packages/`. Перед коммитом
+кода в каждом затронутом пакете из его папки: `dart analyze` без
+предупреждений и `dart test` зелёный (`flutter test` для
+`packages/flutter_solo`). Пример `packages/solo/example/` со своим
+`pubspec.yaml` проверяется отдельно из его папки. Подробности в
+`docs/conventions.md`.
 
 ## Публикация на pub.dev
 

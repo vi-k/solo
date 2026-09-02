@@ -64,11 +64,24 @@ BLE-устройство, плеер, синхронизация), где сос
    одной задачи, отдельные контроллеры, внешние активности, вносящие состояние
    через внешнюю установку.
 
+## Раскладка репозитория
+
+Монорепозиторий. В корне только документы для владельца и агентов
+(`AGENTS.md`, `CLAUDE.md`, `docs/`), `LICENSE` и короткий `README.md`.
+Пакеты в `packages/`:
+
+- `packages/solo` — ядро, чистый Dart, со своим `example/`.
+- `packages/flutter_solo` — Flutter-интеграция. Ещё не создан.
+
+Каждый пакет самодостаточен для pub.dev: свои `pubspec.yaml`, `LICENSE`,
+`README.md`, `CHANGELOG.md`, `analysis_options.yaml`.
+
 ## Карта модулей
 
 ### Целевая (`solo`, по дизайну 2026-09-02)
 
-`lib/solo.dart` экспортирует всё публичное. `lib/src/`:
+`packages/solo/lib/solo.dart` экспортирует всё публичное.
+`packages/solo/lib/src/`:
 
 - `solo_base.dart` — `SoloBase<S>`: состояние, цикл прокачки очереди, хуки,
   `job`, `add`, `run`, `externalSetState`, `close`, защищённый `publish`,
@@ -83,15 +96,17 @@ BLE-устройство, плеер, синхронизация), где сос
 - `policy.dart` — `Policy`.
 - `observer.dart` — `SoloObserver`.
 
-`example/` — отдельный пакет с фейковой камерой и своими тестами.
+`packages/solo/example/` — отдельный пакет с фейковой камерой и своими
+тестами.
 
-`flutter_solo` — отдельный пакет: `SoloListenable<S> extends Solo<S>
-implements ValueListenable<S>` со своими тестами. Где он живёт, решает
-владелец, см. `docs/handoff.md`.
+`packages/flutter_solo` — `SoloListenable<S> extends Solo<S> implements
+ValueListenable<S>` со своими тестами.
 
 ### Текущая (`conveyor` 1.x, до замены)
 
-`lib/conveyor.dart` и `lib/utils.dart`. `lib/src/`: `conveyor.dart` с
+Лежит в `packages/solo`, но `pubspec.yaml` пока называет пакет `conveyor`:
+переименование — первый шаг реализации. `lib/conveyor.dart` и
+`lib/utils.dart`. `lib/src/`: `conveyor.dart` с
 базовым классом и циклом, `event.dart` с событием-генератором и тремя
 предикатами, `process.dart` с подпиской на стрим генератора,
 `state_provider.dart` с цепочками `isA`/`test`/`map`, `queue.dart` на

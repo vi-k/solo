@@ -10,7 +10,10 @@
 
 - Dart SDK: ограничение в `pubspec.yaml`, локально ставится последний
   stable. Никаких зависимостей на Flutter в ядре.
-- Линты: `analysis_options.yaml` в корне, поверх `package:lints/recommended`
+- Раскладка: монорепозиторий, пакеты в `packages/`. Корень держит только
+  `AGENTS.md`, `CLAUDE.md`, `docs/`, `LICENSE`, короткий `README.md`.
+- Линты: `analysis_options.yaml` в папке каждого пакета (pub.dev анализирует
+  пакет без корня репозитория), поверх `package:lints/recommended`
   со строгими режимами `strict-casts`, `strict-inference`, `strict-raw-types`
   и набором стилевых правил: строки до 80 символов, одинарные кавычки,
   завершающие запятые, `prefer_final_locals`, `package_api_docs`. `dart
@@ -35,7 +38,9 @@
 
 ## Тесты
 
-- `dart test` в корне. Тесты примера — `dart test` из папки `example/`.
+- `dart test` из `packages/solo`. Тесты примера — `dart test` из
+  `packages/solo/example/`. Тесты Flutter-пакета — `flutter test` из
+  `packages/flutter_solo`.
 - Асинхронность тестируется через `FakeAsync` (`package:fake_async`), время
   сдвигается явно. Реального времени в тестах нет.
 - Порядок событий проверяется по журналу: тестовый контроллер собирает через
