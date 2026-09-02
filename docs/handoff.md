@@ -46,8 +46,9 @@
 
 ## В работе прямо сейчас
 
-Задачи 1 и 1b плана выполнены: пакет переименован в `solo` 1.0.0,
-реализация `conveyor` 1.x удалена. Следующая — задача 2.
+Задачи 1, 1b и 2 плана выполнены: пакет переименован в `solo` 1.0.0,
+реализация `conveyor` 1.x удалена, добавлены типы `Outcome`, `Done`, `Failed`,
+`Cancelled`, `CancelReason` и `Policy`. Следующая — задача 3.
 
 ## Открытые вопросы
 
@@ -77,9 +78,10 @@
   целевые (задача 1b): `meta: ^1.15.0`; dev — `fake_async: ^1.3.1`,
   `lints: ^5.1.1`, `test: ^1.26.3`. `clock` и `collection` убраны вместе с
   кодом 1.x.
-- `dart test` из `packages/solo`: тестов нет (код удалён), команда не
-  запускалась — не требуется до задачи 2.
-- `dart analyze` из `packages/solo`: чисто, `No issues found!`. Правила
+- `dart test` из `packages/solo`: 4 теста, все зелёные (тесты типов `Outcome`).
+- `dart analyze` из `packages/solo` чист; в `lib/src/outcome.dart` стоит
+  `ignore_for_file: unused_element, unused_element_parameter` для `Cancelled._`,
+  снять в задаче 4, когда движок начнёт его использовать. Правила
   `analysis_options.yaml` под `lints ^5.1.1` не тронуты: аналайзер (Dart
   3.13.0 локально) не сообщил ни об одном removed/deprecated правиле,
   включая `package_api_docs` — проверено отдельно, изолированным прогоном.
