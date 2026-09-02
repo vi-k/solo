@@ -1,6 +1,6 @@
 # Handoff: текущее состояние проекта
 
-Обновлено: 2026-09-02.
+Обновлено: 2026-09-03.
 
 ## Где мы
 
@@ -156,8 +156,24 @@ Cancelled` как `handler`, стек `manual` у `cancel()`, неотменяе
 `lib/solo.dart` и `lib/src/*.dart` (баррель, `SoloBase`, `Solo`, `Job`,
 `JobContext`, `SoloQueue`, `SoloObserver`, `Policy`, `Outcome`/`Done`/
 `Failed`/`Cancelled`/`CancelReason`) пропусков не нашёл — добавлять было
-нечего. Тесты, код и `// ignore:` в `lib/`/`test/` не менялись. Следующая —
-задача 18 (пример).
+нечего. Тесты, код и `// ignore:` в `lib/`/`test/` не менялись. Задача 18
+добавила пример: отдельный пакет `packages/solo/example` (`solo_example`,
+`publish_to: none`) с фейковой камерой — состояния `Initial`, `Preparing`,
+`Ready`, `Broken`, `Disposed`, асинхронное `FakeCameraHardware` с листенером
+отказа и `CameraController extends Solo<CameraState>` (`init`, `reopen` с
+неотменяемым ребёнком `closeCamera`, `pause`/`resume`, `setZoom` через
+`replace`, `setFocusPoint`/`resetFocusPoint` через замену по группе ключей,
+`takePhoto` через `droppable` с `guard` и очисткой очереди, `dispose` через
+принудительное закрытие), 4 теста на журнале и `bin/main.dart`, печатающий
+тот же журнал в реальном времени. Все ожидания выведены из правил движка до
+прогона и совпали с ним с первого раза: правок в ядре не понадобилось. Сверх
+брифа три правки в самом примере: `Photo` получил `==`/`hashCode` и
+`@immutable` (иначе `expect(photo, const Photo(1))` сравнивал бы по
+идентичности и падал), `const Ready(paused: false)` в тесте заменено на
+`const Ready()` (линт `avoid_redundant_argument_values`; значение то же), а
+ссылка `[CameraController.reopen]` в доке `Broken` записана обратными
+кавычками (`camera_state.dart` не импортирует контроллер, `comment_references`
+её не разрешает). Следующая — задача 19 (`flutter_solo`).
 
 ## Открытые вопросы
 
@@ -222,6 +238,16 @@ Cancelled` как `handler`, стек `manual` у `cancel()`, неотменяе
   --set-exit-if-changed .` — 0 правок. Ручной аудит dartdoc в задаче 17 (линт
   `public_member_api_docs` выключен и пропуски не ловит) не нашёл в `lib/`
   публичных членов без документации.
+- `packages/solo/example` — отдельный пакет `solo_example`
+  (`publish_to: none`) со своими `pubspec.yaml` и `analysis_options.yaml`
+  (копия пакетного), проверяется из своей папки: `dart analyze` чист,
+  `dart format --set-exit-if-changed .` — 0 правок, `dart test` — 4 теста в
+  `test/camera_controller_test.dart`, все зелёные, `dart run bin/main.dart`
+  печатает тот же журнал в реальном времени и `shot: Cancelled(manual)`.
+  Зависимости — целевые: `meta: ^1.15.0` и `solo` по пути; dev —
+  `fake_async: ^1.3.1`, `lints: ^5.1.1`, `test: ^1.26.3`. Не покрыты
+  тестами ветка отказа железа внутри `reopen` (`FakeCameraHardware` не
+  бросает из операций) и `resetFocusPoint`.
 - `packages/solo/README.md` устарел: на русском, про провайдер состояния
   1.x. Переписывается в задаче 20.
 - Пункты `packages/solo/TODO.txt`, не вошедшие в спецификацию (файл удалён
