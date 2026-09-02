@@ -114,6 +114,8 @@ class Solo<S extends Object> {
 
   S get state;
   Stream<S> get stream;          // broadcast, sync
+  void addListener(void Function() listener);     // форма Listenable, без Flutter
+  void removeListener(void Function() listener);
   bool get isClosed;
 
   /// Создать задачу, не ставя в очередь. Для фабрик вроде _closeCameraJob().
@@ -176,6 +178,24 @@ enum Policy { sequential, droppable, replace, restart }
   `force` действует только на очередь.
 - `key` — любой объект, сравнение через `==`. Метаданные задачи удобно
   вешать на enum ключа (в камере это `reopensCamera`).
+- Состояние отдаётся тремя способами из одной точки: `state` для
+  синхронного чтения, `stream` для чистого Dart и `StreamBuilder`,
+  `addListener`/`removeListener` для Flutter. Ядро не зависит от Flutter,
+  поэтому `ValueListenable` оно не реализует: `implements` в Dart номинальный.
+  Адаптер на десять строк живёт в приложении:
+
+  ```dart
+  final class SoloListenable<S extends Object> implements ValueListenable<S> {
+    SoloListenable(this._solo);
+    final Solo<S> _solo;
+    @override S get value => _solo.state;
+    @override void addListener(VoidCallback l) => _solo.addListener(l);
+    @override void removeListener(VoidCallback l) => _solo.removeListener(l);
+  }
+  ```
+
+  Наружу только чтение и подписка, то есть `ValueListenable`, не
+  `ValueNotifier`: сеттер `value` был бы дырой в гарантии владения.
 
 ### 3.2. Задача
 
@@ -435,7 +455,16 @@ false)`, включая неотменяемые, с `onFinish` каждой; т
 
 Группы ключей и «заменить, но не отменять» — через `queue` явно.
 
-### 4.8. Мелочи
+### 4.8. Порядок уведомлений
+
+При любом изменении состояния, из `emit` или `externalSetState`: состояние
+записано, `observer.onChange`, хук `onChange`, `stream`, слушатели из
+`addListener` в порядке подписки, затем переоценка правил работающих задач.
+Всё синхронно. Слушатель, отписавшийся во время обхода, больше не
+вызывается; подписавшийся во время обхода получит только следующее
+изменение. `close()` отписывает всех слушателей.
+
+### 4.9. Мелочи
 
 `stream` — `broadcast(sync: true)`. `level` — глубина. Тестового миксина
 нет: тесты делают наследника и зовут защищённый `externalSetState`.
@@ -598,6 +627,8 @@ false)`. Последующий `add` или `ctx.run` бросает `StateErro
 - повторный `add`, `add` завершённой, `cancel` до `add`;
 - observer раньше хука экземпляра, не зависит от `super`;
 - `add` после `close`, повторный `close`;
+- слушатели: порядок относительно `onChange` и `stream`, отписка во время
+  обхода, отписка всех при `close`;
 - источник стека для `manual` и `rules`;
 - реентерабельность `externalSetState` из слушателя стрима;
 - `log` с уровнем; `describe` в журнале.
@@ -671,7 +702,9 @@ false)`. Последующий `add` или `ctx.run` бросает `StateErro
 - Пауза очереди (пункт TODO 1.x).
 - `Policy.debounce(duration)`.
 - Типизированный ключ `Solo<S, K>`.
-- Интеграция с Flutter-виджетами отдельным пакетом.
+- Пакет `flutter_solo`: появится, когда в нём будет что-то сверх адаптера
+  `SoloListenable` — `SoloBuilder` с селектором по части состояния,
+  `SoloListener` для побочных эффектов вроде навигации по `Failed`.
 
 Пункты TODO 1.x, вошедшие в дизайн: запрет двойного запуска задачи
 (`StateError`), неотменяемый ребёнок делает ожидание родителя неизбежным
