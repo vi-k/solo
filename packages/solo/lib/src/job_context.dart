@@ -111,8 +111,51 @@ final class _JobContext<S extends Object, W extends S, R>
   }
 
   @override
-  Future<T> guard<T>(FutureOr<T> Function() action) =>
-      throw UnimplementedError('task 11');
+  Future<T> guard<T>(FutureOr<T> Function() action) async {
+    _checkedState();
+    final result = action();
+    if (result is! Future<T>) {
+      return result;
+    }
+    return _race(result);
+  }
+
+  /// Completes with [future] or with the job's cancellation, whichever
+  /// comes first. A result arriving after cancellation is ignored; an
+  /// error arriving after cancellation goes to `onError`.
+  Future<T> _race<T>(Future<T> future) {
+    final completer = Completer<T>();
+    void onCancel() {
+      if (!completer.isCompleted) {
+        final cancelled = _job._pendingCancel!;
+        completer.completeError(
+          cancelled,
+          cancelled.stackTrace ?? StackTrace.current,
+        );
+      }
+    }
+
+    Future<void> forward() async {
+      try {
+        final value = await future;
+        if (!completer.isCompleted) {
+          completer.complete(value);
+        }
+      } on Object catch (error, stackTrace) {
+        if (completer.isCompleted) {
+          _solo._notifyError(_job, error, stackTrace);
+        } else {
+          completer.completeError(error, stackTrace);
+        }
+      } finally {
+        _job._onCancel.remove(onCancel);
+      }
+    }
+
+    _job._onCancel.add(onCancel);
+    unawaited(forward());
+    return completer.future;
+  }
 
   @override
   Job<T> run<T>(Job<T> child) {

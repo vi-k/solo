@@ -91,9 +91,14 @@ Cancelled` как `handler`, стек `manual` у `cancel()`, неотменяе
 как `Cancelled(handler, 'child <key>: ...')`, `emit` ребёнка переоценивает
 правила родителя и братьев, повторный `ctx.run` и `run` после завершения
 задачи бросают `StateError` — движок задач 4–9 уже это поддерживал, правки
-сверх брифа не понадобились. Заглушки до своих задач: `ctx.guard` (11)
-бросает `UnimplementedError`; `close` появится в задаче 12. Следующая —
-задача 11 (`ctx.guard`).
+сверх брифа не понадобились. Задача 11 реализовала `ctx.guard`
+(`test/guard_test.dart`): действие не стартует, если задача уже отменена;
+запущенное действие ждётся наперегонки с отменой через `_race` и внутренний
+`Completer` — отмена завершает его немедленно, поздний результат отброшенной
+футуры игнорируется, поздняя ошибка уходит в `onError`; синхронный `FutureOr`
+возвращается без ожидания. Все тесты брифа прошли без правок сверх него.
+Заглушка до своей задачи: `close` появится в задаче 12. Следующая — задача
+12 (`close`).
 
 До задачи 12 `runSolo` в `finally` зовёт `solo.cancelAll()` вместо
 `solo.close()`; вернуть `close` там же, где он появится.
@@ -126,7 +131,7 @@ Cancelled` как `handler`, стек `manual` у `cancel()`, неотменяе
   целевые (задача 1b): `meta: ^1.15.0`; dev — `fake_async: ^1.3.1`,
   `lints: ^5.1.1`, `test: ^1.26.3`. `clock` и `collection` убраны вместе с
   кодом 1.x.
-- `dart test` из `packages/solo`: 71 тест, все зелёные (4 — типы `Outcome`,
+- `dart test` из `packages/solo`: 78 тестов, все зелёные (4 — типы `Outcome`,
   3 — каркас `SoloBase` в `test/solo_base_test.dart`, 7 — последовательный
   движок в `test/sequential_test.dart`, 7 — правила старта в
   `test/start_rules_test.dart`, 9 — внешнее состояние, переоценка и ленивая
@@ -134,7 +139,7 @@ Cancelled` как `handler`, стек `manual` у `cancel()`, неотменяе
   `cancellable: false` в `test/cancel_test.dart`, 9 — очередь как объект
   первого класса в `test/queue_test.dart`, 7 — политики `add` в
   `test/policy_test.dart`, 13 — дети через `ctx.run` в
-  `test/children_test.dart`).
+  `test/children_test.dart`, 7 — `ctx.guard` в `test/guard_test.dart`).
 - `dart analyze` из `packages/solo` чист; временных `// ignore:` осталось
   два, оба с комментарием о причине: `comment_references` на dartdoc-ссылке
   `[close]` у `isClosed` в `lib/src/solo_base.dart` и `unused_element` на
