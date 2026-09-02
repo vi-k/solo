@@ -68,9 +68,12 @@ Dart 3.13.0); `emit`/`run` после завершения задачи брос
 - Раскладка: корень — `AGENTS.md`, `CLAUDE.md`, `docs/`, `LICENSE`,
   `README.md`, `.vscode/`; пакет — `packages/solo` со своими `LICENSE`,
   `README.md`, `CHANGELOG.md`, `analysis_options.yaml`, `TODO.txt`.
-- Dart SDK локально 3.13.0, Flutter 3.47.0 (fvm), в `pubspec.yaml`
-  ограничение `^3.3.4`. `lints` 3.0.0, доступна 6.1.0 — поднимается в
-  задаче 17 плана.
+- Dart SDK локально 3.13.0, Flutter 3.47.0 (fvm). В `pubspec.yaml` пока
+  `^3.3.4`; по решению владельца от 2026-09-02 пол SDK во всех пакетах —
+  `^3.6.0`, ставится в задаче 1 плана. Зависимости поднимаются в задаче
+  1b под Flutter 3.27 (первый с Dart 3.6): `meta ^1.15.0`,
+  `fake_async ^1.3.1`, `test ^1.26.3`, `lints ^5.1.1`,
+  `flutter_lints ^5.0.0`; правило — в «Глобальных ограничениях» плана.
 - `dart test` из `packages/solo`: 123 теста, зелёные (на начало сессии).
 - `dart analyze` из `packages/solo`: одно info в
   `lib/src/linked_list/linked_list.dart` (`parameter_assignments`), уйдёт
