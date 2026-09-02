@@ -3,16 +3,16 @@ include: package:lints/recommended.yaml
 analyzer:
   exclude:
     # Web
-    'web/**': true
+    - 'web/**'
     # Build
-    'build/**': true
+    - 'build/**'
     # Generated code
-    'lib/**.g.dart': true
-    'lib/**.freezed.dart': true
-    'lib/generated_plugin_registrant.dart': true
-    '.test_coverage.dart': true
+    - 'lib/**.g.dart'
+    - 'lib/**.freezed.dart'
+    - 'lib/generated_plugin_registrant.dart'
+    - '.test_coverage.dart'
     # Assets
-    'assets/**': true
+    - 'assets/**'
 
   language:
     strict-casts: true
