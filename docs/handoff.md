@@ -62,10 +62,16 @@
 `externalSetState` переоценивает работающие задачи кроме излучившей,
 излучившая проверяется лениво на следующем `ctx.state`/`check`/`stateAs`,
 стек `rules` берётся из последнего изменения состояния — движок задачи 4
-уже это реализует, правки не понадобились. Заглушки до своих задач:
-политики кроме `sequential` (9), `ctx.run` (10), `ctx.guard` (11) бросают
-`UnimplementedError`; `close` появится в задаче 12. Следующая — задача 7
-(отмена).
+уже это реализует, правки не понадобились. Задача 7 закрепила тестами
+семантику отмены и `cancellable: false` (`test/cancel_test.dart`): отмена в
+очереди, во время выполнения, гонка возврата/ошибки с отменой, `throw
+Cancelled` как `handler`, стек `manual` у `cancel()`, неотменяемая задача
+против ручной отмены и против правил, отмена задачи в `created`, повторная
+отмена — идемпотентна; движок задачи 4 уже это реализует, правки не
+понадобились. Заглушки до своих задач: политики кроме `sequential` (9),
+`ctx.run` (10), `ctx.guard` (11) бросают `UnimplementedError`; `close`
+появится в задаче 12. Следующая — задача 8 (очередь как объект первого
+класса).
 
 До задачи 12 `runSolo` в `finally` зовёт `solo.cancelAll()` вместо
 `solo.close()`; вернуть `close` там же, где он появится.
@@ -98,11 +104,12 @@
   целевые (задача 1b): `meta: ^1.15.0`; dev — `fake_async: ^1.3.1`,
   `lints: ^5.1.1`, `test: ^1.26.3`. `clock` и `collection` убраны вместе с
   кодом 1.x.
-- `dart test` из `packages/solo`: 30 тестов, все зелёные (4 — типы `Outcome`,
+- `dart test` из `packages/solo`: 42 теста, все зелёные (4 — типы `Outcome`,
   3 — каркас `SoloBase` в `test/solo_base_test.dart`, 7 — последовательный
   движок в `test/sequential_test.dart`, 7 — правила старта в
   `test/start_rules_test.dart`, 9 — внешнее состояние, переоценка и ленивая
-  самопроверка в `test/external_state_test.dart`).
+  самопроверка в `test/external_state_test.dart`, 12 — отмена и
+  `cancellable: false` в `test/cancel_test.dart`).
 - `dart analyze` из `packages/solo` чист; временных `// ignore:` осталось
   два, оба с комментарием о причине: `comment_references` на dartdoc-ссылке
   `[close]` у `isClosed` в `lib/src/solo_base.dart` и `unused_element` на
