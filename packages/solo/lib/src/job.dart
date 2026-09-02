@@ -1,8 +1,5 @@
 part of 'solo_base.dart';
 
-// `SoloBase.job` and `SoloBase.run` are added in Task 4; until then these
-// forward references do not resolve.
-// ignore: comment_references
 /// A handle to a job created by [SoloBase.job] or [SoloBase.run].
 ///
 /// Not a [Future]: calling a controller method without `await` is legal.
@@ -52,4 +49,197 @@ abstract interface class Job<T> {
   /// A running job with `cancellable: false` is not cancelled; the
   /// returned future still waits for it to finish.
   Future<void> cancel();
+}
+
+enum _JobStatus { created, queued, running, finished }
+
+final class _Job<S extends Object, W extends S, T> implements Job<T> {
+  final SoloBase<S> _solo;
+  final Future<T> Function(JobContext<S, W> ctx) _body;
+  final bool Function(W state)? _canStart;
+  final bool Function(W state)? _keepWhile;
+  final String Function()? _describe;
+  final bool cancellable;
+
+  @override
+  final Object? key;
+
+  @override
+  int level = 0;
+
+  _JobStatus _status = _JobStatus.created;
+  Outcome<T>? _outcome;
+  Cancelled? _pendingCancel;
+  final _done = Completer<Outcome<T>>();
+  final _cancelled = Completer<void>();
+  final _onCancel = <void Function()>[];
+  final _children = <_Job<S, S, Object?>>[];
+
+  _Job(
+    this._solo,
+    this._body, {
+    required this.key,
+    required bool Function(W state)? canStart,
+    required bool Function(W state)? keepWhile,
+    required this.cancellable,
+    required String Function()? describe,
+  })  : _canStart = canStart,
+        _keepWhile = keepWhile,
+        _describe = describe;
+
+  @override
+  String describe() => _describe?.call() ?? '';
+
+  @override
+  bool get isChild => level > 0;
+
+  @override
+  bool get isQueued => _status == _JobStatus.queued;
+
+  @override
+  bool get isRunning => _status == _JobStatus.running;
+
+  @override
+  bool get isFinished => _status == _JobStatus.finished;
+
+  @override
+  bool get isCancelled => _pendingCancel != null || _outcome is Cancelled;
+
+  @override
+  Outcome<T>? get outcome => _outcome;
+
+  @override
+  Future<Outcome<T>> get done => _done.future;
+
+  @override
+  Future<T> get value async {
+    final outcome = await done;
+    return switch (outcome) {
+      Done(:final value) => value,
+      Failed(:final error, :final stackTrace) =>
+        Error.throwWithStackTrace(error, stackTrace),
+      Cancelled() => Error.throwWithStackTrace(
+          outcome,
+          outcome.stackTrace ?? StackTrace.current,
+        ),
+    };
+  }
+
+  @override
+  Future<void> get whenCancelled => _cancelled.future;
+
+  @override
+  Future<void> cancel() {
+    _solo._cancel(
+      this,
+      Cancelled._(
+        reason: CancelReason.manual,
+        started: true,
+        stackTrace: StackTrace.current,
+      ),
+    );
+    return done.then((_) {});
+  }
+
+  /// A rejection description if [state] fails the start rules, else null.
+  String? _rejectStart(S state) {
+    if (state is! W) {
+      return 'is not $W';
+    }
+    final canStart = _canStart;
+    if (canStart != null && !canStart(state)) {
+      return 'canStart';
+    }
+    return _rejectKeep(state);
+  }
+
+  /// A rejection description if [state] fails the keep rules, else null.
+  String? _rejectKeep(S state) {
+    if (state is! W) {
+      return 'is not $W';
+    }
+    final keepWhile = _keepWhile;
+    if (keepWhile != null && !keepWhile(state)) {
+      return 'keepWhile';
+    }
+    return null;
+  }
+
+  void _start(int level) {
+    _status = _JobStatus.running;
+    this.level = level;
+    _solo._running.add(this);
+    _solo._notifyStart(this);
+    unawaited(_execute(_JobContext<S, W, T>(this)));
+  }
+
+  Future<void> _execute(_JobContext<S, W, T> ctx) async {
+    Outcome<T> outcome;
+    try {
+      outcome = Done(await _body(ctx));
+    } on Cancelled catch (cancelled, stackTrace) {
+      outcome = _pendingCancel ?? _handlerCancel(cancelled, stackTrace);
+    } on Object catch (error, stackTrace) {
+      _solo._notifyError(this, error, stackTrace);
+      outcome = Failed(error, stackTrace);
+    }
+    await _awaitChildren();
+    _finish(_pendingCancel ?? outcome);
+  }
+
+  /// The body threw [thrown] without being marked cancelled: either its own
+  /// `throw Cancelled(...)` or a child's cancellation via `child.value`.
+  Cancelled _handlerCancel(Cancelled thrown, StackTrace stackTrace) {
+    for (final child in _children) {
+      if (identical(child._outcome, thrown)) {
+        return Cancelled._(
+          reason: CancelReason.handler,
+          started: true,
+          description: 'child ${child.key}: $thrown',
+          stackTrace: stackTrace,
+        );
+      }
+    }
+    return Cancelled._(
+      reason: CancelReason.handler,
+      started: true,
+      description: thrown.description,
+      stackTrace: stackTrace,
+    );
+  }
+
+  Future<void> _awaitChildren() async {
+    while (true) {
+      final pending = [
+        for (final child in _children)
+          if (!child.isFinished) child.done,
+      ];
+      if (pending.isEmpty) {
+        return;
+      }
+      await Future.wait(pending);
+    }
+  }
+
+  void _finish(Outcome<T> outcome) {
+    _outcome = outcome;
+    _status = _JobStatus.finished;
+    _solo._onJobFinished(this);
+    _done.complete(outcome);
+  }
+
+  void _markCancelled(Cancelled cancelled) {
+    _pendingCancel = cancelled;
+    _cancelled.complete();
+    for (final callback in _onCancel.toList()) {
+      callback();
+    }
+    _onCancel.clear();
+  }
+
+  @override
+  String toString() {
+    final description = describe();
+    return description.isEmpty ? 'Job($key)' : 'Job($key: $description)';
+  }
 }

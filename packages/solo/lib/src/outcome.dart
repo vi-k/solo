@@ -1,7 +1,3 @@
-// `Cancelled._` and its parameters are used by the engine from Task 4 on.
-// Remove this directive there.
-// ignore_for_file: unused_element, unused_element_parameter
-
 part of 'solo_base.dart';
 
 /// Why a job was cancelled.

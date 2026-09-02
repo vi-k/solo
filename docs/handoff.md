@@ -11,8 +11,8 @@
 `packages/flutter_solo` с `ValueListenable`-лицом.
 
 Фаза: **дизайн согласован, план реализации написан и просмотрен
-владельцем. Реализация начата: задачи 1 и 1b выполнены (пакет
-переименован, старый код удалён), движок ещё не написан.**
+владельцем. Реализация идёт: задачи 1–4 выполнены, последовательный движок
+работает, дальше — правила, отмена, дети, `close`.**
 
 Спецификация: `docs/records/2026-09-02[1]-solo-design.md`, согласована
 владельцем целиком. План: `docs/records/2026-09-02[2]-solo-plan.md` —
@@ -31,28 +31,35 @@
 стрим. Остальные решения не оспорены.
 
 Реализация `conveyor` 1.x удалена из дерева в задаче 1b (осталась в истории,
-коммит `c884c38`); `packages/solo/lib/` и `test/` сейчас пустые. Она
-служила источником семантики для переноса, ссылки на её тесты в плане идут
-на тот же коммит.
+коммит `c884c38`). Она служила источником семантики для переноса, ссылки на
+её тесты в плане идут на тот же коммит.
 
 ## Следующие шаги
 
 1. Владелец выбирает способ исполнения: субагент на задачу с ревью между
    задачами или пакетами в одной сессии.
-2. Реализация по плану, задача за задачей, продолжая с задачи 2 (задачи 1
-   и 1b выполнены). Каждая задача — коммит и обновление этого файла.
+2. Реализация по плану, задача за задачей, продолжая с задачи 5 (задачи
+   1–4 выполнены). Каждая задача — коммит и обновление этого файла.
 3. После задачи 20 — пакеты готовы к публикации; публикация только по
    правилам `AGENTS.md`, отдельным запросом владельца.
 
 ## В работе прямо сейчас
 
-Задачи 1, 1b, 2 и 3 плана выполнены: пакет переименован в `solo` 1.0.0,
+Задачи 1, 1b, 2, 3 и 4 плана выполнены: пакет переименован в `solo` 1.0.0,
 реализация `conveyor` 1.x удалена, добавлены типы `Outcome`, `Done`, `Failed`,
 `Cancelled`, `CancelReason`, `Policy`, публичные интерфейсы `Job`,
-`JobContext`, `SoloQueue`, `SoloObserver`, каркас `SoloBase` (без движка) и
-заглушка `Solo`, тестовая опора (`TestSolo`, `JournalObserver`, `runSolo`,
-`delay`, `TestState`). Следующая — задача 4 (движок: `job`, `add`, `run`,
-`queue`, `current`, `lastJobWhere`, `externalSetState`, `cancelAll`).
+`JobContext`, `SoloQueue`, `SoloObserver`, тестовая опора (`TestSolo`,
+`JournalObserver`, `runSolo`, `delay`, `TestState`) и последовательный
+движок: `job`, `add`, `run`, `cancelAll`, защищённые `queue`, `current`,
+`lastJobWhere`, `externalSetState`, реализации `_Job`, `_JobContext`,
+`_SoloQueue`, прокачка очереди через микротаску, `emit`, переоценка правил,
+отмена и исходы, `Solo.stream`. Заглушки до своих задач: политики кроме
+`sequential` (9), `ctx.run` (10), `ctx.guard` (11), `close` (12) бросают
+`UnimplementedError`. Следующая — задача 5 (правила старта: `canStart`,
+`keepWhile`, `state is W`).
+
+До задачи 12 `runSolo` в `finally` зовёт `solo.cancelAll()` вместо
+`solo.close()`; вернуть `close` там же, где он появится.
 
 ## Открытые вопросы
 
@@ -75,25 +82,25 @@
   (`/Users/user/development/my/solo`).
 - Раскладка: корень — `AGENTS.md`, `CLAUDE.md`, `docs/`, `LICENSE`,
   `README.md`, `.vscode/`; пакет — `packages/solo` со своими `LICENSE`,
-  `README.md`, `CHANGELOG.md`, `analysis_options.yaml`, пустыми `lib/` и
-  `test/`. `TODO.txt` и `example/conveyor_example.dart` удалены в задаче 1b.
+  `README.md`, `CHANGELOG.md`, `analysis_options.yaml`, `lib/` и `test/`.
+  `TODO.txt` и `example/conveyor_example.dart` удалены в задаче 1b.
 - Dart SDK локально 3.13.0, Flutter 3.47.0 (fvm). `packages/solo/pubspec.yaml`:
   `name: solo`, `version: 1.0.0`, `environment: sdk: ^3.6.0`; зависимости —
   целевые (задача 1b): `meta: ^1.15.0`; dev — `fake_async: ^1.3.1`,
   `lints: ^5.1.1`, `test: ^1.26.3`. `clock` и `collection` убраны вместе с
   кодом 1.x.
-- `dart test` из `packages/solo`: 7 тестов, все зелёные (4 — типы `Outcome`,
-  3 — каркас `SoloBase` в `test/solo_base_test.dart`).
-- `dart analyze` из `packages/solo` чист; в `lib/src/outcome.dart` стоит
-  `ignore_for_file: unused_element, unused_element_parameter` для `Cancelled._`,
-  снять в задаче 4, когда движок начнёт его использовать. В
-  `lib/src/solo_base.dart` до задачи 4 три точечных `// ignore:` с комментарием
-  о причине: `prefer_final_fields` на `_state` (движок начнёт писать в него),
-  `unused_element` на `_debug` (движок начнёт его звать) и два
-  `comment_references` на dartdoc-ссылках `[close]`/`[externalSetState]`
-  (методы появятся в задачах 4 и 12); в `lib/src/job.dart` — ещё один
-  `comment_references` на ссылках `[SoloBase.job]`/`[SoloBase.run]` (задача 4).
-  Все снять по мере появления соответствующих членов. Правила
+- `dart test` из `packages/solo`: 14 тестов, все зелёные (4 — типы `Outcome`,
+  3 — каркас `SoloBase` в `test/solo_base_test.dart`, 7 — последовательный
+  движок в `test/sequential_test.dart`).
+- `dart analyze` из `packages/solo` чист; временных `// ignore:` осталось
+  два, оба с комментарием о причине: `comment_references` на dartdoc-ссылке
+  `[close]` у `isClosed` в `lib/src/solo_base.dart` и `unused_element` на
+  `_drain` в `lib/src/queue.dart` — оба снимаются в задаче 12, когда
+  появится `close`. Ignore'ы задач 2–3 (`ignore_for_file` в
+  `lib/src/outcome.dart`, `prefer_final_fields` на `_state`,
+  `unused_element` на `_debug`, `comment_references` на
+  `[externalSetState]` и `[SoloBase.job]`/`[SoloBase.run]`) сняты в
+  задаче 4. Правила
   `analysis_options.yaml` под `lints ^5.1.1` не тронуты: аналайзер (Dart
   3.13.0 локально) не сообщил ни об одном removed/deprecated правиле,
   включая `package_api_docs` — проверено отдельно, изолированным прогоном.

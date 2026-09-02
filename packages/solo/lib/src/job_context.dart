@@ -36,3 +36,87 @@ abstract interface class JobContext<S extends Object, W extends S> {
   /// The job this context belongs to.
   Job<Object?> get job;
 }
+
+final class _JobContext<S extends Object, W extends S, R>
+    implements JobContext<S, W> {
+  final _Job<S, W, R> _job;
+
+  _JobContext(this._job);
+
+  SoloBase<S> get _solo => _job._solo;
+
+  @override
+  Job<Object?> get job => _job;
+
+  void _throwIfCancelled() {
+    final cancelled = _job._pendingCancel;
+    if (cancelled != null) {
+      throw cancelled;
+    }
+  }
+
+  void _throwIfFinished(String action) {
+    if (_job.isFinished) {
+      throw StateError('$_job has already finished, cannot $action');
+    }
+  }
+
+  W _checkedState() {
+    _throwIfCancelled();
+    final current = _solo._state;
+    final rejection = _job._rejectKeep(current);
+    if (rejection != null) {
+      final cancelled = Cancelled._(
+        reason: CancelReason.rules,
+        started: true,
+        description: rejection,
+        stackTrace: _solo._lastChange,
+      );
+      _solo._cancel(_job, cancelled);
+      throw _job._pendingCancel ?? cancelled;
+    }
+    return current as W;
+  }
+
+  @override
+  W get state => _checkedState();
+
+  @override
+  T stateAs<T extends S>() {
+    final current = _checkedState();
+    if (current is! T) {
+      final cancelled = Cancelled._(
+        reason: CancelReason.rules,
+        started: true,
+        description: 'is not $T',
+        stackTrace: StackTrace.current,
+      );
+      _solo._cancel(_job, cancelled);
+      throw _job._pendingCancel ?? cancelled;
+    }
+    return current;
+  }
+
+  @override
+  void emit(S next) {
+    _throwIfFinished('emit');
+    _throwIfCancelled();
+    SoloBase._debug(() => '$_job emit: $next');
+    _solo._setState(next, emitter: _job, stackTrace: StackTrace.current);
+  }
+
+  @override
+  void check() {
+    _checkedState();
+  }
+
+  @override
+  Future<T> guard<T>(FutureOr<T> Function() action) =>
+      throw UnimplementedError('task 11');
+
+  @override
+  Job<T> run<T>(Job<T> child) => throw UnimplementedError('task 10');
+
+  @override
+  void log(Object? message) => _solo._notifyLog(_job, '$message');
+}
