@@ -115,7 +115,41 @@ final class _JobContext<S extends Object, W extends S, R>
       throw UnimplementedError('task 11');
 
   @override
-  Job<T> run<T>(Job<T> child) => throw UnimplementedError('task 10');
+  Job<T> run<T>(Job<T> child) {
+    _throwIfFinished('run a child');
+    final impl = _solo._own(child);
+    if (impl._status != _JobStatus.created) {
+      throw StateError('$impl has already been added or run');
+    }
+    impl.level = _job.level + 1;
+    _job._children.add(impl);
+    final pending = _job._pendingCancel;
+    if (pending != null) {
+      _solo._cancel(
+        impl,
+        Cancelled._(
+          reason: CancelReason.parent,
+          started: false,
+          stackTrace: pending.stackTrace,
+        ),
+      );
+      throw pending;
+    }
+    final rejection = impl._rejectStart(_solo._state);
+    if (rejection != null) {
+      impl._finish(
+        Cancelled._(
+          reason: CancelReason.rules,
+          started: false,
+          description: rejection,
+          stackTrace: StackTrace.current,
+        ),
+      );
+      return child;
+    }
+    impl._start(_job.level + 1);
+    return child;
+  }
 
   @override
   void log(Object? message) => _solo._notifyLog(_job, '$message');
