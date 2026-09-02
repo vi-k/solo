@@ -8,7 +8,7 @@
             "name": "conveyor",
             "request": "launch",
             "type": "dart",
-            "program": "example/conveyor_example.dart",
+            "program": "packages/solo/example/conveyor_example.dart",
         }
     ]
 }

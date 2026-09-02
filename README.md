@@ -1,11 +1,10 @@
-# conveyor
+# solo
 
-StateProvider
+Monorepo for the `solo` state management packages.
 
-state - проверка на тип и checkState. Таким образом проверяем текущее
-состояние. Если оно не соответствует правилам, продолжать событие нельзя.
+| Package | Description |
+|---|---|
+| [`packages/solo`](packages/solo) | Core: one job at a time, exclusive state ownership, cooperative cancellation. Pure Dart. |
+| `packages/flutter_solo` | Flutter integration: `ValueListenable` face for `Solo`. Not created yet. |
 
-test/isA/map - проверка каждый только своего уровня. checkState не проверяется.
-это будет делать только yield. test/isA и так будут подразумевать проверку
-checkState в самом начале. а у map странно делать такую проверку, раз мы
-меняем state. всё равно в yield не допустим.
+Development notes for agents and the owner live in `AGENTS.md` and `docs/`.
