@@ -46,9 +46,13 @@
 
 ## В работе прямо сейчас
 
-Задачи 1, 1b и 2 плана выполнены: пакет переименован в `solo` 1.0.0,
+Задачи 1, 1b, 2 и 3 плана выполнены: пакет переименован в `solo` 1.0.0,
 реализация `conveyor` 1.x удалена, добавлены типы `Outcome`, `Done`, `Failed`,
-`Cancelled`, `CancelReason` и `Policy`. Следующая — задача 3.
+`Cancelled`, `CancelReason`, `Policy`, публичные интерфейсы `Job`,
+`JobContext`, `SoloQueue`, `SoloObserver`, каркас `SoloBase` (без движка) и
+заглушка `Solo`, тестовая опора (`TestSolo`, `JournalObserver`, `runSolo`,
+`delay`, `TestState`). Следующая — задача 4 (движок: `job`, `add`, `run`,
+`queue`, `current`, `lastJobWhere`, `externalSetState`, `cancelAll`).
 
 ## Открытые вопросы
 
@@ -78,10 +82,18 @@
   целевые (задача 1b): `meta: ^1.15.0`; dev — `fake_async: ^1.3.1`,
   `lints: ^5.1.1`, `test: ^1.26.3`. `clock` и `collection` убраны вместе с
   кодом 1.x.
-- `dart test` из `packages/solo`: 4 теста, все зелёные (тесты типов `Outcome`).
+- `dart test` из `packages/solo`: 7 тестов, все зелёные (4 — типы `Outcome`,
+  3 — каркас `SoloBase` в `test/solo_base_test.dart`).
 - `dart analyze` из `packages/solo` чист; в `lib/src/outcome.dart` стоит
   `ignore_for_file: unused_element, unused_element_parameter` для `Cancelled._`,
-  снять в задаче 4, когда движок начнёт его использовать. Правила
+  снять в задаче 4, когда движок начнёт его использовать. В
+  `lib/src/solo_base.dart` до задачи 4 три точечных `// ignore:` с комментарием
+  о причине: `prefer_final_fields` на `_state` (движок начнёт писать в него),
+  `unused_element` на `_debug` (движок начнёт его звать) и два
+  `comment_references` на dartdoc-ссылках `[close]`/`[externalSetState]`
+  (методы появятся в задачах 4 и 12); в `lib/src/job.dart` — ещё один
+  `comment_references` на ссылках `[SoloBase.job]`/`[SoloBase.run]` (задача 4).
+  Все снять по мере появления соответствующих членов. Правила
   `analysis_options.yaml` под `lints ^5.1.1` не тронуты: аналайзер (Dart
   3.13.0 локально) не сообщил ни об одном removed/deprecated правиле,
   включая `package_api_docs` — проверено отдельно, изолированным прогоном.
