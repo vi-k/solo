@@ -22,11 +22,14 @@ abstract class SoloBase<S extends Object> {
 
   S _state;
   Completer<void>? _closing;
+  StackTrace? _closeStackTrace;
   late final _SoloQueue<S> _queue = _SoloQueue<S>(this);
   _Job<S, S, Object?>? _current;
   final _running = <_Job<S, S, Object?>>[];
   StackTrace? _lastChange;
   bool _pumpScheduled = false;
+  final _unpublished = <(S, S)>[];
+  bool _publishing = false;
 
   /// Creates a controller in [initialState].
   SoloBase(S initialState) : _state = initialState {
@@ -36,9 +39,6 @@ abstract class SoloBase<S extends Object> {
   /// The current state. Reading is always safe; only jobs write.
   S get state => _state;
 
-  // `close` is added in Task 12; until then this forward reference does not
-  // resolve.
-  // ignore: comment_references
   /// Whether [close] was called.
   bool get isClosed => _closing != null;
 
@@ -100,7 +100,7 @@ abstract class SoloBase<S extends Object> {
         Cancelled._(
           reason: CancelReason.closed,
           started: false,
-          stackTrace: StackTrace.current,
+          stackTrace: _closeStackTrace,
         ),
       );
       return job;
@@ -188,8 +188,64 @@ abstract class SoloBase<S extends Object> {
     _setState(state, emitter: null, stackTrace: StackTrace.current);
   }
 
+  /// Closes the controller: drops every queued job with `Cancelled(closed)`,
+  /// cancels the current job (a `cancellable: false` job is waited for
+  /// instead), then calls the observer's `onClose`. Repeated calls return
+  /// the same future. The state is left as is.
+  ///
+  /// Awaiting the returned future from inside the current job's body never
+  /// completes: it waits for that very body.
+  @mustCallSuper
+  Future<void> close() {
+    final closing = _closing;
+    if (closing != null) {
+      return closing.future;
+    }
+    final completer = _closing = Completer<void>();
+    _debug(() => 'close');
+    // Kept for `add` after close: section 5.1 points every `closed` outcome
+    // at the `close` call, whichever of the two sources made it.
+    final stackTrace = _closeStackTrace = StackTrace.current;
+    for (final job in _queue._drain()) {
+      job._finish(
+        Cancelled._(
+          reason: CancelReason.closed,
+          started: false,
+          stackTrace: stackTrace,
+        ),
+      );
+    }
+    final current = _current;
+    if (current == null) {
+      // Nothing to wait for, but still finish on a microtask: `onClose`
+      // never arrives from inside `close`, whether the engine was busy or
+      // idle.
+      scheduleMicrotask(() => _finishClose(completer));
+    } else {
+      _cancel(
+        current,
+        Cancelled._(
+          reason: CancelReason.closed,
+          started: true,
+          stackTrace: stackTrace,
+        ),
+      );
+      current.done.then((_) => _finishClose(completer));
+    }
+    return completer.future;
+  }
+
+  void _finishClose(Completer<void> completer) {
+    _debug(() => 'closed');
+    observer?.onClose(this);
+    completer.complete();
+  }
+
   /// Clears the queue and cancels the current job; `force` affects only the
   /// queue. Completes when the current job has actually finished.
+  ///
+  /// Awaiting the returned future from inside the current job's body never
+  /// completes: it waits for that very body.
   Future<void> cancelAll({bool force = false}) {
     _queue.clear(force: force);
     final current = _current;
@@ -227,10 +283,31 @@ abstract class SoloBase<S extends Object> {
     _state = next;
     _lastChange = stackTrace;
     _debug(() => 'state: $next');
+    _unpublished.add((previous, next));
     observer?.onChange(this, previous, next);
     onChange(previous, next);
-    publish(previous, next);
+    _publishPending();
     _reevaluate(except: emitter, stackTrace: stackTrace);
+  }
+
+  /// Publishes the recorded changes, oldest first.
+  ///
+  /// A hook, an observer or a listener may set the state again from inside
+  /// this call: the nested change joins the same queue instead of being
+  /// published ahead of the older one it is nested in.
+  void _publishPending() {
+    if (_publishing) {
+      return;
+    }
+    _publishing = true;
+    try {
+      while (_unpublished.isNotEmpty) {
+        final change = _unpublished.removeAt(0);
+        publish(change.$1, change.$2);
+      }
+    } finally {
+      _publishing = false;
+    }
   }
 
   /// Re-evaluates the rules of every running job except [except] against
@@ -265,18 +342,20 @@ abstract class SoloBase<S extends Object> {
     Cancelled cancelled, {
     bool force = false,
   }) {
-    Cancelled notStarted() => Cancelled._(
-          reason: cancelled.reason,
-          started: false,
-          description: cancelled.description,
-          stackTrace: cancelled.stackTrace,
-        );
+    Cancelled withStarted(bool started) => cancelled.started == started
+        ? cancelled
+        : Cancelled._(
+            reason: cancelled.reason,
+            started: started,
+            description: cancelled.description,
+            stackTrace: cancelled.stackTrace,
+          );
     switch (job._status) {
       case _JobStatus.finished:
         return;
       case _JobStatus.created:
         _debug(() => 'cancel $job before add: $cancelled');
-        job._finish(notStarted());
+        job._finish(withStarted(false));
       case _JobStatus.queued:
         if (!job.cancellable && !force) {
           _debug(() => 'cancel $job: not cancellable');
@@ -284,7 +363,7 @@ abstract class SoloBase<S extends Object> {
         }
         _debug(() => 'remove $job: $cancelled');
         _queue._jobs.remove(job);
-        job._finish(notStarted());
+        job._finish(withStarted(false));
       case _JobStatus.running:
         if (job._pendingCancel != null) {
           return;
@@ -293,18 +372,19 @@ abstract class SoloBase<S extends Object> {
           _debug(() => 'cancel $job: not cancellable');
           return;
         }
-        _debug(() => 'cancel $job: $cancelled');
+        final marked = withStarted(true);
+        _debug(() => 'cancel $job: $marked');
         for (final child in job._children.reversed.toList()) {
           _cancel(
             child,
             Cancelled._(
               reason: CancelReason.parent,
               started: true,
-              stackTrace: cancelled.stackTrace,
+              stackTrace: marked.stackTrace,
             ),
           );
         }
-        job._markCancelled(cancelled);
+        job._markCancelled(marked);
     }
   }
 

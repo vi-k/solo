@@ -107,8 +107,6 @@ final class _SoloQueue<S extends Object> implements SoloQueue {
 
   _Job<S, S, Object?>? _takeFirst() => _jobs.isEmpty ? null : _jobs.removeAt(0);
 
-  // Used by `close` in Task 12; the queue is drained in one step there.
-  // ignore: unused_element
   List<_Job<S, S, Object?>> _drain() {
     final drained = _jobs.toList();
     _jobs.clear();

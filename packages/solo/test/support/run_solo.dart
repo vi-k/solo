@@ -6,8 +6,8 @@ import 'test_solo.dart';
 import 'test_state.dart';
 
 /// Runs [body] with a fresh [TestSolo] and [JournalObserver] inside
-/// [fakeAsync]; flushes timers and resets the observer afterwards.
-/// Cancels the controller afterwards; closing it arrives in Task 12.
+/// [fakeAsync]; closes the controller, flushes timers and resets the
+/// observer afterwards.
 void runSolo(
   void Function(TestSolo solo, JournalObserver journal, FakeAsync async) body, {
   TestState initialState = const Initial(),
@@ -19,7 +19,7 @@ void runSolo(
     try {
       body(solo, journal, async);
     } finally {
-      solo.cancelAll();
+      solo.close();
       async.flushTimers();
       SoloBase.observer = null;
     }

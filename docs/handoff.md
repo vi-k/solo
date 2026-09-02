@@ -97,11 +97,19 @@ Cancelled` как `handler`, стек `manual` у `cancel()`, неотменяе
 `Completer` — отмена завершает его немедленно, поздний результат отброшенной
 футуры игнорируется, поздняя ошибка уходит в `onError`; синхронный `FutureOr`
 возвращается без ожидания. Все тесты брифа прошли без правок сверх него.
-Заглушка до своей задачи: `close` появится в задаче 12. Следующая — задача
-12 (`close`).
-
-До задачи 12 `runSolo` в `finally` зовёт `solo.cancelAll()` вместо
-`solo.close()`; вернуть `close` там же, где он появится.
+Задача 12 реализовала закрытие (`test/close_test.dart`): `SoloBase.close`
+осушает очередь исходами `Cancelled(closed, started: false)`, отменяет
+текущую задачу (неотменяемую дожидается) и зовёт `onClose`; `Solo.close`
+закрывает стрим после движка; `runSolo` снова зовёт `solo.close()`. Сверх
+брифа понадобились три правки движка, каждая по спецификации: `Solo.close`
+запоминает свою футуру, иначе `async`-обёртка отдавала новую на каждый вызов
+(4.6, «повторный `close` возвращает ту же футуру»); `onClose` у
+простаивающего контроллера уходит на микротаску, чтобы не звучать изнутри
+`close`; `_setState` копит изменения в очереди и публикует их старейшим
+вперёд, иначе реентерабельный `externalSetState` из хука `onChange` клал в
+стрим новое состояние раньше старого (4.8 «в порядке изменений», 7.3).
+Заодно `_cancel` нормализует `started: true` для работающей задачи.
+Следующая — задача 13 (`log`, порядок observer и хуков, `SoloBase.debug`).
 
 ## Открытые вопросы
 
@@ -131,7 +139,7 @@ Cancelled` как `handler`, стек `manual` у `cancel()`, неотменяе
   целевые (задача 1b): `meta: ^1.15.0`; dev — `fake_async: ^1.3.1`,
   `lints: ^5.1.1`, `test: ^1.26.3`. `clock` и `collection` убраны вместе с
   кодом 1.x.
-- `dart test` из `packages/solo`: 78 тестов, все зелёные (4 — типы `Outcome`,
+- `dart test` из `packages/solo`: 88 тестов, все зелёные (4 — типы `Outcome`,
   3 — каркас `SoloBase` в `test/solo_base_test.dart`, 7 — последовательный
   движок в `test/sequential_test.dart`, 7 — правила старта в
   `test/start_rules_test.dart`, 9 — внешнее состояние, переоценка и ленивая
@@ -139,19 +147,19 @@ Cancelled` как `handler`, стек `manual` у `cancel()`, неотменяе
   `cancellable: false` в `test/cancel_test.dart`, 9 — очередь как объект
   первого класса в `test/queue_test.dart`, 7 — политики `add` в
   `test/policy_test.dart`, 13 — дети через `ctx.run` в
-  `test/children_test.dart`, 7 — `ctx.guard` в `test/guard_test.dart`).
-- `dart analyze` из `packages/solo` чист; временных `// ignore:` осталось
-  два, оба с комментарием о причине: `comment_references` на dartdoc-ссылке
-  `[close]` у `isClosed` в `lib/src/solo_base.dart` и `unused_element` на
-  `_drain` в `lib/src/queue.dart` — оба снимаются в задаче 12, когда
-  появится `close`. Ignore'ы задач 2–3 (`ignore_for_file` в
-  `lib/src/outcome.dart`, `prefer_final_fields` на `_state`,
-  `unused_element` на `_debug`, `comment_references` на
+  `test/children_test.dart`, 7 — `ctx.guard` в `test/guard_test.dart`,
+  10 — закрытие, стрим и реентерабельность в `test/close_test.dart`).
+- `dart analyze` из `packages/solo` чист; временных `// ignore:` в `lib/`
+  не осталось: два последних (`comment_references` на `[close]` у
+  `isClosed`, `unused_element` на `_drain`) сняты в задаче 12 вместе с
+  появлением `close`. Заглушек в коде тоже нет. Ignore'ы задач 2–3
+  (`ignore_for_file` в `lib/src/outcome.dart`, `prefer_final_fields` на
+  `_state`, `unused_element` на `_debug`, `comment_references` на
   `[externalSetState]` и `[SoloBase.job]`/`[SoloBase.run]`) сняты в
-  задаче 4. Правила
-  `analysis_options.yaml` под `lints ^5.1.1` не тронуты: аналайзер (Dart
-  3.13.0 локально) не сообщил ни об одном removed/deprecated правиле,
-  включая `package_api_docs` — проверено отдельно, изолированным прогоном.
+  задаче 4. Правила `analysis_options.yaml` под `lints ^5.1.1` не
+  тронуты: аналайзер (Dart 3.13.0 локально) не сообщил ни об одном
+  removed/deprecated правиле, включая `package_api_docs` — проверено
+  отдельно, изолированным прогоном.
   Сработоспособность самой проверки подтверждена: заведомо несуществующее
   правило аналайзер помечает `undefined_lint`.
 - `packages/solo/README.md` устарел: на русском, про провайдер состояния
