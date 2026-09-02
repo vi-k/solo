@@ -123,7 +123,18 @@ Cancelled` как `handler`, стек `manual` у `cancel()`, неотменяе
 движке, ни в ожиданиях не понадобилось. Сдвиг семантики против 1.x: тело на
 голом `await` замечает отмену только на своём ближайшем таймере, а первый
 `emit` попадает в журнал синхронно, поэтому сценарий «по микротаске» даёт то
-же, что и «через 50 мс». Следующая — задача 15.
+же, что и «через 50 мс». Задача 15 перенесла сценарии 1.x «Sequential»,
+«Droppable», «Droppable with return previous event when dropped» и
+«Restartable» через явные операции с очередью
+(`test/scenario_queue_test.dart`): `lastJobWhere` плюс `job.cancel()` вместо
+`Policy.droppable`, `queue.removeWhere` плюс `current?.cancel()` вместо
+`Policy.restart`. Все ожидания выведены из правил движка до прогона и
+совпали с ним: правок ни в движке, ни в ожиданиях не понадобилось. Две
+группы 1.x про droppable слиты в одну: в 2.0 вызывающий всегда получает уже
+стоящую задачу, поэтому пара сценариев 1.x даёт один порт с проверкой
+`identical`. Сдвиг семантики против `Policy.droppable`: дубликат отменяется
+до `add`, и в журнале стоит `dropped Cancelled(manual)` без описания
+`duplicate`. Следующая — задача 16.
 
 ## Открытые вопросы
 
@@ -153,7 +164,7 @@ Cancelled` как `handler`, стек `manual` у `cancel()`, неотменяе
   целевые (задача 1b): `meta: ^1.15.0`; dev — `fake_async: ^1.3.1`,
   `lints: ^5.1.1`, `test: ^1.26.3`. `clock` и `collection` убраны вместе с
   кодом 1.x.
-- `dart test` из `packages/solo`: 114 тестов, все зелёные (4 — типы `Outcome`,
+- `dart test` из `packages/solo`: 132 теста, все зелёные (4 — типы `Outcome`,
   3 — каркас `SoloBase` в `test/solo_base_test.dart`, 7 — последовательный
   движок в `test/sequential_test.dart`, 7 — правила старта в
   `test/start_rules_test.dart`, 9 — внешнее состояние, переоценка и ленивая
@@ -166,7 +177,8 @@ Cancelled` как `handler`, стек `manual` у `cancel()`, неотменяе
   `log`, порядок observer и хуков, `SoloBase.debug` в `test/hooks_test.dart`,
   10 — закрытие на сдвигах времени в `test/scenario_closing_test.dart`,
   13 — внешнее состояние на сдвигах времени в
-  `test/scenario_external_test.dart`).
+  `test/scenario_external_test.dart`, 18 — политики через явные операции с
+  очередью в `test/scenario_queue_test.dart`).
 - `dart analyze` из `packages/solo` чист; временных `// ignore:` в `lib/`
   не осталось: два последних (`comment_references` на `[close]` у
   `isClosed`, `unused_element` на `_drain`) сняты в задаче 12 вместе с
