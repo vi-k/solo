@@ -68,10 +68,18 @@
 Cancelled` как `handler`, стек `manual` у `cancel()`, неотменяемая задача
 против ручной отмены и против правил, отмена задачи в `created`, повторная
 отмена — идемпотентна; движок задачи 4 уже это реализует, правки не
-понадобились. Заглушки до своих задач: политики кроме `sequential` (9),
-`ctx.run` (10), `ctx.guard` (11) бросают `UnimplementedError`; `close`
-появится в задаче 12. Следующая — задача 8 (очередь как объект первого
-класса).
+понадобились. Задача 8 закрепила тестами очередь как объект первого класса
+(`test/queue_test.dart`): `first: true`, `remove`/`removeWhere`/`clear` с
+`force`, `lastWhere`/`lastJobWhere`, `StateError` на повторный `add`,
+`ArgumentError` на чужую задачу, `cancelAll`, `add` изнутри тела задачи —
+движок задачи 4 уже это реализует, правки не понадобились; исправлено
+только ожидание одного теста (порядок `[keep] started` относительно
+прокачки очереди микротаской: пампа планируется через `scheduleMicrotask`
+и успевает отработать в том же `elapse`, как и в `sequential_test.dart`).
+Заглушки до своих задач: политики
+кроме `sequential` (9), `ctx.run` (10), `ctx.guard` (11) бросают
+`UnimplementedError`; `close` появится в задаче 12. Следующая — задача 9
+(политики `add`).
 
 До задачи 12 `runSolo` в `finally` зовёт `solo.cancelAll()` вместо
 `solo.close()`; вернуть `close` там же, где он появится.
@@ -104,12 +112,13 @@ Cancelled` как `handler`, стек `manual` у `cancel()`, неотменяе
   целевые (задача 1b): `meta: ^1.15.0`; dev — `fake_async: ^1.3.1`,
   `lints: ^5.1.1`, `test: ^1.26.3`. `clock` и `collection` убраны вместе с
   кодом 1.x.
-- `dart test` из `packages/solo`: 42 теста, все зелёные (4 — типы `Outcome`,
+- `dart test` из `packages/solo`: 51 тест, все зелёные (4 — типы `Outcome`,
   3 — каркас `SoloBase` в `test/solo_base_test.dart`, 7 — последовательный
   движок в `test/sequential_test.dart`, 7 — правила старта в
   `test/start_rules_test.dart`, 9 — внешнее состояние, переоценка и ленивая
   самопроверка в `test/external_state_test.dart`, 12 — отмена и
-  `cancellable: false` в `test/cancel_test.dart`).
+  `cancellable: false` в `test/cancel_test.dart`, 9 — очередь как объект
+  первого класса в `test/queue_test.dart`).
 - `dart analyze` из `packages/solo` чист; временных `// ignore:` осталось
   два, оба с комментарием о причине: `comment_references` на dartdoc-ссылке
   `[close]` у `isClosed` в `lib/src/solo_base.dart` и `unused_element` на
