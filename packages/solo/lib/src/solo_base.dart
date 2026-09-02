@@ -105,8 +105,31 @@ abstract class SoloBase<S extends Object> {
       );
       return job;
     }
-    if (policy != Policy.sequential) {
-      throw UnimplementedError('task 9');
+    switch (policy) {
+      case Policy.sequential:
+        break;
+      case Policy.droppable:
+        final existing = lastJobWhere((other) => other.key == impl.key);
+        if (existing != null) {
+          _debug(() => 'add $impl: duplicate of $existing');
+          impl._finish(
+            Cancelled._(
+              reason: CancelReason.manual,
+              started: false,
+              description: 'duplicate',
+              stackTrace: StackTrace.current,
+            ),
+          );
+          return existing as Job<T>;
+        }
+      case Policy.replace:
+        _queue.removeWhere((other) => other.key == impl.key);
+      case Policy.restart:
+        _queue.removeWhere((other) => other.key == impl.key);
+        final current = _current;
+        if (current != null && current.key == impl.key) {
+          unawaited(current.cancel());
+        }
     }
     impl._status = _JobStatus.queued;
     _queue._insert(impl, first: first);

@@ -76,10 +76,16 @@ Cancelled` как `handler`, стек `manual` у `cancel()`, неотменяе
 только ожидание одного теста (порядок `[keep] started` относительно
 прокачки очереди микротаской: пампа планируется через `scheduleMicrotask`
 и успевает отработать в том же `elapse`, как и в `sequential_test.dart`).
-Заглушки до своих задач: политики
-кроме `sequential` (9), `ctx.run` (10), `ctx.guard` (11) бросают
-`UnimplementedError`; `close` появится в задаче 12. Следующая — задача 9
-(политики `add`).
+Задача 9 закрепила тестами политики `add` (`test/policy_test.dart`):
+`droppable` находит дубликат в очереди и в текущей задаче и возвращает его,
+новая завершается `Cancelled(manual, 'duplicate')`; `replace` вычищает
+задачи с тем же ключом из очереди, текущую не трогает; `restart` вдобавок
+отменяет текущую задачу с тем же ключом, не дожидаясь; политика кроме
+`sequential` без ключа бросает `ArgumentError` — реализован блок `switch
+(policy)` в `add` по разделу 4.7 спецификации, правки сверх брифа не
+понадобились. Заглушки до своих задач: `ctx.run` (10), `ctx.guard` (11)
+бросают `UnimplementedError`; `close` появится в задаче 12. Следующая —
+задача 10 (`ctx.run`).
 
 До задачи 12 `runSolo` в `finally` зовёт `solo.cancelAll()` вместо
 `solo.close()`; вернуть `close` там же, где он появится.
@@ -112,13 +118,14 @@ Cancelled` как `handler`, стек `manual` у `cancel()`, неотменяе
   целевые (задача 1b): `meta: ^1.15.0`; dev — `fake_async: ^1.3.1`,
   `lints: ^5.1.1`, `test: ^1.26.3`. `clock` и `collection` убраны вместе с
   кодом 1.x.
-- `dart test` из `packages/solo`: 51 тест, все зелёные (4 — типы `Outcome`,
+- `dart test` из `packages/solo`: 58 тестов, все зелёные (4 — типы `Outcome`,
   3 — каркас `SoloBase` в `test/solo_base_test.dart`, 7 — последовательный
   движок в `test/sequential_test.dart`, 7 — правила старта в
   `test/start_rules_test.dart`, 9 — внешнее состояние, переоценка и ленивая
   самопроверка в `test/external_state_test.dart`, 12 — отмена и
   `cancellable: false` в `test/cancel_test.dart`, 9 — очередь как объект
-  первого класса в `test/queue_test.dart`).
+  первого класса в `test/queue_test.dart`, 7 — политики `add` в
+  `test/policy_test.dart`).
 - `dart analyze` из `packages/solo` чист; временных `// ignore:` осталось
   два, оба с комментарием о причине: `comment_references` на dartdoc-ссылке
   `[close]` у `isClosed` в `lib/src/solo_base.dart` и `unused_element` на
