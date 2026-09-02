@@ -109,7 +109,13 @@ Cancelled` как `handler`, стек `manual` у `cancel()`, неотменяе
 вперёд, иначе реентерабельный `externalSetState` из хука `onChange` клал в
 стрим новое состояние раньше старого (4.8 «в порядке изменений», 7.3).
 Заодно `_cancel` нормализует `started: true` для работающей задачи.
-Следующая — задача 13 (`log`, порядок observer и хуков, `SoloBase.debug`).
+Задача 13 закрепила тестами `log` с уровнем, порядок observer перед хуком
+экземпляра и трассы `SoloBase.debug` (`test/hooks_test.dart`): вложенный
+`log` уходит в журнал с отступом уровня, observer вызывается раньше хука
+независимо от `super`, строки `_debug` совпадают со строками теста — движок
+задач 4–12 уже это реализует, правки сверх брифа не понадобились. Движковая
+фаза плана (задачи 4–13) завершена. Следующая — задача 14 (перенос сценариев
+1.x).
 
 ## Открытые вопросы
 
@@ -139,7 +145,7 @@ Cancelled` как `handler`, стек `manual` у `cancel()`, неотменяе
   целевые (задача 1b): `meta: ^1.15.0`; dev — `fake_async: ^1.3.1`,
   `lints: ^5.1.1`, `test: ^1.26.3`. `clock` и `collection` убраны вместе с
   кодом 1.x.
-- `dart test` из `packages/solo`: 88 тестов, все зелёные (4 — типы `Outcome`,
+- `dart test` из `packages/solo`: 91 тест, все зелёные (4 — типы `Outcome`,
   3 — каркас `SoloBase` в `test/solo_base_test.dart`, 7 — последовательный
   движок в `test/sequential_test.dart`, 7 — правила старта в
   `test/start_rules_test.dart`, 9 — внешнее состояние, переоценка и ленивая
@@ -148,7 +154,8 @@ Cancelled` как `handler`, стек `manual` у `cancel()`, неотменяе
   первого класса в `test/queue_test.dart`, 7 — политики `add` в
   `test/policy_test.dart`, 13 — дети через `ctx.run` в
   `test/children_test.dart`, 7 — `ctx.guard` в `test/guard_test.dart`,
-  10 — закрытие, стрим и реентерабельность в `test/close_test.dart`).
+  10 — закрытие, стрим и реентерабельность в `test/close_test.dart`, 3 —
+  `log`, порядок observer и хуков, `SoloBase.debug` в `test/hooks_test.dart`).
 - `dart analyze` из `packages/solo` чист; временных `// ignore:` в `lib/`
   не осталось: два последних (`comment_references` на `[close]` у
   `isClosed`, `unused_element` на `_drain`) сняты в задаче 12 вместе с
