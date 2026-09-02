@@ -251,7 +251,7 @@ class SoloListenable<S extends Object> extends Solo<S>
 ### 3.2. Задача
 
 ```dart
-abstract class Job<T> {
+abstract interface class Job<T> {
   Object? get key;
   String describe();
   int get level;                     // 0 — корневая
@@ -296,7 +296,7 @@ enum CancelReason { manual, rules, closed, parent, handler }
 ### 3.3. Контекст внутри задачи
 
 ```dart
-abstract class JobContext<S extends Object, W extends S> {
+abstract interface class JobContext<S extends Object, W extends S> {
   W get state;                                  // отмена + тип + keepWhile
   T stateAs<T extends S>();                     // сужение, Cancelled при несовпадении
   void emit(S next);                            // только проверка отмены
@@ -317,7 +317,7 @@ abstract class JobContext<S extends Object, W extends S> {
 ### 3.4. Очередь
 
 ```dart
-abstract class SoloQueue {
+abstract interface class SoloQueue {
   Iterable<Job<Object?>> get jobs;   // неизменяемое представление
   int get length;
   bool get isEmpty;
@@ -350,7 +350,24 @@ abstract class SoloObserver {
 нужен `@mustCallSuper`, забытый `super` в наследнике не отключает аналитику.
 Observer — для сквозных вещей: аналитика, отправка ошибок, единый лог.
 
-### 3.6. Правила, не видные из сигнатур
+### 3.6. Модификаторы классов
+
+| Тип | Модификатор | Почему |
+|---|---|---|
+| `SoloBase`, `SoloObserver` | `abstract class` | пользователь наследует; без `base`, чтобы наследникам не навязывать `base`/`final` и не ломать `Mock implements CameraController` из привычки к `MockBloc` |
+| `Solo`, `SoloListenable` | `class` | то же |
+| `Job`, `JobContext`, `SoloQueue` | `abstract interface class` | наследовать незачем, реализации приватные; реализовать можно: моки, фейковый `JobContext` для теста тела задачи без движка |
+| `Outcome` | `sealed class` | исчерпывающий `switch` |
+| `Done`, `Failed`, `Cancelled` | `final class` | закрытая иерархия; публичный конструктор `Cancelled` с `final` совместим |
+| `Policy`, `CancelReason` | `enum` | |
+
+`base` на контроллерах отклонён осознанно: единственное, от чего он
+защищает, ручная реализация движка через `implements`, в реальности не
+происходит, а `Mock` живёт на `noSuchMethod` и добавления членов не боится.
+Ослабить модификатор потом можно, ужесточить нельзя, но ужесточать не
+понадобится.
+
+### 3.7. Правила, не видные из сигнатур
 
 - `cancellable: false` защищает от действующих лиц: ручной `cancel`, `clear`
   без `force`, отмена родителя, `close`. Но не от реальности: если состояние
@@ -371,7 +388,7 @@ Observer — для сквозных вещей: аналитика, отпра�
 - Из тела задачи видна вся поверхность наследника `Solo`, поэтому
   `ctx.solo` не нужен.
 
-### 3.7. Пример использования
+### 3.8. Пример использования
 
 ```dart
 final class Camera extends Solo<CameraState> {
