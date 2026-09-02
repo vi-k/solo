@@ -147,7 +147,17 @@ Cancelled` как `handler`, стек `manual` у `cancel()`, неотменяе
 шести в группе «Check state on yield» уже покрыты `test/children_test.dart`
 (задача 10), перенесены остальные три. `async.elapsed` после `flushTimers`
 считает и таймеры брошенных ожиданий, поэтому он больше момента последней
-строки журнала — как и в задаче 14. Следующая — задача 17.
+строки журнала — как и в задаче 14. Задача 17 закрыла финальную чистку пакета:
+`dart pub outdated` показал единственный кандидат новее — `lints` 6.1.0, но у
+него пол SDK `^3.8.0` выше проектного `^3.6.0` (проверено по
+`https://pub.dev/api/packages/lints`), поэтому `pubspec.yaml` не менялся;
+`dart pub get` без предупреждений. `dart analyze` и `dart format
+--set-exit-if-changed .` чисты. Ручной аудит dartdoc по всем публичным членам
+`lib/solo.dart` и `lib/src/*.dart` (баррель, `SoloBase`, `Solo`, `Job`,
+`JobContext`, `SoloQueue`, `SoloObserver`, `Policy`, `Outcome`/`Done`/
+`Failed`/`Cancelled`/`CancelReason`) пропусков не нашёл — добавлять было
+нечего. Тесты, код и `// ignore:` в `lib/`/`test/` не менялись. Следующая —
+задача 18 (пример).
 
 ## Открытые вопросы
 
@@ -174,10 +184,13 @@ Cancelled` как `handler`, стек `manual` у `cancel()`, неотменяе
   `TODO.txt` и `example/conveyor_example.dart` удалены в задаче 1b.
 - Dart SDK локально 3.13.0, Flutter 3.47.0 (fvm). `packages/solo/pubspec.yaml`:
   `name: solo`, `version: 1.0.0`, `environment: sdk: ^3.6.0`; зависимости —
-  целевые (задача 1b): `meta: ^1.15.0`; dev — `fake_async: ^1.3.1`,
-  `lints: ^5.1.1`, `test: ^1.26.3`. `clock` и `collection` убраны вместе с
-  кодом 1.x.
-- `dart test` из `packages/solo`: 156 тестов, все зелёные (4 — типы `Outcome`,
+  целевые (задача 1b, подтверждены `dart pub outdated` в задаче 17):
+  `meta: ^1.15.0`; dev — `fake_async: ^1.3.1`, `lints: ^5.1.1`,
+  `test: ^1.26.3`. `clock` и `collection` убраны вместе с кодом 1.x. Из всех
+  зависимостей новее только `lints` 6.1.0, но его пол SDK `^3.8.0` не
+  проходит по правилу — поднимать нечего.
+- `dart test` из `packages/solo`: 156 тестов, все зелёные (пересчитано в
+  задаче 17 — число не изменилось; 4 — типы `Outcome`,
   3 — каркас `SoloBase` в `test/solo_base_test.dart`, 7 — последовательный
   движок в `test/sequential_test.dart`, 7 — правила старта в
   `test/start_rules_test.dart`, 9 — внешнее состояние, переоценка и ленивая
@@ -205,7 +218,10 @@ Cancelled` как `handler`, стек `manual` у `cancel()`, неотменяе
   removed/deprecated правиле, включая `package_api_docs` — проверено
   отдельно, изолированным прогоном.
   Сработоспособность самой проверки подтверждена: заведомо несуществующее
-  правило аналайзер помечает `undefined_lint`.
+  правило аналайзер помечает `undefined_lint`. `dart format
+  --set-exit-if-changed .` — 0 правок. Ручной аудит dartdoc в задаче 17 (линт
+  `public_member_api_docs` выключен и пропуски не ловит) не нашёл в `lib/`
+  публичных членов без документации.
 - `packages/solo/README.md` устарел: на русском, про провайдер состояния
   1.x. Переписывается в задаче 20.
 - Пункты `packages/solo/TODO.txt`, не вошедшие в спецификацию (файл удалён
