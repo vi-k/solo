@@ -50,33 +50,35 @@ emit new states after calling close` (пункт 7 ниже).
 
 ### 1. Очередью нельзя управлять
 
-Экран BLE-устройства. Пользователь жмёт «подключить», «прочитать заряд»,
-«переименовать», а потом уходит с экрана — «отключить». Чтобы очередь вообще
-появилась, все команды сводят в один `on<DeviceEvent>` с `sequential()`;
-четыре отдельных `on<E>` дали бы четыре очереди, работающие бок о бок, а это
-следующий пункт. Теперь очередь настоящая, и `Disconnect` дописывается за
-тремя командами: все они отрабатывают на устройстве, с которого пользователь
-уже ушёл, а отключение происходит последним. Посмотреть на очередь нечем,
-выбросить ожидающие события нечем, и обогнать их нельзя.
+Экран BLE-устройства. Пользователь открывает его — подключение, — жмёт
+«прочитать заряд» и «прочитать уровень сигнала», переименовывает устройство
+и закрывает окно: отключение. Чтобы очередь вообще появилась, все команды
+сводят в один `on<DeviceEvent>` с `sequential()`; пять отдельных `on<E>`
+дали бы пять очередей, работающих бок о бок, а это следующий пункт. Теперь
+очередь настоящая, и `Disconnect` дописывается за двумя чтениями и
+переименованием. Оба чтения отрабатывают раньше отключения, каждое эмитит
+состояние в уже закрытое окно, — и выбросить их нечем: очередь есть, но она
+непрозрачна. Посмотреть на неё нечем, и убрать из неё ожидающее событие
+нечем.
 
 ```dart
 class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
   DeviceBloc(this._ble) : super(const DeviceState()) {
-    // Один обработчик на весь тип события, чтобы `sequential()` и правда
-    // делал одну очередь. Четыре `on<E>` сделали бы четыре — см. следующий
-    // пункт.
+    // Один обработчик на весь тип, чтобы `sequential()` делал одну очередь.
     on<DeviceEvent>((e, emit) async {
       switch (e) {
         case Connect():
           await _ble.connect();
           emit(const DeviceState(online: true));
         case ReadBattery():
-          emit(DeviceState(online: true, battery: await _ble.battery()));
+          emit(state.copyWith(battery: await _ble.battery()));
+        case ReadSignal():
+          emit(state.copyWith(signal: await _ble.signal()));
         case Rename(:final name):
           await _ble.rename(name);
         case Disconnect():
-          // Дописан за connect, battery и rename: они уже в очереди, и ни
-          // посмотреть на них, ни выбросить их нельзя.
+          // Оба чтения стоят в очереди перед этим и отработают первыми,
+          // эмитя состояние в уже закрытое окно.
           await _ble.disconnect();
           emit(const DeviceState());
       }
@@ -87,41 +89,47 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
 }
 ```
 
-В `solo` очередь — объект, которым владеет контроллер.
+В `solo` очередь — объект, которым владеет контроллер, а у задач в ней есть
+ключи.
 
 ```dart
-enum DeviceKey { connect, battery, rename, disconnect }
+enum DeviceKey { connect, readBattery, readSignal, rename, disconnect }
 
 final class DeviceController extends Solo<DeviceState> {
   DeviceController(this._ble) : super(const Offline());
 
   final Ble _ble;
 
-  // connect(), readBattery() и rename() — обычные задачи.
+  // connect(), readBattery(), readSignal() и rename() — обычные задачи.
 
   Job<void> disconnect() {
-    // Всё, что стоит в очереди, прямо сейчас завершится Cancelled(manual),
-    // а эта задача встанет в голову очереди, а не в хвост.
-    queue.clear();
-    return add(
-      job<DeviceState, void>(
-        key: DeviceKey.disconnect,
-        (ctx) async {
-          await ctx.guard(_ble.disconnect);
-          ctx.emit(const Offline());
-        },
-      ),
-      first: true,
+    // Чтения нужны были только экрану, который пользователь уже закрыл;
+    // переименование он попросил сам, поэтому остаётся в очереди.
+    queue.removeWhere(
+      (job) =>
+          job.key == DeviceKey.readBattery || job.key == DeviceKey.readSignal,
+    );
+    return run<Connected, void>(
+      key: DeviceKey.disconnect,
+      (ctx) async {
+        await ctx.guard(_ble.disconnect);
+        ctx.emit(const Offline());
+      },
     );
   }
 }
 ```
 
-`queue.clear()` завершает ожидающие задачи исходом `Cancelled(manual)`, так
-что их вызывающие узнают, что произошло, а `first: true` ставит отключение в
-голову, а не в хвост. Выполняющуюся задачу это не трогает: уже начавшийся
-`connect` сначала доработает; если так не надо, поставьте `current?.cancel()`
-перед `clear`.
+`removeWhere` завершает оба чтения исходом `Cancelled(manual)` и завершает
+их `done`, так что вызывающие узнают, что произошло. Переименование
+остаётся — пользователь его попросил и не отменял, — выполняется, и только
+затем выполняется отключение: `first: true` не нужен, потому что очередь
+последовательна по построению, а отключение добавлено последним.
+Выполняющуюся задачу `removeWhere` не трогает: уже начавшийся `connect`
+сначала доработает; если так не надо, поставьте `current?.cancel()` перед
+удалением. Очередь — объект, на который можно посмотреть и из которого можно
+выбросить лишнее, поэтому «выкинуть то, что нужно было только закрытому
+экрану» — это одно выражение, а не переделка.
 
 ### 2. Один restartable среди sequential
 

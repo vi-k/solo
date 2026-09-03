@@ -46,32 +46,35 @@ Cannot emit new states after calling close` (item 7 below).
 
 ### 1. The queue cannot be managed
 
-A BLE device screen. The user taps connect, read battery, rename, and then
-backs out — disconnect. To get a queue at all you funnel every command into
-a single `on<DeviceEvent>` with `sequential()`; four separate `on<E>` would
-give four queues running side by side, which is the next item. Now the queue
-is real, and `Disconnect` is appended behind the three commands: they all
-run against a device the user has left, and the disconnect happens last.
-There is nothing to look at the queue with, nothing to drop pending events
-with, and no way to get ahead of them.
+A BLE device screen. The user opens it — connect — taps to read the battery
+and the signal, renames the device, and closes the window: disconnect. To
+get a queue at all you funnel every command into a single `on<DeviceEvent>`
+with `sequential()`; five separate `on<E>` would give five queues running
+side by side, which is the next item. Now the queue is real, and
+`Disconnect` is appended behind the two reads and the rename. Both reads
+run before the disconnect, each emitting a state for a window that is
+already closed — and nothing lets you drop them: the queue exists, but it
+is opaque. There is nothing to look at it with, and nothing to remove a
+pending event with.
 
 ```dart
 class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
   DeviceBloc(this._ble) : super(const DeviceState()) {
-    // One handler for the whole event type, so that `sequential()` really
-    // makes one queue. Four `on<E>` would make four — see the next item.
+    // One handler for the whole type, so `sequential()` makes one queue.
     on<DeviceEvent>((e, emit) async {
       switch (e) {
         case Connect():
           await _ble.connect();
           emit(const DeviceState(online: true));
         case ReadBattery():
-          emit(DeviceState(online: true, battery: await _ble.battery()));
+          emit(state.copyWith(battery: await _ble.battery()));
+        case ReadSignal():
+          emit(state.copyWith(signal: await _ble.signal()));
         case Rename(:final name):
           await _ble.rename(name);
         case Disconnect():
-          // Appended behind connect, battery and rename, which are in
-          // the queue already and cannot be inspected or dropped.
+          // Both reads are queued ahead of this and run first, each
+          // emitting a state into a window that is already closed.
           await _ble.disconnect();
           emit(const DeviceState());
       }
@@ -82,41 +85,46 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
 }
 ```
 
-In `solo` the queue is an object the controller owns.
+In `solo` the queue is an object the controller owns, and the jobs in it
+have keys.
 
 ```dart
-enum DeviceKey { connect, battery, rename, disconnect }
+enum DeviceKey { connect, readBattery, readSignal, rename, disconnect }
 
 final class DeviceController extends Solo<DeviceState> {
   DeviceController(this._ble) : super(const Offline());
 
   final Ble _ble;
 
-  // connect(), readBattery() and rename() are ordinary jobs.
+  // connect(), readBattery(), readSignal() and rename() are ordinary jobs.
 
   Job<void> disconnect() {
-    // Everything queued finishes right now with Cancelled(manual),
-    // and this job goes to the head of the queue, not the tail.
-    queue.clear();
-    return add(
-      job<DeviceState, void>(
-        key: DeviceKey.disconnect,
-        (ctx) async {
-          await ctx.guard(_ble.disconnect);
-          ctx.emit(const Offline());
-        },
-      ),
-      first: true,
+    // The reads were only for the screen the user has just closed; the
+    // rename is what the user asked for, so it stays in the queue.
+    queue.removeWhere(
+      (job) =>
+          job.key == DeviceKey.readBattery || job.key == DeviceKey.readSignal,
+    );
+    return run<Connected, void>(
+      key: DeviceKey.disconnect,
+      (ctx) async {
+        await ctx.guard(_ble.disconnect);
+        ctx.emit(const Offline());
+      },
     );
   }
 }
 ```
 
-`queue.clear()` finishes the pending jobs with `Cancelled(manual)`, so their
-callers learn what happened, and `first: true` puts the disconnect at the
-head instead of the tail. It leaves the running job alone — a `connect`
-already in flight finishes first; put `current?.cancel()` before the `clear`
-when it should not.
+`removeWhere` finishes the two reads with `Cancelled(manual)` and completes
+their `done`, so their callers learn what happened. The rename survives —
+the user asked for it and never took it back — runs, and only then does the
+disconnect: no `first: true` is needed, because the queue is sequential by
+construction and the disconnect was added last. The running job is
+untouched by `removeWhere`: a `connect` already in flight finishes first;
+put `current?.cancel()` before the removal when it should not. The queue is
+an object you can look at and prune, so "throw away what only the closed
+screen needed" is one expression, not a redesign.
 
 ### 2. One restartable among sequential
 
