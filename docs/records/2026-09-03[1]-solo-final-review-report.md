@@ -94,11 +94,9 @@ dartdoc и спецификации 5.8 нарушали. Теперь `_finish`
 
 ## Решения владельца
 
-- `homepage`/`repository` в `pubspec.yaml` обоих пакетов — единственное
-  оставшееся предупреждение `dart pub publish --dry-run`. Агент URL не
-  выдумывает.
-- От `repository` зависят относительные ссылки в README:
-  `packages/solo/README.md:433` (`example/`) и
-  `packages/flutter_solo/README.md:3` и `:53` (`../solo`). На pub.dev без
-  `repository` они не разрешатся.
+- `repository` в `pubspec.yaml` обоих пакетов — решено 2026-09-03:
+  репозиторий переименован в `github.com/vi-k/solo`, в pubspec прописаны
+  ссылки вида `https://github.com/vi-k/solo/tree/main/packages/<name>`;
+  предупреждение dry-run ушло, относительные ссылки в README на pub.dev
+  разрешаются относительно папки пакета.
 - Дыры в покрытии примера (список выше): дописывать или оставить.

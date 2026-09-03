@@ -3,6 +3,7 @@ description: >-
   Flutter integration for solo: a ValueListenable face for Solo
   controllers.
 version: 1.0.0
+repository: https://github.com/vi-k/solo/tree/main/packages/flutter_solo
 
 environment:
   sdk: ^3.6.0
