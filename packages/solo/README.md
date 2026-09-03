@@ -175,7 +175,7 @@ final class PlayerController extends Solo<PlayerState> {
 
   final Player _player;
 
-  // No policy: play() and pause() queue in the order they were tapped.
+  // play() and pause() run in the order they were tapped.
   Job<void> pause() => run<Ready, void>(
         key: PlayerKey.pause,
         (ctx) async {

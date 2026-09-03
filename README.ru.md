@@ -181,7 +181,7 @@ final class PlayerController extends Solo<PlayerState> {
 
   final Player _player;
 
-  // Политики нет: play() и pause() встают в очередь в порядке нажатий.
+  // play() и pause() выполняются в порядке нажатий.
   Job<void> pause() => run<Ready, void>(
         key: PlayerKey.pause,
         (ctx) async {
