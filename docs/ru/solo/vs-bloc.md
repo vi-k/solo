@@ -146,7 +146,9 @@ final class DeviceController extends Solo<DeviceState> {
     return run<Connected, void>(
       key: DeviceKey.disconnect,
       (ctx) async {
-        await ctx.guard(_ble.disconnect);
+        // Радио не бросают на полпути: тело дожидается его, а emit
+        // бросит Cancelled, если задачу успели отменить.
+        await _ble.disconnect();
         ctx.emit(const Offline());
       },
     );
@@ -348,7 +350,8 @@ class NotesBloc extends Bloc<NotesEvent, NotesState> {
             state.copyWith(notes: [...state.notes, note], uploading: false),
           );
         case RefreshList():
-          emit(state.copyWith(notes: await _api.list()));
+          final serverNotes = await _api.list();
+          emit(state.copyWith(notes: serverNotes));
       }
     }, transformer: sequential());
   }
@@ -363,10 +366,17 @@ class NotesBloc extends Bloc<NotesEvent, NotesState> {
 Глубже лежит другая цена: гарантия здесь — соглашение, а не правило.
 Трансформер на обработчик её не даёт: с `sequential()` на каждом из двух
 отдельных `on<E>` заметка всё равно теряется —
-`NotesState([n0], uploading: true)`, — потому что два обработчика это две
+`NotesState([n0], uploading: false)`, — потому что два обработчика это две
 очереди. И в тот день, когда кто-нибудь зарегистрирует третий `on<E>` под
 новый тип события, у состояния снова окажется два писателя, молча, и ни
 одна сигнатура при этом не изменится.
+
+Две строки, которыми читается список, в большинстве кода пишут одной:
+`emit(state.copyWith(notes: await _api.list()))`. Этот вариант хуже, чем
+кажется: получатель вычисляется раньше ожидаемого аргумента, поэтому
+`state` берётся тот, что был до ожидания. Запись выгрузки происходит внутри
+этого ожидания и затирается целиком: заметка теряется, а `uploading`
+застревает на `true` — `NotesState([n0], uploading: true)`.
 
 **На solo.** Очередь одна и корневая задача выполняется одна, поэтому
 чередоваться не с чем.
@@ -724,7 +734,11 @@ final class MapController extends Solo<MapState> {
 
   Job<void> follow(Track track) => run<MapState, void>(
         key: MapKey.follow,
-        (ctx) => ctx.guard(() => _map.follow(track)),
+        (ctx) async {
+          final token = CancelToken();
+          ctx.onCancel(token.cancel);
+          await _map.follow(track, cancelToken: token);
+        },
       );
 }
 
@@ -912,8 +926,11 @@ final class SensorController extends Solo<SensorState> {
   Job<void> calibrate() => run<Ready, void>(
         key: 'calibrate',
         (ctx) async {
-          await ctx.guard(_hw.zero);
-          await ctx.guard(_hw.sample);
+          // Вызовы датчика дожидаются, а не бросаются; `check` — то
+          // место, где задача сдаётся, если состояние перестало подходить.
+          await _hw.zero();
+          ctx.check();
+          await _hw.sample();
           ctx.emit(const Calibrated());
         },
       );

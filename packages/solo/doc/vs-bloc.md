@@ -139,7 +139,9 @@ final class DeviceController extends Solo<DeviceState> {
     return run<Connected, void>(
       key: DeviceKey.disconnect,
       (ctx) async {
-        await ctx.guard(_ble.disconnect);
+        // The radio is not left mid-command: the body waits for it, and
+        // the emit throws if the job was cancelled meanwhile.
+        await _ble.disconnect();
         ctx.emit(const Offline());
       },
     );
@@ -333,7 +335,8 @@ class NotesBloc extends Bloc<NotesEvent, NotesState> {
             state.copyWith(notes: [...state.notes, note], uploading: false),
           );
         case RefreshList():
-          emit(state.copyWith(notes: await _api.list()));
+          final serverNotes = await _api.list();
+          emit(state.copyWith(notes: serverNotes));
       }
     }, transformer: sequential());
   }
@@ -348,9 +351,16 @@ the table for good, and the whole controller is one `switch`.
 The deeper cost is that the guarantee is a convention, not a rule. A
 transformer per handler does not deliver it: with `sequential()` on each of
 two separate `on<E>` the note is still lost —
-`NotesState([n0], uploading: true)` — because two handlers are two queues.
+`NotesState([n0], uploading: false)` — because two handlers are two queues.
 So the day someone registers a third `on<E>` for a new event type, the state
 has two writers again, silently, and no signature changed.
+
+The two lines that read the list are one line in most code:
+`emit(state.copyWith(notes: await _api.list()))`. That version is worse than
+it looks, because the receiver is evaluated before the awaited argument, so
+`state` is the one from before the wait. The upload's write lands inside
+that wait and is overwritten wholesale: the note is lost and `uploading`
+sticks at `true` — `NotesState([n0], uploading: true)`.
 
 **On solo.** There is one queue and one running root job, so there is
 nothing to interleave with.
@@ -700,7 +710,11 @@ final class MapController extends Solo<MapState> {
 
   Job<void> follow(Track track) => run<MapState, void>(
         key: MapKey.follow,
-        (ctx) => ctx.guard(() => _map.follow(track)),
+        (ctx) async {
+          final token = CancelToken();
+          ctx.onCancel(token.cancel);
+          await _map.follow(track, cancelToken: token);
+        },
       );
 }
 
@@ -884,8 +898,11 @@ final class SensorController extends Solo<SensorState> {
   Job<void> calibrate() => run<Ready, void>(
         key: 'calibrate',
         (ctx) async {
-          await ctx.guard(_hw.zero);
-          await ctx.guard(_hw.sample);
+          // Sensor calls are awaited, not abandoned; `check` is where
+          // the job gives up if the state stopped matching meanwhile.
+          await _hw.zero();
+          ctx.check();
+          await _hw.sample();
           ctx.emit(const Calibrated());
         },
       );
