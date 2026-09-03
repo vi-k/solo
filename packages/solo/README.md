@@ -153,6 +153,30 @@ context — every `JobContext` member except `log` and `job` throws the job's
 wrap it in `ctx.guard(() => ...)`: the guard returns as soon as either the
 action or the cancellation arrives.
 
+**What a guard does not do.** It ends the waiting, not the work. The action
+runs to its end and its result is dropped on the floor, which is fine for a
+read you can abandon and wrong for anything that must actually stop, or
+that must not be started twice at once. Hand the cancellation to the work
+itself with `ctx.onCancel(callback)`, which fires the moment the job is
+marked, and then wait for the work to finish rather than walking away from
+it:
+
+```dart
+Job<void> seek(Duration position) => run<Ready, void>(
+      key: 'seek',
+      policy: Policy.restart,
+      (ctx) async {
+        final token = CancelToken();
+        ctx.onCancel(token.cancel);
+        // The device stops on its own, and the job ends only once it has,
+        // so the next seek never overlaps this one. If the cancellation
+        // arrived while it was stopping, the emit below throws Cancelled.
+        await _player.seek(position, cancelToken: token);
+        ctx.emit(ctx.state.copyWith(position: position));
+      },
+    );
+```
+
 **Children.** `ctx.run(child)` starts a job right now, bypassing the queue,
 as a child of the current one. The parent finishes only after all of its
 children. `ctx.run(child).done` gives the outcome and never throws;

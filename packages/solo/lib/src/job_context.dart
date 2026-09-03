@@ -23,7 +23,34 @@ abstract interface class JobContext<S extends Object, W extends S> {
 
   /// Runs [action] unless the job is already cancelled, then waits for its
   /// result or for cancellation, whichever comes first.
+  ///
+  /// It ends the waiting, not the work: [action] keeps running, and its
+  /// result is discarded. For anything that must actually stop — a device,
+  /// a download, a write — hand the cancellation to it through [onCancel]
+  /// and wait for it to finish, instead of walking away from it.
   Future<T> guard<T>(FutureOr<T> Function() action);
+
+  /// Registers [callback] to run the moment the job is marked cancelled,
+  /// before the body itself learns about it. Returns a function that
+  /// unregisters it.
+  ///
+  /// This is how a cancellation reaches something that can really stop:
+  /// a device's own cancel token, an HTTP client's abort, a subscription.
+  ///
+  /// ```dart
+  /// final token = CancelToken();
+  /// ctx.onCancel(token.cancel);
+  /// // The device stops by itself, and the body waits for it to finish
+  /// // before the job ends and the next one starts.
+  /// await device.seek(position, cancelToken: token);
+  /// ctx.check();
+  /// ```
+  ///
+  /// Throws [Cancelled] if the job is already cancelled: there is nothing
+  /// to register for, and nothing should be started either. An error thrown
+  /// by [callback] goes to `onError` and stops there; the cancellation
+  /// itself is not affected and the other callbacks still run.
+  void Function() onCancel(void Function() callback);
 
   /// Starts [child] right now, bypassing the queue, as a child of this job.
   /// Returns the same handle; the parent finishes only after all children.
@@ -108,6 +135,25 @@ final class _JobContext<S extends Object, W extends S, R>
   @override
   void check() {
     _checkedState();
+  }
+
+  @override
+  void Function() onCancel(void Function() callback) {
+    _throwIfFinished('register onCancel');
+    _throwIfCancelled();
+    void guarded() {
+      // A callback of the caller's, run from inside the engine's own
+      // cancellation: its error belongs to `onError`, not to whoever
+      // happened to trigger the cancel.
+      try {
+        callback();
+      } on Object catch (error, stackTrace) {
+        _solo._notifyError(_job, error, stackTrace);
+      }
+    }
+
+    _job._onCancel.add(guarded);
+    return () => _job._onCancel.remove(guarded);
   }
 
   @override

@@ -310,6 +310,9 @@ final class _Job<S extends Object, W extends S, T> implements Job<T> {
   void _markCancelled(Cancelled cancelled) {
     _pendingCancel = cancelled;
     _cancelled.complete();
+    // In registration order, and from a copy: a callback may register or
+    // remove another one. `JobContext.onCancel` wraps the caller's
+    // callbacks, so an error of theirs never reaches this loop.
     for (final callback in _onCancel.toList()) {
       callback();
     }
