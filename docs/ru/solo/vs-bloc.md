@@ -54,6 +54,9 @@ emit new states after calling close` (пункт 7 ниже).
 
 ```dart
 class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
+  final Ble _ble;
+  bool _leaving = false;
+
   DeviceBloc(this._ble) : super(const DeviceState()) {
     // Один обработчик на весь тип, чтобы `sequential()` делал одну очередь.
     on<DeviceEvent>((e, emit) async {
@@ -75,9 +78,6 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
       }
     }, transformer: sequential());
   }
-
-  final Ble _ble;
-  bool _leaving = false;
 
   @override
   void onEvent(DeviceEvent event) {
@@ -108,9 +108,9 @@ connect]`, и ни одного чтения заряда.
 enum DeviceKey { connect, readBattery, readSignal, rename, disconnect }
 
 final class DeviceController extends Solo<DeviceState> {
-  DeviceController(this._ble) : super(const Offline());
-
   final Ble _ble;
+
+  DeviceController(this._ble) : super(const Offline());
 
   // connect(), readBattery(), readSignal() и rename() — обычные задачи.
 
@@ -160,6 +160,9 @@ final class DeviceController extends Solo<DeviceState> {
 
 ```dart
 class PlayerBloc extends Bloc<PlayerCommand, PlayerState> {
+  final Player _player;
+  Duration? _newestSeek;
+
   PlayerBloc(this._player) : super(const PlayerState()) {
     on<PlayerCommand>((command, emit) async {
       switch (command) {
@@ -175,9 +178,6 @@ class PlayerBloc extends Bloc<PlayerCommand, PlayerState> {
       }
     }, transformer: sequential());
   }
-
-  final Player _player;
-  Duration? _newestSeek;
 
   @override
   void onEvent(PlayerCommand event) {
@@ -206,9 +206,9 @@ end, pause start, pause end]` — один нативный seek на всё д�
 enum PlayerKey { play, pause, seek }
 
 final class PlayerController extends Solo<PlayerState> {
-  PlayerController(this._player) : super(Ready());
-
   final Player _player;
+
+  PlayerController(this._player) : super(Ready());
 
   // play() и pause() выполняются в порядке нажатий.
   Job<void> pause() => run<Ready, void>(
@@ -262,6 +262,8 @@ seek 2 end]`. Меняется то, что его задача отменяет
 
 ```dart
 class NotesBloc extends Bloc<NotesEvent, NotesState> {
+  final Api _api;
+
   // Один обработчик на весь тип, поэтому все записи в состояние
   // сериализованы — та самая форма, к которой принуждал пункт 1.
   NotesBloc(this._api) : super(const NotesState()) {
@@ -278,8 +280,6 @@ class NotesBloc extends Bloc<NotesEvent, NotesState> {
       }
     }, transformer: sequential());
   }
-
-  final Api _api;
 }
 ```
 
@@ -301,9 +301,9 @@ class NotesBloc extends Bloc<NotesEvent, NotesState> {
 
 ```dart
 final class NotesController extends Solo<NotesState> {
-  NotesController(this._api) : super(const NotesState());
-
   final Api _api;
+
+  NotesController(this._api) : super(const NotesState());
 
   Job<void> upload(Note note) => run<NotesState, void>(
         key: 'upload',
@@ -352,6 +352,8 @@ final class NotesController extends Solo<NotesState> {
 
 ```dart
 class FirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
+  final Ble _ble;
+
   FirmwareBloc(this._ble) : super(Idle()) {
     on<Flash>((e, emit) async {
       for (final chunk in e.chunks) {
@@ -364,8 +366,6 @@ class FirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
       }
     }, transformer: restartable());
   }
-
-  final Ble _ble;
 }
 ```
 
@@ -389,9 +389,9 @@ class FirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
 
 ```dart
 final class FirmwareController extends Solo<FirmwareState> {
-  FirmwareController(this._ble) : super(const Idle());
-
   final Ble _ble;
+
+  FirmwareController(this._ble) : super(const Idle());
 
   Job<void> flash(List<Chunk> chunks) => run<NotBroken, void>(
         key: 'flash',
@@ -441,12 +441,16 @@ final class FirmwareController extends Solo<FirmwareState> {
 
 ```dart
 class Pay extends CheckoutEvent {
-  Pay(this.order) : result = Completer<Receipt>();
   final Order order;
   final Completer<Receipt> result;
+
+  Pay(this.order) : result = Completer<Receipt>();
 }
 
 class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
+  final Api _api;
+  final _inFlight = <String, Completer<Receipt>>{};
+
   CheckoutBloc(this._api) : super(Cart()) {
     on<Pay>((e, emit) async {
       emit(Paying());
@@ -464,9 +468,6 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
       // обработчик, и его completer не завершился бы никогда.
     }, transformer: sequential());
   }
-
-  final Api _api;
-  final _inFlight = <String, Completer<Receipt>>{};
 
   /// То, чем место вызова пользуется вместо `add`.
   Future<Receipt> pay(Order order) {
@@ -497,9 +498,9 @@ bloc, completer как раз и не видит: после `close()` вызо�
 
 ```dart
 final class CheckoutController extends Solo<CheckoutState> {
-  CheckoutController(this._api) : super(const Cart());
-
   final Api _api;
+
+  CheckoutController(this._api) : super(const Cart());
 
   Job<Receipt> pay(Order order) => run<CheckoutState, Receipt>(
         // Ключ называет заказ, поэтому двойное нажатие — дубль, а другой
@@ -560,9 +561,9 @@ Future<void> onPayPressed(CheckoutController checkout, Order order) async {
 
 ```dart
 class MapCubit extends Cubit<MapState> {
-  MapCubit(this._map) : super(const MapState());
-
   final MapApi _map;
+
+  MapCubit(this._map) : super(const MapState());
 
   Future<void> moveTo(Point<double> point) async {
     await _map.moveTo(point);
@@ -596,9 +597,9 @@ end, moveTo 1 end]`: карта осядет на первом кадре дви
 enum MapKey { moveTo, setZoom, follow }
 
 final class MapController extends Solo<MapState> {
-  MapController(this._map) : super(const MapState());
-
   final MapApi _map;
+
+  MapController(this._map) : super(const MapState());
 
   // Движение пальца выпускает это на каждом кадре; важна только самая
   // свежая точка.
@@ -654,6 +655,8 @@ moveTo 3 start, moveTo 3 end, moveTo 1 end]`: средний кадр не ст�
 
 ```dart
 class ChatBloc extends Bloc<ChatEvent, ChatState> {
+  final Api _api;
+
   ChatBloc(this._api) : super(const ChatState()) {
     on<SendMessage>((e, emit) async {
       final reply = await _api.send(e.text);
@@ -667,8 +670,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }, transformer: sequential());
     on<MarkRead>((e, emit) => _api.markRead(), transformer: sequential());
   }
-
-  final Api _api;
 }
 ```
 
@@ -698,9 +699,9 @@ add new events after calling close`
 
 ```dart
 final class ChatController extends Solo<ChatState> {
-  ChatController(this._api) : super(const ChatState());
-
   final Api _api;
+
+  ChatController(this._api) : super(const ChatState());
 
   Job<void> send(String text) => run<ChatState, void>(
         key: 'send',
@@ -753,6 +754,8 @@ directly outside of tests» («только для внутреннего исп
 
 ```dart
 class SensorBloc extends Bloc<SensorEvent, SensorState> {
+  final Sensor _hw;
+
   SensorBloc(this._hw) : super(Ready()) {
     // Поддерживаемый путь внутрь — событие. У него свой обработчик, чтобы
     // он мог работать *рядом* с калибровкой, а не за ней.
@@ -769,8 +772,6 @@ class SensorBloc extends Bloc<SensorEvent, SensorState> {
       emit(Calibrated());
     }, transformer: sequential());
   }
-
-  final Sensor _hw;
 }
 ```
 
@@ -794,14 +795,14 @@ Broken(cable unplugged)]`, причём `Calibrated` по дороге опуб�
 
 ```dart
 final class SensorController extends Solo<SensorState> {
+  final Sensor _hw;
+
   SensorController(this._hw) : super(const Ready()) {
     // Листенер сам пишет состояние. Каждая работающая задача, которая
     // перестала подходить состоянию по рабочему типу или keepWhile,
     // отменяется сразу.
     _hw.onError = (error) => externalSetState(Broken(error));
   }
-
-  final Sensor _hw;
 
   // Предусловие — это сигнатура: W здесь Ready. В теле проверять нечего и
   // повторять после каждого await нечего.

@@ -49,6 +49,9 @@ synchronously and therefore before the queue reaches them.
 
 ```dart
 class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
+  final Ble _ble;
+  bool _leaving = false;
+
   DeviceBloc(this._ble) : super(const DeviceState()) {
     // One handler for the whole type, so `sequential()` makes one queue.
     on<DeviceEvent>((e, emit) async {
@@ -70,9 +73,6 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
       }
     }, transformer: sequential());
   }
-
-  final Ble _ble;
-  bool _leaving = false;
 
   @override
   void onEvent(DeviceEvent event) {
@@ -103,9 +103,9 @@ have keys.
 enum DeviceKey { connect, readBattery, readSignal, rename, disconnect }
 
 final class DeviceController extends Solo<DeviceState> {
-  DeviceController(this._ble) : super(const Offline());
-
   final Ble _ble;
+
+  DeviceController(this._ble) : super(const Offline());
 
   // connect(), readBattery(), readSignal() and rename() are ordinary jobs.
 
@@ -154,6 +154,9 @@ and one early return, with no custom `EventTransformer` to write.
 
 ```dart
 class PlayerBloc extends Bloc<PlayerCommand, PlayerState> {
+  final Player _player;
+  Duration? _newestSeek;
+
   PlayerBloc(this._player) : super(const PlayerState()) {
     on<PlayerCommand>((command, emit) async {
       switch (command) {
@@ -169,9 +172,6 @@ class PlayerBloc extends Bloc<PlayerCommand, PlayerState> {
       }
     }, transformer: sequential());
   }
-
-  final Player _player;
-  Duration? _newestSeek;
 
   @override
   void onEvent(PlayerCommand event) {
@@ -200,9 +200,9 @@ to a job, not to the queue.
 enum PlayerKey { play, pause, seek }
 
 final class PlayerController extends Solo<PlayerState> {
-  PlayerController(this._player) : super(Ready());
-
   final Player _player;
+
+  PlayerController(this._player) : super(Ready());
 
   // play() and pause() run in the order they were tapped.
   Job<void> pause() => run<Ready, void>(
@@ -256,6 +256,8 @@ ever between an `await` and an `emit`.
 
 ```dart
 class NotesBloc extends Bloc<NotesEvent, NotesState> {
+  final Api _api;
+
   // One handler for the whole type, so every write to the state is
   // serialized — the shape item 1 was forced into.
   NotesBloc(this._api) : super(const NotesState()) {
@@ -272,8 +274,6 @@ class NotesBloc extends Bloc<NotesEvent, NotesState> {
       }
     }, transformer: sequential());
   }
-
-  final Api _api;
 }
 ```
 
@@ -294,9 +294,9 @@ nothing to interleave with.
 
 ```dart
 final class NotesController extends Solo<NotesState> {
-  NotesController(this._api) : super(const NotesState());
-
   final Api _api;
+
+  NotesController(this._api) : super(const NotesState());
 
   Job<void> upload(Note note) => run<NotesState, void>(
         key: 'upload',
@@ -341,6 +341,8 @@ all it does — the loop goes on writing.
 
 ```dart
 class FirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
+  final Ble _ble;
+
   FirmwareBloc(this._ble) : super(Idle()) {
     on<Flash>((e, emit) async {
       for (final chunk in e.chunks) {
@@ -353,8 +355,6 @@ class FirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
       }
     }, transformer: restartable());
   }
-
-  final Ble _ble;
 }
 ```
 
@@ -379,9 +379,9 @@ itself.
 
 ```dart
 final class FirmwareController extends Solo<FirmwareState> {
-  FirmwareController(this._ble) : super(const Idle());
-
   final Ble _ble;
+
+  FirmwareController(this._ble) : super(const Idle());
 
   Job<void> flash(List<Chunk> chunks) => run<NotBroken, void>(
         key: 'flash',
@@ -427,12 +427,16 @@ the bloc that hands its future back to the screen.
 
 ```dart
 class Pay extends CheckoutEvent {
-  Pay(this.order) : result = Completer<Receipt>();
   final Order order;
   final Completer<Receipt> result;
+
+  Pay(this.order) : result = Completer<Receipt>();
 }
 
 class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
+  final Api _api;
+  final _inFlight = <String, Completer<Receipt>>{};
+
   CheckoutBloc(this._api) : super(Cart()) {
     on<Pay>((e, emit) async {
       emit(Paying());
@@ -451,9 +455,6 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
       // never complete.
     }, transformer: sequential());
   }
-
-  final Api _api;
-  final _inFlight = <String, Completer<Receipt>>{};
 
   /// What the call site uses instead of `add`.
   Future<Receipt> pay(Order order) {
@@ -485,9 +486,9 @@ throws `Bad state: Cannot add new events after calling close`, which is item
 
 ```dart
 final class CheckoutController extends Solo<CheckoutState> {
-  CheckoutController(this._api) : super(const Cart());
-
   final Api _api;
+
+  CheckoutController(this._api) : super(const Cart());
 
   Job<Receipt> pay(Order order) => run<CheckoutState, Receipt>(
         // The key names the order, so a double tap is a duplicate and a
@@ -547,9 +548,9 @@ another way of saying the ceremony belongs to events, not to the package.
 
 ```dart
 class MapCubit extends Cubit<MapState> {
-  MapCubit(this._map) : super(const MapState());
-
   final MapApi _map;
+
+  MapCubit(this._map) : super(const MapState());
 
   Future<void> moveTo(Point<double> point) async {
     await _map.moveTo(point);
@@ -583,9 +584,9 @@ hand, and a cubit's `close()` does not wait for the chain either.
 enum MapKey { moveTo, setZoom, follow }
 
 final class MapController extends Solo<MapState> {
-  MapController(this._map) : super(const MapState());
-
   final MapApi _map;
+
+  MapController(this._map) : super(const MapState());
 
   // A drag fires this on every frame; only the newest point matters.
   Job<void> moveTo(Point<double> point) => run<MapState, void>(
@@ -640,6 +641,8 @@ Either way the body keeps running.
 
 ```dart
 class ChatBloc extends Bloc<ChatEvent, ChatState> {
+  final Api _api;
+
   ChatBloc(this._api) : super(const ChatState()) {
     on<SendMessage>((e, emit) async {
       final reply = await _api.send(e.text);
@@ -653,8 +656,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }, transformer: sequential());
     on<MarkRead>((e, emit) => _api.markRead(), transformer: sequential());
   }
-
-  final Api _api;
 }
 ```
 
@@ -683,9 +684,9 @@ moving the screen underneath the user.
 
 ```dart
 final class ChatController extends Solo<ChatState> {
-  ChatController(this._api) : super(const ChatState());
-
   final Api _api;
+
+  ChatController(this._api) : super(const ChatState());
 
   Job<void> send(String text) => run<ChatState, void>(
         key: 'send',
@@ -738,6 +739,8 @@ than behind it; and the calibration repeats its precondition after every
 
 ```dart
 class SensorBloc extends Bloc<SensorEvent, SensorState> {
+  final Sensor _hw;
+
   SensorBloc(this._hw) : super(Ready()) {
     // The supported way in is an event. It gets its own handler, so that
     // it can run *beside* the calibration instead of behind it.
@@ -754,8 +757,6 @@ class SensorBloc extends Bloc<SensorEvent, SensorState> {
       emit(Calibrated());
     }, transformer: sequential());
   }
-
-  final Sensor _hw;
 }
 ```
 
@@ -778,13 +779,13 @@ declaration.
 
 ```dart
 final class SensorController extends Solo<SensorState> {
+  final Sensor _hw;
+
   SensorController(this._hw) : super(const Ready()) {
     // The listener writes the state itself. Every running job whose
     // working type or keepWhile no longer holds is cancelled at once.
     _hw.onError = (error) => externalSetState(Broken(error));
   }
-
-  final Sensor _hw;
 
   // The precondition is the signature: W is Ready. Nothing to check in
   // the body, and nothing to repeat after each await.

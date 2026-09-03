@@ -25,8 +25,9 @@ import 'package:flutter_solo/flutter_solo.dart';
 sealed class CounterState {}
 
 class Idle extends CounterState {
-  Idle(this.count);
   final int count;
+
+  Idle(this.count);
 }
 
 class Counter extends SoloListenable<CounterState> {
@@ -38,9 +39,9 @@ class Counter extends SoloListenable<CounterState> {
 }
 
 class CounterView extends StatelessWidget {
-  const CounterView({super.key, required this.counter});
-
   final Counter counter;
+
+  const CounterView({super.key, required this.counter});
 
   @override
   Widget build(BuildContext context) => ValueListenableBuilder<CounterState>(
