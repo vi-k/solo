@@ -88,7 +88,8 @@ BLE-устройство, плеер, синхронизация), где сос
 ## Раскладка репозитория
 
 Монорепозиторий. В корне только документы для владельца и агентов
-(`AGENTS.md`, `CLAUDE.md`, `docs/`), `LICENSE` и короткий `README.md`.
+(`AGENTS.md`, `CLAUDE.md`, `docs/`), `LICENSE`, короткий `README.md` и
+`README.ru.md` — перевод README пакета `solo`.
 Пакеты в `packages/`:
 
 - `packages/solo` — ядро, чистый Dart, со своим `example/`.

@@ -5,13 +5,17 @@
 - По-русски: `AGENTS.md`, `docs/*.md`, `docs/records/`, общение с владельцем.
 - По-английски: `README.md`, `CHANGELOG.md`, dartdoc в `lib/`, сообщения
   коммитов, тексты ошибок и `assert`-сообщений.
+- `README.ru.md` в корне — перевод `packages/solo/README.md`; правка
+  оригинала, включая комментарии в коде, идёт вместе с правкой перевода в
+  одном коммите. Файл лежит вне пакета и на pub.dev не попадает.
 
 ## Код
 
 - Dart SDK: ограничение в `pubspec.yaml`, локально ставится последний
   stable. Никаких зависимостей на Flutter в ядре.
 - Раскладка: монорепозиторий, пакеты в `packages/`. Корень держит только
-  `AGENTS.md`, `CLAUDE.md`, `docs/`, `LICENSE`, короткий `README.md`.
+  `AGENTS.md`, `CLAUDE.md`, `docs/`, `LICENSE`, короткий `README.md` и
+  `README.ru.md` — перевод README пакета `solo`.
 - Линты: `analysis_options.yaml` в папке каждого пакета (pub.dev анализирует
   пакет без корня репозитория), поверх `package:lints/recommended`
   со строгими режимами `strict-casts`, `strict-inference`, `strict-raw-types`
@@ -58,6 +62,7 @@
 - `docs/backlog.md` — записи владельца, агент только читает и удаляет
   сделанное.
 - `docs/architecture.md` — редко меняющееся устройство.
+- `README.ru.md` в корне — русский перевод `README.md` пакета `solo`.
 - `docs/records/` — история: `YYYY-MM-DD[N]-name-kind.md` с шапкой о
   состоянии. Правила именования и шапка описаны в `AGENTS.md`.
 - Ревью: вердикт в конце каждой находки отдельным абзацем, не больше одного,

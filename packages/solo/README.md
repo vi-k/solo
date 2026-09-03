@@ -1,5 +1,7 @@
 # solo
 
+Русская версия: [README.ru.md](https://github.com/vi-k/solo/blob/main/README.ru.md)
+
 One job at a time: sequential jobs with exclusive state ownership,
 declarative rules and cooperative cancellation. Pure Dart, no Flutter
 dependency; [`flutter_solo`](https://pub.dev/packages/flutter_solo) adds the
@@ -40,7 +42,7 @@ arguments and returns a value you can `await` — and felangel points at it in
 [#1556](https://github.com/felangel/bloc/issues/1556) itself. For the rest
 it offers nothing: there is no queue to manage (1), no transformers at all
 (2, 3), no cancellation (4), and `emit` after `close` throws `Bad state:
-Cannot emit new states after calling close` (7).
+Cannot emit new states after calling close` (item 7 below).
 
 ### 1. The queue cannot be managed
 
@@ -196,7 +198,7 @@ this bug has a one-line cure — read `state` after the await instead of
 before it — and both handlers below do. What that does not cure is the
 interleaving: `RefreshList` asks the server before the upload lands and
 emits the answer after it, so a list that predates the note `UploadNote` has
-just merged goes back over the newer one. No snapshot is involved; the two
+just merged is written back over the newer one. No snapshot is involved; the two
 handlers simply take turns on one object.
 
 ```dart

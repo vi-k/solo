@@ -86,9 +86,13 @@ push — `dart pub publish`» не запущено и без такого за�
 ## Состояние дерева и проверок
 
 Раскладка: корень — `AGENTS.md`, `CLAUDE.md`, `docs/`, `LICENSE`,
-`README.md`, `.vscode/`. Пакеты в `packages/`, каждый со своими `LICENSE`,
-`README.md`, `CHANGELOG.md`, `analysis_options.yaml`. Локально Dart SDK
-3.13.0, Flutter 3.47.0 (fvm); пол во всех пакетах — `sdk: ^3.6.0`.
+`README.md`, `README.ru.md`, `.vscode/`. Пакеты в `packages/`, каждый со
+своими `LICENSE`, `README.md`, `CHANGELOG.md`, `analysis_options.yaml`.
+Локально Dart SDK 3.13.0, Flutter 3.47.0 (fvm); пол во всех пакетах —
+`sdk: ^3.6.0`.
+
+Корневой `README.ru.md` — перевод README пакета `solo`, синхронизируется по
+правилу из `AGENTS.md` (правка оригинала и правка перевода в одном коммите).
 
 ### `packages/solo`
 
