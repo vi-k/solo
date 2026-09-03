@@ -133,14 +133,18 @@ final class DeviceController extends Solo<DeviceState> {
 
 ### 2. Один restartable среди sequential
 
-Медиаплеер. `play`, `pause`, `seek` и `setVolume` говорят с одним нативным
-плеером, поэтому выполняться должны по одному; но `seek`, выпущенный, пока
+Медиаплеер. `play`, `pause` и `seek` говорят с одним нативным плеером,
+поэтому выполняться должны по одному; но `seek`, выпущенный, пока
 пользователь тянет ползунок, должен перезапускаться, а не вставать в
-очередь. В bloc трансформер — аргумент `on<E>`, и `sequential()`
-упорядочивает только события этого одного типа, обработчики разных типов всё
-равно накладываются. Чтобы выстроить в линию все четыре, их сводят в один
-`on<PlayerCommand>`, и после этого `seek` уже не может быть `restartable()`:
-у одного обработчика один трансформер. Запасной выход — написать
+очередь: важна только последняя позиция. А два переключателя, наоборот,
+обязаны выполняться в том порядке, в каком их нажали. В bloc трансформер —
+аргумент `on<E>`, и `sequential()` упорядочивает только события этого одного
+типа, обработчики разных типов всё равно накладываются. Чтобы выстроить в
+линию все три, их сводят в один `on<PlayerCommand>`, и после этого `seek`
+уже не может быть `restartable()`: у одного обработчика один трансформер.
+Дать `seek` собственный `on<Seek>` с `restartable()` — он и правда начнёт
+перезапускаться, но пойдёт рядом с `play` и `pause`, а не в одну линию с
+ними: та же ловушка с другой стороны. Запасной выход — написать
 `EventTransformer` руками: он видит события и мог бы ветвиться по их типу, —
 ценой того, что его надо написать.
 
@@ -148,9 +152,9 @@ final class DeviceController extends Solo<DeviceState> {
 class PlayerBloc extends Bloc<PlayerCommand, PlayerState> {
   PlayerBloc(this._player) : super(const PlayerState()) {
     // Один обработчик на все команды: трансформер применяется к своему
-    // `on<E>`, поэтому четыре обработчика с `sequential()` всё равно
-    // накладывались бы. Seek теперь тоже sequential — перетаскивание
-    // ползунка встаёт в очередь целиком.
+    // `on<E>`, поэтому три обработчика с `sequential()` всё равно
+    // накладывались бы. Seek теперь тоже sequential — каждый шаг ползунка
+    // встаёт в очередь.
     on<PlayerCommand>((command, emit) async {
       switch (command) {
         case Play():
@@ -160,8 +164,6 @@ class PlayerBloc extends Bloc<PlayerCommand, PlayerState> {
         case Seek(:final position):
           await _player.seek(position);
           emit(PlayerState(position: position));
-        case SetVolume(:final value):
-          await _player.setVolume(value);
       }
     }, transformer: sequential());
   }
@@ -174,28 +176,28 @@ class PlayerBloc extends Bloc<PlayerCommand, PlayerState> {
 задаче, а не очереди.
 
 ```dart
-enum PlayerKey { play, pause, seek, volume }
+enum PlayerKey { play, pause, seek }
 
 final class PlayerController extends Solo<PlayerState> {
-  PlayerController(this._player) : super(const Stopped());
+  PlayerController(this._player) : super(const Idle());
 
   final Player _player;
 
-  Job<void> pause() => run<Playing, void>(
+  // Политики нет: play() и pause() встают в очередь в порядке нажатий.
+  Job<void> pause() => run<Ready, void>(
         key: PlayerKey.pause,
-        policy: Policy.droppable,
-        (ctx) async => ctx.guard(_player.pause),
+        (ctx) async {
+          await ctx.guard(_player.pause);
+          ctx.emit(ctx.state.copyWith(playing: false));
+        },
       );
 
-  // Единственная перезапускаемая задача здесь. Остальные остаются
-  // последовательными, не говоря об этом: очередь одна, и выполняет она
-  // одну задачу за раз.
-  Job<void> seek(Duration position) => run<Playing, void>(
+  Job<void> seek(Duration position) => run<Ready, void>(
         key: PlayerKey.seek,
         policy: Policy.restart,
         (ctx) async {
           await ctx.guard(() => _player.seek(position));
-          ctx.emit(Playing(position: position));
+          ctx.emit(ctx.state.copyWith(position: position));
         },
       );
 }
@@ -203,7 +205,10 @@ final class PlayerController extends Solo<PlayerState> {
 
 `Policy.restart` отменяет выполняющийся seek и выбрасывает стоящие в
 очереди — все по ключу `seek`; больше в контроллере ничего не меняется,
-потому что политика называет ключ, а не дорожку.
+потому что политика называет ключ, а не дорожку. У `play()` и `pause()`
+политики нет, поэтому они остаются в той же единственной очереди и
+выполняются в том порядке, в каком их нажали: перезапуск достаёт только до
+seek и ни до чего больше.
 
 ### 3. Параллельные обработчики пишут в одно состояние
 

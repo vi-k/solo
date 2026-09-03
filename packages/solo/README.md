@@ -128,22 +128,26 @@ screen needed" is one expression, not a redesign.
 
 ### 2. One restartable among sequential
 
-A media player. `play`, `pause`, `seek` and `setVolume` all talk to one
-native player, so they must run one at a time; but a `seek` fired while the
-user drags the slider must restart, not queue. In bloc a transformer is an
-argument to `on<E>`, and `sequential()` orders only the events of that one
-type — handlers of different types still overlap. To serialize all four you
+A media player. `play`, `pause` and `seek` all talk to one native player, so
+they must run one at a time; but a `seek` fired while the user drags the
+slider must restart, not queue — only the last position matters, while the
+two toggles must run in the order they were tapped. In bloc a transformer is
+an argument to `on<E>`, and `sequential()` orders only the events of that one
+type — handlers of different types still overlap. To serialize all three you
 funnel them into a single `on<PlayerCommand>`, and from there `seek` can no
-longer be `restartable()`: one handler has one transformer. The escape hatch
-is to write an `EventTransformer` by hand — it sees the events and could
-branch on their type — at the cost of writing it.
+longer be `restartable()`: one handler has one transformer. Give `seek` its
+own `on<Seek>` with `restartable()` and it does restart, but that handler now
+runs beside `play` and `pause` instead of in line with them — the same trap
+from the other side. The escape hatch is to write an `EventTransformer` by
+hand — it sees the events and could branch on their type — at the cost of
+writing it.
 
 ```dart
 class PlayerBloc extends Bloc<PlayerCommand, PlayerState> {
   PlayerBloc(this._player) : super(const PlayerState()) {
     // One handler for every command: a transformer applies per `on<E>`,
-    // so four handlers with `sequential()` would still overlap. Seek is
-    // sequential now too — a drag queues the whole slider.
+    // so three handlers with `sequential()` would still overlap. Seek is
+    // sequential now too — a drag queues every step of the slider.
     on<PlayerCommand>((command, emit) async {
       switch (command) {
         case Play():
@@ -153,8 +157,6 @@ class PlayerBloc extends Bloc<PlayerCommand, PlayerState> {
         case Seek(:final position):
           await _player.seek(position);
           emit(PlayerState(position: position));
-        case SetVolume(:final value):
-          await _player.setVolume(value);
       }
     }, transformer: sequential());
   }
@@ -167,35 +169,38 @@ In `solo` the queue is sequential by construction, and a policy belongs to a
 job, not to the queue.
 
 ```dart
-enum PlayerKey { play, pause, seek, volume }
+enum PlayerKey { play, pause, seek }
 
 final class PlayerController extends Solo<PlayerState> {
-  PlayerController(this._player) : super(const Stopped());
+  PlayerController(this._player) : super(const Idle());
 
   final Player _player;
 
-  Job<void> pause() => run<Playing, void>(
+  // No policy: play() and pause() queue in the order they were tapped.
+  Job<void> pause() => run<Ready, void>(
         key: PlayerKey.pause,
-        policy: Policy.droppable,
-        (ctx) async => ctx.guard(_player.pause),
+        (ctx) async {
+          await ctx.guard(_player.pause);
+          ctx.emit(ctx.state.copyWith(playing: false));
+        },
       );
 
-  // The only restartable job here. The others stay sequential without
-  // saying so: there is one queue, and it runs one job at a time.
-  Job<void> seek(Duration position) => run<Playing, void>(
+  Job<void> seek(Duration position) => run<Ready, void>(
         key: PlayerKey.seek,
         policy: Policy.restart,
         (ctx) async {
           await ctx.guard(() => _player.seek(position));
-          ctx.emit(Playing(position: position));
+          ctx.emit(ctx.state.copyWith(position: position));
         },
       );
 }
 ```
 
-`Policy.restart` cancels the seek in flight and drops the queued ones, all
-by the `seek` key; nothing else in the controller changes, because the
-policy names a key rather than a lane.
+`Policy.restart` cancels the seek in flight and drops the queued ones, all by
+the `seek` key; nothing else in the controller changes, because the policy
+names a key rather than a lane. `play()` and `pause()` name no policy, so
+they stay in the same one queue and run in the order they were tapped: the
+restart reaches seeks and nothing else.
 
 ### 3. Handlers running in parallel write one state
 
