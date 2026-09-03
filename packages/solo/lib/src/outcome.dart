@@ -40,6 +40,17 @@ final class Done<T> extends Outcome<T> {
 }
 
 /// The job body threw [error].
+///
+/// The engine reports it to `SoloBase.onError` and `SoloObserver.onError`
+/// first. If nobody then observes the job — no `Job.done`, no `Job.value`,
+/// no `Job.ignore` — the engine hands [error] to the zone the job was
+/// created in, through `Zone.handleUncaughtError`, one microtask after the
+/// job finished. This is what Dart does with an unhandled `Future` error.
+///
+/// An error the engine learns about only through `onError` never reaches
+/// the zone: a body that throws after cancellation, or an action abandoned
+/// by `JobContext.guard` that fails later, both end as [Cancelled], and
+/// [Cancelled] is never reported to the zone.
 final class Failed extends Outcome<Never> {
   /// The thrown error.
   final Object error;

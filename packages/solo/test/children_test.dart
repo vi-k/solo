@@ -263,7 +263,10 @@ void main() {
           throw StateError('boom');
         });
         await ctx.run(child).value;
-      });
+      })
+          // The journal below is the whole assertion; keep the parent's
+          // failure out of the zone.
+          .ignore();
       async.flushTimers();
       expect(journal.take(), [
         '[parent] started',

@@ -89,7 +89,7 @@ abstract class SoloBase<S extends Object> {
   }) {
     final impl = _own(job);
     if (policy != Policy.sequential && impl.key == null) {
-      throw ArgumentError.value(policy, 'policy', 'requires a job key');
+      throw ArgumentError('Policy.${policy.name} requires a job key');
     }
     if (impl._status != _JobStatus.created) {
       throw StateError('$impl has already been added or run');
@@ -235,7 +235,9 @@ abstract class SoloBase<S extends Object> {
           stackTrace: stackTrace,
         ),
       );
-      current.done.then((_) => _finishClose(completer));
+      // `_done.future`, not `done`: closing waits for the job, it does not
+      // observe its outcome, so a failure here still reaches the zone.
+      current._done.future.then((_) => _finishClose(completer));
     }
     return completer.future;
   }
@@ -269,6 +271,12 @@ abstract class SoloBase<S extends Object> {
   void onFinish(Job<Object?> job) {}
 
   /// A job body threw a non-[Cancelled] error, even after cancellation.
+  ///
+  /// Called for every such error, including the ones that end as
+  /// [Cancelled] and are therefore never handed to the zone: a body that
+  /// throws after cancellation, or an action abandoned by
+  /// [JobContext.guard] that fails later. Those are this hook's business
+  /// alone. See [Failed] for the errors that also reach the zone.
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) {}
 
   /// A job called [JobContext.log].

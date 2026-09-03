@@ -44,7 +44,7 @@ void main() {
             ..emit(const Preparing())
             ..log('x');
           throw StateError('boom');
-        });
+        }).ignore();
         async.flushMicrotasks();
         expect(journal.take(), [
           '[job] started',

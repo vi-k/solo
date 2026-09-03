@@ -4,6 +4,11 @@ part of 'solo_base.dart';
 ///
 /// Not a [Future]: calling a controller method without `await` is legal.
 /// Await [done], [value] or [whenCancelled] where you need to.
+///
+/// A job that ends with [Failed] and is never observed hands its error to
+/// the zone that created the job, the way Dart reports an unhandled
+/// `Future` error. Touching [done], [value] or [ignore] counts as
+/// observing it; see [ignore].
 abstract interface class Job<T> {
   /// The key given at creation; compared with `==` by policies and queue
   /// searches.
@@ -34,10 +39,17 @@ abstract interface class Job<T> {
   Outcome<T>? get outcome;
 
   /// Completes with the outcome; never throws.
+  ///
+  /// Reading it marks the job observed, so a [Failed] outcome is not
+  /// reported to the zone.
   Future<Outcome<T>> get done;
 
   /// Completes with the returned value, or throws [Cancelled] with the
   /// cancellation stack trace, or throws the body's error.
+  ///
+  /// Reading it marks the job observed, so a [Failed] outcome is not
+  /// reported to the zone. Handle the error the future carries, or it
+  /// becomes an unhandled `Future` error instead.
   Future<T> get value;
 
   /// Completes when the job is marked cancelled, before the body finishes,
@@ -50,6 +62,22 @@ abstract interface class Job<T> {
   /// A running job with `cancellable: false` is not cancelled; the
   /// returned future still waits for it to finish.
   Future<void> cancel();
+
+  /// Tells the engine that nobody is interested in this job's failure.
+  ///
+  /// The counterpart of `Future.ignore`. A job that ends with [Failed]
+  /// without ever being observed hands its error to the zone that created
+  /// it; call this on a fire-and-forget job whose failure is already
+  /// handled elsewhere, by [SoloBase.onError] or by [SoloObserver.onError].
+  ///
+  /// ```dart
+  /// solo.run<Ready, void>((ctx) => ctx.guard(hw.close)).ignore();
+  /// ```
+  ///
+  /// Waiting for [done] or [value] observes the job too; calling this
+  /// afterwards changes nothing. Has no effect on [Cancelled], which is
+  /// never reported to the zone.
+  void ignore();
 }
 
 enum _JobStatus { created, queued, running, finished }
@@ -67,6 +95,12 @@ final class _Job<S extends Object, W extends S, T> implements Job<T> {
 
   @override
   int level = 0;
+
+  /// The zone the job was created in; an unobserved [Failed] goes here.
+  final Zone _zone = Zone.current;
+
+  /// Whether anyone asked for the outcome: [done], [value] or [ignore].
+  bool _observed = false;
 
   _JobStatus _status = _JobStatus.created;
   Outcome<T>? _outcome;
@@ -110,11 +144,18 @@ final class _Job<S extends Object, W extends S, T> implements Job<T> {
   Outcome<T>? get outcome => _outcome;
 
   @override
-  Future<Outcome<T>> get done => _done.future;
+  Future<Outcome<T>> get done {
+    _observed = true;
+    return _done.future;
+  }
+
+  @override
+  void ignore() => _observed = true;
 
   @override
   Future<T> get value async {
-    final outcome = await done;
+    _observed = true;
+    final outcome = await _done.future;
     return switch (outcome) {
       Done(:final value) => value,
       Failed(:final error, :final stackTrace) =>
@@ -139,7 +180,9 @@ final class _Job<S extends Object, W extends S, T> implements Job<T> {
         stackTrace: StackTrace.current,
       ),
     );
-    return done.then((_) {});
+    // The engine's own waiting is not observation: `_done.future`, not
+    // `done`, so cancelling a job does not silence its failure.
+    return _done.future.then((_) {});
   }
 
   /// A rejection description if [state] fails the start rules, else null.
@@ -217,9 +260,11 @@ final class _Job<S extends Object, W extends S, T> implements Job<T> {
 
   Future<void> _awaitChildren() async {
     while (true) {
+      // `_done.future`, not `done`: waiting for a child is the engine's
+      // business and must not mark the child observed for the parent.
       final pending = [
         for (final child in _children)
-          if (!child.isFinished) child.done,
+          if (!child.isFinished) child._done.future,
       ];
       if (pending.isEmpty) {
         return;
@@ -242,7 +287,24 @@ final class _Job<S extends Object, W extends S, T> implements Job<T> {
       _solo._onJobFinished(this);
     } finally {
       _done.complete(outcome);
+      if (outcome is Failed && !_observed) {
+        _reportUnobserved(outcome);
+      }
     }
+  }
+
+  /// Hands an unobserved failure to the zone that created the job.
+  ///
+  /// One microtask of grace, the same as Dart gives an unhandled `Future`
+  /// error: a listener attached right after the job finished still counts.
+  void _reportUnobserved(Failed outcome) {
+    _zone.scheduleMicrotask(() {
+      if (_observed) {
+        return;
+      }
+      SoloBase._debug(() => '$this failure went to the zone');
+      _zone.handleUncaughtError(outcome.error, outcome.stackTrace);
+    });
   }
 
   void _markCancelled(Cancelled cancelled) {
