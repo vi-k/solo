@@ -119,10 +119,9 @@ final class DeviceController extends Solo<DeviceState> {
 `removeWhere` finishes the two reads with `Cancelled(manual)` and completes
 their `done`, so their callers learn what happened. The rename survives —
 the user asked for it and never took it back — runs, and only then does the
-disconnect: no `first: true` is needed, because the queue is sequential by
-construction and the disconnect was added last. The running job is
-untouched by `removeWhere`: a `connect` already in flight finishes first;
-put `current?.cancel()` before the removal when it should not. The queue is
+disconnect, because the queue is sequential and the disconnect was added
+last. `removeWhere` touches only the queue: a `connect` already in flight
+finishes first. The queue is
 an object you can look at and prune, so "throw away what only the closed
 screen needed" is one expression, not a redesign.
 
