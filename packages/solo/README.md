@@ -20,6 +20,605 @@ dependency; [`flutter_solo`](https://pub.dev/packages/flutter_solo) adds the
 6. from the outside you want to call a method, not build an event and
    `add` it.
 
+[Where bloc falls short](#where-bloc-falls-short) shows all six in code, on
+eight scenarios from different domains.
+
+## Where bloc falls short
+
+bloc fits an ordinary screen well: an event arrives, a handler answers with
+a state. The traps below belong to controllers with a lifecycle — hardware,
+devices, players, background sync — where several things happen to one state
+and the order matters. Each item names a domain, shows the shape of the trap
+in bloc, and then the same thing in `solo`. None of them is a bug: they
+follow from bloc's design — a transformer per handler, `emit` valid only
+inside its handler, `add` returning `void` — and where the point has been
+argued in the tracker, the issue is linked.
+
+The same package ships `Cubit`: no events, no transformers, methods that
+emit. It answers items 5 and 6 outright — a cubit method takes typed
+arguments and returns a value you can `await` — and felangel points at it in
+[#1556](https://github.com/felangel/bloc/issues/1556) itself. For the rest
+it offers nothing: there is no queue to manage (1), no transformers at all
+(2, 3), no cancellation (4), and `emit` after `close` throws `Bad state:
+Cannot emit new states after calling close` (7).
+
+### 1. The queue cannot be managed
+
+A BLE device screen. The user taps connect, read battery, rename, and then
+backs out — disconnect. To get a queue at all you funnel every command into
+a single `on<DeviceEvent>` with `sequential()`; four separate `on<E>` would
+give four queues running side by side, which is the next item. Now the queue
+is real, and `Disconnect` is appended behind the three commands: they all
+run against a device the user has left, and the disconnect happens last.
+There is nothing to look at the queue with, nothing to drop pending events
+with, and no way to get ahead of them.
+
+```dart
+class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
+  DeviceBloc(this._ble) : super(const DeviceState()) {
+    // One handler for the whole event type, so that `sequential()` really
+    // makes one queue. Four `on<E>` would make four — see the next item.
+    on<DeviceEvent>((e, emit) async {
+      switch (e) {
+        case Connect():
+          await _ble.connect();
+          emit(const DeviceState(online: true));
+        case ReadBattery():
+          emit(DeviceState(online: true, battery: await _ble.battery()));
+        case Rename(:final name):
+          await _ble.rename(name);
+        case Disconnect():
+          // Appended behind connect, battery and rename, which are in
+          // the queue already and cannot be inspected or dropped.
+          await _ble.disconnect();
+          emit(const DeviceState());
+      }
+    }, transformer: sequential());
+  }
+
+  final Ble _ble;
+}
+```
+
+In `solo` the queue is an object the controller owns.
+
+```dart
+enum DeviceKey { connect, battery, rename, disconnect }
+
+final class DeviceController extends Solo<DeviceState> {
+  DeviceController(this._ble) : super(const Offline());
+
+  final Ble _ble;
+
+  // connect(), readBattery() and rename() are ordinary jobs.
+
+  Job<void> disconnect() {
+    // Everything queued finishes right now with Cancelled(manual),
+    // and this job goes to the head of the queue, not the tail.
+    queue.clear();
+    return add(
+      job<DeviceState, void>(
+        key: DeviceKey.disconnect,
+        (ctx) async {
+          await ctx.guard(_ble.disconnect);
+          ctx.emit(const Offline());
+        },
+      ),
+      first: true,
+    );
+  }
+}
+```
+
+`queue.clear()` finishes the pending jobs with `Cancelled(manual)`, so their
+callers learn what happened, and `first: true` puts the disconnect at the
+head instead of the tail. It leaves the running job alone — a `connect`
+already in flight finishes first; put `current?.cancel()` before the `clear`
+when it should not.
+
+### 2. One restartable among sequential
+
+A media player. `play`, `pause`, `seek` and `setVolume` all talk to one
+native player, so they must run one at a time; but a `seek` fired while the
+user drags the slider must restart, not queue. In bloc a transformer is an
+argument to `on<E>`, and `sequential()` orders only the events of that one
+type — handlers of different types still overlap. To serialize all four you
+funnel them into a single `on<PlayerCommand>`, and from there `seek` can no
+longer be `restartable()`: one handler has one transformer. The escape hatch
+is to write an `EventTransformer` by hand — it sees the events and could
+branch on their type — at the cost of writing it.
+
+```dart
+class PlayerBloc extends Bloc<PlayerCommand, PlayerState> {
+  PlayerBloc(this._player) : super(const PlayerState()) {
+    // One handler for every command: a transformer applies per `on<E>`,
+    // so four handlers with `sequential()` would still overlap. Seek is
+    // sequential now too — a drag queues the whole slider.
+    on<PlayerCommand>((command, emit) async {
+      switch (command) {
+        case Play():
+          await _player.play();
+        case Pause():
+          await _player.pause();
+        case Seek(:final position):
+          await _player.seek(position);
+          emit(PlayerState(position: position));
+        case SetVolume(:final value):
+          await _player.setVolume(value);
+      }
+    }, transformer: sequential());
+  }
+
+  final Player _player;
+}
+```
+
+In `solo` the queue is sequential by construction, and a policy belongs to a
+job, not to the queue.
+
+```dart
+enum PlayerKey { play, pause, seek, volume }
+
+final class PlayerController extends Solo<PlayerState> {
+  PlayerController(this._player) : super(const Stopped());
+
+  final Player _player;
+
+  Job<void> pause() => run<Playing, void>(
+        key: PlayerKey.pause,
+        policy: Policy.droppable,
+        (ctx) async => ctx.guard(_player.pause),
+      );
+
+  // The only restartable job here. The others stay sequential without
+  // saying so: there is one queue, and it runs one job at a time.
+  Job<void> seek(Duration position) => run<Playing, void>(
+        key: PlayerKey.seek,
+        policy: Policy.restart,
+        (ctx) async {
+          await ctx.guard(() => _player.seek(position));
+          ctx.emit(Playing(position: position));
+        },
+      );
+}
+```
+
+`Policy.restart` cancels the seek in flight and drops the queued ones, all
+by the `seek` key; nothing else in the controller changes, because the
+policy names a key rather than a lane.
+
+### 3. Handlers running in parallel write one state
+
+Notes with sync. `UploadNote` and `RefreshList` change the same state
+object, and since bloc 7.2 the default transformer is concurrent: with no
+transformer given, both handlers run at once. The stale-snapshot version of
+this bug has a one-line cure — read `state` after the await instead of
+before it — and both handlers below do. What that does not cure is the
+interleaving: `RefreshList` asks the server before the upload lands and
+emits the answer after it, so a list that predates the note `UploadNote` has
+just merged goes back over the newer one. No snapshot is involved; the two
+handlers simply take turns on one object.
+
+```dart
+class NotesBloc extends Bloc<NotesEvent, NotesState> {
+  // No transformer: since bloc 7.2 the default is concurrent, so the two
+  // handlers run at the same time.
+  NotesBloc(this._api) : super(const NotesState()) {
+    on<UploadNote>((e, emit) async {
+      emit(state.copyWith(uploading: true));
+      await _api.upload(e.note);
+      // `state` read fresh after the await, as it should be.
+      final merged = [...state.notes, e.note];
+      emit(state.copyWith(notes: merged, uploading: false));
+    });
+    on<RefreshList>((e, emit) async {
+      // Asked before the upload finished, answered after it: this list
+      // predates the note merged above, so writing it into the state
+      // drops that note. Fresh reads do not cure interleaving.
+      final serverNotes = await _api.list();
+      emit(state.copyWith(notes: serverNotes));
+    });
+  }
+
+  final Api _api;
+}
+```
+
+In `solo` there is one queue and one running root job, so there is nothing
+to interleave with.
+
+```dart
+final class NotesController extends Solo<NotesState> {
+  NotesController(this._api) : super(const NotesState());
+
+  final Api _api;
+
+  Job<void> upload(Note note) => run<NotesState, void>(
+        key: 'upload',
+        (ctx) async {
+          ctx.emit(ctx.state.copyWith(uploading: true));
+          await ctx.guard(() => _api.upload(note));
+          final merged = [...ctx.state.notes, note];
+          ctx.emit(ctx.state.copyWith(notes: merged, uploading: false));
+        },
+      );
+
+  Job<void> refresh() => run<NotesState, void>(
+        key: 'refresh',
+        (ctx) async {
+          // Runs before upload or after it, never across it.
+          final serverNotes = await ctx.guard(_api.list);
+          ctx.emit(ctx.state.copyWith(notes: serverNotes));
+        },
+      );
+}
+```
+
+`ctx.state` is read at emit time, and while a root job runs no other root
+job of this controller writes the state. The two ways in are its own
+children, started by `ctx.run` inside the same body, and `externalSetState`
+from outside — both deliberate, both visible. That is the ownership
+guarantee, not a discipline the two bodies have to keep.
+
+### 4. After cancellation the handler keeps running
+
+A firmware update over BLE, written chunk by chunk. `restartable()` closes
+the emitter, and that is all it does: the loop goes on writing chunks to the
+device. The maintainer's answer in
+[felangel/bloc#3349](https://github.com/felangel/bloc/issues/3349) is
+exactly that:
+
+> This is because Futures aren't truly cancelable. To get the behavior
+> you're describing you can simply check if `emit.isDone` is true before
+> performing any expensive computations:
+
+The mirror image is a future started inside the handler and left unawaited:
+it cannot emit later either. An `assert` catches that one in debug builds —
+`emit was called after an event handler completed normally`
+([#2961](https://github.com/felangel/bloc/issues/2961)) — because nothing
+structured outlives the handler.
+
+```dart
+class FirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
+  FirmwareBloc(this._ble) : super(Idle()) {
+    on<Flash>((e, emit) async {
+      for (final chunk in e.chunks) {
+        await _ble.write(chunk);
+        // Without this line a restarted handler keeps writing chunks to
+        // the device: `restartable()` closes the emitter, it does not
+        // stop the body. Every loop that touches hardware needs it.
+        if (emit.isDone) return;
+        emit(Flashing(chunk.index));
+      }
+    }, transformer: restartable());
+  }
+
+  final Ble _ble;
+}
+```
+
+In `solo` cancellation is cooperative too, but the waiting ends by itself.
+
+```dart
+final class FirmwareController extends Solo<FirmwareState> {
+  FirmwareController(this._ble) : super(const Idle());
+
+  final Ble _ble;
+
+  Job<void> flash(List<Chunk> chunks) => run<NotBroken, void>(
+        key: 'flash',
+        policy: Policy.restart,
+        canStart: (state) => state is Idle,
+        (ctx) async {
+          for (final chunk in chunks) {
+            // guard returns the moment the job is cancelled, so the
+            // next write never starts. A hardware failure that emits
+            // Broken from outside ends the job on the same await.
+            await ctx.guard(() => _ble.write(chunk));
+            ctx.emit(Flashing(chunk.index));
+          }
+        },
+      );
+}
+```
+
+`ctx.guard` returns as soon as the cancellation arrives, so the next write
+never starts; the next `ctx.state` or `ctx.emit` throws the job's
+`Cancelled`; and work that would otherwise be fire-and-forget goes through
+`ctx.run(child)`, a child job the parent waits for.
+
+### 5. You cannot await your own event
+
+Checkout. After the user taps Pay, the screen has to know that *this*
+payment succeeded before it navigates. `add` returns `void`, and the state
+stream says only that the state changed. It is a design decision, not an
+omission — felangel in
+[felangel/bloc#1556](https://github.com/felangel/bloc/issues/1556):
+
+> … a single add can result in multiple state changes so you would never
+> know when the event was actually "done" being processed.
+
+```dart
+class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
+  CheckoutBloc(this._api) : super(Cart()) {
+    on<Pay>((e, emit) async {
+      emit(Paying());
+      try {
+        emit(Paid(await _api.pay(e.order)));
+      } on Object catch (error) {
+        emit(PaymentFailed(error));
+      }
+    }, transformer: droppable());
+  }
+
+  final Api _api;
+}
+```
+
+and the screen:
+
+```dart
+Future<void> onPayPressed(CheckoutBloc bloc, Order order) async {
+  bloc.add(Pay(order)); // returns void
+  // The stream says the state changed, not who changed it: a retry
+  // from another screen produces the same Paid.
+  final state = await bloc.stream.firstWhere((s) => s is! Paying);
+  if (state is Paid) {
+    navigateToReceipt(state.receipt);
+  }
+}
+```
+
+A `solo` method returns a handle to the job it created.
+
+```dart
+final class CheckoutController extends Solo<CheckoutState> {
+  CheckoutController(this._api) : super(const Cart());
+
+  final Api _api;
+
+  Job<Receipt> pay(Order order) => run<CheckoutState, Receipt>(
+        key: 'pay',
+        policy: Policy.droppable,
+        canStart: (state) => state is Cart,
+        (ctx) async {
+          ctx.emit(const Paying());
+          final receipt = await ctx.guard(() => _api.pay(order));
+          ctx.emit(Paid(receipt));
+          return receipt;
+        },
+      );
+}
+```
+
+and the screen:
+
+```dart
+Future<void> onPayPressed(CheckoutController checkout, Order order) async {
+  switch (await checkout.pay(order).done) {
+    case Done(:final value):
+      navigateToReceipt(value);
+    case Cancelled():
+      showCancelled();
+    case Failed(:final error):
+      showError(error);
+  }
+}
+```
+
+`done` carries the outcome of this call and never throws; `value` carries
+the value and throws instead. Neither has to guess whose state change it is
+looking at. Later in the same thread felangel points at `Cubit`, whose
+methods are plain `async` methods you can await — the answer to this item,
+at the price of the event queue and the transformers of items 1 to 4.
+
+### 6. A method, not an event
+
+A map. `moveTo`, `setZoom`, `follow` — three actions on one widget. In bloc
+each is a class, a registration and an `add`: the argument types live in the
+event, the work lives in a handler elsewhere, and the call site says `add`,
+not what it wants. `Cubit` answers this one as well — a cubit is methods —
+which is another way of saying the ceremony belongs to events, not to the
+package.
+
+```dart
+sealed class MapEvent {}
+
+class MoveTo extends MapEvent {
+  MoveTo(this.point);
+  final Point<double> point;
+}
+
+class SetZoom extends MapEvent {
+  SetZoom(this.value);
+  final double value;
+}
+
+class Follow extends MapEvent {
+  Follow(this.track);
+  final Track track;
+}
+```
+
+and the bloc:
+
+```dart
+class MapBloc extends Bloc<MapEvent, MapState> {
+  MapBloc(this._map) : super(const MapState()) {
+    on<MoveTo>((e, emit) => _map.moveTo(e.point), transformer: sequential());
+    on<SetZoom>((e, emit) => _map.setZoom(e.value), transformer: sequential());
+    on<Follow>((e, emit) => _map.follow(e.track), transformer: sequential());
+  }
+
+  final MapApi _map;
+}
+
+void onMapDrag(MapBloc bloc, Point<double> point) => bloc.add(MoveTo(point));
+```
+
+In `solo` they are three methods.
+
+```dart
+final class MapController extends Solo<MapState> {
+  MapController(this._map) : super(const MapState());
+
+  final MapApi _map;
+
+  Job<void> moveTo(Point<double> point) =>
+      run<MapState, void>((ctx) => ctx.guard(() => _map.moveTo(point)));
+
+  Job<void> setZoom(double value) =>
+      run<MapState, void>((ctx) => ctx.guard(() => _map.setZoom(value)));
+
+  Job<void> follow(Track track) =>
+      run<MapState, void>((ctx) => ctx.guard(() => _map.follow(track)));
+}
+
+void onMapDrag(MapController map, Point<double> point) => map.moveTo(point);
+```
+
+The signature carries the arguments and the result, the call site reads as a
+call, and the returned `Job<void>` is there when the caller wants to await
+it — calling without `await` raises no lint, because a handle is not a
+`Future`.
+
+### 7. Closing while work is in flight
+
+A chat or feed screen. The user sends a message, goes back, and the reply
+arrives into a controller that is already closed. What happens next depends
+on the transformer. With `sequential()` — the one below — `close()` waits
+for the running handler, and the late `emit` lands: the state changes after
+`close`, and stream listeners still receive it. With the default
+transformer, `concurrent()`, `droppable()` or `restartable()`, `close()`
+returns at once, the emitter is cancelled and the late `emit` is dropped
+without a word. Either way the body keeps running, and the `add` that
+follows throws `Bad state: Cannot add new events after calling close`
+([#52](https://github.com/felangel/bloc/issues/52),
+[#120](https://github.com/felangel/bloc/issues/120); cancelable operations
+are still an open proposal,
+[#3069](https://github.com/felangel/bloc/issues/3069)). The usual workaround
+is an `isClosed` check after every `await`.
+
+```dart
+class ChatBloc extends Bloc<ChatEvent, ChatState> {
+  ChatBloc(this._api) : super(const ChatState()) {
+    on<SendMessage>((e, emit) async {
+      final reply = await _api.send(e.text);
+      // The user went back while the request was in flight. Without
+      // this line the reply still reaches the state — `sequential()`
+      // makes `close()` wait for this body — and the `add` below throws
+      // `Bad state: Cannot add new events after calling close`.
+      if (isClosed) return;
+      emit(state.withReply(reply));
+      add(const MarkRead());
+    }, transformer: sequential());
+    on<MarkRead>((e, emit) => _api.markRead(), transformer: sequential());
+  }
+
+  final Api _api;
+}
+```
+
+In `solo` closing is part of the same queue discipline.
+
+```dart
+final class ChatController extends Solo<ChatState> {
+  ChatController(this._api) : super(const ChatState());
+
+  final Api _api;
+
+  Job<void> send(String text) => run<ChatState, void>(
+        key: 'send',
+        (ctx) async {
+          final reply = await ctx.guard(() => _api.send(text));
+          ctx.emit(ctx.state.withReply(reply));
+          markRead();
+        },
+      );
+
+  Job<void> markRead() =>
+      run<ChatState, void>((ctx) => ctx.guard(_api.markRead));
+}
+
+Future<void> onScreenClosed(ChatController chat) async {
+  // Cancels the running send and waits for its body to stop; queued
+  // jobs finish with Cancelled(closed).
+  await chat.close();
+  chat.send('bye'); // a job already finished with Cancelled(closed)
+}
+```
+
+`close()` marks the running job cancelled and waits for it to actually stop,
+queued jobs finish with `Cancelled(closed)`, and `add` after `close` returns
+a job already finished with the same outcome — so the call site needs no
+`isClosed` check.
+
+### 8. The state changes from outside
+
+A camera, or a BLE sensor. The hardware reports a failure through a listener
+while a calibration handler is halfway through. A bloc's own `emit` is
+`@visibleForTesting` and documented as internal — "only for internal use and
+should never be called directly outside of tests" — so the supported way in
+from a listener is `add(HardwareFailed(error))`. That event gets its own
+handler, which runs next to the calibration one, which goes on talking to
+broken hardware. So every handler opens with `if (state is! Ready) return;`
+and repeats it after each `await`.
+
+```dart
+class SensorBloc extends Bloc<SensorEvent, SensorState> {
+  SensorBloc(this._hw) : super(Idle()) {
+    // The supported way in is an event, and that event gets its own
+    // handler, running next to whatever is already running.
+    _hw.onError = (error) => add(HardwareFailed(error));
+    on<HardwareFailed>((e, emit) => emit(Broken(e.error)));
+    on<Calibrate>((e, emit) async {
+      if (state is! Ready) return;
+      await _hw.zero();
+      // Broken may have arrived during the await; nothing cancelled
+      // this handler, so the precondition is repeated by hand after
+      // every step, forever.
+      if (state is! Ready || emit.isDone) return;
+      await _hw.sample();
+      if (state is! Ready || emit.isDone) return;
+      emit(Calibrated());
+    }, transformer: sequential());
+  }
+
+  final Sensor _hw;
+}
+```
+
+In `solo` the listener writes the state, and the rules stay in the
+declaration.
+
+```dart
+final class SensorController extends Solo<SensorState> {
+  SensorController(this._hw) : super(const Idle()) {
+    // The listener writes the state itself. Every running job whose
+    // working type or keepWhile no longer holds is cancelled at once.
+    _hw.onError = (error) => externalSetState(Broken(error));
+  }
+
+  final Sensor _hw;
+
+  // The precondition is the signature: W is Ready. Nothing to check in
+  // the body, and nothing to repeat after each await.
+  Job<void> calibrate() => run<Ready, void>(
+        key: 'calibrate',
+        (ctx) async {
+          await ctx.guard(_hw.zero);
+          await ctx.guard(_hw.sample);
+          ctx.emit(const Calibrated());
+        },
+      );
+}
+```
+
+`externalSetState` re-evaluates every running job against the new state and
+cancels the ones whose working type or `keepWhile` no longer holds. The
+precondition lives in `run<Ready, void>`, where the engine checks it before
+the start, on every state change, and on every read.
+
 ## Install
 
 ```sh
