@@ -16,8 +16,8 @@ returning `void` — and where the point has been argued in the tracker, the
 issue is linked.
 
 This document assumes the [README's Concepts][concepts]: `Job` and
-`Outcome`, `Policy`, the working type `W` in `run<W, T>`, `ctx.guard` and
-the queue.
+`Outcome`, `Policy`, the working type `W` in `run<W, T>`, `ctx.guard`,
+`ctx.onCancel` and the queue.
 
 [concepts]: https://github.com/vi-k/solo/blob/main/packages/solo/README.md#concepts
 
@@ -165,18 +165,27 @@ slider must not queue behind the earlier steps of the drag — only the last
 position matters — while the two toggles must run in the order they were
 tapped.
 
+The seek already sent to the device is the hard half. A Dart future cannot
+be aborted from outside, so walking away from the wait would leave the
+player seeking while the next command was handed to it, and a player asked
+to seek twice at once is a player that fails. The native call takes a cancel
+token: told to stop, it stops and returns. Both versions below use it; what
+differs is who holds it and who waits for the return.
+
 **On bloc.** A transformer is an argument to `on<E>` (or, globally,
 `Bloc.transformer`), and it orders only the events of that one handler.
 Giving `seek` its own `on<Seek>` with `restartable()` does restart the
 emitter, but that handler then runs beside `play` and `pause` instead of in
-line with them. So all three go into one funnel with `sequential()`, and the
-drag is thinned by a newest-seek field: one field, one `onEvent` override
-and one early return, with no custom `EventTransformer` to write.
+line with them. So all three go into one funnel with `sequential()`. The
+drag is thinned by a newest-position field, and the seek already at the
+device is stopped through a second field — the token of the running seek,
+cancelled from `onEvent`, which `add` calls synchronously.
 
 ```dart
 class PlayerBloc extends Bloc<PlayerCommand, PlayerState> {
   final Player _player;
   Duration? _newestSeek;
+  CancelToken? _seeking;
 
   PlayerBloc(this._player) : super(const PlayerState()) {
     on<PlayerCommand>((command, emit) async {
@@ -188,7 +197,13 @@ class PlayerBloc extends Bloc<PlayerCommand, PlayerState> {
         case Seek(:final position):
           // Every drag step but the newest is dropped here.
           if (position != _newestSeek) return;
-          await _player.seek(position);
+          final token = CancelToken();
+          _seeking = token;
+          // The player stops itself and returns, so the command behind
+          // this one reaches a device that is no longer seeking.
+          await _player.seek(position, cancelToken: token);
+          _seeking = null;
+          if (token.cancelled) return;
           emit(PlayerState(position: position));
       }
     }, transformer: sequential());
@@ -196,26 +211,42 @@ class PlayerBloc extends Bloc<PlayerCommand, PlayerState> {
 
   @override
   void onEvent(PlayerCommand event) {
-    if (event is Seek) _newestSeek = event.position;
+    // `add` calls this synchronously, so a newer drag step reaches the
+    // seek in flight before it reaches the queue behind it.
+    if (event is Seek) {
+      _newestSeek = event.position;
+      _seeking?.cancel();
+    }
     super.onEvent(event);
   }
 }
 ```
 
-It delivers what was asked: `[play start, play end, seek 3 start, seek 3
-end, pause start, pause end]` — one native seek for the whole drag, the
-toggles still in tap order.
+It delivers what was asked. A whole drag added at once reaches the player as
+`[play, seek 3, pause]`: one native seek for the drag, the toggles still in
+tap order. Drag one step, let it reach the player, drag again, and the stale
+seek is stopped rather than waited out. That claim is about two calls not
+overlapping, so this trace pairs each call with its return:
+`[seek 1 start, seek 1 stopped, seek 3 start, seek 3 end]` — the first seek
+returns early because it was told to, and the second starts only after it
+has returned.
 
-What it cannot do is stop a seek that has already started. Drag one step,
-wait until it reaches the player, drag again, and the trace is `[seek 1
-start, seek 1 end, seek 2 start, seek 2 end]`: the stale step talks to the
-device to the end and the newer one waits behind it. This is
-`Policy.replace`, not `Policy.restart` — bloc can get the dropping, not the
-cancelling; that half is item 4. And the rule is hand-written per command,
-once for every command that needs thinning.
+The price is that every part of it is assembled by hand. The token is a
+field beside the newest-position field: set before the call, cleared after
+it, cancelled from an `onEvent` override, and read once more after the await
+to decide whether the `emit` still applies — one rule spread over four
+places, none of which the compiler ties to the others. The thinning is
+written again for every command that needs it. The policy stays the
+funnel's: `sequential()` is the transformer for `play` and `pause` as much
+as for `seek`, so a command that wants a different one has to leave the
+funnel, and leaving the funnel means leaving the queue — which is what sent
+`seek` into it in the first place. And whoever called `add` learns none of
+this: not that this drag step was dropped as stale, not that this seek was
+stopped halfway. `add` returns `void`, which is item 5.
 
-**On solo.** The queue is sequential by construction, and a policy belongs
-to a job, not to the queue.
+**On solo.** The queue is sequential by construction, a policy belongs to a
+job rather than to the queue, and the cancellation goes to the device that
+can act on it.
 
 ```dart
 enum PlayerKey { play, pause, seek }
@@ -225,11 +256,12 @@ final class PlayerController extends Solo<PlayerState> {
 
   PlayerController(this._player) : super(Ready());
 
-  // play() and pause() run in the order they were tapped.
+  // Nothing restarts a toggle, so it just waits for the device; the emit
+  // below throws if the job was cancelled while it waited.
   Job<void> pause() => run<Ready, void>(
         key: PlayerKey.pause,
         (ctx) async {
-          await ctx.guard(_player.pause);
+          await _player.pause();
           ctx.emit(ctx.state.copyWith(playing: false));
         },
       );
@@ -238,7 +270,11 @@ final class PlayerController extends Solo<PlayerState> {
         key: PlayerKey.seek,
         policy: Policy.restart,
         (ctx) async {
-          await ctx.guard(() => _player.seek(position));
+          final token = CancelToken();
+          ctx.onCancel(token.cancel);
+          // The player stops on its own, and the job ends only once it
+          // has, so the next seek never overlaps this one.
+          await _player.seek(position, cancelToken: token);
           ctx.emit(ctx.state.copyWith(position: position));
         },
       );
@@ -247,18 +283,24 @@ final class PlayerController extends Solo<PlayerState> {
 
 `Policy.restart` drops the queued seeks and cancels the running one, all by
 the `seek` key; `play()` and `pause()` name no policy, so they stay in the
-same one queue and run in the order they were tapped. The restart reaches
-seeks and nothing else, and the policy is a named argument rather than a
-field and a branch.
+same one queue and run in the order they were tapped. `ctx.onCancel` fires
+the moment the job is marked cancelled, ahead of the body, so the token
+reaches the player at once; the body then waits for the call to return, and
+the engine starts nothing while a job is running. That pair — cancel now,
+start after the return — is what keeps a second seek off a player that is
+still seeking.
 
-The native `seek` already in flight cannot be aborted — no Dart future can
-be — and the trace shows it: `[seek 1 start, seek 2 start, seek 1 end, seek
-2 end]`. What changes is that its job is cancelled at once, so the newer
-seek starts without waiting for it, and the stale `emit` is refused. The
-listeners see `[Ready(2ms)]` where the bloc above published
-`[PlayerState(1ms), PlayerState(2ms)]` — the slider does not jump back to a
-position the user has already left — and the stale job's handle carries
-`Cancelled(manual)`.
+The device sees what it saw above, `[play, seek 3, pause]` for the drag and
+`[seek 1 start, seek 1 stopped, seek 3 start, seek 3 end]` for the restart.
+What is different is where the three rules live. The policy is a named
+argument on the one job it governs, so `seek` restarts while `play` and
+`pause` in the same queue do not — no funnel to leave, and nothing to
+rewrite when a fourth command arrives with a fourth answer. The ordering and
+the cancelling are the engine's: the token is a local of the body that lives
+exactly as long as its job, and no field of the controller points at what is
+running. And the outcome reaches the caller — the stale seek's handle
+carries `Cancelled(manual)` and completes its `done`, so a slider that wants
+to know whether its seek landed can ask.
 
 ## 3. Handlers running in parallel write one state
 
@@ -381,22 +423,35 @@ class FirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
 
 Within its reach it works. With the line, a flash restarted mid-file writes
 `[0, 1, 100, 101, …]` and stops there. Without it the two flashes interleave
-to the end: `[0, 1, 2, 100, 3, 101, 4, 102, 5, 103, 104, 105]`, two firmware
+to the end: `[0, 1, 100, 2, 101, 3, 102, 4, 103, 5, 104, 105]`, two firmware
 images going to one device at once.
 
 The line has to be repeated after every `await` in every loop that touches
-hardware, and nothing checks that it is there. And its reach is only the
-emitter. Bring the failure in as a state rather than as a restart — a
-`HardwareFailed` event that emits `Broken`, which is item 8's supported
-route — and `emit.isDone` never becomes true: the flash writes
-`[0, 1, 2, 3, 4, 5]` to broken hardware and then overwrites `Broken` with
-`Flashing`. The mirror image is a future started inside the handler and left
-unawaited; nothing structured outlives the handler, so that one is caught by
-an `assert` in debug only
+hardware, and nothing checks that it is there. It also arrives too late to
+keep the two flashes apart. `restartable()` starts the replacement the
+moment the event is added, while the old `_ble.write` is still on the wire,
+and `emit.isDone` is not read until that write returns — so the device is
+asked for a chunk of the new image while it is still taking one of the old:
+`[write 0 start, write 0 end, write 1 start, write 100 start, write 1 end,
+write 100 end, …]`. Item 2's answer — the write's cancel token in a field,
+cancelled from `onEvent` — does stop the old write, and the overlap outlives
+it: `[write 0 start, write 0 end, write 1 start, write 100 start, write 1
+stopped, write 100 end, …]`. There is nowhere to put the waiting. The
+transformers offer "begin the new handler now" (`restartable()`) and "begin
+it after the old one has finished the whole file" (`sequential()`), and not
+"stop the old one, then begin".
+
+And its reach is only the emitter. Bring the failure in as a state rather
+than as a restart — a `HardwareFailed` event that emits `Broken`, which is
+item 8's supported route — and `emit.isDone` never becomes true: the flash
+writes `[0, 1, 2, 3, 4, 5]` to broken hardware and then overwrites `Broken`
+with `Flashing`. The mirror image is a future started inside the handler and
+left unawaited; nothing structured outlives the handler, so that one is
+caught by an `assert` in debug only
 ([#2961](https://github.com/felangel/bloc/issues/2961)) — see item 7.
 
-**On solo.** Cancellation is cooperative too, but the waiting ends by
-itself.
+**On solo.** Cancellation is cooperative too, and it is the write that
+cooperates.
 
 ```dart
 final class FirmwareController extends Solo<FirmwareState> {
@@ -408,11 +463,14 @@ final class FirmwareController extends Solo<FirmwareState> {
         key: 'flash',
         policy: Policy.restart,
         (ctx) async {
+          final token = CancelToken();
+          ctx.onCancel(token.cancel);
           for (final chunk in chunks) {
-            // guard returns the moment the job is cancelled, so the
-            // next write never starts. A hardware failure that emits
-            // Broken from outside ends the job on the same await.
-            await ctx.guard(() => _ble.write(chunk));
+            // The write is told to stop and the loop waits for it to
+            // come back, so the flash that replaces this one never
+            // writes over a chunk still on the wire. What ends the loop
+            // is the emit below: it throws the job's Cancelled.
+            await _ble.write(chunk, cancelToken: token);
             ctx.emit(Flashing(chunk.index));
           }
         },
@@ -420,17 +478,23 @@ final class FirmwareController extends Solo<FirmwareState> {
 }
 ```
 
-The restart writes the same `[0, 1, 100, 101, …]`: `ctx.guard` returns the
-moment the cancellation arrives, so the next write never starts. What
-differs is reach and reporting.
+The restart writes `[0, 100, 101, …]` — a chunk shorter than the bloc's
+`[0, 1, 100, …]`, because the write on the wire was stopped and the chunk it
+was carrying never landed — and it writes them one at a time:
+`[write 0 start, write 0 end, write 1 start, write 1 stopped,
+write 100 start, write 100 end, …]`. Nothing in the controller arranges
+that. The cancellation reaches the token before the body hears of it, the
+write comes back as soon as it can, and the queue starts the replacement
+only once this job has ended.
 
-The same `guard` also ends the job when the state stops matching the working
-type, so a `Broken` written by a hardware listener stops the flash at
-`[0, 1, 2]` with `Cancelled(rules: is not NotBroken)` instead of finishing
-the file — the case `emit.isDone` cannot see. The cancelled call's own
-handle carries `Cancelled(manual)`, where `add` carried nothing. And work
-that would otherwise be fire-and-forget goes through `ctx.run(child)`, a
-child job the parent waits for.
+Those two lines cover the other cancellation as well, the one the restart
+never reaches: a `Broken` written by a hardware listener no longer matches
+the working type, so the job is marked, the token fires with it, and the
+flash stops at `[0, 1]` with `Cancelled(rules: is not NotBroken)` instead of
+finishing the file — the case `emit.isDone` cannot see. The cancelled call's
+own handle carries `Cancelled(manual)`, where `add` carried nothing. And
+work that would otherwise be fire-and-forget goes through `ctx.run(child)`,
+a child job the parent waits for.
 
 ## 5. You cannot await your own event
 
@@ -614,7 +678,11 @@ final class MapController extends Solo<MapState> {
         key: MapKey.moveTo,
         policy: Policy.restart,
         (ctx) async {
-          await ctx.guard(() => _map.moveTo(point));
+          // Restartable, so the cancellation goes to the map itself and
+          // the body waits for it to come back — item 2's shape.
+          final token = CancelToken();
+          ctx.onCancel(token.cancel);
+          await _map.moveTo(point, cancelToken: token);
           ctx.emit(ctx.state.copyWith(center: point));
         },
       );
@@ -623,7 +691,9 @@ final class MapController extends Solo<MapState> {
         key: MapKey.setZoom,
         policy: Policy.restart,
         (ctx) async {
-          await ctx.guard(() => _map.setZoom(value));
+          final token = CancelToken();
+          ctx.onCancel(token.cancel);
+          await _map.setZoom(value, cancelToken: token);
           ctx.emit(ctx.state.copyWith(zoom: value));
         },
       );
@@ -640,11 +710,12 @@ void onMapDrag(MapController map, Point<double> point) => map.moveTo(point);
 The signature carries the arguments and the result, the call site reads as a
 call, and the returned `Job<void>` is there when the caller wants to await
 it — calling without `await` raises no lint, because a handle is not a
-`Future`. The drag is thinned by the same `Policy.restart` as item 2's seek.
-On the same uneven native calls the trace is `[moveTo 1 start, moveTo 3
-start, moveTo 3 end, moveTo 1 end]`: the middle frame never starts, and the
-first frame's job is cancelled, so its late return writes nothing. The map
-ends at `MapState(3)`, where the finger did.
+`Future`. The drag is thinned by the same `Policy.restart` as item 2's seek,
+and the two methods that carry it hand the cancellation to the map the same
+way. On the same uneven native calls the trace is `[moveTo 1 start, moveTo 1
+stopped, moveTo 3 start, moveTo 3 end]`: the middle frame never starts, the
+first is told to stop, and the third reaches the map only after it has. The
+map ends where the finger did, and so does `MapState(3)`.
 
 ## 7. Closing while work is in flight
 
@@ -828,5 +899,8 @@ read that. The precondition lives in `run<Ready, void>`, where the engine
 checks it before the start, on every state change, and on every read — one
 place, and a new `await` in the body inherits it.
 
-The `sample()` already in flight still finishes, on both sides; no library
-can abort a Dart future. What stops is everything after it.
+The `sample()` already in flight still finishes, on both sides: no library
+can abort a Dart future, and a sensor that has just lost its cable has
+nothing left to be told. Where a device does take a cancel token, item 2
+hands it one through `ctx.onCancel`. What stops here is everything after
+the sample.
