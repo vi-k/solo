@@ -55,15 +55,16 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
   DeviceBloc(this._ble) : super(const DeviceState()) {
     // One handler for the whole type, so `sequential()` makes one queue.
     on<DeviceEvent>((e, emit) async {
-      // The reads were only for the screen the user has just closed.
-      if (_leaving && (e is ReadBattery || e is ReadSignal)) return;
       switch (e) {
         case Connect():
           await _ble.connect();
           emit(state.copyWith(online: true));
         case ReadBattery():
+          // The reads were only for the screen the user has just closed.
+          if (_leaving) return;
           emit(state.copyWith(battery: await _ble.battery()));
         case ReadSignal():
+          if (_leaving) return;
           emit(state.copyWith(signal: await _ble.signal()));
         case Rename(:final name):
           await _ble.rename(name);
@@ -76,22 +77,34 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
 
   @override
   void onEvent(DeviceEvent event) {
-    // `add` calls this synchronously, so the flag is already set when the
-    // queue reaches the two reads behind the `Disconnect`.
+    // Why here: `add` calls this synchronously, so the flag is already set
+    // when the queue reaches the two reads behind the `Disconnect`. The
+    // reset belongs here for the same reason. Inside the `Connect` case it
+    // would run when the queue gets there, clearing the flag in front of
+    // the stale reads still queued behind it, which would then run anyway.
     if (event is Disconnect) _leaving = true;
+    if (event is Connect) _leaving = false;
     super.onEvent(event);
   }
 }
 ```
 
 It works: the hardware sees `[connect, rename kitchen, disconnect]` and the
-two reads never happen. What it costs is that the rule now lives in a field
-of the bloc rather than at the call site that knows the screen is gone, and
-it is a condition rather than a removal — the events still travel the queue
-and still reach the handler, every command that can go stale adds a term to
-that condition, and the flag has to be reset somewhere. Forget the reset and
-a reopened screen swallows its own reads in silence: `[connect, disconnect,
-connect]`, with no battery read anywhere.
+two reads never happen. What it costs is that the rule lives in a field of
+the bloc rather than at the call site that knows the screen is gone, and
+that it is a condition rather than a removal — the events still travel the
+queue and still reach the handler, and every command that can go stale needs
+its own copy of that line.
+
+The flag is also read when the queue gets there, not when the call was made,
+so both writes to it belong in `onEvent`. Move the reset into the `Connect`
+case and it clears the flag in front of the reads still waiting behind it:
+`[connect, battery, signal, rename kitchen, disconnect]`, both stale reads
+performed. Leave the reset out and a reopened screen swallows its own reads
+instead: `[connect, disconnect, connect]`, no battery read anywhere. And
+even where it belongs, the flag says nothing about which queued events are
+stale: reopen the screen before the queue drains and the read that belonged
+to the old one runs too — `[connect, battery, disconnect, connect]`.
 
 And nothing can tell whoever asked for the battery that the request was
 dropped. `add` returns `void`; that is item 5.
