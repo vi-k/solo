@@ -32,9 +32,9 @@ class Idle extends CounterState {
 class Counter extends SoloListenable<CounterState> {
   Counter() : super(Idle(0));
 
-  Future<void> increment() => run<Idle, void>((ctx) async {
+  Job<void> increment() => run<Idle, void>((ctx) async {
     ctx.emit(Idle(ctx.state.count + 1));
-  }).done;
+  });
 }
 
 class CounterView extends StatelessWidget {
