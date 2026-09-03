@@ -43,14 +43,23 @@ the rename is what the user asked for and must survive.
 **On bloc.** To get a queue at all you funnel every command into a single
 `on<DeviceEvent>` with `sequential()`; five separate `on<E>` would give five
 queues running side by side, which is the next item. The queue is real but
-opaque — there is no API to enumerate what is pending or to remove it — so
-the reads are dropped by a flag instead, set in `onEvent`, which `add` calls
-synchronously and therefore before the queue reaches them.
+opaque: nothing enumerates what is pending and nothing removes it. The reads
+have to be dropped from inside the handler, so the handler has to be told
+which of them are stale.
+
+A `bool _leaving`, set when the `Disconnect` is added, is the first answer,
+and for one screen it works. It breaks as soon as the screen is reopened
+before the queue has drained: the flag is cleared again for the new screen,
+and the read that belonged to the old one runs after all
+(`[connect, battery, disconnect, connect]`). What survives that is a
+generation. Every event is stamped in `onEvent`, which `add` calls
+synchronously, and a read runs only if its stamp is still the current one.
 
 ```dart
 class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
   final Ble _ble;
-  bool _leaving = false;
+  final _stampOf = Expando<int>();
+  int _screen = 0;
 
   DeviceBloc(this._ble) : super(const DeviceState()) {
     // One handler for the whole type, so `sequential()` makes one queue.
@@ -60,11 +69,11 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
           await _ble.connect();
           emit(state.copyWith(online: true));
         case ReadBattery():
-          // The reads were only for the screen the user has just closed.
-          if (_leaving) return;
+          // The reads were only for the screen that asked for them.
+          if (_stampOf[e] != _screen) return;
           emit(state.copyWith(battery: await _ble.battery()));
         case ReadSignal():
-          if (_leaving) return;
+          if (_stampOf[e] != _screen) return;
           emit(state.copyWith(signal: await _ble.signal()));
         case Rename(:final name):
           await _ble.rename(name);
@@ -77,34 +86,32 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
 
   @override
   void onEvent(DeviceEvent event) {
-    // Why here: `add` calls this synchronously, so the flag is already set
-    // when the queue reaches the two reads behind the `Disconnect`. The
-    // reset belongs here for the same reason. Inside the `Connect` case it
-    // would run when the queue gets there, clearing the flag in front of
-    // the stale reads still queued behind it, which would then run anyway.
-    if (event is Disconnect) _leaving = true;
-    if (event is Connect) _leaving = false;
+    // Why here: `add` calls this synchronously, so every event is stamped
+    // with the screen that asked for it before the queue reaches any of
+    // them. Done inside a handler case instead, the bump would happen when
+    // the queue got there, in front of the reads still waiting behind it.
+    if (event is Disconnect) _screen++;
+    _stampOf[event] = _screen;
     super.onEvent(event);
   }
 }
 ```
 
-It works: the hardware sees `[connect, rename kitchen, disconnect]` and the
-two reads never happen. What it costs is that the rule lives in a field of
-the bloc rather than at the call site that knows the screen is gone, and
-that it is a condition rather than a removal — the events still travel the
-queue and still reach the handler, and every command that can go stale needs
-its own copy of that line.
+It works, and it keeps working when the screen comes back. The hardware
+sees `[connect, rename kitchen, disconnect]`; reopen the screen before the
+queue has drained and the stale read is dropped while the new one runs:
+`[connect, disconnect, connect, battery]`.
 
-The flag is also read when the queue gets there, not when the call was made,
-so both writes to it belong in `onEvent`. Move the reset into the `Connect`
-case and it clears the flag in front of the reads still waiting behind it:
-`[connect, battery, signal, rename kitchen, disconnect]`, both stale reads
-performed. Leave the reset out and a reopened screen swallows its own reads
-instead: `[connect, disconnect, connect]`, no battery read anywhere. And
-even where it belongs, the flag says nothing about which queued events are
-stale: reopen the screen before the queue drains and the read that belonged
-to the old one runs too — `[connect, battery, disconnect, connect]`.
+What it costs is a second queue. The real one is out of reach, so the bloc
+keeps its own record of what is in it — a stamp per event and a counter —
+and consults that record from inside the handler. The rule lives in a field
+of the bloc rather than at the call site that knows the screen is gone; it
+is a condition rather than a removal, so the events still travel the queue
+and still reach the handler; and every command that can go stale needs its
+own copy of that line. The stamping also holds only while every event is a
+distinct object: make the events `const` and the two reads share one stamp,
+so the stale one runs again — `[connect, battery, disconnect, connect,
+battery]`.
 
 And nothing can tell whoever asked for the battery that the request was
 dropped. `add` returns `void`; that is item 5.
@@ -141,8 +148,9 @@ final class DeviceController extends Solo<DeviceState> {
 ```
 
 The hardware trace is the same one. The difference is that the rule is an
-expression at the call site, evaluated once, with nothing to reset and
-nothing to extend as commands are added; and that the two reads finish with
+expression at the call site, evaluated once against the queue itself, with
+no second record to keep in step and nothing to extend as commands are
+added; and that the two reads finish with
 `Cancelled(manual)` and complete their `done`, so their callers learn what
 happened. The rename survives — the user asked for it and never took it
 back — and the disconnect follows it, because the queue is sequential and
