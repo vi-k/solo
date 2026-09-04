@@ -22,8 +22,8 @@ This document assumes the [README's Concepts][concepts]: `Job` and
 [concepts]: https://github.com/vi-k/solo/blob/main/packages/solo/README.md#concepts
 
 Every snippet below was compiled and run — the bloc ones against bloc 9.2.1
-with bloc_concurrency 0.3.0 and, in item 4, mutex 3.1.0; the `solo` ones
-against `solo` 1.0.0 — and every trace quoted is from those runs.
+with bloc_concurrency 0.3.0, the `solo` ones against `solo` 1.0.0 — and
+every trace quoted is from those runs.
 
 The same package ships `Cubit`: no events, no transformers, methods that
 emit. It answers items 5 and 6 outright — a cubit method takes typed
@@ -410,6 +410,11 @@ no cancel token takes it back — the ordinary case for a BLE write. So the
 only way to keep two firmware images off one wire is to wait for the write
 in flight before the next one starts.
 
+The state below is the progress of the flash, not the chunk last written,
+and on both sides for the same reason. Neither reports the chunk that lands
+after the run has been told to stop — there is no longer anyone to report it
+to — and the progress of a run that is being replaced goes out with the run.
+
 **On bloc.** The answer is the maintainer's own, in
 [felangel/bloc#3349](https://github.com/felangel/bloc/issues/3349):
 
@@ -423,13 +428,14 @@ class FirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
 
   FirmwareBloc(this._ble) : super(Idle()) {
     on<Flash>((e, emit) async {
+      var written = 0;
       for (final chunk in e.chunks) {
         await _ble.write(chunk);
         // Without this line a restarted handler keeps writing chunks to
         // the device: `restartable()` closes the emitter, it does not
         // stop the body. Every loop that touches hardware needs it.
         if (emit.isDone) return;
-        emit(Flashing(chunk.index));
+        emit(Flashing(++written, e.chunks.length));
       }
     }, transformer: restartable());
   }
@@ -454,22 +460,38 @@ The transformers have nowhere to put the waiting. They offer "begin the new
 handler now" (`restartable()`) and "begin it once the old one has finished
 the whole file" (`sequential()`), and not "let the old one come back from
 the chunk it is writing, then begin". So the waiting is built beside them,
-by hand: the wire goes under a lock, `Mutex` from `package:mutex` here.
+by hand: the wire goes under a lock. Dart has none in its core, and it is
+small enough to write — a chain of futures, each caller holding the turn of
+the one behind it:
 
 ```dart
+/// One at a time. Each caller waits for the one before it and hands the
+/// turn on when its own work is done, error or not.
+class Lock {
+  Future<void> _tail = Future.value();
+
+  Future<T> protect<T>(Future<T> Function() action) {
+    final turn = Completer<void>();
+    final before = _tail;
+    _tail = turn.future;
+    return before.then((_) => action()).whenComplete(turn.complete);
+  }
+}
+
 class LockedFirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
   final Ble _ble;
-  final _wire = Mutex();
+  final _wire = Lock();
 
   LockedFirmwareBloc(this._ble) : super(Idle()) {
     on<Flash>((e, emit) async {
+      var written = 0;
       for (final chunk in e.chunks) {
         // The replacement handler starts while this write is on the wire
         // and waits here for it to land. Every call to the device, in
         // every handler, has to go through this same lock.
         await _wire.protect(() => _ble.write(chunk));
         if (emit.isDone) return;
-        emit(Flashing(chunk.index));
+        emit(Flashing(++written, e.chunks.length));
       }
     }, transformer: restartable());
   }
@@ -480,15 +502,15 @@ That does it. The same chunks land, `[0, 1, 100, 101, …]`, and now one at a
 time: `[write 0 start, write 0 end, write 1 start, write 1 end, write 100
 start, write 100 end, …]`.
 
-What it costs is a second ordering standing next to the transformer's, and
-the two know nothing of each other. `restartable()` calls the old handler
-replaced the moment the event arrives; the wire says otherwise for another
-chunk's worth of time, and the lock is the only thing that knows it. The
-`emit.isDone` line is still needed — the lock orders the writes, it does not
-end the loop. And every call to the device has to be taken under the same
-lock, in handlers that have nothing to do with flashing too; nothing checks
-that they are, so a single missed one puts both images back on the wire with
-no error anywhere.
+What it costs is not the lock's length. It is a second ordering standing
+next to the transformer's, and the two know nothing of each other.
+`restartable()` calls the old handler replaced the moment the event arrives;
+the wire says otherwise for another chunk's worth of time, and the lock is
+the only thing that knows it. The `emit.isDone` line is still needed — the
+lock orders the writes, it does not end the loop. And every call to the
+device has to be taken under the same lock, in handlers that have nothing to
+do with flashing too; nothing checks that they are, so a single missed one
+puts both images back on the wire with no error anywhere.
 
 And the reach of `emit.isDone` is only the emitter. Bring the failure in as
 a state rather than as a restart — a `HardwareFailed` event that emits
@@ -512,13 +534,14 @@ final class FirmwareController extends Solo<FirmwareState> {
         key: 'flash',
         policy: Policy.restart,
         (ctx) async {
+          var written = 0;
           for (final chunk in chunks) {
             await _ble.write(chunk);
             // What ends the loop is this emit: it throws the job's
             // Cancelled. The write above has already landed, and the
             // flash that replaces this one is not started until the whole
             // body has come back.
-            ctx.emit(Flashing(chunk.index));
+            ctx.emit(Flashing(++written, chunks.length));
           }
         },
       );

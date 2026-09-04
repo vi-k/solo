@@ -37,7 +37,6 @@ environment:
 dependencies:
   bloc: ^9.0.0
   bloc_concurrency: ^0.3.0
-  mutex: ^3.1.0
 """
 
 SOLO_PUBSPEC = """name: solo_check
@@ -333,13 +332,6 @@ BLOC_IMPORTS = """import 'dart:async';
 
 import 'package:bloc/bloc.dart';
 import 'package:bloc_concurrency/bloc_concurrency.dart';
-"""
-
-BLOC_MUTEX_IMPORTS = """import 'dart:async';
-
-import 'package:bloc/bloc.dart';
-import 'package:bloc_concurrency/bloc_concurrency.dart';
-import 'package:mutex/mutex.dart';
 """
 
 BLOC_MAP_IMPORTS = """import 'dart:async';
@@ -715,7 +707,7 @@ Future<void> main() async {
 ''')
 
 # --------------------------------------------------------------- item 4 bloc
-FILES['bloc/item4'] = (BLOC_MUTEX_IMPORTS + TRACE + BLE + '''
+FILES['bloc/item4'] = (BLOC_IMPORTS + TRACE + BLE + '''
 sealed class FirmwareEvent {}
 
 class Flash extends FirmwareEvent {
@@ -736,10 +728,11 @@ class Idle extends FirmwareState {
 }
 
 class Flashing extends FirmwareState {
-  Flashing(this.index);
-  final int index;
+  Flashing(this.written, this.total);
+  final int written;
+  final int total;
   @override
-  String toString() => 'Flashing($index)';
+  String toString() => 'Flashing($written/$total)';
 }
 
 class Broken extends FirmwareState {
@@ -754,9 +747,10 @@ class Broken extends FirmwareState {
 class UnguardedFirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
   UnguardedFirmwareBloc(this._ble) : super(Idle()) {
     on<Flash>((e, emit) async {
+      var written = 0;
       for (final chunk in e.chunks) {
         await _ble.write(chunk);
-        emit(Flashing(chunk.index));
+        emit(Flashing(++written, e.chunks.length));
       }
     }, transformer: restartable());
   }
@@ -769,10 +763,11 @@ class GuardedFirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
   GuardedFirmwareBloc(this._ble) : super(Idle()) {
     on<HardwareFailed>((e, emit) => emit(Broken(e.error)));
     on<Flash>((e, emit) async {
+      var written = 0;
       for (final chunk in e.chunks) {
         await _ble.write(chunk);
         if (emit.isDone) return;
-        emit(Flashing(chunk.index));
+        emit(Flashing(++written, e.chunks.length));
       }
     }, transformer: restartable());
   }
@@ -841,10 +836,11 @@ final class Idle extends NotBroken {
 }
 
 final class Flashing extends NotBroken {
-  Flashing(this.index);
-  final int index;
+  Flashing(this.written, this.total);
+  final int written;
+  final int total;
   @override
-  String toString() => 'Flashing($index)';
+  String toString() => 'Flashing($written/$total)';
 }
 
 final class Broken extends FirmwareState {
