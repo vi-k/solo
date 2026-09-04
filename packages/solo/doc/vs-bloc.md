@@ -769,6 +769,15 @@ way deserves: `cancel` and `close` are refused while it runs and `close`
 waits, so the job comes back `Done(receipt)` for a payment that really
 happened, the state ends at `Paid`, and the app finishes closing after that.
 
+The `Paid` line that records the receipt is an ordinary write, and a job
+cancelled while the charge was on its way would throw there instead of
+recording anything. Nothing can have cancelled it: the actors are turned
+down for the length of the step, and the job's own rules cannot reach it
+either, because `W` is the base `CheckoutState` and there is no `keepWhile`.
+That pairing is deliberate — a narrower working type would let a state
+change cancel the payment in the gap between the charge and the line that
+records it.
+
 It brackets the charge and nothing else, which is the point: the moments
 around it stay ordinary. A payment still waiting its turn in the queue, or
 one that has done no more than emit `Paying`, is cancelled by `job.cancel()`
