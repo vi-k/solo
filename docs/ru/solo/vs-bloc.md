@@ -762,8 +762,8 @@ Future<Receipt> payAndAnswer(CheckoutController checkout, Order order) async {
   switch (await checkout.pay(order).done) {
     case Done(:final value):
       return value;
-    case Cancelled(:final reason):
-      throw StateError('the payment did not happen: $reason');
+    case final Cancelled cancelled:
+      throw cancelled;
     case Failed(:final error, :final stackTrace):
       Error.throwWithStackTrace(error, stackTrace);
   }
@@ -778,11 +778,8 @@ Future<Receipt> payAndAnswer(CheckoutController checkout, Order order) async {
 другой задачей. Три вызова по двум заказам доходят до API дважды, ровно как
 у карты и замка выше, только писать не надо ни того, ни другого.
 
-`ctx.uncancellable` — это всё остальное, и стоит сказать, что делают
-альтернативы. Парный ему `ctx.wait` прекращает ожидание, но не работу:
-`close` во время платежа тут же доложил бы `Cancelled`, а списание прошло
-бы следом, то есть отмену доложили бы про списанную карту. Дождаться API
-напрямую — само по себе не лучше: `close` дождался бы списания, но исход
+`ctx.uncancellable` — это всё остальное, и стоит сказать, что сделал бы на
+его месте обычный `await`: `close` дождался бы списания, но исход
 отменённой задачи — её отмена, и чек всё равно выбросили бы. Отказать в
 отмене на время вызова — то, чего списание, уже ушедшее на сервер, и
 заслуживает: пока оно идёт, `cancel` и `close` получают отказ, а `close`

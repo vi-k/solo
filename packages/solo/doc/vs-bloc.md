@@ -741,8 +741,8 @@ Future<Receipt> payAndAnswer(CheckoutController checkout, Order order) async {
   switch (await checkout.pay(order).done) {
     case Done(:final value):
       return value;
-    case Cancelled(:final reason):
-      throw StateError('the payment did not happen: $reason');
+    case final Cancelled cancelled:
+      throw cancelled;
     case Failed(:final error, :final stackTrace):
       Error.throwWithStackTrace(error, stackTrace);
   }
@@ -757,17 +757,14 @@ callers get the same handle and the same receipt — while a different order
 is a different job. Three calls for two orders reach the API twice, the
 same as the map and the lock above, with neither to write.
 
-`ctx.uncancellable` is the rest of it, and it is worth saying what the
-alternatives do. Its counterpart `ctx.wait` ends the waiting and not the
-work: a `close` during a payment would report `Cancelled` at once and let
-the charge go through behind it, which is a cancellation reported for a card
-that was charged. Awaiting the API directly is no better on its own: `close`
-would wait for the charge, but a cancelled job's outcome is its
-cancellation, so the receipt would still be thrown away. Turning
-cancellation down for the length of the call is what a charge already on its
-way deserves: `cancel` and `close` are refused while it runs and `close`
-waits, so the job comes back `Done(receipt)` for a payment that really
-happened, the state ends at `Paid`, and the app finishes closing after that.
+`ctx.uncancellable` is the rest of it, and it is worth saying what a plain
+`await` would do in its place: `close` would wait for the charge, but a
+cancelled job's outcome is its cancellation, so the receipt would still be
+thrown away. Turning cancellation down for the length of the call is what a
+charge already on its way deserves: `cancel` and `close` are refused while
+it runs and `close` waits, so the job comes back `Done(receipt)` for a
+payment that really happened, the state ends at `Paid`, and the app
+finishes closing after that.
 
 The `Paid` line that records the receipt is an ordinary write, and a job
 cancelled while the charge was on its way would throw there instead of
