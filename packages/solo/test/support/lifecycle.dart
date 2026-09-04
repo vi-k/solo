@@ -1,5 +1,3 @@
-import 'package:solo/solo.dart';
-
 import 'run_solo.dart';
 import 'test_solo.dart';
 import 'test_state.dart';
@@ -9,12 +7,9 @@ import 'test_state.dart';
 /// `incrementB` 400..500, `finish` 500..600 (`Disposed`).
 ///
 /// Every body waits on a bare [delay], so it notices cancellation only on
-/// its next context access. Pass `cancellableA: Cancellable.never` for the
-/// variant where `incrementA` survives `close`.
-void addLifecycle(
-  TestSolo solo, {
-  Cancellable cancellableA = Cancellable.always,
-}) {
+/// its next context access. Pass `cancellableA: false` for the variant
+/// where `incrementA` survives `close`.
+void addLifecycle(TestSolo solo, {bool cancellableA = true}) {
   solo
     ..run<NotDisposed, void>(
       key: 'init',

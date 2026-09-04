@@ -31,7 +31,7 @@ void main() {
         ..run<TestState, void>(key: 'a', (ctx) async {})
         ..run<TestState, void>(
           key: 'keep',
-          cancellable: Cancellable.never,
+          cancellable: false,
           (ctx) async {},
         )
         ..close();
@@ -67,11 +67,11 @@ void main() {
     });
   });
 
-  test('close waits for a Cancellable.never job without cancelling', () {
+  test('close waits for a cancellable: false job without cancelling', () {
     runSolo((solo, journal, async) {
       solo.run<TestState, void>(
         key: 'stubborn',
-        cancellable: Cancellable.never,
+        cancellable: false,
         (ctx) async {
           await delay(100);
           ctx.emit(const Preparing());

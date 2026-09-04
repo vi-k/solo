@@ -722,13 +722,16 @@ final class CheckoutController extends Solo<CheckoutState> {
         // different order is a different job.
         key: ('pay', order.id),
         policy: Policy.droppable,
-        // A charge that has left for the server cannot be taken back.
-        // Until it leaves, the job can be dropped like any other.
-        cancellable: Cancellable.whileQueued,
         (ctx) async {
-          ctx.emit(const Paying());
+          ctx
+            ..emit(const Paying())
+            // A charge that has left for the server cannot be taken back,
+            // so nothing may cancel this job until it comes back.
+            ..cancellable = false;
           final receipt = await _api.pay(order);
-          ctx.emit(Paid(receipt));
+          ctx
+            ..cancellable = true
+            ..emit(Paid(receipt));
           return receipt;
         },
       );
@@ -758,27 +761,28 @@ callers get the same handle and the same receipt — while a different order
 is a different job. Three calls for two orders reach the API twice, the
 same as the map and the lock above, with neither to write.
 
-`Cancellable.whileQueued` is the rest of it, and it is worth saying what
-the alternatives do. `ctx.guard` ends the waiting, not the work: a `close`
+`ctx.cancellable` is the rest of it, and it is worth saying what the
+alternatives do. `ctx.guard` ends the waiting, not the work: a `close`
 during a payment would report `Cancelled` at once and let the charge go
 through behind it, which is a cancellation reported for a card that was
-charged. Dropping `guard` and awaiting the API directly is no better:
-`close` would wait for the charge, but a cancelled job's outcome is its
-cancellation, so the receipt would still be thrown away. Declaring the job
-uninterruptible once it starts is what a charge already on its way
-deserves: `close` waits, the job comes back `Done(receipt)` for a payment
-that really happened, the state ends at `Paid`, and the app finishes
+charged. Awaiting the API directly is no better on its own: `close` would
+wait for the charge, but a cancelled job's outcome is its cancellation, so
+the receipt would still be thrown away. Closing the section is what a charge
+already on its way deserves: while it stands, `cancel` and `close` are
+refused and `close` waits, so the job comes back `Done(receipt)` for a
+payment that really happened, the state ends at `Paid`, and the app finishes
 closing after that.
 
-It says `whileQueued` and not `never` because the two moments are not the
-same. A payment still waiting its turn has sent nothing, and the user is
-entitled to change their mind: `job.cancel()` on it drops it from the queue
-at once, while the same call on the one being charged waits for the charge
-without stopping it. One declaration on the job covers both, and the caller
-does not have to know which moment it is in. Which is also why the caller's
-`Cancelled` branch is not dead. It arrives for a payment dropped before it
-started, for one still queued when the controller closed, and for a call
-made after `close`, which never starts at all.
+It brackets the charge and nothing else, which is the point: the moments
+around it stay ordinary. A payment still waiting its turn in the queue, or
+one that has done no more than emit `Paying`, is cancelled by `job.cancel()`
+like any other job, because until the card is charged the user is entitled
+to change their mind. `cancellable: false` on the job would have covered all
+of that too — the place in the queue included — and taken it away. Which is
+also why the caller's `Cancelled` branch is not dead. It arrives for a
+payment cancelled before the charge left, for one still queued when the
+controller closed, and for a call made after `close`, which never starts at
+all.
 
 ## 6. A method, not an event
 

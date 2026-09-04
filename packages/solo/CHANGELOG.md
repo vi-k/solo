@@ -5,8 +5,7 @@ Initial release.
 - `SoloBase<S>` engine: one root job at a time, exclusive state ownership.
 - `Solo<S>` with a broadcast `stream`, delivered on the next microtask.
 - Jobs as `async` bodies with a working type `W`, `canStart` and
-  `keepWhile` rules, and `Cancellable` — `always`, `whileQueued` for work
-  that must not be interrupted once it starts, `never`.
+  `keepWhile` rules, `cancellable: false`.
 - `Job<T>` handle: `done`, `value`, `outcome`, `whenCancelled`, `cancel`,
   `ignore`.
 - `Outcome<T>`: `Done`, `Failed`, `Cancelled` with `CancelReason`.
@@ -15,7 +14,10 @@ Initial release.
   `value`, or calling `ignore`, counts as observing it; `Cancelled` never
   reaches the zone.
 - `JobContext`: `state`, `stateAs`, `emit`, `check`, `guard`, `onCancel`,
-  `run`, `log`.
+  `run`, `log`, `cancellable`.
+- `cancellable` is asked twice: once at creation, and again by the body
+  through `ctx.cancellable`, which closes a stretch that cannot be taken
+  back — a payment on its way to the server.
 - `JobContext.onCancel` hands a cancellation to something that can really
   stop — a device's cancel token, an HTTP abort. `guard` ends the waiting,
   not the work.

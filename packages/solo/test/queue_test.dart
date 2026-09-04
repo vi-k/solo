@@ -8,11 +8,7 @@ import 'support/run_solo.dart';
 import 'support/test_solo.dart';
 import 'support/test_state.dart';
 
-Job<void> slow(
-  TestSolo solo,
-  String key, {
-  Cancellable cancellable = Cancellable.always,
-}) =>
+Job<void> slow(TestSolo solo, String key, {bool cancellable = true}) =>
     solo.job<TestState, void>(
       key: key,
       cancellable: cancellable,
@@ -51,28 +47,14 @@ void main() {
     });
   });
 
-  test('remove skips a Cancellable.never job unless forced', () {
+  test('remove skips a cancellable: false job unless forced', () {
     runSolo((solo, journal, async) {
       solo.add(slow(solo, 'a'));
-      final stubborn = solo.add(
-        slow(solo, 'stubborn', cancellable: Cancellable.never),
-      );
+      final stubborn = solo.add(slow(solo, 'stubborn', cancellable: false));
       expect(solo.queue.remove(stubborn), isFalse);
       expect(solo.queue.isNotEmpty, isTrue);
       expect(solo.queue.remove(stubborn, force: true), isTrue);
       expect(journal.take(), ['[stubborn] dropped Cancelled(manual)']);
-      async.flushTimers();
-    });
-  });
-
-  test('remove takes a whileQueued job out of the queue', () {
-    runSolo((solo, journal, async) {
-      solo.add(slow(solo, 'a'));
-      final pending = solo.add(
-        slow(solo, 'pending', cancellable: Cancellable.whileQueued),
-      );
-      expect(solo.queue.remove(pending), isTrue, reason: 'not started yet');
-      expect(journal.take(), ['[pending] dropped Cancelled(manual)']);
       async.flushTimers();
     });
   });
@@ -82,7 +64,7 @@ void main() {
       solo.add(slow(solo, 'a1'));
       solo.add(slow(solo, 'b'));
       solo.add(slow(solo, 'a2'));
-      solo.add(slow(solo, 'keep', cancellable: Cancellable.never));
+      solo.add(slow(solo, 'keep', cancellable: false));
       expect(
         solo.queue.removeWhere((j) => (j.key! as String).startsWith('a')),
         2,
@@ -142,7 +124,7 @@ void main() {
         ctx.check();
       });
       solo.add(slow(solo, 'b'));
-      solo.add(slow(solo, 'keep', cancellable: Cancellable.never));
+      solo.add(slow(solo, 'keep', cancellable: false));
       async.elapse(const Duration(milliseconds: 50));
       var done = false;
       solo.cancelAll().then((_) => done = true);

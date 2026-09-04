@@ -131,11 +131,11 @@ void main() {
     });
   });
 
-  test('cancel does not cancel a running Cancellable.never job', () {
+  test('cancel does not cancel a running cancellable: false job', () {
     runSolo((solo, journal, async) {
       final job = solo.run<TestState, void>(
         key: 'stubborn',
-        cancellable: Cancellable.never,
+        cancellable: false,
         (ctx) async {
           await delay(100);
           ctx.emit(const Working());
@@ -157,42 +157,11 @@ void main() {
     });
   });
 
-  test('cancel drops a queued whileQueued job and spares a running one', () {
-    runSolo((solo, journal, async) {
-      Job<void> payment(String key) => solo.run<TestState, void>(
-            key: key,
-            cancellable: Cancellable.whileQueued,
-            (ctx) async {
-              await delay(100);
-              ctx.emit(const Working());
-            },
-          );
-      final running = payment('running');
-      final queued = payment('queued');
-      async.flushMicrotasks();
-      expect(running.isRunning, isTrue);
-      expect(queued.isQueued, isTrue);
-      queued.cancel();
-      running.cancel();
-      async.flushMicrotasks();
-      expect(queued.outcome, isA<Cancelled>());
-      expect(running.isCancelled, isFalse, reason: 'the body already began');
-      async.flushTimers();
-      expect(running.outcome, isA<Done<void>>());
-      expect(journal.take(), [
-        '[running] started',
-        '[queued] dropped Cancelled(manual)',
-        'state: Working(a: 0, b: 0)',
-        '[running] finished Done(null)',
-      ]);
-    });
-  });
-
-  test('rules cancel a Cancellable.never job anyway', () {
+  test('rules cancel a cancellable: false job anyway', () {
     runSolo((solo, journal, async) {
       solo.run<NotDisposed, void>(
         key: 'stubborn',
-        cancellable: Cancellable.never,
+        cancellable: false,
         (ctx) async {
           await delay(100);
           ctx.check();

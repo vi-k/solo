@@ -3,7 +3,6 @@ library;
 
 import 'dart:async';
 
-import 'package:solo/solo.dart';
 import 'package:test/test.dart';
 
 import 'support/lifecycle.dart';
@@ -163,9 +162,9 @@ void main() {
     });
   });
 
-  test('close after 350 ms while incrementA is Cancellable.never', () {
+  test('close after 350 ms while incrementA is cancellable: false', () {
     runSolo((solo, journal, async) {
-      addLifecycle(solo, cancellableA: Cancellable.never);
+      addLifecycle(solo, cancellableA: false);
       async.elapse(const Duration(milliseconds: 350));
       solo.close();
       async.flushTimers();
