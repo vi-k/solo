@@ -980,13 +980,18 @@ too, and a solo body that uses a bare `await` instead of `ctx.wait` makes
 rather than accepted or swallowed, and that it is refused in release as
 well.
 
-A cancelled job's `ctx.emit` throws its `Cancelled`; an `emit` from a future
-that outlived the job throws `Bad state: Job(send) has already finished,
-cannot emit` — a `throw`, not an `assert`, so it does not vanish when
-asserts are off. Queued jobs finish with `Cancelled(closed)` and complete
-their `done`; and `send` after `close` returns a job already finished with
-the same outcome instead of throwing, so the call site needs no `isClosed`
-check.
+In the body above the cancellation arrives at `ctx.wait`, which throws the
+job's `Cancelled`, so the `emit` line is never reached. Write the same body
+with a bare `await` and it is reached with the job already cancelled, and
+`ctx.emit` throws that `Cancelled` instead of writing: the missed `isClosed`
+line has no counterpart here, because the check belongs to the engine. The
+harder case is the same one — a future the body started and never awaited,
+landing after the job is over — and its `ctx.emit` throws `Bad state:
+Job(send) has already finished, cannot emit`, a `throw` and not an `assert`,
+so it does not vanish when asserts are off. Queued jobs finish with
+`Cancelled(closed)` and complete their `done`; and `send` after `close`
+returns a job already finished with the same outcome instead of throwing, so
+the call site needs no `isClosed` check.
 
 ## 8. The state changes from outside
 
