@@ -2,14 +2,14 @@ part of 'solo_base.dart';
 
 /// Why a job was cancelled.
 enum CancelReason {
-  /// `Job.cancel`, `SoloQueue.remove`, `SoloQueue.clear`, or a duplicate
-  /// dropped by `Policy.droppable`.
+  /// [Job.cancel], [SoloQueue.remove], [SoloQueue.clear], or a duplicate
+  /// dropped by [Policy.droppable].
   manual,
 
-  /// `canStart`, `state is! W`, `keepWhile`, or `JobContext.stateAs`.
+  /// `canStart`, `state is! W`, `keepWhile`, or [JobContext.stateAs].
   rules,
 
-  /// `SoloBase.close`, or `SoloBase.add` after close.
+  /// [SoloBase.close], or [SoloBase.add] after close.
   closed,
 
   /// Cascade from a cancelled parent job.
@@ -41,15 +41,15 @@ final class Done<T> extends Outcome<T> {
 
 /// The job body threw [error].
 ///
-/// The engine reports it to `SoloBase.onError` and `SoloObserver.onError`
-/// first. If nobody then observes the job — no `Job.done`, no `Job.value`,
-/// no `Job.ignore` — the engine hands [error] to the zone the job was
-/// created in, through `Zone.handleUncaughtError`, one microtask after the
-/// job finished. This is what Dart does with an unhandled `Future` error.
+/// The engine reports it to [SoloBase.onError] and [SoloObserver.onError]
+/// first. If nobody then observes the job — no [Job.done], no [Job.value],
+/// no [Job.ignore] — the engine hands [error] to the zone the job was
+/// created in, through [Zone.handleUncaughtError], one microtask after the
+/// job finished. This is what Dart does with an unhandled [Future] error.
 ///
-/// An error the engine learns about only through `onError` never reaches
+/// An error the engine learns about only through those hooks never reaches
 /// the zone: a body that throws after cancellation, or an action abandoned
-/// by `JobContext.guard` that fails later, both end as [Cancelled], and
+/// by [JobContext.guard] that fails later, both end as [Cancelled], and
 /// [Cancelled] is never reported to the zone.
 final class Failed extends Outcome<Never> {
   /// The thrown error.
@@ -67,9 +67,9 @@ final class Failed extends Outcome<Never> {
 
 /// The job was cancelled before or during its run.
 ///
-/// Thrown by every `JobContext` member once the job is marked cancelled,
-/// and stored in `Job.outcome`. A body may also `throw Cancelled('why')`
-/// to cancel itself; the engine records that as `CancelReason.handler`.
+/// Thrown by every [JobContext] member once the job is marked cancelled,
+/// and stored in [Job.outcome]. A body may also `throw Cancelled('why')`
+/// to cancel itself; the engine records that as [CancelReason.handler].
 final class Cancelled extends Outcome<Never> implements Exception {
   /// Who cancelled the job.
   final CancelReason reason;

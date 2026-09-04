@@ -52,9 +52,12 @@ abstract interface class Job<T> {
   /// becomes an unhandled `Future` error instead.
   Future<T> get value;
 
-  /// Completes when the job is marked cancelled, before the body finishes,
-  /// or, for a job cancelled before it started, when it is dropped.
-  /// Never completes for a job that finishes without cancellation.
+  /// Completes on every [Cancelled] outcome, and never on any other one.
+  ///
+  /// For a running job, the moment it is marked cancelled, before the body
+  /// finishes; for a job cancelled before it started, when it is dropped;
+  /// for a body that cancelled itself with `throw Cancelled(...)`, when the
+  /// job finishes, since nothing marked it beforehand.
   Future<void> get whenCancelled;
 
   /// Cancels the job and waits for it to actually finish.
