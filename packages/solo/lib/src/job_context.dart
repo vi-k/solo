@@ -38,7 +38,24 @@ abstract interface class JobContext<S extends Object, W extends S> {
   /// hand the cancellation to it through [onCancel] and wait for it to
   /// finish with [join], instead of walking away from it. For a step that
   /// must not be interrupted at all, see [uncancellable].
-  Future<T> wait<T>(FutureOr<T> Function() action);
+  ///
+  /// [ifCancelled] picks up that discarded result: a value arriving after
+  /// the wait is over goes there instead of on the floor, so a connection
+  /// or a file opened by an abandoned action still gets closed. It runs
+  /// late and alone — the job is over by then and nothing waits for it,
+  /// [SoloBase.close] included. A late error goes to `onError` as always,
+  /// and so does an error of [ifCancelled] itself.
+  ///
+  /// ```dart
+  /// final db = await ctx.wait(
+  ///   Database.open,
+  ///   ifCancelled: (db) => db.close(),
+  /// );
+  /// ```
+  Future<T> wait<T>(
+    FutureOr<T> Function() action, {
+    FutureOr<void> Function(T value)? ifCancelled,
+  });
 
   /// Runs [action], waits for all of it, and gives up only afterwards.
   ///
@@ -55,15 +72,35 @@ abstract interface class JobContext<S extends Object, W extends S> {
   /// ```
   ///
   /// [wait] lets go of the action, `join` stays with it, so the next job
-  /// never starts against a device still finishing this one. It is
-  /// `await action(); ctx.check();` under one name: a body written this
-  /// way cannot walk past a cancellation by forgetting a line.
+  /// never starts against a device still finishing this one, and a body
+  /// written this way cannot walk past a cancellation by forgetting a
+  /// line.
+  ///
+  /// The value is dropped when the job gives up: the throw happens inside
+  /// this call, and the body is never reached. For an [action] that hands
+  /// something over to own — a connection, a file, a subscription — pass
+  /// [ifCancelled], and it gets that value instead. It is awaited before
+  /// the [Cancelled] is thrown, so [SoloBase.close] waits for the disposal
+  /// too and the next job starts with the resource already gone. Only a
+  /// value is handed over: an [action] that threw has nothing to dispose
+  /// of.
+  ///
+  /// ```dart
+  /// final db = await ctx.join(
+  ///   Database.open,
+  ///   ifCancelled: (db) => db.close(),
+  /// );
+  /// ```
   ///
   /// An error from [action] is thrown as it is, cancelled or not, and the
-  /// body can catch it like any other. Throws [Cancelled] up front if the
-  /// job is already cancelled or its rules no longer hold, the same as
-  /// [wait] and [uncancellable].
-  Future<T> join<T>(FutureOr<T> Function() action);
+  /// body can catch it like any other. An error from [ifCancelled] goes to
+  /// `onError`, and the [Cancelled] is thrown all the same. Throws
+  /// [Cancelled] up front if the job is already cancelled or its rules no
+  /// longer hold, the same as [wait] and [uncancellable].
+  Future<T> join<T>(
+    FutureOr<T> Function() action, {
+    FutureOr<void> Function(T value)? ifCancelled,
+  });
 
   /// Runs [action] with cancellation refused, and waits for it.
   ///
@@ -198,11 +235,35 @@ final class _JobContext<S extends Object, W extends S, R>
   }
 
   @override
-  Future<T> join<T>(FutureOr<T> Function() action) async {
+  Future<T> join<T>(
+    FutureOr<T> Function() action, {
+    FutureOr<void> Function(T value)? ifCancelled,
+  }) async {
     _checkedState();
     final result = await action();
-    _checkedState();
+    try {
+      _checkedState();
+    } on Cancelled {
+      if (ifCancelled != null) {
+        await _dispose(ifCancelled, result);
+      }
+      rethrow;
+    }
     return result;
+  }
+
+  /// Hands [value] to the body's own disposer. Its error belongs to
+  /// `onError`: the job is already giving up, and a failed disposal must
+  /// not stand in for the cancellation the body is waiting for.
+  Future<void> _dispose<T>(
+    FutureOr<void> Function(T value) ifCancelled,
+    T value,
+  ) async {
+    try {
+      await ifCancelled(value);
+    } on Object catch (error, stackTrace) {
+      _solo._notifyError(_job, error, stackTrace);
+    }
   }
 
   @override
@@ -237,19 +298,26 @@ final class _JobContext<S extends Object, W extends S, R>
   }
 
   @override
-  Future<T> wait<T>(FutureOr<T> Function() action) async {
+  Future<T> wait<T>(
+    FutureOr<T> Function() action, {
+    FutureOr<void> Function(T value)? ifCancelled,
+  }) async {
     _checkedState();
     final result = action();
     if (result is! Future<T>) {
       return result;
     }
-    return _race(result);
+    return _race(result, ifCancelled);
   }
 
   /// Completes with [future] or with the job's cancellation, whichever
-  /// comes first. A result arriving after cancellation is ignored; an
-  /// error arriving after cancellation goes to `onError`.
-  Future<T> _race<T>(Future<T> future) {
+  /// comes first. A result arriving after cancellation goes to
+  /// [ifCancelled], or nowhere if there is none; an error arriving after
+  /// cancellation goes to `onError`.
+  Future<T> _race<T>(
+    Future<T> future,
+    FutureOr<void> Function(T value)? ifCancelled,
+  ) {
     final completer = Completer<T>();
     void onCancel() {
       if (!completer.isCompleted) {
@@ -264,7 +332,11 @@ final class _JobContext<S extends Object, W extends S, R>
     Future<void> forward() async {
       try {
         final value = await future;
-        if (!completer.isCompleted) {
+        if (completer.isCompleted) {
+          if (ifCancelled != null) {
+            await _dispose(ifCancelled, value);
+          }
+        } else {
           completer.complete(value);
         }
       } on Object catch (error, stackTrace) {

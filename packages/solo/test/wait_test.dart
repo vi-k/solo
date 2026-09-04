@@ -183,4 +183,94 @@ void main() {
       ]);
     });
   });
+
+  test('a late value of the abandoned future goes to ifCancelled', () {
+    runSolo((solo, journal, async) {
+      final disposed = <int>[];
+      solo.run<TestState, void>(key: 'job', (ctx) async {
+        await ctx.wait(
+          () async {
+            await delay(100);
+            return 7;
+          },
+          ifCancelled: disposed.add,
+        );
+      });
+      async.elapse(const Duration(milliseconds: 50));
+      solo.current!.cancel();
+      async.flushMicrotasks();
+      expect(disposed, isEmpty, reason: 'the action is still in flight');
+      expect(journal.take(), [
+        '[job] started',
+        '[job] finished Cancelled(manual)',
+      ]);
+      async.elapse(const Duration(milliseconds: 50));
+      expect(disposed, [7]);
+    });
+  });
+
+  test('ifCancelled is not called when the value arrives in time', () {
+    runSolo((solo, journal, async) {
+      final disposed = <int>[];
+      final job = solo.run<TestState, int>(
+        key: 'job',
+        (ctx) => ctx.wait(
+          () async {
+            await delay(50);
+            return 7;
+          },
+          ifCancelled: disposed.add,
+        ),
+      );
+      async.flushTimers();
+      expect((job.outcome! as Done<int>).value, 7);
+      expect(disposed, isEmpty);
+    });
+  });
+
+  test('a late error does not reach ifCancelled', () {
+    runSolo((solo, journal, async) {
+      final disposed = <int>[];
+      solo.run<TestState, void>(key: 'job', (ctx) async {
+        await ctx.wait<int>(
+          () async {
+            await delay(100);
+            throw StateError('late');
+          },
+          ifCancelled: disposed.add,
+        );
+      });
+      async.elapse(const Duration(milliseconds: 50));
+      solo.current!.cancel();
+      async.elapse(const Duration(milliseconds: 50));
+      expect(disposed, isEmpty);
+      expect(journal.take(), [
+        '[job] started',
+        '[job] finished Cancelled(manual)',
+        '[job] error Bad state: late',
+      ]);
+    });
+  });
+
+  test('an error from ifCancelled goes to onError', () {
+    runSolo((solo, journal, async) {
+      solo.run<TestState, void>(key: 'job', (ctx) async {
+        await ctx.wait(
+          () async {
+            await delay(100);
+            return 7;
+          },
+          ifCancelled: (value) => throw StateError('cannot dispose $value'),
+        );
+      });
+      async.elapse(const Duration(milliseconds: 50));
+      solo.current!.cancel();
+      async.elapse(const Duration(milliseconds: 50));
+      expect(journal.take(), [
+        '[job] started',
+        '[job] finished Cancelled(manual)',
+        '[job] error Bad state: cannot dispose 7',
+      ]);
+    });
+  });
 }

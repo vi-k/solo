@@ -181,6 +181,37 @@ Job<void> seek(Duration position) => run<Ready, void>(
     );
 ```
 
+**Taking ownership.** A cancellation throws inside the context call, so a
+value the call was about to hand over never reaches the body: `join` drops
+it, `wait` never had it in the first place. Both take `ifCancelled` for
+exactly that value — a connection, a file, a subscription that would
+otherwise leak. `join` awaits the disposal before it throws, so `close()`
+waits for it too and the next job starts with the resource already gone;
+`wait` calls it late, when the abandoned action finally comes back, and
+nothing waits for that. Once the body does hold the value, an ordinary
+`finally` takes over — with a plain `await`, because a cancelled job is
+turned down by every member of the context, cleanup included:
+
+```dart
+Job<void> load() => run<Idle, void>(
+      key: 'load',
+      (ctx) async {
+        final db = await ctx.join(
+          Database.open,
+          ifCancelled: (db) => db.close(),
+        );
+        try {
+          final rows = await ctx.join(db.readAll);
+          ctx.emit(Loaded(rows));
+        } finally {
+          // The job may be cancelled by now, so this one call goes
+          // without the context; `close()` still waits for the body.
+          await db.close();
+        }
+      },
+    );
+```
+
 **Children.** `ctx.run(child)` starts a job right now, bypassing the queue,
 as a child of the current one. The parent finishes only after all of its
 children. `ctx.run(child).done` gives the outcome and never throws;

@@ -21,6 +21,9 @@ Initial release.
   of the action and gives up afterwards, so a device call is never left
   mid-flight; `uncancellable` turns the cancellation down for the length of
   the call.
+- `wait` and `join` take `ifCancelled`: the value of an action the job gave
+  up on goes there instead of on the floor, so a connection or a file that
+  action opened is still closed.
 - `JobContext.uncancellable` is `wait`'s counterpart: it runs a step that
   cannot be taken back — a payment on its way to the server — with
   cancellation refused, and `close` waits for it.
