@@ -22,8 +22,8 @@ This document assumes the [README's Concepts][concepts]: `Job` and
 [concepts]: https://github.com/vi-k/solo/blob/main/packages/solo/README.md#concepts
 
 Every snippet below was compiled and run — the bloc ones against bloc 9.2.1
-with bloc_concurrency 0.3.0, the `solo` ones against `solo` 1.0.0 — and
-every trace quoted is from those runs.
+with bloc_concurrency 0.3.0 and, in item 4, mutex 3.1.0; the `solo` ones
+against `solo` 1.0.0 — and every trace quoted is from those runs.
 
 The same package ships `Cubit`: no events, no transformers, methods that
 emit. It answers items 5 and 6 outright — a cubit method takes typed
@@ -405,6 +405,11 @@ A firmware update over BLE, written chunk by chunk. A restarted flash must
 stop writing to the device; `restartable()` closes the emitter, and that is
 all it does — the loop goes on writing.
 
+This device cannot be told to stop. A chunk handed to the stack lands, and
+no cancel token takes it back — the ordinary case for a BLE write. So the
+only way to keep two firmware images off one wire is to wait for the write
+in flight before the next one starts.
+
 **On bloc.** The answer is the maintainer's own, in
 [felangel/bloc#3349](https://github.com/felangel/bloc/issues/3349):
 
@@ -443,25 +448,59 @@ moment the event is added, while the old `_ble.write` is still on the wire,
 and `emit.isDone` is not read until that write returns — so the device is
 asked for a chunk of the new image while it is still taking one of the old:
 `[write 0 start, write 0 end, write 1 start, write 100 start, write 1 end,
-write 100 end, …]`. Item 2's answer — the write's cancel token in a field,
-cancelled from `onEvent` — does stop the old write, and the overlap outlives
-it: `[write 0 start, write 0 end, write 1 start, write 100 start, write 1
-stopped, write 100 end, …]`. There is nowhere to put the waiting. The
-transformers offer "begin the new handler now" (`restartable()`) and "begin
-it after the old one has finished the whole file" (`sequential()`), and not
-"stop the old one, then begin".
+write 100 end, …]`.
 
-And its reach is only the emitter. Bring the failure in as a state rather
-than as a restart — a `HardwareFailed` event that emits `Broken`, which is
-item 8's supported route — and `emit.isDone` never becomes true: the flash
-writes `[0, 1, 2, 3, 4, 5]` to broken hardware and then overwrites `Broken`
-with `Flashing`. The mirror image is a future started inside the handler and
-left unawaited; nothing structured outlives the handler, so that one is
-caught by an `assert` in debug only
+The transformers have nowhere to put the waiting. They offer "begin the new
+handler now" (`restartable()`) and "begin it once the old one has finished
+the whole file" (`sequential()`), and not "let the old one come back from
+the chunk it is writing, then begin". So the waiting is built beside them,
+by hand: the wire goes under a lock, `Mutex` from `package:mutex` here.
+
+```dart
+class LockedFirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
+  final Ble _ble;
+  final _wire = Mutex();
+
+  LockedFirmwareBloc(this._ble) : super(Idle()) {
+    on<Flash>((e, emit) async {
+      for (final chunk in e.chunks) {
+        // The replacement handler starts while this write is on the wire
+        // and waits here for it to land. Every call to the device, in
+        // every handler, has to go through this same lock.
+        await _wire.protect(() => _ble.write(chunk));
+        if (emit.isDone) return;
+        emit(Flashing(chunk.index));
+      }
+    }, transformer: restartable());
+  }
+}
+```
+
+That does it. The same chunks land, `[0, 1, 100, 101, …]`, and now one at a
+time: `[write 0 start, write 0 end, write 1 start, write 1 end, write 100
+start, write 100 end, …]`.
+
+What it costs is a second ordering standing next to the transformer's, and
+the two know nothing of each other. `restartable()` calls the old handler
+replaced the moment the event arrives; the wire says otherwise for another
+chunk's worth of time, and the lock is the only thing that knows it. The
+`emit.isDone` line is still needed — the lock orders the writes, it does not
+end the loop. And every call to the device has to be taken under the same
+lock, in handlers that have nothing to do with flashing too; nothing checks
+that they are, so a single missed one puts both images back on the wire with
+no error anywhere.
+
+And the reach of `emit.isDone` is only the emitter. Bring the failure in as
+a state rather than as a restart — a `HardwareFailed` event that emits
+`Broken`, which is item 8's supported route — and `emit.isDone` never
+becomes true: the flash writes `[0, 1, 2, 3, 4, 5]` to broken hardware and
+then overwrites `Broken` with `Flashing`. The mirror image is a future
+started inside the handler and left unawaited; nothing structured outlives
+the handler, so that one is caught by an `assert` in debug only
 ([#2961](https://github.com/felangel/bloc/issues/2961)) — see item 7.
 
-**On solo.** Cancellation is cooperative too, and it is the write that
-cooperates.
+**On solo.** The waiting is the queue's, and there is nothing to write for
+it.
 
 ```dart
 final class FirmwareController extends Solo<FirmwareState> {
@@ -473,14 +512,12 @@ final class FirmwareController extends Solo<FirmwareState> {
         key: 'flash',
         policy: Policy.restart,
         (ctx) async {
-          final token = CancelToken();
-          ctx.onCancel(token.cancel);
           for (final chunk in chunks) {
-            // The write is told to stop and the loop waits for it to
-            // come back, so the flash that replaces this one never
-            // writes over a chunk still on the wire. What ends the loop
-            // is the emit below: it throws the job's Cancelled.
-            await _ble.write(chunk, cancelToken: token);
+            await _ble.write(chunk);
+            // What ends the loop is this emit: it throws the job's
+            // Cancelled. The write above has already landed, and the
+            // flash that replaces this one is not started until the whole
+            // body has come back.
             ctx.emit(Flashing(chunk.index));
           }
         },
@@ -488,23 +525,22 @@ final class FirmwareController extends Solo<FirmwareState> {
 }
 ```
 
-The restart writes `[0, 100, 101, …]` — a chunk shorter than the bloc's
-`[0, 1, 100, …]`, because the write on the wire was stopped and the chunk it
-was carrying never landed — and it writes them one at a time:
-`[write 0 start, write 0 end, write 1 start, write 1 stopped,
-write 100 start, write 100 end, …]`. Nothing in the controller arranges
-that. The cancellation reaches the token before the body hears of it, the
-write comes back as soon as it can, and the queue starts the replacement
-only once this job has ended.
+The restart writes the same `[0, 1, 100, 101, …]` as the locked bloc above,
+and one at a time in the same way: `[write 0 start, write 0 end, write 1
+start, write 1 end, write 100 start, write 100 end, …]`. Nothing in the
+controller arranges that, and there is no lock. A job holds the controller
+until its body comes back, and `Policy.restart` marks this one cancelled and
+queues the replacement behind it, so the second flash cannot reach the
+device while the first is still on it.
 
-Those two lines cover the other cancellation as well, the one the restart
+The same body covers the other cancellation as well, the one the restart
 never reaches: a `Broken` written by a hardware listener no longer matches
-the working type, so the job is marked, the token fires with it, and the
-flash stops at `[0, 1]` with `Cancelled(rules: is not NotBroken)` instead of
-finishing the file — the case `emit.isDone` cannot see. The cancelled call's
-own handle carries `Cancelled(manual)`, where `add` carried nothing. And
-work that would otherwise be fire-and-forget goes through `ctx.run(child)`,
-a child job the parent waits for.
+the working type, so the job is marked, and the flash stops at `[0, 1, 2]`
+with `Cancelled(rules: is not NotBroken)` instead of finishing the file —
+the case `emit.isDone` cannot see. The cancelled call's own handle carries
+`Cancelled(manual)`, where `add` carried nothing. And work that would
+otherwise be fire-and-forget goes through `ctx.run(child)`, a child job the
+parent waits for.
 
 ## 5. You cannot await your own event
 

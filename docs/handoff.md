@@ -153,8 +153,9 @@ dart run bin/v/item1.dart               # и так до item8
 cd ../solo_check && dart pub get && dart analyze bin/v
 ```
 
-`bloc_check` — против bloc 9 с bloc_concurrency, `solo_check` — против
-локального пакета под его же `analysis_options.yaml`. За каждым
+`bloc_check` — против bloc 9 с bloc_concurrency и mutex (пункт 4 берёт
+запись устройства под замок), `solo_check` — против локального пакета под
+его же `analysis_options.yaml`. За каждым
 утверждением о поведении стоит прогон; для bloc — либо прогон-проба, либо
 названная строка исходника. Тайминги в фейках настоящие, с запасом, не
 `FakeAsync`.

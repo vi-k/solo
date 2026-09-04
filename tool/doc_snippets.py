@@ -37,6 +37,7 @@ environment:
 dependencies:
   bloc: ^9.0.0
   bloc_concurrency: ^0.3.0
+  mutex: ^3.1.0
 """
 
 SOLO_PUBSPEC = """name: solo_check
@@ -118,17 +119,11 @@ class Ble {
     await tick(10);
   }
 
-  // A BLE write can be told to stop; it returns as soon as it has, and
-  // the chunk it was carrying does not land.
-  Future<void> write(Chunk chunk, {CancelToken? cancelToken}) async {
+  // A BLE write cannot be told to stop: the chunk handed to the stack
+  // lands, and the only way to keep the wire clear is to wait for it.
+  Future<void> write(Chunk chunk) async {
     trace.add('write ${chunk.index} start');
-    for (var step = 0; step < 2; step++) {
-      await tick(10);
-      if (cancelToken?.cancelled ?? false) {
-        trace.add('write ${chunk.index} stopped');
-        return;
-      }
-    }
+    await tick(20);
     written.add(chunk.index);
     trace.add('write ${chunk.index} end');
   }
@@ -314,6 +309,13 @@ BLOC_IMPORTS = """import 'dart:async';
 
 import 'package:bloc/bloc.dart';
 import 'package:bloc_concurrency/bloc_concurrency.dart';
+"""
+
+BLOC_MUTEX_IMPORTS = """import 'dart:async';
+
+import 'package:bloc/bloc.dart';
+import 'package:bloc_concurrency/bloc_concurrency.dart';
+import 'package:mutex/mutex.dart';
 """
 
 BLOC_MAP_IMPORTS = """import 'dart:async';
@@ -689,7 +691,7 @@ Future<void> main() async {
 ''')
 
 # --------------------------------------------------------------- item 4 bloc
-FILES['bloc/item4'] = (BLOC_IMPORTS + TRACE + BLE + '''
+FILES['bloc/item4'] = (BLOC_MUTEX_IMPORTS + TRACE + BLE + '''
 sealed class FirmwareEvent {}
 
 class Flash extends FirmwareEvent {
@@ -723,7 +725,7 @@ class Broken extends FirmwareState {
   String toString() => 'Broken($error)';
 }
 
-''' + snips['4_1'] + '''
+''' + snips['4_1'] + snips['4_2'] + '''
 /// The same loop with the `emit.isDone` line left out.
 class UnguardedFirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
   UnguardedFirmwareBloc(this._ble) : super(Idle()) {
@@ -736,31 +738,6 @@ class UnguardedFirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
   }
 
   final Ble _ble;
-}
-
-/// The same loop with item 2's answer: the write's cancel token held in a
-/// field and cancelled from `onEvent`.
-class TokenFirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
-  TokenFirmwareBloc(this._ble) : super(Idle()) {
-    on<Flash>((e, emit) async {
-      final token = CancelToken();
-      _writing = token;
-      for (final chunk in e.chunks) {
-        await _ble.write(chunk, cancelToken: token);
-        if (emit.isDone) return;
-        emit(Flashing(chunk.index));
-      }
-    }, transformer: restartable());
-  }
-
-  final Ble _ble;
-  CancelToken? _writing;
-
-  @override
-  void onEvent(FirmwareEvent event) {
-    if (event is Flash) _writing?.cancel();
-    super.onEvent(event);
-  }
 }
 
 /// The same loop, with the failure arriving as a state instead of a restart.
@@ -812,14 +789,14 @@ Future<void> main() async {
 
   trace.clear();
   final ble3 = Ble();
-  final tokened = TokenFirmwareBloc(ble3);
-  tokened.add(Flash([for (var i = 0; i < 6; i++) Chunk(i)]));
+  final locked = LockedFirmwareBloc(ble3);
+  locked.add(Flash([for (var i = 0; i < 6; i++) Chunk(i)]));
   await tick(30);
-  tokened.add(Flash([for (var i = 100; i < 106; i++) Chunk(i)]));
+  locked.add(Flash([for (var i = 100; i < 106; i++) Chunk(i)]));
   await tick(400);
-  print('token in a field: written ${ble3.written}');
-  print('token trace: ${trace.take(6).toList()}');
-  await tokened.close();
+  print('wire under a lock: written ${ble3.written}');
+  print('locked trace: ${trace.take(6).toList()}');
+  await locked.close();
 }
 ''')
 
@@ -853,7 +830,7 @@ final class Broken extends FirmwareState {
   String toString() => 'Broken($error)';
 }
 
-''' + snips['4_2'] + '''
+''' + snips['4_3'] + '''
 extension on FirmwareController {
   // ignore: invalid_use_of_protected_member
   void hardwareFailed(Object error) => externalSetState(Broken(error));
