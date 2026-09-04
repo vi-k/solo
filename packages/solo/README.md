@@ -162,8 +162,8 @@ runs to its end and its result is dropped on the floor, which is fine for a
 read you can abandon and wrong for anything that must actually stop, or
 that must not be started twice at once. Hand the cancellation to the work
 itself with `ctx.onCancel(callback)`, which fires the moment the job is
-marked, and then wait for the work to finish rather than walking away from
-it:
+marked, and wait for the work with `ctx.join` rather than walking away
+from it:
 
 ```dart
 Job<void> seek(Duration position) => run<Ready, void>(
@@ -229,15 +229,16 @@ it to read. A non-cancellable job that must survive any state needs the
 base type `S` and no `keepWhile`.
 
 `ctx.uncancellable(action)` says the same about one step of the body rather
-than about the whole job, and it is `ctx.wait`'s counterpart: `wait` ends
-the waiting and not the work, this one refuses to be cancelled at all while
-`action` runs. Use it for a step that cannot be taken back — a payment on
-its way to the server, a write already on the wire. A `cancel` or a `close`
-arriving then is refused rather than remembered, `close` waits for the body,
-and the rules are not covered by it either. Sections nest, and the answer in
-force before the step comes back afterwards, thrown or not — so a job
-created with `cancellable: false` stays that way throughout, and a step that
-must be interruptible inside such a job belongs in a job of its own.
+than about the whole job, and it is the third answer a call can get: `wait`
+ends the waiting and not the work, `join` waits for the work and gives up
+after it, this one refuses to be cancelled at all while `action` runs. Use
+it for a step that cannot be taken back — a payment on its way to the
+server, a write already on the wire. A `cancel` or a `close` arriving then
+is refused rather than remembered, `close` waits for the body, and the rules
+are not covered by it either. Sections nest, and the answer in force before
+the step comes back afterwards, thrown or not — so a job created with
+`cancellable: false` stays that way throughout, and a step that must be
+interruptible inside such a job belongs in a job of its own.
 
 `emit` is trusted, reads are checked. The emitted state is not verified
 against the rules of the job that emitted it — otherwise a `close` job
