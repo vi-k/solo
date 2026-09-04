@@ -1041,8 +1041,8 @@ class SendMessage extends ChatEvent {
   final String text;
 }
 
-class MarkRead extends ChatEvent {
-  const MarkRead();
+class MarkReplyRead extends ChatEvent {
+  const MarkReplyRead();
 }
 
 ''' + snips['7_1'] + '''

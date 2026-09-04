@@ -933,12 +933,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       // `Bad state: Cannot add new events after calling close`.
       if (isClosed) return;
       emit(state.withReply(reply));
-      // Ответ лёг на открытый экран, а значит, прочитан. Отдельным
-      // событием он потому, что вызов прямо здесь пошёл бы под
-      // трансформером этого обработчика и заставил бы `close()` ждать.
-      add(const MarkRead());
+      // Отдельным событием — потому что вызов прямо здесь пошёл бы
+      // под трансформером этого обработчика и заставил бы `close()` ждать.
+      add(const MarkReplyRead());
     }, transformer: sequential());
-    on<MarkRead>((e, emit) => _api.markRead(), transformer: sequential());
+    on<MarkReplyRead>(
+      (e, emit) => _api.markRead(),
+      transformer: sequential(),
+    );
   }
 }
 ```
@@ -978,11 +980,11 @@ final class ChatController extends Solo<ChatState> {
         (ctx) async {
           final reply = await ctx.wait(() => _api.send(text));
           ctx.emit(ctx.state.withReply(reply));
-          markRead();
+          markReplyRead();
         },
       );
 
-  Job<void> markRead() =>
+  Job<void> markReplyRead() =>
       run<ChatState, void>((ctx) => ctx.wait(_api.markRead));
 }
 
