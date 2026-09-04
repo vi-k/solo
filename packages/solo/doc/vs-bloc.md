@@ -144,9 +144,9 @@ final class DeviceController extends Solo<DeviceState> {
     return run<Connected, void>(
       key: DeviceKey.disconnect,
       (ctx) async {
-        // The radio is not left mid-command: the body waits for it, and
-        // the emit throws if the job was cancelled meanwhile.
-        await _ble.disconnect();
+        // `join` does not leave the radio mid-command: it waits for the
+        // call and gives up only once the radio is back.
+        await ctx.join(_ble.disconnect);
         ctx.emit(const Offline());
       },
     );
@@ -263,12 +263,11 @@ final class PlayerController extends Solo<PlayerState> {
 
   PlayerController(this._player) : super(Ready());
 
-  // Nothing restarts a toggle, so it just waits for the device; the emit
-  // below throws if the job was cancelled while it waited.
+  // Nothing restarts a toggle, so it just waits the device out.
   Job<void> pause() => run<Ready, void>(
         key: PlayerKey.pause,
         (ctx) async {
-          await _player.pause();
+          await ctx.join(_player.pause);
           ctx.emit(ctx.state.copyWith(playing: false));
         },
       );
@@ -279,9 +278,9 @@ final class PlayerController extends Solo<PlayerState> {
         (ctx) async {
           final token = CancelToken();
           ctx.onCancel(token.cancel);
-          // The player stops on its own, and the job ends only once it
-          // has, so the next seek never overlaps this one.
-          await _player.seek(position, cancelToken: token);
+          // The player stops on its own, and `join` waits for it, so
+          // the next seek never overlaps this one.
+          await ctx.join(() => _player.seek(position, cancelToken: token));
           ctx.emit(ctx.state.copyWith(position: position));
         },
       );
@@ -536,11 +535,11 @@ final class FirmwareController extends Solo<FirmwareState> {
         (ctx) async {
           var written = 0;
           for (final chunk in chunks) {
-            await _ble.write(chunk);
-            // What ends the loop is this emit: it throws the job's
-            // Cancelled. The write above has already landed, and the
-            // flash that replaces this one is not started until the whole
-            // body has come back.
+            // What ends the loop is `join`: the write it waits for
+            // lands, and then it throws the job's Cancelled. The flash
+            // that replaces this one is not started until the whole body
+            // has come back.
+            await ctx.join(() => _ble.write(chunk));
             ctx.emit(Flashing(++written, chunks.length));
           }
         },
@@ -852,10 +851,10 @@ final class MapController extends Solo<MapState> {
         policy: Policy.restart,
         (ctx) async {
           // Restartable, so the cancellation goes to the map itself and
-          // the body waits for it to come back — item 2's shape.
+          // `join` waits for it to come back — item 2's shape.
           final token = CancelToken();
           ctx.onCancel(token.cancel);
-          await _map.moveTo(point, cancelToken: token);
+          await ctx.join(() => _map.moveTo(point, cancelToken: token));
           ctx.emit(ctx.state.copyWith(center: point));
         },
       );
@@ -866,7 +865,7 @@ final class MapController extends Solo<MapState> {
         (ctx) async {
           final token = CancelToken();
           ctx.onCancel(token.cancel);
-          await _map.setZoom(value, cancelToken: token);
+          await ctx.join(() => _map.setZoom(value, cancelToken: token));
           ctx.emit(ctx.state.copyWith(zoom: value));
         },
       );
@@ -1062,11 +1061,10 @@ final class SensorController extends Solo<SensorState> {
   Job<void> calibrate() => run<Ready, void>(
         key: 'calibrate',
         (ctx) async {
-          // Sensor calls are awaited, not abandoned; `check` is where
-          // the job gives up if the state stopped matching meanwhile.
-          await _hw.zero();
-          ctx.check();
-          await _hw.sample();
+          // `join` does not abandon a sensor call: it waits for it and
+          // gives up afterwards if the state stopped matching meanwhile.
+          await ctx.join(_hw.zero);
+          await ctx.join(_hw.sample);
           ctx.emit(const Calibrated());
         },
       );

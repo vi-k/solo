@@ -148,10 +148,14 @@ never starts, instead of starting and dying on its first read.
 **Cancellation.** Cooperative: Dart cannot interrupt somebody else's
 `await`. A cancelled job learns about it the next time it touches the
 context — every `JobContext` member except `log` and `job` throws the job's
-`Cancelled` once the job is marked. After a bare `await`, call
-`ctx.check()`. To wait for something and give up on cancellation at once,
-wrap it in `ctx.wait(() => ...)`: it returns as soon as either the
-action or the cancellation arrives.
+`Cancelled` once the job is marked. So a body does not `await` on its own:
+every call goes through the context, and the member you pick says what a
+cancellation does to that call. `ctx.wait(() => ...)` returns as soon as
+either the action or the cancellation arrives. `ctx.join(() => ...)` waits
+for all of the action and gives up afterwards. `ctx.uncancellable(() => ...)`
+turns the cancellation down for the length of the call. Where there is no
+call to wrap — a loop over work of your own — `ctx.check()` is the same
+check on its own.
 
 **The action is not stopped.** The wait ends, the work does not. The action
 runs to its end and its result is dropped on the floor, which is fine for a
@@ -168,10 +172,10 @@ Job<void> seek(Duration position) => run<Ready, void>(
       (ctx) async {
         final token = CancelToken();
         ctx.onCancel(token.cancel);
-        // The device stops on its own, and the job ends only once it has,
-        // so the next seek never overlaps this one. If the cancellation
-        // arrived while it was stopping, the emit below throws Cancelled.
-        await _player.seek(position, cancelToken: token);
+        // The device stops on its own, and `join` waits for it, so the
+        // next seek never overlaps this one and the job gives up only
+        // once the device has come back.
+        await ctx.join(() => _player.seek(position, cancelToken: token));
         ctx.emit(ctx.state.copyWith(position: position));
       },
     );
@@ -615,7 +619,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 | an event class, `on<E>`, `add(E())` | a method returning `Job<T>` |
 | an `EventTransformer` | a `Policy` on the job |
 | `emit(next)` | `ctx.emit(next)` |
-| `if (emit.isDone) return;` | `ctx.check()` or `ctx.wait(...)` |
+| `if (emit.isDone) return;` | `ctx.wait(...)`, `ctx.join(...)`, `ctx.check()` |
 | `state`, `stream` | `state`, `stream` |
 | `BlocObserver` | `SoloObserver` |
 | `BlocBuilder`, `BlocSelector` | `ValueListenableBuilder` |

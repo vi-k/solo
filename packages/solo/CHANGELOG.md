@@ -13,8 +13,14 @@ Initial release.
   the way Dart reports an unhandled `Future` error. Reading `done` or
   `value`, or calling `ignore`, counts as observing it; `Cancelled` never
   reaches the zone.
-- `JobContext`: `state`, `stateAs`, `emit`, `check`, `wait`,
+- `JobContext`: `state`, `stateAs`, `emit`, `check`, `wait`, `join`,
   `uncancellable`, `onCancel`, `run`, `log`.
+- A body does not `await` on its own: every call goes through the context,
+  and the member it picks says what a cancellation does to that call.
+  `wait` ends the waiting and lets the action run on; `join` waits for all
+  of the action and gives up afterwards, so a device call is never left
+  mid-flight; `uncancellable` turns the cancellation down for the length of
+  the call.
 - `JobContext.uncancellable` is `wait`'s counterpart: it runs a step that
   cannot be taken back — a payment on its way to the server — with
   cancellation refused, and `close` waits for it.

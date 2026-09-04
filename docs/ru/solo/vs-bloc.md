@@ -150,9 +150,9 @@ final class DeviceController extends Solo<DeviceState> {
     return run<Connected, void>(
       key: DeviceKey.disconnect,
       (ctx) async {
-        // Радио не бросают на полпути: тело дожидается его, а emit
-        // бросит Cancelled, если задачу успели отменить.
-        await _ble.disconnect();
+        // `join` не бросает радио на полпути: он дожидается вызова и
+        // сдаётся только после того, как радио вернулось.
+        await ctx.join(_ble.disconnect);
         ctx.emit(const Offline());
       },
     );
@@ -274,12 +274,12 @@ final class PlayerController extends Solo<PlayerState> {
 
   PlayerController(this._player) : super(Ready());
 
-  // Переключатель никто не перезапускает, поэтому он просто ждёт
-  // устройство; `emit` ниже бросит, если задачу отменили, пока он ждал.
+  // Переключатель никто не перезапускает, поэтому он просто дожидается
+  // устройства.
   Job<void> pause() => run<Ready, void>(
         key: PlayerKey.pause,
         (ctx) async {
-          await _player.pause();
+          await ctx.join(_player.pause);
           ctx.emit(ctx.state.copyWith(playing: false));
         },
       );
@@ -290,10 +290,9 @@ final class PlayerController extends Solo<PlayerState> {
         (ctx) async {
           final token = CancelToken();
           ctx.onCancel(token.cancel);
-          // Плеер останавливается сам, а задача заканчивается только
-          // после того, как он остановился, поэтому следующий seek
-          // никогда не перекрывается с этим.
-          await _player.seek(position, cancelToken: token);
+          // Плеер останавливается сам, а `join` его дожидается, поэтому
+          // следующий seek никогда не перекрывается с этим.
+          await ctx.join(() => _player.seek(position, cancelToken: token));
           ctx.emit(ctx.state.copyWith(position: position));
         },
       );
@@ -555,10 +554,10 @@ final class FirmwareController extends Solo<FirmwareState> {
         (ctx) async {
           var written = 0;
           for (final chunk in chunks) {
-            await _ble.write(chunk);
-            // Цикл заканчивает этот emit: он бросает Cancelled этой
-            // задачи. Запись выше уже дошла, а прошивка, заменяющая эту,
-            // не стартует, пока не вернётся всё тело.
+            // Цикл заканчивает `join`: запись, которой он ждёт, доходит,
+            // и он бросает Cancelled этой задачи. Прошивка, заменяющая
+            // эту, не стартует, пока не вернётся всё тело.
+            await ctx.join(() => _ble.write(chunk));
             ctx.emit(Flashing(++written, chunks.length));
           }
         },
@@ -871,11 +870,11 @@ final class MapController extends Solo<MapState> {
         key: MapKey.moveTo,
         policy: Policy.restart,
         (ctx) async {
-          // Перезапускаемая, поэтому отмена уходит к самой карте, а тело
-          // дожидается её возврата, — форма из пункта 2.
+          // Перезапускаемая, поэтому отмена уходит к самой карте, а
+          // `join` дожидается её возврата, — форма из пункта 2.
           final token = CancelToken();
           ctx.onCancel(token.cancel);
-          await _map.moveTo(point, cancelToken: token);
+          await ctx.join(() => _map.moveTo(point, cancelToken: token));
           ctx.emit(ctx.state.copyWith(center: point));
         },
       );
@@ -886,7 +885,7 @@ final class MapController extends Solo<MapState> {
         (ctx) async {
           final token = CancelToken();
           ctx.onCancel(token.cancel);
-          await _map.setZoom(value, cancelToken: token);
+          await ctx.join(() => _map.setZoom(value, cancelToken: token));
           ctx.emit(ctx.state.copyWith(zoom: value));
         },
       );
@@ -1086,11 +1085,10 @@ final class SensorController extends Solo<SensorState> {
   Job<void> calibrate() => run<Ready, void>(
         key: 'calibrate',
         (ctx) async {
-          // Вызовы датчика дожидаются, а не бросаются; `check` — то
-          // место, где задача сдаётся, если состояние перестало подходить.
-          await _hw.zero();
-          ctx.check();
-          await _hw.sample();
+          // `join` не бросает вызов датчика: он дожидается его и
+          // сдаётся после, если состояние перестало подходить.
+          await ctx.join(_hw.zero);
+          await ctx.join(_hw.sample);
           ctx.emit(const Calibrated());
         },
       );

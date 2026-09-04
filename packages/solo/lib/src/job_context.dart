@@ -18,7 +18,12 @@ abstract interface class JobContext<S extends Object, W extends S> {
   /// job's rules; other running jobs are re-evaluated.
   void emit(S next);
 
-  /// Reads [state] and discards it. Call after a bare `await`.
+  /// Reads [state] and discards it: gives up if the job was cancelled or
+  /// its rules stopped holding.
+  ///
+  /// [join] is the same thing around a call. Reach for `check` where there
+  /// is no call to wrap: a loop over work of your own, a `switch` on the
+  /// state after one.
   void check();
 
   /// Runs [action] and waits for it, but no longer than this job lives.
@@ -31,9 +36,34 @@ abstract interface class JobContext<S extends Object, W extends S> {
   ///
   /// For anything that must actually stop — a device, a download, a write —
   /// hand the cancellation to it through [onCancel] and wait for it to
-  /// finish, instead of walking away from it. For a step that must not be
-  /// interrupted at all, see [uncancellable].
+  /// finish with [join], instead of walking away from it. For a step that
+  /// must not be interrupted at all, see [uncancellable].
   Future<T> wait<T>(FutureOr<T> Function() action);
+
+  /// Runs [action], waits for all of it, and gives up only afterwards.
+  ///
+  /// The counterpart of [wait] for a call that must not be left in flight:
+  /// a device command, a write already on the wire. A cancellation
+  /// arriving while [action] runs is accepted — the job is marked, and
+  /// [SoloBase.close] waits, because the body is still inside this call —
+  /// but the waiting is not cut short. When [action] comes back, this
+  /// throws that [Cancelled]; if none arrived, it returns [action]'s
+  /// value.
+  ///
+  /// ```dart
+  /// await ctx.join(() => device.write(chunk));
+  /// ```
+  ///
+  /// [wait] lets go of the action, `join` stays with it, so the next job
+  /// never starts against a device still finishing this one. It is
+  /// `await action(); ctx.check();` under one name: a body written this
+  /// way cannot walk past a cancellation by forgetting a line.
+  ///
+  /// An error from [action] is thrown as it is, cancelled or not, and the
+  /// body can catch it like any other. Throws [Cancelled] up front if the
+  /// job is already cancelled or its rules no longer hold, the same as
+  /// [wait] and [uncancellable].
+  Future<T> join<T>(FutureOr<T> Function() action);
 
   /// Runs [action] with cancellation refused, and waits for it.
   ///
@@ -71,10 +101,9 @@ abstract interface class JobContext<S extends Object, W extends S> {
   /// ```dart
   /// final token = CancelToken();
   /// ctx.onCancel(token.cancel);
-  /// // The device stops by itself, and the body waits for it to finish
+  /// // The device stops by itself, and `join` waits for it to finish
   /// // before the job ends and the next one starts.
-  /// await device.seek(position, cancelToken: token);
-  /// ctx.check();
+  /// await ctx.join(() => device.seek(position, cancelToken: token));
   /// ```
   ///
   /// Throws [Cancelled] if the job is already cancelled: there is nothing
@@ -166,6 +195,14 @@ final class _JobContext<S extends Object, W extends S, R>
   @override
   void check() {
     _checkedState();
+  }
+
+  @override
+  Future<T> join<T>(FutureOr<T> Function() action) async {
+    _checkedState();
+    final result = await action();
+    _checkedState();
+    return result;
   }
 
   @override
