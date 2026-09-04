@@ -26,12 +26,14 @@ with bloc_concurrency 0.3.0, the `solo` ones against `solo` 1.0.0 — and
 every trace quoted is from those runs.
 
 The same package ships `Cubit`: no events, no transformers, methods that
-emit. It answers items 5 and 6 outright — a cubit method takes typed
-arguments and returns a value you can `await` — and felangel points at it in
-[#1556](https://github.com/felangel/bloc/issues/1556) itself. For the rest
-it offers nothing: there is no queue to manage (1), no transformers at all
-(2, 3), no cancellation (4), and `emit` after `close` throws `Bad state:
-Cannot emit new states after calling close` (item 7 below).
+emit. It answers item 6 outright, and the awaiting half of item 5 — a
+cubit method takes typed arguments and returns a value you can `await` —
+and felangel points at it in
+[#1556](https://github.com/felangel/bloc/issues/1556) itself. The rest it
+leaves to you: there is no queue to manage because there is no queue (1),
+no transformers at all (2, 3), no cancellation (4), and `emit` after
+`close` throws `Bad state: Cannot emit new states after calling close`
+(item 7 below). Item 5 has the cubit written out.
 
 ## 1. The queue cannot be managed
 
@@ -410,11 +412,6 @@ no cancel token takes it back — the ordinary case for a BLE write. So the
 only way to keep two firmware images off one wire is to wait for the write
 in flight before the next one starts.
 
-The state below is the progress of the flash, not the chunk last written,
-and on both sides for the same reason. Neither reports the chunk that lands
-after the run has been told to stop — there is no longer anyone to report it
-to — and the progress of a run that is being replaced goes out with the run.
-
 **On bloc.** The answer is the maintainer's own, in
 [felangel/bloc#3349](https://github.com/felangel/bloc/issues/3349):
 
@@ -582,22 +579,19 @@ and for a screen it is the end of the discussion — asking a bloc for the
 result of one event, from a widget that could simply watch the state, is
 working against the library. Most screens never need this item.
 
-It stops being right when the caller is not a screen. "Reorder my usual",
-spoken to the assistant, arrives as a platform-channel call, and the
-platform waits on the handler for a value: what it returns is what the user
-is told, what it throws is the failure the user hears, and there is no
-second chance to speak afterwards. No `BuildContext`, no widget to rebuild,
-nobody to listen — a function that has to answer about the request it was
-handed. `WidgetsBindingObserver.didRequestAppExit`, which the framework
-waits on for an `AppExitResponse` before letting the app go, and an
-asynchronous router guard, which the router waits on for a route, are the
-same shape: someone outside your code called in and is holding the line.
+It stops being right when the caller is not a screen. A platform-channel
+handler answering the system, `WidgetsBindingObserver.didRequestAppExit`
+answering the framework with an `AppExitResponse`, an asynchronous router
+guard answering with a route — none of them has a `BuildContext`, anything
+to rebuild or anyone to listen. Each is a function that has to return an
+answer about the request it was handed, with a caller on the other side
+holding the line until it does.
 
 It also has to be the controller's payment and not a repository call beside
 it. The app's own Pay button runs the same operation; two callers must not
 charge the card twice, and the one that arrives second has to be told the
 outcome of the run that is already going. Owning that operation is what the
-controller is for — item 1 — so the handler has to reach the controller and
+controller is for — item 1 — so the caller has to reach the controller and
 wait for it, which is exactly what `add` will not do.
 
 **On bloc.** The answer is a completer carried on the event, and a method on
@@ -646,20 +640,74 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
 }
 ```
 
-and the handler is then `return (await bloc.pay(order)).orderId`, which is
-what the item asked for: two invocations for one order answer with one
-receipt, and a second order gets its own.
+and the caller is then `await bloc.pay(order)`, which is what the item
+asked for: two calls for one order answer with one receipt, and a second
+order gets its own.
 
 The price is the shape. Once this method exists it is the thing `add`
 refused to be, and the event class is ceremony around it — item 6. The
 completer must be completed on every exit path, error included, or the
-caller waits forever and the platform's own timeout is what ends the call;
-the dedupe cannot be delegated to `droppable()`, because a dropped event
-never enters the handler and its completer never completes, so the
-`_inFlight` map is hand-written instead. And the exits bloc owns are the
-ones the completer cannot see: after `close()`, `pay()` throws `Bad state:
-Cannot add new events after calling close`, which reaches the platform as a
-crash rather than as an answer — item 7.
+caller waits forever with nothing to time it out; the dedupe cannot be
+delegated to `droppable()`, because a dropped event never enters the handler
+and its completer never completes, so the `_inFlight` map is hand-written
+instead. And the exits bloc owns are the ones the completer cannot see:
+after `close()`, `pay()` throws `Bad state: Cannot add new events after
+calling close`, which is item 7.
+
+**On Cubit.** The same package's other controller has no events: a method
+takes arguments and returns a value, so the awaiting half of this item is
+answered by the language. `emit(Paying())`, `await _api.pay(order)`,
+`emit(Paid(receipt))`, `return receipt`, and the caller has its receipt.
+
+The other half is not answered at all. Nothing owns the operation, so two
+calls for one order run their bodies side by side and charge the card
+twice, and their `emit`s interleave with no transformer to reach for —
+item 3. Getting to what this item asked for means writing both halves by
+hand, the in-flight map from the bloc above and a lock like item 4's:
+
+```dart
+class CheckoutCubit extends Cubit<CheckoutState> {
+  final Api _api;
+  final _inFlight = <String, Future<Receipt>>{};
+  Future<void> _tail = Future.value();
+
+  CheckoutCubit(this._api) : super(Cart());
+
+  /// One payment at a time, and a second call for an order already on its
+  /// way joins that one instead of charging the card again.
+  Future<Receipt> pay(Order order) {
+    final running = _inFlight[order.id];
+    if (running != null) {
+      return running;
+    }
+    final turn = Completer<void>();
+    final before = _tail;
+    _tail = turn.future;
+    final result = before.then((_) => _pay(order)).whenComplete(turn.complete);
+    _inFlight[order.id] = result;
+    return result;
+  }
+
+  Future<Receipt> _pay(Order order) async {
+    emit(Paying());
+    try {
+      final receipt = await _api.pay(order);
+      emit(Paid(receipt));
+      return receipt;
+    } finally {
+      _inFlight.remove(order.id);
+    }
+  }
+}
+```
+
+That reaches it: three calls for two orders charge twice, and the second
+call for an order gets the first one's receipt. What is left over is
+`close`. A cubit closing over a payment in flight neither waits for it nor
+stops it — `close()` returns at once, the charge goes through behind it,
+and the caller waiting for a receipt gets `Bad state: Cannot emit new
+states after calling close` instead. The payment happened and there is
+nobody left to say so.
 
 **On solo.** A method returns a handle to the job it created.
 
@@ -670,13 +718,16 @@ final class CheckoutController extends Solo<CheckoutState> {
   CheckoutController(this._api) : super(const Cart());
 
   Job<Receipt> pay(Order order) => run<CheckoutState, Receipt>(
-        // The key names the order, so a double tap is a duplicate and a
+        // The key names the order, so a second call is a duplicate and a
         // different order is a different job.
         key: ('pay', order.id),
         policy: Policy.droppable,
+        // A charge that has left for the server cannot be taken back, so
+        // this job refuses to be cancelled and `close` waits for it.
+        cancellable: false,
         (ctx) async {
           ctx.emit(const Paying());
-          final receipt = await ctx.guard(() => _api.pay(order));
+          final receipt = await _api.pay(order);
           ctx.emit(Paid(receipt));
           return receipt;
         },
@@ -684,43 +735,41 @@ final class CheckoutController extends Solo<CheckoutState> {
 }
 ```
 
-and the handler the platform is holding the line on:
+and the caller that owes an answer:
 
 ```dart
-/// Behind "reorder my usual". What this returns is what the user is told,
-/// what it throws is the failure the user hears.
-Future<Object?> onReorderIntent(
-  CheckoutController checkout,
-  MethodCall call,
-) async {
-  final order = Order(call.arguments! as String);
+Future<Receipt> payAndAnswer(CheckoutController checkout, Order order) async {
   switch (await checkout.pay(order).done) {
     case Done(:final value):
-      return value.orderId;
+      return value;
     case Cancelled(:final reason):
-      throw PlatformException(code: 'cancelled', message: '$reason');
-    case Failed(:final error):
-      throw PlatformException(code: 'failed', message: '$error');
+      throw StateError('checkout is closed: $reason');
+    case Failed(:final error, :final stackTrace):
+      Error.throwWithStackTrace(error, stackTrace);
   }
 }
 ```
 
 `done` carries the outcome of this call and never throws; `value` carries
 the value and throws instead. Neither has to guess whose state change it is
-looking at, and the three outcomes are the three answers the platform
-accepts. Because the key names the order rather than the method,
-`Policy.droppable` treats a second invocation as the duplicate it is — both
+looking at. Because the key names the order rather than the method,
+`Policy.droppable` treats a second call as the duplicate it is — both
 callers get the same handle and the same receipt — while a different order
-is a different job. Three invocations for two orders reach the API twice,
-the same as the hand-written `_inFlight` map above, with no map to write.
-The cancelled and failed paths arrive as outcomes rather than as a future
-that never completes, and after `close` the call returns a job already
-finished with `Cancelled(closed)`, so the user is told it was cancelled
-instead of the handler throwing where nobody catches it.
+is a different job. Three calls for two orders reach the API twice, the
+same as the map and the lock above, with neither to write.
 
-Later in the same thread felangel points at `Cubit`, whose methods are plain
-`async` methods you can await — the answer to this item, at the price of the
-event queue and the transformers of items 1 to 4.
+`cancellable: false` is the rest of it, and it is worth saying what the
+alternatives do. `ctx.guard` ends the waiting, not the work: a `close`
+during a payment would report `Cancelled` at once and let the charge go
+through behind it, which is a cancellation reported for a card that was
+charged. Dropping `guard` and awaiting the API directly is no better:
+`close` would wait for the charge, but a cancelled job's outcome is its
+cancellation, so the receipt would still be thrown away. Refusing
+cancellation is what a charge already on its way deserves: `close` waits,
+the job comes back `Done(receipt)` for a payment that really happened, the
+state ends at `Paid`, and the app finishes closing after that. A call made
+after `close` is a different matter — it never starts, and comes back as a
+job already finished with `Cancelled(closed)`.
 
 ## 6. A method, not an event
 

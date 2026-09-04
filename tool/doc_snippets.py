@@ -207,35 +207,6 @@ class Api {
   }
 }
 
-/// `MethodCall` and `PlatformException` of `package:flutter/services.dart`,
-/// stood in for so the snippet runs outside Flutter.
-class MethodCall {
-  const MethodCall(this.method, [this.arguments]);
-  final String method;
-  final Object? arguments;
-}
-
-class PlatformException implements Exception {
-  PlatformException({required this.code, this.message});
-  final String code;
-  final String? message;
-  @override
-  String toString() => 'PlatformException($code, $message)';
-}
-
-/// Stands in for the platform side of the channel: it calls the handler
-/// and prints the answer it is given, value or failure.
-Future<void> assistantAsks(
-  Future<Object?> Function(MethodCall call) handler,
-  String orderId,
-) async {
-  try {
-    final answer = await handler(MethodCall('reorder', orderId));
-    print('  assistant heard: $answer');
-  } on PlatformException catch (error) {
-    print('  assistant heard: $error');
-  }
-}
 '''
 
 MAP_API = '''
@@ -901,31 +872,73 @@ class PaymentFailed extends CheckoutState {
   final Object error;
 }
 
-''' + snips['5_1'] + '''
-/// The same handler as on the solo side, over the bloc's `pay` method.
-Future<Object?> onReorderIntent(CheckoutBloc bloc, MethodCall call) async =>
-    (await bloc.pay(Order(call.arguments! as String))).orderId;
+''' + snips['5_1'] + snips['5_2'] + '''
+/// The cubit the paragraph before the snippet describes: a method you can
+/// await, and nothing around it.
+class PlainCheckoutCubit extends Cubit<CheckoutState> {
+  PlainCheckoutCubit(this._api) : super(Cart());
+
+  final Api _api;
+
+  Future<Receipt> pay(Order order) async {
+    emit(Paying());
+    final receipt = await _api.pay(order);
+    emit(Paid(receipt));
+    return receipt;
+  }
+}
 
 Future<void> main() async {
   final api = Api();
   final bloc = CheckoutBloc(api);
-  // Three invocations for two orders: the shortcut twice for one order,
-  // then a different one.
-  await Future.wait([
-    assistantAsks((call) => onReorderIntent(bloc, call), 'A'),
-    assistantAsks((call) => onReorderIntent(bloc, call), 'A'),
-    assistantAsks((call) => onReorderIntent(bloc, call), 'B'),
+  // Three calls for two orders: one order twice, then a different one.
+  final receipts = await Future.wait([
+    bloc.pay(const Order('A')),
+    bloc.pay(const Order('A')),
+    bloc.pay(const Order('B')),
   ]);
-  print('api.pay calls: ${api.calls}');
+  print('bloc: api.pay calls ${api.calls}, $receipts');
   await bloc.close();
 
   final closed = CheckoutBloc(Api());
   await closed.close();
   try {
-    await assistantAsks((call) => onReorderIntent(closed, call), 'C');
+    await closed.pay(const Order('C'));
   } on Object catch (error) {
-    print('pay after close: $error');
+    print('bloc pay after close: $error');
   }
+
+  final plainApi = Api();
+  final plain = PlainCheckoutCubit(plainApi);
+  await Future.wait([
+    plain.pay(const Order('A')),
+    plain.pay(const Order('A')),
+  ]);
+  print('plain cubit: api.pay calls ${plainApi.calls}');
+  await plain.close();
+
+  final cubitApi = Api();
+  final cubit = CheckoutCubit(cubitApi);
+  final cubitReceipts = await Future.wait([
+    cubit.pay(const Order('A')),
+    cubit.pay(const Order('A')),
+    cubit.pay(const Order('B')),
+  ]);
+  print('queued cubit: api.pay calls ${cubitApi.calls}, $cubitReceipts');
+  await cubit.close();
+
+  final closingApi = Api();
+  final closing = CheckoutCubit(closingApi);
+  final pending = closing.pay(const Order('C'));
+  await tick(10);
+  await closing.close();
+  try {
+    print('cubit close mid-payment: ${await pending}');
+  } on Object catch (error) {
+    print('cubit close mid-payment: $error');
+  }
+  await tick(60);
+  print('  api.pay calls after that: ${closingApi.calls}');
 }
 ''')
 
@@ -937,41 +950,57 @@ sealed class CheckoutState {
 
 final class Cart extends CheckoutState {
   const Cart();
+  @override
+  String toString() => 'Cart';
 }
 
 final class Paying extends CheckoutState {
   const Paying();
+  @override
+  String toString() => 'Paying';
 }
 
 final class Paid extends CheckoutState {
   const Paid(this.receipt);
   final Receipt receipt;
+  @override
+  String toString() => 'Paid($receipt)';
 }
 
-''' + snips['5_2'] + '\n' + snips['5_3'] + '''
+''' + snips['5_3'] + '\n' + snips['5_4'] + '''
 Future<void> main() async {
   final dedupe = CheckoutController(Api());
-  final tapA = dedupe.pay(const Order('Z'));
-  final tapB = dedupe.pay(const Order('Z'));
-  print('double tap, same handle: ${identical(tapA, tapB)}');
+  final callA = dedupe.pay(const Order('Z'));
+  final callB = dedupe.pay(const Order('Z'));
+  print('second call, same handle: ${identical(callA, callB)}');
   await tick(100);
   await dedupe.close();
 
   final api = Api();
   final checkout = CheckoutController(api);
-  // Three invocations for two orders: the shortcut twice for one order,
-  // then a different one.
-  await Future.wait([
-    assistantAsks((call) => onReorderIntent(checkout, call), 'A'),
-    assistantAsks((call) => onReorderIntent(checkout, call), 'A'),
-    assistantAsks((call) => onReorderIntent(checkout, call), 'B'),
+  // Three calls for two orders: one order twice, then a different one.
+  final receipts = await Future.wait([
+    payAndAnswer(checkout, const Order('A')),
+    payAndAnswer(checkout, const Order('A')),
+    payAndAnswer(checkout, const Order('B')),
   ]);
-  print('api.pay calls: ${api.calls}');
+  print('api.pay calls: ${api.calls}, $receipts');
   await checkout.close();
+
+  final closingApi = Api();
+  final closing = CheckoutController(closingApi);
+  final pending = payAndAnswer(closing, const Order('C'));
+  await tick(10);
+  await closing.close();
+  print('close mid-payment: ${await pending}, state ${closing.state}');
 
   final closed = CheckoutController(Api());
   await closed.close();
-  await assistantAsks((call) => onReorderIntent(closed, call), 'C');
+  try {
+    await payAndAnswer(closed, const Order('D'));
+  } on Object catch (error) {
+    print('pay after close: $error');
+  }
 }
 ''')
 
