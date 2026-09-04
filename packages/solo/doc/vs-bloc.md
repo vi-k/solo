@@ -26,14 +26,17 @@ with bloc_concurrency 0.3.0, the `solo` ones against `solo` 1.0.0 — and
 every trace quoted is from those runs.
 
 The same package ships `Cubit`: no events, no transformers, methods that
-emit. It answers the ceremony of item 6, and the awaiting half of item 5 — a
-cubit method takes typed arguments and returns a value you can `await` —
-and felangel points at it in
-[#1556](https://github.com/felangel/bloc/issues/1556) itself. The rest it
-leaves to you: there is no queue to manage because there is no queue (1),
-no transformers at all (2, 3), no cancellation (4), and `emit` after
-`close` throws `Bad state: Cannot emit new states after calling close`
-(item 7 below). Item 5 has the cubit written out.
+emit. It answers half of item 5 and half of item 6, and it is the same half
+twice: a cubit method takes typed arguments and returns a value you can
+`await` — felangel points at it in
+[#1556](https://github.com/felangel/bloc/issues/1556) itself. The half it
+does not answer is the queue the events came with: two calls for one order
+charge the card twice (5), and the drag's state is written by whichever
+native call returns last (6). The rest it leaves to you too: nothing to
+manage because there is no queue (1), no transformers at all (2, 3), no
+cancellation (4), and `emit` after `close` throws `Bad state: Cannot emit
+new states after calling close` (item 7 below). Items 5 and 6 have the cubit
+written out.
 
 ## 1. The queue cannot be managed
 
@@ -799,8 +802,9 @@ registration and an `add`: the argument types live in the event, the work
 lives in a handler elsewhere, and the call site says `add`, not what it
 wants.
 
-**On bloc.** `Cubit` answers the ceremony outright: a cubit is methods,
-which is another way of saying it belongs to events, not to the package.
+**On bloc.** `Cubit` answers half of this outright: a cubit is methods,
+which is another way of saying the ceremony belongs to events, not to the
+package.
 
 ```dart
 class MapCubit extends Cubit<MapState> {
