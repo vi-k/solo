@@ -193,6 +193,7 @@ class Order {
 class Receipt {
   const Receipt(this.orderId);
   final String orderId;
+  String get id => 'R-$orderId';
   @override
   String toString() => 'Receipt(for $orderId)';
 }
@@ -979,17 +980,17 @@ Future<void> main() async {
   final api = Api();
   final checkout = CheckoutController(api);
   // Three calls for two orders: one order twice, then a different one.
-  final receipts = await Future.wait([
-    payAndAnswer(checkout, const Order('A')),
-    payAndAnswer(checkout, const Order('A')),
-    payAndAnswer(checkout, const Order('B')),
+  final replies = await Future.wait([
+    handlePayRequest(checkout, const Order('A')),
+    handlePayRequest(checkout, const Order('A')),
+    handlePayRequest(checkout, const Order('B')),
   ]);
-  print('api.pay calls: ${api.calls}, $receipts');
+  print('api.pay calls: ${api.calls}, $replies');
   await checkout.close();
 
   final closingApi = Api();
   final closing = CheckoutController(closingApi);
-  final inFlight = payAndAnswer(closing, const Order('C'));
+  final inFlight = handlePayRequest(closing, const Order('C'));
   await tick(10);
   await closing.close();
   print('close mid-payment: ${await inFlight}, state ${closing.state}');
@@ -1010,11 +1011,8 @@ Future<void> main() async {
 
   final closed = CheckoutController(Api());
   await closed.close();
-  try {
-    await payAndAnswer(closed, const Order('D'));
-  } on Object catch (error) {
-    print('pay after close: $error');
-  }
+  final reply = await handlePayRequest(closed, const Order('D'));
+  print('pay after close: $reply');
 }
 ''')
 

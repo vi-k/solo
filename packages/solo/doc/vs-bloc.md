@@ -734,17 +734,22 @@ final class CheckoutController extends Solo<CheckoutState> {
 }
 ```
 
-and the caller that owes an answer:
+and the function that owes the answer:
 
 ```dart
-Future<Receipt> payAndAnswer(CheckoutController checkout, Order order) async {
+/// The platform side asked this app to pay and holds the line until it
+/// learns whether this payment went through.
+Future<Map<String, Object?>> handlePayRequest(
+  CheckoutController checkout,
+  Order order,
+) async {
   switch (await checkout.pay(order).done) {
     case Done(:final value):
-      return value;
-    case final Cancelled cancelled:
-      throw cancelled;
-    case Failed(:final error, :final stackTrace):
-      Error.throwWithStackTrace(error, stackTrace);
+      return {'paid': true, 'receipt': value.id};
+    case Cancelled(:final reason):
+      return {'paid': false, 'cancelled': reason.name};
+    case Failed(:final error):
+      return {'paid': false, 'error': '$error'};
   }
 }
 ```
@@ -781,7 +786,7 @@ one that has done no more than emit `Paying`, is cancelled by `job.cancel()`
 like any other job, because until the card is charged the user is entitled
 to change their mind. `cancellable: false` on the job would have covered all
 of that too — the place in the queue included — and taken it away. Which is
-also why the caller's `Cancelled` branch is not dead. It arrives for a
+also why the handler's `Cancelled` branch is not dead. It arrives for a
 payment cancelled before the charge left, for one still queued when the
 controller closed, and for a call made after `close`, which never starts at
 all.

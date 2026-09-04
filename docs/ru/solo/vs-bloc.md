@@ -755,17 +755,22 @@ final class CheckoutController extends Solo<CheckoutState> {
 }
 ```
 
-и вызывающий, который должен дать ответ:
+и функция, которая должна дать ответ:
 
 ```dart
-Future<Receipt> payAndAnswer(CheckoutController checkout, Order order) async {
+/// Платформа попросила приложение оплатить заказ и держит трубку, пока не
+/// узнает, прошёл ли этот платёж.
+Future<Map<String, Object?>> handlePayRequest(
+  CheckoutController checkout,
+  Order order,
+) async {
   switch (await checkout.pay(order).done) {
     case Done(:final value):
-      return value;
-    case final Cancelled cancelled:
-      throw cancelled;
-    case Failed(:final error, :final stackTrace):
-      Error.throwWithStackTrace(error, stackTrace);
+      return {'paid': true, 'receipt': value.id};
+    case Cancelled(:final reason):
+      return {'paid': false, 'cancelled': reason.name};
+    case Failed(:final error):
+      return {'paid': false, 'error': '$error'};
   }
 }
 ```
@@ -801,7 +806,7 @@ Future<Receipt> payAndAnswer(CheckoutController checkout, Order order) async {
 как любая другая задача, — пока карту не списали, пользователь вправе
 передумать. `cancellable: false` на задаче накрыл бы и это, включая место
 в очереди, и такую возможность отнял бы. Поэтому же ветка `Cancelled` у
-вызывающего не мёртвая. Она приходит на платёж, отменённый до того, как
+обработчика не мёртвая. Она приходит на платёж, отменённый до того, как
 списание ушло; на платёж, оставшийся в очереди к моменту закрытия
 контроллера; и на вызов после `close`, который не стартует вовсе.
 

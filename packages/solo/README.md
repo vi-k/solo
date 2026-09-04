@@ -296,7 +296,10 @@ switch (await profile.load().done) {
 the body's error with its original stack trace, or throws the job's
 `Cancelled`. `Cancelled` is not a failure: a job dropped as a duplicate,
 cut short by `close`, or one whose state stopped matching its rules ends
-that way, and that is normal traffic, not something to report.
+that way, and that is normal traffic, not something to report. It is an
+`Exception` and not an `Error`: a job that did not happen is an ordinary
+outcome, not a broken program. That is what makes `throw Cancelled('why')`
+from a body an ordinary throw.
 
 Every failure also reaches the hooks, before the outcome is delivered to
 whoever waits for it: `onError` on the controller itself, and
