@@ -21,9 +21,23 @@ abstract interface class JobContext<S extends Object, W extends S> {
   /// Reads [state] and discards it. Call after a bare `await`.
   void check();
 
+  /// Runs [action] and waits for it, but no longer than this job lives.
+  ///
+  /// Throws [Cancelled] up front if the job is already cancelled or its
+  /// rules no longer hold. If a cancellation arrives while [action] is in
+  /// flight, the wait ends there with that [Cancelled] — and [action] runs
+  /// on, its result discarded, an error of its own going to `onError`. It
+  /// ends the waiting, not the work.
+  ///
+  /// For anything that must actually stop — a device, a download, a write —
+  /// hand the cancellation to it through [onCancel] and wait for it to
+  /// finish, instead of walking away from it. For a step that must not be
+  /// interrupted at all, see [uncancellable].
+  Future<T> wait<T>(FutureOr<T> Function() action);
+
   /// Runs [action] with cancellation refused, and waits for it.
   ///
-  /// The counterpart of [guard], for a step that cannot be taken back: a
+  /// The counterpart of [wait], for a step that cannot be taken back: a
   /// payment on its way to the server, a write already on the wire. While
   /// [action] runs, [Job.cancel], the queue, a cancelled parent and
   /// [SoloBase.close] are all turned down, and `close` waits for the body
@@ -43,18 +57,9 @@ abstract interface class JobContext<S extends Object, W extends S> {
   /// the body learns about it at its next read as always.
   ///
   /// Throws [Cancelled] if the job is already cancelled, the same as
-  /// [guard]: a step that cannot be taken back must not begin for a job
+  /// [wait]: a step that cannot be taken back must not begin for a job
   /// that is already over.
   Future<T> uncancellable<T>(FutureOr<T> Function() action);
-
-  /// Runs [action] unless the job is already cancelled, then waits for its
-  /// result or for cancellation, whichever comes first.
-  ///
-  /// It ends the waiting, not the work: [action] keeps running, and its
-  /// result is discarded. For anything that must actually stop — a device,
-  /// a download, a write — hand the cancellation to it through [onCancel]
-  /// and wait for it to finish, instead of walking away from it.
-  Future<T> guard<T>(FutureOr<T> Function() action);
 
   /// Registers [callback] to run the moment the job is marked cancelled,
   /// before the body itself learns about it. Returns a function that
@@ -195,7 +200,7 @@ final class _JobContext<S extends Object, W extends S, R>
   }
 
   @override
-  Future<T> guard<T>(FutureOr<T> Function() action) async {
+  Future<T> wait<T>(FutureOr<T> Function() action) async {
     _checkedState();
     final result = action();
     if (result is! Future<T>) {

@@ -74,7 +74,7 @@ final class ProfileController extends Solo<Profile> {
         policy: Policy.droppable,
         (ctx) async {
           ctx.emit(ctx.state.copyWith(loading: true));
-          final name = await ctx.guard(api.fetchName);
+          final name = await ctx.wait(api.fetchName);
           ctx.emit(Profile(name: name));
           return name;
         },
@@ -100,7 +100,7 @@ await profile.close();
 
 `run<Profile, String>` says that the job works with `Profile` states and
 returns a `String`. Inside the body `ctx.emit` is the only way to write
-the state, and `ctx.guard` awaits a future the way `await` does, except
+the state, and `ctx.wait` awaits a future the way `await` does, except
 that it gives up the moment the job is cancelled. `Policy.droppable` with
 `key: 'load'` means that a second `load()` while the first one is still
 queued or running returns that first job instead of starting a second.
@@ -150,10 +150,10 @@ never starts, instead of starting and dying on its first read.
 context — every `JobContext` member except `log` and `job` throws the job's
 `Cancelled` once the job is marked. After a bare `await`, call
 `ctx.check()`. To wait for something and give up on cancellation at once,
-wrap it in `ctx.guard(() => ...)`: the guard returns as soon as either the
+wrap it in `ctx.wait(() => ...)`: it returns as soon as either the
 action or the cancellation arrives.
 
-**What a guard does not do.** It ends the waiting, not the work. The action
+**The action is not stopped.** The wait ends, the work does not. The action
 runs to its end and its result is dropped on the floor, which is fine for a
 read you can abandon and wrong for anything that must actually stop, or
 that must not be started twice at once. Hand the cancellation to the work
@@ -225,7 +225,7 @@ it to read. A non-cancellable job that must survive any state needs the
 base type `S` and no `keepWhile`.
 
 `ctx.uncancellable(action)` says the same about one step of the body rather
-than about the whole job, and it is `ctx.guard`'s counterpart: `guard` ends
+than about the whole job, and it is `ctx.wait`'s counterpart: `wait` ends
 the waiting and not the work, this one refuses to be cancelled at all while
 `action` runs. Use it for a step that cannot be taken back — a payment on
 its way to the server, a write already on the wire. A `cancel` or a `close`
@@ -263,7 +263,7 @@ and `replace` would wipe every keyless job in the queue.
 `ctx.emit` and `ctx.run` after the job has finished throw `StateError`. A
 context that leaked out of its job — captured by a closure nobody awaited —
 must not write the state outside the critical section. Reads (`state`,
-`stateAs`, `check`, `guard`) after a job that finished normally are
+`stateAs`, `check`, `wait`) after a job that finished normally are
 allowed; after a cancelled one they still throw its `Cancelled`. `log`
 never throws.
 
@@ -321,7 +321,7 @@ profile.load().ignore(); // the counterpart of Future.ignore
 `ignore()` marks the job as observed without waiting for it.
 
 `Cancelled` never goes to the zone, and neither does an error that arrives
-after the job was cancelled: an action that `guard` stopped waiting for
+after the job was cancelled: an action that `wait` stopped waiting for
 and that fails later is reported to `onError` and stops there.
 
 ## Testing
@@ -402,7 +402,7 @@ the final one, so reading `state` is usually enough.
 
 ## Recipes
 
-**Timeout.** The engine knows nothing about timeouts; `guard` plus
+**Timeout.** The engine knows nothing about timeouts; `wait` plus
 `Future.timeout` is the whole recipe. On a timeout the body throws, and the
 job ends up `Failed`:
 
@@ -410,7 +410,7 @@ job ends up `Failed`:
 Job<void> connect() => run<Idle, void>(
       key: 'connect',
       (ctx) async {
-        await ctx.guard(
+        await ctx.wait(
           () => hw.open().timeout(const Duration(seconds: 5)),
         );
         ctx.emit(const Connected());
@@ -442,7 +442,7 @@ final class Search extends Solo<SearchState> {
         policy: Policy.restart,
         describe: () => text,
         (ctx) async {
-          final results = await ctx.guard(() => api.search(text));
+          final results = await ctx.wait(() => api.search(text));
           ctx.emit(SearchState.results(results));
         },
       );
@@ -612,7 +612,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 | an event class, `on<E>`, `add(E())` | a method returning `Job<T>` |
 | an `EventTransformer` | a `Policy` on the job |
 | `emit(next)` | `ctx.emit(next)` |
-| `if (emit.isDone) return;` | `ctx.check()` or `ctx.guard(...)` |
+| `if (emit.isDone) return;` | `ctx.check()` or `ctx.wait(...)` |
 | `state`, `stream` | `state`, `stream` |
 | `BlocObserver` | `SoloObserver` |
 | `BlocBuilder`, `BlocSelector` | `ValueListenableBuilder` |
@@ -690,7 +690,7 @@ final class CameraController extends Solo<CameraState> {
         canStart: (state) => state is Initial,
         (ctx) async {
           ctx.emit(const Preparing());
-          await ctx.guard(hw.open);
+          await ctx.wait(hw.open);
           ctx.emit(const Ready());
         },
       );
@@ -701,7 +701,7 @@ final class CameraController extends Solo<CameraState> {
         describe: () => 'zoom: $zoom',
         canStart: (state) => !state.paused,
         (ctx) async {
-          await ctx.guard(() => hw.setZoom(zoom));
+          await ctx.wait(() => hw.setZoom(zoom));
           ctx.emit(ctx.state.copyWith(zoom: zoom));
         },
       );
@@ -711,7 +711,7 @@ final class CameraController extends Solo<CameraState> {
         policy: Policy.droppable,
         canStart: (state) => !state.paused,
         (ctx) async {
-          final photo = await ctx.guard(hw.capture);
+          final photo = await ctx.wait(hw.capture);
           queue.clear();
           ctx.log('captured $photo');
           return photo;

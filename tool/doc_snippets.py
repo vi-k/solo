@@ -416,7 +416,7 @@ extension on DeviceController {
   Job<void> connect() => run<DeviceState, void>(
         key: DeviceKey.connect,
         (ctx) async {
-          await ctx.guard(_ble.connect);
+          await ctx.wait(_ble.connect);
           ctx.emit(const Connected());
         },
       );
@@ -424,7 +424,7 @@ extension on DeviceController {
   Job<void> readBattery() => run<Connected, void>(
         key: DeviceKey.readBattery,
         (ctx) async {
-          final battery = await ctx.guard(_ble.battery);
+          final battery = await ctx.wait(_ble.battery);
           ctx.emit(ctx.state.copyWith(battery: battery));
         },
       );
@@ -432,14 +432,14 @@ extension on DeviceController {
   Job<void> readSignal() => run<Connected, void>(
         key: DeviceKey.readSignal,
         (ctx) async {
-          final signal = await ctx.guard(_ble.signal);
+          final signal = await ctx.wait(_ble.signal);
           ctx.emit(ctx.state.copyWith(signal: signal));
         },
       );
 
   Job<void> rename(String name) => run<Connected, void>(
         key: DeviceKey.rename,
-        (ctx) => ctx.guard(() => _ble.rename(name)),
+        (ctx) => ctx.wait(() => _ble.rename(name)),
       );
 }
 

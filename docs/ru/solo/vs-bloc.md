@@ -20,7 +20,7 @@ bloc — трансформер на обработчик, `emit` действи
 трекере, стоит ссылка на issue.
 
 Документ опирается на [раздел «Понятия»][concepts] из README: `Job` и
-`Outcome`, `Policy`, рабочий тип `W` в `run<W, T>`, `ctx.guard`,
+`Outcome`, `Policy`, рабочий тип `W` в `run<W, T>`, `ctx.wait`,
 `ctx.onCancel` и очередь.
 
 [concepts]: https://github.com/vi-k/solo/blob/main/packages/solo/README.ru.md#понятия
@@ -392,7 +392,7 @@ final class NotesController extends Solo<NotesState> {
         key: 'upload',
         (ctx) async {
           ctx.emit(ctx.state.copyWith(uploading: true));
-          await ctx.guard(() => _api.upload(note));
+          await ctx.wait(() => _api.upload(note));
           final merged = [...ctx.state.notes, note];
           ctx.emit(ctx.state.copyWith(notes: merged, uploading: false));
         },
@@ -402,7 +402,7 @@ final class NotesController extends Solo<NotesState> {
         key: 'refresh',
         (ctx) async {
           // Выполняется до upload или после него, но никогда поперёк.
-          final serverNotes = await ctx.guard(_api.list);
+          final serverNotes = await ctx.wait(_api.list);
           ctx.emit(ctx.state.copyWith(notes: serverNotes));
         },
       );
@@ -779,7 +779,7 @@ Future<Receipt> payAndAnswer(CheckoutController checkout, Order order) async {
 у карты и замка выше, только писать не надо ни того, ни другого.
 
 `ctx.uncancellable` — это всё остальное, и стоит сказать, что делают
-альтернативы. Парный ему `ctx.guard` прекращает ожидание, но не работу:
+альтернативы. Парный ему `ctx.wait` прекращает ожидание, но не работу:
 `close` во время платежа тут же доложил бы `Cancelled`, а списание прошло
 бы следом, то есть отмену доложили бы про списанную карту. Дождаться API
 напрямую — само по себе не лучше: `close` дождался бы списания, но исход
@@ -979,14 +979,14 @@ final class ChatController extends Solo<ChatState> {
   Job<void> send(String text) => run<ChatState, void>(
         key: 'send',
         (ctx) async {
-          final reply = await ctx.guard(() => _api.send(text));
+          final reply = await ctx.wait(() => _api.send(text));
           ctx.emit(ctx.state.withReply(reply));
           markRead();
         },
       );
 
   Job<void> markRead() =>
-      run<ChatState, void>((ctx) => ctx.guard(_api.markRead));
+      run<ChatState, void>((ctx) => ctx.wait(_api.markRead));
 }
 
 Future<void> onScreenClosed(ChatController chat) async {
@@ -998,7 +998,7 @@ Future<void> onScreenClosed(ChatController chat) async {
 ```
 
 Разница не в ожидании: `sequential()` у bloc тоже дожидается тела, и тело
-solo, которое пользуется голым `await` вместо `ctx.guard`, заставит
+solo, которое пользуется голым `await` вместо `ctx.wait`, заставит
 `close()` ждать ровно столько же. Разница в том, что устаревшая запись
 отклоняется, а не принимается и не проглатывается молча, — и что
 отклоняется она в release тоже.

@@ -8,10 +8,10 @@ import 'support/run_solo.dart';
 import 'support/test_state.dart';
 
 void main() {
-  test('guard stops waiting when the job is cancelled', () {
+  test('wait stops waiting when the job is cancelled', () {
     runSolo((solo, journal, async) {
       solo.run<TestState, void>(key: 'job', (ctx) async {
-        await ctx.guard(() => delay(100));
+        await ctx.wait(() => delay(100));
         ctx.emit(const Preparing());
       });
       async.elapse(const Duration(milliseconds: 50));
@@ -25,10 +25,10 @@ void main() {
     });
   });
 
-  test('guard stops waiting when the action cancels the job itself', () {
+  test('wait stops waiting when the action cancels the job itself', () {
     runSolo((solo, journal, async) {
       solo.run<TestState, void>(key: 'job', (ctx) async {
-        await ctx.guard(() {
+        await ctx.wait(() {
           solo.current!.cancel();
           return delay(100);
         });
@@ -43,10 +43,10 @@ void main() {
     });
   });
 
-  test('guard stops waiting when the action drops the job by a rule', () {
+  test('wait stops waiting when the action drops the job by a rule', () {
     runSolo((solo, journal, async) {
       solo.run<NotDisposed, void>(key: 'job', (ctx) async {
-        await ctx.guard(() {
+        await ctx.wait(() {
           solo.externalSetState(const Disposed());
           return delay(100);
         });
@@ -62,12 +62,12 @@ void main() {
     });
   });
 
-  test('guard does not start the action when already cancelled', () {
+  test('wait does not start the action when already cancelled', () {
     runSolo((solo, journal, async) {
       var started = false;
       solo.run<TestState, void>(key: 'job', (ctx) async {
         await delay(100);
-        await ctx.guard(() {
+        await ctx.wait(() {
           started = true;
           return delay(10);
         });
@@ -86,7 +86,7 @@ void main() {
   test('a late error of the abandoned future goes to onError', () {
     runSolo((solo, journal, async) {
       solo.run<TestState, void>(key: 'job', (ctx) async {
-        await ctx.guard(() async {
+        await ctx.wait(() async {
           await delay(100);
           throw StateError('late');
         });
@@ -107,7 +107,7 @@ void main() {
     runSolo((solo, journal, async) {
       var resumed = false;
       solo.run<TestState, void>(key: 'job', (ctx) async {
-        await ctx.guard(() async {
+        await ctx.wait(() async {
           await delay(100);
           return 1;
         });
@@ -124,18 +124,18 @@ void main() {
     });
   });
 
-  test('guard passes values and errors through', () {
+  test('wait passes values and errors through', () {
     runSolo((solo, journal, async) {
       final job = solo.run<TestState, int>(key: 'job', (ctx) async {
-        final sync = await ctx.guard(() => 1);
-        final later = await ctx.guard(() async {
+        final sync = await ctx.wait(() => 1);
+        final later = await ctx.wait(() async {
           await delay(10);
           return 2;
         });
         return sync + later;
       });
       solo.run<TestState, void>(key: 'bad', (ctx) async {
-        await ctx.guard(() => throw StateError('boom'));
+        await ctx.wait(() => throw StateError('boom'));
       }).ignore();
       async.flushTimers();
       expect((job.outcome! as Done<int>).value, 3);
@@ -149,11 +149,11 @@ void main() {
     });
   });
 
-  test('guard checks the rules before starting', () {
+  test('wait checks the rules before starting', () {
     runSolo((solo, journal, async) {
       solo.run<Initial, void>(key: 'job', (ctx) async {
         ctx.emit(const Preparing());
-        await ctx.guard(() => delay(10));
+        await ctx.wait(() => delay(10));
       });
       async.flushTimers();
       expect(journal.take(), [
@@ -164,10 +164,10 @@ void main() {
     });
   });
 
-  test('a timeout is a guard around Future.timeout', () {
+  test('a timeout is a wait around Future.timeout', () {
     runSolo((solo, journal, async) {
       solo.run<TestState, void>(key: 'job', (ctx) async {
-        await ctx.guard(
+        await ctx.wait(
           () => delay(100).timeout(const Duration(milliseconds: 10)),
         );
       }).ignore();

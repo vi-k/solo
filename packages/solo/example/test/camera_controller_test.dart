@@ -75,7 +75,7 @@ void main() {
       expect(
         hw.log,
         isNot(contains('capture: end')),
-        reason: 'the shot is still in flight; guard stopped waiting',
+        reason: 'the shot is still in flight; the wait was abandoned',
       );
     });
   });

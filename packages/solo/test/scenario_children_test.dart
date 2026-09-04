@@ -11,7 +11,7 @@ import 'support/test_state.dart';
 /// `test2` 100..300 as a child of `test1`, `test3` 200..300 as a child of
 /// `test2`.
 ///
-/// Every wait goes through [pause], that is `ctx.guard`, so a cancelled
+/// Every wait goes through [pause], that is `ctx.wait`, so a cancelled
 /// body ends at the moment it is marked, not on its next context access.
 /// The timer behind an abandoned wait still fires, so `flushTimers` can
 /// leave `async.elapsed` past the moment of the last journal line.

@@ -16,7 +16,7 @@ returning `void` — and where the point has been argued in the tracker, the
 issue is linked.
 
 This document assumes the [README's Concepts][concepts]: `Job` and
-`Outcome`, `Policy`, the working type `W` in `run<W, T>`, `ctx.guard`,
+`Outcome`, `Policy`, the working type `W` in `run<W, T>`, `ctx.wait`,
 `ctx.onCancel` and the queue.
 
 [concepts]: https://github.com/vi-k/solo/blob/main/packages/solo/README.md#concepts
@@ -377,7 +377,7 @@ final class NotesController extends Solo<NotesState> {
         key: 'upload',
         (ctx) async {
           ctx.emit(ctx.state.copyWith(uploading: true));
-          await ctx.guard(() => _api.upload(note));
+          await ctx.wait(() => _api.upload(note));
           final merged = [...ctx.state.notes, note];
           ctx.emit(ctx.state.copyWith(notes: merged, uploading: false));
         },
@@ -387,7 +387,7 @@ final class NotesController extends Solo<NotesState> {
         key: 'refresh',
         (ctx) async {
           // Runs before upload or after it, never across it.
-          final serverNotes = await ctx.guard(_api.list);
+          final serverNotes = await ctx.wait(_api.list);
           ctx.emit(ctx.state.copyWith(notes: serverNotes));
         },
       );
@@ -758,7 +758,7 @@ is a different job. Three calls for two orders reach the API twice, the
 same as the map and the lock above, with neither to write.
 
 `ctx.uncancellable` is the rest of it, and it is worth saying what the
-alternatives do. Its counterpart `ctx.guard` ends the waiting and not the
+alternatives do. Its counterpart `ctx.wait` ends the waiting and not the
 work: a `close` during a payment would report `Cancelled` at once and let
 the charge go through behind it, which is a cancellation reported for a card
 that was charged. Awaiting the API directly is no better on its own: `close`
@@ -956,14 +956,14 @@ final class ChatController extends Solo<ChatState> {
   Job<void> send(String text) => run<ChatState, void>(
         key: 'send',
         (ctx) async {
-          final reply = await ctx.guard(() => _api.send(text));
+          final reply = await ctx.wait(() => _api.send(text));
           ctx.emit(ctx.state.withReply(reply));
           markRead();
         },
       );
 
   Job<void> markRead() =>
-      run<ChatState, void>((ctx) => ctx.guard(_api.markRead));
+      run<ChatState, void>((ctx) => ctx.wait(_api.markRead));
 }
 
 Future<void> onScreenClosed(ChatController chat) async {
@@ -975,7 +975,7 @@ Future<void> onScreenClosed(ChatController chat) async {
 ```
 
 The difference is not the waiting: bloc's `sequential()` waits for the body
-too, and a solo body that uses a bare `await` instead of `ctx.guard` makes
+too, and a solo body that uses a bare `await` instead of `ctx.wait` makes
 `close()` wait just as long. The difference is that a stale write is refused
 rather than accepted or swallowed, and that it is refused in release as
 well.

@@ -49,7 +49,7 @@ final class Done<T> extends Outcome<T> {
 ///
 /// An error the engine learns about only through those hooks never reaches
 /// the zone: a body that throws after cancellation, or an action abandoned
-/// by [JobContext.guard] that fails later, both end as [Cancelled], and
+/// by [JobContext.wait] that fails later, both end as [Cancelled], and
 /// [Cancelled] is never reported to the zone.
 final class Failed extends Outcome<Never> {
   /// The thrown error.

@@ -78,7 +78,7 @@ final class ProfileController extends Solo<Profile> {
         policy: Policy.droppable,
         (ctx) async {
           ctx.emit(ctx.state.copyWith(loading: true));
-          final name = await ctx.guard(api.fetchName);
+          final name = await ctx.wait(api.fetchName);
           ctx.emit(Profile(name: name));
           return name;
         },
@@ -104,7 +104,7 @@ await profile.close();
 
 `run<Profile, String>` говорит, что задача работает с состояниями `Profile`
 и возвращает `String`. Внутри тела `ctx.emit` — единственный способ записать
-состояние, а `ctx.guard` ждёт future так же, как `await`, но сдаётся в тот
+состояние, а `ctx.wait` ждёт future так же, как `await`, но сдаётся в тот
 момент, когда задачу отменяют. `Policy.droppable` с `key: 'load'` означает,
 что второй `load()`, пока первый ещё стоит в очереди или выполняется, вернёт
 ту первую задачу, а не запустит вторую.
@@ -156,12 +156,12 @@ await profile.close();
 `JobContext`, кроме `log` и `job`, бросает `Cancelled` этой задачи, как
 только она отмечена. После голого `await` зовите `ctx.check()`. Чтобы
 дождаться чего-то и сразу сдаться при отмене, оберните это в
-`ctx.guard(() => ...)`: guard возвращает управление, как только придёт одно
+`ctx.wait(() => ...)`: он возвращает управление, как только придёт одно
 из двух: результат действия или отмена.
 
-**Чего guard не делает.** Он прекращает ожидание, но не работу. Действие
-доработает до конца, а его результат будет выброшен. Для чтения, которое не
-жалко бросить, это нормально; для всего, что обязано остановиться
+**Действие при этом не останавливается.** Кончается ожидание, а не работа.
+Действие доработает до конца, а его результат будет выброшен. Для чтения,
+которое не жалко бросить, это нормально; для всего, что обязано остановиться
 по-настоящему или что нельзя запускать дважды одновременно, — нет. Отдайте
 отмену самой работе через `ctx.onCancel(callback)`, который срабатывает в
 момент пометки задачи, и дождитесь её возврата, а не уходите от неё:
@@ -231,7 +231,7 @@ Job<void> seek(Duration position) => run<Ready, void>(
 `keepWhile`.
 
 `ctx.uncancellable(action)` говорит то же самое про один шаг тела, а не
-про всю задачу, и составляет пару к `ctx.guard`: `guard` прекращает
+про всю задачу, и составляет пару к `ctx.wait`: `wait` прекращает
 ожидание, но не работу, а этот на время `action` вовсе не даёт себя
 отменить. Годится для
 шага, который назад не отыграть, — платёж, уже ушедший на сервер, запись,
@@ -271,7 +271,7 @@ Job<void> seek(Duration position) => run<Ready, void>(
 `ctx.emit` и `ctx.run` после завершения задачи бросают `StateError`.
 Контекст, утёкший из своей задачи — захваченный замыканием, которого никто
 не дождался, — не должен писать состояние вне критической секции. Чтения
-(`state`, `stateAs`, `check`, `guard`) после нормально завершившейся задачи
+(`state`, `stateAs`, `check`, `wait`) после нормально завершившейся задачи
 законны; после отменённой они всё так же бросают её `Cancelled`. `log` не
 бросает никогда.
 
@@ -328,7 +328,7 @@ profile.load().ignore(); // аналог Future.ignore
 `ignore()` помечает задачу наблюдаемой, не дожидаясь её.
 
 `Cancelled` в зону не уходит никогда, и ошибка, пришедшая после отмены
-задачи, — тоже: действие, которого `guard` перестал ждать и которое упало
+задачи, — тоже: действие, которого `wait` перестал ждать и которое упало
 позже, доходит до `onError` и там останавливается.
 
 ## Тесты
@@ -409,7 +409,7 @@ test('a second load while the first one runs is dropped', () {
 
 ## Рецепты
 
-**Таймаут.** Движок ничего не знает о таймаутах; `guard` плюс
+**Таймаут.** Движок ничего не знает о таймаутах; `wait` плюс
 `Future.timeout` — вот и весь рецепт. На таймауте тело бросает, и задача
 заканчивается исходом `Failed`:
 
@@ -417,7 +417,7 @@ test('a second load while the first one runs is dropped', () {
 Job<void> connect() => run<Idle, void>(
       key: 'connect',
       (ctx) async {
-        await ctx.guard(
+        await ctx.wait(
           () => hw.open().timeout(const Duration(seconds: 5)),
         );
         ctx.emit(const Connected());
@@ -449,7 +449,7 @@ final class Search extends Solo<SearchState> {
         policy: Policy.restart,
         describe: () => text,
         (ctx) async {
-          final results = await ctx.guard(() => api.search(text));
+          final results = await ctx.wait(() => api.search(text));
           ctx.emit(SearchState.results(results));
         },
       );
@@ -619,7 +619,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 | класс события, `on<E>`, `add(E())` | метод, возвращающий `Job<T>` |
 | `EventTransformer` | `Policy` у задачи |
 | `emit(next)` | `ctx.emit(next)` |
-| `if (emit.isDone) return;` | `ctx.check()` или `ctx.guard(...)` |
+| `if (emit.isDone) return;` | `ctx.check()` или `ctx.wait(...)` |
 | `state`, `stream` | `state`, `stream` |
 | `BlocObserver` | `SoloObserver` |
 | `BlocBuilder`, `BlocSelector` | `ValueListenableBuilder` |
@@ -697,7 +697,7 @@ final class CameraController extends Solo<CameraState> {
         canStart: (state) => state is Initial,
         (ctx) async {
           ctx.emit(const Preparing());
-          await ctx.guard(hw.open);
+          await ctx.wait(hw.open);
           ctx.emit(const Ready());
         },
       );
@@ -708,7 +708,7 @@ final class CameraController extends Solo<CameraState> {
         describe: () => 'zoom: $zoom',
         canStart: (state) => !state.paused,
         (ctx) async {
-          await ctx.guard(() => hw.setZoom(zoom));
+          await ctx.wait(() => hw.setZoom(zoom));
           ctx.emit(ctx.state.copyWith(zoom: zoom));
         },
       );
@@ -718,7 +718,7 @@ final class CameraController extends Solo<CameraState> {
         policy: Policy.droppable,
         canStart: (state) => !state.paused,
         (ctx) async {
-          final photo = await ctx.guard(hw.capture);
+          final photo = await ctx.wait(hw.capture);
           queue.clear();
           ctx.log('captured $photo');
           return photo;

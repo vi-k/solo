@@ -23,7 +23,7 @@ abstract class SoloObserver {
   /// Called for every such error, including the ones that end as
   /// [Cancelled] and are therefore never handed to the zone: a body that
   /// throws after cancellation, or an action abandoned by
-  /// `JobContext.guard` that fails later. Those are this hook's business
+  /// `JobContext.wait` that fails later. Those are this hook's business
   /// alone. See [Failed] for the errors that also reach the zone.
   void onError(
     SoloBase<Object> solo,

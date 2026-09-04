@@ -13,7 +13,7 @@ void main() {
       final calls = <String>[];
       solo.run<TestState, void>(key: 'job', (ctx) async {
         ctx.onCancel(() => calls.add('stop'));
-        await ctx.guard(() => delay(100));
+        await ctx.wait(() => delay(100));
       });
       async.elapse(const Duration(milliseconds: 50));
       expect(calls, isEmpty);
@@ -33,7 +33,7 @@ void main() {
       solo.run<TestState, void>(key: 'job', (ctx) async {
         ctx.onCancel(() => order.add('callback'));
         try {
-          await ctx.guard(() => delay(100));
+          await ctx.wait(() => delay(100));
         } on Cancelled {
           order.add('body');
           rethrow;
@@ -51,7 +51,7 @@ void main() {
       final calls = <String>[];
       solo.run<NotDisposed, void>(key: 'job', (ctx) async {
         ctx.onCancel(() => calls.add('stop'));
-        await ctx.guard(() => delay(100));
+        await ctx.wait(() => delay(100));
       });
       async.elapse(const Duration(milliseconds: 10));
       solo.externalSetState(const Disposed());
@@ -70,7 +70,7 @@ void main() {
       final calls = <String>[];
       solo.run<TestState, void>(key: 'job', (ctx) async {
         ctx.onCancel(() => calls.add('stop'));
-        await ctx.guard(() => delay(100));
+        await ctx.wait(() => delay(100));
       });
       async.elapse(const Duration(milliseconds: 10));
       solo.close();
@@ -86,7 +86,7 @@ void main() {
         ctx
           ..onCancel(() => calls.add('first'))
           ..onCancel(() => calls.add('second'));
-        await ctx.guard(() => delay(100));
+        await ctx.wait(() => delay(100));
       });
       async.elapse(const Duration(milliseconds: 10));
       solo.current!.cancel();
@@ -100,9 +100,9 @@ void main() {
       final calls = <String>[];
       solo.run<TestState, void>(key: 'job', (ctx) async {
         final remove = ctx.onCancel(() => calls.add('stop'));
-        await ctx.guard(() => delay(10));
+        await ctx.wait(() => delay(10));
         remove();
-        await ctx.guard(() => delay(100));
+        await ctx.wait(() => delay(100));
       });
       async.elapse(const Duration(milliseconds: 50));
       solo.current!.cancel();
@@ -118,7 +118,7 @@ void main() {
         ctx
           ..onCancel(() => throw StateError('boom'))
           ..onCancel(() => calls.add('second'));
-        await ctx.guard(() => delay(100));
+        await ctx.wait(() => delay(100));
       });
       async.elapse(const Duration(milliseconds: 10));
       solo.current!.cancel();
@@ -137,7 +137,7 @@ void main() {
       Object? caught;
       solo.run<TestState, void>(key: 'job', (ctx) async {
         try {
-          await ctx.guard(() => delay(100));
+          await ctx.wait(() => delay(100));
         } on Cancelled {
           try {
             ctx.onCancel(() {});

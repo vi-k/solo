@@ -75,7 +75,7 @@ abstract interface class Job<T> {
   /// handled elsewhere, by [SoloBase.onError] or by [SoloObserver.onError].
   ///
   /// ```dart
-  /// solo.run<Ready, void>((ctx) => ctx.guard(hw.close)).ignore();
+  /// solo.run<Ready, void>((ctx) => ctx.wait(hw.close)).ignore();
   /// ```
   ///
   /// Waiting for [done] or [value] observes the job too; calling this
