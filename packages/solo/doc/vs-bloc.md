@@ -990,8 +990,8 @@ landing after the job is over — and its `ctx.emit` throws `Bad state:
 Job(send) has already finished, cannot emit`, a `throw` and not an `assert`,
 so it does not vanish when asserts are off. Queued jobs finish with
 `Cancelled(closed)` and complete their `done`; and `send` after `close`
-returns a job already finished with the same outcome instead of throwing, so
-the call site needs no `isClosed` check.
+returns a job already finished with the same `Cancelled(closed)` instead of
+throwing, so the call site needs no `isClosed` check.
 
 ## 8. The state changes from outside
 
