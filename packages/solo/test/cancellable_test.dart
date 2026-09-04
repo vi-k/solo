@@ -8,20 +8,17 @@ import 'support/run_solo.dart';
 import 'support/test_state.dart';
 
 void main() {
-  test('a closed section refuses cancel and the job finishes', () {
+  test('an uncancellable step refuses cancel and the job finishes', () {
     runSolo((solo, journal, async) {
       final job = solo.run<TestState, void>(key: 'pay', (ctx) async {
-        ctx.cancellable = false;
-        await delay(100);
-        ctx
-          ..cancellable = true
-          ..emit(const Working());
+        await ctx.uncancellable(() => delay(100));
+        ctx.emit(const Working());
       });
       async.elapse(const Duration(milliseconds: 50));
       var cancelDone = false;
       job.cancel().then((_) => cancelDone = true);
       async.flushMicrotasks();
-      expect(job.isCancelled, isFalse, reason: 'the section is closed');
+      expect(job.isCancelled, isFalse, reason: 'the step is in flight');
       expect(cancelDone, isFalse, reason: 'cancel waits for the body');
       async.elapse(const Duration(milliseconds: 50));
       expect(cancelDone, isTrue);
@@ -34,12 +31,10 @@ void main() {
     });
   });
 
-  test('cancel works again once the section is reopened', () {
+  test('cancel works again once the step is over', () {
     runSolo((solo, journal, async) {
       final job = solo.run<TestState, void>(key: 'pay', (ctx) async {
-        ctx.cancellable = false;
-        await delay(50);
-        ctx.cancellable = true;
+        await ctx.uncancellable(() => delay(50));
         await delay(50);
         ctx.emit(const Working());
       });
@@ -54,14 +49,11 @@ void main() {
     });
   });
 
-  test('close waits for a closed section instead of cancelling', () {
+  test('close waits for an uncancellable step instead of cancelling', () {
     runSolo((solo, journal, async) {
       final job = solo.run<TestState, void>(key: 'pay', (ctx) async {
-        ctx.cancellable = false;
-        await delay(100);
-        ctx
-          ..cancellable = true
-          ..emit(const Working());
+        await ctx.uncancellable(() => delay(100));
+        ctx.emit(const Working());
       });
       async.elapse(const Duration(milliseconds: 50));
       var closed = false;
@@ -74,14 +66,15 @@ void main() {
     });
   });
 
-  test('a job created uncancellable can open itself from the body', () {
+  test('the answer in force before the step is restored, not assumed', () {
     runSolo((solo, journal, async) {
       final job = solo.run<TestState, void>(
         key: 'pay',
         cancellable: false,
         (ctx) async {
-          await delay(50);
-          ctx.cancellable = true;
+          await ctx.uncancellable(() => delay(50));
+          // Still uncancellable: the job was created that way, and the
+          // step restored what it found rather than opening the job up.
           await delay(50);
           ctx.emit(const Working());
         },
@@ -89,19 +82,35 @@ void main() {
       async.elapse(const Duration(milliseconds: 75));
       job.cancel();
       async.flushTimers();
-      expect(job.outcome, isA<Cancelled>(), reason: 'the body opened it');
-      expect(journal.take(), [
-        '[pay] started',
-        '[pay] finished Cancelled(manual)',
-      ]);
+      expect(job.outcome, isA<Done<void>>());
     });
   });
 
-  test('rules cancel a job with a closed section anyway', () {
+  test('the answer comes back even if the step throws', () {
+    runSolo((solo, journal, async) {
+      final job = solo.run<TestState, void>(key: 'pay', (ctx) async {
+        try {
+          await ctx.uncancellable(() async {
+            await delay(50);
+            throw const FormatException('declined');
+          });
+        } on FormatException {
+          // The payment failed; the job carries on and may be cancelled.
+        }
+        await delay(50);
+        ctx.emit(const Working());
+      });
+      async.elapse(const Duration(milliseconds: 75));
+      job.cancel();
+      async.flushTimers();
+      expect(job.outcome, isA<Cancelled>());
+    });
+  });
+
+  test('rules cancel a job inside an uncancellable step anyway', () {
     runSolo((solo, journal, async) {
       solo.run<NotDisposed, void>(key: 'pay', (ctx) async {
-        ctx.cancellable = false;
-        await delay(100);
+        await ctx.uncancellable(() => delay(100));
         ctx.check();
       });
       async.elapse(const Duration(milliseconds: 50));
@@ -115,21 +124,18 @@ void main() {
     });
   });
 
-  test('setting it back is safe on a job the rules already cancelled', () {
+  test('an already cancelled job does not begin the step', () {
     runSolo((solo, journal, async) {
-      final job = solo.run<NotDisposed, void>(key: 'pay', (ctx) async {
-        ctx.cancellable = false;
-        try {
-          await delay(100);
-        } finally {
-          ctx.cancellable = true;
-        }
-        ctx.check();
+      var began = false;
+      final job = solo.run<TestState, void>(key: 'pay', (ctx) async {
+        await delay(100);
+        await ctx.uncancellable(() async => began = true);
       });
       async.elapse(const Duration(milliseconds: 50));
-      solo.externalSetState(const Disposed());
+      job.cancel();
       async.flushTimers();
-      expect(job.outcome, isA<Cancelled>(), reason: 'not Failed');
+      expect(began, isFalse, reason: 'nothing irreversible starts');
+      expect(job.outcome, isA<Cancelled>());
     });
   });
 }

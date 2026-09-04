@@ -62,8 +62,9 @@ abstract interface class Job<T> {
 
   /// Cancels the job and waits for it to actually finish.
   ///
-  /// A job whose [JobContext.cancellable] is `false` is not cancelled; the
-  /// returned future still waits for it to finish.
+  /// A job created with `cancellable: false`, or one inside
+  /// [JobContext.uncancellable], is not cancelled; the returned future
+  /// still waits for it to finish.
   Future<void> cancel();
 
   /// Tells the engine that nobody is interested in this job's failure.

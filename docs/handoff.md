@@ -67,10 +67,10 @@ push — `dart pub publish`» не запущено и без такого за�
 `onFinish` останавливал очередь и обрывал дренаж в `close()`, бросивший
 `onStart` при `ctx.run` проваливал родителя, а бросивший `onChange` уносил
 с собой публикацию и переоценку правил. `publish` в это правило не входит:
-это канал доставки наследника, не сквозной хук. И `cancellable` теперь
-спрашивают дважды: параметр при создании задаёт начальное значение, а тело
-меняет его через `ctx.cancellable`, закрывая участок, который назад не
-отыграть. Разбор — `docs/records/2026-09-04[3]-cancellable-design.md`.
+это канал доставки наследника, не сквозной хук. И у `guard` появился
+парный `ctx.uncancellable(action)`: шаг, который назад не отыграть,
+выполняется с отказом в отмене, а `close` его дожидается. Разбор —
+`docs/records/2026-09-04[3]-cancellable-design.md`.
 
 История работ — в `git log` и в записях.
 
@@ -135,7 +135,7 @@ push — `dart pub publish`» не запущено и без такого за�
 ```sh
 dart analyze                  # No issues found!
 dart format --set-exit-if-changed .
-dart test                     # 194 теста, все зелёные
+dart test                     # 195 тестов, все зелёные
 dart doc .                    # Found 0 warnings and 0 errors
 dart pub publish --dry-run    # только проверка, ничего не публикует
 ```

@@ -224,15 +224,14 @@ not protect it from reality: if the state stopped matching `W` or
 it to read. A non-cancellable job that must survive any state needs the
 base type `S` and no `keepWhile`.
 
-`cancellable` is the same question asked twice. At creation it is the
-answer for the whole job; inside the body `ctx.cancellable` is the answer
-right now, and creation only sets where it starts. Close it around a step
-that cannot be taken back — a payment on its way to the server, a write
-already on the wire — and open it again afterwards. While it is closed a
-`cancel` or a `close` is refused rather than remembered, and `close` waits
-for the body; the rules are not covered by it either. Put it back in a
-`finally` if the step can throw: it is the one context member that never
-throws itself.
+`ctx.uncancellable(action)` says the same about one step of the body rather
+than about the whole job, and it is `ctx.guard`'s counterpart: `guard` ends
+the waiting and not the work, this one refuses to be cancelled at all while
+`action` runs. Use it for a step that cannot be taken back — a payment on
+its way to the server, a write already on the wire. A `cancel` or a `close`
+arriving then is refused rather than remembered, `close` waits for the body,
+and the rules are not covered by it either. Sections nest, and the answer in
+force before the step comes back afterwards, thrown or not.
 
 `emit` is trusted, reads are checked. The emitted state is not verified
 against the rules of the job that emitted it — otherwise a `close` job

@@ -723,15 +723,11 @@ final class CheckoutController extends Solo<CheckoutState> {
         key: ('pay', order.id),
         policy: Policy.droppable,
         (ctx) async {
-          ctx
-            ..emit(const Paying())
-            // A charge that has left for the server cannot be taken back,
-            // so nothing may cancel this job until it comes back.
-            ..cancellable = false;
-          final receipt = await _api.pay(order);
-          ctx
-            ..cancellable = true
-            ..emit(Paid(receipt));
+          ctx.emit(const Paying());
+          // A charge that has left for the server cannot be taken back, so
+          // nothing may cancel this job until it comes back.
+          final receipt = await ctx.uncancellable(() => _api.pay(order));
+          ctx.emit(Paid(receipt));
           return receipt;
         },
       );
@@ -761,17 +757,17 @@ callers get the same handle and the same receipt — while a different order
 is a different job. Three calls for two orders reach the API twice, the
 same as the map and the lock above, with neither to write.
 
-`ctx.cancellable` is the rest of it, and it is worth saying what the
-alternatives do. `ctx.guard` ends the waiting, not the work: a `close`
-during a payment would report `Cancelled` at once and let the charge go
-through behind it, which is a cancellation reported for a card that was
-charged. Awaiting the API directly is no better on its own: `close` would
-wait for the charge, but a cancelled job's outcome is its cancellation, so
-the receipt would still be thrown away. Closing the section is what a charge
-already on its way deserves: while it stands, `cancel` and `close` are
-refused and `close` waits, so the job comes back `Done(receipt)` for a
-payment that really happened, the state ends at `Paid`, and the app finishes
-closing after that.
+`ctx.uncancellable` is the rest of it, and it is worth saying what the
+alternatives do. Its counterpart `ctx.guard` ends the waiting and not the
+work: a `close` during a payment would report `Cancelled` at once and let
+the charge go through behind it, which is a cancellation reported for a card
+that was charged. Awaiting the API directly is no better on its own: `close`
+would wait for the charge, but a cancelled job's outcome is its
+cancellation, so the receipt would still be thrown away. Turning
+cancellation down for the length of the call is what a charge already on its
+way deserves: `cancel` and `close` are refused while it runs and `close`
+waits, so the job comes back `Done(receipt)` for a payment that really
+happened, the state ends at `Paid`, and the app finishes closing after that.
 
 It brackets the charge and nothing else, which is the point: the moments
 around it stay ordinary. A payment still waiting its turn in the queue, or

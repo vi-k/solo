@@ -3,8 +3,8 @@ part of 'solo_base.dart';
 /// What a job body sees: the state, narrowed to `W`, and the tools to change
 /// it, check for cancellation and run children.
 ///
-/// Every member except [cancellable], [log] and [job] throws the job's
-/// [Cancelled] once the job is marked cancelled.
+/// Every member except [log] and [job] throws the job's [Cancelled] once
+/// the job is marked cancelled.
 abstract interface class JobContext<S extends Object, W extends S> {
   /// The current state. Throws [Cancelled] if the job is cancelled, if the
   /// state is not `W`, or if `keepWhile` returns `false`.
@@ -21,33 +21,31 @@ abstract interface class JobContext<S extends Object, W extends S> {
   /// Reads [state] and discards it. Call after a bare `await`.
   void check();
 
-  /// Whether anyone else may cancel this job right now. Starts at the
-  /// `cancellable` given at creation, and the body may change it.
+  /// Runs [action] with cancellation refused, and waits for it.
   ///
-  /// Set it to `false` around a step that cannot be taken back — a payment
-  /// on its way to the server, a write already on the wire — and back to
-  /// `true` after it. While it is `false`, [Job.cancel], the queue, a
-  /// cancelled parent and [SoloBase.close] are refused, and `close` waits
-  /// for the body instead of interrupting it. A refusal is final: nothing
-  /// is replayed when the section is reopened.
-  ///
-  /// The job's own rules are not covered by it: a state outside `W`, or a
-  /// `keepWhile` that turned false, cancels the job whatever this says, and
-  /// the body learns about it at its next read as always.
-  ///
-  /// This is the one member that never throws, so a `finally` can always
-  /// put it back:
+  /// The counterpart of [guard], for a step that cannot be taken back: a
+  /// payment on its way to the server, a write already on the wire. While
+  /// [action] runs, [Job.cancel], the queue, a cancelled parent and
+  /// [SoloBase.close] are all turned down, and `close` waits for the body
+  /// instead of interrupting it.
   ///
   /// ```dart
-  /// ctx.cancellable = false;
-  /// try {
-  ///   await api.pay(order);
-  /// } finally {
-  ///   ctx.cancellable = true;
-  /// }
+  /// final receipt = await ctx.uncancellable(() => api.pay(order));
   /// ```
-  bool get cancellable;
-  set cancellable(bool value);
+  ///
+  /// A refusal is final, not deferred: nothing is replayed once [action]
+  /// returns. Sections nest — the answer in force before this one is
+  /// restored, not assumed — and the answer is restored even if [action]
+  /// throws.
+  ///
+  /// The job's own rules are not covered: a state outside `W`, or a
+  /// `keepWhile` that turned false, cancels the job whatever this does, and
+  /// the body learns about it at its next read as always.
+  ///
+  /// Throws [Cancelled] if the job is already cancelled, the same as
+  /// [guard]: a step that cannot be taken back must not begin for a job
+  /// that is already over.
+  Future<T> uncancellable<T>(FutureOr<T> Function() action);
 
   /// Runs [action] unless the job is already cancelled, then waits for its
   /// result or for cancellation, whichever comes first.
@@ -166,10 +164,16 @@ final class _JobContext<S extends Object, W extends S, R>
   }
 
   @override
-  bool get cancellable => _job.cancellable;
-
-  @override
-  set cancellable(bool value) => _job.cancellable = value;
+  Future<T> uncancellable<T>(FutureOr<T> Function() action) async {
+    _checkedState();
+    final previous = _job.cancellable;
+    _job.cancellable = false;
+    try {
+      return await action();
+    } finally {
+      _job.cancellable = previous;
+    }
+  }
 
   @override
   void Function() onCancel(void Function() callback) {

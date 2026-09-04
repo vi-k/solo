@@ -77,11 +77,11 @@ abstract class SoloBase<S extends Object> {
   ///
   /// `canStart` is checked once, when the job is taken from the queue;
   /// `keepWhile` is checked at start, on every state change while the job
-  /// runs, and on every read through the context. `cancellable` is the
-  /// starting value of [JobContext.cancellable], which the body may change
-  /// while it runs; `false` protects the job from `cancel`, `clear` without
-  /// `force`, parent cancellation and `close`, but not from a state that
-  /// stopped matching `W` or `keepWhile`.
+  /// runs, and on every read through the context. `cancellable: false`
+  /// protects the job from `cancel`, `clear` without `force`, parent
+  /// cancellation and `close`, but not from a state that stopped matching
+  /// `W` or `keepWhile`; [JobContext.uncancellable] says the same about one
+  /// step of the body rather than about the whole job.
   Job<T> job<W extends S, T>(
     Future<T> Function(JobContext<S, W> ctx) body, {
     Object? key,
