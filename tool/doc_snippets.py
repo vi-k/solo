@@ -208,11 +208,35 @@ class Api {
   }
 }
 
-void navigateToReceipt(Receipt receipt) => print('  navigated: $receipt');
+/// `MethodCall` and `PlatformException` of `package:flutter/services.dart`,
+/// stood in for so the snippet runs outside Flutter.
+class MethodCall {
+  const MethodCall(this.method, [this.arguments]);
+  final String method;
+  final Object? arguments;
+}
 
-void showCancelled() => print('  cancelled');
+class PlatformException implements Exception {
+  PlatformException({required this.code, this.message});
+  final String code;
+  final String? message;
+  @override
+  String toString() => 'PlatformException($code, $message)';
+}
 
-void showError(Object error) => print('  error: $error');
+/// Stands in for the platform side of the channel: it calls the handler
+/// and prints the answer it is given, value or failure.
+Future<void> assistantAsks(
+  Future<Object?> Function(MethodCall call) handler,
+  String orderId,
+) async {
+  try {
+    final answer = await handler(MethodCall('reorder', orderId));
+    print('  assistant heard: $answer');
+  } on PlatformException catch (error) {
+    print('  assistant heard: $error');
+  }
+}
 '''
 
 MAP_API = '''
@@ -882,23 +906,27 @@ class PaymentFailed extends CheckoutState {
 }
 
 ''' + snips['5_1'] + '''
+/// The same handler as on the solo side, over the bloc's `pay` method.
+Future<Object?> onReorderIntent(CheckoutBloc bloc, MethodCall call) async =>
+    (await bloc.pay(Order(call.arguments! as String))).orderId;
+
 Future<void> main() async {
   final api = Api();
   final bloc = CheckoutBloc(api);
-  // Three taps on two orders: Pay, Pay again, then a different order.
-  final a = bloc.pay(const Order('A'));
-  final again = bloc.pay(const Order('A'));
-  final b = bloc.pay(const Order('B'));
-  navigateToReceipt(await a);
-  navigateToReceipt(await again);
-  navigateToReceipt(await b);
+  // Three invocations for two orders: the shortcut twice for one order,
+  // then a different one.
+  await Future.wait([
+    assistantAsks((call) => onReorderIntent(bloc, call), 'A'),
+    assistantAsks((call) => onReorderIntent(bloc, call), 'A'),
+    assistantAsks((call) => onReorderIntent(bloc, call), 'B'),
+  ]);
   print('api.pay calls: ${api.calls}');
   await bloc.close();
 
   final closed = CheckoutBloc(Api());
   await closed.close();
   try {
-    await closed.pay(const Order('C'));
+    await assistantAsks((call) => onReorderIntent(closed, call), 'C');
   } on Object catch (error) {
     print('pay after close: $error');
   }
@@ -935,18 +963,19 @@ Future<void> main() async {
 
   final api = Api();
   final checkout = CheckoutController(api);
-  // Three taps on two orders: Pay, Pay again, then a different order.
+  // Three invocations for two orders: the shortcut twice for one order,
+  // then a different one.
   await Future.wait([
-    onPayPressed(checkout, const Order('A')),
-    onPayPressed(checkout, const Order('A')),
-    onPayPressed(checkout, const Order('B')),
+    assistantAsks((call) => onReorderIntent(checkout, call), 'A'),
+    assistantAsks((call) => onReorderIntent(checkout, call), 'A'),
+    assistantAsks((call) => onReorderIntent(checkout, call), 'B'),
   ]);
   print('api.pay calls: ${api.calls}');
   await checkout.close();
 
   final closed = CheckoutController(Api());
   await closed.close();
-  print('pay after close: ${await closed.pay(const Order('C')).done}');
+  await assistantAsks((call) => onReorderIntent(closed, call), 'C');
 }
 ''')
 

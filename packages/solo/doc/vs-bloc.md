@@ -544,8 +544,8 @@ parent waits for.
 
 ## 5. You cannot await your own event
 
-Checkout. After the user taps Pay, the screen has to know that *this*
-payment succeeded before it navigates. `add` returns `void`, and the state
+Checkout. Something asks the app to pay for an order and has to know
+whether *this* payment went through. `add` returns `void`, and the state
 stream says only that the state changed. It is a design decision, not an
 omission — felangel in
 [felangel/bloc#1556](https://github.com/felangel/bloc/issues/1556):
@@ -553,8 +553,32 @@ omission — felangel in
 > … a single add can result in multiple state changes so you would never
 > know when the event was actually "done" being processed.
 
+The first answer is that nothing should ask. A screen does not await: it
+listens, and a `BlocListener` navigates when `Paid` arrives. That is right,
+and for a screen it is the end of the discussion — asking a bloc for the
+result of one event, from a widget that could simply watch the state, is
+working against the library. Most screens never need this item.
+
+It stops being right when the caller is not a screen. "Reorder my usual",
+spoken to the assistant, arrives as a platform-channel call, and the
+platform waits on the handler for a value: what it returns is what the user
+is told, what it throws is the failure the user hears, and there is no
+second chance to speak afterwards. No `BuildContext`, no widget to rebuild,
+nobody to listen — a function that has to answer about the request it was
+handed. `WidgetsBindingObserver.didRequestAppExit`, which the framework
+waits on for an `AppExitResponse` before letting the app go, and an
+asynchronous router guard, which the router waits on for a route, are the
+same shape: someone outside your code called in and is holding the line.
+
+It also has to be the controller's payment and not a repository call beside
+it. The app's own Pay button runs the same operation; two callers must not
+charge the card twice, and the one that arrives second has to be told the
+outcome of the run that is already going. Owning that operation is what the
+controller is for — item 1 — so the handler has to reach the controller and
+wait for it, which is exactly what `add` will not do.
+
 **On bloc.** The answer is a completer carried on the event, and a method on
-the bloc that hands its future back to the screen.
+the bloc that hands its future back to the caller.
 
 ```dart
 class Pay extends CheckoutEvent {
@@ -599,19 +623,20 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
 }
 ```
 
-and the screen is then `navigateToReceipt(await bloc.pay(order))`, which is
-what the item asked for: two taps on one order navigate to one receipt, and
-a second order gets its own.
+and the handler is then `return (await bloc.pay(order)).orderId`, which is
+what the item asked for: two invocations for one order answer with one
+receipt, and a second order gets its own.
 
 The price is the shape. Once this method exists it is the thing `add`
 refused to be, and the event class is ceremony around it — item 6. The
 completer must be completed on every exit path, error included, or the
-screen waits forever; the dedupe cannot be delegated to `droppable()`,
-because a dropped event never enters the handler and its completer never
-completes, so the `_inFlight` map is hand-written instead. And the exits
-bloc owns are the ones the completer cannot see: after `close()`, `pay()`
-throws `Bad state: Cannot add new events after calling close`, which is item
-7.
+caller waits forever and the platform's own timeout is what ends the call;
+the dedupe cannot be delegated to `droppable()`, because a dropped event
+never enters the handler and its completer never completes, so the
+`_inFlight` map is hand-written instead. And the exits bloc owns are the
+ones the completer cannot see: after `close()`, `pay()` throws `Bad state:
+Cannot add new events after calling close`, which reaches the platform as a
+crash rather than as an answer — item 7.
 
 **On solo.** A method returns a handle to the job it created.
 
@@ -636,31 +661,39 @@ final class CheckoutController extends Solo<CheckoutState> {
 }
 ```
 
-and the screen:
+and the handler the platform is holding the line on:
 
 ```dart
-Future<void> onPayPressed(CheckoutController checkout, Order order) async {
+/// Behind "reorder my usual". What this returns is what the user is told,
+/// what it throws is the failure the user hears.
+Future<Object?> onReorderIntent(
+  CheckoutController checkout,
+  MethodCall call,
+) async {
+  final order = Order(call.arguments! as String);
   switch (await checkout.pay(order).done) {
     case Done(:final value):
-      navigateToReceipt(value);
-    case Cancelled():
-      showCancelled();
+      return value.orderId;
+    case Cancelled(:final reason):
+      throw PlatformException(code: 'cancelled', message: '$reason');
     case Failed(:final error):
-      showError(error);
+      throw PlatformException(code: 'failed', message: '$error');
   }
 }
 ```
 
 `done` carries the outcome of this call and never throws; `value` carries
 the value and throws instead. Neither has to guess whose state change it is
-looking at. Because the key names the order rather than the method,
-`Policy.droppable` treats a double tap as the duplicate it is — both taps
-get the same handle and the same receipt — while a different order is a
-different job. Three taps on two orders reach the API twice, the same as the
-hand-written `_inFlight` map above, with no map to write. The cancelled and
-failed paths arrive as outcomes rather than as a future that never
-completes, and after `close` the call returns a job already finished with
-`Cancelled(closed)` rather than throwing.
+looking at, and the three outcomes are the three answers the platform
+accepts. Because the key names the order rather than the method,
+`Policy.droppable` treats a second invocation as the duplicate it is — both
+callers get the same handle and the same receipt — while a different order
+is a different job. Three invocations for two orders reach the API twice,
+the same as the hand-written `_inFlight` map above, with no map to write.
+The cancelled and failed paths arrive as outcomes rather than as a future
+that never completes, and after `close` the call returns a job already
+finished with `Cancelled(closed)`, so the user is told it was cancelled
+instead of the handler throwing where nobody catches it.
 
 Later in the same thread felangel points at `Cubit`, whose methods are plain
 `async` methods you can await — the answer to this item, at the price of the
