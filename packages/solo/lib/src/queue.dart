@@ -2,9 +2,10 @@ part of 'solo_base.dart';
 
 /// The queue of a controller, visible to its subclasses.
 ///
-/// Jobs with `cancellable: false` are skipped silently unless `force` is
-/// given. `force` affects only queued jobs: a running job is never touched
-/// by the queue.
+/// [Cancellable.never] jobs are skipped silently unless `force` is given,
+/// and `force` is there for a controller tearing itself down rather than
+/// for ordinary decisions. It affects only queued jobs: a running job is
+/// never touched by the queue.
 abstract interface class SoloQueue {
   /// An unmodifiable view of the queued jobs, first to run first.
   Iterable<Job<Object?>> get jobs;
@@ -54,7 +55,7 @@ final class _SoloQueue<S extends Object> implements SoloQueue {
     if (job is! _Job<S, S, Object?> || !_jobs.contains(job)) {
       return false;
     }
-    if (!force && !job.cancellable) {
+    if (!force && job.cancellable == Cancellable.never) {
       SoloBase._debug(() => 'remove $job: not cancellable');
       return false;
     }

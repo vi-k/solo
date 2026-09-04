@@ -3,6 +3,7 @@ import 'dart:collection';
 
 import 'package:meta/meta.dart';
 
+import 'cancellable.dart';
 import 'observer.dart';
 import 'policy.dart';
 
@@ -77,16 +78,15 @@ abstract class SoloBase<S extends Object> {
   ///
   /// `canStart` is checked once, when the job is taken from the queue;
   /// `keepWhile` is checked at start, on every state change while the job
-  /// runs, and on every read through the context. `cancellable: false`
-  /// protects the running job from `cancel`, `clear` without `force`,
-  /// parent cancellation and `close`, but not from a state that stopped
-  /// matching `W` or `keepWhile`.
+  /// runs, and on every read through the context. [cancellable] says who
+  /// else may stop this job and when — see [Cancellable]; the rules above
+  /// are not covered by it and cancel the job whatever it says.
   Job<T> job<W extends S, T>(
     Future<T> Function(JobContext<S, W> ctx) body, {
     Object? key,
     bool Function(W state)? canStart,
     bool Function(W state)? keepWhile,
-    bool cancellable = true,
+    Cancellable cancellable = Cancellable.always,
     String Function()? describe,
   }) =>
       _Job<S, W, T>(
@@ -168,7 +168,7 @@ abstract class SoloBase<S extends Object> {
     Object? key,
     bool Function(W state)? canStart,
     bool Function(W state)? keepWhile,
-    bool cancellable = true,
+    Cancellable cancellable = Cancellable.always,
     String Function()? describe,
     Policy policy = Policy.sequential,
   }) =>
@@ -218,7 +218,7 @@ abstract class SoloBase<S extends Object> {
   }
 
   /// Closes the controller: drops every queued job with `Cancelled(closed)`,
-  /// cancels the current job (a `cancellable: false` job is waited for
+  /// cancels the current job (one that refuses cancellation is waited for
   /// instead), then calls the observer's `onClose`. Repeated calls return
   /// the same future. The state is left as is.
   ///
@@ -373,7 +373,7 @@ abstract class SoloBase<S extends Object> {
   }
 
   /// Cancels [job] with [cancelled]; `started` is corrected to the job's
-  /// status. Idempotent. [force] lets a queued `cancellable: false` job go.
+  /// status. Idempotent. [force] lets a queued [Cancellable.never] job go.
   void _cancel(
     _Job<S, S, Object?> job,
     Cancelled cancelled, {
@@ -394,7 +394,7 @@ abstract class SoloBase<S extends Object> {
         _debug(() => 'cancel $job before add: $cancelled');
         job._finish(withStarted(false));
       case _JobStatus.queued:
-        if (!job.cancellable && !force) {
+        if (job.cancellable == Cancellable.never && !force) {
           _debug(() => 'cancel $job: not cancellable');
           return;
         }
@@ -405,7 +405,8 @@ abstract class SoloBase<S extends Object> {
         if (job._pendingCancel != null) {
           return;
         }
-        if (!job.cancellable && cancelled.reason != CancelReason.rules) {
+        if (job.cancellable != Cancellable.always &&
+            cancelled.reason != CancelReason.rules) {
           _debug(() => 'cancel $job: not cancellable');
           return;
         }

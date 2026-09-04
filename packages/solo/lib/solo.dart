@@ -2,6 +2,7 @@
 /// declarative rules and cooperative cancellation.
 library;
 
+export 'src/cancellable.dart';
 export 'src/observer.dart';
 export 'src/policy.dart';
 export 'src/solo.dart';

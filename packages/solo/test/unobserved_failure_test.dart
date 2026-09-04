@@ -168,7 +168,7 @@ void main() {
       _inZone(errors, () {
         solo.run<TestState, void>(
           key: 'job',
-          cancellable: false,
+          cancellable: Cancellable.never,
           (ctx) async {
             await delay(10);
             throw StateError('boom');
@@ -195,7 +195,7 @@ void main() {
       _inZone(errors, () {
         job = solo.run<TestState, void>(
           key: 'job',
-          cancellable: false,
+          cancellable: Cancellable.never,
           (ctx) async {
             await delay(10);
             throw StateError('boom');

@@ -201,7 +201,7 @@ completes the moment the job is marked cancelled, before the body finishes;
 
 **Queue and policies.** `queue` is a first-class object visible to
 subclasses: `jobs`, `remove`, `removeWhere`, `clear`, `lastWhere`. The three
-removing methods skip `cancellable: false` jobs unless given `force: true`,
+removing methods skip `Cancellable.never` jobs unless given `force: true`,
 and none of them touches the running job. Policies are sugar over the common
 case of one key: `sequential` appends; `droppable` returns the queued or
 running job with the same key and drops the new one; `replace` removes
@@ -217,12 +217,19 @@ in subscription order, while the stream event is still on its way.
 
 ## Rules that are not visible in signatures
 
-`cancellable: false` protects a job from actors: a manual `cancel`, a
-`clear` without `force`, the cancellation of its parent, `close`. It does
-not protect it from reality: if the state stopped matching `W` or
-`keepWhile`, the job is cancelled anyway, because there is nothing left for
-it to read. A non-cancellable job that must survive any state needs the
-base type `S` and no `keepWhile`.
+`cancellable` says who else may stop a job, and when. `Cancellable.always`,
+the default, means anyone at any time: a manual `cancel`, a `clear`, the
+cancellation of its parent, `close`. `Cancellable.whileQueued` lets the
+queue drop the job while it waits and protects the body once it has started
+— a payment on its way to the server, a write already on the wire.
+`Cancellable.never` protects it in the queue as well, where `force: true` is
+the way past it, meant for a controller tearing itself down rather than for
+an ordinary decision.
+
+None of the three protects a job from reality: if the state stopped matching
+`W` or `keepWhile`, the job is cancelled anyway, because there is nothing
+left for it to read. A job that must survive any state needs the base type
+`S` and no `keepWhile`.
 
 `emit` is trusted, reads are checked. The emitted state is not verified
 against the rules of the job that emitted it — otherwise a `close` job
@@ -709,7 +716,7 @@ final class CameraController extends Solo<CameraState> {
 
   Job<void> _closeCameraJob() => job<NotDisposed, void>(
         key: CameraKey.closeCamera,
-        cancellable: false,
+        cancellable: Cancellable.whileQueued,
         (ctx) async => hw.close(),
       );
 
@@ -719,7 +726,7 @@ final class CameraController extends Solo<CameraState> {
     return run<CameraState, void>(
       key: CameraKey.dispose,
       policy: Policy.droppable,
-      cancellable: false,
+      cancellable: Cancellable.never,
       (ctx) async {
         if (ctx.state is Disposed) {
           return;
@@ -768,7 +775,7 @@ the body walks through.
 shutter was open were aimed at the frame that has just been taken. Once
 the capture succeeds they are stale, so the shot throws them away instead
 of applying them to the next frame. `queue.clear()` without
-`force` leaves `cancellable: false` jobs alone and never touches the
+`force` leaves `Cancellable.never` jobs alone and never touches the
 running job — the shot itself.
 
 **`dispose()` is a job; `close()` is the end of the controller.**

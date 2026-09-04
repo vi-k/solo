@@ -65,7 +65,7 @@ final class CameraController extends Solo<CameraState> {
       );
 
   /// Closes and reopens the hardware, restoring the zoom. The close runs as
-  /// a `cancellable: false` child: once started it always completes.
+  /// a [Cancellable.whileQueued] child: once started it always completes.
   Job<void> reopen() => run<NotDisposed, void>(
         key: CameraKey.reopen,
         policy: Policy.droppable,
@@ -92,7 +92,7 @@ final class CameraController extends Solo<CameraState> {
 
   Job<void> _closeCameraJob() => job<NotDisposed, void>(
         key: CameraKey.closeCamera,
-        cancellable: false,
+        cancellable: Cancellable.whileQueued,
         (ctx) async => hw.close(),
       );
 
@@ -177,7 +177,7 @@ final class CameraController extends Solo<CameraState> {
     return run<CameraState, void>(
       key: CameraKey.dispose,
       policy: Policy.droppable,
-      cancellable: false,
+      cancellable: Cancellable.never,
       (ctx) async {
         if (ctx.state is Disposed) {
           return;

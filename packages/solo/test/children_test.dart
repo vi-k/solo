@@ -379,14 +379,14 @@ void main() {
     });
   });
 
-  test('a cancellable: false child finishes and the parent waits', () {
+  test('a Cancellable.never child finishes and the parent waits', () {
     runSolo((solo, journal, async) {
       solo.run<TestState, void>(key: 'parent', (ctx) async {
         await ctx
             .run(
               solo.job<TestState, void>(
                 key: 'child',
-                cancellable: false,
+                cancellable: Cancellable.never,
                 (ctx) async {
                   await delay(100);
                   ctx.emit(const Preparing());

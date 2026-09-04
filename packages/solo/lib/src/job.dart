@@ -62,8 +62,9 @@ abstract interface class Job<T> {
 
   /// Cancels the job and waits for it to actually finish.
   ///
-  /// A running job with `cancellable: false` is not cancelled; the
-  /// returned future still waits for it to finish.
+  /// A job that refuses to be cancelled where it stands — see
+  /// [Cancellable] — is left alone; the returned future still waits for it
+  /// to finish.
   Future<void> cancel();
 
   /// Tells the engine that nobody is interested in this job's failure.
@@ -91,7 +92,7 @@ final class _Job<S extends Object, W extends S, T> implements Job<T> {
   final bool Function(W state)? _canStart;
   final bool Function(W state)? _keepWhile;
   final String Function()? _describe;
-  final bool cancellable;
+  final Cancellable cancellable;
 
   @override
   final Object? key;

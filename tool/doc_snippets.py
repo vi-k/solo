@@ -999,8 +999,10 @@ Future<void> main() async {
   final charging = pending.pay(const Order('A'));
   await tick(10);
   final queued = pending.pay(const Order('B'));
-  print('drop the queued one:   ${pending.cancelPending(const Order('B'))}');
-  print('drop the charging one: ${pending.cancelPending(const Order('A'))}');
+  unawaited(queued.cancel());
+  unawaited(charging.cancel());
+  print('queued dropped:   ${queued.outcome}');
+  print('charging spared:  ${charging.isCancelled == false}');
   await tick(100);
   print('  A ${charging.outcome}, B ${queued.outcome}, '
       'api.pay calls ${pendingApi.calls}');

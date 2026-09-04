@@ -5,7 +5,8 @@ Initial release.
 - `SoloBase<S>` engine: one root job at a time, exclusive state ownership.
 - `Solo<S>` with a broadcast `stream`, delivered on the next microtask.
 - Jobs as `async` bodies with a working type `W`, `canStart` and
-  `keepWhile` rules, `cancellable: false`.
+  `keepWhile` rules, and `Cancellable` — `always`, `whileQueued` for work
+  that must not be interrupted once it starts, `never`.
 - `Job<T>` handle: `done`, `value`, `outcome`, `whenCancelled`, `cancel`,
   `ignore`.
 - `Outcome<T>`: `Done`, `Failed`, `Cancelled` with `CancelReason`.

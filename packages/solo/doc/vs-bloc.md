@@ -722,9 +722,9 @@ final class CheckoutController extends Solo<CheckoutState> {
         // different order is a different job.
         key: ('pay', order.id),
         policy: Policy.droppable,
-        // A charge that has left for the server cannot be taken back, so
-        // this job refuses to be cancelled and `close` waits for it.
-        cancellable: false,
+        // A charge that has left for the server cannot be taken back.
+        // Until it leaves, the job can be dropped like any other.
+        cancellable: Cancellable.whileQueued,
         (ctx) async {
           ctx.emit(const Paying());
           final receipt = await _api.pay(order);
@@ -732,13 +732,6 @@ final class CheckoutController extends Solo<CheckoutState> {
           return receipt;
         },
       );
-
-  /// Drops a payment that is still waiting its turn. A charge already on
-  /// its way is not touched: the queue never reaches a running job.
-  bool cancelPending(Order order) {
-    final pending = queue.lastWhere((job) => job.key == ('pay', order.id));
-    return pending != null && queue.remove(pending, force: true);
-  }
 }
 ```
 
@@ -765,28 +758,27 @@ callers get the same handle and the same receipt — while a different order
 is a different job. Three calls for two orders reach the API twice, the
 same as the map and the lock above, with neither to write.
 
-`cancellable: false` is the rest of it, and it is worth saying what the
-alternatives do. `ctx.guard` ends the waiting, not the work: a `close`
+`Cancellable.whileQueued` is the rest of it, and it is worth saying what
+the alternatives do. `ctx.guard` ends the waiting, not the work: a `close`
 during a payment would report `Cancelled` at once and let the charge go
 through behind it, which is a cancellation reported for a card that was
 charged. Dropping `guard` and awaiting the API directly is no better:
 `close` would wait for the charge, but a cancelled job's outcome is its
-cancellation, so the receipt would still be thrown away. Refusing
-cancellation is what a charge already on its way deserves: `close` waits,
-the job comes back `Done(receipt)` for a payment that really happened, the
-state ends at `Paid`, and the app finishes closing after that.
+cancellation, so the receipt would still be thrown away. Declaring the job
+uninterruptible once it starts is what a charge already on its way
+deserves: `close` waits, the job comes back `Done(receipt)` for a payment
+that really happened, the state ends at `Paid`, and the app finishes
+closing after that.
 
-The flag is about the charge, not about the place in the queue, and it does
-not tell the two apart: a payment still waiting its turn has sent nothing,
-yet `job.cancel()` on it waits for the charge instead of preventing it. The
-queue is where that is decided. `remove(job, force: true)` drops a job that
-has not started and can never reach one that has, since the queue holds only
-jobs that are waiting; a controller that lets the user change their mind
-hands that out as a method, and `cancelPending` above answers `true` for an
-order still queued and `false` for the one being charged. Which is why the
-caller's `Cancelled` branch is not dead. It arrives for a payment dropped
-before it started, for a payment still queued when the controller closed,
-and for a call made after `close`, which never starts at all.
+It says `whileQueued` and not `never` because the two moments are not the
+same. A payment still waiting its turn has sent nothing, and the user is
+entitled to change their mind: `job.cancel()` on it drops it from the queue
+at once, while the same call on the one being charged waits for the charge
+without stopping it. One declaration on the job covers both, and the caller
+does not have to know which moment it is in. Which is also why the caller's
+`Cancelled` branch is not dead. It arrives for a payment dropped before it
+started, for one still queued when the controller closed, and for a call
+made after `close`, which never starts at all.
 
 ## 6. A method, not an event
 
