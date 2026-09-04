@@ -59,7 +59,7 @@ final class CameraController extends Solo<CameraState> {
         canStart: (state) => state is Initial,
         (ctx) async {
           ctx.emit(const Preparing());
-          await ctx.wait(hw.open);
+          await ctx.join(hw.open);
           ctx.emit(const Ready());
         },
       );
@@ -78,8 +78,8 @@ final class CameraController extends Solo<CameraState> {
           await ctx.run(_closeCameraJob()).done;
           ctx.emit(const Preparing());
           try {
-            await ctx.wait(hw.open);
-            await ctx.wait(() => hw.setZoom(zoom));
+            await ctx.join(hw.open);
+            await ctx.join(() => hw.setZoom(zoom));
           } on Cancelled {
             rethrow;
           } on Object catch (error) {
@@ -119,7 +119,7 @@ final class CameraController extends Solo<CameraState> {
         describe: () => 'zoom: $zoom',
         canStart: (state) => !state.paused,
         (ctx) async {
-          await ctx.wait(() => hw.setZoom(zoom));
+          await ctx.join(() => hw.setZoom(zoom));
           ctx.emit(ctx.state.copyWith(zoom: zoom));
         },
       );
@@ -135,7 +135,7 @@ final class CameraController extends Solo<CameraState> {
       describe: () => '$point',
       canStart: (state) => !state.paused,
       (ctx) async {
-        await ctx.wait(() => hw.setFocusPoint(point));
+        await ctx.join(() => hw.setFocusPoint(point));
         ctx.emit(ctx.state.copyWith(focusPoint: point));
       },
     );
@@ -150,7 +150,7 @@ final class CameraController extends Solo<CameraState> {
       key: CameraKey.resetFocusPoint,
       canStart: (state) => !state.paused,
       (ctx) async {
-        await ctx.wait(() => hw.setFocusPoint(null));
+        await ctx.join(() => hw.setFocusPoint(null));
         ctx.emit(Ready(zoom: ctx.state.zoom, paused: ctx.state.paused));
       },
     );
@@ -162,7 +162,7 @@ final class CameraController extends Solo<CameraState> {
         policy: Policy.droppable,
         canStart: (state) => !state.paused,
         (ctx) async {
-          final photo = await ctx.wait(hw.capture);
+          final photo = await ctx.join(hw.capture);
           queue.clear();
           ctx.log('captured $photo');
           return photo;

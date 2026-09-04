@@ -415,15 +415,16 @@ test('a second load while the first one runs is dropped', () {
 
 ## Рецепты
 
-**Таймаут.** Движок ничего не знает о таймаутах; `wait` плюс
-`Future.timeout` — вот и весь рецепт. На таймауте тело бросает, и задача
-заканчивается исходом `Failed`:
+**Таймаут.** Движок ничего не знает о таймаутах; член контекста плюс
+`Future.timeout` — вот и весь рецепт; здесь `join`, потому что устройство,
+которое попросили открыться, не стоит бросать полуоткрытым. На таймауте
+тело бросает, и задача заканчивается исходом `Failed`:
 
 ```dart
 Job<void> connect() => run<Idle, void>(
       key: 'connect',
       (ctx) async {
-        await ctx.wait(
+        await ctx.join(
           () => hw.open().timeout(const Duration(seconds: 5)),
         );
         ctx.emit(const Connected());
@@ -703,7 +704,7 @@ final class CameraController extends Solo<CameraState> {
         canStart: (state) => state is Initial,
         (ctx) async {
           ctx.emit(const Preparing());
-          await ctx.wait(hw.open);
+          await ctx.join(hw.open);
           ctx.emit(const Ready());
         },
       );
@@ -714,7 +715,7 @@ final class CameraController extends Solo<CameraState> {
         describe: () => 'zoom: $zoom',
         canStart: (state) => !state.paused,
         (ctx) async {
-          await ctx.wait(() => hw.setZoom(zoom));
+          await ctx.join(() => hw.setZoom(zoom));
           ctx.emit(ctx.state.copyWith(zoom: zoom));
         },
       );
@@ -724,7 +725,7 @@ final class CameraController extends Solo<CameraState> {
         policy: Policy.droppable,
         canStart: (state) => !state.paused,
         (ctx) async {
-          final photo = await ctx.wait(hw.capture);
+          final photo = await ctx.join(hw.capture);
           queue.clear();
           ctx.log('captured $photo');
           return photo;

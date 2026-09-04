@@ -62,6 +62,13 @@ void main() {
 
       camera.dispose();
       async.elapse(const Duration(milliseconds: 10));
+      expect(
+        journal.take(),
+        isEmpty,
+        reason: 'the shot is not abandoned: join waits for the capture',
+      );
+
+      async.elapse(const Duration(milliseconds: 20));
       expect(journal.take(), [
         '[takePhoto] finished Cancelled(manual)',
         '[dispose] started',
@@ -71,11 +78,10 @@ void main() {
         '[dispose] finished Done(null)',
       ]);
       expect(shot.outcome, isA<Cancelled>());
-      expect(hw.log, contains('capture: begin'));
       expect(
         hw.log,
-        isNot(contains('capture: end')),
-        reason: 'the shot is still in flight; the wait was abandoned',
+        contains('capture: end'),
+        reason: 'the camera finished the shot before the job gave up',
       );
     });
   });
@@ -90,8 +96,14 @@ void main() {
 
       hw.fail(StateError('overheat'));
       async.flushMicrotasks();
+      expect(
+        journal.take(),
+        ['state: Broken(Bad state: overheat)'],
+        reason: 'join is still waiting for the zoom command to come back',
+      );
+
+      async.elapse(const Duration(milliseconds: 5));
       expect(journal.take(), [
-        'state: Broken(Bad state: overheat)',
         '[setZoom: zoom: 3.0] finished Cancelled(rules: is not Ready)',
       ]);
 

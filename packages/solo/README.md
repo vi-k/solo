@@ -410,15 +410,16 @@ the final one, so reading `state` is usually enough.
 
 ## Recipes
 
-**Timeout.** The engine knows nothing about timeouts; `wait` plus
-`Future.timeout` is the whole recipe. On a timeout the body throws, and the
-job ends up `Failed`:
+**Timeout.** The engine knows nothing about timeouts; a context member
+plus `Future.timeout` is the whole recipe — `join` here, because a device
+that was asked to open should not be left half-open. On a timeout the body
+throws, and the job ends up `Failed`:
 
 ```dart
 Job<void> connect() => run<Idle, void>(
       key: 'connect',
       (ctx) async {
-        await ctx.wait(
+        await ctx.join(
           () => hw.open().timeout(const Duration(seconds: 5)),
         );
         ctx.emit(const Connected());
@@ -698,7 +699,7 @@ final class CameraController extends Solo<CameraState> {
         canStart: (state) => state is Initial,
         (ctx) async {
           ctx.emit(const Preparing());
-          await ctx.wait(hw.open);
+          await ctx.join(hw.open);
           ctx.emit(const Ready());
         },
       );
@@ -709,7 +710,7 @@ final class CameraController extends Solo<CameraState> {
         describe: () => 'zoom: $zoom',
         canStart: (state) => !state.paused,
         (ctx) async {
-          await ctx.wait(() => hw.setZoom(zoom));
+          await ctx.join(() => hw.setZoom(zoom));
           ctx.emit(ctx.state.copyWith(zoom: zoom));
         },
       );
@@ -719,7 +720,7 @@ final class CameraController extends Solo<CameraState> {
         policy: Policy.droppable,
         canStart: (state) => !state.paused,
         (ctx) async {
-          final photo = await ctx.wait(hw.capture);
+          final photo = await ctx.join(hw.capture);
           queue.clear();
           ctx.log('captured $photo');
           return photo;
