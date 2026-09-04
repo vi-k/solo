@@ -933,6 +933,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       // `Bad state: Cannot add new events after calling close`.
       if (isClosed) return;
       emit(state.withReply(reply));
+      // Ответ лёг на открытый экран, а значит, прочитан. Отдельным
+      // событием он потому, что вызов прямо здесь пошёл бы под
+      // трансформером этого обработчика и заставил бы `close()` ждать.
       add(const MarkRead());
     }, transformer: sequential());
     on<MarkRead>((e, emit) => _api.markRead(), transformer: sequential());

@@ -912,6 +912,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       // `Bad state: Cannot add new events after calling close`.
       if (isClosed) return;
       emit(state.withReply(reply));
+      // The reply landed on an open screen, so it counts as read. It is
+      // an event of its own because an inline `await` would run under
+      // this handler's transformer and keep `close()` waiting for it.
       add(const MarkRead());
     }, transformer: sequential());
     on<MarkRead>((e, emit) => _api.markRead(), transformer: sequential());
