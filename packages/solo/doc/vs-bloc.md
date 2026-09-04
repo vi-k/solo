@@ -26,7 +26,7 @@ with bloc_concurrency 0.3.0, the `solo` ones against `solo` 1.0.0 — and
 every trace quoted is from those runs.
 
 The same package ships `Cubit`: no events, no transformers, methods that
-emit. It answers item 6 outright, and the awaiting half of item 5 — a
+emit. It answers the ceremony of item 6, and the awaiting half of item 5 — a
 cubit method takes typed arguments and returns a value you can `await` —
 and felangel points at it in
 [#1556](https://github.com/felangel/bloc/issues/1556) itself. The rest it
@@ -791,16 +791,16 @@ payment cancelled before the charge left, for one still queued when the
 controller closed, and for a call made after `close`, which never starts at
 all.
 
-## 6. A method, not an event
+## 6. Methods or a queue, not both
 
-A map. `moveTo`, `setZoom`, `follow` — three actions on one widget, and a
-drag fires `moveTo` on every frame. In bloc-with-events each action is a
-class, a registration and an `add`: the argument types live in the event,
-the work lives in a handler elsewhere, and the call site says `add`, not
-what it wants.
+A map. `moveTo` and `setZoom` — two actions on one widget, and a drag fires
+`moveTo` on every frame. In bloc-with-events each action is a class, a
+registration and an `add`: the argument types live in the event, the work
+lives in a handler elsewhere, and the call site says `add`, not what it
+wants.
 
-**On bloc.** `Cubit` answers this outright: a cubit is methods, which is
-another way of saying the ceremony belongs to events, not to the package.
+**On bloc.** `Cubit` answers the ceremony outright: a cubit is methods,
+which is another way of saying it belongs to events, not to the package.
 
 ```dart
 class MapCubit extends Cubit<MapState> {
@@ -817,8 +817,6 @@ class MapCubit extends Cubit<MapState> {
     await _map.setZoom(value);
     emit(state.copyWith(zoom: value));
   }
-
-  Future<void> follow(Track track) => _map.follow(track);
 }
 ```
 
@@ -834,10 +832,10 @@ To get the order back you chain futures in a field; to drop the stale frames
 you add a newest-point field beside it. That is items 1 and 2 rebuilt by
 hand, and a cubit's `close()` does not wait for the chain either.
 
-**On solo.** They are three methods, and the drag keeps a policy.
+**On solo.** They are two methods, and the drag keeps a policy.
 
 ```dart
-enum MapKey { moveTo, setZoom, follow }
+enum MapKey { moveTo, setZoom }
 
 final class MapController extends Solo<MapState> {
   final MapApi _map;
@@ -868,15 +866,6 @@ final class MapController extends Solo<MapState> {
           ctx.emit(ctx.state.copyWith(zoom: value));
         },
       );
-
-  Job<void> follow(Track track) => run<MapState, void>(
-        key: MapKey.follow,
-        (ctx) async {
-          final token = CancelToken();
-          ctx.onCancel(token.cancel);
-          await _map.follow(track, cancelToken: token);
-        },
-      );
 }
 
 void onMapDrag(MapController map, Point<double> point) => map.moveTo(point);
@@ -886,11 +875,11 @@ The signature carries the arguments and the result, the call site reads as a
 call, and the returned `Job<void>` is there when the caller wants to await
 it — calling without `await` raises no lint, because a handle is not a
 `Future`. The drag is thinned by the same `Policy.restart` as item 2's seek,
-and the two methods that carry it hand the cancellation to the map the same
-way. On the same uneven native calls the trace is `[moveTo 1 start, moveTo 1
-stopped, moveTo 3 start, moveTo 3 end]`: the middle frame never starts, the
-first is told to stop, and the third reaches the map only after it has. The
-map ends where the finger did, and so does `MapState(3)`.
+and both methods hand the cancellation to the map the same way. On the same
+uneven native calls the trace is `[moveTo 1 start, moveTo 1 stopped, moveTo
+3 start, moveTo 3 end]`: the middle frame never starts, the first is told to
+stop, and the third reaches the map only after it has. The map ends where
+the finger did, and so does `MapState(3)`.
 
 ## 7. Closing while work is in flight
 

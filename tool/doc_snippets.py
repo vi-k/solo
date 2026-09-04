@@ -211,10 +211,6 @@ class Api {
 '''
 
 MAP_API = '''
-class Track {
-  const Track();
-}
-
 class MapApi {
   Future<void> moveTo(Point<double> point, {CancelToken? cancelToken}) async {
     final n = point.x.toInt();
@@ -232,16 +228,6 @@ class MapApi {
 
   Future<void> setZoom(double value, {CancelToken? cancelToken}) async {
     for (var left = 20; left > 0; left -= 10) {
-      await tick(10);
-      if (cancelToken?.cancelled ?? false) {
-        return;
-      }
-    }
-  }
-
-  // Not traced: the item's traces are about the drag.
-  Future<void> follow(Track track, {CancelToken? cancelToken}) async {
-    for (var i = 0; i < 4; i++) {
       await tick(10);
       if (cancelToken?.cancelled ?? false) {
         return;
@@ -1037,9 +1023,7 @@ Future<void> main() async {
   await tick(10);
   onMapDrag(map, const Point<double>(2, 0));
   onMapDrag(map, const Point<double>(3, 0));
-  map
-    ..setZoom(4)
-    ..follow(const Track());
+  map.setZoom(4);
   await tick(300);
   print('drag: $trace  state ${map.state}');
   await map.close();
