@@ -753,6 +753,13 @@ final class CheckoutController extends Solo<CheckoutState> {
           return receipt;
         },
       );
+
+  /// Снимает платёж, ещё ждущий своей очереди. Списание, уже ушедшее на
+  /// сервер, не трогает: до работающей задачи очередь не достаёт.
+  bool cancelPending(Order order) {
+    final pending = queue.lastWhere((job) => job.key == ('pay', order.id));
+    return pending != null && queue.remove(pending, force: true);
+  }
 }
 ```
 
@@ -764,7 +771,7 @@ Future<Receipt> payAndAnswer(CheckoutController checkout, Order order) async {
     case Done(:final value):
       return value;
     case Cancelled(:final reason):
-      throw StateError('checkout is closed: $reason');
+      throw StateError('the payment did not happen: $reason');
     case Failed(:final error, :final stackTrace):
       Error.throwWithStackTrace(error, stackTrace);
   }
@@ -788,8 +795,19 @@ API напрямую — не лучше: `close` дождался бы спис
 чего списание, уже ушедшее на сервер, и заслуживает: `close` ждёт, задача
 возвращается с `Done(receipt)` про платёж, который действительно
 состоялся, состояние заканчивается на `Paid`, и приложение закрывается
-после этого. Вызов, сделанный после `close`, — другое дело: он не
-стартует вовсе и приходит задачей, уже завершённой с `Cancelled(closed)`.
+после этого.
+
+Флаг — про списание, а не про место в очереди, и одно от другого он не
+отличает: платёж, ещё ждущий своей очереди, ничего не отправил, но
+`job.cancel()` по нему дождётся списания, а не предотвратит его. Решается
+это в очереди. `remove(job, force: true)` снимает задачу, которая не
+стартовала, и до стартовавшей не достанет никогда — в очереди лежат только
+ждущие; контроллер, позволяющий передумать, отдаёт это методом, и
+`cancelPending` выше отвечает `true` про заказ, ещё стоящий в очереди, и
+`false` про тот, который сейчас списывают. Поэтому ветка `Cancelled` у
+вызывающего не мёртвая. Она приходит на платёж, снятый до старта; на
+платёж, оставшийся в очереди к моменту закрытия контроллера; и на вызов
+после `close`, который не стартует вовсе.
 
 ## 6. Метод, а не событие
 

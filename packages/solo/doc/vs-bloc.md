@@ -732,6 +732,13 @@ final class CheckoutController extends Solo<CheckoutState> {
           return receipt;
         },
       );
+
+  /// Drops a payment that is still waiting its turn. A charge already on
+  /// its way is not touched: the queue never reaches a running job.
+  bool cancelPending(Order order) {
+    final pending = queue.lastWhere((job) => job.key == ('pay', order.id));
+    return pending != null && queue.remove(pending, force: true);
+  }
 }
 ```
 
@@ -743,7 +750,7 @@ Future<Receipt> payAndAnswer(CheckoutController checkout, Order order) async {
     case Done(:final value):
       return value;
     case Cancelled(:final reason):
-      throw StateError('checkout is closed: $reason');
+      throw StateError('the payment did not happen: $reason');
     case Failed(:final error, :final stackTrace):
       Error.throwWithStackTrace(error, stackTrace);
   }
@@ -767,9 +774,19 @@ charged. Dropping `guard` and awaiting the API directly is no better:
 cancellation, so the receipt would still be thrown away. Refusing
 cancellation is what a charge already on its way deserves: `close` waits,
 the job comes back `Done(receipt)` for a payment that really happened, the
-state ends at `Paid`, and the app finishes closing after that. A call made
-after `close` is a different matter — it never starts, and comes back as a
-job already finished with `Cancelled(closed)`.
+state ends at `Paid`, and the app finishes closing after that.
+
+The flag is about the charge, not about the place in the queue, and it does
+not tell the two apart: a payment still waiting its turn has sent nothing,
+yet `job.cancel()` on it waits for the charge instead of preventing it. The
+queue is where that is decided. `remove(job, force: true)` drops a job that
+has not started and can never reach one that has, since the queue holds only
+jobs that are waiting; a controller that lets the user change their mind
+hands that out as a method, and `cancelPending` above answers `true` for an
+order still queued and `false` for the one being charged. Which is why the
+caller's `Cancelled` branch is not dead. It arrives for a payment dropped
+before it started, for a payment still queued when the controller closed,
+and for a call made after `close`, which never starts at all.
 
 ## 6. A method, not an event
 

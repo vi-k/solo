@@ -989,10 +989,22 @@ Future<void> main() async {
 
   final closingApi = Api();
   final closing = CheckoutController(closingApi);
-  final pending = payAndAnswer(closing, const Order('C'));
+  final inFlight = payAndAnswer(closing, const Order('C'));
   await tick(10);
   await closing.close();
-  print('close mid-payment: ${await pending}, state ${closing.state}');
+  print('close mid-payment: ${await inFlight}, state ${closing.state}');
+
+  final pendingApi = Api();
+  final pending = CheckoutController(pendingApi);
+  final charging = pending.pay(const Order('A'));
+  await tick(10);
+  final queued = pending.pay(const Order('B'));
+  print('drop the queued one:   ${pending.cancelPending(const Order('B'))}');
+  print('drop the charging one: ${pending.cancelPending(const Order('A'))}');
+  await tick(100);
+  print('  A ${charging.outcome}, B ${queued.outcome}, '
+      'api.pay calls ${pendingApi.calls}');
+  await pending.close();
 
   final closed = CheckoutController(Api());
   await closed.close();
