@@ -107,13 +107,19 @@ void main() {
     runSolo((solo, journal, async) {
       final seen = <TestState>[];
       solo.stream.listen(seen.add);
+      // Read inside the body, asserted outside: a failing `expect` in a job
+      // body ends the job as `Failed` instead of failing the test.
+      TestState? stateAfterEmit;
+      List<TestState>? seenAfterEmit;
       solo.run<TestState, void>((ctx) async {
         ctx.emit(const Preparing());
-        expect(solo.state, const Preparing(), reason: 'state is fresh');
-        expect(seen, isEmpty, reason: 'the stream is asynchronous');
+        stateAfterEmit = solo.state;
+        seenAfterEmit = [...seen];
         ctx.emit(const Working());
       });
       async.flushMicrotasks();
+      expect(stateAfterEmit, const Preparing(), reason: 'state is fresh');
+      expect(seenAfterEmit, isEmpty, reason: 'the stream is asynchronous');
       expect(seen, [const Preparing(), const Working()]);
     });
   });

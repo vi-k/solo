@@ -122,6 +122,84 @@ void main() {
     });
   });
 
+  test('a failure while reopening leaves the camera broken', () {
+    runCamera((camera, hw, journal, async) {
+      camera.init();
+      async.elapse(const Duration(milliseconds: 10));
+      journal.take();
+
+      hw.failures['open'] = StateError('no device');
+      // `ignore`: nobody waits for this job, and its failure is already
+      // told through the state and the observer.
+      final reopen = camera.reopen()..ignore();
+      async.elapse(const Duration(milliseconds: 30));
+      expect(journal.take(), [
+        '[reopen] started',
+        '> [closeCamera] started',
+        '> [closeCamera] finished Done(null)',
+        'state: Preparing()',
+        'state: Broken(Bad state: no device)',
+        '[reopen] error Bad state: no device',
+        '[reopen] finished Failed(Bad state: no device)',
+      ]);
+      expect(reopen.outcome, isA<Failed>());
+      expect(hw.log, contains('open: failed'));
+    });
+  });
+
+  test('resetFocusPoint restores automatic focus', () {
+    runCamera((camera, hw, journal, async) {
+      camera
+        ..init()
+        ..setFocusPoint(const Point(0.5, 0.5));
+      async.elapse(const Duration(milliseconds: 20));
+      expect(camera.state, const Ready(focusPoint: Point(0.5, 0.5)));
+      journal.take();
+
+      camera.resetFocusPoint();
+      async.elapse(const Duration(milliseconds: 10));
+      expect(journal.take(), [
+        '[resetFocusPoint] started',
+        'state: Ready(zoom: 1.0, focusPoint: null, paused: false)',
+        '[resetFocusPoint] finished Done(null)',
+      ]);
+      expect(camera.state, const Ready(), reason: 'copyWith cannot clear it');
+      expect(hw.log, contains('focus null: begin'));
+    });
+  });
+
+  test('a focus request replaces the queued focus jobs of both kinds', () {
+    runCamera((camera, hw, journal, async) {
+      camera.init();
+      async.elapse(const Duration(milliseconds: 10));
+      journal.take();
+
+      // The zoom holds the controller; the three focus requests queue up
+      // behind it, and each one drops the focus job left by the previous.
+      camera
+        ..setZoom(2)
+        ..setFocusPoint(const Point(0.1, 0.1))
+        ..resetFocusPoint()
+        ..setFocusPoint(const Point(0.9, 0.9));
+      async.elapse(const Duration(milliseconds: 20));
+      expect(journal.take(), [
+        '[setFocusPoint: Point(0.1, 0.1)] dropped Cancelled(manual)',
+        '[resetFocusPoint] dropped Cancelled(manual)',
+        '[setZoom: zoom: 2.0] started',
+        'state: Ready(zoom: 2.0, focusPoint: null, paused: false)',
+        '[setZoom: zoom: 2.0] finished Done(null)',
+        '[setFocusPoint: Point(0.9, 0.9)] started',
+        'state: Ready(zoom: 2.0, focusPoint: Point(0.9, 0.9), paused: false)',
+        '[setFocusPoint: Point(0.9, 0.9)] finished Done(null)',
+      ]);
+      expect(
+        hw.log.where((line) => line.startsWith('focus')),
+        ['focus Point(0.9, 0.9): begin', 'focus Point(0.9, 0.9): end'],
+        reason: 'only the surviving request reached the hardware',
+      );
+    });
+  });
+
   test('a shot returns the photo through value', () {
     runCamera((camera, hw, journal, async) {
       camera.init();

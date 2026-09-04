@@ -67,8 +67,14 @@ const nestedPath = [
 ];
 
 /// Queues the «check state on yield» fixture from 1.x: `parent` waits
-/// 100 ms, runs `child`, which emits three states in a row, then emits
-/// `Preparing(100)` and waits 100 ms more.
+/// 100 ms, runs `child`, which emits three states in a row, then adds its
+/// own step on top of what the child left and waits 100 ms more.
+///
+/// The child emits absolute values and never reads the state: `keepWhile`
+/// is checked on reads, so a child that reads nothing survives breaking its
+/// own rule — that is what `childKeepWhile` is for. The parent's own step is
+/// relative, so the journal shows the child's last value reaching it and not
+/// merely that the parent lived through the child.
 void addOnEmit(
   TestSolo solo, {
   bool Function(Preparing state)? childKeepWhile,
@@ -78,15 +84,15 @@ void addOnEmit(
     final child = solo.job<Preparing, void>(
       key: 'child',
       keepWhile: childKeepWhile,
-      (ctx) async {
-        ctx
+      (childCtx) async {
+        childCtx
           ..emit(const Preparing(progress: 25))
           ..emit(const Preparing(progress: 50))
           ..emit(const Preparing(progress: 75));
       },
     );
     await ctx.run(child).done;
-    ctx.emit(const Preparing(progress: 100));
+    ctx.emit(ctx.state.copyWith(progress: ctx.state.progress + 25));
     await pause(ctx, 100);
   });
 }
@@ -459,6 +465,67 @@ void main() {
         '[parent] started',
         'state: Disposed()',
         '[parent] finished Cancelled(rules: is not Preparing)',
+      ]);
+    });
+  });
+
+  test('a child whose keepWhile contradicts the parent is dropped at run', () {
+    runSolo(initialState: const Preparing(), (solo, journal, async) {
+      var childBodyRan = false;
+      solo.run<Preparing, void>(
+        key: 'parent',
+        keepWhile: (state) => state.progress < 50,
+        (ctx) async {
+          final child = solo.job<Preparing, void>(
+            key: 'child',
+            keepWhile: (state) => state.progress >= 50,
+            (childCtx) async {
+              childBodyRan = true;
+            },
+          );
+          await ctx.run(child).done;
+          ctx.emit(ctx.state.copyWith(progress: ctx.state.progress + 25));
+        },
+      );
+      async.flushTimers();
+      expect(childBodyRan, isFalse, reason: 'rejected before it started');
+      expect(journal.take(), [
+        '[parent] started',
+        '> [child] dropped Cancelled(rules: keepWhile)',
+        'state: Preparing(progress: 25)',
+        '[parent] finished Done(null)',
+      ]);
+    });
+  });
+
+  test(
+      'the state that keeps the child alive breaks the parent, and the '
+      'parent takes the child down', () {
+    runSolo(initialState: const Preparing(progress: 10),
+        (solo, journal, async) {
+      solo.run<Preparing, void>(
+        key: 'parent',
+        keepWhile: (state) => state.progress < 50,
+        (ctx) async {
+          final child = solo.job<Preparing, void>(
+            key: 'child',
+            keepWhile: (state) => state.progress > 0,
+            (childCtx) async {
+              childCtx.emit(const Preparing(progress: 60));
+              await pause(childCtx, 100);
+            },
+          );
+          await ctx.run(child).done;
+          await pause(ctx, 100);
+        },
+      );
+      async.flushTimers();
+      expect(journal.take(), [
+        '[parent] started',
+        '> [child] started',
+        'state: Preparing(progress: 60)',
+        '> [child] finished Cancelled(parent)',
+        '[parent] finished Cancelled(rules: keepWhile)',
       ]);
     });
   });

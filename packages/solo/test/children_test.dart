@@ -26,6 +26,9 @@ void main() {
           ctx.emit(const Working());
         },
       );
+      // Read inside the body, asserted outside: a failing `expect` in a job
+      // body ends the job as `Failed` instead of failing the test.
+      ({int level, bool isChild, bool isRunning})? childAtRun;
       final test1 = solo.run<NotDisposed, void>(
         key: 'test1',
         canStart: (state) => state is Initial,
@@ -33,9 +36,11 @@ void main() {
           await delay(100);
           ctx.emit(const Preparing());
           final child = ctx.run(test2);
-          expect(child.level, 1);
-          expect(child.isChild, isTrue);
-          expect(child.isRunning, isTrue, reason: 'started synchronously');
+          childAtRun = (
+            level: child.level,
+            isChild: child.isChild,
+            isRunning: child.isRunning,
+          );
           await child.done;
           await delay(100);
           ctx.emit(ctx.stateAs<Working>().copyWith(a: 1, b: 1));
@@ -44,6 +49,11 @@ void main() {
       );
       async.flushTimers();
       expect(async.elapsed, const Duration(milliseconds: 400));
+      expect(
+        childAtRun,
+        (level: 1, isChild: true, isRunning: true),
+        reason: 'the child starts synchronously, one level deeper',
+      );
       expect(test3.level, 2);
       expect(test1.level, 0);
       expect(journal.take(), [
@@ -66,18 +76,20 @@ void main() {
   test('a child failing canStart is a finished handle, parent goes on', () {
     runSolo((solo, journal, async) {
       var childBodyRan = false;
+      bool? childFinishedAtRun;
       solo.run<TestState, void>(key: 'parent', (ctx) async {
         final child = ctx.run(
-          solo.job<Working, void>(key: 'child', (ctx) async {
+          solo.job<Working, void>(key: 'child', (childCtx) async {
             childBodyRan = true;
           }),
         );
-        expect(child.isFinished, isTrue);
+        childFinishedAtRun = child.isFinished;
         await child.done;
         ctx.emit(const Preparing());
       });
       async.flushTimers();
       expect(childBodyRan, isFalse);
+      expect(childFinishedAtRun, isTrue, reason: 'rejected at run');
       expect(journal.take(), [
         '[parent] started',
         '> [child] dropped Cancelled(rules: is not Working)',
@@ -401,12 +413,18 @@ void main() {
     runSolo((solo, journal, async) {
       late JobContext<TestState, TestState> leaked;
       final used = solo.job<TestState, void>(key: 'used', (ctx) async {});
+      Object? secondRunError;
       solo.run<TestState, void>(key: 'parent', (ctx) async {
         leaked = ctx;
         ctx.run(used);
-        expect(() => ctx.run(used), throwsStateError);
+        try {
+          ctx.run(used);
+        } on Object catch (error) {
+          secondRunError = error;
+        }
       });
       async.flushTimers();
+      expect(secondRunError, isStateError, reason: 'the job is already used');
       expect(
         () => leaked.run(solo.job<TestState, void>((ctx) async {})),
         throwsStateError,

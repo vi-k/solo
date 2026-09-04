@@ -150,12 +150,16 @@ void main() {
       final solo = _Reentrant();
       final seen = <TestState>[];
       solo.stream.listen(seen.add);
+      // Read inside the body, asserted outside: a failing `expect` in a
+      // job body ends the job as `Failed` instead of failing the test.
+      TestState? stateAfterEmit;
       try {
         solo.run<NotDisposed, void>(key: 'job', (ctx) async {
           ctx.emit(const Preparing());
-          expect(solo.state, const Working(), reason: 'hook already ran');
+          stateAfterEmit = solo.state;
         });
         async.flushMicrotasks();
+        expect(stateAfterEmit, const Working(), reason: 'hook already ran');
         expect(seen, [const Preparing(), const Working()]);
         expect(journal.take(), [
           '[job] started',
@@ -180,11 +184,17 @@ void main() {
           solo.externalSetState(const Working());
         }
       });
+      TestState? stateAfterEmit;
       solo.run<NotDisposed, void>(key: 'job', (ctx) async {
         ctx.emit(const Preparing());
-        expect(solo.state, const Preparing(), reason: 'listener not yet run');
+        stateAfterEmit = solo.state;
       });
       async.flushMicrotasks();
+      expect(
+        stateAfterEmit,
+        const Preparing(),
+        reason: 'listener not yet run',
+      );
       expect(seen, [const Preparing(), const Working()]);
       expect(solo.state, const Working());
     });

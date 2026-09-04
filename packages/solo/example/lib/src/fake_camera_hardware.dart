@@ -32,6 +32,11 @@ final class FakeCameraHardware {
   /// Every begun and ended operation, for assertions.
   final log = <String>[];
 
+  /// Errors thrown instead of completing, by operation name without its
+  /// arguments: `open`, `close`, `zoom`, `focus`, `capture`. The failure
+  /// happens after [latency], the way a real one would.
+  final failures = <String, Object>{};
+
   int _photos = 0;
 
   /// Creates hardware whose operations take [latency].
@@ -62,6 +67,13 @@ final class FakeCameraHardware {
   Future<void> _operation(String name, {int factor = 1}) async {
     log.add('$name: begin');
     await Future<void>.delayed(latency * factor);
+    final error = failures[name.split(' ').first];
+    if (error != null) {
+      log.add('$name: failed');
+      // Not a bare `throw`: the map holds any object, and real hardware
+      // wrappers report whatever their SDK gave them.
+      Error.throwWithStackTrace(error, StackTrace.current);
+    }
     log.add('$name: end');
   }
 }
