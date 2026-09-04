@@ -216,14 +216,8 @@ final class _Job<S extends Object, W extends S, T> implements Job<T> {
     _status = _JobStatus.running;
     this.level = level;
     _solo._running.add(this);
-    // A throwing `onStart` is an observer's or a hook's problem, not the
-    // job's: the body still runs, so the job still finishes and the engine
-    // still pumps. The error escapes to whoever started the job.
-    try {
-      _solo._notifyStart(this);
-    } finally {
-      unawaited(_execute(_JobContext<S, W, T>(this)));
-    }
+    _solo._notifyStart(this);
+    unawaited(_execute(_JobContext<S, W, T>(this)));
   }
 
   Future<void> _execute(_JobContext<S, W, T> ctx) async {
@@ -284,15 +278,10 @@ final class _Job<S extends Object, W extends S, T> implements Job<T> {
     if (outcome is Cancelled && !_cancelled.isCompleted) {
       _cancelled.complete();
     }
-    // A throwing `onFinish` must not leave `done` hanging: `close` and
-    // `cancelAll` wait for it. The error escapes after the completer is done.
-    try {
-      _solo._onJobFinished(this);
-    } finally {
-      _done.complete(outcome);
-      if (outcome is Failed && !_observed) {
-        _reportUnobserved(outcome);
-      }
+    _solo._onJobFinished(this);
+    _done.complete(outcome);
+    if (outcome is Failed && !_observed) {
+      _reportUnobserved(outcome);
     }
   }
 

@@ -490,6 +490,12 @@ void main() {
 }
 ```
 
+Hooks are a channel, not a link in the chain: an error thrown by any of
+them — a controller's or an observer's — goes to the current zone, the way
+Dart reports an unhandled `Future` error, and changes nothing else. The job
+ends with the outcome it had, the queue goes on, `close` still completes,
+and the hook standing next to the throwing one is still called.
+
 To trace the engine itself rather than the jobs, set
 `SoloBase.debug = print`.
 

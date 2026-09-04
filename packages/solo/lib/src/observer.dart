@@ -5,7 +5,9 @@ import 'solo_base.dart';
 ///
 /// The engine calls the observer before the controller's own hook, and
 /// independently of it: a subclass that forgets `super` does not switch the
-/// observer off.
+/// observer off. A hook that throws hands its error to the current zone and
+/// changes nothing else — the engine goes on, and the controller's own hook
+/// is still called.
 abstract class SoloObserver {
   /// A controller was created.
   void onCreate(SoloBase<Object> solo) {}

@@ -13,6 +13,13 @@ part 'queue.dart';
 
 /// The engine: state, queue, hooks. Subclasses add a delivery channel
 /// through [publish]; see `Solo` for a stream.
+///
+/// The hooks — [onStart], [onFinish], [onError], [onLog], [onChange] and
+/// the [observer]'s — are a cross-cutting channel, so an error thrown by
+/// one goes to the current zone and changes nothing else: the job's outcome,
+/// the queue and [close] carry on as if the hook had returned. [publish] is
+/// not one of them: it is how a subclass delivers the state, and an error
+/// there is the subclass's own business.
 abstract class SoloBase<S extends Object> {
   /// A global observer for all controllers; `null` by default.
   static SoloObserver? observer;
@@ -33,7 +40,24 @@ abstract class SoloBase<S extends Object> {
 
   /// Creates a controller in [initialState].
   SoloBase(S initialState) : _state = initialState {
-    observer?.onCreate(this);
+    _callHook(() => observer?.onCreate(this));
+  }
+
+  /// Calls [hook] and hands whatever it throws to the current zone, the way
+  /// Dart reports an unhandled `Future` error.
+  ///
+  /// Hooks are a cross-cutting channel — analytics, logging, error
+  /// reporting — called independently of each other and of the job. A
+  /// failure in one is therefore not allowed to change anything else: not a
+  /// job's outcome, not the queue, not the closing. Each call is isolated on
+  /// its own, so a throwing observer does not switch off the instance hook
+  /// standing next to it.
+  static void _callHook(void Function() hook) {
+    try {
+      hook();
+    } on Object catch (error, stackTrace) {
+      Zone.current.handleUncaughtError(error, stackTrace);
+    }
   }
 
   /// The current state. Reading is always safe; only jobs write.
@@ -244,13 +268,8 @@ abstract class SoloBase<S extends Object> {
 
   void _finishClose(Completer<void> completer) {
     _debug(() => 'closed');
-    // A throwing `onClose` must not leave `close()` hanging; the error
-    // escapes after the completer is done.
-    try {
-      observer?.onClose(this);
-    } finally {
-      completer.complete();
-    }
+    _callHook(() => observer?.onClose(this));
+    completer.complete();
   }
 
   /// Clears the queue and cancels the current job; `force` affects only the
@@ -302,8 +321,8 @@ abstract class SoloBase<S extends Object> {
     _lastChange = stackTrace;
     _debug(() => 'state: $next');
     _unpublished.add((previous, next));
-    observer?.onChange(this, previous, next);
-    onChange(previous, next);
+    _callHook(() => observer?.onChange(this, previous, next));
+    _callHook(() => onChange(previous, next));
     _publishPending();
     _reevaluate(except: emitter, stackTrace: stackTrace);
   }
@@ -413,8 +432,8 @@ abstract class SoloBase<S extends Object> {
     }
     _running.remove(job);
     _debug(() => '$job finished: ${job.outcome}');
-    observer?.onFinish(this, job);
-    onFinish(job);
+    _callHook(() => observer?.onFinish(this, job));
+    _callHook(() => onFinish(job));
     if (wasCurrent) {
       _schedulePump();
     }
@@ -422,8 +441,8 @@ abstract class SoloBase<S extends Object> {
 
   void _notifyStart(_Job<S, S, Object?> job) {
     _debug(() => '$job started');
-    observer?.onStart(this, job);
-    onStart(job);
+    _callHook(() => observer?.onStart(this, job));
+    _callHook(() => onStart(job));
   }
 
   void _notifyError(
@@ -432,13 +451,13 @@ abstract class SoloBase<S extends Object> {
     StackTrace stackTrace,
   ) {
     _debug(() => '$job error: $error');
-    observer?.onError(this, job, error, stackTrace);
-    onError(job, error, stackTrace);
+    _callHook(() => observer?.onError(this, job, error, stackTrace));
+    _callHook(() => onError(job, error, stackTrace));
   }
 
   void _notifyLog(_Job<S, S, Object?> job, String message) {
-    observer?.onLog(this, job, message);
-    onLog(job, message);
+    _callHook(() => observer?.onLog(this, job, message));
+    _callHook(() => onLog(job, message));
   }
 
   /// Schedules a pump so the caller finishes its synchronous part first:

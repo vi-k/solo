@@ -24,3 +24,5 @@ Initial release.
 - `externalSetState` for hardware listeners; every change re-evaluates the
   rules of running jobs.
 - `SoloObserver` and instance hooks; `SoloBase.debug` engine tracing.
+- A hook that throws changes nothing: the engine hands its error to the
+  current zone and carries on, and the hook next to it is still called.
