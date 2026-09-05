@@ -51,11 +51,6 @@ final class _SoloQueue<S extends Object> implements SoloQueue {
     if (job is! _SoloJob<S, S, Object?> || !_jobs.contains(job)) {
       return false;
     }
-    if (!force && !job._isCancellable) {
-      // The job answers this itself too; the queue asks first because it
-      // has to say whether it removed anything.
-      return false;
-    }
     job._cancelWith(
       Cancelled.by(
         reason: CancelReason.manual,
@@ -64,7 +59,9 @@ final class _SoloQueue<S extends Object> implements SoloQueue {
       ),
       rejectable: !force,
     );
-    return true;
+    // The job answers a rejectable cancellation itself, and a job that
+    // refused is still here: membership is the answer, not a second check.
+    return !_jobs.contains(job);
   }
 
   @override

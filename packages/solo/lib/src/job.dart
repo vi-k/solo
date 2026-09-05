@@ -105,7 +105,5 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
 
   JobStatus get _jobStatus => status;
 
-  bool get _isCancellable => cancellable;
-
   Future<void> get _whenDone => whenDone;
 }

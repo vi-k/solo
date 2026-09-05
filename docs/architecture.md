@@ -131,8 +131,7 @@ BLE-устройство, плеер, синхронизация), где сос
 ## Раскладка репозитория
 
 Монорепозиторий. В корне только документы для владельца и агентов
-(`AGENTS.md`, `CLAUDE.md`, `docs/`), `LICENSE`, короткий `README.md` и
-`README.ru.md` — перевод README пакета `solo`.
+(`AGENTS.md`, `CLAUDE.md`, `docs/`), `LICENSE` и короткий `README.md`.
 Пакеты в `packages/`:
 
 - `packages/jobs` — исполнительное ядро задачи, чистый Dart: задача,
@@ -170,23 +169,21 @@ BLE-устройство, плеер, синхронизация), где сос
 
 - `solo_base.dart` — `SoloBase<S>`: состояние, цикл прокачки очереди, хуки,
   `job`, `add`, `run`, `externalSetState`, `close`, защищённый `publish`,
-  статические `observer` и `debug`. Это одна библиотека с частями
-  (`part`): `outcome.dart`, `job.dart`, `job_context.dart`, `queue.dart`.
-  Части нужны потому, что основы ядра (`JobBase`, `JobContextBase`) и
-  наследники solo (`_SoloJob`, `_SoloContext`, `_SoloQueue`) связаны с
-  движком в обе стороны: он зовёт их члены, а они — его.
-- `outcome.dart` — `part`: `Outcome`, `Done`, `Failed`, `Cancelled` с
-  публичными конструкторами `Cancelled([description])` и `Cancelled.by`,
-  открытый класс `CancelReason` и `SoloCancelReason` с причинами solo.
-- `job.dart` — `part`: публичные `Job<T>`, `SoloJob<T>` и `JobStatus`,
-  наследуемая основа ядра `JobBase<T>` (жизненный цикл, дети, отмена,
-  исход, зона, наблюдатель, канал `JobBase.debug`) и наследник solo
-  `_SoloJob` (контроллер, тело, правила, очередь, приватные обёртки для
-  движка).
-- `job_context.dart` — `part`: `JobContext` ядра (`check`, `wait`,
-  `join`, `uncancellable`, `onCancel`, `run`, `log`, `job`),
-  `SoloContext<S, W>` поверх него (`state`, `stateAs`, `emit`),
-  наследуемая основа `JobContextBase` и реализация solo `_SoloContext`.
+  статические `observer` и `debug`, адаптер `_SoloJobObserver` к
+  `JobObserver` ядра. Это одна библиотека с частями (`part`): `job.dart`,
+  `job_context.dart`, `queue.dart`. Части нужны потому, что наследники
+  ядра (`_SoloJob`, `_SoloContext`) и очередь связаны с движком в обе
+  стороны: он зовёт их приватные члены, а они — его.
+- `job.dart` — `part`: публичный `SoloJob<T>` (это `Job<T>` плюс
+  `isQueued`) и наследник `_SoloJob extends JobBase<T>`: контроллер, тело,
+  правила, ветка очереди в отмене, усыновление и приватные обёртки, через
+  которые движок трогает задачу.
+- `job_context.dart` — `part`: публичный `SoloContext<S, W>` поверх
+  `JobContext` ядра (`state`, `stateAs`, `emit`) и наследник
+  `_SoloContext extends JobContextBase`: контрольная точка с правилами,
+  правила старта ребёнка, проверка владения.
+- `solo_cancel_reason.dart` — отдельная библиотека, `SoloCancelReason` с
+  причинами `rules` и `closed`.
 - `queue.dart` — `part`: `SoloQueue` и `_SoloQueue` поверх
   `List<_SoloJob>`.
 - `solo.dart` — отдельная библиотека, `Solo<S>`: `stream` поверх `publish`.
