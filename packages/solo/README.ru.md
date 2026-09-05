@@ -221,6 +221,26 @@ Job<void> load() => run<Idle, void>(
     );
 ```
 
+**Слушание стрима.** Подписка — тоже владение, и неудобного сорта:
+замолчавший стрим не кончается никогда, поэтому задача, ждущая его конца,
+ждёт вечно, а `close()` за ней — вместе с ней. `ctx.each` — весь этот
+танец под одним именем: подписаться, кормить тело, отписаться:
+
+```dart
+Job<void> track() => run<Ready, void>(
+      key: 'track',
+      (ctx) => ctx.each(hw.positions, (p) => ctx.emit(Tracking(p))),
+    );
+```
+
+Подписка принадлежит задаче. Она снимается, когда кончился стрим, когда
+тело вышло из вызова и в тот момент, когда задачу пометили отменённой, —
+раньше, чем об этом узнает само тело. Вызов возвращается, когда стрим
+кончился, бросает `Cancelled` задачи, если та сдалась раньше, и бросает в
+тело ошибку стрима или колбэка, где её ловит обычный `catch`. `each` — это
+extension на `JobContext`, а не его член: он собран из `wait` и `onCancel`
+и не делает ничего, чего не могло бы ваше собственное тело.
+
 **Дети.** `ctx.run(child)` запускает задачу прямо сейчас, в обход очереди,
 ребёнком текущей. Родитель завершается только после всех своих детей.
 `ctx.run(child).done` даёт исход и никогда не бросает;
@@ -700,6 +720,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 | `EventTransformer` | `Policy` у задачи |
 | `emit(next)` | `ctx.emit(next)` |
 | `if (emit.isDone) return;` | `ctx.wait(...)`, `ctx.join(...)`, `ctx.check()` |
+| `emit.onEach`, `emit.forEach` | `ctx.each(stream, onData)` |
 | `state`, `stream` | `state`, `stream` |
 | `BlocObserver` | `SoloObserver` |
 | `BlocBuilder`, `BlocSelector` | `ValueListenableBuilder` |

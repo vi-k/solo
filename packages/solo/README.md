@@ -215,6 +215,27 @@ Job<void> load() => run<Idle, void>(
     );
 ```
 
+**Following a stream.** A subscription is ownership too, and the awkward
+kind: a stream that goes quiet never ends, so a job that waits for the end
+waits forever, and a `close()` behind it waits with it. `ctx.each` is that
+whole dance under one name — subscribe, feed the body, unsubscribe:
+
+```dart
+Job<void> track() => run<Ready, void>(
+      key: 'track',
+      (ctx) => ctx.each(hw.positions, (p) => ctx.emit(Tracking(p))),
+    );
+```
+
+The subscription belongs to the job. It goes when the stream ends, when the
+body leaves the call, and the moment the job is marked cancelled — before
+the body itself learns about it. The call returns when the stream is done,
+throws the job's `Cancelled` if the job gave up meanwhile, and throws an
+error of the stream or of the callback into the body, where an ordinary
+`catch` can take it. `each` is an extension on `JobContext`, not a member
+of it: it is built out of `wait` and `onCancel` and does nothing your own
+body could not.
+
 **Children.** `ctx.run(child)` starts a job right now, bypassing the queue,
 as a child of the current one. The parent finishes only after all of its
 children. `ctx.run(child).done` gives the outcome and never throws;
@@ -694,6 +715,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 | an `EventTransformer` | a `Policy` on the job |
 | `emit(next)` | `ctx.emit(next)` |
 | `if (emit.isDone) return;` | `ctx.wait(...)`, `ctx.join(...)`, `ctx.check()` |
+| `emit.onEach`, `emit.forEach` | `ctx.each(stream, onData)` |
 | `state`, `stream` | `state`, `stream` |
 | `BlocObserver` | `SoloObserver` |
 | `BlocBuilder`, `BlocSelector` | `ValueListenableBuilder` |

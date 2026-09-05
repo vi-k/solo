@@ -27,6 +27,9 @@ Initial release.
 - `JobContext.uncancellable` is `wait`'s counterpart: it runs a step that
   cannot be taken back — a payment on its way to the server — with
   cancellation refused, and `close` waits for it.
+- `ctx.each(stream, onData)` follows a stream for as long as the job lives:
+  an extension on `JobContext`, built out of `wait` and `onCancel`. The
+  subscription goes with the job, including the moment it is cancelled.
 - `JobContext.onCancel` hands a cancellation to something that can really
   stop — a device's cancel token, an HTTP abort. `wait` ends the waiting,
   not the work.
