@@ -400,6 +400,7 @@ abstract class JobContextBase implements JobContext {
     }
     child
       ..adoptedBy(this)
+      .._observer ??= _owner._observer
       ..level = _owner.level + 1;
     _owner.children.add(child);
     final pending = _owner.pendingCancel;
@@ -503,12 +504,10 @@ final class _SoloContext<S extends Object, W extends S, R>
 
   @override
   Job<T> run<T>(Job<T> child) {
-    // Ownership is the parent's business: a job of another controller, or
-    // a bare job of the core, has no `adoptedBy` of ours to refuse it.
-    final impl = _solo._own(child);
-    if (_solo._queue._jobs.contains(impl)) {
-      throw StateError('$impl has already been added or run');
-    }
+    // Ownership is the parent's business: a bare job of the core has no
+    // `adoptedBy` of ours to refuse it. The queue is asked by the child,
+    // in `adoptedBy`.
+    _solo._own(child);
     return super.run(child);
   }
 }

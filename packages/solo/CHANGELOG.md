@@ -18,6 +18,10 @@
   waiting family, the children and the outcome, and the solo subclasses add
   the state, the rules and the queue. Nothing moves in the public API of a
   controller.
+- A job says who may adopt it: `ctx.run(child)` refuses a job of another
+  controller with `ArgumentError` and a job still waiting in the queue with
+  `StateError`, and a job of `solo` is refused by a context of the bare
+  kernel. A child without an observer of its own inherits the parent's.
 - `JobBase.debug` traces the life of a job, `SoloBase.debug` the queue, the
   state and the closing. Set both to follow both.
 - `JobObserver` is the observer of a single job: `onStart`, `onFinish`,

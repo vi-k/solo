@@ -6,6 +6,7 @@ import 'dart:async';
 import 'package:solo/solo.dart';
 import 'package:test/test.dart';
 
+import 'support/foreign_job.dart';
 import 'support/run_solo.dart';
 import 'support/test_state.dart';
 
@@ -467,6 +468,39 @@ void main() {
       async.flushTimers();
       expect(thrown, isA<StateError>());
       expect(queued.outcome, isA<Done<void>>(), reason: 'ran once, by queue');
+    });
+  });
+
+  test('a solo job is not adopted by a context of the core', () {
+    runSolo((solo, journal, async) {
+      final child = solo.job<TestState, void>(key: 'child', (ctx) async {});
+      Object? thrown;
+      ForeignJob<void>((ctx) async {
+        try {
+          ctx.run(child);
+        } on Object catch (error) {
+          thrown = error;
+        }
+      }).launch();
+      async.flushTimers();
+      expect(thrown, isA<ArgumentError>());
+      expect(child.outcome, isNull, reason: 'never started, never dropped');
+    });
+  });
+
+  test('solo refuses a job of the core as a child', () {
+    runSolo((solo, journal, async) {
+      var foreignRan = false;
+      final parent = solo.run<TestState, void>(
+        key: 'parent',
+        (ctx) async {
+          ctx.run(ForeignJob<void>((_) async => foreignRan = true));
+        },
+      )..ignore();
+      async.flushTimers();
+      expect(foreignRan, isFalse);
+      expect(parent.outcome, isA<Failed>());
+      expect((parent.outcome! as Failed).error, isA<ArgumentError>());
     });
   });
 }

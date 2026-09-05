@@ -121,7 +121,10 @@ abstract class JobBase<T> implements Job<T> {
 
   final Object? _key;
   final String Function()? _describe;
-  final JobObserver? _observer;
+
+  /// Not final: a child created without one inherits the parent's
+  /// observer when it is adopted.
+  JobObserver? _observer;
 
   /// The zone the job was created in; an unobserved [Failed] goes here.
   final Zone _zone = Zone.current;
@@ -509,6 +512,17 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
 
   @override
   bool get isQueued => _solo._queue._jobs.contains(this);
+
+  @override
+  void adoptedBy(JobContextBase parent) {
+    if (parent is! _SoloContext<S, S, Object?> ||
+        !identical(parent._solo, _solo)) {
+      throw ArgumentError.value(this, 'child', 'was not created by this Solo');
+    }
+    if (_solo._queue._jobs.contains(this)) {
+      throw StateError('$this is queued and cannot be run as a child');
+    }
+  }
 
   @override
   void cancelWith(Cancelled cancelled, {bool rejectable = true}) {
