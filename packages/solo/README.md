@@ -223,7 +223,10 @@ whole dance under one name — subscribe, feed the body, unsubscribe:
 ```dart
 Job<void> track() => run<Ready, void>(
       key: 'track',
-      (ctx) => ctx.each(hw.positions, (p) => ctx.emit(Tracking(p))),
+      (ctx) => ctx.each(
+        hw.positions,
+        (p) => ctx.emit(ctx.state.copyWith(position: p)),
+      ),
     );
 ```
 
@@ -232,7 +235,9 @@ body leaves the call, and the moment the job is marked cancelled — before
 the body itself learns about it. The call returns when the stream is done,
 throws the job's `Cancelled` if the job gave up meanwhile, and throws an
 error of the stream or of the callback into the body, where an ordinary
-`catch` can take it. `each` is an extension on `JobContext`, not a member
+`catch` can take it. `ctx.state` inside the callback is a read like any
+other, checked against the rules; the `Cancelled` it may throw is not an
+error but the end of the stream, and it comes back through the call. `each` is an extension on `JobContext`, not a member
 of it: it is built out of `wait` and `onCancel` and does nothing your own
 body could not.
 
