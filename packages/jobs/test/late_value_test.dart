@@ -24,7 +24,9 @@ void main() {
           // The child keeps the job alive past the return.
           ctx.run(
             Job.deferred<void>(
-                key: 'child', (ctx) => ctx.wait(() => delay(100))),
+              key: 'child',
+              (ctx) => ctx.wait(() => delay(100)),
+            ),
           );
           return resource;
         },
@@ -77,7 +79,9 @@ void main() {
         (ctx) async {
           ctx.run(
             Job.deferred<void>(
-                key: 'child', (ctx) => ctx.wait(() => delay(100))),
+              key: 'child',
+              (ctx) => ctx.wait(() => delay(100)),
+            ),
           );
           return 'db';
         },

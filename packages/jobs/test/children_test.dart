@@ -41,7 +41,9 @@ void main() {
           // can finish.
           ctx.run(
             Job.deferred<void>(
-                key: 'child', (ctx) => ctx.wait(() => delay(50))),
+              key: 'child',
+              (ctx) => ctx.wait(() => delay(50)),
+            ),
           );
         },
       ).ignore();
