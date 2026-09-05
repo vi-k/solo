@@ -401,3 +401,8 @@ abstract class JobContextBase implements JobContext {
   @override
   void log(Object? message) => _owner._notifyLog('$message');
 }
+
+/// The context of a job of the core itself.
+final class _CoreContext extends JobContextBase {
+  _CoreContext(super.owner);
+}

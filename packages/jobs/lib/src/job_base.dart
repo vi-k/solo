@@ -17,6 +17,61 @@ part 'outcome.dart';
 /// `Future` error. Touching [done], [value] or [ignore] counts as
 /// observing it; see [ignore].
 abstract interface class Job<T> {
+  /// Creates a job and starts it on the next microtask.
+  ///
+  /// Not inside the constructor: the caller puts the handle in a variable
+  /// first, listens to [done] if it wants to, and may cancel before the
+  /// body ever runs — a job cancelled by then ends as
+  /// `Cancelled(manual)` with `started: false`, and the body is never
+  /// called.
+  ///
+  /// [ifCancelled] catches a value the body returned after the
+  /// cancellation had already arrived; [observer] receives the hooks of
+  /// this job, and a child inherits it unless given one of its own.
+  ///
+  /// ```dart
+  /// final job = Job<Database>(
+  ///   ifCancelled: (database) => database.close(),
+  ///   (ctx) async {
+  ///     final database = await ctx.join(Database.open);
+  ///     await ctx.wait(() => database.migrate());
+  ///
+  ///     return database;
+  ///   },
+  /// );
+  /// ```
+  factory Job(
+    Future<T> Function(JobContext ctx) body, {
+    Object? key,
+    String Function()? describe,
+    bool cancellable,
+    FutureOr<void> Function(T value)? ifCancelled,
+    JobObserver? observer,
+  }) = _AutoJob<T>;
+
+  /// Creates a job that waits to be told to start.
+  ///
+  /// A static method and not a constructor: the result is a
+  /// [DeferredJob], and a constructor of [Job] could only be typed as one.
+  /// Whoever owns the job starts it — by hand, a queue, or a parent
+  /// through [JobContext.run].
+  static DeferredJob<T> deferred<T>(
+    Future<T> Function(JobContext ctx) body, {
+    Object? key,
+    String Function()? describe,
+    bool cancellable = true,
+    FutureOr<void> Function(T value)? ifCancelled,
+    JobObserver? observer,
+  }) =>
+      _DeferredJob<T>(
+        body,
+        key: key,
+        describe: describe,
+        cancellable: cancellable,
+        ifCancelled: ifCancelled,
+        observer: observer,
+      );
+
   /// The key given at creation; compared with `==` by policies and queue
   /// searches.
   Object? get key;
@@ -524,4 +579,67 @@ abstract class JobBase<T> implements Job<T> {
     final description = describe();
     return description.isEmpty ? 'Job($key)' : 'Job($key: $description)';
   }
+}
+
+/// A job that starts when it is told to.
+abstract interface class DeferredJob<T> implements Job<T> {
+  /// Runs the body. Throws [StateError] if the job already ran.
+  void start();
+}
+
+/// The job of the core itself: a body and nothing else.
+class _Job<T> extends JobBase<T> {
+  final Future<T> Function(JobContext ctx) _body;
+
+  _Job(
+    this._body, {
+    super.key,
+    super.describe,
+    super.cancellable,
+    super.ifCancelled,
+    super.observer,
+  });
+
+  @override
+  JobContextBase createContext() => _CoreContext(this);
+
+  @override
+  Future<T> execute(covariant _CoreContext ctx) => _body(ctx);
+}
+
+/// Starts itself on the next microtask.
+final class _AutoJob<T> extends _Job<T> {
+  _AutoJob(
+    super.body, {
+    super.key,
+    super.describe,
+    super.cancellable,
+    super.ifCancelled,
+    super.observer,
+  }) {
+    // `scheduleMicrotask`, not `Future(...)`: that one schedules a timer,
+    // and under `FakeAsync` the start would need `flushTimers`.
+    scheduleMicrotask(() {
+      // Idempotent: someone may have run this job as a child in the same
+      // synchronous stripe, and then this microtask does nothing.
+      if (status == JobStatus.created) {
+        start();
+      }
+    });
+  }
+}
+
+/// Waits for [start].
+final class _DeferredJob<T> extends _Job<T> implements DeferredJob<T> {
+  _DeferredJob(
+    super.body, {
+    super.key,
+    super.describe,
+    super.cancellable,
+    super.ifCancelled,
+    super.observer,
+  });
+
+  @override
+  void start() => super.start();
 }
