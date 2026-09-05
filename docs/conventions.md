@@ -38,7 +38,8 @@
   Проверки, которые должны работать в release, делаются через `throw`, а не
   `assert`.
 - Модификаторы классов. Типы, которые пользователь получает от движка
-  (`Job`, `JobContext`, `SoloQueue`), — `abstract interface class`,
+  (`Job`, `SoloJob`, `JobContext`, `SoloContext`, `SoloQueue`), —
+  `abstract interface class`,
   реализации приватные; реализовать их можно (моки, фейки), наследовать
   нельзя. Иерархии исходов — `sealed class` с `final class` наследниками.
   Базовые классы, которые пользователь наследует (`SoloBase`, `Solo`,

@@ -37,7 +37,7 @@ final class CancelReason {
 
 /// The reasons `solo` adds to the core ones.
 final class SoloCancelReason {
-  /// `canStart`, `state is! W`, `keepWhile`, or [JobContext.stateAs].
+  /// `canStart`, `state is! W`, `keepWhile`, or [SoloContext.stateAs].
   static const rules = CancelReason('rules');
 
   /// [SoloBase.close], or [SoloBase.add] after close.

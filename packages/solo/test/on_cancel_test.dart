@@ -156,7 +156,7 @@ void main() {
 
   test('onCancel after the job finished throws StateError', () {
     runSolo((solo, journal, async) {
-      late JobContext<TestState, TestState> escaped;
+      late SoloContext<TestState, TestState> escaped;
       final job = solo.run<TestState, void>(key: 'job', (ctx) async {
         escaped = ctx;
       });

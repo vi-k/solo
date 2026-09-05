@@ -1,7 +1,6 @@
 part of 'solo_base.dart';
 
-/// What a job body sees: the state, narrowed to `W`, and the tools to change
-/// it, check for cancellation and run children.
+/// What a job body sees in the core: cancellation, waiting and children.
 ///
 /// Every member except [log] and [job] refuses to run for a job already
 /// marked cancelled: it throws that [Cancelled]. What a cancellation
@@ -9,34 +8,16 @@ part of 'solo_base.dart';
 /// see [wait], [join] and [uncancellable].
 ///
 /// A context that outlived its job — captured by a closure nobody awaited
-/// — neither writes nor starts anything: [emit], [run], [wait], [join] and
-/// [uncancellable] throw a [StateError] once the job has finished. Reading
-/// the state, [check] and [log] stay legal.
-abstract interface class JobContext<S extends Object, W extends S> {
-  /// The current state. Throws [Cancelled] if the job is cancelled, if the
-  /// state is not `W`, or if `keepWhile` returns `false`.
-  W get state;
-
-  /// [state] narrowed to `T`; cancels the job with `Cancelled(rules,
-  /// 'is not T')` on mismatch.
-  T stateAs<T extends S>();
-
-  /// Sets the controller state. The new state is not checked against this
-  /// job's rules; other running jobs are re-evaluated.
-  ///
-  /// A checkpoint on both sides. It throws the job's [Cancelled] before the
-  /// write, as every member does, and again after it if the write cancelled
-  /// this job on the way: hooks, observers and listeners run inside it and
-  /// may set the state again, and a parent that goes down there takes its
-  /// children with it.
-  void emit(S next);
-
-  /// Reads [state] and discards it: gives up if the job was cancelled or
-  /// its rules stopped holding.
+/// — neither writes nor starts anything: [run], [wait], [join] and
+/// [uncancellable] throw a [StateError] once the job has finished. [check]
+/// and [log] stay legal.
+abstract interface class JobContext {
+  /// Gives up if the job was cancelled — in `solo`, also if its rules
+  /// stopped holding.
   ///
   /// [join] is the same thing around a call. Reach for `check` where there
-  /// is no call to wrap: a loop over work of your own, a `switch` on the
-  /// state after one.
+  /// is no call to wrap: a loop over work of your own, a `switch` after
+  /// one.
   void check();
 
   /// Runs [action] and waits for it, but no longer than this job lives.
@@ -174,8 +155,36 @@ abstract interface class JobContext<S extends Object, W extends S> {
   Job<Object?> get job;
 }
 
+/// The core context plus the state: what a job body of `solo` sees.
+///
+/// The state is narrowed to the job's working type `W`, and [emit] is the
+/// only way to change it. Reading it is a checkpoint of its own: [state],
+/// [stateAs] and [check] throw the job's [Cancelled] once its rules
+/// stopped holding, and [emit] throws a [StateError] for a job that has
+/// already finished.
+abstract interface class SoloContext<S extends Object, W extends S>
+    implements JobContext {
+  /// The current state. Throws [Cancelled] if the job is cancelled, if the
+  /// state is not `W`, or if `keepWhile` returns `false`.
+  W get state;
+
+  /// [state] narrowed to `T`; cancels the job with `Cancelled(rules,
+  /// 'is not T')` on mismatch.
+  T stateAs<T extends S>();
+
+  /// Sets the controller state. The new state is not checked against this
+  /// job's rules; other running jobs are re-evaluated.
+  ///
+  /// A checkpoint on both sides. It throws the job's [Cancelled] before the
+  /// write, as every member does, and again after it if the write cancelled
+  /// this job on the way: hooks, observers and listeners run inside it and
+  /// may set the state again, and a parent that goes down there takes its
+  /// children with it.
+  void emit(S next);
+}
+
 final class _JobContext<S extends Object, W extends S, R>
-    implements JobContext<S, W> {
+    implements SoloContext<S, W> {
   final _Job<S, W, R> _job;
 
   _JobContext(this._job);

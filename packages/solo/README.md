@@ -126,7 +126,7 @@ linear: `SoloBase<S>` is the engine and `state`; `Solo<S>` adds a broadcast
 `stream`; `SoloListenable<S>` in `flutter_solo` adds `ValueListenable`.
 They differ only in how a change is delivered.
 
-**Job.** A unit of work: an `async` body `Future<T> Function(JobContext)`,
+**Job.** A unit of work: an `async` body `Future<T> Function(SoloContext)`,
 an optional `key`, rules, and a handle `Job<T>`. `job(...)` builds one
 without queueing it, `add(job, policy: ...)` queues it, `run(...)` does
 both in one call; all three return a `SoloJob<T>`, which is `Job<T>` plus
@@ -149,7 +149,7 @@ never starts, instead of starting and dying on its first read.
 
 **Cancellation.** Cooperative: Dart cannot interrupt somebody else's
 `await`. A cancelled job learns about it the next time it touches the
-context — every `JobContext` member except `log` and `job` throws the job's
+context — every `SoloContext` member except `log` and `job` throws the job's
 `Cancelled` once the job is marked. So a body does not `await` on its own:
 every call goes through the context, and the member you pick says what a
 cancellation does to that call. `ctx.wait(() => ...)` returns as soon as

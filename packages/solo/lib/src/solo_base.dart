@@ -87,7 +87,7 @@ abstract class SoloBase<S extends Object> {
   /// `W` or `keepWhile`; [JobContext.uncancellable] says the same about one
   /// step of the body rather than about the whole job.
   SoloJob<T> job<W extends S, T>(
-    Future<T> Function(JobContext<S, W> ctx) body, {
+    Future<T> Function(SoloContext<S, W> ctx) body, {
     Object? key,
     bool Function(W state)? canStart,
     bool Function(W state)? keepWhile,
@@ -168,7 +168,7 @@ abstract class SoloBase<S extends Object> {
 
   /// `add(job(...), policy: policy)` in one call.
   SoloJob<T> run<W extends S, T>(
-    Future<T> Function(JobContext<S, W> ctx) body, {
+    Future<T> Function(SoloContext<S, W> ctx) body, {
     Object? key,
     bool Function(W state)? canStart,
     bool Function(W state)? keepWhile,

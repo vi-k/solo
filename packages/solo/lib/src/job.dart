@@ -107,7 +107,7 @@ abstract interface class SoloJob<T> implements Job<T> {
 
 final class _Job<S extends Object, W extends S, T> implements SoloJob<T> {
   final SoloBase<S> _solo;
-  final Future<T> Function(JobContext<S, W> ctx) _body;
+  final Future<T> Function(SoloContext<S, W> ctx) _body;
   final bool Function(W state)? _canStart;
   final bool Function(W state)? _keepWhile;
   final String Function()? _describe;

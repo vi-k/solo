@@ -158,7 +158,8 @@ BLE-устройство, плеер, синхронизация), где сос
   открытый класс `CancelReason` и `SoloCancelReason` с причинами solo.
 - `job.dart` — `part`: публичный `Job<T>` и внутренняя реализация `_Job`:
   спека, жизненный цикл, дети, отмена, исход.
-- `job_context.dart` — `part`: `JobContext<S, W>` и `_JobContext`:
+- `job_context.dart` — `part`: `JobContext` ядра, `SoloContext<S, W>`
+  поверх него и реализация `_JobContext`:
   `state`, `stateAs`, `emit`, `check`, `wait`, `join`, `uncancellable`,
   `onCancel`, `run`, `log`, `job`.
 - `queue.dart` — `part`: `SoloQueue` и `_SoloQueue` поверх `List<_Job>`.

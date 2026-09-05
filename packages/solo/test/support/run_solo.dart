@@ -31,5 +31,5 @@ Future<void> delay(int milliseconds) =>
     Future<void>.delayed(Duration(milliseconds: milliseconds));
 
 /// A cancellation-aware delay: [JobContext.wait] around [delay].
-Future<void> pause(JobContext<TestState, TestState> ctx, int milliseconds) =>
+Future<void> pause(SoloContext<TestState, TestState> ctx, int milliseconds) =>
     ctx.wait(() => delay(milliseconds));

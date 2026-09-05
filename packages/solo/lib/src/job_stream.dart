@@ -3,7 +3,7 @@ import 'dart:async';
 import 'solo_base.dart';
 
 /// [JobContext] and a stream: following one for as long as the job lives.
-extension JobStream<S extends Object, W extends S> on JobContext<S, W> {
+extension JobStream on JobContext {
   /// Follows [stream], calling [onData] for every event, until the stream
   /// is done or the job gives up.
   ///

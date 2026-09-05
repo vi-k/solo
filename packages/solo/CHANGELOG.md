@@ -8,6 +8,11 @@
   `CancelReason.manual`. `Cancelled.toString()` is unchanged.
 - `Cancelled.by({reason, started, description, stackTrace})` is public:
   an engine of a domain builds cancellations with a reason of its own.
+- `JobContext<S, W>` is renamed to `SoloContext<S, W>`, and the name
+  `JobContext` now belongs to the interface of the kernel: cancellation,
+  the waiting family and children, without the state. `SoloContext`
+  implements it and adds `state`, `stateAs` and `emit`. Job bodies do not
+  write the name, so code written against the README keeps compiling.
 - `JobObserver` is the observer of a single job: `onStart`, `onFinish`,
   `onError` and `onLog`, without the controller in the signatures. A
   controller feeds its own `SoloObserver` and its instance hooks from it,

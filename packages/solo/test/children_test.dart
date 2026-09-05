@@ -411,7 +411,7 @@ void main() {
 
   test('run of a used job, after finish, or when cancelled', () {
     runSolo((solo, journal, async) {
-      late JobContext<TestState, TestState> leaked;
+      late SoloContext<TestState, TestState> leaked;
       final used = solo.job<TestState, void>(key: 'used', (ctx) async {});
       Object? secondRunError;
       solo.run<TestState, void>(key: 'parent', (ctx) async {

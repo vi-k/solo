@@ -19,7 +19,7 @@ Object? errorFrom(Future<Object?> future, FakeAsync async) {
 void main() {
   test('a finished context does not start an action', () {
     runSolo((solo, journal, async) {
-      late JobContext<TestState, TestState> leaked;
+      late SoloContext<TestState, TestState> leaked;
       var began = false;
       Future<int> action() async {
         began = true;
@@ -44,7 +44,7 @@ void main() {
 
   test('a cancelled job that finished refuses the same three', () {
     runSolo((solo, journal, async) {
-      late JobContext<TestState, TestState> leaked;
+      late SoloContext<TestState, TestState> leaked;
       final job = solo.run<TestState, void>(key: 'job', (ctx) async {
         leaked = ctx;
         await delay(100);
@@ -64,7 +64,7 @@ void main() {
 
   test('a finished context still reads the state and logs', () {
     runSolo((solo, journal, async) {
-      late JobContext<TestState, TestState> leaked;
+      late SoloContext<TestState, TestState> leaked;
       solo.run<TestState, void>(key: 'job', (ctx) async {
         leaked = ctx;
       });
