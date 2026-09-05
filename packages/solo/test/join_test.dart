@@ -278,4 +278,33 @@ void main() {
       ]);
     });
   });
+
+  test('a lazy rule is seen by the join that comes after the emit', () {
+    runSolo(initialState: const Preparing(), (solo, journal, async) {
+      var reached = false;
+      final job = solo.run<Preparing, void>(
+        key: 'job',
+        (ctx) async {
+          ctx.emit(const Working());
+          await ctx.join(() => delay(10));
+          reached = true;
+        },
+      );
+      async.flushTimers();
+      expect(reached, isFalse);
+      expect(job.outcome, isA<Cancelled>());
+      final outcome = job.outcome! as Cancelled;
+      expect(
+        outcome.started,
+        isTrue,
+        reason: 'the job did start; the rule caught it at the next read',
+      );
+      expect(outcome.description, 'is not Preparing');
+      expect(journal.take(), [
+        '[job] started',
+        'state: Working(a: 0, b: 0)',
+        '[job] finished Cancelled(rules: is not Preparing)',
+      ]);
+    });
+  });
 }

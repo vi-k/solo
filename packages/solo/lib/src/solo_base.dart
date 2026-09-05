@@ -35,8 +35,8 @@ abstract class SoloBase<S extends Object> {
 
   /// The observer every job of this controller is given.
   late final JobObserver _jobObserver = _SoloJobObserver<S>(this);
-  _Job<S, S, Object?>? _current;
-  final _running = <_Job<S, S, Object?>>[];
+  _SoloJob<S, S, Object?>? _current;
+  final _running = <_SoloJob<S, S, Object?>>[];
   StackTrace? _lastChange;
   bool _pumpScheduled = false;
   final _unpublished = <(S, S)>[];
@@ -94,7 +94,7 @@ abstract class SoloBase<S extends Object> {
     bool cancellable = true,
     String Function()? describe,
   }) =>
-      _Job<S, W, T>(
+      _SoloJob<S, W, T>(
         this,
         body,
         key: key,
@@ -102,6 +102,7 @@ abstract class SoloBase<S extends Object> {
         keepWhile: keepWhile,
         cancellable: cancellable,
         describe: describe,
+        observer: _jobObserver,
       );
 
   /// Queues [job] and returns it, or the existing job found by
@@ -120,12 +121,12 @@ abstract class SoloBase<S extends Object> {
     if (policy != Policy.sequential && impl.key == null) {
       throw ArgumentError('Policy.${policy.name} requires a job key');
     }
-    if (impl._status != JobStatus.created || _queue._jobs.contains(impl)) {
+    if (impl._jobStatus != JobStatus.created || _queue._jobs.contains(impl)) {
       throw StateError('$impl has already been added or run');
     }
     if (isClosed) {
       _debug(() => 'add $impl: closed');
-      impl._finish(
+      impl._drop(
         Cancelled.by(
           reason: SoloCancelReason.closed,
           started: false,
@@ -141,7 +142,7 @@ abstract class SoloBase<S extends Object> {
         final existing = lastJobWhere((other) => other.key == impl.key);
         if (existing != null) {
           _debug(() => 'add $impl: duplicate of $existing');
-          impl._finish(
+          impl._drop(
             Cancelled.by(
               reason: CancelReason.manual,
               started: false,
@@ -241,7 +242,7 @@ abstract class SoloBase<S extends Object> {
     // at the `close` call, whichever of the two sources made it.
     final stackTrace = _closeStackTrace = StackTrace.current;
     for (final job in _queue._drain()) {
-      job._finish(
+      job._drop(
         Cancelled.by(
           reason: SoloCancelReason.closed,
           started: false,
@@ -264,9 +265,9 @@ abstract class SoloBase<S extends Object> {
           stackTrace: stackTrace,
         ),
       );
-      // `_done.future`, not `done`: closing waits for the job, it does not
+      // `whenDone`, not `done`: closing waits for the job, it does not
       // observe its outcome, so a failure here still reaches the zone.
-      current._done.future.then((_) => _finishClose(completer));
+      current._whenDone.then((_) => _finishClose(completer));
     }
     return completer.future;
   }
@@ -313,8 +314,8 @@ abstract class SoloBase<S extends Object> {
   /// The state changed, from a job or from [externalSetState].
   void onChange(S previous, S current) {}
 
-  _Job<S, S, T> _own<T>(Job<T> job) {
-    if (job is _Job<S, S, T> && identical(job._solo, this)) {
+  _SoloJob<S, S, T> _own<T>(Job<T> job) {
+    if (job is _SoloJob<S, S, T> && identical(job._solo, this)) {
       return job;
     }
     throw ArgumentError.value(job, 'job', 'was not created by this Solo');
@@ -322,7 +323,7 @@ abstract class SoloBase<S extends Object> {
 
   void _setState(
     S next, {
-    required _Job<S, S, Object?>? emitter,
+    required _SoloJob<S, S, Object?>? emitter,
     required StackTrace stackTrace,
   }) {
     final previous = _state;
@@ -359,7 +360,7 @@ abstract class SoloBase<S extends Object> {
   /// Re-evaluates the rules of every running job except [except] against
   /// the current state, children before parents.
   void _reevaluate({
-    required _Job<S, S, Object?>? except,
+    required _SoloJob<S, S, Object?>? except,
     required StackTrace stackTrace,
   }) {
     for (final job in _running.reversed.toList()) {
@@ -384,7 +385,7 @@ abstract class SoloBase<S extends Object> {
   /// Cancels [job] with [cancelled]; `started` is corrected to the job's
   /// status. Idempotent. [force] lets a queued `cancellable: false` job go.
   void _cancel(
-    _Job<S, S, Object?> job,
+    _SoloJob<S, S, Object?> job,
     Cancelled cancelled, {
     bool force = false,
   }) {
@@ -396,12 +397,12 @@ abstract class SoloBase<S extends Object> {
             description: cancelled.description,
             stackTrace: cancelled.stackTrace,
           );
-    switch (job._status) {
+    switch (job._jobStatus) {
       case JobStatus.finished:
         return;
       case JobStatus.created:
         if (_queue._jobs.contains(job)) {
-          if (!job.cancellable && !force) {
+          if (!job._isCancellable && !force) {
             _debug(() => 'cancel $job: not cancellable');
             return;
           }
@@ -410,20 +411,20 @@ abstract class SoloBase<S extends Object> {
         } else {
           _debug(() => 'cancel $job before add: $cancelled');
         }
-        job._finish(withStarted(false));
+        job._drop(withStarted(false));
       case JobStatus.running:
-        if (job._pendingCancel != null) {
+        if (job._pending != null) {
           return;
         }
-        if (!job.cancellable && cancelled.reason != SoloCancelReason.rules) {
+        if (!job._isCancellable && cancelled.reason != SoloCancelReason.rules) {
           _debug(() => 'cancel $job: not cancellable');
           return;
         }
         final marked = withStarted(true);
         _debug(() => 'cancel $job: $marked');
-        for (final child in job._children.reversed.toList()) {
+        for (final child in job._childJobs.reversed.toList()) {
           _cancel(
-            child,
+            child as _SoloJob<S, S, Object?>,
             Cancelled.by(
               reason: CancelReason.parent,
               started: true,
@@ -435,13 +436,12 @@ abstract class SoloBase<S extends Object> {
     }
   }
 
-  void _onJobFinished(_Job<S, S, Object?> job) {
+  void _onJobFinished(_SoloJob<S, S, Object?> job) {
     final wasCurrent = identical(job, _current);
     if (wasCurrent) {
       _current = null;
     }
     _running.remove(job);
-    _debug(() => '$job finished: ${job.outcome}');
     if (wasCurrent) {
       _schedulePump();
     }
@@ -473,7 +473,7 @@ abstract class SoloBase<S extends Object> {
       }
       final rejection = job._rejectStart(_state);
       if (rejection != null) {
-        job._finish(
+        job._drop(
           Cancelled.by(
             reason: SoloCancelReason.rules,
             started: false,
@@ -484,7 +484,7 @@ abstract class SoloBase<S extends Object> {
         continue;
       }
       _current = job;
-      job._start(0);
+      job._launch();
       return;
     }
   }
@@ -509,7 +509,6 @@ final class _SoloJobObserver<S extends Object> implements JobObserver {
 
   @override
   void onStart(Job<Object?> job) {
-    SoloBase._debug(() => '$job started');
     SoloBase._callHook(() => SoloBase.observer?.onStart(_solo, job));
     SoloBase._callHook(() => _solo.onStart(job));
   }
@@ -522,7 +521,6 @@ final class _SoloJobObserver<S extends Object> implements JobObserver {
 
   @override
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
-    SoloBase._debug(() => '$job error: $error');
     SoloBase._callHook(
       () => SoloBase.observer?.onError(_solo, job, error, stackTrace),
     );

@@ -183,94 +183,91 @@ abstract interface class SoloContext<S extends Object, W extends S>
   void emit(S next);
 }
 
-final class _JobContext<S extends Object, W extends S, R>
-    implements SoloContext<S, W> {
-  final _Job<S, W, R> _job;
+/// The base of a job context: everything a body does without a state.
+///
+/// Subclass it to add a domain of your own; `solo` adds the state and its
+/// rules. [check] is the checkpoint, and it is virtual on purpose: a
+/// domain checks more than the cancellation, and [wait], [join] and
+/// [uncancellable] all go through it.
+abstract class JobContextBase implements JobContext {
+  final JobBase<Object?> _owner;
 
-  _JobContext(this._job);
-
-  SoloBase<S> get _solo => _job._solo;
+  /// A plain positional parameter, not `this._owner`: a subclass writes
+  /// `MyContext(super.owner)`, and a private name cannot be used there.
+  JobContextBase(JobBase<Object?> owner) : _owner = owner;
 
   @override
-  Job<Object?> get job => _job;
+  Job<Object?> get job => _owner;
 
-  void _throwIfCancelled() {
-    final cancelled = _job._pendingCancel;
+  @override
+  void check() => throwIfCancelled();
+
+  /// The cancellation the job is marked with, or `null`.
+  @protected
+  Cancelled? get pendingCancel => _owner._pendingCancel;
+
+  /// Throws the job's cancellation if it is marked.
+  @protected
+  void throwIfCancelled() {
+    final cancelled = _owner._pendingCancel;
     if (cancelled != null) {
       throw cancelled;
     }
   }
 
-  void _throwIfFinished(String action) {
-    if (_job.isFinished) {
-      throw StateError('$_job has already finished, cannot $action');
+  /// Throws [StateError] if the job has finished: a context that outlived
+  /// its job neither writes nor starts anything.
+  @protected
+  void throwIfFinished(String action) {
+    if (_owner.isFinished) {
+      throw StateError('$_owner has already finished, cannot $action');
     }
   }
 
-  W _checkedState() {
-    _throwIfCancelled();
-    final current = _solo._state;
-    final rejection = _job._rejectKeep(current);
-    if (rejection != null) {
-      final cancelled = Cancelled.by(
-        reason: SoloCancelReason.rules,
-        started: true,
-        description: rejection,
-        stackTrace: _solo._lastChange,
-      );
-      _solo._cancel(_job, cancelled);
-      throw _job._pendingCancel ?? cancelled;
-    }
-    return current as W;
+  /// Hands [error] to the observer, or to the zone when there is none.
+  @protected
+  void notifyError(Object error, StackTrace stackTrace) =>
+      _owner.notifyError(error, stackTrace);
+
+  /// Registers [callback] past the public [onCancel]: the race inside
+  /// [wait] needs a raw one, unguarded and removable. Returns a remover.
+  @protected
+  void Function() addCancelCallback(void Function() callback) {
+    _owner._onCancel.add(callback);
+    return () => _owner._onCancel.remove(callback);
   }
 
-  @override
-  W get state => _checkedState();
+  /// Cancels the owner with a cancellation it cannot refuse: the rules of
+  /// a domain come here, and they cancel a job whatever `cancellable`
+  /// says.
+  @protected
+  void cancelOwnJob(Cancelled cancelled);
 
-  @override
-  T stateAs<T extends S>() {
-    final current = _checkedState();
-    if (current is! T) {
-      final cancelled = Cancelled.by(
-        reason: SoloCancelReason.rules,
-        started: true,
-        description: 'is not $T',
-        stackTrace: StackTrace.current,
-      );
-      _solo._cancel(_job, cancelled);
-      throw _job._pendingCancel ?? cancelled;
-    }
-    return current;
-  }
+  /// Whether the job accepts a cancellation it may refuse.
+  ///
+  /// A pair, not a lone setter: [uncancellable] remembers the answer in
+  /// force and restores it afterwards.
+  @protected
+  bool get cancellable => _owner._cancellable;
 
-  @override
-  void emit(S next) {
-    _throwIfFinished('emit');
-    _throwIfCancelled();
-    SoloBase._debug(() => '$_job emit: $next');
-    _solo._setState(next, emitter: _job, stackTrace: StackTrace.current);
-    // The write is a checkpoint on both sides: hooks, observers and
-    // listeners run inside `_setState` and may cancel this job — through a
-    // reentrant `externalSetState` or through a parent going down with it.
-    // The body must not walk past that.
-    _throwIfCancelled();
-  }
+  @protected
+  set cancellable(bool value) => _owner._cancellable = value;
 
-  @override
-  void check() {
-    _checkedState();
-  }
+  /// The parent's last word before a child starts; `solo` checks the start
+  /// rules here. A non-null result finishes the child with it.
+  @protected
+  Cancelled? beforeChildStart(JobBase<Object?> child) => null;
 
   @override
   Future<T> join<T>(
     FutureOr<T> Function() action, {
     FutureOr<void> Function(T value)? ifCancelled,
   }) async {
-    _throwIfFinished('join');
-    _checkedState();
+    throwIfFinished('join');
+    check();
     final result = await action();
     try {
-      _checkedState();
+      check();
     } on Cancelled {
       if (ifCancelled != null) {
         await _dispose(ifCancelled, result);
@@ -290,27 +287,27 @@ final class _JobContext<S extends Object, W extends S, R>
     try {
       await ifCancelled(value);
     } on Object catch (error, stackTrace) {
-      _job._notifyError(error, stackTrace);
+      notifyError(error, stackTrace);
     }
   }
 
   @override
   Future<T> uncancellable<T>(FutureOr<T> Function() action) async {
-    _throwIfFinished('run an uncancellable action');
-    _checkedState();
-    final previous = _job.cancellable;
-    _job.cancellable = false;
+    throwIfFinished('run an uncancellable action');
+    check();
+    final previous = cancellable;
+    cancellable = false;
     try {
       return await action();
     } finally {
-      _job.cancellable = previous;
+      cancellable = previous;
     }
   }
 
   @override
   void Function() onCancel(void Function() callback) {
-    _throwIfFinished('register onCancel');
-    _throwIfCancelled();
+    throwIfFinished('register onCancel');
+    throwIfCancelled();
     void guarded() {
       // A callback of the caller's, run from inside the engine's own
       // cancellation: its error belongs to `onError`, not to whoever
@@ -318,12 +315,11 @@ final class _JobContext<S extends Object, W extends S, R>
       try {
         callback();
       } on Object catch (error, stackTrace) {
-        _job._notifyError(error, stackTrace);
+        notifyError(error, stackTrace);
       }
     }
 
-    _job._onCancel.add(guarded);
-    return () => _job._onCancel.remove(guarded);
+    return addCancelCallback(guarded);
   }
 
   @override
@@ -331,8 +327,8 @@ final class _JobContext<S extends Object, W extends S, R>
     FutureOr<T> Function() action, {
     FutureOr<void> Function(T value)? ifCancelled,
   }) async {
-    _throwIfFinished('wait');
-    _checkedState();
+    throwIfFinished('wait');
+    check();
     final result = action();
     if (result is! Future<T>) {
       return result;
@@ -349,9 +345,10 @@ final class _JobContext<S extends Object, W extends S, R>
     FutureOr<void> Function(T value)? ifCancelled,
   ) {
     final completer = Completer<T>();
+    late final void Function() remove;
     void onCancel() {
       if (!completer.isCompleted) {
-        final cancelled = _job._pendingCancel!;
+        final cancelled = pendingCancel!;
         completer.completeError(
           cancelled,
           cancelled.stackTrace ?? StackTrace.current,
@@ -371,20 +368,20 @@ final class _JobContext<S extends Object, W extends S, R>
         }
       } on Object catch (error, stackTrace) {
         if (completer.isCompleted) {
-          _job._notifyError(error, stackTrace);
+          notifyError(error, stackTrace);
         } else {
           completer.completeError(error, stackTrace);
         }
       } finally {
-        _job._onCancel.remove(onCancel);
+        remove();
       }
     }
 
-    _job._onCancel.add(onCancel);
+    remove = addCancelCallback(onCancel);
     // The action may have cancelled this job while it ran: `_markCancelled`
-    // already emptied `_onCancel`, so the registration above would never be
-    // called and the body would wait for the full action for nothing.
-    if (_job._pendingCancel != null) {
+    // already emptied the callbacks, so the registration above would never
+    // be called and the body would wait for the full action for nothing.
+    if (pendingCancel != null) {
       onCancel();
     }
     unawaited(forward());
@@ -393,18 +390,22 @@ final class _JobContext<S extends Object, W extends S, R>
 
   @override
   Job<T> run<T>(Job<T> child) {
-    _throwIfFinished('run a child');
-    final impl = _solo._own(child);
-    if (impl._status != JobStatus.created ||
-        _solo._queue._jobs.contains(impl)) {
-      throw StateError('$impl has already been added or run');
+    throwIfFinished('run a child');
+    if (child is! JobBase<T>) {
+      throw ArgumentError.value(child, 'child', 'is not a job of this core');
     }
-    impl.level = _job.level + 1;
-    _job._children.add(impl);
-    final pending = _job._pendingCancel;
+    if (child.status != JobStatus.created) {
+      throw StateError('$child has already been added or run');
+    }
+    child
+      ..adoptedBy(this)
+      ..level = _owner.level + 1;
+    _owner.children.add(child);
+    final pending = _owner.pendingCancel;
     if (pending != null) {
-      _solo._cancel(
-        impl,
+      // The child is still `created`, so ending it is all a cancellation
+      // would do here anyway.
+      child.finish(
         Cancelled.by(
           reason: CancelReason.parent,
           started: false,
@@ -413,22 +414,105 @@ final class _JobContext<S extends Object, W extends S, R>
       );
       throw pending;
     }
-    final rejection = impl._rejectStart(_solo._state);
+    final rejection = beforeChildStart(child);
     if (rejection != null) {
-      impl._finish(
-        Cancelled.by(
-          reason: SoloCancelReason.rules,
-          started: false,
-          description: rejection,
-          stackTrace: StackTrace.current,
-        ),
-      );
+      child.finish(rejection);
       return child;
     }
-    impl._start(impl.level);
+    child.start();
     return child;
   }
 
   @override
-  void log(Object? message) => _job._notifyLog('$message');
+  void log(Object? message) => _owner._notifyLog('$message');
+}
+
+final class _SoloContext<S extends Object, W extends S, R>
+    extends JobContextBase implements SoloContext<S, W> {
+  final _SoloJob<S, W, R> _job;
+
+  _SoloContext(this._job) : super(_job);
+
+  SoloBase<S> get _solo => _job._solo;
+
+  @override
+  void check() => _checkedState();
+
+  W _checkedState() {
+    throwIfCancelled();
+    final current = _solo._state;
+    final rejection = _job._rejectKeep(current);
+    if (rejection != null) {
+      final cancelled = Cancelled.by(
+        reason: SoloCancelReason.rules,
+        started: true,
+        description: rejection,
+        stackTrace: _solo._lastChange,
+      );
+      cancelOwnJob(cancelled);
+      throw pendingCancel ?? cancelled;
+    }
+    return current as W;
+  }
+
+  @override
+  W get state => _checkedState();
+
+  @override
+  T stateAs<T extends S>() {
+    final current = _checkedState();
+    if (current is! T) {
+      final cancelled = Cancelled.by(
+        reason: SoloCancelReason.rules,
+        started: true,
+        description: 'is not $T',
+        stackTrace: StackTrace.current,
+      );
+      cancelOwnJob(cancelled);
+      throw pendingCancel ?? cancelled;
+    }
+    return current;
+  }
+
+  @override
+  void emit(S next) {
+    throwIfFinished('emit');
+    throwIfCancelled();
+    SoloBase._debug(() => '$_job emit: $next');
+    _solo._setState(next, emitter: _job, stackTrace: StackTrace.current);
+    // The write is a checkpoint on both sides: hooks, observers and
+    // listeners run inside `_setState` and may cancel this job — through a
+    // reentrant `externalSetState` or through a parent going down with it.
+    // The body must not walk past that.
+    throwIfCancelled();
+  }
+
+  @override
+  void cancelOwnJob(Cancelled cancelled) => _solo._cancel(_job, cancelled);
+
+  @override
+  Cancelled? beforeChildStart(JobBase<Object?> child) {
+    // `run` has already asked `_own` whether the child is ours.
+    final impl = child as _SoloJob<S, S, Object?>;
+    final rejection = impl._rejectStart(_solo._state);
+    return rejection == null
+        ? null
+        : Cancelled.by(
+            reason: SoloCancelReason.rules,
+            started: false,
+            description: rejection,
+            stackTrace: StackTrace.current,
+          );
+  }
+
+  @override
+  Job<T> run<T>(Job<T> child) {
+    // Ownership is the parent's business: a job of another controller, or
+    // a bare job of the core, has no `adoptedBy` of ours to refuse it.
+    final impl = _solo._own(child);
+    if (_solo._queue._jobs.contains(impl)) {
+      throw StateError('$impl has already been added or run');
+    }
+    return super.run(child);
+  }
 }

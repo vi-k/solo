@@ -33,7 +33,7 @@ abstract interface class SoloQueue {
 
 final class _SoloQueue<S extends Object> implements SoloQueue {
   final SoloBase<S> _solo;
-  final _jobs = <_Job<S, S, Object?>>[];
+  final _jobs = <_SoloJob<S, S, Object?>>[];
 
   _SoloQueue(this._solo);
 
@@ -51,10 +51,10 @@ final class _SoloQueue<S extends Object> implements SoloQueue {
 
   @override
   bool remove(Job<Object?> job, {bool force = false}) {
-    if (job is! _Job<S, S, Object?> || !_jobs.contains(job)) {
+    if (job is! _SoloJob<S, S, Object?> || !_jobs.contains(job)) {
       return false;
     }
-    if (!force && !job.cancellable) {
+    if (!force && !job._isCancellable) {
       SoloBase._debug(() => 'remove $job: not cancellable');
       return false;
     }
@@ -97,7 +97,7 @@ final class _SoloQueue<S extends Object> implements SoloQueue {
     return null;
   }
 
-  void _insert(_Job<S, S, Object?> job, {required bool first}) {
+  void _insert(_SoloJob<S, S, Object?> job, {required bool first}) {
     if (first) {
       _jobs.insert(0, job);
     } else {
@@ -105,9 +105,10 @@ final class _SoloQueue<S extends Object> implements SoloQueue {
     }
   }
 
-  _Job<S, S, Object?>? _takeFirst() => _jobs.isEmpty ? null : _jobs.removeAt(0);
+  _SoloJob<S, S, Object?>? _takeFirst() =>
+      _jobs.isEmpty ? null : _jobs.removeAt(0);
 
-  List<_Job<S, S, Object?>> _drain() {
+  List<_SoloJob<S, S, Object?>> _drain() {
     final drained = _jobs.toList();
     _jobs.clear();
     return drained;

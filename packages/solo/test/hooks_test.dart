@@ -320,9 +320,11 @@ void main() {
     });
   });
 
-  test('SoloBase.debug receives engine traces', () {
-    final traces = <String>[];
-    SoloBase.debug = traces.add;
+  test('the two debug channels each print their own side', () {
+    final engine = <String>[];
+    final jobs = <String>[];
+    SoloBase.debug = engine.add;
+    JobBase.debug = jobs.add;
     try {
       runSolo((solo, journal, async) {
         solo.run<TestState, void>(key: 'job', (ctx) async {
@@ -332,11 +334,16 @@ void main() {
       });
     } finally {
       SoloBase.debug = null;
+      JobBase.debug = null;
     }
-    expect(traces, contains('add Job(job)'));
-    expect(traces, contains('Job(job) started'));
-    expect(traces, contains('state: Preparing(progress: 0)'));
-    expect(traces, contains('Job(job) finished: Done(null)'));
+    // The queue, the state and the closing belong to the controller.
+    expect(engine, contains('add Job(job)'));
+    expect(engine, contains('state: Preparing(progress: 0)'));
+    expect(engine, isNot(contains('Job(job) started')));
+    // The life of a job belongs to the kernel.
+    expect(jobs, contains('Job(job) started'));
+    expect(jobs, contains('Job(job) finished: Done(null)'));
+    expect(jobs, isNot(contains('add Job(job)')));
   });
 }
 

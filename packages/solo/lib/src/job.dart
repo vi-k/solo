@@ -105,23 +105,33 @@ abstract interface class SoloJob<T> implements Job<T> {
   bool get isQueued;
 }
 
-final class _Job<S extends Object, W extends S, T> implements SoloJob<T> {
-  final SoloBase<S> _solo;
-  final Future<T> Function(SoloContext<S, W> ctx) _body;
-  final bool Function(W state)? _canStart;
-  final bool Function(W state)? _keepWhile;
+/// The lifecycle of a job: start, body, children, cancellation, outcome.
+///
+/// Subclass it to add a domain of your own — the state, the rules and the
+/// queue in `solo`. Everything the engine of that domain needs is
+/// protected, and the subclass opens exactly what it needs through private
+/// wrappers of its own: `@protected` holds inside a subclass, and an
+/// engine reaches a job from the side.
+abstract class JobBase<T> implements Job<T> {
+  /// Tracing of the job lifecycle for debugging; `null` by default.
+  ///
+  /// The queue, the state and the closing of a controller print into
+  /// [SoloBase.debug] instead. To follow both sides, set both.
+  static void Function(String message)? debug;
+
+  final Object? _key;
   final String Function()? _describe;
   final JobObserver? _observer;
-  bool cancellable;
-
-  @override
-  final Object? key;
-
-  @override
-  int level = 0;
 
   /// The zone the job was created in; an unobserved [Failed] goes here.
   final Zone _zone = Zone.current;
+
+  final _done = Completer<Outcome<T>>();
+  final _cancelled = Completer<void>();
+  final _onCancel = <void Function()>[];
+  final _children = <JobBase<Object?>>[];
+
+  bool _cancellable;
 
   /// Whether anyone asked for the outcome: [done], [value] or [ignore].
   bool _observed = false;
@@ -129,28 +139,30 @@ final class _Job<S extends Object, W extends S, T> implements SoloJob<T> {
   JobStatus _status = JobStatus.created;
   Outcome<T>? _outcome;
   Cancelled? _pendingCancel;
-  final _done = Completer<Outcome<T>>();
-  final _cancelled = Completer<void>();
-  final _onCancel = <void Function()>[];
-  final _children = <_Job<S, S, Object?>>[];
+  int _level = 0;
 
-  _Job(
-    this._solo,
-    this._body, {
-    required this.key,
-    required bool Function(W state)? canStart,
-    required bool Function(W state)? keepWhile,
-    required this.cancellable,
-    required String Function()? describe,
-  })  : _canStart = canStart,
-        _keepWhile = keepWhile,
+  /// Creates a job that has not started yet.
+  JobBase({
+    Object? key,
+    String Function()? describe,
+    bool cancellable = true,
+    JobObserver? observer,
+  })  : _key = key,
         _describe = describe,
-        _observer = _solo._jobObserver;
+        _cancellable = cancellable,
+        _observer = observer;
+
+  static void _debug(String Function() message) {
+    final debug = JobBase.debug;
+    if (debug != null) {
+      debug(message());
+    }
+  }
 
   /// Calls [hook] and hands whatever it throws to the current zone.
   ///
-  /// The observer of a job is a cross-cutting channel, like the hooks of a
-  /// controller: an error in it changes nothing else.
+  /// The observer of a job is a cross-cutting channel: an error in it
+  /// changes nothing else.
   static void _notify(void Function() hook) {
     try {
       hook();
@@ -159,24 +171,17 @@ final class _Job<S extends Object, W extends S, T> implements SoloJob<T> {
     }
   }
 
-  void _notifyStart() => _notify(() => _observer?.onStart(this));
-
-  void _notifyFinish() => _notify(() => _observer?.onFinish(this));
-
-  void _notifyError(Object error, StackTrace stackTrace) =>
-      _notify(() => _observer?.onError(this, error, stackTrace));
-
-  void _notifyLog(String message) =>
-      _notify(() => _observer?.onLog(this, message));
+  @override
+  Object? get key => _key;
 
   @override
   String describe() => _describe?.call() ?? '';
 
   @override
-  bool get isChild => level > 0;
+  int get level => _level;
 
   @override
-  bool get isQueued => _solo._queue._jobs.contains(this);
+  bool get isChild => _level > 0;
 
   @override
   bool get isRunning => _status == JobStatus.running;
@@ -217,6 +222,233 @@ final class _Job<S extends Object, W extends S, T> implements SoloJob<T> {
   @override
   Future<void> get whenCancelled => _cancelled.future;
 
+  /// Where the job is in its life.
+  @protected
+  JobStatus get status => _status;
+
+  /// The cancellation the job is marked with, or `null`.
+  @protected
+  Cancelled? get pendingCancel => _pendingCancel;
+
+  /// Whether the job accepts a cancellation it may refuse.
+  @protected
+  bool get cancellable => _cancellable;
+
+  @protected
+  set cancellable(bool value) => _cancellable = value;
+
+  /// Set by whoever adopts the job, before it starts.
+  @protected
+  set level(int value) => _level = value;
+
+  /// The children this job waits for.
+  @protected
+  List<JobBase<Object?>> get children => _children;
+
+  /// Waiting without observing: an engine waits for a job to finish
+  /// without marking its outcome observed, so a failure nobody looked at
+  /// still reaches the zone.
+  @protected
+  Future<void> get whenDone => _done.future.then((_) {});
+
+  /// Runs the body. Throws [StateError] if the job already ran.
+  @protected
+  void start() {
+    if (_status != JobStatus.created) {
+      throw StateError('$this has already been added or run');
+    }
+    _status = JobStatus.running;
+    started();
+    _notifyStart();
+    unawaited(_execute(createContext()));
+  }
+
+  /// Ends the job with [outcome].
+  @protected
+  void finish(Outcome<T> outcome) {
+    _outcome = outcome;
+    _status = JobStatus.finished;
+    // A job cancelled before it started never went through `_markCancelled`,
+    // so `whenCancelled` is still open here.
+    if (outcome is Cancelled && !_cancelled.isCompleted) {
+      _cancelled.complete();
+    }
+    finished();
+    _notifyFinish();
+    _done.complete(outcome);
+    if (outcome is Failed && !_observed) {
+      _reportUnobserved(outcome);
+    }
+  }
+
+  /// Hands [error] to the observer alone.
+  ///
+  /// For an error that has an outcome of its own — the body's. It reaches
+  /// the zone through that outcome, if nobody observes it, and shouting
+  /// twice about one error is worse than once.
+  @protected
+  void notifyObserver(Object error, StackTrace stackTrace) {
+    _debug(() => '$this error: $error');
+    _notify(() => _observer?.onError(this, error, stackTrace));
+  }
+
+  /// Hands [error] to the observer, or to the zone when there is none.
+  ///
+  /// For the errors that have nowhere else to go: an action abandoned by
+  /// [JobContext.wait] failing later, a disposer, a callback of
+  /// [JobContext.onCancel]. Silence is the choice of whoever listens, not
+  /// the default of the package.
+  @protected
+  void notifyError(Object error, StackTrace stackTrace) {
+    final observer = _observer;
+    if (observer == null) {
+      _zone.handleUncaughtError(error, stackTrace);
+      return;
+    }
+    _debug(() => '$this error: $error');
+    _notify(() => observer.onError(this, error, stackTrace));
+  }
+
+  /// The subclass joins the run: `solo` adds the job to its running list.
+  @protected
+  void started() {}
+
+  /// The subclass leaves the run: `solo` clears `current` and pumps.
+  @protected
+  void finished() {}
+
+  /// The child's own word on who may adopt it. Empty here: [JobContext.run]
+  /// has already checked that the child is a job of this core.
+  @protected
+  void adoptedBy(JobContextBase parent) {}
+
+  /// The context this job hands to its body.
+  @protected
+  JobContextBase createContext();
+
+  /// Runs the body with [ctx]; a subclass narrows the type with
+  /// `covariant`.
+  @protected
+  Future<T> execute(JobContextBase ctx);
+
+  void _notifyStart() {
+    _debug(() => '$this started');
+    _notify(() => _observer?.onStart(this));
+  }
+
+  void _notifyFinish() {
+    _debug(() => '$this finished: $_outcome');
+    _notify(() => _observer?.onFinish(this));
+  }
+
+  void _notifyLog(String message) =>
+      _notify(() => _observer?.onLog(this, message));
+
+  Future<void> _execute(JobContextBase ctx) async {
+    Outcome<T> outcome;
+    try {
+      outcome = Done(await execute(ctx));
+    } on Cancelled catch (cancelled, stackTrace) {
+      outcome = _pendingCancel ?? _handlerCancel(cancelled, stackTrace);
+    } on Object catch (error, stackTrace) {
+      notifyObserver(error, stackTrace);
+      outcome = Failed(error, stackTrace);
+    }
+    await _awaitChildren();
+    finish(_pendingCancel ?? outcome);
+  }
+
+  /// The body threw [thrown] without being marked cancelled: either its own
+  /// `throw Cancelled(...)` or a child's cancellation via `child.value`.
+  Cancelled _handlerCancel(Cancelled thrown, StackTrace stackTrace) {
+    for (final child in _children) {
+      if (identical(child._outcome, thrown)) {
+        return Cancelled.by(
+          reason: CancelReason.handler,
+          started: true,
+          description: 'child ${child.key}: $thrown',
+          stackTrace: stackTrace,
+        );
+      }
+    }
+    return Cancelled.by(
+      reason: CancelReason.handler,
+      started: true,
+      description: thrown.description,
+      stackTrace: stackTrace,
+    );
+  }
+
+  Future<void> _awaitChildren() async {
+    while (true) {
+      // `whenDone`, not `done`: waiting for a child is the engine's
+      // business and must not mark the child observed for the parent.
+      final pending = [
+        for (final child in _children)
+          if (!child.isFinished) child.whenDone,
+      ];
+      if (pending.isEmpty) {
+        return;
+      }
+      await Future.wait(pending);
+    }
+  }
+
+  /// Hands an unobserved failure to the zone that created the job.
+  ///
+  /// One microtask of grace, the same as Dart gives an unhandled `Future`
+  /// error: a listener attached right after the job finished still counts.
+  void _reportUnobserved(Failed outcome) {
+    _zone.scheduleMicrotask(() {
+      if (_observed) {
+        return;
+      }
+      _debug(() => '$this failure went to the zone');
+      _zone.handleUncaughtError(outcome.error, outcome.stackTrace);
+    });
+  }
+
+  void _markCancelled(Cancelled cancelled) {
+    _pendingCancel = cancelled;
+    _cancelled.complete();
+    // In registration order, and from a copy: a callback may register or
+    // remove another one. `JobContext.onCancel` wraps the caller's
+    // callbacks, so an error of theirs never reaches this loop.
+    for (final callback in _onCancel.toList()) {
+      callback();
+    }
+    _onCancel.clear();
+  }
+
+  @override
+  String toString() {
+    final description = describe();
+    return description.isEmpty ? 'Job($key)' : 'Job($key: $description)';
+  }
+}
+
+final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
+    implements SoloJob<T> {
+  final SoloBase<S> _solo;
+  final Future<T> Function(SoloContext<S, W> ctx) _body;
+  final bool Function(W state)? _canStart;
+  final bool Function(W state)? _keepWhile;
+
+  _SoloJob(
+    this._solo,
+    this._body, {
+    required super.key,
+    required bool Function(W state)? canStart,
+    required bool Function(W state)? keepWhile,
+    required super.cancellable,
+    required super.describe,
+    required super.observer,
+  })  : _canStart = canStart,
+        _keepWhile = keepWhile;
+
+  @override
+  bool get isQueued => _solo._queue._jobs.contains(this);
+
   @override
   Future<void> cancel() {
     _solo._cancel(
@@ -227,9 +459,9 @@ final class _Job<S extends Object, W extends S, T> implements SoloJob<T> {
         stackTrace: StackTrace.current,
       ),
     );
-    // The engine's own waiting is not observation: `_done.future`, not
-    // `done`, so cancelling a job does not silence its failure.
-    return _done.future.then((_) {});
+    // The engine's own waiting is not observation, so cancelling a job does
+    // not silence its failure.
+    return whenDone;
   }
 
   /// A rejection description if [state] fails the start rules, else null.
@@ -256,109 +488,32 @@ final class _Job<S extends Object, W extends S, T> implements SoloJob<T> {
     return null;
   }
 
-  void _start(int level) {
-    _status = JobStatus.running;
-    this.level = level;
-    _solo._running.add(this);
-    _notifyStart();
-    unawaited(_execute(_JobContext<S, W, T>(this)));
-  }
-
-  Future<void> _execute(_JobContext<S, W, T> ctx) async {
-    Outcome<T> outcome;
-    try {
-      outcome = Done(await _body(ctx));
-    } on Cancelled catch (cancelled, stackTrace) {
-      outcome = _pendingCancel ?? _handlerCancel(cancelled, stackTrace);
-    } on Object catch (error, stackTrace) {
-      _notifyError(error, stackTrace);
-      outcome = Failed(error, stackTrace);
-    }
-    await _awaitChildren();
-    _finish(_pendingCancel ?? outcome);
-  }
-
-  /// The body threw [thrown] without being marked cancelled: either its own
-  /// `throw Cancelled(...)` or a child's cancellation via `child.value`.
-  Cancelled _handlerCancel(Cancelled thrown, StackTrace stackTrace) {
-    for (final child in _children) {
-      if (identical(child._outcome, thrown)) {
-        return Cancelled.by(
-          reason: CancelReason.handler,
-          started: true,
-          description: 'child ${child.key}: $thrown',
-          stackTrace: stackTrace,
-        );
-      }
-    }
-    return Cancelled.by(
-      reason: CancelReason.handler,
-      started: true,
-      description: thrown.description,
-      stackTrace: stackTrace,
-    );
-  }
-
-  Future<void> _awaitChildren() async {
-    while (true) {
-      // `_done.future`, not `done`: waiting for a child is the engine's
-      // business and must not mark the child observed for the parent.
-      final pending = [
-        for (final child in _children)
-          if (!child.isFinished) child._done.future,
-      ];
-      if (pending.isEmpty) {
-        return;
-      }
-      await Future.wait(pending);
-    }
-  }
-
-  void _finish(Outcome<T> outcome) {
-    _outcome = outcome;
-    _status = JobStatus.finished;
-    // A job cancelled before it started never went through `_markCancelled`,
-    // so `whenCancelled` is still open here.
-    if (outcome is Cancelled && !_cancelled.isCompleted) {
-      _cancelled.complete();
-    }
-    _solo._onJobFinished(this);
-    _notifyFinish();
-    _done.complete(outcome);
-    if (outcome is Failed && !_observed) {
-      _reportUnobserved(outcome);
-    }
-  }
-
-  /// Hands an unobserved failure to the zone that created the job.
-  ///
-  /// One microtask of grace, the same as Dart gives an unhandled `Future`
-  /// error: a listener attached right after the job finished still counts.
-  void _reportUnobserved(Failed outcome) {
-    _zone.scheduleMicrotask(() {
-      if (_observed) {
-        return;
-      }
-      SoloBase._debug(() => '$this failure went to the zone');
-      _zone.handleUncaughtError(outcome.error, outcome.stackTrace);
-    });
-  }
-
-  void _markCancelled(Cancelled cancelled) {
-    _pendingCancel = cancelled;
-    _cancelled.complete();
-    // In registration order, and from a copy: a callback may register or
-    // remove another one. `JobContext.onCancel` wraps the caller's
-    // callbacks, so an error of theirs never reaches this loop.
-    for (final callback in _onCancel.toList()) {
-      callback();
-    }
-    _onCancel.clear();
-  }
+  @override
+  void started() => _solo._running.add(this);
 
   @override
-  String toString() {
-    final description = describe();
-    return description.isEmpty ? 'Job($key)' : 'Job($key: $description)';
-  }
+  void finished() => _solo._onJobFinished(this);
+
+  @override
+  JobContextBase createContext() => _SoloContext<S, W, T>(this);
+
+  @override
+  Future<T> execute(covariant _SoloContext<S, W, T> ctx) => _body(ctx);
+
+  // The engine reaches a job from the side, and `@protected` holds only
+  // inside a subclass; these wrappers are how `SoloBase` and `_SoloQueue`
+  // touch it.
+  void _launch() => start();
+
+  void _drop(Outcome<T> outcome) => finish(outcome);
+
+  JobStatus get _jobStatus => status;
+
+  Cancelled? get _pending => pendingCancel;
+
+  bool get _isCancellable => cancellable;
+
+  List<JobBase<Object?>> get _childJobs => children;
+
+  Future<void> get _whenDone => whenDone;
 }

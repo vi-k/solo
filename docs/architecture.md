@@ -150,19 +150,23 @@ BLE-устройство, плеер, синхронизация), где сос
   `job`, `add`, `run`, `externalSetState`, `close`, защищённый `publish`,
   статические `observer` и `debug`. Это одна библиотека с частями
   (`part`): `outcome.dart`, `job.dart`, `job_context.dart`, `queue.dart`.
-  Части нужны потому, что реализации `_Job`, `_JobContext` и `_SoloQueue`
-  приватны и связаны с движком в обе стороны: он зовёт их приватные члены,
-  а они — его.
+  Части нужны потому, что основы ядра (`JobBase`, `JobContextBase`) и
+  наследники solo (`_SoloJob`, `_SoloContext`, `_SoloQueue`) связаны с
+  движком в обе стороны: он зовёт их члены, а они — его.
 - `outcome.dart` — `part`: `Outcome`, `Done`, `Failed`, `Cancelled` с
   публичными конструкторами `Cancelled([description])` и `Cancelled.by`,
   открытый класс `CancelReason` и `SoloCancelReason` с причинами solo.
-- `job.dart` — `part`: публичный `Job<T>` и внутренняя реализация `_Job`:
-  спека, жизненный цикл, дети, отмена, исход.
-- `job_context.dart` — `part`: `JobContext` ядра, `SoloContext<S, W>`
-  поверх него и реализация `_JobContext`:
-  `state`, `stateAs`, `emit`, `check`, `wait`, `join`, `uncancellable`,
-  `onCancel`, `run`, `log`, `job`.
-- `queue.dart` — `part`: `SoloQueue` и `_SoloQueue` поверх `List<_Job>`.
+- `job.dart` — `part`: публичные `Job<T>`, `SoloJob<T>` и `JobStatus`,
+  наследуемая основа ядра `JobBase<T>` (жизненный цикл, дети, отмена,
+  исход, зона, наблюдатель, канал `JobBase.debug`) и наследник solo
+  `_SoloJob` (контроллер, тело, правила, очередь, приватные обёртки для
+  движка).
+- `job_context.dart` — `part`: `JobContext` ядра (`check`, `wait`,
+  `join`, `uncancellable`, `onCancel`, `run`, `log`, `job`),
+  `SoloContext<S, W>` поверх него (`state`, `stateAs`, `emit`),
+  наследуемая основа `JobContextBase` и реализация solo `_SoloContext`.
+- `queue.dart` — `part`: `SoloQueue` и `_SoloQueue` поверх
+  `List<_SoloJob>`.
 - `solo.dart` — отдельная библиотека, `Solo<S>`: `stream` поверх `publish`.
 - `policy.dart` — отдельная библиотека, `Policy`.
 - `observer.dart` — отдельная библиотека, `SoloObserver`.

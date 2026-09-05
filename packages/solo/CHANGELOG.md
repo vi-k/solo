@@ -13,6 +13,13 @@
   the waiting family and children, without the state. `SoloContext`
   implements it and adds `state`, `stateAs` and `emit`. Job bodies do not
   write the name, so code written against the README keeps compiling.
+- The job and its context are split along the seam the kernel will be
+  taken out at: `JobBase<T>` and `JobContextBase` carry the lifecycle, the
+  waiting family, the children and the outcome, and the solo subclasses add
+  the state, the rules and the queue. Nothing moves in the public API of a
+  controller.
+- `JobBase.debug` traces the life of a job, `SoloBase.debug` the queue, the
+  state and the closing. Set both to follow both.
 - `JobObserver` is the observer of a single job: `onStart`, `onFinish`,
   `onError` and `onLog`, without the controller in the signatures. A
   controller feeds its own `SoloObserver` and its instance hooks from it,
