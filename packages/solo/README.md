@@ -296,12 +296,14 @@ Any policy other than `sequential` with `key == null` throws
 `ArgumentError`, not an `assert`: in release mode `null == null` is true
 and `replace` would wipe every keyless job in the queue.
 
-`ctx.emit` and `ctx.run` after the job has finished throw `StateError`. A
-context that leaked out of its job — captured by a closure nobody awaited —
-must not write the state outside the critical section. Reads (`state`,
-`stateAs`, `check`, `wait`) after a job that finished normally are
-allowed; after a cancelled one they still throw its `Cancelled`. `log`
-never throws.
+`ctx.emit`, `ctx.run`, `ctx.wait`, `ctx.join` and `ctx.uncancellable` after
+the job has finished throw `StateError`. A context that leaked out of its
+job — captured by a closure nobody awaited — must not write the state
+outside the critical section, and must not start work either: an action
+begun by a job that is over runs beside the job running now, counted by
+neither the queue nor `close()`. Reads (`state`, `stateAs`, `check`) after
+a job that finished normally are allowed; after a cancelled one they still
+throw its `Cancelled`. `log` never throws.
 
 `close()` awaited from inside the current job's body never completes: it
 waits for that very body. The same holds for `cancelAll()`. Cancel from the

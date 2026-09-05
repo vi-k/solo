@@ -3,8 +3,15 @@ part of 'solo_base.dart';
 /// What a job body sees: the state, narrowed to `W`, and the tools to change
 /// it, check for cancellation and run children.
 ///
-/// Every member except [log] and [job] throws the job's [Cancelled] once
-/// the job is marked cancelled.
+/// Every member except [log] and [job] refuses to run for a job already
+/// marked cancelled: it throws that [Cancelled]. What a cancellation
+/// arriving *during* a call does to that call is the call's own business —
+/// see [wait], [join] and [uncancellable].
+///
+/// A context that outlived its job — captured by a closure nobody awaited
+/// — neither writes nor starts anything: [emit], [run], [wait], [join] and
+/// [uncancellable] throw a [StateError] once the job has finished. Reading
+/// the state, [check] and [log] stay legal.
 abstract interface class JobContext<S extends Object, W extends S> {
   /// The current state. Throws [Cancelled] if the job is cancelled, if the
   /// state is not `W`, or if `keepWhile` returns `false`.
@@ -239,6 +246,7 @@ final class _JobContext<S extends Object, W extends S, R>
     FutureOr<T> Function() action, {
     FutureOr<void> Function(T value)? ifCancelled,
   }) async {
+    _throwIfFinished('join');
     _checkedState();
     final result = await action();
     try {
@@ -268,6 +276,7 @@ final class _JobContext<S extends Object, W extends S, R>
 
   @override
   Future<T> uncancellable<T>(FutureOr<T> Function() action) async {
+    _throwIfFinished('run an uncancellable action');
     _checkedState();
     final previous = _job.cancellable;
     _job.cancellable = false;
@@ -302,6 +311,7 @@ final class _JobContext<S extends Object, W extends S, R>
     FutureOr<T> Function() action, {
     FutureOr<void> Function(T value)? ifCancelled,
   }) async {
+    _throwIfFinished('wait');
     _checkedState();
     final result = action();
     if (result is! Future<T>) {
