@@ -8,6 +8,10 @@
   `CancelReason.manual`. `Cancelled.toString()` is unchanged.
 - `Cancelled.by({reason, started, description, stackTrace})` is public:
   an engine of a domain builds cancellations with a reason of its own.
+- `JobObserver` is the observer of a single job: `onStart`, `onFinish`,
+  `onError` and `onLog`, without the controller in the signatures. A
+  controller feeds its own `SoloObserver` and its instance hooks from it,
+  so nothing changes for a user of `solo`.
 - `isQueued` moves from `Job<T>` to the new `SoloJob<T>`, returned by
   `job`, `add` and `run`. The queue is the controller's, not the job's.
   `JobStatus` is public and has three values: a queued job is `created`

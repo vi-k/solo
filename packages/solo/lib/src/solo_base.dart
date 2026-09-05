@@ -3,6 +3,7 @@ import 'dart:collection';
 
 import 'package:meta/meta.dart';
 
+import 'job_observer.dart';
 import 'observer.dart';
 import 'policy.dart';
 
@@ -31,6 +32,9 @@ abstract class SoloBase<S extends Object> {
   Completer<void>? _closing;
   StackTrace? _closeStackTrace;
   late final _SoloQueue<S> _queue = _SoloQueue<S>(this);
+
+  /// The observer every job of this controller is given.
+  late final JobObserver _jobObserver = _SoloJobObserver<S>(this);
   _Job<S, S, Object?>? _current;
   final _running = <_Job<S, S, Object?>>[];
   StackTrace? _lastChange;
@@ -438,32 +442,9 @@ abstract class SoloBase<S extends Object> {
     }
     _running.remove(job);
     _debug(() => '$job finished: ${job.outcome}');
-    _callHook(() => observer?.onFinish(this, job));
-    _callHook(() => onFinish(job));
     if (wasCurrent) {
       _schedulePump();
     }
-  }
-
-  void _notifyStart(_Job<S, S, Object?> job) {
-    _debug(() => '$job started');
-    _callHook(() => observer?.onStart(this, job));
-    _callHook(() => onStart(job));
-  }
-
-  void _notifyError(
-    _Job<S, S, Object?> job,
-    Object error,
-    StackTrace stackTrace,
-  ) {
-    _debug(() => '$job error: $error');
-    _callHook(() => observer?.onError(this, job, error, stackTrace));
-    _callHook(() => onError(job, error, stackTrace));
-  }
-
-  void _notifyLog(_Job<S, S, Object?> job, String message) {
-    _callHook(() => observer?.onLog(this, job, message));
-    _callHook(() => onLog(job, message));
   }
 
   /// Schedules a pump so the caller finishes its synchronous part first:
@@ -513,5 +494,44 @@ abstract class SoloBase<S extends Object> {
     if (debug != null) {
       debug(message());
     }
+  }
+}
+
+/// Feeds the hooks of one job into [SoloObserver] and into the controller's
+/// own hooks, each call isolated on its own.
+///
+/// A throwing observer must not switch off the instance hook standing next
+/// to it, so the two calls are wrapped separately.
+final class _SoloJobObserver<S extends Object> implements JobObserver {
+  final SoloBase<S> _solo;
+
+  _SoloJobObserver(this._solo);
+
+  @override
+  void onStart(Job<Object?> job) {
+    SoloBase._debug(() => '$job started');
+    SoloBase._callHook(() => SoloBase.observer?.onStart(_solo, job));
+    SoloBase._callHook(() => _solo.onStart(job));
+  }
+
+  @override
+  void onFinish(Job<Object?> job) {
+    SoloBase._callHook(() => SoloBase.observer?.onFinish(_solo, job));
+    SoloBase._callHook(() => _solo.onFinish(job));
+  }
+
+  @override
+  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
+    SoloBase._debug(() => '$job error: $error');
+    SoloBase._callHook(
+      () => SoloBase.observer?.onError(_solo, job, error, stackTrace),
+    );
+    SoloBase._callHook(() => _solo.onError(job, error, stackTrace));
+  }
+
+  @override
+  void onLog(Job<Object?> job, String message) {
+    SoloBase._callHook(() => SoloBase.observer?.onLog(_solo, job, message));
+    SoloBase._callHook(() => _solo.onLog(job, message));
   }
 }

@@ -281,7 +281,7 @@ final class _JobContext<S extends Object, W extends S, R>
     try {
       await ifCancelled(value);
     } on Object catch (error, stackTrace) {
-      _solo._notifyError(_job, error, stackTrace);
+      _job._notifyError(error, stackTrace);
     }
   }
 
@@ -309,7 +309,7 @@ final class _JobContext<S extends Object, W extends S, R>
       try {
         callback();
       } on Object catch (error, stackTrace) {
-        _solo._notifyError(_job, error, stackTrace);
+        _job._notifyError(error, stackTrace);
       }
     }
 
@@ -362,7 +362,7 @@ final class _JobContext<S extends Object, W extends S, R>
         }
       } on Object catch (error, stackTrace) {
         if (completer.isCompleted) {
-          _solo._notifyError(_job, error, stackTrace);
+          _job._notifyError(error, stackTrace);
         } else {
           completer.completeError(error, stackTrace);
         }
@@ -421,5 +421,5 @@ final class _JobContext<S extends Object, W extends S, R>
   }
 
   @override
-  void log(Object? message) => _solo._notifyLog(_job, '$message');
+  void log(Object? message) => _job._notifyLog('$message');
 }

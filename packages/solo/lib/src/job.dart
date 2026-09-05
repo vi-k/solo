@@ -111,6 +111,7 @@ final class _Job<S extends Object, W extends S, T> implements SoloJob<T> {
   final bool Function(W state)? _canStart;
   final bool Function(W state)? _keepWhile;
   final String Function()? _describe;
+  final JobObserver? _observer;
   bool cancellable;
 
   @override
@@ -143,7 +144,30 @@ final class _Job<S extends Object, W extends S, T> implements SoloJob<T> {
     required String Function()? describe,
   })  : _canStart = canStart,
         _keepWhile = keepWhile,
-        _describe = describe;
+        _describe = describe,
+        _observer = _solo._jobObserver;
+
+  /// Calls [hook] and hands whatever it throws to the current zone.
+  ///
+  /// The observer of a job is a cross-cutting channel, like the hooks of a
+  /// controller: an error in it changes nothing else.
+  static void _notify(void Function() hook) {
+    try {
+      hook();
+    } on Object catch (error, stackTrace) {
+      Zone.current.handleUncaughtError(error, stackTrace);
+    }
+  }
+
+  void _notifyStart() => _notify(() => _observer?.onStart(this));
+
+  void _notifyFinish() => _notify(() => _observer?.onFinish(this));
+
+  void _notifyError(Object error, StackTrace stackTrace) =>
+      _notify(() => _observer?.onError(this, error, stackTrace));
+
+  void _notifyLog(String message) =>
+      _notify(() => _observer?.onLog(this, message));
 
   @override
   String describe() => _describe?.call() ?? '';
@@ -236,7 +260,7 @@ final class _Job<S extends Object, W extends S, T> implements SoloJob<T> {
     _status = JobStatus.running;
     this.level = level;
     _solo._running.add(this);
-    _solo._notifyStart(this);
+    _notifyStart();
     unawaited(_execute(_JobContext<S, W, T>(this)));
   }
 
@@ -247,7 +271,7 @@ final class _Job<S extends Object, W extends S, T> implements SoloJob<T> {
     } on Cancelled catch (cancelled, stackTrace) {
       outcome = _pendingCancel ?? _handlerCancel(cancelled, stackTrace);
     } on Object catch (error, stackTrace) {
-      _solo._notifyError(this, error, stackTrace);
+      _notifyError(error, stackTrace);
       outcome = Failed(error, stackTrace);
     }
     await _awaitChildren();
@@ -299,6 +323,7 @@ final class _Job<S extends Object, W extends S, T> implements SoloJob<T> {
       _cancelled.complete();
     }
     _solo._onJobFinished(this);
+    _notifyFinish();
     _done.complete(outcome);
     if (outcome is Failed && !_observed) {
       _reportUnobserved(outcome);

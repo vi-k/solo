@@ -301,6 +301,25 @@ void main() {
     ]);
   });
 
+  test('the observer sees start, log, error and finish in order', () {
+    runSolo((solo, journal, async) {
+      solo.run<TestState, void>(
+        key: 'job',
+        (ctx) async {
+          ctx.log('hello');
+          throw StateError('boom');
+        },
+      ).ignore();
+      async.flushTimers();
+      expect(journal.take(), [
+        '[job] started',
+        '[job] log hello',
+        '[job] error Bad state: boom',
+        '[job] finished Failed(Bad state: boom)',
+      ]);
+    });
+  });
+
   test('SoloBase.debug receives engine traces', () {
     final traces = <String>[];
     SoloBase.debug = traces.add;
