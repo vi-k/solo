@@ -1,4 +1,4 @@
-import 'solo_base.dart';
+import 'job_base.dart';
 
 /// Cross-cutting hooks of a single job: analytics, error reporting, a log.
 ///

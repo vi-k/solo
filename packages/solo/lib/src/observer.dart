@@ -1,3 +1,5 @@
+import 'package:jobs/jobs.dart';
+
 import 'solo_base.dart';
 
 /// Cross-cutting hooks for every controller: analytics, error reporting, a

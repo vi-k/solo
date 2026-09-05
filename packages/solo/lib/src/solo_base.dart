@@ -1,13 +1,13 @@
 import 'dart:async';
 import 'dart:collection';
 
+import 'package:jobs/jobs.dart';
 import 'package:meta/meta.dart';
 
-import 'job_observer.dart';
 import 'observer.dart';
 import 'policy.dart';
+import 'solo_cancel_reason.dart';
 
-part 'outcome.dart';
 part 'job.dart';
 part 'job_context.dart';
 part 'queue.dart';

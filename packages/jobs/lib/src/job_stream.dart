@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'solo_base.dart';
+import 'job_base.dart';
 
 /// [JobContext] and a stream: following one for as long as the job lives.
 extension JobStream on JobContext {

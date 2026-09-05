@@ -9,7 +9,13 @@ environment:
   sdk: ^3.6.0
 
 dependencies:
+  jobs: ^0.1.0
   meta: ^1.15.0
+
+# Until `jobs` is published; the same shape `flutter_solo` uses for `solo`.
+dependency_overrides:
+  jobs:
+    path: ../jobs
 
 dev_dependencies:
   fake_async: ^1.3.1

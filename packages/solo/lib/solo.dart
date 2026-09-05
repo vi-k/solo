@@ -2,9 +2,10 @@
 /// declarative rules and cooperative cancellation.
 library;
 
-export 'src/job_observer.dart';
-export 'src/job_stream.dart';
+export 'package:jobs/jobs.dart';
+
 export 'src/observer.dart';
 export 'src/policy.dart';
 export 'src/solo.dart';
 export 'src/solo_base.dart';
+export 'src/solo_cancel_reason.dart';

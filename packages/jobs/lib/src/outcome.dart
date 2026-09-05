@@ -1,4 +1,4 @@
-part of 'solo_base.dart';
+part of 'job_base.dart';
 
 /// Why a job was cancelled.
 ///
@@ -9,8 +9,8 @@ part of 'solo_base.dart';
 /// value the engine branches on.
 @immutable
 final class CancelReason {
-  /// [Job.cancel], [SoloQueue.remove], [SoloQueue.clear], or a duplicate
-  /// dropped by [Policy.droppable].
+  /// [Job.cancel], or an engine dropping a job of its own accord — a
+  /// queue clearing itself, a duplicate a policy turned away.
   static const manual = CancelReason('manual');
 
   /// Cascade from a cancelled parent job.
@@ -35,17 +35,6 @@ final class CancelReason {
   String toString() => name;
 }
 
-/// The reasons `solo` adds to the core ones.
-final class SoloCancelReason {
-  /// `canStart`, `state is! W`, `keepWhile`, or [SoloContext.stateAs].
-  static const rules = CancelReason('rules');
-
-  /// [SoloBase.close], or [SoloBase.add] after close.
-  static const closed = CancelReason('closed');
-
-  const SoloCancelReason._();
-}
-
 /// The result of a job: [Done], [Failed] or [Cancelled].
 ///
 /// [Failed] and [Cancelled] extend `Outcome<Never>`, so a `switch` over
@@ -68,9 +57,9 @@ final class Done<T> extends Outcome<T> {
 
 /// The job body threw [error].
 ///
-/// The engine reports it to [SoloBase.onError] and [SoloObserver.onError]
-/// first. If nobody then observes the job — no [Job.done], no [Job.value],
-/// no [Job.ignore] — the engine hands [error] to the zone the job was
+/// The engine hands it to [JobObserver.onError] first. If nobody then
+/// observes the job — no [Job.done], no [Job.value], no [Job.ignore] — it
+/// hands [error] to the zone the job was
 /// created in, through [Zone.handleUncaughtError], one microtask after the
 /// job finished. This is what Dart does with an unhandled [Future] error.
 ///
@@ -104,8 +93,9 @@ final class Cancelled extends Outcome<Never> implements Exception {
   /// `false` when the job was dropped from the queue before it started.
   final bool started;
 
-  /// Details within [reason]: `'is not Ready'`, `'canStart'`,
-  /// `'keepWhile'`, `'duplicate'`, or the text passed by the body.
+  /// Details within [reason]: the text passed by the body, or whatever an
+  /// engine of a domain writes there — `'is not Ready'`, `'canStart'`,
+  /// `'keepWhile'`, `'duplicate'` in `solo`.
   final String? description;
 
   /// Where the cancellation came from, not where the body died.
