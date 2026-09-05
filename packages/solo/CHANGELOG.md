@@ -1,5 +1,10 @@
 ## 0.2.0
 
+- The job kernel now lives in `package:jobs` and is re-exported whole:
+  `package:solo/solo.dart` stays the only import, and no code written
+  against the README needs to change. What moved is the job itself — its
+  lifecycle, its context, the outcomes and the observer; what stayed is
+  the state, the queue and the rules.
 - `CancelReason` is a class, not an enum: an engine built on the job
   kernel declares reasons of its own, and reasons are equal by name.
   `CancelReason.rules` and `CancelReason.closed` move to

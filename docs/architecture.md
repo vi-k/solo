@@ -135,7 +135,11 @@ BLE-устройство, плеер, синхронизация), где сос
 `README.ru.md` — перевод README пакета `solo`.
 Пакеты в `packages/`:
 
-- `packages/solo` — ядро, чистый Dart, со своим `example/`.
+- `packages/jobs` — исполнительное ядро задачи, чистый Dart: задача,
+  контекст, исходы, дети, наблюдатель. Ни состояния, ни очереди, ни правил.
+- `packages/solo` — состояние, очередь и правила поверх `jobs`, со своим
+  `example/`. Реэкспортирует `jobs` целиком, поэтому
+  `package:solo/solo.dart` остаётся единственным импортом.
 - `packages/flutter_solo` — Flutter-интеграция.
 
 Каждый пакет самодостаточен для pub.dev: свои `pubspec.yaml`, `LICENSE`,
@@ -143,7 +147,25 @@ BLE-устройство, плеер, синхронизация), где сос
 
 ## Карта модулей
 
-`packages/solo/lib/solo.dart` экспортирует всё публичное.
+`packages/jobs/lib/jobs.dart` экспортирует всё публичное у ядра.
+`packages/jobs/lib/src/`:
+
+- `job_base.dart` — библиотека с частями (`part`): `outcome.dart`,
+  `job_context.dart`. Держит `Job<T>` с фабрикой и `Job.deferred`,
+  `DeferredJob<T>`, `JobStatus`, наследуемую основу `JobBase<T>` и
+  реализации ядра `_Job`, `_AutoJob`, `_DeferredJob`. Части нужны потому,
+  что `JobContextBase` зовёт защищённые члены задачи, не будучи её
+  наследником.
+- `outcome.dart` — `part`: `Outcome`, `Done`, `Failed`, `Cancelled` с
+  публичными конструкторами `Cancelled([description])` и `Cancelled.by`,
+  открытый класс `CancelReason` с причинами ядра.
+- `job_context.dart` — `part`: интерфейс `JobContext`, наследуемая основа
+  `JobContextBase` и контекст ядра `_CoreContext`.
+- `observer.dart` — отдельная библиотека, `JobObserver`.
+- `job_stream.dart` — отдельная библиотека, extension `JobStream` с `each`.
+
+`packages/solo/lib/solo.dart` реэкспортирует `package:jobs/jobs.dart` и
+экспортирует всё публичное у solo.
 `packages/solo/lib/src/`:
 
 - `solo_base.dart` — `SoloBase<S>`: состояние, цикл прокачки очереди, хуки,
@@ -179,6 +201,9 @@ ValueListenable<S>` со своими тестами.
 
 ## Границы
 
+- Ядро (`jobs`) не знает ни про состояние, ни про очередь, ни про правила:
+  всё это живёт в наследниках `JobBase` и `JobContextBase` у solo. А solo
+  не переписывает жизненный цикл задачи — он его наследует.
 - Никаких зависимостей на Flutter в ядре. Всё, что требует Flutter, живёт в
   `flutter_solo`. Наружу только чтение и подписка, `ValueListenable`, не
   `ValueNotifier`: сеттер состояния был бы дырой в гарантии владения.

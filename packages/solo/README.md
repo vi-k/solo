@@ -26,6 +26,11 @@ takes eight scenarios from different domains, solves each one in bloc
 first — the workaround an experienced team would actually write — and then
 in `solo`.
 
+The job itself — its lifecycle, its context, the outcomes and the
+observer — lives in [jobs](https://pub.dev/packages/jobs), and `solo` adds
+the state, the queue and the rules on top. The package re-exports it
+whole, so `package:solo/solo.dart` is the only import you need.
+
 ## Install
 
 ```sh
