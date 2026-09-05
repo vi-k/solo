@@ -279,6 +279,11 @@ that emits itself out of `W` must not touch `ctx` again: emit that state
 as the last statement of the body, or the job ends with
 `Cancelled(rules, 'is not W')` on its next read.
 
+That check is about the job's own rules. A cancellation that arrives from
+inside the write itself — a hook or a listener setting the state again, a
+parent going down and taking this job with it — is thrown by `emit` on the
+way out, so the body never walks past it.
+
 `ctx.run(child)` returns a handle, not a value. `await ctx.run(child).value`
 throws into the parent; `switch (await ctx.run(child).done)` does not. A
 forgotten `await` breaks nothing: the parent waits for its children in any

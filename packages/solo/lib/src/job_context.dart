@@ -23,6 +23,12 @@ abstract interface class JobContext<S extends Object, W extends S> {
 
   /// Sets the controller state. The new state is not checked against this
   /// job's rules; other running jobs are re-evaluated.
+  ///
+  /// A checkpoint on both sides. It throws the job's [Cancelled] before the
+  /// write, as every member does, and again after it if the write cancelled
+  /// this job on the way: hooks, observers and listeners run inside it and
+  /// may set the state again, and a parent that goes down there takes its
+  /// children with it.
   void emit(S next);
 
   /// Reads [state] and discards it: gives up if the job was cancelled or
@@ -234,6 +240,11 @@ final class _JobContext<S extends Object, W extends S, R>
     _throwIfCancelled();
     SoloBase._debug(() => '$_job emit: $next');
     _solo._setState(next, emitter: _job, stackTrace: StackTrace.current);
+    // The write is a checkpoint on both sides: hooks, observers and
+    // listeners run inside `_setState` and may cancel this job — through a
+    // reentrant `externalSetState` or through a parent going down with it.
+    // The body must not walk past that.
+    _throwIfCancelled();
   }
 
   @override
