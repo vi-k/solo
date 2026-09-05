@@ -28,6 +28,10 @@ PAIRS = [
         REPO / "packages" / "solo" / "README.ru.md",
     ),
     (
+        REPO / "packages" / "jobs" / "README.md",
+        REPO / "packages" / "jobs" / "README.ru.md",
+    ),
+    (
         REPO / "packages" / "flutter_solo" / "README.md",
         REPO / "packages" / "flutter_solo" / "README.ru.md",
     ),
