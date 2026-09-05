@@ -121,6 +121,7 @@ abstract class JobBase<T> implements Job<T> {
 
   final Object? _key;
   final String Function()? _describe;
+  final FutureOr<void> Function(T value)? _ifCancelled;
 
   /// Not final: a child created without one inherits the parent's
   /// observer when it is adopted.
@@ -149,10 +150,12 @@ abstract class JobBase<T> implements Job<T> {
     Object? key,
     String Function()? describe,
     bool cancellable = true,
+    FutureOr<void> Function(T value)? ifCancelled,
     JobObserver? observer,
   })  : _key = key,
         _describe = describe,
         _cancellable = cancellable,
+        _ifCancelled = ifCancelled,
         _observer = observer;
 
   static void _debug(String Function() message) {
@@ -419,6 +422,18 @@ abstract class JobBase<T> implements Job<T> {
       outcome = Failed(error, stackTrace);
     }
     await _awaitChildren();
+    // The window the body cannot close: between its `return` and the
+    // engine's decision the job is still alive — it waits for its children
+    // — and a cancellation arriving there beats a value already computed.
+    // Children first: they may still be using it.
+    final disposer = _ifCancelled;
+    if (disposer != null && _pendingCancel != null && outcome is Done<T>) {
+      try {
+        await disposer(outcome.value);
+      } on Object catch (error, stackTrace) {
+        notifyError(error, stackTrace);
+      }
+    }
     finish(_pendingCancel ?? outcome);
   }
 
@@ -506,6 +521,7 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     required bool Function(W state)? keepWhile,
     required super.cancellable,
     required super.describe,
+    required super.ifCancelled,
     required super.observer,
   })  : _canStart = canStart,
         _keepWhile = keepWhile;

@@ -18,6 +18,10 @@
   waiting family, the children and the outcome, and the solo subclasses add
   the state, the rules and the queue. Nothing moves in the public API of a
   controller.
+- `job(...)` and `run(...)` take `ifCancelled`: the value a body returned
+  after its cancellation had already arrived goes there instead of being
+  dropped. The outcome stays the cancellation, and `close` waits for the
+  disposer.
 - A job says who may adopt it: `ctx.run(child)` refuses a job of another
   controller with `ArgumentError` and a job still waiting in the queue with
   `StateError`, and a job of `solo` is refused by a context of the bare

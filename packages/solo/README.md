@@ -186,7 +186,14 @@ Job<void> seek(Duration position) => run<Ready, void>(
     );
 ```
 
-**Taking ownership.** A cancellation throws inside the context call, so a
+**Taking ownership.** `job(...)` and `run(...)` take `ifCancelled` too, for
+the value the body returned after the cancellation had already arrived:
+between the `return` and the outcome the job is still alive — it waits for
+its children — and a cancellation landing there wins. The outcome is the
+cancellation all the same; the value goes to the disposer instead of on the
+floor, and `close()` waits for it.
+
+A cancellation throws inside the context call, so a
 value the call was about to hand over never reaches the body: `join` drops
 it, `wait` never had it in the first place. Both take `ifCancelled` for
 exactly that value — a connection, a file, a subscription that would

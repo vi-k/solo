@@ -79,6 +79,14 @@ abstract class SoloBase<S extends Object> {
   /// Creates a job without queueing it. Use for job factories such as
   /// `_closeCameraJob()` that are added or run as children later.
   ///
+  /// [ifCancelled] catches a value the body returned after the job was
+  /// cancelled: the outcome is the cancellation all the same, but a
+  /// resource built on the way out still gets released. It runs outside the
+  /// body — neither `onCancel` nor `uncancellable` reach it — and the
+  /// engine waits for it, so `close` waits too. Keep it short and
+  /// unconditional; a disposer that hangs holds the job, the queue and the
+  /// closing.
+  ///
   /// `canStart` is checked once, when the job is taken from the queue;
   /// `keepWhile` is checked at start, on every state change while the job
   /// runs, and on every read through the context. `cancellable: false`
@@ -92,6 +100,7 @@ abstract class SoloBase<S extends Object> {
     bool Function(W state)? canStart,
     bool Function(W state)? keepWhile,
     bool cancellable = true,
+    FutureOr<void> Function(T value)? ifCancelled,
     String Function()? describe,
   }) =>
       _SoloJob<S, W, T>(
@@ -101,6 +110,7 @@ abstract class SoloBase<S extends Object> {
         canStart: canStart,
         keepWhile: keepWhile,
         cancellable: cancellable,
+        ifCancelled: ifCancelled,
         describe: describe,
         observer: _jobObserver,
       );
@@ -174,6 +184,7 @@ abstract class SoloBase<S extends Object> {
     bool Function(W state)? canStart,
     bool Function(W state)? keepWhile,
     bool cancellable = true,
+    FutureOr<void> Function(T value)? ifCancelled,
     String Function()? describe,
     Policy policy = Policy.sequential,
   }) =>
@@ -184,6 +195,7 @@ abstract class SoloBase<S extends Object> {
           canStart: canStart,
           keepWhile: keepWhile,
           cancellable: cancellable,
+          ifCancelled: ifCancelled,
           describe: describe,
         ),
         policy: policy,
