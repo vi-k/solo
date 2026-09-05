@@ -138,4 +138,21 @@ void main() {
       expect(job.outcome, isA<Cancelled>());
     });
   });
+
+  test('cancel of a queued job that is not cancellable is refused', () {
+    runSolo((solo, journal, async) {
+      solo.run<TestState, void>(key: 'first', (ctx) => pause(ctx, 100));
+      final queued = solo.run<TestState, void>(
+        key: 'second',
+        cancellable: false,
+        (ctx) async {},
+      );
+      queued.cancel().ignore();
+      async.elapse(const Duration(milliseconds: 10));
+      expect(queued.isQueued, isTrue, reason: 'the refusal keeps it queued');
+      expect(queued.outcome, isNull);
+      async.flushTimers();
+      expect(queued.outcome, isA<Done<void>>());
+    });
+  });
 }

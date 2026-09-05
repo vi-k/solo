@@ -222,6 +222,67 @@ abstract class JobBase<T> implements Job<T> {
   @override
   Future<void> get whenCancelled => _cancelled.future;
 
+  @override
+  Future<void> cancel() {
+    cancelWith(
+      Cancelled.by(
+        reason: CancelReason.manual,
+        started: true,
+        stackTrace: StackTrace.current,
+      ),
+    );
+    // The engine's own waiting is not observation, so cancelling a job does
+    // not silence its failure.
+    return whenDone;
+  }
+
+  /// Cancels the job with [cancelled], correcting `started` to its status.
+  ///
+  /// Idempotent. [rejectable] is what a job created with
+  /// `cancellable: false` may refuse; the rules of a domain pass `false`,
+  /// and a refusal is final — nothing is replayed later. Virtual: `solo`
+  /// adds the branch for a job still waiting in its queue.
+  @protected
+  void cancelWith(Cancelled cancelled, {bool rejectable = true}) {
+    Cancelled withStarted(bool started) => cancelled.started == started
+        ? cancelled
+        : Cancelled.by(
+            reason: cancelled.reason,
+            started: started,
+            description: cancelled.description,
+            stackTrace: cancelled.stackTrace,
+          );
+    switch (_status) {
+      case JobStatus.finished:
+        return;
+      case JobStatus.created:
+        _debug(() => 'cancel $this before start: $cancelled');
+        finish(withStarted(false));
+      case JobStatus.running:
+        if (_pendingCancel != null) {
+          return;
+        }
+        if (!_cancellable && rejectable) {
+          _debug(() => 'cancel $this: not cancellable');
+          return;
+        }
+        final marked = withStarted(true);
+        _debug(() => 'cancel $this: $marked');
+        // Children first, deepest last started first, and the cascade is
+        // rejectable: a child of its own mind refuses it.
+        for (final child in _children.reversed.toList()) {
+          child.cancelWith(
+            Cancelled.by(
+              reason: CancelReason.parent,
+              started: true,
+              stackTrace: marked.stackTrace,
+            ),
+          );
+        }
+        _markCancelled(marked);
+    }
+  }
+
   /// Where the job is in its life.
   @protected
   JobStatus get status => _status;
@@ -450,18 +511,16 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   bool get isQueued => _solo._queue._jobs.contains(this);
 
   @override
-  Future<void> cancel() {
-    _solo._cancel(
-      this,
-      Cancelled.by(
-        reason: CancelReason.manual,
-        started: true,
-        stackTrace: StackTrace.current,
-      ),
-    );
-    // The engine's own waiting is not observation, so cancelling a job does
-    // not silence its failure.
-    return whenDone;
+  void cancelWith(Cancelled cancelled, {bool rejectable = true}) {
+    if (_solo._queue._jobs.contains(this)) {
+      if (!cancellable && rejectable) {
+        SoloBase._debug(() => 'remove $this: not cancellable');
+        return;
+      }
+      SoloBase._debug(() => 'remove $this: $cancelled');
+      _solo._queue._jobs.remove(this);
+    }
+    super.cancelWith(cancelled, rejectable: rejectable);
   }
 
   /// A rejection description if [state] fails the start rules, else null.
@@ -507,13 +566,12 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
 
   void _drop(Outcome<T> outcome) => finish(outcome);
 
+  void _cancelWith(Cancelled cancelled, {bool rejectable = true}) =>
+      cancelWith(cancelled, rejectable: rejectable);
+
   JobStatus get _jobStatus => status;
 
-  Cancelled? get _pending => pendingCancel;
-
   bool get _isCancellable => cancellable;
-
-  List<JobBase<Object?>> get _childJobs => children;
 
   Future<void> get _whenDone => whenDone;
 }

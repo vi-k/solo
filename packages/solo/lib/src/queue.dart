@@ -32,10 +32,7 @@ abstract interface class SoloQueue {
 }
 
 final class _SoloQueue<S extends Object> implements SoloQueue {
-  final SoloBase<S> _solo;
   final _jobs = <_SoloJob<S, S, Object?>>[];
-
-  _SoloQueue(this._solo);
 
   @override
   Iterable<Job<Object?>> get jobs => UnmodifiableListView(_jobs);
@@ -55,17 +52,17 @@ final class _SoloQueue<S extends Object> implements SoloQueue {
       return false;
     }
     if (!force && !job._isCancellable) {
-      SoloBase._debug(() => 'remove $job: not cancellable');
+      // The job answers this itself too; the queue asks first because it
+      // has to say whether it removed anything.
       return false;
     }
-    _solo._cancel(
-      job,
+    job._cancelWith(
       Cancelled.by(
         reason: CancelReason.manual,
         started: false,
         stackTrace: StackTrace.current,
       ),
-      force: force,
+      rejectable: !force,
     );
     return true;
   }

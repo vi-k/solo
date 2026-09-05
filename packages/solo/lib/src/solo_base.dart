@@ -31,7 +31,7 @@ abstract class SoloBase<S extends Object> {
   S _state;
   Completer<void>? _closing;
   StackTrace? _closeStackTrace;
-  late final _SoloQueue<S> _queue = _SoloQueue<S>(this);
+  final _queue = _SoloQueue<S>();
 
   /// The observer every job of this controller is given.
   late final JobObserver _jobObserver = _SoloJobObserver<S>(this);
@@ -257,8 +257,8 @@ abstract class SoloBase<S extends Object> {
       // idle.
       scheduleMicrotask(() => _finishClose(completer));
     } else {
-      _cancel(
-        current,
+      // Rejectable on purpose: `close` waits for a job that refuses.
+      current._cancelWith(
         Cancelled.by(
           reason: SoloCancelReason.closed,
           started: true,
@@ -369,70 +369,17 @@ abstract class SoloBase<S extends Object> {
       }
       final rejection = job._rejectKeep(_state);
       if (rejection != null) {
-        _cancel(
-          job,
+        // A rule of the job's own: it may not refuse this one.
+        job._cancelWith(
           Cancelled.by(
             reason: SoloCancelReason.rules,
             started: true,
             description: rejection,
             stackTrace: stackTrace,
           ),
+          rejectable: false,
         );
       }
-    }
-  }
-
-  /// Cancels [job] with [cancelled]; `started` is corrected to the job's
-  /// status. Idempotent. [force] lets a queued `cancellable: false` job go.
-  void _cancel(
-    _SoloJob<S, S, Object?> job,
-    Cancelled cancelled, {
-    bool force = false,
-  }) {
-    Cancelled withStarted(bool started) => cancelled.started == started
-        ? cancelled
-        : Cancelled.by(
-            reason: cancelled.reason,
-            started: started,
-            description: cancelled.description,
-            stackTrace: cancelled.stackTrace,
-          );
-    switch (job._jobStatus) {
-      case JobStatus.finished:
-        return;
-      case JobStatus.created:
-        if (_queue._jobs.contains(job)) {
-          if (!job._isCancellable && !force) {
-            _debug(() => 'cancel $job: not cancellable');
-            return;
-          }
-          _debug(() => 'remove $job: $cancelled');
-          _queue._jobs.remove(job);
-        } else {
-          _debug(() => 'cancel $job before add: $cancelled');
-        }
-        job._drop(withStarted(false));
-      case JobStatus.running:
-        if (job._pending != null) {
-          return;
-        }
-        if (!job._isCancellable && cancelled.reason != SoloCancelReason.rules) {
-          _debug(() => 'cancel $job: not cancellable');
-          return;
-        }
-        final marked = withStarted(true);
-        _debug(() => 'cancel $job: $marked');
-        for (final child in job._childJobs.reversed.toList()) {
-          _cancel(
-            child as _SoloJob<S, S, Object?>,
-            Cancelled.by(
-              reason: CancelReason.parent,
-              started: true,
-              stackTrace: marked.stackTrace,
-            ),
-          );
-        }
-        job._markCancelled(marked);
     }
   }
 

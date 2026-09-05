@@ -241,7 +241,8 @@ abstract class JobContextBase implements JobContext {
   /// a domain come here, and they cancel a job whatever `cancellable`
   /// says.
   @protected
-  void cancelOwnJob(Cancelled cancelled);
+  void cancelOwnJob(Cancelled cancelled) =>
+      _owner.cancelWith(cancelled, rejectable: false);
 
   /// Whether the job accepts a cancellation it may refuse.
   ///
@@ -403,9 +404,7 @@ abstract class JobContextBase implements JobContext {
     _owner.children.add(child);
     final pending = _owner.pendingCancel;
     if (pending != null) {
-      // The child is still `created`, so ending it is all a cancellation
-      // would do here anyway.
-      child.finish(
+      child.cancelWith(
         Cancelled.by(
           reason: CancelReason.parent,
           started: false,
@@ -486,9 +485,6 @@ final class _SoloContext<S extends Object, W extends S, R>
     // The body must not walk past that.
     throwIfCancelled();
   }
-
-  @override
-  void cancelOwnJob(Cancelled cancelled) => _solo._cancel(_job, cancelled);
 
   @override
   Cancelled? beforeChildStart(JobBase<Object?> child) {
