@@ -93,12 +93,16 @@ void main() {
   test('a child that is not cancellable refuses the cascade', () {
     fakeAsync((async) {
       late final Job<void> child;
+      var childEndedAt = Duration.zero;
       final parent = Job<void>((ctx) async {
         child = ctx.run(
           Job.deferred<void>(
             key: 'child',
             cancellable: false,
-            (ctx) => ctx.wait(() => delay(50)),
+            (ctx) async {
+              await ctx.wait(() => delay(50));
+              childEndedAt = async.elapsed;
+            },
           ),
         );
         await ctx.wait(() => delay(100));
@@ -107,7 +111,11 @@ void main() {
       parent.cancel().ignore();
       async.flushTimers();
       expect(child.outcome, isA<Done<void>>());
-      expect(async.elapsed.inMilliseconds, greaterThanOrEqualTo(50));
+      expect(
+        childEndedAt.inMilliseconds,
+        50,
+        reason: 'it ran its own course, cascade or no cascade',
+      );
     });
   });
 

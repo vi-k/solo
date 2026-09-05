@@ -72,17 +72,46 @@ void main() {
     });
   });
 
-  test('wait throws up front for a job already cancelled', () {
+  test('every member throws up front once the job is marked', () {
     fakeAsync((async) {
+      final thrown = <Object>[];
       var began = false;
       final job = Job<void>((ctx) async {
-        await ctx.wait(() => delay(10));
-        await ctx.wait(() async => began = true);
+        try {
+          await ctx.wait(() => delay(10));
+        } on Cancelled {
+          // Caught on purpose: the body now asks the context again, and
+          // that is the path this test is about — the entry, not the
+          // waiting that was cut short above.
+        }
+        for (final call in <Future<void> Function()>[
+          () => ctx.wait(() async => began = true),
+          () => ctx.join(() async => began = true),
+          () => ctx.uncancellable(() async => began = true),
+        ]) {
+          try {
+            await call();
+          } on Object catch (error) {
+            thrown.add(error);
+          }
+        }
+        for (final call in <void Function()>[
+          () => ctx.onCancel(() {}),
+          ctx.check,
+        ]) {
+          try {
+            call();
+          } on Object catch (error) {
+            thrown.add(error);
+          }
+        }
       });
       async.elapse(const Duration(milliseconds: 5));
       job.cancel().ignore();
       async.flushTimers();
-      expect(began, isFalse);
+      expect(began, isFalse, reason: 'not one of them began its action');
+      expect(thrown, hasLength(5));
+      expect(thrown, everyElement(isA<Cancelled>()));
     });
   });
 
@@ -135,20 +164,6 @@ void main() {
       async.flushTimers();
       expect(closed, ['db']);
       expect(job.outcome, isA<Cancelled>());
-    });
-  });
-
-  test('uncancellable throws up front for a job already cancelled', () {
-    fakeAsync((async) {
-      var began = false;
-      final job = Job<void>((ctx) async {
-        await ctx.wait(() => delay(10));
-        await ctx.uncancellable(() async => began = true);
-      });
-      async.elapse(const Duration(milliseconds: 5));
-      job.cancel().ignore();
-      async.flushTimers();
-      expect(began, isFalse);
     });
   });
 
