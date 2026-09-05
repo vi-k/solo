@@ -178,7 +178,7 @@ final class _Job<S extends Object, W extends S, T> implements Job<T> {
   Future<void> cancel() {
     _solo._cancel(
       this,
-      Cancelled._(
+      Cancelled.by(
         reason: CancelReason.manual,
         started: true,
         stackTrace: StackTrace.current,
@@ -240,7 +240,7 @@ final class _Job<S extends Object, W extends S, T> implements Job<T> {
   Cancelled _handlerCancel(Cancelled thrown, StackTrace stackTrace) {
     for (final child in _children) {
       if (identical(child._outcome, thrown)) {
-        return Cancelled._(
+        return Cancelled.by(
           reason: CancelReason.handler,
           started: true,
           description: 'child ${child.key}: $thrown',
@@ -248,7 +248,7 @@ final class _Job<S extends Object, W extends S, T> implements Job<T> {
         );
       }
     }
-    return Cancelled._(
+    return Cancelled.by(
       reason: CancelReason.handler,
       started: true,
       description: thrown.description,

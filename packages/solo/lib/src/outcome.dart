@@ -1,22 +1,49 @@
 part of 'solo_base.dart';
 
 /// Why a job was cancelled.
-enum CancelReason {
+///
+/// Not an enum: an engine built on the core declares reasons of its own,
+/// and an enum cannot be extended from another package. Reasons are equal
+/// by [name], so a reason declared elsewhere with the same name is the
+/// same reason here — a label for the journal and the observer, never a
+/// value the engine branches on.
+@immutable
+final class CancelReason {
   /// [Job.cancel], [SoloQueue.remove], [SoloQueue.clear], or a duplicate
   /// dropped by [Policy.droppable].
-  manual,
-
-  /// `canStart`, `state is! W`, `keepWhile`, or [JobContext.stateAs].
-  rules,
-
-  /// [SoloBase.close], or [SoloBase.add] after close.
-  closed,
+  static const manual = CancelReason('manual');
 
   /// Cascade from a cancelled parent job.
-  parent,
+  static const parent = CancelReason('parent');
 
   /// The job body threw `Cancelled` itself.
-  handler,
+  static const handler = CancelReason('handler');
+
+  /// The label of this reason.
+  final String name;
+
+  /// Creates a reason called [name].
+  const CancelReason(this.name);
+
+  @override
+  bool operator ==(Object other) => other is CancelReason && name == other.name;
+
+  @override
+  int get hashCode => name.hashCode;
+
+  @override
+  String toString() => name;
+}
+
+/// The reasons `solo` adds to the core ones.
+final class SoloCancelReason {
+  /// `canStart`, `state is! W`, `keepWhile`, or [JobContext.stateAs].
+  static const rules = CancelReason('rules');
+
+  /// [SoloBase.close], or [SoloBase.add] after close.
+  static const closed = CancelReason('closed');
+
+  const SoloCancelReason._();
 }
 
 /// The result of a job: [Done], [Failed] or [Cancelled].
@@ -90,7 +117,11 @@ final class Cancelled extends Outcome<Never> implements Exception {
         started = true,
         stackTrace = null;
 
-  const Cancelled._({
+  /// Creates a cancellation with a reason of your own.
+  ///
+  /// The engine of a domain uses it — `solo` for its rules and its
+  /// closing; a body uses the unnamed constructor instead.
+  const Cancelled.by({
     required this.reason,
     required this.started,
     this.description,

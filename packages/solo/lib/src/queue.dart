@@ -60,7 +60,7 @@ final class _SoloQueue<S extends Object> implements SoloQueue {
     }
     _solo._cancel(
       job,
-      Cancelled._(
+      Cancelled.by(
         reason: CancelReason.manual,
         started: false,
         stackTrace: StackTrace.current,

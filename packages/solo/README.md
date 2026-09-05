@@ -256,8 +256,10 @@ emitting job is checked lazily, on its next read.
 exhaustive: `Done` carries the returned `value`, `Failed` carries `error`
 and `stackTrace`, `Cancelled` carries a `reason`, a `started` flag, an
 optional `description` and the stack trace of the cancellation itself. The
-reason is a `CancelReason`: `manual`, `rules`, `closed`, `parent`,
-`handler`. `job.done` completes with the outcome and never throws;
+reason is a `CancelReason`: `manual`, `parent` and `handler` from the core,
+`SoloCancelReason.rules` and `SoloCancelReason.closed` from `solo`. A reason
+is equal to any other with the same name, so an engine of your own may
+declare its own. `job.done` completes with the outcome and never throws;
 `job.value` completes with the value or throws; `job.whenCancelled`
 completes the moment the job is marked cancelled, before the body finishes;
 `job.cancel()` cancels and waits for the job to actually finish;

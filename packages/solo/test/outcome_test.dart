@@ -36,6 +36,23 @@ void main() {
     );
   });
 
+  test('cancel reasons are equal by name, whoever declared them', () {
+    const own = CancelReason('rules');
+    expect(own, SoloCancelReason.rules);
+    expect(own.hashCode, SoloCancelReason.rules.hashCode);
+    expect('${SoloCancelReason.closed}', 'closed');
+    expect(CancelReason.manual.toString(), 'manual');
+  });
+
+  test('Cancelled.by carries a reason of its own', () {
+    const cancelled = Cancelled.by(
+      reason: SoloCancelReason.rules,
+      started: true,
+      description: 'is not Ready',
+    );
+    expect(cancelled.toString(), 'Cancelled(rules: is not Ready)');
+  });
+
   test('Policy has four values in spec order', () {
     expect(Policy.values, [
       Policy.sequential,

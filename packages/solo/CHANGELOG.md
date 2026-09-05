@@ -1,3 +1,14 @@
+## 0.2.0
+
+- `CancelReason` is a class, not an enum: an engine built on the job
+  kernel declares reasons of its own, and reasons are equal by name.
+  `CancelReason.rules` and `CancelReason.closed` move to
+  `SoloCancelReason`; `values` and `index` are gone, and
+  `CancelReason.manual.toString()` is now `manual`, not
+  `CancelReason.manual`. `Cancelled.toString()` is unchanged.
+- `Cancelled.by({reason, started, description, stackTrace})` is public:
+  an engine of a domain builds cancellations with a reason of its own.
+
 ## 0.1.0
 
 Initial release.

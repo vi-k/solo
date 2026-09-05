@@ -262,7 +262,9 @@ extension на `JobContext`, а не его член: он собран из `wa
 исчерпывающий: `Done` несёт возвращённое `value`, `Failed` несёт `error` и
 `stackTrace`, `Cancelled` несёт `reason`, флаг `started`, необязательное
 `description` и стектрейс самой отмены. Причина — это `CancelReason`:
-`manual`, `rules`, `closed`, `parent`, `handler`. `job.done` завершается
+`manual`, `parent` и `handler` из ядра, `SoloCancelReason.rules` и
+`SoloCancelReason.closed` из `solo`. Причины равны по имени, поэтому свой
+движок может объявить свои. `job.done` завершается
 исходом и никогда не бросает; `job.value` завершается значением или бросает;
 `job.whenCancelled` завершается в момент, когда задача отмечена отменённой,
 ещё до конца тела; `job.cancel()` отменяет и ждёт, пока задача действительно

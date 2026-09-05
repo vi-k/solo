@@ -96,7 +96,7 @@ void main() {
       final job = solo.run<TestState, void>(key: 'late', (ctx) async {});
       expect(job.isFinished, isTrue);
       final dropped = job.outcome! as Cancelled;
-      expect(dropped.reason, CancelReason.closed);
+      expect(dropped.reason, SoloCancelReason.closed);
       final drained = early.outcome! as Cancelled;
       expect(
         identical(dropped.stackTrace, drained.stackTrace),

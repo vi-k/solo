@@ -122,8 +122,8 @@ abstract class SoloBase<S extends Object> {
     if (isClosed) {
       _debug(() => 'add $impl: closed');
       impl._finish(
-        Cancelled._(
-          reason: CancelReason.closed,
+        Cancelled.by(
+          reason: SoloCancelReason.closed,
           started: false,
           stackTrace: _closeStackTrace,
         ),
@@ -138,7 +138,7 @@ abstract class SoloBase<S extends Object> {
         if (existing != null) {
           _debug(() => 'add $impl: duplicate of $existing');
           impl._finish(
-            Cancelled._(
+            Cancelled.by(
               reason: CancelReason.manual,
               started: false,
               description: 'duplicate',
@@ -238,8 +238,8 @@ abstract class SoloBase<S extends Object> {
     final stackTrace = _closeStackTrace = StackTrace.current;
     for (final job in _queue._drain()) {
       job._finish(
-        Cancelled._(
-          reason: CancelReason.closed,
+        Cancelled.by(
+          reason: SoloCancelReason.closed,
           started: false,
           stackTrace: stackTrace,
         ),
@@ -254,8 +254,8 @@ abstract class SoloBase<S extends Object> {
     } else {
       _cancel(
         current,
-        Cancelled._(
-          reason: CancelReason.closed,
+        Cancelled.by(
+          reason: SoloCancelReason.closed,
           started: true,
           stackTrace: stackTrace,
         ),
@@ -366,8 +366,8 @@ abstract class SoloBase<S extends Object> {
       if (rejection != null) {
         _cancel(
           job,
-          Cancelled._(
-            reason: CancelReason.rules,
+          Cancelled.by(
+            reason: SoloCancelReason.rules,
             started: true,
             description: rejection,
             stackTrace: stackTrace,
@@ -386,7 +386,7 @@ abstract class SoloBase<S extends Object> {
   }) {
     Cancelled withStarted(bool started) => cancelled.started == started
         ? cancelled
-        : Cancelled._(
+        : Cancelled.by(
             reason: cancelled.reason,
             started: started,
             description: cancelled.description,
@@ -410,7 +410,7 @@ abstract class SoloBase<S extends Object> {
         if (job._pendingCancel != null) {
           return;
         }
-        if (!job.cancellable && cancelled.reason != CancelReason.rules) {
+        if (!job.cancellable && cancelled.reason != SoloCancelReason.rules) {
           _debug(() => 'cancel $job: not cancellable');
           return;
         }
@@ -419,7 +419,7 @@ abstract class SoloBase<S extends Object> {
         for (final child in job._children.reversed.toList()) {
           _cancel(
             child,
-            Cancelled._(
+            Cancelled.by(
               reason: CancelReason.parent,
               started: true,
               stackTrace: marked.stackTrace,
@@ -492,8 +492,8 @@ abstract class SoloBase<S extends Object> {
       final rejection = job._rejectStart(_state);
       if (rejection != null) {
         job._finish(
-          Cancelled._(
-            reason: CancelReason.rules,
+          Cancelled.by(
+            reason: SoloCancelReason.rules,
             started: false,
             description: rejection,
             stackTrace: StackTrace.current,

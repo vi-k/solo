@@ -203,8 +203,8 @@ final class _JobContext<S extends Object, W extends S, R>
     final current = _solo._state;
     final rejection = _job._rejectKeep(current);
     if (rejection != null) {
-      final cancelled = Cancelled._(
-        reason: CancelReason.rules,
+      final cancelled = Cancelled.by(
+        reason: SoloCancelReason.rules,
         started: true,
         description: rejection,
         stackTrace: _solo._lastChange,
@@ -222,8 +222,8 @@ final class _JobContext<S extends Object, W extends S, R>
   T stateAs<T extends S>() {
     final current = _checkedState();
     if (current is! T) {
-      final cancelled = Cancelled._(
-        reason: CancelReason.rules,
+      final cancelled = Cancelled.by(
+        reason: SoloCancelReason.rules,
         started: true,
         description: 'is not $T',
         stackTrace: StackTrace.current,
@@ -395,7 +395,7 @@ final class _JobContext<S extends Object, W extends S, R>
     if (pending != null) {
       _solo._cancel(
         impl,
-        Cancelled._(
+        Cancelled.by(
           reason: CancelReason.parent,
           started: false,
           stackTrace: pending.stackTrace,
@@ -406,8 +406,8 @@ final class _JobContext<S extends Object, W extends S, R>
     final rejection = impl._rejectStart(_solo._state);
     if (rejection != null) {
       impl._finish(
-        Cancelled._(
-          reason: CancelReason.rules,
+        Cancelled.by(
+          reason: SoloCancelReason.rules,
           started: false,
           description: rejection,
           stackTrace: StackTrace.current,

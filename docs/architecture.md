@@ -150,12 +150,12 @@ BLE-устройство, плеер, синхронизация), где сос
   `job`, `add`, `run`, `externalSetState`, `close`, защищённый `publish`,
   статические `observer` и `debug`. Это одна библиотека с частями
   (`part`): `outcome.dart`, `job.dart`, `job_context.dart`, `queue.dart`.
-  Части нужны потому, что движок создаёт исходы приватным `Cancelled._` с
-  любой причиной, а публичный конструктор `Cancelled` — только `handler`;
-  реализации `_Job`, `_JobContext`, `_SoloQueue` приватны и связаны с
-  движком в обе стороны.
-- `outcome.dart` — `part`: `Outcome`, `Done`, `Failed`, `Cancelled`,
-  `CancelReason`.
+  Части нужны потому, что реализации `_Job`, `_JobContext` и `_SoloQueue`
+  приватны и связаны с движком в обе стороны: он зовёт их приватные члены,
+  а они — его.
+- `outcome.dart` — `part`: `Outcome`, `Done`, `Failed`, `Cancelled` с
+  публичными конструкторами `Cancelled([description])` и `Cancelled.by`,
+  открытый класс `CancelReason` и `SoloCancelReason` с причинами solo.
 - `job.dart` — `part`: публичный `Job<T>` и внутренняя реализация `_Job`:
   спека, жизненный цикл, дети, отмена, исход.
 - `job_context.dart` — `part`: `JobContext<S, W>` и `_JobContext`:
