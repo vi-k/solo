@@ -8,9 +8,9 @@ part of 'job_base.dart';
 /// see [wait], [join] and [uncancellable].
 ///
 /// A context that outlived its job — captured by a closure nobody awaited
-/// — neither writes nor starts anything: [run], [wait], [join] and
-/// [uncancellable] throw a [StateError] once the job has finished. [check]
-/// and [log] stay legal.
+/// — neither waits nor starts anything: [run], [wait], [join],
+/// [uncancellable] and [onCancel] throw a [StateError] once the job has
+/// finished. [check] and [log] stay legal.
 abstract interface class JobContext {
   /// Gives up if the job was cancelled — in `solo`, also if its rules
   /// stopped holding.
@@ -145,12 +145,21 @@ abstract interface class JobContext {
   /// itself is not affected and the other callbacks still run.
   void Function() onCancel(void Function() callback);
 
-  /// Starts [child] right now, bypassing the queue, as a child of this job.
-  /// Returns the same handle; the parent finishes only after all children.
+  /// Starts [child] right now, as a child of this job, ahead of whatever
+  /// an engine of a domain would have put it through.
+  ///
+  /// Returns the same handle; the parent finishes only after all its
+  /// children. A cancellation of the parent cascades onto them, and a
+  /// child created with `cancellable: false` refuses that cascade.
+  ///
+  /// Throws [ArgumentError] for a handle that is not a job of this kernel,
+  /// or one an engine of a domain does not own; [StateError] for a job
+  /// that has already been started; and the parent's own [Cancelled], with
+  /// the child dropped, if the parent is already cancelled.
   Job<T> run<T>(Job<T> child);
 
-  /// Sends `message.toString()` to `onLog` of the observer and the
-  /// controller.
+  /// Sends `message.toString()` to [JobObserver.onLog]. A no-op when the
+  /// job has no observer.
   void log(Object? message);
 
   /// The job this context belongs to.
@@ -370,7 +379,7 @@ abstract class JobContextBase implements JobContext {
       throw ArgumentError.value(child, 'child', 'is not a job of this core');
     }
     if (child.status != JobStatus.created) {
-      throw StateError('$child has already been added or run');
+      throw StateError('$child has already been started');
     }
     child
       ..adoptedBy(this)

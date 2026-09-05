@@ -63,10 +63,14 @@ final class Done<T> extends Outcome<T> {
 /// created in, through [Zone.handleUncaughtError], one microtask after the
 /// job finished. This is what Dart does with an unhandled [Future] error.
 ///
-/// An error the engine learns about only through those hooks never reaches
-/// the zone: a body that throws after cancellation, or an action abandoned
-/// by [JobContext.wait] that fails later, both end as [Cancelled], and
-/// [Cancelled] is never reported to the zone.
+/// This is the error that has an outcome of its own. A body that throws
+/// after its cancellation ends as [Cancelled] instead, and [Cancelled] is
+/// never reported to the zone.
+///
+/// The errors with no outcome to carry them — a late failure of an action
+/// [JobContext.wait] walked away from, a disposer, a callback of
+/// [JobContext.onCancel] — take the other path: [JobObserver.onError], or
+/// straight to the zone when there is no observer.
 final class Failed extends Outcome<Never> {
   /// The thrown error.
   final Object error;
@@ -90,7 +94,7 @@ final class Cancelled extends Outcome<Never> implements Exception {
   /// Who cancelled the job.
   final CancelReason reason;
 
-  /// `false` when the job was dropped from the queue before it started.
+  /// `false` when the job was dropped before its body ran at all.
   final bool started;
 
   /// Details within [reason]: the text passed by the body, or whatever an

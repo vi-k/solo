@@ -9,8 +9,9 @@ part 'outcome.dart';
 
 /// A handle to a job: the outcome, the waiting and the cancellation.
 ///
-/// Not a [Future]: calling a controller method without `await` is legal.
-/// Await [done], [value] or [whenCancelled] where you need to.
+/// Not a [Future]: a method that starts a job may be called without an
+/// `await`, and the analyzer will not ask for one. Await [done], [value]
+/// or [whenCancelled] where you need to.
 ///
 /// A job that ends with [Failed] and is never observed hands its error to
 /// the zone that created the job, the way Dart reports an unhandled
@@ -44,10 +45,18 @@ abstract interface class Job<T> {
     Future<T> Function(JobContext ctx) body, {
     Object? key,
     String Function()? describe,
-    bool cancellable,
+    bool cancellable = true,
     FutureOr<void> Function(T value)? ifCancelled,
     JobObserver? observer,
-  }) = _AutoJob<T>;
+  }) =>
+      _AutoJob<T>(
+        body,
+        key: key,
+        describe: describe,
+        cancellable: cancellable,
+        ifCancelled: ifCancelled,
+        observer: observer,
+      );
 
   /// Creates a job that waits to be told to start.
   ///
@@ -72,8 +81,11 @@ abstract interface class Job<T> {
         observer: observer,
       );
 
-  /// The key given at creation; compared with `==` by policies and queue
-  /// searches.
+  /// The key given at creation.
+  ///
+  /// The kernel does not read it: it is there for [toString], for the
+  /// observer, and for whatever an engine of a domain does with it —
+  /// `solo` compares keys with `==` in its queue policies.
   Object? get key;
 
   /// The description given at creation, or an empty string.
@@ -134,7 +146,7 @@ abstract interface class Job<T> {
   /// handled elsewhere, by a [JobObserver] of your own.
   ///
   /// ```dart
-  /// solo.run<Ready, void>((ctx) => ctx.wait(hw.close)).ignore();
+  /// Job<void>((ctx) => ctx.wait(device.close)).ignore();
   /// ```
   ///
   /// Waiting for [done] or [value] observes the job too; calling this
@@ -387,12 +399,15 @@ abstract class JobBase<T> implements Job<T> {
   @protected
   void start() {
     if (_status != JobStatus.created) {
-      throw StateError('$this has already been added or run');
+      throw StateError('$this has already been started');
     }
+    // Built before the job is running: a context that throws on creation
+    // leaves the job as it was, and not running with no body.
+    final ctx = createContext();
     _status = JobStatus.running;
     started();
     _notifyStart();
-    unawaited(_execute(createContext()));
+    unawaited(_execute(ctx));
   }
 
   /// Ends the job with [outcome].
@@ -460,6 +475,10 @@ abstract class JobBase<T> implements Job<T> {
   }
 
   /// The subclass joins the run: `solo` adds the job to its running list.
+  ///
+  /// Called with the job already [JobStatus.running], so it must not
+  /// throw: an error here leaves a job that is running and has no body,
+  /// and nothing will ever finish it.
   @protected
   void started() {}
 

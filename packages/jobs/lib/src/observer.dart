@@ -12,8 +12,13 @@ abstract class JobObserver {
   /// A job has an outcome, including jobs dropped before start.
   void onFinish(Job<Object?> job) {}
 
-  /// A job body threw an error, or an action abandoned by
-  /// [JobContext.wait] failed later.
+  /// Something the job did threw.
+  ///
+  /// The body — that error also becomes the [Failed] outcome — or one of
+  /// the three with no outcome to carry them: an action abandoned by
+  /// [JobContext.wait] failing later, a disposer, a callback of
+  /// [JobContext.onCancel]. Without an observer those three go to the zone
+  /// the job was created in; with one, they stop here.
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) {}
 
   /// A job called [JobContext.log].
