@@ -379,7 +379,9 @@ final class NotesController extends Solo<NotesState> {
         key: 'upload',
         (ctx) async {
           ctx.emit(ctx.state.copyWith(uploading: true));
-          await ctx.wait(() => _api.upload(note));
+          // A write is not walked away from: `join` holds the job, and
+          // with it the queue, until the server has answered.
+          await ctx.join(() => _api.upload(note));
           final merged = [...ctx.state.notes, note];
           ctx.emit(ctx.state.copyWith(notes: merged, uploading: false));
         },
@@ -402,6 +404,12 @@ children, started by `ctx.run` inside the same body, and `externalSetState`
 from outside — both deliberate, both visible. That is the ownership
 guarantee, not a discipline the two bodies have to keep, and adding a
 tenth method does not put it at risk.
+
+The write waits with `join` and the read with `wait`, and the difference is
+the point: a read can be abandoned, a write cannot. A cancelled `wait`
+would end the upload job while `_api.upload` was still on the wire, the
+queue would start `refresh`, and the server would be read across a write in
+flight — the very interleaving this item is about.
 
 ## 4. After cancellation the handler keeps running
 

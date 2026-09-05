@@ -394,7 +394,9 @@ final class NotesController extends Solo<NotesState> {
         key: 'upload',
         (ctx) async {
           ctx.emit(ctx.state.copyWith(uploading: true));
-          await ctx.wait(() => _api.upload(note));
+          // От записи не уходят: `join` держит задачу, а с ней и очередь,
+          // пока сервер не ответит.
+          await ctx.join(() => _api.upload(note));
           final merged = [...ctx.state.notes, note];
           ctx.emit(ctx.state.copyWith(notes: merged, uploading: false));
         },
@@ -417,6 +419,12 @@ final class NotesController extends Solo<NotesState> {
 теле, и `externalSetState` снаружи — оба осознанные, оба видны. Это
 гарантия владения, а не дисциплина, которую два тела должны соблюдать, и
 десятый метод её под угрозу не ставит.
+
+Запись дожидается через `join`, чтение — через `wait`, и в этой разнице
+всё дело: от чтения уйти можно, от записи нельзя. Отменённый `wait`
+закончил бы задачу загрузки, пока `_api.upload` ещё идёт по проводу,
+очередь запустила бы `refresh`, и сервер прочитали бы поперёк незавершённой
+записи — ровно то наложение, о котором этот пункт.
 
 ## 4. После отмены обработчик продолжает работать
 
