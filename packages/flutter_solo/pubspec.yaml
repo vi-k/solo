@@ -2,7 +2,7 @@ name: flutter_solo
 description: >-
   Flutter integration for solo: a ValueListenable face for Solo
   controllers.
-version: 1.0.0
+version: 0.1.0
 repository: https://github.com/vi-k/solo/tree/main/packages/flutter_solo
 
 environment:
@@ -12,7 +12,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  solo: ^1.0.0
+  solo: ^0.1.0
 
 dependency_overrides:
   solo:

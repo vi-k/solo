@@ -22,7 +22,7 @@ This document assumes the [README's Concepts][concepts]: `Job` and
 [concepts]: https://github.com/vi-k/solo/blob/main/packages/solo/README.md#concepts
 
 Every snippet below was compiled and run — the bloc ones against bloc 9.2.1
-with bloc_concurrency 0.3.0, the `solo` ones against `solo` 1.0.0 — and
+with bloc_concurrency 0.3.0, the `solo` ones against `solo` 0.1.0 — and
 every trace quoted is from those runs.
 
 The same package ships `Cubit`: no events, no transformers, methods that

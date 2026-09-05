@@ -13,7 +13,7 @@ microtask later.
 
 ```yaml
 dependencies:
-  flutter_solo: ^1.0.0
+  flutter_solo: ^0.1.0
 ```
 
 ## Usage

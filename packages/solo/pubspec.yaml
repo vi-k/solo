@@ -2,7 +2,7 @@ name: solo
 description: >-
   One job at a time: sequential jobs with exclusive state ownership,
   declarative rules and cooperative cancellation. Pure Dart.
-version: 1.0.0
+version: 0.1.0
 repository: https://github.com/vi-k/solo/tree/main/packages/solo
 
 environment:
