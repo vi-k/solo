@@ -82,4 +82,61 @@ void main() {
       async.flushTimers();
     });
   });
+
+  test('each leaves nothing listening for a job already cancelled', () {
+    fakeAsync((async) {
+      var listened = false;
+      final controller = StreamController<int>(
+        onListen: () => listened = true,
+      );
+      Object? thrown;
+      final job = Job<void>((ctx) async {
+        try {
+          await ctx.wait(
+            () => Future<void>.delayed(const Duration(milliseconds: 10)),
+          );
+        } on Cancelled {
+          // Caught: the body walks on to a stream anyway.
+        }
+        try {
+          await ctx.each(controller.stream, (_) {});
+        } on Object catch (error) {
+          thrown = error;
+        }
+      });
+      async.elapse(const Duration(milliseconds: 5));
+      job.cancel().ignore();
+      async.flushTimers();
+      expect(thrown, isA<Cancelled>());
+      expect(listened, isFalse, reason: 'it never subscribed at all');
+      expect(controller.hasListener, isFalse);
+      controller.close().ignore();
+    });
+  });
+
+  test('a body that cancels itself from onData does not hang', () {
+    fakeAsync((async) {
+      final controller = StreamController<int>();
+      final job = Job<void>((ctx) async {
+        await ctx.each(controller.stream, (event) {
+          if (event == 2) {
+            throw const Cancelled('enough');
+          }
+        });
+      });
+      async.flushMicrotasks();
+      controller
+        ..add(1)
+        ..add(2);
+      async.elapse(const Duration(milliseconds: 10));
+      expect(job.outcome, isA<Cancelled>());
+      expect(
+        (job.outcome! as Cancelled).description,
+        contains('enough'),
+        reason: 'a body cancelling itself is not a cancellation from outside',
+      );
+      expect(controller.hasListener, isFalse);
+      controller.close().ignore();
+    });
+  });
 }

@@ -5,6 +5,9 @@ import 'package:fake_async/fake_async.dart';
 import 'package:jobs/jobs.dart';
 import 'package:test/test.dart';
 
+import 'support/journal.dart';
+import 'support/probe_job.dart';
+
 void main() {
   test('the body does not start inside the constructor', () {
     fakeAsync((async) {
@@ -74,6 +77,28 @@ void main() {
       async.flushMicrotasks();
       expect(parent.outcome, isA<Failed>());
       expect((parent.outcome! as Failed).error, isA<StateError>());
+    });
+  });
+
+  test('finish on a job that has already finished does nothing', () {
+    fakeAsync((async) {
+      final journal = JobJournal();
+      final job = ProbeJob<int>(
+        key: 'job',
+        observer: journal,
+        (ctx) async => 1,
+      )..launch();
+      async.flushMicrotasks();
+      expect((job.outcome! as Done<int>).value, 1);
+      journal.take();
+      job.drop(const Done(2));
+      async.flushMicrotasks();
+      expect(
+        (job.outcome! as Done<int>).value,
+        1,
+        reason: 'the outcome of a finished job does not change',
+      );
+      expect(journal.take(), isEmpty, reason: 'and nothing is announced');
     });
   });
 }

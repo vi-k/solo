@@ -396,8 +396,15 @@ abstract class JobBase<T> implements Job<T> {
   }
 
   /// Ends the job with [outcome].
+  ///
+  /// On a job that has already finished this does nothing, the same as
+  /// [cancel]: an outcome is final, and an engine of a domain racing its
+  /// own body must not be able to replace one.
   @protected
   void finish(Outcome<T> outcome) {
+    if (_status == JobStatus.finished) {
+      return;
+    }
     _outcome = outcome;
     _status = JobStatus.finished;
     // A job cancelled before it started never went through `_markCancelled`,

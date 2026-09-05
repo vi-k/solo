@@ -12,6 +12,9 @@ final class ProbeJob<T> extends JobBase<T> {
   /// Starts the body the way an engine of a domain would.
   void launch() => start();
 
+  /// Ends the job from the outside, the way an engine of a domain would.
+  void drop(Outcome<T> outcome) => finish(outcome);
+
   @override
   JobContextBase createContext() => ProbeContext(this);
 
