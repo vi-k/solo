@@ -448,22 +448,34 @@ the final one, so reading `state` is usually enough.
 
 ## Recipes
 
-**Timeout.** The engine knows nothing about timeouts; a context member
-plus `Future.timeout` is the whole recipe — `join` here, because a device
-that was asked to open should not be left half-open. On a timeout the body
-throws, and the job ends up `Failed`:
+**Timeout.** The engine knows nothing about timeouts, and `Future.timeout`
+by itself is not one: it ends the waiting, not the work. The source future
+is never cancelled, so `hw.open().timeout(...)` fails the job while the
+device is still opening, and the next job starts against it. Give the timer
+something that really stops — the same cancel token the job hands to
+`onCancel` — and wait for the device with `join`. It comes back with an
+error of its own, and the job ends `Failed`:
 
 ```dart
 Job<void> connect() => run<Idle, void>(
       key: 'connect',
       (ctx) async {
-        await ctx.join(
-          () => hw.open().timeout(const Duration(seconds: 5)),
-        );
+        final token = CancelToken();
+        final timer = Timer(const Duration(seconds: 5), token.cancel);
+        ctx.onCancel(token.cancel);
+        try {
+          await ctx.join(() => hw.open(cancelToken: token));
+        } finally {
+          timer.cancel();
+        }
         ctx.emit(const Connected());
       },
     );
 ```
+
+Where the call has nothing to leave behind — a read, a request whose answer
+you can drop — the short form is honest: `ctx.wait(() => api.fetch()
+.timeout(...))`, and the abandoned request finishes on its own.
 
 **Debounce.** Also outside the engine: hold a `Timer` in the controller and
 start the job when it fires. Combine it with `Policy.restart`, so that a job
