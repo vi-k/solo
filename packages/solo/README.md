@@ -155,7 +155,10 @@ either the action or the cancellation arrives. `ctx.join(() => ...)` waits
 for all of the action and gives up afterwards. `ctx.uncancellable(() => ...)`
 turns the cancellation down for the length of the call. Where there is no
 call to wrap — a loop over work of your own — `ctx.check()` is the same
-check on its own.
+check on its own. A bare `await` is right in one place only: a call with
+no body code after it — the last cleanup of a job, the way the example
+closes its camera, or the `finally` of a job already cancelled, where
+every member would throw at entry anyway.
 
 **The action is not stopped.** The wait ends, the work does not. The action
 runs to its end and its result is dropped on the floor, which is fine for a
@@ -343,6 +346,25 @@ that way, and that is normal traffic, not something to report. It is an
 `Exception` and not an `Error`: a job that did not happen is an ordinary
 outcome, not a broken program. That is what makes `throw Cancelled('why')`
 from a body an ordinary throw.
+
+Being an `Exception` cuts both ways: a wide `catch` in a body catches the
+job's own `Cancelled` too. The outcome is safe — a job that is marked ends
+with its cancellation whatever the body does next — but everything the
+catch does on the way is work a cancelled job should not be doing: a
+compensation, a retry, a failure written into the state. Let it through
+first, the way the camera example does:
+
+```dart
+try {
+  await ctx.join(hw.open);
+  await ctx.join(() => hw.setZoom(zoom));
+} on Cancelled {
+  rethrow;
+} on Object catch (error) {
+  ctx.emit(Broken(error));
+  rethrow;
+}
+```
 
 Every failure also reaches the hooks, before the outcome is delivered to
 whoever waits for it: `onError` on the controller itself, and
@@ -855,8 +877,8 @@ what `takePhoto` uses — keeps the running job and drops the newcomer.
 
 [`example/`](example) is a runnable package with this controller extended:
 a fake camera whose hardware answers late and may break on its own, a
-`Broken` state, `reopen`, `pause`, `resume` and focus jobs, four tests over
-an ordered journal, and `bin/main.dart` that prints the same journal in
+`Broken` state, `reopen`, `pause`, `resume` and focus jobs, seven tests
+over an ordered journal, and `bin/main.dart` that prints the same journal in
 real time.
 
 ```sh

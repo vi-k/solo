@@ -1084,7 +1084,9 @@ cancels the ones whose working type or `keepWhile` no longer holds: the
 calibration ends with `Cancelled(rules: is not Ready)`, and its caller can
 read that. The precondition lives in `run<Ready, void>`, where the engine
 checks it before the start, on every state change, and on every read — one
-place, and a new `await` in the body inherits it.
+place, and a new call in the body inherits it as far as it goes through the
+context: `wait`, `join` or `uncancellable`, or an `await` with a read after
+it.
 
 The `sample()` already in flight still finishes, on both sides: no library
 can abort a Dart future, and a sensor that has just lost its cable has

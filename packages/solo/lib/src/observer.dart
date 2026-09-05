@@ -18,13 +18,17 @@ abstract class SoloObserver {
   /// A job has an outcome, including jobs dropped before start.
   void onFinish(SoloBase<Object> solo, Job<Object?> job) {}
 
-  /// A job body threw a non-[Cancelled] error, even after cancellation.
+  /// A job body threw an error, or an action abandoned by
+  /// `JobContext.wait` failed later.
   ///
   /// Called for every such error, including the ones that end as
   /// [Cancelled] and are therefore never handed to the zone: a body that
-  /// throws after cancellation, or an action abandoned by
-  /// `JobContext.wait` that fails later. Those are this hook's business
-  /// alone. See [Failed] for the errors that also reach the zone.
+  /// throws after cancellation, or an abandoned action that fails later.
+  /// Those are this hook's business alone. The job's own cancellation is
+  /// not an error and never comes here; a [Cancelled] thrown by an
+  /// abandoned action does, because for an observer that is a late failure
+  /// like any other. See [Failed] for the errors that also reach the
+  /// zone.
   void onError(
     SoloBase<Object> solo,
     Job<Object?> job,
