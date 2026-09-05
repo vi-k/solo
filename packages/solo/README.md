@@ -129,7 +129,9 @@ They differ only in how a change is delivered.
 **Job.** A unit of work: an `async` body `Future<T> Function(JobContext)`,
 an optional `key`, rules, and a handle `Job<T>`. `job(...)` builds one
 without queueing it, `add(job, policy: ...)` queues it, `run(...)` does
-both in one call. `describe: () => 'zoom: $zoom'` labels the job for logs,
+both in one call; all three return a `SoloJob<T>`, which is `Job<T>` plus
+`isQueued` — the queue belongs to the controller, so that member is not on
+the handle every job has. `describe: () => 'zoom: $zoom'` labels the job for logs,
 the observer and `toString`, which prints `Job(key: label)` instead of
 `Job(key)`. At most one root job runs at a time, and while it runs no
 other job of this controller touches the state.

@@ -10,7 +10,7 @@ import 'support/test_state.dart';
 
 /// A short job that only bumps its counter: the "other events" of the 1.x
 /// scenarios.
-Job<void> noop(TestSolo solo, int n) => solo.run<Special, void>(
+SoloJob<void> noop(TestSolo solo, int n) => solo.run<Special, void>(
       key: 'noop',
       describe: () => '$n',
       (ctx) async {
@@ -20,7 +20,7 @@ Job<void> noop(TestSolo solo, int n) => solo.run<Special, void>(
     );
 
 /// A 100 ms job with no policy at all: the queue alone orders it.
-Job<void> sequential(TestSolo solo, int n) => solo.run<Special, void>(
+SoloJob<void> sequential(TestSolo solo, int n) => solo.run<Special, void>(
       key: 'sequential',
       describe: () => '$n',
       (ctx) async {
@@ -34,7 +34,7 @@ Job<void> sequential(TestSolo solo, int n) => solo.run<Special, void>(
 /// `Policy.droppable` written out by hand: look the job up, and cancel the
 /// new one before it reaches the queue. The caller always gets the job that
 /// stays, so this one fixture covers both 1.x droppable groups.
-Job<void> droppableByQueue(TestSolo solo, int n) {
+SoloJob<void> droppableByQueue(TestSolo solo, int n) {
   final existing = solo.lastJobWhere((job) => job.key == 'droppable');
   final job = solo.job<Special, void>(
     key: 'droppable',
@@ -48,14 +48,14 @@ Job<void> droppableByQueue(TestSolo solo, int n) {
   );
   if (existing != null) {
     job.cancel();
-    return existing as Job<void>;
+    return existing as SoloJob<void>;
   }
   return solo.add(job);
 }
 
 /// `Policy.restart` written out by hand: drop the queued namesakes, cancel
 /// the running one without waiting for it, then queue the new job.
-Job<void> restartableByQueue(TestSolo solo, int n) {
+SoloJob<void> restartableByQueue(TestSolo solo, int n) {
   solo.queue.removeWhere((job) => job.key == 'restartable');
   final current = solo.current;
   if (current != null && current.key == 'restartable') {

@@ -386,7 +386,8 @@ final class _JobContext<S extends Object, W extends S, R>
   Job<T> run<T>(Job<T> child) {
     _throwIfFinished('run a child');
     final impl = _solo._own(child);
-    if (impl._status != _JobStatus.created) {
+    if (impl._status != JobStatus.created ||
+        _solo._queue._jobs.contains(impl)) {
       throw StateError('$impl has already been added or run');
     }
     impl.level = _job.level + 1;

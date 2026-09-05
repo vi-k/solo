@@ -8,7 +8,7 @@ import 'support/run_solo.dart';
 import 'support/test_solo.dart';
 import 'support/test_state.dart';
 
-Job<void> droppable(TestSolo solo, int n) => solo.run<Special, void>(
+SoloJob<void> droppable(TestSolo solo, int n) => solo.run<Special, void>(
       key: 'droppable',
       describe: () => '$n',
       policy: Policy.droppable,
@@ -19,7 +19,7 @@ Job<void> droppable(TestSolo solo, int n) => solo.run<Special, void>(
       },
     );
 
-Job<void> restartable(TestSolo solo, int n) => solo.run<Special, void>(
+SoloJob<void> restartable(TestSolo solo, int n) => solo.run<Special, void>(
       key: 'restartable',
       describe: () => '$n',
       policy: Policy.restart,
@@ -32,7 +32,7 @@ Job<void> restartable(TestSolo solo, int n) => solo.run<Special, void>(
       },
     );
 
-Job<void> replaceable(TestSolo solo, int n) => solo.run<Special, void>(
+SoloJob<void> replaceable(TestSolo solo, int n) => solo.run<Special, void>(
       key: 'replace',
       describe: () => '$n',
       policy: Policy.replace,

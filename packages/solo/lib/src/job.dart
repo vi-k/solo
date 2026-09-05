@@ -23,9 +23,6 @@ abstract interface class Job<T> {
   /// Whether this job was started by [JobContext.run].
   bool get isChild;
 
-  /// Whether the job waits in the queue.
-  bool get isQueued;
-
   /// Whether the body is running or its children are still finishing.
   bool get isRunning;
 
@@ -84,9 +81,31 @@ abstract interface class Job<T> {
   void ignore();
 }
 
-enum _JobStatus { created, queued, running, finished }
+/// Where a job is in its life.
+///
+/// The queue is not here: it belongs to whoever runs jobs, not to the job.
+enum JobStatus {
+  /// Made, not started; the body has not run.
+  created,
 
-final class _Job<S extends Object, W extends S, T> implements Job<T> {
+  /// The body is running, or its children are still finishing.
+  running,
+
+  /// The outcome is set and will not change.
+  finished,
+}
+
+/// A job of a controller: [Job] plus the queue.
+///
+/// Returned by [SoloBase.job], [SoloBase.add] and [SoloBase.run]. The
+/// queue belongs to the controller, so [isQueued] lives here and not on
+/// the handle every job has.
+abstract interface class SoloJob<T> implements Job<T> {
+  /// Whether the job waits in the controller's queue.
+  bool get isQueued;
+}
+
+final class _Job<S extends Object, W extends S, T> implements SoloJob<T> {
   final SoloBase<S> _solo;
   final Future<T> Function(JobContext<S, W> ctx) _body;
   final bool Function(W state)? _canStart;
@@ -106,7 +125,7 @@ final class _Job<S extends Object, W extends S, T> implements Job<T> {
   /// Whether anyone asked for the outcome: [done], [value] or [ignore].
   bool _observed = false;
 
-  _JobStatus _status = _JobStatus.created;
+  JobStatus _status = JobStatus.created;
   Outcome<T>? _outcome;
   Cancelled? _pendingCancel;
   final _done = Completer<Outcome<T>>();
@@ -133,13 +152,13 @@ final class _Job<S extends Object, W extends S, T> implements Job<T> {
   bool get isChild => level > 0;
 
   @override
-  bool get isQueued => _status == _JobStatus.queued;
+  bool get isQueued => _solo._queue._jobs.contains(this);
 
   @override
-  bool get isRunning => _status == _JobStatus.running;
+  bool get isRunning => _status == JobStatus.running;
 
   @override
-  bool get isFinished => _status == _JobStatus.finished;
+  bool get isFinished => _status == JobStatus.finished;
 
   @override
   bool get isCancelled => _pendingCancel != null || _outcome is Cancelled;
@@ -214,7 +233,7 @@ final class _Job<S extends Object, W extends S, T> implements Job<T> {
   }
 
   void _start(int level) {
-    _status = _JobStatus.running;
+    _status = JobStatus.running;
     this.level = level;
     _solo._running.add(this);
     _solo._notifyStart(this);
@@ -273,7 +292,7 @@ final class _Job<S extends Object, W extends S, T> implements Job<T> {
 
   void _finish(Outcome<T> outcome) {
     _outcome = outcome;
-    _status = _JobStatus.finished;
+    _status = JobStatus.finished;
     // A job cancelled before it started never went through `_markCancelled`,
     // so `whenCancelled` is still open here.
     if (outcome is Cancelled && !_cancelled.isCompleted) {

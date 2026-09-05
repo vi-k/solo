@@ -67,6 +67,25 @@ void main() {
     });
   });
 
+  test('a job taken from the queue is no longer queued in canStart', () {
+    runSolo((solo, journal, async) {
+      bool? queuedInCanStart;
+      late final SoloJob<void> job;
+      job = solo.job<TestState, void>(
+        key: 'job',
+        canStart: (state) {
+          queuedInCanStart = job.isQueued;
+          return true;
+        },
+        (ctx) => delay(10),
+      );
+      solo.add(job);
+      expect(job.isQueued, isTrue, reason: 'queued until the pump runs');
+      async.flushTimers();
+      expect(queuedInCanStart, isFalse);
+    });
+  });
+
   test('keepWhile false at start drops the job before start', () {
     runSolo(initialState: const Preparing(progress: 100),
         (solo, journal, async) {

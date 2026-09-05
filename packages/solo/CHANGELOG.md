@@ -8,6 +8,11 @@
   `CancelReason.manual`. `Cancelled.toString()` is unchanged.
 - `Cancelled.by({reason, started, description, stackTrace})` is public:
   an engine of a domain builds cancellations with a reason of its own.
+- `isQueued` moves from `Job<T>` to the new `SoloJob<T>`, returned by
+  `job`, `add` and `run`. The queue is the controller's, not the job's.
+  `JobStatus` is public and has three values: a queued job is `created`
+  until it starts, and `isQueued` is computed from the queue itself —
+  inside `canStart` a job taken from the queue is no longer queued.
 
 ## 0.1.0
 

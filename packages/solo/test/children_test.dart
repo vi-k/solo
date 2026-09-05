@@ -446,4 +446,27 @@ void main() {
       expect(journal.lines.last, '[cancelled] finished Cancelled(manual)');
     });
   });
+
+  test('a queued job cannot be run as a child', () {
+    runSolo((solo, journal, async) {
+      final queued = solo.run<TestState, void>(key: 'queued', (ctx) async {});
+      Object? thrown;
+      solo.add(
+        solo.job<TestState, void>(
+          key: 'parent',
+          (ctx) async {
+            try {
+              ctx.run(queued);
+            } on Object catch (error) {
+              thrown = error;
+            }
+          },
+        ),
+        first: true,
+      );
+      async.flushTimers();
+      expect(thrown, isA<StateError>());
+      expect(queued.outcome, isA<Done<void>>(), reason: 'ran once, by queue');
+    });
+  });
 }

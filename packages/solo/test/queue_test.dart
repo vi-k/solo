@@ -8,7 +8,7 @@ import 'support/run_solo.dart';
 import 'support/test_solo.dart';
 import 'support/test_state.dart';
 
-Job<void> slow(TestSolo solo, String key, {bool cancellable = true}) =>
+SoloJob<void> slow(TestSolo solo, String key, {bool cancellable = true}) =>
     solo.job<TestState, void>(
       key: key,
       cancellable: cancellable,

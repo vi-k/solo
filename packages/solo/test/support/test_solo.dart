@@ -13,7 +13,7 @@ final class TestSolo extends Solo<TestState> {
   Job<Object?>? get current => super.current;
 
   @override
-  Job<Object?>? lastJobWhere(bool Function(Job<Object?> job) test) =>
+  SoloJob<Object?>? lastJobWhere(bool Function(Job<Object?> job) test) =>
       super.lastJobWhere(test);
 
   @override

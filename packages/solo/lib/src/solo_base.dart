@@ -82,7 +82,7 @@ abstract class SoloBase<S extends Object> {
   /// cancellation and `close`, but not from a state that stopped matching
   /// `W` or `keepWhile`; [JobContext.uncancellable] says the same about one
   /// step of the body rather than about the whole job.
-  Job<T> job<W extends S, T>(
+  SoloJob<T> job<W extends S, T>(
     Future<T> Function(JobContext<S, W> ctx) body, {
     Object? key,
     bool Function(W state)? canStart,
@@ -107,7 +107,7 @@ abstract class SoloBase<S extends Object> {
   /// [ArgumentError] if [policy] is not [Policy.sequential] and the job has
   /// no key, or if [job] was created by another controller. After `close`
   /// the job finishes at once with `Cancelled(closed)`.
-  Job<T> add<T>(
+  SoloJob<T> add<T>(
     Job<T> job, {
     bool first = false,
     Policy policy = Policy.sequential,
@@ -116,7 +116,7 @@ abstract class SoloBase<S extends Object> {
     if (policy != Policy.sequential && impl.key == null) {
       throw ArgumentError('Policy.${policy.name} requires a job key');
     }
-    if (impl._status != _JobStatus.created) {
+    if (impl._status != JobStatus.created || _queue._jobs.contains(impl)) {
       throw StateError('$impl has already been added or run');
     }
     if (isClosed) {
@@ -128,7 +128,7 @@ abstract class SoloBase<S extends Object> {
           stackTrace: _closeStackTrace,
         ),
       );
-      return job;
+      return impl;
     }
     switch (policy) {
       case Policy.sequential:
@@ -145,7 +145,7 @@ abstract class SoloBase<S extends Object> {
               stackTrace: StackTrace.current,
             ),
           );
-          return existing as Job<T>;
+          return existing as SoloJob<T>;
         }
       case Policy.replace:
         _queue.removeWhere((other) => other.key == impl.key);
@@ -156,15 +156,14 @@ abstract class SoloBase<S extends Object> {
           unawaited(current.cancel());
         }
     }
-    impl._status = _JobStatus.queued;
     _queue._insert(impl, first: first);
     _debug(() => 'add $impl${first ? ' first' : ''}');
     _schedulePump();
-    return job;
+    return impl;
   }
 
   /// `add(job(...), policy: policy)` in one call.
-  Job<T> run<W extends S, T>(
+  SoloJob<T> run<W extends S, T>(
     Future<T> Function(JobContext<S, W> ctx) body, {
     Object? key,
     bool Function(W state)? canStart,
@@ -196,10 +195,11 @@ abstract class SoloBase<S extends Object> {
   /// The last queued job matching [test], else the current job if it
   /// matches, else `null`.
   @protected
-  Job<Object?>? lastJobWhere(bool Function(Job<Object?> job) test) {
-    final queued = _queue.lastWhere(test);
-    if (queued != null) {
-      return queued;
+  SoloJob<Object?>? lastJobWhere(bool Function(Job<Object?> job) test) {
+    for (final job in _queue._jobs.reversed) {
+      if (test(job)) {
+        return job;
+      }
     }
     final current = _current;
     return current != null && test(current) ? current : null;
@@ -393,20 +393,21 @@ abstract class SoloBase<S extends Object> {
             stackTrace: cancelled.stackTrace,
           );
     switch (job._status) {
-      case _JobStatus.finished:
+      case JobStatus.finished:
         return;
-      case _JobStatus.created:
-        _debug(() => 'cancel $job before add: $cancelled');
-        job._finish(withStarted(false));
-      case _JobStatus.queued:
-        if (!job.cancellable && !force) {
-          _debug(() => 'cancel $job: not cancellable');
-          return;
+      case JobStatus.created:
+        if (_queue._jobs.contains(job)) {
+          if (!job.cancellable && !force) {
+            _debug(() => 'cancel $job: not cancellable');
+            return;
+          }
+          _debug(() => 'remove $job: $cancelled');
+          _queue._jobs.remove(job);
+        } else {
+          _debug(() => 'cancel $job before add: $cancelled');
         }
-        _debug(() => 'remove $job: $cancelled');
-        _queue._jobs.remove(job);
         job._finish(withStarted(false));
-      case _JobStatus.running:
+      case JobStatus.running:
         if (job._pendingCancel != null) {
           return;
         }
