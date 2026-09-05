@@ -3,6 +3,7 @@ library;
 
 import 'dart:async';
 
+import 'package:fake_async/fake_async.dart';
 import 'package:solo/solo.dart';
 import 'package:test/test.dart';
 
@@ -501,6 +502,50 @@ void main() {
       expect(foreignRan, isFalse);
       expect(parent.outcome, isA<Failed>());
       expect((parent.outcome! as Failed).error, isA<ArgumentError>());
+    });
+  });
+
+  test('the waiting list of a parent shrinks as children finish', () {
+    fakeAsync((async) {
+      // The list of children is protected; the double of the core reads it,
+      // and being a subclass is all it takes.
+      late final ForeignJob<void> parent;
+      final counts = <int>[];
+      parent = ForeignJob<void>((ctx) async {
+        for (var i = 0; i < 3; i++) {
+          await ctx
+              .run(
+                ForeignJob<void>(
+                  key: 'child$i',
+                  (ctx) async {
+                    await ctx.wait(() => delay(10));
+                  },
+                ),
+              )
+              .done;
+          counts.add(parent.childCount);
+        }
+      })
+        ..launch();
+      async.flushTimers();
+      expect(parent.outcome, isA<Done<void>>());
+      expect(counts, [0, 0, 0], reason: 'each child leaves as it finishes');
+    });
+  });
+
+  test('a child without a key still shows in the parent outcome', () {
+    runSolo(initialState: const Preparing(), (solo, journal, async) {
+      final parent = solo.run<Preparing, void>(
+        key: 'parent',
+        (ctx) async {
+          await ctx.run(solo.job<Working, void>((ctx) async {})).value;
+        },
+      );
+      async.flushTimers();
+      expect(
+        parent.outcome.toString(),
+        'Cancelled(handler: child null: Cancelled(rules: is not Working))',
+      );
     });
   });
 }

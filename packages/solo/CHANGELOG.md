@@ -18,6 +18,11 @@
   waiting family, the children and the outcome, and the solo subclasses add
   the state, the rules and the queue. Nothing moves in the public API of a
   controller.
+- The list of children a job waits for now shrinks as they finish: a
+  long-lived job starting children in a loop no longer grows one entry per
+  child. The description of a parent's own outcome is unchanged — the link
+  from an outcome to the child that carried it lives in an `Expando`, so a
+  child without a key still shows in it.
 - `job(...)` and `run(...)` take `ifCancelled`: the value a body returned
   after its cancellation had already arrived goes there instead of being
   dropped. The outcome stays the cancellation, and `close` waits for the

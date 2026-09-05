@@ -401,6 +401,7 @@ abstract class JobContextBase implements JobContext {
     child
       ..adoptedBy(this)
       .._observer ??= _owner._observer
+      .._parent = _owner
       ..level = _owner.level + 1;
     _owner.children.add(child);
     final pending = _owner.pendingCancel;

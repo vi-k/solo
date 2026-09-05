@@ -135,6 +135,18 @@ abstract class JobBase<T> implements Job<T> {
   final _onCancel = <void Function()>[];
   final _children = <JobBase<Object?>>[];
 
+  /// The child behind an outcome of a child, for the description of this
+  /// job's own.
+  ///
+  /// The key is the outcome instance itself, so a child must never be
+  /// finished with a canonicalized constant: two identical
+  /// `const Cancelled.by(...)` are one object and one entry. Today that
+  /// holds by itself — every cancellation the engine builds carries a
+  /// stack trace of its own.
+  final _outcomeChild = Expando<JobBase<Object?>>();
+
+  JobBase<Object?>? _parent;
+
   bool _cancellable;
 
   /// Whether anyone asked for the outcome: [done], [value] or [ignore].
@@ -340,6 +352,17 @@ abstract class JobBase<T> implements Job<T> {
     if (outcome is Cancelled && !_cancelled.isCompleted) {
       _cancelled.complete();
     }
+    // The list of children is a waiting list, so it shrinks; the link from
+    // an outcome to the child that carried it lives on, in the parent's
+    // `Expando`. Both happen here, where they are observable: in `finished`
+    // and in `onFinish` the parent's list is already without this child.
+    final parent = _parent;
+    if (parent != null) {
+      parent._children.remove(this);
+      if (outcome is Cancelled) {
+        parent._outcomeChild[outcome] = this;
+      }
+    }
     finished();
     _notifyFinish();
     _done.complete(outcome);
@@ -440,15 +463,14 @@ abstract class JobBase<T> implements Job<T> {
   /// The body threw [thrown] without being marked cancelled: either its own
   /// `throw Cancelled(...)` or a child's cancellation via `child.value`.
   Cancelled _handlerCancel(Cancelled thrown, StackTrace stackTrace) {
-    for (final child in _children) {
-      if (identical(child._outcome, thrown)) {
-        return Cancelled.by(
-          reason: CancelReason.handler,
-          started: true,
-          description: 'child ${child.key}: $thrown',
-          stackTrace: stackTrace,
-        );
-      }
+    final child = _outcomeChild[thrown];
+    if (child != null) {
+      return Cancelled.by(
+        reason: CancelReason.handler,
+        started: true,
+        description: 'child ${child.key}: $thrown',
+        stackTrace: stackTrace,
+      );
     }
     return Cancelled.by(
       reason: CancelReason.handler,
