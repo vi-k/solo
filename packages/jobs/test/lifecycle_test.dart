@@ -160,4 +160,30 @@ void main() {
       reason: 'an unobserved failure goes where the job was made',
     );
   });
+
+  test('an outcome is not replaced by whatever the body returns later', () {
+    fakeAsync((async) {
+      final journal = JobJournal();
+      final job = ProbeJob<int>(
+        key: 'job',
+        observer: journal,
+        (ctx) async {
+          await ctx.wait(
+            () => Future<void>.delayed(const Duration(milliseconds: 50)),
+          );
+          return 1;
+        },
+      )..launch();
+      async.elapse(const Duration(milliseconds: 10));
+      // An engine of a domain ends the job while its body is still going.
+      job.drop(const Done(99));
+      async.flushTimers();
+      expect((job.outcome! as Done<int>).value, 99);
+      expect(
+        journal.take().where((line) => line.contains('finished')).toList(),
+        ['[job] finished Done(99)'],
+        reason: 'announced once, and the body did not overwrite it',
+      );
+    });
+  });
 }

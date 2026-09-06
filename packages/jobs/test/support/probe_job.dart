@@ -36,6 +36,9 @@ final class UnadoptableJob<T> extends JobBase<T> {
   /// Where the job is in its life; protected on [JobBase].
   JobStatus get statusNow => status;
 
+  /// Starts the body the way an engine of a domain would.
+  void launch() => start();
+
   @override
   void adoptedBy(JobContextBase parent) =>
       throw ArgumentError.value(this, 'child', 'refuses this parent');

@@ -40,34 +40,37 @@ extension JobStream on JobContext {
       }
     }
 
-    late final StreamSubscription<T> sub;
-    // Registered before there is anything to subscribe: `onCancel` throws
-    // for a job already cancelled or finished, and a subscription made
-    // first would be left with nobody to cancel it.
-    final unregister = onCancel(() => sub.cancel());
-    sub = stream.listen(
-      (event) {
-        try {
-          onData(event);
-        } on Cancelled catch (cancelled, stackTrace) {
-          unawaited(sub.cancel());
-          // A cancellation from the context has already marked the job, and
-          // the wait below throws it by itself. A body cancelling itself
-          // with `throw Cancelled(...)` has not: without this the stream is
-          // gone, nothing will ever complete the wait, and the job hangs.
-          if (!job.isCancelled) {
-            fail(cancelled, stackTrace);
-          }
-        } on Object catch (error, stackTrace) {
-          unawaited(sub.cancel());
-          fail(error, stackTrace);
-        }
-      },
-      onError: fail,
-      onDone: end,
-      cancelOnError: true,
-    );
+    // Nullable, and registered before there is anything to subscribe:
+    // `onCancel` throws for a job already cancelled or finished, and a
+    // subscription made first would be left with nobody to cancel it. The
+    // callback may run before `listen` comes back — a stream that cancels
+    // the job as it is listened to — and then there is nothing to cancel
+    // yet: the `finally` below takes care of it.
+    StreamSubscription<T>? sub;
+    final unregister = onCancel(() => sub?.cancel());
     try {
+      sub = stream.listen(
+        (event) {
+          try {
+            onData(event);
+          } on Cancelled catch (cancelled, stackTrace) {
+            unawaited(sub?.cancel());
+            // A cancellation from the context has already marked the job, and
+            // the wait below throws it by itself. A body cancelling itself
+            // with `throw Cancelled(...)` has not: without this the stream is
+            // gone, nothing will ever complete the wait, and the job hangs.
+            if (!job.isCancelled) {
+              fail(cancelled, stackTrace);
+            }
+          } on Object catch (error, stackTrace) {
+            unawaited(sub?.cancel());
+            fail(error, stackTrace);
+          }
+        },
+        onError: fail,
+        onDone: end,
+        cancelOnError: true,
+      );
       await wait(() => done.future);
     } finally {
       unregister();
@@ -75,7 +78,7 @@ extension JobStream on JobContext {
       // future is the source's own cleanup, which this job does not own.
       // Awaiting it would also park the body forever under `FakeAsync`,
       // where a subscription's cancel future belongs to the root zone.
-      unawaited(sub.cancel());
+      unawaited(sub?.cancel());
     }
   }
 }

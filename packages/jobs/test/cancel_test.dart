@@ -1,11 +1,22 @@
 @Timeout(Duration(seconds: 5))
 library;
 
+import 'dart:async';
+
 import 'package:fake_async/fake_async.dart';
 import 'package:jobs/jobs.dart';
 import 'package:test/test.dart';
 
 import 'support/delay.dart';
+
+/// Runs [action] [depth] microtasks from now.
+void _afterMicrotasks(int depth, void Function() action) {
+  if (depth <= 0) {
+    action();
+    return;
+  }
+  scheduleMicrotask(() => _afterMicrotasks(depth - 1, action));
+}
 
 void main() {
   test('cancel is idempotent', () {
@@ -153,29 +164,33 @@ void main() {
     });
   });
 
-  test('a cancellation between the return and the outcome still wins', () {
-    fakeAsync((async) {
-      // No children: the only gap between the body's return and `finish`
-      // is the microtask of waiting for a list that is empty.
-      late final Job<int> job;
-      var returned = false;
-      job = Job<int>((ctx) async {
-        await ctx.wait(() => delay(10));
-        returned = true;
-        // The cancellation lands in the same synchronous stripe as the
-        // return, after the body is past its last checkpoint.
-        job.cancel().ignore();
-        return 42;
+  test('a cancellation after the return still wins the outcome', () {
+    // Without children the window is one microtask wide: the body has
+    // returned, and the engine is waiting for a list of children that is
+    // empty. Walking the depths pins that width instead of assuming it —
+    // a kernel that read the mark before waiting for the children would
+    // hand back Done at depth 1.
+    final outcomes = <int, Outcome<int>>{};
+    for (var depth = 0; depth <= 3; depth++) {
+      fakeAsync((async) {
+        late final Job<int> job;
+        job = Job<int>((ctx) async {
+          await ctx.wait(() => delay(10));
+          _afterMicrotasks(depth, () => job.cancel().ignore());
+          return 42;
+        });
+        async.flushTimers();
+        outcomes[depth] = job.outcome!;
       });
-      async.flushTimers();
-      expect(returned, isTrue);
-      expect(job.outcome, isA<Cancelled>());
-      expect(
-        (job.outcome! as Cancelled).reason,
-        CancelReason.manual,
-        reason: 'the outcome is not rewritten by a value already computed',
-      );
-    });
+    }
+    expect(outcomes[0], isA<Cancelled>());
+    expect(
+      outcomes[1],
+      isA<Cancelled>(),
+      reason: 'the body had returned, and the cancellation still won',
+    );
+    expect(outcomes[2], isA<Done<int>>(), reason: 'the job was over by then');
+    expect(outcomes[3], isA<Done<int>>());
   });
 
   test('uncancellable restores the answer even when the action throws', () {

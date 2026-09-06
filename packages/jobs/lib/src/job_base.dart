@@ -399,7 +399,11 @@ abstract class JobBase<T> implements Job<T> {
   @protected
   void start() {
     if (_status != JobStatus.created) {
-      throw StateError('$this has already been started');
+      throw StateError(
+        _status == JobStatus.running
+            ? '$this is already running'
+            : '$this has already finished',
+      );
     }
     // Built before the job is running: a context that throws on creation
     // leaves the job as it was, and not running with no body.
@@ -415,6 +419,11 @@ abstract class JobBase<T> implements Job<T> {
   /// On a job that has already finished this does nothing, the same as
   /// [cancel]: an outcome is final, and an engine of a domain racing its
   /// own body must not be able to replace one.
+  ///
+  /// Ending a job that is still running is not a way to cancel it: this
+  /// waits for no children and calls no `ifCancelled`, so a value the body
+  /// was about to hand over is lost. Cancel with [cancelWith] instead, and
+  /// let the body unwind.
   @protected
   void finish(Outcome<T> outcome) {
     if (_status == JobStatus.finished) {

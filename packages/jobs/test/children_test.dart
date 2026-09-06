@@ -264,7 +264,7 @@ void main() {
     });
   });
 
-  test('the cascade goes all the way down, deepest last started first', () {
+  test('the cascade goes all the way down, deepest first', () {
     fakeAsync((async) {
       final journal = JobJournal();
       final root = Job<void>(
@@ -303,19 +303,26 @@ void main() {
     fakeAsync((async) {
       final child = UnadoptableJob<void>(key: 'child', (ctx) async {});
       Object? thrown;
-      Job<void>((ctx) async {
+      final parent = Job<void>((ctx) async {
         try {
           ctx.run(child);
         } on Object catch (error) {
           thrown = error;
         }
-      }).ignore();
+      })
+        ..ignore();
       async.flushMicrotasks();
       expect(thrown, isA<ArgumentError>());
       expect(child.statusNow, JobStatus.created);
       expect(child.level, 0, reason: 'the level is set after the adoption');
       expect(child.isChild, isFalse);
       expect(child.outcome, isNull);
+      // The parent reached its end, so the refused child never joined its
+      // waiting list — and the child is free to run later, on its own.
+      expect(parent.outcome, isA<Done<void>>());
+      child.launch();
+      async.flushMicrotasks();
+      expect(child.outcome, isA<Done<void>>());
     });
   });
 

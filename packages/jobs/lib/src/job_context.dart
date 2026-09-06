@@ -379,7 +379,11 @@ abstract class JobContextBase implements JobContext {
       throw ArgumentError.value(child, 'child', 'is not a job of this core');
     }
     if (child.status != JobStatus.created) {
-      throw StateError('$child has already been started');
+      throw StateError(
+        child.status == JobStatus.running
+            ? '$child is already running'
+            : '$child has already finished',
+      );
     }
     child
       ..adoptedBy(this)

@@ -78,4 +78,45 @@ void main() {
     );
     expect(traces, contains('Job(job) error: Bad state: onCancel'));
   });
+
+  test('the same error is traced when an observer takes it', () {
+    final traces = <String>[];
+    final seen = <String>[];
+    JobBase.debug = traces.add;
+    fakeAsync((async) {
+      final job = Job<void>(
+        key: 'job',
+        observer: _RecordingObserver(seen),
+        (ctx) async {
+          ctx.onCancel(() => throw StateError('onCancel'));
+          await ctx.wait(() => delay(50));
+        },
+      );
+      async.elapse(const Duration(milliseconds: 10));
+      job.cancel().ignore();
+      async.flushTimers();
+    });
+    expect(traces, contains('Job(job) error: Bad state: onCancel'));
+    expect(seen, ['Bad state: onCancel'], reason: 'and it stopped there');
+  });
+}
+
+/// Keeps the errors it is given, and nothing else.
+final class _RecordingObserver implements JobObserver {
+  final List<String> _seen;
+
+  _RecordingObserver(this._seen);
+
+  @override
+  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      _seen.add('$error');
+
+  @override
+  void onStart(Job<Object?> job) {}
+
+  @override
+  void onFinish(Job<Object?> job) {}
+
+  @override
+  void onLog(Job<Object?> job, String message) {}
 }
