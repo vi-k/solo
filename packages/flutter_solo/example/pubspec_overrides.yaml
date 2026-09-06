@@ -1,0 +1,10 @@
+# Local paths to the packages that are not on pub.dev yet. This file is not
+# published: `example/` ships inside the package, and these paths lead
+# outside the archive. Delete it once the three packages are out.
+dependency_overrides:
+  flutter_solo:
+    path: ../
+  solo:
+    path: ../../solo
+  jobs:
+    path: ../../jobs

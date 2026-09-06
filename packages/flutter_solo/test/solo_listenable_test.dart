@@ -86,6 +86,18 @@ void main() {
     await counter.close();
   });
 
+  test('a listener added after close hears nothing', () async {
+    final counter = _Counter();
+    await counter.close();
+
+    final calls = <int>[];
+    counter.addListener(() => calls.add(counter.value));
+    counter.set(7);
+
+    expect(counter.value, 7);
+    expect(calls, isEmpty);
+  });
+
   test('close returns the same future on repeated calls', () async {
     final counter = _Counter();
     final first = counter.close();

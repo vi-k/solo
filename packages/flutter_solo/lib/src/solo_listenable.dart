@@ -12,6 +12,7 @@ class SoloListenable<S extends Object> extends Solo<S>
     implements ValueListenable<S> {
   final _listeners = <VoidCallback>[];
   Future<void>? _closed;
+  var _dropped = false;
 
   /// Creates a controller in [initialState].
   SoloListenable(super.initialState);
@@ -31,9 +32,17 @@ class SoloListenable<S extends Object> extends Solo<S>
   /// Queues the event for the stream, then notifies listeners in
   /// subscription order, synchronously. A listener removed during the pass
   /// is skipped; one added during the pass hears the next change.
+  ///
+  /// Nobody is notified once [close] has finished — the listeners are gone
+  /// by then, and one added afterwards hears nothing either, the same way
+  /// the stream of a closed [Solo] drops its events. A state can still
+  /// change there: `externalSetState` is not blocked by [close].
   @override
   void publish(S previous, S current) {
     super.publish(previous, current);
+    if (_dropped) {
+      return;
+    }
     for (final listener in _listeners.toList()) {
       if (_listeners.contains(listener)) {
         listener();
@@ -41,8 +50,9 @@ class SoloListenable<S extends Object> extends Solo<S>
     }
   }
 
-  /// Closes the engine and the stream, then drops every listener. Repeated
-  /// calls return the same future, so the chain is built once and kept.
+  /// Closes the engine and the stream, then drops every listener and stops
+  /// notifying for good. Repeated calls return the same future, so the
+  /// chain is built once and kept.
   @override
   Future<void> close() {
     final closed = _closed;
@@ -53,7 +63,12 @@ class SoloListenable<S extends Object> extends Solo<S>
     // from inside it may call `close` again and must get this same future.
     final completer = Completer<void>();
     _closed = completer.future;
-    completer.complete(super.close().then((_) => _listeners.clear()));
+    completer.complete(
+      super.close().then((_) {
+        _dropped = true;
+        _listeners.clear();
+      }),
+    );
     return completer.future;
   }
 }
