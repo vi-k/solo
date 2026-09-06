@@ -4,6 +4,11 @@ description: >-
   cancellation and a waiting family. Pure Dart.
 version: 0.1.0
 repository: https://github.com/vi-k/solo/tree/main/packages/jobs
+issue_tracker: https://github.com/vi-k/solo/issues
+topics:
+  - async
+  - cancellation
+  - concurrency
 
 environment:
   sdk: ^3.6.0

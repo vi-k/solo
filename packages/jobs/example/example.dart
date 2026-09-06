@@ -11,28 +11,30 @@ class Database {
 
   Future<void> migrate() async {}
 
+  Future<void> markReady() async {}
+
   Future<void> close() async {
     isOpen = false;
     print('database closed');
   }
 }
 
+/// The Quick start of README.md, with a fake [Database] around it.
 Future<void> main() async {
-  // The body never awaits anything by itself: every call goes through the
-  // context, and the member says what a cancellation does to it.
   final job = Job<Database>(
-    key: 'open',
     // The value the body returns after a cancellation has already arrived
     // still gets released.
     ifCancelled: (database) => database.close(),
     (ctx) async {
       // `join` stays with the call: an open database is not abandoned
-      // halfway.
+      // halfway, and its `ifCancelled` closes what the wait no longer
+      // needs.
       final database = await ctx.join(
         Database.open,
         ifCancelled: (database) => database.close(),
       );
       await ctx.wait(database.migrate);
+      await ctx.uncancellable(database.markReady);
 
       return database;
     },

@@ -24,7 +24,7 @@ extension JobStream on JobContext {
   /// [JobContext.join] around it.
   ///
   /// ```dart
-  /// await ctx.each(hw.positions, (p) => ctx.emit(Tracking(p)));
+  /// await ctx.each(hw.positions, (p) => ctx.log('at $p'));
   /// ```
   Future<void> each<T>(Stream<T> stream, void Function(T event) onData) async {
     final done = Completer<void>();
