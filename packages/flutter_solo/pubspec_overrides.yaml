@@ -1,0 +1,6 @@
+# Local development only; see packages/solo/pubspec_overrides.yaml.
+dependency_overrides:
+  jobs:
+    path: ../jobs
+  solo:
+    path: ../solo
