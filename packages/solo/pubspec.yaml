@@ -4,6 +4,12 @@ description: >-
   declarative rules and cooperative cancellation. Pure Dart.
 version: 0.2.0
 repository: https://github.com/vi-k/solo/tree/main/packages/solo
+issue_tracker: https://github.com/vi-k/solo/issues
+topics:
+  - state-management
+  - async
+  - cancellation
+  - concurrency
 
 environment:
   sdk: ^3.6.0
