@@ -223,4 +223,93 @@ void main() {
       controller.close().ignore();
     });
   });
+
+  test('the cancel callback leaves with the job it belonged to', () {
+    fakeAsync((async) {
+      // Counted on the subscription itself: the SDK makes a second cancel
+      // of one subscription idempotent, so the source never sees it. A
+      // callback left behind by `each` would show up here, and nowhere
+      // else in this suite.
+      final controller = StreamController<int>();
+      final stream = _CountingStream<int>(controller.stream);
+      final job = Job<void>((ctx) async {
+        await ctx.each(stream, (_) {});
+        await ctx.wait(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+      });
+      async.flushMicrotasks();
+      controller.close().ignore();
+      async.flushMicrotasks();
+      expect(stream.cancels, 1, reason: 'the stream ended, each let go');
+      job.cancel().ignore();
+      async.flushTimers();
+      expect(
+        stream.cancels,
+        1,
+        reason: 'and the callback left with it, not with the job',
+      );
+    });
+  });
+}
+
+/// A stream that counts how many times its subscription is cancelled.
+final class _CountingStream<T> extends Stream<T> {
+  final Stream<T> _inner;
+
+  /// How many times `cancel()` was called on the subscription.
+  int cancels = 0;
+
+  _CountingStream(this._inner);
+
+  @override
+  StreamSubscription<T> listen(
+    void Function(T event)? onData, {
+    Function? onError,
+    void Function()? onDone,
+    bool? cancelOnError,
+  }) =>
+      _CountingSubscription<T>(
+        _inner.listen(
+          onData,
+          onError: onError,
+          onDone: onDone,
+          cancelOnError: cancelOnError,
+        ),
+        this,
+      );
+}
+
+final class _CountingSubscription<T> implements StreamSubscription<T> {
+  final StreamSubscription<T> _inner;
+  final _CountingStream<T> _owner;
+
+  _CountingSubscription(this._inner, this._owner);
+
+  @override
+  Future<void> cancel() {
+    _owner.cancels++;
+    return _inner.cancel();
+  }
+
+  @override
+  Future<E> asFuture<E>([E? futureValue]) => _inner.asFuture(futureValue);
+
+  @override
+  bool get isPaused => _inner.isPaused;
+
+  @override
+  void onData(void Function(T data)? handleData) => _inner.onData(handleData);
+
+  @override
+  void onDone(void Function()? handleDone) => _inner.onDone(handleDone);
+
+  @override
+  void onError(Function? handleError) => _inner.onError(handleError);
+
+  @override
+  void pause([Future<void>? resumeSignal]) => _inner.pause(resumeSignal);
+
+  @override
+  void resume() => _inner.resume();
 }
