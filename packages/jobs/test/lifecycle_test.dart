@@ -1,6 +1,8 @@
 @Timeout(Duration(seconds: 5))
 library;
 
+import 'dart:async';
+
 import 'package:fake_async/fake_async.dart';
 import 'package:jobs/jobs.dart';
 import 'package:test/test.dart';
@@ -100,5 +102,62 @@ void main() {
       );
       expect(journal.take(), isEmpty, reason: 'and nothing is announced');
     });
+  });
+
+  test('start of a job cancelled before it ran throws', () {
+    fakeAsync((async) {
+      final job = Job.deferred<void>((ctx) async {})..cancel().ignore();
+      async.flushMicrotasks();
+      expect((job.outcome! as Cancelled).started, isFalse);
+      expect(job.start, throwsStateError);
+    });
+  });
+
+  test('toString names the job by key, and by description when given', () {
+    fakeAsync((async) {
+      final plain = Job.deferred<void>(key: 'open', (ctx) async {});
+      final described = Job.deferred<void>(
+        key: 'zoom',
+        describe: () => 'x2',
+        (ctx) async {},
+      );
+      expect(plain.toString(), 'Job(open)');
+      expect(described.toString(), 'Job(zoom: x2)');
+      expect(
+        Job.deferred<void>((ctx) async {}).toString(),
+        'Job(null)',
+        reason: 'a job without a key still prints',
+      );
+    });
+  });
+
+  test('the body runs where it started, the failure where it was made', () {
+    final caught = <String>[];
+    String? bodyZone;
+    fakeAsync((async) {
+      late final DeferredJob<void> job;
+      runZonedGuarded(
+        () {
+          job = Job.deferred<void>((ctx) async {
+            bodyZone = Zone.current[#name] as String?;
+            throw StateError('boom');
+          });
+        },
+        (error, stackTrace) => caught.add('creator'),
+        zoneValues: {#name: 'creator'},
+      );
+      runZonedGuarded(
+        job.start,
+        (error, stackTrace) => caught.add('starter'),
+        zoneValues: {#name: 'starter'},
+      );
+      async.flushMicrotasks();
+    });
+    expect(bodyZone, 'starter', reason: 'the body runs where it was started');
+    expect(
+      caught,
+      ['creator'],
+      reason: 'an unobserved failure goes where the job was made',
+    );
   });
 }

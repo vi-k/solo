@@ -152,4 +152,52 @@ void main() {
       expect(order, ['done', 'cancel']);
     });
   });
+
+  test('a cancellation between the return and the outcome still wins', () {
+    fakeAsync((async) {
+      // No children: the only gap between the body's return and `finish`
+      // is the microtask of waiting for a list that is empty.
+      late final Job<int> job;
+      var returned = false;
+      job = Job<int>((ctx) async {
+        await ctx.wait(() => delay(10));
+        returned = true;
+        // The cancellation lands in the same synchronous stripe as the
+        // return, after the body is past its last checkpoint.
+        job.cancel().ignore();
+        return 42;
+      });
+      async.flushTimers();
+      expect(returned, isTrue);
+      expect(job.outcome, isA<Cancelled>());
+      expect(
+        (job.outcome! as Cancelled).reason,
+        CancelReason.manual,
+        reason: 'the outcome is not rewritten by a value already computed',
+      );
+    });
+  });
+
+  test('uncancellable restores the answer even when the action throws', () {
+    fakeAsync((async) {
+      var reached = false;
+      final job = Job<void>((ctx) async {
+        try {
+          await ctx.uncancellable(() async {
+            await delay(10);
+            throw const FormatException('inside');
+          });
+        } on FormatException {
+          // Caught: the section is over, and the job is cancellable again.
+        }
+        await ctx.wait(() => delay(50));
+        reached = true;
+      });
+      async.elapse(const Duration(milliseconds: 20));
+      job.cancel().ignore();
+      async.flushTimers();
+      expect(reached, isFalse, reason: 'the section did not leave it off');
+      expect(job.outcome, isA<Cancelled>());
+    });
+  });
 }

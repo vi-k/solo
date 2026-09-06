@@ -231,6 +231,122 @@ void main() {
       expect(thrown, isA<ArgumentError>());
     });
   });
+
+  test('a child given an observer of its own keeps it', () {
+    fakeAsync((async) {
+      final parentJournal = JobJournal();
+      final childJournal = JobJournal();
+      Job<void>(
+        key: 'parent',
+        observer: parentJournal,
+        (ctx) async {
+          await ctx
+              .run(
+                Job.deferred<void>(
+                  key: 'child',
+                  observer: childJournal,
+                  (ctx) async {},
+                ),
+              )
+              .done;
+        },
+      ).ignore();
+      async.flushMicrotasks();
+      expect(
+        parentJournal.take(),
+        ['[parent] started', '[parent] finished Done(null)'],
+        reason: 'the child never reported to the parent observer',
+      );
+      expect(childJournal.take(), [
+        '> [child] started',
+        '> [child] finished Done(null)',
+      ]);
+    });
+  });
+
+  test('the cascade goes all the way down, deepest last started first', () {
+    fakeAsync((async) {
+      final journal = JobJournal();
+      final root = Job<void>(
+        key: 'root',
+        observer: journal,
+        (ctx) async {
+          ctx.run(
+            Job.deferred<void>(key: 'child', (ctx) async {
+              ctx.run(
+                Job.deferred<void>(
+                  key: 'grandchild',
+                  (ctx) => ctx.wait(() => delay(100)),
+                ),
+              );
+              await ctx.wait(() => delay(100));
+            }),
+          );
+          await ctx.wait(() => delay(100));
+        },
+      );
+      async.elapse(const Duration(milliseconds: 10));
+      root.cancel().ignore();
+      async.flushTimers();
+      expect(
+        journal.take().where((line) => line.contains('Cancelled')).toList(),
+        [
+          '>> [grandchild] finished Cancelled(parent)',
+          '> [child] finished Cancelled(parent)',
+          '[root] finished Cancelled(manual)',
+        ],
+      );
+    });
+  });
+
+  test('a child that refuses its parent is left as it was', () {
+    fakeAsync((async) {
+      final child = UnadoptableJob<void>(key: 'child', (ctx) async {});
+      Object? thrown;
+      Job<void>((ctx) async {
+        try {
+          ctx.run(child);
+        } on Object catch (error) {
+          thrown = error;
+        }
+      }).ignore();
+      async.flushMicrotasks();
+      expect(thrown, isA<ArgumentError>());
+      expect(child.statusNow, JobStatus.created);
+      expect(child.level, 0, reason: 'the level is set after the adoption');
+      expect(child.isChild, isFalse);
+      expect(child.outcome, isNull);
+    });
+  });
+
+  test('a child the parent turns away finishes without ever starting', () {
+    fakeAsync((async) {
+      final journal = JobJournal();
+      late final Job<void> handle;
+      final child = Job.deferred<void>(key: 'child', (ctx) async {});
+      final parent = RefusingParentJob<void>(
+        key: 'parent',
+        observer: journal,
+        (ctx) async {
+          handle = ctx.run(child);
+        },
+      )..launch();
+      async.flushMicrotasks();
+      expect(identical(handle, child), isTrue, reason: 'the same handle');
+      expect(child.level, 1, reason: 'adopted before it was turned away');
+      expect((child.outcome! as Cancelled).description, 'not now');
+      expect(parent.outcome, isA<Done<void>>());
+      expect(
+        journal.take(),
+        [
+          '[parent] started',
+          '> [child] dropped Cancelled(rules: not now)',
+          '[parent] finished Done(null)',
+        ],
+        reason: 'finished without a started of its own',
+      );
+    });
+  });
 }
 
 /// A handle that implements [Job] without being a job of this core.

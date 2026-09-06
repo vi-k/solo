@@ -465,12 +465,14 @@ abstract class JobBase<T> implements Job<T> {
   /// the default of the package.
   @protected
   void notifyError(Object error, StackTrace stackTrace) {
+    // Traced on both paths: the one without an observer is the harder of
+    // the two to debug, and it is the one that reaches the zone.
+    _debug(() => '$this error: $error');
     final observer = _observer;
     if (observer == null) {
       _zone.handleUncaughtError(error, stackTrace);
       return;
     }
-    _debug(() => '$this error: $error');
     _notify(() => observer.onError(this, error, stackTrace));
   }
 
@@ -483,6 +485,9 @@ abstract class JobBase<T> implements Job<T> {
   void started() {}
 
   /// The subclass leaves the run: `solo` clears `current` and pumps.
+  ///
+  /// Called for every job that gets an outcome, including one dropped
+  /// before its body ever ran — then there was no [started] to match it.
   @protected
   void finished() {}
 
