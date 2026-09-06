@@ -1,2 +1,7 @@
 # Russian translation, kept in the repository but not published.
 README.ru.md
+
+# The example's override of the unpublished `jobs`. `example/` ships inside
+# the package, and `../../jobs` leads outside the archive: published, this
+# file would break `dart pub get` for everyone who downloads the package.
+example/pubspec_overrides.yaml

@@ -177,7 +177,26 @@ abstract class SoloBase<S extends Object> {
     return impl;
   }
 
-  /// `add(job(...), policy: policy)` in one call.
+  /// `add(job(...), policy: policy)` in one call: how a method of a
+  /// controller builds its job and queues it.
+  ///
+  /// Every parameter but [policy] belongs to [job], which documents them
+  /// all; [policy] belongs to [add]. Returns the queued job and throws
+  /// nothing — on a closed controller it gives back a job already
+  /// finished with `Cancelled(closed)`.
+  ///
+  /// ```dart
+  /// Job<String> load() => run<Profile, String>(
+  ///       key: 'load',
+  ///       policy: Policy.droppable,
+  ///       (ctx) async {
+  ///         final name = await ctx.wait(api.fetchName);
+  ///         ctx.emit(Profile(name: name));
+  ///
+  ///         return name;
+  ///       },
+  ///     );
+  /// ```
   SoloJob<T> run<W extends S, T>(
     Future<T> Function(SoloContext<S, W> ctx) body, {
     Object? key,

@@ -59,8 +59,12 @@
    в архив не попадает.
 
    После публикации подчистить оверрайды `jobs` там, где они станут не
-   нужны: `packages/solo/example/pubspec.yaml` и шаблон `SOLO_PUBSPEC` в
-   `tool/doc_snippets.py`.
+   нужны: `packages/solo/example/pubspec_overrides.yaml` и шаблон
+   `SOLO_PUBSPEC` в `tool/doc_snippets.py`. Оба — только уборка, ни один в
+   архив не едет: оверрайд примера переехал из `example/pubspec.yaml` в
+   `pubspec_overrides.yaml` и закрыт `.pubignore` пакета (иначе
+   опубликованный пример не собирался бы ни у кого — находка 1
+   `2026-09-06[5]-solo-docs-review.md`).
 
    Заново проверить, свободны ли имена: `solo` и `flutter_solo` были
    свободны на 2026-09-02, `jobs` — на 2026-09-06. Между публикацией

@@ -25,6 +25,12 @@ abstract interface class SoloContext<S extends Object, W extends S>
   /// this job on the way: hooks, observers and listeners run inside it and
   /// may set the state again, and a parent that goes down there takes its
   /// children with it.
+  ///
+  /// ```dart
+  /// ctx.emit(ctx.state.copyWith(loading: true));
+  /// final name = await ctx.wait(api.fetchName);
+  /// ctx.emit(Profile(name: name));
+  /// ```
   void emit(S next);
 }
 

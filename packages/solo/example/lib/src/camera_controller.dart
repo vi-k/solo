@@ -172,6 +172,10 @@ final class CameraController extends Solo<CameraState> {
   /// Forces the way: clears the queue, cancels the current job, closes the
   /// hardware. Call [close] afterwards to release the controller.
   Job<void> dispose() {
+    // The source of external states goes first: `close()` does not block
+    // `externalSetState`, and a `Broken` arriving after the camera is gone
+    // would set a state nobody is listening for any more.
+    hw.onError = null;
     queue.clear(force: true);
     current?.cancel();
     return run<CameraState, void>(

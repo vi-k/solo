@@ -1,0 +1,7 @@
+# A root package applies no override of its dependency, so the path to
+# the unpublished `jobs` is repeated here. This file is not published:
+# `example/` ships inside the package, and `../../jobs` does not exist
+# in the archive. Delete it once `jobs` is on pub.dev.
+dependency_overrides:
+  jobs:
+    path: ../../jobs
