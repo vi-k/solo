@@ -8,10 +8,12 @@ import 'support/run_solo.dart';
 import 'support/test_state.dart';
 
 void main() {
-  test('an uncancellable step refuses cancel and the job finishes', () {
+  test('an uncancellable step holds the cancel until the step ends', () {
     runSolo((solo, journal, async) {
       final job = solo.run<TestState, void>(key: 'pay', (ctx) async {
         await ctx.uncancellable(() => delay(100));
+        // The first checkpoint after the step: the held cancellation is
+        // thrown here, and the state is never written.
         ctx.emit(const Working());
       });
       async.elapse(const Duration(milliseconds: 50));
@@ -22,11 +24,10 @@ void main() {
       expect(cancelDone, isFalse, reason: 'cancel waits for the body');
       async.elapse(const Duration(milliseconds: 50));
       expect(cancelDone, isTrue);
-      expect(job.outcome, isA<Done<void>>());
+      expect(job.outcome, isA<Cancelled>());
       expect(journal.take(), [
         '[pay] started',
-        'state: Working(a: 0, b: 0)',
-        '[pay] finished Done(null)',
+        '[pay] finished Cancelled(manual)',
       ]);
     });
   });
@@ -49,7 +50,7 @@ void main() {
     });
   });
 
-  test('close waits for an uncancellable step instead of cancelling', () {
+  test('close waits for an uncancellable step and lands after it', () {
     runSolo((solo, journal, async) {
       final job = solo.run<TestState, void>(key: 'pay', (ctx) async {
         await ctx.uncancellable(() => delay(100));
@@ -62,7 +63,13 @@ void main() {
       expect(closed, isFalse, reason: 'close waits for the body');
       async.flushTimers();
       expect(closed, isTrue);
-      expect(job.outcome, isA<Done<void>>());
+      final outcome = job.outcome;
+      expect(outcome, isA<Cancelled>());
+      expect(
+        (outcome! as Cancelled).reason,
+        SoloCancelReason.closed,
+        reason: 'the closing is what was held, and it is what lands',
+      );
     });
   });
 

@@ -9,7 +9,8 @@ Initial release. The job kernel taken out of `solo` 0.1.0.
   and a public `Cancelled.by` for engines built on this one.
 - A waiting family that says what a cancellation does to a call:
   `ctx.wait` ends the waiting and not the work, `ctx.join` waits for all
-  of the action and gives up afterwards, `ctx.uncancellable` refuses,
+  of the action and gives up afterwards, `ctx.uncancellable` holds the
+  cancellation until the step is over,
   `ctx.onCancel` hands the cancellation to whatever can really stop, and
   `ctx.check` gives up where there is no call to wrap. `ctx.each` follows
   a stream for as long as the job lives.

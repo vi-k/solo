@@ -94,8 +94,9 @@ Line by line, because every one of them is a decision:
   would end the waiting and leave it writing into a database this body is
   about to close.
 - **`ctx.uncancellable(database.markReady)`** for the one step that must
-  not be interrupted at all. A cancellation arriving inside it is refused
-  outright — see [Cancellation](#cancellation).
+  not be interrupted at all. A cancellation arriving inside it is held
+  until the step is over, and lands on the next line that goes through the
+  context — see [Cancellation](#cancellation).
 - **`ifCancelled` on the job itself** for the last gap: a cancellation
   that lands between the `return` and the outcome, when the value is
   already computed and there is no body left to catch anything. See
@@ -170,8 +171,13 @@ says what a cancellation does to that call:
 - `ctx.each(stream, onData)` follows a stream for as long as the job
   lives. The subscription is cancelled the moment the job is marked,
   before the body learns about it, and nothing is left listening.
-- `ctx.uncancellable(action)` refuses the cancellation for the length of
-  the call. A refusal is final, not deferred.
+- `ctx.uncancellable(action)` holds the cancellation for the length of
+  the call: the job is not marked while it runs, so nothing — not an
+  `onCancel` callback, not the cascade onto children — reaches into the
+  step. It lands the moment the section closes, and the next context call
+  throws it. A step whose tail must happen too belongs inside the same
+  section; a job that must survive a cancellation altogether is created
+  with `cancellable: false`.
 - `ctx.onCancel(callback)` fires the moment the job is marked, before the
   body learns about it: this is how a cancellation reaches something that
   can really stop — a cancel token, an abort, a subscription.

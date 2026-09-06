@@ -209,7 +209,8 @@ every call goes through the context, and the member you pick says what a
 cancellation does to that call. `ctx.wait(() => ...)` returns as soon as
 either the action or the cancellation arrives. `ctx.join(() => ...)` waits
 for all of the action and gives up afterwards. `ctx.uncancellable(() => ...)`
-turns the cancellation down for the length of the call. Where there is no
+holds the cancellation for the length of the call and gives up once it is
+over. Where there is no
 call to wrap — a loop over work of your own — `ctx.check()` is the same
 check on its own. A bare `await` is right in one place only: a call with
 no body code after it — the last cleanup of a job, the way the example
@@ -363,17 +364,21 @@ not protect it from reality: if the state stopped matching `W` or
 it to read. A non-cancellable job that must survive any state needs the
 base type `S` and no `keepWhile`.
 
-`ctx.uncancellable(action)` says the same about one step of the body rather
-than about the whole job, and it is the third answer a call can get: `wait`
-ends the waiting and not the work, `join` waits for the work and gives up
-after it, this one refuses to be cancelled at all while `action` runs. Use
-it for a step that cannot be taken back — a payment on its way to the
-server, a write already on the wire. A `cancel` or a `close` arriving then
-is refused rather than remembered, `close` waits for the body, and the rules
-are not covered by it either. Sections nest, and the answer in force before
-the step comes back afterwards, thrown or not — so a job created with
-`cancellable: false` stays that way throughout, and a step that must be
-interruptible inside such a job belongs in a job of its own.
+`ctx.uncancellable(action)` protects one step of the body rather than the
+whole job, and it is the third answer a call can get: `wait` ends the
+waiting and not the work, `join` waits for the work and gives up after it,
+this one is not cancelled at all while `action` runs. Use it for a step
+that cannot be taken back — a payment on its way to the server, a write
+already on the wire. A `cancel` or a `close` arriving then is held, not
+refused: the job is not marked while the step runs, so nothing reaches into
+it — not an `onCancel` callback, not the cascade onto children — and
+`close` waits for the body. When the section closes the cancellation lands,
+and the next member of the context throws it, so a tail that has to happen
+anyway belongs inside the same section. The rules are not covered by any of
+this: a job whose state left its working type is cancelled regardless.
+Sections nest and only the outermost lets a held cancellation through; a
+job created with `cancellable: false` refuses it outright instead, and that
+refusal is what a section leaves alone.
 
 `emit` is trusted, reads are checked. The emitted state is not verified
 against the rules of the job that emitted it — otherwise a `close` job

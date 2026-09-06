@@ -98,22 +98,32 @@ abstract interface class JobContext {
     FutureOr<void> Function(T value)? ifCancelled,
   });
 
-  /// Runs [action] with cancellation refused, and waits for it.
+  /// Runs [action] with the cancellation held back, and waits for it.
   ///
   /// The counterpart of [wait], for a step that cannot be taken back: a
   /// payment on its way to the server, a write already on the wire. While
-  /// [action] runs, [Job.cancel], a cancelled parent and whatever an
-  /// engine of a domain adds — a queue, a closing — are all turned down,
-  /// and the engine waits for the body instead of interrupting it.
+  /// [action] runs the job is not marked at all, so [Job.cancel], a
+  /// cancelled parent and whatever an engine of a domain adds — a queue, a
+  /// closing — reach neither an [onCancel] callback nor a child, and the
+  /// engine waits for the body instead of interrupting it.
   ///
   /// ```dart
   /// final receipt = await ctx.uncancellable(() => api.pay(order));
   /// ```
   ///
-  /// A refusal is final, not deferred: nothing is replayed once [action]
-  /// returns. Sections nest — the answer in force before this one is
-  /// restored, not assumed — and the answer is restored even if [action]
-  /// throws.
+  /// Held, not refused: the cancellation lands the moment the section
+  /// closes, and the next member of the context throws it. So the step is
+  /// protected, and the job still ends up cancelled — anything after the
+  /// step that has to happen anyway belongs inside the same section, and a
+  /// job that must survive a cancellation altogether is created with
+  /// `cancellable: false`. That refusal is final and is what a section
+  /// leaves alone. Sections nest — only the outermost lets a held
+  /// cancellation through — and it is let through even if [action] throws.
+  ///
+  /// This is what separates it from [join], which accepts the
+  /// cancellation as it arrives and only keeps waiting: there the job is
+  /// marked at once, and a token handed to [onCancel] stops the very call
+  /// being waited for.
   ///
   /// The rules an engine of a domain adds are not covered: `solo` cancels
   /// a job whose state left its working type whatever this does, and the
@@ -227,15 +237,21 @@ abstract class JobContextBase implements JobContext {
   void cancelOwnJob(Cancelled cancelled) =>
       _owner.cancelWith(cancelled, rejectable: false);
 
-  /// Whether the job accepts a cancellation it may refuse.
-  ///
-  /// A pair, not a lone setter: [uncancellable] remembers the answer in
-  /// force and restores it afterwards.
+  /// Whether the job accepts a cancellation it may refuse, as it was
+  /// created; an uncancellable section does not change it.
   @protected
   bool get cancellable => _owner._cancellable;
 
+  /// Opens an uncancellable section on the owner: a rejectable
+  /// cancellation arriving now is held until the section closes. Sections
+  /// nest, and every one of them is closed by [leaveUncancellable].
   @protected
-  set cancellable(bool value) => _owner._cancellable = value;
+  void enterUncancellable() => _owner.enterUncancellable();
+
+  /// Closes a section opened by [enterUncancellable]; the outermost one
+  /// lets a held cancellation through.
+  @protected
+  void leaveUncancellable() => _owner.leaveUncancellable();
 
   /// The parent's last word before a child starts; `solo` checks the start
   /// rules here. A non-null result finishes the child with it.
@@ -279,12 +295,11 @@ abstract class JobContextBase implements JobContext {
   Future<T> uncancellable<T>(FutureOr<T> Function() action) async {
     throwIfFinished('run an uncancellable action');
     check();
-    final previous = cancellable;
-    cancellable = false;
+    enterUncancellable();
     try {
       return await action();
     } finally {
-      cancellable = previous;
+      leaveUncancellable();
     }
   }
 

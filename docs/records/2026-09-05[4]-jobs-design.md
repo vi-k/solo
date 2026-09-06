@@ -346,11 +346,14 @@ abstract class JobContextBase implements JobContext {
   @protected void Function() addCancelCallback(void Function() callback);
   @protected void cancelOwnJob(Cancelled cancelled);
 
-  /// Пара, а не один сеттер: `uncancellable` запоминает прежнее значение и
-  /// восстанавливает его, а сеттер без геттера не проходит линт
-  /// `avoid_setters_without_getters`. Читает и пишет флаг своей задачи.
+  /// Флаг из конструктора, только на чтение: секция его не меняет.
   @protected bool get cancellable;
-  @protected set cancellable(bool value);
+
+  /// Секция `uncancellable`: пока она открыта, отклоняемую отмену
+  /// придерживают, а не отклоняют, и задачу не помечают. Секции
+  /// вкладываются; отпускает придержанную отмену только внешняя.
+  @protected void enterUncancellable();
+  @protected void leaveUncancellable();
 
   /// Контрольная точка. Ядро бросает отмену, если она отмечена; solo
   /// переопределяет и проверяет заодно правила.
@@ -370,7 +373,8 @@ abstract class JobBase<T> implements Job<T> {
   @protected JobStatus get status;
   @protected Cancelled? get pendingCancel;
   @protected bool get cancellable;
-  @protected set cancellable(bool value);
+  @protected void enterUncancellable();
+  @protected void leaveUncancellable();
   @protected set level(int value);
 
   /// Список ожидания: законченный ребёнок снимается с него сам.
@@ -475,7 +479,8 @@ solo) получил бы в интерфейс восемь защищённы�
 Контексту нужно другое, и всё это — защищённые члены `JobContextBase`, то
 есть наследник контекста обращается к своей основе, а не к чужой задаче:
 `pendingCancel`, `throwIfCancelled`, `throwIfFinished`, `notifyError`,
-чтение и запись `cancellable` (для `uncancellable`), регистрация колбэка
+чтение `cancellable` и пара `enterUncancellable`/`leaveUncancellable` (для
+`uncancellable`), регистрация колбэка
 отмены в обход публичного `onCancel` (её использует гонка внутри `wait`) и
 отмена своей задачи (`stateAs` и проверка правил в solo зовут её с
 неотклоняемой отменой).
@@ -808,3 +813,34 @@ Function() message)`, который зовёт колбэк только при
 - Нужен ли контексту `isCancelled` отдельным членом. Сейчас предлагается
   обходиться `ctx.job.isCancelled`; у `scopo` такой член есть, и если при
   переносе окажется, что он нужен постоянно, это неломающее добавление.
+
+## Дополнение 2026-09-06: отложенный отказ у `uncancellable`
+
+Решение владельца, по вопросу, поднятому им же после ревью документации.
+Было: отклоняемая отмена, пришедшая внутрь `uncancellable`, отклонялась
+навсегда и нигде не запоминалась — задача с `cancellable: true`
+доигрывала до конца и заканчивалась `Done`, а вызывающий `cancel()` узнавал
+об отказе только по исходу. Стало: отмену придерживают. Пока секция
+открыта, задачу **не помечают** — иначе сработали бы колбэки `onCancel` и
+каскад на детей, то есть ровно то, от чего шаг и защищают; в момент
+закрытия внешней секции придержанная отмена применяется, и ближайший член
+контекста её бросает.
+
+Что осталось прежним: `cancellable: false` из конструктора — окончательный
+отказ, секция его не трогает; неотклоняемые отмены (правила solo) проходят
+сквозь секцию как и раньше; `close` по-прежнему дожидается тела; секции
+по-прежнему вкладываются.
+
+Чем это отличается от `join`: `join` принимает отмену сразу — задачу
+помечают, срабатывают `onCancel` и каскад, — и лишь дожидается вызова.
+`uncancellable` не пускает пометку внутрь шага вовсе.
+
+Цена, которую платит тело: хвост после защищённого шага больше не
+выполняется, если отмена пришла во время шага. Хвост, который обязан
+выполниться, кладётся в ту же секцию; задача, которая должна пережить
+отмену целиком, объявляется `cancellable: false`.
+
+В коде: `_uncancellableDepth` и `_heldCancel` в `JobBase`, ветка в
+`cancelWith`, пара `enterUncancellable`/`leaveUncancellable` вместо сеттера
+`cancellable`. В сьютах: четыре теста в `packages/jobs/test/cancel_test.dart`
+и переписанные два в `packages/solo/test/cancellable_test.dart`.

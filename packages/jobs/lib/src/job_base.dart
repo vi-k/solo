@@ -137,9 +137,9 @@ abstract interface class Job<T> {
 
   /// Cancels the job and waits for it to actually finish.
   ///
-  /// A job created with `cancellable: false`, or one inside
-  /// [JobContext.uncancellable], is not cancelled; the returned future
-  /// still waits for it to finish.
+  /// A job created with `cancellable: false` is not cancelled at all; one
+  /// inside [JobContext.uncancellable] is cancelled when that section
+  /// closes. Either way the returned future waits for it to finish.
   Future<void> cancel();
 
   /// Tells the engine that nobody is interested in this job's failure.
@@ -216,7 +216,9 @@ abstract class JobBase<T> implements Job<T> {
 
   JobBase<Object?>? _parent;
 
-  bool _cancellable;
+  final bool _cancellable;
+  var _uncancellableDepth = 0;
+  Cancelled? _heldCancel;
 
   /// Whether anyone asked for the outcome: [done], [value] or [ignore].
   bool _observed = false;
@@ -326,9 +328,12 @@ abstract class JobBase<T> implements Job<T> {
   /// Cancels the job with [cancelled], correcting `started` to its status.
   ///
   /// Idempotent. [rejectable] is what a job created with
-  /// `cancellable: false` may refuse; the rules of a domain pass `false`,
-  /// and a refusal is final — nothing is replayed later. Virtual: `solo`
-  /// adds the branch for a job still waiting in its queue.
+  /// `cancellable: false` may refuse, and its refusal is final — nothing
+  /// is replayed later. Inside [JobContext.uncancellable] a rejectable
+  /// cancellation is held instead: the step runs untouched, and the
+  /// cancellation lands the moment the last section closes. The rules of a
+  /// domain pass `false` and go through both. Virtual: `solo` adds the
+  /// branch for a job still waiting in its queue.
   @protected
   void cancelWith(Cancelled cancelled, {bool rejectable = true}) {
     Cancelled withStarted(bool started) => cancelled.started == started
@@ -354,6 +359,14 @@ abstract class JobBase<T> implements Job<T> {
           return;
         }
         final marked = withStarted(true);
+        if (_uncancellableDepth > 0 && rejectable) {
+          // Held, not refused, and the job is not marked: `onCancel`
+          // callbacks and the cascade onto children would stop the very
+          // step this section protects.
+          _debug(() => 'cancel $this: held until the step ends: $marked');
+          _heldCancel ??= marked;
+          return;
+        }
         _debug(() => 'cancel $this: $marked');
         // Children first, deepest last started first, and the cascade is
         // rejectable: a child of its own mind refuses it.
@@ -378,12 +391,34 @@ abstract class JobBase<T> implements Job<T> {
   @protected
   Cancelled? get pendingCancel => _pendingCancel;
 
-  /// Whether the job accepts a cancellation it may refuse.
+  /// Whether the job accepts a cancellation it may refuse, as it was
+  /// created. An uncancellable section does not change this: it holds a
+  /// cancellation rather than refusing it.
   @protected
   bool get cancellable => _cancellable;
 
+  /// Opens an uncancellable section: a rejectable cancellation arriving
+  /// now is held, and the job is not marked until the section closes.
+  /// Sections nest.
   @protected
-  set cancellable(bool value) => _cancellable = value;
+  void enterUncancellable() => _uncancellableDepth++;
+
+  /// Closes a section opened by [enterUncancellable] and lets a held
+  /// cancellation through — the outermost section is the one that lands
+  /// it, and a job that finished meanwhile ignores it as it would any
+  /// other late cancellation.
+  @protected
+  void leaveUncancellable() {
+    if (--_uncancellableDepth > 0) {
+      return;
+    }
+    final held = _heldCancel;
+    if (held == null) {
+      return;
+    }
+    _heldCancel = null;
+    cancelWith(held);
+  }
 
   /// Set by whoever adopts the job, before it starts.
   @protected

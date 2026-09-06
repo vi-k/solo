@@ -9,6 +9,9 @@ import 'package:test/test.dart';
 
 import 'support/delay.dart';
 
+/// Whether the job behind [ctx] is already marked cancelled.
+bool _isMarked(JobContext ctx) => ctx.job.isCancelled;
+
 /// Runs [action] [depth] microtasks from now.
 void _afterMicrotasks(int depth, void Function() action) {
   if (depth <= 0) {
@@ -63,18 +66,101 @@ void main() {
     });
   });
 
-  test('uncancellable refuses the cancellation for one step', () {
+  test('uncancellable holds the cancellation until the step is over', () {
     fakeAsync((async) {
-      var reached = false;
+      var stepEnded = false;
+      var afterWait = false;
       final job = Job<void>((ctx) async {
         await ctx.uncancellable(() => delay(50));
-        reached = true;
+        stepEnded = true;
+        await ctx.wait(() => delay(10));
+        afterWait = true;
       });
       async.elapse(const Duration(milliseconds: 10));
       job.cancel().ignore();
       async.flushTimers();
-      expect(reached, isTrue, reason: 'a refusal is final, not deferred');
-      expect(job.outcome, isA<Done<void>>());
+      expect(stepEnded, isTrue, reason: 'the step ran to its end');
+      expect(
+        afterWait,
+        isFalse,
+        reason: 'the held cancellation lands at the next context call',
+      );
+      expect(job.outcome, isA<Cancelled>());
+    });
+  });
+
+  test('nothing is marked while an uncancellable step runs', () {
+    fakeAsync((async) {
+      var callbackFired = false;
+      late Job<void> job;
+      late Job<void> child;
+      var seenInsideStep = true;
+      job = Job<void>((ctx) async {
+        ctx.onCancel(() => callbackFired = true);
+        child = ctx.run(
+          Job.deferred<void>((childCtx) => childCtx.wait(() => delay(200))),
+        );
+        await ctx.uncancellable(() async {
+          await delay(50);
+          seenInsideStep = job.isCancelled;
+        });
+      });
+      async.elapse(const Duration(milliseconds: 10));
+      job.cancel().ignore();
+      async.elapse(const Duration(milliseconds: 20));
+      expect(job.isCancelled, isFalse, reason: 'the step is still running');
+      expect(callbackFired, isFalse, reason: 'onCancel would stop the step');
+      expect(child.outcome, isNull, reason: 'the cascade waits too');
+      async.flushTimers();
+      expect(seenInsideStep, isFalse);
+      expect(callbackFired, isTrue, reason: 'the mark lands after the step');
+      expect(job.outcome, isA<Cancelled>());
+      expect(child.outcome, isA<Cancelled>());
+    });
+  });
+
+  test('only the outermost uncancellable section lets it through', () {
+    fakeAsync((async) {
+      var innerEnded = false;
+      var afterOuter = false;
+      final job = Job<void>((ctx) async {
+        await ctx.uncancellable(() async {
+          await ctx.uncancellable(() => delay(30));
+          innerEnded = true;
+          expect(_isMarked(ctx), isFalse);
+          await delay(30);
+        });
+        afterOuter = true;
+        ctx.check();
+      });
+      async.elapse(const Duration(milliseconds: 10));
+      job.cancel().ignore();
+      async.flushTimers();
+      expect(innerEnded, isTrue);
+      expect(afterOuter, isTrue, reason: 'check() is the first checkpoint');
+      expect(job.outcome, isA<Cancelled>());
+    });
+  });
+
+  test('a held cancellation lands even if the step throws', () {
+    fakeAsync((async) {
+      var caught = false;
+      final job = Job<void>((ctx) async {
+        try {
+          await ctx.uncancellable(() async {
+            await delay(50);
+            throw const FormatException('declined');
+          });
+        } on FormatException {
+          caught = true;
+        }
+        await ctx.wait(() => delay(10));
+      });
+      async.elapse(const Duration(milliseconds: 10));
+      job.cancel().ignore();
+      async.flushTimers();
+      expect(caught, isTrue);
+      expect(job.outcome, isA<Cancelled>());
     });
   });
 

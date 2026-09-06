@@ -21,14 +21,14 @@ for a tree that followed the package before it went out.
   and the member it picks says what a cancellation does to that call.
   `wait` ends the waiting and lets the action run on; `join` waits for all
   of the action and gives up afterwards, so a device call is never left
-  mid-flight; `uncancellable` turns the cancellation down for the length of
-  the call.
+  mid-flight; `uncancellable` holds the cancellation for the length of
+  the call and gives up once the step is over.
 - `wait` and `join` take `ifCancelled`: the value of an action the job gave
   up on goes there instead of on the floor, so a connection or a file that
   action opened is still closed.
 - `JobContext.uncancellable` is `wait`'s counterpart: it runs a step that
-  cannot be taken back — a payment on its way to the server — with
-  cancellation refused, and `close` waits for it.
+  cannot be taken back — a payment on its way to the server — with the
+  cancellation held until the step is over, and `close` waits for it.
 - `ctx.each(stream, onData)` follows a stream for as long as the job lives:
   an extension on `JobContext`, built out of `wait` and `onCancel`. The
   subscription goes with the job, including the moment it is cancelled.
