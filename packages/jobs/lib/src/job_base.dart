@@ -129,6 +129,10 @@ abstract interface class Job<T> {
   /// finishes; for a job cancelled before it started, when it is dropped;
   /// for a body that cancelled itself with `throw Cancelled(...)`, when the
   /// job finishes, since nothing marked it beforehand.
+  ///
+  /// A job that ends [Done] or [Failed] never completes it at all. Hang
+  /// work on it with `then`, or race it against [done]; a bare
+  /// `await job.whenCancelled` parks for good on a job that succeeds.
   Future<void> get whenCancelled;
 
   /// Cancels the job and waits for it to actually finish.

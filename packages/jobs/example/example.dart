@@ -22,19 +22,25 @@ class Database {
 /// The Quick start of README.md, with a fake [Database] around it.
 Future<void> main() async {
   final job = Job<Database>(
-    // The value the body returns after a cancellation has already arrived
-    // still gets released.
+    // The body returned a database after the cancellation had already
+    // arrived: close it instead of dropping it.
     ifCancelled: (database) => database.close(),
     (ctx) async {
-      // `join` stays with the call: an open database is not abandoned
-      // halfway, and its `ifCancelled` closes what the wait no longer
-      // needs.
+      // `join` stays with the call: a database half-opened is not left
+      // behind, and `ifCancelled` closes the one nobody wants any more.
       final database = await ctx.join(
         Database.open,
         ifCancelled: (database) => database.close(),
       );
-      await ctx.wait(database.migrate);
-      await ctx.uncancellable(database.markReady);
+
+      // From here the body owns it, so it closes it on the way out.
+      try {
+        await ctx.join(database.migrate);
+        await ctx.uncancellable(database.markReady);
+      } on Cancelled {
+        await database.close();
+        rethrow;
+      }
 
       return database;
     },
@@ -42,8 +48,8 @@ Future<void> main() async {
 
   // Somebody changed their mind while the database was opening.
   await Future<void>.delayed(const Duration(milliseconds: 10));
-  job.cancel().ignore();
+  await job.cancel();
 
-  final outcome = await job.done;
-  print(outcome); // Cancelled(manual)
+  final outcome = await job.done; // Cancelled(manual)
+  print(outcome);
 }

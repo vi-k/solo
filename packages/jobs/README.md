@@ -24,10 +24,12 @@ have is the outcome to end with, the children to wait for, the
 checkpoints inside the body, and the observer that hears the errors with
 nowhere else to go.
 
-Cancellation is cooperative, and the body must never await anything by
-itself: every call goes through the context, and the member it picks says
-what a cancellation does to that call. A direct `await` is not wrong
-Dart, it is blind — nothing tells it that the job is over.
+Cancellation is cooperative: `cancel()` marks the job, and the body is
+what actually stops. That is why every wait in a body goes through the
+context — `await ctx.wait(action)`, not `await action()`. A future awaited
+directly has nothing to interrupt it: the mark arrives, and the body keeps
+waiting for a call that knows nothing about it. The context member you
+pick is what says how that call reacts.
 
 There is no state here, no queue, no rules, no retry, no timeout, no
 pool. That is `solo`, built on this package and re-exporting it whole: a
@@ -51,8 +53,14 @@ final job = Job<Database>(
       Database.open,
       ifCancelled: (database) => database.close(),
     );
-    await ctx.wait(database.migrate);
-    await ctx.uncancellable(database.markReady);
+
+    try {
+      await ctx.join(database.migrate);
+      await ctx.uncancellable(database.markReady);
+    } on Cancelled {
+      await database.close();
+      rethrow;
+    }
 
     return database;
   },
@@ -60,17 +68,43 @@ final job = Job<Database>(
 
 // Somebody changed their mind while the database was opening.
 await Future<void>.delayed(const Duration(milliseconds: 10));
-job.cancel().ignore();
+await job.cancel();
 
-final outcome = await job.done;
+final outcome = await job.done; // Cancelled(manual)
 ```
 
-The body starts on the next microtask, not inside the constructor: the
-caller gets the handle first and may listen to it, or cancel before the
-body ever runs. That is what the wait above is for: a job cancelled on
-the same stripe ends as `Cancelled(manual)` with `started: false`, and
-none of the body runs at all. `example/example.dart` is this fragment
-with a fake `Database` around it.
+Line by line, because every one of them is a decision:
+
+- **The body starts on the next microtask**, not inside the constructor:
+  the caller gets the handle first and may listen to it, or cancel before
+  the body ever runs. That is what the delay above is for — a job
+  cancelled on the same stripe ends as `Cancelled(manual)` with
+  `started: false`, and none of the body runs at all.
+- **`ctx.join(Database.open)`** and not `ctx.wait`: an open that is
+  already under way is not abandoned halfway, or the database would be
+  opened with nobody left holding it. Its `ifCancelled` closes exactly
+  that — the database that came back after the job had already given up.
+- **`try` / `on Cancelled`** because from the line above the body owns the
+  database, and the kernel does not: a cancellation leaves the body as a
+  throw, and without this the database opened a line earlier stays open
+  for good. Close it, then `rethrow` — a swallowed cancellation is the one
+  mistake this package cannot catch for you.
+- **`ctx.join(database.migrate)`** for the same reason as the open: a
+  migration already writing must not be walked away from. `ctx.wait`
+  would end the waiting and leave it writing into a database this body is
+  about to close.
+- **`ctx.uncancellable(database.markReady)`** for the one step that must
+  not be interrupted at all. A cancellation arriving inside it is refused
+  outright — see [Cancellation](#cancellation).
+- **`ifCancelled` on the job itself** for the last gap: a cancellation
+  that lands between the `return` and the outcome, when the value is
+  already computed and there is no body left to catch anything. See
+  [Late values](#late-values).
+- **`await job.cancel()`** returns when the job has actually finished, so
+  the outcome below is already there. Nothing has to be awaited: the
+  handle can be dropped, and `job.ignore()` says so out loud.
+
+`example/example.dart` is this fragment with a fake `Database` around it.
 
 ## Outcomes
 
@@ -94,8 +128,11 @@ and reasons are equal by name.
 completes with the value or throws; `job.whenCancelled` completes on
 every `Cancelled` outcome — for a running job the moment it is marked,
 before the body finishes, and for a body that cancelled itself only when
-the job finishes; `job.cancel()` cancels and waits for the job to
-actually finish; `job.ignore()` says that nobody is going to look at the
+the job finishes. It never completes for a job that ends `Done` or
+`Failed`, so hang work on it with `.then(...)` or race it with
+`job.done` — a bare `await job.whenCancelled` parks for good on a job
+that succeeds. `job.cancel()` cancels and waits for the job to actually
+finish; `job.ignore()` says that nobody is going to look at the
 outcome.
 
 ## Cancellation
@@ -263,7 +300,7 @@ test('a cancelled open still closes what it opened', () {
     );
 
     async.elapse(const Duration(milliseconds: 10));
-    job.cancel().ignore();
+    job.cancel().ignore(); // nothing awaits inside `fakeAsync`
     async.flushTimers();
 
     expect(job.outcome, isA<Cancelled>());
