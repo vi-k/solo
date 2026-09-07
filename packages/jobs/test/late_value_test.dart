@@ -123,4 +123,43 @@ void main() {
       'Bad state: close failed',
     ]);
   });
+  test('a value that arrives during the cleanup is released before the end',
+      () {
+    fakeAsync((async) {
+      final order = <String>[];
+      final job = Job<void>((ctx) async {
+        // Walked away from: the cancellation ends the wait, and the value
+        // turns up later, while the engine is still unwinding the stack.
+        // `ignore`, not `unawaited`: a `wait` left behind still completes
+        // with the job's cancellation, and nobody is there to catch it.
+        ctx.wait<String>(
+          () => delay(50).then((_) => 'db'),
+          discard: (value) async {
+            order.add('discard starts');
+            await delay(100);
+            order.add('discard ends');
+          },
+        ).ignore();
+        ctx.onDispose(() async {
+          order.add('dispose starts');
+          await delay(50);
+          order.add('dispose ends');
+        });
+        await ctx.wait(() => delay(200));
+      })
+        ..ignore();
+      async.elapse(const Duration(milliseconds: 10));
+      job
+        ..cancel().ignore()
+        ..done.then((_) => order.add('done')).ignore();
+      async.flushTimers();
+      expect(order, [
+        'dispose starts',
+        'dispose ends',
+        'discard starts',
+        'discard ends',
+        'done',
+      ]);
+    });
+  });
 }

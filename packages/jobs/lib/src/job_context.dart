@@ -45,12 +45,13 @@ abstract interface class JobContext {
   /// must not be interrupted at all, see [uncancellable].
   ///
   /// [dispose] and [discard] say how the value is cleaned up, and the rule
-  /// is one: **a value that did not reach the body is cleaned up on the
-  /// spot; a value that did goes on the cleanup stack.** So a connection
-  /// or a file opened by an abandoned action still gets closed — late and
-  /// alone, since the job is over by then and nothing waits for it, not
-  /// even the closing of an engine. A late error goes to `onError` as
-  /// always, and so does an error of the disposer itself.
+  /// is one: **a value that did not reach the body is cleaned up without
+  /// a condition; a value that did goes on the cleanup stack.** So a
+  /// connection or a file opened by an abandoned action still gets closed:
+  /// through the stack while the job is still unwinding it, so the closing
+  /// of an engine waits for that too, and on the spot — late and alone —
+  /// once the job is over. A late error goes to `onError` as always, and
+  /// so does an error of the disposer itself.
   ///
   /// On the stack the two differ: [dispose] runs whatever the outcome,
   /// [discard] only if the value reaches nobody. So [discard] is for what
@@ -577,11 +578,10 @@ abstract class JobContextBase implements JobContext {
         final value = await future;
         if (completer.isCompleted) {
           // The value did not reach the body: cleaned up whatever the
-          // outcome, and nobody waits for that.
-          final disposer = dispose ?? discard;
-          if (disposer != null) {
-            await _dispose(disposer, value);
-          }
+          // outcome, and on the same terms as any other late value — on
+          // the stack while the job is still unwinding it, so whoever
+          // waits for the job waits for the release too.
+          await _keepLate(dispose, discard, value);
         } else if (_owner.bodyEnded) {
           await _keepLate(dispose, discard, value);
           completer.complete(value);
