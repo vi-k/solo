@@ -43,9 +43,14 @@ final class _SoloContext<S extends Object, W extends S, R>
   SoloBase<S> get _solo => _job._solo;
 
   @override
-  void check() => _checkedState();
+  void check() => _checkedState('check');
 
-  W _checkedState() {
+  W _checkedState([String action = 'state']) {
+    // The reads are closed while the engine cleans up after the body: a
+    // read checks the rules against the state the body itself emitted, and
+    // on a job that ended `Done` that would turn its outcome into a
+    // cancellation by the rules — nobody cancelled it, the reading did.
+    throwIfDisposing(action);
     throwIfCancelled();
     final current = _solo._state;
     final rejection = _job._rejectKeep(current);
@@ -67,7 +72,7 @@ final class _SoloContext<S extends Object, W extends S, R>
 
   @override
   T stateAs<T extends S>() {
-    final current = _checkedState();
+    final current = _checkedState('stateAs');
     if (current is! T) {
       final cancelled = Cancelled.by(
         reason: SoloCancelReason.rules,
