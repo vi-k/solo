@@ -735,14 +735,392 @@ void main() {
       controller.close().ignore();
     });
   });
+
+  test('a cleanup of the source that fails does not reach the zone', () {
+    final zone = <Object>[];
+    final journal = JobJournal();
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          final controller = StreamController<int>(
+            onCancel: () async => throw StateError('cleanup boom'),
+          );
+          final job = Job<void>(
+            key: 'job',
+            observer: journal,
+            (ctx) async => ctx.each(controller.stream, (_) {}),
+          )..ignore();
+          async.flushMicrotasks();
+          job.cancel().ignore();
+          async.flushTimers();
+          expect(job.outcome, isA<Cancelled>());
+          controller.close().ignore();
+        });
+      },
+      (error, stack) => zone.add(error),
+    );
+    expect(
+      zone,
+      isEmpty,
+      reason: 'what the source does about its own cleanup stays with it',
+    );
+    expect(journal.lines.where((line) => line.contains('error')), isEmpty);
+  });
+
+  test('a listen that throws over what it handed over leaves the zone be', () {
+    final zone = <Object>[];
+    final journal = JobJournal();
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          Object? caught;
+          Job<void>(
+            key: 'job',
+            observer: journal,
+            (ctx) async {
+              try {
+                await ctx.each(_HandOverThenThrow<int>(), (_) {});
+              } on Object catch (error) {
+                caught = error;
+              }
+            },
+          ).ignore();
+          async.flushTimers();
+          expect(
+            caught,
+            isA<StateError>().having(
+              (error) => error.message,
+              'message',
+              'listen boom',
+            ),
+            reason: 'the body gets the harder failure of the two',
+          );
+        });
+      },
+      (error, stack) => zone.add(error),
+    );
+    expect(zone, isEmpty, reason: 'the error it covered is nobody else to see');
+  });
+
+  test('nothing the source hands over after the end of its stream arrives', () {
+    fakeAsync((async) {
+      final seen = <int>[];
+      Object? caught;
+      final job = Job<void>((ctx) async {
+        try {
+          await ctx.each(_ScriptStream([1, 'done', 2, 'error']), seen.add);
+        } on Object catch (error) {
+          caught = error;
+        }
+      })
+        ..ignore();
+      async.flushTimers();
+      expect(
+        seen,
+        [1],
+        reason: 'the window is closed by the end of the stream',
+      );
+      expect(caught, isNull);
+      expect(job.outcome, isA<Done<void>>());
+    });
+  });
+
+  test('the end of a stream waits for the cleanup of the source', () {
+    fakeAsync((async) {
+      final controller = StreamController<int>(
+        onCancel: () => Completer<void>().future,
+      );
+      final seen = <int>[];
+      var returned = false;
+      final job = Job<void>((ctx) async {
+        await ctx.each(controller.stream, seen.add);
+        returned = true;
+      })
+        ..ignore();
+      async.flushMicrotasks();
+      controller
+        ..add(1)
+        ..add(2);
+      async.flushMicrotasks();
+      controller.close().ignore();
+      async.flushTimers();
+      expect(seen, [1, 2]);
+      expect(
+        returned,
+        isFalse,
+        reason: 'Dart says a stream is done only once its source has '
+            'finished cancelling the subscription',
+      );
+      expect(job.outcome, isNull);
+      job.cancel().ignore();
+      async.flushTimers();
+      expect(
+        job.outcome,
+        isA<Cancelled>(),
+        reason: 'cancelling the job is what gets the body out of one',
+      );
+    });
+  });
+
+  test('a handler failing after the job let go reaches the observer', () {
+    final zone = <Object>[];
+    final journal = JobJournal();
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          final controller = StreamController<int>();
+          final job = Job<void>(
+            key: 'job',
+            observer: journal,
+            (ctx) async => ctx.each(controller.stream, (event) async {
+              await delay(20);
+              throw StateError('late boom');
+            }),
+          )..ignore();
+          async.flushMicrotasks();
+          controller.add(1);
+          async.elapse(const Duration(milliseconds: 5));
+          job.cancel().ignore();
+          async.flushTimers();
+          expect(job.outcome, isA<Cancelled>());
+          controller.close().ignore();
+        });
+      },
+      (error, stack) => zone.add(error),
+    );
+    expect(
+      journal.lines,
+      contains('[job] error Bad state: late boom'),
+      reason: 'a failure covered by a cancellation goes where covered '
+          'failures go',
+    );
+    expect(zone, isEmpty, reason: 'the observer took it');
+  });
+
+  test('an error of a handler covered by the source cancelling the job', () {
+    final journal = JobJournal();
+    fakeAsync((async) {
+      late Job<void> job;
+      Object? caught;
+      final controller = StreamController<int>(
+        onCancel: () => job.cancel().ignore(),
+      );
+      job = Job<void>(
+        key: 'job',
+        observer: journal,
+        (ctx) async {
+          try {
+            await ctx.each(
+              controller.stream,
+              (event) => throw StateError('handler boom'),
+            );
+          } on Object catch (error) {
+            caught = error;
+          }
+        },
+      )..ignore();
+      async.flushMicrotasks();
+      controller.add(1);
+      async.flushTimers();
+      expect(
+        caught,
+        isA<Cancelled>(),
+        reason: 'the cancellation the source made wins the wait',
+      );
+      expect(job.outcome, isA<Cancelled>());
+      controller.close().ignore();
+    });
+    expect(
+      journal.lines,
+      contains('[job] error Bad state: handler boom'),
+      reason: 'and the error it covered goes to the observer',
+    );
+  });
+
+  test('an error from onListen after the job was cancelled is not news', () {
+    final zone = <Object>[];
+    final journal = JobJournal();
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          late StreamController<int> controller;
+          late Job<void> job;
+          controller = StreamController<int>.broadcast(
+            sync: true,
+            onListen: () {
+              job.cancel().ignore();
+              controller.addError(StateError('source boom'));
+            },
+          );
+          job = Job<void>(
+            key: 'job',
+            observer: journal,
+            (ctx) async => ctx.each(controller.stream, (_) {}),
+          )..ignore();
+          async.flushTimers();
+          expect(job.outcome, isA<Cancelled>());
+          controller.close().ignore();
+        });
+      },
+      (error, stack) => zone.add(error),
+    );
+    expect(
+      journal.lines.where((line) => line.contains('error')),
+      isEmpty,
+      reason: 'the job had let go before the error came',
+    );
+    expect(zone, isEmpty);
+  });
+
+  test('a stream already done when it is listened to returns at once', () {
+    fakeAsync((async) {
+      late StreamController<int> controller;
+      controller = StreamController<int>.broadcast(
+        sync: true,
+        onListen: () => controller.close().ignore(),
+      );
+      var returned = false;
+      final job = Job<void>((ctx) async {
+        await ctx.each(controller.stream, (_) {});
+        returned = true;
+      })
+        ..ignore();
+      async.flushTimers();
+      expect(returned, isTrue, reason: 'the call comes back, it does not hang');
+      expect(job.outcome, isA<Done<void>>());
+    });
+  });
+
+  test('the first error of a stream in the window is the one the body gets',
+      () {
+    fakeAsync((async) {
+      late StreamController<int> controller;
+      controller = StreamController<int>.broadcast(
+        sync: true,
+        onListen: () => controller
+          ..add(1)
+          ..addError(StateError('first'))
+          ..addError(StateError('second')),
+      );
+      Object? caught;
+      Job<void>((ctx) async {
+        try {
+          await ctx.each(controller.stream, (_) {});
+        } on Object catch (error) {
+          caught = error;
+        }
+      }).ignore();
+      async.flushTimers();
+      expect(
+        (caught! as StateError).message,
+        'first',
+        reason: 'nothing after an error of the stream, that one included',
+      );
+      controller.close().ignore();
+    });
+  });
+
+  test('an early error keeps the stack trace the source gave it', () {
+    fakeAsync((async) {
+      final trace = StackTrace.fromString('the source said so');
+      late StreamController<int> controller;
+      controller = StreamController<int>.broadcast(
+        sync: true,
+        onListen: () => controller
+          ..add(1)
+          ..addError(StateError('boom'), trace),
+      );
+      StackTrace? caught;
+      final job = Job<void>((ctx) async {
+        try {
+          await ctx.each(controller.stream, (_) {});
+        } on Object catch (_, stackTrace) {
+          caught = stackTrace;
+        }
+      })
+        ..ignore();
+      async.flushTimers();
+      expect(caught.toString(), contains('the source said so'));
+      expect(job.outcome, isA<Done<void>>());
+      controller.close().ignore();
+    });
+  });
+
+  test('a source let go of during the playback is not resumed', () {
+    fakeAsync((async) {
+      late StreamController<int> controller;
+      late Job<void> job;
+      controller = StreamController<int>.broadcast(
+        sync: true,
+        onListen: () {
+          controller
+            ..add(1)
+            ..add(2);
+          job.cancel().ignore();
+        },
+      );
+      final stream = _CountingStream<int>(controller.stream);
+      job = Job<void>((ctx) async => ctx.each(stream, (_) {}))..ignore();
+      async.flushTimers();
+      expect(stream.log, isNot(contains('resume')));
+      expect(job.outcome, isA<Cancelled>());
+      controller.close().ignore();
+    });
+  });
+
+  test('a stream done during the playback is not resumed', () {
+    fakeAsync((async) {
+      late StreamController<int> controller;
+      controller = StreamController<int>.broadcast(
+        sync: true,
+        onListen: () {
+          controller
+            ..add(1)
+            ..add(2);
+          controller.close().ignore();
+        },
+      );
+      final stream = _CountingStream<int>(controller.stream);
+      final seen = <int>[];
+      final job = Job<void>((ctx) async => ctx.each(stream, seen.add))
+        ..ignore();
+      async.flushTimers();
+      expect(seen, [1, 2]);
+      expect(stream.log, isNot(contains('resume')));
+      expect(job.outcome, isA<Done<void>>());
+    });
+  });
+
+  test('a stream with nothing early is never held', () {
+    fakeAsync((async) {
+      final controller = StreamController<int>();
+      final stream = _CountingStream<int>(controller.stream);
+      final job = Job<void>((ctx) async => ctx.each(stream, (_) {}))..ignore();
+      async.flushMicrotasks();
+      controller
+        ..add(1)
+        ..add(2);
+      controller.close().ignore();
+      async.flushTimers();
+      expect(
+        stream.log,
+        ['cancel'],
+        reason: 'nothing to play back, nothing to hold',
+      );
+      expect(job.outcome, isA<Done<void>>());
+    });
+  });
 }
 
-/// A stream that counts how many times its subscription is cancelled.
+/// A stream that writes down what is done to its subscription.
 final class _CountingStream<T> extends Stream<T> {
   final Stream<T> _inner;
 
   /// How many times `cancel()` was called on the subscription.
   int cancels = 0;
+
+  /// Every `pause`, `resume` and `cancel`, in the order they came.
+  final log = <String>[];
 
   _CountingStream(this._inner);
 
@@ -773,6 +1151,7 @@ final class _CountingSubscription<T> implements StreamSubscription<T> {
   @override
   Future<void> cancel() {
     _owner.cancels++;
+    _owner.log.add('cancel');
     return _inner.cancel();
   }
 
@@ -792,8 +1171,64 @@ final class _CountingSubscription<T> implements StreamSubscription<T> {
   void onError(Function? handleError) => _inner.onError(handleError);
 
   @override
-  void pause([Future<void>? resumeSignal]) => _inner.pause(resumeSignal);
+  void pause([Future<void>? resumeSignal]) {
+    _owner.log.add('pause');
+    _inner.pause(resumeSignal);
+  }
 
   @override
-  void resume() => _inner.resume();
+  void resume() {
+    _owner.log.add('resume');
+    _inner.resume();
+  }
+}
+
+/// Hands an error over from inside `listen`, then refuses to be listened to.
+final class _HandOverThenThrow<T> extends Stream<T> {
+  @override
+  StreamSubscription<T> listen(
+    void Function(T event)? onData, {
+    Function? onError,
+    void Function()? onDone,
+    bool? cancelOnError,
+  }) {
+    (onError! as void Function(Object, StackTrace))(
+      StateError('source boom'),
+      StackTrace.current,
+    );
+    throw StateError('listen boom');
+  }
+}
+
+/// Calls the raw callbacks from inside `listen`, in the order it was given.
+///
+/// A source of the SDK cannot do this: it is here to say what happens to a
+/// stream that hands something over after it has already ended.
+final class _ScriptStream extends Stream<int> {
+  final List<Object> _script;
+
+  _ScriptStream(this._script);
+
+  @override
+  StreamSubscription<int> listen(
+    void Function(int event)? onData, {
+    Function? onError,
+    void Function()? onDone,
+    bool? cancelOnError,
+  }) {
+    for (final step in _script) {
+      switch (step) {
+        case final int event:
+          onData!(event);
+        case 'done':
+          onDone!();
+        case 'error':
+          (onError! as void Function(Object, StackTrace))(
+            StateError('after the end'),
+            StackTrace.current,
+          );
+      }
+    }
+    return const Stream<int>.empty().listen(null);
+  }
 }

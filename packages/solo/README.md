@@ -340,14 +340,17 @@ body itself learns about it — and, for a call the body walked away from,
 when the job ends whatever the outcome. The call returns when the stream is done,
 throws the job's `Cancelled` if the job gave up meanwhile, and throws an
 error of the stream or of the callback into the body, where an ordinary
-`catch` can take it. `ctx.state` inside the callback is a read like any
+`catch` can take it. The end of a stream is Dart's to declare, and it
+declares it only once the source has finished cancelling the
+subscription: a source whose cleanup never comes back never ends its
+stream either, and cancelling the job is what gets the body out. `ctx.state` inside the callback is a read like any
 other, checked against the rules; the `Cancelled` it may throw is not an
 error but the end of the stream, and it comes back through the call. A callback that returns a future is waited for, and delivery is held
 meanwhile: the events keep their order, and a callback that threw is not
 called again. `each` is an extension on `JobContext` — the interface of the
 kernel that `SoloContext` implements — and not a member of it: it is built
-out of `wait`, `onCancel` and `onDispose`, and does nothing your own body
-could not.
+out of `wait`, `onCancel`, `onDispose` and `job`, and does nothing your
+own body could not.
 
 **Children.** `ctx.run(child)` starts a job right now, bypassing the queue,
 as a child of the current one. The parent finishes only after all of its

@@ -13,23 +13,43 @@ extension JobStream on JobContext {
   /// the body walked away from, when the job's cleanup reaches this
   /// registration. Nothing is left listening.
   ///
-  /// Returns when the stream is done. Throws the job's [Cancelled] if the
-  /// job is cancelled meanwhile: the waiting ends there, because a stream
-  /// that has gone quiet may never end at all. An error from [stream] and
-  /// an error thrown by [onData] end the wait too and are thrown into the
-  /// body, which can catch them like any others.
+  /// Returns when the stream is done — which Dart says only once the
+  /// source has finished cancelling the subscription it is ending, and
+  /// that part is not this call's to skip. A source whose cleanup never
+  /// comes back never ends its stream either, here as under `await for`;
+  /// what gets the body out of one is cancelling the job.
+  ///
+  /// Throws the job's [Cancelled] if the job is cancelled meanwhile: the
+  /// waiting ends there, because a stream that has gone quiet may never
+  /// end at all. An error from [stream] and an error thrown by [onData]
+  /// end the wait too and are thrown into the body, which can catch them
+  /// like any others — for as long as the job holds the stream. Once it
+  /// has let go, nothing from the stream is news any more, and an [onData]
+  /// still running when that happens fails to the job's observer instead,
+  /// as any covered failure does.
   ///
   /// An [onData] that returns a future is waited for, and delivery is held
-  /// meanwhile: the events keep their order, whatever the source does, and
-  /// a handler that threw is not called again. The job is not cancelled
-  /// while it waits for a handler — a handler that must be interrupted
-  /// takes the job's cancellation through the context, as any other code
-  /// of the body does.
+  /// meanwhile: the events keep their order — whatever the source does,
+  /// as long as its subscription honours `pause` — and a handler that
+  /// threw is not called again. A handler already running is not
+  /// interrupted: cancelling the job stops delivery at once, but the
+  /// handler in flight runs on unattended, and neither this call nor the
+  /// job waits for it. A handler that must be interrupted takes the job's
+  /// cancellation through the context, as any other code of the body
+  /// does.
   ///
   /// The subscription is cancelled, never awaited: delivery stops at once,
-  /// and whatever the source does about it afterwards is the source's own
-  /// business. A source that must be waited for is a call of its own —
+  /// and whatever the source does about it afterwards — a cleanup that
+  /// takes its time, or one that fails — is the source's own business. A
+  /// source that must be waited for is a call of its own —
   /// [JobContext.join] around it.
+  ///
+  /// A body that walks away from this call leaves what comes back to the
+  /// job: the stream is let go of when the job's cleanup reaches this
+  /// registration, and the future itself ends with the job's
+  /// cancellation, with a failure of the stream, or — for a job that ends
+  /// on its own — not at all. Quench it with `ignore`; left alone, what it
+  /// carries becomes the zone's.
   ///
   /// ```dart
   /// await ctx.each(hw.positions, (p) => ctx.log('at $p'));
@@ -56,9 +76,11 @@ extension JobStream on JobContext {
     // word (measured, 2026-09-07). A stream this package follows does not
     // lose its first events.
     final early = <T>[];
+    // What ended the window, if anything did: after either of these the
+    // window takes nothing more, the way a live subscription takes
+    // nothing after the end of its stream.
     var earlyDone = false;
-    Object? earlyError;
-    StackTrace? earlyStack;
+    (Object, StackTrace)? earlyFailure;
     StreamSubscription<T>? sub;
     // Whether the stream has been let go of. A cancelled subscription
     // drops what was still on its way to it; the buffer below is not the
@@ -68,7 +90,11 @@ extension JobStream on JobContext {
 
     void letGoOfStream() {
       letGo = true;
-      unawaited(sub?.cancel());
+      // Dropped, not merely unawaited: `unawaited` leaves the future of
+      // the source's own cleanup without a listener, and a cleanup that
+      // fails would go from there to the zone, taking the program with
+      // it. It is the source's business either way, this end of it too.
+      sub?.cancel().ignore();
     }
 
     void end() {
@@ -86,6 +112,15 @@ extension JobStream on JobContext {
     void thrown(Object error, StackTrace stackTrace) {
       // The stream goes first: nothing else is delivered, so a handler
       // that threw is never called again.
+      //
+      // A source that cancels this job from its own `onCancel` decides
+      // the test below by that very call, and its cancellation then wins
+      // the wait ahead of this error, which goes to the observer instead
+      // of to the body. That is the priority of a cancellation over an
+      // outcome, and recording the error first does not change it: the
+      // wait is completed by the cancellation either way, and the only
+      // difference is a `Cancelled` of the body's own showing up in the
+      // observer as an error.
       letGoOfStream();
       // A cancellation from the context has already marked the job, and the
       // wait below throws it by itself. A body cancelling itself with
@@ -129,9 +164,9 @@ extension JobStream on JobContext {
           // more, the end of it and its error included.
           return;
         }
-        if (earlyError case final error?) {
+        if (earlyFailure case final failure?) {
           letGoOfStream();
-          fail(error, earlyStack ?? StackTrace.current);
+          fail(failure.$1, failure.$2);
         } else if (earlyDone) {
           end();
         }
@@ -168,8 +203,9 @@ extension JobStream on JobContext {
               return;
             }
             if (sub == null) {
-              // Nothing after an error of the stream, here as anywhere.
-              if (earlyError == null) {
+              // Nothing after the end of the stream and nothing after an
+              // error of it, here as anywhere.
+              if (!earlyDone && earlyFailure == null) {
                 early.add(event);
               }
               return;
@@ -180,9 +216,16 @@ extension JobStream on JobContext {
             if (letGo) {
               return;
             }
-            if (sub == null && early.isNotEmpty) {
-              earlyError ??= error;
-              earlyStack ??= stackTrace;
+            if (sub == null) {
+              if (!earlyDone && earlyFailure == null) {
+                earlyFailure = (error, stackTrace);
+                if (early.isEmpty) {
+                  // Nothing to play back ahead of it, so the wait ends
+                  // here rather than in `playBack`.
+                  letGoOfStream();
+                  fail(error, stackTrace);
+                }
+              }
               return;
             }
             // Let go here rather than through `cancelOnError`: that one
@@ -197,8 +240,13 @@ extension JobStream on JobContext {
             if (letGo) {
               return;
             }
-            if (sub == null && early.isNotEmpty) {
-              earlyDone = true;
+            if (sub == null) {
+              if (!earlyDone && earlyFailure == null) {
+                earlyDone = true;
+                if (early.isEmpty) {
+                  end();
+                }
+              }
               return;
             }
             end();
@@ -209,6 +257,12 @@ extension JobStream on JobContext {
       } on Object {
         // Nothing will ever complete the waiting now.
         end();
+        // And nobody will ever receive what it already carries — an error
+        // the source handed over from inside `listen`, or the job's own
+        // cancellation from there. The body is about to be given the
+        // harder failure of the two; left alone, the covered one would go
+        // to the zone.
+        waiting.ignore();
         rethrow;
       }
       if (early.isNotEmpty) {
