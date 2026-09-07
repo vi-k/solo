@@ -33,18 +33,30 @@ abstract interface class JobContext {
   /// finish with [join], instead of walking away from it. For a step that
   /// must not be interrupted at all, see [uncancellable].
   ///
-  /// [discard] picks up that discarded result: a value arriving after
-  /// the wait is over goes there instead of on the floor, so a connection
-  /// or a file opened by an abandoned action still gets closed. It runs
-  /// late and alone — the job is over by then and nothing waits for it,
-  /// not even the closing of an engine. A late error goes to `onError` as
-  /// always,
-  /// and so does an error of [discard] itself.
+  /// [dispose] and [discard] say how the value is cleaned up, and the rule
+  /// is one: **a value that did not reach the body is cleaned up on the
+  /// spot; a value that did goes on the cleanup stack.** So a connection
+  /// or a file opened by an abandoned action still gets closed — late and
+  /// alone, since the job is over by then and nothing waits for it, not
+  /// even the closing of an engine. A late error goes to `onError` as
+  /// always, and so does an error of the disposer itself.
+  ///
+  /// On the stack the two differ: [dispose] runs whatever the outcome,
+  /// [discard] only if the value reaches nobody. So [discard] is for what
+  /// the body returns or hands outside, and a lock, a temporary file or a
+  /// subscription takes [dispose] — or it leaks on the successful path,
+  /// where no test on cancellation will see it. Passing both is an
+  /// [ArgumentError].
+  ///
+  /// The engine catches a late value from the moment it learns the body
+  /// has ended, not from its `return`: a call the body walked away from
+  /// with `unawaited` may hand its value over before that. A call that
+  /// gives out a resource is not one to walk away from.
   ///
   /// ```dart
   /// final db = await ctx.wait(
   ///   Database.open,
-  ///   ifCancelled: (db) => db.close(),
+  ///   discard: (db) => db.close(),
   /// );
   /// ```
   Future<T> wait<T>(
@@ -76,21 +88,25 @@ abstract interface class JobContext {
   /// The value is dropped when the job gives up: the throw happens inside
   /// this call, and the body is never reached. For an [action] that hands
   /// something over to own — a connection, a file, a subscription — pass
-  /// [discard], and it gets that value instead. It is awaited before
-  /// the [Cancelled] is thrown, so an engine waiting for the job waits for
-  /// the disposal too, and the next job starts with the resource gone. Only a
-  /// value is handed over: an [action] that threw has nothing to dispose
-  /// of.
+  /// [dispose] or [discard], and the value goes there instead. The rule is
+  /// the same as in [wait]: a value that did not reach the body is cleaned
+  /// up on the spot — and here that is awaited before the [Cancelled] is
+  /// thrown, so an engine waiting for the job waits for the disposal too
+  /// and the next job starts with the resource gone; a value that did
+  /// reach the body goes on the cleanup stack, [dispose] to run whatever
+  /// the outcome and [discard] only if the value reaches nobody. Passing
+  /// both is an [ArgumentError]. Only a value is handed over: an [action]
+  /// that threw has nothing to dispose of.
   ///
   /// ```dart
   /// final db = await ctx.join(
   ///   Database.open,
-  ///   ifCancelled: (db) => db.close(),
+  ///   discard: (db) => db.close(),
   /// );
   /// ```
   ///
   /// An error from [action] is thrown as it is, cancelled or not, and the
-  /// body can catch it like any other. An error from [discard] goes to
+  /// body can catch it like any other. An error from the disposer goes to
   /// `onError`, and the [Cancelled] is thrown all the same. Throws
   /// [Cancelled] up front if the job is already cancelled or its rules no
   /// longer hold, the same as [wait] and [uncancellable].
@@ -399,11 +415,11 @@ abstract class JobContextBase implements JobContext {
   /// `onError`: the job is already giving up, and a failed disposal must
   /// not stand in for the cancellation the body is waiting for.
   Future<void> _dispose<T>(
-    FutureOr<void> Function(T value) ifCancelled,
+    FutureOr<void> Function(T value) disposer,
     T value,
   ) async {
     try {
-      await ifCancelled(value);
+      await disposer(value);
     } on Object catch (error, stackTrace) {
       notifyError(error, stackTrace);
     }

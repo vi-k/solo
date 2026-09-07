@@ -8,6 +8,7 @@ import 'package:jobs/jobs.dart';
 import 'package:test/test.dart';
 
 import 'support/delay.dart';
+import 'support/probe_job.dart';
 
 void main() {
   tearDown(() => JobBase.debug = null);
@@ -98,6 +99,31 @@ void main() {
     });
     expect(traces, contains('Job(job) error: Bad state: onCancel'));
     expect(seen, ['Bad state: onCancel'], reason: 'and it stopped there');
+  });
+
+  test('finish called by hand tells the tracer about the stack', () {
+    final lines = <String>[];
+    JobBase.debug = lines.add;
+    addTearDown(() => JobBase.debug = null);
+    fakeAsync((async) {
+      final job = ProbeJob<void>((ctx) async {
+        ctx.onDispose(() {});
+        await ctx.wait(() => delay(1000));
+      })
+        ..launch();
+      async.elapse(const Duration(milliseconds: 10));
+      // An engine of a domain ended the job itself: the children were not
+      // waited for and the stack was not unwound, so a line about the
+      // cleanups left behind is all there is.
+      job
+        ..drop(const Done(null))
+        ..ignore();
+      async.flushTimers();
+    });
+    expect(
+      lines.where((line) => line.contains('cleanups pending')),
+      hasLength(1),
+    );
   });
 }
 

@@ -26,27 +26,25 @@ abstract interface class Job<T> {
   /// `Cancelled(manual)` with `started: false`, and the body is never
   /// called.
   ///
-  /// [ifCancelled] catches a value the body returned after the
-  /// cancellation had already arrived; [observer] receives the hooks of
-  /// this job, and a child inherits it unless given one of its own.
+  /// [observer] receives the hooks of this job, and a child inherits it
+  /// unless given one of its own. What the body opens is released through
+  /// the cleanup stack of the context — see [JobContext.onDispose] and
+  /// [JobContext.onDiscard].
   ///
   /// ```dart
-  /// final job = Job<Database>(
-  ///   ifCancelled: (database) => database.close(),
-  ///   (ctx) async {
-  ///     final database = await ctx.join(Database.open);
-  ///     await ctx.wait(() => database.migrate());
+  /// final job = Job<Database>((ctx) async {
+  ///   final database = await ctx.join(Database.open);
+  ///   ctx.onDiscard(database.close);
+  ///   await ctx.wait(() => database.migrate());
   ///
-  ///     return database;
-  ///   },
-  /// );
+  ///   return database;
+  /// });
   /// ```
   factory Job(
     Future<T> Function(JobContext ctx) body, {
     Object? key,
     String Function()? describe,
     bool cancellable = true,
-    FutureOr<void> Function(T value)? ifCancelled,
     JobObserver? observer,
   }) =>
       _AutoJob<T>(
@@ -54,7 +52,6 @@ abstract interface class Job<T> {
         key: key,
         describe: describe,
         cancellable: cancellable,
-        ifCancelled: ifCancelled,
         observer: observer,
       );
 
@@ -69,7 +66,6 @@ abstract interface class Job<T> {
     Object? key,
     String Function()? describe,
     bool cancellable = true,
-    FutureOr<void> Function(T value)? ifCancelled,
     JobObserver? observer,
   }) =>
       _DeferredJob<T>(
@@ -77,7 +73,6 @@ abstract interface class Job<T> {
         key: key,
         describe: describe,
         cancellable: cancellable,
-        ifCancelled: ifCancelled,
         observer: observer,
       );
 
@@ -209,7 +204,6 @@ abstract class JobBase<T> implements Job<T> {
 
   final Object? _key;
   final String Function()? _describe;
-  final FutureOr<void> Function(T value)? _ifCancelled;
 
   /// Not final: a child created without one inherits the parent's
   /// observer when it is adopted.
@@ -255,12 +249,10 @@ abstract class JobBase<T> implements Job<T> {
     Object? key,
     String Function()? describe,
     bool cancellable = true,
-    FutureOr<void> Function(T value)? ifCancelled,
     JobObserver? observer,
   })  : _key = key,
         _describe = describe,
         _cancellable = cancellable,
-        _ifCancelled = ifCancelled,
         _observer = observer;
 
   static void _debug(String Function() message) {
@@ -497,13 +489,18 @@ abstract class JobBase<T> implements Job<T> {
   /// own body must not be able to replace one.
   ///
   /// Ending a job that is still running is not a way to cancel it: this
-  /// waits for no children and calls no `ifCancelled`, so a value the body
-  /// was about to hand over is lost. Cancel with [cancelWith] instead, and
-  /// let the body unwind.
+  /// waits for no children and unwinds no cleanup stack, so everything the
+  /// body opened stays open. Cancel with [cancelWith] instead, and let the
+  /// body unwind; the cleanups left behind are named in the debug trace.
   @protected
   void finish(Outcome<T> outcome) {
     if (_status == JobStatus.finished) {
       return;
+    }
+    if (_cleanups.isNotEmpty) {
+      _debug(
+        () => '$this finished with ${_cleanups.length} cleanups pending',
+      );
     }
     _outcome = outcome;
     _status = JobStatus.finished;
@@ -635,18 +632,6 @@ abstract class JobBase<T> implements Job<T> {
         _cancelled.complete();
       }
     }
-    // The window the body cannot close: between its `return` and the
-    // engine's decision the job is still alive — it waits for its children
-    // — and a cancellation arriving there beats a value already computed.
-    // Children first: they may still be using it.
-    final disposer = _ifCancelled;
-    if (disposer != null && _pendingCancel != null && outcome is Done<T>) {
-      try {
-        await disposer(outcome.value);
-      } on Object catch (error, stackTrace) {
-        notifyError(error, stackTrace);
-      }
-    }
     if (_cleanups.isNotEmpty) {
       _disposing = true;
       // The loop lives here and not in a method of its own: between the
@@ -769,7 +754,6 @@ class _Job<T> extends JobBase<T> {
     super.key,
     super.describe,
     super.cancellable,
-    super.ifCancelled,
     super.observer,
   });
 
@@ -787,7 +771,6 @@ final class _AutoJob<T> extends _Job<T> {
     super.key,
     super.describe,
     super.cancellable,
-    super.ifCancelled,
     super.observer,
   }) {
     // `scheduleMicrotask`, not `Future(...)`: that one schedules a timer,
@@ -809,7 +792,6 @@ final class _DeferredJob<T> extends _Job<T> implements DeferredJob<T> {
     super.key,
     super.describe,
     super.cancellable,
-    super.ifCancelled,
     super.observer,
   });
 

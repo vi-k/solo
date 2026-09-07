@@ -32,7 +32,7 @@ void main() {
     });
   });
 
-  test('wait hands a late value to ifCancelled', () {
+  test('wait hands a late value to the disposer', () {
     fakeAsync((async) {
       final closed = <String>[];
       final job = Job<void>((ctx) async {
@@ -147,7 +147,7 @@ void main() {
     });
   });
 
-  test('join hands the value to ifCancelled when the cancel arrived', () {
+  test('join hands the value to discard when the cancel arrived', () {
     fakeAsync((async) {
       final closed = <String>[];
       final job = Job<void>((ctx) async {

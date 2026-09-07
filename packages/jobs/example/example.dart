@@ -21,30 +21,24 @@ class Database {
 
 /// The Quick start of README.md, with a fake [Database] around it.
 Future<void> main() async {
-  final job = Job<Database>(
-    // The body returned a database after the cancellation had already
-    // arrived: close it instead of dropping it.
-    ifCancelled: (database) => database.close(),
-    (ctx) async {
-      // `join` stays with the call: a database half-opened is not left
-      // behind, and `discard` closes the one nobody wants any more.
-      final database = await ctx.join(
-        Database.open,
-        discard: (database) => database.close(),
-      );
+  final job = Job<Database>((ctx) async {
+    // `join` stays with the call: a database half-opened is not left
+    // behind, and `discard` closes the one nobody wants any more.
+    final database = await ctx.join(
+      Database.open,
+      discard: (database) => database.close(),
+    );
 
-      // From here the body owns it, so it closes it on the way out.
-      try {
-        await ctx.join(database.migrate);
-        await ctx.uncancellable(database.markReady);
-      } on Cancelled {
-        await database.close();
-        rethrow;
-      }
+    // The same disposer for the rest of the job: the body may return the
+    // database after a cancellation has already arrived, and then it
+    // reaches nobody.
+    ctx.onDiscard(database.close);
 
-      return database;
-    },
-  );
+    await ctx.join(database.migrate);
+    await ctx.uncancellable(database.markReady);
+
+    return database;
+  });
 
   // Somebody changed their mind while the database was opening.
   await Future<void>.delayed(const Duration(milliseconds: 10));

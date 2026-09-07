@@ -8,25 +8,26 @@ import 'support/run_solo.dart';
 import 'support/test_state.dart';
 
 void main() {
-  test('a value returned after cancellation goes to the job disposer', () {
+  test('a value returned after cancellation goes to the disposer', () {
     runSolo((solo, journal, async) {
       final closed = <String>[];
       final job = solo.run<TestState, String>(
         key: 'open',
-        ifCancelled: closed.add,
         (ctx) async {
           final resource = await ctx.join(() async {
             await delay(10);
             return 'db';
           });
-          // The child keeps the job alive past the return: without it the
-          // body ends at 10 ms and no late value can exist.
-          ctx.run(
-            solo.job<TestState, void>(
-              key: 'child',
-              (ctx) => pause(ctx, 100),
-            ),
-          );
+          ctx
+            ..onDiscard(() => closed.add(resource))
+            // The child keeps the job alive past the return: without it
+            // the body ends at 10 ms and no late value can exist.
+            ..run(
+              solo.job<TestState, void>(
+                key: 'child',
+                (ctx) => pause(ctx, 100),
+              ),
+            );
           return resource;
         },
       );
@@ -48,21 +49,22 @@ void main() {
       final closed = <String>[];
       solo.run<TestState, String>(
         key: 'open',
-        ifCancelled: (value) async {
-          await delay(50);
-          closed.add(value);
-        },
         (ctx) async {
           final resource = await ctx.join(() async {
             await delay(10);
             return 'db';
           });
-          ctx.run(
-            solo.job<TestState, void>(
-              key: 'child',
-              (ctx) => pause(ctx, 100),
-            ),
-          );
+          ctx
+            ..onDiscard(() async {
+              await delay(50);
+              closed.add(resource);
+            })
+            ..run(
+              solo.job<TestState, void>(
+                key: 'child',
+                (ctx) => pause(ctx, 100),
+              ),
+            );
           return resource;
         },
       );
@@ -79,18 +81,19 @@ void main() {
     runSolo((solo, journal, async) {
       final job = solo.run<TestState, String>(
         key: 'open',
-        ifCancelled: (value) => throw StateError('close failed'),
         (ctx) async {
           final resource = await ctx.join(() async {
             await delay(10);
             return 'db';
           });
-          ctx.run(
-            solo.job<TestState, void>(
-              key: 'child',
-              (ctx) => pause(ctx, 100),
-            ),
-          );
+          ctx
+            ..onDiscard(() => throw StateError('close failed'))
+            ..run(
+              solo.job<TestState, void>(
+                key: 'child',
+                (ctx) => pause(ctx, 100),
+              ),
+            );
           return resource;
         },
       );
@@ -102,23 +105,6 @@ void main() {
         journal.take(),
         contains('[open] error Bad state: close failed'),
       );
-    });
-  });
-
-  test('a body that threw leaves the disposer alone', () {
-    runSolo((solo, journal, async) {
-      var called = false;
-      final job = solo.run<TestState, String>(
-        key: 'open',
-        ifCancelled: (value) => called = true,
-        (ctx) async {
-          await pause(ctx, 10);
-          throw StateError('boom');
-        },
-      )..ignore();
-      async.flushTimers();
-      expect(called, isFalse);
-      expect(job.outcome, isA<Failed>());
     });
   });
 }

@@ -14,23 +14,23 @@ void main() {
   test('a value returned after cancellation goes to the disposer', () {
     fakeAsync((async) {
       final closed = <String>[];
-      final job = Job<String>(
-        ifCancelled: closed.add,
-        (ctx) async {
-          final resource = await ctx.join(() async {
-            await delay(10);
-            return 'db';
-          });
+      final job = Job<String>((ctx) async {
+        final resource = await ctx.join(() async {
+          await delay(10);
+          return 'db';
+        });
+        ctx
+          ..onDiscard(() => closed.add(resource))
           // The child keeps the job alive past the return.
-          ctx.run(
+          ..run(
             Job.deferred<void>(
               key: 'child',
               (ctx) => ctx.wait(() => delay(100)),
             ),
           );
-          return resource;
-        },
-      );
+        return resource;
+      })
+        ..ignore();
       async.elapse(const Duration(milliseconds: 30));
       job.cancel().ignore();
       async.flushTimers();
@@ -42,13 +42,14 @@ void main() {
   test('the disposer runs after the children and before the outcome', () {
     fakeAsync((async) {
       final order = <String>[];
-      final job = Job<String>(
-        ifCancelled: (value) => order.add('disposer'),
-        (ctx) async {
+      final job = Job<String>((ctx) async {
+        ctx
+          ..onDiscard(() => order.add('disposer'))
           // Not started by hand: `run` starts it, and the cascade would
-          // otherwise reach an already running child. Uncancellable, so the
-          // cascade does not cut its wait short before it writes its line.
-          ctx.run(
+          // otherwise reach an already running child. Uncancellable, so
+          // the cascade does not cut its wait short before it writes its
+          // line.
+          ..run(
             Job.deferred<void>(
               key: 'child',
               cancellable: false,
@@ -58,9 +59,8 @@ void main() {
               },
             ),
           );
-          return 'db';
-        },
-      );
+        return 'db';
+      });
       job.done.then((_) => order.add('done')).ignore();
       async.elapse(const Duration(milliseconds: 10));
       job.cancel().ignore();
@@ -75,14 +75,15 @@ void main() {
       final job = Job<String>(
         key: 'job',
         observer: journal,
-        ifCancelled: (value) => throw StateError('close failed'),
         (ctx) async {
-          ctx.run(
-            Job.deferred<void>(
-              key: 'child',
-              (ctx) => ctx.wait(() => delay(100)),
-            ),
-          );
+          ctx
+            ..onDiscard(() => throw StateError('close failed'))
+            ..run(
+              Job.deferred<void>(
+                key: 'child',
+                (ctx) => ctx.wait(() => delay(100)),
+              ),
+            );
           return 'db';
         },
       );
@@ -102,15 +103,14 @@ void main() {
     runZonedGuarded(
       () {
         fakeAsync((async) {
-          final job = Job<String>(
-            ifCancelled: (value) => throw StateError('close failed'),
-            (ctx) async {
-              ctx.run(
+          final job = Job<String>((ctx) async {
+            ctx
+              ..onDiscard(() => throw StateError('close failed'))
+              ..run(
                 Job.deferred<void>((ctx) => ctx.wait(() => delay(100))),
               );
-              return 'db';
-            },
-          );
+            return 'db';
+          });
           async.elapse(const Duration(milliseconds: 10));
           job.cancel().ignore();
           async.flushTimers();
@@ -122,21 +122,5 @@ void main() {
     expect(caught.map((error) => '$error').toList(), [
       'Bad state: close failed',
     ]);
-  });
-
-  test('a body that threw leaves the disposer alone', () {
-    fakeAsync((async) {
-      var called = false;
-      final job = Job<String>(
-        ifCancelled: (value) => called = true,
-        (ctx) async {
-          await ctx.wait(() => delay(10));
-          throw StateError('boom');
-        },
-      )..ignore();
-      async.flushTimers();
-      expect(called, isFalse);
-      expect(job.outcome, isA<Failed>());
-    });
   });
 }

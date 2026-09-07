@@ -25,7 +25,6 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     required bool Function(W state)? keepWhile,
     required super.cancellable,
     required super.describe,
-    required super.ifCancelled,
     required super.observer,
   })  : _canStart = canStart,
         _keepWhile = keepWhile;
