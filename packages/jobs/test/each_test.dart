@@ -358,6 +358,149 @@ void main() {
       controller.close().ignore();
     });
   });
+  test('events delivered from onListen keep their order', () {
+    fakeAsync((async) {
+      // A broadcast controller that hands the newcomer what it has: the
+      // events arrive synchronously, from inside `listen` itself.
+      final seen = <String>[];
+      late StreamController<int> controller;
+      controller = StreamController<int>.broadcast(
+        sync: true,
+        onListen: () => controller
+          ..add(1)
+          ..add(2),
+      );
+      final job = Job<void>((ctx) async {
+        await ctx.each(controller.stream, (event) async {
+          seen.add('start $event');
+          await delay(10);
+          seen.add('end $event');
+        });
+      })
+        ..ignore();
+      async.elapse(const Duration(milliseconds: 5));
+      controller.add(3);
+      unawaited(controller.close());
+      async.flushTimers();
+      expect(seen, [
+        'start 1',
+        'end 1',
+        'start 2',
+        'end 2',
+        'start 3',
+        'end 3',
+      ]);
+      expect(job.outcome, isA<Done<void>>());
+    });
+  });
+
+  test('a handler that threw is not called again', () {
+    fakeAsync((async) {
+      final seen = <int>[];
+      late StreamController<int> controller;
+      controller = StreamController<int>.broadcast(
+        sync: true,
+        onListen: () => controller
+          ..add(1)
+          ..add(2)
+          ..add(3),
+      );
+      final job = Job<void>((ctx) async {
+        await ctx.each(controller.stream, (event) {
+          seen.add(event);
+          throw StateError('boom');
+        });
+      })
+        ..ignore();
+      async.flushTimers();
+      expect(seen, [1]);
+      expect(job.outcome, isA<Failed>());
+      controller.close().ignore();
+    });
+  });
+
+  test('an error of a handler still running when the stream ends is kept', () {
+    fakeAsync((async) {
+      final seen = <String>[];
+      late StreamController<int> controller;
+      controller = StreamController<int>.broadcast(
+        sync: true,
+        onListen: () {
+          controller.add(1);
+          unawaited(controller.close());
+        },
+      );
+      final job = Job<void>((ctx) async {
+        await ctx.each(controller.stream, (event) async {
+          seen.add('start $event');
+          await delay(10);
+          throw StateError('late boom');
+        });
+        seen.add('each returned');
+      })
+        ..ignore();
+      async.flushTimers();
+      expect(seen, ['start 1'], reason: 'the wait does not end before it');
+      expect(job.outcome, isA<Failed>());
+    });
+  });
+  test('an error from onListen waits for the events it came after', () {
+    fakeAsync((async) {
+      final seen = <String>[];
+      late StreamController<int> controller;
+      controller = StreamController<int>.broadcast(
+        sync: true,
+        onListen: () => controller
+          ..add(1)
+          ..addError(StateError('source boom')),
+      );
+      final job = Job<void>((ctx) async {
+        try {
+          await ctx.each(controller.stream, (event) async {
+            seen.add('start $event');
+            await delay(10);
+            seen.add('end $event');
+          });
+        } on Object {
+          seen.add('each threw');
+          rethrow;
+        }
+      })
+        ..ignore();
+      async.flushTimers();
+      expect(
+        seen,
+        ['start 1', 'end 1', 'each threw'],
+        reason: 'the error waits for the event it came after',
+      );
+      expect(job.outcome, isA<Failed>());
+      controller.close().ignore();
+    });
+  });
+  test('a handler that threw is not called by a source in the same stripe', () {
+    fakeAsync((async) {
+      // A synchronous source hands over two events in one go: the first
+      // one throws, and the subscription has to be gone before the second
+      // is delivered.
+      final seen = <int>[];
+      final controller = StreamController<int>(sync: true);
+      final job = Job<void>((ctx) async {
+        await ctx.each(controller.stream, (event) {
+          seen.add(event);
+          throw StateError('boom');
+        });
+      })
+        ..ignore();
+      async.flushMicrotasks();
+      controller
+        ..add(1)
+        ..add(2);
+      async.flushTimers();
+      expect(seen, [1]);
+      expect(job.outcome, isA<Failed>());
+      controller.close().ignore();
+    });
+  });
 }
 
 /// A stream that counts how many times its subscription is cancelled.

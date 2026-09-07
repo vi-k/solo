@@ -10,8 +10,8 @@ extension JobStream on JobContext {
   /// The subscription belongs to the job: it is cancelled when the stream
   /// ends, when the body leaves this call, the moment the job is marked
   /// cancelled — before the body itself learns about it — and, for a call
-  /// the body walked away from, when the job ends whatever the outcome.
-  /// Nothing is left listening.
+  /// the body walked away from, when the job's cleanup reaches this
+  /// registration. Nothing is left listening.
   ///
   /// Returns when the stream is done. Throws the job's [Cancelled] if the
   /// job is cancelled meanwhile: the waiting ends there, because a stream
@@ -20,11 +20,11 @@ extension JobStream on JobContext {
   /// body, which can catch them like any others.
   ///
   /// An [onData] that returns a future is waited for, and delivery is held
-  /// until it comes back: the events keep their order, and an error of the
-  /// handler ends the wait the same way a synchronous one does. The job is
-  /// not cancelled while it waits for a handler — a handler that must be
-  /// interrupted takes the job's cancellation through the context, as any
-  /// other code of the body does.
+  /// meanwhile: the events keep their order, whatever the source does, and
+  /// a handler that threw is not called again. The job is not cancelled
+  /// while it waits for a handler — a handler that must be interrupted
+  /// takes the job's cancellation through the context, as any other code
+  /// of the body does.
   ///
   /// The subscription is cancelled, never awaited: delivery stops at once,
   /// and whatever the source does about it afterwards is the source's own
@@ -39,6 +39,23 @@ extension JobStream on JobContext {
     FutureOr<void> Function(T event) onData,
   ) async {
     final done = Completer<void>();
+    // What the source hands out from inside `listen` itself — a
+    // synchronous broadcast controller giving a newcomer what it has —
+    // arrives before there is a subscription to pause. It waits here and
+    // is played back in order once there is one.
+    //
+    // This is the reason `each` is not `stream.asyncMap(onData).listen(...)`
+    // and not a `StreamIterator`: both subscribe to the source from inside
+    // their own `listen`, so events delivered during that call reach a
+    // subscriber that does not exist yet, and both drop them without a
+    // word (measured, 2026-09-07). A stream this package follows does not
+    // lose its first events.
+    final early = <T>[];
+    var earlyDone = false;
+    Object? earlyError;
+    StackTrace? earlyStack;
+    StreamSubscription<T>? sub;
+
     void end() {
       if (!done.isCompleted) {
         done.complete();
@@ -51,20 +68,9 @@ extension JobStream on JobContext {
       }
     }
 
-    // Nullable, and registered before there is anything to subscribe:
-    // `onCancel` throws for a job already cancelled or finished, and a
-    // subscription made first would be left with nobody to cancel it. The
-    // callback may run before `listen` comes back — a stream that cancels
-    // the job as it is listened to — and then there is nothing to cancel
-    // yet: the `finally` below takes care of it.
-    StreamSubscription<T>? sub;
-    // A job that ends without ever being marked — the body walked away
-    // from this call and then returned — never runs the callback above, so
-    // the stack takes the subscription too.
-    final unregister = onCancel(() => sub?.cancel());
-    final undispose = onDispose(() => unawaited(sub?.cancel()));
-
     void thrown(Object error, StackTrace stackTrace) {
+      // The subscription goes first: nothing else is delivered, so a
+      // handler that threw is never called again.
       unawaited(sub?.cancel());
       // A cancellation from the context has already marked the job, and the
       // wait below throws it by itself. A body cancelling itself with
@@ -76,37 +82,87 @@ extension JobStream on JobContext {
       fail(error, stackTrace);
     }
 
-    // Held until `listen` comes back: a source that delivers from inside
-    // `listen` has nothing to pause yet.
-    final held = <Future<void>>[];
+    void deliver(T event) {
+      try {
+        final handled = onData(event);
+        if (handled is Future<void>) {
+          // Delivery waits for the handler, so the events keep their order.
+          // The signal never carries the error: it only says when to go on,
+          // and `thrown` has the error already.
+          sub!.pause(handled.then<void>((_) {}, onError: thrown));
+        }
+      } on Object catch (error, stackTrace) {
+        thrown(error, stackTrace);
+      }
+    }
+
+    /// Plays back what arrived before the subscription existed, one event
+    /// at a time and with delivery held, then lets the stream go on.
+    Future<void> playBack() async {
+      sub!.pause();
+      try {
+        while (early.isNotEmpty) {
+          try {
+            await onData(early.removeAt(0));
+          } on Object catch (error, stackTrace) {
+            thrown(error, stackTrace);
+            return;
+          }
+        }
+        if (earlyError case final error?) {
+          fail(error, earlyStack ?? StackTrace.current);
+        } else if (earlyDone) {
+          end();
+        }
+      } finally {
+        // Not after the wait is over: the subscription is gone by then,
+        // and there is nothing left to let through.
+        if (!done.isCompleted) {
+          sub.resume();
+        }
+      }
+    }
+
+    // Registered before there is anything to subscribe: `onCancel` throws
+    // for a job already cancelled or finished, and a subscription made
+    // first would be left with nobody to cancel it. The callback may run
+    // before `listen` comes back — a stream that cancels the job as it is
+    // listened to — and then there is nothing to cancel yet: the `finally`
+    // below takes care of it.
+    final unregister = onCancel(() => sub?.cancel());
+    // On the stack as well: a body that walks away from this call leaves a
+    // job that may end without ever being marked, and then the callback
+    // above never runs.
+    final undispose = onDispose(() => unawaited(sub?.cancel()));
     try {
       sub = stream.listen(
         (event) {
-          try {
-            final handled = onData(event);
-            if (handled is Future<void>) {
-              // Delivery waits for the handler, so the events keep their
-              // order. The signal never carries the error: it only says
-              // when to go on, and `thrown` has the error already.
-              final resume = handled.then<void>((_) {}, onError: thrown);
-              final current = sub;
-              if (current == null) {
-                held.add(resume);
-              } else {
-                current.pause(resume);
-              }
-            }
-          } on Object catch (error, stackTrace) {
-            thrown(error, stackTrace);
+          if (sub == null) {
+            early.add(event);
+            return;
           }
+          deliver(event);
         },
-        onError: fail,
-        onDone: end,
+        onError: (Object error, StackTrace stackTrace) {
+          if (sub == null && early.isNotEmpty) {
+            earlyError ??= error;
+            earlyStack ??= stackTrace;
+            return;
+          }
+          fail(error, stackTrace);
+        },
+        onDone: () {
+          if (sub == null && early.isNotEmpty) {
+            earlyDone = true;
+            return;
+          }
+          end();
+        },
         cancelOnError: true,
       );
-      held
-        ..forEach(sub.pause)
-        ..clear();
+      if (early.isNotEmpty) {
+        unawaited(playBack());
+      }
       await wait(() => done.future);
     } finally {
       unregister();

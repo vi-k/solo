@@ -129,4 +129,61 @@ void main() {
       expect(journal.take(), ['[x] dropped Cancelled(rules: is not Working)']);
     });
   });
+  test('a start rule that throws does not stall the queue', () {
+    runSolo((solo, journal, async) {
+      // The rule is the caller's code: it may throw the way any code does,
+      // and the job it was asked about is already out of the queue.
+      final first = solo.job<Initial, void>(
+        key: 'first',
+        canStart: (state) => throw StateError('rule boom'),
+        (ctx) async {},
+      )..ignore();
+      final next = solo.job<Initial, void>(key: 'next', (ctx) async {});
+      solo
+        ..add(first)
+        ..add(next);
+      async.flushTimers();
+      expect(first.outcome, isA<Failed>());
+      expect(next.outcome, isA<Done<void>>());
+      expect(journal.take(), [
+        '[first] error Bad state: rule boom',
+        '[first] finished Failed(Bad state: rule boom)',
+        '[next] started',
+        '[next] finished Done(null)',
+      ]);
+    });
+  });
+
+  test('a keep rule that throws does not stop the reevaluation', () {
+    runSolo((solo, journal, async) {
+      // It holds at the state the job started in and throws at the next
+      // one: the throw happens in the reevaluation, not in the pump.
+      final thrower = solo.job<TestState, void>(
+        key: 'thrower',
+        keepWhile: (state) =>
+            state is Preparing ? throw StateError('keep boom') : true,
+        (ctx) async => pause(ctx, 100),
+      );
+      final other = solo.job<TestState, void>(
+        key: 'other',
+        keepWhile: (state) => state is! Preparing,
+        (ctx) async => pause(ctx, 100),
+      );
+      solo
+        ..add(thrower)
+        ..add(other);
+      async.elapse(const Duration(milliseconds: 10));
+      solo.externalSetState(const Preparing());
+      async.flushTimers();
+      expect(
+        journal.take().where((line) => line.contains('error')).toList(),
+        ['[thrower] error Bad state: keep boom'],
+      );
+      expect(
+        other.outcome,
+        isA<Cancelled>(),
+        reason: 'the job behind the thrower was still looked at',
+      );
+    });
+  });
 }

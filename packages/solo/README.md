@@ -205,8 +205,9 @@ checks `paused`, and there is no `if` left to forget.
 
 **Cancellation.** Cooperative: Dart cannot interrupt somebody else's
 `await`. A cancelled job learns about it the next time it touches the
-context — every `SoloContext` member except `log` and `job` throws the job's
-`Cancelled` once the job is marked. So a body does not `await` on its own:
+context — the members that wait or start something throw the job's
+`Cancelled` once the job is marked, while `log`, `job` and the three that
+register a cleanup (`onDispose`, `onDiscard`, `disown`) go on working. So a body does not `await` on its own:
 every call goes through the context, and the member you pick says what a
 cancellation does to that call. `ctx.wait(() => ...)` returns as soon as
 either the action or the cancellation arrives. `ctx.join(() => ...)` waits
@@ -334,19 +335,26 @@ Job<void> track() => run<Ready, void>(
 ```
 
 The subscription belongs to the job. It goes when the stream ends, when the
-body leaves the call, and the moment the job is marked cancelled — before
-the body itself learns about it. The call returns when the stream is done,
+body leaves the call, the moment the job is marked cancelled — before the
+body itself learns about it — and, for a call the body walked away from,
+when the job ends whatever the outcome. The call returns when the stream is done,
 throws the job's `Cancelled` if the job gave up meanwhile, and throws an
 error of the stream or of the callback into the body, where an ordinary
 `catch` can take it. `ctx.state` inside the callback is a read like any
 other, checked against the rules; the `Cancelled` it may throw is not an
-error but the end of the stream, and it comes back through the call. `each` is an extension on `JobContext` — the interface of the
+error but the end of the stream, and it comes back through the call. A callback that returns a future is waited for, and delivery is held
+meanwhile: the events keep their order, and a callback that threw is not
+called again. `each` is an extension on `JobContext` — the interface of the
 kernel that `SoloContext` implements — and not a member of it: it is built
-out of `wait` and `onCancel` and does nothing your own body could not.
+out of `wait`, `onCancel` and `onDispose`, and does nothing your own body
+could not.
 
 **Children.** `ctx.run(child)` starts a job right now, bypassing the queue,
 as a child of the current one. The parent finishes only after all of its
-children. A child writes the state beside its parent — neither waits for
+children. A cancelled parent cancels them, and so does a body that gives
+itself up with `throw Cancelled(...)` — including one that let a child's
+`Cancelled` through from `await child.value`; a body that *fails* leaves
+them to finish and waits. A child writes the state beside its parent — neither waits for
 the other, and their writes interleave — which is the one way to have two
 writers inside a controller deliberately. `ctx.run(child).done` gives the outcome and never throws;
 `ctx.run(child).value` gives the value and throws the child's `Cancelled`
@@ -368,9 +376,9 @@ is equal to any other with the same name, so an engine of your own may
 declare its own. `job.done` completes with the outcome and never throws;
 `job.value` completes with the value or throws; `job.whenCancelled`
 completes on every `Cancelled` outcome — for a running job the moment it is
-marked, before the body finishes, and for a body that cancelled itself only
-when the job finishes — and never at all for a job that ends `Done` or
-`Failed`; `job.cancel()` cancels and waits for the job to actually finish;
+marked, before the body finishes, and for a body that cancelled itself once
+that body has ended and its children are done, right before the cleanup —
+and never at all for a job that ends `Done` or `Failed`; `job.cancel()` cancels and waits for the job to actually finish;
 `job.ignore()` says that nobody is going to look at the outcome.
 
 **Queue and policies.** `queue` is a first-class object visible to
@@ -439,8 +447,11 @@ forgotten `await` breaks nothing: the parent waits for its children in any
 case.
 
 A job handed to `ctx.run` becomes a child even if it is dropped before it
-starts. It is registered as a child first, and only then checked against
-the rules, so a parent always accounts for every job it tried to run.
+starts: it gets its parent, its level and its observer before the rules are
+asked, so a parent always accounts for every job it tried to run. Only the
+waiting is different — a job the rules turn away never joins the list the
+parent waits for, and a rule that throws instead of refusing ends the child
+with that error rather than leaving it behind.
 
 `add` on a closed controller does not throw. It returns a job that is
 already finished with `Cancelled(closed)`, so call sites need no

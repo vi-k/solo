@@ -389,7 +389,15 @@ abstract class SoloBase<S extends Object> {
       if (identical(job, except) || job.isCancelled || job._bodyEnded) {
         continue;
       }
-      final rejection = job._rejectKeep(_state);
+      final String? rejection;
+      try {
+        rejection = job._rejectKeep(_state);
+      } on Object catch (error, stackTrace) {
+        // A rule that threw says nothing about whether the job may go on,
+        // and the jobs behind it still have to be looked at.
+        job._notifyError(error, stackTrace);
+        continue;
+      }
       if (rejection != null) {
         // A rule of the job's own: it may not refuse this one.
         job._cancelWith(
@@ -440,7 +448,19 @@ abstract class SoloBase<S extends Object> {
         _debug(() => 'queue is empty');
         return;
       }
-      final rejection = job._rejectStart(_state);
+      final String? rejection;
+      try {
+        rejection = job._rejectStart(_state);
+      } on Object catch (error, stackTrace) {
+        // The rules are the caller's code, and this one threw. The job is
+        // already out of the queue: left as it is, it would never finish,
+        // and the pump would never come back for the ones behind it.
+        _debug(() => 'rule of $job threw: $error');
+        job
+          .._notifyObserver(error, stackTrace)
+          .._drop(Failed(error, stackTrace));
+        continue;
+      }
       if (rejection != null) {
         job._drop(
           Cancelled.by(
