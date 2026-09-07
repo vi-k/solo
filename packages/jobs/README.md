@@ -202,6 +202,12 @@ final parent = Job<void>((ctx) async {
 });
 ```
 
+`Job.deferred` and not `Job`, because the start of a child belongs to its
+parent: an auto-starting job that `run` did not reach on the same
+synchronous stripe starts itself — as a root job nobody adopted, nobody
+cascades onto and nobody waits for — and `run` then refuses it as already
+started.
+
 A child inherits the parent's observer unless it was given one of its
 own, and a cancellation of a child that surfaces through `child.value`
 marks the parent's outcome as `handler`, naming the child.
