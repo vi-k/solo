@@ -211,4 +211,83 @@ void main() {
     expect(caught, isEmpty);
     expect(closed, ['db'], reason: 'the value is still cleaned up');
   });
+  test("a child's failure nobody looked at reaches the zone", () {
+    final caught = <Object>[];
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          Job<void>((ctx) async {
+            ctx.run(
+              Job.deferred<void>(key: 'child', (child) async {
+                // Outlives the body, so the parent really waits for it: a
+                // child that finished earlier is not on the waiting list
+                // at all.
+                await child.wait(() => delay(20));
+                throw StateError('child boom');
+              }),
+            );
+            await ctx.wait(() => delay(10));
+          }).ignore();
+          async.elapse(const Duration(milliseconds: 50));
+        });
+      },
+      (error, stackTrace) => caught.add(error),
+    );
+    expect(
+      caught.map((error) => '$error').toList(),
+      ['Bad state: child boom'],
+      reason: 'waiting for a child is not looking at its outcome',
+    );
+  });
+
+  test('cancelling a job does not silence the failure it ends with', () {
+    final caught = <Object>[];
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          final job = Job<void>(cancellable: false, (ctx) async {
+            await ctx.wait(() => delay(10));
+            throw StateError('boom');
+          });
+          async.elapse(const Duration(milliseconds: 5));
+          job.cancel().ignore();
+          async.elapse(const Duration(milliseconds: 50));
+        });
+      },
+      (error, stackTrace) => caught.add(error),
+    );
+    expect(
+      caught.map((error) => '$error').toList(),
+      ['Bad state: boom'],
+      reason: 'the waiting of an engine is not observation',
+    );
+  });
+
+  test('a listener that arrives one microtask later still counts', () {
+    final caught = <Object>[];
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          late Job<void> job;
+          job = Job<void>(
+            observer: _TouchAfterFinish(() => job.done.ignore()),
+            (ctx) async => throw StateError('boom'),
+          );
+          async.flushMicrotasks();
+        });
+      },
+      (error, stackTrace) => caught.add(error),
+    );
+    expect(caught, isEmpty, reason: 'one microtask of grace, as Dart gives');
+  });
+}
+
+/// Touches the outcome one microtask after the job finished.
+final class _TouchAfterFinish extends JobObserver {
+  final void Function() _touch;
+
+  _TouchAfterFinish(this._touch);
+
+  @override
+  void onFinish(Job<Object?> job) => scheduleMicrotask(_touch);
 }

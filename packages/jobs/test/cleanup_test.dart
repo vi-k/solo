@@ -8,58 +8,71 @@ import 'package:jobs/jobs.dart';
 import 'package:test/test.dart';
 
 import 'support/delay.dart';
+import 'support/error_observer.dart';
+
+void _byDispose(JobContext ctx, void Function() run) => ctx.onDispose(run);
+
+void _byDiscard(JobContext ctx, void Function() run) => ctx.onDiscard(run);
+
+/// Runs a job that registers a cleanup through [register] and ends the way
+/// [scenario] says, and gives back what the cleanup wrote.
+List<String> _cleanupsOn(
+  String scenario,
+  void Function(JobContext ctx, void Function() run) register,
+) =>
+    fakeAsync((async) {
+      final order = <String>[];
+      final job = Job<int>((ctx) async {
+        register(ctx, () => order.add('cleaned'));
+        await ctx.wait(() => delay(10));
+        if (scenario == 'failed') {
+          throw StateError('boom');
+        }
+
+        return 1;
+      })
+        ..ignore();
+      // Five milliseconds so the body starts and registers: a job cancelled
+      // before that never runs its body at all.
+      async.elapse(const Duration(milliseconds: 5));
+      if (scenario == 'cancelled') {
+        job.cancel().ignore();
+      }
+      async.flushTimers();
+
+      return order;
+    });
+
+/// Opens a resource the way a real one opens: not at once.
+Future<String> _open() async {
+  await delay(10);
+
+  return 'db';
+}
 
 void main() {
-  test('onDispose runs on every outcome', () {
-    for (final scenario in ['done', 'failed', 'cancelled']) {
-      fakeAsync((async) {
-        final order = <String>[];
-        final job = Job<int>((ctx) async {
-          ctx.onDispose(() => order.add('disposed'));
-          await ctx.wait(() => delay(10));
-          if (scenario == 'failed') {
-            throw StateError('boom');
-          }
-          return 1;
-        })
-          ..ignore();
-        // Five milliseconds so the body starts and registers: a job
-        // cancelled before that never runs its body at all.
-        async.elapse(const Duration(milliseconds: 5));
-        if (scenario == 'cancelled') {
-          job.cancel().ignore();
-        }
-        async.flushTimers();
-        expect(order, ['disposed'], reason: 'scenario: $scenario');
-      });
-    }
+  test('onDispose runs on Done', () {
+    expect(_cleanupsOn('done', _byDispose), ['cleaned']);
   });
 
-  test('onDiscard is silent on Done and runs on the other two', () {
-    for (final scenario in ['done', 'failed', 'cancelled']) {
-      fakeAsync((async) {
-        final order = <String>[];
-        final job = Job<int>((ctx) async {
-          ctx.onDiscard(() => order.add('discarded'));
-          await ctx.wait(() => delay(10));
-          if (scenario == 'failed') {
-            throw StateError('boom');
-          }
-          return 1;
-        })
-          ..ignore();
-        async.elapse(const Duration(milliseconds: 5));
-        if (scenario == 'cancelled') {
-          job.cancel().ignore();
-        }
-        async.flushTimers();
-        expect(
-          order,
-          scenario == 'done' ? <String>[] : ['discarded'],
-          reason: 'scenario: $scenario',
-        );
-      });
-    }
+  test('onDispose runs on Failed', () {
+    expect(_cleanupsOn('failed', _byDispose), ['cleaned']);
+  });
+
+  test('onDispose runs on Cancelled', () {
+    expect(_cleanupsOn('cancelled', _byDispose), ['cleaned']);
+  });
+
+  test('onDiscard is silent on Done', () {
+    expect(_cleanupsOn('done', _byDiscard), isEmpty);
+  });
+
+  test('onDiscard runs on Failed', () {
+    expect(_cleanupsOn('failed', _byDiscard), ['cleaned']);
+  });
+
+  test('onDiscard runs on Cancelled', () {
+    expect(_cleanupsOn('cancelled', _byDiscard), ['cleaned']);
   });
 
   test('the stack unwinds last in, first out', () {
@@ -143,7 +156,7 @@ void main() {
       final errors = <Object>[];
       final order = <String>[];
       final job = Job<int>(
-        observer: _CollectingObserver(errors),
+        observer: ErrorObserver(errors),
         (ctx) async {
           ctx
             ..onDispose(() => order.add('below'))
@@ -262,7 +275,7 @@ void main() {
     fakeAsync((async) {
       final errors = <Object>[];
       Job<void>(
-        observer: _CollectingObserver(errors),
+        observer: ErrorObserver(errors),
         (ctx) async {
           // The body walks away from its own wait and throws the
           // cancellation itself: filling `_pendingCancel` must not run the
@@ -421,7 +434,7 @@ void main() {
       final closed = <String>[];
       final errors = <Object>[];
       final job = Job<int>(
-        observer: _CollectingObserver(errors),
+        observer: ErrorObserver(errors),
         (ctx) async {
           unawaited(
             ctx.join<String>(
@@ -478,7 +491,7 @@ void main() {
     fakeAsync((async) {
       final errors = <Object>[];
       Job<int>(
-        observer: _CollectingObserver(errors),
+        observer: ErrorObserver(errors),
         (ctx) async {
           unawaited(
             ctx.join<String>(
@@ -551,17 +564,21 @@ void main() {
   test('disown drops the top registration for that value', () {
     fakeAsync((async) {
       final closed = <String>[];
+      final dropped = <bool>[];
       final job = Job<String>((ctx) async {
         final db = await ctx.join(() async => 'db', dispose: closed.add);
-        expect(ctx.disown(db), isTrue);
-        expect(ctx.disown(db), isFalse, reason: 'nothing left to drop');
-        expect(ctx.disown('someone else'), isFalse);
+        dropped
+          ..add(ctx.disown(db))
+          ..add(ctx.disown(db))
+          ..add(ctx.disown('someone else'));
         await ctx.wait(() => delay(10));
+
         return db;
       })
         ..ignore();
       async.flushTimers();
       expect(job.outcome, isA<Done<String>>());
+      expect(dropped, [true, false, false], reason: 'one per call, then none');
       expect(closed, isEmpty);
     });
   });
@@ -569,12 +586,16 @@ void main() {
   test('disown does not see a registration made by a member', () {
     fakeAsync((async) {
       final closed = <String>[];
-      Job<void>((ctx) async {
+      final dropped = <bool>[];
+      final job = Job<void>((ctx) async {
         const db = 'db';
         ctx.onDispose(() => closed.add(db));
-        expect(ctx.disown(db), isFalse);
-      }).ignore();
+        dropped.add(ctx.disown(db));
+      })
+        ..ignore();
       async.flushTimers();
+      expect(job.outcome, isA<Done<void>>());
+      expect(dropped, [false]);
       expect(closed, ['db'], reason: 'disown left the member alone');
     });
   });
@@ -651,14 +672,82 @@ void main() {
       expect(order, ['slow starts', 'slow ends', 'top', 'below']);
     });
   });
-}
+  test('a discard of a call is silent when the value reaches the body', () {
+    fakeAsync((async) {
+      // The pattern of the Quick start: the call gives the body a resource
+      // and the body hands it out. Nothing may close it on the way.
+      final closed = <String>[];
+      final job = Job<String>((ctx) async {
+        final db = await ctx.join(_open, discard: closed.add);
+        await ctx.wait(() => delay(10));
 
-class _CollectingObserver extends JobObserver {
-  _CollectingObserver(this.errors);
+        return db;
+      });
+      async.flushTimers();
+      expect(job.outcome, isA<Done<String>>());
+      expect(closed, isEmpty);
+    });
+  });
 
-  final List<Object> errors;
+  test('a discard of a wait is silent when the value reaches the body', () {
+    fakeAsync((async) {
+      final closed = <String>[];
+      final job = Job<String>((ctx) async {
+        final db = await ctx.wait(_open, discard: closed.add);
+        await ctx.wait(() => delay(10));
 
-  @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
-      errors.add(error);
+        return db;
+      });
+      async.flushTimers();
+      expect(job.outcome, isA<Done<String>>());
+      expect(closed, isEmpty);
+    });
+  });
+
+  test('a synchronous value of wait goes on the stack as any other does', () {
+    fakeAsync((async) {
+      final closed = <String>[];
+      final job = Job<void>((ctx) async {
+        await ctx.wait(() => 'file', dispose: closed.add);
+        await ctx.wait(() => delay(10));
+      });
+      async.flushTimers();
+      expect(job.outcome, isA<Done<void>>());
+      expect(closed, ['file']);
+    });
+  });
+
+  test('a synchronous value of wait is discarded on a cancellation', () {
+    fakeAsync((async) {
+      final closed = <String>[];
+      final job = Job<void>((ctx) async {
+        await ctx.wait(() => 'file', discard: closed.add);
+        await ctx.wait(() => delay(100));
+      });
+      async.elapse(const Duration(milliseconds: 10));
+      job.cancel().ignore();
+      async.flushTimers();
+      expect(job.outcome, isA<Cancelled>());
+      expect(closed, ['file']);
+    });
+  });
+
+  test('disown drops the top of two registrations for one value', () {
+    fakeAsync((async) {
+      final closed = <String>[];
+      final dropped = <bool>[];
+      final job = Job<String>((ctx) async {
+        final db = await ctx.join(_open, dispose: (_) => closed.add('below'));
+        await ctx.join(() async => db, dispose: (_) => closed.add('top'));
+        dropped.add(ctx.disown(db));
+        await ctx.wait(() => delay(10));
+
+        return db;
+      });
+      async.flushTimers();
+      expect(job.outcome, isA<Done<String>>());
+      expect(dropped, [true]);
+      expect(closed, ['below'], reason: 'the top one went, the one below ran');
+    });
+  });
 }

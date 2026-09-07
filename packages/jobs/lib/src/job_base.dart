@@ -812,14 +812,10 @@ abstract class JobBase<T> implements Job<T> {
 
   /// Lets everyone waiting know, after [cancelWith] has marked the job.
   ///
-  /// Guarded against a second pass: a callback may cancel this job again
-  /// through a path of its own, and an outcome that arrived meanwhile
-  /// leaves nothing to complete.
+  /// Runs once and once only: the mark goes on before the cascade, so a
+  /// callback that comes back to `cancelWith` through a path of its own
+  /// turns around at the early return and never reaches this.
   void _markCancelled(Cancelled cancelled) {
-    _pendingCancel = cancelled;
-    if (_cancelled.isCompleted) {
-      return;
-    }
     _cancelled.complete();
     // In registration order, and from a copy: a callback may register
     // another one, and one it removes still runs. `JobContext.onCancel`

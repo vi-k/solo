@@ -6,6 +6,7 @@ import 'package:jobs/jobs.dart';
 import 'package:test/test.dart';
 
 import 'support/delay.dart';
+import 'support/error_observer.dart';
 import 'support/probe_job.dart';
 
 void main() {
@@ -13,7 +14,7 @@ void main() {
     fakeAsync((async) {
       final errors = <Object>[];
       Job<int>(
-        observer: _CollectingObserver(errors),
+        observer: ErrorObserver(errors),
         (ctx) async {
           // The outcome is `Done`: nothing marked the job, so without a
           // check of the phase every one of these would go through — `run`
@@ -44,7 +45,7 @@ void main() {
       final errors = <Object>[];
       final order = <String>[];
       Job<int>(
-        observer: _CollectingObserver(errors),
+        observer: ErrorObserver(errors),
         (ctx) async {
           ctx.onDispose(() {
             ctx
@@ -65,7 +66,7 @@ void main() {
     fakeAsync((async) {
       final errors = <Object>[];
       final job = Job<void>(
-        observer: _CollectingObserver(errors),
+        observer: ErrorObserver(errors),
         (ctx) async {
           ctx.onDispose(
             () => throw Cancelled.by(
@@ -90,7 +91,7 @@ void main() {
     fakeAsync((async) {
       final errors = <Object>[];
       final job = Job<int>(
-        observer: _CollectingObserver(errors),
+        observer: ErrorObserver(errors),
         (ctx) async {
           final child = ctx.run(
             Job.deferred<void>(
@@ -120,6 +121,10 @@ void main() {
       late JobContext leaked;
       final job = Job<void>((ctx) async {
         leaked = ctx;
+        // A cleanup of its own, so the job really goes through the phase
+        // that closes the context: without one the flag is never raised,
+        // and this test would say nothing about it being lowered again.
+        ctx.onDispose(() {});
       })
         ..ignore();
       async.flushTimers();
@@ -128,6 +133,7 @@ void main() {
       leaked.log('still legal');
     });
   });
+
   test('check throws the cancellation an engine finished the job with', () {
     fakeAsync((async) {
       late JobContext captured;
@@ -148,14 +154,20 @@ void main() {
       expect(captured.check, throwsA(isA<Cancelled>()));
     });
   });
-}
+  test('the job is still running while the engine cleans up after it', () {
+    fakeAsync((async) {
+      final marks = <bool>[];
+      final job = Job<int>((ctx) async {
+        ctx.onDispose(() async {
+          marks.add(ctx.job.isRunning);
+          await delay(10);
+        });
 
-class _CollectingObserver extends JobObserver {
-  _CollectingObserver(this.errors);
-
-  final List<Object> errors;
-
-  @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
-      errors.add(error);
+        return 1;
+      });
+      async.flushTimers();
+      expect(marks, [true]);
+      expect(job.isRunning, isFalse);
+    });
+  });
 }

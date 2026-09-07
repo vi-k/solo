@@ -5,6 +5,8 @@ import 'package:fake_async/fake_async.dart';
 import 'package:jobs/jobs.dart';
 import 'package:test/test.dart';
 
+import 'support/delay.dart';
+
 void main() {
   test('cancel reasons are equal by name, whoever declared them', () {
     // Built at run time, so it is not the canonicalized constant: this is
@@ -103,6 +105,18 @@ void main() {
       async.flushTimers();
       expect(caught, isA<Cancelled>());
       expect(identical(caught, job.outcome), isTrue);
+    });
+  });
+  test('value gives back what the body returned', () {
+    fakeAsync((async) {
+      final seen = <int>[];
+      Job<int>((ctx) async {
+        await ctx.wait(() => delay(10));
+
+        return 7;
+      }).value.then(seen.add).ignore();
+      async.flushTimers();
+      expect(seen, [7]);
     });
   });
 }

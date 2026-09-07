@@ -4,7 +4,16 @@ import 'package:jobs/jobs.dart';
 final class ProbeJob<T> extends JobBase<T> {
   final Future<T> Function(JobContext ctx) _body;
 
-  ProbeJob(this._body, {super.key, super.observer});
+  /// The lifecycle hooks a subclass gets, in the order they were called.
+  final hooks = <String>[];
+
+  ProbeJob(this._body, {super.key, super.observer, super.cancellable});
+
+  @override
+  void started() => hooks.add('started');
+
+  @override
+  void finished() => hooks.add('finished');
 
   /// How many children are still being waited for.
   int get childCount => children.length;
@@ -17,6 +26,10 @@ final class ProbeJob<T> extends JobBase<T> {
 
   /// Ends the job from the outside, the way an engine of a domain would.
   void drop(Outcome<T> outcome) => finish(outcome);
+
+  /// Cancels the job with a cancellation of its own, the way an engine of
+  /// a domain does.
+  void cancelBy(Cancelled cancelled) => cancelWith(cancelled);
 
   @override
   JobContextBase createContext() => ProbeContext(this);
@@ -144,4 +157,38 @@ final class FailingHookJob<T> extends JobBase<T> {
 
   @override
   Future<T> execute(covariant ProbeContext ctx) => _body(ctx);
+}
+
+/// A job whose context cancels it the way the rules of a domain do.
+///
+/// The rules cancel through a cancellation nobody may refuse: neither a
+/// job created with `cancellable: false` nor an uncancellable section.
+final class RulesJob<T> extends JobBase<T> {
+  final Future<T> Function(RulesContext ctx) _body;
+
+  RulesJob(this._body, {super.key, super.cancellable});
+
+  /// Starts the body the way an engine of a domain would.
+  void launch() => start();
+
+  @override
+  JobContextBase createContext() => RulesContext(this);
+
+  @override
+  Future<T> execute(covariant RulesContext ctx) => _body(ctx);
+}
+
+/// The context of [RulesJob].
+final class RulesContext extends JobContextBase {
+  RulesContext(super.owner);
+
+  /// Cancels the job the way a rule of a domain does.
+  void breakRule(String description) => cancelOwnJob(
+        Cancelled.by(
+          reason: const CancelReason('rules'),
+          started: true,
+          description: description,
+          stackTrace: StackTrace.current,
+        ),
+      );
 }

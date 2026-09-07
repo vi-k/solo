@@ -8,6 +8,7 @@ import 'package:jobs/jobs.dart';
 import 'package:test/test.dart';
 
 import 'support/delay.dart';
+import 'support/probe_job.dart';
 
 /// Whether the job behind [ctx] is already marked cancelled.
 bool _isMarked(JobContext ctx) => ctx.job.isCancelled;
@@ -327,6 +328,126 @@ void main() {
       async.elapse(const Duration(milliseconds: 200));
       expect(thrown, isNull);
       expect(parent.outcome, isA<Cancelled>());
+    });
+  });
+  test('a child started from a cancel callback is dropped, not run', () {
+    fakeAsync((async) {
+      // The callbacks of the children run inside the cascade, before the
+      // parent used to be marked: a `run` from one of them found a parent
+      // that still looked alive and started a job under an outcome that
+      // was already decided.
+      Object? thrown;
+      late Job<void> parent;
+      parent = Job<void>((ctx) async {
+        ctx.run(
+          Job.deferred<void>(key: 'child', (child) async {
+            child.onCancel(() {
+              try {
+                ctx.run(
+                  Job.deferred<void>(
+                    key: 'late',
+                    (late) => late.wait(() => delay(50)),
+                  ),
+                );
+              } on Object catch (error) {
+                thrown = error;
+              }
+            });
+            await child.wait(() => delay(100));
+          }),
+        );
+        await ctx.wait(() => delay(100));
+      })
+        ..ignore();
+      async.elapse(const Duration(milliseconds: 10));
+      parent.cancel().ignore();
+      async.flushTimers();
+      expect(thrown, isA<Cancelled>());
+      expect(parent.outcome, isA<Cancelled>());
+    });
+  });
+
+  test('a job dropped before it started says it is cancelled', () {
+    fakeAsync((async) {
+      final job = Job<void>((ctx) async {})..cancel().ignore();
+      expect(job.isCancelled, isTrue);
+      expect(job.outcome, isA<Cancelled>());
+    });
+  });
+
+  test('a cancel callback that removes another one does not break the pass',
+      () {
+    fakeAsync((async) {
+      final seen = <String>[];
+      final job = Job<void>((ctx) async {
+        late void Function() removeSecond;
+        ctx.onCancel(() {
+          seen.add('first');
+          removeSecond();
+        });
+        removeSecond = ctx.onCancel(() => seen.add('second'));
+        await ctx.wait(() => delay(100));
+      })
+        ..ignore();
+      async.elapse(const Duration(milliseconds: 10));
+      job.cancel().ignore();
+      async.elapse(const Duration(milliseconds: 10));
+      expect(seen, ['first', 'second'], reason: 'the pass goes by a copy');
+    });
+  });
+
+  test('the first cancellation a section holds is the one that lands', () {
+    fakeAsync((async) {
+      Cancelled held(String description) => Cancelled.by(
+            reason: CancelReason.manual,
+            started: true,
+            description: description,
+            stackTrace: StackTrace.current,
+          );
+      final job = ProbeJob<void>((ctx) async {
+        await ctx.uncancellable(() => delay(50));
+        await ctx.wait(() => delay(50));
+      })
+        ..ignore()
+        ..launch();
+      async.elapse(const Duration(milliseconds: 10));
+      job
+        ..cancelBy(held('first'))
+        ..cancelBy(held('second'));
+      async.flushTimers();
+      expect((job.outcome! as Cancelled).description, 'first');
+    });
+  });
+
+  test('the rules of a domain reach a job inside an uncancellable section', () {
+    fakeAsync((async) {
+      final marks = <bool>[];
+      final job = RulesJob<void>((ctx) async {
+        await ctx.uncancellable(() async {
+          ctx.breakRule('is not Ready');
+          marks.add(ctx.job.isCancelled);
+          await delay(10);
+        });
+      })
+        ..ignore()
+        ..launch();
+      async.flushTimers();
+      expect(marks, [true], reason: 'a section holds no rule of a domain');
+      expect(job.outcome, isA<Cancelled>());
+    });
+  });
+
+  test('the rules of a domain reach a job that refuses cancellation', () {
+    fakeAsync((async) {
+      final job = RulesJob<void>(cancellable: false, (ctx) async {
+        ctx.breakRule('is not Ready');
+        await ctx.wait(() => delay(100));
+      })
+        ..ignore()
+        ..launch();
+      async.flushTimers();
+      expect(job.outcome, isA<Cancelled>());
+      expect((job.outcome! as Cancelled).description, 'is not Ready');
     });
   });
 }

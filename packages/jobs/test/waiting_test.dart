@@ -224,4 +224,26 @@ void main() {
       expect(() => leaked.log('still legal'), returnsNormally);
     });
   });
+  test('an action that cancels its own job ends the wait at once', () {
+    fakeAsync((async) {
+      final seen = <String>[];
+      late Job<void> job;
+      job = Job<void>((ctx) async {
+        await ctx.wait(() {
+          // Marked while the action runs, so the callback the race
+          // registers a moment later is never called: without the check
+          // that follows it, the body would wait for the whole action.
+          job.cancel().ignore();
+
+          return delay(100).then((_) => seen.add('value'));
+        });
+        seen.add('after');
+      })
+        ..ignore();
+      async.elapse(const Duration(milliseconds: 1));
+      expect(job.outcome, isA<Cancelled>());
+      async.flushTimers();
+      expect(seen, ['value'], reason: 'the action runs on, the body does not');
+    });
+  });
 }

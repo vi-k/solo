@@ -7,6 +7,7 @@ import 'package:fake_async/fake_async.dart';
 import 'package:jobs/jobs.dart';
 import 'package:test/test.dart';
 
+import 'support/delay.dart';
 import 'support/journal.dart';
 import 'support/probe_job.dart';
 
@@ -230,6 +231,26 @@ void main() {
         journal.lines.where((line) => line.contains('error')).toList(),
         ['[job] error Bad state: hook failed'],
       );
+    });
+  });
+  test('the lifecycle hooks bracket the body', () {
+    fakeAsync((async) {
+      final job = ProbeJob<int>((ctx) async {
+        await ctx.wait(() => delay(10));
+
+        return 1;
+      })
+        ..launch();
+      async.flushTimers();
+      expect(job.hooks, ['started', 'finished']);
+    });
+  });
+
+  test('a job dropped before it started gets finished without started', () {
+    fakeAsync((async) {
+      final job = ProbeJob<int>((ctx) async => 1)..cancel().ignore();
+      async.flushTimers();
+      expect(job.hooks, ['finished']);
     });
   });
 }
