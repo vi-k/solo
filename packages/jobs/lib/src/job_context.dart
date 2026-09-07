@@ -2,20 +2,15 @@ part of 'job_base.dart';
 
 /// What a job body sees in the core: cancellation, waiting and children.
 ///
-/// Every member except [log], [job], [onDispose] and [onDiscard] refuses to
-/// run for a job already marked cancelled: it throws that [Cancelled].
-/// What a cancellation arriving *during* a call does to that call is the
-/// call's own business — see [wait], [join] and [uncancellable].
+/// Every member except [log] and [job] refuses to run for a job already
+/// marked cancelled: it throws that [Cancelled]. What a cancellation
+/// arriving *during* a call does to that call is the call's own business —
+/// see [wait], [join] and [uncancellable].
 ///
 /// A context that outlived its job — captured by a closure nobody awaited
 /// — neither waits nor starts anything: [run], [wait], [join],
 /// [uncancellable] and [onCancel] throw a [StateError] once the job has
 /// finished. [check] and [log] stay legal.
-///
-/// While the engine cleans up after the body — after the children, before
-/// the outcome — the context of the body is closed: everything but [log],
-/// [job] and the registration of more cleanups throws a [StateError]. A
-/// disposer takes what it needs from its closure.
 abstract interface class JobContext {
   /// Gives up if the job was cancelled — in `solo`, also if its rules
   /// stopped holding.
@@ -38,13 +33,13 @@ abstract interface class JobContext {
   /// finish with [join], instead of walking away from it. For a step that
   /// must not be interrupted at all, see [uncancellable].
   ///
-  /// [ifCancelled] picks up that discarded result: a value arriving after
+  /// [discard] picks up that discarded result: a value arriving after
   /// the wait is over goes there instead of on the floor, so a connection
   /// or a file opened by an abandoned action still gets closed. It runs
   /// late and alone — the job is over by then and nothing waits for it,
   /// not even the closing of an engine. A late error goes to `onError` as
   /// always,
-  /// and so does an error of [ifCancelled] itself.
+  /// and so does an error of [discard] itself.
   ///
   /// ```dart
   /// final db = await ctx.wait(
@@ -54,7 +49,8 @@ abstract interface class JobContext {
   /// ```
   Future<T> wait<T>(
     FutureOr<T> Function() action, {
-    FutureOr<void> Function(T value)? ifCancelled,
+    FutureOr<void> Function(T value)? dispose,
+    FutureOr<void> Function(T value)? discard,
   });
 
   /// Runs [action], waits for all of it, and gives up only afterwards.
@@ -80,7 +76,7 @@ abstract interface class JobContext {
   /// The value is dropped when the job gives up: the throw happens inside
   /// this call, and the body is never reached. For an [action] that hands
   /// something over to own — a connection, a file, a subscription — pass
-  /// [ifCancelled], and it gets that value instead. It is awaited before
+  /// [discard], and it gets that value instead. It is awaited before
   /// the [Cancelled] is thrown, so an engine waiting for the job waits for
   /// the disposal too, and the next job starts with the resource gone. Only a
   /// value is handed over: an [action] that threw has nothing to dispose
@@ -94,13 +90,14 @@ abstract interface class JobContext {
   /// ```
   ///
   /// An error from [action] is thrown as it is, cancelled or not, and the
-  /// body can catch it like any other. An error from [ifCancelled] goes to
+  /// body can catch it like any other. An error from [discard] goes to
   /// `onError`, and the [Cancelled] is thrown all the same. Throws
   /// [Cancelled] up front if the job is already cancelled or its rules no
   /// longer hold, the same as [wait] and [uncancellable].
   Future<T> join<T>(
     FutureOr<T> Function() action, {
-    FutureOr<void> Function(T value)? ifCancelled,
+    FutureOr<void> Function(T value)? dispose,
+    FutureOr<void> Function(T value)? discard,
   });
 
   /// Runs [action] with the cancellation held back, and waits for it.
@@ -170,30 +167,30 @@ abstract interface class JobContext {
   /// A disposer runs outside the body: nothing cancels it and nothing
   /// interrupts it, so keep it short and unconditional. It must not wait
   /// for its own job — `job.done`, `job.value` and `job.cancel()` all
-  /// complete after the cleanup that would be waiting for them — nor for
-  /// a job of the same queue.
-  ///
-  /// ```dart
-  /// final lock = await ctx.join(Lock.acquire);
-  /// ctx.onDispose(lock.release);
-  /// ```
+  /// complete after the cleanup that would be waiting for them.
   void Function() onDispose(FutureOr<void> Function() disposer);
 
   /// Registers [disposer] to run only if the job ends without handing its
   /// value over: cancelled, or failed.
   ///
-  /// For what the body returns or hands outside; everything else — a lock,
-  /// a temporary file, a subscription — takes [onDispose], or it leaks on
-  /// the successful path, where no test on cancellation will see it.
-  /// Returns a function that unregisters it.
-  ///
-  /// ```dart
-  /// final database = await ctx.join(Database.open);
-  /// ctx.onDiscard(database.close);
-  ///
-  /// return database;
-  /// ```
+  /// For what the body returns or hands outside; everything else — a
+  /// lock, a temporary file, a subscription — takes [onDispose], or it
+  /// leaks on the successful path where no test on cancellation will see
+  /// it. Returns a function that unregisters it.
   void Function() onDiscard(FutureOr<void> Function() disposer);
+
+  /// Drops the cleanup registered for [value] by [wait] or [join].
+  ///
+  /// Returns whether anything was dropped. Registrations made by
+  /// [onDispose] and [onDiscard] carry no value and are invisible here —
+  /// they are dropped by the function those members return; an unknown
+  /// value is not an error. With two registrations for one value the top
+  /// one goes, one per call.
+  ///
+  /// Stands next to the hand-over: before it, when the hand-over is
+  /// synchronous and may throw after its own work (`emit` of `solo`), and
+  /// inside the same uncancellable section, when it is asynchronous.
+  bool disown(Object value);
 
   /// Starts [child] right now, as a child of this job, ahead of whatever
   /// an engine of a domain would have put it through.
@@ -319,20 +316,83 @@ abstract class JobContextBase implements JobContext {
   @override
   Future<T> join<T>(
     FutureOr<T> Function() action, {
-    FutureOr<void> Function(T value)? ifCancelled,
+    FutureOr<void> Function(T value)? dispose,
+    FutureOr<void> Function(T value)? discard,
   }) async {
     throwIfFinished('join');
+    _oneCleanupOnly(dispose, discard);
     check();
     final result = await action();
+    if (_owner.bodyEnded) {
+      // The body ended while the call was in flight: the value did not
+      // reach it. The call ends here and does not go into `check` — in the
+      // cleanup phase that would throw a `StateError` into a future nobody
+      // awaits, and Dart would hand it to the zone on the successful path.
+      await _keepLate(dispose, discard, result);
+      final pending = pendingCancel;
+      if (pending != null) {
+        throw pending;
+      }
+      return result;
+    }
     try {
       check();
     } on Cancelled {
-      if (ifCancelled != null) {
-        await _dispose(ifCancelled, result);
+      final disposer = dispose ?? discard;
+      if (disposer != null) {
+        await _dispose(disposer, result);
       }
       rethrow;
     }
+    _keepOnStack(dispose, discard, result);
     return result;
+  }
+
+  void _oneCleanupOnly(Object? dispose, Object? discard) {
+    if (dispose != null && discard != null) {
+      throw ArgumentError('pass either dispose or discard, not both');
+    }
+  }
+
+  /// Puts the cleanup of [value] on the stack, as `dispose` or `discard`,
+  /// whichever was given.
+  ///
+  /// Synchronous on purpose: `wait` registers between taking the value and
+  /// handing it to the body, and an `await` in that gap would let a
+  /// cancellation in — the body would then hold a value whose cleanup is
+  /// registered nowhere.
+  void _keepOnStack<T>(
+    FutureOr<void> Function(T value)? dispose,
+    FutureOr<void> Function(T value)? discard,
+    T value,
+  ) {
+    final disposer = dispose ?? discard;
+    if (disposer == null) {
+      return;
+    }
+    addCleanup(() => disposer(value), always: dispose != null, value: value);
+  }
+
+  /// Cleans up [value] that came out after the body had ended.
+  ///
+  /// It reached nobody, so the outcome does not matter: on a job that has
+  /// finished the disposer runs on the spot and nobody waits for it, and
+  /// while the engine unwinds the stack the registration is unconditional
+  /// — the same pass takes it off.
+  Future<void> _keepLate<T>(
+    FutureOr<void> Function(T value)? dispose,
+    FutureOr<void> Function(T value)? discard,
+    T value,
+  ) async {
+    final disposer = dispose ?? discard;
+    if (disposer == null) {
+      return;
+    }
+    if (_owner.isFinished) {
+      await _dispose(disposer, value);
+      return;
+    }
+    addCleanup(() => disposer(value), always: true, value: value);
   }
 
   /// Hands [value] to the body's own disposer. Its error belongs to
@@ -383,9 +443,7 @@ abstract class JobContextBase implements JobContext {
   ///
   /// The public [onDispose] and [onDiscard] are this with [value] unset;
   /// `wait` and `join` pass the value they hand to the body, so that
-  /// `disown` can find the registration by it. Registering stays open on a
-  /// job already cancelled and while the engine unwinds the stack —
-  /// refusing it is the trap this whole mechanism removes.
+  /// `disown` can find the registration by it.
   @protected
   void Function() addCleanup(
     FutureOr<void> Function() disposer, {
@@ -411,26 +469,49 @@ abstract class JobContextBase implements JobContext {
       addCleanup(disposer, always: false);
 
   @override
+  bool disown(Object value) {
+    if (_owner.isFinished) {
+      throw StateError('$_owner has already finished, cannot disown');
+    }
+    final cleanups = _owner._cleanups;
+    for (var i = cleanups.length - 1; i >= 0; i--) {
+      if (identical(cleanups[i].value, value)) {
+        cleanups.removeAt(i);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  @override
   Future<T> wait<T>(
     FutureOr<T> Function() action, {
-    FutureOr<void> Function(T value)? ifCancelled,
+    FutureOr<void> Function(T value)? dispose,
+    FutureOr<void> Function(T value)? discard,
   }) async {
     throwIfFinished('wait');
+    _oneCleanupOnly(dispose, discard);
     check();
     final result = action();
     if (result is! Future<T>) {
+      if (_owner.bodyEnded) {
+        await _keepLate(dispose, discard, result);
+      } else {
+        _keepOnStack(dispose, discard, result);
+      }
       return result;
     }
-    return _race(result, ifCancelled);
+    return _race(result, dispose, discard);
   }
 
   /// Completes with [future] or with the job's cancellation, whichever
   /// comes first. A result arriving after cancellation goes to
-  /// [ifCancelled], or nowhere if there is none; an error arriving after
+  /// [discard], or nowhere if there is none; an error arriving after
   /// cancellation goes to `onError`.
   Future<T> _race<T>(
     Future<T> future,
-    FutureOr<void> Function(T value)? ifCancelled,
+    FutureOr<void> Function(T value)? dispose,
+    FutureOr<void> Function(T value)? discard,
   ) {
     final completer = Completer<T>();
     late final void Function() remove;
@@ -448,10 +529,19 @@ abstract class JobContextBase implements JobContext {
       try {
         final value = await future;
         if (completer.isCompleted) {
-          if (ifCancelled != null) {
-            await _dispose(ifCancelled, value);
+          // The value did not reach the body: cleaned up whatever the
+          // outcome, and nobody waits for that.
+          final disposer = dispose ?? discard;
+          if (disposer != null) {
+            await _dispose(disposer, value);
           }
+        } else if (_owner.bodyEnded) {
+          await _keepLate(dispose, discard, value);
+          completer.complete(value);
         } else {
+          // Synchronously and before `complete`: between the registration
+          // and the body there must be no `await`.
+          _keepOnStack(dispose, discard, value);
           completer.complete(value);
         }
       } on Object catch (error, stackTrace) {

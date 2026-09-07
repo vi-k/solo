@@ -27,10 +27,10 @@ Future<void> main() async {
     ifCancelled: (database) => database.close(),
     (ctx) async {
       // `join` stays with the call: a database half-opened is not left
-      // behind, and `ifCancelled` closes the one nobody wants any more.
+      // behind, and `discard` closes the one nobody wants any more.
       final database = await ctx.join(
         Database.open,
-        ifCancelled: (database) => database.close(),
+        discard: (database) => database.close(),
       );
 
       // From here the body owns it, so it closes it on the way out.

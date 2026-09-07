@@ -184,7 +184,7 @@ void main() {
     });
   });
 
-  test('a late value of the abandoned future goes to ifCancelled', () {
+  test('a late value of the abandoned future goes to discard', () {
     runSolo((solo, journal, async) {
       final disposed = <int>[];
       solo.run<TestState, void>(key: 'job', (ctx) async {
@@ -193,7 +193,7 @@ void main() {
             await delay(100);
             return 7;
           },
-          ifCancelled: disposed.add,
+          discard: disposed.add,
         );
       });
       async.elapse(const Duration(milliseconds: 50));
@@ -209,7 +209,7 @@ void main() {
     });
   });
 
-  test('ifCancelled is not called when the value arrives in time', () {
+  test('discard is not called when the value arrives in time', () {
     runSolo((solo, journal, async) {
       final disposed = <int>[];
       final job = solo.run<TestState, int>(
@@ -219,7 +219,7 @@ void main() {
             await delay(50);
             return 7;
           },
-          ifCancelled: disposed.add,
+          discard: disposed.add,
         ),
       );
       async.flushTimers();
@@ -228,7 +228,7 @@ void main() {
     });
   });
 
-  test('a late error does not reach ifCancelled', () {
+  test('a late error does not reach discard', () {
     runSolo((solo, journal, async) {
       final disposed = <int>[];
       solo.run<TestState, void>(key: 'job', (ctx) async {
@@ -237,7 +237,7 @@ void main() {
             await delay(100);
             throw StateError('late');
           },
-          ifCancelled: disposed.add,
+          discard: disposed.add,
         );
       });
       async.elapse(const Duration(milliseconds: 50));
@@ -252,7 +252,7 @@ void main() {
     });
   });
 
-  test('an error from ifCancelled goes to onError', () {
+  test('an error from discard goes to onError', () {
     runSolo((solo, journal, async) {
       solo.run<TestState, void>(key: 'job', (ctx) async {
         await ctx.wait(
@@ -260,7 +260,7 @@ void main() {
             await delay(100);
             return 7;
           },
-          ifCancelled: (value) => throw StateError('cannot dispose $value'),
+          discard: (value) => throw StateError('cannot dispose $value'),
         );
       });
       async.elapse(const Duration(milliseconds: 50));

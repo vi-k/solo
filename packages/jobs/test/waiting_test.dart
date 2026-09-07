@@ -41,7 +41,7 @@ void main() {
             await delay(100);
             return 'db';
           },
-          ifCancelled: closed.add,
+          discard: closed.add,
         );
       });
       async.elapse(const Duration(milliseconds: 10));
@@ -156,7 +156,7 @@ void main() {
             await delay(100);
             return 'db';
           },
-          ifCancelled: closed.add,
+          discard: closed.add,
         );
       });
       async.elapse(const Duration(milliseconds: 10));

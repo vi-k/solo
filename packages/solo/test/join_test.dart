@@ -127,7 +127,7 @@ void main() {
     });
   });
 
-  test('ifCancelled takes the value when the job is cancelled meanwhile', () {
+  test('discard takes the value when the job is cancelled meanwhile', () {
     runSolo((solo, journal, async) {
       final job = solo.run<TestState, void>(key: 'job', (ctx) async {
         await ctx.join(
@@ -135,7 +135,7 @@ void main() {
             await delay(100);
             return 7;
           },
-          ifCancelled: (value) async {
+          discard: (value) async {
             await delay(10);
             ctx.log('disposed $value');
           },
@@ -157,7 +157,7 @@ void main() {
     });
   });
 
-  test('ifCancelled takes the value when a rule stopped holding', () {
+  test('discard takes the value when a rule stopped holding', () {
     runSolo((solo, journal, async) {
       solo.run<NotDisposed, void>(key: 'job', (ctx) async {
         await ctx.join(
@@ -165,7 +165,7 @@ void main() {
             await delay(100);
             return 7;
           },
-          ifCancelled: (value) => ctx.log('disposed $value'),
+          discard: (value) => ctx.log('disposed $value'),
         );
         ctx.emit(const Preparing());
       });
@@ -181,7 +181,7 @@ void main() {
     });
   });
 
-  test('ifCancelled is not called when the action comes back in time', () {
+  test('discard is not called when the action comes back in time', () {
     runSolo((solo, journal, async) {
       final job = solo.run<TestState, int>(key: 'job', (ctx) async {
         final value = await ctx.join(
@@ -189,7 +189,7 @@ void main() {
             await delay(50);
             return 7;
           },
-          ifCancelled: (value) => ctx.log('disposed $value'),
+          discard: (value) => ctx.log('disposed $value'),
         );
         return value;
       });
@@ -202,7 +202,7 @@ void main() {
     });
   });
 
-  test('close waits for ifCancelled before the job ends', () {
+  test('close waits for discard before the job ends', () {
     runSolo((solo, journal, async) {
       final job = solo.run<TestState, void>(key: 'job', (ctx) async {
         await ctx.join(
@@ -210,7 +210,7 @@ void main() {
             await delay(100);
             return 7;
           },
-          ifCancelled: (value) async {
+          discard: (value) async {
             await delay(10);
             ctx.log('disposed $value');
           },
@@ -233,7 +233,7 @@ void main() {
     });
   });
 
-  test('an error from ifCancelled goes to onError', () {
+  test('an error from discard goes to onError', () {
     runSolo((solo, journal, async) {
       final job = solo.run<TestState, void>(key: 'job', (ctx) async {
         await ctx.join(
@@ -241,7 +241,7 @@ void main() {
             await delay(100);
             return 7;
           },
-          ifCancelled: (value) => throw StateError('cannot dispose $value'),
+          discard: (value) => throw StateError('cannot dispose $value'),
         );
       });
       async.elapse(const Duration(milliseconds: 50));
@@ -256,7 +256,7 @@ void main() {
     });
   });
 
-  test('ifCancelled is not called when the action fails', () {
+  test('discard is not called when the action fails', () {
     runSolo((solo, journal, async) {
       final job = solo.run<TestState, void>(key: 'job', (ctx) async {
         await ctx.join<int>(
@@ -264,7 +264,7 @@ void main() {
             await delay(100);
             throw const FormatException('the device said no');
           },
-          ifCancelled: (value) => ctx.log('disposed $value'),
+          discard: (value) => ctx.log('disposed $value'),
         );
       });
       async.elapse(const Duration(milliseconds: 50));
