@@ -1,6 +1,7 @@
-> **Состояние на 2026-09-07:** первая редакция, написана по спеке с тремя
-> дополнениями и трём кругам её ревью. К исполнению не приступали; ревью
-> самого плана ещё не было.
+> **Состояние на 2026-09-07:** вторая редакция, написана по кругу ревью
+> `2026-09-07[6]-dispose-plan-review.md`: ревьюер исполнил первую
+> редакцию на клоне репозитория и нашёл восемнадцать находок, все
+> приняты. К исполнению не приступали.
 > **Что это:** план работ по уборке ресурсов задачи — стек
 > `dispose`/`discard`, параметры у `wait` и `join`, `disown`, фаза уборки,
 > снятие `ifCancelled` — задачами с TDD и коммитом на каждую.
@@ -70,10 +71,14 @@
 
 ## Решения, принятые в плане сверх спеки
 
-1. **Порядок задач.** Сначала стек и раскрутка (задачи 1–2), потом фаза и
-   запреты (3), потом значение из вызова и снятие `ifCancelled` (4–5).
-   Так каждая задача оставляет дерево зелёным: `ifCancelled` живёт рядом
-   со стеком две задачи и уходит целиком в 4 и 5.
+1. **Порядок задач.** Сначала стек с раскруткой целиком, включая второй
+   проход (задача 1), потом решённый исход и флаги фазы (2), потом сама
+   фаза с запретами (3), потом значение из вызова и снятие `ifCancelled`
+   (4–5). Так каждая задача оставляет дерево зелёным: `ifCancelled` живёт
+   рядом со стеком четыре задачи и уходит целиком в 4 и 5. Раскрутка
+   пишется один раз: первая редакция плана переписывала её в задаче 2
+   целиком, и ревью справедливо назвало это лишним коммитом с двумя
+   мотивами.
 2. **Имена внутренних членов.** `_Cleanup` — запись стека; `_cleanups` —
    список; `_bodyEnded`, `_disposing` — флаги фазы; `bodyEnded`,
    `isDisposing` — их защищённые геттеры; `throwIfDisposing` — проверка
@@ -101,6 +106,8 @@
 - `test/disposal_phase_test.dart` (создать) — запреты фазы и что в ней
   легально.
 - `test/late_value_test.dart` — переписывается на новый API.
+- `test/lifecycle_test.dart` — задача, завершённая напрямую, держит стек.
+- `test/debug_test.dart` — строка о непустом стеке у прямого `finish`.
 - `test/waiting_test.dart` — `ifCancelled` у `wait`/`join` меняется на
   `dispose`/`discard`.
 - `README.md`, `README.ru.md`, `CHANGELOG.md`, `example/example.dart`.
@@ -127,13 +134,14 @@
 
 ### Задача 1. Стек уборки: `onDispose`, `onDiscard` и раскрутка
 
-Спека, разделы «Решение» и «Когда стек раскручивается». Стек и его
-раскрутка появляются рядом с сегодняшним `ifCancelled` у задачи: тот
-остаётся до задачи 5, и обе уборки работают одновременно.
+Спека, разделы «Решение», «Когда стек раскручивается» и «Отмена, пришедшая
+внутрь уборки». Стек и его раскрутка целиком, вместе со вторым проходом,
+появляются рядом с сегодняшним `ifCancelled` у задачи: тот остаётся до
+задачи 5, и обе уборки работают одновременно.
 
 **Файлы:**
-- Изменить: `packages/jobs/lib/src/job_base.dart` (запись, список,
-  раскрутка в `_execute:569-593`), `lib/src/job_context.dart` (интерфейс
+- Изменить: `packages/jobs/lib/src/job_base.dart` (запись, список, хвост
+  `_execute:569-593`), `lib/src/job_context.dart` (интерфейс
   `JobContext:14-183`, основа `JobContextBase:185+`)
 - Создать: `packages/jobs/test/cleanup_test.dart`
 
@@ -141,11 +149,13 @@
 disposer)` и `void Function() onDiscard(FutureOr<void> Function()
 disposer)` у `JobContext`; защищённый `void Function()
 addCleanup(FutureOr<void> Function() disposer, {required bool always,
-Object? value})` у `JobContextBase` — им же будут пользоваться `wait` и
-`join` в задаче 4.
+Object? value})` у `JobContextBase` — им же пользуются `wait` и `join` в
+задаче 4.
 
 - [ ] **Шаг 1.** Написать падающие тесты в
-      `packages/jobs/test/cleanup_test.dart`:
+      `packages/jobs/test/cleanup_test.dart`. Блоки — каскадами
+      (`ctx..onDispose(...)..onDiscard(...)`): проект держит
+      `cascade_invocations`.
 
 ```dart
 @Timeout(Duration(seconds: 5))
@@ -173,7 +183,7 @@ void main() {
           ..ignore();
         // Пять миллисекунд, чтобы тело успело стартовать и
         // зарегистрировать уборщика: отмена до старта не пустила бы тело
-        // вовсе, и регистрировать было бы нечего.
+        // вовсе.
         async.elapse(const Duration(milliseconds: 5));
         if (scenario == 'cancelled') {
           job.cancel().ignore();
@@ -215,9 +225,10 @@ void main() {
     fakeAsync((async) {
       final order = <String>[];
       Job<void>((ctx) async {
-        ctx.onDispose(() => order.add('first'));
-        ctx.onDiscard(() => order.add('second'));
-        ctx.onDispose(() => order.add('third'));
+        ctx
+          ..onDispose(() => order.add('first'))
+          ..onDiscard(() => order.add('second'))
+          ..onDispose(() => order.add('third'));
         await ctx.wait(() => delay(10));
         throw StateError('boom');
       }).ignore();
@@ -231,20 +242,21 @@ void main() {
     fakeAsync((async) {
       final order = <String>[];
       final job = Job<void>((ctx) async {
-        ctx.onDispose(() async {
-          order.add('cleanup starts');
-          await delay(50);
-          order.add('cleanup ends');
-        });
-        ctx.run(
-          Job.deferred<void>(
-            key: 'child',
-            (ctx) async {
-              await ctx.wait(() => delay(30));
-              order.add('child');
-            },
-          ),
-        );
+        ctx
+          ..onDispose(() async {
+            order.add('cleanup starts');
+            await delay(50);
+            order.add('cleanup ends');
+          })
+          ..run(
+            Job.deferred<void>(
+              key: 'child',
+              (ctx) async {
+                await ctx.wait(() => delay(30));
+                order.add('child');
+              },
+            ),
+          );
       });
       job.done.then((_) => order.add('finished'));
       async.flushTimers();
@@ -262,12 +274,11 @@ void main() {
     fakeAsync((async) {
       final order = <String>[];
       Job<void>((ctx) async {
-        final drop = ctx.onDispose(() => order.add('kept'));
-        final dropTwice = ctx.onDispose(() => order.add('dropped'));
-        dropTwice();
+        ctx.onDispose(() => order.add('kept'));
+        final dropTwice = ctx.onDispose(() => order.add('dropped'))
+          ..call();
         dropTwice();
         await ctx.wait(() => delay(10));
-        expect(drop, isNotNull);
       }).ignore();
       async.flushTimers();
       expect(order, ['kept']);
@@ -296,8 +307,9 @@ void main() {
       final job = Job<int>(
         observer: _CollectingObserver(errors),
         (ctx) async {
-          ctx.onDispose(() => order.add('below'));
-          ctx.onDispose(() => throw StateError('cleanup failed'));
+          ctx
+            ..onDispose(() => order.add('below'))
+            ..onDispose(() => throw StateError('cleanup failed'));
           return 7;
         },
       );
@@ -305,6 +317,62 @@ void main() {
       expect(order, ['below']);
       expect(errors.single, isA<StateError>());
       expect(job.outcome, isA<Done<int>>());
+    });
+  });
+
+  test('a cancellation arriving during the cleanup still discards', () {
+    fakeAsync((async) {
+      final order = <String>[];
+      final job = Job<int>((ctx) async {
+        // Порядок регистраций тут — суть теста: `discard` лежит НАД
+        // медленным `dispose`, поэтому снимается первым, при исходе
+        // `Done` пропускается, и вернуть его может только второй проход.
+        ctx
+          ..onDispose(() async {
+            order.add('slow starts');
+            await delay(100);
+            order.add('slow ends');
+          })
+          ..onDiscard(() => order.add('discarded'));
+        return 7;
+      })
+        ..ignore();
+      async.elapse(const Duration(milliseconds: 50));
+      job.cancel().ignore();
+      async.flushTimers();
+      expect(order, ['slow starts', 'slow ends', 'discarded']);
+      expect(job.outcome, isA<Cancelled>());
+    });
+  });
+
+  test('registering stays open on a job already cancelled', () {
+    fakeAsync((async) {
+      final order = <String>[];
+      final job = Job<void>((ctx) async {
+        try {
+          await ctx.wait(() => delay(50));
+        } on Cancelled {
+          // Тело раскручивается; регистрация уборки здесь обязана
+          // работать, иначе возвращается ловушка «уборка идёт голым
+          // await».
+          ctx.onDispose(() => order.add('registered while cancelled'));
+          rethrow;
+        }
+      })
+        ..ignore();
+      async.elapse(const Duration(milliseconds: 10));
+      job.cancel().ignore();
+      async.flushTimers();
+      expect(order, ['registered while cancelled']);
+    });
+  });
+
+  test('registering on a job that has finished is a StateError', () {
+    fakeAsync((async) {
+      late JobContext leaked;
+      Job<void>((ctx) async => leaked = ctx).ignore();
+      async.flushTimers();
+      expect(() => leaked.onDispose(() {}), throwsStateError);
     });
   });
 }
@@ -360,7 +428,8 @@ final class _Cleanup {
   /// A disposer runs outside the body: nothing cancels it and nothing
   /// interrupts it, so keep it short and unconditional. It must not wait
   /// for its own job — `job.done`, `job.value` and `job.cancel()` all
-  /// complete after the cleanup that would be waiting for them.
+  /// complete after the cleanup that would be waiting for them — nor for
+  /// a job of the same queue.
   void Function() onDispose(FutureOr<void> Function() disposer);
 
   /// Registers [disposer] to run only if the job ends without handing its
@@ -373,20 +442,29 @@ final class _Cleanup {
   void Function() onDiscard(FutureOr<void> Function() disposer);
 ```
 
-в основе:
+в основе (`disown` в дартдоке — в обратных кавычках: члена ещё нет, а
+ссылка `[disown]` даёт `dangling_library_doc_comments`; в задаче 4 она
+станет ссылкой):
 
 ```dart
   /// Puts a registration on the cleanup stack of the owner.
   ///
   /// The public [onDispose] and [onDiscard] are this with [value] unset;
   /// `wait` and `join` pass the value they hand to the body, so that
-  /// [disown] can find the registration by it.
+  /// `disown` can find the registration by it. Registering stays open on
+  /// a job already cancelled and while the engine unwinds the stack —
+  /// refusing it is the trap this whole mechanism removes.
   @protected
   void Function() addCleanup(
     FutureOr<void> Function() disposer, {
     required bool always,
     Object? value,
   }) {
+    if (_owner.isFinished) {
+      throw StateError(
+        '$_owner has already finished, cannot register a cleanup',
+      );
+    }
     final cleanup = _Cleanup(disposer, always: always, value: value);
     _owner._cleanups.add(cleanup);
     return () => _owner._cleanups.remove(cleanup);
@@ -401,34 +479,56 @@ final class _Cleanup {
       addCleanup(disposer, always: false);
 ```
 
-- [ ] **Шаг 5.** Раскрутить стек в `_execute`, между `_awaitChildren()` и
-      `finish`, до сегодняшней ветки `_ifCancelled` (она уйдёт в задаче 5):
+- [ ] **Шаг 5.** Раскрутить стек в хвосте `_execute`. Цикл живёт прямо
+      здесь, а не в отдельном методе: между проверкой пустоты стека и
+      `finish` не должно быть ни одного `await` — иначе окно после
+      `return` растягивается на микротаск и ломает пришпиленный порядок в
+      `cancel_test.dart`. Хвост целиком:
 
 ```dart
     await _awaitChildren();
-    await _unwindCleanups(_pendingCancel ?? outcome);
-    // Ниже, до задачи 5, остаётся сегодняшняя ветка `_ifCancelled`
-    // и вызов `finish(_pendingCancel ?? outcome)`.
-```
-
-и сам метод:
-
-```dart
-  /// Unwinds the cleanup stack, last registration first.
-  ///
-  /// Takes one at a time rather than a snapshot: a disposer may register
-  /// another one, and that one runs too.
-  Future<void> _unwindCleanups(Outcome<T> decided) async {
-    while (_cleanups.isNotEmpty) {
-      final cleanup = _cleanups.removeLast();
-      if (!cleanup.always && decided is Done<T>) {
-        continue;
-      }
+    // До задачи 5: сегодняшний уборщик значения. Стоит выше стека и
+    // уедет вместе с полем `_ifCancelled`.
+    final disposer = _ifCancelled;
+    if (disposer != null && _pendingCancel != null && outcome is Done<T>) {
       try {
-        await cleanup.run();
+        await disposer(outcome.value);
       } on Object catch (error, stackTrace) {
         notifyError(error, stackTrace);
       }
+    }
+    if (_cleanups.isNotEmpty) {
+      // Условие `discard` читается в момент снятия со стека, по живому
+      // исходу: отмена может прийти внутрь самой уборки. Пропущенные не
+      // выбрасываются, а ждут второго прохода.
+      final skipped = <_Cleanup>[];
+      while (_cleanups.isNotEmpty) {
+        final cleanup = _cleanups.removeLast();
+        if (!cleanup.always && (_pendingCancel ?? outcome) is Done<T>) {
+          skipped.add(cleanup);
+          continue;
+        }
+        await _runCleanup(cleanup);
+      }
+      while (skipped.isNotEmpty &&
+          (_pendingCancel ?? outcome) is! Done<T>) {
+        await _runCleanup(skipped.removeLast());
+        while (_cleanups.isNotEmpty) {
+          await _runCleanup(_cleanups.removeLast());
+        }
+      }
+    }
+    finish(_pendingCancel ?? outcome);
+```
+
+и один вспомогательный метод рядом:
+
+```dart
+  Future<void> _runCleanup(_Cleanup cleanup) async {
+    try {
+      await cleanup.run();
+    } on Object catch (error, stackTrace) {
+      notifyError(error, stackTrace);
     }
   }
 ```
@@ -436,11 +536,18 @@ final class _Cleanup {
 - [ ] **Шаг 6.** Прогнать сьюту ядра целиком.
 
 Команда: `cd packages/jobs && dart test`
-Ожидание: `cleanup_test.dart` зелёный, прежние 85 тестов зелёные.
+Ожидание: `cleanup_test.dart` зелёный, прежние 85 тестов зелёные —
+включая пришпиленный порядок в `cancel_test.dart`, который краснеет от
+лишнего `await` на пустом стеке.
 
-- [ ] **Шаг 7.** `dart analyze` без предупреждений в `packages/jobs`.
+- [ ] **Шаг 7.** Мутант: убрать второй цикл (`while (skipped…`) — тест «a
+      cancellation arriving during the cleanup still discards» обязан
+      покраснеть. Вернуть.
 
-- [ ] **Шаг 8.** Коммит.
+- [ ] **Шаг 8.** `dart analyze` без предупреждений и info в
+      `packages/jobs`.
+
+- [ ] **Шаг 9.** Коммит.
 
 ```bash
 git add packages/jobs/lib/src/job_base.dart \
@@ -449,49 +556,25 @@ git add packages/jobs/lib/src/job_base.dart \
 git commit -m "feat(jobs): a cleanup stack the engine unwinds"
 ```
 
-### Задача 2. Граница исхода: `_pendingCancel` до раскрутки и второй проход
+### Задача 2. Решённый исход: `_pendingCancel`, `whenCancelled` и фазы
 
-Спека, разделы «Отмена, пришедшая внутрь уборки», дополнение 2 («Как
-именно заполняется `_pendingCancel`») и дополнение 3 («Граница „тело
-кончилось“» — здесь появляется только флаг, пользуются им задачи 4 и 7).
-
-Три вещи одной задачей, потому что они об одном моменте: движок решает
-исход до раскрутки, и всё, что смотрит на исход, должно видеть решённое.
+Спека, дополнение 2 («Как именно заполняется `_pendingCancel`») и
+дополнение 3 («Граница „тело кончилось“» — здесь появляются только флаги,
+пользуются ими задачи 4 и 7). Раскрутку задача 1 уже сделала; здесь движок
+учится решать исход до неё.
 
 **Файлы:**
-- Изменить: `packages/jobs/lib/src/job_base.dart` (`_execute:569-593`,
-  `whenCancelled` дартдок `:126-136`, `isCancelled` дартдок `:107`)
-- Изменить: `packages/jobs/test/cleanup_test.dart`
+- Изменить: `packages/jobs/lib/src/job_base.dart` (хвост `_execute`, поля,
+  защищённые геттеры, дартдоки `isCancelled:107` и `whenCancelled:126-136`)
+- Изменить: `packages/jobs/test/cleanup_test.dart`,
+  `packages/jobs/test/lifecycle_test.dart`
 
-**Интерфейсы:** даёт защищённый `bool get bodyEnded` у `JobBase` — им
-пользуются задачи 4 (позднее значение) и 7 (правила `solo`).
+**Интерфейсы:** даёт защищённые `bool get bodyEnded` и `bool get
+isDisposing` у `JobBase` — ими пользуются задачи 3, 4 и 7.
 
-- [ ] **Шаг 1.** Дописать падающие тесты в `test/cleanup_test.dart`:
+- [ ] **Шаг 1.** Дописать тесты в `test/cleanup_test.dart`:
 
 ```dart
-  test('a cancellation arriving during the cleanup still discards', () {
-    fakeAsync((async) {
-      final order = <String>[];
-      final job = Job<int>((ctx) async {
-        ctx.onDiscard(() => order.add('discarded'));
-        ctx.onDispose(() async {
-          order.add('slow starts');
-          await delay(100);
-          order.add('slow ends');
-        });
-        return 7;
-      })
-        ..ignore();
-      // Уборка идёт: медленный уборщик снят со стека первым и держит
-      // задачу; отмена приходит внутрь него, когда исход был `Done`.
-      async.elapse(const Duration(milliseconds: 50));
-      job.cancel().ignore();
-      async.flushTimers();
-      expect(order, ['slow starts', 'slow ends', 'discarded']);
-      expect(job.outcome, isA<Cancelled>());
-    });
-  });
-
   test('isCancelled tells the truth inside a cleanup', () {
     fakeAsync((async) {
       final seen = <bool>[];
@@ -511,11 +594,15 @@ git commit -m "feat(jobs): a cleanup stack the engine unwinds"
     });
   });
 
-  test('whenCancelled closes before the first cleanup', () {
+  test('whenCancelled closes before the cleanup ends', () {
     fakeAsync((async) {
       final order = <String>[];
       final job = Job<void>((ctx) async {
-        ctx.onDispose(() => order.add('cleanup'));
+        ctx.onDispose(() async {
+          order.add('cleanup starts');
+          await delay(50);
+          order.add('cleanup ends');
+        });
         await ctx.wait(() => delay(10));
         throw Cancelled.by(
           reason: CancelReason.manual,
@@ -526,7 +613,10 @@ git commit -m "feat(jobs): a cleanup stack the engine unwinds"
         ..ignore();
       job.whenCancelled.then((_) => order.add('whenCancelled'));
       async.flushTimers();
-      expect(order, ['whenCancelled', 'cleanup']);
+      // Слушатель `whenCancelled` бежит микротаском, поэтому его строка
+      // ложится внутрь асинхронного уборщика, а не перед ним; важно, что
+      // он не ждёт `finish`, как было до этой задачи.
+      expect(order, ['cleanup starts', 'whenCancelled', 'cleanup ends']);
     });
   });
 
@@ -536,7 +626,7 @@ git commit -m "feat(jobs): a cleanup stack the engine unwinds"
       Job<void>(
         observer: _CollectingObserver(errors),
         (ctx) async {
-          // Тело не дожидается своего же ожидания и бросает отмену сама:
+          // Тело не дожидается своего же ожидания и бросает отмену само:
           // колбэки гонки не должны побежать от заполнения
           // `_pendingCancel`.
           unawaited(ctx.wait(() => delay(50)));
@@ -565,7 +655,7 @@ git commit -m "feat(jobs): a cleanup stack the engine unwinds"
               await ctx.wait(() => delay(100));
             },
           ),
-        )..ignore();
+        );
         await ctx.wait(() => delay(10));
         // Тело кончилось своей отменой, а дети ещё бегут: внешний
         // `cancel()` обязан дотянуться до ребёнка.
@@ -582,9 +672,7 @@ git commit -m "feat(jobs): a cleanup stack the engine unwinds"
       expect(order, ['child cancelled']);
     });
   });
-```
 
-```dart
   test('a section the body walked away from holds the cancellation', () {
     fakeAsync((async) {
       final order = <String>[];
@@ -609,45 +697,47 @@ git commit -m "feat(jobs): a cleanup stack the engine unwinds"
 
 Импорт `dart:async` для `unawaited` — вверху файла.
 
-- [ ] **Шаг 2.** Прогнать и убедиться, что падают тесты про `isCancelled`,
-      `whenCancelled` и второй проход, а два последних — зелёные
-      (сегодняшнее поведение, они регрессионные).
-
-Команда: `cd packages/jobs && dart test test/cleanup_test.dart`
-
-- [ ] **Шаг 3.** Переписать хвост `_execute`:
+И один тест в `test/lifecycle_test.dart`, рядом с «finish on a job that
+has already finished does nothing»:
 
 ```dart
-    // Тело кончилось: с этого момента значение, пришедшее из брошенного
-    // вызова, до тела уже не доедет — задачи 4 и 7 смотрят на этот флаг.
-    _bodyEnded = true;
-    await _awaitChildren();
-    // Исход решён. Отмену кладём сырым присваиванием: `_markCancelled`
-    // погнал бы колбэки `onCancel` и завершил бы ошибкой ожидания,
-    // которые тело бросило, — сегодня они тихо получают значение.
-    // После детей, а не в `catch`: до этого `cancelWith` обязан
-    // каскадировать на детей, а заполненный `_pendingCancel` его
-    // останавливает.
-    if (outcome is Cancelled) {
-      _pendingCancel ??= outcome;
-      if (!_cancelled.isCompleted) {
-        _cancelled.complete();
-      }
-    }
-    _disposing = true;
-    await _unwindCleanups(outcome);
-    _disposing = false;
-    finish(_pendingCancel ?? outcome);
+  test('a job finished by hand keeps its cleanup stack', () {
+    fakeAsync((async) {
+      final order = <String>[];
+      final job = ProbeJob<void>((ctx) async {
+        ctx.onDispose(() => order.add('cleanup'));
+        await ctx.wait(() => delay(100));
+      })
+        ..launch();
+      async.elapse(const Duration(milliseconds: 10));
+      // Движок домена завершил задачу сам: исход чужой, детей никто не
+      // ждал, и стек остаётся на месте — как обещает дартдок `finish`.
+      job
+        ..drop(const Done(null))
+        ..ignore();
+      async.flushTimers();
+      expect(order, isEmpty);
+      expect(job.outcome, isA<Done<void>>());
+    });
+  });
 ```
 
-Поля рядом с `_pendingCancel`:
+- [ ] **Шаг 2.** Прогнать: падают тесты про `isCancelled`,
+      `whenCancelled` и про завершённую напрямую задачу; три остальных
+      зелёные — это регрессия, они держат сегодняшнее поведение.
+
+Команда: `cd packages/jobs && dart test test/cleanup_test.dart
+test/lifecycle_test.dart`
+
+- [ ] **Шаг 3.** Завести поля и геттеры в `job_base.dart`. Поля рядом с
+      `_pendingCancel`:
 
 ```dart
   bool _bodyEnded = false;
   bool _disposing = false;
 ```
 
-и защищённые геттеры рядом с `status`:
+геттеры рядом с `status`:
 
 ```dart
   /// Whether the body has ended — returned or thrown.
@@ -666,46 +756,43 @@ git commit -m "feat(jobs): a cleanup stack the engine unwinds"
   bool get isDisposing => _disposing;
 ```
 
-- [ ] **Шаг 4.** Второй проход в `_unwindCleanups` — переписать метод
-      задачи 1 на живое условие и отложенный список:
+- [ ] **Шаг 4.** Переписать хвост `_execute` — вокруг цикла задачи 1
+      встают граница тела, охрана от прямого `finish` и решённый исход:
 
 ```dart
-  /// Unwinds the cleanup stack, last registration first.
-  ///
-  /// Takes one at a time rather than a snapshot: a disposer may register
-  /// another one, and that one runs too. The condition of a `discard`
-  /// registration is read when it is taken off the stack, from the
-  /// outcome as it stands then — a cancellation may arrive into the
-  /// unwinding itself, and the ones it passed over run in a second pass.
-  Future<void> _unwindCleanups(Outcome<T> outcome) async {
-    final skipped = <_Cleanup>[];
-    while (_cleanups.isNotEmpty) {
-      final cleanup = _cleanups.removeLast();
-      if (!cleanup.always && (_pendingCancel ?? outcome) is Done<T>) {
-        skipped.add(cleanup);
-        continue;
-      }
-      await _runCleanup(cleanup);
+    // Тело кончилось: с этого момента значение из брошенного вызова до
+    // него уже не доедет — задачи 4 и 7 смотрят на этот флаг.
+    _bodyEnded = true;
+    await _awaitChildren();
+    if (isFinished) {
+      // Движок домена завершил задачу напрямую, пока тело доигрывало:
+      // исход чужой, стек остаётся на месте, и трогать чужую отмену
+      // нельзя.
+      return;
     }
-    while (skipped.isNotEmpty && (_pendingCancel ?? outcome) is! Done<T>) {
-      await _runCleanup(skipped.removeLast());
-      while (_cleanups.isNotEmpty) {
-        await _runCleanup(_cleanups.removeLast());
+    // Исход решён. Отмену кладём сырым присваиванием: `_markCancelled`
+    // погнал бы колбэки `onCancel` и завершил бы ошибкой ожидания,
+    // которые тело бросило, — сегодня они тихо получают значение. После
+    // детей, а не в `catch`: до этого `cancelWith` обязан каскадировать
+    // на детей, а заполненный `_pendingCancel` его останавливает.
+    if (outcome is Cancelled) {
+      _pendingCancel ??= outcome;
+      if (!_cancelled.isCompleted) {
+        _cancelled.complete();
       }
     }
-  }
-
-  Future<void> _runCleanup(_Cleanup cleanup) async {
-    try {
-      await cleanup.run();
-    } on Object catch (error, stackTrace) {
-      notifyError(error, stackTrace);
+    final disposer = _ifCancelled;   // до задачи 5
+    ...
+    if (_cleanups.isNotEmpty) {
+      _disposing = true;
+      ...цикл задачи 1...
+      _disposing = false;
     }
-  }
+    finish(_pendingCancel ?? outcome);
 ```
 
-Вызов из `_execute` — без аргумента исхода в сигнатуре не обойтись:
-`await _unwindCleanups(outcome);`.
+Цикл внутри `if` не меняется — меняется только то, что он теперь стоит
+между `_disposing = true` и `_disposing = false`.
 
 - [ ] **Шаг 5.** Поправить дартдоки: `isCancelled` — «в уборке отвечает по
       решённому исходу»; `whenCancelled` — «завершается, когда тело
@@ -717,15 +804,16 @@ git commit -m "feat(jobs): a cleanup stack the engine unwinds"
 Команда: `cd packages/jobs && dart test`
 Ожидание: всё зелёное.
 
-- [ ] **Шаг 7.** Мутант: убрать второй проход (оба `while` после первого
-      цикла) — тест «a cancellation arriving during the cleanup still
-      discards» обязан покраснеть. Вернуть.
+- [ ] **Шаг 7.** Мутант: убрать `if (isFinished) return;` — тест «a job
+      finished by hand keeps its cleanup stack» обязан покраснеть.
+      Вернуть.
 
 - [ ] **Шаг 8.** `dart analyze` и коммит.
 
 ```bash
 git add packages/jobs/lib/src/job_base.dart \
-        packages/jobs/test/cleanup_test.dart
+        packages/jobs/test/cleanup_test.dart \
+        packages/jobs/test/lifecycle_test.dart
 git commit -m "feat(jobs): the outcome is decided before the stack unwinds"
 ```
 
@@ -805,6 +893,31 @@ void main() {
       async.flushTimers();
       expect(order, ['outer', 'nested']);
       expect(errors, isEmpty);
+    });
+  });
+
+  test('a Cancelled thrown by a cleanup is its own error', () {
+    fakeAsync((async) {
+      final errors = <Object>[];
+      final job = Job<void>(
+        observer: _CollectingObserver(errors),
+        (ctx) async {
+          ctx.onDispose(
+            () => throw Cancelled.by(
+              reason: CancelReason.manual,
+              started: true,
+              stackTrace: StackTrace.current,
+            ),
+          );
+          await ctx.wait(() => delay(10));
+        },
+      )..ignore();
+      async.elapse(const Duration(milliseconds: 5));
+      job.cancel().ignore();
+      async.flushTimers();
+      // Правило проглатывания снято вторым дополнением: тождественность
+      // не проверяется, любая отмена из уборщика — его ошибка.
+      expect(errors.single, isA<Cancelled>());
     });
   });
 
@@ -919,7 +1032,10 @@ class _CollectingObserver extends JobObserver {
 контекста из `ifCancelled`, и это задача 6; здесь такого быть не должно.
 
 - [ ] **Шаг 6.** Мутант: убрать `throwIfDisposing` из `throwIfFinished` —
-      первый тест обязан покраснеть на пяти пишущих членах. Вернуть.
+      первый тест обязан покраснеть. Красит он четыре члена из шести, и
+      это нормально: `wait`, `join` и `uncancellable` ловят фазу через
+      собственный `check()`, а `throwIfFinished` с фазой внутри нужен
+      `run`, `onCancel` и — в задаче 6 — `emit` у `solo`. Вернуть.
 
 - [ ] **Шаг 7.** `dart analyze` и коммит.
 
@@ -1012,7 +1128,7 @@ value)? dispose, FutureOr<void> Function(T value)? discard}` вместо
         // Тело не дожидается своего вызова: значение приедет, когда тела
         // уже нет, — до него оно не доехало, значит убирают без условия.
         unawaited(
-          ctx.join(
+          ctx.join<String>(
             () async {
               await delay(50);
               return 'db';
@@ -1026,7 +1142,7 @@ value)? dispose, FutureOr<void> Function(T value)? discard}` вместо
             key: 'child',
             (ctx) => ctx.wait(() => delay(80)),
           ),
-        )..ignore();
+        );
         return 1;
       })
         ..ignore();
@@ -1043,7 +1159,7 @@ value)? dispose, FutureOr<void> Function(T value)? discard}` вместо
         observer: _CollectingObserver(errors),
         (ctx) async {
           unawaited(
-            ctx.join(
+            ctx.join<String>(
               () async {
                 await delay(50);
                 return 'db';
@@ -1056,12 +1172,90 @@ value)? dispose, FutureOr<void> Function(T value)? discard}` вместо
               key: 'child',
               (ctx) => ctx.wait(() => delay(80)),
             ),
-          )..ignore();
+          );
           return 1;
         },
       ).ignore();
       async.flushTimers();
       expect(errors, isEmpty, reason: 'ни StateError, ни отмены');
+    });
+  });
+
+  test('a value that arrives into the running cleanup is cleaned up too',
+      () {
+    fakeAsync((async) {
+      final closed = <String>[];
+      final job = Job<int>((ctx) async {
+        unawaited(
+          ctx.join<String>(
+            () async {
+              await delay(50);
+              return 'db';
+            },
+            discard: closed.add,
+          ),
+        );
+        // Детей нет: значение приезжает в середину медленного уборщика,
+        // а не в окно ожидания детей. Мутант ветки `bodyEnded` красит
+        // именно этот тест.
+        ctx.onDispose(() => delay(100));
+        return 1;
+      })
+        ..ignore();
+      async.flushTimers();
+      expect(job.outcome, isA<Done<int>>());
+      expect(closed, ['db']);
+    });
+  });
+
+  test('a value that arrives after the job has finished is cleaned up '
+      'on the spot', () {
+    fakeAsync((async) {
+      final closed = <String>[];
+      Job<int>((ctx) async {
+        unawaited(
+          ctx.join<String>(
+            () async {
+              await delay(50);
+              return 'joined';
+            },
+            discard: closed.add,
+          ),
+        );
+        unawaited(
+          ctx.wait<String>(
+            () async {
+              await delay(60);
+              return 'waited';
+            },
+            discard: closed.add,
+          ),
+        );
+        return 1;
+      }).ignore();
+      async.flushTimers();
+      expect(closed, ['joined', 'waited'], reason: 'оба члена семьи');
+    });
+  });
+
+  test('a call with no value of its own registers by the member', () {
+    fakeAsync((async) {
+      final released = <String>[];
+      final job = Job<void>((ctx) async {
+        // `join<void>` регистрирует уборку, у которой нет адреса: снять
+        // её `disown` нечем, поэтому снятие берут у члена.
+        await ctx.join<void>(
+          () async => delay(1),
+          dispose: (_) => released.add('by parameter'),
+        );
+        final drop = ctx.onDispose(() => released.add('by member'));
+        await ctx.wait(() => delay(10));
+        drop();
+      })
+        ..ignore();
+      async.flushTimers();
+      expect(job.outcome, isA<Done<void>>());
+      expect(released, ['by parameter']);
     });
   });
 
@@ -1093,6 +1287,30 @@ value)? dispose, FutureOr<void> Function(T value)? discard}` вместо
       }).ignore();
       async.flushTimers();
       expect(closed, ['db'], reason: 'запись члена disown не тронул');
+    });
+  });
+
+  test('a cancellation cannot slip between the value and the body', () {
+    fakeAsync((async) {
+      final closed = <String>[];
+      final job = Job<String>((ctx) async {
+        final db = await ctx.wait(
+          () async {
+            await delay(10);
+            return 'db';
+          },
+          discard: closed.add,
+        );
+        await ctx.wait(() => delay(10));
+        return db;
+      })
+        ..ignore();
+      // Отмена ровно в тот момент, когда действие вернуло значение:
+      // регистрация в стек синхронна, поэтому уборка не теряется.
+      async.elapse(const Duration(milliseconds: 10));
+      job.cancel().ignore();
+      async.flushTimers();
+      expect(closed, ['db']);
     });
   });
 
@@ -1145,7 +1363,7 @@ value)? dispose, FutureOr<void> Function(T value)? discard}` вместо
   });
 ```
 
-- [ ] **Шаг 2.** Прогнать: падают все семь.
+- [ ] **Шаг 2.** Прогнать: падают все двенадцать.
 
 Команда: `cd packages/jobs && dart test test/cleanup_test.dart`
 
@@ -1167,7 +1385,7 @@ value)? dispose, FutureOr<void> Function(T value)? discard}` вместо
       // доехало. Вызов кончается здесь и в `check` не заходит — в фазе
       // уборки тот бросил бы `StateError` в future, которого никто не
       // ждёт, и Dart отдал бы его в зону на успешном пути.
-      await _keep(dispose, discard, result);
+      await _keepLate(dispose, discard, result);
       final pending = pendingCancel;
       if (pending != null) {
         throw pending;
@@ -1183,7 +1401,7 @@ value)? dispose, FutureOr<void> Function(T value)? discard}` вместо
       }
       rethrow;
     }
-    await _keep(dispose, discard, result);
+    _keepOnStack(dispose, discard, result);
     return result;
   }
 
@@ -1193,14 +1411,36 @@ value)? dispose, FutureOr<void> Function(T value)? discard}` вместо
     }
   }
 
-  /// Puts the cleanup of [value] where it belongs.
+  /// Puts the cleanup of [value] on the stack, as `dispose` or as
+  /// `discard`, whichever was given.
   ///
-  /// While the body can still use the value, on the stack — as `dispose`
-  /// or as `discard`, whichever was given. Once the body has ended the
-  /// value reached nobody, so the registration is unconditional; and if
-  /// the job has finished there is no stack left, so the disposer runs on
-  /// the spot and nobody waits for it.
-  Future<void> _keep<T>(
+  /// Synchronous on purpose: `wait` registers between taking the value
+  /// and handing it to the body, and an `await` in that gap would let a
+  /// cancellation in — the body would then get a value whose cleanup is
+  /// registered nowhere.
+  void _keepOnStack<T>(
+    FutureOr<void> Function(T value)? dispose,
+    FutureOr<void> Function(T value)? discard,
+    T value,
+  ) {
+    final disposer = dispose ?? discard;
+    if (disposer == null) {
+      return;
+    }
+    addCleanup(
+      () => disposer(value),
+      always: dispose != null,
+      value: value,
+    );
+  }
+
+  /// Cleans up [value] that came out after the body had ended.
+  ///
+  /// It reached nobody, so the outcome does not matter: on a job that has
+  /// finished the disposer runs on the spot and nobody waits for it, and
+  /// during the cleanup itself the registration is unconditional — the
+  /// unwinding takes it off the stack in the same pass.
+  Future<void> _keepLate<T>(
     FutureOr<void> Function(T value)? dispose,
     FutureOr<void> Function(T value)? discard,
     T value,
@@ -1213,11 +1453,7 @@ value)? dispose, FutureOr<void> Function(T value)? discard}` вместо
       await _dispose(disposer, value);
       return;
     }
-    addCleanup(
-      () => disposer(value),
-      always: dispose != null || _owner.bodyEnded,
-      value: value,
-    );
+    addCleanup(() => disposer(value), always: true, value: value);
   }
 ```
 
@@ -1235,7 +1471,11 @@ value)? dispose, FutureOr<void> Function(T value)? discard}` вместо
     check();
     final result = action();
     if (result is! Future<T>) {
-      await _keep(dispose, discard, result);
+      if (_owner.bodyEnded) {
+        await _keepLate(dispose, discard, result);
+      } else {
+        _keepOnStack(dispose, discard, result);
+      }
       return result;
     }
     return _race(result, dispose, discard);
@@ -1255,8 +1495,13 @@ value)? dispose, FutureOr<void> Function(T value)? discard}` вместо
           if (disposer != null) {
             await _dispose(disposer, value);
           }
+        } else if (_owner.bodyEnded) {
+          await _keepLate(dispose, discard, value);
+          completer.complete(value);
         } else {
-          await _keep(dispose, discard, value);
+          // Синхронно и до `complete`: между регистрацией и телом не
+          // должно быть ни одного `await`.
+          _keepOnStack(dispose, discard, value);
           completer.complete(value);
         }
       } on Object catch (error, stackTrace) {
@@ -1309,28 +1554,45 @@ value)? dispose, FutureOr<void> Function(T value)? discard}` вместо
 
 То же самое сделать в `addCleanup` — регистрация в фазе уборки законна.
 
-- [ ] **Шаг 6.** Перевести на новые имена тесты, которые звали
+- [ ] **Шаг 6.** Переписать сигнатуры и дартдоки `wait` и `join` в
+      интерфейсе `JobContext` — иначе они четыре коммита обещают
+      `ifCancelled`, которого больше нет. Коротко, полностью их допишет
+      задача 8: три случая правила («не доехало — убрать здесь, доехало —
+      в стек, тело кончилось — убрать без условия»), `ArgumentError` на
+      оба параметра сразу, и что `unawaited` на вызове, отдающем ресурс,
+      — ошибка тела. Там же снять `[disown]` из обратных кавычек в
+      дартдоке `addCleanup`: член появился, ссылка работает.
+
+- [ ] **Шаг 7.** Поправить `packages/jobs/example/example.dart`: строка
+      с `ctx.join(Database.open, ifCancelled: ...)` становится
+      `discard:`. Иначе `dart analyze` пакета красен до задачи 8.
+
+- [ ] **Шаг 8.** Перевести на новые имена тесты, которые звали
       `ifCancelled` у `wait`/`join`: `packages/jobs/test/waiting_test.dart`,
       `packages/solo/test/wait_test.dart`,
       `packages/solo/test/join_test.dart`. `ifCancelled:` → `discard:` там,
       где значение уходило наружу, и `dispose:` там, где ресурс держат до
       конца задачи. Смысл тестов не менять.
 
-- [ ] **Шаг 7.** Прогнать обе сьюты.
+- [ ] **Шаг 9.** Прогнать обе сьюты.
 
 Команда: `cd packages/jobs && dart test`, затем
 `cd packages/solo && dart test`
 Ожидание: всё зелёное.
 
-- [ ] **Шаг 8.** Мутант: убрать ветку `_owner.bodyEnded` из `join` — тест
-      «a value that arrives after the body…» обязан покраснеть (значение
-      ляжет условной записью и на `Done` пропадёт), а «an abandoned join is
-      silent…» — поймать `StateError`. Вернуть.
+- [ ] **Шаг 10.** Мутант: убрать ветку `_owner.bodyEnded` из `join` — тест
+      «a value that arrives into the running cleanup…» обязан покраснеть:
+      значение придёт в фазу уборки, `check()` бросит `StateError`
+      наблюдателю, а сама база утечёт. Тест про окно детей мутант не
+      красит — там задача ещё не убирает, и условная запись просто
+      пропускается на `Done`; поэтому он идёт вместе с тестом про уборку,
+      а не вместо него. Вернуть.
 
-- [ ] **Шаг 9.** `dart analyze` в обоих пакетах и коммит.
+- [ ] **Шаг 11.** `dart analyze` в обоих пакетах и коммит.
 
 ```bash
 git add packages/jobs/lib/src/job_context.dart \
+        packages/jobs/example/example.dart \
         packages/jobs/test/cleanup_test.dart \
         packages/jobs/test/waiting_test.dart \
         packages/solo/test/wait_test.dart \
@@ -1359,7 +1621,12 @@ git commit -m "feat(jobs)!: wait and join register the cleanup of a value"
       `ctx.onDiscard(() => closed.add(resource))` сразу после того, как
       значение получено. Смысл каждого теста сохранить: поздний результат,
       порядок «дети → уборка → исход», ошибка уборщика в наблюдателя.
-      Например, первый:
+
+      Тесты вида «a body that threw keeps its disposer away» из этого
+      файла удаляются: их сюжет — «уборщик не зовётся, когда значения
+      нет» — целиком закрыт тестом «onDiscard is silent on Done and runs
+      on the other two» из задачи 1, и держать два теста на одно правило
+      незачем. Первый переписанный:
 
 ```dart
   test('a value returned after cancellation goes to the disposer', () {
@@ -1392,7 +1659,9 @@ git commit -m "feat(jobs)!: wait and join register the cleanup of a value"
 - [ ] **Шаг 2.** То же в `packages/solo/test/late_value_test.dart`:
       `ifCancelled:` у `solo.run` уходит, регистрация переезжает в тело.
 
-- [ ] **Шаг 3.** Дописать тест в `packages/jobs/test/debug_test.dart`:
+- [ ] **Шаг 3.** Дописать тест в `packages/jobs/test/debug_test.dart`;
+      импорта `support/probe_job.dart` в этом файле сегодня нет, его надо
+      добавить:
 
 ```dart
   test('finish called by hand tells the debug tracer about the stack', () {
@@ -1445,18 +1714,23 @@ git commit -m "feat(jobs)!: wait and join register the cleanup of a value"
 
 - [ ] **Шаг 6.** Снять проброс в `solo`: параметр `ifCancelled` у
       `SoloBase.job` и `SoloBase.run`, `required super.ifCancelled` в
-      `packages/solo/lib/src/job.dart`.
+      `packages/solo/lib/src/job.dart`. Там же — дартдоки `SoloBase.job` и
+      `SoloBase.run`, где `ifCancelled` описан словами.
 
-- [ ] **Шаг 7.** Убедиться, что слова не осталось:
+- [ ] **Шаг 7.** Поправить `packages/jobs/example/example.dart`:
+      `ifCancelled` у `Job` превращается в `ctx.onDiscard(...)` внутри
+      тела. Пример должен запускаться: `dart run example/example.dart`.
+
+- [ ] **Шаг 8.** Убедиться, что слова не осталось:
 
 Команда: `grep -rn "ifCancelled" packages/*/lib packages/*/test
 packages/*/example`
 Ожидание: пусто.
 
-- [ ] **Шаг 8.** Прогнать обе сьюты, `dart analyze` в обоих пакетах,
+- [ ] **Шаг 9.** Прогнать обе сьюты, `dart analyze` в обоих пакетах,
       `flutter test` в `packages/flutter_solo` (он реэкспортирует ядро).
 
-- [ ] **Шаг 9.** Коммит.
+- [ ] **Шаг 10.** Коммит.
 
 ```bash
 git add packages/jobs/lib packages/jobs/test \
@@ -1480,8 +1754,10 @@ git commit -m "feat(jobs)!: the job's ifCancelled gives way to the stack"
   `_checkedState:47-62`, `state:65`, `stateAs:68-81`)
 - Создать: `packages/solo/test/disposal_test.dart`
 
-- [ ] **Шаг 1.** Написать падающие тесты в
-      `packages/solo/test/disposal_test.dart`:
+- [ ] **Шаг 1.** Написать тесты в `packages/solo/test/disposal_test.dart`.
+      Иерархия состояний — та, что у всех тестов `solo`: `Initial`,
+      `Working(a:, b:)`, `Disposed` из `support/test_state.dart`;
+      наблюдатель ставит `runSolo`, и ошибки уборщиков видны в журнале.
 
 ```dart
 @Timeout(Duration(seconds: 5))
@@ -1490,6 +1766,7 @@ library;
 import 'package:solo/solo.dart';
 import 'package:test/test.dart';
 
+import 'support/journal.dart';
 import 'support/run_solo.dart';
 import 'support/test_state.dart';
 
@@ -1497,7 +1774,7 @@ void main() {
   test('reading the state from a disposer is a StateError, not a flip', () {
     runSolo((solo, journal, async) {
       final errors = <Object>[];
-      final job = solo.run<Idle, int>(
+      final job = solo.run<Initial, int>(
         key: 'load',
         (ctx) async {
           ctx.onDispose(() {
@@ -1510,8 +1787,8 @@ void main() {
               errors.add(error);
             }
           });
-          await ctx.wait(() => delay(10));
-          ctx.emit(const Loaded(7));
+          await pause(ctx, 10);
+          ctx.emit(const Working(a: 7));
           return 7;
         },
       );
@@ -1522,47 +1799,51 @@ void main() {
     });
   });
 
-  test('emit from a disposer is a StateError', () {
+  test('emit from a disposer is a StateError the observer sees', () {
     runSolo((solo, journal, async) {
-      final errors = <Object>[];
-      final solo2 = solo..onErrorHook = errors.add;
-      final job = solo2.run<Idle, int>(
+      final job = solo.run<Initial, int>(
         key: 'load',
         (ctx) async {
-          ctx.onDispose(() => ctx.emit(const Idle()));
+          ctx.onDispose(() => ctx.emit(const Working(a: 1)));
           return 7;
         },
       );
       async.flushTimers();
       expect(job.outcome, isA<Done<int>>());
-      expect(errors.single, isA<StateError>());
+      // Наблюдателя ставит `runSolo`. Без него ошибка уборщика в `solo`
+      // не доходит никуда, и тест был бы зелен на молчании.
+      expect(
+        journal.lines.where((line) => line.contains('error Bad state')),
+        hasLength(1),
+      );
     });
   });
 
   test('check, disown and emit hand the value over in one go', () {
-    runSolo((solo, journal, async) {
-      final closed = <String>[];
-      final job = solo.run<Idle, void>(
-        key: 'load',
-        (ctx) async {
-          final db = await ctx.join(() async => 'db', discard: closed.add);
-          // Хук ставит состояние реентерабельно из `onChange`: `emit`
-          // бросит после записи, а снятие уже позади.
-          ctx.check();
-          ctx.disown(db);
-          ctx.emit(Loaded(db.length));
-        },
-      );
-      async.flushTimers();
+    final solo = _ReentrantSolo();
+    final closed = <String>[];
+    final job = solo.run<Initial, void>(
+      key: 'load',
+      (ctx) async {
+        final db = await ctx.join(() async => 'db', discard: closed.add);
+        // Хук ставит состояние реентерабельно из `onChange`, и `emit`
+        // бросит после записи, — но снятие уже позади.
+        ctx
+          ..check()
+          ..disown(db)
+          ..emit(Working(a: db.length));
+      },
+    );
+    return _flush(solo, () {
       expect(closed, isEmpty, reason: 'база уехала в состояние');
-      expect(job.outcome, isA<Done<void>>());
+      expect(job.outcome, isA<Cancelled>(), reason: 'хук отменил задачу');
     });
   });
 
   test('join inside an uncancellable section breaks the pair', () {
     runSolo((solo, journal, async) {
       final rolled = <String>[];
-      final job = solo.run<Idle, void>(
+      final job = solo.run<Initial, void>(
         key: 'load',
         (ctx) async {
           final tx = await ctx.join(() async => 'tx', dispose: rolled.add);
@@ -1576,7 +1857,7 @@ void main() {
         },
       );
       async.elapse(const Duration(milliseconds: 5));
-      solo.externalSetState(const Loaded(1));
+      solo.externalSetState(const Working(a: 1));
       async.flushTimers();
       expect(job.outcome, isA<Cancelled>());
       expect(rolled, ['tx'], reason: 'снятие не состоялось — уборка идёт');
@@ -1585,26 +1866,41 @@ void main() {
 
   test('reads after the job has finished are still legal', () {
     runSolo((solo, journal, async) {
-      late SoloContext<TestState, Idle> leaked;
-      solo.run<Idle, void>(
-        key: 'load',
-        (ctx) async => leaked = ctx,
-      ).ignore();
+      late SoloContext<TestState, Initial> leaked;
+      solo
+          .run<Initial, void>(
+            key: 'load',
+            (ctx) async => leaked = ctx,
+          )
+          .ignore();
       async.flushTimers();
       expect(() => leaked.state, returnsNormally);
       expect(leaked.check, returnsNormally);
     });
   });
 }
+
+/// A controller whose hook replaces the state from inside `onChange`.
+final class _ReentrantSolo extends Solo<TestState> {
+  _ReentrantSolo() : super(const Initial());
+
+  @override
+  void onChange(TestState previous, TestState current) {
+    if (current is Working) {
+      externalSetState(const Disposed());
+    }
+  }
+}
 ```
 
-Хук ошибок в `runSolo` — тот, что уже есть в `support/test_solo.dart`;
-если поля `onErrorHook` там нет, поставить наблюдателя, как это делает
-`unobserved_failure_test.dart`. Тест обязан ставить наблюдателя явно: без
-него ошибка уборщика в `solo` не доходит никуда, и тест был бы зелен на
-молчании.
+Вспомогательный `_flush` — три строки внизу файла: `fakeAsync` вокруг
+тела с закрытием контроллера, как это делает `runSolo`; собственный
+контроллер нужен только тесту тройки, потому что `runSolo` даёт `TestSolo`
+без переопределённых хуков.
 
-- [ ] **Шаг 2.** Прогнать: первые два падают.
+- [ ] **Шаг 2.** Прогнать: падает первый тест (исход `Cancelled(rules)`,
+      ошибок нет) и второй (ошибки в журнале нет). Остальные три —
+      регрессионные, они обязаны быть зелёными уже сейчас.
 
 Команда: `cd packages/solo && dart test test/disposal_test.dart`
 
@@ -1612,33 +1908,25 @@ void main() {
 
 ```dart
   @override
-  void check() {
-    throwIfDisposing('check');
-    _checkedState();
-  }
+  void check() => _checkedState('check');
 
-  W _checkedState() {
-    throwIfDisposing('read the state');
+  W _checkedState([String action = 'state']) {
+    throwIfDisposing(action);
     throwIfCancelled();
     ...
   }
-```
 
-`state` и `stateAs` идут через `_checkedState`, поэтому отдельной строки
-не требуют; сообщения — `'check'`, `'state'`, `'stateAs'`, значит
-`_checkedState` принимает имя члена:
+  @override
+  W get state => _checkedState();
 
-```dart
-  W _checkedState([String action = 'state']) {
-    throwIfDisposing(action);
+  @override
+  T stateAs<T extends S>() {
+    final current = _checkedState('stateAs');
     ...
   }
 ```
 
-и `stateAs` зовёт `_checkedState('stateAs')`, `check` —
-`_checkedState('check')`.
-
-- [ ] **Шаг 4.** Прогнать сьюту `solo` целиком: 238 тестов плюс новые.
+- [ ] **Шаг 4.** Прогнать сьюту `solo` целиком.
 
 Команда: `cd packages/solo && dart test`
 
@@ -1671,21 +1959,21 @@ git commit -m "feat(solo): reads are closed while the job is cleaning up"
   test('a state change during the cleanup no longer cancels by rules', () {
     runSolo((solo, journal, async) {
       final closed = <String>[];
-      final job = solo.run<Idle, int>(
+      final job = solo.run<Initial, int>(
         key: 'load',
         (ctx) async {
           final db = await ctx.join(() async => 'db', discard: closed.add);
           ctx.onDispose(() async => delay(50));
-          // Форма из README: рабочий тип `Idle`, последнее состояние вне
-          // него, значение возвращается наружу.
-          ctx.emit(const Loaded(7));
+          // Форма из README: рабочий тип `Initial`, последнее состояние
+          // вне него, значение возвращается наружу.
+          ctx.emit(const Working(a: 7));
           return db.length;
         },
       );
       // Пока уборщик спит, «железо» ставит состояние: правила задачи
       // больше не держатся, но тела уже нет — стеречь нечего.
       async.elapse(const Duration(milliseconds: 10));
-      solo.externalSetState(const Loaded(4));
+      solo.externalSetState(const Working(a: 4));
       async.flushTimers();
       expect(job.outcome, isA<Done<int>>());
       expect(closed, isEmpty, reason: 'значение уехало вызывающему');
@@ -1696,37 +1984,45 @@ git commit -m "feat(solo): reads are closed while the job is cleaning up"
 И второй, регрессионный, — очередь и политики уборку дожидаются:
 
 ```dart
-  test('restart and externalSetState wait for the cleanup', () {
+  test('restart waits for the cleanup of the job it replaces', () {
     runSolo((solo, journal, async) {
       final order = <String>[];
-      solo.run<Idle, void>(
-        key: 'load',
-        policy: Policy.restart,
-        (ctx) async {
-          ctx.onDispose(() async {
-            order.add('cleanup starts');
-            await delay(50);
-            order.add('cleanup ends');
-          });
-          await ctx.wait(() => delay(10));
-        },
-      ).ignore();
+      solo
+          .run<Initial, void>(
+            key: 'load',
+            policy: Policy.restartable,
+            (ctx) async {
+              ctx.onDispose(() async {
+                order.add('cleanup starts');
+                await delay(50);
+                order.add('cleanup ends');
+              });
+              await pause(ctx, 10);
+            },
+          )
+          .ignore();
       async.elapse(const Duration(milliseconds: 15));
       // Следующая задача той же очереди стартует только после `finish`,
       // а он ждёт уборку.
-      solo.run<Idle, void>(
-        key: 'load',
-        policy: Policy.restart,
-        (ctx) async => order.add('second starts'),
-      ).ignore();
+      solo
+          .run<Initial, void>(
+            key: 'load',
+            policy: Policy.restartable,
+            (ctx) async => order.add('second starts'),
+          )
+          .ignore();
       async.flushTimers();
       expect(order, ['cleanup starts', 'cleanup ends', 'second starts']);
     });
   });
 ```
 
-- [ ] **Шаг 2.** Прогнать: падает — исход `Cancelled(rules)`, значение
-      закрыто.
+Имя политики свериться по `packages/solo/lib/src/policy.dart`: в дереве
+она называется так, как её зовут `policy_test.dart` и
+`scenario_queue_test.dart`.
+
+- [ ] **Шаг 2.** Прогнать: первый падает — исход `Cancelled(rules)`,
+      значение закрыто; второй зелёный.
 
 - [ ] **Шаг 3.** Завести приватную обёртку в
       `packages/solo/lib/src/job.dart`, рядом с `_cancelWith` и
@@ -1753,7 +2049,7 @@ git commit -m "feat(solo): reads are closed while the job is cleaning up"
 - [ ] **Шаг 5.** Прогнать сьюту `solo`. Ожидание: новый тест зелёный.
       Если краснеет что-то из `scenario_*` или `start_rules_test.dart` —
       разобрать: тест мог опираться на отмену по правилам в окне детей.
-      Такой тест переписать, а разбор записать в отчёт задачи.
+      Такой тест переписать, а разбор записать в сообщение коммита.
 
 - [ ] **Шаг 6.** Мутант: убрать `job._bodyEnded` из условия — новый тест
       обязан покраснеть. Вернуть.
@@ -1766,6 +2062,7 @@ git add packages/solo/lib/src/solo_base.dart \
         packages/solo/test/disposal_test.dart
 git commit -m "feat(solo)!: the rules let go of a job whose body has ended"
 ```
+
 
 ---
 
@@ -1801,11 +2098,17 @@ git commit -m "feat(solo)!: the rules let go of a job whose body has ended"
   - `isRunning` и `JobStatus.running` — в фазе уборки оба ещё `true`.
   - `isCancelled` — в уборке отвечает по решённому исходу.
 
-- [ ] **Шаг 2.** Переписать «Quick start» в `README.md`: он построен
-      вокруг `ifCancelled` у задачи. Новая форма — та, что в спеке,
-      раздел «Решение»: лок через `dispose`, база через `discard`,
-      `return` без церемоний. Рядом — абзац «`discard` только для того,
-      что уходит наружу».
+- [ ] **Шаг 2.** Переписать в `README.md` четыре раздела:
+
+  - **«Quick start»** — он построен вокруг `ifCancelled` у задачи. Новая
+    форма — та, что в спеке, раздел «Решение»: лок через `dispose`, база
+    через `discard`, `return` без церемоний.
+  - **«Late values»** — переписать на стек: после `return` тело ничего не
+    делает, поздним значением занимается движок.
+  - **«Taking ownership»** — правило «`discard` только для того, что
+    уходит наружу», передача владения и `disown`.
+  - **«Testing»** — уборка ждётся, поэтому `close()` и `done` приходят
+    после неё; уборщик не ждёт свою задачу.
 
 - [ ] **Шаг 3.** Заменить `example/example.dart` на новый «Quick start»
       дословно и прогнать его.
@@ -1875,12 +2178,17 @@ git commit -m "docs(jobs): cleanup as its user sees it"
       перевода `scopo` (`releaseLateData` → `discard`, запись `_data` из
       ветки `Done`) и публикация.
 
-- [ ] **Шаг 6.** Полный прогон перед коммитом: `dart analyze` и
+- [ ] **Шаг 6.** Завершающая проверка по всему дереву:
+
+Команда: `grep -rn "ifCancelled" packages docs`
+Ожидание: только записи `docs/records/` — там это история, её не правят.
+
+- [ ] **Шаг 7.** Полный прогон перед коммитом: `dart analyze` и
       `dart test` в `packages/jobs` и `packages/solo`, `flutter test` в
       `packages/flutter_solo`, `dart test` из `packages/solo/example/`,
       `dart doc` в обоих пакетах, `python3 tool/check_translations.py`.
 
-- [ ] **Шаг 7.** Коммит.
+- [ ] **Шаг 8.** Коммит.
 
 ```bash
 git add packages/solo docs/architecture.md docs/handoff.md
@@ -1925,15 +2233,18 @@ git commit -m "docs(solo): the cleanup stack as its user sees it"
   → задачи 8 и 9.
 
 Тесты из списков спеки разложены так: стек, порядок, ожидание, ошибка
-уборщика, вложенная уборка, снятие — задача 1; второй проход с мутантом,
-`whenCancelled`, брошенное ожидание, каскад — задача 2; запреты фазы с
-мутантом, чтения после `finish` — задача 3; параметры, `ArgumentError`,
-`disown` в трёх видах, позднее значение в окне детей и в уборке, тишина
-брошенного `join` — задача 4; поздний результат на новом API — задача 5;
-чтения и `emit` из уборщика в `solo` с явным наблюдателем, тройка
-`check`/`disown`/`emit` и `join` внутри секции — задача 6; внешняя
-установка состояния во время уборки и очередь с `Policy.restart` — задача
-7. Отдельно: двойная регистрация на одно значение, `disown` на
-завершённой задаче — задача 4; `Cancelled` из `child.value` внутри
-уборщика — задача 3; придержанная отмена от незакрытой секции — задача 2;
-строка `debug` у прямого `finish` — задача 5.
+уборщика, вложенная уборка, снятие, второй проход с мутантом, регистрация на
+помеченной и на завершённой задаче — задача 1; решённый исход,
+`whenCancelled`, брошенное ожидание, каскад, незакрытая секция, прямой
+`finish` с мутантом — задача 2; запреты фазы с мутантом, чтения после
+`finish` — задача 3; параметры, `ArgumentError`, `disown` в трёх видах,
+позднее значение в трёх окнах (дети, идущая уборка с мутантом, завершённая
+задача — для `join` и для `wait`), `join<void>` со снятием членом, зазор
+`_race`, двойная регистрация, тишина брошенного `join` — задача 4; поздний
+результат на новом API — задача 5; чтения и `emit` из уборщика в `solo` с
+явным наблюдателем, тройка `check`/`disown`/`emit` и `join` внутри секции —
+задача 6; внешняя установка состояния во время уборки и очередь с
+`Policy.restart` — задача 7. Отдельно: двойная регистрация на одно значение,
+`disown` на завершённой задаче — задача 4; `Cancelled` из `child.value`
+внутри уборщика — задача 3; придержанная отмена от незакрытой секции —
+задача 2; строка `debug` у прямого `finish` — задача 5.
