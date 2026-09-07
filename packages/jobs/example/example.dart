@@ -7,16 +7,11 @@ class Database {
     return Database();
   }
 
-  bool isOpen = true;
-
   Future<void> migrate() async {}
 
   Future<void> markReady() async {}
 
-  Future<void> close() async {
-    isOpen = false;
-    print('database closed');
-  }
+  Future<void> close() async => print('database closed');
 }
 
 /// The Quick start of README.md, with a fake [Database] around it.

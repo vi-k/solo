@@ -1,6 +1,7 @@
 ## 0.1.0
 
-Initial release. The job kernel taken out of `solo` 0.1.0.
+Initial release. The job kernel taken out of `solo` before its own
+first release.
 
 - `Job<T>`: a cancellable `Future` with an outcome, children and a
   cooperative cancellation. Created by `Job(body)`, which starts on the
@@ -13,7 +14,8 @@ Initial release. The job kernel taken out of `solo` 0.1.0.
   cancellation until the step is over,
   `ctx.onCancel` hands the cancellation to whatever can really stop, and
   `ctx.check` gives up where there is no call to wrap. `ctx.each` follows
-  a stream for as long as the job lives.
+  a stream for as long as the job lives, waiting for an asynchronous
+  `onData` and taking the subscription with it whatever the outcome.
 - A cleanup stack: `ctx.onDispose` releases whatever the outcome,
   `ctx.onDiscard` only when the value reaches nobody, and `wait` and
   `join` take the same two as `dispose` and `discard` for the value they

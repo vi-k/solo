@@ -112,14 +112,14 @@ final message = switch (await job.done) {
 `Cancelled` carries a `reason`, a `started` flag, an optional
 `description` and the stack trace of the cancellation itself. The reason
 is a `CancelReason` — `manual`, `parent` and `handler` here — and it is
-an open class, not an enum: an engine built on this one declares its own,
-and reasons are equal by name.
+neither an enum nor sealed: an engine built on this one declares its own
+with `const CancelReason('closed')`, and reasons are equal by name.
 
 `job.done` completes with the outcome and never throws; `job.value`
 completes with the value or throws; `job.whenCancelled` completes on
 every `Cancelled` outcome — for a running job the moment it is marked,
-before the body finishes, and for a body that cancelled itself only when
-the job finishes. It never completes for a job that ends `Done` or
+before the body finishes, and for a body that cancelled itself once that
+body has ended and its children are done, right before the cleanup. It never completes for a job that ends `Done` or
 `Failed`, so hang work on it with `.then(...)` or race it with
 `job.done` — a bare `await job.whenCancelled` parks for good on a job
 that succeeds. `job.cancel()` cancels and waits for the job to actually
@@ -148,6 +148,11 @@ swallowed cancellation expensive to find: from the outside the job ended
 right, while the body went on working. Catch the type you came for, and
 let the cancellation through.
 
+Not every `Cancelled` the body sees is its own: one that came out of
+`await child.value` says a child gave up, and catching that one is fair —
+an optional step that did not work out. Inside such a `catch`, `ctx.check()`
+tells the two apart, because it throws only if this job is cancelled too.
+
 The body must never await anything by itself, and the member it picks
 says what a cancellation does to that call:
 
@@ -160,7 +165,10 @@ says what a cancellation does to that call:
   for the job waits for the disposal too.
 - `ctx.each(stream, onData)` follows a stream for as long as the job
   lives. The subscription is cancelled the moment the job is marked,
-  before the body learns about it, and nothing is left listening.
+  before the body learns about it, and again when the job ends whatever
+  the outcome, so nothing is left listening even behind a body that walked
+  away from the call. An `onData` that returns a future is waited for, and
+  delivery is held meanwhile: the events keep their order.
 - `ctx.uncancellable(action)` holds the cancellation for the length of
   the call: the job is not marked while it runs, so nothing — not an
   `onCancel` callback, not the cascade onto children — reaches into the
@@ -184,15 +192,18 @@ final feed = Job<void>((ctx) => ctx.each(socket.messages, handle));
 ```
 
 A job created as `Job(body, cancellable: false)` refuses every
-cancellation it may refuse; its own rules — whatever an engine on top
-adds — still apply.
+cancellation it may refuse, once it has started: before the body runs
+there is nothing to protect, and such a job is dropped like any other.
+Its own rules — whatever an engine on top adds — still apply.
 
 ## Children
 
 `ctx.run(child)` starts a child right now, bypassing whatever queue an
 engine on top may have. The parent is not finished until its children
 are, a cancelled parent cascades onto them, and a child that is not
-cancellable refuses the cascade.
+cancellable refuses the cascade. A body that gives itself up with
+`throw Cancelled(...)` cancels its children too; a body that *fails*
+leaves them to finish, and waits.
 
 ```dart
 final parent = Job<void>((ctx) async {
@@ -213,10 +224,11 @@ own, and a cancellation of a child that surfaces through `child.value`
 marks the parent's outcome as `handler`, naming the child.
 
 `run` refuses as well as starts: a handle that is not a job of this
-kernel is an `ArgumentError`, a job already started is a `StateError`,
-and a parent that is already cancelled throws its own `Cancelled` with
-the child dropped — which is what a body starting children after a long
-await eventually meets.
+kernel is an `ArgumentError`, a job already started is a `StateError`, a
+body that has already ended is a `StateError` too — a child begun then
+would be waited for by nobody — and a parent that is already cancelled
+throws its own `Cancelled` with the child dropped, which is what a body
+starting children after a long await eventually meets.
 
 ## Cleanup
 

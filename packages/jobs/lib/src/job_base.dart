@@ -842,7 +842,11 @@ abstract class JobBase<T> implements Job<T> {
 
 /// A job that starts when it is told to.
 abstract interface class DeferredJob<T> implements Job<T> {
-  /// Runs the body. Throws [StateError] if the job already ran.
+  /// Runs the body.
+  ///
+  /// Throws [StateError] if the job already ran, and also if it was
+  /// cancelled before it started: a job dropped then is finished, and a
+  /// finished job does not run.
   void start();
 }
 

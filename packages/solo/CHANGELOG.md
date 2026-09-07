@@ -35,8 +35,9 @@ for a tree that followed the package before it went out.
   cannot be taken back — a payment on its way to the server — with the
   cancellation held until the step is over, and `close` waits for it.
 - `ctx.each(stream, onData)` follows a stream for as long as the job lives:
-  an extension on `JobContext`, built out of `wait` and `onCancel`. The
-  subscription goes with the job, including the moment it is cancelled.
+  an extension on `JobContext`. The subscription goes with the job — when
+  it is cancelled, and when it ends any other way. An `onData` that
+  returns a future is waited for, and the events keep their order.
 - `JobContext.onCancel` hands a cancellation to something that can really
   stop — a device's cancel token, an HTTP abort. `wait` ends the waiting,
   not the work.
