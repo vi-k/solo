@@ -176,9 +176,12 @@ abstract class SoloBase<S extends Object> {
   /// controller builds its job and queues it.
   ///
   /// Every parameter but [policy] belongs to [job], which documents them
-  /// all; [policy] belongs to [add]. Returns the queued job and throws
-  /// nothing — on a closed controller it gives back a job already
-  /// finished with `Cancelled(closed)`.
+  /// all; [policy] belongs to [add]. Returns the queued job; on a closed
+  /// controller it gives back one already finished with
+  /// `Cancelled(closed)` rather than throwing. It does throw what [add]
+  /// throws for a job it cannot take: [ArgumentError] for a policy that
+  /// needs a key without one, and a [TypeError] from [Policy.droppable]
+  /// when one key is shared by jobs with different result types.
   ///
   /// ```dart
   /// Job<String> load() => run<Profile, String>(
@@ -319,8 +322,11 @@ abstract class SoloBase<S extends Object> {
   /// A job has an outcome, including jobs dropped before start.
   void onFinish(Job<Object?> job) {}
 
-  /// A job body threw an error, or an action abandoned by
-  /// [JobContext.wait] failed later.
+  /// Something a job did threw where there was nowhere else to put it.
+  ///
+  /// The body; an action abandoned by [JobContext.wait] failing later; a
+  /// disposer or an `onCancel` callback; and a rule of this controller —
+  /// `canStart` or `keepWhile` — that threw instead of answering.
   ///
   /// Called for every such error, including the ones that end as
   /// [Cancelled] and are therefore never handed to the zone: a body that
@@ -473,6 +479,19 @@ abstract class SoloBase<S extends Object> {
             started: false,
             description: rejection,
             stackTrace: StackTrace.current,
+          ),
+        );
+        continue;
+      }
+      if (isClosed) {
+        // The rules are the caller's code, and one of them closed the
+        // controller while it was being asked. Nothing starts after that.
+        _debug(() => 'start $job: closed while the rules were asked');
+        job._drop(
+          Cancelled.by(
+            reason: SoloCancelReason.closed,
+            started: false,
+            stackTrace: _closeStackTrace,
           ),
         );
         continue;

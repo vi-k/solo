@@ -155,7 +155,7 @@ void main() {
     expect(caught.map((error) => '$error').toList(), ['Bad state: boom']);
   });
 
-  test('an error a late cancellation covers reaches the observer only once',
+  test('an error a late cancellation covers goes where an uncovered one goes',
       () {
     final journal = JobJournal();
     final caught = <Object>[];
@@ -182,10 +182,16 @@ void main() {
       },
       (error, stackTrace) => caught.add(error),
     );
-    expect(caught, isEmpty);
+    expect(
+      caught.map((error) => '$error').toList(),
+      ['Bad state: boom'],
+      reason: 'nobody looked at the outcome, so the zone hears — as it '
+          'does for a failure no cancellation covered',
+    );
     expect(
       journal.lines.where((line) => line.contains('error')).toList(),
       ['[job] error Bad state: boom'],
+      reason: 'and the observer hears once, not twice',
     );
   });
   test('a join the body walked away from puts no cancellation in the zone', () {

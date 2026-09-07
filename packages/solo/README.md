@@ -406,7 +406,9 @@ in subscription order, while the stream event is still on its way.
 ## Rules that are not visible in signatures
 
 `cancellable: false` protects a job from actors: a manual `cancel`, a
-`clear` without `force`, the cancellation of its parent, `close`. It does
+`clear` without `force`, the cancellation of its parent, and `close` once
+the job is running — `close` still drops it while it waits in the queue,
+because there is no body there to protect. It does
 not protect it from reality: if the state stopped matching `W` or
 `keepWhile`, the job is cancelled anyway, because there is nothing left for
 it to read. A non-cancellable job that must survive any state needs the
@@ -454,14 +456,15 @@ parent waits for, and a rule that throws instead of refusing ends the child
 with that error rather than leaving it behind.
 
 A rule that throws is caught wherever it is asked, and what happens next
-depends on where that was: in the queue the job ends `Failed` and the queue
-goes on; in a reevaluation after a state change the error goes to `onError`
-and the job runs on, because a rule that threw says nothing about whether
-it may; at the job's next read of the state the error is thrown into the
-body like any other. Every one of those reaches `onError` first, and from
-there the zone if nobody is watching. Rules are ordinary code of yours —
-they are not expected to throw, and the engine does not pretend they
-cannot.
+depends on where that was. In the queue the job ends `Failed` and the queue
+goes on: the error reaches `onError` and, if nobody looks at the outcome,
+the zone as well. At the job's next read of the state it is thrown into the
+body like any other error, and takes the body's own path from there. In a
+reevaluation after a state change it goes to `onError` and stops — the job
+runs on, because a rule that threw says nothing about whether it may, and
+`onError` in a controller is the end of the line. Rules are ordinary code
+of yours: they are not expected to throw, and the engine does not pretend
+they cannot.
 
 `add` on a closed controller does not throw. It returns a job that is
 already finished with `Cancelled(closed)`, so call sites need no

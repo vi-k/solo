@@ -50,6 +50,11 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     if (_solo._queue._jobs.contains(this)) {
       throw StateError('$this is queued and cannot be run as a child');
     }
+    // Adoption is the controller taking the handle, the same as `add`: from
+    // here nothing else may take it, and a rule of the child's own — asked
+    // a moment later, while the child is still `created` and in no list —
+    // must not be able to put it in the queue.
+    _added = true;
   }
 
   @override

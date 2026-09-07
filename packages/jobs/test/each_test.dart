@@ -219,7 +219,15 @@ void main() {
             ),
       );
       async.flushMicrotasks();
-      expect(caught, isA<StateError>());
+      expect(
+        caught,
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('cannot follow a stream'),
+        ),
+        reason: 'the message names what the caller asked for',
+      );
       expect(controller.hasListener, isFalse);
       controller.close().ignore();
     });
@@ -643,6 +651,87 @@ void main() {
       async.elapse(const Duration(milliseconds: 10));
       expect(thrown, isA<StateError>());
       expect(job.outcome, isA<Done<void>>());
+      controller.close().ignore();
+    });
+  });
+  test('an error from onListen with no events reaches the observer', () {
+    final caught = <Object>[];
+    final journal = JobJournal();
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          late StreamController<int> controller;
+          late Job<void> job;
+          controller = StreamController<int>.broadcast(
+            sync: true,
+            onListen: () {
+              // No event before it, so the error does not go through the
+              // buffer: it ends the wait before anyone is waiting.
+              controller.addError(StateError('source boom'));
+              job.cancel().ignore();
+            },
+          );
+          job = Job<void>(
+            key: 'job',
+            observer: journal,
+            (ctx) async => ctx.each(controller.stream, (event) {}),
+          )..ignore();
+          async.flushTimers();
+          controller.close().ignore();
+        });
+      },
+      (error, stackTrace) => caught.add(error),
+    );
+    expect(caught, isEmpty, reason: 'an error of the stream is not zone news');
+    expect(
+      journal.lines.where((line) => line.contains('error')).toList(),
+      ['[job] error Bad state: source boom'],
+    );
+  });
+
+  test('an event from an asynchronous onListen reaches no cancelled job', () {
+    fakeAsync((async) {
+      // The event is delivered after `listen` comes back but before the
+      // cancellation reaches the body: only the flag stands between the
+      // handler and a job that is already marked.
+      final seen = <int>[];
+      late StreamController<int> controller;
+      late Job<void> job;
+      controller = StreamController<int>(
+        onListen: () {
+          controller.add(1);
+          job.cancel().ignore();
+        },
+      );
+      job = Job<void>((ctx) async => ctx.each(controller.stream, seen.add))
+        ..ignore();
+      async.flushTimers();
+      expect(seen, isEmpty);
+      expect(job.outcome, isA<Cancelled>());
+      controller.close().ignore();
+    });
+  });
+
+  test('an event after an error of onListen never reaches onData either', () {
+    fakeAsync((async) {
+      // The same rule as on the ordinary path: after an error of the
+      // stream nothing else is delivered.
+      final seen = <int>[];
+      late StreamController<int> controller;
+      controller = StreamController<int>.broadcast(
+        sync: true,
+        onListen: () => controller
+          ..add(1)
+          ..addError(StateError('source boom'))
+          ..add(2),
+      );
+      final job = Job<void>((ctx) async {
+        await ctx.each(controller.stream, seen.add);
+      })
+        ..ignore();
+      async.flushTimers();
+      expect(seen, [1]);
+      expect(job.outcome, isA<Failed>());
       controller.close().ignore();
     });
   });

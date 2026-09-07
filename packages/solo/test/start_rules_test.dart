@@ -228,13 +228,110 @@ void main() {
       async.flushTimers();
     });
   });
+  test('a child whose own rule puts it in the queue is refused', () {
+    runSolo((solo, journal, async) {
+      // The child's rule runs while the parent is adopting it: the handle
+      // is taken, but nothing had said so yet.
+      Object? refused;
+      late SoloJob<void> child;
+      child = solo.job<Initial, void>(
+        key: 'child',
+        canStart: (state) {
+          try {
+            solo.add(child);
+          } on Object catch (error) {
+            refused = error;
+          }
+
+          return true;
+        },
+        (ctx) async {},
+      );
+      solo.run<Initial, void>(key: 'parent', (ctx) async {
+        ctx.run(child);
+        await pause(ctx, 10);
+      });
+      async.flushTimers();
+      expect(refused, isA<StateError>());
+      expect(child.isQueued, isFalse);
+      expect(solo.current, isNull);
+      expect(child.outcome, isA<Done<void>>());
+    });
+  });
+
+  test('a rule that closes the controller does not let the job start', () {
+    runSolo((solo, journal, async) {
+      final job = solo.job<Initial, void>(
+        key: 'closer',
+        canStart: (state) {
+          solo.close();
+
+          return true;
+        },
+        (ctx) async {},
+      );
+      solo.add(job);
+      async.flushTimers();
+      expect(
+        job.outcome,
+        isA<Cancelled>(),
+        reason: 'the controller closed while the rule was being asked',
+      );
+      expect(
+        journal.take().where((line) => line.contains('started')).toList(),
+        isEmpty,
+      );
+    });
+  });
+
+  test('a job put back from a policy hook is refused', () {
+    runSolo((solo, journal, async) {
+      // `replace` drops the job that was queued, and its finish hook runs
+      // while the incoming one is on its way into the queue.
+      Object? refused;
+      var once = true;
+      late SoloJob<void> incoming;
+      SoloBase.observer = _Retrier(
+        (solo, job) {
+          if (once && job.key == 'old') {
+            once = false;
+            try {
+              solo.add(incoming);
+            } on Object catch (error) {
+              refused = error;
+            }
+          }
+        },
+        alsoOnFinish: true,
+      );
+      solo
+        ..run<Initial, void>(key: 'blocker', (ctx) async => pause(ctx, 50))
+        ..add(
+          solo.job<Initial, void>(key: 'old', (ctx) async {}),
+        );
+      incoming = solo.job<Initial, void>(key: 'old', (ctx) async {});
+      solo.add(incoming, policy: Policy.replace);
+      async.flushTimers();
+      expect(refused, isA<StateError>());
+      expect(solo.queue.length, 0);
+      expect(solo.current, isNull);
+    });
+  });
 }
 
 /// Runs [_onError] from the observer's error hook.
 final class _Retrier extends SoloObserver {
   final void Function(SoloBase<Object> solo, Job<Object?> job) _onError;
+  final bool alsoOnFinish;
 
-  _Retrier(this._onError);
+  _Retrier(this._onError, {this.alsoOnFinish = false});
+
+  @override
+  void onFinish(SoloBase<Object> solo, Job<Object?> job) {
+    if (alsoOnFinish) {
+      _onError(solo, job);
+    }
+  }
 
   @override
   void onError(

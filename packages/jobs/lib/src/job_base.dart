@@ -581,6 +581,10 @@ abstract class JobBase<T> implements Job<T> {
       notifyError(error, stackTrace);
     }
     _notifyFinish();
+    // Nothing will call them: `cancelWith` turns around on a finished job.
+    // They hold whatever the body gave them — a subscription, a buffer, a
+    // token — for as long as anyone holds the handle.
+    _onCancel.clear();
     _done.complete(outcome);
     if (outcome is Failed && !_observed) {
       _reportUnobserved(outcome);
@@ -756,10 +760,15 @@ abstract class JobBase<T> implements Job<T> {
   /// [Cancelled] and the path that reports an unobserved [Failed] never
   /// runs. An observer has heard the error already, through
   /// [notifyObserver] where it was caught; without one it would be lost,
-  /// and an error is never lost silently. [Job.ignore] silences it as it
-  /// silences an unobserved failure — the same word for the same thing.
+  /// and an error is never lost silently. It goes on exactly the terms an
+  /// uncovered [Failed] would: only when nobody looked at the outcome, and
+  /// whether or not there is an observer — one hearing it through
+  /// [notifyObserver] does not settle where an error nobody handled
+  /// belongs, and an engine of a domain that puts an observer on every job
+  /// would otherwise silence this for good. [Job.ignore] silences it, as
+  /// it silences any other failure nobody wants.
   void _reportCovered(Failed outcome) {
-    if (_observer != null || _observed) {
+    if (_observed) {
       return;
     }
     _debug(() => '$this failure covered by a cancellation went to the zone');

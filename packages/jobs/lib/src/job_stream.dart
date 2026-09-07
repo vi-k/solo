@@ -38,6 +38,11 @@ extension JobStream on JobContext {
     Stream<T> stream,
     FutureOr<void> Function(T event) onData,
   ) async {
+    if (job.isFinished) {
+      // Said here rather than by the first registration below, which would
+      // name a member of the context the caller never mentioned.
+      throw StateError('$job has already finished, cannot follow a stream');
+    }
     final done = Completer<void>();
     // What the source hands out from inside `listen` itself — a
     // synchronous broadcast controller giving a newcomer what it has —
@@ -151,51 +156,65 @@ extension JobStream on JobContext {
     // above never runs.
     final undispose = onDispose(letGoOfStream);
     try {
-      sub = stream.listen(
-        (event) {
-          if (letGo) {
-            return;
-          }
-          if (sub == null) {
-            early.add(event);
-            return;
-          }
-          deliver(event);
-        },
-        onError: (Object error, StackTrace stackTrace) {
-          if (letGo) {
-            return;
-          }
-          if (sub == null && early.isNotEmpty) {
-            earlyError ??= error;
-            earlyStack ??= stackTrace;
-            return;
-          }
-          // Let go here rather than through `cancelOnError`: that one hands
-          // the error over only once the source has finished its own
-          // cleanup, and a source whose `onCancel` takes its time — or
-          // never comes back — would hold the error, and the body, for as
-          // long as it liked.
-          letGoOfStream();
-          fail(error, stackTrace);
-        },
-        onDone: () {
-          if (letGo) {
-            return;
-          }
-          if (sub == null && early.isNotEmpty) {
-            earlyDone = true;
-            return;
-          }
-          end();
-        },
-        // `false`, and the error path lets go by itself: see `onError`.
-        cancelOnError: false,
-      );
+      // The waiting starts before the stream does: a source that hands over
+      // an error from inside `listen` would otherwise end the wait before
+      // anything was waiting on it, and Dart would take that error to the
+      // zone instead of to the observer.
+      final waiting = wait(() => done.future);
+      try {
+        sub = stream.listen(
+          (event) {
+            if (letGo) {
+              return;
+            }
+            if (sub == null) {
+              // Nothing after an error of the stream, here as anywhere.
+              if (earlyError == null) {
+                early.add(event);
+              }
+              return;
+            }
+            deliver(event);
+          },
+          onError: (Object error, StackTrace stackTrace) {
+            if (letGo) {
+              return;
+            }
+            if (sub == null && early.isNotEmpty) {
+              earlyError ??= error;
+              earlyStack ??= stackTrace;
+              return;
+            }
+            // Let go here rather than through `cancelOnError`: that one
+            // hands the error over only once the source has finished its
+            // own cleanup, and a source whose `onCancel` takes its time —
+            // or never comes back — would hold the error, and the body,
+            // for as long as it liked.
+            letGoOfStream();
+            fail(error, stackTrace);
+          },
+          onDone: () {
+            if (letGo) {
+              return;
+            }
+            if (sub == null && early.isNotEmpty) {
+              earlyDone = true;
+              return;
+            }
+            end();
+          },
+          // `false`, and the error path lets go by itself: see `onError`.
+          cancelOnError: false,
+        );
+      } on Object {
+        // Nothing will ever complete the waiting now.
+        end();
+        rethrow;
+      }
       if (early.isNotEmpty) {
         unawaited(playBack());
       }
-      await wait(() => done.future);
+      await waiting;
     } finally {
       unregister();
       undispose();

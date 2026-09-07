@@ -15,10 +15,13 @@ enum Policy {
   droppable,
 
   /// Remove queued jobs with the same key, then append. The running job is
-  /// left alone.
+  /// left alone, and so is a queued job created with `cancellable: false`
+  /// — the removal is the one `SoloQueue.removeWhere` does without
+  /// `force`.
   replace,
 
   /// Like [replace], and also cancel the running job with the same key
-  /// without waiting for it.
+  /// without waiting for it — unless that one was created with
+  /// `cancellable: false`, which refuses.
   restart,
 }
