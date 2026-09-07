@@ -2,15 +2,20 @@ part of 'job_base.dart';
 
 /// What a job body sees in the core: cancellation, waiting and children.
 ///
-/// Every member except [log] and [job] refuses to run for a job already
-/// marked cancelled: it throws that [Cancelled]. What a cancellation
-/// arriving *during* a call does to that call is the call's own business —
-/// see [wait], [join] and [uncancellable].
+/// Every member except [log], [job], [onDispose] and [onDiscard] refuses to
+/// run for a job already marked cancelled: it throws that [Cancelled].
+/// What a cancellation arriving *during* a call does to that call is the
+/// call's own business — see [wait], [join] and [uncancellable].
 ///
 /// A context that outlived its job — captured by a closure nobody awaited
 /// — neither waits nor starts anything: [run], [wait], [join],
 /// [uncancellable] and [onCancel] throw a [StateError] once the job has
 /// finished. [check] and [log] stay legal.
+///
+/// While the engine cleans up after the body — after the children, before
+/// the outcome — the context of the body is closed: everything but [log],
+/// [job] and the registration of more cleanups throws a [StateError]. A
+/// disposer takes what it needs from its closure.
 abstract interface class JobContext {
   /// Gives up if the job was cancelled — in `solo`, also if its rules
   /// stopped holding.
@@ -228,7 +233,10 @@ abstract class JobContextBase implements JobContext {
   Job<Object?> get job => _owner;
 
   @override
-  void check() => throwIfCancelled();
+  void check() {
+    throwIfDisposing('check');
+    throwIfCancelled();
+  }
 
   /// The cancellation the job is marked with, or `null`.
   @protected
@@ -244,11 +252,26 @@ abstract class JobContextBase implements JobContext {
   }
 
   /// Throws [StateError] if the job has finished: a context that outlived
-  /// its job neither writes nor starts anything.
+  /// its job neither writes nor starts anything. Also throws while the
+  /// engine unwinds the cleanup stack — see [throwIfDisposing].
   @protected
   void throwIfFinished(String action) {
     if (_owner.isFinished) {
       throw StateError('$_owner has already finished, cannot $action');
+    }
+    throwIfDisposing(action);
+  }
+
+  /// Throws [StateError] while the engine unwinds the cleanup stack.
+  ///
+  /// The body is gone and the outcome is decided, so nothing of the body
+  /// runs any more: a disposer takes what it needs from its closure and
+  /// asks `job.isCancelled` about the outcome. Reads go through this one
+  /// alone — after the job has finished they stay legal, as they were.
+  @protected
+  void throwIfDisposing(String action) {
+    if (_owner.isDisposing) {
+      throw StateError('$_owner is disposing, cannot $action');
     }
   }
 
