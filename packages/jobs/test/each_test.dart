@@ -7,6 +7,7 @@ import 'package:fake_async/fake_async.dart';
 import 'package:jobs/jobs.dart';
 import 'package:test/test.dart';
 
+import 'support/delay.dart';
 import 'support/journal.dart';
 
 void main() {
@@ -249,6 +250,112 @@ void main() {
         1,
         reason: 'and the callback left with it, not with the job',
       );
+    });
+  });
+  test('the subscription leaves with a job that ended without a cancellation',
+      () {
+    fakeAsync((async) {
+      final controller = StreamController<int>();
+      final job = Job<void>((ctx) async {
+        // Followed in the background: the body walks away from the call, so
+        // nothing of `each` runs again once the body is over.
+        unawaited(ctx.each(controller.stream, (event) {}));
+        await ctx.wait(() => delay(10));
+      });
+      async.elapse(const Duration(milliseconds: 50));
+      expect(job.outcome, isA<Done<void>>());
+      expect(controller.hasListener, isFalse);
+      controller.close().ignore();
+    });
+  });
+
+  test('an asynchronous onData is waited for, one event at a time', () {
+    fakeAsync((async) {
+      final controller = StreamController<int>();
+      final seen = <String>[];
+      final job = Job<void>((ctx) async {
+        await ctx.each(controller.stream, (event) async {
+          seen.add('start $event');
+          await delay(10);
+          seen.add('end $event');
+        });
+      });
+      async.flushMicrotasks();
+      controller
+        ..add(1)
+        ..add(2);
+      unawaited(controller.close());
+      async.elapse(const Duration(milliseconds: 100));
+      expect(seen, ['start 1', 'end 1', 'start 2', 'end 2']);
+      expect(job.outcome, isA<Done<void>>());
+    });
+  });
+
+  test('an error from an asynchronous onData ends the wait too', () {
+    fakeAsync((async) {
+      final controller = StreamController<int>();
+      final job = Job<void>((ctx) async {
+        await ctx.each(controller.stream, (event) async {
+          await delay(10);
+          throw StateError('boom');
+        });
+      })
+        ..ignore();
+      async.flushMicrotasks();
+      controller.add(1);
+      async.elapse(const Duration(milliseconds: 100));
+      expect(job.outcome, isA<Failed>());
+      expect(controller.hasListener, isFalse);
+      controller.close().ignore();
+    });
+  });
+
+  test('an event after an error of the stream never reaches onData', () {
+    fakeAsync((async) {
+      final controller = StreamController<int>();
+      final seen = <int>[];
+      final job = Job<void>((ctx) async {
+        await ctx.each(controller.stream, seen.add);
+      })
+        ..ignore();
+      async.flushMicrotasks();
+      controller
+        ..addError(StateError('boom'))
+        ..add(1);
+      async.elapse(const Duration(milliseconds: 10));
+      expect(seen, isEmpty);
+      expect(job.outcome, isA<Failed>());
+      controller.close().ignore();
+    });
+  });
+
+  test('onData that cancels its own job leaves no error behind', () {
+    fakeAsync((async) {
+      final journal = JobJournal();
+      final controller = StreamController<int>();
+      late Job<void> job;
+      job = Job<void>(
+        key: 'job',
+        observer: journal,
+        (ctx) async {
+          await ctx.each(controller.stream, (event) {
+            // The cancellation lands first, and the checkpoint right after
+            // throws it: the wait ends by itself, and nothing here is an
+            // error of the job.
+            job.cancel().ignore();
+            ctx.check();
+          });
+        },
+      );
+      async.flushMicrotasks();
+      controller.add(1);
+      async.elapse(const Duration(milliseconds: 10));
+      expect(job.outcome, isA<Cancelled>());
+      expect(
+        journal.lines.where((line) => line.contains('error')).toList(),
+        isEmpty,
+      );
+      controller.close().ignore();
     });
   });
 }
