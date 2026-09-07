@@ -25,8 +25,10 @@ extension JobStream on JobContext {
   /// end the wait too and are thrown into the body, which can catch them
   /// like any others — for as long as the job holds the stream. Once it
   /// has let go, nothing from the stream is news any more, and an [onData]
-  /// still running when that happens fails to the job's observer instead,
-  /// as any covered failure does.
+  /// still running when that happens fails to whoever is left to take it:
+  /// to the job's observer when a cancellation covered the wait, as any
+  /// covered failure does, and otherwise to the future this call returns,
+  /// which a body that has left it behind no longer holds.
   ///
   /// An [onData] that returns a future is waited for, and delivery is held
   /// meanwhile: the events keep their order — whatever the source does,
@@ -47,9 +49,10 @@ extension JobStream on JobContext {
   /// A body that walks away from this call leaves what comes back to the
   /// job: the stream is let go of when the job's cleanup reaches this
   /// registration, and the future itself ends with the job's
-  /// cancellation, with a failure of the stream, or — for a job that ends
-  /// on its own — not at all. Quench it with `ignore`; left alone, what it
-  /// carries becomes the zone's.
+  /// cancellation, with a failure of the stream, with a handler of its own
+  /// failing after the job is over, or not at all. Quench it with
+  /// `ignore`; left alone, what it carries becomes the zone's, and
+  /// quenched, a failure that had nowhere else to go is gone with it.
   ///
   /// ```dart
   /// await ctx.each(hw.positions, (p) => ctx.log('at $p'));
@@ -94,6 +97,12 @@ extension JobStream on JobContext {
       // the source's own cleanup without a listener, and a cleanup that
       // fails would go from there to the zone, taking the program with
       // it. It is the source's business either way, this end of it too.
+      //
+      // This end of it, and no more: a source may route the same failure
+      // elsewhere by itself — a broadcast controller runs `onCancel`
+      // through `_runGuarded`, and one ending its stream hangs the cancel
+      // future off a branch of its own — and no listener here reaches
+      // those.
       sub?.cancel().ignore();
     }
 

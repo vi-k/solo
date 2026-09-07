@@ -897,6 +897,50 @@ void main() {
     expect(zone, isEmpty, reason: 'the observer took it');
   });
 
+  test('a handler failing after a job that ended on its own', () {
+    final zone = <Object>[];
+    final journal = JobJournal();
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          final handler = Completer<void>();
+          final body = Completer<void>();
+          final controller = StreamController<int>.broadcast(sync: true);
+          final job = Job<void>(
+            key: 'job',
+            observer: journal,
+            (ctx) async {
+              ctx.each(controller.stream, (_) => handler.future).ignore();
+              await ctx.wait(() => body.future);
+            },
+          )..ignore();
+          async.flushMicrotasks();
+          controller.add(1);
+          async.flushMicrotasks();
+          body.complete();
+          async.flushTimers();
+          expect(job.outcome, isA<Done<void>>());
+          expect(controller.hasListener, isFalse);
+          handler.completeError(StateError('late boom'));
+          async.flushTimers();
+          controller.close().ignore();
+        });
+      },
+      (error, stack) => zone.add(error),
+    );
+    expect(
+      journal.lines.where((line) => line.contains('error')),
+      isEmpty,
+      reason: 'no cancellation covered the wait, so the observer is not the '
+          'one left to take it',
+    );
+    expect(
+      zone,
+      isEmpty,
+      reason: 'it went to the future of the call, and that one was quenched',
+    );
+  });
+
   test('an error of a handler covered by the source cancelling the job', () {
     final journal = JobJournal();
     fakeAsync((async) {
