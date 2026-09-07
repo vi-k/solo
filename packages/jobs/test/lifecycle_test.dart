@@ -104,6 +104,27 @@ void main() {
     });
   });
 
+  test('a job finished by hand keeps its cleanup stack', () {
+    fakeAsync((async) {
+      final order = <String>[];
+      final job = ProbeJob<void>((ctx) async {
+        ctx.onDispose(() => order.add('cleanup'));
+        await ctx.wait(() => Future<void>.delayed(const Duration(seconds: 1)));
+      })
+        ..launch();
+      async.elapse(const Duration(milliseconds: 10));
+      // An engine of a domain ended the job itself: the outcome is not
+      // ours, nobody waited for the children, and the stack stays where it
+      // is — as the dartdoc of `finish` promises.
+      job
+        ..drop(const Done(null))
+        ..ignore();
+      async.flushTimers();
+      expect(order, isEmpty);
+      expect(job.outcome, isA<Done<void>>());
+    });
+  });
+
   test('start of a job cancelled before it ran throws', () {
     fakeAsync((async) {
       final job = Job.deferred<void>((ctx) async {})..cancel().ignore();

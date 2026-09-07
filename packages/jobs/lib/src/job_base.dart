@@ -104,6 +104,10 @@ abstract interface class Job<T> {
   bool get isFinished;
 
   /// Whether the job is marked cancelled, even if the body still runs.
+  ///
+  /// While the engine cleans up after the body it answers by the decided
+  /// outcome, so a disposer of a body that threw a [Cancelled] of its own
+  /// sees `true` here as well.
   bool get isCancelled;
 
   /// The outcome, or `null` until the job is finished.
@@ -127,8 +131,9 @@ abstract interface class Job<T> {
   ///
   /// For a running job, the moment it is marked cancelled, before the body
   /// finishes; for a job cancelled before it started, when it is dropped;
-  /// for a body that cancelled itself with `throw Cancelled(...)`, when the
-  /// job finishes, since nothing marked it beforehand.
+  /// for a body that cancelled itself with `throw Cancelled(...)`, once the
+  /// body has ended and its children are done — right before the cleanup,
+  /// since nothing marked it beforehand.
   ///
   /// A job that ends [Done] or [Failed] never completes it at all. Hang
   /// work on it with `then`, or race it against [done]; a bare
@@ -241,6 +246,8 @@ abstract class JobBase<T> implements Job<T> {
   JobStatus _status = JobStatus.created;
   Outcome<T>? _outcome;
   Cancelled? _pendingCancel;
+  bool _bodyEnded = false;
+  bool _disposing = false;
   int _level = 0;
 
   /// Creates a job that has not started yet.
@@ -401,6 +408,21 @@ abstract class JobBase<T> implements Job<T> {
   /// Where the job is in its life.
   @protected
   JobStatus get status => _status;
+
+  /// Whether the body has ended — returned or thrown.
+  ///
+  /// From this moment a value coming out of a call the body walked away
+  /// from can no longer reach it, and the rules of a domain have nothing
+  /// left to guard.
+  @protected
+  bool get bodyEnded => _bodyEnded;
+
+  /// Whether the engine is unwinding the cleanup stack.
+  ///
+  /// The body is gone and the outcome is decided, but the job has not
+  /// finished: [isFinished] is still `false`.
+  @protected
+  bool get isDisposing => _disposing;
 
   /// The cancellation the job is marked with, or `null`.
   @protected
@@ -591,7 +613,28 @@ abstract class JobBase<T> implements Job<T> {
       notifyObserver(error, stackTrace);
       outcome = Failed(error, stackTrace);
     }
+    // The body has ended: from here a value coming out of a call it walked
+    // away from can no longer reach it.
+    _bodyEnded = true;
     await _awaitChildren();
+    if (isFinished) {
+      // An engine of a domain ended the job by hand while the body was
+      // playing out: the outcome is not ours, the children were not waited
+      // for, and the stack stays where it is.
+      return;
+    }
+    // The outcome is decided. The cancellation goes in by a bare
+    // assignment and not through `_markCancelled`: that would run the
+    // `onCancel` callbacks and finish the waits the body walked away from
+    // with an error, where today they quietly get their value. After the
+    // children and not in the `catch`: until then `cancelWith` still has
+    // to cascade onto them, and a filled `_pendingCancel` stops it.
+    if (outcome is Cancelled) {
+      _pendingCancel ??= outcome;
+      if (!_cancelled.isCompleted) {
+        _cancelled.complete();
+      }
+    }
     // The window the body cannot close: between its `return` and the
     // engine's decision the job is still alive — it waits for its children
     // — and a cancellation arriving there beats a value already computed.
@@ -605,6 +648,7 @@ abstract class JobBase<T> implements Job<T> {
       }
     }
     if (_cleanups.isNotEmpty) {
+      _disposing = true;
       // The loop lives here and not in a method of its own: between the
       // last look at the stack and `finish` there must be no `await`, or
       // the window after `return` grows by a microtask.
@@ -628,6 +672,7 @@ abstract class JobBase<T> implements Job<T> {
           await _runCleanup(_cleanups.removeLast());
         }
       }
+      _disposing = false;
     }
     finish(_pendingCancel ?? outcome);
   }
