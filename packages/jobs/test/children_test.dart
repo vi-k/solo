@@ -406,7 +406,15 @@ void main() {
         });
       });
       async.elapse(const Duration(milliseconds: 10));
-      expect(thrown, isA<StateError>());
+      expect(
+        thrown,
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('has ended its body'),
+        ),
+        reason: 'the window of the body, not the one after the outcome',
+      );
       expect(parent.outcome, isA<Done<void>>());
     });
   });
@@ -449,6 +457,67 @@ void main() {
     fakeAsync((async) {
       final job = ProbeJob<void>((ctx) async {})..launch();
       expect(() => job.childrenList.add(job), throwsUnsupportedError);
+    });
+  });
+  test(
+      'a child started from a cancel callback of a self-cancelled body is '
+      'refused', () {
+    fakeAsync((async) {
+      // The same window as the cascade of an outside cancellation, on the
+      // path the body opens by giving itself up.
+      Object? thrown;
+      final parent = Job<void>((ctx) async {
+        ctx.run(
+          Job.deferred<void>(key: 'child', (child) async {
+            child.onCancel(() {
+              try {
+                ctx.run(
+                  Job.deferred<void>(
+                    key: 'late',
+                    (late) => late.wait(() => delay(50)),
+                  ),
+                );
+              } on Object catch (error) {
+                thrown = error;
+              }
+            });
+            await child.wait(() => delay(100));
+          }),
+        );
+        await ctx.wait(() => delay(10));
+        throw const Cancelled('enough');
+      })
+        ..ignore();
+      async.flushTimers();
+      expect(thrown, isA<StateError>());
+      expect(parent.outcome, isA<Cancelled>());
+    });
+  });
+
+  test('a child a throwing rule turned away never runs', () {
+    fakeAsync((async) {
+      final log = <String>[];
+      late Job<void> child;
+      final parent = ThrowingRulesJob<int>((ctx) async {
+        // An auto-starting job: left half-adopted it would start itself
+        // on its own microtask, under a parent that waits for nothing.
+        child = Job<void>(key: 'ghost', (c) async {
+          log.add('ghost started');
+          await c.wait(() => delay(50));
+        });
+        try {
+          ctx.run(child);
+        } on Object catch (error) {
+          log.add('run threw ${error.runtimeType}');
+        }
+
+        return 7;
+      })
+        ..launch();
+      async.flushTimers();
+      expect(log, ['run threw StateError']);
+      expect(child.outcome, isA<Failed>());
+      expect(parent.outcome, isA<Done<int>>());
     });
   });
 }

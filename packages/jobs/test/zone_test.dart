@@ -280,6 +280,61 @@ void main() {
     );
     expect(caught, isEmpty, reason: 'one microtask of grace, as Dart gives');
   });
+  test('a body that turns its cancellation into an error keeps it in hand', () {
+    // No observer: the zone is the only place such an error could land.
+    final caught = <Object>[];
+    late Job<void> job;
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          job = Job<void>((ctx) async {
+            try {
+              await ctx.wait(() => delay(100));
+            } on Cancelled {
+              // The device said no in its own words, as a real one does
+              // through the token it was handed.
+              throw StateError('device aborted');
+            }
+          });
+          async.elapse(const Duration(milliseconds: 10));
+          job.cancel().ignore();
+          async.flushTimers();
+        });
+      },
+      (error, stackTrace) => caught.add(error),
+    );
+    expect(
+      caught,
+      isEmpty,
+      reason: 'the job was already cancelled when the body threw',
+    );
+    expect(job.outcome, isA<Cancelled>());
+  });
+
+  test('ignore silences a failure a late cancellation covered', () {
+    final caught = <Object>[];
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          final job = Job<void>((ctx) async {
+            ctx.run(
+              Job.deferred<void>(
+                key: 'child',
+                (child) => child.wait(() => delay(50)),
+              ),
+            );
+            throw StateError('boom');
+          })
+            ..ignore();
+          async.elapse(const Duration(milliseconds: 10));
+          job.cancel().ignore();
+          async.flushTimers();
+        });
+      },
+      (error, stackTrace) => caught.add(error),
+    );
+    expect(caught, isEmpty);
+  });
 }
 
 /// Touches the outcome one microtask after the job finished.

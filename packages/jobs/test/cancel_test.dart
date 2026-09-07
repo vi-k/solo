@@ -337,18 +337,17 @@ void main() {
       // that still looked alive and started a job under an outcome that
       // was already decided.
       Object? thrown;
+      final late_ = Job.deferred<void>(
+        key: 'late',
+        (late) => late.wait(() => delay(50)),
+      );
       late Job<void> parent;
       parent = Job<void>((ctx) async {
         ctx.run(
           Job.deferred<void>(key: 'child', (child) async {
             child.onCancel(() {
               try {
-                ctx.run(
-                  Job.deferred<void>(
-                    key: 'late',
-                    (late) => late.wait(() => delay(50)),
-                  ),
-                );
+                ctx.run(late_);
               } on Object catch (error) {
                 thrown = error;
               }
@@ -364,6 +363,11 @@ void main() {
       async.flushTimers();
       expect(thrown, isA<Cancelled>());
       expect(parent.outcome, isA<Cancelled>());
+      expect(
+        late_.outcome,
+        isA<Cancelled>().having((c) => c.started, 'started', isFalse),
+        reason: 'the child went down with the refusal, it did not run',
+      );
     });
   });
 
@@ -448,6 +452,43 @@ void main() {
       async.flushTimers();
       expect(job.outcome, isA<Cancelled>());
       expect((job.outcome! as Cancelled).description, 'is not Ready');
+    });
+  });
+  test('an engine that finishes the job from a cancel callback', () {
+    fakeAsync((async) {
+      // The callbacks of the children run inside the cascade, and one of
+      // them reaches the engine of a domain, which ends the job by hand.
+      Object? thrown;
+      late ProbeJob<void> parent;
+      parent = ProbeJob<void>((ctx) async {
+        ctx.run(
+          Job.deferred<void>(key: 'child', (child) async {
+            child.onCancel(
+              () => parent.drop(
+                Cancelled.by(
+                  reason: CancelReason.manual,
+                  started: true,
+                  description: 'by the engine',
+                  stackTrace: StackTrace.current,
+                ),
+              ),
+            );
+            await child.wait(() => delay(100));
+          }),
+        );
+        await ctx.wait(() => delay(100));
+      })
+        ..ignore()
+        ..launch();
+      async.elapse(const Duration(milliseconds: 10));
+      try {
+        parent.cancel().ignore();
+      } on Object catch (error) {
+        thrown = error;
+      }
+      async.flushTimers();
+      expect(thrown, isNull);
+      expect((parent.outcome! as Cancelled).description, 'by the engine');
     });
   });
 }

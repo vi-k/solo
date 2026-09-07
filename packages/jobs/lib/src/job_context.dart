@@ -14,8 +14,11 @@ part of 'job_base.dart';
 /// A context that outlived its job — captured by a closure nobody awaited
 /// — neither waits nor starts nor registers anything: every member throws
 /// a [StateError] once the job has finished, except [check], [log] and
-/// [job]. The same holds while the engine unwinds the cleanup stack, where
-/// [check] throws it too.
+/// [job]. While the engine unwinds the cleanup stack the same holds for
+/// the members that wait or start something, and [check] throws a
+/// [StateError] there too — but [onDispose], [onDiscard] and [disown] go
+/// on working, because a value arriving that late is put on the stack the
+/// engine is unwinding.
 abstract interface class JobContext {
   /// Gives up if the job was cancelled — in `solo`, also if its rules
   /// stopped holding.
@@ -648,18 +651,26 @@ abstract class JobContextBase implements JobContext {
       throw pending;
     }
     // Everything that can refuse the child happens before it joins the
-    // waiting list, and the start itself takes it back out if it throws: a
-    // child that never runs is a child the parent would wait for forever.
-    final rejection = beforeChildStart(child);
-    if (rejection != null) {
-      child.finish(rejection);
-      return child;
-    }
-    _owner._children.add(child);
+    // waiting list, and a refusal that arrives as a throw — a rule of a
+    // domain, a context that would not be built — ends the child rather
+    // than leaving it be. By now it has a parent, a level and an observer,
+    // and a job like that, left alive, would start itself on its own
+    // microtask under a parent that waits for nothing. `ignore` first: the
+    // error is already on its way to the body through the rethrow, and one
+    // error is announced once.
     try {
+      final rejection = beforeChildStart(child);
+      if (rejection != null) {
+        child.finish(rejection);
+        return child;
+      }
+      _owner._children.add(child);
       child.start();
-    } on Object {
+    } on Object catch (error, stackTrace) {
       _owner._children.remove(child);
+      child
+        ..ignore()
+        ..finish(Failed(error, stackTrace));
       rethrow;
     }
     return child;

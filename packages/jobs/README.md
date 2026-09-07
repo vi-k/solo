@@ -158,7 +158,8 @@ says what a cancellation does to that call:
 
 - `ctx.wait(action)` ends the waiting, not the work. The action runs on,
   its result is dropped — or handed to the disposer it was given, which
-  runs late and alone: the job is over by then, and nothing waits for it.
+  runs on the cleanup stack while the job is still unwinding it, so the
+  closing of an engine waits for that too, and alone once the job is over.
 - `ctx.join(action)` waits for all of the action and gives up afterwards:
   a device command already on the wire is not abandoned halfway. Its
   disposer is awaited before the `Cancelled` is thrown, so whoever waits

@@ -415,6 +415,12 @@ abstract class JobBase<T> implements Job<T> {
         // order in which a cancellation is seen.
         _pendingCancel = marked;
         cascadeToChildren(marked);
+        if (_status == JobStatus.finished) {
+          // A callback of a child reached the engine of a domain, and it
+          // ended the job by hand: `whenCancelled` is closed already, and
+          // the callbacks below would run on a job that is over.
+          return;
+        }
         _markCancelled(marked);
     }
   }
@@ -658,28 +664,35 @@ abstract class JobBase<T> implements Job<T> {
 
   Future<void> _execute(JobContextBase ctx) async {
     Outcome<T> outcome;
+    // The body gave itself up: the children go, the same as they do for a
+    // job cancelled from outside. Not from inside the `catch`: the cascade
+    // runs the callbacks of the children, which is the caller's code, and
+    // it must find a parent that already refuses to start anything.
+    Cancelled? selfCancelled;
+    // Whether the body failed before anything marked the job. Only such a
+    // failure is a diagnosis the cancellation would swallow; one thrown
+    // *after* the mark is the body's own way of giving up, and its error
+    // belongs to the observer alone.
+    var failedFirst = false;
     try {
       outcome = Done(await execute(ctx));
     } on Cancelled catch (cancelled, stackTrace) {
       if (_pendingCancel case final pending?) {
         outcome = pending;
       } else {
-        final handled = _handlerCancel(cancelled, stackTrace);
-        outcome = handled;
-        // The body gave itself up, so nothing marked the job and nothing
-        // cascaded. The job stays unmarked on purpose — marking it here
-        // would wake the `onCancel` callbacks and fail the waits the body
-        // walked away from — but the children go, the same as they do for a
-        // job cancelled from outside.
-        cascadeToChildren(handled);
+        outcome = selfCancelled = _handlerCancel(cancelled, stackTrace);
       }
     } on Object catch (error, stackTrace) {
       notifyObserver(error, stackTrace);
       outcome = Failed(error, stackTrace);
+      failedFirst = _pendingCancel == null;
     }
     // The body has ended: from here a value coming out of a call it walked
-    // away from can no longer reach it.
+    // away from can no longer reach it, and no child is started any more.
     _bodyEnded = true;
+    if (selfCancelled != null) {
+      cascadeToChildren(selfCancelled);
+    }
     await _awaitChildren();
     if (isFinished) {
       // An engine of a domain ended the job by hand while the body was
@@ -731,7 +744,7 @@ abstract class JobBase<T> implements Job<T> {
       _disposing = false;
     }
     final decided = _pendingCancel ?? outcome;
-    if (outcome is Failed && !identical(decided, outcome)) {
+    if (failedFirst && outcome is Failed && !identical(decided, outcome)) {
       _reportCovered(outcome);
     }
     finish(decided);
@@ -743,9 +756,10 @@ abstract class JobBase<T> implements Job<T> {
   /// [Cancelled] and the path that reports an unobserved [Failed] never
   /// runs. An observer has heard the error already, through
   /// [notifyObserver] where it was caught; without one it would be lost,
-  /// and an error is never lost silently.
+  /// and an error is never lost silently. [Job.ignore] silences it as it
+  /// silences an unobserved failure — the same word for the same thing.
   void _reportCovered(Failed outcome) {
-    if (_observer != null) {
+    if (_observer != null || _observed) {
       return;
     }
     _debug(() => '$this failure covered by a cancellation went to the zone');
