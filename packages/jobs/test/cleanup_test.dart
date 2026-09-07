@@ -626,6 +626,31 @@ void main() {
       expect((job.outcome! as Failed).error, isA<ArgumentError>());
     });
   });
+  test('the discards a cancellation brings back keep the stack order', () {
+    fakeAsync((async) {
+      final order = <String>[];
+      final job = Job<int>((ctx) async {
+        // The slow `dispose` sits at the bottom of the stack, so both
+        // `discard` registrations come off first and are skipped while the
+        // outcome is still `Done`. The cancellation arrives during the slow
+        // one, and the second pass brings them back — in the order of the
+        // stack, not of the registrations.
+        ctx
+          ..onDispose(() async {
+            order.add('slow starts');
+            await delay(100);
+            order.add('slow ends');
+          })
+          ..onDiscard(() => order.add('below'))
+          ..onDiscard(() => order.add('top'));
+        return 7;
+      });
+      async.elapse(const Duration(milliseconds: 10));
+      job.cancel().ignore();
+      async.elapse(const Duration(milliseconds: 200));
+      expect(order, ['slow starts', 'slow ends', 'top', 'below']);
+    });
+  });
 }
 
 class _CollectingObserver extends JobObserver {

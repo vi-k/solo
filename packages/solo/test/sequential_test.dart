@@ -135,7 +135,7 @@ void main() {
       expect(plain.describe(), '');
       expect(plain.toString(), 'Job(a)');
       expect(described.toString(), 'Job(b: zoom: 2)');
-      expect(solo.job<TestState, void>((ctx) async {}).toString(), 'Job(null)');
+      expect(solo.job<TestState, void>((ctx) async {}).toString(), 'Job()');
     });
   });
 

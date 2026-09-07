@@ -301,4 +301,32 @@ void main() {
       expect(job.outcome, isA<Cancelled>());
     });
   });
+  test('a cancel callback of a child that cancels the parent is not an error',
+      () {
+    fakeAsync((async) {
+      // The cascade runs the callbacks of the children before the parent is
+      // marked, so a callback that comes back for the parent used to find a
+      // job that still looks uncancelled and mark it a second time.
+      Object? thrown;
+      late Job<void> parent;
+      parent = Job<void>((ctx) async {
+        ctx.run(
+          Job.deferred<void>(key: 'child', (child) async {
+            child.onCancel(() => parent.cancel().ignore());
+            await child.wait(() => delay(100));
+          }),
+        );
+        await ctx.wait(() => delay(100));
+      });
+      async.elapse(const Duration(milliseconds: 10));
+      try {
+        parent.cancel().ignore();
+      } on Object catch (error) {
+        thrown = error;
+      }
+      async.elapse(const Duration(milliseconds: 200));
+      expect(thrown, isNull);
+      expect(parent.outcome, isA<Cancelled>());
+    });
+  });
 }

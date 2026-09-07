@@ -606,6 +606,11 @@ abstract class JobContextBase implements JobContext {
   @override
   Job<T> run<T>(Job<T> child) {
     throwIfFinished('run a child');
+    if (_owner.bodyEnded) {
+      // The body is gone, and a child started now would be waited for by
+      // nobody: the engine has already left the children behind.
+      throw StateError('$_owner has ended its body, cannot run a child');
+    }
     if (child is! JobBase<T>) {
       throw ArgumentError.value(child, 'child', 'is not a job of this core');
     }
@@ -621,7 +626,6 @@ abstract class JobContextBase implements JobContext {
       .._observer ??= _owner._observer
       .._parent = _owner
       ..level = _owner.level + 1;
-    _owner.children.add(child);
     final pending = _owner.pendingCancel;
     if (pending != null) {
       child.cancelWith(
@@ -633,12 +637,21 @@ abstract class JobContextBase implements JobContext {
       );
       throw pending;
     }
+    // Everything that can refuse the child happens before it joins the
+    // waiting list, and the start itself takes it back out if it throws: a
+    // child that never runs is a child the parent would wait for forever.
     final rejection = beforeChildStart(child);
     if (rejection != null) {
       child.finish(rejection);
       return child;
     }
-    child.start();
+    _owner._children.add(child);
+    try {
+      child.start();
+    } on Object {
+      _owner._children.remove(child);
+      rethrow;
+    }
     return child;
   }
 

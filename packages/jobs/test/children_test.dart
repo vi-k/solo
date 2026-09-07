@@ -1,6 +1,8 @@
 @Timeout(Duration(seconds: 5))
 library;
 
+import 'dart:async';
+
 import 'package:fake_async/fake_async.dart';
 import 'package:jobs/jobs.dart';
 import 'package:test/test.dart';
@@ -352,6 +354,101 @@ void main() {
         ],
         reason: 'finished without a started of its own',
       );
+    });
+  });
+  test('a child whose start throws does not hang the parent', () {
+    fakeAsync((async) {
+      Object? caught;
+      final parent = Job<int>((ctx) async {
+        try {
+          ctx.run(UnstartableJob<void>(key: 'child'));
+        } on Object catch (error) {
+          caught = error;
+        }
+        return 7;
+      });
+      async.elapse(const Duration(milliseconds: 10));
+      expect(caught, isA<StateError>());
+      expect(parent.outcome, isA<Done<int>>());
+    });
+  });
+
+  test('a start rule that throws does not hang the parent', () {
+    fakeAsync((async) {
+      Object? caught;
+      final parent = ThrowingRulesJob<int>((ctx) async {
+        try {
+          ctx.run(Job.deferred<void>(key: 'child', (child) async {}));
+        } on Object catch (error) {
+          caught = error;
+        }
+        return 7;
+      })
+        ..launch();
+      async.elapse(const Duration(milliseconds: 10));
+      expect(caught, isA<StateError>());
+      expect(parent.outcome, isA<Done<int>>());
+    });
+  });
+
+  test('a child started after the body has ended is refused', () {
+    fakeAsync((async) {
+      Object? thrown;
+      final parent = Job<void>((ctx) async {
+        scheduleMicrotask(() {
+          scheduleMicrotask(() {
+            try {
+              ctx.run(Job.deferred<void>(key: 'late', (child) async {}));
+            } on Object catch (error) {
+              thrown = error;
+            }
+          });
+        });
+      });
+      async.elapse(const Duration(milliseconds: 10));
+      expect(thrown, isA<StateError>());
+      expect(parent.outcome, isA<Done<void>>());
+    });
+  });
+
+  test('a body that cancels itself cancels its children', () {
+    fakeAsync((async) {
+      late Job<void> child;
+      final parent = Job<void>((ctx) async {
+        child = ctx.run(
+          Job.deferred<void>(key: 'child', (c) => c.wait(() => delay(100))),
+        );
+        await ctx.wait(() => delay(10));
+        throw const Cancelled('enough');
+      });
+      async.elapse(const Duration(milliseconds: 20));
+      expect(child.outcome, isA<Cancelled>());
+      expect(parent.outcome, isA<Cancelled>());
+    });
+  });
+
+  test('a body that fails leaves its children alone', () {
+    fakeAsync((async) {
+      late Job<void> child;
+      final parent = Job<void>((ctx) async {
+        child = ctx.run(
+          Job.deferred<void>(key: 'child', (c) => c.wait(() => delay(100))),
+        );
+        await ctx.wait(() => delay(10));
+        throw StateError('boom');
+      })
+        ..ignore();
+      async.elapse(const Duration(milliseconds: 20));
+      expect(child.outcome, isNull);
+      async.elapse(const Duration(milliseconds: 200));
+      expect(child.outcome, isA<Done<void>>());
+      expect(parent.outcome, isA<Failed>());
+    });
+  });
+  test('the waiting list a subclass sees cannot be changed by hand', () {
+    fakeAsync((async) {
+      final job = ProbeJob<void>((ctx) async {})..launch();
+      expect(() => job.childrenList.add(job), throwsUnsupportedError);
     });
   });
 }

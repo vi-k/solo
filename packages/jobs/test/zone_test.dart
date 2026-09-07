@@ -130,4 +130,62 @@ void main() {
     );
     expect(caught, isEmpty, reason: 'an observer takes the whole path');
   });
+  test('an error a late cancellation covers still reaches the zone', () {
+    final caught = <Object>[];
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          final job = Job<void>((ctx) async {
+            ctx.run(
+              Job.deferred<void>(
+                key: 'child',
+                (child) => child.wait(() => delay(50)),
+              ),
+            );
+            throw StateError('boom');
+          });
+          async.elapse(const Duration(milliseconds: 10));
+          job.cancel().ignore();
+          async.elapse(const Duration(milliseconds: 100));
+          expect(job.outcome, isA<Cancelled>());
+        });
+      },
+      (error, stackTrace) => caught.add(error),
+    );
+    expect(caught.map((error) => '$error').toList(), ['Bad state: boom']);
+  });
+
+  test('an error a late cancellation covers reaches the observer only once',
+      () {
+    final journal = JobJournal();
+    final caught = <Object>[];
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          final job = Job<void>(
+            key: 'job',
+            observer: journal,
+            (ctx) async {
+              ctx.run(
+                Job.deferred<void>(
+                  key: 'child',
+                  (child) => child.wait(() => delay(50)),
+                ),
+              );
+              throw StateError('boom');
+            },
+          );
+          async.elapse(const Duration(milliseconds: 10));
+          job.cancel().ignore();
+          async.elapse(const Duration(milliseconds: 100));
+        });
+      },
+      (error, stackTrace) => caught.add(error),
+    );
+    expect(caught, isEmpty);
+    expect(
+      journal.lines.where((line) => line.contains('error')).toList(),
+      ['[job] error Bad state: boom'],
+    );
+  });
 }

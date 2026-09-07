@@ -9,6 +9,9 @@ final class ProbeJob<T> extends JobBase<T> {
   /// How many children are still being waited for.
   int get childCount => children.length;
 
+  /// The waiting list itself, as a subclass of the core sees it.
+  List<JobBase<Object?>> get childrenList => children;
+
   /// Starts the body the way an engine of a domain would.
   void launch() => start();
 
@@ -79,4 +82,66 @@ final class RefusingContext extends JobContextBase {
         // keys its Expando by the outcome itself.
         stackTrace: StackTrace.current,
       );
+}
+
+/// A job of the core whose context refuses to be built.
+///
+/// Stands in for an engine of a domain whose [JobBase.createContext]
+/// throws: the child never starts, and the parent must not wait for it.
+final class UnstartableJob<T> extends JobBase<T> {
+  UnstartableJob({super.key});
+
+  @override
+  JobContextBase createContext() => throw StateError('no context');
+
+  @override
+  Future<T> execute(covariant ProbeContext ctx) async =>
+      throw StateError('never runs');
+}
+
+/// A job whose context throws when a child asks to start.
+///
+/// Stands in for a rule of a domain — `canStart` in `solo` — that throws
+/// instead of turning the child away.
+final class ThrowingRulesJob<T> extends JobBase<T> {
+  final Future<T> Function(JobContext ctx) _body;
+
+  ThrowingRulesJob(this._body, {super.key});
+
+  /// Starts the body the way an engine of a domain would.
+  void launch() => start();
+
+  @override
+  JobContextBase createContext() => ThrowingRulesContext(this);
+
+  @override
+  Future<T> execute(covariant ThrowingRulesContext ctx) => _body(ctx);
+}
+
+/// The context of [ThrowingRulesJob].
+final class ThrowingRulesContext extends JobContextBase {
+  ThrowingRulesContext(super.owner);
+
+  @override
+  Cancelled? beforeChildStart(JobBase<Object?> child) =>
+      throw StateError('rule failed');
+}
+
+/// A job whose `finished` hook throws, the way an engine of a domain can.
+final class FailingHookJob<T> extends JobBase<T> {
+  final Future<T> Function(JobContext ctx) _body;
+
+  FailingHookJob(this._body, {super.key, super.observer});
+
+  /// Starts the body the way an engine of a domain would.
+  void launch() => start();
+
+  @override
+  void finished() => throw StateError('hook failed');
+
+  @override
+  JobContextBase createContext() => ProbeContext(this);
+
+  @override
+  Future<T> execute(covariant ProbeContext ctx) => _body(ctx);
 }

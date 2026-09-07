@@ -146,8 +146,14 @@ void main() {
       expect(described.toString(), 'Job(zoom: x2)');
       expect(
         Job.deferred<void>((ctx) async {}).toString(),
-        'Job(null)',
-        reason: 'a job without a key still prints',
+        'Job()',
+        reason: 'a job without a key prints no null',
+      );
+      expect(
+        Job.deferred<void>(describe: () => 'what it does', (ctx) async {})
+            .toString(),
+        'Job(what it does)',
+        reason: 'a description stands in for the key it has not got',
       );
     });
   });
@@ -204,6 +210,25 @@ void main() {
         journal.take().where((line) => line.contains('finished')).toList(),
         ['[job] finished Done(99)'],
         reason: 'announced once, and the body did not overwrite it',
+      );
+    });
+  });
+  test('a finished hook that throws still lets the job finish', () {
+    fakeAsync((async) {
+      final journal = JobJournal();
+      var done = false;
+      final job = FailingHookJob<int>(
+        key: 'job',
+        observer: journal,
+        (ctx) async => 7,
+      )..launch();
+      job.done.then((_) => done = true).ignore();
+      async.flushMicrotasks();
+      expect(done, isTrue);
+      expect(job.outcome, isA<Done<int>>());
+      expect(
+        journal.lines.where((line) => line.contains('error')).toList(),
+        ['[job] error Bad state: hook failed'],
       );
     });
   });

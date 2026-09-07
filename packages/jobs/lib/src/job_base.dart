@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 
 import 'package:meta/meta.dart';
 
@@ -386,18 +387,34 @@ abstract class JobBase<T> implements Job<T> {
           return;
         }
         _debug(() => 'cancel $this: $marked');
-        // Children first, deepest last started first, and the cascade is
-        // rejectable: a child of its own mind refuses it.
-        for (final child in _children.reversed.toList()) {
-          child.cancelWith(
-            Cancelled.by(
-              reason: CancelReason.parent,
-              started: true,
-              stackTrace: marked.stackTrace,
-            ),
-          );
-        }
+        // Marked before the cascade, and only marked: a callback of a child
+        // may come back for this job, and the early return above is the only
+        // thing that stops it from cascading and marking a second time.
+        // What the marking brings with it — `whenCancelled` and the
+        // callbacks — still waits for the children, because `solo` pins the
+        // order in which a cancellation is seen.
+        _pendingCancel = marked;
+        cascadeToChildren(marked);
         _markCancelled(marked);
+    }
+  }
+
+  /// Cancels every child of this job, deepest last started first.
+  ///
+  /// The cascade is rejectable: a child created with `cancellable: false`
+  /// refuses it. It carries [cancelled]'s stack trace and none of its
+  /// other details — a child is cancelled by its parent, whatever moved
+  /// the parent.
+  @protected
+  void cascadeToChildren(Cancelled cancelled) {
+    for (final child in _children.reversed.toList()) {
+      child.cancelWith(
+        Cancelled.by(
+          reason: CancelReason.parent,
+          started: true,
+          stackTrace: cancelled.stackTrace,
+        ),
+      );
     }
   }
 
@@ -457,9 +474,13 @@ abstract class JobBase<T> implements Job<T> {
   @protected
   set level(int value) => _level = value;
 
-  /// The children this job waits for.
+  /// The children this job waits for; read-only.
+  ///
+  /// The way in is [JobContext.run] alone: it sets the parent, the level
+  /// and the observer of the child, and nothing else may put a job on this
+  /// list — the engine would wait for a child it never adopted.
   @protected
-  List<JobBase<Object?>> get children => _children;
+  List<JobBase<Object?>> get children => UnmodifiableListView(_children);
 
   /// Waiting without observing: an engine waits for a job to finish
   /// without marking its outcome observed, so a failure nobody looked at
@@ -495,7 +516,8 @@ abstract class JobBase<T> implements Job<T> {
   /// Ending a job that is still running is not a way to cancel it: this
   /// waits for no children and unwinds no cleanup stack, so everything the
   /// body opened stays open. Cancel with [cancelWith] instead, and let the
-  /// body unwind; the cleanups left behind are named in the debug trace.
+  /// body unwind; how many cleanups were left behind is in the debug
+  /// trace.
   @protected
   void finish(Outcome<T> outcome) {
     if (_status == JobStatus.finished) {
@@ -524,7 +546,14 @@ abstract class JobBase<T> implements Job<T> {
         parent._outcomeChild[outcome] = this;
       }
     }
-    finished();
+    // Guarded: the hook belongs to an engine of a domain, and its error
+    // must not stand between the job and its outcome — an unfinished job
+    // holds its parent, its waiters and the engine itself forever.
+    try {
+      finished();
+    } on Object catch (error, stackTrace) {
+      notifyError(error, stackTrace);
+    }
     _notifyFinish();
     _done.complete(outcome);
     if (outcome is Failed && !_observed) {
@@ -574,6 +603,9 @@ abstract class JobBase<T> implements Job<T> {
   ///
   /// Called for every job that gets an outcome, including one dropped
   /// before its body ever ran — then there was no [started] to match it.
+  /// An error thrown here goes to `onError` and the job finishes all the
+  /// same, but the engine of the domain is left half-way through its own
+  /// bookkeeping: keep it short and unconditional.
   @protected
   void finished() {}
 
@@ -609,7 +641,18 @@ abstract class JobBase<T> implements Job<T> {
     try {
       outcome = Done(await execute(ctx));
     } on Cancelled catch (cancelled, stackTrace) {
-      outcome = _pendingCancel ?? _handlerCancel(cancelled, stackTrace);
+      if (_pendingCancel case final pending?) {
+        outcome = pending;
+      } else {
+        final handled = _handlerCancel(cancelled, stackTrace);
+        outcome = handled;
+        // The body gave itself up, so nothing marked the job and nothing
+        // cascaded. The job stays unmarked on purpose — marking it here
+        // would wake the `onCancel` callbacks and fail the waits the body
+        // walked away from — but the children go, the same as they do for a
+        // job cancelled from outside.
+        cascadeToChildren(handled);
+      }
     } on Object catch (error, stackTrace) {
       notifyObserver(error, stackTrace);
       outcome = Failed(error, stackTrace);
@@ -655,15 +698,38 @@ abstract class JobBase<T> implements Job<T> {
         }
         await _runCleanup(cleanup);
       }
+      // `removeAt(0)`, not `removeLast`: the skipped registrations were
+      // collected in the order they came off the stack, and that is the
+      // order they run in — the top one first, as if they had never been
+      // put aside.
       while (skipped.isNotEmpty && (_pendingCancel ?? outcome) is! Done<T>) {
-        await _runCleanup(skipped.removeLast());
+        await _runCleanup(skipped.removeAt(0));
         while (_cleanups.isNotEmpty) {
           await _runCleanup(_cleanups.removeLast());
         }
       }
       _disposing = false;
     }
-    finish(_pendingCancel ?? outcome);
+    final decided = _pendingCancel ?? outcome;
+    if (outcome is Failed && !identical(decided, outcome)) {
+      _reportCovered(outcome);
+    }
+    finish(decided);
+  }
+
+  /// Hands an error the outcome no longer carries to the zone.
+  ///
+  /// The body failed and a cancellation arrived afterwards, so the job ends
+  /// [Cancelled] and the path that reports an unobserved [Failed] never
+  /// runs. An observer has heard the error already, through
+  /// [notifyObserver] where it was caught; without one it would be lost,
+  /// and an error is never lost silently.
+  void _reportCovered(Failed outcome) {
+    if (_observer != null) {
+      return;
+    }
+    _debug(() => '$this failure covered by a cancellation went to the zone');
+    _zone.handleUncaughtError(outcome.error, outcome.stackTrace);
   }
 
   /// Runs one registration; its error belongs to `onError` and ends there.
@@ -724,12 +790,21 @@ abstract class JobBase<T> implements Job<T> {
     });
   }
 
+  /// Lets everyone waiting know, after [cancelWith] has marked the job.
+  ///
+  /// Guarded against a second pass: a callback may cancel this job again
+  /// through a path of its own, and an outcome that arrived meanwhile
+  /// leaves nothing to complete.
   void _markCancelled(Cancelled cancelled) {
     _pendingCancel = cancelled;
+    if (_cancelled.isCompleted) {
+      return;
+    }
     _cancelled.complete();
-    // In registration order, and from a copy: a callback may register or
-    // remove another one. `JobContext.onCancel` wraps the caller's
-    // callbacks, so an error of theirs never reaches this loop.
+    // In registration order, and from a copy: a callback may register
+    // another one, and one it removes still runs. `JobContext.onCancel`
+    // wraps the caller's callbacks, so an error of theirs never reaches
+    // this loop.
     for (final callback in _onCancel.toList()) {
       callback();
     }
@@ -739,6 +814,12 @@ abstract class JobBase<T> implements Job<T> {
   @override
   String toString() {
     final description = describe();
+    final key = _key;
+    if (key == null) {
+      // Not `Job(null)`: a job without a key has no name to print, and a
+      // `null` in every error message reads as a defect of its own.
+      return 'Job($description)';
+    }
     return description.isEmpty ? 'Job($key)' : 'Job($key: $description)';
   }
 }
