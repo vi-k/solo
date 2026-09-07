@@ -501,6 +501,151 @@ void main() {
       controller.close().ignore();
     });
   });
+  test('a cancellation stops the playback of the early events', () {
+    fakeAsync((async) {
+      final seen = <String>[];
+      late StreamController<int> controller;
+      controller = StreamController<int>.broadcast(
+        sync: true,
+        onListen: () => controller
+          ..add(1)
+          ..add(2)
+          ..add(3),
+      );
+      late Job<void> job;
+      job = Job<void>((ctx) async {
+        await ctx.each(controller.stream, (event) async {
+          seen.add('start $event');
+          await delay(10);
+          seen.add('end $event');
+        });
+      })
+        ..ignore();
+      async.elapse(const Duration(milliseconds: 5));
+      job.cancel().ignore();
+      async.flushTimers();
+      expect(
+        seen,
+        ['start 1', 'end 1'],
+        reason: 'the handler in flight finishes, the rest is not delivered',
+      );
+      expect(job.outcome, isA<Cancelled>());
+      controller.close().ignore();
+    });
+  });
+
+  test('a job cancelled from onListen delivers nothing at all', () {
+    fakeAsync((async) {
+      final seen = <int>[];
+      late StreamController<int> controller;
+      late Job<void> job;
+      controller = StreamController<int>.broadcast(
+        sync: true,
+        onListen: () {
+          controller
+            ..add(1)
+            ..add(2);
+          job.cancel().ignore();
+        },
+      );
+      job = Job<void>((ctx) async {
+        await ctx.each(controller.stream, seen.add);
+      })
+        ..ignore();
+      async.flushTimers();
+      expect(
+        seen,
+        isEmpty,
+        reason: 'the body learns of a cancellation before the handler does',
+      );
+      expect(job.outcome, isA<Cancelled>());
+      controller.close().ignore();
+    });
+  });
+
+  test('an early error of a released stream reaches nobody', () {
+    final caught = <Object>[];
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          late StreamController<int> controller;
+          late Job<void> job;
+          controller = StreamController<int>.broadcast(
+            sync: true,
+            onListen: () {
+              controller
+                ..add(1)
+                ..addError(StateError('source boom'));
+              job.cancel().ignore();
+            },
+          );
+          job = Job<void>((ctx) async {
+            await ctx.each(controller.stream, (event) {});
+          })
+            ..ignore();
+          async.flushTimers();
+          controller.close().ignore();
+        });
+      },
+      (error, stackTrace) => caught.add(error),
+    );
+    expect(
+      caught,
+      isEmpty,
+      reason: 'a released subscription drops what was still on its way',
+    );
+  });
+
+  test('the playback stops when the job the body walked away from ends', () {
+    fakeAsync((async) {
+      final seen = <String>[];
+      late StreamController<int> controller;
+      controller = StreamController<int>.broadcast(
+        sync: true,
+        onListen: () => controller
+          ..add(1)
+          ..add(2)
+          ..add(3),
+      );
+      final job = Job<void>((ctx) async {
+        ctx.each(controller.stream, (event) async {
+          seen.add('start $event');
+          await delay(10);
+        }).ignore();
+        await ctx.wait(() => delay(5));
+      })
+        ..ignore();
+      async.flushTimers();
+      expect(seen, ['start 1']);
+      expect(job.outcome, isA<Done<void>>());
+      controller.close().ignore();
+    });
+  });
+  test('an error arrives without waiting for the source to clean up', () {
+    fakeAsync((async) {
+      // `onCancel` of a source may take as long as it likes, and may never
+      // come back at all: that is the source's own business, and the body
+      // does not wait for it.
+      Object? thrown;
+      final controller = StreamController<int>(
+        onCancel: () => Completer<void>().future,
+      );
+      final job = Job<void>((ctx) async {
+        try {
+          await ctx.each(controller.stream, (event) {});
+        } on Object catch (error) {
+          thrown = error;
+        }
+      })
+        ..ignore();
+      async.flushMicrotasks();
+      controller.addError(StateError('source boom'));
+      async.elapse(const Duration(milliseconds: 10));
+      expect(thrown, isA<StateError>());
+      expect(job.outcome, isA<Done<void>>());
+      controller.close().ignore();
+    });
+  });
 }
 
 /// A stream that counts how many times its subscription is cancelled.

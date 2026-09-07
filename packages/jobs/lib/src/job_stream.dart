@@ -55,6 +55,16 @@ extension JobStream on JobContext {
     Object? earlyError;
     StackTrace? earlyStack;
     StreamSubscription<T>? sub;
+    // Whether the stream has been let go of. A cancelled subscription
+    // drops what was still on its way to it; the buffer below is not the
+    // subscription's, so it needs telling — otherwise a job that has been
+    // cancelled, or has finished, goes on calling the handler.
+    var letGo = false;
+
+    void letGoOfStream() {
+      letGo = true;
+      unawaited(sub?.cancel());
+    }
 
     void end() {
       if (!done.isCompleted) {
@@ -69,9 +79,9 @@ extension JobStream on JobContext {
     }
 
     void thrown(Object error, StackTrace stackTrace) {
-      // The subscription goes first: nothing else is delivered, so a
-      // handler that threw is never called again.
-      unawaited(sub?.cancel());
+      // The stream goes first: nothing else is delivered, so a handler
+      // that threw is never called again.
+      letGoOfStream();
       // A cancellation from the context has already marked the job, and the
       // wait below throws it by itself. A body cancelling itself with
       // `throw Cancelled(...)` has not: without this the stream is gone,
@@ -101,7 +111,7 @@ extension JobStream on JobContext {
     Future<void> playBack() async {
       sub!.pause();
       try {
-        while (early.isNotEmpty) {
+        while (early.isNotEmpty && !letGo) {
           try {
             await onData(early.removeAt(0));
           } on Object catch (error, stackTrace) {
@@ -109,15 +119,21 @@ extension JobStream on JobContext {
             return;
           }
         }
+        if (letGo) {
+          // Everything left here belonged to a stream nobody holds any
+          // more, the end of it and its error included.
+          return;
+        }
         if (earlyError case final error?) {
+          letGoOfStream();
           fail(error, earlyStack ?? StackTrace.current);
         } else if (earlyDone) {
           end();
         }
       } finally {
-        // Not after the wait is over: the subscription is gone by then,
-        // and there is nothing left to let through.
-        if (!done.isCompleted) {
+        // Not after the wait is over, and not on a stream already let go
+        // of: there is nothing left to let through.
+        if (!letGo && !done.isCompleted) {
           sub.resume();
         }
       }
@@ -129,14 +145,17 @@ extension JobStream on JobContext {
     // before `listen` comes back — a stream that cancels the job as it is
     // listened to — and then there is nothing to cancel yet: the `finally`
     // below takes care of it.
-    final unregister = onCancel(() => sub?.cancel());
+    final unregister = onCancel(letGoOfStream);
     // On the stack as well: a body that walks away from this call leaves a
     // job that may end without ever being marked, and then the callback
     // above never runs.
-    final undispose = onDispose(() => unawaited(sub?.cancel()));
+    final undispose = onDispose(letGoOfStream);
     try {
       sub = stream.listen(
         (event) {
+          if (letGo) {
+            return;
+          }
           if (sub == null) {
             early.add(event);
             return;
@@ -144,21 +163,34 @@ extension JobStream on JobContext {
           deliver(event);
         },
         onError: (Object error, StackTrace stackTrace) {
+          if (letGo) {
+            return;
+          }
           if (sub == null && early.isNotEmpty) {
             earlyError ??= error;
             earlyStack ??= stackTrace;
             return;
           }
+          // Let go here rather than through `cancelOnError`: that one hands
+          // the error over only once the source has finished its own
+          // cleanup, and a source whose `onCancel` takes its time — or
+          // never comes back — would hold the error, and the body, for as
+          // long as it liked.
+          letGoOfStream();
           fail(error, stackTrace);
         },
         onDone: () {
+          if (letGo) {
+            return;
+          }
           if (sub == null && early.isNotEmpty) {
             earlyDone = true;
             return;
           }
           end();
         },
-        cancelOnError: true,
+        // `false`, and the error path lets go by itself: see `onError`.
+        cancelOnError: false,
       );
       if (early.isNotEmpty) {
         unawaited(playBack());
@@ -171,7 +203,7 @@ extension JobStream on JobContext {
       // future is the source's own cleanup, which this job does not own.
       // Awaiting it would also park the body forever under `FakeAsync`,
       // where a subscription's cancel future belongs to the root zone.
-      unawaited(sub?.cancel());
+      letGoOfStream();
     }
   }
 }
