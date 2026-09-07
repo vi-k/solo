@@ -253,9 +253,8 @@ Job<void> load() => run<Idle, void>(
       (ctx) async {
         final db = await ctx.join(
           Database.open,
-          discard: (db) => db.close(),
+          dispose: (db) => db.close(),
         );
-        ctx.onDispose(db.close);
 
         final rows = await ctx.join(db.readAll);
         ctx.emit(Loaded(rows));
@@ -263,14 +262,19 @@ Job<void> load() => run<Idle, void>(
     );
 ```
 
-`discard` on the call covers the value that never reached the body — a
-cancellation throws inside the context call, so `join` would otherwise
-drop it and `wait` never had it at all. `onDispose` covers the rest of the
-job: an error, a cancellation between two steps, a cancellation landing
-after the `return`. Use `onDiscard` instead for a value the body returns
-or hands outside, and `dispose`/`onDispose` for everything else — a
-`discard` on a resource that stays inside the body does nothing on the
-successful path, and that leak is the one mistake the engine cannot catch.
+One line covers the whole life of that database: the value that never
+reached the body — a cancellation throws inside the context call, so
+`join` would otherwise drop it and `wait` never had it at all — and
+everything after it, an error, a cancellation between two steps, a
+cancellation landing after the `return`. **One value, one registration:**
+a `ctx.onDispose(db.close)` next to it would be a second one, and the
+database would be closed twice.
+
+`dispose` here and not `discard` because this body keeps the database to
+itself: it reads the rows, emits them and closes on the way out, whatever
+the outcome. `discard` is for a value the body returns or hands outside —
+on the successful path it does nothing, and that leak is the one mistake
+the engine cannot catch.
 
 An ordinary `try`/`finally` still works, but it is no longer the main
 form; the stack scales to several resources, unwinds in reverse, runs

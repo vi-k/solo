@@ -51,7 +51,6 @@ final job = Job<Database>((ctx) async {
     Database.open,
     discard: (database) => database.close(),
   );
-  ctx.onDiscard(database.close);
 
   await ctx.join(database.migrate);
   await ctx.uncancellable(database.markReady);
@@ -75,14 +74,15 @@ Line by line, because every one of them is a decision:
   `started: false`, and none of the body runs at all.
 - **`ctx.join(Database.open)`** and not `ctx.wait`: an open that is
   already under way is not abandoned halfway, or the database would be
-  opened with nobody left holding it. Its `discard` closes exactly that —
-  the database that came back after the job had already given up.
-- **`ctx.onDiscard(database.close)`** says the same thing for the rest of
-  the job, in one line and once: whatever happens from here — a
-  cancellation between two steps, an error inside one, a cancellation
-  landing after the `return` — the database is closed unless it reaches
-  the caller. No `try`, no `finally`, nothing to remember before the
-  `return`. See [Cleanup](#cleanup).
+  opened with nobody left holding it.
+- **`discard: (database) => database.close()`** covers the whole life of
+  that database in one line and once. Not only the value that came back
+  after the job had given up — everything after it too: a cancellation
+  between two steps, an error inside one, a cancellation landing after the
+  `return`. The database is closed unless it reaches the caller. No `try`,
+  no `finally`, nothing to remember before the `return`, and nothing to
+  register a second time — one value, one registration. See
+  [Cleanup](#cleanup).
 - **`ctx.join(database.migrate)`** for the same reason as the open: a
   migration already writing must not be walked away from. `ctx.wait`
   would end the waiting and leave it writing into a database this body is

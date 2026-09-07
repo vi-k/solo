@@ -29,11 +29,6 @@ Future<void> main() async {
       discard: (database) => database.close(),
     );
 
-    // The same disposer for the rest of the job: the body may return the
-    // database after a cancellation has already arrived, and then it
-    // reaches nobody.
-    ctx.onDiscard(database.close);
-
     await ctx.join(database.migrate);
     await ctx.uncancellable(database.markReady);
 
