@@ -173,6 +173,20 @@ enum JobStatus {
   finished,
 }
 
+/// One registration on the cleanup stack of a job.
+///
+/// [always] tells the two kinds apart: a `dispose` registration runs
+/// whatever the outcome, a `discard` one only when the value reached
+/// nobody. [value] is set for registrations made by `wait` and `join`, and
+/// it is what `disown` looks up.
+final class _Cleanup {
+  final FutureOr<void> Function() run;
+  final bool always;
+  final Object? value;
+
+  _Cleanup(this.run, {required this.always, this.value});
+}
+
 /// The lifecycle of a job: start, body, children, cancellation, outcome.
 ///
 /// Subclass it to add a domain of your own — the state, the rules and the
@@ -202,6 +216,7 @@ abstract class JobBase<T> implements Job<T> {
   final _done = Completer<Outcome<T>>();
   final _cancelled = Completer<void>();
   final _onCancel = <void Function()>[];
+  final _cleanups = <_Cleanup>[];
   final _children = <JobBase<Object?>>[];
 
   /// The child behind an outcome of a child, for the description of this
@@ -589,7 +604,41 @@ abstract class JobBase<T> implements Job<T> {
         notifyError(error, stackTrace);
       }
     }
+    if (_cleanups.isNotEmpty) {
+      // The loop lives here and not in a method of its own: between the
+      // last look at the stack and `finish` there must be no `await`, or
+      // the window after `return` grows by a microtask.
+      //
+      // The condition of a `discard` registration is read as it comes off
+      // the stack, from the outcome as it stands then: a cancellation may
+      // arrive into the unwinding itself. The ones it passed over wait for
+      // a second pass instead of being dropped.
+      final skipped = <_Cleanup>[];
+      while (_cleanups.isNotEmpty) {
+        final cleanup = _cleanups.removeLast();
+        if (!cleanup.always && (_pendingCancel ?? outcome) is Done<T>) {
+          skipped.add(cleanup);
+          continue;
+        }
+        await _runCleanup(cleanup);
+      }
+      while (skipped.isNotEmpty && (_pendingCancel ?? outcome) is! Done<T>) {
+        await _runCleanup(skipped.removeLast());
+        while (_cleanups.isNotEmpty) {
+          await _runCleanup(_cleanups.removeLast());
+        }
+      }
+    }
     finish(_pendingCancel ?? outcome);
+  }
+
+  /// Runs one registration; its error belongs to `onError` and ends there.
+  Future<void> _runCleanup(_Cleanup cleanup) async {
+    try {
+      await cleanup.run();
+    } on Object catch (error, stackTrace) {
+      notifyError(error, stackTrace);
+    }
   }
 
   /// The body threw [thrown] without being marked cancelled: either its own

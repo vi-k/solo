@@ -155,6 +155,41 @@ abstract interface class JobContext {
   /// itself is not affected and the other callbacks still run.
   void Function() onCancel(void Function() callback);
 
+  /// Registers [disposer] to run when the job ends, whatever the outcome.
+  ///
+  /// The engine unwinds the stack after the children and before the
+  /// outcome, last registration first, and it waits for every disposer.
+  /// Returns a function that unregisters this one; calling it twice, or
+  /// after the disposer has run, is safe.
+  ///
+  /// A disposer runs outside the body: nothing cancels it and nothing
+  /// interrupts it, so keep it short and unconditional. It must not wait
+  /// for its own job — `job.done`, `job.value` and `job.cancel()` all
+  /// complete after the cleanup that would be waiting for them — nor for
+  /// a job of the same queue.
+  ///
+  /// ```dart
+  /// final lock = await ctx.join(Lock.acquire);
+  /// ctx.onDispose(lock.release);
+  /// ```
+  void Function() onDispose(FutureOr<void> Function() disposer);
+
+  /// Registers [disposer] to run only if the job ends without handing its
+  /// value over: cancelled, or failed.
+  ///
+  /// For what the body returns or hands outside; everything else — a lock,
+  /// a temporary file, a subscription — takes [onDispose], or it leaks on
+  /// the successful path, where no test on cancellation will see it.
+  /// Returns a function that unregisters it.
+  ///
+  /// ```dart
+  /// final database = await ctx.join(Database.open);
+  /// ctx.onDiscard(database.close);
+  ///
+  /// return database;
+  /// ```
+  void Function() onDiscard(FutureOr<void> Function() disposer);
+
   /// Starts [child] right now, as a child of this job, ahead of whatever
   /// an engine of a domain would have put it through.
   ///
@@ -320,6 +355,37 @@ abstract class JobContextBase implements JobContext {
 
     return addCancelCallback(guarded);
   }
+
+  /// Puts a registration on the cleanup stack of the owner.
+  ///
+  /// The public [onDispose] and [onDiscard] are this with [value] unset;
+  /// `wait` and `join` pass the value they hand to the body, so that
+  /// `disown` can find the registration by it. Registering stays open on a
+  /// job already cancelled and while the engine unwinds the stack —
+  /// refusing it is the trap this whole mechanism removes.
+  @protected
+  void Function() addCleanup(
+    FutureOr<void> Function() disposer, {
+    required bool always,
+    Object? value,
+  }) {
+    if (_owner.isFinished) {
+      throw StateError(
+        '$_owner has already finished, cannot register a cleanup',
+      );
+    }
+    final cleanup = _Cleanup(disposer, always: always, value: value);
+    _owner._cleanups.add(cleanup);
+    return () => _owner._cleanups.remove(cleanup);
+  }
+
+  @override
+  void Function() onDispose(FutureOr<void> Function() disposer) =>
+      addCleanup(disposer, always: true);
+
+  @override
+  void Function() onDiscard(FutureOr<void> Function() disposer) =>
+      addCleanup(disposer, always: false);
 
   @override
   Future<T> wait<T>(
