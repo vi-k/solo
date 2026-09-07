@@ -180,8 +180,10 @@ other **root** job of this controller writes the state.
 
 **Working type `W`.** The subtype of `S` a job agrees to work with. The
 body sees `ctx.state` already narrowed to `W`. The type is checked before
-the job starts, on every state change while it runs, and on every read
-through the context.
+the job starts, on every state change while the body runs, and on every
+read through the context. Once the body has ended — while the children
+finish and the cleanup runs — the rules let the job go: there is no body
+left for them to guard, and the value it returned is on its way out.
 
 **Rules.** `canStart` is checked once, when the job is taken from the
 queue; failing it drops the job with `Cancelled(rules: canStart)` and
@@ -241,23 +243,9 @@ Job<void> seek(Duration position) => run<Ready, void>(
     );
 ```
 
-**Taking ownership.** `job(...)` and `run(...)` take `ifCancelled` too, for
-the value the body returned after the cancellation had already arrived:
-between the `return` and the outcome the job is still alive — it waits for
-its children — and a cancellation landing there wins. The outcome is the
-cancellation all the same; the value goes to the disposer instead of on the
-floor, and `close()` waits for it.
-
-A cancellation throws inside the context call, so a
-value the call was about to hand over never reaches the body: `join` drops
-it, `wait` never had it in the first place. Both take `ifCancelled` for
-exactly that value — a connection, a file, a subscription that would
-otherwise leak. `join` awaits the disposal before it throws, so `close()`
-waits for it too and the next job starts with the resource already gone;
-`wait` calls it late, when the abandoned action finally comes back, and
-nothing waits for that. Once the body does hold the value, an ordinary
-`finally` takes over — with a plain `await`, because a cancelled job is
-turned down by every member of the context, cleanup included:
+**Taking ownership.** What the body opens it registers where it opens it,
+and the engine releases it after the children and before the outcome —
+`close()` waits for that release as well:
 
 ```dart
 Job<void> load() => run<Idle, void>(
@@ -265,19 +253,66 @@ Job<void> load() => run<Idle, void>(
       (ctx) async {
         final db = await ctx.join(
           Database.open,
-          ifCancelled: (db) => db.close(),
+          discard: (db) => db.close(),
         );
-        try {
-          final rows = await ctx.join(db.readAll);
-          ctx.emit(Loaded(rows));
-        } finally {
-          // The job may be cancelled by now, so this one call goes
-          // without the context; `close()` still waits for the body.
-          await db.close();
-        }
+        ctx.onDispose(db.close);
+
+        final rows = await ctx.join(db.readAll);
+        ctx.emit(Loaded(rows));
       },
     );
 ```
+
+`discard` on the call covers the value that never reached the body — a
+cancellation throws inside the context call, so `join` would otherwise
+drop it and `wait` never had it at all. `onDispose` covers the rest of the
+job: an error, a cancellation between two steps, a cancellation landing
+after the `return`. Use `onDiscard` instead for a value the body returns
+or hands outside, and `dispose`/`onDispose` for everything else — a
+`discard` on a resource that stays inside the body does nothing on the
+successful path, and that leak is the one mistake the engine cannot catch.
+
+An ordinary `try`/`finally` still works, but it is no longer the main
+form; the stack scales to several resources, unwinds in reverse, runs
+after the children rather than before them, and reaches past the `return`.
+
+**Handing a resource over.** When the body gives the resource to someone
+else — to the state, most often — the registration has to go before the
+hand-over can throw. `check`, `disown` and `emit` are all synchronous, so
+nothing can slip between them:
+
+```dart
+ctx
+  ..check()
+  ..disown(db)
+  ..emit(Ready(db));
+```
+
+If `check` throws, the database is still on the stack and the cleanup
+closes it — the state never got it. If `emit` throws after writing (a hook
+that sets the state reentrantly can do that), the state holds the database
+and the registration is already gone. For an asynchronous hand-over the
+pair goes into one `ctx.uncancellable(...)`, and inside the section the
+step goes with a bare `await`: `ctx.join` there would throw after the step
+on a cancellation by the rules, and the `disown` would never happen.
+
+**The state on the way out.** A disposer cannot `emit` — the outcome is
+decided by the time it runs, and every read and write of the context
+throws a `StateError` there. Write the last state in the body: on the
+successful path before the `return`, on an error in a `try`/`catch` with a
+`rethrow`. On a cancellation there is no path at all — `emit` throws for a
+cancelled job — so a state that has to be set even then belongs in
+`onFinish` of the controller, through `externalSetState`.
+
+**Errors of a disposer.** They go to `onError` and to `SoloBase.observer`,
+and no further: in `solo` a job always has an observer, so nothing reaches
+the zone. With neither of the two overridden, a disposer that touches the
+context stops on its first line and nobody hears about it — install an
+observer at startup, as the [Errors](#errors) section says.
+
+Note also that a disposer must not wait for its own job, nor for a job of
+the same queue: `job.done`, `job.value`, `job.cancel()` and the next job
+of the queue all wait for the cleanup that would be waiting for them.
 
 **Following a stream.** A subscription is ownership too, and the awkward
 kind: a stream that goes quiet never ends, so a job that waits for the end
@@ -314,9 +349,10 @@ writers inside a controller deliberately. `ctx.run(child).done` gives the outcom
 or error into the parent's body.
 
 **External state.** `externalSetState(next)` sets the state from outside
-any job: a hardware listener, a forced transition. Every running job except
-the one that emitted is re-evaluated against the new state immediately; the
-emitting job is checked lazily, on its next read.
+any job: a hardware listener, a forced transition. Every job whose body is
+still running, except the one that emitted, is re-evaluated against the
+new state immediately; the emitting job is checked lazily, on its next
+read, and a job whose body has ended is not checked at all.
 
 **Outcomes.** `Outcome<T>` is sealed, so a `switch` over its three cases is
 exhaustive: `Done` carries the returned `value`, `Failed` carries `error`

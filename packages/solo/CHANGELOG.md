@@ -23,9 +23,14 @@ for a tree that followed the package before it went out.
   of the action and gives up afterwards, so a device call is never left
   mid-flight; `uncancellable` holds the cancellation for the length of
   the call and gives up once the step is over.
-- `wait` and `join` take `ifCancelled`: the value of an action the job gave
-  up on goes there instead of on the floor, so a connection or a file that
-  action opened is still closed.
+- A cleanup stack instead of a `finally` in the body: `ctx.onDispose`
+  releases whatever the outcome, `ctx.onDiscard` only when the value
+  reaches nobody, and `wait` and `join` take the same two as `dispose` and
+  `discard` for the value they hand over — a connection or a file an
+  abandoned action opened is still closed. The engine unwinds the stack
+  after the children and before the outcome, and `close` waits for it;
+  `ctx.disown(value)` takes a registration back when the body hands the
+  value over itself.
 - `JobContext.uncancellable` is `wait`'s counterpart: it runs a step that
   cannot be taken back — a payment on its way to the server — with the
   cancellation held until the step is over, and `close` waits for it.
@@ -74,10 +79,10 @@ for a tree that followed the package before it went out.
   child. The description of a parent's own outcome is unchanged — the link
   from an outcome to the child that carried it lives in an `Expando`, so a
   child without a key still shows in it.
-- `job(...)` and `run(...)` take `ifCancelled`: the value a body returned
-  after its cancellation had already arrived goes there instead of being
-  dropped. The outcome stays the cancellation, and `close` waits for the
-  disposer.
+- A value a body returned after its cancellation had already arrived is
+  released rather than dropped: the body registers it on the cleanup
+  stack, the outcome stays the cancellation, and `close` waits for the
+  release.
 - A job says who may adopt it: `ctx.run(child)` refuses a job of another
   controller with `ArgumentError` and a job still waiting in the queue with
   `StateError`, and a job of `solo` is refused by a context of the bare
