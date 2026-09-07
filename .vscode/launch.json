@@ -7,6 +7,13 @@
             "type": "dart",
             "cwd": "${workspaceFolder}/packages/solo/example",
             "program": "bin/main.dart"
+        },
+        {
+            "name": "job example",
+            "request": "launch",
+            "type": "dart",
+            "cwd": "${workspaceFolder}/packages/jobs/example",
+            "program": "example.dart"
         }
     ]
 }
