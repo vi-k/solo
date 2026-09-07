@@ -1,6 +1,7 @@
 @Timeout(Duration(seconds: 5))
 library;
 
+import 'package:fake_async/fake_async.dart';
 import 'package:solo/solo.dart';
 import 'package:test/test.dart';
 
@@ -186,4 +187,61 @@ void main() {
       );
     });
   });
+  test('a job put back from a hook is refused, and the queue goes on', () {
+    // The first thing anyone writes in a retry hook. The job the hook sees
+    // is out of the queue, not started and not yet finished, and `add`
+    // used to read that state as "never added".
+    Object? refused;
+    SoloBase.observer = _Retrier((solo, job) {
+      try {
+        solo.add(job);
+      } on Object catch (error) {
+        refused = error;
+      }
+    });
+    addTearDown(() => SoloBase.observer = null);
+    fakeAsync((async) {
+      final solo = TestSolo();
+      var asked = 0;
+      final first = solo.job<Initial, void>(
+        key: 'first',
+        // Throws once, the way a transient fault does: the retry the hook
+        // asks for would then get through.
+        canStart: (state) =>
+            ++asked == 1 ? throw StateError('rule boom') : true,
+        (ctx) async {},
+      )..ignore();
+      final second = solo.job<Initial, void>(key: 'second', (ctx) async {});
+      solo
+        ..add(first)
+        ..add(second);
+      async.flushTimers();
+      expect(refused, isA<StateError>());
+      expect(first.outcome, isA<Failed>());
+      expect(
+        second.outcome,
+        isA<Done<void>>(),
+        reason: 'the queue did not stall behind the job the hook put back',
+      );
+      expect(solo.current, isNull);
+      solo.close();
+      async.flushTimers();
+    });
+  });
+}
+
+/// Runs [_onError] from the observer's error hook.
+final class _Retrier extends SoloObserver {
+  final void Function(SoloBase<Object> solo, Job<Object?> job) _onError;
+
+  _Retrier(this._onError);
+
+  @override
+  void onError(
+    SoloBase<Object> solo,
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace,
+  ) =>
+      _onError(solo, job);
 }

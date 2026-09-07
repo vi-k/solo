@@ -453,6 +453,16 @@ waiting is different — a job the rules turn away never joins the list the
 parent waits for, and a rule that throws instead of refusing ends the child
 with that error rather than leaving it behind.
 
+A rule that throws is caught wherever it is asked, and what happens next
+depends on where that was: in the queue the job ends `Failed` and the queue
+goes on; in a reevaluation after a state change the error goes to `onError`
+and the job runs on, because a rule that threw says nothing about whether
+it may; at the job's next read of the state the error is thrown into the
+body like any other. Every one of those reaches `onError` first, and from
+there the zone if nobody is watching. Rules are ordinary code of yours —
+they are not expected to throw, and the engine does not pretend they
+cannot.
+
 `add` on a closed controller does not throw. It returns a job that is
 already finished with `Cancelled(closed)`, so call sites need no
 `isClosed` check.

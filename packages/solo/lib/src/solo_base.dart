@@ -121,9 +121,14 @@ abstract class SoloBase<S extends Object> {
     if (policy != Policy.sequential && impl.key == null) {
       throw ArgumentError('Policy.${policy.name} requires a job key');
     }
-    if (impl._jobStatus != JobStatus.created || _queue._jobs.contains(impl)) {
+    if (impl._added ||
+        impl._jobStatus != JobStatus.created ||
+        _queue._jobs.contains(impl)) {
       throw StateError('$impl has already been added or run');
     }
+    // Set before anything can go wrong below: a job dropped by a closed
+    // controller has been added too, and one handle is one add.
+    impl._added = true;
     if (isClosed) {
       _debug(() => 'add $impl: closed');
       impl._drop(

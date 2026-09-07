@@ -17,6 +17,15 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   final bool Function(W state)? _canStart;
   final bool Function(W state)? _keepWhile;
 
+  /// Whether the controller has taken this handle already.
+  ///
+  /// The status and the queue together nearly say it, and for a moment
+  /// they do not: a job the pump has taken out and not yet started is
+  /// `created` and not queued, and a hook running right then — the error
+  /// hook of a rule that threw — would be handed a job that looks brand
+  /// new.
+  var _added = false;
+
   _SoloJob(
     this._solo,
     this._body, {
