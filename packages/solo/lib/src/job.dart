@@ -104,5 +104,7 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
 
   JobStatus get _jobStatus => status;
 
+  bool get _bodyEnded => bodyEnded;
+
   Future<void> get _whenDone => whenDone;
 }

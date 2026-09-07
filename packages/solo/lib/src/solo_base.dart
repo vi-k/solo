@@ -79,12 +79,6 @@ abstract class SoloBase<S extends Object> {
   /// Creates a job without queueing it. Use for job factories such as
   /// `_closeCameraJob()` that are added or run as children later.
   ///
-  /// What the body opens is released through the cleanup stack of the
-  /// context — `onDispose`, `onDiscard` and the `dispose`/`discard` of
-  /// `wait` and `join`. The engine unwinds it after the children and
-  /// before the outcome, so `close` waits for the release too; a disposer
-  /// that hangs holds the job, the queue and the closing.
-  ///
   /// `canStart` is checked once, when the job is taken from the queue;
   /// `keepWhile` is checked at start, on every state change while the job
   /// runs, and on every read through the context. `cancellable: false`
@@ -389,7 +383,10 @@ abstract class SoloBase<S extends Object> {
     required StackTrace stackTrace,
   }) {
     for (final job in _running.reversed.toList()) {
-      if (identical(job, except) || job.isCancelled) {
+      // Тела нет — правилам нечего стеречь: они держат работу тела, а не
+      // ожидание детей и не уборку. `cancel()`, `close()` и каскад
+      // родителя дотягиваются до задачи по-прежнему.
+      if (identical(job, except) || job.isCancelled || job._bodyEnded) {
         continue;
       }
       final rejection = job._rejectKeep(_state);

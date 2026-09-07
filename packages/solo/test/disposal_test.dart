@@ -106,6 +106,64 @@ void main() {
     });
   });
 
+  test('a state change during the cleanup no longer cancels by rules', () {
+    runSolo((solo, journal, async) {
+      final closed = <String>[];
+      final job = solo.run<Initial, int>(
+        key: 'load',
+        (ctx) async {
+          final db = await ctx.join(() async => 'db', discard: closed.add);
+          ctx
+            ..onDispose(() async => delay(50))
+            // The form from the README: the working type is `Initial`, the
+            // last state is outside it, and the value goes to the caller.
+            ..emit(const Working(a: 7));
+          return db.length;
+        },
+      );
+      // While the disposer sleeps, the outside world sets a state: the
+      // rules of the job no longer hold, but the body is gone and there is
+      // nothing left for them to guard.
+      async.elapse(const Duration(milliseconds: 10));
+      solo.externalSetState(const Working(a: 4));
+      async.flushTimers();
+      expect(job.outcome, isA<Done<int>>());
+      expect(closed, isEmpty, reason: 'the value went to the caller');
+    });
+  });
+
+  test('restart waits for the cleanup of the job it replaces', () {
+    runSolo((solo, journal, async) {
+      final order = <String>[];
+      solo
+          .run<Initial, void>(
+            key: 'load',
+            policy: Policy.restart,
+            (ctx) async {
+              ctx.onDispose(() async {
+                order.add('cleanup starts');
+                await delay(50);
+                order.add('cleanup ends');
+              });
+              await pause(ctx, 10);
+            },
+          )
+          .ignore();
+      async.elapse(const Duration(milliseconds: 5));
+      // The next job of the same queue starts only after `finish`, and
+      // that waits for the cleanup.
+      solo
+          .run<Initial, void>(
+            key: 'load',
+            policy: Policy.restart,
+            (ctx) async => order.add('second starts'),
+          )
+          .ignore();
+      async.flushTimers();
+      expect(order, ['cleanup starts', 'cleanup ends', 'second starts']);
+    });
+  });
+
   test('reads after the job has finished are still legal', () {
     runSolo((solo, journal, async) {
       late SoloContext<TestState, Initial> leaked;
