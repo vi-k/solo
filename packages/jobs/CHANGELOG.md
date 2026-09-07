@@ -14,8 +14,12 @@ Initial release. The job kernel taken out of `solo` 0.1.0.
   `ctx.onCancel` hands the cancellation to whatever can really stop, and
   `ctx.check` gives up where there is no call to wrap. `ctx.each` follows
   a stream for as long as the job lives.
-- `ifCancelled` on the job catches a value the body returned after its
-  cancellation had already arrived.
+- A cleanup stack: `ctx.onDispose` releases whatever the outcome,
+  `ctx.onDiscard` only when the value reaches nobody, and `wait` and
+  `join` take the same two as `dispose` and `discard` for the value they
+  hand over. The engine unwinds the stack after the children and before
+  the outcome, waiting for every disposer; `ctx.disown(value)` takes a
+  registration back when the body hands the value over itself.
 - Children through `ctx.run`: the parent finishes after them, a
   cancellation cascades, and a child that is not cancellable refuses it.
 - `JobObserver` with `onStart`, `onFinish`, `onError` and `onLog`; a

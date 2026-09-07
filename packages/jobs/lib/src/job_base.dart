@@ -93,6 +93,9 @@ abstract interface class Job<T> {
   bool get isChild;
 
   /// Whether the body is running or its children are still finishing.
+  ///
+  /// Still `true` while the engine cleans up after the body: the outcome
+  /// is decided by then, but the job has not finished.
   bool get isRunning;
 
   /// Whether [outcome] is set.
@@ -166,7 +169,8 @@ enum JobStatus {
   /// Made, not started; the body has not run.
   created,
 
-  /// The body is running, or its children are still finishing.
+  /// The body is running, its children are still finishing, or the engine
+  /// is cleaning up after them.
   running,
 
   /// The outcome is set and will not change.

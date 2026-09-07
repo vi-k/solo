@@ -18,6 +18,12 @@ abstract interface class JobContext {
   /// [join] is the same thing around a call. Reach for `check` where there
   /// is no call to wrap: a loop over work of your own, a `switch` after
   /// one.
+  ///
+  /// Legal after the job has finished, where it throws that [Cancelled] as
+  /// always — but not while the engine cleans up after the body: there it
+  /// throws a [StateError] instead. An action the body walked away from
+  /// that polls `check` to stop will see that error, not a cancellation,
+  /// if it polls inside that window.
   void check();
 
   /// Runs [action] and waits for it, but no longer than this job lives.
@@ -150,6 +156,21 @@ abstract interface class JobContext {
   /// Throws [Cancelled] if the job is already cancelled, the same as
   /// [wait]: a step that cannot be taken back must not begin for a job
   /// that is already over.
+  ///
+  /// A section is also how an asynchronous hand-over stays together with
+  /// its [disown]: inside it, between the step and the `disown`, there
+  /// must be nothing that throws this job's cancellation — no member of
+  /// this context, no `await child.value` of its child. A cancellation
+  /// the rules of a domain make cannot be held, and any of those would
+  /// throw after the step, leaving the value handed over and its cleanup
+  /// still registered.
+  ///
+  /// ```dart
+  /// await ctx.uncancellable(() async {
+  ///   await transaction.commit(); // a bare await, not ctx.join
+  ///   ctx.disown(transaction);
+  /// });
+  /// ```
   Future<T> uncancellable<T>(FutureOr<T> Function() action);
 
   /// Registers [callback] to run the moment the job is marked cancelled,

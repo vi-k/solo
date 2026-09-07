@@ -46,25 +46,18 @@ dart pub add jobs
 ```dart
 import 'package:jobs/jobs.dart';
 
-final job = Job<Database>(
-  ifCancelled: (database) => database.close(),
-  (ctx) async {
-    final database = await ctx.join(
-      Database.open,
-      ifCancelled: (database) => database.close(),
-    );
+final job = Job<Database>((ctx) async {
+  final database = await ctx.join(
+    Database.open,
+    discard: (database) => database.close(),
+  );
+  ctx.onDiscard(database.close);
 
-    try {
-      await ctx.join(database.migrate);
-      await ctx.uncancellable(database.markReady);
-    } on Cancelled {
-      await database.close();
-      rethrow;
-    }
+  await ctx.join(database.migrate);
+  await ctx.uncancellable(database.markReady);
 
-    return database;
-  },
-);
+  return database;
+});
 
 // Somebody changed their mind while the database was opening.
 await Future<void>.delayed(const Duration(milliseconds: 10));
@@ -82,13 +75,14 @@ Line by line, because every one of them is a decision:
   `started: false`, and none of the body runs at all.
 - **`ctx.join(Database.open)`** and not `ctx.wait`: an open that is
   already under way is not abandoned halfway, or the database would be
-  opened with nobody left holding it. Its `ifCancelled` closes exactly
-  that — the database that came back after the job had already given up.
-- **`try` / `on Cancelled`** because from the line above the body owns the
-  database, and the kernel does not: a cancellation leaves the body as a
-  throw, and without this the database opened a line earlier stays open
-  for good. Close it, then `rethrow` — a swallowed cancellation is the one
-  mistake this package cannot catch for you.
+  opened with nobody left holding it. Its `discard` closes exactly that —
+  the database that came back after the job had already given up.
+- **`ctx.onDiscard(database.close)`** says the same thing for the rest of
+  the job, in one line and once: whatever happens from here — a
+  cancellation between two steps, an error inside one, a cancellation
+  landing after the `return` — the database is closed unless it reaches
+  the caller. No `try`, no `finally`, nothing to remember before the
+  `return`. See [Cleanup](#cleanup).
 - **`ctx.join(database.migrate)`** for the same reason as the open: a
   migration already writing must not be walked away from. `ctx.wait`
   would end the waiting and leave it writing into a database this body is
@@ -97,10 +91,6 @@ Line by line, because every one of them is a decision:
   not be interrupted at all. A cancellation arriving inside it is held
   until the step is over, and lands on the next line that goes through the
   context — see [Cancellation](#cancellation).
-- **`ifCancelled` on the job itself** for the last gap: a cancellation
-  that lands between the `return` and the outcome, when the value is
-  already computed and there is no body left to catch anything. See
-  [Late values](#late-values).
 - **`await job.cancel()`** returns when the job has actually finished, so
   the outcome below is already there. Nothing has to be awaited: the
   handle can be dropped, and `job.ignore()` says so out loud.
@@ -162,12 +152,12 @@ The body must never await anything by itself, and the member it picks
 says what a cancellation does to that call:
 
 - `ctx.wait(action)` ends the waiting, not the work. The action runs on,
-  its result is dropped — or handed to `ifCancelled`, which runs late and
-  alone: the job is over by then, and nothing waits for that disposer.
+  its result is dropped — or handed to the disposer it was given, which
+  runs late and alone: the job is over by then, and nothing waits for it.
 - `ctx.join(action)` waits for all of the action and gives up afterwards:
   a device command already on the wire is not abandoned halfway. Its
-  `ifCancelled` is awaited before the `Cancelled` is thrown, so whoever
-  waits for the job waits for the disposal too.
+  disposer is awaited before the `Cancelled` is thrown, so whoever waits
+  for the job waits for the disposal too.
 - `ctx.each(stream, onData)` follows a stream for as long as the job
   lives. The subscription is cancelled the moment the job is marked,
   before the body learns about it, and nothing is left listening.
@@ -222,30 +212,77 @@ and a parent that is already cancelled throws its own `Cancelled` with
 the child dropped — which is what a body starting children after a long
 await eventually meets.
 
-## Late values
+## Cleanup
 
-Between the `return` of a body and the outcome the job is still alive —
-it waits for its children — and a cancellation arriving there wins. The
-value the body computed would be dropped, so `ifCancelled` on the job
-takes it:
+What the body opens, it registers — where it opens it, in one line:
 
 ```dart
-final job = Job<Database>(
-  ifCancelled: (database) => database.close(),
-  (ctx) async => Database.open(),
+final lock = await ctx.join(Lock.acquire, dispose: (lock) => lock.release());
+final database = await ctx.join(
+  Database.open,
+  discard: (database) => database.close(),
 );
+
+await ctx.wait(database.migrate);
+
+return database;
+```
+
+Two words, and the difference between them carries the whole mechanism:
+
+- **`dispose`** runs whatever the outcome. A lock, a temporary file, a
+  counter: released on the successful path too, or it stays taken for
+  good.
+- **`discard`** runs only when the value reaches nobody — cancelled, or
+  failed. The database above goes to the caller on success, and closing it
+  then would be a bug; when nobody gets it, the engine closes it.
+
+The rule for choosing is one line, and it is the one mistake the engine
+cannot catch: **`discard` is only for what the body returns or hands
+outside; everything else takes `dispose`.** A `discard` on a temporary
+file the body never returns does nothing on success — a leak on the happy
+path that no test on cancellation will ever show.
+
+For a value that did not come out of a call, the two members say the same
+thing:
+
+```dart
+final buffer = StringBuffer();
+ctx.onDispose(() => sink.add(buffer.toString()));
+```
+
+Both forms return a function that unregisters; for a value from `wait` or
+`join` there is `ctx.disown(value)`, for when the body hands the value
+over itself and the cleanup must stop being its business.
+
+**How it runs.** The engine unwinds the stack in one pass, last
+registration first, after the children and before the outcome — children
+first because they may still be using what the parent opened — and it
+waits for every disposer, so `close()` of an engine on top waits for the
+release too. A disposer runs outside the body: the context of the body is
+closed there, nothing cancels it, and it must not wait for its own job.
+Keep it short and unconditional; an error of one goes to the observer and
+the rest still run.
+
+**Late values.** Between the `return` of a body and the outcome the job is
+still alive — it waits for its children — and a cancellation arriving
+there wins. The value is registered by then, so it is released like any
+other; a value that comes out of a call the body walked away from is
+released too, whatever the outcome, because it reached nobody:
+
+```dart
+final job = Job<Database>((ctx) async {
+  final database = await Database.open();
+  ctx.onDiscard(database.close);
+
+  return database;
+});
 ```
 
 This body has no context call to be interrupted at: it hands the kernel a
 future and the kernel waits for it, so a cancellation arriving meanwhile
-is not seen until the value is back. That is the shape `ifCancelled` on
-the job is for, and the one place where skipping the context costs
-nothing.
-
-The outcome is the cancellation all the same. The disposer runs after the
-children and before the outcome, and the engine waits for it. It runs
-outside the body — neither `onCancel` nor `uncancellable` reach it — so
-keep it short and unconditional.
+is not seen until the value is back. Registering right after it is what
+covers the gap.
 
 ## Observer
 
@@ -302,7 +339,7 @@ clock — the suite of this package is built that way:
 test('a cancelled open still closes what it opened', () {
   fakeAsync((async) {
     final job = Job<Database>(
-      (ctx) => ctx.join(Database.open, ifCancelled: (db) => db.close()),
+      (ctx) => ctx.join(Database.open, discard: (db) => db.close()),
     );
 
     async.elapse(const Duration(milliseconds: 10));
