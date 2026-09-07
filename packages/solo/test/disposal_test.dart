@@ -135,20 +135,18 @@ void main() {
   test('restart waits for the cleanup of the job it replaces', () {
     runSolo((solo, journal, async) {
       final order = <String>[];
-      solo
-          .run<Initial, void>(
-            key: 'load',
-            policy: Policy.restart,
-            (ctx) async {
-              ctx.onDispose(() async {
-                order.add('cleanup starts');
-                await delay(50);
-                order.add('cleanup ends');
-              });
-              await pause(ctx, 10);
-            },
-          )
-          .ignore();
+      solo.run<Initial, void>(
+        key: 'load',
+        policy: Policy.restart,
+        (ctx) async {
+          ctx.onDispose(() async {
+            order.add('cleanup starts');
+            await delay(50);
+            order.add('cleanup ends');
+          });
+          await pause(ctx, 10);
+        },
+      ).ignore();
       async.elapse(const Duration(milliseconds: 5));
       // The next job of the same queue starts only after `finish`, and
       // that waits for the cleanup.
