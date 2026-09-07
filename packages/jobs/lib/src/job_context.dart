@@ -2,15 +2,20 @@ part of 'job_base.dart';
 
 /// What a job body sees in the core: cancellation, waiting and children.
 ///
-/// Every member except [log] and [job] refuses to run for a job already
-/// marked cancelled: it throws that [Cancelled]. What a cancellation
-/// arriving *during* a call does to that call is the call's own business —
+/// Once the job is marked cancelled, the members that wait or start
+/// something throw that [Cancelled]: [check], [wait], [join],
+/// [uncancellable], [onCancel], [run] and `each`. The members that only
+/// register do not — [onDispose], [onDiscard] and [disown] go on working,
+/// so a body that has just been cancelled can still put what it holds on
+/// the cleanup stack — and neither do [log] and [job]. What a cancellation
+/// arriving *during* a call does to that call is the call's own business:
 /// see [wait], [join] and [uncancellable].
 ///
 /// A context that outlived its job — captured by a closure nobody awaited
-/// — neither waits nor starts anything: [run], [wait], [join],
-/// [uncancellable] and [onCancel] throw a [StateError] once the job has
-/// finished. [check] and [log] stay legal.
+/// — neither waits nor starts nor registers anything: every member throws
+/// a [StateError] once the job has finished, except [check], [log] and
+/// [job]. The same holds while the engine unwinds the cleanup stack, where
+/// [check] throws it too.
 abstract interface class JobContext {
   /// Gives up if the job was cancelled — in `solo`, also if its rules
   /// stopped holding.
@@ -218,11 +223,13 @@ abstract interface class JobContext {
 
   /// Drops the cleanup registered for [value] by [wait] or [join].
   ///
-  /// Returns whether anything was dropped. Registrations made by
-  /// [onDispose] and [onDiscard] carry no value and are invisible here —
-  /// they are dropped by the function those members return; an unknown
-  /// value is not an error. With two registrations for one value the top
-  /// one goes, one per call.
+  /// Returns whether anything was dropped. The lookup is by identity, so
+  /// pass the very object the body was handed: an equal one of its own —
+  /// a string, a record, a number built again — finds nothing.
+  /// Registrations made by [onDispose] and [onDiscard] carry no value and
+  /// are invisible here — they are dropped by the function those members
+  /// return; an unknown value is not an error. With two registrations for
+  /// one value the top one goes, one per call.
   ///
   /// Stands next to the hand-over: before it, when the hand-over is
   /// synchronous and may throw after its own work (`emit` of `solo`), and
@@ -276,12 +283,18 @@ abstract class JobContextBase implements JobContext {
   @protected
   Cancelled? get pendingCancel => _owner._pendingCancel;
 
-  /// Throws the job's cancellation if it is marked.
+  /// Throws the job's cancellation if it is marked, or if it ended with
+  /// one: an engine of a domain that finished the job by hand never marked
+  /// it, and the cancellation lives in the outcome alone.
   @protected
   void throwIfCancelled() {
     final cancelled = _owner._pendingCancel;
     if (cancelled != null) {
       throw cancelled;
+    }
+    final outcome = _owner._outcome;
+    if (outcome is Cancelled) {
+      throw outcome;
     }
   }
 
@@ -362,14 +375,11 @@ abstract class JobContextBase implements JobContext {
     final result = await action();
     if (_owner.bodyEnded) {
       // The body ended while the call was in flight: the value did not
-      // reach it. The call ends here and does not go into `check` — in the
-      // cleanup phase that would throw a `StateError` into a future nobody
-      // awaits, and Dart would hand it to the zone on the successful path.
+      // reach it, and nothing is waiting for this call any more. It hands
+      // the value to its cleanup and ends quietly — neither `check` nor
+      // the job's cancellation goes in, because either would land in a
+      // future nobody awaits and Dart would hand it to the zone.
       await _keepLate(dispose, discard, result);
-      final pending = pendingCancel;
-      if (pending != null) {
-        throw pending;
-      }
       return result;
     }
     try {

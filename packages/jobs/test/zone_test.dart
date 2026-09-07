@@ -188,4 +188,27 @@ void main() {
       ['[job] error Bad state: boom'],
     );
   });
+  test('a join the body walked away from puts no cancellation in the zone', () {
+    final caught = <Object>[];
+    final closed = <String>[];
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          Job<void>((ctx) async {
+            unawaited(
+              ctx.join<String>(
+                () => delay(50).then((_) => 'db'),
+                discard: closed.add,
+              ),
+            );
+            throw const Cancelled('enough');
+          }).ignore();
+          async.elapse(const Duration(milliseconds: 200));
+        });
+      },
+      (error, stackTrace) => caught.add(error),
+    );
+    expect(caught, isEmpty);
+    expect(closed, ['db'], reason: 'the value is still cleaned up');
+  });
 }

@@ -6,6 +6,7 @@ import 'package:jobs/jobs.dart';
 import 'package:test/test.dart';
 
 import 'support/delay.dart';
+import 'support/probe_job.dart';
 
 void main() {
   test('the members are closed during the cleanup of a Done job', () {
@@ -125,6 +126,26 @@ void main() {
       expect(job.isFinished, isTrue);
       expect(leaked.check, returnsNormally);
       leaked.log('still legal');
+    });
+  });
+  test('check throws the cancellation an engine finished the job with', () {
+    fakeAsync((async) {
+      late JobContext captured;
+      final job = ProbeJob<void>((ctx) async {
+        captured = ctx;
+        await ctx.wait(() => delay(100));
+      })
+        ..launch();
+      async.elapse(const Duration(milliseconds: 10));
+      job.drop(
+        Cancelled.by(
+          reason: CancelReason.manual,
+          started: true,
+          stackTrace: StackTrace.current,
+        ),
+      );
+      async.elapse(const Duration(milliseconds: 200));
+      expect(captured.check, throwsA(isA<Cancelled>()));
     });
   });
 }

@@ -34,9 +34,11 @@ abstract interface class Job<T> {
   ///
   /// ```dart
   /// final job = Job<Database>((ctx) async {
-  ///   final database = await ctx.join(Database.open);
-  ///   ctx.onDiscard(database.close);
-  ///   await ctx.wait(() => database.migrate());
+  ///   final database = await ctx.join(
+  ///     Database.open,
+  ///     discard: (database) => database.close(),
+  ///   );
+  ///   await ctx.join(database.migrate);
   ///
   ///   return database;
   /// });
@@ -132,7 +134,10 @@ abstract interface class Job<T> {
   /// finishes; for a job cancelled before it started, when it is dropped;
   /// for a body that cancelled itself with `throw Cancelled(...)`, once the
   /// body has ended and its children are done — right before the cleanup,
-  /// since nothing marked it beforehand.
+  /// since nothing marked it beforehand. The children of such a body are
+  /// cancelled as the body ends, the same as a cancellation from outside
+  /// would cancel them; a body that *failed* leaves them running and waits
+  /// for them.
   ///
   /// A job that ends [Done] or [Failed] never completes it at all. Hang
   /// work on it with `then`, or race it against [done]; a bare
@@ -141,9 +146,15 @@ abstract interface class Job<T> {
 
   /// Cancels the job and waits for it to actually finish.
   ///
-  /// A job created with `cancellable: false` is not cancelled at all; one
-  /// inside [JobContext.uncancellable] is cancelled when that section
-  /// closes. Either way the returned future waits for it to finish.
+  /// A job created with `cancellable: false` refuses this once it has
+  /// started; before that there is no body to protect, and a job cancelled
+  /// then is dropped like any other. A job inside
+  /// [JobContext.uncancellable] is cancelled when that section closes.
+  /// Either way the returned future waits for it to finish.
+  ///
+  /// Awaited from inside the body it never completes: the waiting is for
+  /// the job, and the job is this body. A body gives itself up with
+  /// `throw Cancelled('why')` instead.
   Future<void> cancel();
 
   /// Tells the engine that nobody is interested in this job's failure.
@@ -164,6 +175,9 @@ abstract interface class Job<T> {
 }
 
 /// Where a job is in its life.
+///
+/// For engines built on [JobBase], which read it through `status`; a
+/// handle answers with [Job.isRunning] and [Job.isFinished] instead.
 ///
 /// The queue is not here: it belongs to whoever runs jobs, not to the job.
 enum JobStatus {
@@ -351,9 +365,15 @@ abstract class JobBase<T> implements Job<T> {
   /// is replayed later. Inside [JobContext.uncancellable] a rejectable
   /// cancellation is held instead: the step runs untouched, and the
   /// cancellation lands the moment the last section closes. The rules of a
-  /// domain pass `false` and go through both. Virtual: `solo` adds the
-  /// branch for a job still waiting in its queue.
+  /// domain pass `false` and go through both.
+  ///
+  /// The one member of the lifecycle a subclass extends rather than
+  /// replaces: `solo` adds the branch for a job still waiting in its
+  /// queue and then calls `super`. An override that forgets the call
+  /// silently switches cancellation off — for [Job.cancel], for the
+  /// cascade from a parent and for whatever an engine of a domain adds.
   @protected
+  @mustCallSuper
   void cancelWith(Cancelled cancelled, {bool rejectable = true}) {
     Cancelled withStarted(bool started) => cancelled.started == started
         ? cancelled

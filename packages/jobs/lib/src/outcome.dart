@@ -39,6 +39,11 @@ final class CancelReason {
 ///
 /// [Failed] and [Cancelled] extend `Outcome<Never>`, so a `switch` over
 /// `Outcome<T>` with these three cases is exhaustive.
+///
+/// Outcomes are equal by identity, not by value: two of them stand for two
+/// runs, and a [Failed] or a [Cancelled] carries a stack trace that makes
+/// value equality a question with no good answer. Compare what is inside
+/// — the value, the error, the reason — not the outcome itself.
 sealed class Outcome<T> {
   const Outcome();
 }
@@ -87,9 +92,11 @@ final class Failed extends Outcome<Never> {
 
 /// The job was cancelled before or during its run.
 ///
-/// Thrown by every [JobContext] member once the job is marked cancelled,
-/// and stored in [Job.outcome]. A body may also `throw Cancelled('why')`
-/// to cancel itself; the engine records that as [CancelReason.handler].
+/// Thrown by the [JobContext] members that wait or start something once
+/// the job is marked cancelled — the ones that only register a cleanup go
+/// on working — and stored in [Job.outcome]. A body may also
+/// `throw Cancelled('why')` to cancel itself; the engine records that as
+/// [CancelReason.handler] and cancels the children of that body.
 final class Cancelled extends Outcome<Never> implements Exception {
   /// Who cancelled the job.
   final CancelReason reason;
@@ -115,6 +122,11 @@ final class Cancelled extends Outcome<Never> implements Exception {
   ///
   /// The engine of a domain uses it — `solo` for its rules and its
   /// closing; a body uses the unnamed constructor instead.
+  ///
+  /// [started] matters only where the cancellation becomes an outcome as
+  /// it is, through `JobBase.finish`: on the way through `cancelWith` the
+  /// engine sets it by the status of the job and whatever was passed here
+  /// is replaced.
   const Cancelled.by({
     required this.reason,
     required this.started,
