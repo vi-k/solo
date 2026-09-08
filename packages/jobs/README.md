@@ -32,9 +32,10 @@ waiting for a call that knows nothing about it. The context member you
 pick is what says how that call reacts.
 
 There is no state here, no queue, no rules, no retry, no timeout, no
-pool. If you want any of those, take `solo`: it is built on this package
-and re-exports it whole, so a package that depends on `solo` never depends
-on `jobs` as well.
+pool. For the first three take `solo`: it is built on this package and
+re-exports it whole, so a package that depends on `solo` never depends on
+`jobs` as well. The last three are nobody's here — `solo` has none of them
+either, and an engine of a domain writes its own.
 
 ## Install
 
@@ -132,7 +133,11 @@ with `const CancelReason('closed')`, and reasons are equal by name.
 `job.done` completes with the outcome and never throws; `job.value`
 completes with the value or throws. `job.cancel()` cancels and waits for
 the job to actually finish; `job.ignore()` says that nobody is going to
-look at the outcome.
+look at the outcome. Those three are also what counts as observing a
+`Failed`: touching `done`, `value` or `ignore()`, and nothing else.
+Reading `job.outcome`, hearing it in `onFinish`, awaiting `cancel()` — none
+of them observes anything, and a failure left that way still reaches the
+zone, on the microtask after the job ends.
 
 `job.whenCancelled` completes on every `Cancelled` outcome — for a
 running job the moment it is marked, before the body finishes, and for a
@@ -168,7 +173,7 @@ enough to hold it swallows the cancellation, and the body walks on:
 
 ```dart
 try {
-  await ctx.join(database.migrate);
+  await ctx.join(() => database.migrate(stop));
 } on Cancelled {
   rethrow; // never swallow this one
 } on Exception catch (error) {
@@ -180,7 +185,7 @@ or
 
 ```dart
 try {
-  await ctx.join(database.migrate);
+  await ctx.join(() => database.migrate(stop));
 } on Object catch (error) {
   if (error is Cancelled) rethrow;
   ctx.log('migration failed: $error');
@@ -212,14 +217,18 @@ says what a cancellation does to that call:
   a device command already on the wire is not abandoned halfway. Its
   disposer is awaited before the `Cancelled` is thrown, so whoever waits
   for the job waits for the disposal too.
-- `ctx.each(stream, onData)` follows a stream for as long as the job
-  lives, and a body that does nothing else is one expression:
-  `Job<void>((ctx) => ctx.each(socket.messages, handle))`. The
-  subscription is cancelled the moment the job is marked, before the body
-  learns about it, and again when the job ends whatever the outcome, so
-  nothing is left listening even behind a body that walked away from the
-  call. An `onData` that returns a future is waited for, and delivery is
-  held meanwhile: the events keep their order.
+- `ctx.each(stream, onData)` follows a stream for as long as the job lives,
+  and a body that does nothing else is one expression: `Job<void>((ctx) =>
+  ctx.each(socket.messages, handle))`. The subscription is cancelled the
+  moment the job is marked, before the body learns about it, and again when
+  the job ends whatever the outcome, so nothing is left listening even
+  behind a body that walked away from the call. An `onData` that returns a
+  future is waited for, and delivery is held meanwhile: the events keep
+  their order. Delivery is what waits, not the job: a handler already
+  inside its own `await` is not interrupted by a cancellation, and nobody
+  waits for it — neither this call nor the cleanup, which may close under
+  it what it is still writing to. A handler that must stop takes the
+  cancellation through the context, like any other code of the body.
 - `ctx.uncancellable(action)` holds the cancellation for the length of
   the call: the job is not marked while it runs, so nothing — not an
   `onCancel` callback, not the cascade onto children — reaches into the
@@ -243,11 +252,12 @@ says what a cancellation does to that call:
 - `ctx.unattended(action)` is the one that does not wait at all. The work
   is handed to the engine and the body walks on; a cancellation does not
   touch it, and whatever it throws — now or long after the job is over —
-  reaches `onError` instead of the process. That is what it has over
-  `unawaited(...)`, which only silences the analyser: a future dropped that
-  way still belongs to the zone it was made in, and its failure arrives
-  there with nothing to say which job started it. Start the work inside and
-  take nothing out of it: the boundary of its error zone holds both ways.
+  goes to `onError` — the job's observer, or the zone the job was made in
+  when it has none. That is what it has over `unawaited(...)`, which only
+  silences the analyser: a future dropped that way still belongs to the
+  zone it was made in, and its failure arrives there with nothing to say
+  which job started it. Start the work inside and take nothing out of it:
+  the boundary of its error zone holds both ways.
 - `ctx.check()` gives up where there is no call to wrap.
 
 A job created as `Job(body, cancellable: false)` refuses every
@@ -301,7 +311,7 @@ final database = await ctx.join(
   discard: (database) => database.close(),
 );
 
-await ctx.join(database.migrate);
+await ctx.join(() => database.migrate(stop));
 
 return database;
 ```
@@ -349,12 +359,14 @@ found anything.
 
 **How it runs.** The engine unwinds the stack in one pass, last
 registration first, after the children and before the outcome — children
-first because they may still be using what the parent opened — and it
-waits for every disposer, so `close()` of an engine on top waits for the
-release too. A disposer runs outside the body: the context of the body is
-closed there, nothing cancels it, and it must not wait for its own job.
-Keep it short and unconditional; an error of one goes to the observer and
-the rest still run.
+first because they may still be using what the parent opened — and it waits
+for every disposer, so `close()` of an engine on top waits for the release
+too. One pass while the outcome holds: a `discard` skipped because the body
+had returned is taken up in a second pass if a cancellation lands during
+the unwinding, and then it runs after disposers registered below it. A
+disposer runs outside the body: the context of the body is closed there,
+nothing cancels it, and it must not wait for its own job. Keep it short and
+unconditional; an error of one goes to the observer and the rest still run.
 
 **Late values.** Between the `return` of a body and the outcome the job is
 still alive — it waits for its children — and a cancellation arriving
@@ -436,8 +448,15 @@ clock — the suite of this package is built that way:
 ```dart
 test('a cancelled open still closes what it opened', () {
   fakeAsync((async) {
+    var closed = 0;
     final job = Job<Database>(
-      (ctx) => ctx.join(Database.open, discard: (db) => db.close()),
+      (ctx) => ctx.join(
+        Database.open,
+        discard: (db) {
+          closed++;
+          return db.close();
+        },
+      ),
     );
 
     async.elapse(const Duration(milliseconds: 10));
@@ -445,6 +464,7 @@ test('a cancelled open still closes what it opened', () {
     async.flushTimers();
 
     expect(job.outcome, isA<Cancelled>());
+    expect(closed, 1); // what the test is named for
   });
 });
 ```

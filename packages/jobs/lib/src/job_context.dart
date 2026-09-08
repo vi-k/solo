@@ -285,8 +285,12 @@ abstract interface class JobContext {
   /// already cancelled.
   Job<T> run<T>(Job<T> child);
 
-  /// Sends `message.toString()` to [JobObserver.onLog]. A no-op when the
-  /// job has no observer.
+  /// Sends `message.toString()` to [JobObserver.onLog].
+  ///
+  /// A no-op when the job has no observer, and [message] is not turned
+  /// into a string either: `toString` is the caller's own code, and
+  /// running it for nobody would put its failure into a body that only
+  /// asked to log.
   void log(Object? message);
 
   /// Runs [action] as work this job does not wait for.
@@ -887,7 +891,15 @@ abstract class JobContextBase implements JobContext {
   }
 
   @override
-  void log(Object? message) => _owner._notifyLog('$message');
+  void log(Object? message) {
+    // Nobody to hand the string to, and `toString` is the caller's code:
+    // running it here would charge the body for a message that goes
+    // nowhere, and let a throwing one end the job as `Failed`.
+    if (_owner._observer == null) {
+      return;
+    }
+    _owner._notifyLog('$message');
+  }
 
   @override
   void unattended(FutureOr<void> Function() action) {

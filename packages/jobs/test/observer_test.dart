@@ -77,12 +77,19 @@ void main() {
 
   test('log without an observer is a no-op', () {
     fakeAsync((async) {
+      var conversions = 0;
       final job = Job<void>((ctx) async {
-        ctx.log('nobody listens');
+        ctx
+          ..log('nobody listens')
+          ..log(_Counted(() => conversions++))
+          // The message is never built, so a `toString` of the caller's
+          // that throws cannot end a job that only asked to log.
+          ..log(_Unspeakable());
         await ctx.wait(() => delay(10));
       });
       async.flushTimers();
       expect(job.outcome, isA<Done<void>>());
+      expect(conversions, 0, reason: 'nobody to hand the string to');
     });
   });
 }
@@ -101,4 +108,23 @@ final class _ThrowingObserver implements JobObserver {
 
   @override
   void onLog(Job<Object?> job, String message) => throw StateError('onLog');
+}
+
+/// Counts every turn into a string, so a message nobody hears is visible.
+class _Counted {
+  _Counted(this._seen);
+
+  final void Function() _seen;
+
+  @override
+  String toString() {
+    _seen();
+    return 'counted';
+  }
+}
+
+/// A message that fails the moment somebody turns it into a string.
+class _Unspeakable {
+  @override
+  String toString() => throw StateError('message conversion');
 }
