@@ -203,6 +203,17 @@ abstract interface class JobContext {
   /// to register for, and nothing should be started either. An error thrown
   /// by [callback] goes to `onError` and stops there; the cancellation
   /// itself is not affected and the other callbacks still run.
+  ///
+  /// [callback] is synchronous, and only what it throws synchronously is
+  /// caught. `void Function()` takes an `async` function without a word
+  /// from the analyser, and the future one of those returns is awaited by
+  /// nobody: its failure goes to the zone, past `onError` and past any
+  /// observer. For something that stops asynchronously, hand the work to
+  /// the engine and let it hold the error:
+  ///
+  /// ```dart
+  /// ctx.onCancel(() => ctx.unattended(device.stop));
+  /// ```
   void Function() onCancel(void Function() callback);
 
   /// Registers [disposer] to run when the job ends, whatever the outcome.

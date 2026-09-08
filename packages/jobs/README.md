@@ -129,8 +129,12 @@ outcome.
 ## Cancellation
 
 `cancel()` marks the job; stopping is the body's own business. The mark
-reaches the body as a throw: every context member throws `Cancelled` once
-the job is marked, and `Cancelled` implements `Exception`. A `catch` wide
+reaches the body as a throw: once the job is marked, the members that wait
+or start something throw `Cancelled` — `check`, `wait`, `join`,
+`uncancellable`, `onCancel`, `run` and `each`. The ones that only register
+go on working, so a body just cancelled can still put what it holds on the
+cleanup stack: `onDispose`, `onDiscard`, `disown` and `unattended`. And
+`Cancelled` implements `Exception`. A `catch` wide
 enough to hold it swallows the cancellation, and the body walks on:
 
 ```dart

@@ -1154,6 +1154,53 @@ void main() {
       expect(job.outcome, isA<Done<void>>());
     });
   });
+
+  test('a large batch from onListen is replayed in linear time', () {
+    // Taking the head off a `List` moves everything behind it, so a batch
+    // buffered before the subscription existed costs the square of its
+    // size in moved references. Measured on this test, 100 000 events:
+    // 8 s off a list, under 0.2 s off a queue. The bound below sits
+    // between the two with room on both sides.
+    //
+    // The timeout of this file cannot guard this: the replay runs inside
+    // `fakeAsync` and holds the isolate, so no timer of the runner gets a
+    // turn until the test is over. Hence a watch of our own.
+    const count = 100000;
+    var seen = 0;
+    var last = -1;
+    var ordered = true;
+    final watch = Stopwatch()..start();
+    fakeAsync((async) {
+      late StreamController<int> controller;
+      controller = StreamController<int>.broadcast(
+        sync: true,
+        onListen: () {
+          for (var i = 0; i < count; i++) {
+            controller.add(i);
+          }
+          unawaited(controller.close());
+        },
+      );
+      Job<void>((ctx) async {
+        await ctx.each(controller.stream, (event) {
+          if (event != last + 1) {
+            ordered = false;
+          }
+          last = event;
+          seen++;
+        });
+      }).ignore();
+      async.flushTimers();
+    });
+    watch.stop();
+    expect(seen, count);
+    expect(ordered, isTrue, reason: 'and the order is the order they came');
+    expect(
+      watch.elapsedMilliseconds,
+      lessThan(2000),
+      reason: 'the head of the buffer comes off in constant time',
+    );
+  });
 }
 
 /// A stream that writes down what is done to its subscription.
