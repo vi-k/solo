@@ -27,7 +27,10 @@ first release.
   cancellation cascades, and a child that is not cancellable refuses it.
 - `JobObserver` with `onStart`, `onFinish`, `onError` and `onLog`; a
   child inherits the parent's. A `Failed` outcome nobody observed goes to
-  the zone that created the job.
+  the zone that created the job, and so does an error with nowhere else to
+  go when there is no observer — but never a `Cancelled`: a cancellation
+  is a decision somebody made, not a failure, and the observer is the only
+  place it is heard.
 - `ctx.unattended(action)` for work the body starts and does not wait
   for: it runs in an error zone of its own, and whatever it leaves
   uncaught — now, or long after the job is over — reaches `onError`
@@ -38,5 +41,7 @@ first release.
   subclass: the protected surface, the virtual checkpoint `check()`, and
   the hooks `started()`, `finished()` and `adoptedBy()`. The protected
   surface also carries `reportToZone`, for a domain whose own route for an
-  error with nowhere to go ends with nobody, and `throwIfUnattended`, for
-  a member of its context that must not be called from unattended work.
+  error with nowhere to go ends with nobody — it keeps a `Cancelled` out of
+  the zone exactly as the core does, so a domain does not write that rule
+  again — and `throwIfUnattended`, for a member of its context that must
+  not be called from unattended work.

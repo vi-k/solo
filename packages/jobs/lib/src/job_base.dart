@@ -619,8 +619,11 @@ abstract class JobBase<T> implements Job<T> {
   ///
   /// For the errors that have nowhere else to go: an action abandoned by
   /// [JobContext.wait] failing later, a disposer, a callback of
-  /// [JobContext.onCancel]. Silence is the choice of whoever listens, not
-  /// the default of the package.
+  /// [JobContext.onCancel], work handed over with [JobContext.unattended].
+  /// Silence is the choice of whoever listens, not the default of the
+  /// package. A [Cancelled] is the one thing that never reaches the zone
+  /// from here: a cancellation is a decision somebody made, not a failure,
+  /// and without an observer it is heard by nobody.
   @protected
   void notifyError(Object error, StackTrace stackTrace) {
     // Traced on both paths: the one without an observer is the harder of
@@ -628,21 +631,42 @@ abstract class JobBase<T> implements Job<T> {
     _debug(() => '$this error: $error');
     final observer = _observer;
     if (observer == null) {
-      _zone.handleUncaughtError(error, stackTrace);
+      _toZone(error, stackTrace);
       return;
     }
     _notify(() => observer.onError(this, error, stackTrace));
   }
 
-  /// Hands [error] to the zone the job was created in.
+  /// Hands [error] to the zone the job was created in, unless it is a
+  /// [Cancelled].
   ///
   /// For an engine of a domain whose own route for an error with nowhere
   /// to go ends with nobody: `solo` sends one here when neither an
   /// observer nor its hook took it. The core reaches the zone by itself,
   /// through [notifyError] without an observer and through an unobserved
-  /// [Failed].
+  /// [Failed]. A cancellation is held back here as it is there, so an
+  /// engine of a domain does not write that rule again.
   @protected
-  void reportToZone(Object error, StackTrace stackTrace) {
+  void reportToZone(Object error, StackTrace stackTrace) =>
+      _toZone(error, stackTrace);
+
+  /// The one door to the zone for an error with nowhere else to go.
+  ///
+  /// A [Cancelled] does not go through it. A cancellation is a decision
+  /// somebody made, not a failure; the one that ends this job has been
+  /// heard on the outcome already, and any other has an owner of its own.
+  /// In Flutter the zone is `PlatformDispatcher.onError`, and a
+  /// cancellation reaching it says nothing anybody can act on.
+  ///
+  /// The route of an unobserved [Failed] is not this one and keeps its own
+  /// rule: there the outcome decides, not the object it carries, so a
+  /// failure somebody built out of a [Cancelled] on purpose still reaches
+  /// the zone.
+  void _toZone(Object error, StackTrace stackTrace) {
+    if (error is Cancelled) {
+      _debug(() => '$this kept a cancellation out of the zone: $error');
+      return;
+    }
     _debug(() => '$this error went to the zone: $error');
     _zone.handleUncaughtError(error, stackTrace);
   }

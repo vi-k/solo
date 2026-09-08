@@ -347,7 +347,8 @@ abstract class SoloBase<S extends Object> {
   /// no observer at all. Silence is the choice of whoever listens, not the
   /// default of the package. A [Cancelled] is the one exception and never
   /// goes there: a cancellation is a decision somebody made, not a
-  /// failure. The body's own failure does not go there from here either —
+  /// failure, and the core keeps one out of the zone whatever route leads
+  /// there. The body's own failure does not go there from here either —
   /// it reaches the zone through its unobserved outcome instead, and one
   /// error is announced once.
   ///
@@ -356,14 +357,10 @@ abstract class SoloBase<S extends Object> {
   /// stackTrace)` to keep the default route as well.
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
     final homeless = _homeless;
-    // Only an error with nowhere else to go, only when nobody is
-    // listening, and never a cancellation: a cancellation is a decision
-    // somebody made, not a failure, and in Flutter it would reach
-    // `PlatformDispatcher.onError` for nothing.
-    if (homeless != null &&
-        identical(homeless, job) &&
-        observer == null &&
-        error is! Cancelled) {
+    // Only an error with nowhere else to go, and only when nobody is
+    // listening. A cancellation is not weeded out here: the core holds one
+    // back at its own door, and the rule is written in one place.
+    if (homeless != null && identical(homeless, job) && observer == null) {
       homeless._reportToZone(error, stackTrace);
     }
   }

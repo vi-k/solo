@@ -9,6 +9,7 @@ import 'package:test/test.dart';
 
 import 'support/delay.dart';
 import 'support/journal.dart';
+import 'support/probe_job.dart';
 
 void main() {
   test('an unobserved failure goes to the zone that created the job', () {
@@ -340,6 +341,139 @@ void main() {
       (error, stackTrace) => caught.add(error),
     );
     expect(caught, isEmpty);
+  });
+
+  test('a cancellation with nowhere to go stays out of the zone', () {
+    final caught = <Object>[];
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          final job = Job<void>((ctx) async {
+            ctx
+              ..onDispose(() {
+                throw const Cancelled('disposer');
+              })
+              ..onCancel(() {
+                throw const Cancelled('onCancel');
+              })
+              ..unattended(() async {
+                await delay(10);
+                throw const Cancelled('unattended');
+              })
+              // `ignore`, so the cancellation the abandoned future itself
+              // carries does not reach the zone on its own account: that
+              // one is Dart's doing, not the engine's.
+              ..wait(() async {
+                await delay(20);
+                throw const Cancelled('late action');
+              }).ignore();
+            await ctx.wait(() => delay(100));
+          });
+          async.elapse(const Duration(milliseconds: 5));
+          job.cancel().ignore();
+          async.flushTimers();
+        });
+      },
+      (error, stackTrace) => caught.add(error),
+    );
+    expect(
+      caught,
+      isEmpty,
+      reason: 'a cancellation is a decision somebody made, not a failure, '
+          'and the engine hands one to nobody',
+    );
+  });
+
+  test('the same cancellations reach the observer when there is one', () {
+    final journal = JobJournal();
+    final caught = <Object>[];
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          final job = Job<void>(
+            key: 'job',
+            observer: journal,
+            (ctx) async {
+              ctx
+                ..onDispose(() {
+                  throw const Cancelled('disposer');
+                })
+                ..onCancel(() {
+                  throw const Cancelled('onCancel');
+                })
+                ..unattended(() async {
+                  await delay(10);
+                  throw const Cancelled('unattended');
+                })
+                ..wait(() async {
+                  await delay(20);
+                  throw const Cancelled('late action');
+                }).ignore();
+              await ctx.wait(() => delay(100));
+            },
+          );
+          async.elapse(const Duration(milliseconds: 5));
+          job.cancel().ignore();
+          async.flushTimers();
+        });
+      },
+      (error, stackTrace) => caught.add(error),
+    );
+    expect(
+      journal.lines.where((line) => line.contains('error')).toList(),
+      containsAll(<String>[
+        '[job] error Cancelled(handler: onCancel)',
+        '[job] error Cancelled(handler: late action)',
+        '[job] error Cancelled(handler: disposer)',
+        '[job] error Cancelled(handler: unattended)',
+      ]),
+      reason: 'held back from the zone, not from whoever listens',
+    );
+    expect(caught, isEmpty);
+  });
+
+  test('the zone route of an engine of a domain refuses a cancellation', () {
+    final caught = <Object>[];
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          final job = ProbeJob<void>((ctx) async {})..launch();
+          async.flushMicrotasks();
+          job
+            ..report(const Cancelled('by hand'), StackTrace.empty)
+            ..report(StateError('boom'), StackTrace.empty);
+        });
+      },
+      (error, stackTrace) => caught.add(error),
+    );
+    expect(
+      caught.map((error) => '$error').toList(),
+      ['Bad state: boom'],
+      reason: 'the rule holds at the door an engine of a domain uses too',
+    );
+  });
+
+  test('an unobserved failure carrying a cancellation still reaches the zone',
+      () {
+    final caught = <Object>[];
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          // The outcome decides here, not the object it holds: somebody
+          // made this a failure on purpose, and a failure nobody looked at
+          // goes to the zone whatever is inside it.
+          ProbeJob<void>((ctx) async {}).drop(
+            const Failed(Cancelled('as a failure'), StackTrace.empty),
+          );
+          async.flushMicrotasks();
+        });
+      },
+      (error, stackTrace) => caught.add(error),
+    );
+    expect(
+      caught.map((error) => '$error').toList(),
+      ['Cancelled(handler: as a failure)'],
+    );
   });
 }
 

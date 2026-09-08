@@ -31,6 +31,11 @@ final class ProbeJob<T> extends JobBase<T> {
   /// a domain does.
   void cancelBy(Cancelled cancelled) => cancelWith(cancelled);
 
+  /// Sends an error to the zone the way an engine of a domain does, when
+  /// its own route for one with nowhere to go ends with nobody.
+  void report(Object error, StackTrace stackTrace) =>
+      reportToZone(error, stackTrace);
+
   @override
   JobContextBase createContext() => ProbeContext(this);
 

@@ -341,7 +341,9 @@ only if nobody observes that outcome. The four errors that have nowhere
 else to go — a late failure of an action `wait` abandoned, a disposer, an
 `onCancel` callback, a failure of work handed to `ctx.unattended` — go to
 the observer, or straight to the zone when there is none. Silence is the
-choice of whoever listens.
+choice of whoever listens. A `Cancelled` never takes that second road: a
+cancellation is a decision somebody made, not a failure, and the observer
+is the only place it is heard.
 
 ## Deferred start
 
