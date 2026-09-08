@@ -619,7 +619,12 @@ abstract class JobContextBase implements JobContext {
         '$_owner has already finished, cannot register a cleanup',
       );
     }
-    final cleanup = _Cleanup(disposer, always: always, value: value);
+    final cleanup = _Cleanup(
+      disposer,
+      always: always,
+      order: _owner._cleanupOrder++,
+      value: value,
+    );
     _owner._cleanups.add(cleanup);
     // Both lists: the unwinding moves a registration it decided to put off
     // out of the stack, and a disposer running below it may still take
@@ -643,23 +648,28 @@ abstract class JobContextBase implements JobContext {
     if (_owner.isFinished) {
       throw StateError('$_owner has already finished, cannot disown');
     }
-    final cleanups = _owner._cleanups;
-    for (var i = cleanups.length - 1; i >= 0; i--) {
-      if (identical(cleanups[i].value, value)) {
-        cleanups.removeAt(i);
-        return true;
+    // Both stores, and the newest wins: the unwinding moves the
+    // registrations it puts off out of the stack, and a late value can be
+    // registered while they are aside, so neither list alone holds the
+    // order. One waiting for an outcome that has not happened yet is still
+    // a registration, and handing the value on must still take it back.
+    List<_Cleanup>? found;
+    var at = -1;
+    void look(List<_Cleanup> list) {
+      for (var i = list.length - 1; i >= 0; i--) {
+        if (identical(list[i].value, value) &&
+            (found == null || list[i].order > found![at].order)) {
+          found = list;
+          at = i;
+        }
       }
     }
-    // Then what the unwinding has put aside, top of the stack first: a
-    // registration waiting for an outcome that has not happened yet is
-    // still a registration, and handing the value on must still take it
-    // back.
-    final skipped = _owner._skipped;
-    for (var i = 0; i < skipped.length; i++) {
-      if (identical(skipped[i].value, value)) {
-        skipped.removeAt(i);
-        return true;
-      }
+
+    look(_owner._cleanups);
+    look(_owner._skipped);
+    if (found case final list?) {
+      list.removeAt(at);
+      return true;
     }
     return false;
   }

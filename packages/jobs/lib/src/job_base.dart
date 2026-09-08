@@ -207,7 +207,15 @@ final class _Cleanup {
   final bool always;
   final Object? value;
 
-  _Cleanup(this.run, {required this.always, this.value});
+  /// Where this registration stands in the order they were made.
+  ///
+  /// The stack alone stops answering that once the unwinding starts: it
+  /// moves the registrations it puts off out of the list, and a late value
+  /// can be registered while they are aside. `disown` promises the top
+  /// one, and the top one is the newest, wherever it is being kept.
+  final int order;
+
+  _Cleanup(this.run, {required this.always, required this.order, this.value});
 }
 
 /// The lifecycle of a job: start, body, children, cancellation, outcome.
@@ -257,6 +265,9 @@ abstract class JobBase<T> implements Job<T> {
   /// returned, or through [JobContext.disown] — so they have to stay
   /// reachable from both, and a local list would hide them.
   final _skipped = <_Cleanup>[];
+
+  /// Hands out [_Cleanup.order] — the order registrations were made in.
+  int _cleanupOrder = 0;
   final _children = <JobBase<Object?>>[];
 
   /// The child behind an outcome of a child, for the description of this
@@ -820,6 +831,12 @@ abstract class JobBase<T> implements Job<T> {
           await _runCleanup(_cleanups.removeLast());
         }
       }
+      // Whatever is still put aside will never run: the loop above drains
+      // the list for every outcome but [Done], and a [Done] is what put
+      // them there. Left behind, they would hold their values and their
+      // closures for as long as anyone holds the handle — the job is over,
+      // and the list is a field now, not a local that dies with the call.
+      _skipped.clear();
       _disposing = false;
     }
     final decided = _pendingCancel ?? outcome;

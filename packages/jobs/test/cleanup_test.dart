@@ -2,6 +2,7 @@
 library;
 
 import 'dart:async';
+import 'dart:mirrors';
 
 import 'package:fake_async/fake_async.dart';
 import 'package:jobs/jobs.dart';
@@ -798,4 +799,62 @@ void main() {
           'pass put aside went with it',
     );
   });
+
+  test('disown takes the newest registration, whichever list holds it', () {
+    final resource = Object();
+    final ran = <String>[];
+    fakeAsync((async) {
+      Job<void>((ctx) async {
+        await ctx.wait(() => resource, discard: (_) => ran.add('bottom'));
+        ctx.onDispose(() {
+          ran.add('disown: ${ctx.disown(resource)}');
+          ctx.job.cancel().ignore();
+        });
+        await ctx.wait(() => resource, discard: (_) => ran.add('top'));
+      }).ignore();
+      async.flushTimers();
+    });
+    expect(
+      ran,
+      ['disown: true', 'bottom'],
+      reason: 'the top registration is the one the unwinding had already '
+          'put aside, and the one below it is still owed',
+    );
+  });
+
+  test('a successful job lets go of the registrations it never ran', () {
+    late Job<Object> job;
+    fakeAsync((async) {
+      job = Job<Object>((ctx) async {
+        final resource = Object();
+        // Put off by the first pass on a `Done` and never run: the value
+        // reached the caller, so there was nothing to discard.
+        return ctx.wait(() => resource, discard: (value) {});
+      })
+        ..ignore();
+      async.flushTimers();
+    });
+    expect(job.outcome, isA<Done<Object>>());
+    expect(
+      _putAside(job),
+      isEmpty,
+      reason: 'a registration nobody will run must not outlive the job in '
+          'its handle: it holds its value and its closure',
+    );
+  });
+}
+
+/// The registrations the unwinding put aside, read through the mirror: the
+/// list is private, and nothing public tells a finished job apart from one
+/// still holding what it will never run.
+List<Object?> _putAside(Job<Object?> job) {
+  final mirror = reflect(job);
+  for (ClassMirror? type = mirror.type; type != null; type = type.superclass) {
+    for (final entry in type.declarations.entries) {
+      if (MirrorSystem.getName(entry.key) == '_skipped') {
+        return mirror.getField(entry.key).reflectee as List<Object?>;
+      }
+    }
+  }
+  throw StateError('no _skipped field on ${job.runtimeType}');
 }
