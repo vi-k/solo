@@ -569,8 +569,11 @@ the working type, so the job is marked, and the flash stops at `[0, 1, 2]`
 with `Cancelled(rules: is not NotBroken)` instead of finishing the file —
 the case `emit.isDone` cannot see. The cancelled call's own handle carries
 `Cancelled(manual)`, where `add` carried nothing. And work that would
-otherwise be fire-and-forget goes through `ctx.run(child)`, a child job the
-parent waits for.
+otherwise be fire-and-forget goes through one of two members. Work with an
+outcome of its own goes through `ctx.run(child)`, a child job the parent
+waits for; work with none — a metric, a best-effort stop — goes through
+`ctx.unattended`, which the parent does not wait for but whose failure it
+still hears.
 
 ## 5. You cannot await your own event
 

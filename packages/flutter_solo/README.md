@@ -185,7 +185,14 @@ Future<void> _load() async {
 too. A job nobody looks at is not silent: an unobserved `Failed` reaches
 the zone that created the job, so a fire-and-forget call is
 `controller.load().ignore()` — the `ignore()` is what says the outcome is
-nobody's business.
+nobody's business. The same road carries a failure of work handed to
+`ctx.unattended` when neither `onError` nor a `SoloObserver` took it.
+
+What "to the zone" means in a Flutter app: the error goes to
+`PlatformDispatcher.instance.onError` if you set one, and to the engine's
+log if you did not. The app does **not** die of it — the `EXIT=255` of a
+plain Dart program is the VM's own answer to an unhandled error, not
+Flutter's.
 
 ## Testing
 

@@ -16,13 +16,28 @@ for a tree that followed the package before it went out.
   `value`, or calling `ignore`, counts as observing it; `Cancelled` never
   reaches the zone.
 - `JobContext`: `state`, `stateAs`, `emit`, `check`, `wait`, `join`,
-  `uncancellable`, `onCancel`, `run`, `log`.
+  `uncancellable`, `unattended`, `onCancel`, `run`, `log`.
 - A body does not `await` on its own: every call goes through the context,
   and the member it picks says what a cancellation does to that call.
   `wait` ends the waiting and lets the action run on; `join` waits for all
   of the action and gives up afterwards, so a device call is never left
   mid-flight; `uncancellable` holds the cancellation for the length of
-  the call and gives up once the step is over.
+  the call and gives up once the step is over; `unattended` does not wait
+  at all and hands the work to the engine, which hears it fail even after
+  the job is over.
+- `ctx.unattended(action)` for work a body starts and does not wait for.
+  It runs in an error zone of its own, and whatever it leaves uncaught —
+  now, or long after the job is over — reaches `onError` instead of the
+  process.
+- **Behaviour change.** With no `SoloBase.observer` and no override of
+  `SoloBase.onError`, an error with nowhere else to go no longer stops in
+  the empty hook: it goes to the zone the job was created in, the way the
+  core reports one when a job has no observer. That covers a disposer, an
+  `onCancel` callback, a late failure of an abandoned call or of
+  unattended work, and a `canStart` or `keepWhile` that threw instead of
+  answering. A `Cancelled` is the one exception and never goes there.
+  Install an observer, or override the hook, and the route is yours
+  again; call `super.onError(...)` from the override to keep it.
 - A cleanup stack instead of a `finally` in the body: `ctx.onDispose`
   releases whatever the outcome, `ctx.onDiscard` only when the value
   reaches nobody, and `wait` and `join` take the same two as `dispose` and

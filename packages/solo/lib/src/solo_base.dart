@@ -18,7 +18,11 @@ part 'queue.dart';
 /// The hooks — [onStart], [onFinish], [onError], [onLog], [onChange] and
 /// the [observer]'s — are a cross-cutting channel, so an error thrown by
 /// one goes to the current zone and changes nothing else: the job's outcome,
-/// the queue and [close] carry on as if the hook had returned. [publish] is
+/// the queue and [close] carry on as if the hook had returned. [onError] is
+/// the one with a body of its own: what reaches it and has nowhere else to
+/// go — a disposer, an `onCancel` callback, a late failure of an abandoned
+/// call or of work handed to `JobContext.unattended`, a rule that threw —
+/// goes on to the zone when nobody is listening. [publish] is
 /// not one of them: it is how a subclass delivers the state, and an error
 /// there is the subclass's own business.
 abstract class SoloBase<S extends Object> {

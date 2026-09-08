@@ -206,19 +206,25 @@ checks `paused`, and there is no `if` left to forget.
 **Cancellation.** Cooperative: Dart cannot interrupt somebody else's
 `await`. A cancelled job learns about it the next time it touches the
 context — the members that wait or start something throw the job's
-`Cancelled` once the job is marked, while `log`, `job` and the three that
-register a cleanup (`onDispose`, `onDiscard`, `disown`) go on working. So a body does not `await` on its own:
+`Cancelled` once the job is marked, while `log`, `job`, the three that
+register a cleanup (`onDispose`, `onDiscard`, `disown`) and
+`ctx.unattended` go on working. So a body does not `await` on its own:
 every call goes through the context, and the member you pick says what a
 cancellation does to that call. `ctx.wait(() => ...)` returns as soon as
 either the action or the cancellation arrives. `ctx.join(() => ...)` waits
 for all of the action and gives up afterwards. `ctx.uncancellable(() => ...)`
 holds the cancellation for the length of the call and gives up once it is
-over. Where there is no
+over. `ctx.unattended(() => ...)` does not wait at all: it hands the work
+to the engine and comes back, and whatever that work throws — now or long
+after the job is over — reaches `onError` instead of the process. Where
+there is no
 call to wrap — a loop over work of your own — `ctx.check()` is the same
 check on its own. A bare `await` is right in one place only: a call with
 no body code after it — the last cleanup of a job, the way the example
 closes its camera, or the `finally` of a job already cancelled, where
-every member would throw at entry anyway.
+every member would throw at entry anyway. A bare `unawaited(...)` stands
+in the same place as a bare `await`: outside the family, with its failure
+going to the zone; `ctx.unattended` is what to write instead.
 
 **The action is not stopped.** The wait ends, the work does not. The action
 runs to its end and its result is dropped on the floor, which is fine for a
@@ -552,6 +558,14 @@ the engine hands the error to the zone the job was created in, through
 `Zone.handleUncaughtError`, exactly as Dart does with an unhandled
 `Future` error. A fire-and-forget `profile.load();` on its own line still
 reports what went wrong.
+
+Neither is an error a job left behind. Work a body hands to
+`ctx.unattended` keeps its own error zone, and a failure of it — now, or
+long after the job is over — arrives at `onError` like any other. With
+neither the hook overridden nor an observer installed, nobody is
+listening, and it goes to the zone the job was created in rather than
+stopping in an empty hook; a cancellation is the one thing that never
+goes there.
 
 When the failure is genuinely handled elsewhere — by `onError`, by the
 observer — say so:
