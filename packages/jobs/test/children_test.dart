@@ -499,9 +499,9 @@ void main() {
       final log = <String>[];
       late Job<void> child;
       final parent = ThrowingRulesJob<int>((ctx) async {
-        // An auto-starting job: left half-adopted it would start itself
-        // on its own microtask, under a parent that waits for nothing.
-        child = Job<void>(key: 'ghost', (c) async {
+        // Left half-adopted it would be a job nobody starts and nobody
+        // waits for: the rule turns it away, and it is dropped instead.
+        child = Job.deferred<void>(key: 'ghost', (c) async {
           log.add('ghost started');
           await c.wait(() => delay(50));
         });

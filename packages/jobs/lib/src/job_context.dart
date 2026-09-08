@@ -272,10 +272,17 @@ abstract interface class JobContext {
   /// children. A cancellation of the parent cascades onto them, and a
   /// child created with `cancellable: false` refuses that cascade.
   ///
+  /// A child is a job nobody starts by itself: [Job.deferred], or a job of
+  /// an engine whose start belongs to the engine. One from `Job(body)` is
+  /// refused, whether or not its own start has come round yet: which of
+  /// the two got there first is a matter of microtasks nobody can see in
+  /// the source.
+  ///
   /// Throws [ArgumentError] for a handle that is not a job of this kernel,
-  /// or one an engine of a domain does not own; [StateError] for a job
-  /// that has already been started; and the parent's own [Cancelled], with
-  /// the child dropped, if the parent is already cancelled.
+  /// one an engine of a domain does not own, or one that starts itself;
+  /// [StateError] for a job that has already been started; and the
+  /// parent's own [Cancelled], with the child dropped, if the parent is
+  /// already cancelled.
   Job<T> run<T>(Job<T> child);
 
   /// Sends `message.toString()` to [JobObserver.onLog]. A no-op when the
@@ -797,6 +804,18 @@ abstract class JobContextBase implements JobContext {
     }
     if (child is! JobBase<T>) {
       throw ArgumentError.value(child, 'child', 'is not a job of this core');
+    }
+    if (child is _AutoJob) {
+      // Refused before the status is even looked at, so that the answer
+      // does not depend on which got here first: on the same synchronous
+      // stripe this call would still find it `created` and adopt it, one
+      // microtask later it is already running on its own. The start of a
+      // child belongs to its parent.
+      throw ArgumentError.value(
+        child,
+        'child',
+        'starts itself; a child is made with Job.deferred',
+      );
     }
     if (child.status != JobStatus.created) {
       throw StateError(

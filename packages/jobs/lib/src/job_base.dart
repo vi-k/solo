@@ -27,6 +27,10 @@ abstract interface class Job<T> {
   /// `Cancelled(manual)` with `started: false`, and the body is never
   /// called.
   ///
+  /// A job made this way is a root and stays one: [JobContext.run] refuses
+  /// it, its own start being already on the way. A child is made with
+  /// [deferred].
+  ///
   /// [observer] receives the hooks of this job, and a child inherits it
   /// unless given one of its own. What the body opens is released through
   /// the cleanup stack of the context — see [JobContext.onDispose] and
@@ -1003,8 +1007,8 @@ final class _AutoJob<T> extends _Job<T> {
     // `scheduleMicrotask`, not `Future(...)`: that one schedules a timer,
     // and under `FakeAsync` the start would need `flushTimers`.
     scheduleMicrotask(() {
-      // Idempotent: someone may have run this job as a child in the same
-      // synchronous stripe, and then this microtask does nothing.
+      // A job dropped before its own start ever came round is finished
+      // already, and a finished job does not run.
       if (status == JobStatus.created) {
         start();
       }

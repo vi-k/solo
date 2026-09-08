@@ -272,19 +272,21 @@ final parent = Job<void>((ctx) async {
 ```
 
 `Job.deferred` and not `Job`, because the start of a child belongs to its
-parent: an auto-starting job that `run` did not reach on the same
-synchronous stripe starts itself — as a root job nobody adopted, nobody
-cascades onto and nobody waits for — and `run` then refuses it as already
-started.
+parent: a job that starts itself is refused, whether or not its own start
+has come round yet. Which of the two would have got there first is a
+matter of microtasks nobody can see in the source, and losing that race
+left the job running as a root nobody adopted, nobody cascades onto and
+nobody waits for.
 
 A child inherits the parent's observer unless it was given one of its
 own, and a cancellation of a child that surfaces through `child.value`
 marks the parent's outcome as `handler`, naming the child.
 
 `run` refuses as well as starts: a handle that is not a job of this
-kernel is an `ArgumentError`, a job already started is a `StateError`, a
-body that has already ended is a `StateError` too — a child begun then
-would be waited for by nobody — and a parent that is already cancelled
+kernel is an `ArgumentError`, and so is one that starts itself; a job
+already started is a `StateError`, a body that has already ended is a
+`StateError` too — a child begun then would be waited for by nobody —
+and a parent that is already cancelled
 throws its own `Cancelled` with the child dropped, which is what a body
 starting children after a long await eventually meets.
 

@@ -54,23 +54,33 @@ void main() {
     });
   });
 
-  test('a job created in the same stripe can still be a child', () {
+  test('a job that starts itself cannot be a child', () {
     fakeAsync((async) {
-      // Inside the parent's body: a job made before it would have started
-      // on its own microtask, and could not be adopted.
-      late final Job<void> child;
+      // Made inside the parent's body, before its own microtask came
+      // round: `run` would still have found it `created` and adopted it.
+      late final Job<void> orphan;
+      Object? thrown;
       final parent = Job<void>((ctx) async {
-        child = Job<void>((ctx) async {});
-        await ctx.run(child).done;
+        orphan = Job<void>((ctx) async {});
+        try {
+          ctx.run(orphan);
+        } on Object catch (error) {
+          thrown = error;
+        }
       });
       async.flushMicrotasks();
-      expect(child.isChild, isTrue);
-      expect(child.level, 1);
+      expect(thrown, isA<ArgumentError>());
+      expect(orphan.isChild, isFalse);
+      expect(
+        orphan.outcome,
+        isA<Done<void>>(),
+        reason: 'refused, and left to start itself as the root it is',
+      );
       expect(parent.isFinished, isTrue);
     });
   });
 
-  test('a job started by its own microtask cannot be adopted', () {
+  test('a job that already started itself cannot be a child either', () {
     fakeAsync((async) {
       final early = Job<void>((ctx) async {});
       async.flushMicrotasks();
@@ -79,7 +89,9 @@ void main() {
       final parent = Job<void>((ctx) async => ctx.run(early))..ignore();
       async.flushMicrotasks();
       expect(parent.outcome, isA<Failed>());
-      expect((parent.outcome! as Failed).error, isA<StateError>());
+      // The same answer as in the stripe above: which of the two got
+      // here first is nothing the reader of that body could see.
+      expect((parent.outcome! as Failed).error, isA<ArgumentError>());
     });
   });
 
