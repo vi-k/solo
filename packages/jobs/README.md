@@ -105,8 +105,9 @@ Line by line, because every one of them is a decision:
   ends, and the body learns of the cancellation after that, at its next
   call through the context — see [Cancellation](#cancellation).
 - **`await job.cancel()`** returns when the job has actually finished, so
-  the outcome below is already there. Nothing has to be awaited: the
-  handle can be dropped, and `job.ignore()` says so out loud.
+  the outcome below is already there. The `await` is a choice: the
+  cancellation goes through either way, and dropping it only means not
+  waiting for the end.
 
 `example/example.dart` is this fragment with a fake `Database` around it.
 
