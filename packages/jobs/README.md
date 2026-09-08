@@ -32,8 +32,9 @@ waiting for a call that knows nothing about it. The context member you
 pick is what says how that call reacts.
 
 There is no state here, no queue, no rules, no retry, no timeout, no
-pool. That is `solo`, built on this package and re-exporting it whole: a
-package that depends on `solo` never depends on `jobs` as well.
+pool. If you want any of those, take `solo`: it is built on this package
+and re-exports it whole, so a package that depends on `solo` never depends
+on `jobs` as well.
 
 ## Install
 
