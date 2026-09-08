@@ -11,6 +11,8 @@ class Database {
 
   Future<void> markReady() async {}
 
+  Future<void> flush() async {}
+
   Future<void> close() async => print('database closed');
 }
 
@@ -25,7 +27,12 @@ Future<void> main() async {
     );
 
     await ctx.join(database.migrate);
-    await ctx.uncancellable(database.markReady);
+    // Both or neither: `join` on each would let the cancellation end the
+    // body between them.
+    await ctx.uncancellable(() async {
+      await database.markReady();
+      await database.flush();
+    });
 
     return database;
   });

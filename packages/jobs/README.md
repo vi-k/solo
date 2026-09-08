@@ -54,7 +54,10 @@ final job = Job<Database>((ctx) async {
   );
 
   await ctx.join(database.migrate);
-  await ctx.uncancellable(database.markReady);
+  await ctx.uncancellable(() async {
+    await database.markReady();
+    await database.flush();
+  });
 
   return database;
 });
@@ -88,10 +91,15 @@ Line by line, because every one of them is a decision:
   migration already writing must not be walked away from. `ctx.wait`
   would end the waiting and leave it writing into a database this body is
   about to close.
-- **`ctx.uncancellable(database.markReady)`** for the one step that must
-  not be interrupted at all. A cancellation arriving inside it is held
-  until the step is over, and lands on the next line that goes through the
-  context — see [Cancellation](#cancellation).
+- **`ctx.uncancellable(...)`** around the pair, and not a `join` on each:
+  the two lines land together or neither does. `join` lets the call it
+  wraps finish and then hands the body to the cancellation, so one
+  arriving inside `markReady` would end the body before `flush` ever ran.
+  `uncancellable` holds the cancellation for the whole section instead; it
+  lands on the next line that goes through the context, and here that is
+  after both. What is on disk outlives this job whatever the outcome, and
+  a schema marked ready but never written stays that way — see
+  [Cancellation](#cancellation).
 - **`await job.cancel()`** returns when the job has actually finished, so
   the outcome below is already there. Nothing has to be awaited: the
   handle can be dropped, and `job.ignore()` says so out loud.
