@@ -35,7 +35,7 @@ extension JobStream on JobContext {
   /// as long as its subscription honours `pause` — and a handler that
   /// threw is not called again. A handler already running is not
   /// interrupted: cancelling the job stops delivery at once, but the
-  /// handler in flight runs on unattended, and neither this call nor the
+  /// handler in flight runs on unwatched, and neither this call nor the
   /// job waits for it. A handler that must be interrupted takes the job's
   /// cancellation through the context, as any other code of the body
   /// does.
@@ -50,9 +50,15 @@ extension JobStream on JobContext {
   /// job: the stream is let go of when the job's cleanup reaches this
   /// registration, and the future itself ends with the job's
   /// cancellation, with a failure of the stream, with a handler of its own
-  /// failing after the job is over, or not at all. Quench it with
-  /// `ignore`; left alone, what it carries becomes the zone's, and
-  /// quenched, a failure that had nowhere else to go is gone with it.
+  /// failing after the job is over, or not at all. Left alone, what it
+  /// carries becomes the zone's; quenched with `ignore`, a failure that
+  /// had nowhere else to go is gone with it. Neither is what you want, and
+  /// there is a third way — hand the whole call over instead, and its
+  /// late failures reach the observer like any other:
+  ///
+  /// ```dart
+  /// ctx.unattended(() => ctx.each(hw.positions, (p) => ctx.log('at $p')));
+  /// ```
   ///
   /// ```dart
   /// await ctx.each(hw.positions, (p) => ctx.log('at $p'));

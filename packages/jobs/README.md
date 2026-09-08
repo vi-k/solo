@@ -180,6 +180,11 @@ says what a cancellation does to that call:
 - `ctx.onCancel(callback)` fires the moment the job is marked, before the
   body learns about it: this is how a cancellation reaches something that
   can really stop — a cancel token, an abort, a subscription.
+- `ctx.unattended(action)` is the one that does not wait at all. The work
+  is handed to the engine and the body walks on; a cancellation does not
+  touch it, and whatever it throws — now or long after the job is over —
+  reaches `onError` instead of the process. Start the work inside and take
+  nothing out of it: the boundary of its error zone holds both ways.
 - `ctx.check()` gives up where there is no call to wrap.
 
 ```dart
@@ -187,6 +192,7 @@ final job = Job<void>((ctx) async {
   final token = CancelToken();
   ctx.onCancel(token.cancel);
   await ctx.join(() => device.seek(position, cancelToken: token));
+  ctx.unattended(() => analytics.report('seek', position));
 });
 
 final feed = Job<void>((ctx) => ctx.each(socket.messages, handle));
@@ -331,10 +337,11 @@ queue policies. `describe` adds a line for whoever reads that log.
 
 Errors take two paths, and they are not the same. The body's error goes
 to the observer and becomes the `Failed` outcome; it reaches the zone
-only if nobody observes that outcome. The three errors that have nowhere
+only if nobody observes that outcome. The four errors that have nowhere
 else to go — a late failure of an action `wait` abandoned, a disposer, an
-`onCancel` callback — go to the observer, or straight to the zone when
-there is none. Silence is the choice of whoever listens.
+`onCancel` callback, a failure of work handed to `ctx.unattended` — go to
+the observer, or straight to the zone when there is none. Silence is the
+choice of whoever listens.
 
 ## Deferred start
 
@@ -381,7 +388,11 @@ domain subclasses. The subclass adds what the kernel does not have — a
 state, a queue, rules — and everything the engine needs is protected:
 the status, the pending cancellation, the children, the start, the
 finish, the cancellation with its rejectable flag, and the two hooks a
-job of a domain fills in, `started()` and `finished()`.
+job of a domain fills in, `started()` and `finished()`. Two more are
+there for the error routes: `reportToZone`, for a domain whose own route
+for an error with nowhere to go ends with nobody, and
+`throwIfUnattended`, for a member of a domain's context that must not be
+called from unattended work.
 
 ```dart
 final class MyJob<T> extends JobBase<T> {

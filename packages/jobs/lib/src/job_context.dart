@@ -5,9 +5,10 @@ part of 'job_base.dart';
 /// Once the job is marked cancelled, the members that wait or start
 /// something throw that [Cancelled]: [check], [wait], [join],
 /// [uncancellable], [onCancel], [run] and `each`. The members that only
-/// register do not — [onDispose], [onDiscard] and [disown] go on working,
-/// so a body that has just been cancelled can still put what it holds on
-/// the cleanup stack — and neither do [log] and [job]. What a cancellation
+/// register do not — [onDispose], [onDiscard], [disown] and [unattended]
+/// go on working, so a body that has just been cancelled can still put
+/// what it holds on the cleanup stack, and still hand out a stop nobody
+/// waits for — and neither do [log] and [job]. What a cancellation
 /// arriving *during* a call does to that call is the call's own business:
 /// see [wait], [join] and [uncancellable].
 ///
@@ -16,9 +17,10 @@ part of 'job_base.dart';
 /// a [StateError] once the job has finished, except [check], [log] and
 /// [job]. While the engine unwinds the cleanup stack the same holds for
 /// the members that wait or start something, and [check] throws a
-/// [StateError] there too — but [onDispose], [onDiscard] and [disown] go
-/// on working, because a value arriving that late is put on the stack the
-/// engine is unwinding.
+/// [StateError] there too — but [onDispose], [onDiscard], [disown] and
+/// [unattended] go on working, because a value arriving that late is put
+/// on the stack the engine is unwinding, and a disposer may hand out work
+/// nobody waits for.
 abstract interface class JobContext {
   /// Gives up if the job was cancelled — in `solo`, also if its rules
   /// stopped holding.
@@ -257,7 +259,78 @@ abstract interface class JobContext {
   /// job has no observer.
   void log(Object? message);
 
-  /// Runs [action] as work the job does not wait for.
+  /// Runs [action] as work this job does not wait for.
+  ///
+  /// The fourth member of the waiting family, and the one that does not
+  /// wait: [wait] waits for the call but not the work, [join] waits for
+  /// all of it, [uncancellable] waits with the cancellation held back, and
+  /// this one hands the work to the engine and comes back at once.
+  /// Whatever [action] leaves uncaught — now, or long after the job is
+  /// over — reaches `onError`: the job's observer, or the zone the job was
+  /// created in when there is none. Written any other way, such a failure
+  /// belongs to nobody and takes the process down with it.
+  ///
+  /// ```dart
+  /// ctx.unattended(() => analytics.report(event));
+  /// ```
+  ///
+  /// The job does not wait for the work, does not cancel it and does not
+  /// stop it outliving the job. Its own cancellation is not reported: a
+  /// cancellation is a decision, not a failure, and whoever listens has
+  /// heard it on the outcome already. A throw of [action] itself goes the
+  /// same way as one from a future it started — to `onError`, never into
+  /// the body: background work must not decide the outcome of the job
+  /// that started it.
+  ///
+  /// **Start the work in here and take nothing out of it.** The work runs
+  /// in an error zone of its own, and that boundary holds both ways. A
+  /// future made outside and awaited in here never comes back if it
+  /// fails, and its error goes to whoever made it — the process, in an
+  /// ordinary program. A future born in here and awaited outside hangs
+  /// whoever waits for it: a body that changed its mind, a disposer, a
+  /// memoized cache first filled from the background. The `void` return
+  /// does not stop a closure carrying one out, and nothing will warn you.
+  ///
+  /// [run] and [uncancellable] throw a [StateError] when called from
+  /// inside [action]: both act on the whole job, and this work is not the
+  /// job. A child started here would hang on that boundary with the
+  /// parent waiting for it forever, and a section opened here would hold
+  /// back the cancellation of a body that stands in no section at all.
+  /// [wait] and [join] are fine — they register on the job and behave.
+  ///
+  /// **How the work stops.** Not by polling [check]: while the engine
+  /// unwinds the cleanup stack it throws a [StateError] instead of the
+  /// cancellation, and on a job that ended [Done] it does not throw at
+  /// all, so a loop waiting for it waits forever and holds the job while
+  /// it waits. Ask `job.isFinished`, or wait for `job.done`. Work that
+  /// must end with the job puts its own stop on the cleanup stack —
+  /// `ctx.onDispose(timer.cancel)` — or takes the cancellation through
+  /// [onCancel], which is also the natural place to hand out an
+  /// asynchronous stop whose failure should be heard:
+  ///
+  /// ```dart
+  /// ctx.onCancel(() => ctx.unattended(device.stop));
+  /// ```
+  ///
+  /// **Unfinished work holds the job**, its outcome and the body's
+  /// closure with everything it captured — and, in `solo`, the controller
+  /// itself, with its state and its listeners, after `close()` too. A
+  /// periodic timer left running in here leaks all of that.
+  ///
+  /// A job created in here is not this work: it has an outcome and an
+  /// observer of its own, and its unobserved failure goes to the zone the
+  /// body runs in rather than to this job's observer. Quench it with
+  /// [Job.ignore]. The `emit` of `solo` works from in here too, while the
+  /// job is alive, the same as [wait] does.
+  ///
+  /// Legal on a job already marked cancelled, and legal while the engine
+  /// unwinds the cleanup stack — a disposer starting work nobody waits
+  /// for is the case this member was made for. Once the job has finished
+  /// it throws a [StateError].
+  ///
+  /// A bare `unawaited(work())` is not covered: it belongs to no member of
+  /// this context, its failure goes to the zone as it always has, and this
+  /// member is what to write instead of it.
   void unattended(FutureOr<void> Function() action);
 
   /// The job this context belongs to.

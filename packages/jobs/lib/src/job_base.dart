@@ -171,6 +171,10 @@ abstract interface class Job<T> {
   /// Waiting for [done] or [value] observes the job too; calling this
   /// afterwards changes nothing. Has no effect on [Cancelled], which is
   /// never reported to the zone.
+  ///
+  /// A job is not background work: it has an outcome and an observer of
+  /// its own, and this is how it is quenched. Work with neither goes to
+  /// [JobContext.unattended] instead.
   void ignore();
 }
 

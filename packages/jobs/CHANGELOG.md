@@ -12,6 +12,7 @@ first release.
   `ctx.wait` ends the waiting and not the work, `ctx.join` waits for all
   of the action and gives up afterwards, `ctx.uncancellable` holds the
   cancellation until the step is over,
+  `ctx.unattended` does not wait at all and hands the work to the engine,
   `ctx.onCancel` hands the cancellation to whatever can really stop, and
   `ctx.check` gives up where there is no call to wrap. `ctx.each` follows
   a stream for as long as the job lives, waiting for an asynchronous
@@ -27,6 +28,15 @@ first release.
 - `JobObserver` with `onStart`, `onFinish`, `onError` and `onLog`; a
   child inherits the parent's. A `Failed` outcome nobody observed goes to
   the zone that created the job.
+- `ctx.unattended(action)` for work the body starts and does not wait
+  for: it runs in an error zone of its own, and whatever it leaves
+  uncaught — now, or long after the job is over — reaches `onError`
+  instead of the process. `ctx.run` and `ctx.uncancellable` are refused
+  from inside it, and a job created in there reports to the zone the body
+  runs in, not to the observer of the job that started the work.
 - `JobBase<T>` and `JobContextBase` for an engine of a domain to
   subclass: the protected surface, the virtual checkpoint `check()`, and
-  the hooks `started()`, `finished()` and `adoptedBy()`.
+  the hooks `started()`, `finished()` and `adoptedBy()`. The protected
+  surface also carries `reportToZone`, for a domain whose own route for an
+  error with nowhere to go ends with nobody, and `throwIfUnattended`, for
+  a member of its context that must not be called from unattended work.

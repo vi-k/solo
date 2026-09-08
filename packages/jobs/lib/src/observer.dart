@@ -15,10 +15,18 @@ abstract class JobObserver {
   /// Something the job did threw.
   ///
   /// The body — that error also becomes the [Failed] outcome — or one of
-  /// the three with no outcome to carry them: an action abandoned by
+  /// the four with no outcome to carry them: an action abandoned by
   /// [JobContext.wait] failing later, a disposer, a callback of
-  /// [JobContext.onCancel]. Without an observer those three go to the zone
-  /// the job was created in; with one, they stop here.
+  /// [JobContext.onCancel], and work handed over with
+  /// [JobContext.unattended]. Without an observer those four go to the
+  /// zone the job was created in; with one, they stop here.
+  ///
+  /// A [Cancelled] reaches this hook in three cases, and none of them is
+  /// the job giving up — that one is not an error and never comes here.
+  /// A child's cancellation awaited through `child.value`; a fresh
+  /// `Cancelled` built by the rules of a domain for a context that
+  /// outlived its job; and `throw Cancelled(...)` inside unattended work,
+  /// where there is nobody left to cancel and the object is new.
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) {}
 
   /// A job called [JobContext.log].
