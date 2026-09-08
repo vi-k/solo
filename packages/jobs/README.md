@@ -223,15 +223,23 @@ says what a cancellation does to that call:
   step. It lands the moment the section closes, and the next context call
   throws it. A step whose tail must happen too belongs inside the same
   section; a job that must survive a cancellation altogether is created
-  with `cancellable: false`.
+  with `cancellable: false`. Always `await` it: the section belongs to the
+  job, not to the future, so it opens on the call either way — and a body
+  that walked on can end while it is still open, in which case the held
+  cancellation lands on a job that is already over and is dropped.
+  `cancel()` then returns on a job that ended `Done`, and nothing says
+  otherwise.
 - `ctx.onCancel(callback)` fires the moment the job is marked, before the
   body learns about it: this is how a cancellation reaches something that
   can really stop — a cancel token, an abort, a subscription.
 - `ctx.unattended(action)` is the one that does not wait at all. The work
   is handed to the engine and the body walks on; a cancellation does not
   touch it, and whatever it throws — now or long after the job is over —
-  reaches `onError` instead of the process. Start the work inside and take
-  nothing out of it: the boundary of its error zone holds both ways.
+  reaches `onError` instead of the process. That is what it has over
+  `unawaited(...)`, which only silences the analyser: a future dropped that
+  way still belongs to the zone it was made in, and its failure arrives
+  there with nothing to say which job started it. Start the work inside and
+  take nothing out of it: the boundary of its error zone holds both ways.
 - `ctx.check()` gives up where there is no call to wrap.
 
 ```dart

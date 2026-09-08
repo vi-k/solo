@@ -491,4 +491,42 @@ void main() {
       expect((parent.outcome! as Cancelled).description, 'by the engine');
     });
   });
+
+  test(
+      'a section nobody awaited can outlive the job and lose the '
+      'cancellation', () {
+    // The section belongs to the job, not to the future: it opens on the
+    // call and holds a cancellation whether the body waits for it or not.
+    // A body that walked on can end first, and then the held cancellation
+    // arrives at a job that is already over. This is what the dartdoc of
+    // `uncancellable` tells the reader to avoid by awaiting the call.
+    final order = <String>[];
+    late Job<void> job;
+    fakeAsync((async) {
+      job = Job<void>((ctx) async {
+        // ignore: unawaited_futures
+        ctx.uncancellable(() async {
+          await delay(50);
+          order.add('section ends');
+        });
+        await ctx.wait(() => delay(20));
+        order.add('body ends');
+      })
+        ..ignore();
+      async.elapse(const Duration(milliseconds: 10));
+      job.cancel().then((_) => order.add('cancel returned')).ignore();
+      async.flushTimers();
+    });
+    expect(
+      order,
+      ['body ends', 'cancel returned', 'section ends'],
+      reason: 'the body did not wait for the section and ended under it',
+    );
+    expect(
+      job.outcome,
+      isA<Done<void>>(),
+      reason: 'the cancellation was held past the end of the job and then '
+          'dropped, and `cancel()` returned saying nothing of it',
+    );
+  });
 }

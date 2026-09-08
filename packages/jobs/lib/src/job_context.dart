@@ -158,6 +158,15 @@ abstract interface class JobContext {
   /// section leaves alone. Sections nest — only the outermost lets a held
   /// cancellation through — and it is let through even if [action] throws.
   ///
+  /// **Always await this call.** The section belongs to the job, not to the
+  /// future returned here: it opens on the call and holds a cancellation
+  /// whether the body waits for it or not. A body that walked on can end
+  /// while the section is still open, and then the held cancellation lands
+  /// on a job that is already over and is dropped — [Job.cancel] returns on
+  /// a job whose outcome is [Done], and nothing says otherwise. What
+  /// [action] throws has nowhere to go either: nobody awaits this future,
+  /// so its error reaches the zone instead of the observer.
+  ///
   /// This is what separates it from [join], which accepts the
   /// cancellation as it arrives and only keeps waiting: there the job is
   /// marked at once, and a token handed to [onCancel] stops the very call
