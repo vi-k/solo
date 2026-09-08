@@ -170,13 +170,13 @@ They differ only in how a change is delivered.
 
 **Job.** A unit of work: an `async` body `Future<T> Function(SoloContext)`,
 an optional `key`, rules, and a handle `Job<T>`. `job(...)` builds one
-without queueing it, `add(job, policy: ...)` queues it, `run(...)` does
-both in one call; all three return a `SoloJob<T>`, which is `Job<T>` plus
+without queueing it, `add(job, policy: ...)` queues it, `run(...)` does both
+in one call; all three return a `SoloJob<T>`, which is `Job<T>` plus
 `isQueued` — the queue belongs to the controller, so that member is not on
-the handle every job has. `describe: () => 'zoom: $zoom'` labels the job for logs,
-the observer and `toString`, which prints `Job(key: label)` instead of
-`Job(key)`. At most one root job runs at a time, and while it runs no
-other **root** job of this controller writes the state.
+the handle every job has. `describe: () => 'zoom: $zoom'` labels the job for
+logs, the observer and `toString`, which prints `Job(key: label)` instead of
+`Job(key)`. At most one root job runs at a time, and while it runs no other
+**root** job of this controller writes the state.
 
 **Working type `W`.** The subtype of `S` a job agrees to work with. The
 body sees `ctx.state` already narrowed to `W`. The type is checked before
@@ -318,10 +318,11 @@ cancelled job — so a state that has to be set even then belongs in
 **Errors of a disposer.** They go to `onError` and to `SoloBase.observer`.
 With neither of the two set, nobody is listening, and the error goes to the
 zone the job was created in — not the controller's — the way the core
-reports one that has nowhere else to go — so a disposer that touches the context and stops on
-its first line is heard rather than lost. A `Cancelled` is the one thing
-that never travels that road. Install an observer at startup, as the
-[Errors](#errors) section says, and it becomes yours to route.
+reports one that has nowhere else to go — so a disposer that touches the
+context and stops on its first line is heard rather than lost. A `Cancelled`
+is the one thing that never travels that road. Install an observer at
+startup, as the [Errors](#errors) section says, and it becomes yours to
+route.
 
 Note also that a disposer must not wait for its own job, nor for a job of
 the same queue: `job.done`, `job.value`, `job.cancel()` and the next job
@@ -345,31 +346,33 @@ Job<void> track() => run<Ready, void>(
 The subscription belongs to the job. It goes when the stream ends, when the
 body leaves the call, the moment the job is marked cancelled — before the
 body itself learns about it — and, for a call the body walked away from,
-when the job ends whatever the outcome. The call returns when the stream is done,
-throws the job's `Cancelled` if the job gave up meanwhile, and throws an
-error of the stream or of the callback into the body, where an ordinary
+when the job ends whatever the outcome. The call returns when the stream is
+done, throws the job's `Cancelled` if the job gave up meanwhile, and throws
+an error of the stream or of the callback into the body, where an ordinary
 `catch` can take it. The end of a stream is Dart's to declare, and it
-declares it only once the source has finished cancelling the
-subscription: a source whose cleanup never comes back never ends its
-stream either, and cancelling the job is what gets the body out. `ctx.state` inside the callback is a read like any
-other, checked against the rules; the `Cancelled` it may throw is not an
-error but the end of the stream, and it comes back through the call. A callback that returns a future is waited for, and delivery is held
-meanwhile: the events keep their order, and a callback that threw is not
-called again. `each` is an extension on `JobContext` — the interface of the
-kernel that `SoloContext` implements — and not a member of it: it is built
-out of `wait`, `onCancel`, `onDispose` and `job`, and does nothing your
-own body could not.
+declares it only once the source has finished cancelling the subscription: a
+source whose cleanup never comes back never ends its stream either, and
+cancelling the job is what gets the body out. `ctx.state` inside the
+callback is a read like any other, checked against the rules; the
+`Cancelled` it may throw is not an error but the end of the stream, and it
+comes back through the call. A callback that returns a future is waited for,
+and delivery is held meanwhile: the events keep their order, and a callback
+that threw is not called again. `each` is an extension on `JobContext` — the
+interface of the kernel that `SoloContext` implements — and not a member of
+it: it is built out of `wait`, `onCancel`, `onDispose` and `job`, and does
+nothing your own body could not.
 
 **Children.** `ctx.run(child)` starts a job right now, bypassing the queue,
 as a child of the current one. The parent finishes only after all of its
 children. A cancelled parent cancels them, and so does a body that gives
 itself up with `throw Cancelled(...)` — including one that let a child's
 `Cancelled` through from `await child.value`; a body that *fails* leaves
-them to finish and waits. A child writes the state beside its parent — neither waits for
-the other, and their writes interleave — which is the one way to have two
-writers inside a controller deliberately. `ctx.run(child).done` gives the outcome and never throws;
-`ctx.run(child).value` gives the value and throws the child's `Cancelled`
-or error into the parent's body.
+them to finish and waits. A child writes the state beside its parent —
+neither waits for the other, and their writes interleave — which is the one
+way to have two writers inside a controller deliberately.
+`ctx.run(child).done` gives the outcome and never throws;
+`ctx.run(child).value` gives the value and throws the child's `Cancelled` or
+error into the parent's body.
 
 **External state.** `externalSetState(next)` sets the state from outside
 any job: a hardware listener, a forced transition. Every job whose body is
@@ -389,8 +392,9 @@ declare its own. `job.done` completes with the outcome and never throws;
 completes on every `Cancelled` outcome — for a running job the moment it is
 marked, before the body finishes, and for a body that cancelled itself once
 that body has ended and its children are done, right before the cleanup —
-and never at all for a job that ends `Done` or `Failed`; `job.cancel()` cancels and waits for the job to actually finish;
-`job.ignore()` says that nobody is going to look at the outcome.
+and never at all for a job that ends `Done` or `Failed`; `job.cancel()`
+cancels and waits for the job to actually finish; `job.ignore()` says that
+nobody is going to look at the outcome.
 
 **Queue and policies.** `queue` is a first-class object visible to
 subclasses: `jobs`, `remove`, `removeWhere`, `clear`, `lastWhere`. The three
@@ -931,13 +935,13 @@ transformer of its own, and a policy is chosen per call rather than per
 event type.
 
 Three things have no counterpart on purpose. There is no `concurrent`
-transformer: root jobs of one controller never overlap, and work that
-really is parallel goes inside one job, which awaits it itself. There is nothing
-like an `emit` after `close` to guard against: `add` on a closed
-controller returns a job that is already `Cancelled(closed)`, so call
-sites need no `isClosed` check. And an event is not a value you can hold
-on to — a method call gives you the `Job<T>` instead, so the caller can
-await exactly the work it started.
+transformer: root jobs of one controller never overlap, and work that really
+is parallel goes inside one job, which awaits it itself. There is nothing
+like an `emit` after `close` to guard against: `add` on a closed controller
+returns a job that is already `Cancelled(closed)`, so call sites need no
+`isClosed` check. And an event is not a value you can hold on to — a method
+call gives you the `Job<T>` instead, so the caller can await exactly the
+work it started.
 
 ## Example
 

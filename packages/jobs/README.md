@@ -130,15 +130,29 @@ neither an enum nor sealed: an engine built on this one declares its own
 with `const CancelReason('closed')`, and reasons are equal by name.
 
 `job.done` completes with the outcome and never throws; `job.value`
-completes with the value or throws; `job.whenCancelled` completes on
-every `Cancelled` outcome — for a running job the moment it is marked,
-before the body finishes, and for a body that cancelled itself once that
-body has ended and its children are done, right before the cleanup. It never completes for a job that ends `Done` or
-`Failed`, so hang work on it with `.then(...)` or race it with
-`job.done` — a bare `await job.whenCancelled` parks for good on a job
-that succeeds. `job.cancel()` cancels and waits for the job to actually
-finish; `job.ignore()` says that nobody is going to look at the
-outcome.
+completes with the value or throws. `job.cancel()` cancels and waits for
+the job to actually finish; `job.ignore()` says that nobody is going to
+look at the outcome.
+
+`job.whenCancelled` completes on every `Cancelled` outcome — for a
+running job the moment it is marked, before the body finishes, and for a
+body that cancelled itself once that body has ended and its children are
+done, right before the cleanup. It says that the decision has been made,
+not that the job is over:
+
+```dart
+final job = Job<Report>(build);
+
+// The moment somebody cancels. The children and the cleanup still have
+// to play out, and `job.done` waits for them.
+unawaited(job.whenCancelled.then((_) => print('cancelling…')));
+
+final outcome = await job.done;
+```
+
+It never completes for a job that ends `Done` or `Failed`, so hang work
+on it as above, or race it with `job.done`: a bare
+`await job.whenCancelled` parks for good on a job that succeeds.
 
 ## Cancellation
 
@@ -185,10 +199,14 @@ tells the two apart, because it throws only if this job is cancelled too.
 The body must never await anything by itself, and the member it picks
 says what a cancellation does to that call:
 
-- `ctx.wait(action)` ends the waiting, not the work. The action runs on,
-  its result is dropped — or handed to the disposer it was given, which
-  runs on the cleanup stack while the job is still unwinding it, so the
-  closing of an engine waits for that too, and alone once the job is over.
+- `ctx.wait(action)` ends the waiting, not the work: the body goes on
+  from that call — with the cancellation in hand — while the action runs
+  to its end. Its result is dropped, or handed to the disposer it was
+  given. That disposer goes on the cleanup stack while the job is still
+  unwinding it, so whoever waits for the job waits for the disposal too,
+  the closing of an engine included. If the action finishes after the job
+  is already over, the disposer runs on its own, with nobody left to wait
+  for it.
 - `ctx.join(action)` waits for all of the action and gives up afterwards:
   a device command already on the wire is not abandoned halfway. Its
   disposer is awaited before the `Cancelled` is thrown, so whoever waits

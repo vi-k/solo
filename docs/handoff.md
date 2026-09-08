@@ -649,8 +649,9 @@ false` из конструктора остался окончательным �
 внутренний комментарий по-русски во всём `lib/` (пришёл с `aaa6f01`).
 Правило `AGENTS.md` про английский касается публичных артефактов и
 дартдока, а внутренние комментарии не покрывает, так что нарушения нет —
-но остальной код английский, и это выбивается. Два, оставшихся после пятого круга
-ревью, он закрыл 2026-09-08, оба — «оставить как есть»; они перечислены
+но остальной код английский, и это выбивается. Два, оставшихся после
+пятого круга ревью, он закрыл 2026-09-08, оба — «оставить как есть»;
+они перечислены
 выше, в «В работе прямо сейчас», разбор — в
 `2026-09-07[11]-jobs-each-review.md`, находки 12 и 13.
 
@@ -761,17 +762,18 @@ dart pub publish --dry-run    # 0 warnings; только проверка
 
 `README.md` пакета: Why, Install, Quick start, Outcomes, Cancellation,
 Children, Cleanup, Observer, Deferred start, Testing, Building on the core,
-solo. Четырнадцать блоков кода; тринадцать собраны и прогнаны в стенде
+solo. Пятнадцать блоков кода; тринадцать собраны и прогнаны в стенде
 2026-09-06, раздел «Cleanup» переписан 2026-09-07 вместе с работой по
 уборке, а «Cancellation» и «Children» — в тот же день по ревью ядра: `each`
 с асинхронным обработчиком, каскад при самоотмене тела, границы
 `cancellable: false`, чужой `Cancelled` из `child.value`. 2026-09-08 по
 слову владельца переписан «Quick start» — теперь он даёт базе свой сигнал
 остановки через `ctx.onCancel`, и на нём видно, чем `join` отличается от
-`uncancellable`, — и в «Cancellation» добавлен четырнадцатый блок: тот же
-`catch` в форме `on Object` с `if (error is Cancelled) rethrow`. `example/example.dart` — «Quick start»
-дословно, с фальшивой `Database` вокруг: запускается, печатает `database
-closed` и `Cancelled(manual)`. В конце «Building on the core» — ссылка на
+`uncancellable`, — и добавлены два блока: в «Cancellation» тот же `catch`
+в форме `on Object` с `if (error is Cancelled) rethrow`, а в «Outcomes» —
+пример на `whenCancelled`. `example/example.dart` — «Quick start» дословно,
+с фальшивой `Database` вокруг: запускается, печатает `database closed` и
+`Cancelled(manual)`. В конце «Building on the core» — ссылка на
 справку `JobBase` на pub.dev, она заработает после публикации.
 
 ### `packages/solo`
