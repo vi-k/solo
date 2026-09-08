@@ -257,6 +257,9 @@ abstract interface class JobContext {
   /// job has no observer.
   void log(Object? message);
 
+  /// Runs [action] as work the job does not wait for.
+  void unattended(FutureOr<void> Function() action);
+
   /// The job this context belongs to.
   Job<Object?> get job;
 }
@@ -678,7 +681,69 @@ abstract class JobContextBase implements JobContext {
 
   @override
   void log(Object? message) => _owner._notifyLog('$message');
+
+  @override
+  void unattended(FutureOr<void> Function() action) {
+    // First, and by name: a context outliving its job is the mistake this
+    // member is likeliest to be caught in, and the message has to say
+    // which call threw. The cleanup window stays open on purpose — a
+    // disposer starting work nobody waits for is what this is for.
+    if (_owner.isFinished) {
+      throw StateError(
+        '$_owner has already finished, cannot start unattended work',
+      );
+    }
+    // The zone a job born in this work reports to. Taken from the fork
+    // around us when there is one, so nesting does not walk the address
+    // one fork outwards on every level: the answer is the zone the body
+    // itself runs in, however deep the call is.
+    final from = (Zone.current[_unattendedKey] as Zone?) ?? Zone.current;
+    runZonedGuarded<void>(
+      () {
+        action();
+      },
+      _unattendedError,
+      // Two values, and the key of the second is the job itself: forks of
+      // different jobs nest, and one shared key would let the inner one
+      // hide the outer. Under a key of its own each job sees its own work
+      // and nobody else's.
+      zoneValues: {_unattendedKey: from, _owner: true},
+    );
+  }
+
+  /// The fork's handler: everything the work leaves uncaught, less this
+  /// job's own giving up.
+  void _unattendedError(Object error, StackTrace stackTrace) {
+    if (_isOwnCancellation(error)) {
+      return;
+    }
+    notifyError(error, stackTrace);
+  }
+
+  /// Whether [error] is this job giving up rather than something failing.
+  ///
+  /// The job's own cancellation is not news: whoever listens has heard it
+  /// on the outcome already. A `Cancelled` built inside the work is not
+  /// this — there is nobody to cancel there, and the observer gets it.
+  bool _isOwnCancellation(Object error) {
+    if (identical(error, _owner._pendingCancel) ||
+        identical(error, _owner._outcome)) {
+      return true;
+    }
+    // A child this job's own cascade took down, reaching the work through
+    // `child.value`. The lookup is exact — the key is the outcome object
+    // itself — so anyone else's child still comes through.
+    return error is Cancelled &&
+        error.reason == CancelReason.parent &&
+        _owner._outcomeChild[error] != null;
+  }
 }
+
+/// The zone-value key under which a fork of [JobContext.unattended]
+/// carries the zone of the body. A fresh object, so nothing outside this
+/// library can name it. The fork's other value is the mark of the job
+/// that made it, and its key is that job.
+final _unattendedKey = Object();
 
 /// The context of a job of the core itself.
 final class _CoreContext extends JobContextBase {
