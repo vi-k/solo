@@ -329,6 +329,23 @@ abstract class JobContextBase implements JobContext {
     }
   }
 
+  /// Throws [StateError] when called from inside this job's own
+  /// [JobContext.unattended] work.
+  ///
+  /// Two members act on the whole job, and unattended work is not the
+  /// job: a child started there would hang on the fork's boundary with
+  /// the parent waiting for it forever, and a section opened there would
+  /// hold a cancellation of a body that stands in no section at all.
+  /// Another job's fork is not this job's business, and the key is the
+  /// job itself: forks nest, and a shared key would let the inner one
+  /// answer for the outer.
+  @protected
+  void throwIfUnattended(String action) {
+    if (Zone.current[_owner] != null) {
+      throw StateError('$_owner cannot $action inside unattended work');
+    }
+  }
+
   /// Hands [error] to the observer, or to the zone when there is none.
   @protected
   void notifyError(Object error, StackTrace stackTrace) =>
@@ -465,6 +482,9 @@ abstract class JobContextBase implements JobContext {
 
   @override
   Future<T> uncancellable<T>(FutureOr<T> Function() action) async {
+    // Before `throwIfFinished`: for work that outlived its job both
+    // complaints are true, but the call from the fork is the one to fix.
+    throwIfUnattended('run an uncancellable action');
     throwIfFinished('run an uncancellable action');
     check();
     enterUncancellable();
@@ -621,6 +641,7 @@ abstract class JobContextBase implements JobContext {
 
   @override
   Job<T> run<T>(Job<T> child) {
+    throwIfUnattended('run a child');
     throwIfFinished('run a child');
     if (_owner.bodyEnded) {
       // The body is gone, and a child started now would be waited for by
