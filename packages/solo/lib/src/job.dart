@@ -119,6 +119,29 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   void _notifyError(Object error, StackTrace stackTrace) =>
       notifyError(error, stackTrace);
 
+  /// Marks the controller while an error with nowhere to go passes
+  /// through the hooks.
+  ///
+  /// [SoloBase.onError] takes two kinds and cannot tell them apart by
+  /// itself: the body's failure, which has an outcome carrying it to the
+  /// zone already, and this one, which has nothing. Only this one may end
+  /// in the zone. Saved and restored, not merely set: the hooks are
+  /// synchronously reentrant through `externalSetState` → `_reevaluate` →
+  /// `_notifyError`.
+  @override
+  void notifyError(Object error, StackTrace stackTrace) {
+    final previous = _solo._homeless;
+    _solo._homeless = this;
+    try {
+      super.notifyError(error, stackTrace);
+    } finally {
+      _solo._homeless = previous;
+    }
+  }
+
+  void _reportToZone(Object error, StackTrace stackTrace) =>
+      reportToZone(error, stackTrace);
+
   void _cancelWith(Cancelled cancelled, {bool rejectable = true}) =>
       cancelWith(cancelled, rejectable: rejectable);
 

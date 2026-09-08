@@ -630,6 +630,19 @@ abstract class JobBase<T> implements Job<T> {
     _notify(() => observer.onError(this, error, stackTrace));
   }
 
+  /// Hands [error] to the zone the job was created in.
+  ///
+  /// For an engine of a domain whose own route for an error with nowhere
+  /// to go ends with nobody: `solo` sends one here when neither an
+  /// observer nor its hook took it. The core reaches the zone by itself,
+  /// through [notifyError] without an observer and through an unobserved
+  /// [Failed].
+  @protected
+  void reportToZone(Object error, StackTrace stackTrace) {
+    _debug(() => '$this error went to the zone: $error');
+    _zone.handleUncaughtError(error, stackTrace);
+  }
+
   /// The subclass joins the run: `solo` adds the job to its running list.
   ///
   /// Called with the job already [JobStatus.running], so it must not

@@ -27,13 +27,16 @@ abstract class SoloObserver {
   /// `canStart` or `keepWhile` — that threw instead of answering.
   ///
   /// Called for every such error, including the ones that end as
-  /// [Cancelled] and are therefore never handed to the zone: a body that
-  /// throws after cancellation, or an abandoned action that fails later.
-  /// Those are this hook's business alone. The job's own cancellation is
-  /// not an error and never comes here; a [Cancelled] thrown by an
-  /// abandoned action does, because for an observer that is a late failure
-  /// like any other. See [Failed] for the errors that also reach the
-  /// zone.
+  /// [Cancelled], which are never handed to the zone: a body that throws
+  /// after cancellation, or an abandoned action that fails later. The
+  /// job's own cancellation is not an error and never comes here; a
+  /// [Cancelled] thrown by an abandoned action does, because for an
+  /// observer that is a late failure like any other.
+  ///
+  /// Setting an observer takes the error off the default route: with no
+  /// observer and no override of [SoloBase.onError], an error with
+  /// nowhere else to go reaches the zone the job was created in. See
+  /// [Failed] for the errors that also reach the zone.
   void onError(
     SoloBase<Object> solo,
     Job<Object?> job,

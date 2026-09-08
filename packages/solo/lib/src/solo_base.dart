@@ -35,6 +35,10 @@ abstract class SoloBase<S extends Object> {
 
   /// The observer every job of this controller is given.
   late final JobObserver _jobObserver = _SoloJobObserver<S>(this);
+
+  /// The job whose error with nowhere to go is going through the hooks
+  /// right now, set by `_SoloJob.notifyError`.
+  _SoloJob<S, S, Object?>? _homeless;
   _SoloJob<S, S, Object?>? _current;
   final _running = <_SoloJob<S, S, Object?>>[];
   StackTrace? _lastChange;
@@ -328,15 +332,37 @@ abstract class SoloBase<S extends Object> {
   /// disposer or an `onCancel` callback; and a rule of this controller —
   /// `canStart` or `keepWhile` — that threw instead of answering.
   ///
-  /// Called for every such error, including the ones that end as
-  /// [Cancelled] and are therefore never handed to the zone: a body that
-  /// throws after cancellation, or an abandoned action that fails later.
-  /// Those are this hook's business alone. The job's own cancellation is
-  /// not an error and never comes here; a [Cancelled] thrown by an
-  /// abandoned action does, because for an observer that is a late failure
-  /// like any other. See [Failed] for the errors that also reach the
-  /// zone.
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {}
+  /// Called for every such error. The job's own cancellation is not an
+  /// error and never comes here; a [Cancelled] thrown by an abandoned
+  /// action does, because for an observer that is a late failure like any
+  /// other. See [Failed] for the errors that also reach the zone.
+  ///
+  /// **What the default body does.** With no [observer] set and this hook
+  /// not overridden, nobody is listening, and the error goes to the zone
+  /// the job was created in — the same thing the core does when a job has
+  /// no observer at all. Silence is the choice of whoever listens, not the
+  /// default of the package. A [Cancelled] is the one exception and never
+  /// goes there: a cancellation is a decision somebody made, not a
+  /// failure. The body's own failure does not go there from here either —
+  /// it reaches the zone through its unobserved outcome instead, and one
+  /// error is announced once.
+  ///
+  /// **Overriding replaces that**, so an override that says nothing keeps
+  /// the error out of the zone; call `super.onError(job, error,
+  /// stackTrace)` to keep the default route as well.
+  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
+    final homeless = _homeless;
+    // Only an error with nowhere else to go, only when nobody is
+    // listening, and never a cancellation: a cancellation is a decision
+    // somebody made, not a failure, and in Flutter it would reach
+    // `PlatformDispatcher.onError` for nothing.
+    if (homeless != null &&
+        identical(homeless, job) &&
+        observer == null &&
+        error is! Cancelled) {
+      homeless._reportToZone(error, stackTrace);
+    }
+  }
 
   /// A job called [JobContext.log].
   void onLog(Job<Object?> job, String message) {}
