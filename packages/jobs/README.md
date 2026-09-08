@@ -159,10 +159,11 @@ on it as above, or race it with `job.done`: a bare
 `cancel()` marks the job; stopping is the body's own business. The mark
 reaches the body as a throw: once the job is marked, the members that wait
 or start something throw `Cancelled` — `check`, `wait`, `join`,
-`uncancellable`, `onCancel`, `run` and `each`. The ones that only register
-go on working, so a body just cancelled can still put what it holds on the
-cleanup stack: `onDispose`, `onDiscard`, `disown` and `unattended`. And
-`Cancelled` implements `Exception`. A `catch` wide
+`uncancellable`, `run` and `each` — and `onCancel` with them, which only
+registers, but would be registering a callback that can no longer fire. The
+ones that only register go on working, so a body just cancelled can still
+put what it holds on the cleanup stack: `onDispose`, `onDiscard`, `disown`
+and `unattended`. And `Cancelled` implements `Exception`. A `catch` wide
 enough to hold it swallows the cancellation, and the body walks on:
 
 ```dart
@@ -231,7 +232,12 @@ says what a cancellation does to that call:
   otherwise.
 - `ctx.onCancel(callback)` fires the moment the job is marked, before the
   body learns about it: this is how a cancellation reaches something that
-  can really stop — a cancel token, an abort, a subscription.
+  can really stop — a cancel token, an abort, a subscription. The callback
+  is synchronous, and only what it throws synchronously reaches `onError`:
+  `void Function()` takes an `async` function without a word from the
+  analyser, and the future one of those returns is awaited by nobody — its
+  failure goes straight to the zone. A stop that is asynchronous itself is
+  handed to the engine — `ctx.onCancel(() => ctx.unattended(device.stop))`.
 - `ctx.unattended(action)` is the one that does not wait at all. The work
   is handed to the engine and the body walks on; a cancellation does not
   touch it, and whatever it throws — now or long after the job is over —
