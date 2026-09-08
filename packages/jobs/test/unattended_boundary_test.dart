@@ -188,7 +188,8 @@ void main() {
     expect(journal.take().where((line) => line.contains('error')), isEmpty);
   });
 
-  test('a job created inside nested unattended work still reports to the '
+  test(
+      'a job created inside nested unattended work still reports to the '
       'body zone', () {
     final journal = JobJournal();
     final caught = <String>[];

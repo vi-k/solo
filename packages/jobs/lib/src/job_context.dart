@@ -275,9 +275,14 @@ abstract interface class JobContext {
   /// ```
   ///
   /// The job does not wait for the work, does not cancel it and does not
-  /// stop it outliving the job. Its own cancellation is not reported: a
-  /// cancellation is a decision, not a failure, and whoever listens has
-  /// heard it on the outcome already. A throw of [action] itself goes the
+  /// stop it outliving the job. The job's own cancellation is not
+  /// reported when the work leaves it uncaught: a cancellation is a
+  /// decision, not a failure, and whoever listens has heard it on the
+  /// outcome already. That covers what comes out of [action]; a [wait] or
+  /// a [join] made in here keeps its own rules, and an action *it* was
+  /// left holding still reports its late failure — a [Cancelled]
+  /// included — the way it does anywhere else. A throw of [action] goes
+  /// the
   /// same way as one from a future it started — to `onError`, never into
   /// the body: background work must not decide the outcome of the job
   /// that started it.
@@ -287,8 +292,9 @@ abstract interface class JobContext {
   /// future made outside and awaited in here never comes back if it
   /// fails, and its error goes to whoever made it — the process, in an
   /// ordinary program. A future born in here and awaited outside hangs
-  /// whoever waits for it: a body that changed its mind, a disposer, a
-  /// memoized cache first filled from the background. The `void` return
+  /// whoever waits for it **if it fails** — a body that changed its mind,
+  /// a disposer, a memoized cache first filled from the background — and
+  /// a failure is exactly the case nobody plans for. The `void` return
   /// does not stop a closure carrying one out, and nothing will warn you.
   ///
   /// [run] and [uncancellable] throw a [StateError] when called from
@@ -820,6 +826,16 @@ abstract class JobContextBase implements JobContext {
   /// on the outcome already. A `Cancelled` built inside the work is not
   /// this — there is nobody to cancel there, and the observer gets it.
   bool _isOwnCancellation(Object error) {
+    // The type first: everything below compares by identity against an
+    // outcome, and an outcome is not always a cancellation. Work that
+    // outlived its job and threw `job.outcome!` would otherwise have a
+    // `Done` or a `Failed` swallowed here.
+    if (error is! Cancelled) {
+      return false;
+    }
+    // `_outcome` and not only `_pendingCancel`: an engine of a domain
+    // that finishes a job by hand never marks it, and the cancellation
+    // lives in the outcome alone.
     if (identical(error, _owner._pendingCancel) ||
         identical(error, _owner._outcome)) {
       return true;
@@ -827,8 +843,7 @@ abstract class JobContextBase implements JobContext {
     // A child this job's own cascade took down, reaching the work through
     // `child.value`. The lookup is exact — the key is the outcome object
     // itself — so anyone else's child still comes through.
-    return error is Cancelled &&
-        error.reason == CancelReason.parent &&
+    return error.reason == CancelReason.parent &&
         _owner._outcomeChild[error] != null;
   }
 }

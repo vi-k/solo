@@ -35,9 +35,12 @@ for a tree that followed the package before it went out.
   core reports one when a job has no observer. That covers a disposer, an
   `onCancel` callback, a late failure of an abandoned call or of
   unattended work, and a `canStart` or `keepWhile` that threw instead of
-  answering. A `Cancelled` is the one exception and never goes there.
-  Install an observer, or override the hook, and the route is yours
-  again; call `super.onError(...)` from the override to keep it.
+  answering while the job runs. A `Cancelled` is the one exception and
+  never goes there. Install an observer, or override the hook, and the
+  route is yours again; call `super.onError(...)` from the override to
+  keep it. A rule that throws *before* the job starts is not on this
+  route at all: it becomes a `Failed` outcome and reaches the zone as any
+  unobserved failure does, whatever the observer.
 - A cleanup stack instead of a `finally` in the body: `ctx.onDispose`
   releases whatever the outcome, `ctx.onDiscard` only when the value
   reaches nobody, and `wait` and `join` take the same two as `dispose` and

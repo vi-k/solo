@@ -238,9 +238,9 @@ void main() {
 final class _Silent extends SoloObserver {}
 
 final class _Quiet extends Solo<TestState> {
-  _Quiet() : super(const Initial());
-
   final errors = <String>[];
+
+  _Quiet() : super(const Initial());
 
   @override
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
@@ -248,9 +248,9 @@ final class _Quiet extends Solo<TestState> {
 }
 
 final class _Loud extends Solo<TestState> {
-  _Loud() : super(const Initial());
-
   final errors = <String>[];
+
+  _Loud() : super(const Initial());
 
   void set(TestState state) => externalSetState(state);
 
@@ -262,9 +262,9 @@ final class _Loud extends Solo<TestState> {
 }
 
 final class _Reentrant extends Solo<TestState> {
-  _Reentrant() : super(const Initial());
-
   bool _nested = false;
+
+  _Reentrant() : super(const Initial());
 
   @override
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) {

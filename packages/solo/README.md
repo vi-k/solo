@@ -317,10 +317,11 @@ cancelled job — so a state that has to be set even then belongs in
 
 **Errors of a disposer.** They go to `onError` and to `SoloBase.observer`.
 With neither of the two set, nobody is listening, and the error goes to the
-zone the controller was built in, the way the core reports one that has
-nowhere else to go — so a disposer that touches the context and stops on
-its first line is heard rather than lost. Install an observer at startup,
-as the [Errors](#errors) section says, and it becomes yours to route.
+zone the job was created in — not the controller's — the way the core
+reports one that has nowhere else to go — so a disposer that touches the context and stops on
+its first line is heard rather than lost. A `Cancelled` is the one thing
+that never travels that road. Install an observer at startup, as the
+[Errors](#errors) section says, and it becomes yours to route.
 
 Note also that a disposer must not wait for its own job, nor for a job of
 the same queue: `job.done`, `job.value`, `job.cancel()` and the next job

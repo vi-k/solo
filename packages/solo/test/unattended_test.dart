@@ -17,10 +17,10 @@ import 'support/test_state.dart';
 /// class`, and these tests need two controllers whose `onError` can be
 /// told apart by name.
 final class _Recorder extends Solo<TestState> {
-  _Recorder(this.name, this.lines) : super(const Initial());
-
   final String name;
   final List<String> lines;
+
+  _Recorder(this.name, this.lines) : super(const Initial());
 
   void set(TestState state) => externalSetState(state);
 
@@ -30,8 +30,7 @@ final class _Recorder extends Solo<TestState> {
 }
 
 void main() {
-  test('a job created inside unattended work is reported once, by itself',
-      () {
+  test('a job created inside unattended work is reported once, by itself', () {
     final lines = <String>[];
     final zone = <String>[];
     fakeAsync((async) {
@@ -216,9 +215,9 @@ void main() {
 }
 
 final class _Watched extends Solo<TestState> {
-  _Watched(this.lines) : super(const Initial());
-
   final List<String> lines;
+
+  _Watched(this.lines) : super(const Initial());
 
   @override
   void onFinish(Job<Object?> job) =>
@@ -230,9 +229,9 @@ final class _Watched extends Solo<TestState> {
 }
 
 final class _Watcher extends SoloObserver {
-  _Watcher(this.lines);
-
   final List<String> lines;
+
+  _Watcher(this.lines);
 
   @override
   void onClose(SoloBase<Object> solo) => lines.add('observer.onClose');

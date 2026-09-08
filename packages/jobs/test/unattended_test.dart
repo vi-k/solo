@@ -9,6 +9,7 @@ import 'package:test/test.dart';
 
 import 'support/delay.dart';
 import 'support/journal.dart';
+import 'support/probe_job.dart';
 
 void main() {
   test('a failure of unattended work reaches the observer', () {
@@ -30,7 +31,8 @@ void main() {
     ]);
   });
 
-  test('without an observer the failure goes to the zone that created the '
+  test(
+      'without an observer the failure goes to the zone that created the '
       'job', () {
     final caught = <String>[];
     runZonedGuarded(
@@ -68,7 +70,8 @@ void main() {
     });
   });
 
-  test('a synchronous throw of the action goes to the observer, not to the '
+  test(
+      'a synchronous throw of the action goes to the observer, not to the '
       'body', () {
     final journal = JobJournal();
     late final Job<void> job;
@@ -137,7 +140,8 @@ void main() {
     ]);
   });
 
-  test("a child cancelled by this job's cascade is not an error, a child "
+  test(
+      "a child cancelled by this job's cascade is not an error, a child "
       'cancelling itself is', () {
     List<String> run({required bool own}) {
       final journal = JobJournal();
@@ -162,10 +166,7 @@ void main() {
         }
         async.flushTimers();
       });
-      return journal
-          .take()
-          .where((line) => line.contains('error'))
-          .toList();
+      return journal.take().where((line) => line.contains('error')).toList();
     }
 
     expect(run(own: false), isEmpty);
@@ -258,6 +259,85 @@ void main() {
     expect(ran, isTrue);
   });
 
+  test('a late failure of a wait made in the work reports as it always does',
+      () {
+    final journal = JobJournal();
+    fakeAsync((async) {
+      final job = Job<void>(key: 'j', observer: journal, (ctx) async {
+        ctx.unattended(() async {
+          await ctx.wait(() async {
+            await delay(50);
+            ctx.check();
+          });
+        });
+        await ctx.wait(() => delay(100));
+      });
+      async.elapse(const Duration(milliseconds: 5));
+      job.cancel();
+      async.flushTimers();
+    });
+    // The filter covers what the work leaves uncaught, and nothing else: a
+    // `wait` made in here keeps its own rules, and an action it was left
+    // holding reports its late failure as it does anywhere — a `Cancelled`
+    // included. Pinned so the two rules are not confused for one.
+    expect(journal.take(), [
+      '[j] started',
+      '[j] finished Cancelled(manual)',
+      '[j] error Cancelled(manual)',
+    ]);
+  });
+
+  test('a cancellation the engine finished the job with is not an error', () {
+    final journal = JobJournal();
+    fakeAsync((async) {
+      final job = ProbeJob<void>(
+        key: 'j',
+        observer: journal,
+        (ctx) async {
+          ctx.unattended(() async {
+            await delay(30);
+            // The job was ended by hand, so it was never marked: the
+            // cancellation lives in the outcome alone. Thrown the way the
+            // core throws an outcome itself, which is also how a test
+            // throws one without tripping `only_throw_errors`.
+            Error.throwWithStackTrace(ctx.job.outcome!, StackTrace.current);
+          });
+          await ctx.wait(() => delay(100));
+        },
+      )..launch();
+      async.elapse(const Duration(milliseconds: 5));
+      job.drop(
+        const Cancelled.by(reason: CancelReason.manual, started: true),
+      );
+      async.flushTimers();
+    });
+    expect(journal.take().where((line) => line.contains('error')), isEmpty);
+  });
+
+  test('an outcome that is not a cancellation is an error like any other', () {
+    final journal = JobJournal();
+    fakeAsync((async) {
+      final job = ProbeJob<void>(
+        key: 'j',
+        observer: journal,
+        (ctx) async {
+          ctx.unattended(() async {
+            await delay(30);
+            Error.throwWithStackTrace(ctx.job.outcome!, StackTrace.current);
+          });
+          await ctx.wait(() => delay(100));
+        },
+      )..launch();
+      async.elapse(const Duration(milliseconds: 5));
+      job.drop(const Done<void>(null));
+      async.flushTimers();
+    });
+    expect(
+      journal.take().where((line) => line.contains('error')),
+      ['[j] error Done(null)'],
+    );
+  });
+
   test('onCancel may hand an asynchronous stop to unattended work', () {
     final journal = JobJournal();
     var stopped = false;
@@ -283,7 +363,8 @@ void main() {
     );
   });
 
-  test('an abandoned each wrapped in unattended hands a late handler error '
+  test(
+      'an abandoned each wrapped in unattended hands a late handler error '
       'to the observer', () {
     final journal = JobJournal();
     fakeAsync((async) {

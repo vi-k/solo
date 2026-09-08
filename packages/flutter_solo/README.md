@@ -188,11 +188,14 @@ the zone that created the job, so a fire-and-forget call is
 nobody's business. The same road carries a failure of work handed to
 `ctx.unattended` when neither `onError` nor a `SoloObserver` took it.
 
-What "to the zone" means in a Flutter app: the error goes to
-`PlatformDispatcher.instance.onError` if you set one, and to the engine's
-log if you did not. The app does **not** die of it — the `EXIT=255` of a
-plain Dart program is the VM's own answer to an unhandled error, not
-Flutter's.
+What "to the zone" means in a Flutter app: the error travels the zones
+outwards, so an error zone of your own around `runApp` sees it first; past
+that it reaches `PlatformDispatcher.instance.onError` if you set one, and
+the engine's log if you did not. What happens next is that callback's
+business and the embedder's — the framework does not promise to carry on,
+and `PlatformDispatcher.onError` may end the process. What is *not* the
+answer here is the `EXIT=255` of a plain Dart program: that one is the
+VM's own reaction to an unhandled error, and it is not Flutter's.
 
 ## Testing
 
