@@ -135,7 +135,7 @@ enough to hold it swallows the cancellation, and the body walks on:
 
 ```dart
 try {
-  await ctx.wait(database.migrate);
+  await ctx.join(database.migrate);
 } on Cancelled {
   rethrow; // never swallow this one
 } on Exception catch (error) {
@@ -248,7 +248,7 @@ final database = await ctx.join(
   discard: (database) => database.close(),
 );
 
-await ctx.wait(database.migrate);
+await ctx.join(database.migrate);
 
 return database;
 ```

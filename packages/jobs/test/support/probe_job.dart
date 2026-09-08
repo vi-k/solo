@@ -102,6 +102,37 @@ final class RefusingContext extends JobContextBase {
       );
 }
 
+/// A job whose context cancels the job itself and still lets the child in.
+///
+/// Stands in for a rule of a domain that says yes and, on the way, gives
+/// up on the job it belongs to: `canStart` in `solo` may call `cancel()`
+/// or `close()` and still answer that the child may start.
+final class SelfCancellingRulesJob<T> extends JobBase<T> {
+  final Future<T> Function(JobContext ctx) _body;
+
+  SelfCancellingRulesJob(this._body, {super.key});
+
+  /// Starts the body the way an engine of a domain would.
+  void launch() => start();
+
+  @override
+  JobContextBase createContext() => SelfCancellingContext(this);
+
+  @override
+  Future<T> execute(covariant SelfCancellingContext ctx) => _body(ctx);
+}
+
+/// The context of [SelfCancellingRulesJob].
+final class SelfCancellingContext extends JobContextBase {
+  SelfCancellingContext(super.owner);
+
+  @override
+  Cancelled? beforeChildStart(JobBase<Object?> child) {
+    job.cancel().ignore();
+    return null;
+  }
+}
+
 /// A job of the core whose context refuses to be built.
 ///
 /// Stands in for an engine of a domain whose [JobBase.createContext]

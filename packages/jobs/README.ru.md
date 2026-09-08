@@ -134,7 +134,7 @@ final message = switch (await job.done) {
 
 ```dart
 try {
-  await ctx.wait(database.migrate);
+  await ctx.join(database.migrate);
 } on Cancelled {
   rethrow; // эту — никогда не глотать
 } on Exception catch (error) {
@@ -246,7 +246,7 @@ final database = await ctx.join(
   discard: (database) => database.close(),
 );
 
-await ctx.wait(database.migrate);
+await ctx.join(database.migrate);
 
 return database;
 ```

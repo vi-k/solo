@@ -520,6 +520,45 @@ void main() {
       expect(parent.outcome, isA<Done<int>>());
     });
   });
+
+  test(
+      'a rule that cancels the parent while saying yes still refuses the '
+      'child', () {
+    Outcome<void>? parentOutcome;
+    Outcome<void>? childOutcome;
+    Object? thrown;
+    fakeAsync((async) {
+      final parent = SelfCancellingRulesJob<void>((ctx) async {
+        final child = Job.deferred<void>(
+          key: 'child',
+          (c) => c.wait(() => delay(1000)),
+        );
+        try {
+          ctx.run(child);
+        } on Object catch (error) {
+          thrown = error;
+        }
+        child.done.then((outcome) => childOutcome = outcome).ignore();
+        await ctx.wait(() => delay(50));
+      })
+        ..launch();
+      parent.done.then((outcome) => parentOutcome = outcome).ignore();
+      async.elapse(const Duration(milliseconds: 100));
+    });
+    expect(
+      thrown,
+      isA<Cancelled>(),
+      reason: 'the mark reaches the body as a throw, as it does before the '
+          'rule is asked at all',
+    );
+    expect(childOutcome, isA<Cancelled>());
+    expect(
+      parentOutcome,
+      isA<Cancelled>(),
+      reason: 'and the parent ends on its own cancellation, not after the '
+          'child it never waited for',
+    );
+  });
 }
 
 /// A handle that implements [Job] without being a job of this core.

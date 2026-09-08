@@ -287,10 +287,23 @@ abstract class JobBase<T> implements Job<T> {
         _cancellable = cancellable,
         _observer = observer;
 
+  /// Builds and delivers a diagnostic message, guarded on both halves.
+  ///
+  /// Guarded because the channel stands between transitions a job cannot be
+  /// left in the middle of: an error here once left a job `isFinished` with
+  /// its `done` never completing. Both halves belong to whoever turned the
+  /// channel on — `message()` runs their `describe` and `toString`, and
+  /// [debug] is theirs — and a diagnostic channel is cross-cutting like an
+  /// observer: an error in it changes nothing else.
   static void _debug(String Function() message) {
     final debug = JobBase.debug;
-    if (debug != null) {
+    if (debug == null) {
+      return;
+    }
+    try {
       debug(message());
+    } on Object catch (error, stackTrace) {
+      Zone.current.handleUncaughtError(error, stackTrace);
     }
   }
 

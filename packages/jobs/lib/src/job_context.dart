@@ -742,8 +742,10 @@ abstract class JobContextBase implements JobContext {
       .._observer ??= _owner._observer
       .._parent = _owner
       ..level = _owner.level + 1;
-    final pending = _owner.pendingCancel;
-    if (pending != null) {
+
+    /// Turns [child] away because this job is already giving up, and
+    /// returns the cancellation to throw into the body.
+    Cancelled refuse(Cancelled pending) {
       child.cancelWith(
         Cancelled.by(
           reason: CancelReason.parent,
@@ -751,7 +753,11 @@ abstract class JobContextBase implements JobContext {
           stackTrace: pending.stackTrace,
         ),
       );
-      throw pending;
+      return pending;
+    }
+
+    if (_owner.pendingCancel case final pending?) {
+      throw refuse(pending);
     }
     // Everything that can refuse the child happens before it joins the
     // waiting list, and a refusal that arrives as a throw — a rule of a
@@ -761,20 +767,34 @@ abstract class JobContextBase implements JobContext {
     // microtask under a parent that waits for nothing. `ignore` first: the
     // error is already on its way to the body through the rethrow, and one
     // error is announced once.
+    Cancelled? markedWhileAsking;
     try {
       final rejection = beforeChildStart(child);
       if (rejection != null) {
         child.finish(rejection);
         return child;
       }
-      _owner._children.add(child);
-      child.start();
+      // The rule is code of a domain, and it may give up on this job while
+      // answering: `solo` lets a `canStart` call `cancel()` or `close()`
+      // and still say yes. A child joining the list after that would be
+      // waited for by a parent whose cascade has already walked the list
+      // without it, and nothing would ever reach it — a second `cancel`
+      // turns around on the mark. Read here and refused below, outside the
+      // `catch`: the child ends `Cancelled`, not `Failed(Cancelled)`.
+      markedWhileAsking = _owner.pendingCancel;
+      if (markedWhileAsking == null) {
+        _owner._children.add(child);
+        child.start();
+      }
     } on Object catch (error, stackTrace) {
       _owner._children.remove(child);
       child
         ..ignore()
         ..finish(Failed(error, stackTrace));
       rethrow;
+    }
+    if (markedWhileAsking case final pending?) {
+      throw refuse(pending);
     }
     return child;
   }

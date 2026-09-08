@@ -125,6 +125,62 @@ void main() {
       hasLength(1),
     );
   });
+
+  test('a debug channel that throws does not break the life of a job', () {
+    final caught = <Object>[];
+    var doneSeen = false;
+    Outcome<void>? outcome;
+    JobBase.debug = (message) => throw StateError('logger: $message');
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          final job = Job<void>(key: 'job', (ctx) => ctx.wait(() => delay(10)));
+          job.done.then((result) {
+            doneSeen = true;
+            outcome = result;
+          }).ignore();
+          async.flushTimers();
+        });
+      },
+      (error, stackTrace) => caught.add(error),
+    );
+    expect(doneSeen, isTrue, reason: 'the job finished and said so');
+    expect(outcome, isA<Done<void>>());
+    expect(
+      caught.map((error) => '$error').toList(),
+      everyElement(startsWith('Bad state: logger: ')),
+      reason: 'every refusal of the channel went to the zone and nowhere else',
+    );
+    expect(caught, isNotEmpty);
+  });
+
+  test('a describe that throws does not break the life of a job', () {
+    final traces = <String>[];
+    final caught = <Object>[];
+    var doneSeen = false;
+    JobBase.debug = traces.add;
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          final job = Job<void>(
+            key: 'job',
+            describe: () => throw StateError('describe'),
+            (ctx) => ctx.wait(() => delay(10)),
+          );
+          job.done.then((_) => doneSeen = true).ignore();
+          async.flushTimers();
+        });
+      },
+      (error, stackTrace) => caught.add(error),
+    );
+    expect(doneSeen, isTrue, reason: 'building the message is guarded too');
+    expect(
+      caught.map((error) => '$error').toList(),
+      everyElement('Bad state: describe'),
+    );
+    expect(caught, isNotEmpty);
+    expect(traces, isEmpty, reason: 'no message was ever built');
+  });
 }
 
 /// Keeps the errors it is given, and nothing else.
