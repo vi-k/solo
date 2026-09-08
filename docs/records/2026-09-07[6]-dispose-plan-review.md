@@ -641,7 +641,8 @@ packages/solo/test/support/*.dart` — пусто. На стенде тесты 
 спека («Что правится вокруг») велит поправить: раздел «Поздний
 результат: `ifCancelled` у задачи» в `2026-09-05[4]-jobs-design.md` с
 шапкой и шапку `2026-09-05[2]-resource-ownership-design.md`; по
-`AGENTS.md` шапки самой спеки `2026-09-07[1]` и плана `[5]` тоже меняют
+`AGENTS.md` шапки самой спеки `2026-09-07[1]-dispose-design.md` и плана
+`2026-09-07[5]-dispose-plan.md` тоже меняют
 состояние. Дартдоки `solo`: план называет `job`, `run`, `onError`, но не
 шапку `SoloContext` («[state], [stateAs] and [check] throw the job's
 [Cancelled]…») и не `emit` («throws a StateError for a job that has
