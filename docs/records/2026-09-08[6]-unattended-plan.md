@@ -1,13 +1,19 @@
-> **Состояние на 2026-09-08:** вторая редакция, написанная по кругу
-> ревью `2026-09-08[7]-unattended-plan-review.md`: девять находок, все
-> приняты. Переписаны механика zone-value (находки 1 и 2) и тесты
-> (находки 3–9); замысел не тронут. К исполнению не приступали.
+> **Состояние на 2026-09-08:** третья редакция, написанная по второму
+> кругу ревью `2026-09-08[8]-unattended-plan-review-2.md`: двенадцать
+> находок, все приняты. Этот круг шёл **с исполнением** — оба ревьюера
+> прошли план задачами, прогнали сьюты и проверили тесты нарочными
+> подменами, — и подтвердил замысел и механику; правки точечные, кроме
+> радиуса решения 2. Вторая редакция была написана по первому кругу
+> (`2026-09-08[7]-unattended-plan-review.md`, девять находок): в ней
+> переписаны механика zone-value и тесты. К исполнению не приступали.
 > **Что это:** план работ по `ctx.unattended` — члену контекста, который
 > отдаёт ядру работу, не дожидаемую телом, чтобы её провал доставался
 > наблюдателю задачи, а не ронял процесс. Семь задач с TDD и коммитом на
 > каждую.
-> **Связанные записи:** `2026-09-08[7]-unattended-plan-review.md` (ревью
-> первой редакции, вердикт у каждой находки),
+> **Связанные записи:** `2026-09-08[8]-unattended-plan-review-2.md`
+> (второй круг ревью, с исполнением, вердикт у каждой находки),
+> `2026-09-08[7]-unattended-plan-review.md` (первый круг, вердикт у
+> каждой находки),
 > `2026-09-08[4]-detached-design.md` (спека, вторая
 > редакция; план аргументирует от неё),
 > `2026-09-08[5]-detached-design-review.md` (ревью первой редакции
@@ -191,7 +197,35 @@
    `from = (Zone.current[_unattendedKey] as Zone?) ?? Zone.current` — то
    есть всегда зону тела, сколько бы форков ни было вложено. Лишняя
    строка, а не цепочка.
-10. **`notifyError` не переписываем на `reportToZone`.** Он уже пишет
+10. **Маршрут решения 2 фильтрует `Cancelled`, а всё прочее пускает.**
+    Второй круг ревью (`2026-09-08[8]-unattended-plan-review-2.md`,
+    находка 1) замерил, что радиус решения 2 много шире, чем говорила
+    вторая редакция: в зону идёт **всё**, что дошло до `notifyError`, —
+    уборщик, колбэк `onCancel`, поздний провал брошенного `wait`,
+    `Cancelled` любого происхождения, — и это отменяет четыре письменных
+    обещания сразу.
+
+    Довод за выбранную ширину — в самом ядре.
+    `packages/jobs/test/zone_test.dart:66` закрепляет, что бросивший
+    `onCancel` и поздний провал брошенного действия **уже сегодня**
+    уходят в зону, когда наблюдателя нет. Значит решение 2 не вводит
+    нового поведения, а перестаёт делать `solo` глуше ядра, на котором он
+    стоит: надстройка молчит там же, где молчит ядро.
+
+    `Cancelled` — исключение, и единственное: у отмены есть хозяин, она
+    не провал, а во Флаттере ушла бы в `PlatformDispatcher.onError` без
+    всякой пользы. Первая половина инварианта 4 («`Cancelled` в зону не
+    уходит никогда») этим сохраняется; правится вторая, про ошибку через
+    `onError`.
+
+    Узкий вариант — пускать только провал фоновой работы — отклонён: он
+    оставил бы бросившего уборщика немым, а провал фона слышным, тогда
+    как для пользователя это одно и то же «ошибке некуда идти».
+
+    Асимметрия, которую эта правка оставляет: ядро `Cancelled` в
+    `notifyError` не фильтрует, а `solo` будет. Выравнивание ядра — не
+    эта работа.
+11. **`notifyError` не переписываем на `reportToZone`.** Он уже пишет
     свою строку `_debug` перед развилкой, а `reportToZone` пишет свою;
     сведя одно к другому, получим две строки на одну ошибку. Общего кода
     там одна строка, и дублирование дешевле путаницы в трассировке.
@@ -219,8 +253,10 @@
 **Надстройка, `packages/solo`:**
 
 - `lib/src/solo_base.dart` — поле `_homeless`, тело `onError` по
-  умолчанию и его дартдок; дартдок `SoloObserver.onError` в
-  `lib/src/observer.dart`.
+  умолчанию (с фильтром `Cancelled`) и его дартдок; дартдок
+  `SoloObserver.onError` в `lib/src/observer.dart`. Оба дартдока, абзац
+  «Errors of a disposer» в README и инвариант 4 правятся в задаче 4,
+  вместе с поведением.
 - `lib/src/job.dart` — `_SoloJob.notifyError` ставит и снимает флаг;
   обёртка `_reportToZone`.
 - `test/zone_test.dart` (создать) — стенд без глобального наблюдателя.
@@ -378,7 +414,7 @@ final _unattendedKey = Object();
 Команда: `cd packages/jobs && dart test test/unattended_test.dart`
 Ожидание: PASS.
 
-- [ ] **Шаг 6.** Дописать остальные тесты файла. Двенадцать штук,
+- [ ] **Шаг 6.** Дописать остальные тесты файла. Тринадцать штук,
       кейсы — со стендов ревьюеров (`s1_main.dart`, `s3_filter.dart`,
       `s5_order.dart`, `s7_refusal.dart`).
 
@@ -441,7 +477,13 @@ final _unattendedKey = Object();
   12. `unattended on a cancelled but still running job does not throw` —
       задача помечена отменой, тело в `finally` зовёт член; исключения
       нет.
-  13. `an abandoned each wrapped in unattended hands a late handler error
+  13. `onCancel may hand an asynchronous stop to unattended work` —
+      решающий довод спеки за то, что член не бросает `Cancelled`:
+      `ctx.onCancel(() => ctx.unattended(device.stop))`. Задачу
+      отменяют, остановка запускается, её провал приходит наблюдателю.
+      Без этого теста первая же правка группы членов молча отменит
+      довод (находка 8 второго круга ревью).
+  14. `an abandoned each wrapped in unattended hands a late handler error
       to the observer` — `ctx.unattended(() => ctx.each(stream,
       onData))`, где `onData` падает уже после конца задачи; строка
       `error` у наблюдателя. Спека, «Что меняется в публичном контракте»,
@@ -474,11 +516,14 @@ git commit -m "feat(jobs): ctx.unattended, work the job does not wait for"
 
 - [ ] **Шаг 1.** Написать падающие тесты.
 
+Импорта `dart:async` в файле пока нет: ни одному тесту задачи 2 он не
+нужен, а лишний импорт — `warning` анализатора ровно в той точке, где
+план обещает чистый анализ (находка 2 второго круга ревью). Он появится в
+задаче 3 вместе с `runZonedGuarded`.
+
 ```dart
 @Timeout(Duration(seconds: 5))
 library;
-
-import 'dart:async';
 
 import 'package:fake_async/fake_async.dart';
 import 'package:jobs/jobs.dart';
@@ -486,6 +531,14 @@ import 'package:test/test.dart';
 
 import 'support/delay.dart';
 import 'support/journal.dart';
+
+// Вынесены в константы, а не написаны соседними литералами внутри
+// списка: `no_adjacent_strings_in_list` включён в
+// `packages/jobs/analysis_options.yaml`.
+const _noChild =
+    '[j] error Bad state: Job(j) cannot run a child inside unattended work';
+const _noSection = '[j] error Bad state: Job(j) cannot run an uncancellable '
+    'action inside unattended work';
 
 void main() {
   test('run inside unattended work throws and starts no child', () {
@@ -509,8 +562,7 @@ void main() {
     // that say the child ran.
     expect(journal.take(), [
       '[j] started',
-      '[j] error Bad state: Job(j) cannot run a child '
-          'inside unattended work',
+      _noChild,
       '[j] finished Done(null)',
     ]);
     expect(childRan, isFalse);
@@ -536,8 +588,7 @@ void main() {
     });
     expect(journal.take(), [
       '[j] started',
-      '[j] error Bad state: Job(j) cannot run an uncancellable action '
-          'inside unattended work',
+      _noSection,
       '[j] finished Cancelled(manual)',
     ]);
     // The refused section neither ran its action nor held the body's
@@ -557,9 +608,19 @@ void main() {
 
 Команда:
 `cd packages/jobs && dart test test/unattended_boundary_test.dart`
-Ожидание: FAIL — сегодня `run` подвешивает родителя навсегда
-(замерено ревьюером: `job.done: STUCK after 200ms`), а `uncancellable`
-проходит молча.
+Ожидание: FAIL, и вот с каким выходом — замерено:
+
+```text
+Expected: ['[j] started', '[j] error Bad state: Job(j) cannot run a child inside unattended work', '[j] finished Done(null)']
+  Actual: ['[j] started', '> [child] started', '> [child] finished Done(true)', '[j] finished Done(null)']
+```
+
+Ничего при этом не виснет, и искать зависание не надо: под `fakeAsync`
+тело ребёнка не ждёт чужой future и границы форка не касается.
+Зависание, которым обоснован запрет (`job.done: STUCK after 200ms` у
+ревьюера спеки), требует чужой future внутри ребёнка; эти тесты держат
+более слабое и достаточное — «ребёнок стартовал там, где его никто не
+ждёт». `uncancellable` сегодня проходит молча.
 
 - [ ] **Шаг 3.** Добавить проверку в `JobContextBase`, рядом с
       `throwIfDisposing`.
@@ -609,13 +670,20 @@ void main() {
 `cd packages/jobs && dart test test/unattended_boundary_test.dart`
 Ожидание: PASS.
 
-- [ ] **Шаг 6.** Дописать в файл четыре теста на границы проверки.
+- [ ] **Шаг 6.** Дописать в файл пять тестов на границы проверки.
 
-  1. `wait and join inside unattended work are allowed` — оба
-     регистрируют колбэки на задаче и ведут себя предсказуемо (спека,
-     конец раздела «Что запрещено»); работа делает
-     `await ctx.wait(() => delay(5))` и доходит до конца, у наблюдателя
-     тихо.
+  1. `wait inside unattended work is allowed` — работа делает
+     `await ctx.wait(() => delay(5))`, **доходит до строки после
+     ожидания** и ставит флаг; у наблюдателя тихо. Спека, конец раздела
+     «Что запрещено».
+  1a. `join inside unattended work is allowed` — то же для `join`,
+     отдельным тестом. Оба члена в одном тесте — пустая проверка:
+     замерено, что запрет `throwIfUnattended('join')` оставляет всю
+     сьюту зелёной, если `join` в тесте не позван (находка 5 второго
+     круга ревью). Проверять надо не только отсутствие ошибки, но и то,
+     что продолжение после ожидания выполнилось: запрет бросает **в**
+     работу, и без флага после `await` тест не отличит запрет от
+     разрешения.
   2. `a job of its own may run a child from inside another job's fork` —
      тело задачи `a` создаёт в своей работе задачу `b` (обычным
      `Job(...)`, не `ctx.run`), тело `b` зовёт `ctx.run` своего ребёнка;
@@ -658,7 +726,9 @@ git commit -m "feat(jobs): refuse run and uncancellable inside unattended work"
 - Меняет: инициализацию поля `JobBase._zone`; наружу ничего нового.
 
 - [ ] **Шаг 1.** Дописать падающий тест в
-      `test/unattended_boundary_test.dart`.
+      `test/unattended_boundary_test.dart`, добавив в файл
+      `import 'dart:async';` — здесь он впервые нужен, ради
+      `runZonedGuarded`.
 
 ```dart
   test('a job created inside unattended work reports to the body zone', () {
@@ -729,7 +799,11 @@ git commit -m "feat(jobs): refuse run and uncancellable inside unattended work"
 - [ ] **Шаг 6.** Дописать третий тест — в `packages/solo`, потому что
       дубль виден только там, где наблюдатель есть у каждой задачи:
       `a job created inside unattended work is reported once, by itself`.
-      Контроллер `TestSolo`, задача с фоном, а в фоне — задача **другого**
+      **Два контроллера, объявленные в самом файле от `Solo<TestState>`**
+      — `TestSolo` из `support/` не годится, он `final class` и
+      переопределить `onError` у наследника нельзя (та же находка 3
+      первого круга ревью, исправленная в задаче 4 и пропущенная здесь).
+      Задача первого контроллера с фоном, а в фоне — задача **другого**
       контроллера, падающая и никем не наблюдаемая. Проверяется двоякое:
       её провал пришёл её собственному наблюдателю, и у наблюдателя
       хозяина строки об этой ошибке нет. Файл — `test/unattended_test.dart`
@@ -762,7 +836,10 @@ git commit -m "fix(jobs): a job born in unattended work reports to its own zone"
 **Файлы:**
 - Изменить: `packages/jobs/lib/src/job_base.dart` (`reportToZone`)
 - Изменить: `packages/solo/lib/src/solo_base.dart`,
-  `packages/solo/lib/src/job.dart`
+  `packages/solo/lib/src/job.dart`, `packages/solo/lib/src/observer.dart`
+- Изменить: `packages/solo/README.md`, `README.ru.md`,
+  `docs/architecture.md` — документы, описывающие **этот** хук, правятся
+  здесь, а не в фазе C (находка 7 второго круга ревью)
 - Создать: `packages/solo/test/zone_test.dart`
 
 **Интерфейсы:**
@@ -885,15 +962,22 @@ void _inZone(List<String> errors, void Function() body) {
 ```dart
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
     final homeless = _homeless;
-    if (homeless != null && identical(homeless, job) && observer == null) {
+    // Only an error with nowhere else to go, only when nobody is
+    // listening, and never a cancellation: a cancellation is a decision
+    // somebody made, not a failure, and in Flutter it would reach
+    // `PlatformDispatcher.onError` for nothing.
+    if (homeless != null &&
+        identical(homeless, job) &&
+        observer == null &&
+        error is! Cancelled) {
       homeless._reportToZone(error, stackTrace);
     }
   }
 ```
 
-Дартдок хука дописывается в задаче 7; в нём обязана быть фраза про
-`super`: по умолчанию хук отдаёт ошибку в зону, переопределение это
-заменяет, `super.onError(...)` — оставляет.
+Условие `error is! Cancelled` — решение 10 плана, по находке 1 второго
+круга ревью. Без него в зону уходит и отмена, а это отменяет первую
+половину инварианта 4, которую решено сохранить.
 
 - [ ] **Шаг 6.** Прогнать стенд шага 1.
 
@@ -926,14 +1010,53 @@ void _inZone(List<String> errors, void Function() body) {
      смена поведения: сегодня такая ошибка глохнет в пустом хуке. Ей
      место в `CHANGELOG` (задача 7).
   7. `a reentrant notification does not lose the outer error` — находка
-     6 ревью: без него подмена восстановления флага на
+     6 первого круга ревью: без него подмена восстановления флага на
      `_solo._homeless = null` проходит все шесть тестов выше.
      Переопределённый `onError` зовёт `externalSetState`, бросающее
      правило даёт вторую ошибку синхронно внутри первой, и после
      возврата внешний хук зовёт `super.onError`. Проверяется, что в зону
      ушли **обе** ошибки и что маршрут после вложенного вызова цел.
+  8. `a disposer that throws reaches the zone` — уборщик
+     `ctx.onDispose(() => throw StateError('cleanup'))`, ни наблюдателя,
+     ни переопределения; в зоне одна строка. Это самый частый случай
+     нового радиуса и тот, из-за которого правится
+     `packages/solo/README.md`.
+  9. `a cancellation never reaches the zone` — три источника подряд:
+     отмена снаружи, `throw Cancelled(...)` внутри работы, свежая
+     `Cancelled(rules: ...)` от протёкшего контекста. Во всех трёх в
+     зоне пусто, а у переопределённого хука строки есть — то есть
+     фильтруется маршрут в зону, а не сам хук. Без этого теста подмена
+     «снять `error is! Cancelled`» проходит зелёной.
 
-- [ ] **Шаг 8.** Померить точку удара по сьюте: прогнать всё.
+- [ ] **Шаг 8.** Поправить документы, описывающие изменённый хук, — тем
+      же коммитом, что и поведение (`AGENTS.md`: документ, противоречащий
+      коду, правится вместе с работой):
+
+  - **дартдок `SoloBase.onError`** — переписать целиком: хук принимает
+    два рода ошибок; по умолчанию тот, которому идти больше некуда,
+    уходит в зону создания задачи, если глобального наблюдателя нет;
+    отмена туда не уходит никогда; **переопределение это заменяет, а
+    `super.onError(...)` — оставляет**. Провал тела в зону отсюда не
+    идёт: он дойдёт туда своим путём, через ненаблюдённый исход.
+  - **дартдок `SoloObserver.onError`** в
+    `packages/solo/lib/src/observer.dart` — снять фразу «including the
+    ones that end as `Cancelled` and are therefore never handed to the
+    zone… Those are this hook's business alone»: половина про
+    `Cancelled` остаётся верной, половина про «hook's business alone» —
+    нет.
+  - **`packages/solo/README.md`, §Cleanup, абзац «Errors of a
+    disposer»** — сегодня он обещает: «in `solo` a job always has an
+    observer, so nothing reaches the zone. With neither of the two
+    overridden, a disposer that touches the context stops on its first
+    line and nobody hears about it». После этой задачи обещание ложно.
+    Переписать вместе с `README.ru.md`.
+  - **`docs/architecture.md`, инвариант 4** — вторая половина фразы:
+    ошибка, дошедшая до движка только через `onError`, остаётся делом
+    observer'а **пока он есть**; без него и без переопределения она идёт
+    в зону, как в ядре. Первая половина, про `Cancelled`, остаётся как
+    есть.
+
+- [ ] **Шаг 9.** Померить точку удара по сьюте: прогнать всё.
 
 Команда: `cd packages/jobs && dart analyze && dart test`,
 затем `cd packages/solo && dart analyze && dart test`,
@@ -945,14 +1068,14 @@ void _inZone(List<String> errors, void Function() body) {
 значит либо переопределённый `onError` в самом тесте, либо ошибку в
 флаге.
 
-- [ ] **Шаг 9.** Коммит.
+- [ ] **Шаг 10.** Коммит.
 
 ```bash
-git add packages/jobs packages/solo
+git add packages/jobs packages/solo docs
 git commit -m "feat(solo): an error with nowhere to go reaches the zone"
 ```
 
-### Задача 5. Порядок после `onClose` и остановка фоновой работы
+### Задача 5. Порядок, остановка и правила
 
 Спека, разделы «Как фоновой работе остановиться» и «Удержание»; вопрос
 плана 6.
@@ -971,14 +1094,14 @@ git commit -m "feat(solo): an error with nowhere to go reaches the zone"
     SoloBase.observer = _Watcher(lines);
     try {
       fakeAsync((async) {
-        final solo = _Watched(lines);
-        solo.run<TestState, void>(key: 'j', (ctx) async {
+        final solo = _Watched(lines)
+          ..run<TestState, void>(key: 'j', (ctx) async {
           ctx.unattended(() async {
             await delay(30);
             throw StateError('late boom');
           });
           await ctx.wait(() => delay(5));
-        });
+          });
         async.elapse(const Duration(milliseconds: 10));
         solo.close();
         async.flushTimers();
@@ -1024,17 +1147,18 @@ git commit -m "feat(solo): an error with nowhere to go reaches the zone"
   test('unattended work outlives close until the cleanup stops it', () {
     var ticks = 0;
     fakeAsync((async) {
-      final solo = TestSolo();
-      solo.run<TestState, void>(key: 'j', (ctx) async {
-        ctx.unattended(() {
-          final timer = Timer.periodic(
-            const Duration(milliseconds: 10),
-            (_) => ticks++,
-          );
-          ctx.onDispose(timer.cancel);
+      // Каскадом, а не двумя операторами: `cascade_invocations` включён.
+      final solo = TestSolo()
+        ..run<TestState, void>(key: 'j', (ctx) async {
+          ctx.unattended(() {
+            final timer = Timer.periodic(
+              const Duration(milliseconds: 10),
+              (_) => ticks++,
+            );
+            ctx.onDispose(timer.cancel);
+          });
+          await ctx.wait(() => delay(5));
         });
-        await ctx.wait(() => delay(5));
-      });
       async.elapse(const Duration(milliseconds: 100));
       expect(ticks, 0, reason: 'the cleanup stopped the timer with the job');
       solo.close();
@@ -1043,8 +1167,16 @@ git commit -m "feat(solo): an error with nowhere to go reaches the zone"
   });
 ```
 
-И зеркальный к нему — без `ctx.onDispose`: тикает и после `close()`, что
-и есть цена, названная в дартдоке.
+И зеркальный к нему — без `ctx.onDispose`. Форму назвать точно, иначе
+транскрипция по образцу соседа вешает `fakeAsync` (находка 3 второго
+круга ревью): `flushTimers` гонит и периодические таймеры, а этот никто
+не отменяет — по условию теста, — и прогон падает на
+`Bad state: Exceeded timeout 1:00:00.000000 while flushing timers`.
+Поэтому: ручку таймера вынести из форка в `late final Timer` теста,
+время двигать `async.elapse` до и после `close()`, сравнивать счётчики
+до и после, а `timer.cancel()` поставить перед выходом из `fakeAsync`.
+`flushTimers` в этом тесте не звать вовсе. Тикающий после `close()`
+счётчик и есть цена, названная в дартдоке.
 
 Почему не `WeakReference`. Ревьюер померил на стенде `s6_retention.dart`,
 что живой таймер в форке держит задачу, её исход, замыкание тела и через
@@ -1054,16 +1186,40 @@ git commit -m "feat(solo): an error with nowhere to go reaches the zone"
 наблюдаемое следствие — работа живёт, пока её не остановят, — а сам граф
 удержания остаётся на стенде и в дартдоке.
 
-- [ ] **Шаг 4.** Прогнать пакет.
+- [ ] **Шаг 4.** Написать три теста на ось правил `solo` — единственную
+      ось спеки, у которой в плане не было ни одной проверки, и обе
+      половины фильтра на ней держались честным словом (находка 4
+      второго круга ревью). Всем трём нужен контроллер, поэтому они
+      здесь, а не в задаче 1.
+
+  1. `unattended does not look at the rules` — спека, «Группа членов»:
+     член во второй группе, правила его не смотрят (инвариант 2). Тело
+     делает `emit`, нарушающий собственное правило, и следом зовёт
+     `ctx.unattended(...)`; вызов не бросает, задача кончается `Done`.
+     Замерено, что без этого теста добавление `check()` перед вызовом
+     оставляет всю сьюту зелёной, а контрольный сценарий даёт
+     `Cancelled(rules: keepWhile)` вместо `Done`.
+  2. `the job's own cancellation by the rules is filtered` — работа
+     стоит в `ctx.wait`, состояние уходит из `keepWhile`, задача
+     отменяется правилами; строк `error` у наблюдателя нет. Без теста
+     снятие фильтра именно для этого случая проходит всю сьюту.
+  3. `a fresh Cancelled(rules) from a leaked context reaches the
+     observer` — третий случай, который спека в разделе «Фильтр отмены»
+     называет пропускаемым намеренно, и единственный со стороны `solo`.
+     Задача кончилась `Done`, состояние ушло из `keepWhile`, фон читает
+     `ctx.state` — новый объект `Cancelled` проходит фильтр:
+     `[j] Cancelled(rules: keepWhile)` у наблюдателя.
+
+- [ ] **Шаг 5.** Прогнать пакет.
 
 Команда: `cd packages/solo && dart analyze && dart test`
 Ожидание: анализ чист, все тесты зелёные.
 
-- [ ] **Шаг 5.** Коммит.
+- [ ] **Шаг 6.** Коммит.
 
 ```bash
 git add packages/solo
-git commit -m "test(solo): order and stopping of unattended work"
+git commit -m "test(solo): order, stopping and rules of unattended work"
 ```
 
 ## Фаза C. Документы
@@ -1111,6 +1267,13 @@ git commit -m "test(solo): order and stopping of unattended work"
     остановки — тот же `ctx.onDispose`;
   - что голый `unawaited(...)` по-прежнему уходит в зону: это цена того,
     что тело не форкается, и назвать её надо прямо;
+  - что `emit` из работы законен, пока задача жива, — по той же причине,
+    по которой законен `wait`: работа бежит внутри живой задачи, а
+    монопольность письма держится тем, что корневая задача одна, а не
+    тем, кто именно пишет из неё. После конца задачи `emit` бросает
+    `StateError` сам. Фраза, не запрет: заводить третий случай в
+    `throwIfUnattended` ради дыры, которую никто не назвал опасной, не
+    за чем (находка 12 второго круга ревью);
   - пример:
 
 ```dart
@@ -1148,11 +1311,22 @@ git commit -m "test(solo): order and stopping of unattended work"
     ждать вовсе», в пару к «`wait` — ждать, но не работу», «`join` —
     ждать всё», «`uncancellable` — ждать, придержав отмену») и строка в
     примере;
-  - **§Observer** — маршрут ошибки фоновой работы.
+  - **§Observer** — маршрут ошибки фоновой работы;
+  - **§Building on the core** — два новых защищённых члена.
 
-- [ ] **Шаг 5.** `CHANGELOG.md` пакета: строка в секции 0.1.0 (не
-      опубликована, правка складывается в текущую секцию) —
-      `JobContext.unattended` и куда идёт провал.
+- [ ] **Шаг 5.** `CHANGELOG.md` пакета, секция 0.1.0 (не опубликована,
+      правка складывается в текущую секцию). Не только приписать новое,
+      но и **дополнить перечни, которые станут неполными** (находка 6
+      второго круга ревью):
+
+  - новая строка: `JobContext.unattended` и куда идёт провал;
+  - пункт про «a waiting family that says what a cancellation does to a
+    call» — четвёртый член в перечень;
+  - пункт про защищённую поверхность `JobBase` и `JobContextBase` —
+    назвать оба новых защищённых члена, `reportToZone` и
+    `throwIfUnattended`. Это поверхность, про которую
+    `packages/jobs/README.md` §«Building on the core» говорит «where half
+    of this package lives»; там их тоже упомянуть, шагом 4.
 
 - [ ] **Шаг 6.** Перевести правки в `README.ru.md` и сверить.
 
@@ -1186,14 +1360,11 @@ git commit -m "docs(jobs): unattended work as its user sees it"
 - Изменить: `docs/ru/solo/vs-bloc.md`, `docs/architecture.md`,
   `docs/handoff.md`
 
-- [ ] **Шаг 1.** Дартдок `SoloBase.onError` — переписать целиком.
-      Обязательное содержимое: хук принимает два рода ошибок; по
-      умолчанию тот, которому идти больше некуда, уходит в зону создания
-      задачи, если глобального наблюдателя нет; **переопределение это
-      заменяет, а `super.onError(...)` — оставляет.** Провал тела в зону
-      отсюда не уходит: он дойдёт туда своим путём, через ненаблюдённый
-      исход. Тем же абзацем — `SoloObserver.onError` и дартдок класса
-      `SoloBase` в части хуков.
+- [ ] **Шаг 1.** Дартдоки `SoloBase.onError` и `SoloObserver.onError`
+      здесь **не правятся**: они переехали в задачу 4, туда, где меняется
+      само поведение (находка 7 второго круга ревью). Здесь остаётся
+      дартдок класса `SoloBase` в части хуков — упомянуть новый член в
+      перечне того, что доходит до `onError`.
 
 - [ ] **Шаг 2.** `packages/solo/README.md`:
 
@@ -1204,7 +1375,8 @@ git commit -m "docs(jobs): unattended work as its user sees it"
     новым членом;
   - **§Errors** — маршрут ошибки фоновой работы и то, что по умолчанию
     бездомная ошибка уходит в зону; рядом с существующей фразой про
-    fire-and-forget `profile.load();`.
+    fire-and-forget `profile.load();`. Абзац «Errors of a disposer» в
+    §Cleanup здесь не трогать: он правится в задаче 4.
 
 - [ ] **Шаг 3.** `packages/solo/doc/vs-bloc.md` §4 — дописать второй
       вариант к фразе про `ctx.run(child)`: работа со своим исходом,
@@ -1212,10 +1384,20 @@ git commit -m "docs(jobs): unattended work as its user sees it"
       он не ждёт, но чей провал слышит, — `ctx.unattended`. Перевод —
       `docs/ru/solo/vs-bloc.md`, тем же коммитом.
 
-- [ ] **Шаг 4.** `packages/solo/CHANGELOG.md`, секция 0.2.0: строка про
-      маршрут по умолчанию и **отдельная строка** про смену поведения —
-      бросившее правило `keepWhile` сегодня глохнет в пустом хуке, а
-      теперь уходит в зону.
+- [ ] **Шаг 4.** `packages/solo/CHANGELOG.md`, секция 0.2.0:
+
+  - строка про новый член и маршрут его провала;
+  - **отдельная строка про смену поведения, называющая весь набор**, а не
+    один `keepWhile`: без глобального наблюдателя и без переопределения
+    `onError` в зону создания задачи теперь уходят провал уборщика,
+    провал колбэка `onCancel`, поздний провал брошенного `wait` и
+    бросившее правило. Отмена не уходит никогда. Первая редакция
+    называла здесь один `keepWhile`, и второй круг ревью показал, что
+    радиус вчетверо шире (находка 1);
+  - дополнить перечни, которые станут неполными (находка 6): «`JobContext`:
+    `state`, `stateAs`, `emit`, `check`, `wait`, `join`, `uncancellable`,
+    `onCancel`, `run`, `log`» и пункт «A body does not `await` on its
+    own».
 
 - [ ] **Шаг 5.** `packages/flutter_solo/README.md` — что значит «в зону»
       во Flutter: `PlatformDispatcher.instance.onError`, если задан,
@@ -1229,8 +1411,7 @@ git commit -m "docs(jobs): unattended work as its user sees it"
     что он делает с отменой (ничего: работу отмена не трогает);
   - **инвариант 2** — `unattended` в перечень членов, которые правила не
     смотрят;
-  - **инвариант 4** — маршрут бездомной ошибки: наблюдателю, а в `solo`
-    без наблюдателя и без переопределения — в зону;
+  - **инвариант 4** — здесь не правится, он переехал в задачу 4;
   - **инвариант 8** — `unattended` законен в окне уборки, как
     регистрации; после `isFinished` — `StateError`;
   - **инвариант 10** — без изменений по существу, но проверить, что
@@ -1286,14 +1467,23 @@ git commit -m "docs(solo): unattended work, its route and its price"
 
 ## Как план сверялся со спекой
 
-Первая редакция сверялась только сама с собой, и ревью
-(`2026-09-08[7]-unattended-plan-review.md`) справедливо назвало это
+Первая редакция сверялась только сама с собой, и первый круг ревью
+(`2026-09-08[7]-unattended-plan-review.md`) справедливо назвал это
 заявлением автора, а не доказательством: покрытие вложенности,
 дедупликации и порядка было слабее обещанного. Во второй редакции
-проверки на эти три места стоят поимённо — задача 2, тесты 3 и 4
+проверки на эти три места встали поимённо — задача 2, тесты 3 и 4
 (вложенные форки), задача 3, шаги 5 и 6 (вложенность и дубль в `solo`),
-задача 5, шаг 1 (порядок относительно настоящего `onClose`). Список ниже
-остаётся сверкой по разделам, и читать его надо вместе с ревью.
+задача 5, шаг 1 (порядок относительно настоящего `onClose`).
+
+Второй круг (`2026-09-08[8]-unattended-plan-review-2.md`) шёл с
+исполнением и нашёл, чем это заявление всё ещё было сильнее проверок:
+ось правил `solo` не была покрыта вовсе (находка 4, три теста в задаче
+5), тест «`wait` и `join` разрешены» звал только `wait` (находка 5,
+разделён на два), решающий довод спеки про `onCancel` не имел теста
+(находка 8, тест 13 задачи 1), а радиус решения 2 был назван вчетверо
+уже настоящего (находка 1, условие `error is! Cancelled` и тесты 8 и 9
+задачи 4). Список ниже — сверка по разделам, и читать его надо вместе с
+обоими кругами.
 
 Прошёл по разделам спеки; каждый закрыт задачей.
 
@@ -1319,7 +1509,10 @@ git commit -m "docs(solo): unattended work, its route and its price"
 - «Фильтр отмены» — задача 1, шаг 4 и тесты 5–9; решение по вопросу
   плана — «Решения, принятые в плане сверх спеки», пункт 2. Тест 9 —
   чужой ребёнок под своим каскадом — и есть то, что отличает принятую
-  точную проверку от отклонённой эвристики.
+  точную проверку от отклонённой эвристики. Три случая, которые фильтр
+  пропускает намеренно: первые два — тесты 7 и 8 задачи 1, третий
+  (свежая `Cancelled(rules: ...)` от протёкшего контекста) — задача 5,
+  шаг 4, тест 3.
 - «Удержание» — задача 5, шаг 3; дартдок — задача 6, шаг 1.
 - «Цена» — только в дартдок не идёт: 45 нс на вызов и около 48 нс на
   микрозадачу внутри фона названы здесь, чтобы исполнитель не искал их
@@ -1330,8 +1523,10 @@ git commit -m "docs(solo): unattended work, its route and its price"
 - «Что решить в плане» — шесть вопросов, ответы в «Решениях, принятых в
   плане сверх спеки», пункты 1–6.
 
-Чего в этом круге не проверено. Ревьюер не смог ни исполнить план на
-клоне, ни прогнать `dart test`: песочница отказала во временной
-директории. Значит рантайм-подтверждения у второй редакции нет — ни у
-механики форков, ни у точки удара по сьютам. Следующему кругу ревью
-стоит начинать именно с исполнения.
+Чего не проверено и после двух кругов — перечень в
+`2026-09-08[8]-unattended-plan-review-2.md`, раздел «Что осталось
+непройденным». Коротко: существо задач 6 и 7, то есть сама проза
+дартдоков, README, инвариантов и переводов, не написано ни строки —
+проверено лишь, что каждый адресат существует и механические проверки на
+нём проходят. Плюс граф удержания, двусторонние зависания на границе
+future, цена и утверждение про Flutter.
