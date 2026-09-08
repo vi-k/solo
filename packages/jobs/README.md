@@ -53,11 +53,11 @@ final job = Job<Database>((ctx) async {
     discard: (database) => database.close(),
   );
 
-  await ctx.join(database.migrate);
-  await ctx.uncancellable(() async {
-    await database.markReady();
-    await database.flush();
-  });
+  final stop = CancelToken();
+  ctx.onCancel(stop.cancel);
+
+  await ctx.join(() => database.migrate(stop));
+  await ctx.uncancellable(() => database.markReady(stop));
 
   return database;
 });
@@ -87,18 +87,21 @@ Line by line, because every one of them is a decision:
   no `finally`, nothing to remember before the `return`, and nothing to
   register a second time — one value, one registration. See
   [Cleanup](#cleanup).
-- **`ctx.join(database.migrate)`** for the same reason as the open: a
-  migration already writing must not be walked away from. `ctx.wait`
-  would end the waiting and leave it writing into a database this body is
-  about to close.
-- **`ctx.uncancellable(...)`** around the pair, and not a `join` on each:
-  the two lines land together or neither does. `join` lets the call it
-  wraps finish and then hands the body to the cancellation, so one
-  arriving inside `markReady` would end the body before `flush` ever ran.
-  `uncancellable` holds the cancellation for the whole section instead; it
-  lands on the next line that goes through the context, and here that is
-  after both. What is on disk outlives this job whatever the outcome, and
-  a schema marked ready but never written stays that way — see
+- **`ctx.onCancel(stop.cancel)`** is how `cancel()` reaches the database
+  itself. The callback runs the moment the job is marked, before the body
+  learns of it, so whatever the database is doing is told to stop at once.
+- **`ctx.join(() => database.migrate(stop))`** for the same reason as the
+  open: the migration is told to stop through that token, and `join` waits
+  for it to actually stop. `ctx.wait` would end the waiting and leave it
+  writing into a database this body is about to close.
+- **`ctx.uncancellable(() => database.markReady(stop))`** for the step that
+  must not even be told to stop. `join` would not do here, and this is the
+  difference between the two: `join` holds the waiting, not the
+  cancellation. Under it the callback above has already fired, `stop` is
+  already cancelled, and `markReady` gives up halfway — the call is waited
+  for, but it is a call that is stopping. `uncancellable` holds the
+  cancellation itself: nothing is told to stop until the step is over, and
+  it lands on the next line that goes through the context — see
   [Cancellation](#cancellation).
 - **`await job.cancel()`** returns when the job has actually finished, so
   the outcome below is already there. Nothing has to be awaited: the

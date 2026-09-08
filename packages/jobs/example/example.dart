@@ -1,5 +1,13 @@
 import 'package:jobs/jobs.dart';
 
+/// The stop signal a database client of its own takes, the kind
+/// [JobContext.onCancel] is for.
+class CancelToken {
+  bool cancelled = false;
+
+  void cancel() => cancelled = true;
+}
+
 /// A resource that takes a while to open and must be closed.
 class Database {
   static Future<Database> open() async {
@@ -7,11 +15,9 @@ class Database {
     return Database();
   }
 
-  Future<void> migrate() async {}
+  Future<void> migrate(CancelToken stop) async {}
 
-  Future<void> markReady() async {}
-
-  Future<void> flush() async {}
+  Future<void> markReady(CancelToken stop) async {}
 
   Future<void> close() async => print('database closed');
 }
@@ -26,13 +32,13 @@ Future<void> main() async {
       discard: (database) => database.close(),
     );
 
-    await ctx.join(database.migrate);
-    // Both or neither: `join` on each would let the cancellation end the
-    // body between them.
-    await ctx.uncancellable(() async {
-      await database.markReady();
-      await database.flush();
-    });
+    final stop = CancelToken();
+    ctx.onCancel(stop.cancel);
+
+    // Told to stop the moment the job is cancelled, and waited for.
+    await ctx.join(() => database.migrate(stop));
+    // Not told to stop at all: the token stays untouched until this is over.
+    await ctx.uncancellable(() => database.markReady(stop));
 
     return database;
   });
