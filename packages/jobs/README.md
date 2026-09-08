@@ -321,17 +321,31 @@ outside; everything else takes `dispose`.** A `discard` on a temporary
 file the body never returns does nothing on success — a leak on the happy
 path that no test on cancellation will ever show.
 
-For a value that did not come out of a call, the two members say the same
-thing:
+For a value that did not come out of a call, the same two words are two
+members of the context — `ctx.onDispose` and `ctx.onDiscard` — choosing by
+the same rule:
 
 ```dart
 final buffer = StringBuffer();
 ctx.onDispose(() => sink.add(buffer.toString()));
 ```
 
-Both forms return a function that unregisters; for a value from `wait` or
-`join` there is `ctx.disown(value)`, for when the body hands the value
-over itself and the cleanup must stop being its business.
+Both return a function that unregisters what they registered, for a
+disposer that only had to cover a window. Calling it twice, or after the
+disposer has run, is safe:
+
+```dart
+final remove = ctx.onDispose(cursor.close);
+await ctx.join(cursor.readAll); // closes it at the end
+remove();
+```
+
+What `wait` and `join` registered has no such function — the body was
+never handed one — and is dropped by the value instead:
+`ctx.disown(value)`, for when the body hands the value over itself and the
+cleanup must stop being its business. It looks the value up by identity,
+so it takes the very object the body was given, and answers whether it
+found anything.
 
 **How it runs.** The engine unwinds the stack in one pass, last
 registration first, after the children and before the outcome — children
