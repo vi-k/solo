@@ -248,6 +248,15 @@ abstract class JobBase<T> implements Job<T> {
   final _cancelled = Completer<void>();
   final _onCancel = <void Function()>[];
   final _cleanups = <_Cleanup>[];
+
+  /// The registrations the first pass of the unwinding has put aside.
+  ///
+  /// They are still waiting, not gone: an outcome of [Done] that a late
+  /// cancellation takes away brings them back. A disposer running below
+  /// them may take one back — through the function [JobContext.onDispose]
+  /// returned, or through [JobContext.disown] — so they have to stay
+  /// reachable from both, and a local list would hide them.
+  final _skipped = <_Cleanup>[];
   final _children = <JobBase<Object?>>[];
 
   /// The child behind an outcome of a child, for the description of this
@@ -750,9 +759,13 @@ abstract class JobBase<T> implements Job<T> {
         outcome = selfCancelled = _handlerCancel(cancelled, stackTrace);
       }
     } on Object catch (error, stackTrace) {
+      // Read before the observer hears: it is handed the job, and an
+      // `onError` that cancels would otherwise make a failure that came
+      // first look like it came second. The order is the whole diagnosis,
+      // and it is settled at the moment of the throw.
+      failedFirst = _pendingCancel == null;
       notifyObserver(error, stackTrace);
       outcome = Failed(error, stackTrace);
-      failedFirst = _pendingCancel == null;
     }
     // The body has ended: from here a value coming out of a call it walked
     // away from can no longer reach it, and no child is started any more.
@@ -789,11 +802,10 @@ abstract class JobBase<T> implements Job<T> {
       // the stack, from the outcome as it stands then: a cancellation may
       // arrive into the unwinding itself. The ones it passed over wait for
       // a second pass instead of being dropped.
-      final skipped = <_Cleanup>[];
       while (_cleanups.isNotEmpty) {
         final cleanup = _cleanups.removeLast();
         if (!cleanup.always && (_pendingCancel ?? outcome) is Done<T>) {
-          skipped.add(cleanup);
+          _skipped.add(cleanup);
           continue;
         }
         await _runCleanup(cleanup);
@@ -802,8 +814,8 @@ abstract class JobBase<T> implements Job<T> {
       // collected in the order they came off the stack, and that is the
       // order they run in — the top one first, as if they had never been
       // put aside.
-      while (skipped.isNotEmpty && (_pendingCancel ?? outcome) is! Done<T>) {
-        await _runCleanup(skipped.removeAt(0));
+      while (_skipped.isNotEmpty && (_pendingCancel ?? outcome) is! Done<T>) {
+        await _runCleanup(_skipped.removeAt(0));
         while (_cleanups.isNotEmpty) {
           await _runCleanup(_cleanups.removeLast());
         }
@@ -811,10 +823,15 @@ abstract class JobBase<T> implements Job<T> {
       _disposing = false;
     }
     final decided = _pendingCancel ?? outcome;
+    finish(decided);
+    // After `finish`, not before: the terms are those of an uncovered
+    // failure, and those include the window to observe — `finished`,
+    // `onFinish`, the completion of `done`, and a microtask after them.
+    // Reported earlier, this reached the zone while an observer taking the
+    // outcome at finish had not been called yet.
     if (failedFirst && outcome is Failed && !identical(decided, outcome)) {
       _reportCovered(outcome);
     }
-    finish(decided);
   }
 
   /// Hands an error the outcome no longer carries to the zone.
@@ -831,11 +848,13 @@ abstract class JobBase<T> implements Job<T> {
   /// would otherwise silence this for good. [Job.ignore] silences it, as
   /// it silences any other failure nobody wants.
   void _reportCovered(Failed outcome) {
-    if (_observed) {
-      return;
-    }
-    _debug(() => '$this failure covered by a cancellation went to the zone');
-    _zone.handleUncaughtError(outcome.error, outcome.stackTrace);
+    _zone.scheduleMicrotask(() {
+      if (_observed) {
+        return;
+      }
+      _debug(() => '$this failure covered by a cancellation went to the zone');
+      _zone.handleUncaughtError(outcome.error, outcome.stackTrace);
+    });
   }
 
   /// Runs one registration; its error belongs to `onError` and ends there.

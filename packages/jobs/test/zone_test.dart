@@ -475,6 +475,100 @@ void main() {
       ['Cancelled(handler: as a failure)'],
     );
   });
+
+  test('an observer that cancels from onError does not hide the failure', () {
+    final caught = <Object>[];
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          Job<void>(key: 'job', observer: _CancelOnError(), (ctx) async {
+            throw StateError('boom');
+          });
+          async.flushTimers();
+        });
+      },
+      (error, stackTrace) => caught.add(error),
+    );
+    expect(
+      caught.map((error) => '$error').toList(),
+      ['Bad state: boom'],
+      reason: 'the body failed first, and a cancellation decided afterwards '
+          'leaves that failure on the same road it would have taken anyway',
+    );
+  });
+
+  test('a covered error waits for the same window an uncovered one waits for',
+      () {
+    final order = <String>[];
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          final job = Job<void>(
+            key: 'job',
+            observer: _IgnoreOnFinish(order),
+            (ctx) async {
+              ctx.run(
+                Job.deferred<void>(
+                  key: 'child',
+                  // An observer of its own: the child would inherit the
+                  // parent's, and its finish would take the outcome of the
+                  // parent through the closure long before this is about.
+                  observer: _Quiet(),
+                  (child) => child.wait(() => delay(50)),
+                ),
+              );
+              throw StateError('boom');
+            },
+          );
+          async.elapse(const Duration(milliseconds: 10));
+          job.cancel().ignore();
+          async.flushTimers();
+        });
+      },
+      (error, stackTrace) => order.add('zone'),
+    );
+    expect(
+      order,
+      ['onFinish job'],
+      reason: 'an observer taking the outcome at finish is in time here as '
+          'it is for a failure no cancellation covered',
+    );
+  });
+
+  test('a listener one microtask late still counts for a covered error too',
+      () {
+    final caught = <Object>[];
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          late Job<void> job;
+          job = Job<void>(
+            key: 'job',
+            observer: _TouchAfterFinish(() => job.done.ignore()),
+            (ctx) async {
+              ctx.run(
+                Job.deferred<void>(
+                  key: 'child',
+                  observer: _Quiet(),
+                  (child) => child.wait(() => delay(50)),
+                ),
+              );
+              throw StateError('boom');
+            },
+          );
+          async.elapse(const Duration(milliseconds: 10));
+          job.cancel().ignore();
+          async.flushTimers();
+        });
+      },
+      (error, stackTrace) => caught.add(error),
+    );
+    expect(
+      caught,
+      isEmpty,
+      reason: 'the same microtask of grace an uncovered failure gives',
+    );
+  });
 }
 
 /// Touches the outcome one microtask after the job finished.
@@ -486,3 +580,29 @@ final class _TouchAfterFinish extends JobObserver {
   @override
   void onFinish(Job<Object?> job) => scheduleMicrotask(_touch);
 }
+
+/// Cancels the job from inside `onError`, the way an engine of a domain
+/// that treats a failure as a reason to give up would.
+final class _CancelOnError extends JobObserver {
+  @override
+  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      job.cancel().ignore();
+}
+
+/// Takes the outcome the moment the job finishes, the way an engine of a
+/// domain that routes failures itself would.
+final class _IgnoreOnFinish extends JobObserver {
+  final List<String> order;
+
+  _IgnoreOnFinish(this.order);
+
+  @override
+  void onFinish(Job<Object?> job) {
+    order.add('onFinish ${job.key}');
+    job.ignore();
+  }
+}
+
+/// Hears everything and does nothing: keeps a child out of a scenario that
+/// is about its parent.
+final class _Quiet extends JobObserver {}

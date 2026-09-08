@@ -750,4 +750,52 @@ void main() {
       expect(closed, ['below'], reason: 'the top one went, the one below ran');
     });
   });
+
+  test('a registration the unwinding put off can still be taken back', () {
+    final ran = <String>[];
+    fakeAsync((async) {
+      late void Function() unregister;
+      Job<Object>((ctx) async {
+        ctx.onDispose(() {
+          // Runs below the put-off registration, on a `Done` a cancellation
+          // is about to take away.
+          unregister();
+          ctx.job.cancel().ignore();
+        });
+        unregister = ctx.onDiscard(() => ran.add('discard ran'));
+        return ran;
+      }).ignore();
+      async.flushTimers();
+    });
+    expect(
+      ran,
+      isEmpty,
+      reason: 'taking a registration back works wherever the unwinding has '
+          'put it',
+    );
+  });
+
+  test('a value the unwinding put off can still be disowned', () {
+    final ran = <String>[];
+    final resource = Object();
+    fakeAsync((async) {
+      Job<Object>((ctx) async {
+        ctx.onDispose(() {
+          ran.add('disown: ${ctx.disown(resource)}');
+          ctx.job.cancel().ignore();
+        });
+        return ctx.wait(
+          () => resource,
+          discard: (value) => ran.add('discard ran'),
+        );
+      }).ignore();
+      async.flushTimers();
+    });
+    expect(
+      ran,
+      ['disown: true'],
+      reason: 'the body handed the value on, and the registration the first '
+          'pass put aside went with it',
+    );
+  });
 }

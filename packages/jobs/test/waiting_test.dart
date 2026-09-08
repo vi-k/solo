@@ -246,4 +246,34 @@ void main() {
       expect(seen, ['value'], reason: 'the action runs on, the body does not');
     });
   });
+
+  test(
+      'an action that cancels the job and answers at once hands the body '
+      'nothing', () {
+    final ran = <String>[];
+    fakeAsync((async) {
+      Job<void>((ctx) async {
+        try {
+          final value = await ctx.wait(
+            () {
+              ctx.job.cancel().ignore();
+              return 'db';
+            },
+            discard: (value) => ran.add('discarded $value'),
+          );
+          ran.add('continued: $value');
+        } on Cancelled {
+          ran.add('cancelled');
+        }
+      }).ignore();
+      async.flushTimers();
+    });
+    expect(
+      ran,
+      ['discarded db', 'cancelled'],
+      reason: 'a value produced after the mark is one the body must not see, '
+          'and the answer does not turn on whether the action was '
+          'synchronous',
+    );
+  });
 }

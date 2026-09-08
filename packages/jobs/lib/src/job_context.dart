@@ -610,7 +610,13 @@ abstract class JobContextBase implements JobContext {
     }
     final cleanup = _Cleanup(disposer, always: always, value: value);
     _owner._cleanups.add(cleanup);
-    return () => _owner._cleanups.remove(cleanup);
+    // Both lists: the unwinding moves a registration it decided to put off
+    // out of the stack, and a disposer running below it may still take
+    // that one back.
+    return () {
+      _owner._cleanups.remove(cleanup);
+      _owner._skipped.remove(cleanup);
+    };
   }
 
   @override
@@ -633,6 +639,17 @@ abstract class JobContextBase implements JobContext {
         return true;
       }
     }
+    // Then what the unwinding has put aside, top of the stack first: a
+    // registration waiting for an outcome that has not happened yet is
+    // still a registration, and handing the value on must still take it
+    // back.
+    final skipped = _owner._skipped;
+    for (var i = 0; i < skipped.length; i++) {
+      if (identical(skipped[i].value, value)) {
+        skipped.removeAt(i);
+        return true;
+      }
+    }
     return false;
   }
 
@@ -649,9 +666,27 @@ abstract class JobContextBase implements JobContext {
     if (result is! Future<T>) {
       if (_owner.bodyEnded) {
         await _keepLate(dispose, discard, result);
-      } else {
-        _keepOnStack(dispose, discard, result);
+        return result;
       }
+      // The action may have cancelled this job while it ran, and a value
+      // made after the mark is one the body must not see: `_race` answers
+      // that way for a future completing after the mark, and `join` for an
+      // action of its own. A member whose answer turns on whether the call
+      // happened to be synchronous is a member nobody can reason about.
+      //
+      // The cancellation alone, not `check()`: `wait` promises to end the
+      // waiting when the job is marked, and the rules of a domain are no
+      // part of that promise.
+      try {
+        throwIfCancelled();
+      } on Cancelled {
+        final disposer = dispose ?? discard;
+        if (disposer != null) {
+          await _dispose(disposer, result);
+        }
+        rethrow;
+      }
+      _keepOnStack(dispose, discard, result);
       return result;
     }
     return _race(result, dispose, discard);
