@@ -161,6 +161,17 @@ try {
 }
 ```
 
+or
+
+```dart
+try {
+  await ctx.join(database.migrate);
+} on Object catch (error) {
+  if (error is Cancelled) rethrow;
+  ctx.log('migration failed: $error');
+}
+```
+
 The outcome is `Cancelled` all the same, and that is what makes a
 swallowed cancellation expensive to find: from the outside the job ended
 right, while the body went on working. Catch the type you came for, and

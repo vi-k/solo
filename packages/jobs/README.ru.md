@@ -159,6 +159,17 @@ try {
 }
 ```
 
+или
+
+```dart
+try {
+  await ctx.join(database.migrate);
+} on Object catch (error) {
+  if (error is Cancelled) rethrow;
+  ctx.log('migration failed: $error');
+}
+```
+
 Не всякий `Cancelled`, который видит тело, — его собственный: тот, что
 пришёл из `await child.value`, говорит, что сдался ребёнок, и такой ловить
 законно — необязательный шаг не вышел. Внутри такого `catch` их различает
