@@ -213,11 +213,13 @@ says what a cancellation does to that call:
   disposer is awaited before the `Cancelled` is thrown, so whoever waits
   for the job waits for the disposal too.
 - `ctx.each(stream, onData)` follows a stream for as long as the job
-  lives. The subscription is cancelled the moment the job is marked,
-  before the body learns about it, and again when the job ends whatever
-  the outcome, so nothing is left listening even behind a body that walked
-  away from the call. An `onData` that returns a future is waited for, and
-  delivery is held meanwhile: the events keep their order.
+  lives, and a body that does nothing else is one expression:
+  `Job<void>((ctx) => ctx.each(socket.messages, handle))`. The
+  subscription is cancelled the moment the job is marked, before the body
+  learns about it, and again when the job ends whatever the outcome, so
+  nothing is left listening even behind a body that walked away from the
+  call. An `onData` that returns a future is waited for, and delivery is
+  held meanwhile: the events keep their order.
 - `ctx.uncancellable(action)` holds the cancellation for the length of
   the call: the job is not marked while it runs, so nothing — not an
   `onCancel` callback, not the cascade onto children — reaches into the
@@ -247,17 +249,6 @@ says what a cancellation does to that call:
   there with nothing to say which job started it. Start the work inside and
   take nothing out of it: the boundary of its error zone holds both ways.
 - `ctx.check()` gives up where there is no call to wrap.
-
-```dart
-final job = Job<void>((ctx) async {
-  final token = CancelToken();
-  ctx.onCancel(token.cancel);
-  await ctx.join(() => device.seek(position, cancelToken: token));
-  ctx.unattended(() => analytics.report('seek', position));
-});
-
-final feed = Job<void>((ctx) => ctx.each(socket.messages, handle));
-```
 
 A job created as `Job(body, cancellable: false)` refuses every
 cancellation it may refuse, once it has started: before the body runs
