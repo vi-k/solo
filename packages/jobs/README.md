@@ -257,12 +257,11 @@ Its own rules — whatever an engine on top adds — still apply.
 
 ## Children
 
-`ctx.run(child)` starts a child right now, bypassing whatever queue an
-engine on top may have. The parent is not finished until its children
-are, a cancelled parent cascades onto them, and a child that is not
-cancellable refuses the cascade. A body that gives itself up with
-`throw Cancelled(...)` cancels its children too; a body that *fails*
-leaves them to finish, and waits.
+`ctx.run(child)` starts a child right now. The parent is not finished until
+its children are, a cancelled parent cascades onto them, and a child that
+is not cancellable refuses the cascade. A body that gives itself up with
+`throw Cancelled(...)` cancels its children too; a body that *fails* leaves
+them to finish, and waits.
 
 ```dart
 final parent = Job<void>((ctx) async {
