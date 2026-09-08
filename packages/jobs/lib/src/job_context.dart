@@ -147,12 +147,15 @@ abstract interface class JobContext {
   /// ```
   ///
   /// Held, not refused: the cancellation lands the moment the section
-  /// closes, and the next member of the context throws it. So the step is
-  /// protected, and the job still ends up cancelled — anything after the
-  /// step that has to happen anyway belongs inside the same section, and a
-  /// job that must survive a cancellation altogether is created with
-  /// `cancellable: false`. That refusal is final and is what a section
-  /// leaves alone. Sections nest — only the outermost lets a held
+  /// closes, and the next member of the context throws it. Plainly: while
+  /// the body is inside, the callbacks of [onCancel] are not called at all
+  /// — they are called the moment the section closes, before the body goes
+  /// on, and the body itself learns of the cancellation after that. So the
+  /// step is protected, and the job still ends up cancelled — anything
+  /// after the step that has to happen anyway belongs inside the same
+  /// section, and a job that must survive a cancellation altogether is
+  /// created with `cancellable: false`. That refusal is final and is what a
+  /// section leaves alone. Sections nest — only the outermost lets a held
   /// cancellation through — and it is let through even if [action] throws.
   ///
   /// This is what separates it from [join], which accepts the

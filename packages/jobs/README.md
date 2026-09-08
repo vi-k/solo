@@ -100,9 +100,10 @@ Line by line, because every one of them is a decision:
   cancellation. Under it the callback above has already fired, `stop` is
   already cancelled, and `markReady` gives up halfway — the call is waited
   for, but it is a call that is stopping. `uncancellable` holds the
-  cancellation itself: nothing is told to stop until the step is over, and
-  it lands on the next line that goes through the context — see
-  [Cancellation](#cancellation).
+  cancellation itself. Plainly: while the body is inside the section,
+  `onCancel` is not called at all — it is called the moment the section
+  ends, and the body learns of the cancellation after that, at its next
+  call through the context — see [Cancellation](#cancellation).
 - **`await job.cancel()`** returns when the job has actually finished, so
   the outcome below is already there. Nothing has to be awaited: the
   handle can be dropped, and `job.ignore()` says so out loud.
