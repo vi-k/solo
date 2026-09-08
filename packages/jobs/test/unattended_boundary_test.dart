@@ -1,6 +1,8 @@
 @Timeout(Duration(seconds: 5))
 library;
 
+import 'dart:async';
+
 import 'package:fake_async/fake_async.dart';
 import 'package:jobs/jobs.dart';
 import 'package:test/test.dart';
@@ -163,6 +165,54 @@ void main() {
     expect(childRan, isFalse);
     expect(journal.take().where((line) => line.contains('error')), [refused]);
     expect(a.outcome, isA<Done<void>>());
+  });
+
+  test('a job created inside unattended work reports to the body zone', () {
+    final journal = JobJournal();
+    final caught = <String>[];
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          Job<void>(key: 'j', observer: journal, (ctx) async {
+            ctx.unattended(() {
+              Job<void>(key: 'stray', (c) async => throw StateError('stray'));
+            });
+            await ctx.wait(() => delay(1));
+          });
+          async.flushTimers();
+        });
+      },
+      (error, stackTrace) => caught.add('$error'),
+    );
+    expect(caught, ['Bad state: stray']);
+    expect(journal.take().where((line) => line.contains('error')), isEmpty);
+  });
+
+  test('a job created inside nested unattended work still reports to the '
+      'body zone', () {
+    final journal = JobJournal();
+    final caught = <String>[];
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          Job<void>(key: 'j', observer: journal, (ctx) async {
+            ctx.unattended(
+              () => ctx.unattended(() {
+                Job<void>(
+                  key: 'stray',
+                  (c) async => throw StateError('stray'),
+                );
+              }),
+            );
+            await ctx.wait(() => delay(1));
+          });
+          async.flushTimers();
+        });
+      },
+      (error, stackTrace) => caught.add('$error'),
+    );
+    expect(caught, ['Bad state: stray']);
+    expect(journal.take().where((line) => line.contains('error')), isEmpty);
   });
 
   test(

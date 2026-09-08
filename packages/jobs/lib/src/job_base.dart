@@ -229,7 +229,16 @@ abstract class JobBase<T> implements Job<T> {
   JobObserver? _observer;
 
   /// The zone the job was created in; an unobserved [Failed] goes here.
-  final Zone _zone = Zone.current;
+  ///
+  /// A job created inside [JobContext.unattended] takes the zone that work
+  /// was started from, not the fork: the failure is the new job's own, and
+  /// it must not arrive at the observer of the job that started the work.
+  /// A job is not unattended work — it has an outcome and an observer of
+  /// its own, and `ignore()` is how it is quenched.
+  final Zone _zone = _creationZone();
+
+  static Zone _creationZone() =>
+      (Zone.current[_unattendedKey] as Zone?) ?? Zone.current;
 
   final _done = Completer<Outcome<T>>();
   final _cancelled = Completer<void>();
