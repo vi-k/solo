@@ -27,20 +27,22 @@ with bloc_concurrency 0.3.0, the `solo` ones against `solo` 0.2.0 — and
 every trace quoted is from those runs.
 
 The same package ships `Cubit`: no events, no transformers, methods that
-emit. It answers half of item 5 and half of item 7, and it is the same half
-twice: a cubit method takes typed arguments and returns a value you can
-`await` — felangel points at it in
+emit. Item by item, that changes little. It has no transformers to reach
+for, so items 1 and 4 are its problem too; item 2 it shares whole, because
+the observer runs inside `BlocBase.emit` and that is the same method in
+both; `emit` after `close` throws `Bad state: Cannot emit new states after
+calling close`, which is item 3; there is no queue to manage, which is
+item 6; there is no cancellation, which is item 9; and in item 10 it has no
+emitter, so not even `emit.isDone` is there and the staleness check goes
+back to a field of its own.
+
+Items 5 and 7 it answers halfway, and it is the same half twice: a cubit
+method takes typed arguments and returns a value you can `await` — felangel
+points at it in
 [#1556](https://github.com/felangel/bloc/issues/1556) itself. The half it
 does not answer is the queue the events came with: the drag's state is
 written by whichever native call returns last (5), and two calls for one
-order charge the card twice (7). The rest it leaves to you too: nothing to
-manage because there is no queue (6), no transformers at all (1, 4), no
-cancellation (9), and `emit` after `close` throws `Bad state: Cannot emit
-new states after calling close` (item 3 below). Item 2 it shares whole: the
-observer runs inside `BlocBase.emit`, which is the same method in both.
-Item 10 it makes slightly worse — with no emitter there is no
-`emit.isDone`, so the staleness check goes back to a field of its own.
-Items 5 and 7 have the cubit written out.
+order charge the card twice (7). Both items have the cubit written out.
 
 ## 1. Handlers running in parallel write one state
 
@@ -55,8 +57,9 @@ turns on one object.
 
 **On bloc.** The cure is a funnel — one handler for the whole event type
 with `sequential()` — so that only one body is ever between an `await` and
-an `emit`. Every bloc example in this document is in that shape, and the
-items below are about what it costs.
+an `emit`. Several of the items below start from that shape and are about
+what it costs; item 8 is about a state change that cannot be put into it at
+all.
 
 ```dart
 class NotesBloc extends Bloc<NotesEvent, NotesState> {
@@ -145,6 +148,7 @@ the point: a read can be abandoned, a write cannot. A cancelled `wait`
 would end the upload job while `_api.upload` was still on the wire, the
 queue would start `refresh`, and the server would be read across a write in
 flight — the very interleaving this item is about.
+
 ## 2. An observer's error becomes the command's error
 
 A field recorder. `start` asks the native recorder to begin, publishes
@@ -292,6 +296,7 @@ error is still an unhandled error, and both runs above are under
 `runZonedGuarded` for exactly that reason. `solo` does not make an
 unreliable logger reliable. What it does is keep the logger's failure out
 of the decision about whether the recorder is recording.
+
 ## 3. Closing while work is in flight
 
 A chat or feed screen. The user sends a message, goes back, and the reply
@@ -332,7 +337,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 ```
 
 It works: `close()` returns only after the body does, however long that
-takes, and the state is untouched.
+takes, and the state is untouched. The second `on<E>` is a second queue,
+which is what item 1 warned about; it is safe here only because
+`MarkReplyRead` writes no state. Give it one to write and the two handlers
+are two writers again.
 
 One missed line and, under `sequential()`, the state changes after `close`
 and listeners see it; under any other transformer the same missed line is
@@ -399,6 +407,7 @@ so it does not vanish when asserts are off. Queued jobs finish with
 `Cancelled(closed)` and complete their `done`; and `send` after `close`
 returns a job already finished with the same `Cancelled(closed)` instead of
 throwing, so the call site needs no `isClosed` check.
+
 ## 4. One restartable among sequential
 
 A media player. `play`, `pause` and `seek` all talk to one native player, so
@@ -545,6 +554,7 @@ exactly as long as its job, and no field of the controller points at what is
 running. And the outcome reaches the caller — the stale seek's handle
 carries `Cancelled(manual)` and completes its `done`, so a slider that wants
 to know whether its seek landed can ask.
+
 ## 5. Methods or a queue, not both
 
 A map. `moveTo` and `setZoom` — two actions on one widget, and a drag fires
@@ -636,6 +646,7 @@ uneven native calls the trace is `[moveTo 1 start, moveTo 1 stopped, moveTo
 3 start, moveTo 3 end]`: the middle frame never starts, the first is told to
 stop, and the third reaches the map only after it has. The map ends where
 the finger did, and so does `MapState(3)`.
+
 ## 6. The queue cannot be managed
 
 A BLE device screen. The user opens it — connect — taps to read the battery
@@ -761,6 +772,7 @@ happened. The rename survives — the user asked for it and never took it
 back — and the disconnect follows it, because the queue is sequential and
 the disconnect was added last. `removeWhere` touches only the queue: a
 `connect` already in flight finishes first.
+
 ## 7. You cannot await your own event
 
 Checkout. Something asks the app to pay for an order and has to know
@@ -996,6 +1008,7 @@ also why the handler's `Cancelled` branch is not dead. It arrives for a
 payment cancelled before the charge left, for one still queued when the
 controller closed, and for a call made after `close`, which never starts at
 all.
+
 ## 8. The state changes from outside
 
 A camera, or a BLE sensor. The hardware reports a failure through a listener
@@ -1089,6 +1102,7 @@ can abort a Dart future, and a sensor that has just lost its cable has
 nothing left to be told. Where a device does take a cancel token, item 4
 hands it one through `ctx.onCancel`. What stops here is everything after
 the sample.
+
 ## 9. After cancellation the handler keeps running
 
 A firmware update over BLE, written chunk by chunk. A restarted flash must
