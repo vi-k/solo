@@ -114,12 +114,12 @@ void main() {
     });
   });
 
-  test('whenCancelled completes for a job added after close', () {
+  test('whenCancelled notifies for a job added after close', () {
     runSolo((solo, journal, async) {
       solo.close();
       final job = solo.run<TestState, void>(key: 'late', (ctx) async {});
       var cancelled = false;
-      job.whenCancelled.then((_) => cancelled = true);
+      job.whenCancelled((_) => cancelled = true);
       async.flushMicrotasks();
       expect(cancelled, isTrue);
       expect(journal.take(), ['[late] dropped Cancelled(closed)', 'closed']);

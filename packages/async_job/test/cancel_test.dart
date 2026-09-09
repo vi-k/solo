@@ -187,11 +187,11 @@ void main() {
     });
   });
 
-  test('whenCancelled completes before the job does', () {
+  test('whenCancelled notifies before the job finishes', () {
     fakeAsync((async) {
       final order = <String>[];
-      final job = Job<void>((ctx) => ctx.wait(() => delay(50)));
-      job.whenCancelled.then((_) => order.add('cancelled')).ignore();
+      final job = Job<void>((ctx) => ctx.wait(() => delay(50)))
+        ..whenCancelled((_) => order.add('cancelled'));
       job.done.then((_) => order.add('done')).ignore();
       async.elapse(const Duration(milliseconds: 10));
       job.cancel().ignore();
@@ -200,11 +200,12 @@ void main() {
     });
   });
 
-  test('whenCancelled of a job dropped before start completes too', () {
+  test('whenCancelled of a job dropped before start notifies too', () {
     fakeAsync((async) {
       var completed = false;
-      final job = Job<void>((ctx) async {})..cancel().ignore();
-      job.whenCancelled.then((_) => completed = true).ignore();
+      final job = Job<void>((ctx) async {})
+        ..cancel().ignore()
+        ..whenCancelled((_) => completed = true);
       async.flushMicrotasks();
       expect(completed, isTrue);
       expect((job.outcome! as Cancelled).started, isFalse);

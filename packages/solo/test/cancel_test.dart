@@ -24,14 +24,15 @@ void main() {
     });
   });
 
-  test('whenCancelled completes for a job dropped from the queue', () {
+  test('whenCancelled notifies for a job dropped from the queue', () {
     runSolo((solo, journal, async) {
       solo.run<TestState, void>(key: 'first', (ctx) async => delay(100));
       final second = solo.run<TestState, void>(key: 'second', (ctx) async {});
       async.flushMicrotasks();
       var cancelled = false;
-      second.whenCancelled.then((_) => cancelled = true);
-      second.cancel();
+      second
+        ..whenCancelled((_) => cancelled = true)
+        ..cancel();
       async.flushMicrotasks();
       expect(cancelled, isTrue);
       expect(journal.take(), [

@@ -139,25 +139,43 @@ Reading `job.outcome`, hearing it in `onFinish`, awaiting `cancel()` — none
 of them observes anything, and a failure left that way still reaches the
 zone, on the microtask after the job ends.
 
-`job.whenCancelled` completes on every `Cancelled` outcome — for a
-running job the moment it is marked, before the body finishes, and for a
-body that cancelled itself once that body has ended and its children are
-done, right before the cleanup. It says that the decision has been made,
-not that the job is over:
+`job.whenCancelled(callback)` registers a synchronous cancellation listener
+and returns a function that unregisters it. The callback receives the
+`Cancelled` with its reason and details. For a running job it runs after
+the cancellation cascades to children and `ctx.onCancel` callbacks run,
+before the body finishes. For a job dropped before start it runs when the
+job is dropped. For a body that throws `Cancelled` itself it runs after
+the body and its children end, right before cleanup:
 
 ```dart
 final job = Job<Report>(build);
 
-// The moment somebody cancels. The children and the cleanup still have
-// to play out, and `job.done` waits for them.
-unawaited(job.whenCancelled.then((_) => print('cancelling…')));
+// Cancellation has been accepted; the job may still be finishing.
+final unregister = job.whenCancelled((cancelled) {
+  print('cancelling: ${cancelled.reason}');
+});
 
 final outcome = await job.done;
+// Safe after completion; call earlier to stop listening sooner.
+unregister();
 ```
 
-It never completes for a job that ends `Done` or `Failed`, so hang work
-on it as above, or race it with `job.done`: a bare
-`await job.whenCancelled` parks for good on a job that succeeds.
+A late registration calls the listener immediately, even after the job has
+finished. A refused cancellation sends no notification; an `uncancellable`
+section delays it until the cancellation is accepted. Jobs that end `Done`
+or `Failed` without cancellation never call the listener and release their
+registrations on finish. Registering does not observe a failure.
+
+Each registration runs once. Pending listeners run in registration order
+from a snapshot: removing another listener during notification does not
+remove it from that pass. A new listener registered during notification
+runs immediately. Unregistering more than once is harmless.
+
+Synchronous callback errors follow the same route as `ctx.onCancel`: to
+`onError`, or to the job's creation zone without an observer; a thrown
+`Cancelled` never reaches the zone. They do not change cancellation or
+prevent other listeners from running. An `async` callback's future is not
+awaited and its errors are not caught here.
 
 ## Cancellation
 
@@ -429,9 +447,10 @@ queue policies. `describe` adds a line for whoever reads that log.
 Errors take two paths, and they are not the same. The body's error goes
 to the observer and becomes the `Failed` outcome; it reaches the zone
 only if nobody observes that outcome. The four errors that have nowhere
-else to go — a late failure of an action `wait` abandoned, a disposer, an
-`onCancel` callback, a failure of work handed to `ctx.unattended` — go to
-the observer, or straight to the zone when there is none. Silence is the
+else to go — a late failure of an action `wait` abandoned, a disposer, a
+cancellation callback (`ctx.onCancel` or `job.whenCancelled`), a failure
+of work handed to `ctx.unattended` — go to the observer, or straight to the
+zone when there is none. Silence is the
 choice of whoever listens. A `Cancelled` never takes that second road: a
 cancellation is a decision somebody made, not a failure, and the observer
 is the only place it is heard.

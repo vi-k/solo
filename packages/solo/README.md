@@ -404,13 +404,16 @@ reason is a `CancelReason`: `manual`, `parent` and `handler` from the core,
 `SoloCancelReason.rules` and `SoloCancelReason.closed` from `solo`. A reason
 is equal to any other with the same name, so an engine of your own may
 declare its own. `job.done` completes with the outcome and never throws;
-`job.value` completes with the value or throws; `job.whenCancelled`
-completes on every `Cancelled` outcome — for a running job the moment it is
-marked, before the body finishes, and for a body that cancelled itself once
-that body has ended and its children are done, right before the cleanup —
-and never at all for a job that ends `Done` or `Failed`; `job.cancel()`
-cancels and waits for the job to actually finish; `job.ignore()` says that
-nobody is going to look at the outcome.
+`job.value` completes with the value or throws; `job.whenCancelled(callback)`
+registers a synchronous listener and returns an unregister function. The
+listener receives `Cancelled` with its reason and details: on accepted
+cancellation for a running job, on dropping a job before start, or after
+the body and its children end and before cleanup if the body cancelled
+itself. Late registration calls it immediately. Jobs that end `Done` or
+`Failed` without cancellation release their listeners without calling them.
+Listener errors follow the `ctx.onCancel` route; `async` callbacks are not
+awaited. `job.cancel()` cancels and waits for the job to actually finish;
+`job.ignore()` says that nobody is going to look at the outcome.
 
 **Queue and policies.** `queue` is a first-class object visible to
 subclasses: `jobs`, `remove`, `removeWhere`, `clear`, `lastWhere`. The

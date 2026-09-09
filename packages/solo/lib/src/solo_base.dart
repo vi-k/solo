@@ -196,6 +196,9 @@ abstract class SoloBase<S extends Object> {
       );
       return impl;
     }
+    // A removed job's synchronous cancellation listener may cancel the
+    // incoming job. It must not occupy a queue slot or match a later policy.
+    if (impl.isFinished) return impl;
     _queue._insert(impl, first: first);
     _debug(() => 'add $impl${first ? ' first' : ''}');
     _schedulePump();

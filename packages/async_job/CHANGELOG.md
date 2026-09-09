@@ -1,3 +1,15 @@
+## 0.2.0
+
+- **Breaking:** replace the `Job.whenCancelled` future with
+  `job.whenCancelled((cancelled) { ... })`. The callback receives the full
+  `Cancelled` and runs synchronously; registering after cancellation calls
+  it immediately. The returned function unregisters the callback.
+- Release unused cancellation listeners when a job finishes without
+  cancellation. Registration does not observe a failed outcome.
+- Route synchronous listener errors through `onError`, or the creation
+  zone without an observer, as for `ctx.onCancel`. Async callbacks are not
+  awaited.
+
 ## 0.1.0
 
 Initial release. The job kernel taken out of `solo` before its own

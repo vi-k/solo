@@ -19,7 +19,7 @@ void main() {
 
       expect(job.isCancelled, isTrue, reason: 'marked before the body notices');
       var cancelledSeen = false;
-      job.whenCancelled.then((_) => cancelledSeen = true);
+      job.whenCancelled((_) => cancelledSeen = true);
       async.flushMicrotasks();
       expect(cancelledSeen, isTrue);
       expect(job.isFinished, isFalse, reason: 'body still parked on delay');

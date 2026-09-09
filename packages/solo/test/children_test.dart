@@ -176,15 +176,13 @@ void main() {
       // only come from the order in which the marks were set.
       final marked = <String>[];
       solo.run<TestState, void>(key: 'parent', (ctx) async {
-        unawaited(ctx.job.whenCancelled.then((_) => marked.add('parent')));
+        ctx.job.whenCancelled((_) => marked.add('parent'));
         final child = solo.job<TestState, void>(key: 'child', (ctx) async {
-          unawaited(ctx.job.whenCancelled.then((_) => marked.add('child')));
+          ctx.job.whenCancelled((_) => marked.add('child'));
           final grandchild = solo.job<TestState, void>(
             key: 'grandchild',
             (ctx) async {
-              unawaited(
-                ctx.job.whenCancelled.then((_) => marked.add('grandchild')),
-              );
+              ctx.job.whenCancelled((_) => marked.add('grandchild'));
               await delay(100);
               ctx.check();
             },

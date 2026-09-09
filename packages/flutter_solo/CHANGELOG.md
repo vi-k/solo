@@ -14,7 +14,8 @@ The first published release. 0.1.0 never left the tree.
 - Re-exports `package:solo/solo.dart`, which re-exports
   `package:async_job/async_job.dart`, so `flutter_solo` is the only dependency
   an app adds and the only import it writes.
-- Floor: `solo: ^0.2.0`, whose job kernel lives in `package:async_job`.
+- Floor: `solo: ^0.2.0`, whose job kernel is `async_job: ^0.2.0`
+  with synchronous `job.whenCancelled(callback)` registration.
 
 ## 0.1.0
 

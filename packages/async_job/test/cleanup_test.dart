@@ -246,10 +246,10 @@ void main() {
     });
   });
 
-  test('whenCancelled closes before the cleanup ends', () {
+  test('whenCancelled notifies before cleanup starts', () {
     fakeAsync((async) {
       final order = <String>[];
-      final job = Job<void>((ctx) async {
+      Job<void>((ctx) async {
         ctx.onDispose(() async {
           order.add('cleanup starts');
           await delay(50);
@@ -262,13 +262,10 @@ void main() {
           stackTrace: StackTrace.current,
         );
       })
-        ..ignore();
-      job.whenCancelled.then((_) => order.add('whenCancelled')).ignore();
+        ..ignore()
+        ..whenCancelled((_) => order.add('whenCancelled'));
       async.flushTimers();
-      // The listener of `whenCancelled` runs as a microtask, so its line
-      // lands inside the asynchronous disposer rather than before it; what
-      // matters is that it no longer waits for `finish`.
-      expect(order, ['cleanup starts', 'whenCancelled', 'cleanup ends']);
+      expect(order, ['whenCancelled', 'cleanup starts', 'cleanup ends']);
     });
   });
 

@@ -17,7 +17,7 @@ abstract class JobObserver {
   /// The body — that error also becomes the [Failed] outcome — or one of
   /// the four with no outcome to carry them: an action abandoned by
   /// [JobContext.wait] failing later, a disposer, a callback of
-  /// [JobContext.onCancel], and work handed over with
+  /// [JobContext.onCancel] or [Job.whenCancelled], and work handed over with
   /// [JobContext.unattended]. Without an observer those four go to the
   /// zone the job was created in — all but a [Cancelled], which the engine
   /// hands to nobody; with an observer they all stop here.
@@ -25,8 +25,9 @@ abstract class JobObserver {
   /// A [Cancelled] reaches this hook whenever one is thrown where there is
   /// no outcome to carry it — never the job giving up, which is not an
   /// error and never comes here. A disposer or a callback of
-  /// [JobContext.onCancel] that throws one; `throw Cancelled(...)` inside
-  /// unattended work, where there is nobody left to cancel and the object
+  /// [JobContext.onCancel] or [Job.whenCancelled] that throws one;
+  /// `throw Cancelled(...)` inside unattended work, where there is nobody
+  /// left to cancel and the object
   /// is new; a fresh `Cancelled` built by the rules of a domain for a
   /// context that outlived its job; a child's cancellation taken through
   /// `child.value` from one of those places rather than from the body,

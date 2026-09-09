@@ -1,8 +1,10 @@
 # Local paths to the packages that are not on pub.dev yet. This file is not
 # published: `example/` ships inside the package, and these paths lead
-# outside the archive. Delete it once the two remaining packages are out.
+# outside the archive. Remove their overrides as each release is published.
 dependency_overrides:
   flutter_solo:
     path: ../
   solo:
     path: ../../solo
+  async_job:
+    path: ../../async_job

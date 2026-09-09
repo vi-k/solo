@@ -8,6 +8,11 @@ for a tree that followed the package before it went out.
 - `Solo<S>` with a broadcast `stream`, delivered on the next microtask.
 - Jobs as `async` bodies with a working type `W`, `canStart` and
   `keepWhile` rules, `cancellable: false`.
+- Keep a replacement cancelled by a synchronous listener out of the queue,
+  so it cannot absorb a later `droppable` job.
+- Requires `async_job: ^0.2.0`: `job.whenCancelled(callback)` registers a
+  synchronous listener receiving `Cancelled` and returns an unregister
+  function.
 - `Job<T>` handle: `done`, `value`, `outcome`, `whenCancelled`, `cancel`,
   `ignore`.
 - `Outcome<T>`: `Done`, `Failed`, `Cancelled` with `CancelReason`.

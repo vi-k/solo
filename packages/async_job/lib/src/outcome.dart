@@ -74,9 +74,9 @@ final class Done<T> extends Outcome<T> {
 ///
 /// The errors with no outcome to carry them — a late failure of an action
 /// [JobContext.wait] walked away from, a disposer, a callback of
-/// [JobContext.onCancel], a failure of work handed over with
-/// [JobContext.unattended] — take the other path: [JobObserver.onError],
-/// or straight to the zone when there is no observer.
+/// [JobContext.onCancel] or [Job.whenCancelled], a failure of work handed
+/// over with [JobContext.unattended] — take the other path:
+/// [JobObserver.onError], or straight to the zone when there is no observer.
 final class Failed extends Outcome<Never> {
   /// The thrown error.
   final Object error;

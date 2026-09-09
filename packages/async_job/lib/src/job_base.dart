@@ -11,8 +11,8 @@ part 'outcome.dart';
 /// A handle to a job: the outcome, the waiting and the cancellation.
 ///
 /// Not a [Future]: a method that starts a job may be called without an
-/// `await`, and the analyzer will not ask for one. Await [done], [value]
-/// or [whenCancelled] where you need to.
+/// `await`, and the analyzer will not ask for one. Await [done] or [value]
+/// where you need to, or register a cancellation listener with [whenCancelled].
 ///
 /// A job that ends with [Failed] and is never observed hands its error to
 /// the zone that created the job, the way Dart reports an unhandled
@@ -132,21 +132,41 @@ abstract interface class Job<T> {
   /// becomes an unhandled `Future` error instead.
   Future<T> get value;
 
-  /// Completes on every [Cancelled] outcome, and never on any other one.
+  /// Registers [callback] for cancellation and returns an unregister function.
   ///
-  /// For a running job, the moment it is marked cancelled, before the body
-  /// finishes; for a job cancelled before it started, when it is dropped;
-  /// for a body that cancelled itself with `throw Cancelled(...)`, once the
-  /// body has ended and its children are done — right before the cleanup,
-  /// since nothing marked it beforehand. The children of such a body are
-  /// cancelled as the body ends, the same as a cancellation from outside
-  /// would cancel them; a body that *failed* leaves them running and waits
-  /// for them.
+  /// Calls it synchronously with the [Cancelled] carrying the reason,
+  /// description, start status and stack trace. For a running job this is
+  /// after cancellation has cascaded to its children and [JobContext.onCancel]
+  /// callbacks have run, before the body finishes; for a job cancelled before
+  /// start, when it is dropped. If the body throws [Cancelled] itself, this
+  /// runs after the body and its children end, right before cleanup. That
+  /// path does not call [JobContext.onCancel].
   ///
-  /// A job that ends [Done] or [Failed] never completes it at all. Hang
-  /// work on it with `then`, or race it against [done]; a bare
-  /// `await job.whenCancelled` parks for good on a job that succeeds.
-  Future<void> get whenCancelled;
+  /// If cancellation has already been accepted, calls [callback] immediately,
+  /// even if the job has finished. A refused or held cancellation does not
+  /// trigger it; a held one triggers it when it is accepted. A job that ends
+  /// [Done] or [Failed] without cancellation never calls it and releases its
+  /// registrations on finish. Registering does not observe a [Failed] outcome.
+  ///
+  /// Each registration runs once. Pending callbacks run in registration
+  /// order, from a snapshot: unregistering during notification does not remove
+  /// a callback from that pass. Registering during notification calls the new
+  /// callback immediately. Unregistering more than once is harmless.
+  ///
+  /// A synchronous error goes to [JobObserver.onError], or to the job's
+  /// creation zone if there is no observer; a thrown [Cancelled] is kept out
+  /// of the zone. The error changes neither cancellation nor other callbacks.
+  /// The callback is synchronous: an `async` callback's future is not awaited
+  /// and its errors are not caught here.
+  ///
+  /// ```dart
+  /// final unregister = job.whenCancelled((cancelled) {
+  ///   print(cancelled.reason);
+  /// });
+  /// // When the listener is no longer needed:
+  /// unregister();
+  /// ```
+  void Function() whenCancelled(void Function(Cancelled) callback);
 
   /// Cancels the job and waits for it to actually finish.
   ///
@@ -260,7 +280,8 @@ abstract class JobBase<T> implements Job<T> {
       (Zone.current[_unattendedKey] as Zone?) ?? Zone.current;
 
   final _done = Completer<Outcome<T>>();
-  final _cancelled = Completer<void>();
+  Cancelled? _cancelled;
+  final _cancelListeners = <void Function(Cancelled)>[];
   final _onCancel = <void Function()>[];
   final _cleanups = <_Cleanup>[];
 
@@ -395,7 +416,26 @@ abstract class JobBase<T> implements Job<T> {
   }
 
   @override
-  Future<void> get whenCancelled => _cancelled.future;
+  void Function() whenCancelled(void Function(Cancelled) callback) {
+    void guarded(Cancelled cancelled) {
+      try {
+        callback(cancelled);
+      } on Object catch (error, stackTrace) {
+        notifyError(error, stackTrace);
+      }
+    }
+
+    final outcome = _outcome;
+    final cancelled =
+        _cancelled ?? _pendingCancel ?? (outcome is Cancelled ? outcome : null);
+    if (cancelled != null) {
+      guarded(cancelled);
+      return () {};
+    }
+    if (isFinished) return () {};
+    _cancelListeners.add(guarded);
+    return () => _cancelListeners.remove(guarded);
+  }
 
   @override
   Future<void> cancel() {
@@ -470,7 +510,7 @@ abstract class JobBase<T> implements Job<T> {
         cascadeToChildren(marked);
         if (_status == JobStatus.finished) {
           // A callback of a child reached the engine of a domain, and it
-          // ended the job by hand: `whenCancelled` is closed already, and
+          // ended the job by hand: `whenCancelled` was notified already, and
           // the callbacks below would run on a job that is over.
           return;
         }
@@ -609,11 +649,6 @@ abstract class JobBase<T> implements Job<T> {
     }
     _outcome = outcome;
     _status = JobStatus.finished;
-    // A job cancelled before it started never went through `_markCancelled`,
-    // so `whenCancelled` is still open here.
-    if (outcome is Cancelled && !_cancelled.isCompleted) {
-      _cancelled.complete();
-    }
     // The list of children is a waiting list, so it shrinks; the link from
     // an outcome to the child that carried it lives on, in the parent's
     // `Expando`. Both happen here, where they are observable: in `finished`
@@ -639,6 +674,10 @@ abstract class JobBase<T> implements Job<T> {
     // token — for as long as anyone holds the handle.
     _onCancel.clear();
     _done.complete(outcome);
+    // Notify only after the domain has detached this job and delivered its
+    // finish hooks: a synchronous subscriber may immediately add more work.
+    if (outcome is Cancelled) _notifyCancelled(outcome);
+    _cancelListeners.clear();
     if (outcome is Failed && !_observed) {
       _reportUnobserved(outcome);
     }
@@ -659,7 +698,8 @@ abstract class JobBase<T> implements Job<T> {
   ///
   /// For the errors that have nowhere else to go: an action abandoned by
   /// [JobContext.wait] failing later, a disposer, a callback of
-  /// [JobContext.onCancel], work handed over with [JobContext.unattended].
+  /// [JobContext.onCancel] or [Job.whenCancelled], work handed over with
+  /// [JobContext.unattended].
   /// Silence is the choice of whoever listens, not the default of the
   /// package. A [Cancelled] is the one thing that never reaches the zone
   /// from here: a cancellation is a decision somebody made, not a failure,
@@ -806,9 +846,9 @@ abstract class JobBase<T> implements Job<T> {
     // to cascade onto them, and a filled `_pendingCancel` stops it.
     if (outcome is Cancelled) {
       _pendingCancel ??= outcome;
-      if (!_cancelled.isCompleted) {
-        _cancelled.complete();
-      }
+      _notifyCancelled(_pendingCancel!);
+      // A synchronous subscriber may reach an engine that finishes by hand.
+      if (isFinished) return;
     }
     if (_cleanups.isNotEmpty) {
       _disposing = true;
@@ -945,7 +985,6 @@ abstract class JobBase<T> implements Job<T> {
   /// callback that comes back to `cancelWith` through a path of its own
   /// turns around at the early return and never reaches this.
   void _markCancelled(Cancelled cancelled) {
-    _cancelled.complete();
     // In registration order, and from a copy: a callback may register
     // another one, and one it removes still runs. `JobContext.onCancel`
     // wraps the caller's callbacks, so an error of theirs never reaches
@@ -954,6 +993,18 @@ abstract class JobBase<T> implements Job<T> {
       callback();
     }
     _onCancel.clear();
+    _notifyCancelled(cancelled);
+  }
+
+  /// Saves the event before calling user code, including reentrant listeners.
+  void _notifyCancelled(Cancelled cancelled) {
+    if (_cancelled != null) return;
+    _cancelled = cancelled;
+    final listeners = _cancelListeners.toList();
+    _cancelListeners.clear();
+    for (final listener in listeners) {
+      listener(cancelled);
+    }
   }
 
   @override
