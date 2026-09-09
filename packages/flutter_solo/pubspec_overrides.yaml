@@ -1,6 +1,4 @@
 # Local development only; see packages/solo/pubspec_overrides.yaml.
 dependency_overrides:
-  async_job:
-    path: ../async_job
   solo:
     path: ../solo

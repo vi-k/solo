@@ -1,6 +1,0 @@
-# Local development only: `async_job` is resolved from the tree until it is on
-# pub.dev. Kept out of `pubspec.yaml` so the published archive carries no
-# dependency_overrides.
-dependency_overrides:
-  async_job:
-    path: ../async_job

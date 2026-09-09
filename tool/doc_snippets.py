@@ -49,19 +49,12 @@ dependencies:
   solo:
     path: {solo}
 
-# A root package applies no override of its dependency, so the path to the
-# unpublished `async_job` is repeated here.
-dependency_overrides:
-  async_job:
-    path: {jobs}
-
 dev_dependencies:
   fake_async: ^1.3.1
   lints: ^5.1.1
   test: ^1.25.15
 """.format(
     solo=os.path.join(REPO, 'packages', 'solo'),
-    jobs=os.path.join(REPO, 'packages', 'async_job'),
 )
 
 doc = open(DOC).read()
