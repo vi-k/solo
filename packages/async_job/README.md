@@ -135,7 +135,9 @@ the value on success and throws on failure or cancellation. If you do not
 need the result at all, call `job.ignore()` to acknowledge that choice.
 
 Accessing `done` or `value`, or calling `ignore()`, counts as observing a
-failure. Reading `job.outcome`, receiving the observer's `onFinish` callback
+failure. Forwarding a failure through `then` observes it too; the
+continuation takes responsibility for it. Reading `job.outcome`,
+receiving the observer's `onFinish` callback
 or awaiting `job.cancel()` does not. An unobserved failure reaches the
 job's creation zone on the microtask after the job finishes. This keeps a
 failure visible even when no caller waits for the result.
@@ -144,8 +146,8 @@ For a cancelled job, the outcome also explains why it stopped.
 `Cancelled` contains a `reason`, a `started` flag, an optional `description`
 and the stack trace of the cancellation. `started` tells you whether the
 body ran or was cancelled before start. The built-in reason classes are
-`ManualCancelReason`, `ParentCancelReason` and `HandlerCancelReason`, all
-extending `CancelReason`.
+`ManualCancelReason`, `ParentCancelReason`, `HandlerCancelReason` and
+`ChainCancelReason`, all extending `CancelReason`.
 
 Check reasons by type, for example `reason is ParentCancelReason`. The
 `name` property is a label for logs and does not determine equality.
@@ -408,6 +410,57 @@ a job that starts automatically. It throws `StateError` if the child has
 already started or the parent body has ended. If the parent is already
 cancelled, it cancels the child before start and throws the parent's
 `Cancelled`.
+
+## Chains
+
+Use `then` to continue a job with its result. Each call returns a new
+`Job` and gives its callback a separate context. The next callback starts
+after the previous job succeeds, including its children and cleanup:
+
+```dart
+final loaded = Job<String>((ctx) => ctx.join(loadText));
+final parsed = loaded.then<int>((ctx, text) => int.parse(text));
+final saved = parsed.then<void>((ctx, number) => ctx.join(
+      () => saveNumber(number),
+    ));
+
+await saved.value;
+```
+
+Cancelling `saved` also asks unfinished `parsed` and `loaded` to cancel.
+Cancelling `parsed` asks unfinished `loaded` to cancel and cancels `saved`.
+Cancelling `loaded` passes cancellation forward through both continuations.
+Each forwarded request carries `ChainCancelReason` with the adjacent
+job's `Cancelled` in `cause`. Completed jobs keep their outcomes. If you
+attach several continuations to one job, cancelling one can cancel their
+shared source and the other continuations too.
+
+`await saved.cancel()` waits for the unfinished predecessors, their
+children and cleanup, and any work and cleanup already started by `saved`.
+Sources retain their normal cancellation rules: `cancellable: false`
+refuses a request, and `uncancellable` holds it. A cancelled continuation
+still waits for that source, then finishes without calling its callback.
+While waiting, it can be `isCancelled` without being `isFinished`; its
+outcome has `started: false` if it was cancelled while waiting for its
+source.
+
+A failed predecessor forwards its error and stack without calling the
+callback. Observe the tail through `value`, `done` or `ignore` to handle
+that failure. If a cancelled continuation cannot forward a source failure,
+it does not observe it either: for example, a source that refuses
+cancellation and later fails still needs its own error handling.
+
+The callback accepts a value or future. Returning another `Job` does not
+wait for it; use `ctx.run(child).value` for a deferred child. `then` does
+not start a deferred source, and a continuation cannot be adopted through
+`ctx.run`. Do not await a continuation from its source's body or cleanup:
+the continuation is waiting for that source to finish.
+
+Each continuation is a root job of the core. It has an optional `observer`
+argument and inherits neither the source's observer nor domain state,
+rules or a queue slot. Cleanup registered by the source has already run
+when the continuation receives its value; a resource closed by the
+source's `onDispose` is therefore already closed at that point.
 
 ## Cleanup
 

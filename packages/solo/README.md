@@ -403,6 +403,22 @@ way to have two writers inside a controller deliberately.
 `ctx.run(child).value` gives the value and throws the child's `Cancelled` or
 error into the parent's body.
 
+**Chains.** `job.then((ctx, value) => ...)` creates a core `Job` that runs
+after `job` succeeds, including its children and cleanup. Its callback
+receives a new `JobContext` and may return a value or future. Failures
+pass forward without calling the callback. Cancellation passes forward
+to continuations and backwards to unfinished predecessors; cancelling
+the tail waits for that work and cleanup. Sources still obey their usual
+cancellation rules, including refusal and held cancellation.
+
+The continuation has its own optional `observer`. It inherits no
+`SoloContext`, rules, controller observer or queue slot. To change state,
+call a controller method that adds another job to the queue; other jobs
+may run between those steps. `close()` cancels a continuation through an
+unfinished source, but does not own a continuation already running after
+its source finished. Use children inside one parent when the entire
+sequence must hold the controller's current slot.
+
 **External state.** `externalSetState(next)` sets the state from outside
 any job: a hardware listener, a forced transition. Every job whose body is
 still running, except the one that emitted, is re-evaluated against the
@@ -413,8 +429,9 @@ read, and a job whose body has ended is not checked at all.
 exhaustive: `Done` carries the returned `value`, `Failed` carries `error`
 and `stackTrace`, `Cancelled` carries a `reason`, a `started` flag, an
 optional `description` and the stack trace of the cancellation itself. The
-reason extends `CancelReason`: `ManualCancelReason`, `ParentCancelReason`
-and `HandlerCancelReason` from the core, `RulesCancelReason` and
+reason extends `CancelReason`: `ManualCancelReason`, `ParentCancelReason`,
+`HandlerCancelReason` and `ChainCancelReason` from the core,
+`RulesCancelReason` and
 `ClosedCancelReason` from `solo`. Check the type, not the display `name`;
 there is no equality by name. Extend `CancelReason` to carry data of your
 own and pass it through `job.cancel(reason: reason)` or throw

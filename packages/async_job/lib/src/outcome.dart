@@ -42,6 +42,18 @@ final class ParentCancelReason extends CancelReason {
   String get name => 'parent';
 }
 
+/// A cancellation forwarded between jobs connected by [Job.then].
+final class ChainCancelReason extends CancelReason {
+  /// The cancellation of the adjacent job that caused this request.
+  final Cancelled cause;
+
+  /// Creates a chain cancellation preserving its [cause].
+  const ChainCancelReason({required this.cause});
+
+  @override
+  String get name => 'chain';
+}
+
 /// The body gave up, directly or by letting a child's cancellation escape.
 final class HandlerCancelReason extends CancelReason {
   /// The child's cancellation when it escaped through the parent's body.
@@ -84,10 +96,11 @@ final class Done<T> extends Outcome<T> {
 /// The job body threw [error].
 ///
 /// The engine hands it to [JobObserver.onError] first. If nobody then
-/// observes the job — no [Job.done], no [Job.value], no [Job.ignore] — it
-/// hands [error] to the zone the job was
-/// created in, through [Zone.handleUncaughtError], one microtask after the
-/// job finished. This is what Dart does with an unhandled [Future] error.
+/// observes the job through [Job.done], [Job.value], [Job.ignore] or failure
+/// forwarding by [Job.then], it hands [error] to the job's creation zone
+/// through [Zone.handleUncaughtError]. The check runs on the microtask after
+/// completion; a continuation attached within that grace period gets a
+/// chance to receive the outcome first.
 ///
 /// This is the error that has an outcome of its own. A body that throws
 /// after its cancellation ends as [Cancelled] instead, and [Cancelled] is

@@ -7,6 +7,7 @@ import 'observer.dart';
 
 part 'job_context.dart';
 part 'job_stream.dart';
+part 'job_then.dart';
 part 'outcome.dart';
 
 /// A handle to a job: the outcome, the waiting and the cancellation.
@@ -17,8 +18,8 @@ part 'outcome.dart';
 ///
 /// A job that ends with [Failed] and is never observed hands its error to
 /// the zone that created the job, the way Dart reports an unhandled
-/// `Future` error. Touching [done], [value] or [ignore] counts as
-/// observing it; see [ignore].
+/// `Future` error. Touching [done], [value] or [ignore], or forwarding a
+/// failure through [then], counts as observing it; see [ignore].
 abstract interface class Job<T> {
   /// Creates a job and starts it on the next microtask.
   ///
@@ -132,6 +133,49 @@ abstract interface class Job<T> {
   /// reported to the zone. Handle the error the future carries, or it
   /// becomes an unhandled `Future` error instead.
   Future<T> get value;
+
+  /// Creates a job that runs [onValue] after this job succeeds and cleans up.
+  ///
+  /// The callback receives its own [JobContext] and this job's value. It is
+  /// called asynchronously, even when this job has already finished, and may
+  /// return a value or a future. A failed source forwards its error and stack
+  /// trace without calling [onValue]; cancellation cancels the continuation.
+  ///
+  /// Cancellation also travels backwards: cancelling the continuation asks
+  /// its unfinished source to cancel, back through earlier links. Other
+  /// continuations of that source receive its accepted cancellation too.
+  /// [ChainCancelReason.cause] preserves each cancellation that was forwarded.
+  /// Completed jobs keep their outcomes. Sources may refuse or hold a request
+  /// under their usual cancellation rules.
+  ///
+  /// Until the source finishes, the continuation is not running. Cancelling
+  /// it marks it immediately but still waits for the source, including its
+  /// children and cleanup, even if the source refuses cancellation. Its
+  /// cancellation outcome has `started: false` while waiting for the source.
+  /// Once started, its body, children and cleanup follow the ordinary [Job]
+  /// lifecycle. Awaiting its [cancel] waits for that work as well.
+  ///
+  /// This does not start a deferred source. The continuation starts itself
+  /// when ready and cannot be adopted through [JobContext.run]. It is a root
+  /// job of the core, with its own optional [observer]; it inherits no
+  /// observer, domain state, queue slot or rules. Awaiting it from its
+  /// source's body or cleanup deadlocks, just like awaiting its own [done].
+  ///
+  /// Forwarding a failure observes the source and transfers responsibility
+  /// to the continuation. A cancelled continuation does not observe a source
+  /// failure it cannot forward; observe the source separately if needed.
+  /// Returned jobs are ordinary values, not automatically awaited: start
+  /// deferred children with `ctx.run(child)` and await their `.value`.
+  ///
+  /// ```dart
+  /// final length = Job<String>((ctx) async => 'hello')
+  ///     .then<int>((ctx, text) => text.length);
+  /// print(await length.value); // 5
+  /// ```
+  Job<R> then<R>(
+    FutureOr<R> Function(JobContext ctx, T value) onValue, {
+    JobObserver? observer,
+  });
 
   /// Registers [callback] for cancellation and returns an unregister function.
   ///
@@ -324,8 +368,13 @@ abstract class JobBase<T> implements Job<T> {
   var _uncancellableDepth = 0;
   Cancelled? _heldCancel;
 
-  /// Whether anyone asked for the outcome: [done], [value] or [ignore].
+  /// Whether anyone observed the outcome, directly or by forwarding it.
   bool _observed = false;
+
+  /// Continuations still waiting to receive this outcome. A late listener
+  /// may attach within the observation grace period but receive the result
+  /// on the next microtask; give it that chance before reporting a failure.
+  int _pendingContinuations = 0;
 
   JobStatus _status = JobStatus.created;
   Outcome<T>? _outcome;
@@ -424,6 +473,13 @@ abstract class JobBase<T> implements Job<T> {
         ),
     };
   }
+
+  @override
+  Job<R> then<R>(
+    FutureOr<R> Function(JobContext ctx, T value) onValue, {
+    JobObserver? observer,
+  }) =>
+      _ThenJob<T, R>(this, onValue, observer: observer);
 
   @override
   void Function() whenCancelled(void Function(Cancelled) callback) {
@@ -995,6 +1051,10 @@ abstract class JobBase<T> implements Job<T> {
   void _reportUnobserved(Failed outcome) {
     _zone.scheduleMicrotask(() {
       if (_observed) {
+        return;
+      }
+      if (_pendingContinuations > 0) {
+        _reportUnobserved(outcome);
         return;
       }
       _debug(() => '$this failure went to the zone');

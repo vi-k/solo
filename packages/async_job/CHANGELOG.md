@@ -1,5 +1,11 @@
 ## 0.2.0
 
+- Add `Job.then` with a separate context per continuation, forward outcome
+  propagation and cancellation in both directions. Cancelling the tail
+  waits for unfinished predecessors and their cleanup. `ChainCancelReason`
+  retains each adjacent cancellation in `cause`. Continuations are core
+  root jobs with their own optional observer, independent of domain queues.
+
 - **Breaking:** `ctx.each(stream, (child, event) { ... })` returns a child
   `Job<void>` immediately. Await `.value` for a throwing result, inspect
   `.done` for the outcome, or call `.cancel()` to stop it separately.
