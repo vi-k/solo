@@ -77,24 +77,26 @@ Line by line, because every one of them is a decision:
   the body ever runs. That is what the delay above is for — a job
   cancelled on the same stripe ends as `Cancelled(manual)` with
   `started: false`, and none of the body runs at all.
-- **`ctx.join(Database.open)`** and not `ctx.wait`: an open that is
-  already under way is not abandoned halfway, or the database would be
-  opened with nobody left holding it.
-- **`discard: (database) => database.close()`** covers the whole life of
-  that database in one line and once. Not only the value that came back
-  after the job had given up — everything after it too: a cancellation
-  between two steps, an error inside one, a cancellation landing after the
-  `return`. The database is closed unless it reaches the caller. No `try`,
-  no `finally`, nothing to remember before the `return`, and nothing to
-  register a second time — one value, one registration. See
-  [Cleanup](#cleanup).
+- **`ctx.join(Database.open)`** calls `Database.open` and waits for it to
+  finish, returning the opened database. If the job is cancelled while
+  opening is in progress, `join` still waits for the call to finish before
+  telling the body about the cancellation.
+- **`discard: (database) => database.close()`** registers cleanup for the
+  database: if the job ends with cancellation or an error, it closes the
+  database. This also covers the time after `return database`, which ends
+  the body, not necessarily the job. For example, a body may have started
+  a child that is still running when it returns. The job waits for that
+  child; if cancelled while waiting, it ends as `Cancelled` and closes the
+  database. With `Done(database)`, the database stays open for the caller.
+  See [Cleanup](#cleanup).
 - **`ctx.onCancel(stop.cancel)`** is how `cancel()` reaches the database
   itself. The callback runs the moment the job is marked, before the body
   learns of it, so whatever the database is doing is told to stop at once.
-- **`ctx.join(() => database.migrate(stop))`** for the same reason as the
-  open: the migration is told to stop through that token, and `join` waits
-  for it to actually stop. `ctx.wait` would end the waiting and leave it
-  writing into a database this body is about to close.
+- **`ctx.join(() => database.migrate(stop))`** waits for the migration to
+  finish. On cancellation, the token tells the migration to stop, and
+  `join` waits until it has actually stopped before the job closes the
+  database. If you need to stop waiting immediately on cancellation, use
+  `ctx.wait`. It ends the waiting without stopping the operation itself.
 - **`ctx.uncancellable(() => database.markReady(stop))`** for the step that
   must not even be told to stop. `join` would not do here, and this is the
   difference between the two: `join` holds the waiting, not the
