@@ -4,10 +4,11 @@
 
 ## Где мы
 
-Фаза: **ядро опубликовано.** `async_job` 0.1.0 лежит на pub.dev с
-2026-09-09 (`https://pub.dev/packages/async_job`, API отдаёт 200);
-`packages/solo` 0.2.0 и `packages/flutter_solo` 0.2.0 стоят на нём и ждут
-своей очереди — каждый отдельным запросом владельца.
+Фаза: **ядро опубликовано, `solo` подготовлен к своей публикации.**
+`async_job` 0.1.0 лежит на pub.dev с 2026-09-09
+(`https://pub.dev/packages/async_job`, API отдаёт 200); `packages/solo`
+0.2.0 и `packages/flutter_solo` 0.2.0 стоят на нём и ждут своей очереди —
+каждый отдельным запросом владельца.
 
 Связка прошла целиком: коммит `Release async_job 0.1.0` (`09e4f2b`),
 аннотированный тег `async_job-v0.1.0`, push обоих и `dart pub publish`.
@@ -123,28 +124,27 @@ for job», 1.0.0, без зависимостей) — довод для `suppor
    сначала ядро и лишь потом те, кто на нём стоит.
 
    1. ~~`async_job` 0.1.0~~ — опубликован 2026-09-09.
-   2. `solo` 0.2.0 — **сначала удалить**
-      `packages/solo/pubspec_overrides.yaml` целиком: `async_job: ^0.1.0`
-      после первого шага резолвится с pub.dev. Затем `dart pub get`, проверки,
-      dry-run.
-   3. `flutter_solo` 0.2.0 — так же: удалить его
-      `pubspec_overrides.yaml`, `flutter pub get`, проверки, dry-run.
+   2. `solo` 0.2.0 — **подготовлен 2026-09-09**: оверрайды на `async_job`
+      сняты везде, `solo` берёт ядро с pub.dev (в `pubspec.lock` — hosted
+      с sha256), проверки зелёные, dry-run 0 warnings, архив 83 КБ.
+      Осталась сама связка.
+   3. `flutter_solo` 0.2.0 — **сначала удалить**
+      `packages/flutter_solo/pubspec_overrides.yaml` (в нём остался один
+      путь, на `solo`) и убрать `solo` из
+      `packages/flutter_solo/example/pubspec_overrides.yaml`; затем
+      `flutter pub get`, проверки, dry-run.
 
-   Пока оверрайды на месте, dry-run у `solo` и `flutter_solo` даёт hint
-   «Non-dev dependencies are overridden». Он не зависит от того, лежат они
-   в `pubspec.yaml` или в `pubspec_overrides.yaml` (проверено 2026-09-06),
-   и уходит только вместе с самим оверрайдом; сам `pubspec_overrides.yaml`
-   в архив не попадает.
+   Пока оверрайд на месте, dry-run у `flutter_solo` даёт hint «Non-dev
+   dependencies are overridden». Он не зависит от того, лежит он в
+   `pubspec.yaml` или в `pubspec_overrides.yaml` (проверено 2026-09-06), и
+   уходит только вместе с самим оверрайдом; сам `pubspec_overrides.yaml` в
+   архив не попадает.
 
-   После публикации подчистить оверрайды там, где они станут не нужны:
-   `packages/solo/example/pubspec_overrides.yaml`,
-   `packages/flutter_solo/example/pubspec_overrides.yaml` и шаблон
-   `SOLO_PUBSPEC` в `tool/doc_snippets.py`. Всё три — только уборка, в
-   архив не едет ни один: оверрайд примера `solo` переехал из
-   `example/pubspec.yaml` в `pubspec_overrides.yaml` и закрыт `.pubignore`
-   пакета (иначе опубликованный пример не собирался бы ни у кого — находка
-   1 `2026-09-06[5]-solo-docs-review.md`), у примера `flutter_solo` он так
-   и заведён.
+   Пример `solo` едет в архив со своим `pubspec.yaml`, где `solo` —
+   path-зависимость `../`: внутри архива этот путь ведёт в корень пакета и
+   резолвится (находка 1 `2026-09-06[5]-solo-docs-review.md`). Оверрайд
+   примера был нужен только ради неопубликованного ядра и удалён вместе с
+   остальными.
 
    Проверка «имя свободно» (404 от `pub.dev/api/packages/<имя>`) ничего не
    гарантирует: похожесть сервер смотрит только на загрузке, и `--dry-run`
