@@ -56,7 +56,7 @@ final class _SoloContext<S extends Object, W extends S, R>
     final rejection = _job._rejectKeep(current);
     if (rejection != null) {
       final cancelled = Cancelled.by(
-        reason: SoloCancelReason.rules,
+        reason: const RulesCancelReason(),
         started: true,
         description: rejection,
         stackTrace: _solo._lastChange,
@@ -80,7 +80,7 @@ final class _SoloContext<S extends Object, W extends S, R>
     final current = _checkedState('stateAs');
     if (current is! T) {
       final cancelled = Cancelled.by(
-        reason: SoloCancelReason.rules,
+        reason: const RulesCancelReason(),
         started: true,
         description: 'is not $T',
         stackTrace: StackTrace.current,
@@ -123,7 +123,7 @@ final class _SoloContext<S extends Object, W extends S, R>
     return rejection == null
         ? null
         : Cancelled.by(
-            reason: SoloCancelReason.rules,
+            reason: const RulesCancelReason(),
             started: false,
             description: rejection,
             stackTrace: StackTrace.current,

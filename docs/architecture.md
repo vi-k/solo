@@ -192,7 +192,10 @@ BLE-устройство, плеер, синхронизация), где сос
   наследником.
 - `outcome.dart` — `part`: `Outcome`, `Done`, `Failed`, `Cancelled` с
   публичными конструкторами `Cancelled([description])` и `Cancelled.by`,
-  открытый класс `CancelReason` с причинами ядра.
+  открытый абстрактный `CancelReason`, причины `ManualCancelReason`,
+  `ParentCancelReason`, `HandlerCancelReason`. Причины несут свои данные,
+  `name` нужен только журналу; распознавание по типу. У родительской причины
+  и причины ребёнка, вышедшей через тело, `cause` хранит исходный `Cancelled`.
 - `job_context.dart` — `part`: интерфейс `JobContext`, наследуемая основа
   `JobContextBase` и контекст ядра `_CoreContext`.
 - `observer.dart` — отдельная библиотека, `JobObserver`.
@@ -217,8 +220,8 @@ BLE-устройство, плеер, синхронизация), где сос
   `JobContext` ядра (`state`, `stateAs`, `emit`) и наследник
   `_SoloContext extends JobContextBase`: контрольная точка с правилами,
   правила старта ребёнка, проверка владения.
-- `solo_cancel_reason.dart` — отдельная библиотека, `SoloCancelReason` с
-  причинами `rules` и `closed`.
+- `solo_cancel_reason.dart` — отдельная библиотека: абстрактная основа
+  `SoloCancelReason`, классы `RulesCancelReason` и `ClosedCancelReason`.
 - `queue.dart` — `part`: `SoloQueue` и `_SoloQueue` поверх
   `List<_SoloJob>`.
 - `solo.dart` — отдельная библиотека, `Solo<S>`: `stream` поверх `publish`.

@@ -67,7 +67,7 @@ void main() {
       expect(outcome, isA<Cancelled>());
       expect(
         (outcome! as Cancelled).reason,
-        SoloCancelReason.closed,
+        const ClosedCancelReason(),
         reason: 'the closing is what was held, and it is what lands',
       );
     });

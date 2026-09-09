@@ -70,7 +70,7 @@ void main() {
         (ctx) async {
           ctx.onDispose(
             () => throw Cancelled.by(
-              reason: CancelReason.manual,
+              reason: const ManualCancelReason(),
               started: true,
               stackTrace: StackTrace.current,
             ),
@@ -145,7 +145,7 @@ void main() {
       async.elapse(const Duration(milliseconds: 10));
       job.drop(
         Cancelled.by(
-          reason: CancelReason.manual,
+          reason: const ManualCancelReason(),
           started: true,
           stackTrace: StackTrace.current,
         ),

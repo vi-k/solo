@@ -132,7 +132,7 @@ void main() {
       });
       async.flushTimers();
       final outcome = parent.outcome! as Cancelled;
-      expect(outcome.reason, CancelReason.handler);
+      expect(outcome.reason, isA<HandlerCancelReason>());
       expect(outcome.description, 'child child: Cancelled(manual)');
     });
   });
@@ -214,7 +214,7 @@ void main() {
       parent.cancel().ignore();
       async.flushTimers();
       expect(thrown, isA<Cancelled>());
-      expect((child.outcome! as Cancelled).reason, CancelReason.parent);
+      expect((child.outcome! as Cancelled).reason, isA<ParentCancelReason>());
       expect((child.outcome! as Cancelled).started, isFalse);
     });
   });

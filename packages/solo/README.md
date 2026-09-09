@@ -400,10 +400,14 @@ read, and a job whose body has ended is not checked at all.
 exhaustive: `Done` carries the returned `value`, `Failed` carries `error`
 and `stackTrace`, `Cancelled` carries a `reason`, a `started` flag, an
 optional `description` and the stack trace of the cancellation itself. The
-reason is a `CancelReason`: `manual`, `parent` and `handler` from the core,
-`SoloCancelReason.rules` and `SoloCancelReason.closed` from `solo`. A reason
-is equal to any other with the same name, so an engine of your own may
-declare its own. `job.done` completes with the outcome and never throws;
+reason extends `CancelReason`: `ManualCancelReason`, `ParentCancelReason`
+and `HandlerCancelReason` from the core, `RulesCancelReason` and
+`ClosedCancelReason` from `solo`. Check the type, not the display `name`;
+there is no equality by name. Extend `CancelReason` to carry data of your
+own and pass it through `job.cancel(reason: reason)` or throw
+`Cancelled.by(reason: reason, started: true)` from the body. Parent and
+child propagation retain the original cancellation in the reason's
+`cause`. `job.done` completes with the outcome and never throws;
 `job.value` completes with the value or throws; `job.whenCancelled(callback)`
 registers a synchronous listener and returns an unregister function. The
 listener receives `Cancelled` with its reason and details: on accepted

@@ -33,7 +33,7 @@ void main() {
       async.flushTimers();
       expect(first, isNull, reason: 'the body is still unwinding');
       expect(job.outcome, isA<Cancelled>());
-      expect((job.outcome! as Cancelled).reason, CancelReason.manual);
+      expect((job.outcome! as Cancelled).reason, isA<ManualCancelReason>());
     });
   });
 
@@ -217,7 +217,7 @@ void main() {
       final job = Job<void>((ctx) async => throw const Cancelled('no photo'));
       async.flushMicrotasks();
       final outcome = job.outcome! as Cancelled;
-      expect(outcome.reason, CancelReason.handler);
+      expect(outcome.reason, isA<HandlerCancelReason>());
       expect(outcome.description, 'no photo');
       expect(outcome.started, isTrue);
     });
@@ -235,7 +235,7 @@ void main() {
       async.elapse(const Duration(milliseconds: 10));
       parent.cancel().ignore();
       async.flushTimers();
-      expect((child.outcome! as Cancelled).reason, CancelReason.parent);
+      expect((child.outcome! as Cancelled).reason, isA<ParentCancelReason>());
       expect(parent.outcome, isA<Cancelled>());
     });
   });
@@ -404,7 +404,7 @@ void main() {
   test('the first cancellation a section holds is the one that lands', () {
     fakeAsync((async) {
       Cancelled held(String description) => Cancelled.by(
-            reason: CancelReason.manual,
+            reason: const ManualCancelReason(),
             started: true,
             description: description,
             stackTrace: StackTrace.current,
@@ -467,7 +467,7 @@ void main() {
             child.onCancel(
               () => parent.drop(
                 Cancelled.by(
-                  reason: CancelReason.manual,
+                  reason: const ManualCancelReason(),
                   started: true,
                   description: 'by the engine',
                   stackTrace: StackTrace.current,

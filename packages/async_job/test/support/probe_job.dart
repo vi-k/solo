@@ -1,5 +1,7 @@
 import 'package:async_job/async_job.dart';
 
+import 'cancel_reason.dart';
+
 /// A job of the core with its protected surface opened for tests.
 final class ProbeJob<T> extends JobBase<T> {
   final Future<T> Function(JobContext ctx) _body;
@@ -93,7 +95,7 @@ final class RefusingContext extends JobContextBase {
 
   @override
   Cancelled? beforeChildStart(JobBase<Object?> child) => Cancelled.by(
-        reason: const CancelReason('rules'),
+        reason: const TestCancelReason('rules'),
         started: false,
         description: 'not now',
         // A fresh instance, never a canonicalized constant: the parent
@@ -221,7 +223,7 @@ final class RulesContext extends JobContextBase {
   /// Cancels the job the way a rule of a domain does.
   void breakRule(String description) => cancelOwnJob(
         Cancelled.by(
-          reason: const CancelReason('rules'),
+          reason: const TestCancelReason('rules'),
           started: true,
           description: description,
           stackTrace: StackTrace.current,

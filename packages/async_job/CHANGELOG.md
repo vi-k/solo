@@ -1,5 +1,15 @@
 ## 0.2.0
 
+- **Breaking:** reasons are extensible classes: `ManualCancelReason`,
+  `ParentCancelReason` and `HandlerCancelReason`. Replace named constants
+  with constructors and inspect types instead of comparing names.
+  `CancelReason` is abstract; subclasses can carry arbitrary data.
+- `job.cancel(reason: reason)` accepts a custom reason, preserved by
+  identity in callbacks and outcomes. A body throwing `Cancelled.by` now
+  preserves its explicit reason as well.
+- Parent cancellation and a child's cancellation escaping the body retain
+  the source `Cancelled` in `ParentCancelReason.cause` and
+  `HandlerCancelReason.cause` respectively.
 - **Breaking:** replace the `Job.whenCancelled` future with
   `job.whenCancelled((cancelled) { ... })`. The callback receives the full
   `Cancelled` and runs synchronously; registering after cancellation calls

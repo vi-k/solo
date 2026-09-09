@@ -4,7 +4,7 @@ import 'package:test/test.dart';
 void main() {
   test('public Cancelled constructor is a handler signal', () {
     const cancelled = Cancelled('no photo');
-    expect(cancelled.reason, CancelReason.handler);
+    expect(cancelled.reason, isA<HandlerCancelReason>());
     expect(cancelled.started, isTrue);
     expect(cancelled.description, 'no photo');
     expect(cancelled.stackTrace, isNull);
@@ -36,17 +36,20 @@ void main() {
     );
   });
 
-  test('cancel reasons are equal by name, whoever declared them', () {
-    const own = CancelReason('rules');
-    expect(own, SoloCancelReason.rules);
-    expect(own.hashCode, SoloCancelReason.rules.hashCode);
-    expect('${SoloCancelReason.closed}', 'closed');
-    expect(CancelReason.manual.toString(), 'manual');
+  test('domain reasons can be matched through the core reason type', () {
+    String describe(CancelReason reason) => switch (reason) {
+          RulesCancelReason() => 'retry after a state change',
+          ClosedCancelReason() => 'controller is gone',
+          _ => 'other',
+        };
+    expect(describe(const RulesCancelReason()), 'retry after a state change');
+    expect(describe(const ClosedCancelReason()), 'controller is gone');
+    expect(describe(const ManualCancelReason()), 'other');
   });
 
   test('Cancelled.by carries a reason of its own', () {
     const cancelled = Cancelled.by(
-      reason: SoloCancelReason.rules,
+      reason: RulesCancelReason(),
       started: true,
       description: 'is not Ready',
     );

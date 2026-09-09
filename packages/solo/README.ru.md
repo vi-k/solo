@@ -401,10 +401,15 @@ Job<void> track() => run<Ready, void>(
 **Исходы.** `Outcome<T>` — sealed, поэтому `switch` по трём его случаям
 исчерпывающий: `Done` несёт возвращённое `value`, `Failed` несёт `error` и
 `stackTrace`, `Cancelled` несёт `reason`, флаг `started`, необязательное
-`description` и стектрейс самой отмены. Причина — это `CancelReason`:
-`manual`, `parent` и `handler` из ядра, `SoloCancelReason.rules` и
-`SoloCancelReason.closed` из `solo`. Причины равны по имени, поэтому свой
-движок может объявить свои. `job.done` завершается исходом и никогда не
+`description` и стектрейс самой отмены. Причина наследует
+`CancelReason`: `ManualCancelReason`, `ParentCancelReason` и
+`HandlerCancelReason` из ядра, `RulesCancelReason` и `ClosedCancelReason`
+из `solo`. Проверяйте тип, а не метку `name`; равенства по имени нет.
+Наследуйте `CancelReason` для своих данных и передайте причину через
+`job.cancel(reason: reason)` или бросьте из тела
+`Cancelled.by(reason: reason, started: true)`. При передаче отмены от
+родителя или ребёнка исходная отмена сохраняется в поле `cause` причины.
+`job.done` завершается исходом и никогда не
 бросает; `job.value` завершается значением или бросает;
 `job.whenCancelled(callback)`
 регистрирует синхронный обработчик и возвращает функцию снятия регистрации.

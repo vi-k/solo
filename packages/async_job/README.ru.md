@@ -123,10 +123,44 @@ final message = switch (await job.done) {
 ```
 
 `Cancelled` несёт `reason`, флаг `started`, необязательное `description` и
-стектрейс самой отмены. Причина — это `CancelReason`, здесь их три:
-`manual`, `parent` и `handler`. Это не enum и не sealed: движок,
-построенный поверх этого, объявляет свои причины через
-`const CancelReason('closed')`, а равны они по имени.
+стектрейс самой отмены. Причины — классы, наследующие `CancelReason`:
+`ManualCancelReason`, `ParentCancelReason` и `HandlerCancelReason` в ядре.
+Проверяйте их по типу, например `reason is ParentCancelReason`; `name` —
+только метка для журнала. Равенства по имени нет. По умолчанию причины
+равны по идентичности, но свой класс может определить равенство по данным.
+
+Собственная причина может нести любые данные, в том числе ошибку и её
+исходный стек:
+
+```dart
+final class RequestCancelReason extends CancelReason {
+  final Object error;
+  final StackTrace stackTrace;
+
+  const RequestCancelReason(this.error, this.stackTrace);
+
+  @override
+  String get name => 'request';
+}
+```
+
+Передайте её при отмене; `whenCancelled` и исход получат тот же экземпляр
+причины:
+
+```dart
+try {
+  await request();
+} on Object catch (error, stackTrace) {
+  await job.cancel(reason: RequestCancelReason(error, stackTrace));
+}
+```
+
+Тело также может бросить `Cancelled.by(reason: reason, started: true)`,
+сохранив явную причину. Обычный `throw Cancelled('why')` использует
+`HandlerCancelReason`. Каскад на детей оборачивает `Cancelled` родителя
+в `ParentCancelReason.cause`; отмена ребёнка, вышедшая через тело,
+оборачивается в `HandlerCancelReason.cause`. Эти связи сохраняют исходную
+причину и её данные. Стек ошибки внутри причины отделён от стека отмены.
 
 `job.done` завершается исходом и никогда не бросает; `job.value`
 завершается значением или бросает. `job.cancel()` отменяет и ждёт, пока
@@ -439,11 +473,12 @@ final job = Job<int>(
 
 У ошибок два пути, и это не одно и то же. Ошибка тела идёт наблюдателю и
 становится исходом `Failed`; в зону она попадает, только если исход никто
-не наблюдал. Четыре ошибки, которым больше некуда идти, — поздний отказ
+не наблюдал. Ошибки, которым больше некуда идти, — поздний отказ
 действия, брошенного `wait`, ошибка диспозера, ошибка колбэка отмены
 (`ctx.onCancel` или `job.whenCancelled`) и провал работы, отданной
-`ctx.unattended`, — идут наблюдателю, а без него
-сразу в зону. Тишина — выбор того, кто слушает. Второй дорогой не идёт
+`ctx.unattended`, или ошибка построения описания отмены ребёнка — идут
+наблюдателю, а без него сразу в зону. Тишина — выбор того, кто слушает.
+Второй дорогой не идёт
 `Cancelled`: отмена — не провал, а чьё-то решение, и слышит её только
 наблюдатель.
 

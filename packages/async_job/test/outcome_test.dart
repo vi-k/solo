@@ -5,24 +5,22 @@ import 'package:async_job/async_job.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart';
 
+import 'support/cancel_reason.dart';
 import 'support/delay.dart';
 
 void main() {
-  test('cancel reasons are equal by name, whoever declared them', () {
-    // Built at run time, so it is not the canonicalized constant: this is
-    // equality by name, the way a reason declared in another package would
-    // meet one of ours.
-    final elsewhere = CancelReason(['par', 'ent'].join());
-    expect(identical(elsewhere, CancelReason.parent), isFalse);
-    expect(elsewhere, CancelReason.parent);
-    expect(elsewhere.hashCode, CancelReason.parent.hashCode);
-    expect(CancelReason.manual.toString(), 'manual');
-    expect(CancelReason(['ru', 'les'].join()), isNot(CancelReason.parent));
+  test('same-named reasons keep distinct diagnostic data', () {
+    final first = TestCancelReason('network', error: StateError('first'));
+    final second = TestCancelReason('network', error: StateError('second'));
+    final reports = <CancelReason, String>{first: 'first', second: 'second'};
+    expect(reports, hasLength(2));
+    expect(reports[first], 'first');
+    expect(reports[second], 'second');
   });
 
   test('the public Cancelled constructor is a handler signal', () {
     const cancelled = Cancelled('no photo');
-    expect(cancelled.reason, CancelReason.handler);
+    expect(cancelled.reason, isA<HandlerCancelReason>());
     expect(cancelled.started, isTrue);
     expect(cancelled.description, 'no photo');
     expect(cancelled.stackTrace, isNull);
@@ -31,7 +29,7 @@ void main() {
 
   test('Cancelled.by carries a reason of its own', () {
     const cancelled = Cancelled.by(
-      reason: CancelReason('rules'),
+      reason: TestCancelReason('rules'),
       started: true,
       description: 'is not Ready',
     );

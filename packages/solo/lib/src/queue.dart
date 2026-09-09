@@ -53,7 +53,7 @@ final class _SoloQueue<S extends Object> implements SoloQueue {
     }
     job._cancelWith(
       Cancelled.by(
-        reason: CancelReason.manual,
+        reason: const ManualCancelReason(),
         started: false,
         stackTrace: StackTrace.current,
       ),

@@ -439,7 +439,7 @@ void main() {
       solo.current!.cancel();
       async.elapse(const Duration(milliseconds: 50));
       expect(orphan.outcome, isA<Cancelled>());
-      expect((orphan.outcome! as Cancelled).reason, CancelReason.parent);
+      expect((orphan.outcome! as Cancelled).reason, isA<ParentCancelReason>());
       expect((orphan.outcome! as Cancelled).started, isFalse);
       expect(orphan.level, 1);
       expect(orphan.isChild, isTrue);

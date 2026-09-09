@@ -837,13 +837,7 @@ abstract class JobContextBase implements JobContext {
     /// Turns [child] away because this job is already giving up, and
     /// returns the cancellation to throw into the body.
     Cancelled refuse(Cancelled pending) {
-      child.cancelWith(
-        Cancelled.by(
-          reason: CancelReason.parent,
-          started: false,
-          stackTrace: pending.stackTrace,
-        ),
-      );
+      _owner._cancelChild(child, pending);
       return pending;
     }
 
@@ -954,8 +948,10 @@ abstract class JobContextBase implements JobContext {
     // A child this job's own cascade took down, reaching the work through
     // `child.value`. The lookup is exact — the key is the outcome object
     // itself — so anyone else's child still comes through.
-    return error.reason == CancelReason.parent &&
-        _owner._outcomeChild[error] != null;
+    final child = _owner._outcomeChild[error];
+    return child != null &&
+        error.reason is ParentCancelReason &&
+        identical(_owner._cascadeChild[error.reason], child._cascadeIdentity);
   }
 }
 

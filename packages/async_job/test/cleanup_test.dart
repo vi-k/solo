@@ -236,7 +236,7 @@ void main() {
         // The body throws the cancellation itself: nothing marked the job,
         // and until now `isCancelled` lied about it during the cleanup.
         throw Cancelled.by(
-          reason: CancelReason.manual,
+          reason: const ManualCancelReason(),
           started: true,
           stackTrace: StackTrace.current,
         );
@@ -257,7 +257,7 @@ void main() {
         });
         await ctx.wait(() => delay(10));
         throw Cancelled.by(
-          reason: CancelReason.manual,
+          reason: const ManualCancelReason(),
           started: true,
           stackTrace: StackTrace.current,
         );
@@ -281,7 +281,7 @@ void main() {
           unawaited(ctx.wait(() => delay(50)));
           await ctx.wait(() => delay(10));
           throw Cancelled.by(
-            reason: CancelReason.manual,
+            reason: const ManualCancelReason(),
             started: true,
             stackTrace: StackTrace.current,
           );
@@ -309,7 +309,7 @@ void main() {
         // The body ended with a cancellation of its own while the children
         // are still running: an outside `cancel()` has to reach the child.
         throw Cancelled.by(
-          reason: CancelReason.manual,
+          reason: const ManualCancelReason(),
           started: true,
           stackTrace: StackTrace.current,
         );

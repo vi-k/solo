@@ -78,16 +78,16 @@ for a tree that followed the package before it went out.
 ### Since 0.1.0
 
 - The job kernel now lives in `package:async_job` and is re-exported whole:
-  `package:solo/solo.dart` stays the only import, and no code written
-  against the README needs to change. What moved is the job itself — its
-  lifecycle, its context, the outcomes and the observer; what stayed is
-  the state, the queue and the rules.
-- `CancelReason` is a class, not an enum: an engine built on the job
-  kernel declares reasons of its own, and reasons are equal by name.
-  `CancelReason.rules` and `CancelReason.closed` move to
-  `SoloCancelReason`; `values` and `index` are gone, and
-  `CancelReason.manual.toString()` is now `manual`, not
-  `CancelReason.manual`. `Cancelled.toString()` is unchanged.
+  `package:solo/solo.dart` stays the only import. Code using the old reason
+  API must migrate to the reason classes. The job's lifecycle, context,
+  outcomes and observer moved to the kernel; the state, queue and rules
+  stay in `solo`.
+- `CancelReason` is an extensible class hierarchy: `ManualCancelReason`,
+  `ParentCancelReason` and `HandlerCancelReason` from the core, plus
+  `RulesCancelReason` and `ClosedCancelReason` from `solo`. Inspect types;
+  `name` is only a log label, with no equality by name. Custom subclasses
+  can carry arbitrary data through `job.cancel(reason: reason)`.
+  Parent and child propagation retain the original cancellation in `cause`.
 - `Cancelled.by({reason, started, description, stackTrace})` is public:
   an engine of a domain builds cancellations with a reason of its own.
 - `JobContext<S, W>` is renamed to `SoloContext<S, W>`, and the name

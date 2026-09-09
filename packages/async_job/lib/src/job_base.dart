@@ -168,7 +168,11 @@ abstract interface class Job<T> {
   /// ```
   void Function() whenCancelled(void Function(Cancelled) callback);
 
-  /// Cancels the job and waits for it to actually finish.
+  /// Cancels the job with [reason] and waits for it to actually finish.
+  ///
+  /// Pass a custom [CancelReason] subclass to carry data to [whenCancelled]
+  /// and the [Cancelled] outcome. The accepted reason is kept by identity;
+  /// another cancellation does not replace it, even while it is held.
   ///
   /// A job created with `cancellable: false` refuses this once it has
   /// started; before that there is no body to protect, and a job cancelled
@@ -182,7 +186,7 @@ abstract interface class Job<T> {
   /// Awaited from inside the body it never completes: the waiting is for
   /// the job, and the job is this body. A body gives itself up with
   /// `throw Cancelled('why')` instead.
-  Future<void> cancel();
+  Future<void> cancel({CancelReason reason = const ManualCancelReason()});
 
   /// Tells the engine that nobody is interested in this job's failure.
   ///
@@ -307,6 +311,11 @@ abstract class JobBase<T> implements Job<T> {
   /// holds by itself — every cancellation the engine builds carries a
   /// stack trace of its own.
   final _outcomeChild = Expando<JobBase<Object?>>();
+
+  // A public reason type is not proof that this job issued the cancellation.
+  // Tokens identify the child without retaining its handle through a reason.
+  late final _cascadeChild = Expando<Object>();
+  late final Object _cascadeIdentity = Object();
 
   JobBase<Object?>? _parent;
 
@@ -438,10 +447,10 @@ abstract class JobBase<T> implements Job<T> {
   }
 
   @override
-  Future<void> cancel() {
+  Future<void> cancel({CancelReason reason = const ManualCancelReason()}) {
     cancelWith(
       Cancelled.by(
-        reason: CancelReason.manual,
+        reason: reason,
         started: true,
         stackTrace: StackTrace.current,
       ),
@@ -521,20 +530,26 @@ abstract class JobBase<T> implements Job<T> {
   /// Cancels every child of this job, deepest last started first.
   ///
   /// The cascade is rejectable: a child created with `cancellable: false`
-  /// refuses it. It carries [cancelled]'s stack trace and none of its
-  /// other details — a child is cancelled by its parent, whatever moved
-  /// the parent.
+  /// refuses it. Each child receives [ParentCancelReason] with [cancelled]
+  /// as its cause, preserving the parent's reason and data. The cancellation
+  /// stack trace is carried over as well.
   @protected
   void cascadeToChildren(Cancelled cancelled) {
     for (final child in _children.reversed.toList()) {
-      child.cancelWith(
-        Cancelled.by(
-          reason: CancelReason.parent,
-          started: true,
-          stackTrace: cancelled.stackTrace,
-        ),
-      );
+      _cancelChild(child, cancelled);
     }
+  }
+
+  void _cancelChild(JobBase<Object?> child, Cancelled cause) {
+    final reason = ParentCancelReason(cause: cause);
+    _cascadeChild[reason] = child._cascadeIdentity;
+    child.cancelWith(
+      Cancelled.by(
+        reason: reason,
+        started: child.isRunning,
+        stackTrace: cause.stackTrace,
+      ),
+    );
   }
 
   /// Where the job is in its life.
@@ -935,15 +950,22 @@ abstract class JobBase<T> implements Job<T> {
   Cancelled _handlerCancel(Cancelled thrown, StackTrace stackTrace) {
     final child = _outcomeChild[thrown];
     if (child != null) {
+      String description;
+      try {
+        description = 'child ${child.key}: $thrown';
+      } on Object catch (error, stackTrace) {
+        notifyError(error, stackTrace);
+        description = 'child cancellation';
+      }
       return Cancelled.by(
-        reason: CancelReason.handler,
+        reason: HandlerCancelReason(cause: thrown),
         started: true,
-        description: 'child ${child.key}: $thrown',
+        description: description,
         stackTrace: stackTrace,
       );
     }
     return Cancelled.by(
-      reason: CancelReason.handler,
+      reason: thrown.reason,
       started: true,
       description: thrown.description,
       stackTrace: stackTrace,

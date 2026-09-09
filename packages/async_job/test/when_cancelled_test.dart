@@ -28,7 +28,7 @@ void main() {
       async.flushMicrotasks();
       job.cancel().ignore();
       expect(seen, hasLength(1));
-      expect(seen.single.reason, CancelReason.manual);
+      expect(seen.single.reason, isA<ManualCancelReason>());
       expect(seen.single.started, isTrue);
       expect(seen.single.stackTrace, isNotNull);
       expect(job.outcome, isNull);
@@ -43,7 +43,7 @@ void main() {
     final seen = <Cancelled>[];
     final job = Job.deferred<void>((ctx) async {})..whenCancelled(seen.add);
     job.cancel().ignore();
-    expect(seen.single.reason, CancelReason.manual);
+    expect(seen.single.reason, isA<ManualCancelReason>());
     expect(seen.single.started, isFalse);
     expect(job.outcome, same(seen.single));
   });
@@ -150,7 +150,7 @@ void main() {
     fakeAsync((async) {
       final seen = <Cancelled>[];
       const first = Cancelled.by(
-        reason: CancelReason.manual,
+        reason: ManualCancelReason(),
         started: true,
         description: 'first request',
       );
@@ -192,7 +192,7 @@ void main() {
       expect(order, isEmpty);
       async.flushTimers();
       expect(order, ['child done', 'cancelled', 'cleanup']);
-      expect(seen!.reason, CancelReason.handler);
+      expect(seen!.reason, isA<HandlerCancelReason>());
       expect(seen!.description, 'no photo');
       expect(seen!.stackTrace, isNotNull);
       expect(job.outcome, same(seen));

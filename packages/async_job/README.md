@@ -125,10 +125,46 @@ final message = switch (await job.done) {
 ```
 
 `Cancelled` carries a `reason`, a `started` flag, an optional
-`description` and the stack trace of the cancellation itself. The reason
-is a `CancelReason` — `manual`, `parent` and `handler` here — and it is
-neither an enum nor sealed: an engine built on this one declares its own
-with `const CancelReason('closed')`, and reasons are equal by name.
+`description` and the stack trace of the cancellation itself. Reasons are
+classes extending `CancelReason`: `ManualCancelReason`,
+`ParentCancelReason` and `HandlerCancelReason` in the core. Match them by
+type, for example `reason is ParentCancelReason`; `name` is only a label
+for logs. There is no equality by name. Reasons use identity equality
+unless their class defines value equality.
+
+Your own reason can carry any data, including an error and its original
+stack trace:
+
+```dart
+final class RequestCancelReason extends CancelReason {
+  final Object error;
+  final StackTrace stackTrace;
+
+  const RequestCancelReason(this.error, this.stackTrace);
+
+  @override
+  String get name => 'request';
+}
+```
+
+Pass it when cancelling; `whenCancelled` and the outcome receive the same
+reason instance:
+
+```dart
+try {
+  await request();
+} on Object catch (error, stackTrace) {
+  await job.cancel(reason: RequestCancelReason(error, stackTrace));
+}
+```
+
+A body can also throw `Cancelled.by(reason: reason, started: true)` to
+keep an explicit reason. The ordinary `throw Cancelled('why')` uses
+`HandlerCancelReason`. A cancellation cascading onto children wraps the
+parent's `Cancelled` in `ParentCancelReason.cause`; a child's cancellation
+escaping through the body wraps it in `HandlerCancelReason.cause`. Those
+links preserve the original reason and its data. The reason's own error
+stack is separate from the cancellation's stack trace.
 
 `job.done` completes with the outcome and never throws; `job.value`
 completes with the value or throws. `job.cancel()` cancels and waits for
@@ -446,11 +482,12 @@ queue policies. `describe` adds a line for whoever reads that log.
 
 Errors take two paths, and they are not the same. The body's error goes
 to the observer and becomes the `Failed` outcome; it reaches the zone
-only if nobody observes that outcome. The four errors that have nowhere
+only if nobody observes that outcome. Errors that have nowhere
 else to go — a late failure of an action `wait` abandoned, a disposer, a
 cancellation callback (`ctx.onCancel` or `job.whenCancelled`), a failure
-of work handed to `ctx.unattended` — go to the observer, or straight to the
-zone when there is none. Silence is the
+of work handed to `ctx.unattended`, or an error formatting a child's
+cancellation description — go to the observer, or straight to the zone
+when there is none. Silence is the
 choice of whoever listens. A `Cancelled` never takes that second road: a
 cancellation is a decision somebody made, not a failure, and the observer
 is the only place it is heard.

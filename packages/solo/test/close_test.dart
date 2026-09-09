@@ -98,7 +98,7 @@ void main() {
       final job = solo.run<TestState, void>(key: 'late', (ctx) async {});
       expect(job.isFinished, isTrue);
       final dropped = job.outcome! as Cancelled;
-      expect(dropped.reason, SoloCancelReason.closed);
+      expect(dropped.reason, isA<ClosedCancelReason>());
       final drained = early.outcome! as Cancelled;
       expect(
         identical(dropped.stackTrace, drained.stackTrace),
@@ -238,7 +238,10 @@ void main() {
       async.flushTimers();
       expect(incoming.isQueued, isFalse, reason: 'not left in a closed queue');
       expect(incoming.outcome, isA<Cancelled>());
-      expect((incoming.outcome! as Cancelled).reason, SoloCancelReason.closed);
+      expect(
+        (incoming.outcome! as Cancelled).reason,
+        isA<ClosedCancelReason>(),
+      );
       expect(solo.queue.isEmpty, isTrue);
     });
   });

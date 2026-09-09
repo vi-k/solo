@@ -38,7 +38,7 @@ void main() {
       )..whenCancelled(seen.add);
       async.flushMicrotasks();
       solo.externalSetState(const Disposed());
-      expect(seen.single.reason, SoloCancelReason.rules);
+      expect(seen.single.reason, isA<RulesCancelReason>());
       expect(seen.single.description, 'is not NotDisposed');
       expect(seen.single.started, isTrue);
       async.flushTimers();
@@ -54,7 +54,7 @@ void main() {
       final queued = solo.run<TestState, void>((ctx) async {})
         ..whenCancelled(seen.add);
       solo.close().ignore();
-      expect(seen.single.reason, SoloCancelReason.closed);
+      expect(seen.single.reason, isA<ClosedCancelReason>());
       expect(seen.single.started, isFalse);
       expect(queued.isQueued, isFalse);
       expect(queued.outcome, same(seen.single));

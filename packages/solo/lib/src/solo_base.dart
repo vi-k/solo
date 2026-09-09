@@ -147,7 +147,7 @@ abstract class SoloBase<S extends Object> {
       _debug(() => 'add $impl: closed');
       impl._drop(
         Cancelled.by(
-          reason: SoloCancelReason.closed,
+          reason: const ClosedCancelReason(),
           started: false,
           stackTrace: _closeStackTrace,
         ),
@@ -163,7 +163,7 @@ abstract class SoloBase<S extends Object> {
           _debug(() => 'add $impl: duplicate of $existing');
           impl._drop(
             Cancelled.by(
-              reason: CancelReason.manual,
+              reason: const ManualCancelReason(),
               started: false,
               description: 'duplicate',
               stackTrace: StackTrace.current,
@@ -189,7 +189,7 @@ abstract class SoloBase<S extends Object> {
       _debug(() => 'add $impl: closed while the policy was applied');
       impl._drop(
         Cancelled.by(
-          reason: SoloCancelReason.closed,
+          reason: const ClosedCancelReason(),
           started: false,
           stackTrace: _closeStackTrace,
         ),
@@ -304,7 +304,7 @@ abstract class SoloBase<S extends Object> {
     for (final job in _queue._drain()) {
       job._drop(
         Cancelled.by(
-          reason: SoloCancelReason.closed,
+          reason: const ClosedCancelReason(),
           started: false,
           stackTrace: stackTrace,
         ),
@@ -320,7 +320,7 @@ abstract class SoloBase<S extends Object> {
       // Rejectable on purpose: `close` waits for a job that refuses.
       current._cancelWith(
         Cancelled.by(
-          reason: SoloCancelReason.closed,
+          reason: const ClosedCancelReason(),
           started: true,
           stackTrace: stackTrace,
         ),
@@ -466,7 +466,7 @@ abstract class SoloBase<S extends Object> {
         // A rule of the job's own: it may not refuse this one.
         job._cancelWith(
           Cancelled.by(
-            reason: SoloCancelReason.rules,
+            reason: const RulesCancelReason(),
             started: true,
             description: rejection,
             stackTrace: stackTrace,
@@ -528,7 +528,7 @@ abstract class SoloBase<S extends Object> {
       if (rejection != null) {
         job._drop(
           Cancelled.by(
-            reason: SoloCancelReason.rules,
+            reason: const RulesCancelReason(),
             started: false,
             description: rejection,
             stackTrace: StackTrace.current,
@@ -542,7 +542,7 @@ abstract class SoloBase<S extends Object> {
         _debug(() => 'start $job: closed while the rules were asked');
         job._drop(
           Cancelled.by(
-            reason: SoloCancelReason.closed,
+            reason: const ClosedCancelReason(),
             started: false,
             stackTrace: _closeStackTrace,
           ),

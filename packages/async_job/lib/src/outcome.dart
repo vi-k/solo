@@ -1,38 +1,59 @@
 part of 'job_base.dart';
 
-/// Why a job was cancelled.
+/// Why a job was cancelled, with any data the reason needs.
 ///
-/// Not an enum: an engine built on the core declares reasons of its own,
-/// and an enum cannot be extended from another package. Reasons are equal
-/// by [name], so a reason declared elsewhere with the same name is the
-/// same reason here — a label for the journal and the observer, never a
-/// value the engine branches on.
+/// Extend this class to carry domain data such as an error, its stack trace,
+/// or an identifier. Inspect reasons by type; [name] is only a display label.
+/// There is no equality by name: subclasses inherit identity equality unless
+/// they define their own value equality.
 @immutable
-final class CancelReason {
-  /// [Job.cancel], or an engine dropping a job of its own accord — a
-  /// queue clearing itself, a duplicate a policy turned away.
-  static const manual = CancelReason('manual');
+abstract class CancelReason {
+  /// Creates a reason for a subclass.
+  const CancelReason();
 
-  /// Cascade from a cancelled parent job.
-  static const parent = CancelReason('parent');
-
-  /// The job body threw `Cancelled` itself.
-  static const handler = CancelReason('handler');
-
-  /// The label of this reason.
-  final String name;
-
-  /// Creates a reason called [name].
-  const CancelReason(this.name);
-
-  @override
-  bool operator ==(Object other) => other is CancelReason && name == other.name;
-
-  @override
-  int get hashCode => name.hashCode;
+  /// A short label for journals and diagnostics, not a type identifier.
+  String get name;
 
   @override
   String toString() => name;
+}
+
+/// An explicit cancellation, queue removal, or duplicate dropped by a policy.
+final class ManualCancelReason extends CancelReason {
+  /// Creates an explicit cancellation reason.
+  const ManualCancelReason();
+
+  @override
+  String get name => 'manual';
+}
+
+/// A cancellation cascaded from the parent job.
+final class ParentCancelReason extends CancelReason {
+  /// The parent's cancellation, including its original reason and data.
+  ///
+  /// Set by the engine when it cascades; optional for domain engines that
+  /// have no parent cancellation to attach.
+  final Cancelled? cause;
+
+  /// Creates a parent cancellation reason with its optional [cause].
+  const ParentCancelReason({this.cause});
+
+  @override
+  String get name => 'parent';
+}
+
+/// The body gave up, directly or by letting a child's cancellation escape.
+final class HandlerCancelReason extends CancelReason {
+  /// The child's cancellation when it escaped through the parent's body.
+  ///
+  /// `null` for an ordinary `throw Cancelled(...)` by the body itself.
+  final Cancelled? cause;
+
+  /// Creates a body cancellation reason with its optional [cause].
+  const HandlerCancelReason({this.cause});
+
+  @override
+  String get name => 'handler';
 }
 
 /// The result of a job: [Done], [Failed] or [Cancelled].
@@ -97,7 +118,7 @@ final class Failed extends Outcome<Never> {
 /// the job is marked cancelled — the ones that only register a cleanup go
 /// on working — and stored in [Job.outcome]. A body may also
 /// `throw Cancelled('why')` to cancel itself; the engine records that as
-/// [CancelReason.handler] and cancels the children of that body.
+/// [HandlerCancelReason] and cancels the children of that body.
 final class Cancelled extends Outcome<Never> implements Exception {
   /// Who cancelled the job.
   final CancelReason reason;
@@ -115,14 +136,16 @@ final class Cancelled extends Outcome<Never> implements Exception {
 
   /// Cancels the current job from its body: `throw Cancelled('why')`.
   const Cancelled([this.description])
-      : reason = CancelReason.handler,
+      : reason = const HandlerCancelReason(),
         started = true,
         stackTrace = null;
 
   /// Creates a cancellation with a reason of your own.
   ///
-  /// The engine of a domain uses it — `solo` for its rules and its
-  /// closing; a body uses the unnamed constructor instead.
+  /// A body may throw this to keep a custom [reason] and its data. The
+  /// engine records the throw's stack trace and sets [started] to `true`.
+  /// Domain engines also use it for their own cancellations, such as rules
+  /// and closing in `solo`.
   ///
   /// [started] matters only where the cancellation becomes an outcome as
   /// it is, through `JobBase.finish`: on the way through `cancelWith` the
