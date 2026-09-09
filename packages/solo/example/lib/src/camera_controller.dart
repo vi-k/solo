@@ -59,7 +59,18 @@ final class CameraController extends Solo<CameraState> {
         canStart: (state) => state is Initial,
         (ctx) async {
           ctx.emit(const Preparing());
-          await ctx.join(hw.open);
+          // The same landing as in `reopen`: `Preparing` says the hardware
+          // is opening, and a controller left in it after the opening
+          // failed can be started by nothing — `init` wants `Initial` and
+          // `reopen` wants `Ready` or `Broken`.
+          try {
+            await ctx.join(hw.open);
+          } on Cancelled {
+            rethrow;
+          } on Object catch (error) {
+            ctx.emit(Broken(error));
+            rethrow;
+          }
           ctx.emit(const Ready());
         },
       );
@@ -75,9 +86,12 @@ final class CameraController extends Solo<CameraState> {
             Ready(:final zoom) => zoom,
             _ => 1.0,
           };
-          await ctx.run(_closeCameraJob()).done;
-          ctx.emit(const Preparing());
           try {
+            // `.value` and not `.done`: an outcome that is read but never
+            // examined counts as observed, and a close that failed would
+            // be reopened over in silence.
+            await ctx.run(_closeCameraJob()).value;
+            ctx.emit(const Preparing());
             await ctx.join(hw.open);
             await ctx.join(() => hw.setZoom(zoom));
           } on Cancelled {
@@ -187,7 +201,9 @@ final class CameraController extends Solo<CameraState> {
           return;
         }
         if (ctx.state is! Initial) {
-          await ctx.run(_closeCameraJob()).done;
+          // `.value` throws what the close threw: hardware that is still
+          // open is not a disposal, and `Disposed` here would say it was.
+          await ctx.run(_closeCameraJob()).value;
         }
         ctx.emit(const Disposed());
       },

@@ -1043,7 +1043,7 @@ final class CameraController extends Solo<CameraState> {
           return;
         }
         if (ctx.state is! Initial) {
-          await ctx.run(_closeCameraJob()).done;
+          await ctx.run(_closeCameraJob()).value;
         }
         ctx.emit(const Disposed());
       },

@@ -223,4 +223,37 @@ void main() {
       expect(journal.lines, contains('[takePhoto] log captured Photo#1'));
     });
   });
+
+  test('a close that fails is not a disposal', () {
+    runCamera((camera, hw, journal, async) {
+      camera.init();
+      async.flushTimers();
+      hw.failures['close'] = StateError('close-failed');
+      // `ignore` and not a bare read: an outcome nobody observed reaches
+      // the zone, and reading `outcome` is not observing it.
+      final disposal = camera.dispose()..ignore();
+      async.flushTimers();
+      expect(disposal.outcome, isA<Failed>());
+      expect(
+        camera.state,
+        isNot(isA<Disposed>()),
+        reason: 'the hardware is still open',
+      );
+    });
+  });
+
+  test('a first open that fails leaves a state reopen can start from', () {
+    runCamera((camera, hw, journal, async) {
+      hw.failures['open'] = StateError('open-failed');
+      final first = camera.init()..ignore();
+      async.flushTimers();
+      expect(first.outcome, isA<Failed>());
+      expect(camera.state, isA<Broken>());
+      hw.failures.remove('open');
+      final rescue = camera.reopen();
+      async.flushTimers();
+      expect(rescue.outcome, isA<Done<void>>());
+      expect(camera.state, isA<Ready>());
+    });
+  });
 }
