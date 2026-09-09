@@ -961,7 +961,7 @@ looking at. Because the key names the order rather than the method,
 `Policy.droppable` treats a second call as the duplicate it is — both
 callers get the same handle and the same receipt — while a different order
 is a different job. Three calls for two orders reach the API twice, the
-same as the map and the lock above, with neither to write.
+same as the map and the chain above, with neither to write.
 
 `cancellable: false` and `ctx.uncancellable` are the rest of it, and they
 are not the same thing. The section **holds** a cancellation for the length
