@@ -293,6 +293,11 @@ final class TelemetryObserver extends SoloObserver {
 }
 ```
 
+One observer serves every controller of an app, so its hook is handed the
+base type they all share, `SoloBase`, rather than the `Solo<S>` the rest of
+this document builds on; the instance hook next to it is typed in the
+controller's own state.
+
 The observer throws exactly as before, and the body does not notice. The
 state reaches `Recording`, the device trace is `[native start, arm meter]`,
 the job ends `Done(null)`, and the journal holds `[Recording]` even though
@@ -415,7 +420,8 @@ harder case is the same one — a future the body started and never awaited,
 landing after the job is over — and its `ctx.emit` throws `Bad state:
 Job(send) has already finished, cannot emit`, a `throw` and not an `assert`,
 so it does not vanish when asserts are off. Queued jobs finish with
-`Cancelled(closed)` and complete their `done`; and `send` after `close`
+`Cancelled(closed)` and complete their `done` — the future on the handle
+that carries the outcome and never throws, item 7 — and `send` after `close`
 returns a job already finished with the same `Cancelled(closed)` instead of
 throwing, so the call site needs no `isClosed` check.
 
@@ -796,12 +802,17 @@ have keys.
 ```dart
 enum DeviceKey { connect, readBattery, readSignal, rename, disconnect }
 
+// The state here is two classes rather than one object with flags:
+// `Offline` until the radio answers, `Connected` after it. That is what
+// lets a job name `Connected` as its working type — the bloc above has to
+// carry the same fact in a `bool` and check it by hand.
 final class DeviceController extends Solo<DeviceState> {
   final Ble _ble;
 
   DeviceController(this._ble) : super(const Offline());
 
-  // connect(), readBattery(), readSignal() and rename() are ordinary jobs.
+  // connect() emits `Connected`; readBattery(), readSignal() and rename()
+  // are ordinary jobs standing on it.
 
   Job<void> disconnect() {
     // The reads were only for the screen the user has just closed; the
@@ -862,7 +873,8 @@ It also has to be the controller's payment and not a repository call beside
 it. The app's own Pay button runs the same operation; two callers must not
 charge the card twice, and the one that arrives second has to be told the
 outcome of the run that is already going. Owning that operation is what the
-controller is for — item 6 — so the caller has to reach the controller and
+controller is for — its state in item 1, its queue in item 6 — so the
+caller has to reach the controller and
 wait for it, which is exactly what `add` will not do.
 
 **On bloc.** The answer is a completer carried on the event, and a method on
