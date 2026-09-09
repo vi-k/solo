@@ -14,7 +14,7 @@ remember to check. It is for what has a lifecycle — a screen, a device, a
 session — where the state decides what may run and work has to be dropped
 the moment it stops matching. Where a value merely changes, a
 `ValueNotifier` is enough; where work has no state to guard,
-[jobs](https://pub.dev/packages/jobs) alone will do.
+[async_job](https://pub.dev/packages/async_job) alone will do.
 
 The list below is about bloc because that is where the package grew from,
 and because bloc is where these problems have names:
@@ -41,13 +41,13 @@ limit of its engine — no retry, no timeout, no pool, no dependency
 injection, no persistence, and no equality check between states.
 
 The job itself — its lifecycle, its context, the outcomes and the
-observer — lives in [jobs](https://pub.dev/packages/jobs), and `solo` adds
+observer — lives in [async_job](https://pub.dev/packages/async_job), and `solo` adds
 the state, the queue and the rules on top. The package re-exports it
 whole, so `package:solo/solo.dart` is the only import you need. Its types
 come with it and show up in autocomplete: `JobObserver` is the one you may
 want, while `JobContext`, `JobBase`, `JobContextBase`, `DeferredJob` and
 `JobStatus` are there for an engine of your own and are explained in the
-`jobs` README, not here.
+`async_job` README, not here.
 
 ## Install
 

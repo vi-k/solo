@@ -1,4 +1,4 @@
-# jobs
+# async_job
 
 A cancellable `Future`: a job with an outcome, children, cooperative
 cancellation and a waiting family. Pure Dart, no dependencies beyond
@@ -34,19 +34,19 @@ pick is what says how that call reacts.
 There is no state here, no queue, no rules, no retry, no timeout, no
 pool. For the first three take `solo`: it is built on this package and
 re-exports it whole, so a package that depends on `solo` never depends on
-`jobs` as well. The last three are nobody's here — `solo` has none of them
+`async_job` as well. The last three are nobody's here — `solo` has none of them
 either, and an engine of a domain writes its own.
 
 ## Install
 
 ```sh
-dart pub add jobs
+dart pub add async_job
 ```
 
 ## Quick start
 
 ```dart
-import 'package:jobs/jobs.dart';
+import 'package:async_job/async_job.dart';
 
 final job = Job<Database>((ctx) async {
   final database = await ctx.join(
@@ -528,7 +528,7 @@ the side wants private wrappers on its own subclass, not direct calls —
 
 `solo` is built this way. The protected surface is where half of this
 package lives, and it is spelled out in the API reference of
-[JobBase](https://pub.dev/documentation/jobs/latest/jobs/JobBase-class.html).
+[JobBase](https://pub.dev/documentation/async_job/latest/async_job/JobBase-class.html).
 
 ## solo
 

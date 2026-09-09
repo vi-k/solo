@@ -1,4 +1,4 @@
-import 'package:jobs/jobs.dart';
+import 'package:async_job/async_job.dart';
 
 /// The stop signal a database client of its own takes, the kind
 /// [JobContext.onCancel] is for.

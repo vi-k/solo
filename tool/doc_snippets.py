@@ -50,9 +50,9 @@ dependencies:
     path: {solo}
 
 # A root package applies no override of its dependency, so the path to the
-# unpublished `jobs` is repeated here.
+# unpublished `async_job` is repeated here.
 dependency_overrides:
-  jobs:
+  async_job:
     path: {jobs}
 
 dev_dependencies:
@@ -61,7 +61,7 @@ dev_dependencies:
   test: ^1.25.15
 """.format(
     solo=os.path.join(REPO, 'packages', 'solo'),
-    jobs=os.path.join(REPO, 'packages', 'jobs'),
+    jobs=os.path.join(REPO, 'packages', 'async_job'),
 )
 
 doc = open(DOC).read()

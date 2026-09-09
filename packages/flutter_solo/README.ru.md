@@ -54,7 +54,7 @@ flutter pub add flutter_solo
 
 Одной зависимости достаточно: `flutter_solo` реэкспортирует целиком
 [solo](https://pub.dev/packages/solo), а тот — целиком
-[jobs](https://pub.dev/packages/jobs). `Solo`, `SoloContext`, `Job`,
+[async_job](https://pub.dev/packages/async_job). `Solo`, `SoloContext`, `Job`,
 `Outcome`, `Policy` и `ValueListenable` приходят вместе с
 
 ```dart

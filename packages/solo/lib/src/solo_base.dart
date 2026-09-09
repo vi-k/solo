@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
 
-import 'package:jobs/jobs.dart';
+import 'package:async_job/async_job.dart';
 import 'package:meta/meta.dart';
 
 import 'observer.dart';

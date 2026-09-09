@@ -1,4 +1,4 @@
-import 'package:jobs/jobs.dart';
+import 'package:async_job/async_job.dart';
 
 /// Collects an ordered journal of what happens to a job.
 ///

@@ -169,10 +169,10 @@ BLE-устройство, плеер, синхронизация), где сос
 (`AGENTS.md`, `CLAUDE.md`, `docs/`), `LICENSE` и короткий `README.md`.
 Пакеты в `packages/`:
 
-- `packages/jobs` — исполнительное ядро задачи, чистый Dart: задача,
+- `packages/async_job` — исполнительное ядро задачи, чистый Dart: задача,
   контекст, исходы, дети, наблюдатель. Ни состояния, ни очереди, ни правил.
-- `packages/solo` — состояние, очередь и правила поверх `jobs`, со своим
-  `example/`. Реэкспортирует `jobs` целиком, поэтому
+- `packages/solo` — состояние, очередь и правила поверх `async_job`, со своим
+  `example/`. Реэкспортирует `async_job` целиком, поэтому
   `package:solo/solo.dart` остаётся единственным импортом.
 - `packages/flutter_solo` — Flutter-интеграция.
 
@@ -181,8 +181,8 @@ BLE-устройство, плеер, синхронизация), где сос
 
 ## Карта модулей
 
-`packages/jobs/lib/jobs.dart` экспортирует всё публичное у ядра.
-`packages/jobs/lib/src/`:
+`packages/async_job/lib/async_job.dart` экспортирует всё публичное у ядра.
+`packages/async_job/lib/src/`:
 
 - `job_base.dart` — библиотека с частями (`part`): `outcome.dart`,
   `job_context.dart`. Держит `Job<T>` с фабрикой и `Job.deferred`,
@@ -198,8 +198,8 @@ BLE-устройство, плеер, синхронизация), где сос
 - `observer.dart` — отдельная библиотека, `JobObserver`.
 - `job_stream.dart` — отдельная библиотека, extension `JobStream` с `each`.
 
-`packages/solo/lib/solo.dart` реэкспортирует `package:jobs/jobs.dart` и
-экспортирует всё публичное у solo.
+`packages/solo/lib/solo.dart` реэкспортирует
+`package:async_job/async_job.dart` и экспортирует всё публичное у solo.
 `packages/solo/lib/src/`:
 
 - `solo_base.dart` — `SoloBase<S>`: состояние, цикл прокачки очереди, хуки,
@@ -233,7 +233,7 @@ ValueListenable<S>` со своими тестами.
 
 ## Границы
 
-- Ядро (`jobs`) не знает ни про состояние, ни про очередь, ни про правила:
+- Ядро (`async_job`) не знает ни про состояние, ни про очередь, ни про правила:
   всё это живёт в наследниках `JobBase` и `JobContextBase` у solo. А solo
   не переписывает жизненный цикл задачи — он его наследует.
 - Никаких зависимостей на Flutter в ядре. Всё, что требует Flutter, живёт в

@@ -12,9 +12,9 @@ The first published release. 0.1.0 never left the tree.
 - `close()` cancels what is running, drops every listener and stops
   notifying for good; nothing else closes the controller for you.
 - Re-exports `package:solo/solo.dart`, which re-exports
-  `package:jobs/jobs.dart`, so `flutter_solo` is the only dependency
+  `package:async_job/async_job.dart`, so `flutter_solo` is the only dependency
   an app adds and the only import it writes.
-- Floor: `solo: ^0.2.0`, whose job kernel lives in `package:jobs`.
+- Floor: `solo: ^0.2.0`, whose job kernel lives in `package:async_job`.
 
 ## 0.1.0
 

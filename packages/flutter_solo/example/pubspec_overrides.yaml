@@ -6,5 +6,5 @@ dependency_overrides:
     path: ../
   solo:
     path: ../../solo
-  jobs:
-    path: ../../jobs
+  async_job:
+    path: ../../async_job

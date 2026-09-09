@@ -53,7 +53,7 @@ flutter pub add flutter_solo
 
 One dependency is all it takes: `flutter_solo` re-exports the whole of
 [solo](https://pub.dev/packages/solo), which re-exports the whole of
-[jobs](https://pub.dev/packages/jobs). `Solo`, `SoloContext`, `Job`,
+[async_job](https://pub.dev/packages/async_job). `Solo`, `SoloContext`, `Job`,
 `Outcome`, `Policy` and `ValueListenable` all arrive with
 
 ```dart

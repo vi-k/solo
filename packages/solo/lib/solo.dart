@@ -2,7 +2,7 @@
 /// declarative rules and cooperative cancellation.
 library;
 
-export 'package:jobs/jobs.dart';
+export 'package:async_job/async_job.dart';
 
 export 'src/observer.dart';
 export 'src/policy.dart';

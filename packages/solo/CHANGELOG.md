@@ -70,7 +70,7 @@ for a tree that followed the package before it went out.
 
 ### Since 0.1.0
 
-- The job kernel now lives in `package:jobs` and is re-exported whole:
+- The job kernel now lives in `package:async_job` and is re-exported whole:
   `package:solo/solo.dart` stays the only import, and no code written
   against the README needs to change. What moved is the job itself — its
   lifecycle, its context, the outcomes and the observer; what stayed is

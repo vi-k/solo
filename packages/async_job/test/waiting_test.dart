@@ -3,8 +3,8 @@ library;
 
 import 'dart:async';
 
+import 'package:async_job/async_job.dart';
 import 'package:fake_async/fake_async.dart';
-import 'package:jobs/jobs.dart';
 import 'package:test/test.dart';
 
 import 'support/delay.dart';

@@ -15,7 +15,7 @@ environment:
   sdk: ^3.6.0
 
 dependencies:
-  jobs: ^0.1.0
+  async_job: ^0.1.0
   meta: ^1.15.0
 
 dev_dependencies:

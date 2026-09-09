@@ -1,4 +1,4 @@
-# jobs
+# async_job
 
 Отменяемая `Future`: задача с исходом, детьми, кооперативной отменой и
 семьёй ожидания. Чистый Dart, из зависимостей только `meta`.
@@ -33,20 +33,20 @@ ctx.wait(action)`, а не `await action()`. Future, который ждут н�
 
 Здесь нет ни состояния, ни очереди, ни правил, ни повторов, ни таймаутов,
 ни пула. За первыми тремя — к `solo`: он построен на этом пакете и
-реэкспортирует его целиком, так что тот, кто зависит от `solo`, от `jobs`
+реэкспортирует его целиком, так что тот, кто зависит от `solo`, от `async_job`
 отдельно не зависит. Последних трёх нет и у него: повторы, таймауты и пул
 пишет себе движок предметной области.
 
 ## Установка
 
 ```sh
-dart pub add jobs
+dart pub add async_job
 ```
 
 ## Быстрый старт
 
 ```dart
-import 'package:jobs/jobs.dart';
+import 'package:async_job/async_job.dart';
 
 final job = Job<Database>((ctx) async {
   final database = await ctx.join(
@@ -518,7 +518,7 @@ final job = MyJob<int>((ctx) => ctx.wait(load))..launch();
 
 `solo` устроен именно так. Защищённая поверхность — это половина пакета, и
 расписана она в справке
-[JobBase](https://pub.dev/documentation/jobs/latest/jobs/JobBase-class.html).
+[JobBase](https://pub.dev/documentation/async_job/latest/async_job/JobBase-class.html).
 
 ## solo
 

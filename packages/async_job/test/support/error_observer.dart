@@ -1,4 +1,4 @@
-import 'package:jobs/jobs.dart';
+import 'package:async_job/async_job.dart';
 
 /// Collects the errors a job hands to its observer.
 final class ErrorObserver extends JobObserver {

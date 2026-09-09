@@ -1,4 +1,4 @@
-import 'package:jobs/jobs.dart';
+import 'package:async_job/async_job.dart';
 
 /// A job of the core with its protected surface opened for tests.
 final class ProbeJob<T> extends JobBase<T> {
