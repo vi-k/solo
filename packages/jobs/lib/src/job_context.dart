@@ -854,8 +854,8 @@ abstract class JobContextBase implements JobContext {
     // waiting list, and a refusal that arrives as a throw — a rule of a
     // domain, a context that would not be built — ends the child rather
     // than leaving it be. By now it has a parent, a level and an observer,
-    // and a job like that, left alive, would start itself on its own
-    // microtask under a parent that waits for nothing. `ignore` first: the
+    // and a job like that, left alive, would sit half-adopted: parented,
+    // levelled, never started and waited for by nobody. `ignore` first: the
     // error is already on its way to the body through the rethrow, and one
     // error is announced once.
     Cancelled? markedWhileAsking;

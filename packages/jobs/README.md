@@ -342,12 +342,17 @@ ctx.onDispose(() => sink.add(buffer.toString()));
 
 Both return a function that unregisters what they registered, for a
 disposer that only had to cover a window. Calling it twice, or after the
-disposer has run, is safe:
+disposer has run, is safe — but where the call goes decides whether it
+happens at all: a cancellation arriving during a call is thrown after that
+call, and a removal left below it is never reached, so the disposer runs
+after all. It belongs inside the same action:
 
 ```dart
 final remove = ctx.onDispose(cursor.close);
-await ctx.join(cursor.readAll); // closes it at the end
-remove();
+await ctx.join(() async {
+  await cursor.readAll(); // closes it at the end
+  remove();
+});
 ```
 
 What `wait` and `join` registered has no such function — the body was
@@ -393,10 +398,12 @@ covers the gap.
 `JobObserver` is the cross-cutting channel of one job: `onStart`,
 `onFinish`, `onError`, `onLog`. The engine calls the first three itself;
 the last is the body's own — `ctx.log(message)` hands the message to it as
-it is, and does nothing at all when the job has no observer, so the
-`ctx.log` of the fragments above costs nothing until somebody listens.
-Nothing makes a line out of the message on the way: what it becomes is the
-listener's business. All four have empty bodies, so a listener overrides
+it is, and does nothing at all when the job has no observer. Nothing makes
+a line out of the message on the way: what it becomes is the listener's
+business. A line the caller builds is another matter —
+`ctx.log('migration failed: $error')` above builds one whether anybody
+listens or not; hand the object over instead, and it costs nothing until
+somebody does. All four have empty bodies, so a listener overrides
 only what it needs; `implements` works as well, for a listener that already
 extends something of its own. Pass it at creation; a child without one
 inherits the parent's. A hook that throws hands its error to the current
