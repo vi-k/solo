@@ -38,6 +38,6 @@ final class JobJournal implements JobObserver {
       lines.add('${_label(job)} error $error');
 
   @override
-  void onLog(Job<Object?> job, String message) =>
+  void onLog(Job<Object?> job, Object? message) =>
       lines.add('${_label(job)} log $message');
 }

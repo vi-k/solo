@@ -82,16 +82,39 @@ void main() {
         ctx
           ..log('nobody listens')
           ..log(_Counted(() => conversions++))
-          // The message is never built, so a `toString` of the caller's
-          // that throws cannot end a job that only asked to log.
+          // Nothing makes a line out of it, so a `toString` of the
+          // caller's that throws cannot end a job that only asked to log.
           ..log(_Unspeakable());
         await ctx.wait(() => delay(10));
       });
       async.flushTimers();
       expect(job.outcome, isA<Done<void>>());
-      expect(conversions, 0, reason: 'nobody to hand the string to');
+      expect(conversions, 0, reason: 'nobody to hand the message to');
     });
   });
+
+  test('the message reaches the observer as it was given', () {
+    fakeAsync((async) {
+      var conversions = 0;
+      final heard = _Messages();
+      final message = _Counted(() => conversions++);
+      Job<void>(observer: heard, (ctx) async => ctx.log(message));
+      async.flushMicrotasks();
+      expect(heard.seen, hasLength(1));
+      expect(identical(heard.seen.single, message), isTrue);
+      expect(conversions, 0, reason: 'the line is the listener to make');
+      expect('${heard.seen.single}', 'counted');
+      expect(conversions, 1, reason: 'and it made one');
+    });
+  });
+}
+
+/// Keeps the messages as they came, without a word about them.
+final class _Messages extends JobObserver {
+  final seen = <Object?>[];
+
+  @override
+  void onLog(Job<Object?> job, Object? message) => seen.add(message);
 }
 
 /// Throws from every hook the engine calls.
@@ -107,7 +130,7 @@ final class _ThrowingObserver implements JobObserver {
       throw StateError('onError');
 
   @override
-  void onLog(Job<Object?> job, String message) => throw StateError('onLog');
+  void onLog(Job<Object?> job, Object? message) => throw StateError('onLog');
 }
 
 /// Counts every turn into a string, so a message nobody hears is visible.

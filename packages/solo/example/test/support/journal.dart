@@ -45,7 +45,7 @@ final class JournalObserver extends SoloObserver {
       lines.add('${_label(job)} error $error');
 
   @override
-  void onLog(SoloBase<Object> solo, Job<Object?> job, String message) =>
+  void onLog(SoloBase<Object> solo, Job<Object?> job, Object? message) =>
       lines.add('${_label(job)} log $message');
 
   @override

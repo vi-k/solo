@@ -408,7 +408,7 @@ final class _Hooked extends Solo<TestState> {
       lines.add('hook: error $error');
 
   @override
-  void onLog(Job<Object?> job, String message) =>
+  void onLog(Job<Object?> job, Object? message) =>
       lines.add('hook: log $message');
 
   @override

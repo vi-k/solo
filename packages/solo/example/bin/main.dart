@@ -49,7 +49,7 @@ final class _PrintObserver extends SoloObserver {
       print('${_label(job)} error $error');
 
   @override
-  void onLog(SoloBase<Object> solo, Job<Object?> job, String message) =>
+  void onLog(SoloBase<Object> solo, Job<Object?> job, Object? message) =>
       print('${_label(job)} log $message');
 
   @override

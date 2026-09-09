@@ -750,7 +750,7 @@ abstract class JobBase<T> implements Job<T> {
     _notify(() => _observer?.onFinish(this));
   }
 
-  void _notifyLog(String message) =>
+  void _notifyLog(Object? message) =>
       _notify(() => _observer?.onLog(this, message));
 
   Future<void> _execute(JobContextBase ctx) async {

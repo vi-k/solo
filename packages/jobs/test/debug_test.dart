@@ -200,5 +200,5 @@ final class _RecordingObserver implements JobObserver {
   void onFinish(Job<Object?> job) {}
 
   @override
-  void onLog(Job<Object?> job, String message) {}
+  void onLog(Job<Object?> job, Object? message) {}
 }

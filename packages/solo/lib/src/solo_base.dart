@@ -366,7 +366,7 @@ abstract class SoloBase<S extends Object> {
   }
 
   /// A job called [JobContext.log].
-  void onLog(Job<Object?> job, String message) {}
+  void onLog(Job<Object?> job, Object? message) {}
 
   /// The state changed, from a job or from [externalSetState].
   void onChange(S previous, S current) {}
@@ -568,7 +568,7 @@ final class _SoloJobObserver<S extends Object> implements JobObserver {
   }
 
   @override
-  void onLog(Job<Object?> job, String message) {
+  void onLog(Job<Object?> job, Object? message) {
     SoloBase._callHook(() => SoloBase.observer?.onLog(_solo, job, message));
     SoloBase._callHook(() => _solo.onLog(job, message));
   }

@@ -48,7 +48,7 @@ abstract class SoloObserver {
   void onChange(SoloBase<Object> solo, Object previous, Object current) {}
 
   /// A job called [JobContext.log].
-  void onLog(SoloBase<Object> solo, Job<Object?> job, String message) {}
+  void onLog(SoloBase<Object> solo, Job<Object?> job, Object? message) {}
 
   /// The controller finished closing.
   void onClose(SoloBase<Object> solo) {}

@@ -35,6 +35,11 @@ abstract class JobObserver {
   /// somebody made, not a failure, and none of them reaches the zone.
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) {}
 
-  /// A job called [JobContext.log].
-  void onLog(Job<Object?> job, String message) {}
+  /// A job called [JobContext.log], with what it passed.
+  ///
+  /// [message] arrives as the body gave it, untouched: making a line out
+  /// of it is this listener's business, and a `toString` that throws while
+  /// it does is a hook that throws — the error goes to the current zone
+  /// and nothing else changes.
+  void onLog(Job<Object?> job, Object? message) {}
 }

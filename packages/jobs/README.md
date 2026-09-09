@@ -392,13 +392,15 @@ covers the gap.
 
 `JobObserver` is the cross-cutting channel of one job: `onStart`,
 `onFinish`, `onError`, `onLog`. The engine calls the first three itself;
-the last is the body's own — `ctx.log(message)` sends `message.toString()`
-to it, and does nothing when the job has no observer, so the `ctx.log` of
-the fragments above costs nothing until somebody listens. All four have
-empty bodies, so a listener overrides only what it needs; `implements`
-works as well, for a listener that already extends something of its own.
-Pass it at creation; a child without one inherits the parent's. A hook that
-throws hands its error to the current zone and changes nothing else.
+the last is the body's own — `ctx.log(message)` hands the message to it as
+it is, and does nothing at all when the job has no observer, so the
+`ctx.log` of the fragments above costs nothing until somebody listens.
+Nothing makes a line out of the message on the way: what it becomes is the
+listener's business. All four have empty bodies, so a listener overrides
+only what it needs; `implements` works as well, for a listener that already
+extends something of its own. Pass it at creation; a child without one
+inherits the parent's. A hook that throws hands its error to the current
+zone and changes nothing else.
 
 ```dart
 final class Log extends JobObserver {
