@@ -92,11 +92,14 @@ abstract class SoloBase<S extends Object> {
   /// runs, and on every read through the context. `cancellable: false`
   /// turns down every cancellation that may be turned down — `cancel`,
   /// `clear` without `force`, parent cancellation and `close` — but not a
-  /// state that stopped matching `W` or `keepWhile`. Two of them still
-  /// reach a job that has not started: `close` and `clear` with `force`
-  /// take it out of the queue outright, where the same two are refused
-  /// once it is running. [JobContext.uncancellable] says the same about
-  /// one step of the body rather than about the whole job.
+  /// state that stopped matching `W` or `keepWhile`.
+  ///
+  /// The flag is consulted only once the engine holds the job. One this
+  /// method has made and nobody has added is cancelled like any other.
+  /// Queued, it turns down `cancel` and a `clear` without `force`, while
+  /// `close` and `clear` with `force` take it out anyway — they do not
+  /// ask. Running, it turns down all four. [JobContext.uncancellable] says
+  /// the same about one step of the body rather than about the whole job.
   SoloJob<T> job<W extends S, T>(
     Future<T> Function(SoloContext<S, W> ctx) body, {
     Object? key,

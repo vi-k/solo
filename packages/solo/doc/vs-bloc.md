@@ -88,7 +88,9 @@ class NotesBloc extends Bloc<NotesEvent, NotesState> {
 It works — the final state is `NotesState([n0, n1], uploading: false)`, the
 note kept — and it costs the shape. One handler for the type means one
 transformer for every command in it, so a policy per command is off the
-table for good, and the whole controller is one `switch`.
+table for good; and with a class per event, as here, the whole controller
+becomes one `switch`. Item 5 shows the other shape the same single handler
+can take.
 
 The deeper cost is that the guarantee is a convention, not a rule. A
 transformer per handler does not deliver it: with `sequential()` on each of
@@ -145,12 +147,16 @@ have to keep, and adding a tenth method does not put it at risk.
 
 There is a discipline, and it is worth naming next to the guarantee rather
 than at the end: every wait inside a body goes through the context. A bare
-`await`, or an `unawaited(...)`, still runs — nothing stops it — and what
-it runs is outside cancellation, outside the working type and outside
-`close`. Nothing checks that it is not there, which is the same kind of
-unchecked convention the bloc side of these items keeps paying for. What
-differs is the price of forgetting: here the call escapes the guarantees,
-where a missed `isClosed` writes state that was already stale.
+`await` still runs — nothing stops it — and what it runs is outside
+cancellation and outside the working type: no checkpoint is reached, so a
+job already cancelled goes on waiting for it. `close()` does wait for it,
+because it is still part of the future the body returned; what escapes
+`close` as well is work handed to `unawaited(...)`, which outlives the body
+that started it. Nothing checks that either is absent, which is the same
+kind of unchecked convention the bloc side of these items keeps paying for.
+What differs is the price of forgetting: here the call escapes the
+guarantees, where a missed `isClosed` writes state that was already
+stale.
 
 The write waits with `join` and the read with `wait`, and the difference is
 the point: a read can be abandoned, a write cannot. A cancelled `wait`
@@ -463,7 +469,8 @@ class PlayerBloc extends Bloc<PlayerCommand, PlayerState> {
         case Pause():
           await _player.pause();
         case Seek(:final position):
-          // Every drag step but the newest is dropped here.
+          // Every drag step whose position is not the newest is
+          // dropped here — see below for what that misses.
           if (position != _newestSeek) return;
           final token = CancelToken();
           _seeking = token;
@@ -581,10 +588,10 @@ to know whether its seek landed can ask.
 ## 5. A method, an event, and one queue
 
 A map. `moveTo` and `setZoom` — two actions on one widget, and a drag fires
-`moveTo` on every frame. In bloc-with-events each action is a class, a
-registration and an `add`: the argument types live in the event, the work
-lives in a handler elsewhere, and the call site says `add`, not what it
-wants.
+`moveTo` on every frame. With a class per event — the shape items 1 and 6
+are written in — each action is a class, a registration and an `add`: the
+argument types live in the event, the work lives in a handler elsewhere,
+and the call site says `add`, not what it wants.
 
 **On bloc.** `Cubit` answers half of this outright: a cubit is methods,
 which is another way of saying the ceremony belongs to events, not to the
@@ -949,7 +956,7 @@ delegated to `droppable()`, because a dropped event never enters the handler
 and its completer never completes, so the `_inFlight` map is hand-written
 instead.
 
-Every exit path is more of them than it looks. Three of the five lines
+Every exit path is more of them than it looks. Three things in the code
 above are there for that alone: the `try` around `add`, because `add` after
 `close` throws `Bad state: Cannot add new events after calling close` —
 item 3 — and would otherwise leave a dedupe entry nobody can complete; the
@@ -1080,17 +1087,22 @@ happened. Moving the write inside the uncancellable section changes nothing
 — the held cancellation still decides the outcome.
 
 What makes the promise good is `cancellable: false` on the job: such a job
-refuses every cancellation it may refuse, once it has started, `close`
-included. With it the job comes back `Done(receipt)`, the state ends at
-`Paid`, and the app finishes closing after that. The section is still
-worth its line: it covers the window between the start of the charge and
-the mark, where a queue policy or a rule of a domain could still reach a
-job that has not begun refusing yet.
+refuses every cancellation it may refuse, `close` included. With it the job
+comes back `Done(receipt)`, the state ends at `Paid`, and the app finishes
+closing after that.
 
-The job's own rules cannot reach the write either, because `W` is the base
-`CheckoutState` and there is no `keepWhile`. That pairing is deliberate — a
+What the flag does not refuse is a rule. A working type or a `keepWhile`
+that stops matching cancels the job whatever the flag says, and that is the
+one thing the section covers: without it the rule cuts the body where it
+stands and the charge never leaves — measured `charged=false`, outcome
+`Cancelled(rules: …)`; with it the charge comes back first and the
+cancellation lands after it. This payment has no such rule, deliberately:
+`W` is the base `CheckoutState` and there is no `keepWhile`, because a
 narrower working type would let a state change cancel the payment in the
-gap between the charge and the line that records it.
+gap between the charge and the line that records it. So on the recipe as
+shown the section changes nothing — measured, `cancel`, `close` and a
+forced clear all end `Done(receipt)` with it and without it — and it is
+there for the reader who later gives the job a rule.
 
 What the flag costs is the user's mind. It is refused from the moment the
 job is added, its place in the queue included: `job.cancel()` on a payment
@@ -1101,12 +1113,14 @@ button before the charge leaves needs a second gate of its own, in front of
 the call.
 
 Two cancellations still reach a payment that has not started, because they
-do not ask: `close()` and `clear(force: true)` take it out of the queue
-outright — measured `Cancelled(closed)` with nothing charged. That is where
-the handler's `Cancelled` branch comes from, together with a call made
-after `close`, which never starts at all. Once the job is running, nothing
-takes it: `close()` waits for the charge and the app finishes closing
-after it.
+do not ask. `close()` takes it out of the queue as `Cancelled(closed)` and
+`clear(force: true)` as `Cancelled(manual)`; neither charges anything.
+That is where the handler's `Cancelled` branch comes from, together with a
+call made after `close`, which never starts at all — and the reason it
+reads `reason.name` rather than assuming which of them it was.
+
+Once the job is running, nothing takes it: `close()` waits for the charge
+and the app finishes closing after it.
 
 ## 8. The state changes from outside
 
