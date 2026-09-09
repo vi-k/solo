@@ -1092,17 +1092,24 @@ comes back `Done(receipt)`, the state ends at `Paid`, and the app finishes
 closing after that.
 
 What the flag does not refuse is a rule. A working type or a `keepWhile`
-that stops matching cancels the job whatever the flag says, and that is the
-one thing the section covers: without it the rule cuts the body where it
-stands and the charge never leaves — measured `charged=false`, outcome
-`Cancelled(rules: …)`; with it the charge comes back first and the
-cancellation lands after it. This payment has no such rule, deliberately:
-`W` is the base `CheckoutState` and there is no `keepWhile`, because a
-narrower working type would let a state change cancel the payment in the
-gap between the charge and the line that records it. So on the recipe as
-shown the section changes nothing — measured, `cancel`, `close` and a
-forced clear all end `Done(receipt)` with it and without it — and it is
-there for the reader who later gives the job a rule.
+that stops matching cancels the job whatever the flag says, and the section
+does not hold that one either: measured, the mark lands while the section
+is still open. Nor does any of it spare the card. `_api.pay` has no cancel
+token, so by the time a rule can break the call has already left; measured,
+the section, a bare `await`, `ctx.wait`, and a `ctx.wait` inside the
+section all end `Cancelled(rules: …)` with the card charged. The difference
+is only in when the job stops waiting: through `ctx.wait` it stops at the
+mark, and a snapshot taken there reads `charged=false` — the charge lands a
+moment later all the same. None of the four reaches the `Paid` line either:
+recording is a write, and a cancelled job cannot write. This payment has no
+such rule, deliberately: `W` is the base `CheckoutState` and there is no
+`keepWhile`, because a narrower working type would let a state change
+cancel the payment in the gap between the charge and the line that records
+it. So on the recipe as shown the section changes nothing — measured,
+`cancel`, `close` and a forced clear all end `Done(receipt)` with it and
+without it — and what it is for is the job that does not set the flag: it
+holds the same cancellations for one step of the body instead of for the
+whole job.
 
 What the flag costs is the user's mind. It is refused from the moment the
 job is added, its place in the queue included: `job.cancel()` on a payment
