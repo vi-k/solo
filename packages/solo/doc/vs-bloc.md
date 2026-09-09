@@ -16,9 +16,9 @@ returning `void` — and where the point has been argued in the tracker, the
 issue is linked.
 
 This document assumes the [README's Concepts][concepts]: `Job` and
-`Outcome`, `Policy`, the working type `W` in `run<W, T>`, `ctx.wait` and the
-cleanup registered with a value, `ctx.onCancel`, `SoloObserver` and the
-queue.
+`Outcome`, `Policy`, the working type `W` in `run<W, T>` and the `keepWhile`
+beside it, `ctx.wait` and the cleanup registered with a value,
+`ctx.onCancel`, `SoloObserver` and the queue.
 
 [concepts]: https://github.com/vi-k/solo/blob/main/packages/solo/README.md#concepts
 
@@ -138,10 +138,19 @@ final class NotesController extends Solo<NotesState> {
 
 `ctx.state` is read at emit time, and while a root job runs no other root
 job of this controller writes the state. The two ways in are its own
-children, started by `ctx.run` inside the same body, and `externalSetState`
-from outside — both deliberate, both visible. That is the ownership
-guarantee, not a discipline the two bodies have to keep, and adding a
-tenth method does not put it at risk.
+children, started by `ctx.run` inside the same body — item 9 — and
+`externalSetState` from outside, which is item 8; both deliberate, both
+visible. That is the ownership guarantee, not a discipline the two bodies
+have to keep, and adding a tenth method does not put it at risk.
+
+There is a discipline, and it is worth naming next to the guarantee rather
+than at the end: every wait inside a body goes through the context. A bare
+`await`, or an `unawaited(...)`, still runs — nothing stops it — and what
+it runs is outside cancellation, outside the working type and outside
+`close`. Nothing checks that it is not there, which is the same kind of
+unchecked convention the bloc side of these items keeps paying for. What
+differs is the price of forgetting: here the call escapes the guarantees,
+where a missed `isClosed` writes state that was already stale.
 
 The write waits with `join` and the read with `wait`, and the difference is
 the point: a read can be abandoned, a write cannot. A cancelled `wait`
@@ -373,6 +382,8 @@ final class ChatController extends Solo<ChatState> {
         (ctx) async {
           final reply = await ctx.wait(() => _api.send(text));
           ctx.emit(ctx.state.withReply(reply));
+          // Not a child: `run` always goes through the queue, so this is
+          // a root job standing behind the current one.
           markReplyRead();
         },
       );
@@ -473,9 +484,15 @@ class PlayerBloc extends Bloc<PlayerCommand, PlayerState> {
 }
 ```
 
-It delivers what was asked. A whole drag added at once reaches the player as
-`[play, seek 3, pause]`: one native seek for the drag, the toggles still in
-tap order. Drag one step, let it reach the player, drag again, and the stale
+It delivers what was asked, for a drag that keeps moving. A whole one added
+at once reaches the player as `[play, seek 3, pause]`: one native seek for
+the drag, the toggles still in tap order. What the field compares is the
+position, not which event is newest, so a drag that comes back to a
+position it already had lets both of those through: `1, 2, 1` in one batch
+reaches the device as `[play, seek 1, seek 1, pause]`. A generation counter
+per event fixes it, which is item 6's `Expando` written a second time.
+
+Drag one step, let it reach the player, drag again, and the stale
 seek is stopped rather than waited out. That claim is about two calls not
 overlapping, so this trace pairs each call with its return:
 `[seek 1 start, seek 1 stopped, seek 3 start, seek 3 end]` — the first seek
@@ -499,8 +516,8 @@ stopped halfway. `add` returns `void`, which is item 7.
 job rather than to the queue, and the cancellation goes to the device that
 can act on it. `Ready` as the first type argument is the job's working
 type: the engine checks the state against it and cancels the job when it
-stops matching, which is item 8 — here nothing narrows, and it can be read
-as the state the player is in.
+stops matching, which is item 8. This player has no other state, so nothing
+is narrowed away here and `Ready` can be read as the state it is in.
 
 ```dart
 enum PlayerKey { play, pause, seek }
@@ -555,7 +572,7 @@ running. And the outcome reaches the caller — the stale seek's handle
 carries `Cancelled(manual)` and completes its `done`, so a slider that wants
 to know whether its seek landed can ask.
 
-## 5. Methods or a queue, not both
+## 5. A method, an event, and one queue
 
 A map. `moveTo` and `setZoom` — two actions on one widget, and a drag fires
 `moveTo` on every frame. In bloc-with-events each action is a class, a
@@ -591,12 +608,55 @@ native map, and the state is written by whichever call returns last rather
 than by the one the finger ended on. Give the native calls uneven durations
 and the trace is `[moveTo 1 start, moveTo 2 start, moveTo 3 start, moveTo 3
 end, moveTo 2 end, moveTo 1 end]`: the map settles at the first frame of the
-drag, `MapState(1)`.
+drag, `MapState(1, z1)`.
 
 To get the order back you chain futures in a field; to drop the stale frames
 you add a newest-point field beside it. That is item 1's queue and item 4's
 restart rebuilt by hand, and a cubit's `close()` does not wait for the chain
 either.
+
+The queue is not the thing a method costs, though, and `Bloc` has a shorter
+answer than the cubit. `Event` is a type parameter with no bound, so the
+event can be a function; one handler runs it, and the methods around it are
+ordinary typed methods.
+
+```dart
+typedef MapCommand = Future<void> Function(Emitter<MapState>);
+
+class CommandMapBloc extends Bloc<MapCommand, MapState> {
+  final MapApi _map;
+
+  CommandMapBloc(this._map) : super(const MapState()) {
+    on<MapCommand>(
+      (command, emit) => command(emit),
+      transformer: sequential(),
+    );
+  }
+
+  void moveTo(Point<double> point) => add((emit) async {
+        await _map.moveTo(point);
+        emit(state.copyWith(center: point));
+      });
+
+  void setZoom(double value) => add((emit) async {
+        await _map.setZoom(value);
+        emit(state.copyWith(zoom: value));
+      });
+}
+```
+
+That is both halves: typed arguments at the call site and bloc's own queue
+behind them. The drag runs in order — `[moveTo 1 start, moveTo 1 end,
+moveTo 2 start, moveTo 2 end, moveTo 3 start, moveTo 3 end]`, ending at
+`MapState(3, z4)` — and no chain of futures is written by hand.
+
+What it costs is what the type says. The event is
+`Function(Emitter<MapState>)`, so the emitter is now part of the public
+event type and every command in the bloc is that one type: the transformer
+is the funnel's, and a command that wants its own is back at item 4. The
+methods return `void`, because `add` does, so nothing here can be awaited
+— that is item 7. And the body of each command is a closure over the bloc,
+which is where the ceremony went rather than where it stopped.
 
 **On solo.** They are two methods, and the drag keeps a policy.
 
@@ -645,7 +705,7 @@ and both methods hand the cancellation to the map the same way. On the same
 uneven native calls the trace is `[moveTo 1 start, moveTo 1 stopped, moveTo
 3 start, moveTo 3 end]`: the middle frame never starts, the first is told to
 stop, and the third reaches the map only after it has. The map ends where
-the finger did, and so does `MapState(3)`.
+the finger did, and so does `MapState(3, z4)`.
 
 ## 6. The queue cannot be managed
 
@@ -822,14 +882,19 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
 
   CheckoutBloc(this._api) : super(Cart()) {
     on<Pay>((e, emit) async {
-      emit(Paying());
       try {
+        emit(Paying());
         final receipt = await _api.pay(e.order);
-        emit(Paid(receipt));
+        // The result first, the state after it: an `emit` that throws —
+        // a failing observer is item 2 — must not be the thing that
+        // leaves the caller waiting.
         e.result.complete(receipt);
+        emit(Paid(receipt));
       } on Object catch (error, stackTrace) {
+        if (!e.result.isCompleted) {
+          e.result.completeError(error, stackTrace);
+        }
         emit(PaymentFailed(error));
-        e.result.completeError(error, stackTrace);
       } finally {
         _inFlight.remove(e.order.id);
       }
@@ -845,7 +910,16 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
     if (running != null) return running.future;
     final event = Pay(order);
     _inFlight[order.id] = event.result;
-    add(event);
+    try {
+      add(event);
+    } on Object {
+      // `add` after `close` throws, and this event will never reach the
+      // handler that completes it. Without this the entry stays, and the
+      // next `pay` for the order hands back a future nobody will ever
+      // complete.
+      _inFlight.remove(order.id);
+      rethrow;
+    }
     return event.result.future;
   }
 }
@@ -861,9 +935,17 @@ completer must be completed on every exit path, error included, or the
 caller waits forever with nothing to time it out; the dedupe cannot be
 delegated to `droppable()`, because a dropped event never enters the handler
 and its completer never completes, so the `_inFlight` map is hand-written
-instead. And the exits bloc owns are the ones the completer cannot see:
-after `close()`, `pay()` throws `Bad state: Cannot add new events after
-calling close`, which is item 3.
+instead.
+
+Every exit path is more of them than it looks. Three of the five lines
+above are there for that alone: the `try` around `add`, because `add` after
+`close` throws `Bad state: Cannot add new events after calling close` —
+item 3 — and would otherwise leave a dedupe entry nobody can complete; the
+`isCompleted` guard, because the `catch` is also reached from a failed
+`emit`; and completing the result before writing `Paid` rather than after,
+because an observer that throws goes through `emit` — item 2 — and a
+charged card must not turn into a caller waiting forever. Each of them is a
+line that has to be remembered, and nothing asks for it.
 
 **On Cubit.** The same package's other controller has no events: a method
 takes arguments and returns a value, so the awaiting half of this item is
@@ -979,11 +1061,11 @@ same as the map and the chain above, with neither to write.
 are not the same thing. The section **holds** a cancellation for the length
 of the call — it does not refuse it: `cancel` and `close` are not turned
 down, they are made to wait, and the moment the charge comes back the held
-cancellation lands. The `Paid` line is an ordinary write, and it would
-throw the cancellation instead of recording anything; the job would end
-`Cancelled(closed)` for a payment that really happened. Moving the write
-inside the section changes nothing — the held cancellation still decides
-the outcome.
+cancellation lands. Without `cancellable: false`, the `Paid` line would be an
+ordinary write and would throw the held cancellation instead of recording
+anything; the job would end `Cancelled(closed)` for a payment that really
+happened. Moving the write inside the uncancellable section changes nothing
+— the held cancellation still decides the outcome.
 
 What makes the promise good is `cancellable: false` on the job: such a job
 refuses every cancellation it may refuse, once it has started, `close`
@@ -998,16 +1080,21 @@ The job's own rules cannot reach the write either, because `W` is the base
 narrower working type would let a state change cancel the payment in the
 gap between the charge and the line that records it.
 
-It brackets the charge and nothing else, which is the point: the moments
-around it stay ordinary. A payment still waiting its turn in the queue, or
-one that has done no more than emit `Paying`, is cancelled by `job.cancel()`
-like any other job, because until the card is charged the user is entitled
-to change their mind. `cancellable: false` on the job would have covered all
-of that too — the place in the queue included — and taken it away. Which is
-also why the handler's `Cancelled` branch is not dead. It arrives for a
-payment cancelled before the charge left, for one still queued when the
-controller closed, and for a call made after `close`, which never starts at
-all.
+What the flag costs is the user's mind. It is refused from the moment the
+job is added, its place in the queue included: `job.cancel()` on a payment
+that has not started yet is turned down and the card is charged anyway —
+measured `Done(receipt)` where the same job without the flag ends
+`Cancelled(manual)` and charges nothing. A checkout that wants a Cancel
+button before the charge leaves needs a second gate of its own, in front of
+the call.
+
+Two cancellations still reach a payment that has not started, because they
+do not ask: `close()` and `clear(force: true)` take it out of the queue
+outright — measured `Cancelled(closed)` with nothing charged. That is where
+the handler's `Cancelled` branch comes from, together with a call made
+after `close`, which never starts at all. Once the job is running, nothing
+takes it: `close()` waits for the charge and the app finishes closing
+after it.
 
 ## 8. The state changes from outside
 
@@ -1096,6 +1183,15 @@ checks it before the start, on every state change, and on every read — one
 place, and a new call in the body inherits it as far as it goes through the
 context: `wait`, `join` or `uncancellable`, or an `await` with a read after
 it.
+
+One job is exempt from that re-evaluation, and it is the one doing the
+writing. `ctx.emit` does not re-check the job it was called on, which is
+why the last line above can write a `Calibrated` that its own `Ready` would
+otherwise refuse: measured `Done(null)`. The rules catch up on the next
+read through the context, so the same write followed by a single
+`ctx.wait` ends `Cancelled(rules: is not Ready)` instead. A body whose last
+act is a write out of its own working type is therefore ordinary; one that
+goes on working after such a write is not.
 
 The `sample()` already in flight still finishes, on both sides: no library
 can abort a Dart future, and a sensor that has just lost its cable has
@@ -1188,7 +1284,13 @@ class LockedFirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
         // The replacement handler starts while this write is on the wire
         // and waits here for it to land. Every call to the device, in
         // every handler, has to go through this same lock.
-        await _wire.protect(() => _ble.write(chunk));
+        await _wire.protect(() async {
+          // Checked inside the turn, not before it. Waiting for the lock
+          // is a second place to go stale, and the lock calls what it is
+          // holding whether or not that handler still exists.
+          if (emit.isDone) return;
+          await _ble.write(chunk);
+        });
         if (emit.isDone) return;
         emit(Flashing(++written, e.chunks.length));
       }
@@ -1200,6 +1302,16 @@ class LockedFirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
 That does it. The same chunks land, `[0, 1, 100, 101, …]`, and now one at a
 time: `[write 0 start, write 0 end, write 1 start, write 1 end, write 100
 start, write 100 end, …]`.
+
+The check moved inside the turn because the lock added a second place to
+go stale, and the first version of this recipe missed it. A handler that
+reaches `protect` while another write holds the wire is parked in the
+chain; cancel it there, and the chain still calls what it is holding when
+its turn comes. Measured on the version that checks before the lock: three
+flashes started in a row put `[0, 100, 200, 201]` on the wire, a chunk of
+the middle image going to the device although that flash was replaced
+before it ever reached the radio; and a write can start after `close()` has
+already returned.
 
 What it costs is not the lock's length. It is a second ordering standing
 next to the transformer's, and the two know nothing of each other.

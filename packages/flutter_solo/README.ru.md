@@ -39,7 +39,7 @@ print(job.outcome);  // Cancelled(manual)
 - исход у каждой задачи — `Done`, `Failed` или `Cancelled`, — а именно его
   экрану и надо показать.
 
-Длинный разбор, восемь сценариев, решённых сначала на bloc, а потом здесь,
+Длинный разбор, десять сценариев, решённых сначала на bloc, а потом здесь,
 — в [solo и bloc, бок о бок](https://github.com/vi-k/solo/blob/main/packages/solo/doc/vs-bloc.md).
 
 Чего здесь нет: ни `SoloProvider`, ни кодогенерации, ни внедрения

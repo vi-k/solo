@@ -31,7 +31,7 @@ and because bloc is where these problems have names:
    `add` it.
 
 [solo and bloc, side by side](https://github.com/vi-k/solo/blob/main/packages/solo/doc/vs-bloc.md)
-takes eight scenarios from different domains, solves each one in bloc
+takes ten scenarios from different domains, solves each one in bloc
 first — the workaround an experienced team would actually write — and then
 in `solo`.
 

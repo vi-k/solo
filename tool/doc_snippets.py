@@ -502,6 +502,20 @@ Future<void> main() async {
   print('published: $seen  state ${b2.state}');
   await sub.cancel();
   await b2.close();
+
+  // A drag that comes back to a position it already had: the field holds
+  // the position, not which event is newest.
+  trace.clear();
+  final b3 = PlayerBloc(Player());
+  b3
+    ..add(Play())
+    ..add(Seek(const Duration(milliseconds: 1)))
+    ..add(Seek(const Duration(milliseconds: 2)))
+    ..add(Seek(const Duration(milliseconds: 1)))
+    ..add(Pause());
+  await tick(300);
+  print('returning drag: ${callsOf(trace)}');
+  await b3.close();
 }
 ''')
 
@@ -1010,7 +1024,11 @@ Future<void> main() async {
 ''')
 
 # --------------------------------------------------------------- item 5 bloc
-FILES['bloc/item5'] = (BLOC_MAP_IMPORTS + TRACE + MAP_API + '\n' + snips['5_1'] + '''
+FILES['bloc/item5'] = (BLOC_MAP_IMPORTS.replace(
+    "import 'package:bloc/bloc.dart';",
+    "import 'package:bloc/bloc.dart';\n"
+    "import 'package:bloc_concurrency/bloc_concurrency.dart';",
+) + TRACE + MAP_API + '\n' + snips['5_1'] + '\n' + snips['5_2'] + '''
 Future<void> main() async {
   final cubit = MapCubit(MapApi());
   for (var i = 1; i <= 3; i++) {
@@ -1019,11 +1037,21 @@ Future<void> main() async {
   await tick(300);
   print('drag: $trace  state ${cubit.state}');
   await cubit.close();
+
+  trace.clear();
+  final bloc = CommandMapBloc(MapApi());
+  for (var i = 1; i <= 3; i++) {
+    bloc.moveTo(Point<double>(i.toDouble(), 0));
+  }
+  bloc.setZoom(4);
+  await tick(400);
+  print('typed methods, one queue: $trace  state ${bloc.state}');
+  await bloc.close();
 }
 ''')
 
 # --------------------------------------------------------------- item 5 solo
-FILES['solo/item5'] = (SOLO_MAP_IMPORTS + TRACE + MAP_API + '\n' + snips['5_2'] + '''
+FILES['solo/item5'] = (SOLO_MAP_IMPORTS + TRACE + MAP_API + '\n' + snips['5_3'] + '''
 Future<void> main() async {
   final map = MapController(MapApi());
   onMapDrag(map, const Point<double>(1, 0));

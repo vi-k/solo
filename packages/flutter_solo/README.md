@@ -38,7 +38,7 @@ What the engine holds to:
 - an outcome for every job — `Done`, `Failed` or `Cancelled` — which is
   what a screen has to show anyway.
 
-The long argument, eight scenarios solved in bloc first and then here, is
+The long argument, ten scenarios solved in bloc first and then here, is
 in [solo and bloc, side by side](https://github.com/vi-k/solo/blob/main/packages/solo/doc/vs-bloc.md).
 
 What is not here: no `SoloProvider` and no code generation, no dependency
