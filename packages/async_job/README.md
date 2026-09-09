@@ -26,10 +26,15 @@ tokens let you ask work to stop; `CancelableOperation` lets you cancel
 waiting for a result. A job also provides cancellation checkpoints in the
 body, child lifetimes, outcomes and an observer for errors.
 
-The body receives a context, `ctx`. Use its methods to choose how an
-operation responds to cancellation. For example, `ctx.join(action)` waits
-for the operation to finish before reporting cancellation to the body.
-A direct `await action()` keeps waiting even if the job is cancelled.
+The body receives a context, `ctx`. Await external asynchronous operations
+through its methods. For example, `ctx.join(action)` checks cancellation
+before starting the operation, waits for it to finish, then checks again
+before returning its value to the body.
+
+A direct `await action()` is allowed, but does not check job cancellation.
+It keeps waiting, and the code after it can run even if the job has been
+cancelled. Use context methods to make these cancellation checks part of
+the operation.
 
 For state management, a queue and scheduling rules, use `solo`, which
 builds on this package and re-exports its API. Neither package provides
@@ -255,7 +260,12 @@ You can catch it if that child was optional. Call `ctx.check()` inside the
 catch block to check the parent: it throws if the parent is cancelled too.
 
 Choose a context method according to what should happen to the operation
-when cancellation arrives:
+when cancellation arrives. Inside the action passed to that method,
+ordinary `await` is appropriate: for example, inside `ctx.uncancellable`
+when several steps must complete together. The context method manages
+the whole action; it does not add checkpoints between its internal steps.
+If those steps need separate cancellation checks, add context calls there
+too.
 
 - `ctx.join(action)` waits for the action to finish, then throws
   `Cancelled`. Use it when work must finish or stop before cleanup begins,
@@ -411,8 +421,9 @@ cleaned up accordingly. A value returned by an action abandoned by `wait`
 is also cleaned up, regardless of the outcome, because it was never
 delivered to the body.
 
-Even if you acquire a resource with a plain `await`, you can register it
-for cleanup immediately afterwards:
+The following example shows that cleanup registration still works after
+a plain `await`. For ordinary resource acquisition, prefer `ctx.join`
+with `discard`, as shown above:
 
 ```dart
 final job = Job<Database>((ctx) async {
