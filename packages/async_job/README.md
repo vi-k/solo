@@ -241,7 +241,8 @@ comes too late, because the cancellation notification has already happened.
 body can arrange cleanup after cancellation.
 
 `Cancelled` implements `Exception`. If you catch `Exception` or `Object`,
-rethrow the job's cancellation to avoid continuing work after it:
+rethrow the job's cancellation to avoid continuing work after it.
+You can handle `Cancelled` in a separate catch clause:
 
 ```dart
 try {
@@ -253,7 +254,7 @@ try {
 }
 ```
 
-Or, when catching `Object`:
+Or check its type inside a shared catch clause:
 
 ```dart
 try {
@@ -264,7 +265,8 @@ try {
 }
 ```
 
-Swallowing the job's cancellation lets the body continue even though the
+Both forms work with either `Exception` or `Object` as the broader catch
+type. Swallowing the job's cancellation lets the body continue even though the
 final outcome will still be `Cancelled`. Catch specific error types where
 possible, and let cancellation propagate.
 
