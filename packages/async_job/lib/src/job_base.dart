@@ -152,7 +152,10 @@ abstract interface class Job<T> {
   ///
   /// A job created with `cancellable: false` refuses this once it has
   /// started; before that there is no body to protect, and a job cancelled
-  /// then is dropped like any other. A job inside
+  /// then is dropped like any other — unless an engine of a domain holds
+  /// it before the start and refuses on its behalf, as `solo` does for a
+  /// job waiting in its queue: there `cancellable: false` turns this call
+  /// down already, and the job runs when its turn comes. A job inside
   /// [JobContext.uncancellable] is cancelled when that section closes.
   /// Either way the returned future waits for it to finish.
   ///

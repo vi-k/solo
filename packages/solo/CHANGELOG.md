@@ -15,8 +15,10 @@ for a tree that followed the package before it went out.
   the way Dart reports an unhandled `Future` error. Reading `done` or
   `value`, or calling `ignore`, counts as observing it; `Cancelled` never
   reaches the zone.
-- `JobContext`: `state`, `stateAs`, `emit`, `check`, `wait`, `join`,
-  `uncancellable`, `unattended`, `onCancel`, `run`, `log`.
+- `JobContext` of the kernel: `check`, `wait`, `join`, `uncancellable`,
+  `unattended`, `onCancel`, `run`, `log`.
+- `SoloContext<S, W>` on top of it, where the state lives: `state`,
+  `stateAs`, `emit`.
 - A body does not `await` on its own: every call goes through the context,
   and the member it picks says what a cancellation does to that call.
   `wait` ends the waiting and lets the action run on; `join` waits for all

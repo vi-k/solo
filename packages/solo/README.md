@@ -102,6 +102,16 @@ final class ProfileController extends Solo<Profile> {
           return name;
         },
       );
+
+  // A flag the body raised has to come off whatever the outcome, and the
+  // body is not the place for that: a failure skips the lines below it,
+  // and a cancellation makes `emit` throw. The hook runs on every outcome.
+  @override
+  void onFinish(Job<Object?> job) {
+    if (job.key == 'load' && state.loading) {
+      externalSetState(state.copyWith(loading: false));
+    }
+  }
 }
 ```
 
@@ -286,6 +296,9 @@ the engine cannot catch.
 An ordinary `try`/`finally` still works, but it is no longer the main
 form; the stack scales to several resources, unwinds in reverse, runs
 after the children rather than before them, and reaches past the `return`.
+In reverse while the outcome holds: a `discard` skipped because the body
+had returned is taken up in a second pass if a cancellation lands during
+the unwinding, and then it runs after disposers registered below it.
 
 **Handing a resource over.** When the body gives the resource to someone
 else — to the state, most often — the registration has to go before the
@@ -350,17 +363,20 @@ when the job ends whatever the outcome. The call returns when the stream is
 done, throws the job's `Cancelled` if the job gave up meanwhile, and throws
 an error of the stream or of the callback into the body, where an ordinary
 `catch` can take it. The end of a stream is Dart's to declare, and it
-declares it only once the source has finished cancelling the subscription: a
-source whose cleanup never comes back never ends its stream either, and
+declares it only once the source has finished cancelling the subscription:
+a source whose cleanup never comes back never ends its stream either, and
 cancelling the job is what gets the body out. `ctx.state` inside the
 callback is a read like any other, checked against the rules; the
 `Cancelled` it may throw is not an error but the end of the stream, and it
-comes back through the call. A callback that returns a future is waited for,
-and delivery is held meanwhile: the events keep their order, and a callback
-that threw is not called again. `each` is an extension on `JobContext` — the
-interface of the kernel that `SoloContext` implements — and not a member of
-it: it is built out of `wait`, `onCancel`, `onDispose` and `job`, and does
-nothing your own body could not.
+comes back through the call. A callback that returns a future is waited
+for, and delivery is held meanwhile: the events keep their order, and a
+callback that threw is not called again. Delivery is what waits, not the
+job: a callback already inside its own `await` is not interrupted by a
+cancellation, and nobody waits for it — neither the call nor the cleanup,
+which may close under it what it is still writing to. `each` is an
+extension on `JobContext` — the interface of the kernel that `SoloContext`
+implements — and not a member of it: it is built out of `wait`, `onCancel`,
+`onDispose` and `job`, and does nothing your own body could not.
 
 **Children.** `ctx.run(child)` starts a job right now, bypassing the queue,
 as a child of the current one. The parent finishes only after all of its
@@ -397,19 +413,21 @@ cancels and waits for the job to actually finish; `job.ignore()` says that
 nobody is going to look at the outcome.
 
 **Queue and policies.** `queue` is a first-class object visible to
-subclasses: `jobs`, `remove`, `removeWhere`, `clear`, `lastWhere`. The three
-removing methods skip `cancellable: false` jobs unless given `force: true`,
-and none of them touches the running job. Policies are sugar over the common
-case of one key: `sequential` appends; `droppable` returns the queued or
-running job with the same key and drops the new one; `replace` removes
-queued jobs with the same key; `restart` additionally cancels the running
-one without waiting for it. `add(job, first: true)` puts a job at the head.
-A key stands for the result type as well: the job a key finds is cast to
-the result type of the new one, so a `load()` returning `String` and a
-`refresh()` returning `void` must not share a key — an enum of keys, as in
-`example/`, hands that to the compiler. `job`, `add` and `run` are public
-because the controller's own methods call them; the API a caller is meant
-to use is those methods.
+subclasses: `jobs`, `remove`, `removeWhere`, `clear`, `lastWhere`. The
+three removing methods skip `cancellable: false` jobs unless given `force:
+true`, and none of them touches the running job. Policies are sugar over
+the common case of one key: `sequential` appends; `droppable` returns the
+queued or running job with the same key and drops the new one; `replace`
+removes queued jobs with the same key; `restart` additionally cancels the
+running one without waiting for it. `add(job, first: true)` puts a job at
+the head. A key stands for the result type as well: the job a key finds is
+cast to the result type of the new one, so a `load()` returning `String`
+and a `refresh()` returning `void` must not share a key. Nothing checks
+that for you — the cast fails at run time, as a `TypeError` out of `add`.
+An enum of keys, as in `example/`, is how you keep them apart by hand: one
+constant per method, and the rule is that a result type gets a key of its
+own. `job`, `add` and `run` are public because the controller's own methods
+call them; the API a caller is meant to use is those methods.
 
 **Stream.** `Solo.stream` is a broadcast stream of every state change, in
 order, delivered on the next microtask — the stream is asynchronous. The
@@ -476,8 +494,11 @@ goes on: the error reaches `onError` and, if nobody looks at the outcome,
 the zone as well. At the job's next read of the state it is thrown into the
 body like any other error, and takes the body's own path from there. In a
 reevaluation after a state change it goes to `onError` and stops — the job
-runs on, because a rule that threw says nothing about whether it may, and
-`onError` in a controller is the end of the line. Rules are ordinary code
+runs on, because a rule that threw says nothing about whether it may.
+`onError` is the end of the line when there is one: a controller that
+overrides it, or a `SoloObserver` set on `SoloBase.observer`. With neither,
+the same error goes to the zone the controller was made in, and in the root
+zone that is the process. Rules are ordinary code
 of yours: they are not expected to throw, and the engine does not pretend
 they cannot.
 
@@ -581,9 +602,11 @@ profile.load().ignore(); // the counterpart of Future.ignore
 
 `ignore()` marks the job as observed without waiting for it.
 
-`Cancelled` never goes to the zone, and neither does an error that arrives
-after the job was cancelled: an action that `wait` stopped waiting for
-and that fails later is reported to `onError` and stops there.
+`Cancelled` never goes to the zone. An error that arrives after the job was
+cancelled — an action that `wait` stopped waiting for and that fails later
+— is reported to `onError` and stops there **if anybody is listening**:
+without an observer and without an overridden hook it takes the same road
+to the zone as any error with nowhere else to go.
 
 ## Testing
 
@@ -747,6 +770,14 @@ stream. The subscription lives exactly as long as the job, `close()` takes
 it down with everything else, and the writes it makes go through the queue
 like any other job's.
 
+Two things this recipe asks of you. A stream carries what happens next and
+not what has already happened, so the job starts by taking the state it
+follows — `session.state` — and only then listens; without that first line
+a screen follows a session it never read. And the job holds the queue for
+as long as it follows, so it belongs to a controller whose work is the
+following: a controller that has jobs of its own wants a job per event
+instead, queued from the callback.
+
 ```dart
 final class ScreenController extends Solo<Screen> {
   final Solo<Session> session;
@@ -755,10 +786,13 @@ final class ScreenController extends Solo<Screen> {
 
   Job<void> follow() => run<Screen, void>(
         key: 'follow',
-        (ctx) => ctx.each(
-          session.stream,
-          (next) => ctx.emit(ctx.state.copyWith(signedIn: next.signedIn)),
-        ),
+        (ctx) async {
+          void take(Session next) =>
+              ctx.emit(ctx.state.copyWith(signedIn: next.signedIn));
+
+          take(session.state); // what has already happened
+          await ctx.each(session.stream, take); // and what happens next
+        },
       );
 }
 ```

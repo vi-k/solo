@@ -735,6 +735,7 @@ final class CheckoutController extends Solo<CheckoutState> {
         // different order is a different job.
         key: ('pay', order.id),
         policy: Policy.droppable,
+        cancellable: false,
         (ctx) async {
           ctx.emit(const Paying());
           // A charge that has left for the server cannot be taken back, so
@@ -775,23 +776,28 @@ callers get the same handle and the same receipt — while a different order
 is a different job. Three calls for two orders reach the API twice, the
 same as the map and the lock above, with neither to write.
 
-`ctx.uncancellable` is the rest of it, and it is worth saying what a plain
-`await` would do in its place: `close` would wait for the charge, but a
-cancelled job's outcome is its cancellation, so the receipt would still be
-thrown away. Turning cancellation down for the length of the call is what a
-charge already on its way deserves: `cancel` and `close` are refused while
-it runs and `close` waits, so the job comes back `Done(receipt)` for a
-payment that really happened, the state ends at `Paid`, and the app
-finishes closing after that.
+`cancellable: false` and `ctx.uncancellable` are the rest of it, and they
+are not the same thing. The section **holds** a cancellation for the length
+of the call — it does not refuse it: `cancel` and `close` are not turned
+down, they are made to wait, and the moment the charge comes back the held
+cancellation lands. The `Paid` line is an ordinary write, and it would
+throw the cancellation instead of recording anything; the job would end
+`Cancelled(closed)` for a payment that really happened. Moving the write
+inside the section changes nothing — the held cancellation still decides
+the outcome.
 
-The `Paid` line that records the receipt is an ordinary write, and a job
-cancelled while the charge was on its way would throw there instead of
-recording anything. Nothing can have cancelled it: the actors are turned
-down for the length of the step, and the job's own rules cannot reach it
-either, because `W` is the base `CheckoutState` and there is no `keepWhile`.
-That pairing is deliberate — a narrower working type would let a state
-change cancel the payment in the gap between the charge and the line that
-records it.
+What makes the promise good is `cancellable: false` on the job: such a job
+refuses every cancellation it may refuse, once it has started, `close`
+included. With it the job comes back `Done(receipt)`, the state ends at
+`Paid`, and the app finishes closing after that. The section is still
+worth its line: it covers the window between the start of the charge and
+the mark, where a queue policy or a rule of a domain could still reach a
+job that has not begun refusing yet.
+
+The job's own rules cannot reach the write either, because `W` is the base
+`CheckoutState` and there is no `keepWhile`. That pairing is deliberate — a
+narrower working type would let a state change cancel the payment in the
+gap between the charge and the line that records it.
 
 It brackets the charge and nothing else, which is the point: the moments
 around it stay ordinary. A payment still waiting its turn in the queue, or
