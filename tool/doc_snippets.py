@@ -10,11 +10,11 @@ Usage, from the repository root:
 
 It creates two packages under the workdir, bloc_check (bloc 9 with
 bloc_concurrency) and solo_check (a path dependency on packages/solo), and
-writes bin/v/item1..8.dart into each. Then, in each of them:
+writes bin/v/item1..10.dart into each. Then, in each of them:
 
     dart pub get
     dart analyze bin/v
-    dart run bin/v/item1.dart          # and so on, up to item8
+    dart run bin/v/item1.dart          # and so on, up to item10
 
 The traces the document quotes come from those runs. Timings in the fakes
 are wall-clock and leave a margin; the drivers are not FakeAsync.
@@ -294,6 +294,11 @@ import 'package:bloc/bloc.dart';
 import 'package:bloc_concurrency/bloc_concurrency.dart';
 """
 
+BLOC_PLAIN_IMPORTS = """import 'dart:async';
+
+import 'package:bloc/bloc.dart';
+"""
+
 BLOC_MAP_IMPORTS = """import 'dart:async';
 import 'dart:math';
 
@@ -315,8 +320,8 @@ import 'package:solo/solo.dart';
 
 FILES = {}
 
-# --------------------------------------------------------------- item 1 bloc
-FILES['bloc/item1'] = (BLOC_IMPORTS + TRACE + BLE + '''
+# --------------------------------------------------------------- item 6 bloc
+FILES['bloc/item6'] = (BLOC_IMPORTS + TRACE + BLE + '''
 sealed class DeviceEvent {}
 
 class Connect extends DeviceEvent {}
@@ -347,7 +352,7 @@ class DeviceState {
   String toString() => 'DeviceState($online, b:$battery, s:$signal)';
 }
 
-''' + snips['1_1'] + '''
+''' + snips['6_1'] + '''
 Future<void> main() async {
   final bloc = DeviceBloc(Ble());
   bloc
@@ -375,8 +380,8 @@ Future<void> main() async {
 }
 ''')
 
-# --------------------------------------------------------------- item 1 solo
-FILES['solo/item1'] = (SOLO_IMPORTS + TRACE + BLE + '''
+# --------------------------------------------------------------- item 6 solo
+FILES['solo/item6'] = (SOLO_IMPORTS + TRACE + BLE + '''
 sealed class DeviceState {
   const DeviceState();
 }
@@ -399,7 +404,7 @@ final class Connected extends DeviceState {
   String toString() => 'Connected(b:$battery, s:$signal)';
 }
 
-''' + snips['1_2'] + '''
+''' + snips['6_2'] + '''
 // The four "ordinary jobs" the snippet refers to.
 extension on DeviceController {
   Job<void> connect() => run<DeviceState, void>(
@@ -448,7 +453,7 @@ Future<void> main() async {
 }
 ''')
 
-# --------------------------------------------------------------- item 2 bloc
+# --------------------------------------------------------------- item 4 bloc
 PLAYER_EVENTS = '''
 sealed class PlayerCommand {}
 
@@ -469,8 +474,8 @@ class PlayerState {
 }
 '''
 
-FILES['bloc/item2'] = (BLOC_IMPORTS + TRACE + PLAYER + PLAYER_EVENTS + '\n'
-                       + snips['2_1'] + '''
+FILES['bloc/item4'] = (BLOC_IMPORTS + TRACE + PLAYER + PLAYER_EVENTS + '\n'
+                       + snips['4_1'] + '''
 Future<void> main() async {
   final bloc = PlayerBloc(Player());
   bloc
@@ -500,8 +505,8 @@ Future<void> main() async {
 }
 ''')
 
-# --------------------------------------------------------------- item 2 solo
-FILES['solo/item2'] = (SOLO_IMPORTS + TRACE + PLAYER + '''
+# --------------------------------------------------------------- item 4 solo
+FILES['solo/item4'] = (SOLO_IMPORTS + TRACE + PLAYER + '''
 sealed class PlayerState {}
 
 final class Ready extends PlayerState {
@@ -516,7 +521,7 @@ final class Ready extends PlayerState {
   String toString() => 'Ready(${position.inMilliseconds}ms)';
 }
 
-''' + snips['2_2'] + '''
+''' + snips['4_2'] + '''
 extension on PlayerController {
   // The other toggle, in the same shape as pause().
   Job<void> play() => run<Ready, void>(
@@ -557,7 +562,7 @@ Future<void> main() async {
 }
 ''')
 
-# --------------------------------------------------------------- item 3 bloc
+# --------------------------------------------------------------- item 1 bloc
 NOTES_EVENTS = '''
 sealed class NotesEvent {}
 
@@ -581,8 +586,8 @@ class NotesState {
 }
 '''
 
-FILES['bloc/item3'] = (BLOC_IMPORTS + TRACE + NOTES_API + NOTES_EVENTS + '\n'
-                       + snips['3_1'] + '''
+FILES['bloc/item1'] = (BLOC_IMPORTS + TRACE + NOTES_API + NOTES_EVENTS + '\n'
+                       + snips['1_1'] + '''
 /// The same two handlers with a transformer each: two queues, not one.
 class SplitNotesBloc extends Bloc<NotesEvent, NotesState> {
   SplitNotesBloc(this._api) : super(const NotesState()) {
@@ -641,8 +646,8 @@ Future<void> main() async {
 }
 ''')
 
-# --------------------------------------------------------------- item 3 solo
-FILES['solo/item3'] = (SOLO_IMPORTS + TRACE + NOTES_API + '''
+# --------------------------------------------------------------- item 1 solo
+FILES['solo/item1'] = (SOLO_IMPORTS + TRACE + NOTES_API + '''
 final class NotesState {
   const NotesState({this.notes = const [], this.uploading = false});
   final List<Note> notes;
@@ -655,7 +660,7 @@ final class NotesState {
   String toString() => 'NotesState($notes, uploading: $uploading)';
 }
 
-''' + snips['3_2'] + '''
+''' + snips['1_2'] + '''
 Future<void> main() async {
   final notes = NotesController(Api())
     ..upload(Note('n1'))
@@ -666,8 +671,8 @@ Future<void> main() async {
 }
 ''')
 
-# --------------------------------------------------------------- item 4 bloc
-FILES['bloc/item4'] = (BLOC_IMPORTS + TRACE + BLE + '''
+# --------------------------------------------------------------- item 9 bloc
+FILES['bloc/item9'] = (BLOC_IMPORTS + TRACE + BLE + '''
 sealed class FirmwareEvent {}
 
 class Flash extends FirmwareEvent {
@@ -702,7 +707,7 @@ class Broken extends FirmwareState {
   String toString() => 'Broken($error)';
 }
 
-''' + snips['4_1'] + snips['4_2'] + '''
+''' + snips['9_1'] + snips['9_2'] + '''
 /// The same loop with the `emit.isDone` line left out.
 class UnguardedFirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
   UnguardedFirmwareBloc(this._ble) : super(Idle()) {
@@ -779,8 +784,8 @@ Future<void> main() async {
 }
 ''')
 
-# --------------------------------------------------------------- item 4 solo
-FILES['solo/item4'] = (SOLO_IMPORTS + TRACE + BLE + '''
+# --------------------------------------------------------------- item 9 solo
+FILES['solo/item9'] = (SOLO_IMPORTS + TRACE + BLE + '''
 sealed class FirmwareState {
   const FirmwareState();
 }
@@ -810,7 +815,7 @@ final class Broken extends FirmwareState {
   String toString() => 'Broken($error)';
 }
 
-''' + snips['4_3'] + '''
+''' + snips['9_3'] + '''
 extension on FirmwareController {
   // ignore: invalid_use_of_protected_member
   void hardwareFailed(Object error) => externalSetState(Broken(error));
@@ -841,8 +846,8 @@ Future<void> main() async {
 }
 ''')
 
-# --------------------------------------------------------------- item 5 bloc
-FILES['bloc/item5'] = (BLOC_IMPORTS + TRACE + PAY_API + '''
+# --------------------------------------------------------------- item 7 bloc
+FILES['bloc/item7'] = (BLOC_IMPORTS + TRACE + PAY_API + '''
 sealed class CheckoutEvent {}
 
 sealed class CheckoutState {}
@@ -861,7 +866,7 @@ class PaymentFailed extends CheckoutState {
   final Object error;
 }
 
-''' + snips['5_1'] + snips['5_2'] + '''
+''' + snips['7_1'] + snips['7_2'] + '''
 /// The cubit the paragraph before the snippet describes: a method you can
 /// await, and nothing around it.
 class PlainCheckoutCubit extends Cubit<CheckoutState> {
@@ -931,8 +936,8 @@ Future<void> main() async {
 }
 ''')
 
-# --------------------------------------------------------------- item 5 solo
-FILES['solo/item5'] = (SOLO_IMPORTS + TRACE + PAY_API + '''
+# --------------------------------------------------------------- item 7 solo
+FILES['solo/item7'] = (SOLO_IMPORTS + TRACE + PAY_API + '''
 sealed class CheckoutState {
   const CheckoutState();
 }
@@ -956,7 +961,7 @@ final class Paid extends CheckoutState {
   String toString() => 'Paid($receipt)';
 }
 
-''' + snips['5_3'] + '\n' + snips['5_4'] + '''
+''' + snips['7_3'] + '\n' + snips['7_4'] + '''
 Future<void> main() async {
   final dedupe = CheckoutController(Api());
   final callA = dedupe.pay(const Order('Z'));
@@ -1004,8 +1009,8 @@ Future<void> main() async {
 }
 ''')
 
-# --------------------------------------------------------------- item 6 bloc
-FILES['bloc/item6'] = (BLOC_MAP_IMPORTS + TRACE + MAP_API + '\n' + snips['6_1'] + '''
+# --------------------------------------------------------------- item 5 bloc
+FILES['bloc/item5'] = (BLOC_MAP_IMPORTS + TRACE + MAP_API + '\n' + snips['5_1'] + '''
 Future<void> main() async {
   final cubit = MapCubit(MapApi());
   for (var i = 1; i <= 3; i++) {
@@ -1017,8 +1022,8 @@ Future<void> main() async {
 }
 ''')
 
-# --------------------------------------------------------------- item 6 solo
-FILES['solo/item6'] = (SOLO_MAP_IMPORTS + TRACE + MAP_API + '\n' + snips['6_2'] + '''
+# --------------------------------------------------------------- item 5 solo
+FILES['solo/item5'] = (SOLO_MAP_IMPORTS + TRACE + MAP_API + '\n' + snips['5_2'] + '''
 Future<void> main() async {
   final map = MapController(MapApi());
   onMapDrag(map, const Point<double>(1, 0));
@@ -1032,8 +1037,8 @@ Future<void> main() async {
 }
 ''')
 
-# --------------------------------------------------------------- item 7 bloc
-FILES['bloc/item7'] = (BLOC_IMPORTS + TRACE + CHAT_API + '''
+# --------------------------------------------------------------- item 3 bloc
+FILES['bloc/item3'] = (BLOC_IMPORTS + TRACE + CHAT_API + '''
 sealed class ChatEvent {
   const ChatEvent();
 }
@@ -1047,7 +1052,7 @@ class MarkReplyRead extends ChatEvent {
   const MarkReplyRead();
 }
 
-''' + snips['7_1'] + '''
+''' + snips['3_1'] + '''
 /// The same bloc with the guard left out.
 class UnguardedChatBloc extends Bloc<ChatEvent, ChatState> {
   UnguardedChatBloc(this._api) : super(const ChatState()) {
@@ -1103,10 +1108,9 @@ Future<void> main() async {
 }
 ''')
 
-# --------------------------------------------------------------- item 7 solo
-FILES['solo/item7'] = (SOLO_IMPORTS + TRACE + CHAT_API + '\n' + snips['7_1']
-                       .replace('x', 'x') if False else
-                       SOLO_IMPORTS + TRACE + CHAT_API + '\n' + snips['7_2'] + '''
+# --------------------------------------------------------------- item 3 solo
+FILES['solo/item3'] = (SOLO_IMPORTS + TRACE + CHAT_API + '\n'
+                       + snips['3_2'] + '''
 /// A future started inside a job and left unawaited.
 final class LateChatController extends Solo<ChatState> {
   LateChatController(this._api) : super(const ChatState());
@@ -1281,6 +1285,304 @@ shutil.copyfile(
     os.path.join(REPO, 'packages', 'solo', 'analysis_options.yaml'),
     f'{ROOT}/solo_check/analysis_options.yaml',
 )
+
+RECORDER = """
+class TelemetryFailure implements Exception {
+  @override
+  String toString() => 'telemetry unavailable';
+}
+
+/// The endpoint is down, so every send throws.
+class Telemetry {
+  void send(Object? state) => throw TelemetryFailure();
+}
+
+/// The controller's own record of what the state did.
+class Journal {
+  final entries = <String>[];
+
+  void note(String state) => entries.add(state);
+}
+
+/// Where a guarded observer writes what telemetry could not take.
+class Log {
+  final entries = <String>[];
+
+  void write(Object error, StackTrace stackTrace) => entries.add('$error');
+}
+
+class Recorder {
+  final trace = <String>[];
+
+  Future<void> start() async => trace.add('native start');
+
+  void armMeter() => trace.add('arm meter');
+}
+
+sealed class RecorderState {
+  const RecorderState();
+}
+
+final class Idle extends RecorderState {
+  const Idle();
+
+  @override
+  String toString() => 'Idle';
+}
+
+final class Recording extends RecorderState {
+  const Recording();
+
+  @override
+  String toString() => 'Recording';
+}
+
+class StartRecording {}
+"""
+
+# --------------------------------------------------------------- item 2 bloc
+FILES['bloc/item2'] = (BLOC_PLAIN_IMPORTS + TRACE + RECORDER + '\n' + snips['2_1'] + '\n'
+                       + snips['2_2'] + '''
+/// The same body as a cubit method, to show the caller's side of it.
+class RecorderCubit extends Cubit<RecorderState> {
+  final Recorder _recorder;
+
+  RecorderCubit(this._recorder) : super(const Idle());
+
+  Future<void> start() async {
+    await _recorder.start();
+    emit(const Recording());
+    _recorder.armMeter();
+  }
+}
+
+Future<void> go({required bool guarded}) async {
+  final telemetry = Telemetry();
+  final fallback = Log();
+  Bloc.observer = guarded
+      ? GuardedTelemetryObserver(telemetry, fallback)
+      : TelemetryObserver(telemetry);
+
+  final label = guarded ? 'guarded' : 'raw';
+  // The bloc is built inside the zone: its event subscription is made in
+  // the constructor, and a handler error surfaces in the zone that was
+  // current then.
+  final zone = <String>[];
+  await runZonedGuarded(
+    () async {
+      final recorder = Recorder();
+      final journal = Journal();
+      final bloc = RecorderBloc(recorder, journal);
+      bloc.add(StartRecording());
+      await tick(20);
+      print('$label bloc: state ${bloc.state}, journal ${journal.entries}, '
+          'trace ${recorder.trace}, fallback ${fallback.entries}');
+      await bloc.close();
+
+      final native = Recorder();
+      final cubit = RecorderCubit(native);
+      Object? caught;
+      try {
+        await cubit.start();
+      } on Object catch (error) {
+        caught = error;
+      }
+      print('$label cubit: state ${cubit.state}, caller error $caught, '
+          'trace ${native.trace}');
+      await cubit.close();
+    },
+    (error, _) => zone.add('$error'),
+  );
+  print('$label zone: $zone');
+}
+
+Future<void> main() async {
+  await go(guarded: false);
+  await go(guarded: true);
+}
+''')
+
+# --------------------------------------------------------------- item 2 solo
+FILES['solo/item2'] = (SOLO_IMPORTS + TRACE + RECORDER + '\n' + snips['2_3'] + '''
+Future<void> main() async {
+  SoloBase.observer = TelemetryObserver(Telemetry());
+  final recorder = Recorder();
+  final journal = Journal();
+  final controller = RecorderController(recorder, journal);
+  final zone = <String>[];
+  await runZonedGuarded(
+    () async {
+      final outcome = await controller.start().done;
+      print('solo: state ${controller.state}, outcome $outcome, '
+          'journal ${journal.entries}, trace ${recorder.trace}');
+    },
+    (error, _) => zone.add('$error'),
+  );
+  print('zone: $zone');
+  await controller.close();
+}
+''')
+
+PREVIEW = """
+class Clip {
+  final int id;
+
+  const Clip(this.id);
+
+  @override
+  String toString() => 'clip $id';
+}
+
+/// A native PCM buffer. Releasing it is not optional.
+class Buffer {
+  final Clip clip;
+  final List<String> trace;
+  final released = Completer<void>();
+  int releases = 0;
+
+  Buffer(this.clip, this.trace);
+
+  int waveform() {
+    trace.add('sample ${clip.id}');
+    return clip.id;
+  }
+
+  Future<void> release() async {
+    releases++;
+    trace.add('release ${clip.id}');
+    released.complete();
+  }
+}
+
+/// A decoder whose answers the driver hands out one at a time.
+class Decoder {
+  final trace = <String>[];
+  final asked = <int, Completer<void>>{};
+  final answers = <int, Completer<Buffer>>{};
+
+  Future<Buffer> open(Clip clip) {
+    trace.add('open ${clip.id}');
+    (asked[clip.id] ??= Completer<void>()).complete();
+    return (answers[clip.id] ??= Completer<Buffer>()).future;
+  }
+
+  Future<void> whenAsked(int id) => (asked[id] ??= Completer<void>()).future;
+
+  Buffer deliver(Clip clip) {
+    final buffer = Buffer(clip, trace);
+    trace.add('ready ${clip.id}');
+    (answers[clip.id] ??= Completer<Buffer>()).complete(buffer);
+    return buffer;
+  }
+}
+
+sealed class PreviewState {
+  const PreviewState();
+}
+
+final class NoPreview extends PreviewState {
+  const NoPreview();
+
+  @override
+  String toString() => 'NoPreview';
+}
+
+final class Preview extends PreviewState {
+  final int waveform;
+
+  const Preview(this.waveform);
+
+  @override
+  String toString() => 'Preview($waveform)';
+}
+
+class OpenPreview {
+  final Clip clip;
+  final done = Completer<void>();
+
+  OpenPreview(this.clip);
+}
+"""
+
+# -------------------------------------------------------------- item 10 bloc
+FILES['bloc/item10'] = (BLOC_IMPORTS + TRACE + PREVIEW + '\n' + snips['10_1'] + '\n'
+                        + snips['10_2'] + '''
+/// Completes an event's future when its handler is done, so the driver can
+/// watch a handler the document's snippet knows nothing about.
+mixin Finishing on Bloc<OpenPreview, PreviewState> {
+  @override
+  void onDone(OpenPreview event, [Object? error, StackTrace? stackTrace]) {
+    super.onDone(event, error, stackTrace);
+    event.done.complete();
+  }
+}
+
+class WatchedPreviewBloc extends PreviewBloc with Finishing {
+  WatchedPreviewBloc(super.decoder);
+}
+
+class WatchedGuardedPreviewBloc extends GuardedPreviewBloc with Finishing {
+  WatchedGuardedPreviewBloc(super.decoder);
+}
+
+Future<void> go(
+  String label,
+  Decoder decoder,
+  Bloc<OpenPreview, PreviewState> bloc,
+) async {
+  const first = Clip(1);
+  const second = Clip(2);
+  final stale = OpenPreview(first);
+  bloc.add(stale);
+  await decoder.whenAsked(1);
+  final current = OpenPreview(second);
+  bloc.add(current);
+  await decoder.whenAsked(2);
+  final currentBuffer = decoder.deliver(second);
+  await current.done.future;
+  final staleBuffer = decoder.deliver(first);
+  await stale.done.future;
+  await tick(10);
+  print('$label: state ${bloc.state}, stale releases '
+      '${staleBuffer.releases}, current releases ${currentBuffer.releases}');
+  print('$label trace: ${decoder.trace}');
+  await bloc.close();
+}
+
+Future<void> main() async {
+  final plain = Decoder();
+  await go('guard only', plain, WatchedPreviewBloc(plain));
+  final guarded = Decoder();
+  await go('finally', guarded, WatchedGuardedPreviewBloc(guarded));
+}
+''')
+
+# -------------------------------------------------------------- item 10 solo
+FILES['solo/item10'] = (SOLO_IMPORTS + TRACE + PREVIEW + '\n' + snips['10_3'] + '''
+Future<void> main() async {
+  final decoder = Decoder();
+  final controller = PreviewController(decoder);
+  const first = Clip(1);
+  const second = Clip(2);
+
+  final stale = controller.open(first);
+  await decoder.whenAsked(1);
+  final current = controller.open(second);
+  final staleOutcome = await stale.done;
+  await decoder.whenAsked(2);
+  final currentBuffer = decoder.deliver(second);
+  final currentOutcome = await current.done;
+  await controller.close();
+  print('before the late value: stale $staleOutcome, current '
+      '$currentOutcome, closed ${controller.isClosed}');
+
+  final staleBuffer = decoder.deliver(first);
+  await staleBuffer.released.future;
+  print('dispose: state ${controller.state}, stale releases '
+      '${staleBuffer.releases}, current releases ${currentBuffer.releases}');
+  print('trace: ${decoder.trace}');
+}
+''')
 
 for key, body in FILES.items():
     kind, name = key.split('/')
