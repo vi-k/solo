@@ -18,5 +18,5 @@ pubspec.lock
 # Python bytecode from tool/
 __pycache__/
 
-# Наработки ревьюеров: прототипы и стенды, не для публикации
+# Reviewer workspaces: prototypes and benches, not for publication
 .artifacts/

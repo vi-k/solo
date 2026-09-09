@@ -437,9 +437,10 @@ abstract class SoloBase<S extends Object> {
     required StackTrace stackTrace,
   }) {
     for (final job in _running.reversed.toList()) {
-      // Тела нет — правилам нечего стеречь: они держат работу тела, а не
-      // ожидание детей и не уборку. `cancel()`, `close()` и каскад
-      // родителя дотягиваются до задачи по-прежнему.
+      // With the body gone the rules have nothing left to guard: they
+      // hold the work of the body, not the wait for children and not
+      // the cleanup. `cancel()`, `close()` and the parent's cascade
+      // still reach the job.
       if (identical(job, except) || job.isCancelled || job._bodyEnded) {
         continue;
       }
