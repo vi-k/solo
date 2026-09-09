@@ -32,6 +32,21 @@ abstract interface class SoloContext<S extends Object, W extends S>
   /// ctx.emit(Profile(name: name));
   /// ```
   void emit(S next);
+
+  /// Starts a stream-processing child with its own [SoloContext].
+  ///
+  /// The child belongs to this controller and keeps the parent's working
+  /// type `W` and `keepWhile` rule, including after the parent's body ends.
+  /// The parent's `canStart` rule is not repeated. The child is cancellable
+  /// independently of the parent's `cancellable` setting.
+  ///
+  /// Use the context passed to [onData] for [emit], state access and
+  /// cancellation checkpoints. All other behavior is [JobContext.each]'s.
+  @override
+  Job<void> each<T>(
+    Stream<T> stream,
+    FutureOr<void> Function(SoloContext<S, W> ctx, T event) onData,
+  );
 }
 
 final class _SoloContext<S extends Object, W extends S, R>
@@ -41,6 +56,24 @@ final class _SoloContext<S extends Object, W extends S, R>
   _SoloContext(this._job) : super(_job);
 
   SoloBase<S> get _solo => _job._solo;
+
+  @override
+  Job<void> createEachJob(Future<void> Function(JobContext ctx) body) =>
+      _solo.job<W, void>(
+        body,
+        keepWhile: _job._keepWhile,
+        describe: () => 'each',
+      );
+
+  @override
+  Job<void> each<T>(
+    Stream<T> stream,
+    FutureOr<void> Function(SoloContext<S, W> ctx, T event) onData,
+  ) =>
+      super.each(
+        stream,
+        (child, event) => onData(child as SoloContext<S, W>, event),
+      );
 
   @override
   void check() => _checkedState('check');

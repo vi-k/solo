@@ -6,6 +6,7 @@ import 'package:meta/meta.dart';
 import 'observer.dart';
 
 part 'job_context.dart';
+part 'job_stream.dart';
 part 'outcome.dart';
 
 /// A handle to a job: the outcome, the waiting and the cancellation.

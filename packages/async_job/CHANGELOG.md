@@ -1,5 +1,19 @@
 ## 0.2.0
 
+- **Breaking:** `ctx.each(stream, (child, event) { ... })` returns a child
+  `Job<void>` immediately. Await `.value` for a throwing result, inspect
+  `.done` for the outcome, or call `.cancel()` to stop it separately.
+  The callback receives the child's context. The parent waits for the
+  child even when its body does not await it, and observers see the child.
+- Cancelling `each` immediately removes the subscription and stops event
+  delivery, then waits for the running callback before child completion
+  and cleanup. Use child context checkpoints to respond to cancellation;
+  a plain `await` cannot be interrupted. Source cleanup from subscription
+  cancellation is still not awaited.
+- **Breaking:** `each` is a `JobContext` method; the `JobStream` extension
+  is removed. `JobContextBase.createEachJob` is a protected factory for
+  domain engines. As with `run`, `each` is rejected from `unattended`
+  and after the parent body ends.
 - **Breaking:** reasons are extensible classes: `ManualCancelReason`,
   `ParentCancelReason` and `HandlerCancelReason`. Replace named constants
   with constructors and inspect types instead of comparing names.

@@ -1,79 +1,16 @@
-import 'dart:async';
-import 'dart:collection';
+part of 'job_base.dart';
 
-import 'job_base.dart';
-
-/// [JobContext] and a stream: following one for as long as the job lives.
-extension JobStream on JobContext {
-  /// Follows [stream], calling [onData] for every event, until the stream
-  /// is done or the job gives up.
-  ///
-  /// The subscription belongs to the job: it is cancelled when the stream
-  /// ends, when the body leaves this call, the moment the job is marked
-  /// cancelled — before the body itself learns about it — and, for a call
-  /// the body walked away from, when the job's cleanup reaches this
-  /// registration. Nothing is left listening.
-  ///
-  /// Returns when the stream is done — which Dart says only once the
-  /// source has finished cancelling the subscription it is ending, and
-  /// that part is not this call's to skip. A source whose cleanup never
-  /// comes back never ends its stream either, here as under `await for`;
-  /// what gets the body out of one is cancelling the job.
-  ///
-  /// Throws the job's [Cancelled] if the job is cancelled meanwhile: the
-  /// waiting ends there, because a stream that has gone quiet may never
-  /// end at all. An error from [stream] and an error thrown by [onData]
-  /// end the wait too and are thrown into the body, which can catch them
-  /// like any others — for as long as the job holds the stream. Once it
-  /// has let go, nothing from the stream is news any more, and an [onData]
-  /// still running when that happens fails to whoever is left to take it:
-  /// to the job's observer when a cancellation covered the wait, as any
-  /// covered failure does, and otherwise to the future this call returns,
-  /// which a body that has left it behind no longer holds.
-  ///
-  /// An [onData] that returns a future is waited for, and delivery is held
-  /// meanwhile: the events keep their order — whatever the source does,
-  /// as long as its subscription honours `pause` — and a handler that
-  /// threw is not called again. A handler already running is not
-  /// interrupted: cancelling the job stops delivery at once, but the
-  /// handler in flight runs on unwatched, and neither this call nor the
-  /// job waits for it. A handler that must be interrupted takes the job's
-  /// cancellation through the context, as any other code of the body
-  /// does.
-  ///
-  /// The subscription is cancelled, never awaited: delivery stops at once,
-  /// and whatever the source does about it afterwards — a cleanup that
-  /// takes its time, or one that fails — is the source's own business. A
-  /// source that must be waited for is a call of its own —
-  /// [JobContext.join] around it.
-  ///
-  /// A body that walks away from this call leaves what comes back to the
-  /// job: the stream is let go of when the job's cleanup reaches this
-  /// registration, and the future itself ends with the job's
-  /// cancellation, with a failure of the stream, with a handler of its own
-  /// failing after the job is over, or not at all. Left alone, what it
-  /// carries becomes the zone's; quenched with `ignore`, a failure that
-  /// had nowhere else to go is gone with it. Neither is what you want, and
-  /// there is a third way — hand the whole call over instead, and its
-  /// late failures reach the observer like any other:
-  ///
-  /// ```dart
-  /// ctx.unattended(() => ctx.each(hw.positions, (p) => ctx.log('at $p')));
-  /// ```
-  ///
-  /// ```dart
-  /// await ctx.each(hw.positions, (p) => ctx.log('at $p'));
-  /// ```
-  Future<void> each<T>(
+/// The subscription body of the child started by [JobContext.each].
+extension _JobStreamBody on JobContext {
+  Future<void> _followStream<T>(
     Stream<T> stream,
     FutureOr<void> Function(T event) onData,
   ) async {
-    if (job.isFinished) {
-      // Said here rather than by the first registration below, which would
-      // name a member of the context the caller never mentioned.
-      throw StateError('$job has already finished, cannot follow a stream');
-    }
     final done = Completer<void>();
+    // The signal carries no errors: this body owns and awaits the handler.
+    // Throw failures from the body after it has stopped, so cancellation
+    // uses the ordinary Job error route rather than a late wait's route.
+    (Object, StackTrace)? failure;
     // What the source hands out from inside `listen` itself — a
     // synchronous broadcast controller giving a newcomer what it has —
     // arrives before there is a subscription to pause. It waits here and
@@ -102,6 +39,8 @@ extension JobStream on JobContext {
     // subscription's, so it needs telling — otherwise a job that has been
     // cancelled, or has finished, goes on calling the handler.
     var letGo = false;
+    var subscriptionCancelled = false;
+    Future<void>? active;
 
     void letGoOfStream() {
       letGo = true;
@@ -115,7 +54,10 @@ extension JobStream on JobContext {
       // through `_runGuarded`, and one ending its stream hangs the cancel
       // future off a branch of its own — and no listener here reaches
       // those.
-      sub?.cancel().ignore();
+      if (sub != null && !subscriptionCancelled) {
+        subscriptionCancelled = true;
+        sub.cancel().ignore();
+      }
     }
 
     void end() {
@@ -126,7 +68,8 @@ extension JobStream on JobContext {
 
     void fail(Object error, StackTrace stackTrace) {
       if (!done.isCompleted) {
-        done.completeError(error, stackTrace);
+        failure = (error, stackTrace);
+        done.complete();
       }
     }
 
@@ -134,14 +77,9 @@ extension JobStream on JobContext {
       // The stream goes first: nothing else is delivered, so a handler
       // that threw is never called again.
       //
-      // A source that cancels this job from its own `onCancel` decides
-      // the test below by that very call, and its cancellation then wins
-      // the wait ahead of this error, which goes to the observer instead
-      // of to the body. That is the priority of a cancellation over an
-      // outcome, and recording the error first does not change it: the
-      // wait is completed by the cancellation either way, and the only
-      // difference is a `Cancelled` of the body's own showing up in the
-      // observer as an error.
+      // The source can cancel this job from its own `onCancel`. The
+      // failure still leaves this body, and the engine preserves the
+      // accepted cancellation as the outcome while notifying the observer.
       letGoOfStream();
       // A cancellation from the context has already marked the job, and the
       // wait below throws it by itself. A body cancelling itself with
@@ -160,7 +98,9 @@ extension JobStream on JobContext {
           // Delivery waits for the handler, so the events keep their order.
           // The signal never carries the error: it only says when to go on,
           // and `thrown` has the error already.
-          sub!.pause(handled.then<void>((_) {}, onError: thrown));
+          final handling = handled.then<void>((_) {}, onError: thrown);
+          active = handling;
+          sub!.pause(handling);
         }
       } on Object catch (error, stackTrace) {
         thrown(error, stackTrace);
@@ -207,15 +147,12 @@ extension JobStream on JobContext {
     // listened to — and then there is nothing to cancel yet: the `finally`
     // below takes care of it.
     final unregister = onCancel(letGoOfStream);
-    // On the stack as well: a body that walks away from this call leaves a
-    // job that may end without ever being marked, and then the callback
-    // above never runs.
+    // Also release the subscription if an engine finishes the child by
+    // hand and unwinds its cleanup before this body returns.
     final undispose = onDispose(letGoOfStream);
     try {
-      // The waiting starts before the stream does: a source that hands over
-      // an error from inside `listen` would otherwise end the wait before
-      // anything was waiting on it, and Dart would take that error to the
-      // zone instead of to the observer.
+      // Set up the cancellation-aware wait before the source can invoke
+      // user code from inside `listen`.
       final waiting = wait(() => done.future);
       try {
         sub = stream.listen(
@@ -278,16 +215,14 @@ extension JobStream on JobContext {
       } on Object {
         // Nothing will ever complete the waiting now.
         end();
-        // And nobody will ever receive what it already carries — an error
-        // the source handed over from inside `listen`, or the job's own
-        // cancellation from there. The body is about to be given the
-        // harder failure of the two; left alone, the covered one would go
-        // to the zone.
+        // A throwing listen takes precedence over an earlier stream error.
+        // The wait may already carry cancellation, which nobody awaits now.
+        failure = null;
         waiting.ignore();
         rethrow;
       }
       if (early.isNotEmpty) {
-        unawaited(playBack());
+        active = playBack();
       }
       await waiting;
     } finally {
@@ -298,6 +233,12 @@ extension JobStream on JobContext {
       // Awaiting it would also park the body forever under `FakeAsync`,
       // where a subscription's cancel future belongs to the root zone.
       letGoOfStream();
+      // A callback may still own resources from this child or its parent.
+      // Keep both jobs alive until it returns, even after cancellation.
+      await active;
+      if (failure case final failed?) {
+        Error.throwWithStackTrace(failed.$1, failed.$2);
+      }
     }
   }
 }

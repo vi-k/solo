@@ -206,7 +206,10 @@ Job<void> record() => run<Ready, void>(
       key: 'record',
       canStart: (state) => state.free > 0,
       keepWhile: (state) => !state.paused,
-      (ctx) => ctx.each(camera.frames, store),
+      (ctx) => ctx.each(
+        camera.frames,
+        (child, frame) => child.join(() => store(frame)),
+      ).value,
     );
 ```
 
@@ -341,42 +344,52 @@ Note also that a disposer must not wait for its own job, nor for a job of
 the same queue: `job.done`, `job.value`, `job.cancel()` and the next job
 of the queue all wait for the cleanup that would be waiting for them.
 
-**Following a stream.** A subscription is ownership too, and the awkward
-kind: a stream that goes quiet never ends, so a job that waits for the end
-waits forever, and a `close()` behind it waits with it. `ctx.each` is that
-whole dance under one name — subscribe, feed the body, unsubscribe:
+**Following a stream.** `ctx.each` starts and returns a child `Job<void>`
+that owns the subscription. Its callback receives a `SoloContext<S, W>`
+for that child, so state reads, writes and cancellation checks belong to
+the child:
 
 ```dart
 Job<void> track() => run<Ready, void>(
       key: 'track',
       (ctx) => ctx.each(
         hw.positions,
-        (p) => ctx.emit(ctx.state.copyWith(position: p)),
-      ),
+        (child, p) => child.emit(child.state.copyWith(position: p)),
+      ).value,
     );
 ```
 
-The subscription belongs to the job. It goes when the stream ends, when the
-body leaves the call, the moment the job is marked cancelled — before the
-body itself learns about it — and, for a call the body walked away from,
-when the job ends whatever the outcome. The call returns when the stream is
-done, throws the job's `Cancelled` if the job gave up meanwhile, and throws
-an error of the stream or of the callback into the body, where an ordinary
-`catch` can take it. The end of a stream is Dart's to declare, and it
-declares it only once the source has finished cancelling the subscription:
-a source whose cleanup never comes back never ends its stream either, and
-cancelling the job is what gets the body out. `ctx.state` inside the
-callback is a read like any other, checked against the rules; the
-`Cancelled` it may throw is not an error but the end of the stream, and it
-comes back through the call. A callback that returns a future is waited
-for, and delivery is held meanwhile: the events keep their order, and a
-callback that threw is not called again. Delivery is what waits, not the
-job: a callback already inside its own `await` is not interrupted by a
-cancellation, and nobody waits for it — neither the call nor the cleanup,
-which may close under it what it is still writing to. `each` is an
-extension on `JobContext` — the interface of the kernel that `SoloContext`
-implements — and not a member of it: it is built out of `wait`, `onCancel`,
-`onDispose` and `job`, and does nothing your own body could not.
+The example returns the child's `.value` so a stream or callback error
+reaches the parent body; cancellation is thrown as `Cancelled`. To inspect
+the outcome instead, await `.done`. To stop this subscription separately,
+keep the returned job as `subscription` and await its `cancel()`. Child
+cancellation does not itself mark the parent cancelled, but an uncaught
+`Cancelled` from `.value` cancels the parent under the usual child rules.
+
+The parent waits for this child even if its body returns without awaiting
+it. A quiet, open stream therefore keeps the parent alive. Accepted parent
+cancellation cascades to the child, including during `close()`. The child
+is cancellable even if the parent is not. It retains the parent's working
+type `W` and `keepWhile`, so rules still protect state access after the
+parent body returns. It does not inherit `canStart`: that condition has
+already allowed the parent to start. Observers see the child separately.
+
+Events keep their order: an asynchronous callback is awaited before the
+next event is delivered, and the first stream or callback error stops
+processing. When the child accepts cancellation, it immediately removes
+the subscription and stops delivery, then waits for the current callback
+before completing and releasing resources. Parent cleanup also waits.
+Use the child's `wait`, `join` or other checkpoints inside the callback;
+a plain `await` cannot be interrupted and can delay cancellation and
+`close()` forever. Do not await this child's own completion or `cancel()`
+from its callback: the child is already waiting for that callback.
+
+The future returned by the underlying subscription's `cancel()` is not
+awaited. Await asynchronous source cleanup separately when needed. Normal
+stream completion still depends on the source sending `onDone`. `each`
+is a context method with the same lifecycle restrictions as `run`: it
+cannot start a child after the parent body ends or from `unattended`
+or cleanup.
 
 **Children.** `ctx.run(child)` starts a job right now, bypassing the queue,
 as a child of the current one. The parent finishes only after all of its
@@ -794,11 +807,11 @@ final class ScreenController extends Solo<Screen> {
   Job<void> follow() => run<Screen, void>(
         key: 'follow',
         (ctx) async {
-          void take(Session next) =>
-              ctx.emit(ctx.state.copyWith(signedIn: next.signedIn));
+          void take(SoloContext<Screen, Screen> target, Session next) =>
+              target.emit(target.state.copyWith(signedIn: next.signedIn));
 
-          take(session.state); // what has already happened
-          await ctx.each(session.stream, take); // and what happens next
+          take(ctx, session.state); // what has already happened
+          await ctx.each(session.stream, take).value; // what happens next
         },
       );
 }

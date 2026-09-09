@@ -16,7 +16,7 @@ void main() {
       final controller = StreamController<int>();
       final seen = <int>[];
       final job = Job<void>((ctx) async {
-        await ctx.each(controller.stream, seen.add);
+        await ctx.each(controller.stream, (_, event) => seen.add(event)).value;
       });
       async.flushMicrotasks();
       controller
@@ -37,7 +37,7 @@ void main() {
         onCancel: () => cancelled = true,
       );
       final job = Job<void>((ctx) async {
-        await ctx.each(controller.stream, (_) {});
+        await ctx.each(controller.stream, (_, event) {}).value;
       });
       async.flushMicrotasks();
       expect(cancelled, isFalse);
@@ -55,7 +55,7 @@ void main() {
       Object? caught;
       final job = Job<void>((ctx) async {
         try {
-          await ctx.each(controller.stream, (_) {});
+          await ctx.each(controller.stream, (_, event) {}).value;
         } on Object catch (error) {
           caught = error;
         }
@@ -73,7 +73,9 @@ void main() {
     fakeAsync((async) {
       final controller = StreamController<int>();
       final job = Job<void>((ctx) async {
-        await ctx.each(controller.stream, (_) => throw StateError('onData'));
+        await ctx
+            .each(controller.stream, (_, event) => throw StateError('onData'))
+            .value;
       })
         ..ignore();
       async.flushMicrotasks();
@@ -102,7 +104,7 @@ void main() {
           // Caught: the body walks on to a stream anyway.
         }
         try {
-          await ctx.each(controller.stream, (_) {});
+          await ctx.each(controller.stream, (_, event) {}).value;
         } on Object catch (error) {
           thrown = error;
         }
@@ -121,11 +123,11 @@ void main() {
     fakeAsync((async) {
       final controller = StreamController<int>();
       final job = Job<void>((ctx) async {
-        await ctx.each(controller.stream, (event) {
+        await ctx.each(controller.stream, (_, event) {
           if (event == 2) {
             throw const Cancelled('enough');
           }
-        });
+        }).value;
       });
       async.flushMicrotasks();
       controller
@@ -155,7 +157,7 @@ void main() {
         observer: journal,
         (ctx) async {
           try {
-            await ctx.each(controller.stream, (_) {});
+            await ctx.each(controller.stream, (_, event) {}).value;
           } on Object catch (error) {
             caught = error;
           }
@@ -170,8 +172,8 @@ void main() {
       expect(caught, isA<StateError>(), reason: 'the body sees the refusal');
       expect(
         journal.take().where((line) => line.contains('error')),
-        isEmpty,
-        reason: 'and the kernel invents no error of its own',
+        ['> [null: each] error $caught'],
+        reason: 'the child reports the listen failure once',
       );
       controller.close().ignore();
     });
@@ -188,7 +190,7 @@ void main() {
         key: 'job',
         observer: journal,
         (ctx) async {
-          await ctx.each(controller.stream, (_) {});
+          await ctx.each(controller.stream, (_, event) {}).value;
         },
       );
       async.flushTimers();
@@ -211,22 +213,10 @@ void main() {
         leaked = ctx;
       });
       async.flushMicrotasks();
-      Object? caught;
-      unawaited(
-        leaked.each(controller.stream, (_) {}).then<void>(
-              (_) {},
-              onError: (Object error, StackTrace stackTrace) => caught = error,
-            ),
-      );
-      async.flushMicrotasks();
       expect(
-        caught,
-        isA<StateError>().having(
-          (error) => error.message,
-          'message',
-          contains('cannot follow a stream'),
-        ),
-        reason: 'the message names what the caller asked for',
+        () => leaked.each(controller.stream, (_, event) {}),
+        throwsA(isA<StateError>()),
+        reason: 'starting a child needs a live body context',
       );
       expect(controller.hasListener, isFalse);
       controller.close().ignore();
@@ -242,7 +232,7 @@ void main() {
       final controller = StreamController<int>();
       final stream = _CountingStream<int>(controller.stream);
       final job = Job<void>((ctx) async {
-        await ctx.each(stream, (_) {});
+        await ctx.each(stream, (_, event) {}).value;
         await ctx.wait(
           () => Future<void>.delayed(const Duration(milliseconds: 20)),
         );
@@ -260,20 +250,22 @@ void main() {
       );
     });
   });
-  test('the subscription leaves with a job that ended without a cancellation',
+  test('a body returning without awaiting each keeps the subscription alive',
       () {
     fakeAsync((async) {
       final controller = StreamController<int>();
       final job = Job<void>((ctx) async {
-        // Followed in the background: the body walks away from the call, so
-        // nothing of `each` runs again once the body is over.
-        unawaited(ctx.each(controller.stream, (event) {}));
+        // Returning from the body does not end an attached child.
+        ctx.each(controller.stream, (_, event) {});
         await ctx.wait(() => delay(10));
       });
       async.elapse(const Duration(milliseconds: 50));
+      expect(job.outcome, isNull);
+      expect(controller.hasListener, isTrue);
+      controller.close().ignore();
+      async.flushMicrotasks();
       expect(job.outcome, isA<Done<void>>());
       expect(controller.hasListener, isFalse);
-      controller.close().ignore();
     });
   });
 
@@ -282,11 +274,11 @@ void main() {
       final controller = StreamController<int>();
       final seen = <String>[];
       final job = Job<void>((ctx) async {
-        await ctx.each(controller.stream, (event) async {
+        await ctx.each(controller.stream, (_, event) async {
           seen.add('start $event');
           await delay(10);
           seen.add('end $event');
-        });
+        }).value;
       });
       async.flushMicrotasks();
       controller
@@ -303,10 +295,10 @@ void main() {
     fakeAsync((async) {
       final controller = StreamController<int>();
       final job = Job<void>((ctx) async {
-        await ctx.each(controller.stream, (event) async {
+        await ctx.each(controller.stream, (_, event) async {
           await delay(10);
           throw StateError('boom');
-        });
+        }).value;
       })
         ..ignore();
       async.flushMicrotasks();
@@ -323,7 +315,7 @@ void main() {
       final controller = StreamController<int>();
       final seen = <int>[];
       final job = Job<void>((ctx) async {
-        await ctx.each(controller.stream, seen.add);
+        await ctx.each(controller.stream, (_, event) => seen.add(event)).value;
       })
         ..ignore();
       async.flushMicrotasks();
@@ -346,13 +338,13 @@ void main() {
         key: 'job',
         observer: journal,
         (ctx) async {
-          await ctx.each(controller.stream, (event) {
+          await ctx.each(controller.stream, (child, event) {
             // The cancellation lands first, and the checkpoint right after
             // throws it: the wait ends by itself, and nothing here is an
             // error of the job.
             job.cancel().ignore();
-            ctx.check();
-          });
+            child.check();
+          }).value;
         },
       );
       async.flushMicrotasks();
@@ -379,11 +371,11 @@ void main() {
           ..add(2),
       );
       final job = Job<void>((ctx) async {
-        await ctx.each(controller.stream, (event) async {
+        await ctx.each(controller.stream, (_, event) async {
           seen.add('start $event');
           await delay(10);
           seen.add('end $event');
-        });
+        }).value;
       })
         ..ignore();
       async.elapse(const Duration(milliseconds: 5));
@@ -414,10 +406,10 @@ void main() {
           ..add(3),
       );
       final job = Job<void>((ctx) async {
-        await ctx.each(controller.stream, (event) {
+        await ctx.each(controller.stream, (_, event) {
           seen.add(event);
           throw StateError('boom');
-        });
+        }).value;
       })
         ..ignore();
       async.flushTimers();
@@ -439,11 +431,11 @@ void main() {
         },
       );
       final job = Job<void>((ctx) async {
-        await ctx.each(controller.stream, (event) async {
+        await ctx.each(controller.stream, (_, event) async {
           seen.add('start $event');
           await delay(10);
           throw StateError('late boom');
-        });
+        }).value;
         seen.add('each returned');
       })
         ..ignore();
@@ -464,11 +456,11 @@ void main() {
       );
       final job = Job<void>((ctx) async {
         try {
-          await ctx.each(controller.stream, (event) async {
+          await ctx.each(controller.stream, (_, event) async {
             seen.add('start $event');
             await delay(10);
             seen.add('end $event');
-          });
+          }).value;
         } on Object {
           seen.add('each threw');
           rethrow;
@@ -493,10 +485,10 @@ void main() {
       final seen = <int>[];
       final controller = StreamController<int>(sync: true);
       final job = Job<void>((ctx) async {
-        await ctx.each(controller.stream, (event) {
+        await ctx.each(controller.stream, (_, event) {
           seen.add(event);
           throw StateError('boom');
-        });
+        }).value;
       })
         ..ignore();
       async.flushMicrotasks();
@@ -522,11 +514,11 @@ void main() {
       );
       late Job<void> job;
       job = Job<void>((ctx) async {
-        await ctx.each(controller.stream, (event) async {
+        await ctx.each(controller.stream, (_, event) async {
           seen.add('start $event');
           await delay(10);
           seen.add('end $event');
-        });
+        }).value;
       })
         ..ignore();
       async.elapse(const Duration(milliseconds: 5));
@@ -557,7 +549,7 @@ void main() {
         },
       );
       job = Job<void>((ctx) async {
-        await ctx.each(controller.stream, seen.add);
+        await ctx.each(controller.stream, (_, event) => seen.add(event)).value;
       })
         ..ignore();
       async.flushTimers();
@@ -588,7 +580,7 @@ void main() {
             },
           );
           job = Job<void>((ctx) async {
-            await ctx.each(controller.stream, (event) {});
+            await ctx.each(controller.stream, (_, event) {}).value;
           })
             ..ignore();
           async.flushTimers();
@@ -604,7 +596,7 @@ void main() {
     );
   });
 
-  test('the playback stops when the job the body walked away from ends', () {
+  test('early playback continues after the parent body returns', () {
     fakeAsync((async) {
       final seen = <String>[];
       late StreamController<int> controller;
@@ -616,7 +608,7 @@ void main() {
           ..add(3),
       );
       final job = Job<void>((ctx) async {
-        ctx.each(controller.stream, (event) async {
+        ctx.each(controller.stream, (_, event) async {
           seen.add('start $event');
           await delay(10);
         }).ignore();
@@ -624,9 +616,12 @@ void main() {
       })
         ..ignore();
       async.flushTimers();
-      expect(seen, ['start 1']);
-      expect(job.outcome, isA<Done<void>>());
+      expect(seen, ['start 1', 'start 2', 'start 3']);
+      expect(job.outcome, isNull);
+      expect(controller.hasListener, isTrue);
       controller.close().ignore();
+      async.flushMicrotasks();
+      expect(job.outcome, isA<Done<void>>());
     });
   });
   test('an error arrives without waiting for the source to clean up', () {
@@ -640,7 +635,7 @@ void main() {
       );
       final job = Job<void>((ctx) async {
         try {
-          await ctx.each(controller.stream, (event) {});
+          await ctx.each(controller.stream, (_, event) {}).value;
         } on Object catch (error) {
           thrown = error;
         }
@@ -674,7 +669,7 @@ void main() {
           job = Job<void>(
             key: 'job',
             observer: journal,
-            (ctx) async => ctx.each(controller.stream, (event) {}),
+            (ctx) async => ctx.each(controller.stream, (_, event) {}).value,
           )..ignore();
           async.flushTimers();
           controller.close().ignore();
@@ -685,7 +680,7 @@ void main() {
     expect(caught, isEmpty, reason: 'an error of the stream is not zone news');
     expect(
       journal.lines.where((line) => line.contains('error')).toList(),
-      ['[job] error Bad state: source boom'],
+      ['> [null: each] error Bad state: source boom'],
     );
   });
 
@@ -703,8 +698,10 @@ void main() {
           job.cancel().ignore();
         },
       );
-      job = Job<void>((ctx) async => ctx.each(controller.stream, seen.add))
-        ..ignore();
+      job = Job<void>(
+        (ctx) async =>
+            ctx.each(controller.stream, (_, event) => seen.add(event)).value,
+      )..ignore();
       async.flushTimers();
       expect(seen, isEmpty);
       expect(job.outcome, isA<Cancelled>());
@@ -726,7 +723,7 @@ void main() {
           ..add(2),
       );
       final job = Job<void>((ctx) async {
-        await ctx.each(controller.stream, seen.add);
+        await ctx.each(controller.stream, (_, event) => seen.add(event)).value;
       })
         ..ignore();
       async.flushTimers();
@@ -748,7 +745,7 @@ void main() {
           final job = Job<void>(
             key: 'job',
             observer: journal,
-            (ctx) async => ctx.each(controller.stream, (_) {}),
+            (ctx) async => ctx.each(controller.stream, (_, event) {}).value,
           )..ignore();
           async.flushMicrotasks();
           job.cancel().ignore();
@@ -779,7 +776,7 @@ void main() {
             observer: journal,
             (ctx) async {
               try {
-                await ctx.each(_HandOverThenThrow<int>(), (_) {});
+                await ctx.each(_HandOverThenThrow<int>(), (_, event) {}).value;
               } on Object catch (error) {
                 caught = error;
               }
@@ -808,7 +805,12 @@ void main() {
       Object? caught;
       final job = Job<void>((ctx) async {
         try {
-          await ctx.each(_ScriptStream([1, 'done', 2, 'error']), seen.add);
+          await ctx
+              .each(
+                _ScriptStream([1, 'done', 2, 'error']),
+                (_, event) => seen.add(event),
+              )
+              .value;
         } on Object catch (error) {
           caught = error;
         }
@@ -833,7 +835,7 @@ void main() {
       final seen = <int>[];
       var returned = false;
       final job = Job<void>((ctx) async {
-        await ctx.each(controller.stream, seen.add);
+        await ctx.each(controller.stream, (_, event) => seen.add(event)).value;
         returned = true;
       })
         ..ignore();
@@ -862,7 +864,7 @@ void main() {
     });
   });
 
-  test('a handler failing after the job let go reaches the observer', () {
+  test('a handler failing after cancellation reaches the child observer', () {
     final zone = <Object>[];
     final journal = JobJournal();
     runZonedGuarded(
@@ -872,10 +874,10 @@ void main() {
           final job = Job<void>(
             key: 'job',
             observer: journal,
-            (ctx) async => ctx.each(controller.stream, (event) async {
+            (ctx) async => ctx.each(controller.stream, (_, event) async {
               await delay(20);
               throw StateError('late boom');
-            }),
+            }).value,
           )..ignore();
           async.flushMicrotasks();
           controller.add(1);
@@ -890,14 +892,14 @@ void main() {
     );
     expect(
       journal.lines,
-      contains('[job] error Bad state: late boom'),
+      contains('> [null: each] error Bad state: late boom'),
       reason: 'a failure covered by a cancellation goes where covered '
           'failures go',
     );
     expect(zone, isEmpty, reason: 'the observer took it');
   });
 
-  test('a handler failing after a job that ended on its own', () {
+  test('an ignored child fails after its parent body returns', () {
     final zone = <Object>[];
     final journal = JobJournal();
     runZonedGuarded(
@@ -910,7 +912,9 @@ void main() {
             key: 'job',
             observer: journal,
             (ctx) async {
-              ctx.each(controller.stream, (_) => handler.future).ignore();
+              ctx
+                  .each(controller.stream, (_, event) => handler.future)
+                  .ignore();
               await ctx.wait(() => body.future);
             },
           )..ignore();
@@ -919,10 +923,12 @@ void main() {
           async.flushMicrotasks();
           body.complete();
           async.flushTimers();
-          expect(job.outcome, isA<Done<void>>());
-          expect(controller.hasListener, isFalse);
+          expect(job.outcome, isNull);
+          expect(controller.hasListener, isTrue);
           handler.completeError(StateError('late boom'));
           async.flushTimers();
+          expect(job.outcome, isA<Done<void>>());
+          expect(controller.hasListener, isFalse);
           controller.close().ignore();
         });
       },
@@ -930,14 +936,13 @@ void main() {
     );
     expect(
       journal.lines.where((line) => line.contains('error')),
-      isEmpty,
-      reason: 'no cancellation covered the wait, so the observer is not the '
-          'one left to take it',
+      ['> [null: each] error Bad state: late boom'],
+      reason: 'ignoring the child outcome does not suppress its observer',
     );
     expect(
       zone,
       isEmpty,
-      reason: 'it went to the future of the call, and that one was quenched',
+      reason: 'the ignored child failure does not reach the zone',
     );
   });
 
@@ -954,10 +959,12 @@ void main() {
         observer: journal,
         (ctx) async {
           try {
-            await ctx.each(
-              controller.stream,
-              (event) => throw StateError('handler boom'),
-            );
+            await ctx
+                .each(
+                  controller.stream,
+                  (_, event) => throw StateError('handler boom'),
+                )
+                .value;
           } on Object catch (error) {
             caught = error;
           }
@@ -976,7 +983,7 @@ void main() {
     });
     expect(
       journal.lines,
-      contains('[job] error Bad state: handler boom'),
+      contains('> [null: each] error Bad state: handler boom'),
       reason: 'and the error it covered goes to the observer',
     );
   });
@@ -999,7 +1006,7 @@ void main() {
           job = Job<void>(
             key: 'job',
             observer: journal,
-            (ctx) async => ctx.each(controller.stream, (_) {}),
+            (ctx) async => ctx.each(controller.stream, (_, event) {}).value,
           )..ignore();
           async.flushTimers();
           expect(job.outcome, isA<Cancelled>());
@@ -1025,7 +1032,7 @@ void main() {
       );
       var returned = false;
       final job = Job<void>((ctx) async {
-        await ctx.each(controller.stream, (_) {});
+        await ctx.each(controller.stream, (_, event) {}).value;
         returned = true;
       })
         ..ignore();
@@ -1049,7 +1056,7 @@ void main() {
       Object? caught;
       Job<void>((ctx) async {
         try {
-          await ctx.each(controller.stream, (_) {});
+          await ctx.each(controller.stream, (_, event) {}).value;
         } on Object catch (error) {
           caught = error;
         }
@@ -1077,7 +1084,7 @@ void main() {
       StackTrace? caught;
       final job = Job<void>((ctx) async {
         try {
-          await ctx.each(controller.stream, (_) {});
+          await ctx.each(controller.stream, (_, event) {}).value;
         } on Object catch (_, stackTrace) {
           caught = stackTrace;
         }
@@ -1104,7 +1111,8 @@ void main() {
         },
       );
       final stream = _CountingStream<int>(controller.stream);
-      job = Job<void>((ctx) async => ctx.each(stream, (_) {}))..ignore();
+      job = Job<void>((ctx) async => ctx.each(stream, (_, event) {}).value)
+        ..ignore();
       async.flushTimers();
       expect(stream.log, isNot(contains('resume')));
       expect(job.outcome, isA<Cancelled>());
@@ -1126,8 +1134,9 @@ void main() {
       );
       final stream = _CountingStream<int>(controller.stream);
       final seen = <int>[];
-      final job = Job<void>((ctx) async => ctx.each(stream, seen.add))
-        ..ignore();
+      final job = Job<void>(
+        (ctx) async => ctx.each(stream, (_, event) => seen.add(event)).value,
+      )..ignore();
       async.flushTimers();
       expect(seen, [1, 2]);
       expect(stream.log, isNot(contains('resume')));
@@ -1139,7 +1148,9 @@ void main() {
     fakeAsync((async) {
       final controller = StreamController<int>();
       final stream = _CountingStream<int>(controller.stream);
-      final job = Job<void>((ctx) async => ctx.each(stream, (_) {}))..ignore();
+      final job =
+          Job<void>((ctx) async => ctx.each(stream, (_, event) {}).value)
+            ..ignore();
       async.flushMicrotasks();
       controller
         ..add(1)
@@ -1182,13 +1193,13 @@ void main() {
         },
       );
       Job<void>((ctx) async {
-        await ctx.each(controller.stream, (event) {
+        await ctx.each(controller.stream, (_, event) {
           if (event != last + 1) {
             ordered = false;
           }
           last = event;
           seen++;
-        });
+        }).value;
       }).ignore();
       async.flushTimers();
     });

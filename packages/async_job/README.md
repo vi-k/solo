@@ -337,17 +337,39 @@ provide this error handling. Start the work inside the callback and keep
 its futures and other asynchronous objects inside it, because it runs in
 a separate error zone.
 
-For a stream, `ctx.each(stream, onData)` manages the subscription as part
-of the job. For example: `Job<void>((ctx) => ctx.each(socket.messages,
-handle))`. It processes events in order, awaiting an asynchronous `onData`
-before delivering the next event. It cancels the subscription as soon as
-the job accepts cancellation and also during cleanup on every outcome,
-even if the body stopped awaiting `each`.
+For a stream, `ctx.each(stream, (child, event) { ... })` starts and returns
+a child `Job<void>` that owns the subscription. The callback receives
+that child's `JobContext`. For example, `ctx.each(socket.messages,
+(child, message) => child.join(() => handle(message)))` processes messages
+in order and waits for each handler before delivering the next message.
+The first stream or callback error ends processing with a failed outcome;
+a thrown `Cancelled` ends it with cancellation.
 
-Cancelling the subscription does not interrupt or await an `onData`
-callback already waiting on a plain future. Cleanup may therefore close a
-resource that the callback is still using. Use context checkpoints inside
-the callback if it needs to respond to cancellation.
+Keep the returned job as `subscription` to cancel it separately with
+`await subscription.cancel()`. Use `await subscription.value` to await
+completion and throw a failure or cancellation into the body, or
+`await subscription.done` to inspect the outcome. Cancelling this child
+does not itself mark the parent cancelled. An uncaught `Cancelled` from
+its `value` cancels the parent under the usual child outcome rules.
+
+The parent waits for the child even if its body returns without awaiting
+it. An open stream therefore keeps the parent alive until the stream ends
+or the child is cancelled. Accepted parent cancellation cascades to the
+child. The observer sees this child as a separate job.
+
+When the child accepts cancellation, it immediately cancels the
+subscription and stops delivering events. It then waits for any running
+callback before completing and releasing resources, so parent cleanup
+also waits. Use the child's context checkpoints inside the callback:
+a plain `await` cannot be interrupted and can delay cancellation forever.
+Do not await the child's own completion or `cancel()` from its callback;
+the child is already waiting for that callback.
+
+The future returned by the underlying subscription's `cancel()` is not
+awaited. If the source needs asynchronous cleanup, arrange to await that
+cleanup separately. Normal stream completion still depends on the source
+sending `onDone`. Like `run`, `each` can only start children while the
+parent body is active; calls from `unattended` or cleanup are rejected.
 
 ## Children
 

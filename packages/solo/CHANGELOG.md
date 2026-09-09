@@ -21,7 +21,7 @@ for a tree that followed the package before it went out.
   `value`, or calling `ignore`, counts as observing it; `Cancelled` never
   reaches the zone.
 - `JobContext` of the kernel: `check`, `wait`, `join`, `uncancellable`,
-  `unattended`, `onCancel`, `run`, `log`.
+  `unattended`, `onCancel`, `run`, `each`, `log`.
 - `SoloContext<S, W>` on top of it, where the state lives: `state`,
   `stateAs`, `emit`.
 - A body does not `await` on its own: every call goes through the context,
@@ -59,10 +59,19 @@ for a tree that followed the package before it went out.
 - `JobContext.uncancellable` is `wait`'s counterpart: it runs a step that
   cannot be taken back — a payment on its way to the server — with the
   cancellation held until the step is over, and `close` waits for it.
-- `ctx.each(stream, onData)` follows a stream for as long as the job lives:
-  an extension on `JobContext`. The subscription goes with the job — when
-  it is cancelled, and when it ends any other way. An `onData` that
-  returns a future is waited for, and the events keep their order.
+- **Breaking:** `ctx.each(stream, (child, event) { ... })` returns a child
+  `Job<void>` immediately. Await `.value` for a throwing result, inspect
+  `.done`, or cancel the subscription separately through `.cancel()`.
+  The callback receives a `SoloContext<S, W>` retaining the parent's
+  working type and `keepWhile`, without inheriting `canStart`.
+  The parent waits for this child even without an explicit await, and
+  observers see the child. Parent cancellation cascades to it.
+- Cancelling `each` removes the subscription immediately, then waits for
+  the running callback before child completion and cleanup. Use child
+  context checkpoints to respond to cancellation; a plain `await` can
+  delay cancellation and `close()`. Source cleanup from subscription
+  cancellation is still not awaited. `each` is now a context method and
+  follows `run`'s restrictions on when and where children can start.
 - `JobContext.onCancel` hands a cancellation to something that can really
   stop — a device's cancel token, an HTTP abort. `wait` ends the waiting,
   not the work.

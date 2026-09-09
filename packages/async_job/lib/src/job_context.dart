@@ -285,6 +285,45 @@ abstract interface class JobContext {
   /// already cancelled.
   Job<T> run<T>(Job<T> child);
 
+  /// Starts a child job that processes [stream] one event at a time.
+  ///
+  /// Returns the child immediately. Await its [Job.value] to propagate its
+  /// outcome into the body, or use [Job.done] to inspect the outcome. The
+  /// parent waits for this child even when the body does not await it.
+  /// An open stream therefore keeps the parent alive until the stream ends
+  /// or the child is cancelled. Cancelling the child alone does not mark
+  /// the parent cancelled.
+  ///
+  /// [onData] receives the child's context. Use its checkpoints to react
+  /// to the child's cancellation. An asynchronous handler is awaited before
+  /// the next event is delivered. Stream and handler errors end the child
+  /// and follow the usual [Job] error reporting rules.
+  ///
+  /// Cancellation stops delivery and cancels the subscription immediately,
+  /// then waits for an active handler before finishing the child and running
+  /// its cleanup. A plain future inside the handler cannot be interrupted;
+  /// use the child's [wait] or [join] as appropriate. Do not await the
+  /// child's own completion or cancellation from its handler.
+  ///
+  /// The future returned by the subscription's cancellation is ignored:
+  /// cleanup owned by the source is not awaited. A normal stream ending
+  /// still depends on the source delivering its `onDone` notification.
+  ///
+  /// Throws synchronously if a child cannot be started, as [run] does:
+  /// after the parent's body ended, during cleanup, from [unattended] work,
+  /// or after cancellation was accepted.
+  ///
+  /// ```dart
+  /// final listening = ctx.each<int>(events, (child, event) {
+  ///   child.log(event);
+  /// });
+  /// await listening.cancel();
+  /// ```
+  Job<void> each<T>(
+    Stream<T> stream,
+    FutureOr<void> Function(JobContext ctx, T event) onData,
+  );
+
   /// Hands [message] to [JobObserver.onLog] as it is.
   ///
   /// Nothing happens to it on the way: a listener that wants a line makes
@@ -392,6 +431,29 @@ abstract class JobContextBase implements JobContext {
 
   @override
   Job<Object?> get job => _owner;
+
+  /// Creates the unstarted child used by [each].
+  ///
+  /// A domain that restricts child ownership overrides this factory to
+  /// return its own job with the appropriate context and rules. The result
+  /// must be accepted by [run]. This factory must not start the child.
+  @protected
+  Job<void> createEachJob(Future<void> Function(JobContext ctx) body) =>
+      Job.deferred<void>(body, describe: () => 'each');
+
+  @override
+  Job<void> each<T>(
+    Stream<T> stream,
+    FutureOr<void> Function(JobContext ctx, T event) onData,
+  ) {
+    throwIfUnattended('follow a stream');
+    throwIfFinished('follow a stream');
+    return run(
+      createEachJob(
+        (child) => child._followStream(stream, (event) => onData(child, event)),
+      ),
+    );
+  }
 
   @override
   void check() {

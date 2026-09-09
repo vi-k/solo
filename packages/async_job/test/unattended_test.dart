@@ -363,30 +363,38 @@ void main() {
     );
   });
 
-  test(
-      'an abandoned each wrapped in unattended hands a late handler error '
-      'to the observer', () {
+  test('unattended work cannot start an each child', () {
     final journal = JobJournal();
     fakeAsync((async) {
       final source = StreamController<int>();
-      Job<void>(key: 'j', observer: journal, (ctx) async {
-        ctx.unattended(
-          () => ctx.each(source.stream, (event) async {
-            await delay(20);
-            throw StateError('late handler');
-          }),
-        );
-        source.add(1);
+      Object? caught;
+      final job = Job<void>(key: 'j', observer: journal, (ctx) async {
+        ctx.unattended(() {
+          try {
+            ctx.each(source.stream, (_, event) {});
+          } on Object catch (error) {
+            caught = error;
+          }
+        });
         await ctx.wait(() => delay(1));
       });
       async.flushTimers();
+      expect(
+        caught,
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('inside unattended work'),
+        ),
+      );
+      expect(source.hasListener, isFalse);
+      expect(job.outcome, isA<Done<void>>());
       source.close();
       async.flushTimers();
     });
     expect(journal.take(), [
       '[j] started',
       '[j] finished Done(null)',
-      '[j] error Bad state: late handler',
     ]);
   });
 }

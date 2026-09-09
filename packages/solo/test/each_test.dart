@@ -16,10 +16,12 @@ void main() {
     runSolo((solo, journal, async) {
       final events = StreamController<int>();
       final job = solo.run<TestState, void>(key: 'job', (ctx) async {
-        await ctx.each(
-          events.stream,
-          (p) => ctx.emit(Preparing(progress: p)),
-        );
+        await ctx
+            .each(
+              events.stream,
+              (child, p) => child.emit(Preparing(progress: p)),
+            )
+            .value;
         ctx.emit(const Working());
       });
       async.flushMicrotasks();
@@ -32,8 +34,10 @@ void main() {
       expect(job.outcome, isA<Done<void>>());
       expect(journal.take(), [
         '[job] started',
+        '> [null: each] started',
         'state: Preparing(progress: 1)',
         'state: Preparing(progress: 2)',
+        '> [null: each] finished Done(null)',
         'state: Working(a: 0, b: 0)',
         '[job] finished Done(null)',
       ]);
@@ -45,10 +49,12 @@ void main() {
       var cancelled = false;
       final events = StreamController<int>(onCancel: () => cancelled = true);
       final job = solo.run<TestState, void>(key: 'job', (ctx) async {
-        await ctx.each(
-          events.stream,
-          (p) => ctx.emit(Preparing(progress: p)),
-        );
+        await ctx
+            .each(
+              events.stream,
+              (child, p) => child.emit(Preparing(progress: p)),
+            )
+            .value;
         ctx.emit(const Working());
       });
       async.flushMicrotasks();
@@ -60,7 +66,9 @@ void main() {
       expect(job.outcome, isA<Cancelled>());
       expect(journal.take(), [
         '[job] started',
+        '> [null: each] started',
         'state: Preparing(progress: 1)',
+        '> [null: each] finished Cancelled(parent)',
         '[job] finished Cancelled(manual)',
       ]);
       events.close();
@@ -73,12 +81,14 @@ void main() {
       final events = StreamController<int>(onCancel: () => cancelled = true);
       final job = solo.run<TestState, void>(key: 'job', (ctx) async {
         try {
-          await ctx.each(
-            events.stream,
-            (p) => ctx.emit(Preparing(progress: p)),
-          );
+          await ctx
+              .each(
+                events.stream,
+                (child, p) => child.emit(Preparing(progress: p)),
+              )
+              .value;
         } on FormatException {
-          // The stream failed; the job reports it itself.
+          // The parent handles the child's stream failure.
           ctx.emit(const Working());
         }
       });
@@ -89,6 +99,9 @@ void main() {
       expect(job.outcome, isA<Done<void>>());
       expect(journal.take(), [
         '[job] started',
+        '> [null: each] started',
+        '> [null: each] error FormatException: the wire is noisy',
+        '> [null: each] finished Failed(FormatException: the wire is noisy)',
         'state: Working(a: 0, b: 0)',
         '[job] finished Done(null)',
       ]);
@@ -101,10 +114,12 @@ void main() {
       var cancelled = false;
       final events = StreamController<int>(onCancel: () => cancelled = true);
       solo.run<NotDisposed, void>(key: 'job', (ctx) async {
-        await ctx.each(
-          events.stream,
-          (p) => ctx.emit(Preparing(progress: p)),
-        );
+        await ctx
+            .each(
+              events.stream,
+              (child, p) => child.emit(Preparing(progress: p)),
+            )
+            .value;
       });
       async.flushMicrotasks();
       solo.externalSetState(const Disposed());
@@ -112,7 +127,9 @@ void main() {
       expect(cancelled, isTrue);
       expect(journal.take(), [
         '[job] started',
+        '> [null: each] started',
         'state: Disposed()',
+        '> [null: each] finished Cancelled(rules: is not NotDisposed)',
         '[job] finished Cancelled(rules: is not NotDisposed)',
       ]);
       events.close();
@@ -125,12 +142,12 @@ void main() {
       final events = StreamController<int>(onCancel: () => cancelled = true);
       // `ignore`, because an unobserved `Failed` goes to the zone.
       final job = solo.run<TestState, void>(key: 'job', (ctx) async {
-        await ctx.each(events.stream, (p) {
+        await ctx.each(events.stream, (child, p) {
           if (p == 2) {
             throw const FormatException('bad event');
           }
-          ctx.emit(Preparing(progress: p));
-        });
+          child.emit(Preparing(progress: p));
+        }).value;
       })
         ..ignore();
       async.flushMicrotasks();
@@ -143,7 +160,10 @@ void main() {
       expect(job.outcome, isA<Failed>());
       expect(journal.take(), [
         '[job] started',
+        '> [null: each] started',
         'state: Preparing(progress: 1)',
+        '> [null: each] error FormatException: bad event',
+        '> [null: each] finished Failed(FormatException: bad event)',
         '[job] error FormatException: bad event',
         '[job] finished Failed(FormatException: bad event)',
       ]);
@@ -160,10 +180,12 @@ void main() {
       var past = false;
       try {
         solo.run<NotDisposed, void>(key: 'job', (ctx) async {
-          await ctx.each(
-            events.stream,
-            (p) => ctx.emit(Preparing(progress: p)),
-          );
+          await ctx
+              .each(
+                events.stream,
+                (child, p) => child.emit(Preparing(progress: p)),
+              )
+              .value;
           past = true;
         });
         async.flushMicrotasks();
@@ -174,9 +196,11 @@ void main() {
         expect(past, isFalse, reason: 'the hook cancelled the job meanwhile');
         expect(journal.take(), [
           '[job] started',
+          '> [null: each] started',
           'state: Preparing(progress: 1)',
           'state: Preparing(progress: 2)',
           'state: Disposed()',
+          '> [null: each] finished Cancelled(rules: is not NotDisposed)',
           '[job] finished Cancelled(rules: is not NotDisposed)',
         ]);
       } finally {
