@@ -1,41 +1,39 @@
 # async_job
 
-A cancellable `Future`: a job with an outcome, children, cooperative
-cancellation and a waiting family. Pure Dart, no dependencies beyond
-`meta`.
+`async_job` adds cancellation, child tasks and resource cleanup to
+asynchronous Dart code. It uses cooperative cancellation: the job's body
+checks for cancellation through a context and stops at a suitable point.
+The package works in pure Dart and depends only on `meta`.
 
-`Job` is not a `Future`, and nothing awaits it directly: `await job.done`
-for the outcome, `await job.value` for the value.
+A `Job<T>` runs an asynchronous function and records how it ended. Use
+`await job.done` to get its outcome or `await job.value` to get its value.
+`Job` itself does not implement `Future`.
 
 ## Why
 
-A `Future` cannot be cancelled. The usual answers — a flag the body
-checks, a `CancelableOperation`, a token passed by hand — leave the same
-three questions open: what the job ended as, who is waiting for it, and
-who hears about a failure nobody looked at.
+Cancelling asynchronous work involves more than stopping an `await`. You
+may also need to stop child tasks, close resources and report errors that
+the caller has not handled.
 
-A job answers all three. It ends with an `Outcome`: `Done`, `Failed` or
-`Cancelled` with a reason. It can start children and is not finished
-until they are. And a `Failed` outcome nobody observed goes to the zone
-that created the job, the way Dart reports an unhandled `Future` error.
+A job manages these steps together. It finishes with one of three
+outcomes: `Done`, `Failed` or `Cancelled` with a reason. It waits for its
+children and runs registered cleanup before completing. An unobserved
+`Failed` is reported to the zone that created the job, just as Dart reports
+an unhandled `Future` error.
 
-`CancelableOperation` ends the waiting the same way. What it does not
-have is the outcome to end with, the children to wait for, the
-checkpoints inside the body, and the observer that hears the errors with
-nowhere else to go.
+A plain `Future` has no cancellation operation. Flags and cancellation
+tokens let you ask work to stop; `CancelableOperation` lets you cancel
+waiting for a result. A job also provides cancellation checkpoints in the
+body, child lifetimes, outcomes and an observer for errors.
 
-Cancellation is cooperative: `cancel()` marks the job, and the body is
-what actually stops. That is why every wait in a body goes through the
-context — `await ctx.wait(action)`, not `await action()`. A future awaited
-directly has nothing to interrupt it: the mark arrives, and the body keeps
-waiting for a call that knows nothing about it. The context member you
-pick is what says how that call reacts.
+The body receives a context, `ctx`. Use its methods to choose how an
+operation responds to cancellation. For example, `ctx.join(action)` waits
+for the operation to finish before reporting cancellation to the body.
+A direct `await action()` keeps waiting even if the job is cancelled.
 
-There is no state here, no queue, no rules, no retry, no timeout, no
-pool. For the first three take `solo`: it is built on this package and
-re-exports it whole, so a package that depends on `solo` never depends on
-`async_job` as well. The last three are nobody's here — `solo` has none of them
-either, and an engine of a domain writes its own.
+For state management, a queue and scheduling rules, use `solo`, which
+builds on this package and re-exports its API. Neither package provides
+retries, timeouts or a task pool; applications can add these as needed.
 
 ## Install
 
@@ -70,53 +68,45 @@ await job.cancel();
 final outcome = await job.done; // Cancelled(manual)
 ```
 
-Line by line, because every one of them is a decision:
+This example opens a database, migrates it and returns it to the caller.
+If the job is cancelled or fails, it closes the database.
 
-- **The body starts on the next microtask**, not inside the constructor:
-  the caller gets the handle first and may listen to it, or cancel before
-  the body ever runs. That is what the delay above is for — a job
-  cancelled on the same stripe ends as `Cancelled(manual)` with
-  `started: false`, and none of the body runs at all.
-- **`ctx.join(Database.open)`** calls `Database.open` and waits for it to
-  finish, returning the opened database. If the job is cancelled while
-  opening is in progress, `join` still waits for the call to finish before
-  telling the body about the cancellation.
-- **`discard: (database) => database.close()`** registers cleanup for the
-  database: if the job ends with cancellation or an error, it closes the
-  database. This also covers the time after `return database`, which ends
-  the body, not necessarily the job. For example, a body may have started
-  a child that is still running when it returns. The job waits for that
-  child; if cancelled while waiting, it ends as `Cancelled` and closes the
-  database. With `Done(database)`, the database stays open for the caller.
+- **The body starts on the next microtask.** The caller receives the job
+  first and can register listeners before it runs. Cancelling immediately
+  after construction skips the body and produces `Cancelled(manual)` with
+  `started: false`. The delay in the example lets the body start first.
+- **`ctx.join(Database.open)`** calls `Database.open` and returns the opened
+  database. If cancellation arrives during opening, it waits for the call
+  to finish before throwing `Cancelled` in the body.
+- **`discard: (database) => database.close()`** closes the database if the
+  job ends with cancellation or an error. With `Done(database)`, it stays
+  open for the caller. Cleanup also covers cancellation after
+  `return database`: for example, if the body has started a child that is
+  still running, the job waits for that child before completing. Cancelling
+  during this wait produces `Cancelled` and closes the database.
   See [Cleanup](#cleanup).
-- **`ctx.onCancel(stop.cancel)`** is how `cancel()` reaches the database
-  itself. The callback runs the moment the job is marked, before the body
-  learns of it, so whatever the database is doing is told to stop at once.
+- **`ctx.onCancel(stop.cancel)`** connects job cancellation to the
+  database's cancellation token. The callback runs as soon as the job
+  accepts cancellation, before the body reaches its next checkpoint.
 - **`ctx.join(() => database.migrate(stop))`** waits for the migration to
-  finish. On cancellation, the token tells the migration to stop, and
-  `join` waits until it has actually stopped before the job closes the
-  database. If you need to stop waiting immediately on cancellation, use
-  `ctx.wait`. It ends the waiting without stopping the operation itself.
-- **`ctx.uncancellable(() => database.markReady(stop))`** for the step that
-  must not even be told to stop. `join` would not do here, and this is the
-  difference between the two: `join` holds the waiting, not the
-  cancellation. Under it the callback above has already fired, `stop` is
-  already cancelled, and `markReady` gives up halfway — the call is waited
-  for, but it is a call that is stopping. `uncancellable` holds the
-  cancellation itself. Plainly: while the body is inside the section,
-  `onCancel` is not called at all — it is called the moment the section
-  ends, and the body learns of the cancellation after that, at its next
-  call through the context — see [Cancellation](#cancellation).
-- **`await job.cancel()`** returns when the job has actually finished, so
-  the outcome below is already there. The `await` is a choice: the
-  cancellation goes through either way, and dropping it only means not
-  waiting for the end.
+  finish. On cancellation, the token asks the migration to stop, and `join`
+  waits for it to stop before the job closes the database. If you need to
+  stop waiting immediately on cancellation, use `ctx.wait`. It stops the
+  waiting without stopping the operation itself.
+- **`ctx.uncancellable(() => database.markReady(stop))`** protects this
+  step from cancellation. A cancellation request is held until the section
+  ends, so `onCancel` does not fire and the token remains active during the
+  call. After the section, the request takes effect and the next context
+  checkpoint throws `Cancelled`. See [Cancellation](#cancellation).
+- **`await job.cancel()`** requests cancellation and waits for the job to
+  finish. You can omit `await` if you only need to request cancellation.
 
-`example/example.dart` is this fragment with a fake `Database` around it.
+The complete runnable example, including a fake `Database`, is in
+`example/example.dart`.
 
 ## Outcomes
 
-`Outcome<T>` is sealed, so a `switch` over its three cases is exhaustive:
+`Outcome<T>` is sealed. A `switch` covering its three cases is exhaustive:
 
 ```dart
 final message = switch (await job.done) {
@@ -126,16 +116,17 @@ final message = switch (await job.done) {
 };
 ```
 
-`Cancelled` carries a `reason`, a `started` flag, an optional
-`description` and the stack trace of the cancellation itself. Reasons are
-classes extending `CancelReason`: `ManualCancelReason`,
-`ParentCancelReason` and `HandlerCancelReason` in the core. Match them by
-type, for example `reason is ParentCancelReason`; `name` is only a label
-for logs. There is no equality by name. Reasons use identity equality
-unless their class defines value equality.
+`Cancelled` contains a `reason`, a `started` flag, an optional `description`
+and the stack trace of the cancellation. The built-in reason classes are
+`ManualCancelReason`, `ParentCancelReason` and `HandlerCancelReason`, all
+extending `CancelReason`.
 
-Your own reason can carry any data, including an error and its original
-stack trace:
+Check reasons by type, for example `reason is ParentCancelReason`. The
+`name` property is a label for logs and does not determine equality.
+Reasons use identity equality unless their class defines value equality.
+
+You can define a reason that stores additional data, such as an error and
+its original stack trace:
 
 ```dart
 final class RequestCancelReason extends CancelReason {
@@ -149,8 +140,8 @@ final class RequestCancelReason extends CancelReason {
 }
 ```
 
-Pass it when cancelling; `whenCancelled` and the outcome receive the same
-reason instance:
+Pass the reason to `cancel()`. The cancellation listener and the outcome
+receive the same instance:
 
 ```dart
 try {
@@ -160,30 +151,37 @@ try {
 }
 ```
 
-A body can also throw `Cancelled.by(reason: reason, started: true)` to
-keep an explicit reason. The ordinary `throw Cancelled('why')` uses
-`HandlerCancelReason`. A cancellation cascading onto children wraps the
-parent's `Cancelled` in `ParentCancelReason.cause`; a child's cancellation
-escaping through the body wraps it in `HandlerCancelReason.cause`. Those
-links preserve the original reason and its data. The reason's own error
-stack is separate from the cancellation's stack trace.
+The body can throw `Cancelled.by(reason: reason, started: true)` to use an
+explicit reason, or `Cancelled('why')` to use `HandlerCancelReason`.
+When a parent cancels a child, the child's `ParentCancelReason.cause`
+holds the parent's `Cancelled`. When a child's cancellation escapes
+through the parent body, the parent's `HandlerCancelReason.cause` holds
+the child's `Cancelled`. These links preserve the original reason and its
+data. An error's stack trace stored in a reason is separate from the
+cancellation's stack trace.
 
-`job.done` completes with the outcome and never throws; `job.value`
-completes with the value or throws. `job.cancel()` cancels and waits for
-the job to actually finish; `job.ignore()` says that nobody is going to
-look at the outcome. Those three are also what counts as observing a
-`Failed`: touching `done`, `value` or `ignore()`, and nothing else.
-Reading `job.outcome`, hearing it in `onFinish`, awaiting `cancel()` — none
-of them observes anything, and a failure left that way still reaches the
-zone, on the microtask after the job ends.
+Use these members to read or acknowledge the result:
 
-`job.whenCancelled(callback)` registers a synchronous cancellation listener
-and returns a function that unregisters it. The callback receives the
-`Cancelled` with its reason and details. For a running job it runs after
-the cancellation cascades to children and `ctx.onCancel` callbacks run,
-before the body finishes. For a job dropped before start it runs when the
-job is dropped. For a body that throws `Cancelled` itself it runs after
-the body and its children end, right before cleanup:
+- `job.done` completes with the outcome and never throws.
+- `job.value` completes with the value, or throws on failure or
+  cancellation.
+- `job.ignore()` acknowledges that you will not use the outcome.
+
+Accessing `done` or `value`, or calling `ignore()`, counts as observing a
+failure. Reading `job.outcome`, receiving `onFinish` or awaiting
+`job.cancel()` does not. An unobserved failure reaches the job's creation
+zone on the microtask after the job finishes.
+
+`job.whenCancelled(callback)` registers a synchronous listener and returns
+a function to unregister it. The listener receives the `Cancelled` with
+its reason and details. Its timing depends on how cancellation happens:
+
+- For an external cancellation of a running job, it runs after cancellation
+  has cascaded to children and `ctx.onCancel` callbacks have run, before
+  the body finishes.
+- For a job cancelled before start, it runs when the job is cancelled.
+- If the body throws `Cancelled`, it runs after the body and its children
+  have ended, before cleanup.
 
 ```dart
 final job = Job<Report>(build);
@@ -198,34 +196,34 @@ final outcome = await job.done;
 unregister();
 ```
 
-A late registration calls the listener immediately, even after the job has
-finished. A refused cancellation sends no notification; an `uncancellable`
-section delays it until the cancellation is accepted. Jobs that end `Done`
-or `Failed` without cancellation never call the listener and release their
-registrations on finish. Registering does not observe a failure.
+Registering after cancellation calls the listener immediately, even if
+the job has finished. A refused cancellation does not notify listeners.
+An `uncancellable` section delays notification until cancellation is
+accepted. A job that finishes as `Done` or `Failed` without cancellation
+releases its listeners without calling them. Registering a listener does
+not count as observing a failure.
 
-Each registration runs once. Pending listeners run in registration order
-from a snapshot: removing another listener during notification does not
-remove it from that pass. A new listener registered during notification
-runs immediately. Unregistering more than once is harmless.
+Each registration runs once. Listeners run in registration order, using a
+snapshot of the list: removing a listener during notification does not
+remove it from the current pass. A listener added during notification runs
+immediately. Unregistering more than once is safe.
 
-Synchronous callback errors follow the same route as `ctx.onCancel`: to
-`onError`, or to the job's creation zone without an observer; a thrown
-`Cancelled` never reaches the zone. They do not change cancellation or
-prevent other listeners from running. An `async` callback's future is not
-awaited and its errors are not caught here.
+A synchronous listener error goes to `onError`, or to the job's creation
+zone if there is no observer. A thrown `Cancelled` is never forwarded to
+the zone. Listener errors do not change cancellation or prevent other
+listeners from running. If you pass an `async` callback, its future is not
+awaited and its errors are not caught by this mechanism.
 
 ## Cancellation
 
-`cancel()` marks the job; stopping is the body's own business. The mark
-reaches the body as a throw: once the job is marked, the members that wait
-or start something throw `Cancelled` — `check`, `wait`, `join`,
-`uncancellable`, `run` and `each` — and `onCancel` with them, which only
-registers, but would be registering a callback that can no longer fire. The
-ones that only register go on working, so a body just cancelled can still
-put what it holds on the cleanup stack: `onDispose`, `onDiscard`, `disown`
-and `unattended`. And `Cancelled` implements `Exception`. A `catch` wide
-enough to hold it swallows the cancellation, and the body walks on:
+When a job accepts cancellation, it records the request. Context methods
+then throw `Cancelled` so the body can stop: `check`, `wait`, `join`,
+`uncancellable`, `run`, `each` and `onCancel` all check for cancellation.
+You can still use `onDispose`, `onDiscard`, `disown` and `unattended`, so
+the body can arrange cleanup after cancellation.
+
+`Cancelled` implements `Exception`. If you catch `Exception` or `Object`,
+rethrow the job's cancellation to avoid continuing work after it:
 
 ```dart
 try {
@@ -237,7 +235,7 @@ try {
 }
 ```
 
-or
+Or, when catching `Object`:
 
 ```dart
 try {
@@ -248,86 +246,70 @@ try {
 }
 ```
 
-The outcome is `Cancelled` all the same, and that is what makes a
-swallowed cancellation expensive to find: from the outside the job ended
-right, while the body went on working. Catch the type you came for, and
-let the cancellation through.
+Swallowing the job's cancellation lets the body continue even though the
+final outcome will still be `Cancelled`. Catch specific error types where
+possible, and let cancellation propagate.
 
-Not every `Cancelled` the body sees is its own: one that came out of
-`await child.value` says a child gave up, and catching that one is fair —
-an optional step that did not work out. Inside such a `catch`, `ctx.check()`
-tells the two apart, because it throws only if this job is cancelled too.
+A cancellation from `await child.value` may belong only to the child.
+You can catch it if that child was optional. Call `ctx.check()` inside the
+catch block to check the parent: it throws if the parent is cancelled too.
 
-The body must never await anything by itself, and the member it picks
-says what a cancellation does to that call:
+Choose a context method according to what should happen to the operation
+when cancellation arrives:
 
-- `ctx.wait(action)` ends the waiting, not the work: the body goes on
-  from that call — with the cancellation in hand — while the action runs
-  to its end. Its result is dropped, or handed to the disposer it was
-  given. That disposer goes on the cleanup stack while the job is still
-  unwinding it, so whoever waits for the job waits for the disposal too,
-  the closing of an engine included. If the action finishes after the job
-  is already over, the disposer runs on its own, with nobody left to wait
-  for it.
-- `ctx.join(action)` waits for all of the action and gives up afterwards:
-  a device command already on the wire is not abandoned halfway. Its
-  disposer is awaited before the `Cancelled` is thrown, so whoever waits
-  for the job waits for the disposal too.
-- `ctx.each(stream, onData)` follows a stream for as long as the job lives,
-  and a body that does nothing else is one expression: `Job<void>((ctx) =>
-  ctx.each(socket.messages, handle))`. The subscription is cancelled the
-  moment the job is marked, before the body learns about it, and again when
-  the job ends whatever the outcome, so nothing is left listening even
-  behind a body that walked away from the call. An `onData` that returns a
-  future is waited for, and delivery is held meanwhile: the events keep
-  their order. Delivery is what waits, not the job: a handler already
-  inside its own `await` is not interrupted by a cancellation, and nobody
-  waits for it — neither this call nor the cleanup, which may close under
-  it what it is still writing to. A handler that must stop takes the
-  cancellation through the context, like any other code of the body.
-- `ctx.uncancellable(action)` holds the cancellation for the length of
-  the call: the job is not marked while it runs, so nothing — not an
-  `onCancel` callback, not the cascade onto children — reaches into the
-  step. It lands the moment the section closes, and the next context call
-  throws it. A step whose tail must happen too belongs inside the same
-  section; a job that must survive a cancellation altogether is created
-  with `cancellable: false`. Always `await` it: the section belongs to the
-  job, not to the future, so it opens on the call either way — and a body
-  that walked on can end while it is still open, in which case the held
-  cancellation lands on a job that is already over and is dropped.
-  `cancel()` then returns on a job that ended `Done`, and nothing says
-  otherwise.
-- `ctx.onCancel(callback)` fires the moment the job is marked, before the
-  body learns about it: this is how a cancellation reaches something that
-  can really stop — a cancel token, an abort, a subscription. The callback
-  is synchronous, and only what it throws synchronously reaches `onError`:
-  `void Function()` takes an `async` function without a word from the
-  analyser, and the future one of those returns is awaited by nobody — its
-  failure goes straight to the zone. A stop that is asynchronous itself is
-  handed to the engine — `ctx.onCancel(() => ctx.unattended(device.stop))`.
-- `ctx.unattended(action)` is the one that does not wait at all. The work
-  is handed to the engine and the body walks on; a cancellation does not
-  touch it, and whatever it throws — now or long after the job is over —
-  goes to `onError` — the job's observer, or the zone the job was made in
-  when it has none. That is what it has over `unawaited(...)`, which only
-  silences the analyser: a future dropped that way still belongs to the
-  zone it was made in, and its failure arrives there with nothing to say
-  which job started it. Start the work inside and take nothing out of it:
-  the boundary of its error zone holds both ways.
-- `ctx.check()` gives up where there is no call to wrap.
+- `ctx.join(action)` waits for the action to finish, then throws
+  `Cancelled`. Use it when work must finish or stop before cleanup begins,
+  such as a command already sent to a device. If a cleanup callback was
+  provided, it is awaited before `Cancelled` is thrown.
+- `ctx.wait(action)` throws `Cancelled` without waiting for the action to
+  finish. The action continues; its eventual result is dropped or passed
+  to the supplied cleanup callback. If cleanup is still in progress when
+  the result arrives, that callback joins the cleanup stack and is awaited
+  as part of job completion. If the job has already finished, the callback
+  runs separately and is no longer included in that wait.
+- `ctx.each(stream, onData)` processes stream events in order. For example:
+  `Job<void>((ctx) => ctx.each(socket.messages, handle))`. It awaits an
+  asynchronous `onData` callback before delivering the next event. The
+  subscription is cancelled as soon as the job accepts cancellation, and
+  also during cleanup on every outcome, even if the body stopped awaiting
+  `each`. Cancellation does not interrupt or await an `onData` callback
+  already waiting on a plain future. Cleanup may therefore close a resource
+  that the callback is still using. Use context checkpoints in the callback
+  if it needs to respond to cancellation.
+- `ctx.uncancellable(action)` delays cancellation until the action ends.
+  During the section, the job does not run `onCancel` callbacks or cascade
+  cancellation to children. The request takes effect at the end of the
+  section, and the next context checkpoint throws `Cancelled`. Include all
+  steps that need this protection in the same section. Always await the
+  call: an unawaited section can outlive the body. If the job finishes
+  before the section ends, the pending cancellation is lost and `cancel()`
+  can return with a `Done` outcome.
+- `ctx.onCancel(callback)` runs a synchronous callback when the job accepts
+  cancellation. Use it to cancel a token, abort a request or cancel a
+  subscription. Dart allows an `async` function here, but its future will
+  not be awaited; only synchronous errors reach `onError`, and asynchronous
+  errors go to the zone. For asynchronous stop work, use
+  `ctx.onCancel(() => ctx.unattended(device.stop))`.
+- `ctx.unattended(action)` starts work that the job does not await or
+  cancel. Its errors, including those after the job finishes, go to the
+  job's observer or, without one, its creation zone. `unawaited(...)` only
+  suppresses the analyzer warning and does not associate errors with a job.
+  Start the work inside the callback and keep its futures and other
+  asynchronous objects inside it, because it runs in a separate error zone.
+- `ctx.check()` checks for cancellation where there is no operation to
+  wrap, such as between steps of a calculation.
 
-A job created as `Job(body, cancellable: false)` refuses every
-cancellation it may refuse, once it has started: before the body runs
-there is nothing to protect, and such a job is dropped like any other.
-Its own rules — whatever an engine on top adds — still apply.
+`Job(body, cancellable: false)` refuses ordinary cancellation once the
+body starts. It can still be cancelled before start. A library built on
+the core can also enforce cancellation through its own rules.
 
 ## Children
 
-`ctx.run(child)` starts a child right now. The parent is not finished until
-its children are, a cancelled parent cascades onto them, and a child that
-is not cancellable refuses the cascade. A body that gives itself up with
-`throw Cancelled(...)` cancels its children too; a body that *fails* leaves
-them to finish, and waits.
+`ctx.run(child)` starts a child immediately. The parent waits for all its
+children before finishing and passes cancellation to them. A child with
+`cancellable: false` can refuse that cancellation. If the parent body
+throws `Cancelled`, its children are cancelled too. If it throws another
+error, the parent lets its children finish and waits for them.
 
 ```dart
 final parent = Job<void>((ctx) async {
@@ -337,28 +319,24 @@ final parent = Job<void>((ctx) async {
 });
 ```
 
-`Job.deferred` and not `Job`, because the start of a child belongs to its
-parent: a job that starts itself is refused, whether or not its own start
-has come round yet. Which of the two would have got there first is a
-matter of microtasks nobody can see in the source, and losing that race
-left the job running as a root nobody adopted, nobody cascades onto and
-nobody waits for.
+Create children with `Job.deferred`, so the parent controls their start.
+`ctx.run` rejects a regular `Job`, even before its scheduled start. This
+avoids a race where the child starts independently and is left outside
+the parent's cancellation and completion handling.
 
-A child inherits the parent's observer unless it was given one of its
-own, and a cancellation of a child that surfaces through `child.value`
-marks the parent's outcome as `handler`, naming the child.
+A child inherits the parent's observer unless it has its own. If a child's
+cancellation escapes through `child.value` from the parent body, the
+parent ends with `HandlerCancelReason` and a description naming the child.
 
-`run` refuses as well as starts: a handle that is not a job of this
-kernel is an `ArgumentError`, and so is one that starts itself; a job
-already started is a `StateError`, a body that has already ended is a
-`StateError` too — a child begun then would be waited for by nobody —
-and a parent that is already cancelled
-throws its own `Cancelled` with the child dropped, which is what a body
-starting children after a long await eventually meets.
+`ctx.run` throws `ArgumentError` for a job from another implementation or
+a job that starts automatically. It throws `StateError` if the child has
+already started or the parent body has ended. If the parent is already
+cancelled, it cancels the child before start and throws the parent's
+`Cancelled`.
 
 ## Cleanup
 
-What the body opens, it registers — where it opens it, in one line:
+Register cleanup when you acquire a resource:
 
 ```dart
 final lock = await ctx.join(Lock.acquire, dispose: (lock) => lock.release());
@@ -372,36 +350,32 @@ await ctx.join(() => database.migrate(stop));
 return database;
 ```
 
-Two words, and the difference between them carries the whole mechanism:
+Choose the callback according to who needs the resource after success:
 
-- **`dispose`** runs whatever the outcome. A lock, a temporary file, a
-  counter: released on the successful path too, or it stays taken for
-  good.
-- **`discard`** runs only when the value reaches nobody — cancelled, or
-  failed. The database above goes to the caller on success, and closing it
-  then would be a bug; when nobody gets it, the engine closes it.
+- **`dispose`** runs on every outcome. Use it for resources used only by
+  the job, such as a lock or a temporary file.
+- **`discard`** runs on cancellation or failure. Use it for values the body
+  returns or transfers to a caller. In this example, a successful job
+  leaves the database open for the caller; otherwise, it closes it.
 
-The rule for choosing is one line, and it is the one mistake the engine
-cannot catch: **`discard` is only for what the body returns or hands
-outside; everything else takes `dispose`.** A `discard` on a temporary
-file the body never returns does nothing on success — a leak on the happy
-path that no test on cancellation will ever show.
+Using `discard` for a temporary resource that the body keeps to itself
+leaks that resource on success, because the callback will not run.
 
-For a value that did not come out of a call, the same two words are two
-members of the context — `ctx.onDispose` and `ctx.onDiscard` — choosing by
-the same rule:
+For resources acquired separately, register cleanup with `ctx.onDispose`
+or `ctx.onDiscard`. The same choice applies:
 
 ```dart
 final buffer = StringBuffer();
 ctx.onDispose(() => sink.add(buffer.toString()));
 ```
 
-Both return a function that unregisters what they registered, for a
-disposer that only had to cover a window. Calling it twice, or after the
-disposer has run, is safe — but where the call goes decides whether it
-happens at all: a cancellation arriving during a call is thrown after that
-call, and a removal left below it is never reached, so the disposer runs
-after all. It belongs inside the same action:
+Both methods return a function that unregisters the callback. Use it if
+the resource has already been released or transferred. Calling it again,
+or after cleanup has run, is safe.
+
+If an operation releases the resource itself, unregister inside the same
+action. Otherwise, cancellation can make `join` throw before the body
+reaches the unregister call, leaving the cleanup callback registered:
 
 ```dart
 final remove = ctx.onDispose(cursor.close);
@@ -411,29 +385,34 @@ await ctx.join(() async {
 });
 ```
 
-What `wait` and `join` registered has no such function — the body was
-never handed one — and is dropped by the value instead:
-`ctx.disown(value)`, for when the body hands the value over itself and the
-cleanup must stop being its business. It looks the value up by identity,
-so it takes the very object the body was given, and answers whether it
-found anything.
+For cleanup registered through `wait` or `join`, use `ctx.disown(value)`
+when transferring ownership yourself. It removes the registration by
+object identity and returns whether it found one. Pass the same instance
+that the operation returned.
 
-**How it runs.** The engine unwinds the stack in one pass, last
-registration first, after the children and before the outcome — children
-first because they may still be using what the parent opened — and it waits
-for every disposer, so `close()` of an engine on top waits for the release
-too. One pass while the outcome holds: a `discard` skipped because the body
-had returned is taken up in a second pass if a cancellation lands during
-the unwinding, and then it runs after disposers registered below it. A
-disposer runs outside the body: the context of the body is closed there,
-nothing cancels it, and it must not wait for its own job. Keep it short and
-unconditional; an error of one goes to the observer and the rest still run.
+**Cleanup order.** Cleanup runs after all children finish, because they
+may still use the parent's resources. Callbacks run in reverse registration
+order, and each is awaited before the job completes. This also lets a
+library built on the core wait for resource release when closing.
 
-**Late values.** Between the `return` of a body and the outcome the job is
-still alive — it waits for its children — and a cancellation arriving
-there wins. The value is registered by then, so it is released like any
-other; a value that comes out of a call the body walked away from is
-released too, whatever the outcome, because it reached nobody:
+If cancellation arrives during cleanup, a `discard` previously skipped
+on the successful path runs in a second pass. It can therefore run after
+callbacks registered earlier than it.
+
+Cleanup callbacks run outside the body, with its context closed. They are
+not cancelled and must not await their own job. Keep them short and
+unconditional. An error is reported to the observer; the remaining
+callbacks still run.
+
+**Cancellation after the body returns.** A job may still be waiting for
+children or running cleanup after `return`. Cancellation during that time
+can change its outcome to `Cancelled`. Registered resources are then
+cleaned up accordingly. A value returned by an action abandoned by `wait`
+is also cleaned up, regardless of the outcome, because it was never
+delivered to the body.
+
+Even if you acquire a resource with a plain `await`, you can register it
+for cleanup immediately afterwards:
 
 ```dart
 final job = Job<Database>((ctx) async {
@@ -444,26 +423,28 @@ final job = Job<Database>((ctx) async {
 });
 ```
 
-This body has no context call to be interrupted at: it hands the kernel a
-future and the kernel waits for it, so a cancellation arriving meanwhile
-is not seen until the value is back. Registering right after it is what
-covers the gap.
+Here cancellation cannot interrupt `Database.open()`. The body continues
+waiting, then registers the opened database. If the job was cancelled
+while opening, the final outcome is `Cancelled` and `onDiscard` closes
+the database.
 
 ## Observer
 
-`JobObserver` is the cross-cutting channel of one job: `onStart`,
-`onFinish`, `onError`, `onLog`. The engine calls the first three itself;
-the last is the body's own — `ctx.log(message)` hands the message to it as
-it is, and does nothing at all when the job has no observer. Nothing makes
-a line out of the message on the way: what it becomes is the listener's
-business. A line the caller builds is another matter —
-`ctx.log('migration failed: $error')` above builds one whether anybody
-listens or not; hand the object over instead, and it costs nothing until
-somebody does. All four have empty bodies, so a listener overrides
-only what it needs; `implements` works as well, for a listener that already
-extends something of its own. Pass it at creation; a child without one
-inherits the parent's. A hook that throws hands its error to the current
-zone and changes nothing else.
+`JobObserver` has four hooks: `onStart`, `onFinish`, `onError` and `onLog`.
+The job calls the first three automatically. To send a log message, the
+body calls `ctx.log(message)`.
+
+Messages are passed as objects without conversion to strings. With no
+observer, `ctx.log` does nothing, but Dart still evaluates its argument.
+For example, `ctx.log('migration failed: $error')` formats the string even
+without an observer. Pass the object directly to leave formatting to the
+listener.
+
+All four hooks have empty default implementations, so you can override
+only those you need. You can also use `implements JobObserver` if your
+class already extends another class. Pass the observer when creating the
+job; children inherit it unless they have their own. If a hook throws,
+its error goes to the current zone without changing the job's behavior.
 
 ```dart
 final class Log extends JobObserver {
@@ -478,27 +459,27 @@ final job = Job<int>(
 ); // Job(load): Done(3)
 ```
 
-A job prints itself as `Job($key)`, so the key is what it is called in a
-log — and what an engine on top compares jobs by, as `solo` does in its
-queue policies. `describe` adds a line for whoever reads that log.
+A job's string representation is `Job($key)`. Use `key` to identify it in
+logs or in a library's scheduling rules, such as `solo` queue policies.
+`describe` adds context to the log description.
 
-Errors take two paths, and they are not the same. The body's error goes
-to the observer and becomes the `Failed` outcome; it reaches the zone
-only if nobody observes that outcome. Errors that have nowhere
-else to go — a late failure of an action `wait` abandoned, a disposer, a
-cancellation callback (`ctx.onCancel` or `job.whenCancelled`), a failure
-of work handed to `ctx.unattended`, or an error formatting a child's
-cancellation description — go to the observer, or straight to the zone
-when there is none. Silence is the
-choice of whoever listens. A `Cancelled` never takes that second road: a
-cancellation is a decision somebody made, not a failure, and the observer
-is the only place it is heard.
+A body error is sent to the observer and stored in `Failed`. It is also
+reported to the job's creation zone if the outcome remains unobserved.
+
+Errors outside the body cannot become its outcome. These include late
+errors from an action abandoned by `wait`, cleanup errors, cancellation
+callback errors (`ctx.onCancel` or `job.whenCancelled`), errors from
+`ctx.unattended` and errors while formatting a child's cancellation
+description. They go to the observer, or directly to the job's creation
+zone if there is no observer. An observer decides how to handle them.
+A `Cancelled` reported through this route goes only to the observer and
+is never forwarded to the zone as an unhandled error.
 
 ## Deferred start
 
-`Job.deferred(body)` returns a `DeferredJob<T>`, which adds a public
-`start()`. Whoever owns the job starts it: by hand, a queue, or a parent
-through `ctx.run(child)`.
+`Job.deferred(body)` returns a `DeferredJob<T>` with a public `start()`
+method. You can start it yourself, let a queue start it, or pass it to a
+parent with `ctx.run(child)`.
 
 ```dart
 final job = Job.deferred<void>((ctx) => ctx.wait(work));
@@ -508,9 +489,9 @@ job.start();
 
 ## Testing
 
-A job starts on one microtask and finishes on another, so a test of a job
-is a test about the event loop. `package:fake_async` runs it without a
-clock — the suite of this package is built that way:
+A job starts and completes through microtasks. Use `package:fake_async`
+to control microtasks and timers in tests without waiting in real time.
+This package uses it in its own tests:
 
 ```dart
 test('a cancelled open still closes what it opened', () {
@@ -536,22 +517,21 @@ test('a cancelled open still closes what it opened', () {
 });
 ```
 
-`flushMicrotasks()` is enough to get a job started; anything built on
-`Future(...)` or `Future.delayed(...)` is a timer, not a microtask, and
-needs `flushTimers()` or `elapse(...)`.
+`flushMicrotasks()` is enough to start a job. Operations scheduled through
+`Future(...)` or `Future.delayed(...)` use timers, so advance them with
+`flushTimers()` or `elapse(...)`.
 
 ## Building on the core
 
-`JobBase<T>` and `JobContextBase` are the two classes an engine of a
-domain subclasses. The subclass adds what the kernel does not have — a
-state, a queue, rules — and everything the engine needs is protected:
-the status, the pending cancellation, the children, the start, the
-finish, the cancellation with its rejectable flag, and the two hooks a
-job of a domain fills in, `started()` and `finished()`. Two more are
-there for the error routes: `reportToZone`, for a domain whose own route
-for an error with nowhere to go ends with nobody, and
-`throwIfUnattended`, for a member of a domain's context that must not be
-called from unattended work.
+Extend `JobBase<T>` and `JobContextBase` to add features such as state,
+a queue or scheduling rules. Their protected API provides access to job
+status, pending cancellation, children, start and completion. Cancellation
+has a flag controlling whether the job may refuse it. Override `started()`
+and `finished()` to handle lifecycle events.
+
+Use `reportToZone` to forward an error to the job's creation zone if your
+own error handling has no recipient. Use `throwIfUnattended` to prevent
+calls to your context methods from unattended work.
 
 ```dart
 final class MyJob<T> extends JobBase<T> {
@@ -576,24 +556,23 @@ final class MyContext extends JobContextBase {
 final job = MyJob<int>((ctx) => ctx.wait(load))..launch();
 ```
 
-Two things are worth knowing before you start. `check()` is the
-checkpoint every waiting member goes through — `wait`, `join` and
-`uncancellable` all begin with it — so a domain that checks more than the
-cancellation overrides it there, and gets the whole family for free. And
-`@protected` holds inside a subclass only: an engine reaching a job from
-the side wants private wrappers on its own subclass, not direct calls —
-`launch` above is one.
+`wait`, `join` and `uncancellable` begin by calling `check()`. Override it
+to apply additional checks to all three methods.
 
-`solo` is built this way. The protected surface is where half of this
-package lives, and it is spelled out in the API reference of
-[JobBase](https://pub.dev/documentation/async_job/latest/async_job/JobBase-class.html).
+Protected methods are accessible within subclasses. If a separate
+coordinator needs to call one, expose a wrapper on your subclass, as
+`launch()` does above.
+
+`solo` uses these extension points. The full protected API is documented in
+the [JobBase](https://pub.dev/documentation/async_job/latest/async_job/JobBase-class.html)
+reference.
 
 ## solo
 
-[solo](https://pub.dev/packages/solo) adds a state, a queue and rules on
-top of these jobs: one root job at a time, exclusive state ownership,
-declarative rules. If you want a controller rather than a job, start
-there — and depend on it alone, since it re-exports this package whole.
+[solo](https://pub.dev/packages/solo) adds state, a queue and declarative
+rules. It runs one root job at a time and gives that job exclusive access
+to state. Use it when you need a controller with these guarantees. It
+re-exports `async_job`, so you only need a dependency on `solo`.
 
-Nothing here is Flutter-specific: jobs run wherever Dart runs. The widget
-layer of `solo` is [flutter_solo](https://pub.dev/packages/flutter_solo).
+Jobs work wherever Dart runs. For `solo` widget integration, use
+[flutter_solo](https://pub.dev/packages/flutter_solo).
