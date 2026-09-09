@@ -36,9 +36,12 @@ It keeps waiting, and the code after it can run even if the job has been
 cancelled. Use context methods to make these cancellation checks part of
 the operation.
 
-For state management, a queue and scheduling rules, use `solo`, which
-builds on this package and re-exports its API. Neither package provides
-retries, timeouts or a task pool; applications can add these as needed.
+`async_job` does not provide state management, a task queue or scheduling
+rules. If you need them, use `solo`, which adds these features on top of
+`async_job` and re-exports its API.
+
+Neither package provides retries, timeouts or a task pool; applications
+can add these as needed.
 
 ## Install
 
