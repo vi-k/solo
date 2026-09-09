@@ -266,13 +266,18 @@ try {
 ```
 
 Both forms work with either `Exception` or `Object` as the broader catch
-type. Swallowing the job's cancellation lets the body continue even though the
-final outcome will still be `Cancelled`. Catch specific error types where
-possible, and let cancellation propagate.
+type. If `Job` has already accepted cancellation, catching its `Cancelled`
+does not undo that cancellation. Code after the catch can run, but the next
+context checkpoint throws again. When the job finishes, its outcome is
+still `Cancelled`, even if the body returns a value. Catch specific error
+types where possible, and let the job's cancellation propagate.
 
-A cancellation from `await child.value` may belong only to the child.
-You can catch it if that child was optional. Call `ctx.check()` inside the
-catch block to check the parent: it throws if the parent is cancelled too.
+A caught `Cancelled` does not by itself mean this `Job` was cancelled.
+If an operation throws it and the body catches it, the job can still end
+with `Done`, provided it has not itself accepted cancellation. The same
+applies to a cancellation from `await child.value`: you can catch it if
+that child was optional. Call `ctx.check()` inside the catch block to
+check the parent; it throws if the parent is cancelled too.
 
 For an operation already in progress, choose whether cancellation should
 wait for it to finish, stop waiting immediately or be delayed until the
