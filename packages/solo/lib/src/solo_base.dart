@@ -174,6 +174,22 @@ abstract class SoloBase<S extends Object> {
           unawaited(current.cancel());
         }
     }
+    if (isClosed) {
+      // A policy above removes jobs, and removing one finishes it: its
+      // `onFinish` is a hook of a domain, and a hook may close the
+      // controller. The check at the top of this method is stale by then,
+      // and a job inserted into a drained queue would wait for a pump that
+      // never comes.
+      _debug(() => 'add $impl: closed while the policy was applied');
+      impl._drop(
+        Cancelled.by(
+          reason: SoloCancelReason.closed,
+          started: false,
+          stackTrace: _closeStackTrace,
+        ),
+      );
+      return impl;
+    }
     _queue._insert(impl, first: first);
     _debug(() => 'add $impl${first ? ' first' : ''}');
     _schedulePump();
@@ -523,6 +539,15 @@ abstract class SoloBase<S extends Object> {
         );
         continue;
       }
+      if (job.isFinished) {
+        // The rules are the caller's code, and one of them gave this job
+        // up while answering: `cancel()` on a job that has not started
+        // finishes it where it stands. Launching it now would throw
+        // `has already finished` from the kernel and leave the pump
+        // holding a finished `_current` — the queue would never move again.
+        _debug(() => 'start $job: given up while the rules were asked');
+        continue;
+      }
       _current = job;
       job._launch();
       return;
@@ -531,8 +556,17 @@ abstract class SoloBase<S extends Object> {
 
   static void _debug(String Function() message) {
     final debug = SoloBase.debug;
-    if (debug != null) {
+    if (debug == null) {
+      return;
+    }
+    // Isolated like the channel of the kernel: building the message is the
+    // caller's code as well, and a diagnostic that throws must not leave a
+    // lifecycle half-done. `close` fills `_closing` before it logs, so a
+    // throw from there would hang the controller for good.
+    try {
       debug(message());
+    } on Object catch (error, stackTrace) {
+      Zone.current.handleUncaughtError(error, stackTrace);
     }
   }
 }

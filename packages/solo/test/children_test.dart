@@ -548,4 +548,31 @@ void main() {
       );
     });
   });
+
+  test('a start rule of a child that throws reaches the observer', () {
+    runSolo((solo, journal, async) {
+      solo.run<TestState, void>(key: 'parent', (ctx) async {
+        try {
+          ctx.run(
+            solo.job<TestState, void>(
+              key: 'child',
+              canStart: (state) => throw StateError('rule boom'),
+              (childCtx) async {},
+            ),
+          );
+        } on Object catch (_) {
+          // The parent handles it and ends `Done`; the failure of the
+          // child still has to be heard.
+        }
+      });
+      async.flushTimers();
+      expect(
+        journal.take(),
+        containsAllInOrder([
+          '> [child] error Bad state: rule boom',
+          '> [child] finished Failed(Bad state: rule boom)',
+        ]),
+      );
+    });
+  });
 }

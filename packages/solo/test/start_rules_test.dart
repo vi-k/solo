@@ -317,6 +317,51 @@ void main() {
       expect(solo.current, isNull);
     });
   });
+
+  test('a start rule that gives its own job up lets the queue move on', () {
+    runSolo((solo, journal, async) {
+      late final SoloJob<void> first;
+      first = solo.run<TestState, void>(
+        key: 'first',
+        canStart: (state) {
+          first.cancel().ignore();
+          return true;
+        },
+        (ctx) async {},
+      );
+      final second = solo.run<TestState, void>(key: 'second', (ctx) async {});
+      async.flushTimers();
+      expect(first.outcome, isA<Cancelled>());
+      expect(second.outcome, isA<Done<void>>(), reason: 'the queue moved on');
+      expect(solo.current, isNull);
+      expect(journal.take(), contains('[second] started'));
+    });
+  });
+
+  test('a keepWhile that gives the job up stops the next action', () {
+    runSolo((solo, journal, async) {
+      var started = 0;
+      var armed = false;
+      late final SoloJob<void> job;
+      job = solo.run<TestState, void>(
+        key: 'job',
+        keepWhile: (state) {
+          if (armed) {
+            armed = false;
+            job.cancel().ignore();
+          }
+          return true;
+        },
+        (ctx) async {
+          armed = true;
+          await ctx.wait(() async => started++);
+        },
+      );
+      async.flushTimers();
+      expect(started, 0, reason: 'the checkpoint threw before the action');
+      expect(job.outcome, isA<Cancelled>());
+    });
+  });
 }
 
 /// Runs [_onError] from the observer's error hook.

@@ -64,6 +64,11 @@ final class _SoloContext<S extends Object, W extends S, R>
       cancelOwnJob(cancelled);
       throw pendingCancel ?? cancelled;
     }
+    // `keepWhile` is the caller's code, and it may have given the job up
+    // while answering. A checkpoint that returned here would let the
+    // member that called it start its action on a job already marked.
+    throwIfCancelled();
+
     return current as W;
   }
 
@@ -103,7 +108,18 @@ final class _SoloContext<S extends Object, W extends S, R>
   Cancelled? beforeChildStart(JobBase<Object?> child) {
     // `run` has already asked `_own` whether the child is ours.
     final impl = child as _SoloJob<S, S, Object?>;
-    final rejection = impl._rejectStart(_solo._state);
+    final String? rejection;
+    try {
+      rejection = impl._rejectStart(_solo._state);
+    } on Object catch (error, stackTrace) {
+      // The kernel ends such a child `Failed` and hands the error to the
+      // body of the parent, which may catch it; `finish` alone tells no
+      // observer, and `ignore` closes the road an unobserved failure would
+      // have taken. The root pump announces a throwing rule itself, and a
+      // child of the same rules is announced here.
+      impl._notifyObserver(error, stackTrace);
+      rethrow;
+    }
     return rejection == null
         ? null
         : Cancelled.by(

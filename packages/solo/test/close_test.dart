@@ -1,6 +1,8 @@
 @Timeout(Duration(seconds: 5))
 library;
 
+import 'dart:async';
+
 import 'package:fake_async/fake_async.dart';
 import 'package:solo/solo.dart';
 import 'package:test/test.dart';
@@ -215,6 +217,50 @@ void main() {
       recorder.close();
     });
   });
+
+  test('a job added while a policy hook closed the controller is dropped', () {
+    runSolo((solo, journal, async) {
+      solo
+        ..run<TestState, void>(key: 'busy', (ctx) => pause(ctx, 50))
+        ..run<TestState, void>(key: 'x', (ctx) async {});
+      async.flushMicrotasks();
+      journal.take();
+      // Closing from the hook that the policy's own removal fires: the
+      // incoming job has passed the check at the top of `add` and is not
+      // in the queue yet.
+      SoloBase.observer = _ClosingObserver(solo, key: 'x');
+      final incoming = solo.run<TestState, void>(
+        key: 'x',
+        policy: Policy.replace,
+        (ctx) async {},
+      );
+      SoloBase.observer = journal;
+      async.flushTimers();
+      expect(incoming.isQueued, isFalse, reason: 'not left in a closed queue');
+      expect(incoming.outcome, isA<Cancelled>());
+      expect((incoming.outcome! as Cancelled).reason, SoloCancelReason.closed);
+      expect(solo.queue.isEmpty, isTrue);
+    });
+  });
+
+  test('a debug channel that throws does not hang close', () {
+    runSolo((solo, journal, async) {
+      SoloBase.debug = (message) {
+        if (message.contains('close')) {
+          throw StateError('debug boom');
+        }
+      };
+      var closed = false;
+      runZonedGuarded(
+        () => solo.close().then((_) => closed = true).ignore(),
+        (error, stackTrace) => journal.lines.add('zone: $error'),
+      );
+      SoloBase.debug = null;
+      async.flushTimers();
+      expect(closed, isTrue, reason: 'close still finishes');
+      expect(journal.take(), contains('zone: Bad state: debug boom'));
+    });
+  });
 }
 
 final class _CloseOnFinish extends Solo<TestState> {
@@ -260,5 +306,22 @@ final class _Recorder extends SoloBase<TestState> {
     super.publish(previous, current);
     final cancelled = watched?.isCancelled ?? false;
     order.add('publish ${cancelled ? 'cancelled' : 'not cancelled'}');
+  }
+}
+
+/// Closes the controller from the finish hook of the job with [key].
+final class _ClosingObserver extends SoloObserver {
+  _ClosingObserver(this._solo, {required this.key});
+
+  final SoloBase<Object> _solo;
+  final Object? key;
+  var _fired = false;
+
+  @override
+  void onFinish(SoloBase<Object> solo, Job<Object?> job) {
+    if (job.key == key && !_fired) {
+      _fired = true;
+      _solo.close().ignore();
+    }
   }
 }
