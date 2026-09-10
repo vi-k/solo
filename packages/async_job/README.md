@@ -339,20 +339,71 @@ provide this error handling. Start the work inside the callback and keep
 its futures and other asynchronous objects inside it, because it runs in
 a separate error zone.
 
-For a stream, `ctx.each(stream, (child, event) { ... })` starts and returns
-a child `Job<void>` that owns the subscription. The callback receives
-that child's `JobContext`. For example, `ctx.each(socket.messages,
-(child, message) => child.join(() => handle(message)))` processes messages
-in order and waits for each handler before delivering the next message.
-The first stream or callback error ends processing with a failed outcome;
-a thrown `Cancelled` ends it with cancellation.
+## Processing streams
 
-Keep the returned job as `subscription` to cancel it separately with
-`await subscription.cancel()`. Use `await subscription.value` to await
-completion and throw a failure or cancellation into the body, or
-`await subscription.done` to inspect the outcome. Cancelling this child
-does not itself mark the parent cancelled. An uncaught `Cancelled` from
-its `value` cancels the parent under the usual child outcome rules.
+`ctx.each(stream, onData)` subscribes to a stream and processes its events
+one at a time. It immediately returns a child `Job<void>` that owns the
+subscription. The callback receives that child's context and an event.
+
+For example, `saveMessages` below accepts a stream of messages and an
+asynchronous function that saves one message. `each` waits for each save
+before passing the next message to the callback:
+
+```dart
+Future<void> saveMessages(
+  Stream<String> messages,
+  Future<void> Function(String message) save,
+) async {
+  final job = Job<void>((ctx) async {
+    final processing = ctx.each(messages, (child, message) {
+      return child.join(() => save(message));
+    });
+    await processing.value;
+  });
+
+  await job.value;
+}
+```
+
+`processing.value` completes when the stream ends and the last save
+finishes. A stream or callback error ends processing; awaiting `value`
+throws it into the parent body and then to the caller of `saveMessages`.
+A thrown `Cancelled` follows the cancellation path. Use the child's
+context inside the callback, as `child.join` does here, so its cancellation
+is checked around the save operation.
+
+The returned Job also lets the parent stop listening separately. This
+example prints a tick every second, stops listening after 2.5 seconds,
+and continues the parent body:
+
+```dart
+Future<void> watchTicks() async {
+  final job = Job<void>((ctx) async {
+    final ticks = ctx.each(
+      Stream<int>.periodic(const Duration(seconds: 1), (index) => index + 1),
+      (child, tick) => print('Tick $tick'),
+    );
+
+    await ctx.wait(
+      () => Future<void>.delayed(const Duration(milliseconds: 2500)),
+    );
+    await ticks.cancel();
+    print('Parent continues');
+  });
+
+  await job.value;
+}
+```
+
+The output is `Tick 1`, `Tick 2`, then `Parent continues`. The stream has
+not ended when `ticks.cancel()` cancels the subscription. The call waits
+for the child to finish; cancelling that child does not itself cancel
+the parent.
+
+Use `childJob.value` when its failure or cancellation should be thrown
+into the body, or `childJob.done` to inspect its outcome without throwing.
+An uncaught `Cancelled` from the child's `value` cancels the parent under
+the usual child outcome rules.
 
 The parent waits for the child even if its body returns without awaiting
 it. An open stream therefore keeps the parent alive until the stream ends
