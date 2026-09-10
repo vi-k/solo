@@ -16,6 +16,7 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   final Future<T> Function(SoloContext<S, W> ctx) _body;
   final bool Function(W state)? _canStart;
   final bool Function(W state)? _keepWhile;
+  _AccumulationGroup<Object?>? _accumulation;
 
   /// Whether the controller has taken this handle already.
   ///
@@ -64,8 +65,10 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
         SoloBase._debug(() => 'remove $this: not cancellable');
         return;
       }
-      SoloBase._debug(() => 'remove $this: $cancelled');
       _solo._queue._jobs.remove(this);
+      // Diagnostics may add another event synchronously. Detach first so
+      // the group being cancelled can no longer receive it.
+      SoloBase._debug(() => 'remove $this: $cancelled');
     }
     super.cancelWith(cancelled, rejectable: rejectable);
   }
@@ -98,7 +101,11 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   void started() => _solo._running.add(this);
 
   @override
-  void finished() => _solo._onJobFinished(this);
+  void finished() {
+    _accumulation?._release();
+    _accumulation = null;
+    _solo._onJobFinished(this);
+  }
 
   @override
   JobContextBase createContext() => _SoloContext<S, W, T>(this);

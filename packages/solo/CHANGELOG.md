@@ -1,5 +1,10 @@
 ## 0.2.0
 
+- Add `collect` and `accumulate` factories returning `SoloAccumulator`:
+  gather events in a list or merge them into one value before execution.
+  `AccumulationPolicy` selects adjacent grouping, replacement at the
+  queue's tail with data transfer, or joining an existing queued group.
+  Groups use ordinary `SoloJob` lifecycle, state rules and cancellation.
 - Re-export `Job.then` and `ChainCancelReason` from the core. Continuations
   support cancellation chains and have their own `JobContext`; they do not
   inherit controller state, rules, observers or a queue slot.

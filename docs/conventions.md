@@ -46,7 +46,8 @@
   Проверки, которые должны работать в release, делаются через `throw`, а не
   `assert`.
 - Модификаторы классов. Типы, которые пользователь получает от движка
-  (`Job`, `SoloJob`, `JobContext`, `SoloContext`, `SoloQueue`), —
+  (`Job`, `SoloJob`, `JobContext`, `SoloContext`, `SoloQueue`,
+  `SoloAccumulator`), —
   `abstract interface class`,
   реализации приватные; реализовать их можно (моки, фейки), наследовать
   нельзя. Иерархии исходов — `sealed class` с `final class` наследниками.
@@ -91,8 +92,9 @@
   проза не трогается.
 - `tool/check_translations.py` — сверка переводов с оригиналами: порядок
   заголовков, число блоков кода и код внутри блоков без комментариев.
-  Запускать из корня после любой правки README или `doc/vs-bloc.md`;
-  проверяются три пары: README обоих пакетов и `vs-bloc.md`.
+  Запускать из корня после любой правки README, `doc/vs-bloc.md` или
+  `doc/accumulation.md`; проверяются пять пар: README трёх пакетов,
+  `vs-bloc.md` и `accumulation.md`.
 - `tool/doc_snippets.py` — стенды для фрагментов `doc/vs-bloc.md`: режет
   код прямо из markdown и собирает запускаемые файлы против bloc и против
   локального `solo`. Запускать после любой правки фрагментов или трасс в

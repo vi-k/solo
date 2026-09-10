@@ -99,8 +99,12 @@ final class _SoloQueue<S extends Object> implements SoloQueue {
     }
   }
 
-  _SoloJob<S, S, Object?>? _takeFirst() =>
-      _jobs.isEmpty ? null : _jobs.removeAt(0);
+  _SoloJob<S, S, Object?>? _takeFirst() {
+    if (_jobs.isEmpty) return null;
+    final job = _jobs.removeAt(0);
+    job._accumulation?._seal();
+    return job;
+  }
 
   List<_SoloJob<S, S, Object?>> _drain() {
     final drained = _jobs.toList();

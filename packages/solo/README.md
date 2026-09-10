@@ -466,6 +466,17 @@ constant per method, and the rule is that a result type gets a key of its
 own. `job`, `add` and `run` are public because the controller's own methods
 call them; the API a caller is meant to use is those methods.
 
+**Event accumulation.** Create an accumulator once with `collect` to keep
+events in a list, or `accumulate` to merge them into one value. Its
+`add(event)` method gathers input for a queued `SoloJob`; the handler
+changes state when that job runs. `AccumulationPolicy.adjacent` joins
+only the queue's tail, `replace` transfers the input to a new job at the
+tail and cancels the old one, and `join` adds to the existing queued
+group on its current spot. Only groups of the same accumulator can join;
+running groups never accept new events. See the
+[settings and logs recipe](doc/accumulation.md) for examples, ordering
+and the outcome of each handle.
+
 **Stream.** `Solo.stream` is a broadcast stream of every state change, in
 order, delivered on the next microtask — the stream is asynchronous. The
 source of truth is `state`: by the time an event arrives, `state` may

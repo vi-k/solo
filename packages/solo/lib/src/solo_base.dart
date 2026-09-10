@@ -8,6 +8,7 @@ import 'observer.dart';
 import 'policy.dart';
 import 'solo_cancel_reason.dart';
 
+part 'accumulator.dart';
 part 'job.dart';
 part 'job_context.dart';
 part 'queue.dart';
@@ -117,6 +118,70 @@ abstract class SoloBase<S extends Object> {
         cancellable: cancellable,
         describe: describe,
         observer: _jobObserver,
+      );
+
+  /// Creates an accumulator that collects events into an immutable list.
+  ///
+  /// No job is created until [SoloAccumulator.add]. Events retain their order
+  /// and duplicates; the list is copied once when the group leaves the queue.
+  /// The handler receives a regular context and runs under the same rules as
+  /// [job]. It changes state only when it runs, never when an event is added.
+  /// [policy] chooses the waiting group and its position; [key] is an ordinary
+  /// job key and does not make different accumulators compatible.
+  SoloAccumulator<E, T> collect<W extends S, E, T>(
+    Future<T> Function(SoloContext<S, W> ctx, List<E> events) handler, {
+    Object? key,
+    AccumulationPolicy policy = AccumulationPolicy.adjacent,
+    bool Function(W state)? canStart,
+    bool Function(W state)? keepWhile,
+    bool cancellable = true,
+    String Function()? describe,
+  }) =>
+      _SoloAccumulator<S, W, E, List<E>, T>(
+        this,
+        handler,
+        seed: (event) => <E>[event],
+        merge: (events, event) => events..add(event),
+        snapshot: List<E>.unmodifiable,
+        key: key,
+        policy: policy,
+        canStart: canStart,
+        keepWhile: keepWhile,
+        cancellable: cancellable,
+        describe: describe,
+      );
+
+  /// Creates an accumulator holding one value, combined synchronously by
+  /// [merge] on each addition after the first. Nullable events are supported.
+  ///
+  /// [merge] must be pure: do not mutate either argument, the controller or
+  /// its queue. Errors escape from [SoloAccumulator.add] without changing the
+  /// previous value. A recursive add from merge throws [StateError].
+  /// Only the latest merged value is retained; no event history is stored.
+  /// The handler, rules, key and policy follow [collect]. No job is created
+  /// until the first event, and no state changes before the handler runs.
+  SoloAccumulator<E, T> accumulate<W extends S, E, T>(
+    Future<T> Function(SoloContext<S, W> ctx, E value) handler, {
+    required E Function(E accumulated, E incoming) merge,
+    Object? key,
+    AccumulationPolicy policy = AccumulationPolicy.adjacent,
+    bool Function(W state)? canStart,
+    bool Function(W state)? keepWhile,
+    bool cancellable = true,
+    String Function()? describe,
+  }) =>
+      _SoloAccumulator<S, W, E, E, T>(
+        this,
+        handler,
+        seed: (event) => event,
+        merge: merge,
+        snapshot: (value) => value,
+        key: key,
+        policy: policy,
+        canStart: canStart,
+        keepWhile: keepWhile,
+        cancellable: cancellable,
+        describe: describe,
       );
 
   /// Queues [job] and returns it, or the existing job found by

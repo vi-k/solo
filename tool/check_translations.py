@@ -3,8 +3,10 @@
 
 Pairs checked:
   * packages/solo/README.md          <-> packages/solo/README.ru.md
+  * packages/async_job/README.md     <-> packages/async_job/README.ru.md
   * packages/flutter_solo/README.md  <-> packages/flutter_solo/README.ru.md
   * packages/solo/doc/vs-bloc.md     <-> docs/ru/solo/vs-bloc.md
+  * packages/solo/doc/accumulation.md <-> docs/ru/solo/accumulation.md
 
 Compares:
   * the sequence of heading levels (count and order),
@@ -38,6 +40,10 @@ PAIRS = [
     (
         REPO / "packages" / "solo" / "doc" / "vs-bloc.md",
         REPO / "docs" / "ru" / "solo" / "vs-bloc.md",
+    ),
+    (
+        REPO / "packages" / "solo" / "doc" / "accumulation.md",
+        REPO / "docs" / "ru" / "solo" / "accumulation.md",
     ),
 ]
 
