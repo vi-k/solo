@@ -149,9 +149,6 @@ await job.cancel(); // returns when the job has actually stopped
 print(job.outcome); // Cancelled(manual)
 ```
 
-`cancelAll()` does that to the queue and the running job at once, and
-`close()` does it once and for good.
-
 `run<ProfileState, String>` accepts every `ProfileState` and returns a
 `String`. Inside the body `ctx.emit` is the only way to write
 the state, and `ctx.wait` awaits a future the way `await` does, except

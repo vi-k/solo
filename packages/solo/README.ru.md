@@ -155,9 +155,6 @@ await job.cancel(); // возвращается, когда задача дей�
 print(job.outcome); // Cancelled(manual)
 ```
 
-`cancelAll()` делает то же самое с очередью и выполняющейся задачей разом,
-а `close()` — один раз и насовсем.
-
 `run<ProfileState, String>` принимает любое `ProfileState` и возвращает
 `String`. Внутри тела `ctx.emit` — единственный способ записать
 состояние, а `ctx.wait` ждёт future так же, как `await`, но сдаётся в тот
