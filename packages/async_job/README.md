@@ -85,7 +85,8 @@ final outcome = await job.done; // Cancelled(manual)
   `started: false`. The delay in the example lets the body start first.
 - **`ctx.join(Database.open)`** calls `Database.open` and returns the opened
   database. If cancellation arrives during opening, it waits for the call
-  to finish before throwing `Cancelled` in the body.
+  to finish and throws `Cancelled` if opening succeeded. If opening fails,
+  it throws the original error, even after cancellation.
 - **`discard: (database) => database.close()`** closes the database if the
   job ends with cancellation or an error. With `Done(database)`, it stays
   open for the caller. Cleanup also covers cancellation after
@@ -285,11 +286,13 @@ For an operation already in progress, choose whether cancellation should
 wait for it to finish, stop waiting immediately or be delayed until the
 operation ends:
 
-- `ctx.join(action)` calls the action and waits for its result. If
-  cancellation arrives during the call, it waits for the result and then
-  throws `Cancelled`. Use it when work must finish or stop before cleanup,
-  such as a command already sent to a device. If you supplied a cleanup
-  callback for the returned value, it is awaited before the throw.
+- `ctx.join(action)` calls the action and waits for it to finish. If
+  cancellation arrives during the call and the action succeeds, `join`
+  throws `Cancelled` instead of returning the value. A supplied cleanup
+  callback for that value is awaited before the throw. If the action
+  fails, its original error is thrown even after cancellation; the job's
+  accepted cancellation remains in effect. Use `join` when work must
+  finish or stop before cleanup, such as a command already sent to a device.
 - `ctx.wait(action)` also calls the action and returns its result, but
   throws `Cancelled` immediately if cancellation arrives while waiting.
   The action continues. Its eventual result is dropped or passed to the
