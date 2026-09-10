@@ -20,7 +20,7 @@ This document assumes the [README's Concepts][concepts]: `Job` and
 beside it, `ctx.wait` and the cleanup registered with a value,
 `ctx.onCancel`, `SoloObserver` and the queue.
 
-[concepts]: https://github.com/vi-k/solo/blob/main/packages/solo/README.md#concepts
+[concepts]: https://github.com/vi-k/solo/blob/main/packages/solo/README.md#state-and-rules
 
 Every snippet below was compiled and run — the bloc ones against bloc 9.2.1
 with bloc_concurrency 0.3.0, the `solo` ones against `solo` 0.2.0 — and

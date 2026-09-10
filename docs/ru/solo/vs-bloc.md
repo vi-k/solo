@@ -24,7 +24,7 @@ bloc — трансформер на обработчик, `emit` действи
 `keepWhile`, `ctx.wait` и уборку, зарегистрированную вместе со значением,
 `ctx.onCancel`, `SoloObserver` и очередь.
 
-[concepts]: https://github.com/vi-k/solo/blob/main/packages/solo/README.ru.md#понятия
+[concepts]: https://github.com/vi-k/solo/blob/main/packages/solo/README.ru.md#состояние-и-правила
 
 Каждый фрагмент кода ниже компилировался и запускался — фрагменты на bloc
 против bloc 9.2.1 с bloc_concurrency 0.3.0, фрагменты на `solo` против

@@ -1,53 +1,14 @@
 # solo
 
-State management for controllers with a lifecycle: one job at a time,
-exclusive state ownership, declarative rules and cooperative cancellation.
-Pure Dart, no Flutter dependency;
-[`flutter_solo`](https://pub.dev/packages/flutter_solo) adds the
-`ValueListenable` face.
+`solo` manages state and asynchronous work in Dart. A controller holds
+the current state and processes jobs one at a time. Each job can declare
+which states allow it to start and continue, and callers can await its
+result or request cancellation.
 
-## Why
-
-`solo` is a controller: it owns one state, runs jobs over that state one
-at a time, and cancels them by rules you declare instead of flags you
-remember to check. It is for what has a lifecycle — a screen, a device, a
-session — where the state decides what may run and work has to be dropped
-the moment it stops matching. Where a value merely changes, a
-`ValueNotifier` is enough; where work has no state to guard,
-[async_job](https://pub.dev/packages/async_job) alone will do.
-
-The list below is about bloc because that is where the package grew from,
-and because bloc is where these problems have names:
-
-1. the event queue cannot be managed;
-2. when every event is `sequential`, a single one of them cannot be made
-   `restartable` without moving it to a separate queue;
-3. events running in parallel write to one and the same state;
-4. after cancellation the handler keeps running until it checks
-   `emit.isDone` itself;
-5. you cannot await your own event: the `stream` tells you the state
-   changed, not who changed it;
-6. from the outside you want to call a method, not build an event and
-   `add` it.
-
-[solo and bloc, side by side](https://github.com/vi-k/solo/blob/main/packages/solo/doc/vs-bloc.md)
-takes ten scenarios from different domains, solves each one in bloc
-first — the workaround an experienced team would actually write — and then
-in `solo`.
-
-What is not here, so that the minute you spend deciding is honest: no
-parallel root jobs — one at a time is the subject of the package, not a
-limit of its engine — no retry, no timeout, no pool, no dependency
-injection, no persistence, and no equality check between states.
-
-The job itself — its lifecycle, its context, the outcomes and the
-observer — lives in [async_job](https://pub.dev/packages/async_job), and `solo` adds
-the state, the queue and the rules on top. The package re-exports it
-whole, so `package:solo/solo.dart` is the only import you need. Its types
-come with it and show up in autocomplete: `JobObserver` is the one you may
-want, while `JobContext`, `JobBase`, `JobContextBase`, `DeferredJob` and
-`JobStatus` are there for an engine of your own and are explained in the
-`async_job` README, not here.
+Use it for screens, sessions and devices where operations share state
+and need an explicit order. The package has no Flutter dependency.
+[`flutter_solo`](https://pub.dev/packages/flutter_solo) adds a controller
+that implements `ValueListenable` for Flutter widgets.
 
 ## Install
 
@@ -55,17 +16,25 @@ want, while `JobContext`, `JobBase`, `JobContextBase`, `DeferredJob` and
 dart pub add solo
 ```
 
-For Flutter, take `flutter_solo` instead — it re-exports all of `solo`:
+For Flutter, install `flutter_solo`. It re-exports `solo`:
 
 ```sh
 flutter pub add flutter_solo
 ```
 
+`solo` re-exports [async_job](https://pub.dev/packages/async_job), which
+provides jobs, cancellation and resource cleanup. One import,
+`package:solo/solo.dart`, gives access to both APIs. You do not need to
+learn the underlying package before using the examples below.
+
 ## Quick start
 
-Represent loading, success and failure as separate immutable states:
+A controller exposes methods for application operations. Here, `load()`
+loads a profile name and reports progress through four immutable states:
 
 ```dart
+import 'package:solo/solo.dart';
+
 sealed class ProfileState {
   const ProfileState();
 }
@@ -91,11 +60,17 @@ final class Failure extends ProfileState {
 }
 ```
 
-The controller is a plain class with plain methods. Each method builds a
-job and hands it to the queue; the handle it returns is not a `Future`, so
-calling the method without `await` is legal and raises no lint:
+The example API returns a name after a short delay. Replace it with your
+application's API client:
 
 ```dart
+class ProfileApi {
+  Future<String> fetchName() => Future.delayed(
+        const Duration(milliseconds: 20),
+        () => 'Ada Lovelace',
+      );
+}
+
 final class ProfileController extends Solo<ProfileState> {
   final ProfileApi api;
 
@@ -116,89 +91,214 @@ final class ProfileController extends Solo<ProfileState> {
 }
 ```
 
-The body publishes `Loading` and `Loaded`. On failure, `onError` returns
-`Failure`; on cancellation, `onCancel` returns `Initial`. The engine applies
-that state after the body, children and cleanup, before the next queued job.
-These handlers are skipped if an external state change violates the job's
-rules. They preserve the job's `Failed` or `Cancelled` outcome.
+`run<ProfileState, String>` creates and queues a job. `ProfileState` is
+the state type its body can work with; `String` is its result type.
+The body receives a context, `ctx`, which provides state updates and
+cancellation-aware waiting:
 
-From the outside:
+- `ctx.emit` updates the controller's state.
+- `ctx.wait` waits for the API response, or throws `Cancelled` if the job
+  accepts cancellation while waiting.
+- `onError` returns the state to publish if the job fails.
+- `onCancel` returns the state to publish if a started job is cancelled.
+
+The state handlers run after the body and its cleanup. In this example,
+the state becomes `Loaded` on success, `Failure` on error, or `Initial`
+on cancellation. Failure and cancellation remain the job's outcome even
+when a handler updates the state.
+
+`Policy.droppable` and `key: 'load'` make repeated calls share the queued
+or running load. A second call returns the existing job. Once that job
+finishes, another call can start a new load.
+
+The caller uses the returned `Job<String>` to await this particular load:
 
 ```dart
-final profile = ProfileController(ProfileApi());
-final subscription = profile.stream.listen(print);
+Future<void> main() async {
+  final profile = ProfileController(ProfileApi());
+  final subscription = profile.stream.listen(print);
+  try {
+    final job = profile.load();
+    profile.load(); // the existing job is returned
 
-final job = profile.load();
-profile.load(); // droppable: the same job, not a second one
-
-print(await job.value); // Ada Lovelace; a failure is rethrown here
-if (profile.state case Loaded(:final name)) {
-  print(name);
+    print(await job.value);
+    if (profile.state case Loaded(:final name)) {
+      print(name);
+    }
+  } finally {
+    await subscription.cancel();
+    await profile.close();
+  }
 }
-
-await subscription.cancel();
-await profile.close();
 ```
 
-Cancelling is the caller's side of the same handle:
+`profile.state` is available synchronously. `profile.stream` broadcasts
+changes asynchronously. `job.value` returns the loaded name, or throws
+the job's error or `Cancelled`. The `finally` block releases the listener
+and closes the controller even if loading fails.
+
+Cancellation uses the same job object. This separate example requests
+cancellation immediately, so the job may still be in the queue:
 
 ```dart
-final job = profile.load();
+Future<void> cancelLoading() async {
+  final profile = ProfileController(ProfileApi());
+  final job = profile.load();
 
-await job.cancel(); // returns when the job has actually stopped
-print(job.outcome); // Cancelled(manual)
+  await job.cancel();
+  print(job.outcome); // Cancelled(manual)
+  await profile.close();
+}
 ```
 
-`run<ProfileState, String>` accepts every `ProfileState` and returns a
-`String`. Inside the body `ctx.emit` is the only way to write
-the state, and `ctx.wait` awaits a future the way `await` does, except
-that it gives up the moment the job is cancelled. `Policy.droppable` with
-`key: 'load'` means that a second `load()` while the first one is still
-queued or running returns that first job instead of starting a second.
+`cancel()` waits for the job to finish, including cleanup if it started.
+A job cancelled before its body starts does not call `onCancel`.
+Jobs can start child jobs as part of their work; the starting job is
+their parent and waits for them before finishing.
+The next queued job starts only after the previous job finishes its body,
+children, cleanup and state handler.
 
-`profile.state` gives the current state synchronously; `profile.stream`
-is a broadcast stream of changes, delivered one microtask later.
-Root jobs run one at a time. The next job starts after the previous job's
-body, children, cleanup and final state handler have finished.
+The sections below explain results, queue policies and cancellation in
+more detail. In particular, cancellation of a job does not automatically
+stop an API request that has already been sent.
 
-`close()` stops accepting work, cancels queued jobs, requests cancellation
-of the running job and waits for it to finish. Jobs submitted after
-closing immediately finish with `Cancelled(closed)`.
+## Jobs and results
 
-## Concepts
+A `Job<T>` represents one operation and its eventual outcome. It is not a
+`Future`: calling `profile.load()` without `await` is allowed. Choose how
+to handle its result at the call site:
 
-**State.** One immutable object of type `S`, usually a sealed hierarchy
-with union interfaces (`NotDisposed`, `Initialized`) so that jobs can
-declare a working type wider than a single class. `solo.state` is readable
-by anyone at any time; only jobs write.
+| Member | Use |
+| --- | --- |
+| `job.value` | Await `T`; throws on failure or cancellation. |
+| `job.done` | Await an `Outcome<T>` without throwing. |
+| `job.outcome` | Read the outcome synchronously after completion. |
+| `job.cancel()` | Request cancellation and wait for completion. |
+| `job.ignore()` | Mark the outcome as handled without waiting. |
 
-**Controller.** The owner of the state and of the queue. The hierarchy is
-linear: `SoloBase<S>` is the engine and `state`; `Solo<S>` adds a broadcast
-`stream`; `SoloListenable<S>` in `flutter_solo` adds `ValueListenable`.
-They differ only in how a change is delivered.
+`Outcome<T>` has three cases. `Done` carries the value, `Failed` carries
+the error and stack trace, and `Cancelled` carries the cancellation reason:
 
-**Job.** A unit of work: an `async` body `Future<T> Function(SoloContext)`,
-an optional `key`, rules, and a handle `Job<T>`. `job(...)` builds one
-without queueing it, `add(job, policy: ...)` queues it, `run(...)` does both
-in one call; all three return a `SoloJob<T>`, which is `Job<T>` plus
-`isQueued` — the queue belongs to the controller, so that member is not on
-the handle every job has. `describe: () => 'zoom: $zoom'` labels the job for
-logs, the observer and `toString`, which prints `Job(key: label)` instead of
-`Job(key)`. At most one root job runs at a time, and while it runs no other
-**root** job of this controller writes the state.
+```dart
+switch (await profile.load().done) {
+  case Done(:final value):
+    print('loaded $value');
+  case Failed(:final error):
+    print('not loaded: $error');
+  case Cancelled(:final reason):
+    print('gave up: $reason');
+}
+```
 
-**Working type `W`.** The subtype of `S` a job agrees to work with. The
-body sees `ctx.state` already narrowed to `W`. The type is checked before
-the job starts, on every state change while the body runs, and on every
-read through the context. Once the body has ended — while the children
-finish and the cleanup runs — the rules let the job go: there is no body
-left for them to guard, and the value it returned is on its way out.
+A failed job does not stop the queue. Its error is reported and the next
+job can run. Cancellation is a separate outcome: closing a controller,
+removing a queued job or invalidating its state rules can all cancel work
+without indicating an application failure.
 
-**Rules.** `canStart` is checked once, when the job is taken from the
-queue; failing it drops the job with `Cancelled(rules: canStart)` and
-`started: false`. `keepWhile` is checked continuously — and also before the
-start, together with `canStart`: a job whose invariant is already broken
-never starts, instead of starting and dying on its first read.
+Every failure reaches the controller's error hook and observer. A failed
+job whose outcome is never accessed through `done`, `value` or `ignore()`
+also reports an unhandled error to the Dart zone in which it was created.
+Use `ignore()` when error reporting elsewhere is sufficient; leaving a
+job unawaited does not by itself mark the error as handled. See
+[Error reporting and observation](#error-reporting-and-observation).
+
+### Creating and scheduling jobs
+
+Within a controller, `job(...)` creates a job without scheduling it,
+`add(job, policy: ...)` queues a job, and `run(...)` combines both steps.
+All three return `SoloJob<T>`, which implements `Job<T>` and adds
+`isQueued`. A controller normally exposes domain methods such as `load()`
+or `setZoom()` so callers do not need to assemble jobs themselves.
+
+A job can have a `key` for queue policies and a lazy `describe` callback
+for diagnostics. For example, `describe: () => 'zoom: $zoom'` supplies the
+label used by logs, observers and `toString()`: `Job(key: label)`.
+Without a description, the representation is `Job(key)`.
+
+## Queue and policies
+
+A job added to a controller's queue is a root job. Only one root job runs
+at a time. It holds the queue until its body, children, cleanup and final
+state handler finish. Child jobs can run within that interval; they are
+described in [Children and streams](#children-and-streams).
+
+Each call chooses a policy. Policies other than `sequential` use the job's
+key to find related work:
+
+| Policy | When a job with the same key already exists |
+| --- | --- |
+| `Policy.sequential` | Add the new job to the queue. |
+| `Policy.droppable` | Return the existing queued or running job; discard the new one. |
+| `Policy.replace` | Remove cancellable queued jobs with that key, then enqueue the new job. |
+| `Policy.restart` | Do the same as `replace` and request cancellation of the running job with that key. |
+
+`restart` requests cancellation when the new job is submitted. The new
+job still waits for the current job to finish; their bodies do not overlap.
+A job that refuses cancellation can therefore delay its replacement.
+
+Use a distinct key for each operation and result type. Reusing a key for
+both `Job<String>` and `Job<void>` can make `droppable` return an
+incompatible job and throw `TypeError`. An enum with one key per method
+is a convenient way to avoid this. A non-sequential policy with a null
+key throws `ArgumentError`, including in release builds.
+
+The controller's `queue` exposes `jobs`, `remove`, `removeWhere`, `clear`
+and `lastWhere`. Removal methods affect queued jobs only. They preserve
+jobs with `cancellable: false` unless called with `force: true`.
+`add(job, first: true)` inserts at the front. Time-delayed accumulator
+groups can let ready jobs pass; see [Event accumulation](#event-accumulation).
+
+### Cancelling and closing a controller
+
+`cancelAll()` clears cancellable queued jobs, requests cancellation of the
+running job and waits for it to finish. The controller continues accepting
+work. `cancelAll(force: true)` also removes non-cancellable queued jobs;
+`force` does not change whether the running job accepts cancellation.
+
+`close()` stops accepting work, cancels every queued job with
+`Cancelled(closed)` and requests cancellation of the running job. It waits
+for that job, including children and cleanup, even if cancellation is
+refused. Repeated calls return the same future. Later submissions return
+already cancelled jobs rather than throwing, so callers do not need an
+`isClosed` check before submitting.
+
+Closing does not itself release resources owned by your application or
+select a final application state. Put that work in a controller method
+and await it before `close()`, as in the camera example below. A state
+handler of the cancelled job may still update state while closing.
+
+Do not await `close()` or `cancelAll()` from the current job's body or
+cleanup: either would wait for the very job making the call. A body can
+finish by returning or cancel itself by throwing `Cancelled('reason')`.
+
+## State and rules
+
+`Solo<S>` stores one immutable state of type `S`. Use separate classes
+when states allow different operations, and shared base types when an
+operation can span several states.
+
+The first type argument of `run<W, T>` is the job's working state type,
+`W extends S`. The body reads `ctx.state` as `W`. For example, a camera
+operation declared with `run<Ready, void>` can start only in `Ready`.
+
+Three rules govern state access:
+
+| Rule | Checked when |
+| --- | --- |
+| Working type `W` | Before start, on other state updates while the body runs, and at state checkpoints. |
+| `canStart` | Once, when the job is about to start. |
+| `keepWhile` | Before start, on other state updates while the body runs, and at state checkpoints. |
+
+If a start check fails, the job ends with `Cancelled` and `started: false`.
+A failing `W` or `keepWhile` check during execution cancels the job with
+`RulesCancelReason`. These rules reject unsuitable work; they do not keep
+it queued until the state becomes suitable.
+
+For example, recording can require available storage at start and an
+unpaused camera throughout execution. In this fragment, `Ready`, `camera`
+and `store` belong to the application. `ctx.each` processes the stream;
+its full lifecycle is explained under
+[Children and streams](#children-and-streams).
 
 ```dart
 Job<void> record() => run<Ready, void>(
@@ -212,40 +312,91 @@ Job<void> record() => run<Ready, void>(
     );
 ```
 
-The recording stops itself the moment somebody pauses: nothing in the body
-checks `paused`, and there is no `if` left to forget.
+When another state update sets `paused` to true, `keepWhile` cancels the
+recording. The callback does not need to repeat that condition.
 
-**Cancellation.** Cooperative: Dart cannot interrupt somebody else's
-`await`. A cancelled job learns about it the next time it touches the
-context — the members that wait or start something throw the job's
-`Cancelled` once the job is marked, while `log`, `job`, the three that
-register a cleanup (`onDispose`, `onDiscard`, `disown`) and
-`ctx.unattended` go on working. So a body does not `await` on its own:
-every call goes through the context, and the member you pick says what a
-cancellation does to that call. `ctx.wait(() => ...)` returns as soon as
-either the action or the cancellation arrives. `ctx.join(() => ...)` waits
-for all of the action and gives up afterwards. `ctx.uncancellable(() => ...)`
-defers cancellation until the action finishes; the next cancellation
-checkpoint throws it. Plain code after the call can still run.
-`ctx.unattended(() => ...)` does not wait at all: it hands the work
-to the engine and comes back, and whatever that work throws — now or long
-after the job is over — reaches `onError` instead of the process. Where
-there is no
-call to wrap — a loop over work of your own — `ctx.check()` is the same
-check on its own. A bare `await` is right in one place only: a call with
-no body code after it — the last cleanup of a job, the way the example
-closes its camera, or the `finally` of a job already cancelled, where
-every member would throw at entry anyway. A bare `unawaited(...)` stands
-in the same place as a bare `await`: outside the family, with its failure
-going to the zone; `ctx.unattended` is what to write instead.
+### Reading and updating state
 
-**The action is not stopped.** The wait ends, the work does not. The action
-runs to its end and its result is dropped on the floor, which is fine for a
-read you can abandon and wrong for anything that must actually stop, or
-that must not be started twice at once. Hand the cancellation to the work
-itself with `ctx.onCancel(callback)`, which fires the moment the job is
-marked, and wait for the work with `ctx.join` rather than walking away
-from it:
+`ctx.state`, `ctx.stateAs<T>()` and `ctx.check()` check cancellation and
+state rules. `stateAs<T>()` additionally requires the state to be `T`;
+a mismatch cancels the job. Waiting methods use state checkpoints too.
+
+`ctx.emit(next)` updates the state synchronously. It allows a job to
+publish a state outside its own working type: an initialization job may
+finish by emitting `Ready`. A later state checkpoint will reject that
+state if it does not match `W`, so such a transition should be the body's
+last state-dependent step. `canStart` is never repeated after an emit.
+
+Other running bodies are checked after a state update. A job's own emit
+is excluded from that rule check, but still checks cancellation before
+and after writing. A synchronous hook or listener that causes another
+state change can therefore cancel the emitting job before `emit` returns.
+
+Rules stop cancelling a job once its body has ended. Manual cancellation,
+controller closing and parent cancellation can still reach it while it
+waits for children or cleanup. Jobs with state handlers also keep checking
+whether those handlers may update state; see
+[State after failure or cancellation](#state-after-failure-or-cancellation).
+
+### Observing state
+
+Anyone holding the controller can read `state`. `Solo.stream` is a
+broadcast stream of every update, in order, delivered asynchronously on
+a microtask. It does not replay the initial state. By the time an event
+arrives, `state` may already contain a newer value. Equality is not checked;
+emitting an equal state still produces an event.
+
+The controller types differ in how they deliver updates:
+
+| Type | Provides |
+| --- | --- |
+| `SoloBase<S>` | State, jobs, queue and rules. |
+| `Solo<S>` | All of `SoloBase` plus a broadcast `stream`. |
+| `SoloListenable<S>` | All of `Solo` plus Flutter's `ValueListenable<S>`. |
+
+`SoloListenable` listeners run synchronously, in subscription order.
+Its stream remains asynchronous.
+
+## Cancellation and waiting
+
+Cancellation is cooperative. Dart cannot interrupt an arbitrary `await`,
+and marking a job cancelled does not stop its underlying I/O. Context
+methods provide checkpoints so the body can respond to cancellation.
+
+`ctx.join(action)` calls the operation and waits for its result. Before
+starting it and before returning a successful result, it checks the job's
+cancellation and state rules. For example, `ctx.join(Database.open)`
+opens the database and returns it only after those checks succeed.
+
+Use `ctx.wait(action)` when cancellation should end the wait immediately.
+It also calls the operation and returns its result on success. Choose the
+method according to what may happen to that operation:
+
+| Method | If the job accepts cancellation while waiting |
+| --- | --- |
+| `ctx.wait(action)` | Throws `Cancelled` without waiting for the operation to finish. |
+| `ctx.join(action)` | Waits for the operation; checks cancellation before returning a successful result. |
+| `ctx.uncancellable(action)` | Holds ordinary cancellation until the action finishes; the next checkpoint throws it. |
+
+If an operation awaited by `join` fails, its error is thrown into the
+body even if the job has accepted cancellation. The job's final outcome
+still remains `Cancelled`. The cancellation check after `join` applies
+to successful operation results.
+
+`wait` suits a request whose result can be abandoned. The request can
+continue after the job has finished and the next job has started.
+`join` suits work that must finish before the queue proceeds, such as a
+device command or resource release. Neither method stops the operation
+itself.
+
+### Stopping the underlying operation
+
+Use `ctx.onCancel(callback)` to connect job cancellation to an operation's
+own cancellation mechanism. This callback runs synchronously when the job
+is marked cancelled. Combine it with `join` when the next job must wait
+for the operation to stop.
+
+For a player whose API accepts a cancellation token:
 
 ```dart
 Job<void> seek(Duration position) => run<Ready, void>(
@@ -254,102 +405,141 @@ Job<void> seek(Duration position) => run<Ready, void>(
       (ctx) async {
         final token = CancelToken();
         ctx.onCancel(token.cancel);
-        // The device stops on its own, and `join` waits for it, so the
-        // next seek never overlaps this one and the job gives up only
-        // once the device has come back.
+        // Wait for the device to stop before another seek starts.
         await ctx.join(() => _player.seek(position, cancelToken: token));
         ctx.emit(ctx.state.copyWith(position: position));
       },
     );
 ```
 
-**Taking ownership.** What the body opens it registers where it opens it,
-and the engine releases it after the children and before the outcome —
-`close()` waits for that release as well:
+The token requests that the player stop seeking. `join` waits for that
+request to finish, so a replacement seek starts only afterwards. This
+depends on the player's API actually responding to the token.
 
-```dart
-Job<void> load() => run<Idle, void>(
-      key: 'load',
-      (ctx) async {
-        final db = await ctx.join(
-          Database.open,
-          dispose: (db) => db.close(),
-        );
+`ctx.onCancel` returns a function that unregisters the callback. It is a
+cancellation signal for the operation, whereas the `onCancel` parameter
+of `run` computes a final controller state after the job's cleanup.
 
-        final rows = await ctx.join(db.readAll);
-        ctx.emit(Loaded(rows));
-      },
-    );
-```
+### Protecting a step or a whole job
 
-One line covers the whole life of that database: the value that never
-reached the body — a cancellation throws inside the context call, so
-`join` would otherwise drop it and `wait` never had it at all — and
-everything after it, an error, a cancellation between two steps, a
-cancellation landing after the `return`. **One value, one registration:**
-a `ctx.onDispose(db.close)` next to it would be a second one, and the
-database would be closed twice.
+Use `ctx.uncancellable(action)` for a step that must complete once started,
+such as committing a transaction. Manual cancellation, parent cancellation
+and closing are held while the action runs. The job is not marked by
+those requests yet, so its cancellation callbacks and child cancellation
+cascade are also delayed.
 
-`dispose` here and not `discard` because this body keeps the database to
-itself: it reads the rows, emits them and closes on the way out, whatever
-the outcome. `discard` is for a value the body returns or hands outside —
-on the successful path it does nothing, and that leak is the one mistake
-the engine cannot catch.
+When the outermost section finishes, a held request is applied. The next
+checkpoint throws `Cancelled`; ordinary code immediately after the call
+can still execute. Keep all required work inside the section and always
+await it. An unawaited section can outlive the job and lose a held request.
+Sections can nest.
 
-An ordinary `try`/`finally` still works, but it is no longer the main
-form; the stack scales to several resources, unwinds in reverse, runs
-after the children rather than before them, and reaches past the `return`.
-In reverse while the outcome holds: a `discard` skipped because the body
-had returned is taken up in a second pass if a cancellation lands during
-the unwinding, and then it runs after disposers registered below it.
+`cancellable: false` on a job refuses these requests altogether. Queue
+removal normally preserves such jobs, but `force: true` and `close()`
+can discard them before they start. `close()` waits for a running
+non-cancellable job.
 
-**Handing a resource over.** When the body gives the resource to someone
-else — to the state, most often — the registration has to go before the
-hand-over can throw. `check`, `disown` and `emit` are all synchronous, so
-nothing can slip between them:
+Neither mechanism disables state rules. A job whose `W` or `keepWhile`
+no longer matches is still cancelled. A job that must work in every state
+needs the base type `S` and no `keepWhile` restriction.
 
-```dart
-ctx
-  ..check()
-  ..disown(db)
-  ..emit(Ready(db));
-```
+### Ordinary await and context lifetime
 
-If `check` throws, the database is still on the stack and the cleanup
-closes it — the state never got it. If `emit` throws after writing (a hook
-that sets the state reentrantly can do that), the state holds the database
-and the registration is already gone. For an asynchronous hand-over the
-pair goes into one `ctx.uncancellable(...)`, and inside the section the
-step goes with a bare `await`: `ctx.join` there would throw after the step
-on a cancellation by the rules, and the `disown` would never happen.
+Use context waiting methods for operations during the body, and
+`ctx.check()` between steps of a loop that has no asynchronous operation
+to wrap. A plain `await` does not respond to job cancellation and can
+delay completion and `close()` indefinitely.
 
-**State after failure or cancellation.** The optional `onError` and
-`onCancel` parameters of `run` and `job` are synchronous state handlers.
-They receive the current `S` and the error with its stack trace, or the
-`Cancelled` outcome, and return the next state. The engine calls the
-matching handler after the body, children and cleanup, before releasing
-the queue and calling `onFinish`. The outcome is already fixed: a handler
-cannot turn failure or cancellation into success. It does not observe the
-outcome for the caller; use `job.done`, `job.value` or `job.ignore()`.
+Plain `await` is appropriate when intentionally waiting through
+cancellation, including inside cleanup or inside an `uncancellable`
+section. Cancellation-aware waiting methods reject a job that is already
+cancelled, so they cannot perform its cleanup.
 
-Neither handler runs for `Done`, a dropped duplicate, or a job whose body
-never started. A handler error is reported through the controller's error
-hook and observer without replacing the original outcome. Keep these
-functions limited to computing the next state; resource cleanup belongs
-in `ctx.onDispose` or `ctx.onDiscard`.
+Do not retain a context to start work after its job ends. Methods such as
+`emit`, `run`, `each`, `wait`, `join` and `uncancellable` then throw
+`StateError`. Reads and `check` remain available after normal completion;
+after cancellation they still throw `Cancelled`. During registered cleanup,
+state reads and body operations are unavailable. Capture the resources
+needed for cleanup in its closure. `log`, `job`, cleanup registration,
+`disown` and `unattended` remain available during cleanup. `log` itself
+does not throw on cancellation or completion.
 
-An external state change that violates `W` or `keepWhile` revokes both
-handlers, even if the job is already cancelled or waiting for children or
-cleanup. A later compatible state does not restore them. A parent's loss
-of permission also blocks its children's handlers. These extra checks
-apply to jobs with state handlers; a parent without them stops checking
-its rules when its body ends, as usual. `canStart` is only
-checked at entry, and the job's own `emit` does not revoke its handlers.
-If a rule throws during this check, the handlers are disabled and the
-error is reported; resource cleanup still runs.
+### Cancellation details
 
-For example, a device-backed profile can add `Disconnected` to its sealed
-states and restrict loading to connected states:
+`Cancelled` includes `reason`, `started`, an optional `description` and
+the cancellation stack trace. `started: false` means the body never ran.
+Reasons extend `CancelReason`. The built-in types include
+`ManualCancelReason`, `ParentCancelReason`, `HandlerCancelReason`,
+`ChainCancelReason`, `RulesCancelReason` and `ClosedCancelReason`.
+Inspect the type; `name` is a display label, not an equality key.
+
+You can extend `CancelReason` to carry application data, then pass it to
+`job.cancel(reason: reason)` or throw
+`Cancelled.by(reason: reason, started: true)` inside a body. Propagation
+between jobs retains the original cancellation in the reason's `cause`.
+
+`job.whenCancelled(callback)` registers a synchronous listener and returns
+a function to unregister it. It fires when a running job accepts
+cancellation or a job is dropped before starting. If a body cancels itself,
+it fires after the body and children finish, before cleanup. Registration
+after cancellation calls the listener immediately. Successful and failed
+jobs release these listeners without calling them. An asynchronous
+callback is not awaited; callback errors use the same reporting path as
+`ctx.onCancel` errors.
+
+## External state
+
+Most updates result from the controller's own jobs. An independent source,
+such as a device or socket, can also change without waiting for the
+controller. `externalSetState(next)` reflects a change that has already
+happened in that source. It is marked `@protected` and is called from
+inside the controller subclass, typically by a listener registered there.
+
+Consider a device that disconnects while a job waits for its response.
+If the listener queues a separate job to publish `Disconnected`, that
+update must wait behind the current job. Until then, the controller still
+reports a connected state, and the current job's rules cannot react to
+the disconnection. The current job may itself be waiting for a response
+that will never arrive.
+
+Calling `externalSetState(const Disconnected())` in the listener updates
+state immediately and re-evaluates running jobs. A job whose rules require
+a connection is cancelled. Its waiting method determines when its body
+resumes and whether the underlying operation must finish. The queue still
+waits for the job's body and cleanup before starting another root job.
+
+The distinction is what the notification represents. If it says that an
+independent entity has already changed, reflect that fact immediately.
+If it asks the controller to perform work, such as refresh data or save an
+incoming value, enqueue a normal job. An event being delivered by a stream
+does not by itself justify bypassing the queue.
+
+Use job bodies and their state handlers for the controller's own success,
+failure and cancellation. `externalSetState` is an exception for external
+facts, not a general setter for those operations. Stop the external
+listener before closing the controller: this method still changes `state`
+and calls change hooks after `close()`, but `Solo`'s closed stream no
+longer delivers updates.
+
+## State after failure or cancellation
+
+The `onError` and `onCancel` parameters of `run` and `job` let a controller
+leave a temporary state such as `Loading` when an operation fails or is
+cancelled. They receive the current state of type `S`, plus the error and
+stack trace or the `Cancelled` outcome, and return the next state
+synchronously.
+
+The matching handler runs after the body, children and cleanup, before
+the next queued job and before the `onFinish` hook. The outcome is already
+fixed: changing state does not turn `Failed` or `Cancelled` into `Done`,
+and does not mark the outcome as handled for error reporting.
+
+### Preserving an incompatible external state
+
+A final handler must not overwrite a state that makes its job invalid.
+For example, extend the profile states from the quick start with
+`Disconnected` in the same library, and replace the controller's `load`
+method with this version:
 
 ```dart
 final class Disconnected extends ProfileState {
@@ -371,36 +561,168 @@ Job<String> load() => run<ProfileState, String>(
     );
 ```
 
-A device can lose its connection independently of the controller. Its
-listener reports that fact through the protected `externalSetState`
-method, setting `Disconnected`. That state stays in place, including when
-the report arrives during cleanup of a job already cancelled manually.
-A compatible external state permits correction, so the handlers need no
-repeated type checks.
+The device listener calls `externalSetState(const Disconnected())` inside
+the controller. `keepWhile` rejects that state, cancelling the load and
+disabling both final handlers. `Disconnected` therefore remains visible
+instead of being replaced by `Initial` or `Failure`.
 
-`run.onCancel` runs at completion; `ctx.onCancel` delivers the cancellation
-signal immediately to something that can stop the operation. With
-`ctx.wait`, the queue waits for the job's cleanup, but the abandoned
-operation can finish later. Use `ctx.join` when the next job must also
-wait for that operation and its resource release.
+If the load is cancelled manually while the state is still compatible,
+`onCancel` can return `Initial`. The handlers need no extra
+`state is Loading` checks: the job's rules express which states permit
+the operation and its final correction.
 
-**Errors of a disposer.** They go to `onError` and to `SoloBase.observer`.
-With neither of the two set, nobody is listening, and the error goes to the
-zone the job was created in — not the controller's — the way the core
-reports one that has nowhere else to go — so a disposer that touches the
-context and stops on its first line is heard rather than lost. A `Cancelled`
-is the one thing that never travels that road. Install an observer at
-startup, as the [Errors](#errors) section says, and it becomes yours to
-route.
+### Handler eligibility and errors
 
-Note also that a disposer must not wait for its own job, nor for a job of
-the same queue: `job.done`, `job.value`, `job.cancel()` and the next job
-of the queue all wait for the cleanup that would be waiting for them.
+An incompatible external update permanently disables both handlers, even
+if it arrives after manual cancellation, while waiting for children, or
+during cleanup. A later compatible update does not enable them again.
+Loss of a parent's permission also blocks its children's handlers.
 
-**Following a stream.** `ctx.each` starts and returns a child `Job<void>`
-that owns the subscription. Its callback receives a `SoloContext<S, W>`
-for that child, so state reads, writes and cancellation checks belong to
-the child:
+These extra checks apply to jobs with their own state handlers. A parent
+without handlers stops checking its rules when its body ends; children
+then remain subject to their own rules and any permission the parent
+already lost. `canStart` is checked only at entry. A job's own `emit`
+does not disable its handlers.
+
+Handlers do not run for success, a discarded duplicate or any job whose
+body never started. If a handler throws, the error is reported without
+replacing the outcome or blocking the queue. If a rule throws while
+checking handler eligibility, the handlers are disabled and the error
+is reported. Resource cleanup still runs.
+
+Keep these functions limited to computing state. Resource release belongs
+in the cleanup API described next.
+
+## Resources and cleanup
+
+A job may acquire a database, subscription or another resource. Register
+its release when acquiring it so cancellation cannot leave a resource
+without cleanup. `wait` and `join` accept a `dispose` callback for a
+resource that belongs to the job. In this separate database example,
+`Database`, `Idle` and `Loaded(rows)` are types from that application's
+model:
+
+```dart
+Job<void> load() => run<Idle, void>(
+      key: 'load',
+      (ctx) async {
+        final db = await ctx.join(
+          Database.open,
+          dispose: (db) => db.close(),
+        );
+
+        final rows = await ctx.join(db.readAll);
+        ctx.emit(Loaded(rows));
+      },
+    );
+```
+
+Here, the database belongs to the load operation; only its rows become
+controller state. `dispose` closes the database on success, failure or
+cancellation, including when cancellation prevents the acquired value
+from reaching the body.
+
+For resources obtained elsewhere, `ctx.onDispose(cursor.close)` registers
+a cleanup callback. It returns a function you can keep as
+`removeDisposer` to unregister the callback without running it. Register
+each release once: adding `ctx.onDispose(db.close)` to the example would
+close the same database twice.
+
+The job waits for children, then runs registered cleanup in reverse
+registration order, awaiting each callback. Cleanup finishes before the
+final state handler, outcome delivery and release of the queue. An ordinary
+`try`/`finally` remains useful for local work; registered cleanup also
+covers the period after the body returns and while its children finish.
+
+### Returning or transferring a resource
+
+Use `discard` instead of `dispose` when the resource is the job's result
+and its recipient will own it on success. The corresponding registration
+method is `ctx.onDiscard`. These callbacks run when the job ends without
+successfully handing out its result. They do not release a resource kept
+only inside a successful body; use `dispose` for that case. A waiting call
+accepts either `dispose` or `discard`, never both.
+
+For example, a body may return a resource while a child is still running.
+The job is not complete yet. If cancellation arrives during that wait,
+the caller receives `Cancelled` instead of the resource, and its `discard`
+callback releases the resource.
+
+When transferring a registered resource directly to state, first check
+the job and remove the resource's registration with `disown`. Given a
+database acquired with `dispose` and a state that will own it:
+
+```dart
+ctx
+  ..check()
+  ..disown(db)
+  ..emit(Ready(db));
+```
+
+These calls are synchronous. If `check` throws, cleanup still owns the
+database. If `emit` writes the state and then throws because a synchronous
+listener cancelled the job, the database is already owned by the state
+and no longer registered for job cleanup.
+
+For an asynchronous transfer, put the transfer and `disown` inside one
+awaited `ctx.uncancellable` section. Use a plain `await` for the transfer
+inside that section, followed immediately by `disown`. A context checkpoint
+between the two could throw cancellation by state rules after ownership
+has changed but before its cleanup registration is removed.
+
+### Cleanup ordering and late results
+
+Cancellation can arrive after the body returns, including during cleanup.
+If a `discard` registration was skipped on the success path, it is run in
+a second pass when cancellation makes it necessary. In that case it runs
+after later-processed disposers rather than in strict reverse order.
+
+With `wait`, an abandoned operation can produce its resource after the
+job has already finished. The supplied cleanup still releases it, but the
+finished job and `close()` cannot wait for that late release. Use `join`
+when resource release must precede the next job or controller closure.
+
+Cleanup errors go to error hooks and observers, with a zone fallback
+when no handler is installed. A `Cancelled` from cleanup is not reported
+as an error. Never await the same job's `done`, `value` or `cancel()` from
+its cleanup, or wait for a later job in the same queue: all of them depend
+on the current cleanup finishing.
+
+## Children and streams
+
+A root job can split its work into child jobs. Create a child with the
+controller's `job(...)` method, then call `await ctx.run(child)` from the
+parent body. The child starts immediately, bypassing the queue, subject to
+its own start rules. The parent keeps the queue occupied until all its
+children finish, even if its body returns earlier.
+
+`ctx.run(child)` returns `Future<T>`. It waits for the child, the child's
+children and cleanup. On success, it checks the parent's cancellation and
+state rules before returning the value. A child error or cancellation is
+thrown into the parent body with its stack trace.
+
+Keep the original `child` to cancel it or inspect `child.done`. To work
+concurrently in parent and child, handle the returned future separately.
+Their state writes can then interleave. `ctx.run(child).ignore()` explicitly
+ignores that future's result while the parent still waits for its children.
+`child.ignore()` alone does not handle errors of the future returned by
+`run`.
+
+Accepted parent cancellation propagates to children. This also applies
+when the parent throws `Cancelled`, including an uncaught cancellation
+from `await ctx.run(child)`. A parent body that fails instead lets its
+children finish and waits for them. A child can refuse cancellation;
+`ctx.run` still waits for it and checks the parent after child success.
+
+A child rejected by its start rules still receives its parent, level and
+observer, but requires no further waiting. A throwing start rule fails
+the child and propagates that error through `ctx.run`.
+
+### Processing a stream
+
+`ctx.each(stream, onData)` creates and returns a child `Job<void>` that
+owns the subscription. Each event callback receives that child's context.
+Use it for state access and cancellation-aware operations:
 
 ```dart
 Job<void> track() => run<Ready, void>(
@@ -412,280 +734,237 @@ Job<void> track() => run<Ready, void>(
     );
 ```
 
-The example returns the child's `.value` so a stream or callback error
-reaches the parent body; cancellation is thrown as `Cancelled`. To inspect
-the outcome instead, await `.done`. To stop this subscription separately,
-keep the returned job as `subscription` and await its `cancel()`. Child
-cancellation does not itself mark the parent cancelled, but an uncaught
-`Cancelled` from `.value` cancels the parent under the usual child rules.
+This application-specific example copies hardware positions into a
+`Ready` state. Returning the child's `.value` makes stream and callback
+errors propagate into the parent body. Use `.done` to inspect the outcome,
+or retain the returned job and call its `cancel()` to stop only this
+subscription.
 
-The parent waits for this child even if its body returns without awaiting
-it. A quiet, open stream therefore keeps the parent alive. Accepted parent
-cancellation cascades to the child, including during `close()`. The child
-is cancellable even if the parent is not. It retains the parent's working
-type `W` and `keepWhile`, so rules still protect state access after the
-parent body returns. It does not inherit `canStart`: that condition has
-already allowed the parent to start. Observers see the child separately.
+Events are processed in order. An asynchronous callback finishes before
+the next callback starts; the first stream or callback error stops
+processing. Cancellation removes the subscription immediately, prevents
+further delivery, and waits for the current callback before completing
+the child. Use the callback's context for waits; a plain `await` can keep
+the child and parent alive indefinitely.
 
-Events keep their order: an asynchronous callback is awaited before the
-next event is delivered, and the first stream or callback error stops
-processing. When the child accepts cancellation, it immediately removes
-the subscription and stops delivery, then waits for the current callback
-before completing and releasing resources. Parent cleanup also waits.
-Use the child's `wait`, `join` or other checkpoints inside the callback;
-a plain `await` cannot be interrupted and can delay cancellation and
-`close()` forever. Do not await this child's own completion or `cancel()`
-from its callback: the child is already waiting for that callback.
+The parent waits for this child even without an explicit await, so an open
+stream with no events still keeps the parent running. Accepted parent
+cancellation, including during `close()`, cancels the child. The child is
+cancellable even if the parent is not. It retains the parent's `W` and
+`keepWhile` after the parent body returns, but does not repeat `canStart`.
+Observers see it as a separate job.
 
-The future returned by the underlying subscription's `cancel()` is not
-awaited. Await asynchronous source cleanup separately when needed. Normal
-stream completion still depends on the source sending `onDone`. `each`
-is a context method with the same lifecycle restrictions as `run`: it
-cannot start a child after the parent body ends or from `unattended`
-or cleanup.
+Cancelling only the child does not directly cancel the parent. An uncaught
+`Cancelled` from the child's `.value` does cancel the parent through its
+body. Do not await the child's own completion or `cancel()` inside its
+event callback, because the child is already waiting for that callback.
 
-**Children.** `ctx.run(child)` starts a job right now, bypassing the queue,
-as a child of the current one. The parent finishes only after all of its
-children. A cancelled parent cancels them, and so does a body that gives
-itself up with `throw Cancelled(...)` — including one that let a child's
-`Cancelled` through from `await ctx.run(child)`; a body that *fails* leaves
-them to finish and waits. `await ctx.run(child)` waits for the child's
-children and cleanup, then checks the parent's cancellation and state rules
-before returning its value. The child's error or `Cancelled` is
-thrown into the parent's body with its stack trace. The child can refuse
-cancellation; `run` waits for it and checks the parent after it succeeds.
+The future returned by the underlying stream subscription's `cancel()`
+is not awaited. Await asynchronous source cleanup separately if needed.
+Normal completion requires the source to send `onDone`. Like `ctx.run`,
+`each` cannot start a child after the parent body ends, during cleanup,
+or from `unattended` work.
 
-Keep the original `child` to cancel it or inspect `child.done`; `run`
-returns a future and creates no new job. To run parent and child work
-concurrently, handle the returned future separately. Their state writes
-can then interleave. Use `ctx.run(child).ignore()` if the result is
-deliberately unused; this does not stop the parent waiting for its children
-before finishing.
+### Following another controller
 
-**Chains.** `job.then((ctx, value) => ...)` creates a core `Job` that runs
-after `job` succeeds, including its children and cleanup. Its callback
-receives a new `JobContext` and may return a value or future. Failures
-pass forward without calling the callback. Cancellation passes forward
-to continuations and backwards to unfinished predecessors; cancelling
-the tail waits for that work and cleanup. Sources still obey their usual
-cancellation rules, including refusal and held cancellation.
-
-The continuation has its own optional `observer`. It inherits no
-`SoloContext`, rules, controller observer or queue slot. To change state,
-call a controller method that adds another job to the queue; other jobs
-may run between those steps. `close()` cancels a continuation through an
-unfinished source, but does not own a continuation already running after
-its source finished. Use children inside one parent when the entire
-sequence must hold the controller's current slot.
-
-**External state.** A device or another independent entity can change its
-state without a command from this controller. A listener inside the
-`Solo` subclass reflects that already completed change through
-`externalSetState(next)`, which is marked `@protected`. This is an
-exception to job-owned state changes: the external entity owns the
-transition, and the controller receives its notification. For its own
-operations, the controller uses job bodies and `run`/`job` state handlers.
-
-An external update re-evaluates running bodies against the new state.
-For jobs with state handlers, incompatible updates also revoke permission
-to correct state during cancellation, child waiting and cleanup.
-
-Stop the external listener before closing the controller.
-`externalSetState` still changes the state after `close()`, but `Solo`'s
-closed stream no longer delivers those updates.
-
-**Outcomes.** `Outcome<T>` is sealed, so a `switch` over its three cases is
-exhaustive: `Done` carries the returned `value`, `Failed` carries `error`
-and `stackTrace`, `Cancelled` carries a `reason`, a `started` flag, an
-optional `description` and the stack trace of the cancellation itself. The
-reason extends `CancelReason`: `ManualCancelReason`, `ParentCancelReason`,
-`HandlerCancelReason` and `ChainCancelReason` from the core,
-`RulesCancelReason` and
-`ClosedCancelReason` from `solo`. Check the type, not the display `name`;
-there is no equality by name. Extend `CancelReason` to carry data of your
-own and pass it through `job.cancel(reason: reason)` or throw
-`Cancelled.by(reason: reason, started: true)` from the body. Parent and
-child propagation retain the original cancellation in the reason's
-`cause`. `job.done` completes with the outcome and never throws;
-`job.value` completes with the value or throws; `job.whenCancelled(callback)`
-registers a synchronous listener and returns an unregister function. The
-listener receives `Cancelled` with its reason and details: on accepted
-cancellation for a running job, on dropping a job before start, or after
-the body and its children end and before cleanup if the body cancelled
-itself. Late registration calls it immediately. Jobs that end `Done` or
-`Failed` without cancellation release their listeners without calling them.
-Listener errors follow the `ctx.onCancel` route; `async` callbacks are not
-awaited. `job.cancel()` cancels and waits for the job to actually finish;
-`job.ignore()` says that nobody is going to look at the outcome.
-
-**Queue and policies.** `queue` is a first-class object visible to
-subclasses: `jobs`, `remove`, `removeWhere`, `clear`, `lastWhere`. The
-three removing methods skip `cancellable: false` jobs unless given `force:
-true`, and none of them touches the running job. Policies are sugar over
-the common case of one key: `sequential` appends; `droppable` returns the
-queued or running job with the same key and drops the new one; `replace`
-removes queued jobs with the same key; `restart` additionally cancels the
-running one without waiting for it. `add(job, first: true)` puts a job at
-the head. A key stands for the result type as well: the job a key finds is
-cast to the result type of the new one, so a `load()` returning `String`
-and a `refresh()` returning `void` must not share a key. Nothing checks
-that for you — the cast fails at run time, as a `TypeError` out of `add`.
-An enum of keys, as in `example/`, is how you keep them apart by hand: one
-constant per method, and the rule is that a result type gets a key of its
-own. `job`, `add` and `run` are public because the controller's own methods
-call them; the API a caller is meant to use is those methods.
-
-**Event accumulation.** Create an accumulator once with `collect` to keep
-events in a list, or `accumulate` to merge them into one value. Its
-`add(event)` method gathers input for a queued `SoloJob`; the handler
-changes state when that job runs. `AccumulationPolicy.adjacent` joins
-only the queue's tail, `replace` transfers the input to a new job at the
-tail and cancels the old one, and `join` adds to the existing queued
-group on its current spot. Only groups of the same accumulator can join;
-running groups never accept new events. See the
-[settings and logs recipe](doc/accumulation.md) for examples, ordering
-and the outcome of each handle.
-
-Set `timing` to `AccumulationTiming.debounce(duration)` to wait for a
-pause between events, or `AccumulationTiming.throttle(duration)` to limit
-how often groups start. `collect` keeps every accepted event;
-`accumulate` keeps the value chosen by `merge`. Waiting groups stay in
-`queue` and let ready jobs pass. Handlers still run sequentially.
-Omit `timing` or use `Duration.zero` to make groups ready immediately.
-
-**Stream.** `Solo.stream` is a broadcast stream of every state change, in
-order, delivered on the next microtask — the stream is asynchronous. The
-source of truth is `state`: by the time an event arrives, `state` may
-already be newer. Equality is not checked; each change is one event. In
-`flutter_solo`, `SoloListenable` listeners are called synchronously,
-in subscription order, while the stream event is still on its way.
-
-## Rules that are not visible in signatures
-
-`cancellable: false` protects a job from actors: a manual `cancel`, a
-`clear` without `force`, the cancellation of its parent, and `close` once
-the job is running — `close` still drops it while it waits in the queue,
-because there is no body there to protect. It does
-not protect it from reality: if the state stopped matching `W` or
-`keepWhile`, the job is cancelled anyway, because there is nothing left for
-it to read. A non-cancellable job that must survive any state needs the
-base type `S` and no `keepWhile`.
-
-`ctx.uncancellable(action)` protects one step of the body rather than the
-whole job, and it is the third answer a call can get: `wait` ends the
-waiting and not the work, `join` waits for the work and gives up after it,
-this one is not cancelled at all while `action` runs. Use it for a step
-that cannot be taken back — a payment on its way to the server, a write
-already on the wire. A `cancel` or a `close` arriving then is held, not
-refused: the job is not marked while the step runs, so nothing reaches into
-it — not an `onCancel` callback, not the cascade onto children — and
-`close` waits for the body. When the section closes the cancellation lands,
-and the next member of the context throws it, so a tail that has to happen
-anyway belongs inside the same section. The rules are not covered by any of
-this: a job whose state left its working type is cancelled regardless.
-Sections nest and only the outermost lets a held cancellation through; a
-job created with `cancellable: false` refuses it outright instead, and that
-refusal is what a section leaves alone.
-
-`emit` is trusted, reads are checked. The emitted state is not verified
-against the rules of the job that emitted it — otherwise a `close` job
-declared as `run<NotClosed, void>` would cancel itself the moment it
-emitted `Closed()`. The next read is checked as usual, though, so a job
-that emits itself out of `W` must not touch `ctx` again: emit that state
-as the last statement of the body, or the job ends with
-`Cancelled(rules: is not W)` on its next read.
-
-That check is about the job's own rules. A cancellation that arrives from
-inside the write itself — a hook or a listener setting the state again, a
-parent going down and taking this job with it — is thrown by `emit` on the
-way out, so the body never walks past it.
-
-`ctx.run(child)` returns `Future<T>`. Await it to propagate a child's error
-or cancellation into the body. To inspect the outcome instead, keep the
-original child, call `ctx.run(child).ignore()` and await `child.done`.
-The parent waits for its children even if its body does not await them,
-but the returned future still needs error handling: `child.ignore()` alone
-does not handle that future's errors. An unhandled future error, including
-cancellation, follows Dart's rules.
-
-A job handed to `ctx.run` becomes a child even if it is dropped before it
-starts: it gets its parent, its level and its observer before the rules are
-asked, so a parent always accounts for every job it tried to run. Only the
-waiting is different — a job the rules turn away never joins the list the
-parent waits for, and a rule that throws instead of refusing ends the child
-with that error rather than leaving it behind.
-
-A rule that throws is caught wherever it is asked, and what happens next
-depends on where that was. In the queue the job ends `Failed` and the queue
-goes on: the error reaches `onError` and, if nobody looks at the outcome,
-the zone as well. At the job's next read of the state it is thrown into the
-body like any other error, and takes the body's own path from there. In a
-reevaluation after a state change it goes to `onError` and stops — the job
-runs on, because a rule that threw says nothing about whether it may.
-`onError` is the end of the line when there is one: a controller that
-overrides it, or a `SoloObserver` set on `SoloBase.observer`. With neither,
-the same error goes to the zone the controller was made in, and in the root
-zone that is the process. Rules are ordinary code
-of yours: they are not expected to throw, and the engine does not pretend
-they cannot.
-
-`add` on a closed controller does not throw. It returns a job that is
-already finished with `Cancelled(closed)`, so call sites need no
-`isClosed` check.
-
-Any policy other than `sequential` with `key == null` throws
-`ArgumentError`, not an `assert`: in release mode `null == null` is true
-and `replace` would wipe every keyless job in the queue.
-
-`ctx.emit`, `ctx.run`, `ctx.wait`, `ctx.join` and `ctx.uncancellable` after
-the job has finished throw `StateError`. A context that leaked out of its
-job — captured by a closure nobody awaited — must not write the state
-outside the critical section, and must not start work either: an action
-begun by a job that is over runs beside the job running now, counted by
-neither the queue nor `close()`. Reads (`state`, `stateAs`, `check`) after
-a job that finished normally are allowed; after a cancelled one they still
-throw its `Cancelled`. `log` never throws.
-
-`close()` awaited from inside the current job's body never completes: it
-waits for that very body. The same holds for `cancelAll()`. Cancel from the
-inside by returning or by throwing `Cancelled('why')`.
-
-From inside a job body the whole surface of the `Solo` subclass is visible,
-so there is no `ctx.solo`.
-
-## Errors
-
-A job that throws does not break the controller and does not stop the
-queue: the error becomes the job's outcome and the next job runs.
-`Outcome<T>` is sealed, so one `switch` covers everything that can happen
-to a job:
+A controller dedicated to following another controller can keep a job
+running over its stream. Read the current state first because the stream
+only carries later updates:
 
 ```dart
-switch (await profile.load().done) {
-  case Done(:final value):
-    print('loaded $value');
-  case Failed(:final error):
-    print('not loaded: $error');
-  case Cancelled(:final reason):
-    print('gave up: $reason');
+final class ScreenController extends Solo<Screen> {
+  final Solo<Session> session;
+
+  ScreenController(this.session) : super(const Screen());
+
+  Job<void> follow() => run<Screen, void>(
+        key: 'follow',
+        (ctx) async {
+          void take(SoloContext<Screen, Screen> target, Session next) =>
+              target.emit(target.state.copyWith(signedIn: next.signedIn));
+
+          take(ctx, session.state); // what has already happened
+          await ctx.each(session.stream, take).value; // what happens next
+        },
+      );
 }
 ```
 
-`job.done` never throws. `job.value` gives the value instead, and rethrows
-the body's error with its original stack trace, or throws the job's
-`Cancelled`. `Cancelled` is not a failure: a job dropped as a duplicate,
-cut short by `close`, or one whose state stopped matching its rules ends
-that way, and that is normal traffic, not something to report. It is an
-`Exception` and not an `Error`: a job that did not happen is an ordinary
-outcome, not a broken program. That is what makes `throw Cancelled('why')`
-from a body an ordinary throw.
+Here, `Screen` and `Session` are application states with a `signedIn`
+property. The subscription keeps the following controller's queue
+occupied until it ends. If that controller must also process other jobs,
+use an external listener that queues a short job for each update instead.
+When the update represents an immediate change to the validity of current
+work, consider the [External state](#external-state) rules instead.
 
-Being an `Exception` cuts both ways: a wide `catch` in a body catches the
-job's own `Cancelled` too. The outcome is safe — a job that is marked ends
-with its cancellation whatever the body does next — but everything the
-catch does on the way is work a cancelled job should not be doing: a
-compensation, a retry, a failure written into the state. Let it through
-first, the way the camera example does:
+### Chaining completed work
+
+`job.then((ctx, value) => ...)` creates a job that runs after its source
+succeeds, including children and cleanup. Its callback receives the result
+and a new core `JobContext`, and may return a value or future. A source
+failure propagates without calling the callback.
+
+The continuation does not inherit the controller's state context, rules,
+observer or queue position. It has its own optional observer. To change
+controller state, call a method that enqueues another job; other queued
+jobs may run between the two operations. Use children within one parent
+when the whole sequence must occupy the queue without another root job
+running between its steps.
+
+Cancellation propagates forward to continuations and backward to
+unfinished sources, subject to each job's cancellation rules. Cancelling
+the tail waits for those sources and their cleanup, including a source
+that refuses cancellation. `close()` reaches a continuation through an
+unfinished source, but does not own a continuation already running after
+the source finished.
+
+## Event accumulation
+
+An accumulator groups incoming values into queued jobs. Create it once
+and call its `add(event)` method for each input:
+
+- `collect` keeps accepted events in a list.
+- `accumulate` combines them with a synchronous `merge` function. The
+  function decides what to retain; keeping only the latest value is one
+  possible choice.
+
+Only the queued job's handler updates controller state. A running group
+does not accept new input. Groups can combine only when they belong to
+the same accumulator.
+
+| Accumulation policy | How input joins queued work |
+| --- | --- |
+| `AccumulationPolicy.adjacent` | Join a compatible group only at the queue's tail. |
+| `AccumulationPolicy.join` | Join an existing queued group at its current position. |
+| `AccumulationPolicy.replace` | Transfer input to a new job at the tail and cancel the old group. |
+
+### Debounce and throttle
+
+Set `timing` to delay a group's eligibility to start:
+
+- `AccumulationTiming.debounce(duration)` waits for a pause in input.
+- `AccumulationTiming.throttle(duration)` limits how often groups start,
+  measuring the interval from the previous group's actual start.
+
+These delays do not occupy the running job's position. Waiting groups
+remain in `queue` and let other ready jobs pass. The handlers themselves
+still run one at a time. Timing does not discard input: `collect` keeps
+accepted events and `accumulate` keeps what `merge` returns. Without
+`timing`, or with `Duration.zero`, groups are ready immediately.
+
+This search controller retains the latest query and waits for 300 ms
+without new input before starting it. `SearchApi` and `SearchState` are
+application types:
+
+```dart
+final class Search extends Solo<SearchState> {
+  final SearchApi api;
+  late final _queries = accumulate<SearchState, String, void>(
+    (ctx, text) async {
+      final results = await ctx.wait(() => api.search(text));
+      ctx.emit(SearchState.results(results));
+    },
+    merge: (previous, incoming) => incoming,
+    timing: AccumulationTiming.debounce(const Duration(milliseconds: 300)),
+    policy: AccumulationPolicy.join,
+    key: 'query',
+  );
+
+  Search(this.api) : super(const SearchState.idle());
+
+  SoloJob<void> query(String text) => _queries.add(text);
+}
+```
+
+A search that has already started finishes before the next one starts.
+The returned job exposes the outcome and cancellation, like other jobs.
+Closing cancels waiting groups rather than flushing them. See the
+[settings and logs recipe](doc/accumulation.md) for grouping examples,
+ordering and the outcomes returned to individual callers.
+
+## Error reporting and observation
+
+State handlers and reporting hooks have different responsibilities.
+`run(onError: ...)` computes a state after a job fails. The controller's
+`onError` method and `SoloObserver.onError` receive errors for logging or
+reporting, including errors from cleanup and abandoned operations.
+
+A controller can override `onStart`, `onFinish`, `onError`, `onLog` and
+`onChange`. For example, add an error hook to the profile controller:
+
+```dart
+final class ProfileController extends Solo<ProfileState> {
+  final ProfileApi api;
+
+  ProfileController(this.api) : super(const Initial());
+
+  // ...the jobs above...
+
+  @override
+  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
+    reportCrash(error, stackTrace);
+  }
+}
+```
+
+`SoloObserver` receives the same events across controllers, plus
+`onCreate` and `onClose`. Install one at application startup:
+
+```dart
+final class LoggingObserver extends SoloObserver {
+  @override
+  void onStart(SoloBase<Object> solo, Job<Object?> job) =>
+      print('$job started');
+
+  @override
+  void onFinish(SoloBase<Object> solo, Job<Object?> job) =>
+      print('$job finished ${job.outcome}');
+
+  @override
+  void onChange(SoloBase<Object> solo, Object previous, Object current) =>
+      print('state: $current');
+}
+
+void main() {
+  SoloBase.observer = LoggingObserver();
+}
+```
+
+The observer is called before the controller's corresponding hook.
+Each call is independent; omitting `super` in a controller hook does not
+disable the observer. An error thrown by either hook is sent to the
+current Dart zone without changing the job's outcome, stopping the queue,
+or preventing the other hook from running.
+
+### Handled and unhandled failures
+
+Accessing `job.done` or `job.value`, or calling `job.ignore()`, marks the
+outcome as observed. A `Failed` outcome that nobody observes goes to the
+job's creation zone through `Zone.handleUncaughtError`, in addition to
+the error hooks. An installed observer alone does not mark outcomes as
+observed. If the observer handles reporting and the caller needs no result:
+
+```dart
+profile.load().ignore(); // the counterpart of Future.ignore
+```
+
+Errors from cleanup, cancellation callbacks and operations abandoned by
+`wait` go to the reporting hooks. Without an overridden error hook or an
+installed observer, they fall back to the job's creation zone. Such an
+error can arrive after the job has already completed. It does not replace
+an existing cancellation outcome. These reporting paths exclude
+`Cancelled` itself.
+
+An unhandled error of `job.value` or `ctx.run(child)` is still an unhandled
+Future error under Dart's rules, even if that error is `Cancelled`.
+Handle those futures with `await`, `catchError` or `ignore()` as appropriate.
+
+### Catching errors inside a body
+
+`Cancelled` implements `Exception`, so a broad `catch` also catches
+cancellation. If a body needs its own error handling, pass cancellation
+through first. This fragment handles a camera failure while preserving
+cancellation:
 
 ```dart
 try {
@@ -699,47 +978,46 @@ try {
 }
 ```
 
-Every failure also reaches the hooks, before the outcome is delivered to
-whoever waits for it: `onError` on the controller itself, and
-`SoloObserver.onError` for the whole process. Install an observer at
-startup and every failure of every controller is reported once, in one
-place.
+Once a job has accepted cancellation, its outcome remains `Cancelled`
+even if the body catches it. A catch block can still execute unwanted
+work, such as retrying the operation. For a final failure state, prefer
+the `onError` parameter of `run` rather than writing that correction
+inside a broad catch.
 
-A job nobody looks at is not silent. When a job ends with `Failed` and
-nothing observed it — no `job.done`, no `job.value`, no `job.ignore()` —
-the engine hands the error to the zone the job was created in, through
-`Zone.handleUncaughtError`, exactly as Dart does with an unhandled
-`Future` error. A fire-and-forget `profile.load();` on its own line still
-reports what went wrong.
+### Errors in state rules
 
-Neither is an error a job left behind. Work a body hands to
-`ctx.unattended` keeps its own error zone, and a failure of it — now, or
-long after the job is over — arrives at `onError` like any other. With
-neither the hook overridden nor an observer installed, nobody is
-listening, and it goes to the zone the job was created in rather than
-stopping in an empty hook; a cancellation is the one thing that never
-goes there.
+Rules should return a boolean. If a start rule throws, the job fails and
+the queue continues. If a rule throws at a context checkpoint, the body
+receives the error. During re-evaluation after a state update, a throwing
+rule is reported but does not itself cancel the running body. If that
+check also controls a final state handler, the handler is disabled.
 
-When the failure is genuinely handled elsewhere — by `onError`, by the
-observer — say so:
+Re-evaluation errors fall back to the controller's creation zone when no
+error hook or observer handles them. In the root Dart zone, an unhandled
+error can terminate the application. Install error reporting and observe
+job outcomes according to your application's needs.
 
-```dart
-profile.load().ignore(); // the counterpart of Future.ignore
-```
+### Background work and logs
 
-`ignore()` marks the job as observed without waiting for it.
+`ctx.unattended(action)` starts work that the job does not wait for or
+cancel. Its errors are reported through the job's error hooks, even after
+the job finishes, with the same zone fallback when no handler is installed.
+Use it for work with an independent lifetime. Starting children from
+this work is prohibited. A captured context still belongs to the original
+job: `emit` can work while that job is active, but is rejected after
+cancellation or completion. The background operation does not extend
+the context's lifetime. A bare `unawaited(future)` does not provide
+the error routing of `unattended`.
 
-`Cancelled` never goes to the zone. An error that arrives after the job was
-cancelled — an action that `wait` stopped waiting for and that fails later
-— is reported to `onError` and stops there **if anybody is listening**:
-without an observer and without an overridden hook it takes the same road
-to the zone as any error with nowhere else to go.
+`ctx.log(data)` forwards application data to log hooks and observers.
+`SoloBase.debug = print` additionally traces the controller's internal
+queue and lifecycle operations.
 
 ## Testing
 
-There is no `bloc_test` here and no need for one: the job handle is the
-synchronization point. Start a job, await its outcome, then look at the
-state.
+Await a job's outcome to synchronize a test before asserting state. The
+following example uses `package:test`; `FakeProfileApi` is a test
+implementation that returns `'Ada Lovelace'`:
 
 ```dart
 test('load fills in the name', () async {
@@ -757,14 +1035,12 @@ test('load fills in the name', () async {
 });
 ```
 
-Use `job.value` instead of `job.done` when the test is about the returned
-value, and `await expectLater(profile.load().value, throwsA(...))` when it
-is about a failure.
+Use `job.value` when testing the returned value, or
+`await expectLater(profile.load().value, throwsA(...))` for a failure.
 
-When timing matters — a debounce, a timeout, two jobs racing — wrap the
-test in `fakeAsync` and move time by hand. An observer that collects one
-ordered journal turns a whole episode into a single `expect`, and that
-catches ordering mistakes no final-state check can see:
+For timing and ordering, use `package:fake_async`. In the following test,
+the fake API completes after 20 ms. An observer records state changes and
+job completion in one ordered list:
 
 ```dart
 final class Journal extends SoloObserver {
@@ -810,30 +1086,27 @@ test('a second load while the first one runs is dropped', () {
 });
 ```
 
-`SoloBase.observer` is a global, so it is set once and undone by
-`addTearDown` — a failing expectation throws, and a line at the end of the
-test would never run, leaving the journal of this test to collect the
-lines of the next one. `stream` works with
-`expectLater(..., emitsInOrder([...]))` too, but it is asynchronous —
-after `await job.done` the state is already the final one, so reading
-`state` is usually enough.
+The cancelled duplicate in the journal is the newly created job that
+`droppable` discarded. Both method calls returned the original job.
+Reset the global observer with `addTearDown` so a failed test cannot leave
+it installed for later tests.
 
-Cancelling in a test is the same two lines as anywhere: `job.cancel()`
-returns a future nothing inside `fakeAsync` can await, so
-`job.cancel().ignore()` and then `async.flushTimers()` before the
-expectation. And a fake API built on `Future(...)` or `Future.delayed(...)`
-schedules a timer, not a microtask: `flushMicrotasks()` will not run it,
-`flushTimers()` and `elapse(...)` will.
+Inside `fakeAsync`, request cancellation with `job.cancel().ignore()` and
+advance pending work before asserting. `flushMicrotasks()` runs microtasks;
+`Future(...)` and `Future.delayed(...)` use timers and require `elapse(...)`
+or `flushTimers()`. Use `emitsInOrder` when the stream itself matters;
+for final state, reading `state` after `job.done` is usually sufficient.
 
-## Recipes
+## Timeouts
 
-**Timeout.** The engine knows nothing about timeouts, and `Future.timeout`
-by itself is not one: it ends the waiting, not the work. The source future
-is never cancelled, so `hw.open().timeout(...)` fails the job while the
-device is still opening, and the next job starts against it. Give the timer
-something that really stops — the same cancel token the job hands to
-`onCancel` — and wait for the device with `join`. It comes back with an
-error of its own, and the job ends `Failed`:
+`Future.timeout` limits waiting for a future; it does not stop the
+underlying operation. For a request whose result may be abandoned,
+`ctx.wait(() => api.fetch().timeout(...))` can be sufficient.
+
+For a device operation that must stop before the next job, connect a timer
+to the device's cancellation mechanism and await the operation with
+`join`. In this example, the hardware API completes with an error when
+its token is cancelled, so a timeout fails the job:
 
 ```dart
 Job<void> connect() => run<Idle, void>(
@@ -852,127 +1125,14 @@ Job<void> connect() => run<Idle, void>(
     );
 ```
 
-Where the call has nothing to leave behind — a read, a request whose answer
-you can drop — the short form is honest: `ctx.wait(() => api.fetch()
-.timeout(...))`, and the abandoned request finishes on its own.
-
-**Debounce.** Use an accumulator to start a search after a pause in input.
-Here, `merge` keeps the latest query and debounce waits for 300 ms of
-silence. Other ready jobs can run during that pause. A search already
-running finishes before the next one starts. The returned job exposes
-its result and cancellation; see [Errors](#errors) for handling failures.
-
-```dart
-final class Search extends Solo<SearchState> {
-  final SearchApi api;
-  late final _queries = accumulate<SearchState, String, void>(
-    (ctx, text) async {
-      final results = await ctx.wait(() => api.search(text));
-      ctx.emit(SearchState.results(results));
-    },
-    merge: (previous, incoming) => incoming,
-    timing: AccumulationTiming.debounce(const Duration(milliseconds: 300)),
-    policy: AccumulationPolicy.join,
-    key: 'query',
-  );
-
-  Search(this.api) : super(const SearchState.idle());
-
-  SoloJob<void> query(String text) => _queries.add(text);
-}
-```
-
-**Following another controller.** The answer to `BlocListener` for a
-controller rather than a screen: a long-lived job over the other one's
-stream. The subscription lives exactly as long as the job, `close()` takes
-it down with everything else, and the writes it makes go through the queue
-like any other job's.
-
-Two things this recipe asks of you. A stream carries what happens next and
-not what has already happened, so the job starts by taking the state it
-follows — `session.state` — and only then listens; without that first line
-a screen follows a session it never read. And the job holds the queue for
-as long as it follows, so it belongs to a controller whose work is the
-following: a controller that has jobs of its own wants a job per event
-instead, queued from the callback.
-
-```dart
-final class ScreenController extends Solo<Screen> {
-  final Solo<Session> session;
-
-  ScreenController(this.session) : super(const Screen());
-
-  Job<void> follow() => run<Screen, void>(
-        key: 'follow',
-        (ctx) async {
-          void take(SoloContext<Screen, Screen> target, Session next) =>
-              target.emit(target.state.copyWith(signedIn: next.signedIn));
-
-          take(ctx, session.state); // what has already happened
-          await ctx.each(session.stream, take).value; // what happens next
-        },
-      );
-}
-```
-
-**Hooks.** A controller can override `onStart`, `onFinish`, `onError`,
-`onLog` and `onChange` to react to its own jobs:
-
-```dart
-final class ProfileController extends Solo<ProfileState> {
-  final ProfileApi api;
-
-  ProfileController(this.api) : super(const Initial());
-
-  // ...the jobs above...
-
-  @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
-    reportCrash(error, stackTrace);
-  }
-}
-```
-
-**Observer.** `SoloObserver` is the cross-cutting version of the same five
-hooks plus `onCreate` and `onClose`: analytics, error reporting, one log for
-every controller in the process. The engine calls the observer before the
-controller's own hook, and independently of it — a subclass that forgets
-`super` does not switch the observer off:
-
-```dart
-final class LoggingObserver extends SoloObserver {
-  @override
-  void onStart(SoloBase<Object> solo, Job<Object?> job) =>
-      print('$job started');
-
-  @override
-  void onFinish(SoloBase<Object> solo, Job<Object?> job) =>
-      print('$job finished ${job.outcome}');
-
-  @override
-  void onChange(SoloBase<Object> solo, Object previous, Object current) =>
-      print('state: $current');
-}
-
-void main() {
-  SoloBase.observer = LoggingObserver();
-}
-```
-
-Hooks are a channel, not a link in the chain: an error thrown by any of
-them — a controller's or an observer's — goes to the current zone, the way
-Dart reports an unhandled `Future` error, and changes nothing else. The job
-ends with the outcome it had, the queue goes on, `close` still completes,
-and the hook standing next to the throwing one is still called.
-
-To trace the engine itself rather than the jobs, set
-`SoloBase.debug = print`.
+The `finally` block cancels the timer on every exit. Whether the device
+actually stops, and which error it returns, depends on that device's API.
 
 ## Flutter
 
-`flutter_solo` adds `SoloListenable<S> extends Solo<S> implements
-ValueListenable<S>`, and re-exports all of `solo`. The only change to the
-controller is its base class — the jobs stay exactly as they are:
+Use `SoloListenable<S>` from `flutter_solo` as the controller base class.
+It extends `Solo<S>` and implements `ValueListenable<S>`. The profile
+controller keeps the same states and `load` method:
 
 ```dart
 import 'dart:async';
@@ -989,15 +1149,16 @@ final class ProfileController extends SoloListenable<ProfileState> {
 }
 ```
 
-There is no `SoloProvider`, and nothing closes the controller for you. A
-controller that belongs to one screen is created in `initState` and closed
-in `dispose`; a controller shared by several screens goes into whatever
-you already use for that — `provider`, `get_it`, an `InheritedWidget` —
-and is closed there.
+A screen can own its controller: create it in `initState` and close it
+in `dispose`. A shared controller can instead live in your existing
+dependency container, such as `provider`, `get_it` or an `InheritedWidget`.
+The code that owns it is responsible for closing it; `flutter_solo` does
+not provide a `SoloProvider` or close controllers automatically.
 
-A side effect is not a state: awaiting the job is the whole mechanism.
-Check `mounted` after the await, as after any `await` in a `State`, and
-then decide what to do with the outcome:
+`ValueListenableBuilder` rebuilds when state changes. To navigate or show
+a message after a particular operation, await that job's outcome at the
+call site. Check `mounted` after waiting before using the widget's context.
+Here, `ProfilePage` is the destination screen in the application:
 
 ```dart
 class ProfileScreen extends StatefulWidget {
@@ -1057,51 +1218,54 @@ class _ProfileScreenState extends State<ProfileScreen> {
 }
 ```
 
-`ListenableBuilder` and `AnimatedBuilder` take the controller too — it is a
-`Listenable` — when the builder does not need the value itself. `value` and
-`state` are the same object. There is no setter on purpose: a
-`ValueNotifier` face would be a hole in the ownership guarantee.
+`value` and `state` refer to the same object. There is no value setter;
+controller jobs perform updates through their context. `ListenableBuilder`
+and `AnimatedBuilder` also accept the controller when the builder does
+not need the state value itself.
 
 ## Coming from bloc
+
+Callers invoke controller methods and receive a job for each operation.
+Queue policy is selected per call, and all root jobs share one queue.
+These are the main API correspondences:
 
 | bloc | solo |
 | --- | --- |
 | `Bloc<E, S>`, `Cubit<S>` | `Solo<S>`, `SoloListenable<S>` |
-| an event class, `on<E>`, `add(E())` | a method returning `Job<T>` |
-| an `EventTransformer` | a `Policy` on the job |
+| Event class, `on<E>`, `add(E())` | Method returning `Job<T>` |
+| `EventTransformer` | `Policy` on a job submission |
 | `emit(next)` | `ctx.emit(next)` |
-| `if (emit.isDone) return;` | `ctx.wait(...)`, `ctx.join(...)`, `ctx.check()` |
+| `if (emit.isDone) return;` | Cancellation checkpoints such as `ctx.wait` and `ctx.check` |
 | `emit.onEach`, `emit.forEach` | `ctx.each(stream, onData)` |
 | `state`, `stream` | `state`, `stream` |
 | `BlocObserver` | `SoloObserver` |
-| `BlocBuilder`, `BlocSelector` | `ValueListenableBuilder` |
-| `BlocListener` | `await job.done` at the call site |
-| `BlocProvider` | `initState` plus `dispose` |
+| `BlocBuilder`, `BlocSelector` | `ValueListenableBuilder`; selection is application code |
+| `BlocListener` for an operation's result | Await that operation's `job.done` |
+| `BlocProvider` | Your chosen ownership or dependency mechanism |
 | `close()` | `close()` |
-| `blocTest` | `test` plus `await job.done` |
+| `blocTest` | `test` and an awaited job outcome |
 
-The transformers map by name: `sequential()` is `Policy.sequential`,
-`droppable()` is `Policy.droppable`, `restartable()` is `Policy.restart`.
-`Policy.replace` — drop what is queued, leave what is running — has no
-transformer of its own, and a policy is chosen per call rather than per
-event type.
+`sequential`, `droppable` and `restartable` correspond to
+`Policy.sequential`, `Policy.droppable` and `Policy.restart`.
+`Policy.replace` removes queued work while leaving the running job alone.
+There is no concurrent root-job policy; use children or separate
+controllers for independent concurrent work.
 
-Three things have no counterpart on purpose. There is no `concurrent`
-transformer: root jobs of one controller never overlap, and work that really
-is parallel goes inside one job, which awaits it itself. There is nothing
-like an `emit` after `close` to guard against: `add` on a closed controller
-returns a job that is already `Cancelled(closed)`, so call sites need no
-`isClosed` check. And an event is not a value you can hold on to — a method
-call gives you the `Job<T>` instead, so the caller can await exactly the
-work it started.
+The package does not include retry policies, built-in timeouts, worker
+pools, dependency injection, persistence or state equality filtering.
+If work needs cancellation and cleanup but no state rules or controller
+queue, [async_job](https://pub.dev/packages/async_job) can be used directly.
+For a value with no asynchronous lifecycle, a `ValueNotifier` may suffice.
 
-## Example
+[solo and bloc, side by side](https://github.com/vi-k/solo/blob/main/packages/solo/doc/vs-bloc.md)
+compares ten application scenarios with implementations in both packages.
 
-The camera below is the shape of a real controller: several jobs with
-different policies, a job that must not be cancelled, and a teardown that
-clears the queue before it runs. The state is a sealed hierarchy, and
-`NotDisposed` is a union interface that jobs can declare as their working
-type:
+## Camera example
+
+The following example combines state rules, queue policies and explicit
+device cleanup. It uses a separate state hierarchy from the profile
+example. `NotDisposed` groups every state in which hardware operations
+may still be performed:
 
 ```dart
 sealed class CameraState {
@@ -1134,6 +1298,10 @@ final class Disposed extends CameraState {
   const Disposed();
 }
 ```
+
+`FakeCameraHardware` and `Photo` are supplied by the runnable
+[`example/`](example) package. The controller below shows its main
+operations:
 
 ```dart
 enum CameraKey { init, closeCamera, setZoom, takePhoto, dispose }
@@ -1204,7 +1372,21 @@ final class CameraController extends Solo<CameraState> {
 }
 ```
 
-From the outside:
+`init` starts only from `Initial`, but uses `NotDisposed` as its working
+type so it can continue after emitting `Preparing`. `setZoom` replaces
+queued zoom requests while allowing the running request to finish.
+
+After taking a photo, `takePhoto` clears cancellable queued commands. This
+example treats commands accumulated during capture as belonging to that
+capture; clearing prevents them from affecting the next one. The running
+job is unaffected by `queue.clear()`.
+
+`dispose()` is an application operation that closes the hardware and
+publishes `Disposed`. It clears pending work and requests cancellation of
+the running job before queuing its own non-cancellable teardown. The
+child `_closeCameraJob` also refuses ordinary cancellation. The controller's
+`close()` is a separate lifecycle operation, so await device disposal
+before closing the controller:
 
 ```dart
 final camera = CameraController(FakeCameraHardware());
@@ -1226,38 +1408,10 @@ switch (await camera.dispose().done) {
 await camera.close();
 ```
 
-Four things in that controller are worth a sentence each.
-
-**The working type is wider than the start condition.** `init` starts only
-from `Initial`, but it is declared `run<NotDisposed, void>`, because its
-first line emits `Preparing` and the body keeps reading the context
-afterwards. The start condition lives in `canStart`; `W` covers every state
-the body walks through.
-
-**`takePhoto` clears the queue.** The commands that piled up while the
-shutter was open were aimed at the frame that has just been taken. Once
-the capture succeeds they are stale, so the shot throws them away instead
-of applying them to the next frame. `queue.clear()` without
-`force` leaves `cancellable: false` jobs alone and never touches the
-running job — the shot itself.
-
-**`dispose()` is a job; `close()` is the end of the controller.**
-`dispose()` puts the hardware back and can be queued, dropped as a
-duplicate, and awaited like any other job. `close()` drops the queue,
-cancels the running job and refuses everything after it. One does not
-imply the other: `close()` alone leaves the camera open. Await the teardown
-first, then close.
-
-**A queued `setZoom` is replaced, a running one is not.** `Policy.replace`
-removes queued jobs with the same key; the job already running is left to
-finish. `Policy.restart` would cancel it as well, and `Policy.droppable` —
-what `takePhoto` uses — keeps the running job and drops the newcomer.
-
-[`example/`](example) is a runnable package with this controller extended:
-a fake camera whose hardware answers late and may break on its own, a
-`Broken` state, `reopen`, `pause`, `resume` and focus jobs, seven tests
-over an ordered journal, and `bin/main.dart` that prints the same journal in
-real time.
+The runnable example extends this controller with a `Broken` state,
+reopening, pause, resume and focus operations. Its fake hardware responds
+with delays and can fail independently. Tests check ordered event journals,
+and `bin/main.dart` prints one while the scenario runs:
 
 ```sh
 cd example
