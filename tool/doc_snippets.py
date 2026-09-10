@@ -1,4 +1,4 @@
-"""Builds one runnable file per snippet of packages/solo/doc/vs-bloc.md.
+"""Builds runnable scenarios from packages/solo/doc/vs-bloc.md.
 
 Every snippet is copied byte-identical out of the markdown and wrapped in a
 runnable file: fakes above it, a driver below it. That is what keeps the
@@ -10,14 +10,16 @@ Usage, from the repository root:
 
 It creates two packages under the workdir, bloc_check (bloc 9 with
 bloc_concurrency) and solo_check (a path dependency on packages/solo), and
-writes bin/v/item1..10.dart into each. Then, in each of them:
+writes bin/v/item1..10.dart plus item3_cancel.dart into each. Then:
 
     dart pub get
     dart analyze bin/v
     dart run bin/v/item1.dart          # and so on, up to item10
+    dart run bin/v/item3_cancel.dart   # Loading after cancellation
 
-The traces the document quotes come from those runs. Timings in the fakes
-are wall-clock and leave a margin; the drivers are not FakeAsync.
+The traces the document quotes come from those runs. The main ten drivers
+use wall-clock fakes with timing margins. The Loading cancellation driver
+uses FakeAsync and completers, checking each state transition explicitly.
 """
 import os
 import re
@@ -37,6 +39,7 @@ environment:
 dependencies:
   bloc: ^9.0.0
   bloc_concurrency: ^0.3.0
+  fake_async: ^1.3.1
 """
 
 SOLO_PUBSPEC = """name: solo_check
@@ -48,9 +51,9 @@ environment:
 dependencies:
   solo:
     path: {solo}
+  fake_async: ^1.3.1
 
 dev_dependencies:
-  fake_async: ^1.3.1
   lints: ^5.1.1
   test: ^1.25.15
 """.format(
@@ -1609,6 +1612,106 @@ Future<void> main() async {
   print('dispose: state ${controller.state}, stale releases '
       '${staleBuffer.releases}, current releases ${currentBuffer.releases}');
   print('trace: ${decoder.trace}');
+}
+''')
+
+REFRESH_MODEL = '''
+sealed class RefreshState {
+  const RefreshState();
+}
+
+final class Initial extends RefreshState {
+  const Initial();
+}
+
+final class Loading extends RefreshState {
+  const Loading();
+}
+
+sealed class RefreshEvent {}
+final class StartRefresh extends RefreshEvent {}
+final class CancelRefresh extends RefreshEvent {}
+
+class RefreshApi {
+  final pending = Completer<void>();
+  Future<void> refresh() => pending.future;
+}
+
+void require(bool condition, String message) {
+  if (!condition) throw StateError(message);
+}
+'''
+
+fixed_refresh = snips['3_3'].replace(
+    'class RefreshBloc ', 'class GuardedRefreshBloc ',
+).replace('RefreshBloc(this._api)', 'GuardedRefreshBloc(this._api)').replace(
+    'if (event is CancelRefresh) return;', snips['3_4'].strip(),
+)
+FILES['bloc/item3_cancel'] = (
+    BLOC_IMPORTS + "import 'package:fake_async/fake_async.dart';\n"
+    + REFRESH_MODEL + snips['3_3'] + fixed_refresh + '''
+void main() {
+  fakeAsync((clock) {
+    final api = RefreshApi();
+    final bloc = RefreshBloc(api);
+    bloc.add(StartRefresh());
+    clock.flushMicrotasks();
+    require(bloc.state is Loading, 'refresh must start in Loading');
+    bloc.add(CancelRefresh());
+    clock.flushMicrotasks();
+    require(bloc.state is Loading, 'cancel without emit leaves Loading');
+    api.pending.complete();
+    clock.flushMicrotasks();
+    require(bloc.state is Loading, 'cancelled finally must not update state');
+    print('finally reset: ${bloc.state.runtimeType} after API completion');
+    bloc.close();
+    clock.flushMicrotasks();
+
+    final fixedApi = RefreshApi();
+    final fixed = GuardedRefreshBloc(fixedApi);
+    fixed.add(StartRefresh());
+    clock.flushMicrotasks();
+    require(fixed.state is Loading, 'guarded refresh must start in Loading');
+    fixed.add(CancelRefresh());
+    clock.flushMicrotasks();
+    require(fixed.state is Initial, 'cancel handler must reset immediately');
+    fixedApi.pending.complete();
+    clock.flushMicrotasks();
+    require(fixed.state is Initial, 'late finally must preserve Initial');
+    print('cancel handler reset: ${fixed.state.runtimeType}');
+    fixed.close();
+    clock.flushMicrotasks();
+  });
+}
+''')
+
+FILES['solo/item3_cancel'] = (
+    SOLO_IMPORTS.replace(
+        "import 'package:solo/solo.dart';",
+        "import 'package:fake_async/fake_async.dart';\n"
+        "import 'package:solo/solo.dart';",
+    )
+    + REFRESH_MODEL + snips['3_5'] + '''
+void main() {
+  fakeAsync((clock) {
+    final api = RefreshApi();
+    final controller = RefreshController(api);
+    final job = controller.refresh();
+    clock.flushMicrotasks();
+    require(controller.state is Loading, 'refresh must start in Loading');
+    var cancelled = false;
+    job.cancel().then((_) => cancelled = true);
+    clock.flushMicrotasks();
+    require(cancelled, 'cancel must finish before abandoned API response');
+    require(job.outcome is Cancelled, 'job must report cancellation');
+    require(controller.state is Initial, 'onCancel must reset state');
+    print('onCancel reset: ${controller.state.runtimeType}, ${job.outcome}');
+    api.pending.complete();
+    clock.flushMicrotasks();
+    require(controller.state is Initial, 'late response must preserve state');
+    controller.close();
+    clock.flushMicrotasks();
+  });
 }
 ''')
 
