@@ -156,21 +156,14 @@ that it gives up the moment the job is cancelled. `Policy.droppable` with
 `key: 'load'` means that a second `load()` while the first one is still
 queued or running returns that first job instead of starting a second.
 
-Reading is free: `profile.state` is the current state, synchronously, for
-anyone; `profile.stream` is a broadcast stream of every change, delivered
-one microtask later. Only jobs write, one root job at a time, in queue
-order. Two writers inside one controller happen on purpose and only on
-purpose: a child started by `ctx.run` writes beside its parent, and
-`externalSetState` writes from outside any job at all.
+`profile.state` gives the current state synchronously; `profile.stream`
+is a broadcast stream of changes, delivered one microtask later.
+Root jobs run one at a time. The next job starts after the previous job's
+body, children, cleanup and final state handler have finished.
 
-`close()` shuts the controller down for good: queued jobs end with
-`Cancelled(closed)`, the running one is cancelled, and later calls return
-jobs that are already `Cancelled(closed)` instead of throwing. It does not
-close the door on `externalSetState`, though: the state still changes
-after `close()` and the rules are still re-evaluated, while the stream,
-already closed, drops the event and nobody hears it. Stop the source of
-external states — the hardware listener, the socket — before closing the
-controller.
+`close()` stops accepting work, cancels queued jobs, requests cancellation
+of the running job and waits for it to finish. Jobs submitted after
+closing immediately finish with `Cancelled(closed)`.
 
 ## Concepts
 
@@ -378,10 +371,12 @@ Job<String> load() => run<ProfileState, String>(
     );
 ```
 
-If the device reports `Disconnected` through `externalSetState`, that
-state stays in place. It also stays if the report arrives during cleanup
-of a job already cancelled manually. A compatible external state permits
-correction, so the handlers need no repeated type checks.
+A device can lose its connection independently of the controller. Its
+listener reports that fact through the protected `externalSetState`
+method, setting `Disconnected`. That state stays in place, including when
+the report arrives during cleanup of a job already cancelled manually.
+A compatible external state permits correction, so the handlers need no
+repeated type checks.
 
 `run.onCancel` runs at completion; `ctx.onCancel` delivers the cancellation
 signal immediately to something that can stop the operation. With
@@ -483,13 +478,21 @@ unfinished source, but does not own a continuation already running after
 its source finished. Use children inside one parent when the entire
 sequence must hold the controller's current slot.
 
-**External state.** `externalSetState(next)` reflects a change that has
-already happened in an external source, such as a device or socket.
-Running bodies are re-evaluated against that state; the emitting job is
-checked on its next context read. After the body ends, rules no longer
-cancel it, but they still revoke state handlers if an external transition
-is incompatible. Use `run`/`job` state handlers to correct the state of
-an operation owned by the controller.
+**External state.** A device or another independent entity can change its
+state without a command from this controller. A listener inside the
+`Solo` subclass reflects that already completed change through
+`externalSetState(next)`, which is marked `@protected`. This is an
+exception to job-owned state changes: the external entity owns the
+transition, and the controller receives its notification. For its own
+operations, the controller uses job bodies and `run`/`job` state handlers.
+
+An external update re-evaluates running bodies against the new state.
+For jobs with state handlers, incompatible updates also revoke permission
+to correct state during cancellation, child waiting and cleanup.
+
+Stop the external listener before closing the controller.
+`externalSetState` still changes the state after `close()`, but `Solo`'s
+closed stream no longer delivers those updates.
 
 **Outcomes.** `Outcome<T>` is sealed, so a `switch` over its three cases is
 exhaustive: `Done` carries the returned `value`, `Failed` carries `error`
