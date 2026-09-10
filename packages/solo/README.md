@@ -105,9 +105,11 @@ final class ProfileController extends Solo<Profile> {
 
   // A flag the body raised has to come off whatever the outcome, and the
   // body is not the place for that: a failure skips the lines below it,
-  // and a cancellation makes `emit` throw. The hook runs on every outcome.
+  // and a cancellation makes `emit` throw. The hook runs on every outcome,
+  // including dropped duplicates that never ran and must be skipped.
   @override
   void onFinish(Job<Object?> job) {
+    if (job.outcome case Cancelled(started: false)) return;
     if (job.key == 'load' && state.loading) {
       externalSetState(state.copyWith(loading: false));
     }
@@ -226,8 +228,9 @@ every call goes through the context, and the member you pick says what a
 cancellation does to that call. `ctx.wait(() => ...)` returns as soon as
 either the action or the cancellation arrives. `ctx.join(() => ...)` waits
 for all of the action and gives up afterwards. `ctx.uncancellable(() => ...)`
-holds the cancellation for the length of the call and gives up once it is
-over. `ctx.unattended(() => ...)` does not wait at all: it hands the work
+defers cancellation until the action finishes; the next cancellation
+checkpoint throws it. Plain code after the call can still run.
+`ctx.unattended(() => ...)` does not wait at all: it hands the work
 to the engine and comes back, and whatever that work throws — now or long
 after the job is over — reaches `onError` instead of the process. Where
 there is no

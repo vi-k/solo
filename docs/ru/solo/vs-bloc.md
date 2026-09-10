@@ -1025,8 +1025,8 @@ class CheckoutCubit extends Cubit<CheckoutState> {
   }
 
   Future<Receipt> _pay(Order order) async {
-    emit(Paying());
     try {
+      emit(Paying());
       final receipt = await _api.pay(order);
       emit(Paid(receipt));
       return receipt;
