@@ -98,7 +98,10 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   }
 
   @override
-  void started() => _solo._running.add(this);
+  void started() {
+    _solo._running.add(this);
+    _accumulation?._started();
+  }
 
   @override
   void finished() {

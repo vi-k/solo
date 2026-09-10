@@ -6,8 +6,9 @@ Both return a `SoloAccumulator<E, T>`. Create it once in your controller,
 then call its `add(event)` method from the controller's public methods.
 
 The accumulator owns the input of a queued job. Adding an event does not
-run the handler or change controller state. When the queue takes the job
-for execution, its input is fixed. The handler receives that input and
+run the handler or change controller state. The group accepts events until
+it is sealed: when debounce expires, or when the queue takes the job
+for execution with other timing settings. The handler receives that input and
 an ordinary `SoloContext<S, W>`; it changes state through `ctx.emit`.
 
 ## Combining settings changes
@@ -71,6 +72,7 @@ class SettingsController extends Solo<Settings> {
     },
     merge: (accumulated, incoming) => accumulated.merge(incoming),
     key: 'settings',
+    timing: AccumulationTiming.debounce(const Duration(milliseconds: 200)),
   );
 
   SettingsController(this._api, Settings initial) : super(initial);
@@ -84,7 +86,7 @@ Each following event calls `merge(accumulated, incoming)` synchronously
 from `add`, before the handler starts. Only its result is kept. `false`
 is a specified value and is preserved by the example's merge function.
 
-Call these methods before yielding to the queue:
+For example, make three changes in one group:
 
 ```dart
 Future<void> changeSettings(SettingsApi api, Settings initial) async {
@@ -112,7 +114,8 @@ Future<void> changeSettings(SettingsApi api, Settings initial) async {
 
 With the default policy, these calls share one `SoloJob<void>`. Its
 handler saves one snapshot with all three changes, then emits that
-snapshot. State still has its initial value before the handler runs.
+snapshot after 200 ms without another change. State still has its initial
+value before the handler runs. Other ready jobs can run during the pause.
 Observing `.done` reports `Done`, `Failed` or `Cancelled` without throwing.
 
 If saving fails, the state is unchanged and the group fails. Retrying
@@ -128,7 +131,8 @@ after the server has accepted the write.
 
 Logs need their individual entries and order. `collect` appends events
 to a private list and gives the handler an unmodifiable snapshot at
-execution time. It preserves duplicate events and does not copy the
+the moment the group is sealed. It preserves duplicate events and does not copy
+the
 entire list on every addition. The entries themselves are not cloned;
 use immutable event objects.
 
@@ -154,6 +158,7 @@ class LogController extends Solo<int> {
     },
     key: 'logs',
     policy: AccumulationPolicy.join,
+    timing: AccumulationTiming.throttle(const Duration(seconds: 1)),
   );
 
   LogController(this._api) : super(0);
@@ -162,15 +167,62 @@ class LogController extends Solo<int> {
 }
 ```
 
-Three calls before execution send one list of three entries. This
+Three calls before execution send one list of three entries. The first
+group is ready immediately; later groups start at least one second apart.
+Entries received during that interval are kept for the next group. This
 controller's state counts entries whose send operation completed and
-whose handler reached `emit`. The next section explains why this example
+whose handler reached `emit`. The policy section explains why this example
 chooses `join` as its accumulation policy.
 
 Collecting entries does not guarantee delivery. A failed send, a
 cancelled group or controller shutdown can leave them unsent. Durable
 storage, retries and a final send on shutdown require an application
 protocol beyond this accumulator.
+
+## Choosing when a group is ready
+
+Both factories accept an optional `timing`. The setting controls when a
+group may start; `collect` still keeps every accepted event, and
+`accumulate` keeps whatever its `merge` returns. For example,
+`merge: (previous, incoming) => incoming` keeps only the latest value.
+
+`AccumulationTiming.debounce(duration)` waits for a pause after the last
+accepted event in each group. Every addition restarts the timer, even
+when `merge` returns an unchanged value. With a 200 ms interval, events
+at 0, 60 and 120 ms make the group ready at 320 ms. Continuous input can
+keep an open group waiting indefinitely. When the timer fires, the group
+is sealed even if another job is running. Later events form a new group;
+they cannot change the sealed input. `collect` makes its unmodifiable
+snapshot once, when sealing.
+
+`AccumulationTiming.throttle(duration)` allows the first group to start
+immediately, then waits at least `duration` between actual starts of the
+same accumulator. Additions during the interval gather in an open group
+without extending the timer. When the interval ends, queued input is
+ready without needing another event. The group accepts events until the
+queue takes it for execution. No job is created for an empty interval.
+
+The start is the transition to running, before `onStart`. A group rejected
+by start rules consumes no throttle interval; cancellation from `onStart`
+does. If a group starts at 0 ms with a 200 ms interval, but another job
+holds the slot until 500 ms, the next group starts at 500 ms and the one
+after that cannot start before 700 ms. If the group's own handler,
+children or cleanup outlast the interval, the next group can start as
+soon as they finish.
+
+Waiting groups stay visible in `queue.jobs`. The queue takes the first
+ready job in list order, allowing ready jobs to pass waiting groups.
+The list can therefore be nonempty while no job is running. Timing does
+not occupy the execution slot; once a handler starts, the queue waits
+for its children and cleanup before starting another root job.
+
+Omitting `timing`, or passing `Duration.zero`, makes groups ready
+immediately and creates no timers. Negative durations throw
+`ArgumentError`. A timing configuration can be shared by several
+accumulators; each accumulator has its own groups and throttle interval.
+Timer callbacks follow Dart's event-loop order: an event processed before
+a debounce callback can restart the timer; an event processed after it
+belongs to a new group. A busy event loop can delay callbacks and starts.
 
 ## Choosing where events join
 
@@ -185,11 +237,15 @@ keeps the queue occupied. A belongs to one accumulator; B is another job.
 | `join` | `[A(A1 + A2), B]` | A1's existing job |
 
 `adjacent` accepts into the group only when it is at the queue's tail.
-`replace` and `join` find the last queued group of the same accumulator,
+`replace` and `join` find the last open queued group of the same accumulator,
 looking past other jobs. Those other jobs stay in the queue. In `join`,
-A2 is processed before B even though it arrived later. In `replace`,
-A1's processing is deferred until after B. Choose the policy according
-to which ordering your handler requires.
+A retains its position before B; `replace` moves A behind B. Execution
+also depends on readiness: a ready B can pass A while A waits for timing.
+
+Policies use the current queue. If B has already run, a waiting A may
+again be at the tail, so a later event can join it with `adjacent`.
+Already separate groups are never combined retroactively. A sealed
+debounce group is ineligible for all three policies.
 
 `replace` transfers all accumulated data into a new queued job and adds
 the incoming event. It creates a new handle even when the old group was
@@ -198,7 +254,8 @@ already at the tail. The old job completes with `Cancelled`, a
 `replaced by accumulated group`. The new group is in the queue before
 the old job's finish and cancellation callbacks run. Those callbacks can
 add, cancel or close again, so the returned new handle may already be
-cancelled by the time the outer `add` returns.
+cancelled by the time the outer `add` returns. A replacement starts a
+fresh debounce interval; it preserves the accumulator's throttle interval.
 
 Replacement is mandatory for a queued group, including one configured
 with `cancellable: false`. It never cancels a running group. The ordinary
@@ -213,14 +270,15 @@ accumulator on every call prevents events from joining an existing one.
 ## Start, cancellation and errors
 
 All three policies operate on queued groups. A group stops accepting
-events when it is taken from the queue, before `canStart` and `onStart`.
+events when debounce seals it or when it is taken from the queue, before
+`canStart` and `onStart`.
 Events added from either callback go to a later group. The handler gets
 the configured working type and rules, and the queue waits for its
 children and cleanup just as it does for any other `SoloJob`.
 
-An accumulator creates no job until the first event. There is no timer
-or debounce window. If each group finishes before the next event arrives,
-each event starts a separate job. A `join` policy's search can scan the
+An accumulator creates no job until the first event. Without timing,
+if each group finishes before the next event arrives, each event starts
+a separate job. A `join` policy's search can scan the
 queue; `adjacent` only checks its tail. `replace` also searches the queue.
 
 In `adjacent` and `join`, additions to one group share one handle,
@@ -231,8 +289,9 @@ successor. Await the new handle to observe the transferred work.
 
 `merge` must be synchronous and pure. It must not mutate either argument
 or call into the controller. If it throws, `add` throws the same error
-and the existing group remains unchanged; even `replace` keeps the old
-job. Calling the same accumulator's `add` from within its `merge` throws
+and the existing group and timer remain unchanged; even `replace` keeps
+the old job. Calling the same accumulator's `add` from within its `merge`
+throws
 `StateError`. The engine also checks that the target group is still
 eligible after the callback, before committing the result.
 
@@ -242,8 +301,14 @@ errors follow the ordinary `Job` contract; accepted cancellation still
 takes precedence over a later value or error. The accumulator does not
 roll back partial external effects or resend failed input automatically.
 
-`close()` drops queued groups and cancels or waits for the running job
-under the usual rules. It does not send a final batch. An `add` after
+Cancelling a queued debounce group removes its timer. Removing or clearing
+throttle groups preserves an already started interval, so adding another
+event cannot bypass the limit. That timer expires once and is not renewed
+until another group starts.
+
+`close()` cancels every timing timer, drops queued groups and cancels or
+waits for the running job under the usual rules. It does not send a final
+batch. An `add` after
 closing returns a new job already completed with `Cancelled(closed)`;
 it does not call `merge` or the handler. Once a group completes, its
 internal input storage is released. A handler, result or error that

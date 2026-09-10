@@ -1,5 +1,12 @@
 ## 0.2.0
 
+- Add `AccumulationTiming.debounce` and `.throttle` to `collect` and
+  `accumulate`. Debounce seals a group after a pause between events;
+  throttle spaces actual group starts. Waiting groups let ready jobs
+  pass, while handlers, children and cleanup remain sequential.
+  `collect` retains every event; `accumulate` retains the `merge` result.
+  Closing cancels timing timers and queued groups without a final batch.
+
 - **Breaking:** `ctx.run(child)` returns the child's result as `Future<T>`.
   Replace `await ctx.run(child).value` with `await ctx.run(child)`; keep the
   original child handle to cancel it or inspect its outcome. After success,

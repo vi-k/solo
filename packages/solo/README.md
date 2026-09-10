@@ -483,6 +483,13 @@ running groups never accept new events. See the
 [settings and logs recipe](doc/accumulation.md) for examples, ordering
 and the outcome of each handle.
 
+Set `timing` to `AccumulationTiming.debounce(duration)` to wait for a
+pause between events, or `AccumulationTiming.throttle(duration)` to limit
+how often groups start. `collect` keeps every accepted event;
+`accumulate` keeps the value chosen by `merge`. Waiting groups stay in
+`queue` and let ready jobs pass. Handlers still run sequentially.
+Omit `timing` or use `Duration.zero` to make groups ready immediately.
+
 **Stream.** `Solo.stream` is a broadcast stream of every state change, in
 order, delivered on the next microtask — the stream is asynchronous. The
 source of truth is `state`: by the time an event arrives, `state` may
@@ -782,42 +789,29 @@ Where the call has nothing to leave behind — a read, a request whose answer
 you can drop — the short form is honest: `ctx.wait(() => api.fetch()
 .timeout(...))`, and the abandoned request finishes on its own.
 
-**Debounce.** Also outside the engine: hold a `Timer` in the controller and
-start the job when it fires. Combine it with `Policy.restart`, so that a job
-still running for the previous input is cancelled rather than awaited.
-Nothing awaits this job, so a failure of `api.search` goes to the zone; see
-[Errors](#errors) for the ways out:
+**Debounce.** Use an accumulator to start a search after a pause in input.
+Here, `merge` keeps the latest query and debounce waits for 300 ms of
+silence. Other ready jobs can run during that pause. A search already
+running finishes before the next one starts. The returned job exposes
+its result and cancellation; see [Errors](#errors) for handling failures.
 
 ```dart
-import 'dart:async';
-
 final class Search extends Solo<SearchState> {
   final SearchApi api;
-
-  Timer? _debounce;
+  late final _queries = accumulate<SearchState, String, void>(
+    (ctx, text) async {
+      final results = await ctx.wait(() => api.search(text));
+      ctx.emit(SearchState.results(results));
+    },
+    merge: (previous, incoming) => incoming,
+    timing: AccumulationTiming.debounce(const Duration(milliseconds: 300)),
+    policy: AccumulationPolicy.join,
+    key: 'query',
+  );
 
   Search(this.api) : super(const SearchState.idle());
 
-  void query(String text) {
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 300), () {
-      run<SearchState, void>(
-        key: 'query',
-        policy: Policy.restart,
-        describe: () => text,
-        (ctx) async {
-          final results = await ctx.wait(() => api.search(text));
-          ctx.emit(SearchState.results(results));
-        },
-      );
-    });
-  }
-
-  @override
-  Future<void> close() {
-    _debounce?.cancel();
-    return super.close();
-  }
+  SoloJob<void> query(String text) => _queries.add(text);
 }
 ```
 

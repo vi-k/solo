@@ -6,7 +6,10 @@ part of 'solo_base.dart';
 /// given. `force` affects only queued jobs: a running job is never touched
 /// by the queue.
 abstract interface class SoloQueue {
-  /// An unmodifiable view of the queued jobs, first to run first.
+  /// An unmodifiable view of queued jobs in their current order.
+  ///
+  /// A job waiting for an accumulation timing window can be bypassed by a
+  /// ready job later in this view.
   Iterable<Job<Object?>> get jobs;
 
   /// The number of queued jobs.
@@ -100,10 +103,14 @@ final class _SoloQueue<S extends Object> implements SoloQueue {
   }
 
   _SoloJob<S, S, Object?>? _takeFirst() {
-    if (_jobs.isEmpty) return null;
-    final job = _jobs.removeAt(0);
-    job._accumulation?._seal();
-    return job;
+    for (var i = 0; i < _jobs.length; i++) {
+      final job = _jobs[i];
+      if (!(job._accumulation?._ready ?? true)) continue;
+      _jobs.removeAt(i);
+      job._accumulation?._seal();
+      return job;
+    }
+    return null;
   }
 
   List<_SoloJob<S, S, Object?>> _drain() {

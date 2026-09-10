@@ -400,15 +400,12 @@ the parent's cancellation and completion handling.
 and checks the parent's cancellation before returning the value to the
 body. If the child refuses cancellation, `run` still waits for it; after
 the child succeeds, `run` throws the parent's cancellation instead of
-continuing to the log call. No separate `ctx.join` or `ctx.check()` is
-needed. A child's error or cancellation is thrown through the returned
-future with its stack trace.
+continuing to the log call. A child's error or cancellation is thrown
+through the returned future with its stack trace.
 
-The original `child` remains the handle for cancellation and inspecting
-its outcome; `run` does not create another job. A plain `await child.value`
-only delivers the child's value or error and does not check the parent's
-cancellation. To start a child concurrently, retain the future returned
-by `run` and await it later, or handle its errors. Use
+Use `child.cancel()` to request cancellation and `child.done` to inspect
+the outcome. To start a child concurrently, retain the future returned
+by `ctx.run(child)` and await it later, or handle its errors. Use
 `ctx.run(child).ignore()` when deliberately ignoring that result. The
 parent still waits for the child before finishing. Ignoring the handle
 with `child.ignore()` alone does not handle errors of the `run` future;

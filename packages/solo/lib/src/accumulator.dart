@@ -35,7 +35,7 @@ abstract interface class SoloAccumulator<E, T> {
 }
 
 final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
-    implements SoloAccumulator<E, T> {
+    implements SoloAccumulator<E, T>, _AccumulationOwner {
   final SoloBase<S> _solo;
   final Future<T> Function(SoloContext<S, W>, V) _handler;
   final V Function(E) _seed;
@@ -43,11 +43,14 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
   final V Function(V) _snapshot;
   final Object? _key;
   final AccumulationPolicy _policy;
+  @override
+  final AccumulationTiming? _timing;
   final bool Function(W)? _canStart;
   final bool Function(W)? _keepWhile;
   final bool _cancellable;
   final String Function()? _describe;
   var _merging = false;
+  Timer? _throttleTimer;
 
   _SoloAccumulator(
     this._solo,
@@ -57,6 +60,7 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
     required V Function(V) snapshot,
     required Object? key,
     required AccumulationPolicy policy,
+    required AccumulationTiming? timing,
     required bool Function(W)? canStart,
     required bool Function(W)? keepWhile,
     required bool cancellable,
@@ -66,6 +70,7 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
         _snapshot = snapshot,
         _key = key,
         _policy = policy,
+        _timing = timing,
         _canStart = canStart,
         _keepWhile = keepWhile,
         _cancellable = cancellable,
@@ -107,7 +112,10 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
     if (_solo.isClosed) return _solo.add(_job(null));
     final previous = _candidate();
     if (previous == null) {
-      return _solo.add(_job(_AccumulationGroup(this, _seed(event), _snapshot)));
+      final group = _AccumulationGroup(this, _seed(event), _snapshot);
+      final job = _solo.add(_job(group));
+      if (job.isQueued && group._open) group._accepted();
+      return job;
     }
     final group = previous._accumulation! as _AccumulationGroup<V>;
     final V next;
@@ -121,10 +129,13 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
       throw StateError('The accumulation group changed during merge');
     }
     if (_policy != AccumulationPolicy.replace) {
-      group._value = next;
+      group
+        .._value = next
+        .._accepted();
       return previous;
     }
-    final replacement = _job(_AccumulationGroup(this, next, _snapshot));
+    final nextGroup = _AccumulationGroup(this, next, _snapshot);
+    final replacement = _job(nextGroup);
     // Transfer ownership and publish the new queue state before cancellation
     // hooks can add, clear, cancel or close reentrantly. A collect buffer is
     // transferred as-is; releasing the old group must not clear its list.
@@ -132,6 +143,7 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
     _solo._queue._jobs.remove(previous);
     replacement._added = true;
     _solo._queue._insert(replacement, first: false);
+    nextGroup._accepted();
     _solo._schedulePump();
     previous._drop(
       Cancelled.by(
@@ -143,18 +155,98 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
     );
     return replacement;
   }
+
+  @override
+  bool get _throttleReady => _throttleTimer?.isActive != true;
+
+  bool get _hasQueuedGroup => _solo._queue._jobs.any(
+        (job) => identical(job._accumulation?._owner, this),
+      );
+
+  @override
+  Timer _startTimer(Duration duration, void Function(Timer) callback) =>
+      _solo._startTimer(duration, callback);
+
+  @override
+  void _cancelTimer(Timer timer) => _solo._cancelTimer(timer);
+
+  @override
+  void _schedulePump() => _solo._schedulePump();
+
+  @override
+  void _started() {
+    final timing = _timing;
+    if (timing == null ||
+        timing._kind != _AccumulationTimingKind.throttle ||
+        timing.duration == Duration.zero) {
+      return;
+    }
+    late final Timer timer;
+    timer = _startTimer(timing.duration, (elapsed) {
+      if (!identical(_throttleTimer, elapsed)) return;
+      _throttleTimer = null;
+      if (_solo._current == null && _hasQueuedGroup) _schedulePump();
+    });
+    _throttleTimer = timer;
+  }
+}
+
+abstract interface class _AccumulationOwner {
+  AccumulationTiming? get _timing;
+
+  bool get _throttleReady;
+
+  Timer _startTimer(Duration duration, void Function(Timer) callback);
+
+  void _cancelTimer(Timer timer);
+
+  void _schedulePump();
+
+  void _started();
 }
 
 final class _AccumulationGroup<V> {
-  final Object _owner;
+  final _AccumulationOwner _owner;
   final V Function(V) _snapshot;
   V? _value;
   var _open = true;
+  Timer? _debounceTimer;
 
   _AccumulationGroup(this._owner, this._value, this._snapshot);
 
+  bool get _ready {
+    final timing = _owner._timing;
+    if (timing == null || timing.duration == Duration.zero) return true;
+    return switch (timing._kind) {
+      _AccumulationTimingKind.debounce => _debounceTimer == null,
+      _AccumulationTimingKind.throttle => _owner._throttleReady,
+    };
+  }
+
+  void _accepted() {
+    final timing = _owner._timing;
+    if (timing == null ||
+        timing._kind != _AccumulationTimingKind.debounce ||
+        timing.duration == Duration.zero) {
+      return;
+    }
+    _stopDebounce();
+    late final Timer timer;
+    timer = _owner._startTimer(timing.duration, (elapsed) {
+      if (!identical(_debounceTimer, elapsed)) return;
+      _debounceTimer = null;
+      _seal();
+      _owner._schedulePump();
+    });
+    _debounceTimer = timer;
+  }
+
+  void _started() => _owner._started();
+
   void _seal() {
+    if (!_open) return;
     _open = false;
+    _stopDebounce();
     _value = _snapshot(_value as V);
   }
 
@@ -165,7 +257,16 @@ final class _AccumulationGroup<V> {
   }
 
   void _release() {
+    if (!_open && _value == null) return;
     _open = false;
+    _stopDebounce();
     _value = null;
+  }
+
+  void _stopDebounce() {
+    final timer = _debounceTimer;
+    if (timer == null) return;
+    _debounceTimer = null;
+    _owner._cancelTimer(timer);
   }
 }

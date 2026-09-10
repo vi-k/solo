@@ -9,6 +9,7 @@ import 'policy.dart';
 import 'solo_cancel_reason.dart';
 
 part 'accumulator.dart';
+part 'accumulation_timing.dart';
 part 'job.dart';
 part 'job_context.dart';
 part 'queue.dart';
@@ -37,6 +38,7 @@ abstract class SoloBase<S extends Object> {
   Completer<void>? _closing;
   StackTrace? _closeStackTrace;
   final _queue = _SoloQueue<S>();
+  final _timers = <Timer>{};
 
   /// The observer every job of this controller is given.
   late final JobObserver _jobObserver = _SoloJobObserver<S>(this);
@@ -123,15 +125,18 @@ abstract class SoloBase<S extends Object> {
   /// Creates an accumulator that collects events into an immutable list.
   ///
   /// No job is created until [SoloAccumulator.add]. Events retain their order
-  /// and duplicates; the list is copied once when the group leaves the queue.
+  /// and duplicates; the list is copied once when the group is sealed.
   /// The handler receives a regular context and runs under the same rules as
   /// [job]. It changes state only when it runs, never when an event is added.
   /// [policy] chooses the waiting group and its position; [key] is an ordinary
-  /// job key and does not make different accumulators compatible.
+  /// job key and does not make different accumulators compatible. [timing]
+  /// can debounce each group or throttle starts across this accumulator;
+  /// ready jobs later in the queue can bypass a group waiting for its window.
   SoloAccumulator<E, T> collect<W extends S, E, T>(
     Future<T> Function(SoloContext<S, W> ctx, List<E> events) handler, {
     Object? key,
     AccumulationPolicy policy = AccumulationPolicy.adjacent,
+    AccumulationTiming? timing,
     bool Function(W state)? canStart,
     bool Function(W state)? keepWhile,
     bool cancellable = true,
@@ -145,6 +150,7 @@ abstract class SoloBase<S extends Object> {
         snapshot: List<E>.unmodifiable,
         key: key,
         policy: policy,
+        timing: timing,
         canStart: canStart,
         keepWhile: keepWhile,
         cancellable: cancellable,
@@ -160,11 +166,13 @@ abstract class SoloBase<S extends Object> {
   /// Only the latest merged value is retained; no event history is stored.
   /// The handler, rules, key and policy follow [collect]. No job is created
   /// until the first event, and no state changes before the handler runs.
+  /// [timing] has the same group readiness behavior as it does for [collect].
   SoloAccumulator<E, T> accumulate<W extends S, E, T>(
     Future<T> Function(SoloContext<S, W> ctx, E value) handler, {
     required E Function(E accumulated, E incoming) merge,
     Object? key,
     AccumulationPolicy policy = AccumulationPolicy.adjacent,
+    AccumulationTiming? timing,
     bool Function(W state)? canStart,
     bool Function(W state)? keepWhile,
     bool cancellable = true,
@@ -178,6 +186,7 @@ abstract class SoloBase<S extends Object> {
         snapshot: (value) => value,
         key: key,
         policy: policy,
+        timing: timing,
         canStart: canStart,
         keepWhile: keepWhile,
         cancellable: cancellable,
@@ -366,6 +375,10 @@ abstract class SoloBase<S extends Object> {
     // Kept for `add` after close: section 5.1 points every `closed` outcome
     // at the `close` call, whichever of the two sources made it.
     final stackTrace = _closeStackTrace = StackTrace.current;
+    for (final timer in _timers.toList()) {
+      timer.cancel();
+    }
+    _timers.clear();
     for (final job in _queue._drain()) {
       job._drop(
         Cancelled.by(
@@ -553,6 +566,21 @@ abstract class SoloBase<S extends Object> {
     }
   }
 
+  Timer _startTimer(Duration duration, void Function(Timer timer) callback) {
+    late final Timer timer;
+    timer = Timer(duration, () {
+      _timers.remove(timer);
+      callback(timer);
+    });
+    _timers.add(timer);
+    return timer;
+  }
+
+  void _cancelTimer(Timer timer) {
+    timer.cancel();
+    _timers.remove(timer);
+  }
+
   /// Schedules a pump so the caller finishes its synchronous part first:
   /// it may add several jobs and rearrange the queue before the first
   /// one starts.
@@ -574,7 +602,7 @@ abstract class SoloBase<S extends Object> {
     while (true) {
       final job = _queue._takeFirst();
       if (job == null) {
-        _debug(() => 'queue is empty');
+        _debug(() => 'queue has no ready jobs');
         return;
       }
       final String? rejection;
