@@ -1,7 +1,7 @@
 name: async_job
 description: >-
-  A cancellable Future: a job with an outcome, children, cooperative
-  cancellation and a waiting family. Pure Dart.
+  Cooperative cancellation, child tasks, resource cleanup and explicit
+  outcomes for asynchronous Dart code. Pure Dart.
 version: 0.2.0
 repository: https://github.com/vi-k/solo/tree/main/packages/async_job
 issue_tracker: https://github.com/vi-k/solo/issues
