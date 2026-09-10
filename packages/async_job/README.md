@@ -385,7 +385,7 @@ error, the parent lets its children finish and waits for them.
 ```dart
 final parent = Job<void>((ctx) async {
   final child = ctx.run(Job.deferred<int>((ctx) => ctx.wait(load)));
-  final rows = await child.value;
+  final rows = await ctx.join(() => child.value);
   ctx.log('$rows rows');
 });
 ```
@@ -395,11 +395,13 @@ Create children with `Job.deferred`, so the parent controls their start.
 avoids a race where the child starts independently and is left outside
 the parent's cancellation and completion handling.
 
-The example awaits `child.value` to use the child's result. The child is
-already registered with the parent, which waits for it and passes
-cancellation to it. If the child refuses cancellation, that wait can
-continue; use `ctx.check()` afterwards if the parent must check its own
-cancellation before doing more work.
+The example uses `ctx.join` to await `child.value` and check the parent's
+cancellation before returning the value to the body. If the child refuses
+cancellation, `join` still waits for it; after the child succeeds, `join`
+throws the parent's cancellation instead of continuing to the log call.
+No separate `ctx.check()` is needed. A plain `await child.value` only
+delivers the child's value or error; it does not check the parent's
+cancellation.
 
 A child inherits the parent's observer unless it has its own. If a child's
 cancellation escapes through `child.value` from the parent body, the
@@ -510,10 +512,10 @@ action. Otherwise, cancellation can make `join` throw before the body
 reaches the unregister call, leaving the cleanup callback registered:
 
 ```dart
-final remove = ctx.onDispose(cursor.close);
+final removeDisposer = ctx.onDispose(cursor.close);
 await ctx.join(() async {
   await cursor.readAll(); // closes it at the end
-  remove();
+  removeDisposer();
 });
 ```
 
@@ -583,6 +585,12 @@ its error goes to the current zone without changing the job's behavior.
 final class Log extends JobObserver {
   @override
   void onFinish(Job<Object?> job) => print('$job: ${job.outcome}');
+
+  @override
+  void onLog(Job<Object?> job, Object? message) {
+    final data = message is Object? Function() ? message() : message;
+    print('$job: $data');
+  }
 }
 
 final job = Job<int>(
@@ -600,7 +608,17 @@ Messages passed to `ctx.log` remain objects until the listener formats
 them. With no observer, `ctx.log` does nothing, but Dart still evaluates
 its argument. For example, `ctx.log('migration failed: $error')` formats
 the string even without an observer. Pass the object directly to leave
-formatting to the listener.
+formatting to the listener, or pass a callback to defer building the
+message itself:
+
+```dart
+ctx.log(() => 'migration failed: $error');
+```
+
+The observer above calls the callback and formats the returned data.
+Without an observer, the callback is never called and the interpolation
+does not run. This is a convention of this observer: `ctx.log` passes the
+callback through unchanged, just like any other object.
 
 A body error is sent to the observer. If the job ends with that error,
 it is stored in `Failed` and is also reported to the job's creation zone
