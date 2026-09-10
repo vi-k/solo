@@ -63,22 +63,31 @@ flutter pub add flutter_solo
 
 ## Quick start
 
-The state is one immutable object. A single class is enough to start
-with; a sealed hierarchy comes later, when the states differ in what they
-allow:
+Represent loading, success and failure as separate immutable states:
 
 ```dart
-final class Profile {
+sealed class ProfileState {
+  const ProfileState();
+}
+
+final class Initial extends ProfileState {
+  const Initial();
+}
+
+final class Loading extends ProfileState {
+  const Loading();
+}
+
+final class Loaded extends ProfileState {
   final String name;
-  final bool loading;
 
-  const Profile({this.name = '', this.loading = false});
+  const Loaded(this.name);
+}
 
-  Profile copyWith({String? name, bool? loading}) =>
-      Profile(name: name ?? this.name, loading: loading ?? this.loading);
+final class Failure extends ProfileState {
+  final Object error;
 
-  @override
-  String toString() => 'Profile("$name", loading: $loading)';
+  const Failure(this.error);
 }
 ```
 
@@ -87,35 +96,31 @@ job and hands it to the queue; the handle it returns is not a `Future`, so
 calling the method without `await` is legal and raises no lint:
 
 ```dart
-final class ProfileController extends Solo<Profile> {
+final class ProfileController extends Solo<ProfileState> {
   final ProfileApi api;
 
-  ProfileController(this.api) : super(const Profile());
+  ProfileController(this.api) : super(const Initial());
 
-  Job<String> load() => run<Profile, String>(
+  Job<String> load() => run<ProfileState, String>(
         key: 'load',
         policy: Policy.droppable,
+        onError: (state, error, stackTrace) => Failure(error),
+        onCancel: (state, cancelled) => const Initial(),
         (ctx) async {
-          ctx.emit(ctx.state.copyWith(loading: true));
+          ctx.emit(const Loading());
           final name = await ctx.wait(api.fetchName);
-          ctx.emit(Profile(name: name));
+          ctx.emit(Loaded(name));
           return name;
         },
       );
-
-  // A flag the body raised has to come off whatever the outcome, and the
-  // body is not the place for that: a failure skips the lines below it,
-  // and a cancellation makes `emit` throw. The hook runs on every outcome,
-  // including dropped duplicates that never ran and must be skipped.
-  @override
-  void onFinish(Job<Object?> job) {
-    if (job.outcome case Cancelled(started: false)) return;
-    if (job.key == 'load' && state.loading) {
-      externalSetState(state.copyWith(loading: false));
-    }
-  }
 }
 ```
+
+The body publishes `Loading` and `Loaded`. On failure, `onError` returns
+`Failure`; on cancellation, `onCancel` returns `Initial`. The engine applies
+that state after the body, children and cleanup, before the next queued job.
+These handlers are skipped if an external state change violates the job's
+rules. They preserve the job's `Failed` or `Cancelled` outcome.
 
 From the outside:
 
@@ -127,7 +132,9 @@ final job = profile.load();
 profile.load(); // droppable: the same job, not a second one
 
 print(await job.value); // Ada Lovelace; a failure is rethrown here
-print(profile.state.name); // the same name, straight from the state
+if (profile.state case Loaded(:final name)) {
+  print(name);
+}
 
 await subscription.cancel();
 await profile.close();
@@ -145,8 +152,8 @@ print(job.outcome); // Cancelled(manual)
 `cancelAll()` does that to the queue and the running job at once, and
 `close()` does it once and for good.
 
-`run<Profile, String>` says that the job works with `Profile` states and
-returns a `String`. Inside the body `ctx.emit` is the only way to write
+`run<ProfileState, String>` accepts every `ProfileState` and returns a
+`String`. Inside the body `ctx.emit` is the only way to write
 the state, and `ctx.wait` awaits a future the way `await` does, except
 that it gives up the moment the job is cancelled. `Policy.droppable` with
 `key: 'load'` means that a second `load()` while the first one is still
@@ -326,13 +333,64 @@ pair goes into one `ctx.uncancellable(...)`, and inside the section the
 step goes with a bare `await`: `ctx.join` there would throw after the step
 on a cancellation by the rules, and the `disown` would never happen.
 
-**The state on the way out.** A disposer cannot `emit` — the outcome is
-decided by the time it runs, and every read and write of the context
-throws a `StateError` there. Write the last state in the body: on the
-successful path before the `return`, on an error in a `try`/`catch` with a
-`rethrow`. On a cancellation there is no path at all — `emit` throws for a
-cancelled job — so a state that has to be set even then belongs in
-`onFinish` of the controller, through `externalSetState`.
+**State after failure or cancellation.** The optional `onError` and
+`onCancel` parameters of `run` and `job` are synchronous state handlers.
+They receive the current `S` and the error with its stack trace, or the
+`Cancelled` outcome, and return the next state. The engine calls the
+matching handler after the body, children and cleanup, before releasing
+the queue and calling `onFinish`. The outcome is already fixed: a handler
+cannot turn failure or cancellation into success. It does not observe the
+outcome for the caller; use `job.done`, `job.value` or `job.ignore()`.
+
+Neither handler runs for `Done`, a dropped duplicate, or a job whose body
+never started. A handler error is reported through the controller's error
+hook and observer without replacing the original outcome. Keep these
+functions limited to computing the next state; resource cleanup belongs
+in `ctx.onDispose` or `ctx.onDiscard`.
+
+An external state change that violates `W` or `keepWhile` revokes both
+handlers, even if the job is already cancelled or waiting for children or
+cleanup. A later compatible state does not restore them. A parent's loss
+of permission also blocks its children's handlers. These extra checks
+apply to jobs with state handlers; a parent without them stops checking
+its rules when its body ends, as usual. `canStart` is only
+checked at entry, and the job's own `emit` does not revoke its handlers.
+If a rule throws during this check, the handlers are disabled and the
+error is reported; resource cleanup still runs.
+
+For example, a device-backed profile can add `Disconnected` to its sealed
+states and restrict loading to connected states:
+
+```dart
+final class Disconnected extends ProfileState {
+  const Disconnected();
+}
+
+Job<String> load() => run<ProfileState, String>(
+      key: 'load',
+      policy: Policy.droppable,
+      keepWhile: (state) => state is! Disconnected,
+      onError: (state, error, stackTrace) => Failure(error),
+      onCancel: (state, cancelled) => const Initial(),
+      (ctx) async {
+        ctx.emit(const Loading());
+        final name = await ctx.wait(api.fetchName);
+        ctx.emit(Loaded(name));
+        return name;
+      },
+    );
+```
+
+If the device reports `Disconnected` through `externalSetState`, that
+state stays in place. It also stays if the report arrives during cleanup
+of a job already cancelled manually. A compatible external state permits
+correction, so the handlers need no repeated type checks.
+
+`run.onCancel` runs at completion; `ctx.onCancel` delivers the cancellation
+signal immediately to something that can stop the operation. With
+`ctx.wait`, the queue waits for the job's cleanup, but the abandoned
+operation can finish later. Use `ctx.join` when the next job must also
+wait for that operation and its resource release.
 
 **Errors of a disposer.** They go to `onError` and to `SoloBase.observer`.
 With neither of the two set, nobody is listening, and the error goes to the
@@ -428,11 +486,13 @@ unfinished source, but does not own a continuation already running after
 its source finished. Use children inside one parent when the entire
 sequence must hold the controller's current slot.
 
-**External state.** `externalSetState(next)` sets the state from outside
-any job: a hardware listener, a forced transition. Every job whose body is
-still running, except the one that emitted, is re-evaluated against the
-new state immediately; the emitting job is checked lazily, on its next
-read, and a job whose body has ended is not checked at all.
+**External state.** `externalSetState(next)` reflects a change that has
+already happened in an external source, such as a device or socket.
+Running bodies are re-evaluated against that state; the emitting job is
+checked on its next context read. After the body ends, rules no longer
+cancel it, but they still revoke state handlers if an external transition
+is incompatible. Use `run`/`job` state handlers to correct the state of
+an operation owned by the controller.
 
 **Outcomes.** `Outcome<T>` is sealed, so a `switch` over its three cases is
 exhaustive: `Done` carries the returned `value`, `Failed` carries `error`
@@ -688,7 +748,10 @@ test('load fills in the name', () async {
   final outcome = await profile.load().done;
 
   expect(outcome, isA<Done<String>>());
-  expect(profile.state.name, 'Ada Lovelace');
+  expect(
+    profile.state,
+    isA<Loaded>().having((state) => state.name, 'name', 'Ada Lovelace'),
+  );
 
   await profile.close();
 });
@@ -717,7 +780,7 @@ final class Journal extends SoloObserver {
 
   @override
   void onChange(SoloBase<Object> solo, Object previous, Object current) =>
-      lines.add('state: $current');
+      lines.add('state: ${current.runtimeType}');
 }
 
 test('a second load while the first one runs is dropped', () {
@@ -728,15 +791,16 @@ test('a second load while the first one runs is dropped', () {
     final profile = ProfileController(FakeProfileApi());
 
     final first = profile.load();
+    async.flushMicrotasks();
     final second = profile.load();
     expect(identical(first, second), isTrue);
 
     async.elapse(const Duration(milliseconds: 20));
     expect(journal.lines, [
-      'load Cancelled(manual: duplicate)',
       'load started',
-      'state: Profile("", loading: true)',
-      'state: Profile("Ada Lovelace", loading: false)',
+      'state: Loading',
+      'load Cancelled(manual: duplicate)',
+      'state: Loaded',
       'load Done(Ada Lovelace)',
     ]);
 
@@ -855,10 +919,10 @@ final class ScreenController extends Solo<Screen> {
 `onLog` and `onChange` to react to its own jobs:
 
 ```dart
-final class ProfileController extends Solo<Profile> {
+final class ProfileController extends Solo<ProfileState> {
   final ProfileApi api;
 
-  ProfileController(this.api) : super(const Profile());
+  ProfileController(this.api) : super(const Initial());
 
   // ...the jobs above...
 
@@ -916,10 +980,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_solo/flutter_solo.dart';
 
-final class ProfileController extends SoloListenable<Profile> {
+final class ProfileController extends SoloListenable<ProfileState> {
   final ProfileApi api;
 
-  ProfileController(this.api) : super(const Profile());
+  ProfileController(this.api) : super(const Initial());
 
   // ...the jobs above...
 }
@@ -979,9 +1043,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
         body: Center(
-          child: ValueListenableBuilder<Profile>(
+          child: ValueListenableBuilder<ProfileState>(
             valueListenable: profile,
-            builder: (context, state, _) => state.loading
+            builder: (context, state, _) => state is Loading
                 ? const CircularProgressIndicator()
                 : ElevatedButton(
                     onPressed: _open,

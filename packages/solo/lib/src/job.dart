@@ -16,7 +16,13 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   final Future<T> Function(SoloContext<S, W> ctx) _body;
   final bool Function(W state)? _canStart;
   final bool Function(W state)? _keepWhile;
+  final S Function(S, Object, StackTrace)? _onError;
+  final S Function(S, Cancelled)? _onCancel;
   _AccumulationGroup<Object?>? _accumulation;
+  _SoloJob<S, S, Object?>? _parentJob;
+  final bool _hasStateHandlers;
+  bool _stateCorrectionRevoked = false;
+  bool _bodyEntered = false;
 
   /// Whether the controller has taken this handle already.
   ///
@@ -36,8 +42,13 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     required super.cancellable,
     required super.describe,
     required super.observer,
+    S Function(S, Object, StackTrace)? onError,
+    S Function(S, Cancelled)? onCancel,
   })  : _canStart = canStart,
-        _keepWhile = keepWhile;
+        _keepWhile = keepWhile,
+        _onError = onError,
+        _onCancel = onCancel,
+        _hasStateHandlers = onError != null || onCancel != null;
 
   @override
   bool get isQueued => _solo._queue._jobs.contains(this);
@@ -56,10 +67,14 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     // a moment later, while the child is still `created` and in no list —
     // must not be able to put it in the queue.
     _added = true;
+    _parentJob = parent._job;
   }
 
   @override
   void cancelWith(Cancelled cancelled, {bool rejectable = true}) {
+    if (cancelled.reason is RulesCancelReason) {
+      _stateCorrectionRevoked = true;
+    }
     if (_solo._queue._jobs.contains(this)) {
       if (!cancellable && rejectable) {
         SoloBase._debug(() => 'remove $this: not cancellable');
@@ -105,16 +120,62 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
 
   @override
   void finished() {
-    _accumulation?._release();
-    _accumulation = null;
-    _solo._onJobFinished(this);
+    try {
+      _correctState();
+    } finally {
+      _accumulation?._release();
+      _accumulation = null;
+      _solo._onJobFinished(this);
+    }
+  }
+
+  bool get _mayCorrectState =>
+      !_stateCorrectionRevoked && (_parentJob?._mayCorrectState ?? true);
+
+  bool _checkCorrectionState(S state) {
+    if (!_hasStateHandlers || !_mayCorrectState) return false;
+    try {
+      final rejection = _rejectKeep(state);
+      if (rejection != null) _stateCorrectionRevoked = true;
+      return false;
+    } on Object catch (error, stackTrace) {
+      // Without a valid rule decision, a finishing job must leave the
+      // external state alone. Resource cleanup and its outcome still run.
+      _stateCorrectionRevoked = true;
+      notifyError(error, stackTrace);
+      return true;
+    }
+  }
+
+  void _correctState() {
+    if (!_bodyEntered || !_mayCorrectState) return;
+    final S next;
+    switch (outcome) {
+      case Failed(:final error, :final stackTrace):
+        final handler = _onError;
+        if (handler == null) return;
+        next = handler(_solo._state, error, stackTrace);
+      case final Cancelled cancelled:
+        final handler = _onCancel;
+        if (handler == null) return;
+        next = handler(_solo._state, cancelled);
+      default:
+        return;
+    }
+    // A handler can synchronously notify an external state source. Such
+    // a transition may revoke permission before the result is applied.
+    if (!_mayCorrectState) return;
+    _solo._setState(next, emitter: this, stackTrace: StackTrace.current);
   }
 
   @override
   JobContextBase createContext() => _SoloContext<S, W, T>(this);
 
   @override
-  Future<T> execute(covariant _SoloContext<S, W, T> ctx) => _body(ctx);
+  Future<T> execute(covariant _SoloContext<S, W, T> ctx) {
+    _bodyEntered = true;
+    return _body(ctx);
+  }
 
   // The engine reaches a job from the side, and `@protected` holds only
   // inside a subclass; these wrappers are how `SoloBase` and `_SoloQueue`

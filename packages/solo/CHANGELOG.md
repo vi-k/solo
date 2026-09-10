@@ -1,5 +1,11 @@
 ## 0.2.0
 
+- Add `onError` and `onCancel` state handlers to `run` and `job`.
+  They apply state after children and cleanup, before the next queued job,
+  while preserving the failed or cancelled outcome. Incompatible external
+  state changes suppress correction, including during cleanup and for
+  descendants. The quick start now uses sealed loading/result/error states.
+
 - Add `AccumulationTiming.debounce` and `.throttle` to `collect` and
   `accumulate`. Debounce seals a group after a pause between events;
   throttle spaces actual group starts. Waiting groups let ready jobs

@@ -35,6 +35,7 @@ abstract class SoloBase<S extends Object> {
   static void Function(String message)? debug;
 
   S _state;
+  int _stateRevision = 0;
   Completer<void>? _closing;
   StackTrace? _closeStackTrace;
   final _queue = _SoloQueue<S>();
@@ -103,6 +104,29 @@ abstract class SoloBase<S extends Object> {
   /// `close` and `clear` with `force` take it out anyway — they do not
   /// ask. Running, it turns down all four. [JobContext.uncancellable] says
   /// the same about one step of the body rather than about the whole job.
+  ///
+  /// [onError] and [onCancel] synchronously map the current state to the
+  /// state after a failed or cancelled body. They run after children and
+  /// resource cleanup, with the outcome fixed, before [SoloBase.onFinish]
+  /// and before the next queued job. They do not change or observe the
+  /// outcome: [Job.value] still throws, and an unobserved failure is still
+  /// reported. A handler error goes to the error hook and observer without
+  /// replacing the original outcome.
+  ///
+  /// Neither runs on success or when the body never started. An external
+  /// state change that violates `W` or [keepWhile] permanently suppresses
+  /// both handlers, including during cancellation, child waiting or
+  /// cleanup. A parent's lost permission also suppresses its descendants'
+  /// handlers. A parent without state handlers stops checking its rules
+  /// when its body ends, as usual. A rule error suppresses correction and
+  /// is reported.
+  /// [canStart] is not repeated, and the job's own emit is exempt.
+  ///
+  /// Handlers receive `S`, which may differ from the body's working `W`,
+  /// and should only compute the next state. Cleanup belongs in
+  /// [JobContext.onDispose] or [JobContext.onDiscard]. The [onCancel]
+  /// parameter runs at completion; [JobContext.onCancel] instead delivers
+  /// the cancellation signal immediately to the operation being stopped.
   SoloJob<T> job<W extends S, T>(
     Future<T> Function(SoloContext<S, W> ctx) body, {
     Object? key,
@@ -110,6 +134,8 @@ abstract class SoloBase<S extends Object> {
     bool Function(W state)? keepWhile,
     bool cancellable = true,
     String Function()? describe,
+    S Function(S state, Object error, StackTrace stackTrace)? onError,
+    S Function(S state, Cancelled cancelled)? onCancel,
   }) =>
       _SoloJob<S, W, T>(
         this,
@@ -120,6 +146,8 @@ abstract class SoloBase<S extends Object> {
         cancellable: cancellable,
         describe: describe,
         observer: _jobObserver,
+        onError: onError,
+        onCancel: onCancel,
       );
 
   /// Creates an accumulator that collects events into an immutable list.
@@ -310,6 +338,8 @@ abstract class SoloBase<S extends Object> {
     bool cancellable = true,
     String Function()? describe,
     Policy policy = Policy.sequential,
+    S Function(S state, Object error, StackTrace stackTrace)? onError,
+    S Function(S state, Cancelled cancelled)? onCancel,
   }) =>
       add(
         job<W, T>(
@@ -319,6 +349,8 @@ abstract class SoloBase<S extends Object> {
           keepWhile: keepWhile,
           cancellable: cancellable,
           describe: describe,
+          onError: onError,
+          onCancel: onCancel,
         ),
         policy: policy,
       );
@@ -344,8 +376,11 @@ abstract class SoloBase<S extends Object> {
     return current != null && test(current) ? current : null;
   }
 
-  /// Sets the state from outside any job: hardware listeners, forced
-  /// transitions. Re-evaluates the rules of every running job.
+  /// Reflects state already changed by an external source, such as a
+  /// device or socket. Re-evaluates the rules of running bodies and the
+  /// permission of finishing jobs to apply their state handlers.
+  /// Use the state handlers of [run] or [job] for an operation's own
+  /// failure or cancellation.
   ///
   /// Not blocked by [close]: after closing it still changes [state], calls
   /// `onChange` and re-evaluates the rules, while a subclass channel that is
@@ -488,13 +523,26 @@ abstract class SoloBase<S extends Object> {
   }) {
     final previous = _state;
     _state = next;
+    final revision = ++_stateRevision;
     _lastChange = stackTrace;
     _debug(() => 'state: $next');
     _unpublished.add((previous, next));
+    // Record lost correction rights before observers can synchronously
+    // replace this external state with a compatible one again.
+    final ruleErrors = <_SoloJob<S, S, Object?>>{};
+    for (final job in _running.reversed.toList()) {
+      if (identical(job, emitter)) continue;
+      if (job._checkCorrectionState(next)) ruleErrors.add(job);
+    }
     _callHook(() => observer?.onChange(this, previous, next));
     _callHook(() => onChange(previous, next));
     _publishPending();
-    _reevaluate(except: emitter, stackTrace: stackTrace);
+    _reevaluate(
+      except: emitter,
+      stackTrace: stackTrace,
+      ruleErrors: ruleErrors,
+      revision: revision,
+    );
   }
 
   /// Publishes the recorded changes, oldest first.
@@ -522,25 +570,32 @@ abstract class SoloBase<S extends Object> {
   void _reevaluate({
     required _SoloJob<S, S, Object?>? except,
     required StackTrace stackTrace,
+    required Set<_SoloJob<S, S, Object?>> ruleErrors,
+    required int revision,
   }) {
     for (final job in _running.reversed.toList()) {
-      // With the body gone the rules have nothing left to guard: they
-      // hold the work of the body, not the wait for children and not
-      // the cleanup. `cancel()`, `close()` and the parent's cascade
-      // still reach the job.
-      if (identical(job, except) || job.isCancelled || job._bodyEnded) {
+      if (identical(job, except)) continue;
+      // After the body, rules protect only state correction. Cancellation
+      // itself still follows the original body lifetime.
+      final canCancel = !job.isCancelled && !job._bodyEnded;
+      if (!canCancel && (!job._hasStateHandlers || !job._mayCorrectState)) {
         continue;
       }
       final String? rejection;
       try {
+        // Observers may change a predicate's captured data without
+        // replacing S. Always ask again after delivering the transition.
         rejection = job._rejectKeep(_state);
       } on Object catch (error, stackTrace) {
-        // A rule that threw says nothing about whether the job may go on,
-        // and the jobs behind it still have to be looked at.
-        job._notifyError(error, stackTrace);
+        if (job._hasStateHandlers) job._stateCorrectionRevoked = true;
+        final alreadyReported =
+            revision == _stateRevision && ruleErrors.contains(job);
+        if (!alreadyReported) job._notifyError(error, stackTrace);
         continue;
       }
       if (rejection != null) {
+        job._stateCorrectionRevoked = true;
+        if (!canCancel) continue;
         // A rule of the job's own: it may not refuse this one.
         job._cancelWith(
           Cancelled.by(

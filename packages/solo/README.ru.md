@@ -68,22 +68,32 @@ flutter pub add flutter_solo
 
 ## Быстрый старт
 
-Состояние — один неизменяемый объект. Для начала хватит одного класса;
-sealed-иерархия появится позже, когда состояния начнут различаться тем, что
-они разрешают:
+Загрузка, успех и ошибка представлены отдельными неизменяемыми
+состояниями:
 
 ```dart
-final class Profile {
+sealed class ProfileState {
+  const ProfileState();
+}
+
+final class Initial extends ProfileState {
+  const Initial();
+}
+
+final class Loading extends ProfileState {
+  const Loading();
+}
+
+final class Loaded extends ProfileState {
   final String name;
-  final bool loading;
 
-  const Profile({this.name = '', this.loading = false});
+  const Loaded(this.name);
+}
 
-  Profile copyWith({String? name, bool? loading}) =>
-      Profile(name: name ?? this.name, loading: loading ?? this.loading);
+final class Failure extends ProfileState {
+  final Object error;
 
-  @override
-  String toString() => 'Profile("$name", loading: $loading)';
+  const Failure(this.error);
 }
 ```
 
@@ -92,35 +102,31 @@ final class Profile {
 без `await` законно и линтов это не поднимает:
 
 ```dart
-final class ProfileController extends Solo<Profile> {
+final class ProfileController extends Solo<ProfileState> {
   final ProfileApi api;
 
-  ProfileController(this.api) : super(const Profile());
+  ProfileController(this.api) : super(const Initial());
 
-  Job<String> load() => run<Profile, String>(
+  Job<String> load() => run<ProfileState, String>(
         key: 'load',
         policy: Policy.droppable,
+        onError: (state, error, stackTrace) => Failure(error),
+        onCancel: (state, cancelled) => const Initial(),
         (ctx) async {
-          ctx.emit(ctx.state.copyWith(loading: true));
+          ctx.emit(const Loading());
           final name = await ctx.wait(api.fetchName);
-          ctx.emit(Profile(name: name));
+          ctx.emit(Loaded(name));
           return name;
         },
       );
-
-  // Флаг, поднятый телом, обязан сняться при любом исходе, а тело для
-  // этого не место: провал пропустит строки ниже, а после отмены `emit`
-  // бросит. Хук срабатывает на любом исходе, в том числе у отброшенных
-  // дубликатов, которые не запускались: их нужно пропустить.
-  @override
-  void onFinish(Job<Object?> job) {
-    if (job.outcome case Cancelled(started: false)) return;
-    if (job.key == 'load' && state.loading) {
-      externalSetState(state.copyWith(loading: false));
-    }
-  }
 }
 ```
+
+Тело публикует `Loading` и `Loaded`. При ошибке `onError` возвращает
+`Failure`, при отмене `onCancel` — `Initial`. Движок применяет состояние
+после тела, детей и уборки, перед следующей Job в очереди. Обработчики
+пропускаются, если внешняя смена состояния нарушила правила Job.
+Исход Job остаётся `Failed` или `Cancelled`.
 
 Снаружи:
 
@@ -132,7 +138,9 @@ final job = profile.load();
 profile.load(); // droppable: та же задача, а не вторая
 
 print(await job.value); // Ada Lovelace; сбой будет переброшен здесь
-print(profile.state.name); // то же имя, прямо из состояния
+if (profile.state case Loaded(:final name)) {
+  print(name);
+}
 
 await subscription.cancel();
 await profile.close();
@@ -150,8 +158,8 @@ print(job.outcome); // Cancelled(manual)
 `cancelAll()` делает то же самое с очередью и выполняющейся задачей разом,
 а `close()` — один раз и насовсем.
 
-`run<Profile, String>` говорит, что задача работает с состояниями `Profile`
-и возвращает `String`. Внутри тела `ctx.emit` — единственный способ записать
+`run<ProfileState, String>` принимает любое `ProfileState` и возвращает
+`String`. Внутри тела `ctx.emit` — единственный способ записать
 состояние, а `ctx.wait` ждёт future так же, как `await`, но сдаётся в тот
 момент, когда задачу отменяют. `Policy.droppable` с `key: 'load'` означает,
 что второй `load()`, пока первый ещё стоит в очереди или выполняется, вернёт
@@ -331,12 +339,64 @@ ctx
 секции шаг идёт голым `await`: `ctx.join` там бросил бы после шага на
 отмене по правилам, и снятие не состоялось бы.
 
-**Состояние на выходе.** Уборщик не может `emit` — исход к его моменту
-решён, и любое чтение и запись контекста там бросают `StateError`.
-Последнее состояние пишут в теле: на успешном пути до `return`, на ошибке
-— в `try`/`catch` с `rethrow`. На отмене такого пути нет вовсе (`emit`
-отменённой задаче бросает), поэтому состояние, которое обязано выставиться
-и там, живёт в `onFinish` контроллера, через `externalSetState`.
+**Состояние после ошибки или отмены.** Необязательные параметры `onError`
+и `onCancel` у `run` и `job` — синхронные обработчики состояния. Они
+получают текущее `S` и ошибку со стектрейсом либо исход `Cancelled`,
+возвращают следующее состояние. Движок вызывает соответствующий
+обработчик после тела, детей и уборки, перед освобождением очереди
+и вызовом `onFinish`. Исход уже зафиксирован: обработчик не превращает
+ошибку или отмену в успех. Он не наблюдает исход за вызывающий код;
+используйте `job.done`, `job.value` или `job.ignore()`.
+
+Обработчики не вызываются при `Done`, отбрасывании дубликата и для Job,
+чьё тело не запускалось. Ошибка обработчика сообщается через хук ошибок
+контроллера и наблюдателя, сохраняя исходную ошибку или отмену. Ограничьте
+эти функции вычислением следующего состояния; ресурсы освобождайте
+через `ctx.onDispose` или `ctx.onDiscard`.
+
+Внешняя смена состояния, нарушающая `W` или `keepWhile`, запрещает оба
+обработчика, даже если Job уже отменена, ждёт детей или уборку. Возврат
+в совместимое состояние их не восстанавливает. Потеря права родителем
+запрещает и обработчики его детей. Дополнительные проверки относятся
+к Job с обработчиками состояния; родитель без них после конца тела
+перестаёт проверять свои правила, как и раньше. `canStart` проверяется
+только при входе, а собственный `emit` не запрещает обработчики этой Job. Если
+правило при такой проверке бросает, обработчики отключаются, ошибка
+сообщается; уборка ресурсов продолжается.
+
+Например, профиль, связанный с устройством, может добавить `Disconnected`
+в sealed-состояния и разрешить загрузку только при подключении:
+
+```dart
+final class Disconnected extends ProfileState {
+  const Disconnected();
+}
+
+Job<String> load() => run<ProfileState, String>(
+      key: 'load',
+      policy: Policy.droppable,
+      keepWhile: (state) => state is! Disconnected,
+      onError: (state, error, stackTrace) => Failure(error),
+      onCancel: (state, cancelled) => const Initial(),
+      (ctx) async {
+        ctx.emit(const Loading());
+        final name = await ctx.wait(api.fetchName);
+        ctx.emit(Loaded(name));
+        return name;
+      },
+    );
+```
+
+Если устройство сообщает `Disconnected` через `externalSetState`, это
+состояние сохраняется. В том числе если уведомление пришло во время
+уборки Job, уже отменённой вручную. Совместимое внешнее состояние
+разрешает коррекцию, поэтому повторные проверки типа не нужны.
+
+`run.onCancel` вызывается при завершении; `ctx.onCancel` немедленно
+передаёт сигнал отмены операции, которую можно остановить. С `ctx.wait`
+очередь ждёт уборку Job, но оставленная операция может завершиться
+позже. Используйте `ctx.join`, когда следующая Job должна дождаться
+также самой операции и освобождения её ресурса.
 
 **Ошибки уборщика.** Они уходят в `onError` и в `SoloBase.observer`. Если
 не задано ни то ни другое, слушать некому, и ошибка уходит в зону создания
@@ -432,11 +492,13 @@ Future, которую возвращает `cancel()` самой подписк
 детей внутри одного родителя, когда вся последовательность должна
 удерживать текущий слот контроллера.
 
-**Внешнее состояние.** `externalSetState(next)` устанавливает состояние вне
-всякой задачи: листенер железа, принудительный переход. Каждая задача, чьё
-тело ещё идёт, кроме излучившей, немедленно переоценивается по новому
-состоянию; излучившая проверяется лениво, на следующем чтении, а задачу,
-чьё тело кончилось, не проверяют вовсе.
+**Внешнее состояние.** `externalSetState(next)` отражает изменение,
+уже произошедшее во внешнем источнике: устройстве или сокете. Правила
+выполняющихся тел переоцениваются; излучившая Job проверяется при
+следующем чтении контекста. После конца тела правила больше не отменяют
+Job, но запрещают обработчики состояния при несовместимом внешнем
+переходе. Для коррекции состояния собственной операции контроллера
+используйте обработчики `run`/`job`.
 
 **Исходы.** `Outcome<T>` — sealed, поэтому `switch` по трём его случаям
 исчерпывающий: `Done` несёт возвращённое `value`, `Failed` несёт `error` и
@@ -690,7 +752,10 @@ test('load fills in the name', () async {
   final outcome = await profile.load().done;
 
   expect(outcome, isA<Done<String>>());
-  expect(profile.state.name, 'Ada Lovelace');
+  expect(
+    profile.state,
+    isA<Loaded>().having((state) => state.name, 'name', 'Ada Lovelace'),
+  );
 
   await profile.close();
 });
@@ -719,7 +784,7 @@ final class Journal extends SoloObserver {
 
   @override
   void onChange(SoloBase<Object> solo, Object previous, Object current) =>
-      lines.add('state: $current');
+      lines.add('state: ${current.runtimeType}');
 }
 
 test('a second load while the first one runs is dropped', () {
@@ -730,15 +795,16 @@ test('a second load while the first one runs is dropped', () {
     final profile = ProfileController(FakeProfileApi());
 
     final first = profile.load();
+    async.flushMicrotasks();
     final second = profile.load();
     expect(identical(first, second), isTrue);
 
     async.elapse(const Duration(milliseconds: 20));
     expect(journal.lines, [
-      'load Cancelled(manual: duplicate)',
       'load started',
-      'state: Profile("", loading: true)',
-      'state: Profile("Ada Lovelace", loading: false)',
+      'state: Loading',
+      'load Cancelled(manual: duplicate)',
+      'state: Loaded',
       'load Done(Ada Lovelace)',
     ]);
 
@@ -858,10 +924,10 @@ final class ScreenController extends Solo<Screen> {
 `onLog` и `onChange`, чтобы реагировать на собственные задачи:
 
 ```dart
-final class ProfileController extends Solo<Profile> {
+final class ProfileController extends Solo<ProfileState> {
   final ProfileApi api;
 
-  ProfileController(this.api) : super(const Profile());
+  ProfileController(this.api) : super(const Initial());
 
   // ...задачи выше...
 
@@ -919,10 +985,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_solo/flutter_solo.dart';
 
-final class ProfileController extends SoloListenable<Profile> {
+final class ProfileController extends SoloListenable<ProfileState> {
   final ProfileApi api;
 
-  ProfileController(this.api) : super(const Profile());
+  ProfileController(this.api) : super(const Initial());
 
   // ...задачи выше...
 }
@@ -982,9 +1048,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
         body: Center(
-          child: ValueListenableBuilder<Profile>(
+          child: ValueListenableBuilder<ProfileState>(
             valueListenable: profile,
-            builder: (context, state, _) => state.loading
+            builder: (context, state, _) => state is Loading
                 ? const CircularProgressIndicator()
                 : ElevatedButton(
                     onPressed: _open,
