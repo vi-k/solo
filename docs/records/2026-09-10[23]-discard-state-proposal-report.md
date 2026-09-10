@@ -28,21 +28,66 @@
 - Ошибка обработчика идёт по существующему пути ошибок уборки и
   не заменяет исходную ошибку или отмену Job.
 
-Пример предполагаемого API:
+Владелец уточнил: даже первый короткий пример должен показывать
+sealed-состояния Initial, Loading, Loaded и Failure и обработку ошибки.
+Вместо сброса bool обработчик отмены возвращает Initial только из
+Loading. Уже установленное Failure или Loaded сохраняется.
+
+Пример предполагаемого API внутри ProfileController:
 
 ```dart
-Job<String> load() => run<Profile, String>(
+sealed class ProfileState {
+  const ProfileState();
+}
+
+final class Initial extends ProfileState {
+  const Initial();
+}
+
+final class Loading extends ProfileState {
+  const Loading();
+}
+
+final class Loaded extends ProfileState {
+  final String name;
+  const Loaded(this.name);
+}
+
+final class Failure extends ProfileState {
+  final Object error;
+  const Failure(this.error);
+}
+
+Job<String> load() => run<ProfileState, String>(
       key: 'load',
       policy: Policy.droppable,
-      onDiscard: (state) => state.copyWith(loading: false),
+      onDiscard: (state) => state is Loading ? const Initial() : state,
       (ctx) async {
-        ctx.emit(ctx.state.copyWith(loading: true));
-        final name = await ctx.wait(api.fetchName);
-        ctx.emit(Profile(name: name));
-        return name;
+        ctx.emit(const Loading());
+        try {
+          final name = await ctx.wait(api.fetchName);
+          ctx.emit(Loaded(name));
+          return name;
+        } on Cancelled {
+          rethrow;
+        } on Object catch (error) {
+          ctx.emit(Failure(error));
+          rethrow;
+        }
       },
     );
 ```
+
+Контроллер наследует Solo<ProfileState> и начинает с const Initial().
+Рабочий тип run — ProfileState: тело должно иметь доступ к контексту
+при переходах между всеми четырьмя состояниями.
+
+Обычная ошибка устанавливает Failure и пробрасывается дальше, чтобы
+Job завершился Failed и вызывающий код мог получить ошибку через value.
+Cancelled пробрасывается отдельной веткой и не становится Failure.
+При отмене в Loading onDiscard устанавливает Initial до следующей Job.
+Если внешний источник уже сменил состояние, обработчик его сохраняет.
+Пример иллюстрирует предложенный API: параметра onDiscard в run ещё нет.
 
 ## Обоснование и альтернативы
 
