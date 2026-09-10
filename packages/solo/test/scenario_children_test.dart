@@ -31,7 +31,8 @@ void addNested(TestSolo solo) {
     (ctx) async {
       await pause(ctx, 100);
       ctx.emit(ctx.stateAs<Preparing>().copyWith(progress: 50));
-      await ctx.run(test3).done;
+      ctx.run(test3).ignore();
+      await test3.done;
       ctx.emit(const Working());
     },
   );
@@ -41,7 +42,8 @@ void addNested(TestSolo solo) {
     (ctx) async {
       await pause(ctx, 100);
       ctx.emit(const Preparing());
-      await ctx.run(test2).done;
+      ctx.run(test2).ignore();
+      await test2.done;
       await pause(ctx, 100);
       ctx.emit(ctx.stateAs<Working>().copyWith(a: 1, b: 1));
       ctx.emit(const Disposed());
@@ -91,7 +93,8 @@ void addOnEmit(
           ..emit(const Preparing(progress: 75));
       },
     );
-    await ctx.run(child).done;
+    ctx.run(child).ignore();
+    await child.done;
     ctx.emit(ctx.state.copyWith(progress: ctx.state.progress + 25));
     await pause(ctx, 100);
   });
@@ -483,7 +486,8 @@ void main() {
               childBodyRan = true;
             },
           );
-          await ctx.run(child).done;
+          ctx.run(child).ignore();
+          await child.done;
           ctx.emit(ctx.state.copyWith(progress: ctx.state.progress + 25));
         },
       );
@@ -515,7 +519,8 @@ void main() {
               await pause(childCtx, 100);
             },
           );
-          await ctx.run(child).done;
+          ctx.run(child).ignore();
+          await child.done;
           await pause(ctx, 100);
         },
       );

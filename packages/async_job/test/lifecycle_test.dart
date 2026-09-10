@@ -63,7 +63,7 @@ void main() {
       final parent = Job<void>((ctx) async {
         orphan = Job<void>((ctx) async {});
         try {
-          ctx.run(orphan);
+          ctx.run(orphan).ignore();
         } on Object catch (error) {
           thrown = error;
         }

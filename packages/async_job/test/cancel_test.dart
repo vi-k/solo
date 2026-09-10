@@ -98,9 +98,10 @@ void main() {
       var seenInsideStep = true;
       job = Job<void>((ctx) async {
         ctx.onCancel(() => callbackFired = true);
-        child = ctx.run(
-          Job.deferred<void>((childCtx) => childCtx.wait(() => delay(200))),
+        child = Job.deferred<void>(
+          (childCtx) => childCtx.wait(() => delay(200)),
         );
+        ctx.run(child).ignore();
         await ctx.uncancellable(() async {
           await delay(50);
           seenInsideStep = job.isCancelled;
@@ -227,10 +228,8 @@ void main() {
     fakeAsync((async) {
       late final Job<void> child;
       final parent = Job<void>((ctx) async {
-        child = ctx.run(
-          Job.deferred<void>((ctx) => ctx.wait(() => delay(100))),
-        );
-        await child.done;
+        child = Job.deferred<void>((ctx) => ctx.wait(() => delay(100)));
+        await ctx.run(child);
       });
       async.elapse(const Duration(milliseconds: 10));
       parent.cancel().ignore();
@@ -312,12 +311,14 @@ void main() {
       Object? thrown;
       late Job<void> parent;
       parent = Job<void>((ctx) async {
-        ctx.run(
-          Job.deferred<void>(key: 'child', (child) async {
-            child.onCancel(() => parent.cancel().ignore());
-            await child.wait(() => delay(100));
-          }),
-        );
+        ctx
+            .run(
+              Job.deferred<void>(key: 'child', (child) async {
+                child.onCancel(() => parent.cancel().ignore());
+                await child.wait(() => delay(100));
+              }),
+            )
+            .ignore();
         await ctx.wait(() => delay(100));
       });
       async.elapse(const Duration(milliseconds: 10));
@@ -344,18 +345,20 @@ void main() {
       );
       late Job<void> parent;
       parent = Job<void>((ctx) async {
-        ctx.run(
-          Job.deferred<void>(key: 'child', (child) async {
-            child.onCancel(() {
-              try {
-                ctx.run(late_);
-              } on Object catch (error) {
-                thrown = error;
-              }
-            });
-            await child.wait(() => delay(100));
-          }),
-        );
+        ctx
+            .run(
+              Job.deferred<void>(key: 'child', (child) async {
+                child.onCancel(() {
+                  try {
+                    ctx.run(late_);
+                  } on Object catch (error) {
+                    thrown = error;
+                  }
+                });
+                await child.wait(() => delay(100));
+              }),
+            )
+            .ignore();
         await ctx.wait(() => delay(100));
       })
         ..ignore();
@@ -462,21 +465,23 @@ void main() {
       Object? thrown;
       late ProbeJob<void> parent;
       parent = ProbeJob<void>((ctx) async {
-        ctx.run(
-          Job.deferred<void>(key: 'child', (child) async {
-            child.onCancel(
-              () => parent.drop(
-                Cancelled.by(
-                  reason: const ManualCancelReason(),
-                  started: true,
-                  description: 'by the engine',
-                  stackTrace: StackTrace.current,
-                ),
-              ),
-            );
-            await child.wait(() => delay(100));
-          }),
-        );
+        ctx
+            .run(
+              Job.deferred<void>(key: 'child', (child) async {
+                child.onCancel(
+                  () => parent.drop(
+                    Cancelled.by(
+                      reason: const ManualCancelReason(),
+                      started: true,
+                      description: 'by the engine',
+                      stackTrace: StackTrace.current,
+                    ),
+                  ),
+                );
+                await child.wait(() => delay(100));
+              }),
+            )
+            .ignore();
         await ctx.wait(() => delay(100));
       })
         ..ignore()

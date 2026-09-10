@@ -39,7 +39,7 @@ void main() {
         key: 'parent',
         observer: journal,
         (ctx) async {
-          await ctx.run(Job.deferred<void>(key: 'child', (ctx) async {})).done;
+          await ctx.run(Job.deferred<void>(key: 'child', (ctx) async {}));
         },
       ).ignore();
       async.flushMicrotasks();

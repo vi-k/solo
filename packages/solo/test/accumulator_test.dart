@@ -404,7 +404,7 @@ void main() {
                 await childCtx.join(() => child.future);
                 calls.add('child');
               }),
-            )
+            ).ignore()
             ..onDispose(() async {
               calls.add('cleanup');
               await cleanup.future;

@@ -376,16 +376,17 @@ parent body is active; calls from `unattended` or cleanup are rejected.
 ## Children
 
 When a body delegates work to another job, register it as a child with
-`ctx.run(child)`. This starts the child immediately. The parent waits for
-all its children before finishing and passes cancellation to them. A child with
-`cancellable: false` can refuse that cancellation. If the parent body
+`ctx.run(child)`. This starts the child immediately and returns a future
+of its result. The parent waits for all its children before finishing
+and passes cancellation to them. A child with `cancellable: false` can
+refuse that cancellation. If the parent body
 throws `Cancelled`, its children are cancelled too. If it throws another
 error, the parent lets its children finish and waits for them.
 
 ```dart
 final parent = Job<void>((ctx) async {
-  final child = ctx.run(Job.deferred<int>((ctx) => ctx.wait(load)));
-  final rows = await ctx.join(() => child.value);
+  final child = Job.deferred<int>((ctx) => ctx.wait(load));
+  final rows = await ctx.run(child);
   ctx.log('$rows rows');
 });
 ```
@@ -395,20 +396,31 @@ Create children with `Job.deferred`, so the parent controls their start.
 avoids a race where the child starts independently and is left outside
 the parent's cancellation and completion handling.
 
-The example uses `ctx.join` to await `child.value` and check the parent's
-cancellation before returning the value to the body. If the child refuses
-cancellation, `join` still waits for it; after the child succeeds, `join`
-throws the parent's cancellation instead of continuing to the log call.
-No separate `ctx.check()` is needed. A plain `await child.value` only
-delivers the child's value or error; it does not check the parent's
-cancellation.
+`run` waits for the child to finish, including its children and cleanup,
+and checks the parent's cancellation before returning the value to the
+body. If the child refuses cancellation, `run` still waits for it; after
+the child succeeds, `run` throws the parent's cancellation instead of
+continuing to the log call. No separate `ctx.join` or `ctx.check()` is
+needed. A child's error or cancellation is thrown through the returned
+future with its stack trace.
+
+The original `child` remains the handle for cancellation and inspecting
+its outcome; `run` does not create another job. A plain `await child.value`
+only delivers the child's value or error and does not check the parent's
+cancellation. To start a child concurrently, retain the future returned
+by `run` and await it later, or handle its errors. Use
+`ctx.run(child).ignore()` when deliberately ignoring that result. The
+parent still waits for the child before finishing. Ignoring the handle
+with `child.ignore()` alone does not handle errors of the `run` future;
+an unhandled future error, including cancellation, follows Dart's rules.
 
 A child inherits the parent's observer unless it has its own. If a child's
-cancellation escapes through `child.value` from the parent body, the
+cancellation escapes through `await ctx.run(child)` or `child.value`, the
 parent ends with `HandlerCancelReason` and a description naming the child.
 
-`ctx.run` throws `ArgumentError` for a job from another implementation or
-a job that starts automatically. It throws `StateError` if the child has
+`ctx.run` throws synchronously for an invalid start: `ArgumentError` for
+a job from another implementation or a job that starts automatically.
+It throws `StateError` if the child has
 already started or the parent body has ended. If the parent is already
 cancelled, it cancels the child before start and throws the parent's
 `Cancelled`.
@@ -453,7 +465,7 @@ it does not observe it either: for example, a source that refuses
 cancellation and later fails still needs its own error handling.
 
 The callback accepts a value or future. Returning another `Job` does not
-wait for it; use `ctx.run(child).value` for a deferred child. `then` does
+wait for it; return `ctx.run(child)` for a deferred child. `then` does
 not start a deferred source, and a continuation cannot be adopted through
 `ctx.run`. Do not await a continuation from its source's body or cleanup:
 the continuation is waiting for that source to finish.

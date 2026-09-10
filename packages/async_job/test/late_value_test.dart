@@ -19,15 +19,16 @@ void main() {
           await delay(10);
           return 'db';
         });
+        ctx.onDiscard(() => closed.add(resource));
+        // The child keeps the job alive past the return.
         ctx
-          ..onDiscard(() => closed.add(resource))
-          // The child keeps the job alive past the return.
-          ..run(
-            Job.deferred<void>(
-              key: 'child',
-              (ctx) => ctx.wait(() => delay(100)),
-            ),
-          );
+            .run(
+              Job.deferred<void>(
+                key: 'child',
+                (ctx) => ctx.wait(() => delay(100)),
+              ),
+            )
+            .ignore();
         return resource;
       })
         ..ignore();
@@ -43,22 +44,23 @@ void main() {
     fakeAsync((async) {
       final order = <String>[];
       final job = Job<String>((ctx) async {
+        ctx.onDiscard(() => order.add('disposer'));
+        // Not started by hand: `run` starts it, and the cascade would
+        // otherwise reach an already running child. Uncancellable, so
+        // the cascade does not cut its wait short before it writes its
+        // line.
         ctx
-          ..onDiscard(() => order.add('disposer'))
-          // Not started by hand: `run` starts it, and the cascade would
-          // otherwise reach an already running child. Uncancellable, so
-          // the cascade does not cut its wait short before it writes its
-          // line.
-          ..run(
-            Job.deferred<void>(
-              key: 'child',
-              cancellable: false,
-              (ctx) async {
-                await ctx.wait(() => delay(50));
-                order.add('child');
-              },
-            ),
-          );
+            .run(
+              Job.deferred<void>(
+                key: 'child',
+                cancellable: false,
+                (ctx) async {
+                  await ctx.wait(() => delay(50));
+                  order.add('child');
+                },
+              ),
+            )
+            .ignore();
         return 'db';
       });
       job.done.then((_) => order.add('done')).ignore();
@@ -76,14 +78,15 @@ void main() {
         key: 'job',
         observer: journal,
         (ctx) async {
+          ctx.onDiscard(() => throw StateError('close failed'));
           ctx
-            ..onDiscard(() => throw StateError('close failed'))
-            ..run(
-              Job.deferred<void>(
-                key: 'child',
-                (ctx) => ctx.wait(() => delay(100)),
-              ),
-            );
+              .run(
+                Job.deferred<void>(
+                  key: 'child',
+                  (ctx) => ctx.wait(() => delay(100)),
+                ),
+              )
+              .ignore();
           return 'db';
         },
       );
@@ -104,11 +107,12 @@ void main() {
       () {
         fakeAsync((async) {
           final job = Job<String>((ctx) async {
+            ctx.onDiscard(() => throw StateError('close failed'));
             ctx
-              ..onDiscard(() => throw StateError('close failed'))
-              ..run(
-                Job.deferred<void>((ctx) => ctx.wait(() => delay(100))),
-              );
+                .run(
+                  Job.deferred<void>((ctx) => ctx.wait(() => delay(100))),
+                )
+                .ignore();
             return 'db';
           });
           async.elapse(const Duration(milliseconds: 10));

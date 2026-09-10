@@ -93,12 +93,11 @@ void main() {
       final job = Job<int>(
         observer: ErrorObserver(errors),
         (ctx) async {
-          final child = ctx.run(
-            Job.deferred<void>(
-              key: 'child',
-              (ctx) => ctx.wait(() => delay(100)),
-            ),
+          final child = Job.deferred<void>(
+            key: 'child',
+            (ctx) => ctx.wait(() => delay(100)),
           );
+          ctx.run(child).ignore();
           ctx.onDispose(() async {
             // The disposer chose to wait for someone else's outcome: the
             // cascade took the child down, and its cancellation is an

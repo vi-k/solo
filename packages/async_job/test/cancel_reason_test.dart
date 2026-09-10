@@ -89,7 +89,8 @@ void main() {
       final reason = TestCancelReason('network', error: StateError('failed'));
       late Job<void> child;
       final parent = Job<void>((ctx) async {
-        child = ctx.run(Job.deferred<void>((ctx) => ctx.wait(() => delay(50))));
+        child = Job.deferred<void>((ctx) => ctx.wait(() => delay(50)));
+        ctx.run(child).ignore();
         await ctx.wait(() => delay(50));
       });
       async.flushMicrotasks();
@@ -107,8 +108,8 @@ void main() {
       final reason = TestCancelReason('network', error: StateError('failed'));
       late Job<void> child;
       final parent = Job<void>((ctx) async {
-        child = ctx.run(Job.deferred<void>((ctx) => ctx.wait(() => delay(50))));
-        await child.value;
+        child = Job.deferred<void>((ctx) => ctx.wait(() => delay(50)));
+        await ctx.run(child);
       });
       async.flushMicrotasks();
       child.cancel(reason: reason).ignore();
@@ -125,9 +126,8 @@ void main() {
       final errors = <Object>[];
       late Job<void> child;
       final parent = Job<void>(observer: ErrorObserver(errors), (ctx) async {
-        child = ctx.run(
-          Job.deferred<void>((ctx) => ctx.wait(() => delay(50))),
-        );
+        child = Job.deferred<void>((ctx) => ctx.wait(() => delay(50)));
+        ctx.run(child).ignore();
         ctx.unattended(() => child.value);
         await ctx.wait(() => delay(100));
       });
@@ -146,10 +146,8 @@ void main() {
       final reason = _BrokenLabelReason();
       final parent = Job<void>(observer: ErrorObserver(errors), (ctx) async {
         ctx.onDispose(() => disposed = true);
-        child = ctx.run(
-          Job.deferred<void>((ctx) => ctx.wait(() => delay(50))),
-        );
-        await child.value;
+        child = Job.deferred<void>((ctx) => ctx.wait(() => delay(50)));
+        await ctx.run(child);
       });
       async.flushMicrotasks();
       child.cancel(reason: reason).ignore();
@@ -168,14 +166,13 @@ void main() {
       final errors = <Object>[];
       late Job<void> child;
       final parent = Job<void>(observer: ErrorObserver(errors), (ctx) async {
-        child = ctx.run(
-          Job.deferred<void>((ctx) async {
-            throw const Cancelled.by(
-              reason: ParentCancelReason(),
-              started: true,
-            );
-          }),
-        );
+        child = Job.deferred<void>((ctx) async {
+          throw const Cancelled.by(
+            reason: ParentCancelReason(),
+            started: true,
+          );
+        });
+        ctx.run(child).ignore();
         ctx.unattended(() => child.value);
         await ctx.wait(() => delay(50));
       });

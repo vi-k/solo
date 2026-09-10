@@ -248,7 +248,7 @@ void main() {
         (ctx) async {},
       );
       solo.run<Initial, void>(key: 'parent', (ctx) async {
-        ctx.run(child);
+        ctx.run(child).ignore();
         await pause(ctx, 10);
       });
       async.flushTimers();

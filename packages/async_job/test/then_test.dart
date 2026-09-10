@@ -398,14 +398,15 @@ void main() {
       final order = <String>[];
       final a = Job<int>((ctx) async => 1);
       final b = a.then<int>((ctx, value) {
+        ctx.onDispose(() => order.add('dispose b'));
         ctx
-          ..onDispose(() => order.add('dispose b'))
-          ..run(
-            Job.deferred<void>(cancellable: false, (child) async {
-              await child.join(() => gate.future);
-              order.add('child done');
-            }),
-          );
+            .run(
+              Job.deferred<void>(cancellable: false, (child) async {
+                await child.join(() => gate.future);
+                order.add('child done');
+              }),
+            )
+            .ignore();
         return value + 1;
       });
       final c = b.then<void>((ctx, value) => order.add('c'));

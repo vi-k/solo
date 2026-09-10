@@ -268,9 +268,23 @@ abstract interface class JobContext {
   /// Starts [child] right now, as a child of this job, ahead of whatever
   /// an engine of a domain would have put it through.
   ///
-  /// Returns the same handle; the parent finishes only after all its
-  /// children. A cancellation of the parent cascades onto them, and a
-  /// child created with `cancellable: false` refuses that cascade.
+  /// Starts synchronously, then returns a future with the child's value after
+  /// the child, its children and its cleanup finish. Keep [child] itself when
+  /// its handle is needed. A child error or cancellation reaches the future
+  /// with its original stack trace.
+  ///
+  /// The parent finishes only after all its children. Its cancellation
+  /// cascades onto them, and a child created with `cancellable: false` refuses
+  /// that cascade. The future still waits for a child that refuses or holds
+  /// cancellation. If that child succeeds while the parent's body is still
+  /// active, the future checks the parent and throws its accepted [Cancelled]
+  /// instead of returning the value. If the body ended without awaiting the
+  /// future, a later success returns its value without checking the closed
+  /// context.
+  ///
+  /// Once the child starts, this method observes its [Job.value]. Handle the
+  /// future returned here even when [Job.ignore] was called on [child]: that
+  /// ignores the job's own reporting, not an error carried by this future.
   ///
   /// A child is a job nobody starts by itself: [Job.deferred], or a job of
   /// an engine whose start belongs to the engine. One from `Job(body)` is
@@ -278,18 +292,19 @@ abstract interface class JobContext {
   /// the two got there first is a matter of microtasks nobody can see in
   /// the source.
   ///
-  /// Throws [ArgumentError] for a handle that is not a job of this kernel,
-  /// one an engine of a domain does not own, or one that starts itself;
-  /// [StateError] for a job that has already been started; and the
-  /// parent's own [Cancelled], with the child dropped, if the parent is
-  /// already cancelled.
-  Job<T> run<T>(Job<T> child);
+  /// Admission errors are synchronous: throws [ArgumentError] for a handle
+  /// that is not a job of this kernel, one an engine of a domain does not own,
+  /// or one that starts itself; [StateError] for a job that has already been
+  /// started; and the parent's own [Cancelled], with the child dropped, if the
+  /// parent is already cancelled.
+  Future<T> run<T>(Job<T> child);
 
   /// Starts a child job that processes [stream] one event at a time.
   ///
-  /// Returns the child immediately. Await its [Job.value] to propagate its
-  /// outcome into the body, or use [Job.done] to inspect the outcome. The
-  /// parent waits for this child even when the body does not await it.
+  /// Returns the child immediately without observing its outcome. Await its
+  /// [Job.value] to propagate its outcome into the body, or use [Job.done] to
+  /// inspect the outcome. The parent waits for this child even when the body
+  /// does not await it.
   /// An open stream therefore keeps the parent alive until the stream ends
   /// or the child is cancelled. Cancelling the child alone does not mark
   /// the parent cancelled.
@@ -436,7 +451,7 @@ abstract class JobContextBase implements JobContext {
   ///
   /// A domain that restricts child ownership overrides this factory to
   /// return its own job with the appropriate context and rules. The result
-  /// must be accepted by [run]. This factory must not start the child.
+  /// must be accepted by [startChild]. This factory must not start the child.
   @protected
   Job<void> createEachJob(Future<void> Function(JobContext ctx) body) =>
       Job.deferred<void>(body, describe: () => 'each');
@@ -448,11 +463,11 @@ abstract class JobContextBase implements JobContext {
   ) {
     throwIfUnattended('follow a stream');
     throwIfFinished('follow a stream');
-    return run(
-      createEachJob(
-        (child) => child._followStream(stream, (event) => onData(child, event)),
-      ),
+    final child = createEachJob(
+      (child) => child._followStream(stream, (event) => onData(child, event)),
     );
+    startChild(child);
+    return child;
   }
 
   @override
@@ -860,7 +875,25 @@ abstract class JobContextBase implements JobContext {
   }
 
   @override
-  Job<T> run<T>(Job<T> child) {
+  Future<T> run<T>(Job<T> child) {
+    startChild(child);
+    return _awaitChild(child);
+  }
+
+  Future<T> _awaitChild<T>(Job<T> child) async {
+    final value = await child.value;
+    if (!_owner.bodyEnded) check();
+    return value;
+  }
+
+  /// Adopts and starts [child] synchronously.
+  ///
+  /// A domain that restricts child ownership overrides this method, performs
+  /// its own validation, then calls `super.startChild(child)`. It applies the
+  /// synchronous admission rules of [run] and does not observe the child's
+  /// outcome.
+  @protected
+  void startChild<T>(Job<T> child) {
     throwIfUnattended('run a child');
     throwIfFinished('run a child');
     if (_owner.bodyEnded) {
@@ -919,7 +952,7 @@ abstract class JobContextBase implements JobContext {
       final rejection = beforeChildStart(child);
       if (rejection != null) {
         child.finish(rejection);
-        return child;
+        return;
       }
       // The rule is code of a domain, and it may give up on this job while
       // answering: `solo` lets a `canStart` call `cancel()` or `close()`
@@ -943,7 +976,6 @@ abstract class JobContextBase implements JobContext {
     if (markedWhileAsking case final pending?) {
       throw refuse(pending);
     }
-    return child;
   }
 
   @override

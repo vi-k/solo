@@ -45,7 +45,8 @@ void main() {
           ctx.emit(const Disposed());
           past = true;
         });
-        await ctx.run(child).done;
+        ctx.run(child).ignore();
+        await child.done;
       });
       async.flushTimers();
       expect(past, isFalse, reason: 'the parent went down inside the emit');

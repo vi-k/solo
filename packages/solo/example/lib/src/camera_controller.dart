@@ -87,10 +87,9 @@ final class CameraController extends Solo<CameraState> {
             _ => 1.0,
           };
           try {
-            // `.value` and not `.done`: an outcome that is read but never
-            // examined counts as observed, and a close that failed would
-            // be reopened over in silence.
-            await ctx.run(_closeCameraJob()).value;
+            // `run` throws what the close threw: hardware that is still open
+            // must not be reopened over in silence.
+            await ctx.run(_closeCameraJob());
             ctx.emit(const Preparing());
             await ctx.join(hw.open);
             await ctx.join(() => hw.setZoom(zoom));
@@ -201,9 +200,9 @@ final class CameraController extends Solo<CameraState> {
           return;
         }
         if (ctx.state is! Initial) {
-          // `.value` throws what the close threw: hardware that is still
-          // open is not a disposal, and `Disposed` here would say it was.
-          await ctx.run(_closeCameraJob()).value;
+          // `run` throws what the close threw: hardware that is still open
+          // is not a disposal, and `Disposed` here would say it was.
+          await ctx.run(_closeCameraJob());
         }
         ctx.emit(const Disposed());
       },

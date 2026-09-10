@@ -93,10 +93,12 @@ void main() {
       final errors = <String>[];
       _inZone(errors, () {
         solo.run<TestState, void>(key: 'parent', (ctx) async {
-          ctx.run(
-            solo.job<TestState, void>(key: 'child', (ctx) async {
-              throw StateError('boom');
-            }),
+          unawaited(
+            ctx.run(
+              solo.job<TestState, void>(key: 'child', (ctx) async {
+                throw StateError('boom');
+              }),
+            ),
           );
         });
       });
@@ -122,7 +124,7 @@ void main() {
             throw StateError('boom');
           });
           try {
-            await ctx.run(child).value;
+            await ctx.run(child);
           } on Object catch (error) {
             caught = error;
           }

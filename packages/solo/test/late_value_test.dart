@@ -27,7 +27,7 @@ void main() {
                 key: 'child',
                 (ctx) => pause(ctx, 100),
               ),
-            );
+            ).ignore();
           return resource;
         },
       );
@@ -64,7 +64,7 @@ void main() {
                 key: 'child',
                 (ctx) => pause(ctx, 100),
               ),
-            );
+            ).ignore();
           return resource;
         },
       );
@@ -93,7 +93,7 @@ void main() {
                 key: 'child',
                 (ctx) => pause(ctx, 100),
               ),
-            );
+            ).ignore();
           return resource;
         },
       );

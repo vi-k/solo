@@ -19,7 +19,7 @@ void main() {
         final child = solo.job<TestState, void>(key: 'child', (ctx) async {
           ctx.log(42);
         });
-        await ctx.run(child).done;
+        await ctx.run(child);
       });
       async.flushTimers();
       expect(journal.take(), [
@@ -212,7 +212,7 @@ void main() {
                     key: 'child',
                     (childCtx) async {},
                   );
-                  await ctx.run(child).done;
+                  await ctx.run(child);
                 })
                 .done
                 .then((value) => parentOutcome = value);

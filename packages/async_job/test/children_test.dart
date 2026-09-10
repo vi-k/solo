@@ -16,15 +16,17 @@ void main() {
     fakeAsync((async) {
       ({int level, bool isChild, bool isRunning})? atRun;
       final parent = Job<void>((ctx) async {
-        final child = ctx.run(
-          Job.deferred<void>(key: 'child', (ctx) => ctx.wait(() => delay(10))),
+        final child = Job.deferred<void>(
+          key: 'child',
+          (ctx) => ctx.wait(() => delay(10)),
         );
+        final result = ctx.run(child);
         atRun = (
           level: child.level,
           isChild: child.isChild,
           isRunning: child.isRunning,
         );
-        await child.done;
+        await result;
       });
       async.flushTimers();
       expect(atRun, (level: 1, isChild: true, isRunning: true));
@@ -41,12 +43,14 @@ void main() {
         (ctx) async {
           // Not awaited: the parent still waits for the child before it
           // can finish.
-          ctx.run(
-            Job.deferred<void>(
-              key: 'child',
-              (ctx) => ctx.wait(() => delay(50)),
-            ),
-          );
+          ctx
+              .run(
+                Job.deferred<void>(
+                  key: 'child',
+                  (ctx) => ctx.wait(() => delay(50)),
+                ),
+              )
+              .ignore();
         },
       ).ignore();
       async.flushTimers();
@@ -67,12 +71,14 @@ void main() {
         observer: journal,
         (ctx) async {
           for (var i = 0; i < 2; i++) {
-            ctx.run(
-              Job.deferred<void>(
-                key: 'child$i',
-                (ctx) => ctx.wait(() => delay(100)),
-              ),
-            );
+            ctx
+                .run(
+                  Job.deferred<void>(
+                    key: 'child$i',
+                    (ctx) => ctx.wait(() => delay(100)),
+                  ),
+                )
+                .ignore();
           }
           await ctx.wait(() => delay(100));
         },
@@ -97,16 +103,15 @@ void main() {
       late final Job<void> child;
       var childEndedAt = Duration.zero;
       final parent = Job<void>((ctx) async {
-        child = ctx.run(
-          Job.deferred<void>(
-            key: 'child',
-            cancellable: false,
-            (ctx) async {
-              await ctx.wait(() => delay(50));
-              childEndedAt = async.elapsed;
-            },
-          ),
+        child = Job.deferred<void>(
+          key: 'child',
+          cancellable: false,
+          (ctx) async {
+            await ctx.wait(() => delay(50));
+            childEndedAt = async.elapsed;
+          },
         );
+        ctx.run(child).ignore();
         await ctx.wait(() => delay(100));
       });
       async.elapse(const Duration(milliseconds: 10));
@@ -121,14 +126,194 @@ void main() {
     });
   });
 
-  test('a child cancellation seen through value marks the parent', () {
+  test('run waits for a refusing child then checks parent cancellation', () {
+    fakeAsync((async) {
+      final gate = Completer<int>();
+      final log = <String>[];
+      int? valueReadSeparately;
+      final child = Job.deferred<int>(
+        (ctx) => ctx.wait(() => gate.future),
+        cancellable: false,
+      );
+      final parent = Job<void>((ctx) async {
+        await ctx.run(child);
+        log.add('continued');
+      });
+      child.value.then((value) => valueReadSeparately = value).ignore();
+      async.flushMicrotasks();
+
+      parent.cancel().ignore();
+      async.flushMicrotasks();
+
+      expect(child.outcome, isNull);
+      expect(parent.outcome, isNull);
+      expect(log, isEmpty);
+
+      gate.complete(3);
+      async.flushMicrotasks();
+
+      expect(
+        child.outcome,
+        isA<Done<int>>().having((it) => it.value, 'value', 3),
+      );
+      expect(parent.outcome, isA<Cancelled>());
+      expect(log, isEmpty);
+      expect(valueReadSeparately, 3);
+    });
+  });
+
+  test('run waits while the child holds cancellation', () {
+    fakeAsync((async) {
+      final gate = Completer<int>();
+      final log = <String>[];
+      final child = Job.deferred<int>(
+        (ctx) => ctx.uncancellable(() => gate.future),
+      );
+      final parent = Job<void>((ctx) async {
+        await ctx.run(child);
+        log.add('continued');
+      });
+      async.flushMicrotasks();
+
+      parent.cancel().ignore();
+      async.flushMicrotasks();
+
+      expect(child.outcome, isNull);
+      expect(parent.outcome, isNull);
+      expect(log, isEmpty);
+
+      gate.complete(9);
+      async.flushMicrotasks();
+
+      expect(child.outcome, isA<Cancelled>());
+      expect(parent.outcome, isA<Cancelled>());
+      expect(log, isEmpty);
+    });
+  });
+
+  test('run waits when child onStart cancels the parent', () {
+    fakeAsync((async) {
+      final gate = Completer<int>();
+      final log = <String>[];
+      late final Job<void> parent;
+      final child = Job.deferred<int>(
+        (ctx) => ctx.wait(() => gate.future),
+        observer: _OnStartObserver(() => parent.cancel().ignore()),
+        cancellable: false,
+      );
+      parent = Job<void>((ctx) async {
+        await ctx.run(child);
+        log.add('continued');
+      });
+      async.flushMicrotasks();
+
+      expect(child.outcome, isNull);
+      expect(parent.outcome, isNull);
+      expect(log, isEmpty);
+
+      gate.complete(11);
+      async.flushMicrotasks();
+
+      expect(child.outcome, isA<Done<int>>());
+      expect(parent.outcome, isA<Cancelled>());
+      expect(log, isEmpty);
+    });
+  });
+
+  test('run waits for the child children and cleanup before returning', () {
+    fakeAsync((async) {
+      final order = <String>[];
+      final child = Job.deferred<int>((ctx) async {
+        ctx.onDispose(() async {
+          await delay(10);
+          order.add('cleanup');
+        });
+        ctx.run(
+          Job.deferred<void>((grandchild) async {
+            await grandchild.wait(() => delay(20));
+            order.add('grandchild');
+          }),
+        ).ignore();
+        return 7;
+      });
+      final parent = Job<void>((ctx) async {
+        final value = await ctx.run(child);
+        order.add('run returned $value');
+      });
+
+      async.flushTimers();
+
+      expect(parent.outcome, isA<Done<void>>());
+      expect(order, ['grandchild', 'cleanup', 'run returned 7']);
+    });
+  });
+
+  test('run preserves a child error and its stack trace', () {
+    fakeAsync((async) {
+      final error = StateError('child failed');
+      final stackTrace = StackTrace.fromString('child stack');
+      Object? caught;
+      StackTrace? caughtStackTrace;
+      final child = Job.deferred<void>((ctx) async {
+        Error.throwWithStackTrace(error, stackTrace);
+      });
+      final parent = Job<void>((ctx) async {
+        try {
+          await ctx.run(child);
+        } on Object catch (thrown, thrownStackTrace) {
+          caught = thrown;
+          caughtStackTrace = thrownStackTrace;
+        }
+      });
+
+      async.flushMicrotasks();
+
+      expect(caught, same(error));
+      expect(caughtStackTrace, same(stackTrace));
+      expect((child.outcome! as Failed).stackTrace, same(stackTrace));
+      expect(parent.outcome, isA<Done<void>>());
+    });
+  });
+
+  test('an ignored run returns a late value after the parent body ends', () {
+    fakeAsync((async) {
+      final gate = Completer<int>();
+      int? runValue;
+      int? childValue;
+      final child = Job.deferred<int>(
+        (ctx) => ctx.wait(() => gate.future),
+        cancellable: false,
+      );
+      final parent = Job<void>((ctx) async {
+        ctx.run(child).then((value) => runValue = value).ignore();
+        child.value.then((value) => childValue = value).ignore();
+      });
+      async.flushMicrotasks();
+
+      parent.cancel().ignore();
+      async.flushMicrotasks();
+      expect(parent.outcome, isNull);
+
+      gate.complete(13);
+      async.flushMicrotasks();
+
+      expect(runValue, 13);
+      expect(childValue, 13);
+      expect(child.outcome, isA<Done<int>>());
+      expect(parent.outcome, isA<Cancelled>());
+    });
+  });
+
+  test('a child cancellation seen through run marks the parent', () {
     fakeAsync((async) {
       final parent = Job<void>((ctx) async {
-        final child = ctx.run(
-          Job.deferred<void>(key: 'child', (ctx) => ctx.wait(() => delay(50))),
+        final child = Job.deferred<void>(
+          key: 'child',
+          (ctx) => ctx.wait(() => delay(50)),
         );
+        final result = ctx.run(child);
         child.cancel().ignore();
-        await child.value;
+        await result;
       });
       async.flushTimers();
       final outcome = parent.outcome! as Cancelled;
@@ -140,11 +325,10 @@ void main() {
   test('a child without a key still shows in the parent outcome', () {
     fakeAsync((async) {
       final parent = Job<void>((ctx) async {
-        final child = ctx.run(
-          Job.deferred<void>((ctx) => ctx.wait(() => delay(50))),
-        );
+        final child = Job.deferred<void>((ctx) => ctx.wait(() => delay(50)));
+        final result = ctx.run(child);
         child.cancel().ignore();
-        await child.value;
+        await result;
       });
       async.flushTimers();
       expect(
@@ -160,14 +344,12 @@ void main() {
       final counts = <int>[];
       parent = ProbeJob<void>((ctx) async {
         for (var i = 0; i < 3; i++) {
-          await ctx
-              .run(
-                Job.deferred<void>(
-                  key: 'child$i',
-                  (ctx) => ctx.wait(() => delay(10)),
-                ),
-              )
-              .done;
+          await ctx.run(
+            Job.deferred<void>(
+              key: 'child$i',
+              (ctx) => ctx.wait(() => delay(10)),
+            ),
+          );
           counts.add(parent.childCount);
         }
       })
@@ -205,7 +387,7 @@ void main() {
           // The wait gives up first; the body walks on to `run` anyway.
         }
         try {
-          ctx.run(child);
+          ctx.run(child).ignore();
         } on Object catch (error) {
           thrown = error;
         }
@@ -224,7 +406,7 @@ void main() {
       Object? thrown;
       Job<void>((ctx) async {
         try {
-          ctx.run(_ForeignJob());
+          ctx.run(_ForeignJob()).ignore();
         } on Object catch (error) {
           thrown = error;
         }
@@ -242,15 +424,13 @@ void main() {
         key: 'parent',
         observer: parentJournal,
         (ctx) async {
-          await ctx
-              .run(
-                Job.deferred<void>(
-                  key: 'child',
-                  observer: childJournal,
-                  (ctx) async {},
-                ),
-              )
-              .done;
+          await ctx.run(
+            Job.deferred<void>(
+              key: 'child',
+              observer: childJournal,
+              (ctx) async {},
+            ),
+          );
         },
       ).ignore();
       async.flushMicrotasks();
@@ -273,17 +453,21 @@ void main() {
         key: 'root',
         observer: journal,
         (ctx) async {
-          ctx.run(
-            Job.deferred<void>(key: 'child', (ctx) async {
-              ctx.run(
-                Job.deferred<void>(
-                  key: 'grandchild',
-                  (ctx) => ctx.wait(() => delay(100)),
-                ),
-              );
-              await ctx.wait(() => delay(100));
-            }),
-          );
+          ctx
+              .run(
+                Job.deferred<void>(key: 'child', (ctx) async {
+                  ctx
+                      .run(
+                        Job.deferred<void>(
+                          key: 'grandchild',
+                          (ctx) => ctx.wait(() => delay(100)),
+                        ),
+                      )
+                      .ignore();
+                  await ctx.wait(() => delay(100));
+                }),
+              )
+              .ignore();
           await ctx.wait(() => delay(100));
         },
       );
@@ -307,7 +491,7 @@ void main() {
       Object? thrown;
       final parent = Job<void>((ctx) async {
         try {
-          ctx.run(child);
+          ctx.run(child).ignore();
         } on Object catch (error) {
           thrown = error;
         }
@@ -337,11 +521,12 @@ void main() {
         key: 'parent',
         observer: journal,
         (ctx) async {
-          handle = ctx.run(child);
+          handle = child;
+          ctx.run(child).ignore();
         },
       )..launch();
       async.flushMicrotasks();
-      expect(identical(handle, child), isTrue, reason: 'the same handle');
+      expect(identical(handle, child), isTrue, reason: 'the original handle');
       expect(child.level, 1, reason: 'adopted before it was turned away');
       expect((child.outcome! as Cancelled).description, 'not now');
       expect(parent.outcome, isA<Done<void>>());
@@ -361,7 +546,7 @@ void main() {
       Object? caught;
       final parent = Job<int>((ctx) async {
         try {
-          ctx.run(UnstartableJob<void>(key: 'child'));
+          ctx.run(UnstartableJob<void>(key: 'child')).ignore();
         } on Object catch (error) {
           caught = error;
         }
@@ -378,7 +563,7 @@ void main() {
       Object? caught;
       final parent = ThrowingRulesJob<int>((ctx) async {
         try {
-          ctx.run(Job.deferred<void>(key: 'child', (child) async {}));
+          ctx.run(Job.deferred<void>(key: 'child', (child) async {})).ignore();
         } on Object catch (error) {
           caught = error;
         }
@@ -423,9 +608,11 @@ void main() {
     fakeAsync((async) {
       late Job<void> child;
       final parent = Job<void>((ctx) async {
-        child = ctx.run(
-          Job.deferred<void>(key: 'child', (c) => c.wait(() => delay(100))),
+        child = Job.deferred<void>(
+          key: 'child',
+          (c) => c.wait(() => delay(100)),
         );
+        ctx.run(child).ignore();
         await ctx.wait(() => delay(10));
         throw const Cancelled('enough');
       });
@@ -439,9 +626,11 @@ void main() {
     fakeAsync((async) {
       late Job<void> child;
       final parent = Job<void>((ctx) async {
-        child = ctx.run(
-          Job.deferred<void>(key: 'child', (c) => c.wait(() => delay(100))),
+        child = Job.deferred<void>(
+          key: 'child',
+          (c) => c.wait(() => delay(100)),
         );
+        ctx.run(child).ignore();
         await ctx.wait(() => delay(10));
         throw StateError('boom');
       })
@@ -467,23 +656,25 @@ void main() {
       // path the body opens by giving itself up.
       Object? thrown;
       final parent = Job<void>((ctx) async {
-        ctx.run(
-          Job.deferred<void>(key: 'child', (child) async {
-            child.onCancel(() {
-              try {
-                ctx.run(
-                  Job.deferred<void>(
-                    key: 'late',
-                    (late) => late.wait(() => delay(50)),
-                  ),
-                );
-              } on Object catch (error) {
-                thrown = error;
-              }
-            });
-            await child.wait(() => delay(100));
-          }),
-        );
+        ctx
+            .run(
+              Job.deferred<void>(key: 'child', (child) async {
+                child.onCancel(() {
+                  try {
+                    ctx.run(
+                      Job.deferred<void>(
+                        key: 'late',
+                        (late) => late.wait(() => delay(50)),
+                      ),
+                    );
+                  } on Object catch (error) {
+                    thrown = error;
+                  }
+                });
+                await child.wait(() => delay(100));
+              }),
+            )
+            .ignore();
         await ctx.wait(() => delay(10));
         throw const Cancelled('enough');
       })
@@ -506,7 +697,7 @@ void main() {
           await c.wait(() => delay(50));
         });
         try {
-          ctx.run(child);
+          ctx.run(child).ignore();
         } on Object catch (error) {
           log.add('run threw ${error.runtimeType}');
         }
@@ -534,7 +725,7 @@ void main() {
           (c) => c.wait(() => delay(1000)),
         );
         try {
-          ctx.run(child);
+          ctx.run(child).ignore();
         } on Object catch (error) {
           thrown = error;
         }
@@ -566,4 +757,13 @@ final class _ForeignJob implements Job<void> {
   @override
   dynamic noSuchMethod(Invocation invocation) =>
       throw UnimplementedError('${invocation.memberName}');
+}
+
+final class _OnStartObserver extends JobObserver {
+  final void Function() _onStart;
+
+  _OnStartObserver(this._onStart);
+
+  @override
+  void onStart(Job<Object?> job) => _onStart();
 }

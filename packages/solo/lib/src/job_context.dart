@@ -164,11 +164,11 @@ final class _SoloContext<S extends Object, W extends S, R>
   }
 
   @override
-  Job<T> run<T>(Job<T> child) {
+  void startChild<T>(Job<T> child) {
     // Ownership is the parent's business: a bare job of the core has no
     // `adoptedBy` of ours to refuse it. The queue is asked by the child,
     // in `adoptedBy`.
     _solo._own(child);
-    return super.run(child);
+    super.startChild(child);
   }
 }

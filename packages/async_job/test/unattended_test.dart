@@ -147,14 +147,13 @@ void main() {
       final journal = JobJournal();
       fakeAsync((async) {
         final job = Job<void>(key: 'j', observer: journal, (ctx) async {
-          final child = ctx.run(
-            Job.deferred<void>(key: 'child', (c) async {
-              await c.wait(() => delay(own ? 10 : 100));
-              if (own) {
-                throw const Cancelled('child quits');
-              }
-            }),
-          );
+          final child = Job.deferred<void>(key: 'child', (c) async {
+            await c.wait(() => delay(own ? 10 : 100));
+            if (own) {
+              throw const Cancelled('child quits');
+            }
+          });
+          ctx.run(child).ignore();
           ctx.unattended(() async {
             await child.value;
           });
@@ -179,11 +178,10 @@ void main() {
     fakeAsync((async) {
       late final Job<void> c;
       final b = Job<void>(key: 'b', observer: journalB, (ctx) async {
-        c = ctx.run(
-          Job.deferred<void>(key: 'c', (cc) async {
-            await cc.wait(() => delay(100));
-          }),
-        );
+        c = Job.deferred<void>(key: 'c', (cc) async {
+          await cc.wait(() => delay(100));
+        });
+        ctx.run(c).ignore();
         await ctx.wait(() => delay(100));
       });
       async.flushMicrotasks();

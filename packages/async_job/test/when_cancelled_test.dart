@@ -175,13 +175,15 @@ void main() {
       final job = Job<void>((ctx) async {
         ctx
           ..onCancel(() => order.add('context cancelled'))
-          ..onDispose(() => order.add('cleanup'))
-          ..run(
-            Job.deferred<void>(cancellable: false, (child) async {
-              await delay(20);
-              order.add('child done');
-            }),
-          );
+          ..onDispose(() => order.add('cleanup'));
+        ctx
+            .run(
+              Job.deferred<void>(cancellable: false, (child) async {
+                await delay(20);
+                order.add('child done');
+              }),
+            )
+            .ignore();
         throw const Cancelled('no photo');
       })
         ..whenCancelled((cancelled) {

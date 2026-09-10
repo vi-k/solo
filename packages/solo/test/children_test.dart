@@ -24,7 +24,7 @@ void main() {
         (ctx) async {
           await delay(100);
           ctx.emit(ctx.stateAs<Preparing>().copyWith(progress: 50));
-          await ctx.run(test3).done;
+          await ctx.run(test3);
           ctx.emit(const Working());
         },
       );
@@ -37,13 +37,13 @@ void main() {
         (ctx) async {
           await delay(100);
           ctx.emit(const Preparing());
-          final child = ctx.run(test2);
+          final waitForChild = ctx.run(test2);
           childAtRun = (
-            level: child.level,
-            isChild: child.isChild,
-            isRunning: child.isRunning,
+            level: test2.level,
+            isChild: test2.isChild,
+            isRunning: test2.isRunning,
           );
-          await child.done;
+          await waitForChild;
           await delay(100);
           ctx.emit(ctx.stateAs<Working>().copyWith(a: 1, b: 1));
           ctx.emit(const Disposed());
@@ -80,11 +80,10 @@ void main() {
       var childBodyRan = false;
       bool? childFinishedAtRun;
       solo.run<TestState, void>(key: 'parent', (ctx) async {
-        final child = ctx.run(
-          solo.job<Working, void>(key: 'child', (childCtx) async {
-            childBodyRan = true;
-          }),
-        );
+        final child = solo.job<Working, void>(key: 'child', (childCtx) async {
+          childBodyRan = true;
+        });
+        ctx.run(child).ignore();
         childFinishedAtRun = child.isFinished;
         await child.done;
         ctx.emit(const Preparing());
@@ -101,11 +100,11 @@ void main() {
     });
   });
 
-  test('await value of a child dropped at run reports the child', () {
+  test('await run of a child dropped at start reports the child', () {
     runSolo((solo, journal, async) {
       solo.run<TestState, void>(key: 'parent', (ctx) async {
         final child = solo.job<Working, void>(key: 'child', (ctx) async {});
-        await ctx.run(child).value;
+        await ctx.run(child);
       });
       async.flushTimers();
       const parentOutcome = '[parent] finished Cancelled(handler: child '
@@ -125,7 +124,7 @@ void main() {
           await delay(100);
           ctx.emit(const Preparing());
         });
-        ctx.run(child);
+        ctx.run(child).ignore();
       });
       async.elapse(const Duration(milliseconds: 50));
       expect(parent.isRunning, isTrue);
@@ -150,10 +149,12 @@ void main() {
               ctx.check();
             },
           );
-          await ctx.run(grandchild).done;
+          ctx.run(grandchild).ignore();
+          await grandchild.done;
           ctx.check();
         });
-        await ctx.run(child).done;
+        ctx.run(child).ignore();
+        await child.done;
         ctx.check();
       });
       async.elapse(const Duration(milliseconds: 50));
@@ -187,10 +188,12 @@ void main() {
               ctx.check();
             },
           );
-          await ctx.run(grandchild).done;
+          ctx.run(grandchild).ignore();
+          await grandchild.done;
           ctx.check();
         });
-        await ctx.run(child).done;
+        ctx.run(child).ignore();
+        await child.done;
         ctx.check();
       });
       async.elapse(const Duration(milliseconds: 50));
@@ -209,7 +212,7 @@ void main() {
     });
   });
 
-  test('await child.value propagates the child cancellation as handler', () {
+  test('await run propagates the child cancellation as handler', () {
     runSolo(initialState: const Preparing(), (solo, journal, async) {
       solo.run<Preparing, void>(key: 'parent', (ctx) async {
         final child = solo.job<Preparing, void>(
@@ -220,7 +223,7 @@ void main() {
             ctx.check();
           },
         );
-        await ctx.run(child).value;
+        await ctx.run(child);
         ctx.emit(const Working());
       });
       async.elapse(const Duration(milliseconds: 50));
@@ -241,16 +244,15 @@ void main() {
   test('await child.done lets the parent continue after cancellation', () {
     runSolo(initialState: const Preparing(), (solo, journal, async) {
       solo.run<PreparingAndWorking, void>(key: 'parent', (ctx) async {
-        final child = ctx.run(
-          solo.job<Preparing, void>(
-            key: 'child',
-            keepWhile: (state) => state.progress < 50,
-            (ctx) async {
-              await delay(100);
-              ctx.check();
-            },
-          ),
+        final child = solo.job<Preparing, void>(
+          key: 'child',
+          keepWhile: (state) => state.progress < 50,
+          (ctx) async {
+            await delay(100);
+            ctx.check();
+          },
         );
+        ctx.run(child).ignore();
         await child.done;
         ctx.emit(const Working());
       });
@@ -268,13 +270,13 @@ void main() {
     });
   });
 
-  test('a failed child reports onError and fails the parent via value', () {
+  test('a failed child reports onError and fails the parent via run', () {
     runSolo((solo, journal, async) {
       solo.run<TestState, void>(key: 'parent', (ctx) async {
         final child = solo.job<TestState, void>(key: 'child', (ctx) async {
           throw StateError('boom');
         });
-        await ctx.run(child).value;
+        await ctx.run(child);
       })
           // The journal below is the whole assertion; keep the parent's
           // failure out of the zone.
@@ -304,7 +306,8 @@ void main() {
               ..emit(const Preparing(progress: 50))
               ..emit(const Preparing(progress: 75));
           });
-          await ctx.run(child).done;
+          ctx.run(child).ignore();
+          await child.done;
           ctx.emit(const Preparing(progress: 100));
         },
       );
@@ -332,7 +335,8 @@ void main() {
             ctx.check();
           },
         );
-        await ctx.run(child).done;
+        ctx.run(child).ignore();
+        await child.done;
         ctx.check();
       });
       async.flushTimers();
@@ -349,22 +353,21 @@ void main() {
   test('parallel children each re-evaluate the other', () {
     runSolo(initialState: const Working(), (solo, journal, async) {
       solo.run<Working, void>(key: 'parent', (ctx) async {
-        final a = ctx.run(
-          solo.job<Working, void>(
-            key: 'a',
-            keepWhile: (state) => state.b == 0,
-            (ctx) async {
-              await delay(100);
-              ctx.emit(ctx.state.copyWith(a: 1));
-            },
-          ),
+        final jobA = solo.job<Working, void>(
+          key: 'a',
+          keepWhile: (state) => state.b == 0,
+          (ctx) async {
+            await delay(100);
+            ctx.emit(ctx.state.copyWith(a: 1));
+          },
         );
+        ctx.run(jobA).ignore();
         final jobB = solo.job<Working, void>(key: 'b', (ctx) async {
           await delay(50);
           ctx.emit(ctx.state.copyWith(b: 1));
         });
-        final b = ctx.run(jobB);
-        await Future.wait([a.done, b.done]);
+        ctx.run(jobB).ignore();
+        await Future.wait([jobA.done, jobB.done]);
       });
       async.flushTimers();
       expect(journal.take(), [
@@ -382,18 +385,16 @@ void main() {
   test('a cancellable: false child finishes and the parent waits', () {
     runSolo((solo, journal, async) {
       solo.run<TestState, void>(key: 'parent', (ctx) async {
-        await ctx
-            .run(
-              solo.job<TestState, void>(
-                key: 'child',
-                cancellable: false,
-                (ctx) async {
-                  await delay(100);
-                  ctx.emit(const Preparing());
-                },
-              ),
-            )
-            .done;
+        final child = solo.job<TestState, void>(
+          key: 'child',
+          cancellable: false,
+          (ctx) async {
+            await delay(100);
+            ctx.emit(const Preparing());
+          },
+        );
+        ctx.run(child).ignore();
+        await child.done;
         ctx.check();
       });
       async.elapse(const Duration(milliseconds: 50));
@@ -409,6 +410,82 @@ void main() {
     });
   });
 
+  test('run reevaluates parent rules after a successful child', () {
+    runSolo((solo, journal, async) {
+      var continued = false;
+      final child = solo.job<TestState, int>(
+        key: 'child',
+        (ctx) async => 7,
+      );
+      final parent = solo.run<Initial, void>(key: 'parent', (ctx) async {
+        ctx.emit(const Working());
+        await ctx.run(child);
+        continued = true;
+      });
+
+      async.flushMicrotasks();
+      expect(child.outcome, isA<Done<int>>());
+      expect(continued, isFalse);
+      expect(parent.outcome, isA<Cancelled>());
+      expect((parent.outcome! as Cancelled).reason, isA<RulesCancelReason>());
+      expect(journal.take(), [
+        '[parent] started',
+        'state: Working(a: 0, b: 0)',
+        '> [child] started',
+        '> [child] finished Done(7)',
+        '[parent] finished Cancelled(rules: is not Initial)',
+      ]);
+    });
+  });
+
+  test('run checks parent rules after a successful child cleanup', () {
+    runSolo((solo, journal, async) {
+      final order = <String>[];
+      int? childValue;
+      final child = solo.job<TestState, int>(
+        key: 'child',
+        cancellable: false,
+        (ctx) async {
+          ctx.onDispose(() async {
+            order.add('cleanup starts');
+            await delay(50);
+            order.add('cleanup ends');
+          });
+          await delay(50);
+          order.add('child body ends');
+          return 7;
+        },
+      );
+      child.value.then((value) => childValue = value).ignore();
+      final parent = solo.run<Initial, void>(key: 'parent', (ctx) async {
+        await ctx.run(child);
+        order.add('parent continued');
+      });
+      final next = solo.run<TestState, void>(key: 'next', (ctx) async {
+        order.add('next starts');
+      });
+
+      async.elapse(const Duration(milliseconds: 10));
+      solo.externalSetState(const Working());
+      async.elapse(const Duration(milliseconds: 40));
+      expect(child.outcome, isNull, reason: 'cleanup is still running');
+      expect(next.outcome, isNull, reason: 'the parent still owns the slot');
+
+      async.elapse(const Duration(milliseconds: 50));
+      expect(child.outcome, isA<Done<int>>());
+      expect(childValue, 7, reason: 'the original handle keeps the value');
+      expect(parent.outcome, isA<Cancelled>());
+      expect((parent.outcome! as Cancelled).reason, isA<RulesCancelReason>());
+      expect(next.outcome, isA<Done<void>>());
+      expect(order, [
+        'child body ends',
+        'cleanup starts',
+        'cleanup ends',
+        'next starts',
+      ]);
+    });
+  });
+
   test('run of a used job, after finish, or when cancelled', () {
     runSolo((solo, journal, async) {
       late SoloContext<TestState, TestState> leaked;
@@ -416,9 +493,9 @@ void main() {
       Object? secondRunError;
       solo.run<TestState, void>(key: 'parent', (ctx) async {
         leaked = ctx;
-        ctx.run(used);
+        ctx.run(used).ignore();
         try {
-          ctx.run(used);
+          ctx.run(used).ignore();
         } on Object catch (error) {
           secondRunError = error;
         }
@@ -433,7 +510,7 @@ void main() {
       final orphan = solo.job<TestState, void>(key: 'orphan', (ctx) async {});
       solo.run<TestState, void>(key: 'cancelled', (ctx) async {
         await delay(100);
-        ctx.run(orphan);
+        ctx.run(orphan).ignore();
       });
       async.elapse(const Duration(milliseconds: 50));
       solo.current!.cancel();
@@ -456,7 +533,7 @@ void main() {
           key: 'parent',
           (ctx) async {
             try {
-              ctx.run(queued);
+              ctx.run(queued).ignore();
             } on Object catch (error) {
               thrown = error;
             }
@@ -476,7 +553,7 @@ void main() {
       Object? thrown;
       ForeignJob<void>((ctx) async {
         try {
-          ctx.run(child);
+          ctx.run(child).ignore();
         } on Object catch (error) {
           thrown = error;
         }
@@ -493,7 +570,7 @@ void main() {
       final parent = solo.run<TestState, void>(
         key: 'parent',
         (ctx) async {
-          ctx.run(ForeignJob<void>((_) async => foreignRan = true));
+          ctx.run(ForeignJob<void>((_) async => foreignRan = true)).ignore();
         },
       )..ignore();
       async.flushTimers();
@@ -511,16 +588,14 @@ void main() {
       final counts = <int>[];
       parent = ForeignJob<void>((ctx) async {
         for (var i = 0; i < 3; i++) {
-          await ctx
-              .run(
-                ForeignJob<void>(
-                  key: 'child$i',
-                  (ctx) async {
-                    await ctx.wait(() => delay(10));
-                  },
-                ),
-              )
-              .done;
+          await ctx.run(
+            ForeignJob<void>(
+              key: 'child$i',
+              (ctx) async {
+                await ctx.wait(() => delay(10));
+              },
+            ),
+          );
           counts.add(parent.childCount);
         }
       })
@@ -536,7 +611,7 @@ void main() {
       final parent = solo.run<Preparing, void>(
         key: 'parent',
         (ctx) async {
-          await ctx.run(solo.job<Working, void>((ctx) async {})).value;
+          await ctx.run(solo.job<Working, void>((ctx) async {}));
         },
       );
       async.flushTimers();
@@ -551,13 +626,15 @@ void main() {
     runSolo((solo, journal, async) {
       solo.run<TestState, void>(key: 'parent', (ctx) async {
         try {
-          ctx.run(
-            solo.job<TestState, void>(
-              key: 'child',
-              canStart: (state) => throw StateError('rule boom'),
-              (childCtx) async {},
-            ),
-          );
+          ctx
+              .run(
+                solo.job<TestState, void>(
+                  key: 'child',
+                  canStart: (state) => throw StateError('rule boom'),
+                  (childCtx) async {},
+                ),
+              )
+              .ignore();
         } on Object catch (_) {
           // The parent handles it and ends `Done`; the failure of the
           // child still has to be heard.

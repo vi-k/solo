@@ -395,13 +395,19 @@ or cleanup.
 as a child of the current one. The parent finishes only after all of its
 children. A cancelled parent cancels them, and so does a body that gives
 itself up with `throw Cancelled(...)` — including one that let a child's
-`Cancelled` through from `await child.value`; a body that *fails* leaves
-them to finish and waits. A child writes the state beside its parent —
-neither waits for the other, and their writes interleave — which is the one
-way to have two writers inside a controller deliberately.
-`ctx.run(child).done` gives the outcome and never throws;
-`ctx.run(child).value` gives the value and throws the child's `Cancelled` or
-error into the parent's body.
+`Cancelled` through from `await ctx.run(child)`; a body that *fails* leaves
+them to finish and waits. `await ctx.run(child)` waits for the child's
+children and cleanup, then checks the parent's cancellation and state rules
+before returning its value. The child's error or `Cancelled` is
+thrown into the parent's body with its stack trace. The child can refuse
+cancellation; `run` waits for it and checks the parent after it succeeds.
+
+Keep the original `child` to cancel it or inspect `child.done`; `run`
+returns a future and creates no new job. To run parent and child work
+concurrently, handle the returned future separately. Their state writes
+can then interleave. Use `ctx.run(child).ignore()` if the result is
+deliberately unused; this does not stop the parent waiting for its children
+before finishing.
 
 **Chains.** `job.then((ctx, value) => ...)` creates a core `Job` that runs
 after `job` succeeds, including its children and cleanup. Its callback
@@ -524,10 +530,13 @@ inside the write itself — a hook or a listener setting the state again, a
 parent going down and taking this job with it — is thrown by `emit` on the
 way out, so the body never walks past it.
 
-`ctx.run(child)` returns a handle, not a value. `await ctx.run(child).value`
-throws into the parent; `switch (await ctx.run(child).done)` does not. A
-forgotten `await` breaks nothing: the parent waits for its children in any
-case.
+`ctx.run(child)` returns `Future<T>`. Await it to propagate a child's error
+or cancellation into the body. To inspect the outcome instead, keep the
+original child, call `ctx.run(child).ignore()` and await `child.done`.
+The parent waits for its children even if its body does not await them,
+but the returned future still needs error handling: `child.ignore()` alone
+does not handle that future's errors. An unhandled future error, including
+cancellation, follows Dart's rules.
 
 A job handed to `ctx.run` becomes a child even if it is dropped before it
 starts: it gets its parent, its level and its observer before the rules are
@@ -1125,7 +1134,7 @@ final class CameraController extends Solo<CameraState> {
           return;
         }
         if (ctx.state is! Initial) {
-          await ctx.run(_closeCameraJob()).value;
+          await ctx.run(_closeCameraJob());
         }
         ctx.emit(const Disposed());
       },

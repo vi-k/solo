@@ -137,12 +137,14 @@ void main() {
       () {
         fakeAsync((async) {
           final job = Job<void>((ctx) async {
-            ctx.run(
-              Job.deferred<void>(
-                key: 'child',
-                (child) => child.wait(() => delay(50)),
-              ),
-            );
+            ctx
+                .run(
+                  Job.deferred<void>(
+                    key: 'child',
+                    (child) => child.wait(() => delay(50)),
+                  ),
+                )
+                .ignore();
             throw StateError('boom');
           });
           async.elapse(const Duration(milliseconds: 10));
@@ -167,12 +169,14 @@ void main() {
             key: 'job',
             observer: journal,
             (ctx) async {
-              ctx.run(
-                Job.deferred<void>(
-                  key: 'child',
-                  (child) => child.wait(() => delay(50)),
-                ),
-              );
+              ctx
+                  .run(
+                    Job.deferred<void>(
+                      key: 'child',
+                      (child) => child.wait(() => delay(50)),
+                    ),
+                  )
+                  .ignore();
               throw StateError('boom');
             },
           );
@@ -218,12 +222,15 @@ void main() {
     expect(caught, isEmpty);
     expect(closed, ['db'], reason: 'the value is still cleaned up');
   });
-  test("a child's failure nobody looked at reaches the zone", () {
+  test("a run Future nobody handles reports the child's failure", () {
     final caught = <Object>[];
     runZonedGuarded(
       () {
         fakeAsync((async) {
           Job<void>((ctx) async {
+            // Intentionally unhandled: this test checks the returned
+            // Future's error reporting contract.
+            // ignore: unawaited_futures
             ctx.run(
               Job.deferred<void>(key: 'child', (child) async {
                 // Outlives the body, so the parent really waits for it: a
@@ -243,7 +250,7 @@ void main() {
     expect(
       caught.map((error) => '$error').toList(),
       ['Bad state: child boom'],
-      reason: 'waiting for a child is not looking at its outcome',
+      reason: 'run observes the child and its own Future owns the error',
     );
   });
 
@@ -324,12 +331,14 @@ void main() {
       () {
         fakeAsync((async) {
           final job = Job<void>((ctx) async {
-            ctx.run(
-              Job.deferred<void>(
-                key: 'child',
-                (child) => child.wait(() => delay(50)),
-              ),
-            );
+            ctx
+                .run(
+                  Job.deferred<void>(
+                    key: 'child',
+                    (child) => child.wait(() => delay(50)),
+                  ),
+                )
+                .ignore();
             throw StateError('boom');
           })
             ..ignore();
@@ -507,16 +516,18 @@ void main() {
             key: 'job',
             observer: _IgnoreOnFinish(order),
             (ctx) async {
-              ctx.run(
-                Job.deferred<void>(
-                  key: 'child',
-                  // An observer of its own: the child would inherit the
-                  // parent's, and its finish would take the outcome of the
-                  // parent through the closure long before this is about.
-                  observer: _Quiet(),
-                  (child) => child.wait(() => delay(50)),
-                ),
-              );
+              ctx
+                  .run(
+                    Job.deferred<void>(
+                      key: 'child',
+                      // An observer of its own: the child would inherit the
+                      // parent's, and its finish would take the outcome of the
+                      // parent through the closure long before this is about.
+                      observer: _Quiet(),
+                      (child) => child.wait(() => delay(50)),
+                    ),
+                  )
+                  .ignore();
               throw StateError('boom');
             },
           );
@@ -546,13 +557,15 @@ void main() {
             key: 'job',
             observer: _TouchAfterFinish(() => job.done.ignore()),
             (ctx) async {
-              ctx.run(
-                Job.deferred<void>(
-                  key: 'child',
-                  observer: _Quiet(),
-                  (child) => child.wait(() => delay(50)),
-                ),
-              );
+              ctx
+                  .run(
+                    Job.deferred<void>(
+                      key: 'child',
+                      observer: _Quiet(),
+                      (child) => child.wait(() => delay(50)),
+                    ),
+                  )
+                  .ignore();
               throw StateError('boom');
             },
           );

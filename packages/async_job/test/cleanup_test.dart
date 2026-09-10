@@ -96,21 +96,22 @@ void main() {
     fakeAsync((async) {
       final order = <String>[];
       final job = Job<void>((ctx) async {
+        ctx.onDispose(() async {
+          order.add('cleanup starts');
+          await delay(50);
+          order.add('cleanup ends');
+        });
         ctx
-          ..onDispose(() async {
-            order.add('cleanup starts');
-            await delay(50);
-            order.add('cleanup ends');
-          })
-          ..run(
-            Job.deferred<void>(
-              key: 'child',
-              (ctx) async {
-                await ctx.wait(() => delay(30));
-                order.add('child');
-              },
-            ),
-          );
+            .run(
+              Job.deferred<void>(
+                key: 'child',
+                (ctx) async {
+                  await ctx.wait(() => delay(30));
+                  order.add('child');
+                },
+              ),
+            )
+            .ignore();
       });
       job.done.then((_) => order.add('finished')).ignore();
       async.flushTimers();
@@ -296,15 +297,17 @@ void main() {
     fakeAsync((async) {
       final order = <String>[];
       final job = Job<void>((ctx) async {
-        ctx.run(
-          Job.deferred<void>(
-            key: 'child',
-            (ctx) async {
-              ctx.onCancel(() => order.add('child cancelled'));
-              await ctx.wait(() => delay(100));
-            },
-          ),
-        );
+        ctx
+            .run(
+              Job.deferred<void>(
+                key: 'child',
+                (ctx) async {
+                  ctx.onCancel(() => order.add('child cancelled'));
+                  await ctx.wait(() => delay(100));
+                },
+              ),
+            )
+            .ignore();
         await ctx.wait(() => delay(10));
         // The body ended with a cancellation of its own while the children
         // are still running: an outside `cancel()` has to reach the child.
@@ -412,12 +415,14 @@ void main() {
             discard: closed.add,
           ),
         );
-        ctx.run(
-          Job.deferred<void>(
-            key: 'child',
-            (ctx) => ctx.wait(() => delay(80)),
-          ),
-        );
+        ctx
+            .run(
+              Job.deferred<void>(
+                key: 'child',
+                (ctx) => ctx.wait(() => delay(80)),
+              ),
+            )
+            .ignore();
         return 1;
       })
         ..ignore();
@@ -500,12 +505,14 @@ void main() {
               discard: (_) {},
             ),
           );
-          ctx.run(
-            Job.deferred<void>(
-              key: 'child',
-              (ctx) => ctx.wait(() => delay(80)),
-            ),
-          );
+          ctx
+              .run(
+                Job.deferred<void>(
+                  key: 'child',
+                  (ctx) => ctx.wait(() => delay(80)),
+                ),
+              )
+              .ignore();
           return 1;
         },
       ).ignore();

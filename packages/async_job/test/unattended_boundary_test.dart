@@ -118,9 +118,11 @@ void main() {
       Job<void>(key: 'a', observer: journal, (ctx) async {
         ctx.unattended(() {
           Job<void>(key: 'b', observer: journal, (inner) async {
-            inner.run(
-              Job.deferred<void>(key: 'c', (c) async => childRan = true),
-            );
+            inner
+                .run(
+                  Job.deferred<void>(key: 'c', (c) async => childRan = true),
+                )
+                .ignore();
             await inner.wait(() => delay(1));
           });
         });

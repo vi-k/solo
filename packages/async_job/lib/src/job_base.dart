@@ -164,8 +164,9 @@ abstract interface class Job<T> {
   /// Forwarding a failure observes the source and transfers responsibility
   /// to the continuation. A cancelled continuation does not observe a source
   /// failure it cannot forward; observe the source separately if needed.
-  /// Returned jobs are ordinary values, not automatically awaited: start
-  /// deferred children with `ctx.run(child)` and await their `.value`.
+  /// Returned jobs are ordinary values, not automatically awaited: start and
+  /// await deferred children with `await ctx.run(child)`. Keep the original
+  /// child separately when its handle is needed.
   ///
   /// ```dart
   /// final length = Job<String>((ctx) async => 'hello')

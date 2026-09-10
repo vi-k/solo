@@ -1,5 +1,12 @@
 ## 0.2.0
 
+- **Breaking:** `ctx.run(child)` returns the child's result as `Future<T>`.
+  Replace `await ctx.run(child).value` with `await ctx.run(child)`; keep the
+  original child handle to cancel it or inspect its outcome. After success,
+  `run` checks the parent's cancellation and state rules before returning.
+  Concurrent starts must handle or explicitly ignore the returned future.
+  Controller `run` and `ctx.each` still return job handles immediately.
+
 - Add `collect` and `accumulate` factories returning `SoloAccumulator`:
   gather events in a list or merge them into one value before execution.
   `AccumulationPolicy` selects adjacent grouping, replacement at the

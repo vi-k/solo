@@ -1,5 +1,15 @@
 ## 0.2.0
 
+- **Breaking:** `ctx.run(child)` returns `Future<T>` instead of the child's
+  handle. Use `await ctx.run(child)` to await its value, children and cleanup;
+  successful completion checks the parent's cancellation before continuing.
+  Keep the original `child` for cancellation or outcome inspection. Handle
+  the returned future's errors, or use `.ignore()` for an intentional
+  concurrent start whose result is unused. Start validation still throws
+  synchronously. `ctx.each` continues to return its child handle immediately.
+- Add protected `JobContextBase.startChild` for domain adoption and start
+  checks shared by `run` and `each`, without observing the child's result.
+
 - Add `Job.then` with a separate context per continuation, forward outcome
   propagation and cancellation in both directions. Cancelling the tail
   waits for unfinished predecessors and their cleanup. `ChainCancelReason`
