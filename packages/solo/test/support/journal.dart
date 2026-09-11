@@ -49,8 +49,8 @@ final class JournalObserver extends SoloObserver {
       lines.add('${_label(job)} log $message');
 
   @override
-  void onChange(SoloBase<Object> solo, Object previous, Object current) =>
-      lines.add('state: $current');
+  void onChange(SoloBase<Object> solo, SoloTransition<Object> transition) =>
+      lines.add('state: ${transition.current}');
 
   @override
   void onClose(SoloBase<Object> solo) => lines.add('closed');

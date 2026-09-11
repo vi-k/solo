@@ -7,6 +7,7 @@ import 'package:meta/meta.dart';
 import 'observer.dart';
 import 'policy.dart';
 import 'solo_cancel_reason.dart';
+import 'transition.dart';
 
 part 'accumulator.dart';
 part 'accumulation_timing.dart';
@@ -558,7 +559,11 @@ abstract class SoloBase<S extends Object> {
   void onLog(Job<Object?> job, Object? message) {}
 
   /// The state changed, from a job or from [externalSetState].
-  void onChange(S previous, S current) {}
+  ///
+  /// [SoloTransition.job] says whose change it was — a job of this
+  /// controller, a child of one, or nobody for an external change — and
+  /// [SoloTransition.revision] puts two of them in order.
+  void onChange(SoloTransition<S> transition) {}
 
   _SoloJob<S, S, T> _own<T>(Job<T> job) {
     if (job is _SoloJob<S, S, T> && identical(job._solo, this)) {
@@ -585,8 +590,14 @@ abstract class SoloBase<S extends Object> {
       if (identical(job, emitter)) continue;
       if (job._checkCorrectionState(next)) ruleErrors.add(job);
     }
-    _callHook(() => observer?.onChange(this, previous, next));
-    _callHook(() => onChange(previous, next));
+    final transition = SoloTransition<S>(
+      previous: previous,
+      current: next,
+      job: emitter,
+      revision: revision,
+    );
+    _callHook(() => observer?.onChange(this, transition));
+    _callHook(() => onChange(transition));
     _publishPending();
     _reevaluate(
       except: emitter,

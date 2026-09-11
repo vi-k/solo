@@ -946,14 +946,21 @@ final class LoggingObserver extends SoloObserver {
       print('$job finished ${job.outcome}');
 
   @override
-  void onChange(SoloBase<Object> solo, Object previous, Object current) =>
-      print('state: $current');
+  void onChange(SoloBase<Object> solo, SoloTransition<Object> transition) =>
+      print('${transition.job ?? 'external'}: ${transition.current}');
 }
 
 void main() {
   SoloBase.observer = LoggingObserver();
 }
 ```
+
+Хук изменения получает `SoloTransition`: состояние до и после, `job`, чей
+`emit` его сделал — `null` для `externalSetState`, а у дочерней задачи это
+она сама, а не корневая, которой она принадлежит, — и `revision`, растущий
+на единицу за изменение, так что два перехода упорядочены даже когда хук
+поменял состояние ещё раз изнутри первого. Он отвечает на вопрос, кто
+изменил состояние, а снаружи движка это не выводится.
 
 Наблюдатель вызывается перед соответствующим хуком контроллера.
 Каждый вызов независим; отсутствие `super` в хуке контроллера не отключает
@@ -1100,8 +1107,8 @@ final class Journal extends SoloObserver {
       lines.add('${job.key} ${job.outcome}');
 
   @override
-  void onChange(SoloBase<Object> solo, Object previous, Object current) =>
-      lines.add('state: ${current.runtimeType}');
+  void onChange(SoloBase<Object> solo, SoloTransition<Object> transition) =>
+      lines.add('state: ${transition.current.runtimeType}');
 }
 
 test('a second load while the first one runs is dropped', () {

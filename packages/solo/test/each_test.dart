@@ -219,7 +219,8 @@ final class _DisposeOnSecond extends Solo<TestState> {
   _DisposeOnSecond() : super(const Initial());
 
   @override
-  void onChange(TestState previous, TestState current) {
+  void onChange(SoloTransition<TestState> transition) {
+    final current = transition.current;
     if (current is Preparing && current.progress == 2) {
       externalSetState(const Disposed());
     }

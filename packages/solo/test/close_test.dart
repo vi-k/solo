@@ -282,8 +282,8 @@ final class _Reentrant extends Solo<TestState> {
   _Reentrant() : super(const Initial());
 
   @override
-  void onChange(TestState previous, TestState current) {
-    if (current is Preparing) {
+  void onChange(SoloTransition<TestState> transition) {
+    if (transition.current is Preparing) {
       externalSetState(const Working());
     }
   }
@@ -302,7 +302,7 @@ final class _Recorder extends SoloBase<TestState> {
   }
 
   @override
-  void onChange(TestState previous, TestState current) => order.add('onChange');
+  void onChange(SoloTransition<TestState> transition) => order.add('onChange');
 
   @override
   void publish(TestState previous, TestState current) {

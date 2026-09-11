@@ -1,5 +1,15 @@
 ## Unreleased
 
+- **Breaking:** the change hooks take a `SoloTransition<S>` instead of a
+  pair of states: `SoloBase.onChange(transition)` and
+  `SoloObserver.onChange(solo, transition)`. Beside `previous` and
+  `current` it carries `job` — whose `emit` made the change, `null` for an
+  `externalSetState`, and a child rather than the root it belongs to — and
+  `revision`, which grows by one per change and orders two transitions
+  even when a hook changed the state again from inside the first. The
+  engine knew both and told nobody, and neither can be worked out from
+  outside. Migration: `previous` becomes `transition.previous`, `current`
+  becomes `transition.current`.
 - **Breaking:** setting `SoloBase.observer` no longer takes an error with
   nowhere else to go off its default route to the zone. Watching is not
   answering: an observer set for a log used to switch reporting off for

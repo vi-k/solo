@@ -9,3 +9,4 @@ export 'src/policy.dart';
 export 'src/solo.dart';
 export 'src/solo_base.dart';
 export 'src/solo_cancel_reason.dart';
+export 'src/transition.dart';

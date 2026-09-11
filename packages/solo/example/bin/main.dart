@@ -53,8 +53,8 @@ final class _PrintObserver extends SoloObserver {
       print('${_label(job)} log $message');
 
   @override
-  void onChange(SoloBase<Object> solo, Object previous, Object current) =>
-      print('state: $current');
+  void onChange(SoloBase<Object> solo, SoloTransition<Object> transition) =>
+      print('state: ${transition.current}');
 
   @override
   void onClose(SoloBase<Object> solo) => print('closed');

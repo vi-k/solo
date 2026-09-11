@@ -922,14 +922,22 @@ final class LoggingObserver extends SoloObserver {
       print('$job finished ${job.outcome}');
 
   @override
-  void onChange(SoloBase<Object> solo, Object previous, Object current) =>
-      print('state: $current');
+  void onChange(SoloBase<Object> solo, SoloTransition<Object> transition) =>
+      print('${transition.job ?? 'external'}: ${transition.current}');
 }
 
 void main() {
   SoloBase.observer = LoggingObserver();
 }
 ```
+
+A change hook is given a `SoloTransition`: the state before and after,
+the `job` whose `emit` made it — `null` for an `externalSetState`, and a
+child of the running job rather than the root it belongs to — and a
+`revision` that grows by one per change, so two transitions are in order
+even when a hook changed the state again from inside the first. It
+answers who changed the state, which nothing outside the engine can work
+out.
 
 The observer is called before the controller's corresponding hook.
 Each call is independent; omitting `super` in a controller hook does not
@@ -1072,8 +1080,8 @@ final class Journal extends SoloObserver {
       lines.add('${job.key} ${job.outcome}');
 
   @override
-  void onChange(SoloBase<Object> solo, Object previous, Object current) =>
-      lines.add('state: ${current.runtimeType}');
+  void onChange(SoloBase<Object> solo, SoloTransition<Object> transition) =>
+      lines.add('state: ${transition.current.runtimeType}');
 }
 
 test('a second load while the first one runs is dropped', () {

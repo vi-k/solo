@@ -83,8 +83,8 @@ final class _DisposeOnPreparing extends Solo<TestState> {
   _DisposeOnPreparing() : super(const Initial());
 
   @override
-  void onChange(TestState previous, TestState current) {
-    if (current is Preparing) {
+  void onChange(SoloTransition<TestState> transition) {
+    if (transition.current is Preparing) {
       externalSetState(const Disposed());
     }
   }

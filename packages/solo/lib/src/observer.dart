@@ -1,6 +1,7 @@
 import 'package:async_job/async_job.dart';
 
 import 'solo_base.dart';
+import 'transition.dart';
 
 /// Cross-cutting hooks for every controller: analytics, error reporting, a
 /// single log. Set [SoloBase.observer] once at startup.
@@ -47,7 +48,10 @@ abstract class SoloObserver {
   ) {}
 
   /// The state changed, from a job or from `externalSetState`.
-  void onChange(SoloBase<Object> solo, Object previous, Object current) {}
+  ///
+  /// [SoloTransition.job] says whose change it was, and
+  /// [SoloTransition.revision] puts two of them in order.
+  void onChange(SoloBase<Object> solo, SoloTransition<Object> transition) {}
 
   /// A job called [JobContext.log].
   void onLog(SoloBase<Object> solo, Job<Object?> job, Object? message) {}

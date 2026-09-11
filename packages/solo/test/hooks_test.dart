@@ -371,7 +371,7 @@ final class _ThrowingChange extends Solo<TestState> {
   void externalSetState(TestState state) => super.externalSetState(state);
 
   @override
-  void onChange(TestState previous, TestState current) =>
+  void onChange(SoloTransition<TestState> transition) =>
       throw StateError('onChange');
 }
 
@@ -412,6 +412,6 @@ final class _Hooked extends Solo<TestState> {
       lines.add('hook: log $message');
 
   @override
-  void onChange(TestState previous, TestState current) =>
-      lines.add('hook: change $current');
+  void onChange(SoloTransition<TestState> transition) =>
+      lines.add('hook: change ${transition.current}');
 }

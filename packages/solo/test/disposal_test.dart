@@ -183,8 +183,8 @@ final class _ReentrantSolo extends Solo<TestState> {
   _ReentrantSolo() : super(const Initial());
 
   @override
-  void onChange(TestState previous, TestState current) {
-    if (current is Working) {
+  void onChange(SoloTransition<TestState> transition) {
+    if (transition.current is Working) {
       externalSetState(const Disposed());
     }
   }

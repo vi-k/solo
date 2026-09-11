@@ -17,7 +17,8 @@ final class _Controller<S extends Object> extends Solo<S> {
   void external(S value) => externalSetState(value);
 
   @override
-  void onChange(S previous, S current) {
+  void onChange(SoloTransition<S> transition) {
+    final current = transition.current;
     log.add('state:$current');
     changed?.call(current);
   }
