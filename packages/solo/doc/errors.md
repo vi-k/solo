@@ -147,11 +147,19 @@ inside a broad catch.
 
 ## Errors in state rules
 
-Rules should return a boolean. If a start rule throws, the job fails and
-the queue continues. If a rule throws at a context checkpoint, the body
-receives the error. During re-evaluation after a state update, a throwing
-rule is reported but does not itself cancel the running body. If that
-check also controls a final state handler, the handler is disabled.
+```dart
+// A rule answers; it does not throw to refuse.
+canStart: (state) => state.free > 0,
+```
+
+Where a rule throws anyway decides who hears about it:
+
+| Where it throws | What happens |
+| --- | --- |
+| A start rule | The job fails and the queue continues. |
+| A rule at a context checkpoint | The body receives the error. |
+| Re-evaluation after a state update | Reported; it does not itself cancel the running body. |
+| A check that also controls a final state handler | The handler is disabled. |
 
 Re-evaluation errors fall back to the controller's creation zone when no
 error hook and no `SoloBase.errorHandler` answers for them. In the root
@@ -160,6 +168,18 @@ error reporting and observe job outcomes according to your application's
 needs.
 
 ## Background work and logs
+
+```dart
+// Work with a life of its own: the job neither waits for it nor cancels
+// it, and its errors still reach the job's hooks.
+ctx.unattended(() => analytics.send('zoom'));
+
+// Application data for the log hooks and observers.
+ctx.log(('zoom', zoom));
+
+// And the engine's own trace, when the queue itself needs watching.
+SoloBase.debug = print;
+```
 
 `ctx.unattended(action)` starts work that the job does not wait for or
 cancel. Its errors are reported through the job's error hooks, even after
@@ -171,6 +191,7 @@ cancellation or completion. The background operation does not extend
 the context's lifetime. A bare `unawaited(future)` does not provide
 the error routing of `unattended`.
 
-`ctx.log(data)` forwards application data to log hooks and observers.
-`SoloBase.debug = print` additionally traces the controller's internal
-queue and lifecycle operations.
+`ctx.log(data)` forwards application data to log hooks and observers as
+it is, so a listener that wants a line makes one. `SoloBase.debug`
+additionally traces the controller's internal queue and lifecycle
+operations.
