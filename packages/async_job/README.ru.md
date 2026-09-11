@@ -150,6 +150,8 @@ final outcome = await job.done; // Cancelled(manual)
 
 ## Страницы
 
+Они же на [сайте документации](https://docs.yet-another.dev/async_job/), с поиском.
+
 | Страница | О чём |
 | --- | --- |
 | [Исходы](../../docs/ru/async_job/outcomes.md) | `Done`, `Failed`, `Cancelled` и кто отвечает за ошибку |

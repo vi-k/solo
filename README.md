@@ -8,7 +8,8 @@ Monorepo for the `solo` state management packages.
 | [`packages/async_job`](packages/async_job) | Kernel: one operation, its children, its cleanup and its cancellation. Pure Dart. |
 | [`packages/flutter_solo`](packages/flutter_solo) | Flutter integration: `ValueListenable` face for `Solo`. |
 
-The documentation site is built from these packages' own Markdown by
+Documentation: **[docs.yet-another.dev](https://docs.yet-another.dev)**. It is built
+from these packages' own Markdown by
 [`tool/build_site.py`](tool/build_site.py); see [`site/`](site).
 
 Development notes for agents and the owner live in `AGENTS.md` and `docs/`.

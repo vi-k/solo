@@ -146,6 +146,8 @@ The complete runnable example, including a fake `Database`, is in
 
 ## Guides
 
+Also on the [documentation site](https://docs.yet-another.dev/async_job/), with search.
+
 | Page | What it covers |
 | --- | --- |
 | [Outcomes](doc/outcomes.md) | `Done`, `Failed`, `Cancelled`, and who is answerable for an error |

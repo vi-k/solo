@@ -1,6 +1,6 @@
 {
-  "site": "https://vi-k.github.io",
-  "base": "/solo",
+  "site": "https://docs.yet-another.dev",
+  "base": "/",
   "title": "solo",
   "tagline": "One job at a time, exclusive state, cooperative cancellation.",
   "repo": "https://github.com/vi-k/solo"

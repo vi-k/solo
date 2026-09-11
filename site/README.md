@@ -22,7 +22,7 @@ Then here:
 
 ```sh
 npm install     # once
-npm run dev     # http://localhost:4321/solo/
+npm run dev     # http://localhost:4321/
 npm run build   # static output in dist/
 ```
 
@@ -37,7 +37,7 @@ the Astro config and `build_site.py` read it:
 | Field | What it is |
 | --- | --- |
 | `site` | The origin the site is served from, for canonical URLs and the sitemap. |
-| `base` | The path it is served under. `/solo` for the GitHub Pages project URL; `/` for a custom domain. |
+| `base` | The path it is served under: `/` on the custom domain, `/solo` on the GitHub Pages project URL. |
 | `title`, `tagline` | The site's name and its one-line description. |
 | `repo` | The repository, for the GitHub link and for "Edit this page". |
 
@@ -47,16 +47,22 @@ one place moves the whole site.
 ## Publishing
 
 `.github/workflows/site.yml` builds and deploys on every push to `main`
-that touches a README, a `doc/` page, this folder or the assembler. Before
-the first run, set **Settings → Pages → Source** to *GitHub Actions*.
+that touches a README, a `doc/` page, this folder or the assembler.
+**Settings → Pages → Source** is set to *GitHub Actions*.
 
-For a custom domain: set `base` to `/` and `site` to the domain in
-`site.json`, put a `CNAME` file holding the bare domain into `public/`,
-and add the DNS records GitHub asks for — four `A` records for the apex
-(185.199.108–111.153), four `AAAA` (2606:50c0:8000–8003::153), or a
-`CNAME` to `<user>.github.io` for a `www` subdomain. "Enforce HTTPS" in
-the Pages settings becomes available once the certificate is issued,
-which can take up to 24 hours.
+The domain is `docs.yet-another.dev`, held by `public/CNAME`. A subdomain
+needs one DNS record — `docs` as a `CNAME` to `vi-k.github.io` — and the
+apex stays free for whatever else lives there.
+
+Moving the site elsewhere is three edits: `site` and `base` in
+`site.json`, and `public/CNAME`. An apex domain would need four `A`
+records (185.199.108–111.153) and four `AAAA`
+(2606:50c0:8000–8003::153) instead of the single `CNAME`.
+
+`.dev` is in the HSTS preload list, so browsers reach it over HTTPS only.
+GitHub issues the certificate itself once the DNS record resolves; until
+then the address does not open at all, and "Enforce HTTPS" in the Pages
+settings stays greyed out. It can take up to 24 hours, usually minutes.
 
 ## Search
 

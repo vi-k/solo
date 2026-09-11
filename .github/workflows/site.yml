@@ -6,7 +6,8 @@ name: site
 # the READMEs and the `doc/` folders of the packages, so the packages stay
 # the single source of truth and the site cannot drift from them.
 #
-# Before the first run, set Settings -> Pages -> Source to "GitHub Actions".
+# Settings -> Pages -> Source is "GitHub Actions"; the domain lives in
+# site/public/CNAME, which the build copies into the output.
 
 on:
   push:

@@ -243,6 +243,8 @@ await player.close(mode: SoloCloseMode.drain);
 
 ## Страницы
 
+Они же на [сайте документации](https://docs.yet-another.dev/solo/), с поиском.
+
 | Страница | О чём |
 | --- | --- |
 | [Задачи и очередь](../../docs/ru/solo/jobs.md) | Постановка работы, исходы, ключи, политики очереди |

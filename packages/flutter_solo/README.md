@@ -9,6 +9,9 @@ it one at a time, and it is a `ValueListenable<S>` at the same time — so
 it drops straight into `ValueListenableBuilder`, `ListenableBuilder`,
 `AnimatedBuilder` and `Listenable.merge`.
 
+The [documentation site](https://docs.yet-another.dev/flutter_solo/) carries this page and
+the guides of the packages below it.
+
 ## Why
 
 A screen has a lifecycle, and so does the work on it: a load that must be

@@ -239,6 +239,8 @@ await player.close(mode: SoloCloseMode.drain);
 
 ## Guides
 
+Also on the [documentation site](https://docs.yet-another.dev/solo/), with search.
+
 | Page | What it covers |
 | --- | --- |
 | [Jobs and the queue](doc/jobs.md) | Submitting work, outcomes, keys, queue policies |
