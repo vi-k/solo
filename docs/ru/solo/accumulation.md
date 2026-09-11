@@ -128,6 +128,105 @@ Future<void> changeSettings(SettingsApi api, Settings initial) async {
 сервер перестал записывать. Отмена также может помешать финальному
 `emit` после того, как сервер уже принял запись.
 
+## Команды, где важна только последняя
+
+Очередь, в которой стоят `resume`, а за ним `pause`, собирается сделать
+две взаимно уничтожающие вещи, и пришедший сейчас `resume` обесценивает
+всю пару: её итог — то, к чему привёл бы один `resume`. Отменять ничего
+не нужно, потому что накопитель не создаёт задач, которые пришлось бы
+отменять. `merge` берёт пришедшую команду и выбрасывает ту, что была:
+
+```dart
+import 'package:solo/solo.dart';
+
+enum Command { resume, pause }
+
+sealed class Playback {
+  const Playback();
+}
+
+final class Playing extends Playback {
+  const Playing();
+}
+
+final class Paused extends Playback {
+  const Paused();
+}
+
+abstract interface class PlayerDevice {
+  Future<void> resume();
+
+  Future<void> pause();
+}
+
+final class Player extends Solo<Playback> {
+  final PlayerDevice device;
+
+  late final _transport = accumulate<Playback, Command, void>(
+    key: 'transport',
+    merge: (accumulated, incoming) => incoming,
+    (ctx, command) async {
+      switch (command) {
+        case Command.resume:
+          await ctx.join(device.resume);
+          ctx.emit(const Playing());
+        case Command.pause:
+          await ctx.join(device.pause);
+          ctx.emit(const Paused());
+      }
+    },
+  );
+
+  Player(this.device) : super(const Paused());
+
+  SoloJob<void> resume() => _transport.add(Command.resume);
+
+  SoloJob<void> pause() => _transport.add(Command.pause);
+}
+```
+
+Три вызова подряд — `resume`, `pause`, `resume` — оставляют в очереди
+одну задачу, и все три возвращают один и тот же handle. Устройству
+сказано возобновить один раз. По дороге ничего не ставилось в очередь и
+не отменялось.
+
+Это работает потому, что команды абсолютные: каждая говорит, каким будет
+итоговое состояние, поэтому последняя и есть ответ. Команды, которые
+надстраиваются друг над другом — «ещё на десять секунд вперёд», —
+объединяются сложением, а не заменой.
+
+`adjacent`, политика по умолчанию, присоединяет группу только к хвосту
+очереди, поэтому задача другого рода, добавленная между двумя командами,
+становится границей и склейка на ней прекращается. Именно это сохраняет
+порядок с остальной работой; `AccumulationPolicy.join` от него
+отказывается и присоединяет группу там, где она стоит.
+
+### Когда это всё-таки разные задачи
+
+Там, где `resume` и `pause` правда разные операции, а не одна команда со
+значением, они обычные задачи со своими ключами, и `Policy.replace` не
+поможет: она убирает задачи с тем же ключом, а общего ключа у этих двух
+нет. Убирает их собственная очередь контроллера:
+
+```dart
+SoloJob<void> resume() {
+  queue.removeWhere(
+    (job) => job.key == Command.resume || job.key == Command.pause,
+  );
+
+  return run<Playback, void>(key: Command.resume, (ctx) async {
+    await ctx.join(device.resume);
+    ctx.emit(const Playing());
+  });
+}
+```
+
+Работающую задачу очередь не трогает никогда: уже начавшийся `pause`
+доработает до конца, что бы за ним ни убрали. Для него нужен
+`cancelAll()` — он чистит очередь и отменяет текущую — или общий ключ на
+обе команды с `Policy.restart`. Задачи, созданные с `cancellable: false`,
+пропускаются, пока не передашь `force: true`.
+
 ## Сбор записей журнала
 
 Для логов важны отдельные записи и их порядок. `collect` дописывает

@@ -1303,6 +1303,24 @@ controller jobs perform updates through their context. `ListenableBuilder`
 and `AnimatedBuilder` also accept the controller when the builder does
 not need the state value itself.
 
+## Recipes
+
+Situations that come up, and what to reach for. Each one is explained in
+the section named beside it.
+
+| Situation | Reach for | Where |
+| --- | --- | --- |
+| Only the last of a burst of commands matters | `accumulate` with a `merge` that keeps the incoming value | [Commands where only the last one counts](doc/accumulation.md) |
+| Typing into a search box | `accumulate` with `AccumulationTiming.debounce` | Event accumulation |
+| A later request must not be dropped as a duplicate of an earlier one | a record key, `(Op.load, id)` | Queue and policies |
+| Queued work is made pointless by what just arrived | `queue.removeWhere` before submitting, or `cancelAll()` if it may be running | [Commands where only the last one counts](doc/accumulation.md) |
+| A last batch has to go out before the screen goes away | `close(mode: SoloCloseMode.drain)` | Closing with the queue run |
+| `close()` does not come back | `SoloBase.pending` | What is holding the controller |
+| A journal needs to say which operation changed the state | `SoloTransition` in `onChange` | Error reporting and observation |
+| A step must not be interrupted halfway | `ctx.join` for a call, `ctx.uncancellable` for a step | Cancellation and waiting |
+| A resource opened by a call nobody waited for still has to close | `dispose` or `discard` on `ctx.wait` and `ctx.join` | Resources and cleanup |
+| A widget rebuilds for state it does not use | `select` on `SoloListenable` | Flutter |
+
 ## Coming from bloc
 
 Callers invoke controller methods and receive a job for each operation.

@@ -3,6 +3,11 @@
 - Document what a job key can be: any object compared with `==`, so a
   record gives a policy the identity of one request — `(_Op.load, id)` —
   rather than of the operation.
+- Document commands where only the last one counts, in
+  `doc/accumulation.md`: a burst that cancels itself out never becomes
+  jobs to take back, and what to do when they are separate jobs after
+  all. A recipes table in the README points at this and at nine other
+  situations.
 - **Breaking:** `SoloBase.close` takes a `SoloCloseMode`. Calls are
   unchanged — the default is `SoloCloseMode.cancel`, which is what `close`
   always did — but an override of `close` has to take the parameter too.

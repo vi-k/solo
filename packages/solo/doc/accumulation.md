@@ -127,6 +127,106 @@ cancellation. A client timeout alone does not establish that a server
 has stopped writing. Cancellation can also prevent the final `emit`
 after the server has accepted the write.
 
+## Commands where only the last one counts
+
+A queue holding `resume` and then `pause` is about to do two things that
+cancel each other out, and a `resume` arriving now makes the whole pair
+pointless: the end of it is what a single `resume` would have reached.
+Nothing has to be taken back, because an accumulator never creates the
+jobs to take back. `merge` keeps the incoming command and drops the one
+it had:
+
+```dart
+import 'package:solo/solo.dart';
+
+enum Command { resume, pause }
+
+sealed class Playback {
+  const Playback();
+}
+
+final class Playing extends Playback {
+  const Playing();
+}
+
+final class Paused extends Playback {
+  const Paused();
+}
+
+abstract interface class PlayerDevice {
+  Future<void> resume();
+
+  Future<void> pause();
+}
+
+final class Player extends Solo<Playback> {
+  final PlayerDevice device;
+
+  late final _transport = accumulate<Playback, Command, void>(
+    key: 'transport',
+    merge: (accumulated, incoming) => incoming,
+    (ctx, command) async {
+      switch (command) {
+        case Command.resume:
+          await ctx.join(device.resume);
+          ctx.emit(const Playing());
+        case Command.pause:
+          await ctx.join(device.pause);
+          ctx.emit(const Paused());
+      }
+    },
+  );
+
+  Player(this.device) : super(const Paused());
+
+  SoloJob<void> resume() => _transport.add(Command.resume);
+
+  SoloJob<void> pause() => _transport.add(Command.pause);
+}
+```
+
+Three calls in a row — `resume`, `pause`, `resume` — leave one job in the
+queue, and all three return the same handle. The device is told to resume
+once. Nothing was queued and cancelled on the way.
+
+This works because the commands are absolute: each one says what the end
+state is, so the last one is the answer. Commands that build on each
+other — "ten seconds further on" — are merged by adding them up, not by
+replacing.
+
+`adjacent`, the default policy, joins a group only at the queue's tail, so
+a job of another kind added between two commands is a boundary and the
+merging stops there. That is what keeps the order with the rest of the
+work; `AccumulationPolicy.join` gives it up and joins the group where it
+stands.
+
+### When they are separate jobs after all
+
+Where `resume` and `pause` are genuinely different operations rather than
+one command with a value, they are ordinary jobs with keys of their own,
+and `Policy.replace` does not help: it removes jobs with the same key, and
+these two do not share one. The controller's own queue is what removes
+them:
+
+```dart
+SoloJob<void> resume() {
+  queue.removeWhere(
+    (job) => job.key == Command.resume || job.key == Command.pause,
+  );
+
+  return run<Playback, void>(key: Command.resume, (ctx) async {
+    await ctx.join(device.resume);
+    ctx.emit(const Playing());
+  });
+}
+```
+
+The queue never touches the running job: a `pause` that has already
+started runs to its end whatever is removed behind it. Reach for
+`cancelAll()` — it clears the queue and cancels the current job — or give
+both commands one key and `Policy.restart`. Jobs created with
+`cancellable: false` are skipped unless `force: true` is given.
+
 ## Collecting log entries
 
 Logs need their individual entries and order. `collect` appends events
