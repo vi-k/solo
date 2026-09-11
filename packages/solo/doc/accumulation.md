@@ -45,22 +45,6 @@ belong to the same accumulator.
 
 ## Debounce and throttle
 
-Set `timing` to delay a group's eligibility to start:
-
-- `AccumulationTiming.debounce(duration)` waits for a pause in input.
-- `AccumulationTiming.throttle(duration)` limits how often groups start,
-  measuring the interval from the previous group's actual start.
-
-These delays do not occupy the running job's position. Waiting groups
-remain in `queue` and let other ready jobs pass. The handlers themselves
-still run one at a time. Timing does not discard input: `collect` keeps
-accepted events and `accumulate` keeps what `merge` returns. Without
-`timing`, or with `Duration.zero`, groups are ready immediately.
-
-This search controller retains the latest query and waits for 300 ms
-without new input before starting it. `SearchApi` and `SearchState` are
-application types:
-
 ```dart
 final class Search extends Solo<SearchState> {
   final SearchApi api;
@@ -80,6 +64,22 @@ final class Search extends Solo<SearchState> {
   SoloJob<void> query(String text) => _queries.add(text);
 }
 ```
+
+Set `timing` to delay a group's eligibility to start:
+
+- `AccumulationTiming.debounce(duration)` waits for a pause in input.
+- `AccumulationTiming.throttle(duration)` limits how often groups start,
+  measuring the interval from the previous group's actual start.
+
+These delays do not occupy the running job's position. Waiting groups
+remain in `queue` and let other ready jobs pass. The handlers themselves
+still run one at a time. Timing does not discard input: `collect` keeps
+accepted events and `accumulate` keeps what `merge` returns. Without
+`timing`, or with `Duration.zero`, groups are ready immediately.
+
+The search controller above retains the latest query and waits for
+300 ms without new input before starting it. `SearchApi` and
+`SearchState` are application types.
 
 A search that has already started finishes before the next one starts.
 The returned job exposes the outcome and cancellation, like other jobs.

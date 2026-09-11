@@ -1,5 +1,8 @@
 ## Unreleased
 
+- The notes at the end of the README became a table of the four questions
+  they answer: when listeners run, whether equal states are filtered, how
+  several controllers share a screen, and why `value` has no setter.
 - **Breaking:** `SoloListenable.close` takes `solo`'s new `SoloCloseMode`
   and hands it on. Calls are unchanged; an override of `close` has to take
   the parameter too.
