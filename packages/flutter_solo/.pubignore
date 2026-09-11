@@ -1,7 +1,2 @@
 # Russian translation, kept in the repository but not published.
 README.ru.md
-
-# The example's local path to flutter_solo, which is not published yet.
-# `example/` ships inside the package, and the path leads outside the
-# archive.
-example/pubspec_overrides.yaml

@@ -1,6 +1,0 @@
-# Local path to flutter_solo, which is not on pub.dev yet. This file is not
-# published: `example/` ships inside the package, and the path leads
-# outside the archive. Remove the override once the release is published.
-dependency_overrides:
-  flutter_solo:
-    path: ../
