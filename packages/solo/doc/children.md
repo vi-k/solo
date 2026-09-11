@@ -1,10 +1,34 @@
 # Children and streams
 
-A root job can split its work into child jobs. Create a child with the
-controller's `job(...)` method, then call `await ctx.run(child)` from the
-parent body. The child starts immediately, bypassing the queue, subject to
-its own start rules. The parent keeps the queue occupied until all its
-children finish, even if its body returns earlier.
+A root job can split its work into child jobs:
+
+```dart
+SoloJob<String> sync(int item) => run<Ready, String>(
+      key: _Op.sync,
+      (ctx) async {
+        // Created by the controller, started by the parent and outside
+        // the queue: the parent holds the queue for both.
+        final upload = job<Ready, String>(
+          key: _Op.upload,
+          (child) => child.join(() => api.push(item)),
+        );
+        final path = await ctx.run(upload);
+
+        // A stream child. The parent waits for it even without an
+        // await, and cancelling the parent cancels it.
+        ctx.each(
+          device.events,
+          (child, event) async =>
+              child.emit(child.state.copyWith(done: event)),
+        );
+        return path;
+      },
+    );
+```
+
+A child starts immediately, bypassing the queue, subject to its own start
+rules. The parent keeps the queue occupied until all its children finish,
+even if its body returns earlier.
 
 `ctx.run(child)` returns `Future<T>`. It waits for the child, the child's
 children and cleanup. On success, it checks the parent's cancellation and
@@ -108,6 +132,12 @@ When the update represents an immediate change to the validity of current
 work, consider the [External state](state.md#external-state) rules instead.
 
 ## Chaining completed work
+
+```dart
+// Runs after the source succeeds, with a plain JobContext of its own.
+Job<void> syncAndReport(int item) =>
+    sync(item).then((ctx, path) => analytics.send(path));
+```
 
 `job.then((ctx, value) => ...)` creates a job that runs after its source
 succeeds, including children and cleanup. Its callback receives the result
