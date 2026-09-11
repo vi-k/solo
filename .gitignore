@@ -20,3 +20,10 @@ __pycache__/
 
 # Reviewer workspaces: prototypes and benches, not for publication
 .artifacts/
+
+# Documentation site: node modules, build output and the content that
+# tool/build_site.py assembles from the packages.
+site/node_modules/
+site/dist/
+site/.astro/
+site/src/content/docs/
