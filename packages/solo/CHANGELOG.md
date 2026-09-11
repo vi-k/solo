@@ -1,5 +1,13 @@
 ## Unreleased
 
+- The README is a starting page again: what the package is, `Install`,
+  `Quick start`, `The dozen calls` — one controller holding everything
+  reached for day to day — and a map of the guides. The reference material
+  it grew over the releases moved to `doc/`, one page per subject:
+  `jobs.md`, `state.md`, `cancellation.md`, `resources.md`, `children.md`,
+  `errors.md`, `testing.md`, `flutter.md`, `camera.md`. Nothing was
+  dropped; the bloc correspondence table now opens `doc/vs-bloc.md` and
+  the accumulation API opens `doc/accumulation.md`.
 - Document what a job key can be: any object compared with `==`, so a
   record gives a policy the identity of one request — `(_Op.load, id)` —
   rather than of the operation.

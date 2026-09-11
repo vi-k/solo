@@ -28,6 +28,32 @@
 устройства. Стенд извлекает код из этого документа;
 он находится в репозитории в `tool/doc_snippets.py`.
 
+## Соответствия
+
+Основные соответствия API для того, кто знает bloc:
+
+| bloc | solo |
+| --- | --- |
+| `Bloc<E, S>`, `Cubit<S>` | `Solo<S>`, `SoloListenable<S>` |
+| Класс события, `on<E>`, `add(E())` | Метод, возвращающий `Job<T>` |
+| `EventTransformer` | `Policy` при добавлении Job |
+| `emit(next)` | `ctx.emit(next)` |
+| `if (emit.isDone) return;` | Контрольные точки отмены, например `ctx.wait` и `ctx.check` |
+| `emit.onEach`, `emit.forEach` | `ctx.each(stream, onData)` |
+| `state`, `stream` | `state`, `stream` |
+| `BlocObserver` | `SoloObserver` |
+| `BlocBuilder`, `BlocSelector` | `ValueListenableBuilder`; выбор части состояния делает приложение |
+| `BlocListener` для результата операции | Ожидание `job.done` этой операции |
+| `BlocProvider` | Выбранный способ владения или передачи зависимостей |
+| `close()` | `close()` |
+| `blocTest` | `test` и ожидание исхода Job |
+
+`sequential`, `droppable` и `restartable` соответствуют
+`Policy.sequential`, `Policy.droppable` и `Policy.restart`.
+`Policy.replace` удаляет ожидающую работу, сохраняя работающую Job.
+Политики одновременного выполнения корневых Job нет; для независимой
+параллельной работы используйте детей или отдельные контроллеры.
+
 ## 1. Порядок обновлений общего состояния
 
 Контроллер заметок отправляет заметку и обновляет список с сервера.

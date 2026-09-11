@@ -11,6 +11,70 @@ it is sealed: when debounce expires, or when the queue takes the job
 for execution with other timing settings. The handler receives that input and
 an ordinary `SoloContext<S, W>`; it changes state through `ctx.emit`.
 
+## Accumulators and policies
+
+An accumulator groups incoming values into queued jobs. Create it once
+and call its `add(event)` method for each input:
+
+- `collect` keeps accepted events in a list.
+- `accumulate` combines them with a synchronous `merge` function. The
+  function decides what to retain; keeping only the latest value is one
+  possible choice.
+
+Only the queued job's handler updates controller state. A running group
+does not accept new input. Groups can combine only when they belong to
+the same accumulator.
+
+| Accumulation policy | How input joins queued work |
+| --- | --- |
+| `AccumulationPolicy.adjacent` | Join a compatible group only at the queue's tail. |
+| `AccumulationPolicy.join` | Join an existing queued group at its current position. |
+| `AccumulationPolicy.replace` | Transfer input to a new job at the tail and cancel the old group. |
+
+## Debounce and throttle
+
+Set `timing` to delay a group's eligibility to start:
+
+- `AccumulationTiming.debounce(duration)` waits for a pause in input.
+- `AccumulationTiming.throttle(duration)` limits how often groups start,
+  measuring the interval from the previous group's actual start.
+
+These delays do not occupy the running job's position. Waiting groups
+remain in `queue` and let other ready jobs pass. The handlers themselves
+still run one at a time. Timing does not discard input: `collect` keeps
+accepted events and `accumulate` keeps what `merge` returns. Without
+`timing`, or with `Duration.zero`, groups are ready immediately.
+
+This search controller retains the latest query and waits for 300 ms
+without new input before starting it. `SearchApi` and `SearchState` are
+application types:
+
+```dart
+final class Search extends Solo<SearchState> {
+  final SearchApi api;
+  late final _queries = accumulate<SearchState, String, void>(
+    (ctx, text) async {
+      final results = await ctx.wait(() => api.search(text));
+      ctx.emit(SearchState.results(results));
+    },
+    merge: (previous, incoming) => incoming,
+    timing: AccumulationTiming.debounce(const Duration(milliseconds: 300)),
+    policy: AccumulationPolicy.join,
+    key: 'query',
+  );
+
+  Search(this.api) : super(const SearchState.idle());
+
+  SoloJob<void> query(String text) => _queries.add(text);
+}
+```
+
+A search that has already started finishes before the next one starts.
+The returned job exposes the outcome and cancellation, like other jobs.
+Closing cancels waiting groups rather than flushing them. See the
+[settings and logs recipe](doc/accumulation.md) for grouping examples,
+ordering and the outcomes returned to individual callers.
+
 ## Combining settings changes
 
 A patch describes which settings to change. A new value for a field

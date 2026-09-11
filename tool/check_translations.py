@@ -7,6 +7,7 @@ Pairs checked:
   * packages/flutter_solo/README.md  <-> packages/flutter_solo/README.ru.md
   * packages/solo/doc/vs-bloc.md     <-> docs/ru/solo/vs-bloc.md
   * packages/solo/doc/accumulation.md <-> docs/ru/solo/accumulation.md
+  * packages/solo/doc/<page>.md    <-> docs/ru/solo/<page>.md
 
 Compares:
   * the sequence of heading levels (count and order),
@@ -44,6 +45,42 @@ PAIRS = [
     (
         REPO / "packages" / "solo" / "doc" / "accumulation.md",
         REPO / "docs" / "ru" / "solo" / "accumulation.md",
+    ),
+    (
+        REPO / "packages" / "solo" / "doc" / "jobs.md",
+        REPO / "docs" / "ru" / "solo" / "jobs.md",
+    ),
+    (
+        REPO / "packages" / "solo" / "doc" / "state.md",
+        REPO / "docs" / "ru" / "solo" / "state.md",
+    ),
+    (
+        REPO / "packages" / "solo" / "doc" / "cancellation.md",
+        REPO / "docs" / "ru" / "solo" / "cancellation.md",
+    ),
+    (
+        REPO / "packages" / "solo" / "doc" / "resources.md",
+        REPO / "docs" / "ru" / "solo" / "resources.md",
+    ),
+    (
+        REPO / "packages" / "solo" / "doc" / "children.md",
+        REPO / "docs" / "ru" / "solo" / "children.md",
+    ),
+    (
+        REPO / "packages" / "solo" / "doc" / "errors.md",
+        REPO / "docs" / "ru" / "solo" / "errors.md",
+    ),
+    (
+        REPO / "packages" / "solo" / "doc" / "testing.md",
+        REPO / "docs" / "ru" / "solo" / "testing.md",
+    ),
+    (
+        REPO / "packages" / "solo" / "doc" / "camera.md",
+        REPO / "docs" / "ru" / "solo" / "camera.md",
+    ),
+    (
+        REPO / "packages" / "solo" / "doc" / "flutter.md",
+        REPO / "docs" / "ru" / "solo" / "flutter.md",
     ),
 ]
 

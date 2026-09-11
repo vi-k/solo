@@ -26,6 +26,32 @@ local solo 0.2.0 source. Traces describe those runs, not timing guarantees
 for arbitrary devices. The harness extracts the code from this document;
 it is available as `tool/doc_snippets.py` in the repository.
 
+## Correspondences
+
+The main API correspondences, for a reader who knows bloc:
+
+| bloc | solo |
+| --- | --- |
+| `Bloc<E, S>`, `Cubit<S>` | `Solo<S>`, `SoloListenable<S>` |
+| Event class, `on<E>`, `add(E())` | Method returning `Job<T>` |
+| `EventTransformer` | `Policy` on a job submission |
+| `emit(next)` | `ctx.emit(next)` |
+| `if (emit.isDone) return;` | Cancellation checkpoints such as `ctx.wait` and `ctx.check` |
+| `emit.onEach`, `emit.forEach` | `ctx.each(stream, onData)` |
+| `state`, `stream` | `state`, `stream` |
+| `BlocObserver` | `SoloObserver` |
+| `BlocBuilder`, `BlocSelector` | `ValueListenableBuilder`; selection is application code |
+| `BlocListener` for an operation's result | Await that operation's `job.done` |
+| `BlocProvider` | Your chosen ownership or dependency mechanism |
+| `close()` | `close()` |
+| `blocTest` | `test` and an awaited job outcome |
+
+`sequential`, `droppable` and `restartable` correspond to
+`Policy.sequential`, `Policy.droppable` and `Policy.restart`.
+`Policy.replace` removes queued work while leaving the running job alone.
+There is no concurrent root-job policy; use children or separate
+controllers for independent concurrent work.
+
 ## 1. Ordering updates to shared state
 
 A notes controller uploads a note and refreshes the list from the server.
