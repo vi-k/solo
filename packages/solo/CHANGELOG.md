@@ -1,5 +1,13 @@
 ## Unreleased
 
+- **Breaking:** setting `SoloBase.observer` no longer takes an error with
+  nowhere else to go off its default route to the zone. Watching is not
+  answering: an observer set for a log used to switch reporting off for
+  the whole process without saying so. `SoloBase.errorHandler` is the new
+  seam that answers for such an error — one handler for the process, set
+  once at startup — and with nobody set there the error reaches the zone
+  the job was created in, observer or no observer. An observer that used
+  to rely on the old silence now needs `errorHandler` set as well.
 - **Breaking:** `Policy.droppable` throws `ArgumentError`, not `TypeError`,
   when the key it finds belongs to a job of another result type — and it
   throws before the new job is taken, so a job refused this way is

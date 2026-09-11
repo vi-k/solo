@@ -29,7 +29,31 @@ part 'queue.dart';
 /// there is the subclass's own business.
 abstract class SoloBase<S extends Object> {
   /// A global observer for all controllers; `null` by default.
+  ///
+  /// Watching only. Setting one changes nothing about where an error then
+  /// goes; [errorHandler] is what takes that over.
   static SoloObserver? observer;
+
+  /// Where an error with nowhere else to go goes instead of the zone;
+  /// `null` by default.
+  ///
+  /// The errors [onError] describes — a disposer, an `onCancel` callback,
+  /// a late failure of an abandoned call, a rule that threw — have no
+  /// outcome of their own to carry them anywhere. With nobody set here
+  /// they reach the zone the job was created in; with a handler set they
+  /// go to it instead, for every controller of the process, and what it
+  /// does with one is the end of it.
+  ///
+  /// One global handler, set once at startup, the way [observer] is. It is
+  /// separate from the observer on purpose: answering for an error is a
+  /// responsibility somebody takes, not a side effect of switching a log
+  /// on. An error it throws itself goes to the zone.
+  ///
+  /// ```dart
+  /// SoloBase.errorHandler = (solo, job, error, stackTrace) =>
+  ///     Sentry.captureException(error, stackTrace: stackTrace);
+  /// ```
+  static SoloErrorHandler? errorHandler;
 
   /// Engine tracing for debugging the engine itself; `null` by default.
   static void Function(String message)? debug;
@@ -497,27 +521,36 @@ abstract class SoloBase<S extends Object> {
   /// action does, because for an observer that is a late failure like any
   /// other. See [Failed] for the errors that also reach the zone.
   ///
-  /// **What the default body does.** With no [observer] set and this hook
-  /// not overridden, nobody is listening, and the error goes to the zone
-  /// the job was created in — the same thing the core does when a job has
-  /// no observer at all. Silence is the choice of whoever listens, not the
-  /// default of the package. A [Cancelled] is the one exception and never
-  /// goes there: a cancellation is a decision somebody made, not a
-  /// failure, and the core keeps one out of the zone whatever route leads
-  /// there. The body's own failure does not go there from here either —
-  /// it reaches the zone through its unobserved outcome instead, and one
-  /// error is announced once.
+  /// **What the default body does.** With no [errorHandler] set and this
+  /// hook not overridden, the error goes to the zone the job was created
+  /// in — the same thing the core does when a job has no observer at all.
+  /// With a handler set it goes there instead, and nowhere else. Setting
+  /// an [observer] changes neither: watching is not answering. A
+  /// [Cancelled] is the one exception and never goes to the zone: a
+  /// cancellation is a decision somebody made, not a failure, and the core
+  /// keeps one out of the zone whatever route leads there. The body's own
+  /// failure does not go there from here either — it reaches the zone
+  /// through its unobserved outcome instead, and one error is announced
+  /// once.
   ///
   /// **Overriding replaces that**, so an override that says nothing keeps
   /// the error out of the zone; call `super.onError(job, error,
   /// stackTrace)` to keep the default route as well.
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
     final homeless = _homeless;
-    // Only an error with nowhere else to go, and only when nobody is
-    // listening. A cancellation is not weeded out here: the core holds one
-    // back at its own door, and the rule is written in one place.
-    if (homeless != null && identical(homeless, job) && observer == null) {
+    // Only an error with nowhere else to go. A cancellation is not weeded
+    // out here: the core holds one back at its own door, and the rule is
+    // written in one place.
+    if (homeless == null || !identical(homeless, job)) {
+      return;
+    }
+    final handler = errorHandler;
+    if (handler == null) {
       homeless._reportToZone(error, stackTrace);
+    } else {
+      // Already inside `_callHook`, so a handler that throws reaches the
+      // zone without a wrapper of its own.
+      handler(this, job, error, stackTrace);
     }
   }
 

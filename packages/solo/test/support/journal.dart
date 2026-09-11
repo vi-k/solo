@@ -54,4 +54,13 @@ final class JournalObserver extends SoloObserver {
 
   @override
   void onClose(SoloBase<Object> solo) => lines.add('closed');
+
+  /// Answers for an error with nowhere else to go, so the journal above is
+  /// the only place it shows up; see `SoloBase.errorHandler`.
+  void answerForErrors(
+    SoloBase<Object> solo,
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace,
+  ) {}
 }

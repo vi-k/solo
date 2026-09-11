@@ -51,7 +51,7 @@ void main() {
     expect(caught, isEmpty);
   });
 
-  test('a global observer switches the default route off', () {
+  test('a global observer leaves the default route alone', () {
     final caught = <String>[];
     SoloBase.observer = _Silent();
     try {
@@ -72,7 +72,63 @@ void main() {
     } finally {
       SoloBase.observer = null;
     }
-    expect(caught, isEmpty);
+    expect(
+      caught,
+      ['Bad state: abandoned boom'],
+      reason: 'watching is not answering',
+    );
+  });
+
+  test('an error handler takes the default route over', () {
+    final caught = <String>[];
+    final answered = <String>[];
+    SoloBase.errorHandler =
+        (solo, job, error, stackTrace) => answered.add('${job.key}: $error');
+    try {
+      fakeAsync((async) {
+        final solo = TestSolo();
+        _inZone(caught, () {
+          solo.run<TestState, void>(key: 'j', (ctx) async {
+            ctx.unattended(() async {
+              await Future<void>.delayed(const Duration(milliseconds: 10));
+              throw StateError('abandoned boom');
+            });
+          });
+        });
+        async.flushTimers();
+        solo.close();
+        async.flushTimers();
+      });
+    } finally {
+      SoloBase.errorHandler = null;
+    }
+    expect(answered, ['j: Bad state: abandoned boom']);
+    expect(caught, isEmpty, reason: 'the handler answered for it');
+  });
+
+  test('an error handler that throws reaches the zone', () {
+    final caught = <String>[];
+    SoloBase.errorHandler =
+        (solo, job, error, stackTrace) => throw StateError('handler boom');
+    try {
+      fakeAsync((async) {
+        final solo = TestSolo();
+        _inZone(caught, () {
+          solo.run<TestState, void>(key: 'j', (ctx) async {
+            ctx.unattended(() async {
+              await Future<void>.delayed(const Duration(milliseconds: 10));
+              throw StateError('abandoned boom');
+            });
+          });
+        });
+        async.flushTimers();
+        solo.close();
+        async.flushTimers();
+      });
+    } finally {
+      SoloBase.errorHandler = null;
+    }
+    expect(caught, ['Bad state: handler boom']);
   });
 
   test('an override without super keeps the error out of the zone', () {

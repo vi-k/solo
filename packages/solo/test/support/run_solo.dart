@@ -15,6 +15,10 @@ void runSolo(
   fakeAsync((async) {
     final journal = JournalObserver();
     SoloBase.observer = journal;
+    // Watching is not answering: without a handler every homeless error
+    // would also reach the zone of the test. The journal has already
+    // recorded it through `onError`, so answering for it is all this does.
+    SoloBase.errorHandler = journal.answerForErrors;
     final solo = TestSolo(initialState);
     try {
       body(solo, journal, async);
@@ -22,6 +26,7 @@ void runSolo(
       solo.close();
       async.flushTimers();
       SoloBase.observer = null;
+      SoloBase.errorHandler = null;
     }
   });
 }

@@ -33,9 +33,11 @@ abstract class SoloObserver {
   /// [Cancelled] thrown by an abandoned action does, because for an
   /// observer that is a late failure like any other.
   ///
-  /// Setting an observer takes the error off the default route: with no
-  /// observer and no override of [SoloBase.onError], an error with
-  /// nowhere else to go reaches the zone the job was created in. See
+  /// Watching changes nothing about where the error then goes: an error
+  /// with nowhere else to go reaches the zone the job was created in
+  /// whether an observer is set or not. To take that route over, set
+  /// [SoloBase.errorHandler] — answering for an error is a job of its own,
+  /// and setting up a log must not quietly turn reporting off. See
   /// [Failed] for the errors that also reach the zone.
   void onError(
     SoloBase<Object> solo,
@@ -53,3 +55,12 @@ abstract class SoloObserver {
   /// The controller finished closing.
   void onClose(SoloBase<Object> solo) {}
 }
+
+/// Answers for an error that has nowhere else to go; see
+/// [SoloBase.errorHandler].
+typedef SoloErrorHandler = void Function(
+  SoloBase<Object> solo,
+  Job<Object?> job,
+  Object error,
+  StackTrace stackTrace,
+);

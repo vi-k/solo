@@ -937,13 +937,27 @@ disable the observer. An error thrown by either hook is sent to the
 current Dart zone without changing the job's outcome, stopping the queue,
 or preventing the other hook from running.
 
+An observer only watches. Setting one changes nothing about where an
+error then goes. To answer for the errors that have nowhere else to go,
+set a handler:
+
+```dart
+SoloBase.errorHandler = (solo, job, error, stackTrace) =>
+    Sentry.captureException(error, stackTrace: stackTrace);
+```
+
+One handler for the process, set once at startup. With it set, those
+errors go to it instead of the zone; with nobody set, they go to the
+zone. Separating the two is deliberate: answering for an error is a
+responsibility somebody takes, not a side effect of switching a log on.
+
 ### Handled and unhandled failures
 
 Accessing `job.done` or `job.value`, or calling `job.ignore()`, marks the
 outcome as observed. A `Failed` outcome that nobody observes goes to the
 job's creation zone through `Zone.handleUncaughtError`, in addition to
 the error hooks. An installed observer alone does not mark outcomes as
-observed. If the observer handles reporting and the caller needs no result:
+observed. If reporting is handled elsewhere and the caller needs no result:
 
 ```dart
 profile.load().ignore(); // the counterpart of Future.ignore
@@ -951,7 +965,8 @@ profile.load().ignore(); // the counterpart of Future.ignore
 
 Errors from cleanup, cancellation callbacks and operations abandoned by
 `wait` go to the reporting hooks. Without an overridden error hook or an
-installed observer, they fall back to the job's creation zone. Such an
+installed `SoloBase.errorHandler`, they fall back to the job's creation
+zone. Such an
 error can arrive after the job has already completed. It does not replace
 an existing cancellation outcome. These reporting paths exclude
 `Cancelled` itself.
@@ -994,9 +1009,10 @@ rule is reported but does not itself cancel the running body. If that
 check also controls a final state handler, the handler is disabled.
 
 Re-evaluation errors fall back to the controller's creation zone when no
-error hook or observer handles them. In the root Dart zone, an unhandled
-error can terminate the application. Install error reporting and observe
-job outcomes according to your application's needs.
+error hook and no `SoloBase.errorHandler` answers for them. In the root
+Dart zone, an unhandled error can terminate the application. Install
+error reporting and observe job outcomes according to your application's
+needs.
 
 ### Background work and logs
 
