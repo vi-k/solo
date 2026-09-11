@@ -639,6 +639,14 @@ abstract class JobBase<T> implements Job<T> {
   @protected
   bool get cancellable => _cancellable;
 
+  /// Whether a section opened by [enterUncancellable] is open right now.
+  ///
+  /// For diagnostics: an engine that is waiting for this job and wants to
+  /// say why. A held cancellation is one of the answers, and this is the
+  /// only thing that knows it.
+  @protected
+  bool get inUncancellableSection => _uncancellableDepth > 0;
+
   /// Opens an uncancellable section: a rejectable cancellation arriving
   /// now is held, and the job is not marked until the section closes.
   /// Sections nest.

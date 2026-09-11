@@ -10,6 +10,12 @@
   engine knew both and told nobody, and neither can be worked out from
   outside. Migration: `previous` becomes `transition.previous`, `current`
   becomes `transition.current`.
+- Add `SoloBase.pending`: a `SoloPending` snapshot of the job the
+  controller is waiting for — its phase (body, children, cleanup, or
+  unknown), the cancellation it carries, a `ctx.uncancellable` section
+  holding one back, and whether it was created `cancellable: false`. For a
+  `close` that has not come back. It reports what the engine knows and
+  says `SoloPhase.unknown` where it knows nothing, rather than guessing.
 - **Breaking:** setting `SoloBase.observer` no longer takes an error with
   nowhere else to go off its default route to the zone. Watching is not
   answering: an observer set for a log used to switch reporting off for

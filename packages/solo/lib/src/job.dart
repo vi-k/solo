@@ -112,6 +112,28 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     return null;
   }
 
+  /// A snapshot of what this job is doing, for [SoloBase.pending].
+  SoloPending _pending({required bool closing}) => SoloPending(
+        job: this,
+        phase: _phase,
+        cancellation: pendingCancel,
+        children: children.length,
+        inUncancellableSection: inUncancellableSection,
+        refusesCancellation: !cancellable,
+        closing: closing,
+      );
+
+  SoloPhase get _phase {
+    if (isDisposing) {
+      return SoloPhase.cleanup;
+    }
+    if (!bodyEnded) {
+      return SoloPhase.body;
+    }
+
+    return children.isEmpty ? SoloPhase.unknown : SoloPhase.children;
+  }
+
   @override
   void started() {
     _solo._running.add(this);

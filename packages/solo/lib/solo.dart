@@ -5,6 +5,7 @@ library;
 export 'package:async_job/async_job.dart';
 
 export 'src/observer.dart';
+export 'src/pending.dart';
 export 'src/policy.dart';
 export 'src/solo.dart';
 export 'src/solo_base.dart';

@@ -5,6 +5,10 @@
   `Cancelled`. A rule of a domain that threw instead of answering used to
   cost the job the resource it already held: the value reached no body and
   was registered on no cleanup stack.
+- **Breaking:** add the protected `JobBase.inUncancellableSection`, for an
+  engine that waits for a job and wants to say why. Adding a member to a
+  class meant to be extended is breaking on its own: a subclass with a
+  member of that name stops compiling.
 
 ## 0.2.0
 

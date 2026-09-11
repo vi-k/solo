@@ -959,6 +959,28 @@ errors go to it instead of the zone; with nobody set, they go to the
 zone. Separating the two is deliberate: answering for an error is a
 responsibility somebody takes, not a side effect of switching a log on.
 
+### What is holding the controller
+
+`close()` waits for the running job, and a job can take its time. The
+controller says what it is waiting for:
+
+```dart
+unawaited(controller.close().timeout(
+  const Duration(seconds: 5),
+  onTimeout: () => log('closing is held by ${controller.pending}'),
+));
+```
+
+`SoloPending` names the job, its `phase` — body, children, cleanup — the
+cancellation it carries, whether a `ctx.uncancellable` section is holding
+one back, and whether the job was created with `cancellable: false` and
+turns them down.
+
+It reports and does not diagnose. A long wait does not prove a forgotten
+`ctx.wait`: a body inside an external call looks the same, and so does a
+resource that takes its time to release. What the engine cannot see is
+`SoloPhase.unknown`, not a guess.
+
 ### Handled and unhandled failures
 
 Accessing `job.done` or `job.value`, or calling `job.ignore()`, marks the

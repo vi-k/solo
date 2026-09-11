@@ -5,6 +5,7 @@ import 'package:async_job/async_job.dart';
 import 'package:meta/meta.dart';
 
 import 'observer.dart';
+import 'pending.dart';
 import 'policy.dart';
 import 'solo_cancel_reason.dart';
 import 'transition.dart';
@@ -401,6 +402,26 @@ abstract class SoloBase<S extends Object> {
   /// The queue, for subclasses that manage it directly.
   @protected
   SoloQueue get queue => _queue;
+
+  /// What is holding the controller right now, or `null` when no job is
+  /// running.
+  ///
+  /// For a `close` that has not come back, or a `cancel` that is taking
+  /// its time: it names the job, says what it is doing and whether
+  /// anybody has asked it to stop.
+  ///
+  /// ```dart
+  /// unawaited(controller.close().timeout(
+  ///   const Duration(seconds: 5),
+  ///   onTimeout: () => log('closing is held by ${controller.pending}'),
+  /// ));
+  /// ```
+  ///
+  /// It reports and does not diagnose. A job that holds on for reasons of
+  /// its own — a bare `await` on a slow call, an external operation the
+  /// body is inside — shows up as [SoloPhase.unknown], because that is
+  /// what the engine knows about it.
+  SoloPending? get pending => _current?._pending(closing: isClosed);
 
   /// The running root job, or `null` when idle.
   @protected
