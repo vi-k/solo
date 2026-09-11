@@ -4,6 +4,7 @@ library;
 
 export 'package:async_job/async_job.dart';
 
+export 'src/close_mode.dart';
 export 'src/observer.dart';
 export 'src/pending.dart';
 export 'src/policy.dart';

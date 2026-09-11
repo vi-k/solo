@@ -959,6 +959,26 @@ errors go to it instead of the zone; with nobody set, they go to the
 zone. Separating the two is deliberate: answering for an error is a
 responsibility somebody takes, not a side effect of switching a log on.
 
+### Closing with the queue run
+
+`close()` drops what is queued. When the work already accepted has to
+happen first — a last batch of events on its way out, a save that was
+just asked for — close with a drain:
+
+```dart
+await controller.close(mode: SoloCloseMode.drain);
+```
+
+No new root job is taken from the call onwards, and the ones already in
+the queue run by the usual rules: in order, with their children, their
+cleanup, and an accumulation window waited out where there is one. A
+plain `close()` over a running drain stops it where it is, and the same
+future everybody holds completes after that.
+
+Running the queue is not a promise of delivery. A drained job can still
+fail or be turned down by its rules. A buffer that keeps events until the
+sending is confirmed is built on top of this, not inside it.
+
 ### What is holding the controller
 
 `close()` waits for the running job, and a job can take its time. The

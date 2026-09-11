@@ -1,5 +1,8 @@
 ## Unreleased
 
+- **Breaking:** `SoloListenable.close` takes `solo`'s new `SoloCloseMode`
+  and hands it on. Calls are unchanged; an override of `close` has to take
+  the parameter too.
 - **Fix:** a listener that throws is reported through
   `FlutterError.reportError`, the way `ChangeNotifier` reports one, and the
   listeners behind it still hear the change. Its error used to leave

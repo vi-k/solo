@@ -1,5 +1,15 @@
 ## Unreleased
 
+- **Breaking:** `SoloBase.close` takes a `SoloCloseMode`. Calls are
+  unchanged — the default is `SoloCloseMode.cancel`, which is what `close`
+  always did — but an override of `close` has to take the parameter too.
+  `SoloCloseMode.drain` closes by running what is already queued instead
+  of dropping it: no new root job is taken from the call onwards, and the
+  ones accepted before it go by the usual rules, children, cleanup and
+  accumulation windows included. A plain `close()` over a running drain
+  stops it where it is. `SoloBase.isDraining` says whether one is running.
+  Running the queue is not a promise of delivery: a buffer that keeps
+  events until the sending is confirmed is built on top of this.
 - **Breaking:** the change hooks take a `SoloTransition<S>` instead of a
   pair of states: `SoloBase.onChange(transition)` and
   `SoloObserver.onChange(solo, transition)`. Beside `previous` and

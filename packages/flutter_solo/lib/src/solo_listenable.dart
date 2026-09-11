@@ -57,11 +57,16 @@ class SoloListenable<S extends Object> extends Solo<S>
 
   /// Closes the engine and the stream, then drops every listener and stops
   /// notifying for good. Repeated calls return the same future, so the
-  /// chain is built once and kept.
+  /// chain is built once and kept. [mode] is [Solo.close]'s.
   @override
-  Future<void> close() {
+  Future<void> close({SoloCloseMode mode = SoloCloseMode.cancel}) {
     final closed = _closed;
     if (closed != null) {
+      // Handed on rather than answered here: a plain `close` over a drain
+      // stops it in the engine, and the chain below is already built and
+      // stays the future everybody waits for.
+      unawaited(super.close(mode: mode));
+
       return closed;
     }
     // Stored before `super.close()` runs: a hook or a listener notified
@@ -69,7 +74,7 @@ class SoloListenable<S extends Object> extends Solo<S>
     final completer = Completer<void>();
     _closed = completer.future;
     completer.complete(
-      super.close().then((_) {
+      super.close(mode: mode).then((_) {
         _dropped = true;
         _listeners.clear();
       }),

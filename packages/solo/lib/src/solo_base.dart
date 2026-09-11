@@ -4,6 +4,7 @@ import 'dart:collection';
 import 'package:async_job/async_job.dart';
 import 'package:meta/meta.dart';
 
+import 'close_mode.dart';
 import 'observer.dart';
 import 'pending.dart';
 import 'policy.dart';
@@ -64,6 +65,7 @@ abstract class SoloBase<S extends Object> {
   int _stateRevision = 0;
   Completer<void>? _closing;
   StackTrace? _closeStackTrace;
+  var _draining = false;
   final _queue = _SoloQueue<S>();
   final _timers = <Timer>{};
 
@@ -107,6 +109,13 @@ abstract class SoloBase<S extends Object> {
 
   /// Whether [close] was called.
   bool get isClosed => _closing != null;
+
+  /// Whether [close] was called with [SoloCloseMode.drain] and the queue
+  /// it is running has not emptied yet.
+  ///
+  /// New root jobs are refused the whole time — [isClosed] is true from
+  /// the call — while the engine goes on with the ones it already had.
+  bool get isDraining => _draining;
 
   /// Delivery point for subclasses; empty here. Called after `onChange` and
   /// before running jobs are re-evaluated.
@@ -456,24 +465,58 @@ abstract class SoloBase<S extends Object> {
     _setState(state, emitter: null, stackTrace: StackTrace.current);
   }
 
-  /// Closes the controller: drops every queued job with `Cancelled(closed)`,
-  /// cancels the current job (a `cancellable: false` job is waited for
-  /// instead), then calls the observer's `onClose`. Repeated calls return
-  /// the same future. The state is left as is.
+  /// Closes the controller, then calls the observer's `onClose`. Repeated
+  /// calls return the same future. The state is left as is.
+  ///
+  /// [SoloCloseMode.cancel], the default, drops every queued job with
+  /// `Cancelled(closed)` and cancels the current one — a
+  /// `cancellable: false` job is waited for instead.
+  /// [SoloCloseMode.drain] leaves the queue alone and closes once it has
+  /// run: new root jobs are refused from the call onwards, and the ones
+  /// already accepted go by the usual rules, children, cleanup and
+  /// accumulation windows included.
+  ///
+  /// A plain `close()` over a running drain stops it where it is: the
+  /// queue is dropped and the current job cancelled, and the same future
+  /// everybody is holding completes after that. There is no way back the
+  /// other way — a drain cannot be started over a `close` that is already
+  /// cancelling.
   ///
   /// Awaiting the returned future from inside the current job's body never
   /// completes: it waits for that very body.
   @mustCallSuper
-  Future<void> close() {
+  Future<void> close({SoloCloseMode mode = SoloCloseMode.cancel}) {
     final closing = _closing;
     if (closing != null) {
+      if (_draining && mode == SoloCloseMode.cancel) {
+        _debug(() => 'close: the drain gives way');
+        _draining = false;
+        _stopWork(closing, _closeStackTrace!);
+      }
       return closing.future;
     }
     final completer = _closing = Completer<void>();
-    _debug(() => 'close');
     // Kept for `add` after close: section 5.1 points every `closed` outcome
     // at the `close` call, whichever of the two sources made it.
     final stackTrace = _closeStackTrace = StackTrace.current;
+    switch (mode) {
+      case SoloCloseMode.cancel:
+        _debug(() => 'close');
+        _stopWork(completer, stackTrace);
+      case SoloCloseMode.drain:
+        _debug(() => 'close: draining');
+        _draining = true;
+        // Even with nothing running: an idle controller closes from the
+        // pump like any other, on a microtask, so `onClose` never arrives
+        // from inside `close`.
+        _schedulePump();
+    }
+    return completer.future;
+  }
+
+  /// Drops the queue, cancels the current job and finishes [completer]
+  /// once it is over: what [SoloCloseMode.cancel] means.
+  void _stopWork(Completer<void> completer, StackTrace stackTrace) {
     for (final timer in _timers.toList()) {
       timer.cancel();
     }
@@ -506,10 +549,15 @@ abstract class SoloBase<S extends Object> {
       // observe its outcome, so a failure here still reaches the zone.
       current._whenDone.then((_) => _finishClose(completer));
     }
-    return completer.future;
   }
 
   void _finishClose(Completer<void> completer) {
+    // A drain that was stopped by a plain `close` has two routes to here:
+    // the pump it left behind and the job the stop was waiting for.
+    if (completer.isCompleted) {
+      return;
+    }
+    _draining = false;
     _debug(() => 'closed');
     _callHook(() => observer?.onClose(this));
     completer.complete();
@@ -734,13 +782,22 @@ abstract class SoloBase<S extends Object> {
   }
 
   void _pump() {
-    if (_current != null || isClosed) {
+    if (_current != null || (isClosed && !_draining)) {
       return;
     }
     while (true) {
       final job = _queue._takeFirst();
       if (job == null) {
+        // Not the same as an empty queue: a group waiting for its window
+        // stays in it, and its timer brings the pump back. A drain that
+        // ended here would cut off the very case it exists for.
+        if (_draining && _queue._jobs.isEmpty) {
+          _finishClose(_closing!);
+
+          return;
+        }
         _debug(() => 'queue has no ready jobs');
+
         return;
       }
       final String? rejection;
@@ -767,9 +824,11 @@ abstract class SoloBase<S extends Object> {
         );
         continue;
       }
-      if (isClosed) {
+      if (isClosed && !_draining) {
         // The rules are the caller's code, and one of them closed the
-        // controller while it was being asked. Nothing starts after that.
+        // controller while it was being asked. Nothing starts after that
+        // — unless the closing is a drain, whose whole point is to start
+        // what is already in the queue.
         _debug(() => 'start $job: closed while the rules were asked');
         job._drop(
           Cancelled.by(

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'close_mode.dart';
 import 'solo_base.dart';
 
 /// A controller for plain Dart and `StreamBuilder`: [SoloBase] plus a
@@ -19,16 +20,23 @@ class Solo<S extends Object> extends SoloBase<S> {
   /// Closes the engine, then the stream. Repeated calls return the same
   /// future, so the chain is built once and kept.
   @override
-  Future<void> close() {
+  Future<void> close({SoloCloseMode mode = SoloCloseMode.cancel}) {
     final closed = _closed;
     if (closed != null) {
+      // Handed on rather than answered here: a plain `close` over a drain
+      // stops it in the engine, and the chain below is already built and
+      // stays the future everybody waits for.
+      unawaited(super.close(mode: mode));
+
       return closed;
     }
     // Stored before `super.close()` runs: a hook or an observer notified
     // from inside it may call `close` again and must get this same future.
     final completer = Completer<void>();
     _closed = completer.future;
-    completer.complete(super.close().then((_) => _controller.close()));
+    completer.complete(
+      super.close(mode: mode).then((_) => _controller.close()),
+    );
     return completer.future;
   }
 
