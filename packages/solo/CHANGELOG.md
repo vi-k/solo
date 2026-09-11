@@ -1,5 +1,9 @@
 ## 0.2.0
 
+The first published release. 0.1.0 never left the tree, so nothing below
+is a migration anybody has to make; what changed since it is at the end,
+for a tree that followed the package before it went out.
+
 - Add `onError` and `onCancel` state handlers to `run` and `job`.
   They apply state after children and cleanup, before the next queued job,
   while preserving the failed or cancelled outcome. Incompatible external
@@ -28,10 +32,6 @@
 - Re-export `Job.then` and `ChainCancelReason` from the core. Continuations
   support cancellation chains and have their own `JobContext`; they do not
   inherit controller state, rules, observers or a queue slot.
-
-The first published release. 0.1.0 never left the tree, so nothing below
-is a migration anybody has to make; what changed since it is at the end,
-for a tree that followed the package before it went out.
 
 - `SoloBase<S>` engine: one root job at a time, exclusive state ownership.
 - `Solo<S>` with a broadcast `stream`, delivered on the next microtask.
