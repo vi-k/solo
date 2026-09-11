@@ -9,10 +9,10 @@
             "program": "bin/main.dart"
         },
         {
-            "name": "job example",
+            "name": "async_job example",
             "request": "launch",
             "type": "dart",
-            "cwd": "${workspaceFolder}/packages/jobs/example",
+            "cwd": "${workspaceFolder}/packages/async_job/example",
             "program": "example.dart"
         }
     ]
