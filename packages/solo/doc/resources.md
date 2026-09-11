@@ -1,11 +1,8 @@
 # Resources and cleanup
 
 A job may acquire a database, subscription or another resource. Register
-its release when acquiring it so cancellation cannot leave a resource
-without cleanup. `wait` and `join` accept a `dispose` callback for a
-resource that belongs to the job. In this separate database example,
-`Database`, `Idle` and `Loaded(rows)` are types from that application's
-model:
+its release at the moment of acquiring it, so no cancellation can leave
+it behind:
 
 ```dart
 Job<void> load() => run<Idle, void>(
@@ -22,10 +19,12 @@ Job<void> load() => run<Idle, void>(
     );
 ```
 
-Here, the database belongs to the load operation; only its rows become
-controller state. `dispose` closes the database on success, failure or
-cancellation, including when cancellation prevents the acquired value
-from reaching the body.
+`wait` and `join` accept a `dispose` callback for a resource that belongs
+to the job. Here the database belongs to the load operation and only its
+rows become controller state, so `dispose` closes it on success, failure
+or cancellation — including when cancellation prevents the acquired value
+from reaching the body at all. `Database`, `Idle` and `Loaded(rows)` are
+types from that application's model.
 
 For resources obtained elsewhere, `ctx.onDispose(cursor.close)` registers
 a cleanup callback. It returns a function you can keep as
@@ -41,6 +40,21 @@ covers the period after the body returns and while its children finish.
 
 ## Returning or transferring a resource
 
+```dart
+// The database is this job's result, and its taker owns it on success.
+SoloJob<Database> open() => run<Idle, Database>(
+      key: _Op.open,
+      (ctx) async {
+        final db = await ctx.join(
+          Database.open,
+          discard: (db) => db.close(),
+        );
+        await ctx.run(job<Idle, void>((child) => child.join(db.readAll)));
+        return db;
+      },
+    );
+```
+
 Use `discard` instead of `dispose` when the resource is the job's result
 and its recipient will own it on success. The corresponding registration
 method is `ctx.onDiscard`. These callbacks run when the job ends without
@@ -48,10 +62,10 @@ successfully handing out its result. They do not release a resource kept
 only inside a successful body; use `dispose` for that case. A waiting call
 accepts either `dispose` or `discard`, never both.
 
-For example, a body may return a resource while a child is still running.
-The job is not complete yet. If cancellation arrives during that wait,
-the caller receives `Cancelled` instead of the resource, and its `discard`
-callback releases the resource.
+The child above is why the distinction earns its keep: the body has
+returned the database, but the job is not complete. If cancellation
+arrives during that wait, the caller receives `Cancelled` instead of the
+resource, and `discard` releases it.
 
 When transferring a registered resource directly to state, first check
 the job and remove the resource's registration with `disown`. Given a
@@ -77,15 +91,25 @@ has changed but before its cleanup registration is removed.
 
 ## Cleanup ordering and late results
 
+The waiting method decides when the release happens, not whether it
+happens:
+
+```dart
+// Abandoned on cancellation: the file can arrive after the job has
+// finished. It is still deleted, but nobody is waiting for that.
+await ctx.wait(openTemp, dispose: (file) => file.delete());
+
+// Deleted before the next job starts and before close() comes back.
+await ctx.join(openTemp, dispose: (file) => file.delete());
+```
+
+Use `join` when resource release must precede the next job or controller
+closure.
+
 Cancellation can arrive after the body returns, including during cleanup.
 If a `discard` registration was skipped on the success path, it is run in
 a second pass when cancellation makes it necessary. In that case it runs
 after later-processed disposers rather than in strict reverse order.
-
-With `wait`, an abandoned operation can produce its resource after the
-job has already finished. The supplied cleanup still releases it, but the
-finished job and `close()` cannot wait for that late release. Use `join`
-when resource release must precede the next job or controller closure.
 
 Cleanup errors go to error hooks and observers, with a zone fallback
 when no handler is installed. A `Cancelled` from cleanup is not reported
