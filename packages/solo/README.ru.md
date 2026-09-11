@@ -250,6 +250,19 @@ Job, поставленная в очередь контроллера, явля
 с ключом null тоже бросает `ArgumentError`; обе проверки работают в
 release-сборке.
 
+Ключ — любой объект, сравнивается через `==`, поэтому запись даёт
+политике идентичность одного запроса, а не операции вообще. `droppable`
+на `(_Op.load, id)` отбросит вторую загрузку того же профиля и пропустит
+загрузку другого, тогда как голый `_Op.load` отбросил бы обе:
+
+```dart
+SoloJob<Profile> load(String id) => run<Loaded, Profile>(
+      key: (_Op.load, id),
+      policy: Policy.droppable,
+      (ctx) async => ctx.wait(() => api.load(id)),
+    );
+```
+
 Очередь контроллера `queue` предоставляет `jobs`, `remove`, `removeWhere`,
 `clear` и `lastWhere`. Методы удаления затрагивают только ожидающие
 Job. Они сохраняют Job с `cancellable: false`, если не передать

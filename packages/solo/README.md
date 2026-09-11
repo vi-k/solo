@@ -243,6 +243,19 @@ under a key of its own. An enum with one key per method is a convenient
 way to avoid this. A non-sequential policy with a null key throws
 `ArgumentError` too, and both checks work in release builds.
 
+A key is any object, compared with `==`, so a record gives a policy the
+identity of one request rather than of the operation. `droppable` on
+`(_Op.load, id)` drops a second load of the same profile and lets a load
+of another one through, where a bare `_Op.load` would have dropped both:
+
+```dart
+SoloJob<Profile> load(String id) => run<Loaded, Profile>(
+      key: (_Op.load, id),
+      policy: Policy.droppable,
+      (ctx) async => ctx.wait(() => api.load(id)),
+    );
+```
+
 The controller's `queue` exposes `jobs`, `remove`, `removeWhere`, `clear`
 and `lastWhere`. Removal methods affect queued jobs only. They preserve
 jobs with `cancellable: false` unless called with `force: true`.

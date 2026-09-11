@@ -1,5 +1,8 @@
 ## Unreleased
 
+- Document what a job key can be: any object compared with `==`, so a
+  record gives a policy the identity of one request — `(_Op.load, id)` —
+  rather than of the operation.
 - **Breaking:** `SoloBase.close` takes a `SoloCloseMode`. Calls are
   unchanged — the default is `SoloCloseMode.cancel`, which is what `close`
   always did — but an override of `close` has to take the parameter too.
