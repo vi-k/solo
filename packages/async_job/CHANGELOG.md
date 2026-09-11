@@ -1,3 +1,11 @@
+## Unreleased
+
+- **Fix:** `ctx.join` releases the value through `dispose` or `discard`
+  when the checkpoint after the action throws anything, not only a
+  `Cancelled`. A rule of a domain that threw instead of answering used to
+  cost the job the resource it already held: the value reached no body and
+  was registered on no cleanup stack.
+
 ## 0.2.0
 
 - **Breaking:** `ctx.run(child)` returns `Future<T>` instead of the child's

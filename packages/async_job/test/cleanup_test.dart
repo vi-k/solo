@@ -51,6 +51,41 @@ Future<String> _open() async {
   return 'db';
 }
 
+/// A job whose checkpoint fails once [failCheck] is raised: a rule of a
+/// domain that throws instead of answering.
+final class _RuleJob<T> extends JobBase<T> {
+  final Future<T> Function(JobContext ctx) _body;
+
+  /// Whether [JobContext.check] throws from now on.
+  bool failCheck = false;
+
+  _RuleJob(this._body);
+
+  /// Starts the body the way an engine of a domain would.
+  void launch() => start();
+
+  @override
+  JobContextBase createContext() => _RuleContext(this);
+
+  @override
+  Future<T> execute(covariant _RuleContext ctx) => _body(ctx);
+}
+
+/// The context that goes with [_RuleJob].
+final class _RuleContext extends JobContextBase {
+  final _RuleJob<Object?> _job;
+
+  _RuleContext(this._job) : super(_job);
+
+  @override
+  void check() {
+    if (_job.failCheck) {
+      throw StateError('the rule blew up');
+    }
+    super.check();
+  }
+}
+
 void main() {
   test('onDispose runs on Done', () {
     expect(_cleanupsOn('done', _byDispose), ['cleaned']);
@@ -396,6 +431,41 @@ void main() {
       async.flushTimers();
       expect(closed, ['db']);
       expect(order, ['body sees the cancellation']);
+    });
+  });
+
+  test('join releases the value when the checkpoint after it throws', () {
+    fakeAsync((async) {
+      final closed = <String>[];
+      late final _RuleJob<void> job;
+      job = _RuleJob<void>((ctx) async {
+        await ctx.join(
+          () async {
+            final value = await _open();
+            job.failCheck = true;
+
+            return value;
+          },
+          discard: closed.add,
+        );
+      })
+        ..launch()
+        ..ignore();
+      async.flushTimers();
+      expect(
+        closed,
+        ['db'],
+        reason: 'the value reached nobody: it is released without a condition',
+      );
+      expect(
+        job.outcome,
+        isA<Failed>().having(
+          (outcome) => outcome.error,
+          'error',
+          isStateError,
+        ),
+        reason: 'the rule error is the outcome, not the disposal',
+      );
     });
   });
 

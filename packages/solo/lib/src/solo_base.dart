@@ -226,8 +226,11 @@ abstract class SoloBase<S extends Object> {
   ///
   /// Throws [StateError] if [job] was already added or run, and
   /// [ArgumentError] if [policy] is not [Policy.sequential] and the job has
-  /// no key, or if [job] was created by another controller. After `close`
-  /// the job finishes at once with `Cancelled(closed)`.
+  /// no key, if [job] was created by another controller, or if
+  /// [Policy.droppable] finds that key on a job of another result type.
+  /// Every one of them throws before [job] is taken, so a job refused here
+  /// is untouched and can be added again. After `close` the job finishes at
+  /// once with `Cancelled(closed)`.
   SoloJob<T> add<T>(
     Job<T> job, {
     bool first = false,
@@ -241,6 +244,21 @@ abstract class SoloBase<S extends Object> {
         impl._jobStatus != JobStatus.created ||
         _queue._jobs.contains(impl)) {
       throw StateError('$impl has already been added or run');
+    }
+    // Looked up before the job is marked as added, and the answer reused
+    // below: a key shared with a job of another result type is the
+    // caller's mistake, and `add` must not bury the job it then refuses to
+    // hand back. Nothing between here and the branch touches the queue. A
+    // closed controller never reaches a policy and keeps its own answer.
+    final duplicate = !isClosed && policy == Policy.droppable
+        ? lastJobWhere((other) => other.key == impl.key)
+        : null;
+    if (duplicate != null && duplicate is! SoloJob<T>) {
+      throw ArgumentError.value(
+        job,
+        'job',
+        'key ${impl.key} belongs to a job of another result type',
+      );
     }
     // Set before anything can go wrong below: a job dropped by a closed
     // controller has been added too, and one handle is one add.
@@ -260,9 +278,8 @@ abstract class SoloBase<S extends Object> {
       case Policy.sequential:
         break;
       case Policy.droppable:
-        final existing = lastJobWhere((other) => other.key == impl.key);
-        if (existing != null) {
-          _debug(() => 'add $impl: duplicate of $existing');
+        if (duplicate != null) {
+          _debug(() => 'add $impl: duplicate of $duplicate');
           impl._drop(
             Cancelled.by(
               reason: const ManualCancelReason(),
@@ -271,7 +288,8 @@ abstract class SoloBase<S extends Object> {
               stackTrace: StackTrace.current,
             ),
           );
-          return existing as SoloJob<T>;
+          // The type was checked before the job was marked as added.
+          return duplicate as SoloJob<T>;
         }
       case Policy.replace:
         _queue.removeWhere((other) => other.key == impl.key);
@@ -315,8 +333,8 @@ abstract class SoloBase<S extends Object> {
   /// controller it gives back one already finished with
   /// `Cancelled(closed)` rather than throwing. It does throw what [add]
   /// throws for a job it cannot take: [ArgumentError] for a policy that
-  /// needs a key without one, and a [TypeError] from [Policy.droppable]
-  /// when one key is shared by jobs with different result types.
+  /// needs a key without one, and another from [Policy.droppable] when one
+  /// key is shared by jobs with different result types.
   ///
   /// ```dart
   /// Job<String> load() => run<Profile, String>(

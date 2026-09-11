@@ -237,10 +237,11 @@ job still waits for the current job to finish; their bodies do not overlap.
 A job that refuses cancellation can therefore delay its replacement.
 
 Use a distinct key for each operation and result type. Reusing a key for
-both `Job<String>` and `Job<void>` can make `droppable` return an
-incompatible job and throw `TypeError`. An enum with one key per method
-is a convenient way to avoid this. A non-sequential policy with a null
-key throws `ArgumentError`, including in release builds.
+both `Job<String>` and `Job<void>` makes `droppable` throw
+`ArgumentError`, before the new job is touched, so it can be added again
+under a key of its own. An enum with one key per method is a convenient
+way to avoid this. A non-sequential policy with a null key throws
+`ArgumentError` too, and both checks work in release builds.
 
 The controller's `queue` exposes `jobs`, `remove`, `removeWhere`, `clear`
 and `lastWhere`. Removal methods affect queued jobs only. They preserve

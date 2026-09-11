@@ -1,3 +1,14 @@
+## Unreleased
+
+- **Fix:** a listener that throws is reported through
+  `FlutterError.reportError`, the way `ChangeNotifier` reports one, and the
+  listeners behind it still hear the change. Its error used to leave
+  `publish` and skip the engine's re-evaluation of the rules that follows a
+  state change, so a job could go on running against a state its
+  `keepWhile` forbids.
+- Notifying no longer looks each listener up in the list of all of them, so
+  one pass is linear in their number rather than quadratic.
+
 ## 0.2.0
 
 The first published release. 0.1.0 never left the tree.

@@ -146,6 +146,37 @@ void main() {
     });
   });
 
+  test('droppable refuses a key held by another result type', () {
+    runSolo((solo, journal, async) {
+      final first = solo.run<TestState, int>(
+        key: 'shared',
+        policy: Policy.droppable,
+        (ctx) async {
+          await delay(100);
+
+          return 1;
+        },
+      );
+      async.flushMicrotasks();
+      journal.take();
+      expect(
+        () => solo.run<TestState, String>(
+          key: 'shared',
+          policy: Policy.droppable,
+          (ctx) async => 'x',
+        ),
+        throwsArgumentError,
+      );
+      expect(
+        journal.lines,
+        isEmpty,
+        reason: 'the refused job is not buried on the way out',
+      );
+      async.flushTimers();
+      expect(first.outcome, isA<Done<int>>());
+    });
+  });
+
   test('a policy other than sequential requires a key', () {
     runSolo((solo, journal, async) {
       for (final policy in [Policy.droppable, Policy.replace, Policy.restart]) {

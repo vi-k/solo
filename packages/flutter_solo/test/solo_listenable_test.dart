@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_solo/flutter_solo.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -61,6 +62,66 @@ void main() {
     expect(calls, ['first']);
     counter.set(2);
     expect(calls, ['first', 'first', 'late']);
+    await counter.close();
+  });
+
+  test('a listener registered twice is called twice', () async {
+    final counter = _Counter();
+    var calls = 0;
+    void listener() => calls++;
+    counter
+      ..addListener(listener)
+      ..addListener(listener)
+      ..set(1);
+    expect(calls, 2);
+    counter
+      ..removeListener(listener)
+      ..set(2);
+    expect(calls, 3, reason: 'one removal drops one registration');
+    await counter.close();
+  });
+
+  test('a throwing listener is reported and the rest still hear', () async {
+    final counter = _Counter();
+    final errors = <Object>[];
+    final previous = FlutterError.onError;
+    FlutterError.onError = (details) => errors.add(details.exception);
+    addTearDown(() => FlutterError.onError = previous);
+
+    final calls = <String>[];
+    counter
+      ..addListener(() => calls.add('before'))
+      ..addListener(() => throw StateError('the listener blew up'))
+      ..addListener(() => calls.add('after'))
+      ..set(1);
+
+    expect(calls, ['before', 'after']);
+    expect(errors, [isStateError]);
+    await counter.close();
+  });
+
+  test('a throwing listener does not hold back the rules', () async {
+    final counter = _Counter();
+    final previous = FlutterError.onError;
+    FlutterError.onError = (_) {};
+    addTearDown(() => FlutterError.onError = previous);
+
+    final job = counter.run<int, void>(
+      keepWhile: (state) => state < 10,
+      (ctx) => ctx.wait(() => Future<void>.delayed(const Duration(days: 1))),
+    )..ignore();
+    await Future<void>.delayed(Duration.zero);
+
+    counter
+      ..addListener(() => throw StateError('the listener blew up'))
+      ..set(42);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(
+      job.outcome,
+      isA<Cancelled>(),
+      reason: 'the state no longer matches keepWhile',
+    );
     await counter.close();
   });
 

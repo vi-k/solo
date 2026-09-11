@@ -1,3 +1,12 @@
+## Unreleased
+
+- **Breaking:** `Policy.droppable` throws `ArgumentError`, not `TypeError`,
+  when the key it finds belongs to a job of another result type — and it
+  throws before the new job is taken, so a job refused this way is
+  untouched and can be added again under a key of its own. It used to
+  finish the new job as a duplicate first and then refuse to hand anything
+  back, leaving the caller with an error and no job at all.
+
 ## 0.2.0
 
 The first published release. 0.1.0 never left the tree, so nothing below

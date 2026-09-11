@@ -181,6 +181,45 @@ void main() {
     });
   });
 
+  test('discard takes the value when the rule throws after it arrived', () {
+    runSolo((solo, journal, async) {
+      var explode = false;
+      final job = solo.run<TestState, void>(
+        key: 'job',
+        keepWhile: (state) {
+          if (explode) {
+            throw StateError('the rule blew up');
+          }
+
+          return true;
+        },
+        (ctx) async {
+          await ctx.join(
+            () async {
+              await delay(100);
+              explode = true;
+
+              return 7;
+            },
+            discard: (value) => ctx.log('disposed $value'),
+          );
+          ctx.emit(const Preparing());
+        },
+      )..ignore();
+      async.flushTimers();
+      expect(
+        job.outcome,
+        isA<Failed>().having((o) => o.error, 'error', isStateError),
+      );
+      expect(journal.take(), [
+        '[job] started',
+        '[job] log disposed 7',
+        '[job] error Bad state: the rule blew up',
+        '[job] finished Failed(Bad state: the rule blew up)',
+      ]);
+    });
+  });
+
   test('discard is not called when the action comes back in time', () {
     runSolo((solo, journal, async) {
       final job = solo.run<TestState, int>(key: 'job', (ctx) async {

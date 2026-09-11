@@ -127,6 +127,11 @@ abstract interface class JobContext {
   /// `onError`, and the [Cancelled] is thrown all the same. Throws
   /// [Cancelled] up front if the job is already cancelled or its rules no
   /// longer hold, the same as [wait] and [uncancellable].
+  ///
+  /// The checkpoint after [action] releases the value whatever it throws,
+  /// not only for a [Cancelled]: a rule of a domain that throws instead of
+  /// answering ends the job with that error, and the resource goes to
+  /// [dispose] or [discard] on the way out.
   Future<T> join<T>(
     FutureOr<T> Function() action, {
     FutureOr<void> Function(T value)? dispose,
@@ -598,7 +603,12 @@ abstract class JobContextBase implements JobContext {
     }
     try {
       check();
-    } on Cancelled {
+    } on Object {
+      // Whatever the checkpoint threw, the value stops here: it reaches no
+      // body, and the stack below is never reached, so this is its only
+      // way out. `on Object`, not `on Cancelled`: a domain checks its own
+      // rules in here, and a rule that threw instead of answering must not
+      // cost the caller the resource it already holds.
       final disposer = dispose ?? discard;
       if (disposer != null) {
         await _dispose(disposer, result);
