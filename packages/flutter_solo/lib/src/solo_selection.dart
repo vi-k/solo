@@ -11,7 +11,7 @@ import 'solo_listenable.dart';
 /// so it is never behind — a selector is a pick and is expected to be
 /// cheap. What the selection keeps is the last value it announced, and it
 /// keeps it to hold notifications back: listeners hear only a pick that
-/// changed by `equals` — `==` unless another comparison is given — so a
+/// `compare` calls changed — `!=` unless another answer is given — so a
 /// state change that leaves the pick alone reaches nobody here. With
 /// nobody listening the source is not subscribed to at all.
 ///
@@ -45,25 +45,26 @@ import 'solo_listenable.dart';
 final class SoloSelection<S extends Object, T> implements ValueListenable<T> {
   final SoloListenable<S> _source;
   final T Function(S state) _selector;
-  final bool Function(T previous, T current) _equals;
+  final bool Function(T previous, T current) _compare;
   final _listeners = Listeners();
 
   /// The last value announced to the listeners, kept to tell a change
   /// from a state change that left the pick alone.
   T _selected;
 
-  /// Picks [selector] out of [source], comparing the results with [equals]
-  /// or with `==`.
+  /// Picks [selector] out of [source]; [compare] answers whether the pick
+  /// changed, `!=` when it is omitted.
   SoloSelection(
     SoloListenable<S> source,
     T Function(S state) selector, {
-    bool Function(T previous, T current)? equals,
+    bool Function(T previous, T current)? compare,
   })  : _source = source,
         _selector = selector,
-        _equals = equals ?? _sameValue,
+        _compare = compare ?? _changed,
         _selected = selector(source.state);
 
-  static bool _sameValue<T>(T previous, T current) => previous == current;
+  /// `true` means the pick changed, the same way `compare` answers.
+  static bool _changed<T>(T previous, T current) => previous != current;
 
   /// The picked value, as the state has it right now.
   @override
@@ -97,9 +98,14 @@ final class SoloSelection<S extends Object, T> implements ValueListenable<T> {
 
   void _onSourceChanged() {
     final next = _selector(_source.state);
-    if (_equals(_selected, next)) {
+    if (!_compare(_selected, next)) {
       return;
     }
+    // Written before the listeners run: one of them is free to change the
+    // state from in here, and the pick it has already been handed must not
+    // set a walk of its own going. Not taken back when a listener throws
+    // either — [value] reads the state rather than this, so a listener that
+    // missed a notification is a rebuild missed, not a value stuck.
     _selected = next;
     _listeners.notify(this);
   }
@@ -119,7 +125,7 @@ extension SoloSelect<S extends Object> on SoloListenable<S> {
   /// [SoloSelection].
   SoloSelection<S, T> select<T>(
     T Function(S state) selector, {
-    bool Function(T previous, T current)? equals,
+    bool Function(T previous, T current)? compare,
   }) =>
-      SoloSelection<S, T>(this, selector, equals: equals);
+      SoloSelection<S, T>(this, selector, compare: compare);
 }

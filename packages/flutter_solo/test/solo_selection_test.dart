@@ -92,12 +92,12 @@ void main() {
     expect(name.value, 'Ada');
   });
 
-  test('equals replaces the comparison', () {
+  test('compare replaces the answer about a change', () {
     final controller = _Controller();
     final name = controller.select(
       (state) => state.name,
-      equals: (previous, current) =>
-          previous.toLowerCase() == current.toLowerCase(),
+      compare: (previous, current) =>
+          previous.toLowerCase() != current.toLowerCase(),
     );
     var calls = 0;
     name.addListener(() => calls++);
@@ -159,6 +159,34 @@ void main() {
     );
     expect(name, isA<SoloSelection<_Screen, String>>());
     await controller.close();
+  });
+
+  test('a listener that throws misses a rebuild, not the value', () {
+    final controller = _Controller();
+    final errors = <Object>[];
+    final previous = FlutterError.onError;
+    FlutterError.onError = (details) => errors.add(details.exception);
+    addTearDown(() => FlutterError.onError = previous);
+
+    final name = controller.select((state) => state.name);
+    final seen = <String>[];
+    var blowUp = true;
+    name.addListener(() {
+      if (blowUp) {
+        blowUp = false;
+
+        throw StateError('the listener blew up');
+      }
+      seen.add(name.value);
+    });
+
+    controller.set(const _Screen(name: 'Ada'));
+    expect(errors, [isStateError]);
+    expect(seen, isEmpty, reason: 'this notification was lost to the throw');
+    expect(name.value, 'Ada', reason: 'value reads the state, not the pick');
+
+    controller.set(const _Screen(name: 'Grace'));
+    expect(seen, ['Grace'], reason: 'the next change still gets through');
   });
 
   test('a select of its own wins over the extension', () {

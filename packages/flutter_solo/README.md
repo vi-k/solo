@@ -146,11 +146,12 @@ class _SaveButtonState extends State<SaveButton> {
 ```
 
 Hold the selection in a field, the way `canSave` is held above: one built
-inside `build` would subscribe and unsubscribe every frame. Picks are
-compared with `==` unless `equals:` says otherwise, the source is
-subscribed to only while the selection has listeners, and there is
-nothing to dispose of. `value` reads the state every time, so it is never
-behind — keep the selector a cheap pick.
+inside `build` would subscribe and unsubscribe every frame, and so would
+a selector written inline there. Picks count as changed when they are
+`!=`, unless `compare:` answers that question itself — `true` means
+changed. The source is subscribed to only while the selection has
+listeners, and there is nothing to dispose of. `value` reads the state
+every time, so it is never behind — keep the selector a cheap pick.
 
 `select` is an extension, so a controller of your own with a `select`
 method keeps it: yours wins, and the selection is then built directly,
