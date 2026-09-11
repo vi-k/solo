@@ -73,9 +73,17 @@ Astro. Пока там `base: "/solo"` — адрес проектной стр�
 `.pubignore` и раскладка переводов прежние; записано в `AGENTS.md`.
 
 Публикует `.github/workflows/site.yml` при пуше в `main`, задевающем
-README, `doc/`, `site/` или сборщик. **Перед первым запуском владельцу
-надо переключить Settings → Pages → Source на «GitHub Actions»** —
-без этого workflow упадёт на деплое.
+README, `doc/`, `site/` или сборщик. Settings → Pages → Source стоит на
+«GitHub Actions»: переключено перед первым запуском, дальше сайт
+выкладывается сам.
+
+Версии экшенов подняты 2026-09-12: `checkout@v7`, `setup-node@v7`,
+`upload-pages-artifact@v5`, `deploy-pages@v5`. До этого стояли `v4`,
+`v4`, `v3` и `v4`, и GitHub уже писал на них «Node.js 20 is deprecated»
+— когда поддержку снимут, деплой встанет. Версии выяснены через
+`gh api repos/<экшен>/git/matching-refs/tags/v`, а не по памяти: то же
+правило, что и для `npm view <пакет> version`. `node-version: 22`
+оставлен как был.
 
 Домен привязан: **https://docs.yet-another.dev/**. DNS — одна запись
 `CNAME docs -> vi-k.github.io` у porkbun, апекс не тронут (он занят
