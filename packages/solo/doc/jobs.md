@@ -3,19 +3,8 @@
 ## Jobs and results
 
 A `Job<T>` represents one operation and its eventual outcome. It is not a
-`Future`: calling `profile.load()` without `await` is allowed. Choose how
-to handle its result at the call site:
-
-| Member | Use |
-| --- | --- |
-| `job.value` | Await `T`; throws on failure or cancellation. |
-| `job.done` | Await an `Outcome<T>` without throwing. |
-| `job.outcome` | Read the outcome synchronously after completion. |
-| `job.cancel()` | Request cancellation and wait for completion. |
-| `job.ignore()` | Mark the outcome as handled without waiting. |
-
-`Outcome<T>` has three cases. `Done` carries the value, `Failed` carries
-the error and stack trace, and `Cancelled` carries the cancellation reason:
+`Future`: calling `profile.load()` without `await` is allowed, and the
+call site decides what to do with the result.
 
 ```dart
 switch (await profile.load().done) {
@@ -27,6 +16,17 @@ switch (await profile.load().done) {
     print('gave up: $reason');
 }
 ```
+
+`Outcome<T>` has those three cases: `Done` carries the value, `Failed`
+the error and stack trace, `Cancelled` the cancellation reason.
+
+| Member | Use |
+| --- | --- |
+| `job.value` | Await `T`; throws on failure or cancellation. |
+| `job.done` | Await an `Outcome<T>` without throwing. |
+| `job.outcome` | Read the outcome synchronously after completion. |
+| `job.cancel()` | Request cancellation and wait for completion. |
+| `job.ignore()` | Mark the outcome as handled without waiting. |
 
 A failed job does not stop the queue. Its error is reported and the next
 job can run. Cancellation is a separate outcome: closing a controller,
@@ -42,26 +42,61 @@ job unawaited does not by itself mark the error as handled. See
 
 ### Creating and scheduling jobs
 
-Within a controller, `job(...)` creates a job without scheduling it,
-`add(job, policy: ...)` queues a job, and `run(...)` combines both steps.
+```dart
+// Assembled now, queued after: two steps, for a job to hold on to.
+final saving = job<Ready, void>(key: _Op.save, (ctx) => ctx.join(store.save));
+add(saving, policy: Policy.droppable);
+
+// Or both at once, which is what a controller method normally does.
+SoloJob<void> setZoom(double zoom) => run<Ready, void>(
+      key: _Op.zoom,
+      // Lazy, and only for diagnostics: built when a log asks for it.
+      describe: () => 'zoom: $zoom',
+      (ctx) => ctx.join(() => camera.zoom(zoom)),
+    );
+```
+
 All three return `SoloJob<T>`, which implements `Job<T>` and adds
 `isQueued`. A controller normally exposes domain methods such as `load()`
 or `setZoom()` so callers do not need to assemble jobs themselves.
 
-A job can have a `key` for queue policies and a lazy `describe` callback
-for diagnostics. For example, `describe: () => 'zoom: $zoom'` supplies the
-label used by logs, observers and `toString()`: `Job(key: label)`.
-Without a description, the representation is `Job(key)`.
+A `key` is what queue policies match on, and `describe` supplies the label
+used by logs, observers and `toString()`: `Job(key: label)`. Without a
+description the representation is `Job(key)`.
 
 ## Queue and policies
 
-A job added to a controller's queue is a root job. Only one root job runs
-at a time. It holds the queue until its body, children, cleanup and final
-state handler finish. Child jobs can run within that interval; they are
-described in [Children and streams](children.md).
+A job added to a controller's queue is a root job. Only one runs at a
+time. Which of them survives a second call is the policy's decision:
 
-Each call chooses a policy. Policies other than `sequential` use the job's
-key to find related work:
+```dart
+enum _Op { load, save, zoom, seek, stop }
+
+// sequential, the default: one after another, in the order asked for.
+SoloJob<void> save() =>
+    run<Ready, void>(key: _Op.save, (ctx) => ctx.join(store.save));
+
+// droppable: a second load of the same profile returns the first job.
+SoloJob<Profile> load(String id) => run<Loaded, Profile>(
+      key: (_Op.load, id),
+      policy: Policy.droppable,
+      (ctx) async => ctx.wait(() => api.load(id)),
+    );
+
+// replace: the queued zoom goes, a running one is left alone.
+SoloJob<void> setZoom(double zoom) => run<Ready, void>(
+      key: _Op.zoom,
+      policy: Policy.replace,
+      (ctx) => ctx.join(() => camera.zoom(zoom)),
+    );
+
+// restart: the same, and the running one is asked to stop as well.
+SoloJob<void> seek(Duration position) => run<Ready, void>(
+      key: _Op.seek,
+      policy: Policy.restart,
+      (ctx) => ctx.join(() => camera.seek(position)),
+    );
+```
 
 | Policy | When a job with the same key already exists |
 | --- | --- |
@@ -70,9 +105,19 @@ key to find related work:
 | `Policy.replace` | Remove cancellable queued jobs with that key, then enqueue the new job. |
 | `Policy.restart` | Do the same as `replace` and request cancellation of the running job with that key. |
 
+A root job holds the queue until its body, children, cleanup and final
+state handler finish. Child jobs can run within that interval; they are
+described in [Children and streams](children.md).
+
 `restart` requests cancellation when the new job is submitted. The new
 job still waits for the current job to finish; their bodies do not overlap.
 A job that refuses cancellation can therefore delay its replacement.
+
+A key is any object, compared with `==`, so the record `(_Op.load, id)`
+above gives the policy the identity of one request rather than of the
+operation: `droppable` drops a second load of the same profile and lets a
+load of another one through, where a bare `_Op.load` would have dropped
+both.
 
 Use a distinct key for each operation and result type. Reusing a key for
 both `Job<String>` and `Job<void>` makes `droppable` throw
@@ -81,21 +126,25 @@ under a key of its own. An enum with one key per method is a convenient
 way to avoid this. A non-sequential policy with a null key throws
 `ArgumentError` too, and both checks work in release builds.
 
-A key is any object, compared with `==`, so a record gives a policy the
-identity of one request rather than of the operation. `droppable` on
-`(_Op.load, id)` drops a second load of the same profile and lets a load
-of another one through, where a bare `_Op.load` would have dropped both:
+The queue itself is the controller's own, and a method can work it
+directly:
 
 ```dart
-SoloJob<Profile> load(String id) => run<Loaded, Profile>(
-      key: (_Op.load, id),
-      policy: Policy.droppable,
-      (ctx) async => ctx.wait(() => api.load(id)),
-    );
+SoloJob<void> stop() {
+  // What is waiting right now.
+  print(queue.jobs.length);
+  // Drop what this command makes pointless...
+  queue.removeWhere((job) => job.key == _Op.zoom);
+  // ...and jump the line with the stop itself.
+  return add(
+    job<Ready, void>(key: _Op.stop, (ctx) => ctx.join(camera.stop)),
+    first: true,
+  );
+}
 ```
 
-The controller's `queue` exposes `jobs`, `remove`, `removeWhere`, `clear`
-and `lastWhere`. Removal methods affect queued jobs only. They preserve
-jobs with `cancellable: false` unless called with `force: true`.
-`add(job, first: true)` inserts at the front. Time-delayed accumulator
-groups can let ready jobs pass; see [Event accumulation](accumulation.md).
+`queue` exposes `jobs`, `remove`, `removeWhere`, `clear` and `lastWhere`.
+Removal methods affect queued jobs only — the running job is not theirs to
+touch — and they preserve jobs with `cancellable: false` unless called
+with `force: true`. Time-delayed accumulator groups can let ready jobs
+pass; see [Event accumulation](accumulation.md).
