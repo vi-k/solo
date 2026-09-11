@@ -6,8 +6,9 @@ name: site
 # the READMEs and the `doc/` folders of the packages, so the packages stay
 # the single source of truth and the site cannot drift from them.
 #
-# Settings -> Pages -> Source is "GitHub Actions"; the domain lives in
-# site/public/CNAME, which the build copies into the output.
+# Settings -> Pages -> Source is "GitHub Actions". The custom domain is a
+# Pages setting, not a file: a deployment made from Actions does not read
+# CNAME out of the artifact, so site/public/CNAME only records the intent.
 
 on:
   push:

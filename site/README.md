@@ -50,9 +50,18 @@ one place moves the whole site.
 that touches a README, a `doc/` page, this folder or the assembler.
 **Settings → Pages → Source** is set to *GitHub Actions*.
 
-The domain is `docs.yet-another.dev`, held by `public/CNAME`. A subdomain
-needs one DNS record — `docs` as a `CNAME` to `vi-k.github.io` — and the
-apex stays free for whatever else lives there.
+The domain is `docs.yet-another.dev`. A subdomain needs one DNS record —
+`docs` as a `CNAME` to `vi-k.github.io` — and the apex stays free for
+whatever else lives there.
+
+The domain itself is a **Pages setting**, not a file. A deployment made by
+GitHub Actions does not read `CNAME` out of the artifact the way a
+branch-published site does, so `public/CNAME` only ends up served as a
+plain file. Set the domain once, in Settings → Pages → Custom domain, or
+with `gh api -X PUT repos/vi-k/solo/pages -f cname=docs.yet-another.dev`.
+The file is kept beside it so the intended domain is visible in the
+repository, and so a branch-published copy of this site would land on the
+same name.
 
 Moving the site elsewhere is three edits: `site` and `base` in
 `site.json`, and `public/CNAME`. An apex domain would need four `A`
