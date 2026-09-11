@@ -1,6 +1,7 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import starlightLlmsTxt from 'starlight-llms-txt';
 
 import config from './site.json' with { type: 'json' };
 
@@ -20,6 +21,49 @@ export default defineConfig({
     starlight({
       title: config.title,
       description: config.tagline,
+      plugins: [
+        // Publishes /llms.txt, /llms-full.txt and /llms-small.txt: the
+        // documentation as plain text, for agents that would otherwise
+        // crawl the repository page by page. English only -- the plugin
+        // takes the default locale, which is what we want here.
+        starlightLlmsTxt({
+          projectName: 'solo',
+          description:
+            'solo manages state and asynchronous work in Dart. A ' +
+            'controller holds one immutable state and runs jobs over it ' +
+            'one at a time; each job declares which states let it start ' +
+            'and continue, owns its children and its cleanup, and ends ' +
+            'with Done, Failed or Cancelled.',
+          details: [
+            'Three packages, one dependency:',
+            '',
+            '- `async_job` is the kernel: one operation, its children, ' +
+              'its cleanup and cooperative cancellation. Pure Dart.',
+            '- `solo` adds the controller: a queue with policies, state ' +
+              'rules, event accumulation. Re-exports `async_job`.',
+            '- `flutter_solo` adds the Flutter face: `ValueListenable`, ' +
+              '`select`, `listen`. Re-exports `solo`.',
+            '',
+            'Cancellation is cooperative: `cancel()` requests it and the ' +
+              'body answers at a checkpoint -- `ctx.wait`, `ctx.join`, ' +
+              '`ctx.uncancellable` or `ctx.check` -- and which one it is ' +
+              'decides what happens to the operation behind it.',
+          ].join('\n'),
+          optionalLinks: [
+            {
+              label: 'solo and bloc, side by side',
+              url: `${config.site}/solo/vs-bloc/`,
+              description:
+                'Ten application scenarios implemented in both packages.',
+            },
+            {
+              label: 'Repository',
+              url: config.repo,
+              description: 'Source, examples and tests.',
+            },
+          ],
+        }),
+      ],
       defaultLocale: 'root',
       locales: {
         root: { label: 'English', lang: 'en' },

@@ -85,3 +85,20 @@ settings stays greyed out. It can take up to 24 hours, usually minutes.
 Built in, through [Pagefind](https://pagefind.app): it indexes the
 generated HTML at build time and needs no service and no key. It indexes
 each language separately, so a search in Russian returns Russian pages.
+
+## For agents
+
+`starlight-llms-txt` publishes three files an agent can read instead of
+crawling the site or the repository page by page:
+
+| File | What it holds |
+| --- | --- |
+| `/llms.txt` | The entry point: what the packages are and where the other two files live. |
+| `/llms-full.txt` | Every English page, in order, as plain text. |
+| `/llms-small.txt` | The same with asides and `<details>` stripped. Barely smaller here — these docs are mostly code, and code is kept. |
+
+English only: the plugin takes the default locale, which is what we want
+— an agent asking about `ctx.join` should not get the answer twice.
+The prose at the top of `llms.txt` is set in `astro.config.mjs`; it is the
+first thing an agent reads, so it says what the three packages are and how
+cancellation works before anything else.
