@@ -9,7 +9,7 @@
 поэтому вставляется прямо в `ValueListenableBuilder`, `ListenableBuilder`,
 `AnimatedBuilder` и `Listenable.merge`.
 
-На [сайте документации](https://docs.yet-another.dev/flutter_solo/) лежат
+На [сайте документации](https://docs.yet-another.dev/ru/flutter_solo/) лежат
 эта страница и руководства пакетов под ней.
 
 ## Зачем

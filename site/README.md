@@ -7,8 +7,15 @@ adds the frontmatter Starlight wants, and rewrites the links between files
 into links between pages. The packages stay the single source of truth, so
 the site cannot drift from what ships on pub.dev.
 
-Only the English originals are published. The Russian translations in
-`docs/ru/` are for the owner and for agents.
+Both languages are published. English is the root locale and comes from
+the packages; Russian lives under `/ru/` and comes from each package's
+`README.ru.md` and from `docs/ru/<package>/`. The language picker in the
+header pairs a page with its translation, and `check_translations.py`
+keeps the two sides mirroring each other, so the pairing cannot go stale.
+
+This says nothing about what pub.dev gets: `README.ru.md` stays excluded
+by each package's `.pubignore`, and the other translations live outside
+the packages.
 
 ## Running it
 
@@ -76,4 +83,5 @@ settings stays greyed out. It can take up to 24 hours, usually minutes.
 ## Search
 
 Built in, through [Pagefind](https://pagefind.app): it indexes the
-generated HTML at build time and needs no service and no key.
+generated HTML at build time and needs no service and no key. It indexes
+each language separately, so a search in Russian returns Russian pages.

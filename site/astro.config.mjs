@@ -4,9 +4,14 @@ import starlight from '@astrojs/starlight';
 
 import config from './site.json' with { type: 'json' };
 
+/** One sidebar entry, named in both languages. */
+const page = (slug, label, ru) => ({ slug, label, translations: { ru } });
+
 // Content under src/content/docs/ is generated from the packages by
 // `python3 tool/build_site.py` and is not kept in git. The packages stay
-// the single source of truth; this site renders them.
+// the single source of truth; this site renders them. English is the root
+// locale and comes from the packages; Russian lives under /ru/ and comes
+// from each package's README.ru.md and from docs/ru/<package>/.
 export default defineConfig({
   site: config.site,
   base: config.base,
@@ -15,6 +20,11 @@ export default defineConfig({
     starlight({
       title: config.title,
       description: config.tagline,
+      defaultLocale: 'root',
+      locales: {
+        root: { label: 'English', lang: 'en' },
+        ru: { label: 'Русский', lang: 'ru' },
+      },
       social: [
         { icon: 'github', label: 'GitHub', href: config.repo },
       ],
@@ -22,38 +32,67 @@ export default defineConfig({
         {
           label: 'solo',
           items: [
-            { label: 'Overview', slug: 'solo' },
-            { label: 'Jobs and the queue', slug: 'solo/jobs' },
-            { label: 'State', slug: 'solo/state' },
-            { label: 'Cancellation', slug: 'solo/cancellation' },
-            { label: 'Resources and cleanup', slug: 'solo/resources' },
-            { label: 'Children and streams', slug: 'solo/children' },
-            { label: 'Event accumulation', slug: 'solo/accumulation' },
-            { label: 'Errors and observation', slug: 'solo/errors' },
-            { label: 'Testing', slug: 'solo/testing' },
-            { label: 'Flutter', slug: 'solo/flutter' },
-            { label: 'Camera example', slug: 'solo/camera' },
-            { label: 'solo and bloc, side by side', slug: 'solo/vs-bloc' },
+            page('solo', 'Overview', 'Обзор'),
+            page('solo/jobs', 'Jobs and the queue', 'Задачи и очередь'),
+            page('solo/state', 'State', 'Состояние'),
+            page('solo/cancellation', 'Cancellation', 'Отмена'),
+            page(
+              'solo/resources',
+              'Resources and cleanup',
+              'Ресурсы и освобождение',
+            ),
+            page(
+              'solo/children',
+              'Children and streams',
+              'Дочерние задачи и стримы',
+            ),
+            page(
+              'solo/accumulation',
+              'Event accumulation',
+              'Накопление событий',
+            ),
+            page(
+              'solo/errors',
+              'Errors and observation',
+              'Ошибки и наблюдение',
+            ),
+            page('solo/testing', 'Testing', 'Тестирование'),
+            page('solo/flutter', 'Flutter', 'Flutter'),
+            page('solo/camera', 'Camera example', 'Пример камеры'),
+            page(
+              'solo/vs-bloc',
+              'solo and bloc, side by side',
+              'solo и bloc рядом',
+            ),
           ],
         },
         {
           label: 'async_job',
           items: [
-            { label: 'Overview', slug: 'async_job' },
-            { label: 'Outcomes', slug: 'async_job/outcomes' },
-            { label: 'Cancellation', slug: 'async_job/cancellation' },
-            {
-              label: 'Children, streams and chains',
-              slug: 'async_job/children',
-            },
-            { label: 'Cleanup', slug: 'async_job/cleanup' },
-            { label: 'Observing and testing', slug: 'async_job/observing' },
-            { label: 'Building on the core', slug: 'async_job/extending' },
+            page('async_job', 'Overview', 'Обзор'),
+            page('async_job/outcomes', 'Outcomes', 'Исходы'),
+            page('async_job/cancellation', 'Cancellation', 'Отмена'),
+            page(
+              'async_job/children',
+              'Children, streams and chains',
+              'Дети, стримы и цепочки',
+            ),
+            page('async_job/cleanup', 'Cleanup', 'Уборка'),
+            page(
+              'async_job/observing',
+              'Observing and testing',
+              'Наблюдение и тестирование',
+            ),
+            page(
+              'async_job/extending',
+              'Building on the core',
+              'Своё поверх ядра',
+            ),
           ],
         },
         {
           label: 'flutter_solo',
-          items: [{ label: 'Overview', slug: 'flutter_solo' }],
+          items: [page('flutter_solo', 'Overview', 'Обзор')],
         },
       ],
     }),
