@@ -8,6 +8,7 @@ Pairs checked:
   * packages/solo/doc/vs-bloc.md     <-> docs/ru/solo/vs-bloc.md
   * packages/solo/doc/accumulation.md <-> docs/ru/solo/accumulation.md
   * packages/solo/doc/<page>.md    <-> docs/ru/solo/<page>.md
+  * packages/async_job/doc/<page>.md <-> docs/ru/async_job/<page>.md
 
 Compares:
   * the sequence of heading levels (count and order),
@@ -81,6 +82,30 @@ PAIRS = [
     (
         REPO / "packages" / "solo" / "doc" / "flutter.md",
         REPO / "docs" / "ru" / "solo" / "flutter.md",
+    ),
+    (
+        REPO / "packages" / "async_job" / "doc" / "outcomes.md",
+        REPO / "docs" / "ru" / "async_job" / "outcomes.md",
+    ),
+    (
+        REPO / "packages" / "async_job" / "doc" / "cancellation.md",
+        REPO / "docs" / "ru" / "async_job" / "cancellation.md",
+    ),
+    (
+        REPO / "packages" / "async_job" / "doc" / "children.md",
+        REPO / "docs" / "ru" / "async_job" / "children.md",
+    ),
+    (
+        REPO / "packages" / "async_job" / "doc" / "cleanup.md",
+        REPO / "docs" / "ru" / "async_job" / "cleanup.md",
+    ),
+    (
+        REPO / "packages" / "async_job" / "doc" / "observing.md",
+        REPO / "docs" / "ru" / "async_job" / "observing.md",
+    ),
+    (
+        REPO / "packages" / "async_job" / "doc" / "extending.md",
+        REPO / "docs" / "ru" / "async_job" / "extending.md",
     ),
 ]
 

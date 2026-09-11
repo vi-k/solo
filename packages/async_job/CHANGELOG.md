@@ -1,5 +1,11 @@
 ## Unreleased
 
+- The README is a starting page: what a job is, why a plain `Future` does
+  not cover it — now shown as the flag that asks and the job that answers
+  — `Install`, `Quick start` and a map of the guides. The reference
+  material moved to `doc/`: `outcomes.md`, `cancellation.md`,
+  `children.md`, `cleanup.md`, `observing.md`, `extending.md`. Nothing was
+  dropped, and every section now starts with the code it is about.
 - **Fix:** `ctx.join` releases the value through `dispose` or `discard`
   when the checkpoint after the action throws anything, not only a
   `Cancelled`. A rule of a domain that threw instead of answering used to

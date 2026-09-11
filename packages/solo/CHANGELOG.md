@@ -8,6 +8,12 @@
   `errors.md`, `testing.md`, `flutter.md`, `camera.md`. Nothing was
   dropped; the bloc correspondence table now opens `doc/vs-bloc.md` and
   the accumulation API opens `doc/accumulation.md`.
+- Every page in `doc/` starts with the code it is about, and the rules
+  that lived only in prose became tables: handler eligibility, where a
+  throwing state rule is heard, what each waiting method does to the
+  operation behind it. The sections that had no code at all — external
+  state, closing a controller, protecting a step, background work —
+  have it now, compiled and run before it was written down.
 - Document what a job key can be: any object compared with `==`, so a
   record gives a policy the identity of one request — `(_Op.load, id)` —
   rather than of the operation.
