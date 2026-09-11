@@ -7,3 +7,4 @@ library;
 export 'package:flutter/foundation.dart' show ValueListenable;
 export 'package:solo/solo.dart';
 export 'src/solo_listenable.dart';
+export 'src/solo_selection.dart';

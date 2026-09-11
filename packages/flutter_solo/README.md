@@ -124,6 +124,38 @@ the state, and `ctx.wait` awaits like `await` except that it gives up the
 moment the job is cancelled. The full API — rules, the queue, children,
 observers — is documented in [solo](https://pub.dev/packages/solo).
 
+## Selecting one value
+
+A widget that needs one field does not have to rebuild for the rest.
+`select` hands back a `ValueListenable` of that field alone, and it
+notifies only when the field itself changes:
+
+```dart
+class _SaveButtonState extends State<SaveButton> {
+  late final canSave = widget.controller.select((state) => state.canSave);
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<bool>(
+        valueListenable: canSave,
+        builder: (context, canSave, _) => ElevatedButton(
+          onPressed: canSave ? widget.controller.save : null,
+          child: const Text('Save'),
+        ),
+      );
+}
+```
+
+Hold the selection in a field, the way `canSave` is held above: one built
+inside `build` would subscribe and unsubscribe every frame. Picks are
+compared with `==` unless `equals:` says otherwise, the source is
+subscribed to only while the selection has listeners, and there is
+nothing to dispose of. `value` reads the state every time, so it is never
+behind — keep the selector a cheap pick.
+
+`select` is an extension, so a controller of your own with a `select`
+method keeps it: yours wins, and the selection is then built directly,
+`SoloSelection(controller, (state) => state.canSave)`.
+
 ## The controller's life
 
 Nothing closes a controller for you. There is no `SoloProvider`: a
@@ -246,7 +278,8 @@ outcome or call `ignore()`.
   later; `value` and `state` are the same object.
 - Equal states are not filtered: `emit` of a state equal to the current
   one still notifies, the way `Solo` does. A frame may swallow several of
-  them, a listener will not.
+  them, a listener will not. `select` filters its own value, which is the
+  one a widget usually cares about.
 - Several controllers on one screen work as expected, each with its own
   builder, and `Listenable.merge([a, b])` in a `ListenableBuilder` covers
   the case where one widget depends on two.

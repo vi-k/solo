@@ -8,6 +8,12 @@
   `keepWhile` forbids.
 - Notifying no longer looks each listener up in the list of all of them, so
   one pass is linear in their number rather than quadratic.
+- Add `SoloSelection<S, T>` and the `select` extension on
+  `SoloListenable<S>`: a `ValueListenable` of one value picked out of the
+  state, notifying only when that value changes by `==` or by an `equals`
+  of your own. It subscribes to the source only while it has listeners and
+  needs no disposal. An extension and not a member, so a controller with a
+  `select` method of its own keeps it and builds `SoloSelection` directly.
 
 ## 0.2.0
 

@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:solo/solo.dart';
 
+import 'listeners.dart';
+
 /// A [Solo] that is also a [ValueListenable]: drop it into
 /// `ValueListenableBuilder` or `ListenableBuilder`.
 ///
@@ -10,12 +12,7 @@ import 'package:solo/solo.dart';
 /// ownership guarantee. [value] and [state] are the same object.
 class SoloListenable<S extends Object> extends Solo<S>
     implements ValueListenable<S> {
-  final _listeners = <VoidCallback>[];
-
-  /// How many registrations each listener has, to tell a listener still
-  /// registered from one removed mid-pass without walking [_listeners]:
-  /// a list lookup for every listener makes one pass quadratic.
-  final _registrations = <VoidCallback, int>{};
+  final _listeners = Listeners();
   Future<void>? _closed;
   var _dropped = false;
 
@@ -28,24 +25,11 @@ class SoloListenable<S extends Object> extends Solo<S>
 
   /// Adds [listener], called on every state change until removed.
   @override
-  void addListener(VoidCallback listener) {
-    _listeners.add(listener);
-    _registrations.update(listener, (count) => count + 1, ifAbsent: () => 1);
-  }
+  void addListener(VoidCallback listener) => _listeners.add(listener);
 
   /// Removes one registration of [listener]; unknown listeners are ignored.
   @override
-  void removeListener(VoidCallback listener) {
-    if (!_listeners.remove(listener)) {
-      return;
-    }
-    final count = _registrations[listener]!;
-    if (count == 1) {
-      _registrations.remove(listener);
-    } else {
-      _registrations[listener] = count - 1;
-    }
-  }
+  void removeListener(VoidCallback listener) => _listeners.remove(listener);
 
   /// Queues the event for the stream, then notifies listeners in
   /// subscription order, synchronously. A listener removed during the pass
@@ -68,23 +52,7 @@ class SoloListenable<S extends Object> extends Solo<S>
     if (_dropped) {
       return;
     }
-    for (final listener in _listeners.toList()) {
-      if (!_registrations.containsKey(listener)) {
-        continue;
-      }
-      try {
-        listener();
-      } on Object catch (error, stackTrace) {
-        FlutterError.reportError(
-          FlutterErrorDetails(
-            exception: error,
-            stack: stackTrace,
-            library: 'flutter_solo',
-            context: ErrorDescription('notifying a listener of $runtimeType'),
-          ),
-        );
-      }
-    }
+    _listeners.notify(this);
   }
 
   /// Closes the engine and the stream, then drops every listener and stops
@@ -104,7 +72,6 @@ class SoloListenable<S extends Object> extends Solo<S>
       super.close().then((_) {
         _dropped = true;
         _listeners.clear();
-        _registrations.clear();
       }),
     );
     return completer.future;
