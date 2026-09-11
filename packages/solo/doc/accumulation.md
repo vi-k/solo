@@ -13,17 +13,29 @@ an ordinary `SoloContext<S, W>`; it changes state through `ctx.emit`.
 
 ## Accumulators and policies
 
-An accumulator groups incoming values into queued jobs. Create it once
-and call its `add(event)` method for each input:
+```dart
+// One list per group: every accepted event is kept, in order.
+late final _logs = collect<Ready, LogEntry, void>(
+  (ctx, events) => ctx.join(() => sink.write(events)),
+);
 
-- `collect` keeps accepted events in a list.
-- `accumulate` combines them with a synchronous `merge` function. The
-  function decides what to retain; keeping only the latest value is one
-  possible choice.
+// One value per group: merge decides what survives.
+late final _patches = accumulate<Ready, Patch, void>(
+  (ctx, patch) => ctx.join(() => store.apply(patch)),
+  merge: (previous, incoming) => previous.merge(incoming),
+  // Find this accumulator's open group anywhere in the queue and keep
+  // its position, instead of looking only at the tail.
+  policy: AccumulationPolicy.join,
+);
 
-Only the queued job's handler updates controller state. A running group
-does not accept new input. Groups can combine only when they belong to
-the same accumulator.
+SoloJob<void> log(LogEntry entry) => _logs.add(entry);
+```
+
+`accumulate` combines events with a synchronous `merge` function, which
+decides what to retain; keeping only the latest value is one possible
+choice. Only the queued job's handler updates controller state. A running
+group does not accept new input, and groups can combine only when they
+belong to the same accumulator.
 
 | Accumulation policy | How input joins queued work |
 | --- | --- |
@@ -71,9 +83,9 @@ final class Search extends Solo<SearchState> {
 
 A search that has already started finishes before the next one starts.
 The returned job exposes the outcome and cancellation, like other jobs.
-Closing cancels waiting groups rather than flushing them. See the
-[settings and logs recipe](doc/accumulation.md) for grouping examples,
-ordering and the outcomes returned to individual callers.
+Closing cancels waiting groups rather than flushing them. The sections
+below work through grouping, ordering and the outcomes returned to
+individual callers.
 
 ## Combining settings changes
 
@@ -345,6 +357,21 @@ protocol beyond this accumulator.
 
 ## Choosing when a group is ready
 
+```dart
+// A pause in the input: every add restarts the 200 ms timer.
+late final _queries = accumulate<Ready, String, void>(
+  (ctx, text) => ctx.wait(() => api.search(text)),
+  merge: (previous, incoming) => incoming,
+  timing: AccumulationTiming.debounce(const Duration(milliseconds: 200)),
+);
+
+// A ceiling on how often groups start, measured from the actual start.
+late final _metrics = collect<Ready, Metric, void>(
+  (ctx, events) => ctx.join(() => api.send(events)),
+  timing: AccumulationTiming.throttle(const Duration(seconds: 5)),
+);
+```
+
 Both factories accept an optional `timing`. The setting controls when a
 group may start; `collect` still keeps every accepted event, and
 `accumulate` keeps whatever its `merge` returns. For example,
@@ -390,9 +417,15 @@ belongs to a new group. A busy event loop can delay callbacks and starts.
 
 ## Choosing where events join
 
+```dart
+// All three while the current job still keeps the queue occupied:
+settings.change(a1); // A1, into this accumulator
+settings.save();     // B, an ordinary job of its own
+settings.change(a2); // A2 -- where it lands is the policy's decision
+```
+
 Both factories accept an `AccumulationPolicy`, fixed when the accumulator
-is created. Consider events `A1`, `B`, `A2` added while the current job
-keeps the queue occupied. A belongs to one accumulator; B is another job.
+is created.
 
 | Policy | Queue after the additions | Handle for A2 |
 | --- | --- | --- |
@@ -432,6 +465,23 @@ their jobs for the ordinary queue's search and policies. Creating a new
 accumulator on every call prevents events from joining an existing one.
 
 ## Start, cancellation and errors
+
+```dart
+final group = settings.report(metric);
+
+// Everyone who added to this group holds the same handle...
+switch (await group.done) {
+  case Done():
+    print('sent');
+  case Failed(:final error):
+    print('failed: $error');
+  case Cancelled(:final reason):
+    print('cancelled: $reason');
+}
+
+// ...and cancelling it cancels the whole group.
+await group.cancel();
+```
 
 All three policies operate on queued groups. A group stops accepting
 events when debounce seals it or when it is taken from the queue, before
