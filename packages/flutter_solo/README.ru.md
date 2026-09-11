@@ -159,6 +159,35 @@ class _SaveButtonState extends State<SaveButton> {
 сохраняет: побеждает ваш, а проекция тогда строится напрямую,
 `SoloSelection(controller, (state) => state.canSave)`.
 
+## Подписка без хранения колбэка
+
+`addListener` требует вернуть тот же самый колбэк, поэтому замыканию
+нужно собственное поле, где жить. `listen` хранит его сам и отдаёт
+`SoloSubscription`; `SoloSubscriptions` снимает группу таких разом:
+
+```dart
+final _listening = SoloSubscriptions();
+
+@override
+void initState() {
+  super.initState();
+  widget.controller.listen(_onState).addTo(_listening);
+  canSave.listen(_onCanSave).addTo(_listening);
+}
+
+@override
+void dispose() {
+  _listening.cancel();
+  super.dispose();
+}
+```
+
+`listen` работает и на контроллере, и на проекции. Повторная отмена не
+делает ничего, а отменённая группа не хранит то, что ей передали, а
+сразу отменяет. Если один участник отказывается отпускать, остальные всё
+равно отменяются: первая ошибка бросается по окончании прохода,
+остальные уходят в отчёт.
+
 ## Жизнь контроллера
 
 Контроллер за вас никто не закроет. `SoloProvider`'а нет: контроллер — это

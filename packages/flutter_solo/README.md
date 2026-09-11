@@ -157,6 +157,35 @@ every time, so it is never behind — keep the selector a cheap pick.
 method keeps it: yours wins, and the selection is then built directly,
 `SoloSelection(controller, (state) => state.canSave)`.
 
+## Listening without keeping the callback
+
+`addListener` has to be given the same callback back, so a closure needs
+a field of its own to live in. `listen` keeps it instead and hands back a
+`SoloSubscription`; `SoloSubscriptions` cancels a group of them at once:
+
+```dart
+final _listening = SoloSubscriptions();
+
+@override
+void initState() {
+  super.initState();
+  widget.controller.listen(_onState).addTo(_listening);
+  canSave.listen(_onCanSave).addTo(_listening);
+}
+
+@override
+void dispose() {
+  _listening.cancel();
+  super.dispose();
+}
+```
+
+`listen` works on a controller and on a selection alike. Cancelling
+twice does nothing the second time, and a group that has been cancelled
+cancels what it is handed rather than keeping it. If one member refuses
+to let go, the others are cancelled all the same: the first error is
+thrown once the pass is over and the rest are reported.
+
 ## The controller's life
 
 Nothing closes a controller for you. There is no `SoloProvider`: a

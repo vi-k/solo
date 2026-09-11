@@ -15,6 +15,11 @@
   source only while it has listeners and needs no disposal. An extension
   and not a member, so a controller with a `select` method of its own keeps
   it and builds `SoloSelection` directly.
+- Add `listen` on a controller and on a selection, returning a
+  `SoloSubscription` that holds the callback and takes it back on
+  `cancel`, and `SoloSubscriptions` to cancel a group of them at once.
+  Extensions on the package's own types rather than on `Listenable`, so
+  they never collide with an extension of the same name from elsewhere.
 
 ## 0.2.0
 
