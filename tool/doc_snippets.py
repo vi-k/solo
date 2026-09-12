@@ -1168,6 +1168,20 @@ FILES['bloc/item6'] = (BLOC_MAP_IMPORTS.replace(
     "import 'package:bloc/bloc.dart';\n"
     "import 'package:bloc_concurrency/bloc_concurrency.dart';",
 ) + TRACE + MAP_API + '\n' + snips['6/MapCubit'] + '\n' + snips['6/CommandMapBloc'] + '''
+final seenEvents = <String>[];
+
+class _SeenEvents extends BlocObserver {
+  @override
+  void onEvent(Bloc<dynamic, dynamic> bloc, Object? event) {
+    super.onEvent(bloc, event);
+    seenEvents.add(event.runtimeType.toString());
+  }
+}
+
+class _NoObserver extends BlocObserver {
+  const _NoObserver();
+}
+
 Future<void> main() async {
   final cubit = MapCubit(MapApi());
   for (var i = 1; i <= 3; i++) {
@@ -1178,6 +1192,8 @@ Future<void> main() async {
   await cubit.close();
 
   trace.clear();
+  // What an observer of this bloc is given for each command.
+  Bloc.observer = _SeenEvents();
   final bloc = CommandMapBloc(MapApi());
   for (var i = 1; i <= 3; i++) {
     bloc.moveTo(Point<double>(i.toDouble(), 0));
@@ -1185,6 +1201,8 @@ Future<void> main() async {
   bloc.setZoom(4);
   await tick(400);
   print('typed methods, one queue: $trace  state ${bloc.state}');
+  print('an observer sees: $seenEvents');
+  Bloc.observer = const _NoObserver();
   await bloc.close();
 }
 ''')

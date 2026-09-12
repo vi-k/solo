@@ -841,8 +841,9 @@ including `Cancelled(manual)` for a replaced request.
 
 ## 6. Typed methods with queued execution
 
-A map exposes `moveTo` and `setZoom`. Callers need typed arguments, and rapid
-drag updates should not make the map finish at an older position.
+A map exposes `moveTo` and `setZoom`. The caller should reach them as methods
+on the controller, with their own arguments and without a class per command,
+and rapid drag updates should not leave the map at an older position.
 
 ### The first attempt
 
@@ -906,10 +907,15 @@ class CommandMapBloc extends Bloc<MapCommand, MapState> {
 }
 ```
 
-The calls now run in order and end at `MapState(3, z4)`. This provides typed
-methods and shared ordering without a separate event class per method. All
-commands still use one transformer, and the shown methods return `void`.
-Returning a result requires an additional mechanism, as in section 8.
+The calls now run in order and end at `MapState(3, z4)`. An ordinary event
+class would be just as typed — `add(MoveTo(point))` checks its argument like
+any other constructor — but then the command vocabulary lives beside the
+controller instead of on it, and every command needs its class. The closure
+removes both, and what it costs is the event's identity: an observer of this
+bloc receives `(Emitter<MapState>) => Future<void>` for each of the four
+commands, with no name and no arguments to record. All commands still use one
+transformer, and the shown methods return `void`. Returning a result requires
+an additional mechanism, as in section 8.
 
 ### Solo
 
