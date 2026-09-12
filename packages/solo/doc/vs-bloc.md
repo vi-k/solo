@@ -763,11 +763,14 @@ class PlayerBloc extends Bloc<PlayerCommand, PlayerState> {
 }
 ```
 
+`onEvent` runs inside `add`, before the event reaches the queue: it records the
+newest position and cancels the token of a `seek` already in flight. The
+handler does the rest — it drops a position that is no longer the newest, and,
+being sequential, waits for the player to return before it proceeds.
+
 For positions `1, 2, 3` queued together, the device receives
 `[play, seek 3, pause]`. If `seek 1` is already active when `seek 3` arrives,
 the trace is `[seek 1 start, seek 1 stopped, seek 3 start, seek 3 end]`.
-`onEvent` receives the new request synchronously and cancels the token; the
-sequential handler waits for the player to return before proceeding.
 
 Comparing position values is insufficient when the drag repeats a value. Input
 `1, 2, 1` produces `[play, seek 1, seek 1, pause]`. Identifying the latest
