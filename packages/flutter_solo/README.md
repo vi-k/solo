@@ -63,7 +63,9 @@ One dependency is all it takes: `flutter_solo` re-exports the whole of
 import 'package:flutter_solo/flutter_solo.dart';
 ```
 
-and `SoloListenable` is the single class this package adds on top.
+`SoloListenable` is the class this package is about; `SoloSelector` and
+`SoloSelection` come with it, and a second import next door adds `select`
+and `listen` as methods.
 
 ## Usage
 
@@ -130,12 +132,32 @@ observers — is documented in [solo](https://pub.dev/packages/solo).
 ## Selecting one value
 
 A widget that needs one field does not have to rebuild for the rest.
-`select` hands back a `ValueListenable` of that field alone, and it
-notifies only when the field itself changes:
+`SoloSelector` picks the field and rebuilds only when that field changes:
+
+```dart
+SoloSelector<Profile, bool>(
+  listenable: controller,
+  selector: (state) => state.canSave,
+  builder: (context, canSave, _) => ElevatedButton(
+    onPressed: canSave ? controller.save : null,
+    child: const Text('Save'),
+  ),
+)
+```
+
+Picks count as changed when they are `!=`, unless `compare:` answers that
+question itself — `true` means changed. The pick is read out of the state
+every time, so it is never behind; keep the selector a cheap pick. The
+`listenable` is any `ValueListenable`, a controller being the usual one.
+
+What the widget holds for you is a `SoloSelection` — a `ValueListenable`
+of the picked value — and it is an object like any other where a
+listenable is what you need:
 
 ```dart
 class _SaveButtonState extends State<SaveButton> {
-  late final canSave = widget.controller.select((state) => state.canSave);
+  late final canSave =
+      SoloSelection(widget.controller, (state) => state.canSave);
 
   @override
   Widget build(BuildContext context) => ValueListenableBuilder<bool>(
@@ -149,16 +171,10 @@ class _SaveButtonState extends State<SaveButton> {
 ```
 
 Hold the selection in a field, the way `canSave` is held above: one built
-inside `build` would subscribe and unsubscribe every frame, and so would
-a selector written inline there. Picks count as changed when they are
-`!=`, unless `compare:` answers that question itself — `true` means
-changed. The source is subscribed to only while the selection has
-listeners, and there is nothing to dispose of. `value` reads the state
-every time, so it is never behind — keep the selector a cheap pick.
-
-`select` is an extension, so a controller of your own with a `select`
-method keeps it: yours wins, and the selection is then built directly,
-`SoloSelection(controller, (state) => state.canSave)`.
+inside `build` would subscribe and unsubscribe every frame, and the value
+it holds notifications back with would go with it — which is the field
+`SoloSelector` spares you. The source is subscribed to only while the
+selection has listeners, and there is nothing to dispose of.
 
 ## Listening without keeping the callback
 
@@ -167,6 +183,8 @@ a field of its own to live in. `listen` keeps it instead and hands back a
 `SoloSubscription`; `SoloSubscriptions` cancels a group of them at once:
 
 ```dart
+import 'package:flutter_solo/listenable.dart';
+
 final _listening = SoloSubscriptions();
 
 @override
@@ -183,11 +201,37 @@ void dispose() {
 }
 ```
 
-`listen` works on a controller and on a selection alike. Cancelling
-twice does nothing the second time, and a group that has been cancelled
-cancels what it is handed rather than keeping it. If one member refuses
-to let go, the others are cancelled all the same: the first error is
-thrown once the pass is over and the rest are reported.
+`listen` works on any `Listenable` — a controller, a selection, a
+`ScrollController` of the framework's own. Cancelling twice does nothing
+the second time, and a group that has been cancelled cancels what it is
+handed rather than keeping it. If one member refuses to let go, the
+others are cancelled all the same: the first error is thrown once the
+pass is over and the rest are reported.
+
+## Methods from a second import
+
+`select` and `listen` arrive with an import of their own, next to the one
+the rest of the package comes from:
+
+```dart
+import 'package:flutter_solo/flutter_solo.dart';
+import 'package:flutter_solo/listenable.dart';
+
+final canSave = controller.select((state) => state.canSave);
+final subscription = canSave.listen(_onCanSave);
+```
+
+They are extensions, and they sit on the framework's own
+`ValueListenable` and `Listenable` — where another package's `select` and
+`listen` sit too. Two extensions with the same member name on one type
+are ambiguous at every call site, so a package carrying them into every
+file that imports it would break a neighbour it never heard of. The
+import is the choice.
+
+Without it nothing is lost but the shorthand: `SoloSelection(controller,
+(state) => state.canSave)` is the same selection, and `SoloSelector`
+needs no method at all. It is also why a controller of your own with a
+`select` method keeps it — an extension always steps aside for a member.
 
 ## The controller's life
 

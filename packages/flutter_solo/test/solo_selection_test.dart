@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_solo/flutter_solo.dart';
+import 'package:flutter_solo/listenable.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 @immutable
@@ -204,5 +205,35 @@ void main() {
 
     expect(calls, 0, reason: 'a closed controller notifies nobody');
     expect(name.value, 'Ada', reason: 'the state still answers');
+  });
+
+  test('the source is any value listenable, not only a controller', () {
+    final source = ValueNotifier(const _Screen());
+    addTearDown(source.dispose);
+    final name = source.select((state) => state.name);
+    var calls = 0;
+    name.addListener(() => calls++);
+
+    source.value = const _Screen(progress: 1);
+    expect(calls, 0, reason: 'the progress is not what is picked');
+
+    source.value = const _Screen(name: 'Ada', progress: 1);
+    expect(calls, 1);
+    expect(name.value, 'Ada');
+  });
+
+  test('a selection picked out of a selection narrows further', () {
+    final controller = _Controller();
+    final name = controller.select((state) => state.name);
+    final initial = name.select((it) => it.isEmpty);
+    var calls = 0;
+    initial.addListener(() => calls++);
+
+    controller.set(const _Screen(name: 'Ada'));
+    expect(calls, 1);
+    expect(initial.value, isFalse);
+
+    controller.set(const _Screen(name: 'Grace'));
+    expect(calls, 1, reason: 'still not empty');
   });
 }

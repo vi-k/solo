@@ -64,8 +64,9 @@ flutter pub add flutter_solo
 import 'package:flutter_solo/flutter_solo.dart';
 ```
 
-а `SoloListenable` — единственный класс, который этот пакет добавляет
-сверху.
+`SoloListenable` — то, ради чего пакет и нужен; `SoloSelector` и
+`SoloSelection` идут вместе с ним, а второй импорт по соседству
+добавляет `select` и `listen` методами.
 
 ## Как пользоваться
 
@@ -132,12 +133,33 @@ class ProfileView extends StatelessWidget {
 ## Выбор одного значения
 
 Виджету, которому нужно одно поле, незачем перестраиваться из-за
-остальных. `select` отдаёт `ValueListenable` одного этого поля и
-уведомляет только тогда, когда меняется само поле:
+остальных. `SoloSelector` выбирает поле и перестраивается, только когда
+меняется оно само:
+
+```dart
+SoloSelector<Profile, bool>(
+  listenable: controller,
+  selector: (state) => state.canSave,
+  builder: (context, canSave, _) => ElevatedButton(
+    onPressed: canSave ? controller.save : null,
+    child: const Text('Save'),
+  ),
+)
+```
+
+Выборка считается изменившейся при `!=`, если на этот вопрос не отвечает
+сам `compare:` — `true` значит изменилась. Выбранное читается из
+состояния каждый раз, поэтому никогда не отстаёт; держите селектор
+дешёвой выборкой. `listenable` — любой `ValueListenable`, обычно это
+контроллер.
+
+За вас виджет держит `SoloSelection` — `ValueListenable` выбранного
+значения, — и это обычный объект там, где нужен именно listenable:
 
 ```dart
 class _SaveButtonState extends State<SaveButton> {
-  late final canSave = widget.controller.select((state) => state.canSave);
+  late final canSave =
+      SoloSelection(widget.controller, (state) => state.canSave);
 
   @override
   Widget build(BuildContext context) => ValueListenableBuilder<bool>(
@@ -151,16 +173,10 @@ class _SaveButtonState extends State<SaveButton> {
 ```
 
 Держите проекцию в поле, как `canSave` выше: созданная внутри `build`
-подписывалась бы и отписывалась каждый кадр — и селектор, написанный там
-же по месту, тоже. Выборка считается изменившейся при `!=`, если на этот
-вопрос не отвечает сам `compare:` — `true` значит изменилась. На источник
-проекция подписана, только пока у неё есть слушатели, и освобождать её не
-нужно. `value` читает состояние каждый раз, поэтому никогда не отстаёт —
-держите селектор дешёвой выборкой.
-
-`select` — расширение, поэтому свой контроллер с методом `select` его
-сохраняет: побеждает ваш, а проекция тогда строится напрямую,
-`SoloSelection(controller, (state) => state.canSave)`.
+подписывалась бы и отписывалась каждый кадр, а вместе с ней пропадало бы
+и запомненное значение, которым она придерживает уведомления, — то самое
+поле, от которого избавляет `SoloSelector`. На источник проекция
+подписана, только пока у неё есть слушатели, и освобождать её не нужно.
 
 ## Подписка без хранения колбэка
 
@@ -169,6 +185,8 @@ class _SaveButtonState extends State<SaveButton> {
 `SoloSubscription`; `SoloSubscriptions` снимает группу таких разом:
 
 ```dart
+import 'package:flutter_solo/listenable.dart';
+
 final _listening = SoloSubscriptions();
 
 @override
@@ -185,11 +203,37 @@ void dispose() {
 }
 ```
 
-`listen` работает и на контроллере, и на проекции. Повторная отмена не
-делает ничего, а отменённая группа не хранит то, что ей передали, а
-сразу отменяет. Если один участник отказывается отпускать, остальные всё
-равно отменяются: первая ошибка бросается по окончании прохода,
-остальные уходят в отчёт.
+`listen` работает на любом `Listenable` — на контроллере, на проекции, на
+`ScrollController` самого фреймворка. Повторная отмена не делает ничего,
+а отменённая группа не хранит то, что ей передали, а сразу отменяет.
+Если один участник отказывается отпускать, остальные всё равно
+отменяются: первая ошибка бросается по окончании прохода, остальные
+уходят в отчёт.
+
+## Методы из второго импорта
+
+`select` и `listen` приходят собственным импортом, рядом с тем, из
+которого берётся всё остальное:
+
+```dart
+import 'package:flutter_solo/flutter_solo.dart';
+import 'package:flutter_solo/listenable.dart';
+
+final canSave = controller.select((state) => state.canSave);
+final subscription = canSave.listen(_onCanSave);
+```
+
+Это расширения, и стоят они на `ValueListenable` и `Listenable` самого
+фреймворка — там же, где стоят `select` и `listen` других пакетов. Два
+расширения с одинаковым именем члена на одном типе делают двусмысленным
+каждое место вызова, так что пакет, тянущий их в любой файл, который его
+импортирует, ломал бы соседа, о котором ничего не знает. Импорт и есть
+выбор.
+
+Без него теряется только короткая запись: `SoloSelection(controller,
+(state) => state.canSave)` — та же самая проекция, а `SoloSelector` не
+требует и метода. По той же причине свой контроллер с методом `select`
+его сохраняет — расширение всегда уступает члену класса.
 
 ## Жизнь контроллера
 

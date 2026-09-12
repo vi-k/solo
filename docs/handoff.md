@@ -1,7 +1,25 @@
 # Handoff: текущее состояние проекта
 
-Обновлено: 2026-09-11, публичная документация перестраивается под
-сайт; для `solo` шаг переноса сделан.
+Обновлено: 2026-09-12, у `flutter_solo` появился второй импорт под
+расширения и виджет `SoloSelector`.
+
+## flutter_solo: два импорта
+
+Поручение владельца: расширения, связанные с listenable, — отдельным
+экспортом; и взять из `scopo` то, что позволяет не держать `select` в
+`State`. Сделано, отчёт — `2026-09-12[2]-listenable-export-report.md`.
+
+- `package:flutter_solo/flutter_solo.dart` — `SoloListenable`,
+  `SoloSelection`, новый виджет `SoloSelector` и весь `solo`;
+- `package:flutter_solo/listenable.dart` — методы `select` и `listen`,
+  `SoloSubscription`, `SoloSubscriptions`.
+
+Расширения вернулись на типы фреймворка (`ValueListenable` и
+`Listenable`), а `SoloSelection` стала проекцией над любым
+`ValueListenable`. Столкновение с одноимёнными расширениями `scopo`
+теперь решает импорт, а не сужение получателя.
+
+Версию не трогали: записи легли под `## Unreleased`.
 
 ## Текущая работа
 

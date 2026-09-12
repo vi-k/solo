@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_solo/flutter_solo.dart';
+import 'package:flutter_solo/listenable.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 final class _Counter extends SoloListenable<int> {
@@ -141,5 +142,19 @@ void main() {
 
     counter.set(1);
     expect(calls, 0);
+  });
+
+  test('a listenable of the framework is listened to the same way', () {
+    final notifier = ValueNotifier(0);
+    addTearDown(notifier.dispose);
+    var calls = 0;
+    final subscription = notifier.listen(() => calls++);
+
+    notifier.value = 1;
+    expect(calls, 1);
+
+    subscription.cancel();
+    notifier.value = 2;
+    expect(calls, 1);
   });
 }

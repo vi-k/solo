@@ -14,18 +14,24 @@
   `keepWhile` forbids.
 - Notifying no longer looks each listener up in the list of all of them, so
   one pass is linear in their number rather than quadratic.
-- Add `SoloSelection<S, T>` and the `select` extension on
-  `SoloListenable<S>`: a `ValueListenable` of one value picked out of the
-  state, notifying only when that value changes — by `!=`, or by a
-  `compare` of your own answering whether it did. It subscribes to the
-  source only while it has listeners and needs no disposal. An extension
-  and not a member, so a controller with a `select` method of its own keeps
-  it and builds `SoloSelection` directly.
-- Add `listen` on a controller and on a selection, returning a
-  `SoloSubscription` that holds the callback and takes it back on
-  `cancel`, and `SoloSubscriptions` to cancel a group of them at once.
-  Extensions on the package's own types rather than on `Listenable`, so
-  they never collide with an extension of the same name from elsewhere.
+- Add `SoloSelection<S, T>`: a `ValueListenable` of one value picked out
+  of another, notifying only when that value changes — by `!=`, or by a
+  `compare` of your own answering whether it did. It subscribes to its
+  source only while it has listeners and needs no disposal. The source is
+  any `ValueListenable`, so a selection picks out of a controller, a
+  `ValueNotifier` or another selection alike.
+- Add `SoloSelector`, the widget that holds a selection for you: a
+  `listenable`, a `selector` and a `builder`, and no `State` field to keep
+  the selection in — a widget that picks can be a `StatelessWidget`.
+- Add `select` and `listen` as methods, with `SoloSubscription` and
+  `SoloSubscriptions`, in an import of their own,
+  `package:flutter_solo/listenable.dart`. Both methods are extensions on
+  the framework's own `ValueListenable` and `Listenable`, where another
+  package's methods of the same name sit too: two extensions with one
+  member name on one type are ambiguous at every call site, so the import
+  is the choice rather than something every user of the package is given.
+  Without it nothing is lost but the shorthand — `SoloSelection(...)`
+  builds the same selection, and `SoloSelector` needs no method at all.
 
 ## 0.2.0
 

@@ -1,8 +1,12 @@
-> **Состояние на 2026-09-11:** сделано и смержено.
+> **Состояние на 2026-09-12:** сделано и смержено, позже пересмотрено:
+> `listen` вернулся на `Listenable`, а решением про столкновение имён
+> стал отдельный импорт — `2026-09-12[2]-listenable-export-report.md`.
+> Раздел «На чём это висит» читать вместе с ним.
 > **Что это:** отчёт о `listen`, `SoloSubscription` и
 > `SoloSubscriptions` в `flutter_solo` — перенос утилиты из `scopo`.
 > **Связанные записи:** `2026-09-11[10]-selection-report.md`,
-> `2026-09-11[11]-error-handler-report.md`.
+> `2026-09-11[11]-error-handler-report.md`,
+> `2026-09-12[2]-listenable-export-report.md`.
 
 # Подписка вместо пары addListener/removeListener
 

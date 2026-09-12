@@ -1,11 +1,14 @@
-> **Состояние на 2026-09-11:** сделано и смержено. Пункт 6 сводного
-> списка закрыт; позже сравнение переехало с `equals` на `compare` по
-> образцу `scopo` — `2026-09-11[11]-error-handler-report.md`.
+> **Состояние на 2026-09-12:** сделано и смержено, позже пересмотрено.
+> Пункт 6 сводного списка закрыт; сравнение переехало с `equals` на
+> `compare` по образцу `scopo` — `2026-09-11[11]-error-handler-report.md`;
+> источником проекции стал любой `ValueListenable`, а `select` уехал в
+> отдельный импорт — `2026-09-12[2]-listenable-export-report.md`.
 > **Что это:** отчёт о проекции состояния в `flutter_solo` — `select` и
 > `SoloSelection`.
 > **Связанные записи:** `2026-09-11[8]-external-reviews-plan.md`,
 > `2026-09-11[9]-review-fixes-report.md`,
-> `2026-09-11[11]-error-handler-report.md`.
+> `2026-09-11[11]-error-handler-report.md`,
+> `2026-09-12[2]-listenable-export-report.md`.
 
 # Проекция одного значения
 

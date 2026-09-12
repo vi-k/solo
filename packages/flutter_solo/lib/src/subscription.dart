@@ -1,8 +1,5 @@
 import 'package:flutter/foundation.dart';
 
-import 'solo_listenable.dart';
-import 'solo_selection.dart';
-
 /// A listener registered on a [Listenable], and the way to take it back.
 ///
 /// The plain way needs the callback kept somewhere so that
@@ -141,21 +138,14 @@ final class SoloSubscriptions {
   }
 }
 
-/// [listen] on a controller.
-extension SoloListen<S extends Object> on SoloListenable<S> {
-  /// Registers [listener] and hands back the way to take it back.
-  ///
-  /// The same thing as [Listenable.addListener], with the callback kept
-  /// for you; see [SoloSubscription].
-  SoloSubscription listen(VoidCallback listener) {
-    addListener(listener);
-
-    return SoloSubscription._(this, listener);
-  }
-}
-
-/// [listen] on a selection.
-extension SoloSelectionListen<S extends Object, T> on SoloSelection<S, T> {
+/// [listen] on every [Listenable].
+///
+/// Exported from `package:flutter_solo/listenable.dart` and not from the
+/// package itself: it sits on a type of the framework, where a `listen`
+/// of another package sits too, and two extensions with the same member
+/// name on the same type make every call of it ambiguous. Import the one
+/// you want the method from.
+extension SoloListen on Listenable {
   /// Registers [listener] and hands back the way to take it back.
   ///
   /// The same thing as [Listenable.addListener], with the callback kept
