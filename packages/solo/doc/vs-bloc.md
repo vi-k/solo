@@ -1136,12 +1136,15 @@ line for line. The events that version runs on are not in this document: a
 sealed base and four classes, one of which a caller constructs for every
 command. Here the methods are that vocabulary.
 
-They also carry the state each command needs. A refresh that fires while the
-screen is closing queues its read behind the disconnect, and that read carries
-the current generation, so the stamp check passes it through: the handler calls
-`_ble.battery` on a device just let go. The device refuses; bloc reports the
-error to `onError` and rethrows it, and since nothing awaits that handler it
-lands in the zone as an unhandled `Bad state: battery: not connected`.
+They also carry the state each command needs. The screen is closing,
+`Disconnect` is already queued, and at that moment a refresh timer adds
+`ReadBattery`. The new event is stamped with the current generation — the one
+`Disconnect` has just bumped — so the stamp check lets it through. The queue
+reaches it after the disconnect, and the handler calls `_ble.battery` on a
+device that is no longer connected. The device refuses; bloc reports the error
+to `onError` and rethrows it, and since nothing awaits that handler it lands in
+the zone as an unhandled `Bad state: battery: not connected`.
+
 `run<Connected, void>` is checked when the job starts, so the same read ends as
 `Cancelled(rules: is not Connected)` and the call is never made. In the
 handler, that check is one more `if` in the `switch`, by hand, for every
