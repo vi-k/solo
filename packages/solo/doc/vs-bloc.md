@@ -778,10 +778,12 @@ means marking each one as it arrives instead of comparing what it carries — th
 scheme section 7 writes out, with the condition it comes with: the events have
 to be distinct objects.
 
-The application maintains the latest-request identity, active token and
-post-await check. Each command requiring different replacement behavior needs
-corresponding logic within the shared handler. `add` does not return the
-outcome of a skipped or interrupted `seek`.
+Three things are the application's to keep right: which position is the newest
+(`_newestSeek`), which token belongs to the `seek` in flight (`_seeking`), and
+the check after the await that keeps a cancelled `seek` from publishing. A
+command that needs a different replacement rule brings its own branch and its
+own bookkeeping into the same handler. And `add` returns nothing, so a skipped
+or interrupted `seek` leaves the caller no outcome to read.
 
 ### Solo
 
