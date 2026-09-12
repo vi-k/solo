@@ -399,6 +399,38 @@ class DeviceState {
 }
 
 ''' + snips['7/DeviceBloc'] + '\n' + snips['7/FlagDeviceBloc'] + '''
+// The document quotes the flag and the generation among the device calls,
+// because the moment they are written is the whole point. They are recorded
+// here and not in the snippets: the code in the document is the code that
+// runs, and it does not log.
+class TracedFlagDeviceBloc extends FlagDeviceBloc {
+  TracedFlagDeviceBloc(super.ble);
+  bool _seen = false;
+
+  @override
+  void onEvent(DeviceEvent event) {
+    super.onEvent(event);
+    if (_leaving != _seen) {
+      _seen = _leaving;
+      trace.add('_leaving = $_leaving');
+    }
+  }
+}
+
+class TracedDeviceBloc extends DeviceBloc {
+  TracedDeviceBloc(super.ble);
+  int _seen = 0;
+
+  @override
+  void onEvent(DeviceEvent event) {
+    super.onEvent(event);
+    if (_screen != _seen) {
+      _seen = _screen;
+      trace.add('_screen = $_screen');
+    }
+  }
+}
+
 Future<void> run(Bloc<DeviceEvent, DeviceState> bloc, String label) async {
   trace.clear();
   bloc
@@ -431,11 +463,11 @@ Future<void> runReopen(
 }
 
 Future<void> main() async {
-  await run(FlagDeviceBloc(Ble()), 'a flag,');
-  await runReopen(FlagDeviceBloc(Ble()), 'a flag,');
+  await run(TracedFlagDeviceBloc(Ble()), 'a flag,');
+  await runReopen(TracedFlagDeviceBloc(Ble()), 'a flag,');
 
   trace.clear();
-  final bloc = DeviceBloc(Ble());
+  final bloc = TracedDeviceBloc(Ble());
   bloc
     ..add(Connect())
     ..add(ReadBattery())
@@ -447,12 +479,12 @@ Future<void> main() async {
   print('state: ${bloc.state}');
   await bloc.close();
 
-  await runReopen(DeviceBloc(Ble()), 'a stamp,');
+  await runReopen(TracedDeviceBloc(Ble()), 'a stamp,');
 
   // The screen that comes back asks for the battery through the same
   // canonical value, so its add overwrites the stamp the queued read got.
   trace.clear();
-  final shared = DeviceBloc(Ble());
+  final shared = TracedDeviceBloc(Ble());
   const read = ReadBattery();
   shared
     ..add(Connect())

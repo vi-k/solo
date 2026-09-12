@@ -110,7 +110,11 @@ def fill(body, first_indent, next_indent):
         # A span wider than the line has to break somewhere: a quoted trace
         # of a whole run is written to be read, not copied. A link is kept
         # whole at any width -- see `check_line_width.py` on long URLs.
-        if len(atom) > room and not LINK_ONLY.fullmatch(atom):
+        # What has to fit is the span with whatever is glued to it: a span
+        # of exactly the width plus the sentence's full stop is one column
+        # too wide, and the fill has nowhere to put the stop.
+        glued = re.match(r'\S*', body[match.end():]).group(0)
+        if len(atom) + len(glued) > room and not LINK_ONLY.fullmatch(atom):
             # It breaks after a comma, never inside an entry: `seek` at the
             # end of one line and `3 start` at the start of the next is two
             # things to the eye and one in the trace.
