@@ -646,9 +646,9 @@ external state and the README describes handler rules.
 ## 5. Restarting one operation within a shared queue
 
 A player must run `play`, `pause` and `seek` one at a time. During a slider
-drag, queued seek positions become obsolete and an active seek should stop
-before its replacement starts. Play and pause retain their order. The player
-API in this example accepts a token and returns when cancelled.
+drag, queued `seek` positions become obsolete and an active `seek` should stop
+before its replacement starts. `play` and `pause` retain their order. The
+player API in this example accepts a token and returns when cancelled.
 
 ### The first attempt
 
@@ -676,15 +676,16 @@ final state is `PlayerState(3ms)` — the position the user asked for. The state
 is right and the device is not.
 
 Two things went wrong at once. A transformer orders the events of its own
-registration, so pause no longer waits for play. And `restartable()` cancels
-the replaced handler's emitter without stopping the native call it is awaiting:
-all three seeks ran on the device, the third of them after pause. Only the last
-`emit` reached the state, which is why the state alone shows none of this.
+registration, so `pause` no longer waits for `play`. And `restartable()`
+cancels the replaced handler's emitter without stopping the native call it is
+awaiting: all three seeks ran on the device, the third of them after `pause`.
+Only the last `emit` reached the state, which is why the state alone shows none
+of this.
 
 ### Bloc
 
 To keep all commands serialized, this implementation uses one `sequential()`
-registration and tracks the latest seek and active token:
+registration and tracks the latest `seek` and active token:
 
 ```dart
 class PlayerBloc extends Bloc<PlayerCommand, PlayerState> {
@@ -723,10 +724,10 @@ class PlayerBloc extends Bloc<PlayerCommand, PlayerState> {
 ```
 
 For positions `1, 2, 3` queued together, the device receives
-`[play, seek 3, pause]`. If seek 1 is already active when seek 3 arrives, the
-trace is `[seek 1 start, seek 1 stopped, seek 3 start, seek 3 end]`. `onEvent`
-receives the new request synchronously and cancels the token; the sequential
-handler waits for the player to return before proceeding.
+`[play, seek 3, pause]`. If `seek 1` is already active when `seek 3` arrives,
+the trace is `[seek 1 start, seek 1 stopped, seek 3 start, seek 3 end]`.
+`onEvent` receives the new request synchronously and cancels the token; the
+sequential handler waits for the player to return before proceeding.
 
 Comparing position values is insufficient when the drag repeats a value. Input
 `1, 2, 1` produces `[play, seek 1, seek 1, pause]`. Identifying the latest
@@ -735,13 +736,13 @@ event with a generation counter instead of its position fixes that case.
 The application maintains the latest-request identity, active token and
 post-await check. Each command requiring different replacement behavior needs
 corresponding logic within the shared handler. `add` does not return the
-outcome of a skipped or interrupted seek.
+outcome of a skipped or interrupted `seek`.
 
 ### Solo
 
-Queue policy belongs to each job submission. The fragment shows pause and seek;
-play follows the same sequential pattern as pause. `Ready` is the working state
-type accepted by these player jobs:
+Queue policy belongs to each job submission. The fragment shows `pause` and
+`seek`; `play` follows the same sequential pattern as `pause`. `Ready` is the
+working state type accepted by these player jobs:
 
 ```dart
 enum PlayerKey { play, pause, seek }
@@ -773,16 +774,16 @@ final class PlayerController extends Solo<PlayerState> {
 ```
 
 `Policy.restart` removes cancellable queued seeks with the same key and
-requests cancellation of the active seek. `ctx.onCancel` forwards that request
-to the player immediately. `ctx.join` waits for the operation to return before
-the current job can finish and the replacement can start. If the operation
-fails after cancellation, its error reaches the body; the job's outcome still
-remains cancelled.
+requests cancellation of the active `seek`. `ctx.onCancel` forwards that
+request to the player immediately. `ctx.join` waits for the operation to return
+before the current job can finish and the replacement can start. If the
+operation fails after cancellation, its error reaches the body; the job's
+outcome still remains cancelled.
 
-The observed traces match the successful bloc cases above. Pause and play
+The observed traces match the successful bloc cases above. `pause` and `play`
 remain in the same queue with their default sequential policy. The token is
-local to the seek body, and callers can inspect each seek's outcome, including
-`Cancelled(manual)` for a replaced request.
+local to the `seek` body, and callers can inspect the outcome of each `seek`,
+including `Cancelled(manual)` for a replaced request.
 
 ## 6. Typed methods with queued execution
 
