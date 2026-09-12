@@ -352,7 +352,7 @@ outcome or call `ignore()`.
 
 | Question | Answer |
 | --- | --- |
-| When do listeners run? | Synchronously, in subscription order, on every state change. `Solo`'s `stream` still works and arrives a microtask later; `value` and `currentState` are the same object. |
+| When do listeners run? | Synchronously, in subscription order, on every state change. `value` and `currentState` are the same object. There is no `stream` on this controller: it is a `SoloBase`, not a `Solo`, because a widget rebuilds from `value`. |
 | Are equal states filtered? | No. `emit` of a state equal to the current one still notifies, the way `Solo` does. A frame may swallow several of them, a listener will not. `select` filters its own value, which is the one a widget usually cares about. |
 | Several controllers on one screen? | Each with its own builder, as expected. `Listenable.merge([a, b])` in a `ListenableBuilder` covers the case where one widget depends on two. |
 | Can I set `value`? | There is no setter. The state belongs to the jobs; a `ValueNotifier` face with a setter would give it away. |
@@ -362,5 +362,6 @@ outcome or call `ignore()`.
 [solo](https://pub.dev/packages/solo) is the controller itself: the
 queue and its policies, the working type of a job, `canStart` and
 `keepWhile`, children, observers, the waiting family and the rest of the
-API this package inherits whole. If you are not writing widgets, take it
+API this package inherits whole — all but `Solo`'s broadcast `stream`,
+which a widget has no use for. If you are not writing widgets, take it
 instead — it is pure Dart.

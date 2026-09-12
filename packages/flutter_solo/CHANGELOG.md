@@ -1,5 +1,13 @@
 ## Unreleased
 
+- **Breaking:** `SoloListenable` is built on `SoloBase`, not on `Solo`,
+  and has no `stream`. The listeners are its whole delivery: a widget
+  rebuilds from `value`, and an operation's result is awaited through its
+  `Job`, so the broadcast `StreamController` every controller used to
+  carry — created with it, fed on every change and closed afterwards — is
+  gone. A controller no longer fits where a `Solo<S>` is expected;
+  `SoloBase<S>` is the type that covers both.
+
 - **Breaking:** the controller's synchronous read is `solo`'s new
   `currentState`, so `SoloListenable.state` is gone. `value` is unchanged
   and is still the same object; a widget that reads the controller

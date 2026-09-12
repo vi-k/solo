@@ -101,10 +101,11 @@ final subscription = camera.stream.listen(print);
 | --- | --- |
 | `SoloBase<S>` | Состояние, Job, очередь и правила. |
 | `Solo<S>` | Всё из `SoloBase` и broadcast-стрим `stream`. |
-| `SoloListenable<S>` | Всё из `Solo` и интерфейс Flutter `ValueListenable<S>`. |
+| `SoloListenable<S>` | Всё из `SoloBase` и интерфейс Flutter `ValueListenable<S>`. |
 
-Слушатели `SoloListenable` вызываются синхронно, в порядке подписки.
-Его стрим остаётся асинхронным.
+Слушатели `SoloListenable` вызываются синхронно, в порядке подписки. Он
+брат `Solo`, а не наследник: виджет перестраивается по `value`, поэтому
+стрима у контроллера нет вовсе.
 
 ## Внешнее состояние
 

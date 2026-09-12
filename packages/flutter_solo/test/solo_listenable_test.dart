@@ -18,16 +18,15 @@ void main() {
     await counter.close();
   });
 
-  test('listeners fire now, the stream on the next microtask', () async {
+  test('listeners fire inside the change, not on a microtask', () async {
     final counter = _Counter();
     final order = <String>[];
-    counter.stream.listen((_) => order.add('stream'));
     counter
       ..addListener(() => order.add('listener'))
       ..set(1);
-    expect(order, ['listener']);
-    await Future<void>.microtask(() {});
-    expect(order, ['listener', 'stream']);
+    order.add('after set');
+    await Future<void>.microtask(() => order.add('microtask'));
+    expect(order, ['listener', 'after set', 'microtask']);
     await counter.close();
   });
 

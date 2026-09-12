@@ -1,8 +1,10 @@
 # Flutter
 
 Use `SoloListenable<S>` from `flutter_solo` as the controller base class.
-It extends `Solo<S>` and implements `ValueListenable<S>`. The profile
-controller keeps the same states and `load` method:
+It extends `SoloBase<S>` and implements `ValueListenable<S>`; it has no
+`stream` — a widget rebuilds from `value`, and an operation's result is
+awaited through its `Job`. The profile controller keeps the same states
+and `load` method:
 
 ```dart
 import 'dart:async';

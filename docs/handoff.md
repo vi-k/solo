@@ -1,7 +1,23 @@
 # Handoff: текущее состояние проекта
 
 Обновлено: 2026-09-12, чтение контроллера переименовано в
-`currentState`.
+`currentState`, `SoloListenable` перенесён на `SoloBase`.
+
+## flutter_solo: контроллер без стрима
+
+Поручение владельца: «в `SoloListenable` stream не нужен, только
+интерфейс `ValueListenable`». Отчёт —
+`2026-09-12[4]-listenable-on-base-report.md`.
+
+`SoloListenable<S> extends SoloBase<S> implements ValueListenable<S>`.
+Ушли `StreamController.broadcast()` на экземпляр, `add` на каждое
+изменение и закрытие стрима; слушатели остались единственной доставкой.
+Решение 2026-09-02 «цепочка линейная, а не вилка от базы» отменено,
+шапка `2026-09-02[1]-solo-design.md` помечена.
+
+Ломающее: контроллер больше не подходит туда, где объявлен `Solo<S>`, —
+общий тип теперь `SoloBase<S>`. Запись под `## Unreleased`
+`flutter_solo`, версию не трогали.
 
 ## solo: чтение контроллера — `currentState`
 

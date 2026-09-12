@@ -96,10 +96,11 @@ exactly like the checked `ctx.state`.
 | --- | --- |
 | `SoloBase<S>` | State, jobs, queue and rules. |
 | `Solo<S>` | All of `SoloBase` plus a broadcast `stream`. |
-| `SoloListenable<S>` | All of `Solo` plus Flutter's `ValueListenable<S>`. |
+| `SoloListenable<S>` | All of `SoloBase` plus Flutter's `ValueListenable<S>`. |
 
-`SoloListenable` listeners run synchronously, in subscription order.
-Its stream remains asynchronous.
+`SoloListenable` listeners run synchronously, in subscription order. It
+is a sibling of `Solo`, not a subclass: a widget rebuilds from `value`,
+so the controller carries no stream at all.
 
 ## External state
 

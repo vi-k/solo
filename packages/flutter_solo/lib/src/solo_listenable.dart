@@ -5,12 +5,18 @@ import 'package:solo/solo.dart';
 
 import 'listeners.dart';
 
-/// A [Solo] that is also a [ValueListenable]: drop it into
+/// A [SoloBase] that is also a [ValueListenable]: drop it into
 /// `ValueListenableBuilder` or `ListenableBuilder`.
+///
+/// The listeners are its only delivery. It is built on the engine
+/// itself, not on [Solo], because a widget has no use for a broadcast
+/// `stream`: a screen rebuilds from [value], and an operation's result is
+/// awaited through its `Job`. So there is no `StreamController` here to
+/// carry, feed on every change and close afterwards.
 ///
 /// Read-only on purpose: a `ValueNotifier` setter would break the
 /// ownership guarantee. [value] and [currentState] are the same object.
-class SoloListenable<S extends Object> extends Solo<S>
+class SoloListenable<S extends Object> extends SoloBase<S>
     implements ValueListenable<S> {
   final _listeners = Listeners();
   Future<void>? _closed;
@@ -31,14 +37,13 @@ class SoloListenable<S extends Object> extends Solo<S>
   @override
   void removeListener(VoidCallback listener) => _listeners.remove(listener);
 
-  /// Queues the event for the stream, then notifies listeners in
-  /// subscription order, synchronously. A listener removed during the pass
-  /// is skipped; one added during the pass hears the next change.
+  /// Notifies listeners in subscription order, synchronously. A listener
+  /// removed during the pass is skipped; one added during the pass hears
+  /// the next change.
   ///
   /// Nobody is notified once [close] has finished — the listeners are gone
-  /// by then, and one added afterwards hears nothing either, the same way
-  /// the stream of a closed [Solo] drops its events. A state can still
-  /// change there: `externalSetState` is not blocked by [close].
+  /// by then, and one added afterwards hears nothing either. A state can
+  /// still change there: `externalSetState` is not blocked by [close].
   ///
   /// A listener that throws is reported through [FlutterError.reportError],
   /// the way [ChangeNotifier] reports one, and the pass goes on to the
@@ -55,9 +60,9 @@ class SoloListenable<S extends Object> extends Solo<S>
     _listeners.notify(this);
   }
 
-  /// Closes the engine and the stream, then drops every listener and stops
-  /// notifying for good. Repeated calls return the same future, so the
-  /// chain is built once and kept. [mode] is [Solo.close]'s.
+  /// Closes the engine, then drops every listener and stops notifying for
+  /// good. Repeated calls return the same future, so the chain is built
+  /// once and kept. [mode] is [SoloBase.close]'s.
   @override
   Future<void> close({SoloCloseMode mode = SoloCloseMode.cancel}) {
     final closed = _closed;
