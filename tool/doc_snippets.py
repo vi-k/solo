@@ -507,30 +507,6 @@ final class Connected extends DeviceState {
 }
 
 ''' + snips['7/DeviceController'] + '''
-// The four "ordinary jobs" the snippet refers to.
-extension on DeviceController {
-  Job<void> connect() => run<DeviceState, void>(
-        key: DeviceKey.connect,
-        (ctx) async {
-          await ctx.wait(_ble.connect);
-          ctx.emit(const Connected());
-        },
-      );
-
-  Job<void> readBattery() => run<Connected, void>(
-        key: DeviceKey.readBattery,
-        (ctx) async {
-          final battery = await ctx.wait(_ble.battery);
-          ctx.emit(ctx.state.copyWith(battery: battery));
-        },
-      );
-
-  Job<void> rename(String name) => run<Connected, void>(
-        key: DeviceKey.rename,
-        (ctx) => ctx.wait(() => _ble.rename(name)),
-      );
-}
-
 Future<void> main() async {
   final device = DeviceController(Ble());
   final connect = device.connect();

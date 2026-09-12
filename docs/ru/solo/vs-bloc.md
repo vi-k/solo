@@ -1104,6 +1104,27 @@ final class DeviceController extends Solo<DeviceState> {
 
   DeviceController(this._ble) : super(const Offline());
 
+  Job<void> connect() => run<DeviceState, void>(
+        key: DeviceKey.connect,
+        (ctx) async {
+          await ctx.join(_ble.connect);
+          ctx.emit(const Connected());
+        },
+      );
+
+  Job<void> readBattery() => run<Connected, void>(
+        key: DeviceKey.readBattery,
+        (ctx) async {
+          final battery = await ctx.join(_ble.battery);
+          ctx.emit(ctx.state.copyWith(battery: battery));
+        },
+      );
+
+  Job<void> rename(String name) => run<Connected, void>(
+        key: DeviceKey.rename,
+        (ctx) => ctx.join(() => _ble.rename(name)),
+      );
+
   Job<void> disconnect() {
     queue.removeWhere((job) => job.key == DeviceKey.readBattery);
     return run<Connected, void>(
@@ -1121,8 +1142,7 @@ final class DeviceController extends Solo<DeviceState> {
 Удалённая `Job` чтения завершается с `Cancelled(manual)`; вызывающий код может
 наблюдать этот результат. Переименование остаётся в очереди, а отключение
 выполняется после него. `removeWhere` не затрагивает уже работающее
-подключение. Для удаления `Job` с `cancellable: false` из очереди нужен
-`force: true`.
+подключение.
 
 ## 8. Ожидание конкретного запроса
 

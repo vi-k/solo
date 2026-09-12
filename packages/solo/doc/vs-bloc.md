@@ -1091,6 +1091,27 @@ final class DeviceController extends Solo<DeviceState> {
 
   DeviceController(this._ble) : super(const Offline());
 
+  Job<void> connect() => run<DeviceState, void>(
+        key: DeviceKey.connect,
+        (ctx) async {
+          await ctx.join(_ble.connect);
+          ctx.emit(const Connected());
+        },
+      );
+
+  Job<void> readBattery() => run<Connected, void>(
+        key: DeviceKey.readBattery,
+        (ctx) async {
+          final battery = await ctx.join(_ble.battery);
+          ctx.emit(ctx.state.copyWith(battery: battery));
+        },
+      );
+
+  Job<void> rename(String name) => run<Connected, void>(
+        key: DeviceKey.rename,
+        (ctx) => ctx.join(() => _ble.rename(name)),
+      );
+
   Job<void> disconnect() {
     queue.removeWhere((job) => job.key == DeviceKey.readBattery);
     return run<Connected, void>(
@@ -1107,8 +1128,7 @@ final class DeviceController extends Solo<DeviceState> {
 The device calls are the same, but the removal happens when `disconnect` is
 called. The removed read job completes with `Cancelled(manual)`; its caller can
 observe that result. Rename stays queued, and disconnect runs after it.
-`removeWhere` does not affect an already running connect. Jobs marked
-`cancellable: false` require `force: true` for queue removal.
+`removeWhere` does not affect an already running connect.
 
 ## 8. Awaiting a particular request
 
