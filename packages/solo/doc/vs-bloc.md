@@ -1136,13 +1136,16 @@ line for line. The events that version runs on are not in this document: a
 sealed base and four classes, one of which a caller constructs for every
 command. Here the methods are that vocabulary.
 
-They also carry the state each command needs. `run<Connected, void>` refuses a
-battery read while the device is offline: the job ends as
-`Cancelled(rules: is not Connected)` and `_ble.battery` is never called. The
-handler above checks the stamp, not the state, so the same read with no connect
-behind it reaches the device and leaves `DeviceState(false, b:100)` — a battery
-reading for a device that is not connected. Guarding against that is one more
-`if` in the `switch`, by hand, for every command that needs it.
+They also carry the state each command needs. A refresh that fires while the
+screen is closing queues its read behind the disconnect, and that read carries
+the current generation, so the stamp check passes it through: the handler calls
+`_ble.battery` on a device just let go. The device refuses; bloc reports the
+error to `onError` and rethrows it, and since nothing awaits that handler it
+lands in the zone as an unhandled `Bad state: battery: not connected`.
+`run<Connected, void>` is checked when the job starts, so the same read ends as
+`Cancelled(rules: is not Connected)` and the call is never made. In the
+handler, that check is one more `if` in the `switch`, by hand, for every
+command that needs it.
 
 ## 8. Awaiting a particular request
 

@@ -120,19 +120,31 @@ class Chunk {
 
 class Ble {
   final written = <int>[];
+  var _connected = false;
+
+  // A device answers nobody it is not connected to. Without this the
+  // fake is more permissive than any radio, and a claim measured against
+  // it says something about the fake. `write` is left alone: the
+  // flashing scenario never connects and is not about this.
+  void _requireConnected(String call) {
+    if (!_connected) throw StateError('$call: not connected');
+  }
 
   Future<void> connect() async {
     trace.add('connect');
     await tick(30);
+    _connected = true;
   }
 
   Future<int> battery() async {
+    _requireConnected('battery');
     trace.add('battery');
     await tick(10);
     return 100;
   }
 
   Future<void> rename(String name) async {
+    _requireConnected('rename');
     trace.add('rename $name');
     await tick(10);
   }
@@ -140,6 +152,7 @@ class Ble {
   Future<void> disconnect() async {
     trace.add('disconnect');
     await tick(10);
+    _connected = false;
   }
 
   // A BLE write cannot be told to stop: the chunk handed to the stack
@@ -467,14 +480,25 @@ Future<void> main() async {
 
   await runReopen(TracedDeviceBloc(Ble()), 'a stamp,');
 
-  // Nothing in the handler asks what state the device is in: a read with
-  // no connect behind it reaches the device all the same.
+  // A read queued behind the disconnect carries the current generation,
+  // so the stamp check passes -- and by then the device is gone.
   trace.clear();
-  final offline = DeviceBloc(Ble());
-  offline.add(ReadBattery());
-  await tick(100);
-  print('read while offline: $trace, state ${offline.state}');
-  await offline.close();
+  Object? escaped;
+  DeviceBloc? trailing;
+  await runZonedGuarded(() async {
+    final bloc = trailing = DeviceBloc(Ble());
+    bloc
+      ..add(Connect())
+      ..add(Disconnect())
+      ..add(ReadBattery());
+    await tick(200);
+  }, (error, _) => escaped ??= error);
+  print('read after disconnect: $trace, state ${trailing?.state}, '
+      'escaped $escaped');
+  if (escaped == null) {
+    throw StateError('the device must refuse a read after disconnect');
+  }
+  await trailing?.close();
 
   // The screen that comes back asks for the battery through the same
   // canonical value, so its add overwrites the stamp the queued read got.
@@ -529,18 +553,20 @@ Future<void> main() async {
   print('disconnect ${disconnect.outcome}  state ${device.currentState}');
   await device.close();
 
-  // The state each command needs is part of its declaration, so the same
-  // read never reaches the device.
+  // The same read queued behind the disconnect. The state each command
+  // needs is part of its declaration, so it never reaches the device.
   trace.clear();
-  final offline = DeviceController(Ble());
-  final refusedRead = offline.readBattery();
-  await tick(100);
-  print('read while offline: $trace, ${refusedRead.outcome}, '
-      'state ${offline.currentState}');
-  if (refusedRead.outcome is! Cancelled || trace.isNotEmpty) {
-    throw StateError('a read while offline must not reach the device');
+  final trailing = DeviceController(Ble())
+    ..connect()
+    ..disconnect();
+  final lateRead = trailing.readBattery();
+  await tick(200);
+  print('read after disconnect: $trace, ${lateRead.outcome}, '
+      'state ${trailing.currentState}');
+  if (lateRead.outcome is! Cancelled) {
+    throw StateError('a read after disconnect must not reach the device');
   }
-  await offline.close();
+  await trailing.close();
 
   // `removeWhere` is about the queue. A read that has already started is
   // not in it, so disconnect removes nothing and waits for it.
