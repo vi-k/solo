@@ -132,12 +132,6 @@ class Ble {
     return 100;
   }
 
-  Future<int> signal() async {
-    trace.add('signal');
-    await tick(10);
-    return -60;
-  }
-
   Future<void> rename(String name) async {
     trace.add('rename $name');
     await tick(10);
@@ -374,8 +368,6 @@ class ReadBattery extends DeviceEvent {
   const ReadBattery();
 }
 
-class ReadSignal extends DeviceEvent {}
-
 class Rename extends DeviceEvent {
   Rename(this.name);
   final String name;
@@ -384,18 +376,15 @@ class Rename extends DeviceEvent {
 class Disconnect extends DeviceEvent {}
 
 class DeviceState {
-  const DeviceState({this.online = false, this.battery, this.signal});
+  const DeviceState({this.online = false, this.battery});
   final bool online;
   final int? battery;
-  final int? signal;
-  DeviceState copyWith({bool? online, int? battery, int? signal}) =>
-      DeviceState(
+  DeviceState copyWith({bool? online, int? battery}) => DeviceState(
         online: online ?? this.online,
         battery: battery ?? this.battery,
-        signal: signal ?? this.signal,
       );
   @override
-  String toString() => 'DeviceState($online, b:$battery, s:$signal)';
+  String toString() => 'DeviceState($online, b:$battery)';
 }
 
 ''' + snips['7/DeviceBloc'] + '\n' + snips['7/FlagDeviceBloc'] + '''
@@ -436,7 +425,6 @@ Future<void> run(Bloc<DeviceEvent, DeviceState> bloc, String label) async {
   bloc
     ..add(Connect())
     ..add(ReadBattery())
-    ..add(ReadSignal())
     ..add(Rename('kitchen'))
     ..add(Disconnect());
   await tick(300);
@@ -453,7 +441,6 @@ Future<void> runReopen(
   bloc
     ..add(Connect())
     ..add(ReadBattery())
-    ..add(ReadSignal())
     ..add(Rename('kitchen'))
     ..add(Disconnect())
     ..add(Connect());
@@ -471,7 +458,6 @@ Future<void> main() async {
   bloc
     ..add(Connect())
     ..add(ReadBattery())
-    ..add(ReadSignal())
     ..add(Rename('kitchen'))
     ..add(Disconnect());
   await tick(300);
@@ -489,7 +475,6 @@ Future<void> main() async {
   shared
     ..add(Connect())
     ..add(read)
-    ..add(ReadSignal())
     ..add(Rename('kitchen'))
     ..add(Disconnect())
     ..add(Connect())
@@ -513,15 +498,12 @@ final class Offline extends DeviceState {
 }
 
 final class Connected extends DeviceState {
-  const Connected({this.battery, this.signal});
+  const Connected({this.battery});
   final int? battery;
-  final int? signal;
-  Connected copyWith({int? battery, int? signal}) => Connected(
-        battery: battery ?? this.battery,
-        signal: signal ?? this.signal,
-      );
+  Connected copyWith({int? battery}) =>
+      Connected(battery: battery ?? this.battery);
   @override
-  String toString() => 'Connected(b:$battery, s:$signal)';
+  String toString() => 'Connected(b:$battery)';
 }
 
 ''' + snips['7/DeviceController'] + '''
@@ -543,14 +525,6 @@ extension on DeviceController {
         },
       );
 
-  Job<void> readSignal() => run<Connected, void>(
-        key: DeviceKey.readSignal,
-        (ctx) async {
-          final signal = await ctx.wait(_ble.signal);
-          ctx.emit(ctx.state.copyWith(signal: signal));
-        },
-      );
-
   Job<void> rename(String name) => run<Connected, void>(
         key: DeviceKey.rename,
         (ctx) => ctx.wait(() => _ble.rename(name)),
@@ -561,13 +535,12 @@ Future<void> main() async {
   final device = DeviceController(Ble());
   final connect = device.connect();
   final battery = device.readBattery();
-  final signal = device.readSignal();
   final rename = device.rename('kitchen');
   final disconnect = device.disconnect();
   await tick(300);
   print('hardware: $trace');
   print('connect ${connect.outcome}  battery ${battery.outcome}');
-  print('signal ${signal.outcome}  rename ${rename.outcome}');
+  print('rename ${rename.outcome}');
   print('disconnect ${disconnect.outcome}  state ${device.currentState}');
   await device.close();
 }

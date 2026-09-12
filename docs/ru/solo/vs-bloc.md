@@ -978,9 +978,9 @@ void onMapDrag(MapController map, Point<double> point) => map.moveTo(point);
 
 ## 7. Удаление выбранной ожидающей работы
 
-BLE-экран ставит в очередь подключение, чтение батареи и сигнала,
-переименование и отключение. При закрытии экрана ожидающие чтения нужно
-отбросить, а заказанное переименование должно завершиться до отключения.
+BLE-экран ставит в очередь подключение, чтение батареи, переименование
+и отключение. При закрытии экрана ожидающее чтение нужно отбросить,
+а заказанное переименование должно завершиться до отключения.
 
 ### Первая попытка
 
@@ -1004,9 +1004,6 @@ class FlagDeviceBloc extends Bloc<DeviceEvent, DeviceState> {
         case ReadBattery():
           if (_leaving) return;
           emit(state.copyWith(battery: await _ble.battery()));
-        case ReadSignal():
-          if (_leaving) return;
-          emit(state.copyWith(signal: await _ble.signal()));
         case Rename(:final name):
           await _ble.rename(name);
         case Disconnect():
@@ -1028,16 +1025,16 @@ class FlagDeviceBloc extends Bloc<DeviceEvent, DeviceState> {
 На уходе флаг работает:
 `[_leaving = true, connect, rename kitchen, disconnect]`. Трасса несёт записи
 в `_leaving` вместе с вызовами устройства, и запись стоит раньше их всех:
-`onEvent` выполняется внутри `add`, а очередь разбирается, когда все пять
-команд уже в ней. К тому времени, как обработчик доходит до первой, флаг
-выставлен, и оба чтения пропускаются.
+`onEvent` выполняется внутри `add`, а очередь разбирается, когда все четыре
+команды уже в ней. К тому времени, как обработчик доходит до первой, флаг
+выставлен, и чтение пропускается.
 
 Чего этим не выразить — так это экрана, который вернулся раньше, чем разошлись
-старые события. Те же пять команд, а за ними `Connect` открывшегося экрана:
-`[_leaving = true, _leaving = false, connect, battery, signal, rename kitchen,
+старые события. Те же четыре команды, а за ними `Connect` открывшегося экрана:
+`[_leaving = true, _leaving = false, connect, battery, rename kitchen,
 disconnect, connect]`. Обе записи ложатся раньше первого вызова устройства,
-вторая снимает флаг, и чтения, поставленные ушедшим экраном, снова разрешены.
-Оба чтения сделаны для экрана, которого уже нет.
+вторая снимает флаг, и чтение, поставленное ушедшим экраном, снова разрешено.
+Это чтение сделано для экрана, которого уже нет.
 
 ### Bloc
 
@@ -1060,9 +1057,6 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
         case ReadBattery():
           if (_stampOf[e] != _screen) return;
           emit(state.copyWith(battery: await _ble.battery()));
-        case ReadSignal():
-          if (_stampOf[e] != _screen) return;
-          emit(state.copyWith(signal: await _ble.signal()));
         case Rename(:final name):
           await _ble.rename(name);
         case Disconnect():
@@ -1084,7 +1078,7 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
 Поколение увеличивается там же, где выставлялся флаг, и так же рано:
 `[_screen = 1, connect, rename kitchen, disconnect]`. Разница в том, что
 стоящие в очереди события сохраняют доставшуюся им метку, поэтому `Connect`
-после них ничего не меняет для чтений:
+после них ничего не меняет для чтения:
 `[_screen = 1, connect, rename kitchen, disconnect, connect]`.
 
 Записи поколений являются состоянием приложения, связанным с очередью. События
@@ -1093,15 +1087,15 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
 открывшийся экран просит батарею тем же каноническим `const ReadBattery()`,
 этот `add` перезаписывает метку стоящего в очереди чтения, и устаревшее чтение
 всё-таки выполняется: `[_screen = 1, connect, battery, rename kitchen,
-disconnect, connect, battery]`. Сигнал, отдельный объект, в трассу не попадает.
-`add` не возвращает результат, указывающий на пропуск чтения.
+disconnect, connect, battery]`. `add` не возвращает результат, указывающий
+на пропуск чтения.
 
 ### Solo
 
 Контроллер может удалять подходящие `Job` прямо из своей очереди:
 
 ```dart
-enum DeviceKey { connect, readBattery, readSignal, rename, disconnect }
+enum DeviceKey { connect, readBattery, rename, disconnect }
 
 final class DeviceController extends Solo<DeviceState> {
   final Ble _ble;
@@ -1109,10 +1103,7 @@ final class DeviceController extends Solo<DeviceState> {
   DeviceController(this._ble) : super(const Offline());
 
   Job<void> disconnect() {
-    queue.removeWhere(
-      (job) =>
-          job.key == DeviceKey.readBattery || job.key == DeviceKey.readSignal,
-    );
+    queue.removeWhere((job) => job.key == DeviceKey.readBattery);
     return run<Connected, void>(
       key: DeviceKey.disconnect,
       (ctx) async {
@@ -1125,7 +1116,7 @@ final class DeviceController extends Solo<DeviceState> {
 ```
 
 Вызовы устройства те же, но удаление происходит при вызове `disconnect`.
-Удалённые `Job` чтения завершаются с `Cancelled(manual)`; вызывающий код может
+Удалённая `Job` чтения завершается с `Cancelled(manual)`; вызывающий код может
 наблюдать этот результат. Переименование остаётся в очереди, а отключение
 выполняется после него. `removeWhere` не затрагивает уже работающее
 подключение. Для удаления `Job` с `cancellable: false` из очереди нужен

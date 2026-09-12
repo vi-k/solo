@@ -966,9 +966,9 @@ in the README.
 
 ## 7. Removing selected pending work
 
-A BLE screen queues connect, battery and signal reads, rename and disconnect.
-When the screen closes, pending reads should be discarded, while the requested
-rename must still complete before disconnect.
+A BLE screen queues connect, a battery read, rename and disconnect. When the
+screen closes, the pending read should be discarded, while the requested rename
+must still complete before disconnect.
 
 ### The first attempt
 
@@ -991,9 +991,6 @@ class FlagDeviceBloc extends Bloc<DeviceEvent, DeviceState> {
         case ReadBattery():
           if (_leaving) return;
           emit(state.copyWith(battery: await _ble.battery()));
-        case ReadSignal():
-          if (_leaving) return;
-          emit(state.copyWith(signal: await _ble.signal()));
         case Rename(:final name):
           await _ble.rename(name);
         case Disconnect():
@@ -1015,16 +1012,16 @@ class FlagDeviceBloc extends Bloc<DeviceEvent, DeviceState> {
 On the way out the flag works:
 `[_leaving = true, connect, rename kitchen, disconnect]`. The trace carries the
 writes to `_leaving` among the device calls, and the write stands ahead of all
-of them: `onEvent` runs inside `add`, while the queue is drained once all five
+of them: `onEvent` runs inside `add`, while the queue is drained once all four
 commands are in it. The flag is already set when the handler reaches the first,
-and both reads are skipped.
+and the read is skipped.
 
 What it cannot express is a screen that comes back before the old events drain.
-The same five commands, and a `Connect` after them from the screen that opened:
-`[_leaving = true, _leaving = false, connect, battery, signal, rename kitchen,
+The same four commands, and a `Connect` after them from the screen that opened:
+`[_leaving = true, _leaving = false, connect, battery, rename kitchen,
 disconnect, connect]`. Both writes land before the first device call, and the
-second one clears the flag, so the reads queued by the screen that left are
-valid again. Both readings were taken for a screen that is gone.
+second one clears the flag, so the read queued by the screen that left is valid
+again. That reading was taken for a screen that is gone.
 
 ### Bloc
 
@@ -1047,9 +1044,6 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
         case ReadBattery():
           if (_stampOf[e] != _screen) return;
           emit(state.copyWith(battery: await _ble.battery()));
-        case ReadSignal():
-          if (_stampOf[e] != _screen) return;
-          emit(state.copyWith(signal: await _ble.signal()));
         case Rename(:final name):
           await _ble.rename(name);
         case Disconnect():
@@ -1071,7 +1065,7 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
 The generation is bumped where the flag was set and just as early:
 `[_screen = 1, connect, rename kitchen, disconnect]`. The difference is that
 the queued events keep the stamp they were given, so a `Connect` after them
-changes nothing for the reads:
+changes nothing for the read:
 `[_screen = 1, connect, rename kitchen, disconnect, connect]`.
 
 The generation records are application state associated with the queue. Events
@@ -1080,15 +1074,14 @@ still reach the handler, which must check each discardable command. The
 asks for the battery through the same canonical `const ReadBattery()`, that
 `add` overwrites the stamp of the queued read, and the stale read runs after
 all: `[_screen = 1, connect, battery, rename kitchen, disconnect, connect,
-battery]`. The signal, a distinct object, stays out of the trace. `add`
-provides no result indicating that a read was skipped.
+battery]`. `add` provides no result indicating that a read was skipped.
 
 ### Solo
 
 The controller can remove matching jobs directly from its queue:
 
 ```dart
-enum DeviceKey { connect, readBattery, readSignal, rename, disconnect }
+enum DeviceKey { connect, readBattery, rename, disconnect }
 
 final class DeviceController extends Solo<DeviceState> {
   final Ble _ble;
@@ -1096,10 +1089,7 @@ final class DeviceController extends Solo<DeviceState> {
   DeviceController(this._ble) : super(const Offline());
 
   Job<void> disconnect() {
-    queue.removeWhere(
-      (job) =>
-          job.key == DeviceKey.readBattery || job.key == DeviceKey.readSignal,
-    );
+    queue.removeWhere((job) => job.key == DeviceKey.readBattery);
     return run<Connected, void>(
       key: DeviceKey.disconnect,
       (ctx) async {
@@ -1112,8 +1102,8 @@ final class DeviceController extends Solo<DeviceState> {
 ```
 
 The device calls are the same, but the removal happens when `disconnect` is
-called. The removed read jobs complete with `Cancelled(manual)`; their callers
-can observe that result. Rename stays queued, and disconnect runs after it.
+called. The removed read job completes with `Cancelled(manual)`; its caller can
+observe that result. Rename stays queued, and disconnect runs after it.
 `removeWhere` does not affect an already running connect. Jobs marked
 `cancellable: false` require `force: true` for queue removal.
 
