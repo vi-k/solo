@@ -166,7 +166,7 @@ void resume() {
 There is no pause in the API, and a job waiting on a `Completer` is one. It
 holds the head of the queue; everything submitted behind it waits, and
 completing the `Completer` lets the queue run in the order it was asked for.
-Measured:
+The cases:
 
 | What you do | What happens |
 | --- | --- |

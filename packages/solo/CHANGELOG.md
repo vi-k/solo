@@ -2,15 +2,14 @@
 
 - `doc/vs-bloc.md` is rebuilt around the mistake. Every one of the ten
   scenarios now opens with "The first attempt" — the code the requirement
-  invites, and the measured proof that it does not hold — before the
-  implementation that does. Eight of those attempts are new runnable snippets:
-  two registrations with a transformer each, one registration with none, a chat
-  handler without its `isClosed` guard, a player with a registration per
-  command, a leaving flag instead of a screen generation, `droppable()` with a
-  completer that nobody completes, one funnel for a failure that must not wait,
-  a restartable loop without `emit.isDone`. Section 1 also quotes the order of
-  the run, so that the lost note is explained by what happened rather than
-  asserted.
+  invites, and the proof that it does not hold — before the implementation that
+  does. Eight of those attempts are new runnable snippets: two registrations
+  with a transformer each, one registration with none, a chat handler without
+  its `isClosed` guard, a player with a registration per command, a leaving
+  flag instead of a screen generation, `droppable()` with a completer that
+  nobody completes, one funnel for a failure that must not wait, a restartable
+  loop without `emit.isDone`. Section 1 also quotes the order of execution, so
+  that the lost note is explained by what happened rather than asserted.
 
 - Two stale snippets in `doc/vs-bloc.md` fixed: the recorder and the telemetry
   observer still overrode `onChange(previous, current)`, which has taken a
