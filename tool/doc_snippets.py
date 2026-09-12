@@ -467,6 +467,15 @@ Future<void> main() async {
 
   await runReopen(TracedDeviceBloc(Ble()), 'a stamp,');
 
+  // Nothing in the handler asks what state the device is in: a read with
+  // no connect behind it reaches the device all the same.
+  trace.clear();
+  final offline = DeviceBloc(Ble());
+  offline.add(ReadBattery());
+  await tick(100);
+  print('read while offline: $trace, state ${offline.state}');
+  await offline.close();
+
   // The screen that comes back asks for the battery through the same
   // canonical value, so its add overwrites the stamp the queued read got.
   trace.clear();
@@ -519,6 +528,19 @@ Future<void> main() async {
   print('rename ${rename.outcome}');
   print('disconnect ${disconnect.outcome}  state ${device.currentState}');
   await device.close();
+
+  // The state each command needs is part of its declaration, so the same
+  // read never reaches the device.
+  trace.clear();
+  final offline = DeviceController(Ble());
+  final refusedRead = offline.readBattery();
+  await tick(100);
+  print('read while offline: $trace, ${refusedRead.outcome}, '
+      'state ${offline.currentState}');
+  if (refusedRead.outcome is! Cancelled || trace.isNotEmpty) {
+    throw StateError('a read while offline must not reach the device');
+  }
+  await offline.close();
 
   // `removeWhere` is about the queue. A read that has already started is
   // not in it, so disconnect removes nothing and waits for it.

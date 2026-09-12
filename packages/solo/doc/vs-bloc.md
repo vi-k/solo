@@ -1128,9 +1128,21 @@ final class DeviceController extends Solo<DeviceState> {
 The device calls are the same, but the removal happens when `disconnect` is
 called. The removed read job completes with `Cancelled(manual)`; its caller can
 observe that result. Rename stays queued, and disconnect runs after it.
-`removeWhere` works on the queue alone: a read that has already started is not
-in it, so the same call removes nothing and the device receives
-`[connect, battery, disconnect]`.
+`removeWhere` works on the queue alone: if the read has already started, it is
+not removed. The device then receives `[connect, battery, disconnect]`.
+
+The controller is longer than the bloc above it, and the two do not compare
+line for line. The events that version runs on are not in this document: a
+sealed base and four classes, one of which a caller constructs for every
+command. Here the methods are that vocabulary.
+
+They also carry the state each command needs. `run<Connected, void>` refuses a
+battery read while the device is offline: the job ends as
+`Cancelled(rules: is not Connected)` and `_ble.battery` is never called. The
+handler above checks the stamp, not the state, so the same read with no connect
+behind it reaches the device and leaves `DeviceState(false, b:100)` — a battery
+reading for a device that is not connected. Guarding against that is one more
+`if` in the `switch`, by hand, for every command that needs it.
 
 ## 8. Awaiting a particular request
 
