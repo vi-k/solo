@@ -1138,17 +1138,18 @@ command. Here the methods are that vocabulary.
 
 They also carry the state each command needs. The screen is closing,
 `Disconnect` is already queued, and at that moment a refresh timer adds
-`ReadBattery`. The new event is stamped with the current generation — the one
-`Disconnect` has just bumped — so the stamp check lets it through. The queue
-reaches it after the disconnect, and the handler calls `_ble.battery` on a
-device that is no longer connected. The device refuses; bloc reports the error
-to `onError` and rethrows it, and since nothing awaits that handler it lands in
-the zone as an unhandled `Bad state: battery: not connected`.
+`ReadBattery`. In the stamped version above, the new event takes the current
+generation — the one `Disconnect` has just bumped — so the stamp check lets it
+through. The queue reaches it after the disconnect, and the handler calls
+`_ble.battery` on a device that is no longer connected. The device refuses;
+bloc reports the error to `onError` and rethrows it, and since nothing awaits
+that handler it lands in the zone as an unhandled
+`Bad state: battery: not connected`.
 
-`run<Connected, void>` is checked when the job starts, so the same read ends as
-`Cancelled(rules: is not Connected)` and the call is never made. In the
-handler, that check is one more `if` in the `switch`, by hand, for every
-command that needs it.
+Here `run<Connected, void>` is checked when the job starts, so the same read
+ends as `Cancelled(rules: is not Connected)` and the call is never made. In
+bloc the same guard is written by hand: one more `if` in the `switch`, for
+every command that needs it.
 
 ## 8. Awaiting a particular request
 
