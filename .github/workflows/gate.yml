@@ -1,0 +1,190 @@
+name: gate
+
+# The checks of `AGENTS.md`, run by a machine instead of by a person: the
+# commands the regimen asks for before a commit, on the toolchain the
+# packages declare as their floor — Dart 3.6.0, and Flutter 3.27.0, which
+# carries it. Locally those come from `fvm`; here the actions pin the same
+# numbers, so `dart` and `flutter` on the PATH are already the right ones.
+#
+# Three jobs rather than one, and the split is the point. `dart` never
+# installs Flutter: that is what keeps `solo` and `async_job` the pure Dart
+# they promise to be, because a stray `package:flutter` import would stop
+# resolving there and nowhere else. `flutter` covers the package that needs
+# it. `docs` needs no SDK at all.
+#
+# `dart pub publish --dry-run` is deliberately absent. Between releases the
+# tree carries `pubspec_overrides.yaml` files pointing at the packages next
+# door, and a dry run over those does not describe the archive that would
+# go out. Release readiness is a step of the release, and its order is in
+# `docs/records/2026-09-11[1]-solo-release-readiness-report.md`.
+#
+# `AGENTS.md` and the records are not covered either: `check_line_width.py`
+# takes `packages/` and `docs/` and skips `docs/records/` by design, so
+# those two stay a reading job, as the regimen says.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A newer push to the same ref makes this run pointless.
+concurrency:
+  group: gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dart:
+    runs-on: ubuntu-latest
+    # The suites take seconds. The ceiling is for a hang, which does not
+    # fail on its own: it would hold the concurrency group until GitHub's
+    # default of six hours.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: 3.6.0
+
+      # The action's own cache holds the SDK and nothing else, so every run
+      # would re-download every package. No lockfile is committed — these
+      # are library packages — so the manifests key the cache.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: pub-dart-${{ runner.os }}-${{ hashFiles('packages/*/pubspec.yaml', 'packages/*/example/pubspec.yaml') }}
+          restore-keys: pub-dart-${{ runner.os }}-
+
+      - name: Toolchain
+        run: dart --version
+
+      # The example is a package of its own, with a resolution of its own.
+      - name: Dependencies
+        run: |
+          for package in packages/async_job packages/solo packages/solo/example; do
+            echo "== $package"
+            (cd "$package" && dart pub get)
+          done
+
+      # First, and with `--output=none`: the cheapest failure to read, and
+      # the tree stays as it was checked out, which is what makes the last
+      # step of the job mean anything.
+      - name: Formatting
+        run: |
+          (cd packages/async_job && dart format --output=none --set-exit-if-changed lib test)
+          (cd packages/solo && dart format --output=none --set-exit-if-changed lib test example)
+
+      - name: Analyze
+        run: |
+          for package in packages/async_job packages/solo packages/solo/example; do
+            echo "== $package"
+            (cd "$package" && dart analyze)
+          done
+
+      - name: Dartdoc
+        run: |
+          (cd packages/async_job && dart doc --dry-run)
+          (cd packages/solo && dart doc --dry-run)
+
+      - name: Tests
+        run: |
+          for package in packages/async_job packages/solo packages/solo/example; do
+            echo "== $package"
+            (cd "$package" && dart test)
+          done
+
+      # `git status --porcelain` rather than `git diff --exit-code`: the
+      # latter compares what is tracked and says nothing about a file a step
+      # created out of nothing.
+      - name: Nothing drifted
+        run: |
+          git status --porcelain
+          test -z "$(git status --porcelain)"
+
+  flutter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.27.0
+          channel: stable
+          cache: true
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: pub-flutter-${{ runner.os }}-${{ hashFiles('packages/*/pubspec.yaml', 'packages/*/example/pubspec.yaml') }}
+          restore-keys: pub-flutter-${{ runner.os }}-
+
+      - name: Toolchain
+        run: flutter --version
+
+      # The example resolves `solo` and `async_job` through a
+      # `pubspec_overrides.yaml` of its own: the overrides of
+      # `packages/flutter_solo` do not reach it, because pub applies only
+      # the ones belonging to the package it is resolving. Without that file
+      # the example analyzed against the published `solo` and said nothing
+      # about the tree it lives in.
+      - name: Dependencies
+        run: |
+          for package in packages/flutter_solo packages/flutter_solo/example; do
+            echo "== $package"
+            (cd "$package" && flutter pub get)
+          done
+
+      - name: Formatting
+        run: |
+          cd packages/flutter_solo
+          dart format --output=none --set-exit-if-changed lib test example
+
+      # `flutter analyze` of the package walks the example as well, under
+      # the example's own `analysis_options.yaml`. The second run is kept
+      # because the regimen lists it, and because a failure then names the
+      # package instead of a path.
+      - name: Analyze
+        run: |
+          (cd packages/flutter_solo && flutter analyze)
+          (cd packages/flutter_solo/example && flutter analyze)
+
+      - name: Dartdoc
+        run: cd packages/flutter_solo && dart doc --dry-run
+
+      - name: Tests
+        run: cd packages/flutter_solo && flutter test
+
+      - name: Nothing drifted
+        run: |
+          git status --porcelain
+          test -z "$(git status --porcelain)"
+
+  docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Line width
+        run: python3 tool/check_line_width.py
+
+      - name: A section starts with code
+        run: python3 tool/check_doc_shape.py
+
+      - name: Translations answer their originals
+        run: python3 tool/check_translations.py
+
+      # Not a duplicate of `site.yml`: that one runs after a merge and only
+      # for the paths it watches. Here the assembly is a smoke test — a page
+      # that cannot be assembled fails before the merge, not after it.
+      - name: The site assembles
+        run: python3 tool/build_site.py
+
+      # The assembled pages land in `site/src/content/docs/`, which is
+      # ignored, so this still holds.
+      - name: Nothing drifted
+        run: |
+          git status --porcelain
+          test -z "$(git status --porcelain)"
