@@ -76,8 +76,8 @@ test('a second load while the first one runs is dropped', () {
 наблюдатель через `addTearDown`, чтобы неудачный тест не оставил его
 установленным для следующих тестов.
 
-Внутри `fakeAsync` запрашивайте отмену через `job.cancel().ignore()` и
-продвигайте ожидающую работу перед проверкой. `flushMicrotasks()` выполняет
+Внутри `fakeAsync` запрашивайте отмену через `job.cancel().ignore()`
+и продвигайте ожидающую работу перед проверкой. `flushMicrotasks()` выполняет
 микротаски; `Future(...)` и `Future.delayed(...)` используют таймеры и требуют
 `elapse(...)` или `flushTimers()`. Используйте `emitsInOrder`, когда важен сам
 стрим; для итогового состояния обычно достаточно прочитать `currentState` после

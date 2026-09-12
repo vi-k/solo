@@ -48,6 +48,17 @@ SPAN = r'`[^`]+`'
 ATOM = re.compile(f'{LINK}|{SPAN}')
 LINK_ONLY = re.compile(LINK)
 STAND_IN = re.compile('\x00(\\d+)~*\x00')
+# A Russian preposition, conjunction or particle of one or two letters
+# binds forward: left at the end of a line it hangs there, and the reader
+# meets it without the word it governs. It is glued to the next word, and
+# the pair breaks as one. Pronouns are not in the list on purpose -- `её`
+# at the end of a line is nobody's mistake.
+GLUED = {
+    'в', 'во', 'к', 'ко', 'с', 'со', 'о', 'об', 'от', 'до', 'за', 'из',
+    'на', 'по', 'у', 'и', 'а', 'но', 'да', 'то', 'ни', 'не', 'же', 'бы',
+    'ли',
+}
+KEEP_TOGETHER = '\x01'
 
 
 def files():
@@ -64,6 +75,24 @@ def files():
         if path.exists():
             yield path
 
+
+
+def glue(body, room):
+    """Ties every hanging preposition to the word behind it."""
+    words = body.split(' ')
+    out = []
+    for word in words:
+        # The pair has to fit -- unless the next word does not fit on a
+        # line by itself either. A link wider than the limit keeps its own
+        # line anyway, and the preposition is better off there with it
+        # than hanging at the end of the line above.
+        if (out and out[-1].split(KEEP_TOGETHER)[-1].lower() in GLUED
+                and (len(out[-1]) + 1 + len(word) <= room
+                     or len(word) > room)):
+            out[-1] += KEEP_TOGETHER + word
+        else:
+            out.append(word)
+    return ' '.join(out)
 
 def fill(body, first_indent, next_indent):
     # Each link becomes one space-free word of the same width, so the fill
@@ -87,7 +116,7 @@ def fill(body, first_indent, next_indent):
     atom = ATOM if body.count('`') % 2 == 0 else LINK_ONLY
 
     lines = textwrap.wrap(
-        atom.sub(hide, body),
+        glue(atom.sub(hide, body), room),
         WIDTH,
         initial_indent=first_indent,
         subsequent_indent=next_indent,
@@ -95,7 +124,8 @@ def fill(body, first_indent, next_indent):
         break_on_hyphens=False,
     )
     return [
-        STAND_IN.sub(lambda m: links[int(m.group(1))], line) for line in lines
+        STAND_IN.sub(lambda m: links[int(m.group(1))],
+                     line.replace(KEEP_TOGETHER, ' ')) for line in lines
     ]
 
 
