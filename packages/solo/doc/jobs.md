@@ -70,7 +70,7 @@ A job added to a controller's queue is a root job. Only one runs at a
 time. Which of them survives a second call is the policy's decision:
 
 ```dart
-enum _Op { load, save, zoom, seek, stop }
+enum _Op { load, save, zoom, seek, stop, pause }
 
 // sequential, the default: one after another, in the order asked for.
 SoloJob<void> save() =>
@@ -148,3 +148,42 @@ Removal methods affect queued jobs only — the running job is not theirs to
 touch — and they preserve jobs with `cancellable: false` unless called
 with `force: true`. Time-delayed accumulator groups can let ready jobs
 pass; see [Event accumulation](accumulation.md).
+### Pausing the queue
+
+```dart
+Completer<void>? _gate;
+
+void pause() {
+  if (_gate != null) return;
+  final gate = _gate = Completer<void>();
+  run<Ready, void>(key: _Op.pause, (ctx) => ctx.wait(() => gate.future));
+}
+
+void resume() {
+  _gate?.complete();
+  _gate = null;
+}
+```
+
+There is no pause in the API, and a job waiting on a `Completer` is one.
+It holds the head of the queue; everything submitted behind it waits, and
+completing the `Completer` lets the queue run in the order it was asked
+for. Measured:
+
+| What you do | What happens |
+| --- | --- |
+| `pause()`, then submit three jobs | The three wait, and no outcome is reached. |
+| `resume()` | They run, in the order they were submitted. |
+| `queue.clear()` while paused | The queue empties and the pause stands: the gate is the running job, not a queued one. |
+| `close()` while paused | It comes back without a `resume`: the gate is cancellable, and `ctx.wait` hands it the cancellation. |
+| `cancelAll(force: true)` | The gate goes with everything else and the queue moves on, with nobody having opened it. |
+
+What the gate does not give you is a name. The observer sees an ordinary
+job start, and `current` answers with the gate rather than with work, so
+a screen showing what runs shows the pause instead. Whether the
+controller is paused is yours to keep.
+
+`canStart` is not a pause. A job whose rule does not fit the state is not
+held back: it is cancelled where it stands, with
+`Cancelled(rules: is not Ready)`, and the queue empties instead of
+filling up. A pause built on it loses the work silently.
