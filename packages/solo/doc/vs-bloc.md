@@ -7,9 +7,9 @@ actually does, and only then shows the implementations that meet it — bloc's
 and solo's — with what the library handles and what remains application code.
 
 A first attempt here is not a strawman: it is the version the API's own
-vocabulary suggests, and what is quoted under it was measured, not argued.
-Reading it before the answer is the point of the section; a reader who already
-knows the trap can skip to `### Bloc` and `### Solo`.
+vocabulary suggests, and the states and traces quoted under it are what running
+that code produces. Reading it before the answer is the point of the section; a
+reader who already knows the trap can skip to `### Bloc` and `### Solo`.
 
 `Bloc` processes events registered with `on<E>`. A transformer determines how
 events in that registration are scheduled. `Cubit` exposes methods that update
@@ -90,10 +90,10 @@ class SplitNotesBloc extends Bloc<NotesEvent, NotesState> {
 }
 ```
 
-The measured final state is `NotesState([n0], uploading: false)`: the uploaded
-note is not in it. The order of the run says why. Below are the server's own
-entries and every publication, each with the event that made it; the local list
-starts empty because nothing has been read yet:
+The final state is `NotesState([n0], uploading: false)`: the uploaded note is
+not in it. The order of execution says why. Below are the server's own entries
+and every publication, each with the event that made it; the local list starts
+empty because nothing has been read yet:
 
 ```text
 UploadNote emits [], uploading: true
@@ -149,7 +149,7 @@ class ConcurrentNotesBloc extends Bloc<NotesEvent, NotesState> {
 }
 ```
 
-The measured state is `NotesState([n0], uploading: false)` again, from an order
+The state is `NotesState([n0], uploading: false)` again, from an order
 identical to the one above, line for line. The two attempts fail for different
 reasons — two queues there, no queue here — but the result does not tell them
 apart.
@@ -181,8 +181,8 @@ class NotesBloc extends Bloc<NotesEvent, NotesState> {
 }
 ```
 
-The measured final state is `NotesState([n0, n1], uploading: false)`, and one
-line of the order has moved:
+The final state is `NotesState([n0, n1], uploading: false)`, and one line of
+the order has moved:
 
 ```text
 UploadNote emits [], uploading: true
@@ -303,10 +303,10 @@ In this run the device starts, but the state remains `Idle`. The level meter is
 never armed. The local journal is empty too, and not through an unlucky line
 order: `onChange`'s own documentation asks for `super.onChange` to be called
 first, which puts the global observer ahead of the controller's own note.
-Writing that note before `super` saves the journal — a measured `[Recording]` —
-and saves nothing else: the state is still `Idle` and the meter still unarmed.
-The handler reports `telemetry unavailable`, and the same observer failure in a
-Cubit method reaches the method's caller.
+Writing that note before `super` saves the journal — it then holds
+`[Recording]` — and saves nothing else: the state is still `Idle` and the meter
+still unarmed. The handler reports `telemetry unavailable`, and the same
+observer failure in a Cubit method reaches the method's caller.
 
 Both `Bloc` and `Cubit` publish through `BlocBase.emit`. It calls `onChange`
 before updating the state, and an exception from that call is passed to
@@ -346,9 +346,9 @@ failures and its fallback does not throw.
 `onError` is not a second place to put that guard. `emit` catches the
 exception, hands it to `onError` and rethrows it, so an override there reports
 the failure without preventing it. With `onError` overridden and the observer
-still throwing, the measured run ends at `Idle` with the meter unarmed, exactly
-as the unguarded one did, and the failure is reported twice: once by `emit`,
-once by the handler it broke.
+still throwing, the run ends at `Idle` with the meter unarmed, exactly as the
+unguarded one did, and the failure is reported twice: once by `emit`, once by
+the handler it broke.
 
 ### Solo
 
@@ -427,19 +427,19 @@ class UnguardedChatBloc extends Bloc<ChatEvent, ChatState> {
 }
 ```
 
-With `sequential()` the run shows `close()` waiting for the API call still in
-flight, and the state after it is `ChatState(reply to hi)`: the reply was
-published into a controller that was already closing. The follow-up `add` then
-throws `Bad state: Cannot add new events after calling close`, and that error
-arrives in the zone while `close()` is still being awaited, not at the caller
-of the handler.
+With `sequential()`, `close()` waits for the API call still in flight, and the
+state after it is `ChatState(reply to hi)`: the reply was published into a
+controller that was already closing. The follow-up `add` then throws
+`Bad state: Cannot add new events after calling close`, and that error arrives
+in the zone while `close()` is still being awaited, not at the caller of the
+handler.
 
 Closing behavior depends on the transformer in these versions. With
 `sequential()`, `close()` waits for the running handler, which can still emit
 while closure is pending. With the default transformer, `concurrent`,
-`droppable` or `restartable`, the run shows `close()` returning before the body
-finishes and the cancelled emitter ignoring subsequent writes. Neither case
-interrupts the API call or the rest of the handler body.
+`droppable` or `restartable`, `close()` returns before the body finishes and
+the cancelled emitter ignores subsequent writes. Neither case interrupts the
+API call or the rest of the handler body.
 
 ### Bloc
 
@@ -475,7 +475,7 @@ direct `emit` then throws rather than using a cancelled handler emitter.
 
 Another case is an unawaited future that emits after its handler completed
 normally, while the Bloc is still open. This triggers a debug assertion; with
-assertions disabled, the measured late write changes state. The
+assertions disabled, the late write changes state. The
 [completed-handler issue](https://github.com/felangel/bloc/issues/2961)
 discusses this lifetime constraint. Cancellation support is also discussed in
 [the async-operation proposal](https://github.com/felangel/bloc/issues/3069).
@@ -632,10 +632,10 @@ class SplitPlayerBloc extends Bloc<PlayerCommand, PlayerState> {
 }
 ```
 
-The measured device trace is `[play start, seek 1 start, seek 2 start, pause
-start, seek 3 start, play end, pause end, seek 1 end, seek 2 end, seek 3 end]`,
-and the final state is `PlayerState(3ms)` — the position the user asked for.
-The state is right and the device is not.
+The device trace is `[play start, seek 1 start, seek 2 start, pause start, seek
+3 start, play end, pause end, seek 1 end, seek 2 end, seek 3 end]`, and the
+final state is `PlayerState(3ms)` — the position the user asked for. The state
+is right and the device is not.
 
 Two things went wrong at once. A transformer orders the events of its own
 registration, so pause no longer waits for play. And `restartable()` cancels
@@ -969,9 +969,9 @@ runs: `[connect, disconnect, connect, battery]`.
 The generation records are application state associated with the queue. Events
 still reach the handler, which must check each discardable command. The
 `Expando` scheme also requires distinct event objects. Reusing a canonical
-const event overwrites its earlier stamp; the measured sequence then includes
-the stale read: `[connect, battery, disconnect, connect, battery]`. `add`
-provides no result indicating that a read was skipped.
+const event overwrites its earlier stamp; the sequence then includes the stale
+read: `[connect, battery, disconnect, connect, battery]`. `add` provides no
+result indicating that a read was skipped.
 
 ### Solo
 
@@ -1054,11 +1054,11 @@ class DroppableCheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
 }
 ```
 
-The measured three requests make one API call, and one caller in three is
-answered: `[Receipt(for A), never answered, never answered]`. The other two are
-still waiting when the run ends, and would wait for as long as the process
-lives — `droppable()` dropped their events, and a dropped event's completer is
-completed by nobody.
+Three requests make one API call, and one caller in three is answered:
+`[Receipt(for A), never answered, never answered]`. The other two are still
+waiting after everything else has finished, and would wait for as long as the
+process lives — `droppable()` dropped their events, and a dropped event's
+completer is completed by nobody.
 
 The second of those two shows what the policy actually does: order B is a
 different payment, and it was dropped as well. `droppable()` drops what arrives
@@ -1162,7 +1162,7 @@ class CheckoutCubit extends Cubit<CheckoutState> {
 
 It also makes two API calls for three requests covering two orders. Its closure
 handling remains incomplete: Cubit does not wait for this custom chain. In the
-run that closes during payment, the charge succeeds, but the later
+case where closure happens during payment, the charge succeeds, but the later
 `emit(Paid(...))` throws
 `Bad state: Cannot emit new states after calling close`, so the caller receives
 that error instead of the receipt. A production implementation must coordinate
@@ -1212,7 +1212,7 @@ Future<Map<String, Object?>> handlePayRequest(
 
 `Policy.droppable` returns the existing queued or running job for the same
 order key. Both callers share its receipt, while another order creates another
-job. The measured three requests again make two API calls.
+job. The three requests again make two API calls.
 
 `cancellable: false` protects the complete payment operation from ordinary
 cancellation, including controller closure once it is running. `join` waits for
@@ -1277,7 +1277,7 @@ class FunnelSensorBloc extends Bloc<SensorEvent, SensorState> {
 }
 ```
 
-The measured states are `[Calibrated, Broken(cable unplugged)]`. The cable was
+The published states are `[Calibrated, Broken(cable unplugged)]`. The cable was
 already unplugged when `Calibrated` was published: the failure event waited its
 turn behind the calibration it invalidates, and every check in that handler
 read a state that nothing had been allowed to change yet. A screen watching
@@ -1394,11 +1394,11 @@ class UnguardedFirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
 }
 ```
 
-The measured device receives
-`[0, 1, 100, 2, 101, 3, 102, 4, 103, 5, 104, 105]`: both loops went on writing,
-and the two uploads interleave on the wire. `restartable()` cancels the
-replaced handler's emitter, and a cancelled emitter ignores writes — but the
-Dart body awaiting `_ble.write` is not interrupted by that. The
+The device receives `[0, 1, 100, 2, 101, 3, 102, 4, 103, 5, 104, 105]`: both
+loops went on writing, and the two uploads interleave on the wire.
+`restartable()` cancels the replaced handler's emitter, and a cancelled emitter
+ignores writes — but the Dart body awaiting `_ble.write` is not interrupted by
+that. The
 [restartable-handler discussion](https://github.com/felangel/bloc/issues/3349)
 describes why cancellation does not interrupt awaited futures.
 
@@ -1426,10 +1426,10 @@ class FirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
 
 The chunks now belong to one upload: a mid-upload restart writes
 `[0, 1, 100, 101, …]`. The device still sees two writers, though. The
-replacement handler starts while the old write is pending, and the measured
-trace is `[write 0 start, write 0 end, write 1 start, write 100 start, write 1
-end, write 100 end, …]` — the check governs what is published, not what the
-wire is doing.
+replacement handler starts while the old write is pending, and the trace is
+`[write 0 start, write 0 end, write 1 start, write 100 start, write 1 end,
+write 100 end, …]` — the check governs what is published, not what the wire is
+doing.
 
 ### Bloc
 
@@ -1512,7 +1512,7 @@ completes. The observed chunk sequence and non-overlap match the locked Bloc
 implementation.
 
 An external `Broken` state also cancels this job because it no longer matches
-`NotBroken`. The measured failure run stops after `[0, 1, 2]` with
+`NotBroken`. The failure run stops after `[0, 1, 2]` with
 `Cancelled(rules: is not NotBroken)`. The check covers both replacement and
 state invalidation.
 
@@ -1624,7 +1624,7 @@ The guarded Bloc and solo runs both record
 `[open 1, open 2, ready 2, sample 2, release 2, ready 1, release 1]` and end at
 `Preview(2)`.
 
-Late disposal can happen after the controller closes. In the measured solo run,
-`close()` finishes before the obsolete buffer arrives; it is released when
-decoding finally returns it. Use `join` when both the operation and its
-resource release must finish before the queue or controller proceeds.
+Late disposal can happen after the controller closes. In solo, `close()`
+finishes before the obsolete buffer arrives; it is released when decoding
+finally returns it. Use `join` when both the operation and its resource release
+must finish before the queue or controller proceeds.
