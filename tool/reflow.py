@@ -128,6 +128,16 @@ def reflow(text):
     kept = 0
     index = 0
     fenced = False
+    # A YAML front matter is not prose: filled, it becomes one paragraph
+    # and the file stops having a front matter at all.
+    if lines and lines[0].strip() == '---':
+        out.append(lines[0])
+        index = 1
+        while index < len(lines):
+            out.append(lines[index])
+            index += 1
+            if out[-1].strip() == '---':
+                break
     while index < len(lines):
         line = lines[index]
         if line.startswith('```'):
