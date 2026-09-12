@@ -396,11 +396,13 @@ with different state types. The controller's own hook uses its specific
 state type.
 
 With the throwing observer, the run still reaches `Recording`, arms the
-meter, records `[Recording]` locally and finishes with `Done(null)`.
-The telemetry error is reported to the zone. The test harness handles it
-with `runZonedGuarded`; an unhandled zone error can still terminate an
-application. Hook isolation preserves the operation's control flow, while
-the application remains responsible for reporting errors.
+meter, records `[Recording]` locally and finishes with `Done(null)`: the
+failing hook changes neither the job's outcome nor the queue. The
+telemetry error goes to `Zone.current.handleUncaughtError` — to whatever
+the application already does with uncaught asynchronous errors, and
+nowhere else. Left unhandled there it can still terminate the
+application: hook isolation keeps the operation's control flow, it does
+not take over the reporting.
 
 ## 3. Closing and cancelling in-flight work
 
