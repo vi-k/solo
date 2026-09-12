@@ -26,11 +26,11 @@ provides a complete introduction and the detailed contracts.
 
 Examples use separate application models: a `Ready` state in the player example
 is not the sensor's `Ready`. Supporting state classes, event classes and fake
-APIs are supplied by the runnable documentation harness. The examples were
+APIs are not shown here: they live with the code that extracts these examples
+from the document, `tool/doc_snippets.py` in the repository. The examples were
 checked with bloc 9.2.1, bloc_concurrency 0.3.0 and the local solo 0.2.0
 source. Traces describe those runs, not timing guarantees for arbitrary
-devices. The harness extracts the code from this document; it is available as
-`tool/doc_snippets.py` in the repository.
+devices.
 
 ## Correspondences
 
