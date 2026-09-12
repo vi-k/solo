@@ -2,8 +2,15 @@
 
 This guide compares [solo](https://pub.dev/packages/solo) with `Bloc` and
 `Cubit` through ten controller scenarios. Each section states the required
-behavior, shows implementations, and explains what the library handles
-and what remains application code.
+behavior, starts from the code that behavior invites, says what that code
+actually does, and only then shows the implementations that meet it —
+bloc's and solo's — with what the library handles and what remains
+application code.
+
+A first attempt here is not a strawman: it is the version the API's own
+vocabulary suggests, and what is quoted under it was measured, not argued.
+Reading it before the answer is the point of the section; a reader who
+already knows the trap can skip to `### Bloc` and `### Solo`.
 
 `Bloc` processes events registered with `on<E>`. A transformer determines
 how events in that registration are scheduled. `Cubit` exposes methods
@@ -57,13 +64,102 @@ controllers for independent concurrent work.
 A notes controller uploads a note and refreshes the list from the server.
 If refresh starts before upload completes, its response can contain the
 old list. Publishing that response after upload would remove the new note
-from local state, even if both handlers read the latest local `state`.
+from local state, even if both handlers read the latest local state.
 The requirement is to serialize the complete operations, including I/O.
+
+### The first attempt
+
+An event type per command, a handler per event, and on both of them the
+transformer whose name is the requirement:
+
+```dart
+class SplitNotesBloc extends Bloc<NotesEvent, NotesState> {
+  final Api _api;
+
+  SplitNotesBloc(this._api) : super(const NotesState()) {
+    on<UploadNote>((e, emit) async {
+      emit(state.copyWith(uploading: true));
+      await _api.upload(e.note);
+      emit(
+        state.copyWith(notes: [...state.notes, e.note], uploading: false),
+      );
+    }, transformer: sequential());
+    on<RefreshList>((e, emit) async {
+      final serverNotes = await _api.list();
+      emit(state.copyWith(notes: serverNotes));
+    }, transformer: sequential());
+  }
+}
+```
+
+The measured final state is `NotesState([n0], uploading: false)`: the
+uploaded note is not in it. The order of the run says why. Below are the
+server's own entries and every publication, each with the event that made
+it; the local list starts empty because nothing has been read yet:
+
+```text
+UploadNote emits [], uploading: true
+upload n1 starts
+list reads [n0]
+server receives n1 and holds [n0, n1]
+UploadNote emits [n1], uploading: false
+RefreshList emits [n0]
+```
+
+Refresh reads the server on line three, before the upload reaches it on
+line four, and publishes that answer on line six, after the upload has
+published its own. The response is older than the state it replaces, and
+no reading of the local `state` inside either handler can tell: the
+obsolete list is in the response, not in the state.
+
+A transformer schedules the events of its own registration, and here there
+are two registrations, so the two handlers still run at the same time. The
+[per-handler ordering discussion](https://github.com/felangel/bloc/issues/2790)
+describes that distinction.
+
+The same two registrations have another way to lose the note, and this one
+involves no transformer at all. Written in a single line,
+`emit(state.copyWith(notes: await _api.list()))` evaluates the receiver
+`state` before it awaits the argument, so it publishes a state assembled
+before the upload. That variant ends at `NotesState([n0], uploading: true)`
+and overwrites the upload flag as well.
+
+### The second attempt
+
+The missing half is one registration for both commands. By itself it is
+not enough either, because the default scheduling is concurrent:
+
+```dart
+class ConcurrentNotesBloc extends Bloc<NotesEvent, NotesState> {
+  final Api _api;
+
+  ConcurrentNotesBloc(this._api) : super(const NotesState()) {
+    on<NotesEvent>((e, emit) async {
+      switch (e) {
+        case UploadNote(:final note):
+          emit(state.copyWith(uploading: true));
+          await _api.upload(note);
+          emit(
+            state.copyWith(notes: [...state.notes, note], uploading: false),
+          );
+        case RefreshList():
+          final serverNotes = await _api.list();
+          emit(state.copyWith(notes: serverNotes));
+      }
+    });
+  }
+}
+```
+
+The measured state is `NotesState([n0], uploading: false)` again, from an
+order identical to the one above, line for line. The two attempts fail for
+different reasons — two queues there, no queue here — but the result does
+not tell them apart.
 
 ### Bloc
 
-The default event scheduling is concurrent. To serialize both event types,
-register one handler for their common type and use `sequential()`:
+Both halves together: one registration for the common supertype, with
+`sequential()` on it:
 
 ```dart
 class NotesBloc extends Bloc<NotesEvent, NotesState> {
@@ -87,23 +183,24 @@ class NotesBloc extends Bloc<NotesEvent, NotesState> {
 }
 ```
 
-The measured final state is `NotesState([n0, n1], uploading: false)`.
-The upload completes before refresh reads the server. One registration
-also means one transformer for all commands handled by that registration.
+The measured final state is `NotesState([n0, n1], uploading: false)`, and
+one line of the order has moved:
 
-Putting `sequential()` on two separate `on<E>` registrations does not
-serialize them with each other. In the same scenario that arrangement
-ends at `NotesState([n0], uploading: false)`. Every operation requiring
-the shared ordering must therefore use the same registration. The
-[per-handler ordering discussion](https://github.com/felangel/bloc/issues/2790)
-describes this distinction.
+```text
+UploadNote emits [], uploading: true
+upload n1 starts
+server receives n1 and holds [n0, n1]
+UploadNote emits [n1], uploading: false
+list reads [n0, n1]
+RefreshList emits [n0, n1]
+```
 
-There is a separate snapshot issue in
-`emit(state.copyWith(notes: await _api.list()))`: Dart evaluates the
-receiver `state` before awaiting the argument. The concurrent test of this
-variant ends at `NotesState([n0], uploading: true)`, overwriting both the
-notes and upload flag. Reading state after the await avoids that snapshot
-problem, but does not serialize the server operations.
+Refresh now reads a server that already holds the note, so the answer it
+publishes is not obsolete. The ordering is what makes the response
+current; checking the local state on arrival would not have.
+
+One registration also means one transformer for every command handled
+there, so each operation that needs this ordering has to be handled in it.
 
 ### Solo
 
@@ -141,10 +238,19 @@ response it checks cancellation before returning the result. Upload uses
 still in progress. Refresh uses `ctx.wait`, which can stop waiting on
 cancellation because this example allows its read result to be abandoned.
 
-The final state is also `NotesState([n0, n1], uploading: false)`. Adding
-another queued method preserves the shared ordering. This guarantee covers
-root jobs; child jobs can run inside a parent, and independent device
-changes have a separate path described in section 8.
+The final state is also `NotesState([n0, n1], uploading: false)`, from the
+same order as the bloc funnel above — `list reads [n0, n1]` after `server
+receives n1` — with job keys where that run has event types.
+
+There is nothing to remember here about transformers or the order events
+are processed in: there is no transformer to pass and no scheduling to
+choose. The root jobs of a controller run one at a time, in the order they
+were added, and that is the only way they run. Adding another queued
+method preserves the ordering, because the queue is one per controller
+rather than one per command; no arrangement of the methods can give two of
+them a queue each. This guarantee covers root jobs; child jobs can run
+inside a parent, and independent device changes have a separate path
+described in section 8.
 
 Use context waiting methods inside job bodies to check cancellation and
 state rules. A plain `await` still keeps the body and queue occupied but
@@ -157,10 +263,11 @@ A recorder starts its native recording, publishes `Recording`, then arms
 a level meter. A telemetry observer throws while processing the update.
 The recorder operation should finish independently of telemetry reporting.
 
-### Bloc and Cubit
+### The first attempt
 
-Both use `BlocBase.emit`. It calls `onChange` before updating state, and
-an exception from that call is passed to `onError` and rethrown:
+An observer that reports every change, and a controller that keeps a local
+journal of them. Both are written the way the hooks invite, calling
+`super` first:
 
 ```dart
 class RecorderBloc extends Bloc<StartRecording, RecorderState> {
@@ -195,13 +302,22 @@ class TelemetryObserver extends BlocObserver {
 }
 ```
 
-In this run the device starts, but state remains `Idle`. The level meter
-is never armed. The local journal is empty because its write follows the
-failing `super.onChange` call. The handler reports `telemetry unavailable`.
-The same observer failure in a Cubit method reaches the method's caller.
+In this run the device starts, but the state remains `Idle`. The level
+meter is never armed. The local journal is empty, because its write
+follows the failing `super.onChange` call. The handler reports
+`telemetry unavailable`. The same observer failure in a Cubit method
+reaches the method's caller.
 
-Catch telemetry errors within the observer to prevent them from
-interrupting the update:
+Both `Bloc` and `Cubit` publish through `BlocBase.emit`. It calls
+`onChange` before updating the state, and an exception from that call is
+passed to `onError` and rethrown — into the handler that was publishing.
+The reporting an observer exists for is therefore on the same path as the
+operation it reports on.
+
+### Bloc and Cubit
+
+Catch telemetry errors within the observer, so that they cannot interrupt
+the update:
 
 ```dart
 class GuardedTelemetryObserver extends BlocObserver {
@@ -226,7 +342,8 @@ The guarded run reaches `Recording`, records `[native start, arm meter]`
 and writes `[Recording]` to the journal. The fallback logger receives
 the telemetry error. This approach works when every relevant observation
 callback handles its failures and its fallback does not throw. Overriding
-`onError` alone does not prevent `emit` from rethrowing.
+`onError` alone does not prevent `emit` from rethrowing: the guard has to
+be in the callback that throws.
 
 ### Solo
 
@@ -250,8 +367,8 @@ final class RecorderController extends Solo<RecorderState> {
       );
 
   @override
-  void onChange(RecorderState previous, RecorderState current) =>
-      _journal.note('$current');
+  void onChange(SoloTransition<RecorderState> transition) =>
+      _journal.note('${transition.current}');
 }
 
 final class TelemetryObserver extends SoloObserver {
@@ -260,8 +377,8 @@ final class TelemetryObserver extends SoloObserver {
   TelemetryObserver(this._telemetry);
 
   @override
-  void onChange(SoloBase<Object> solo, Object previous, Object current) =>
-      _telemetry.send(current);
+  void onChange(SoloBase<Object> solo, SoloTransition<Object> transition) =>
+      _telemetry.send(transition.current);
 }
 ```
 
@@ -282,7 +399,35 @@ A user sends a chat message and leaves the screen before the reply arrives.
 The controller must prevent the old operation from updating a closed
 screen or scheduling follow-up work after closure.
 
-### Bloc
+### The first attempt
+
+The screen is gone and the controller is closed, so the handler is written
+as though closing had ended it:
+
+```dart
+class UnguardedChatBloc extends Bloc<ChatEvent, ChatState> {
+  final Api _api;
+
+  UnguardedChatBloc(this._api) : super(const ChatState()) {
+    on<SendMessage>((e, emit) async {
+      final reply = await _api.send(e.text);
+      emit(state.withReply(reply));
+      add(const MarkReplyRead());
+    }, transformer: sequential());
+    on<MarkReplyRead>(
+      (e, emit) => _api.markRead(),
+      transformer: sequential(),
+    );
+  }
+}
+```
+
+With `sequential()` the measured close waits for the API call still in
+flight, and the state after it is `ChatState(reply to hi)`: the reply was
+published into a controller that was already closing. The follow-up `add`
+then throws `Bad state: Cannot add new events after calling close`, and
+that error arrives in the zone while `close()` is still being awaited,
+not at the caller of the handler.
 
 Closing behavior depends on the transformer in these versions. With
 `sequential()`, `close()` waits for the running handler, which can still
@@ -290,6 +435,8 @@ emit while closure is pending. With the default transformer, `concurrent`,
 `droppable` or `restartable`, the measured close returns before the body
 finishes and the cancelled emitter ignores subsequent writes. Neither
 case interrupts the API call or the rest of the handler body.
+
+### Bloc
 
 This sequential handler checks closure after its await:
 
@@ -442,16 +589,16 @@ final class RefreshController extends Solo<RefreshState> {
 }
 ```
 
-Call `controller.refresh()` and retain its Job; `await job.cancel()` waits
+Call `controller.refresh()` and retain its job; `await job.cancel()` waits
 for cancellation and cleanup. `ctx.wait` ends the wait for the API, and
 `onCancel` returns `Initial` before the queue proceeds. A successful refresh
 publishes `Initial` from the body; `onError` resets the indicator on failure
-while the Job still reports `Failed`.
+while the job still reports `Failed`.
 
 The timing differs: Bloc's cancel-event handler updates state when it runs,
-while solo's state handler runs after the cancelled Job's cleanup.
+while solo's state handler runs after the cancelled job's cleanup.
 Neither example stops the API operation itself. If an independent external
-state makes the solo Job invalid, its final state handlers are skipped;
+state makes the solo job invalid, its final state handlers are skipped;
 section 8 explains external state and the README describes handler rules.
 
 ## 4. Restarting one operation within a shared queue
@@ -461,10 +608,41 @@ drag, queued seek positions become obsolete and an active seek should
 stop before its replacement starts. Play and pause retain their order.
 The player API in this example accepts a token and returns when cancelled.
 
+### The first attempt
+
+One registration per command, and on the one that must be replaceable, the
+transformer named after the requirement:
+
+```dart
+class SplitPlayerBloc extends Bloc<PlayerCommand, PlayerState> {
+  final Player _player;
+
+  SplitPlayerBloc(this._player) : super(const PlayerState()) {
+    on<Play>((e, emit) => _player.play(), transformer: sequential());
+    on<Pause>((e, emit) => _player.pause(), transformer: sequential());
+    on<Seek>((e, emit) async {
+      await _player.seek(e.position);
+      emit(PlayerState(position: e.position));
+    }, transformer: restartable());
+  }
+}
+```
+
+The measured device trace is `[play start, seek 1 start, seek 2 start,
+pause start, seek 3 start, play end, pause end, seek 1 end, seek 2 end,
+seek 3 end]`, and the final state is `PlayerState(3ms)` — the position the
+user asked for. The state is right and the device is not.
+
+Two things went wrong at once. A transformer orders the events of its own
+registration, so pause no longer waits for play. And `restartable()`
+cancels the replaced handler's emitter without stopping the native call it
+is awaiting: all three seeks ran on the device, the third of them after
+pause. Only the last emit reached the state, which is why the state alone
+shows none of this.
+
 ### Bloc
 
-A separate `on<Seek>` with `restartable()` can overlap play and pause
-handlers. To keep all commands serialized, this implementation uses one
+To keep all commands serialized, this implementation uses one
 `sequential()` registration and tracks the latest seek and active token:
 
 ```dart
@@ -571,9 +749,10 @@ including `Cancelled(manual)` for a replaced request.
 A map exposes `moveTo` and `setZoom`. Callers need typed arguments, and
 rapid drag updates should not make the map finish at an older position.
 
-### Cubit
+### The first attempt
 
-Cubit directly supports methods returning futures:
+Cubit supports methods that return futures directly, so the typed call
+interface costs nothing:
 
 ```dart
 class MapCubit extends Cubit<MapState> {
@@ -639,7 +818,7 @@ All commands still use one transformer, and the shown methods return
 
 ### Solo
 
-Each method returns a Job and specifies its replacement policy:
+Each method returns a job and specifies its replacement policy:
 
 ```dart
 enum MapKey { moveTo, setZoom }
@@ -679,7 +858,7 @@ The restart trace is `[moveTo 1 start, moveTo 1 stopped, moveTo 3 start,
 moveTo 3 end]`. The middle request does not start; the first stops before
 the latest one begins. Both the map and `MapState(3, z4)` reflect the
 latest request. Callers may await `job.value` or `job.done` to wait for
-the operation, or omit waiting. The returned Job itself is not a Future;
+the operation, or omit waiting. The returned job itself is not a Future;
 its error-handling rules are described in the README.
 
 ## 6. Removing selected pending work
@@ -688,15 +867,62 @@ A BLE screen queues connect, battery and signal reads, rename and
 disconnect. When the screen closes, pending reads should be discarded,
 while the requested rename must still complete before disconnect.
 
-### Bloc
+### The first attempt
 
 One `sequential()` registration orders all device commands. Its pending
 events cannot be enumerated or removed through the Bloc API, so the
-handler checks whether a read is still relevant.
+handler has to check whether a read is still relevant, and a leaving flag
+is the obvious thing to check: the screen sets it when it goes and clears
+it when it comes back.
 
-A single leaving flag fails if the screen reopens before old events drain:
-clearing the flag for the new screen makes an old read valid again. This
-version records the screen generation on each event:
+```dart
+class FlagDeviceBloc extends Bloc<DeviceEvent, DeviceState> {
+  final Ble _ble;
+  var _leaving = false;
+
+  FlagDeviceBloc(this._ble) : super(const DeviceState()) {
+    on<DeviceEvent>((e, emit) async {
+      switch (e) {
+        case Connect():
+          await _ble.connect();
+          emit(state.copyWith(online: true));
+        case ReadBattery():
+          if (_leaving) return;
+          emit(state.copyWith(battery: await _ble.battery()));
+        case ReadSignal():
+          if (_leaving) return;
+          emit(state.copyWith(signal: await _ble.signal()));
+        case Rename(:final name):
+          await _ble.rename(name);
+        case Disconnect():
+          await _ble.disconnect();
+          emit(const DeviceState());
+      }
+    }, transformer: sequential());
+  }
+
+  @override
+  void onEvent(DeviceEvent event) {
+    if (event is Disconnect) _leaving = true;
+    if (event is Connect) _leaving = false;
+    super.onEvent(event);
+  }
+}
+```
+
+On the way out the flag works: the device receives
+`[connect, rename kitchen, disconnect]`, and the queued reads are skipped.
+What it cannot express is a screen that comes back before the old events
+drain. Adding the new `Connect` clears the flag while the previous
+screen's read is still queued, so that read becomes valid again and runs:
+`[connect, battery, disconnect, connect, battery]`. The battery it reports
+belongs to the screen that is gone.
+
+### Bloc
+
+A flag says where the screen is now; what the queue needs to know is which
+screen each event belongs to. This version records the screen generation
+on each event:
 
 ```dart
 class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
@@ -792,10 +1018,11 @@ with that request. `Bloc.add` returns `void`; the
 [awaiting-events discussion](https://github.com/felangel/bloc/issues/1556)
 covers this use case.
 
-### Bloc
+### The first attempt
 
-Carry a completer on the event and expose a method returning its future.
-An in-flight map makes duplicate callers share the same result:
+The result has to travel on the event itself, as a completer the caller
+awaits. `droppable()` reads like the policy for sharing one payment: while
+a charge is running, another request for it should not start a second one.
 
 ```dart
 class Pay extends CheckoutEvent {
@@ -805,6 +1032,43 @@ class Pay extends CheckoutEvent {
   Pay(this.order) : result = Completer<Receipt>();
 }
 
+class DroppableCheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
+  final Api _api;
+
+  DroppableCheckoutBloc(this._api) : super(Cart()) {
+    on<Pay>((e, emit) async {
+      emit(Paying());
+      final receipt = await _api.pay(e.order);
+      e.result.complete(receipt);
+      emit(Paid(receipt));
+    }, transformer: droppable());
+  }
+
+  Future<Receipt> pay(Order order) {
+    final event = Pay(order);
+    add(event);
+    return event.result.future;
+  }
+}
+```
+
+The measured three requests make one API call, and one caller in three is
+answered: `[Receipt(for A), never answered, never answered]`. The other
+two are still waiting when the run ends, and would wait for as long as the
+process lives — `droppable()` dropped their events, and a dropped event's
+completer is completed by nobody.
+
+The second of those two shows what the policy actually does: order B is a
+different payment, and it was dropped as well. `droppable()` drops what
+arrives while a handler is running, not what duplicates it.
+
+### Bloc
+
+The event carries its completer as above. What the sharing needs is a map
+of the payments in flight, so that a caller of an order already running is
+given the completer of that payment instead of a dropped event of its own:
+
+```dart
 class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
   final Api _api;
   final _inFlight = <String, Completer<Receipt>>{};
@@ -850,8 +1114,10 @@ The completer must finish on every path. The `add` catch removes the map
 entry when a closed Bloc refuses the event. `isCompleted` prevents double
 completion if an emit throws after the receipt has been delivered.
 Completing the receipt before publishing `Paid` prevents an observer error
-from replacing an already obtained receipt. `droppable()` alone would not
-implement this sharing: a dropped event would leave its completer pending.
+from replacing an already obtained receipt. The transformer stays
+`sequential()`: the map is what shares a payment, and what reaches the
+queue after it are distinct orders, which should run in order rather than
+drop one another.
 
 ### Cubit
 
@@ -925,7 +1191,7 @@ final class CheckoutController extends Solo<CheckoutState> {
 }
 ```
 
-The platform handler can inspect that Job's outcome:
+The platform handler can inspect that job's outcome:
 
 ```dart
 Future<Map<String, Object?>> handlePayRequest(
@@ -943,9 +1209,9 @@ Future<Map<String, Object?>> handlePayRequest(
 }
 ```
 
-`Policy.droppable` returns the existing queued or running Job for the same
+`Policy.droppable` returns the existing queued or running job for the same
 order key. Both callers share its receipt, while another order creates
-another Job. The measured three requests again make two API calls.
+another job. The measured three requests again make two API calls.
 
 `cancellable: false` protects the complete payment operation from ordinary
 cancellation, including controller closure once it is running. `join`
@@ -954,14 +1220,14 @@ with the receipt. `close()` waits for that completion. API failures still
 produce `Failed`; a failure state can be supplied with `run(onError: ...)`.
 
 This job accepts the base `CheckoutState` and has no `keepWhile` restriction.
-State rules can cancel even a non-cancellable Job, so a narrower type
+State rules can cancel even a non-cancellable job, so a narrower type
 would allow cancellation after a charge was sent but before it was
 recorded. No waiting method can retract a charge from an API that provides
 no cancellation mechanism.
 
 `ctx.uncancellable` has a different purpose: it holds ordinary cancellation
 for one step, then applies the request afterwards. It does not guarantee
-a successful Job outcome for a payment that completed during that step.
+a successful job outcome for a payment that completed during that step.
 It is unnecessary for the non-cancellable job shown here.
 
 The flag also refuses manual cancellation while the payment is queued.
@@ -971,7 +1237,7 @@ can still discard a queued payment without charging, and a submission
 after close also never starts. These cases explain the platform handler's
 `Cancelled` branch.
 
-Sharing an in-memory Job only deduplicates concurrent calls to this
+Sharing an in-memory job only deduplicates concurrent calls to this
 controller. Payment retries across process restarts or network failures
 also require an idempotent payment API; neither example provides that.
 
@@ -981,11 +1247,50 @@ A sensor reports a hardware failure while calibration is waiting for a
 sample. The controller must reflect `Broken` promptly and prevent the
 calibration from later publishing `Calibrated` over it.
 
-### Bloc
+### The first attempt
 
 Bloc's direct `emit` is marked `@visibleForTesting` and documented for
-internal use. The listener can instead add a `HardwareFailed` event.
-Give it a separate registration so it does not wait behind calibration:
+internal use, so the listener adds a `HardwareFailed` event instead. One
+registration for both events is what section 1 asks for, and it is what a
+reader who has just learned that lesson writes:
+
+```dart
+class FunnelSensorBloc extends Bloc<SensorEvent, SensorState> {
+  final Sensor _hw;
+
+  FunnelSensorBloc(this._hw) : super(Ready()) {
+    _hw.onError = (error) => add(HardwareFailed(error));
+    on<SensorEvent>((e, emit) async {
+      switch (e) {
+        case HardwareFailed(:final error):
+          emit(Broken(error));
+        case Calibrate():
+          if (state is! Ready) return;
+          await _hw.zero();
+          if (state is! Ready) return;
+          await _hw.sample();
+          if (state is! Ready) return;
+          emit(Calibrated());
+      }
+    }, transformer: sequential());
+  }
+}
+```
+
+The measured states are `[Calibrated, Broken(cable unplugged)]`. The cable
+was already unplugged when `Calibrated` was published: the failure event
+waited its turn behind the calibration it invalidates, and every check in
+that handler read a state that nothing had been allowed to change yet. A
+screen watching this controller reports success after the device has
+failed.
+
+The ordering of section 1 and the promptness needed here pull in opposite
+directions, and one registration cannot do both.
+
+### Bloc
+
+Give the failure its own registration, so that it does not wait behind
+calibration:
 
 ```dart
 class SensorBloc extends Bloc<SensorEvent, SensorState> {
@@ -1007,14 +1312,9 @@ class SensorBloc extends Bloc<SensorEvent, SensorState> {
 ```
 
 The run ends at `Broken(cable unplugged)` without publishing `Calibrated`.
-Calibration checks state after each await because the failure event
-does not cancel its handler or emitter.
-
-If both events use one sequential registration, the failure notification
-waits behind calibration. The measured states become
-`[Calibrated, Broken(cable unplugged)]`, briefly reporting success after
-the device failed. Thus this approach uses a separate failure handler
-and explicit checks in operations that depend on the device state.
+Calibration checks state after each await because the failure event does
+not cancel its handler or emitter; the checks are what the second
+registration buys, not something it replaces.
 
 Cubit can reflect the notification directly from a subclass method,
 but its asynchronous operations still need equivalent validity checks.
@@ -1044,7 +1344,7 @@ final class SensorController extends Solo<SensorState> {
 }
 ```
 
-Queuing a normal Job to publish `Broken` would delay the fact behind the
+Queuing a normal job to publish `Broken` would delay the fact behind the
 calibration that it invalidates. `externalSetState` updates state
 immediately and checks running bodies against their rules. Here,
 `run<Ready, void>` permits calibration only while state is `Ready`, so
@@ -1052,7 +1352,7 @@ the external failure cancels it with `Cancelled(rules: is not Ready)`.
 
 This exception applies to facts such as an unplugged cable. A notification
 asking the controller to perform future work should enqueue an ordinary
-Job. The source being a stream does not itself justify bypassing the queue.
+job. The source being a stream does not itself justify bypassing the queue.
 Stop the hardware listener before closing either controller; the snippets
 show registration, not application-specific listener teardown.
 
@@ -1062,7 +1362,7 @@ rule check; a later state checkpoint would cancel it. This allows a final
 transition while requiring the working type to cover continued work.
 
 The sensor call already in progress still finishes in both examples.
-`join` waits for it before allowing another root Job to start. A device
+`join` waits for it before allowing another root job to start. A device
 with a cancellation token can additionally be stopped through `ctx.onCancel`,
 as in section 4. Final `onError` and `onCancel` state handlers, if supplied,
 are disabled by an incompatible external update, so they do not overwrite
@@ -1074,10 +1374,40 @@ A firmware upload writes BLE chunks sequentially. A replacement upload
 must stop the old loop and wait for its current write before sending any
 new chunk. This example's BLE API cannot abort an accepted write.
 
-### Bloc
+### The first attempt
 
-`restartable()` cancels the old emitter, but its Dart body continues.
-Check `emit.isDone` after each write to stop the old loop:
+`restartable()` is the policy the requirement names: a new upload replaces
+the one running. The loop is written as though the replacement stopped it:
+
+```dart
+class UnguardedFirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
+  final Ble _ble;
+
+  UnguardedFirmwareBloc(this._ble) : super(Idle()) {
+    on<Flash>((e, emit) async {
+      var written = 0;
+      for (final chunk in e.chunks) {
+        await _ble.write(chunk);
+        emit(Flashing(++written, e.chunks.length));
+      }
+    }, transformer: restartable());
+  }
+}
+```
+
+The measured device receives
+`[0, 1, 100, 2, 101, 3, 102, 4, 103, 5, 104, 105]`: both loops went on
+writing, and the two uploads interleave on the wire. `restartable()`
+cancels the replaced handler's emitter, and a cancelled emitter ignores
+writes — but the Dart body awaiting `_ble.write` is not interrupted by
+that. The
+[restartable-handler discussion](https://github.com/felangel/bloc/issues/3349)
+describes why cancellation does not interrupt awaited futures.
+
+### The second attempt
+
+Since the body is not interrupted, it has to notice: `emit.isDone` is true
+once the emitter has been cancelled.
 
 ```dart
 class FirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
@@ -1096,15 +1426,16 @@ class FirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
 }
 ```
 
-With the check, a mid-upload restart writes `[0, 1, 100, 101, …]`. Without
-it, both loops continue and their chunks interleave. The
-[restartable-handler discussion](https://github.com/felangel/bloc/issues/3349)
-describes why cancellation does not interrupt awaited futures.
+The chunks now belong to one upload: a mid-upload restart writes
+`[0, 1, 100, 101, …]`. The device still sees two writers, though. The
+replacement handler starts while the old write is pending, and the
+measured trace is `[write 0 start, write 0 end, write 1 start,
+write 100 start, write 1 end, write 100 end, …]` — the check governs what
+is published, not what the wire is doing.
 
-The check alone does not prevent overlapping native writes. A replacement
-handler starts while the old write is still pending, producing
-`[write 0 start, write 0 end, write 1 start, write 100 start, write 1 end,
-write 100 end, …]` in the test. A shared lock can serialize device calls:
+### Bloc
+
+A shared lock serializes the device calls:
 
 ```dart
 class Lock {
@@ -1154,7 +1485,7 @@ still needed to stop flashing and preserve `Broken`, as in section 8.
 
 ### Solo
 
-The Job occupies the controller's queue until its body and cleanup finish:
+The job occupies the controller's queue until its body and cleanup finish:
 
 ```dart
 final class FirmwareController extends Solo<FirmwareState> {
@@ -1179,18 +1510,18 @@ final class FirmwareController extends Solo<FirmwareState> {
 `Policy.restart` requests cancellation and enqueues the replacement.
 `join` waits for the current write; after a successful write it detects
 cancellation and throws before the next iteration. The replacement starts
-after the old Job completes. The observed chunk sequence and non-overlap
+after the old job completes. The observed chunk sequence and non-overlap
 match the locked Bloc implementation.
 
-An external `Broken` state also cancels this Job because it no longer
+An external `Broken` state also cancels this job because it no longer
 matches `NotBroken`. The measured failure run stops after `[0, 1, 2]` with
 `Cancelled(rules: is not NotBroken)`. The check covers both replacement
 and state invalidation.
 
 If the upload starts child jobs through `ctx.run`, the parent also waits
 for those children and their cleanup. Work intentionally allowed to
-outlive the Job can use `ctx.unattended`, whose errors are reported through
-the Job's hooks; it does not keep the queue occupied.
+outlive the job can use `ctx.unattended`, whose errors are reported through
+the job's hooks; it does not keep the queue occupied.
 
 ## 10. Releasing a resource returned after cancellation
 
@@ -1201,10 +1532,10 @@ These decoder calls may overlap safely because their buffers are
 independent. A decoder requiring serialized access needs section 9's
 waiting behavior instead.
 
-### Bloc
+### The first attempt
 
 Checking `emit.isDone` before using the result prevents a stale waveform
-update, but this version returns without releasing the stale buffer:
+update, and after section 9 that check is the reflex:
 
 ```dart
 class PreviewBloc extends Bloc<OpenPreview, PreviewState> {
@@ -1220,6 +1551,13 @@ class PreviewBloc extends Bloc<OpenPreview, PreviewState> {
   }
 }
 ```
+
+The state ends at `Preview(2)`, which is correct, and the stale buffer is
+released zero times: the early return leaves it to the garbage collector,
+which does not know how to release a native buffer. Nothing about the
+state says so.
+
+### Bloc
 
 Move the check inside a `try`/`finally` that owns the acquired buffer:
 
@@ -1243,7 +1581,8 @@ class GuardedPreviewBloc extends Bloc<OpenPreview, PreviewState> {
 
 Both versions finish at `Preview(2)`. The first releases the current buffer
 once and the stale buffer zero times; the guarded version releases each
-once. Testing state alone would miss the leak.
+once. The `finally` runs on the cancelled path too, which is the only
+reason the stale buffer is released at all.
 
 The handler continues waiting after emitter cancellation and releases the
 buffer when it arrives. This is a working resource-management pattern;
@@ -1276,9 +1615,9 @@ final class PreviewController extends Solo<PreviewState> {
 }
 ```
 
-`ctx.wait` can end the cancelled Job before the decoder finishes. A late
-buffer is still passed to `dispose`; one returned while the Job is active
-is released during its cleanup. The replacement Job may therefore start
+`ctx.wait` can end the cancelled job before the decoder finishes. A late
+buffer is still passed to `dispose`; one returned while the job is active
+is released during its cleanup. The replacement job may therefore start
 without waiting for the obsolete decode, while each buffer is released.
 
 Use `dispose` here because the buffer is temporary, including on success.

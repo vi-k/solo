@@ -56,17 +56,43 @@ dependencies:
 dev_dependencies:
   lints: ^5.1.1
   test: ^1.25.15
+
+# The bench must see the tree, not pub.dev: solo in the tree can depend on
+# an async_job that is not released yet, and without this the snippets run
+# against a different engine than the package they document.
+dependency_overrides:
+  async_job:
+    path: {async_job}
 """.format(
     solo=os.path.join(REPO, 'packages', 'solo'),
+    async_job=os.path.join(REPO, 'packages', 'async_job'),
 )
+
+# What a snippet declares at column 0: a type, or a top-level function.
+DECLARES = re.compile(
+    r'^(?:(?:final|abstract|sealed|base|interface) )*'
+    r'(?:class|enum|mixin|extension|typedef)\s+(\w+)'
+    r'|^[A-Za-z_][\w<>,?\[\] ]*\s(\w+)\s*\(', re.M)
 
 doc = open(DOC).read()
 parts = re.split(r'\n## ', doc)
+
+# A snippet is addressed by section and by a name it declares -- '1/NotesBloc'
+# -- so that inserting a block into a section does not renumber the rest.
+# A block declaring several names answers to each of them. A name declared
+# twice in one section answers to neither: the entry is poisoned, and a use
+# of it fails here instead of quietly building the wrong file. A block that
+# declares nothing is addressed by its first line instead, slugified:
+# '3/if-event-is-cancelrefresh'. Nothing here is addressed by position.
 snips = {}
 for p in parts[1:]:
     n = p.split('.')[0].strip()
     for j, b in enumerate(re.findall(r'```dart\n(.*?)```', p, re.S)):
-        snips[f'{n}_{j + 1}'] = b
+        slug = re.sub(r'[^a-z0-9]+', '-', b.split('\n')[0].lower()).strip('-')
+        names = [a or c for a, c in DECLARES.findall(b)] or [slug[:30]]
+        for name in names:
+            key = f'{n}/{name}'
+            snips[key] = None if key in snips else b
 
 TRACE = '''
 final trace = <String>[];
@@ -165,6 +191,9 @@ class Player {
 }
 '''
 
+# The fake records the two moments the section turns on: when the server
+# takes the note, and what `list` saw when it read. The snapshot is taken
+# before the wait on purpose -- that is a response in flight.
 NOTES_API = '''
 class Note {
   Note(this.id);
@@ -177,12 +206,15 @@ class Api {
   final _server = <Note>[Note('n0')];
 
   Future<void> upload(Note note) async {
+    trace.add('upload $note starts');
     await tick(40);
     _server.add(note);
+    trace.add('server receives $note and holds $_server');
   }
 
   Future<List<Note>> list() async {
     final snapshot = List<Note>.from(_server);
+    trace.add('list reads $snapshot');
     await tick(60);
     return snapshot;
   }
@@ -355,8 +387,41 @@ class DeviceState {
   String toString() => 'DeviceState($online, b:$battery, s:$signal)';
 }
 
-''' + snips['6_1'] + '''
+''' + snips['6/DeviceBloc'] + '\n' + snips['6/FlagDeviceBloc'] + '''
+Future<void> run(Bloc<DeviceEvent, DeviceState> bloc, String label) async {
+  trace.clear();
+  bloc
+    ..add(Connect())
+    ..add(ReadBattery())
+    ..add(Rename('kitchen'))
+    ..add(Disconnect());
+  await tick(300);
+  print('$label leaving:     $trace');
+  trace.clear();
+  await bloc.close();
+}
+
+Future<void> runReopen(
+  Bloc<DeviceEvent, DeviceState> bloc,
+  String label,
+) async {
+  trace.clear();
+  bloc
+    ..add(Connect())
+    ..add(ReadBattery())
+    ..add(Disconnect())
+    ..add(Connect())
+    ..add(ReadBattery());
+  await tick(300);
+  print('$label reopen fast: $trace');
+  await bloc.close();
+}
+
 Future<void> main() async {
+  await run(FlagDeviceBloc(Ble()), 'a flag,');
+  await runReopen(FlagDeviceBloc(Ble()), 'a flag,');
+
+  trace.clear();
   final bloc = DeviceBloc(Ble());
   bloc
     ..add(Connect())
@@ -407,7 +472,7 @@ final class Connected extends DeviceState {
   String toString() => 'Connected(b:$battery, s:$signal)';
 }
 
-''' + snips['6_2'] + '''
+''' + snips['6/DeviceController'] + '''
 // The four "ordinary jobs" the snippet refers to.
 extension on DeviceController {
   Job<void> connect() => run<DeviceState, void>(
@@ -451,7 +516,7 @@ Future<void> main() async {
   print('hardware: $trace');
   print('connect ${connect.outcome}  battery ${battery.outcome}');
   print('signal ${signal.outcome}  rename ${rename.outcome}');
-  print('disconnect ${disconnect.outcome}  state ${device.state}');
+  print('disconnect ${disconnect.outcome}  state ${device.currentState}');
   await device.close();
 }
 ''')
@@ -478,8 +543,23 @@ class PlayerState {
 '''
 
 FILES['bloc/item4'] = (BLOC_IMPORTS + TRACE + PLAYER + PLAYER_EVENTS + '\n'
-                       + snips['4_1'] + '''
+                       + snips['4/PlayerBloc'] + '\n'
+                       + snips['4/SplitPlayerBloc'] + '''
 Future<void> main() async {
+  final split = SplitPlayerBloc(Player());
+  split
+    ..add(Play())
+    ..add(Seek(const Duration(milliseconds: 1)))
+    ..add(Seek(const Duration(milliseconds: 2)))
+    ..add(Seek(const Duration(milliseconds: 3)))
+    ..add(Pause());
+  await tick(300);
+  print('a registration each: ${callsOf(trace)}');
+  print('  full:  $trace');
+  print('  state ${split.state}');
+  await split.close();
+  trace.clear();
+
   final bloc = PlayerBloc(Player());
   bloc
     ..add(Play())
@@ -538,7 +618,7 @@ final class Ready extends PlayerState {
   String toString() => 'Ready(${position.inMilliseconds}ms)';
 }
 
-''' + snips['4_2'] + '''
+''' + snips['4/PlayerController'] + '''
 extension on PlayerController {
   // The other toggle, in the same shape as pause().
   Job<void> play() => run<Ready, void>(
@@ -560,7 +640,7 @@ Future<void> main() async {
   await tick(300);
   print('drag calls: ${callsOf(trace)}');
   print('drag full:  $trace');
-  print('state ${player.state}');
+  print('state ${player.currentState}');
   await player.close();
 
   trace.clear();
@@ -572,7 +652,7 @@ Future<void> main() async {
   p2.seek(const Duration(milliseconds: 3));
   await tick(300);
   print('in-flight: $trace');
-  print('published: $seen  state ${p2.state}');
+  print('published: $seen  state ${p2.currentState}');
   print('stale job ${stale.outcome}');
   await sub.cancel();
   await p2.close();
@@ -580,6 +660,15 @@ Future<void> main() async {
 ''')
 
 # --------------------------------------------------------------- item 1 bloc
+# The notes and, only when the write changed it, the flag: a trace of the
+# fields a publication left alone reads as if it had set them.
+NOTES_EMITTED = '''
+String emitted(NotesState previous, NotesState next) =>
+    'emits ${next.notes}'
+    '${next.uploading == previous.uploading ? '' : ', '
+        'uploading: ${next.uploading}'}';
+'''
+
 NOTES_EVENTS = '''
 sealed class NotesEvent {}
 
@@ -603,27 +692,14 @@ class NotesState {
 }
 '''
 
-FILES['bloc/item1'] = (BLOC_IMPORTS + TRACE + NOTES_API + NOTES_EVENTS + '\n'
-                       + snips['1_1'] + '''
-/// The same two handlers with a transformer each: two queues, not one.
-class SplitNotesBloc extends Bloc<NotesEvent, NotesState> {
-  SplitNotesBloc(this._api) : super(const NotesState()) {
-    on<UploadNote>((e, emit) async {
-      emit(state.copyWith(uploading: true));
-      await _api.upload(e.note);
-      emit(state.copyWith(notes: [...state.notes, e.note], uploading: false));
-    }, transformer: sequential());
-    on<RefreshList>((e, emit) async {
-      final serverNotes = await _api.list();
-      emit(state.copyWith(notes: serverNotes));
-    }, transformer: sequential());
-  }
-
-  final Api _api;
-}
-
-/// The same two queues, with the refresh written in one line: `state` is
-/// the receiver, so it is read before the awaited argument.
+FILES['bloc/item1'] = (BLOC_IMPORTS + TRACE + NOTES_API + NOTES_EVENTS
+                       + NOTES_EMITTED + '\n'
+                       + snips['1/SplitNotesBloc'] + '\n'
+                       + snips['1/ConcurrentNotesBloc'] + '\n'
+                       + snips['1/NotesBloc'] + '''
+/// The third way, the one the document keeps in prose: the same two
+/// registrations, with the refresh written in one line. `state` is the
+/// receiver, so it is read before the awaited argument.
 class InlineNotesBloc extends Bloc<NotesEvent, NotesState> {
   final Api _api;
 
@@ -639,32 +715,59 @@ class InlineNotesBloc extends Bloc<NotesEvent, NotesState> {
   }
 }
 
+/// Every publication, in the order it happened and with the event that
+/// made it. `onTransition` runs inside `emit`, so these entries interleave
+/// with the API's own truthfully.
+mixin TracedNotes on Bloc<NotesEvent, NotesState> {
+  @override
+  void onTransition(Transition<NotesEvent, NotesState> transition) {
+    trace.add(
+      '${transition.event.runtimeType} '
+      '${emitted(transition.currentState, transition.nextState)}',
+    );
+    super.onTransition(transition);
+  }
+}
+
+class TracedSplit extends SplitNotesBloc with TracedNotes {
+  TracedSplit(Api api) : super(api);
+}
+
+class TracedConcurrent extends ConcurrentNotesBloc with TracedNotes {
+  TracedConcurrent(Api api) : super(api);
+}
+
+class TracedInline extends InlineNotesBloc with TracedNotes {
+  TracedInline(Api api) : super(api);
+}
+
+class TracedFunnel extends NotesBloc with TracedNotes {
+  TracedFunnel(Api api) : super(api);
+}
+
+Future<void> run(Bloc<NotesEvent, NotesState> bloc, String label) async {
+  trace.clear();
+  bloc
+    ..add(UploadNote(Note('n1')))
+    ..add(RefreshList());
+  await tick(300);
+  print('$label ${bloc.state}');
+  for (final entry in trace) {
+    print('    $entry');
+  }
+  await bloc.close();
+}
+
 Future<void> main() async {
-  final funnel = NotesBloc(Api())
-    ..add(UploadNote(Note('n1')))
-    ..add(RefreshList());
-  await tick(300);
-  print('funnel: ${funnel.state}');
-  await funnel.close();
-
-  final split = SplitNotesBloc(Api())
-    ..add(UploadNote(Note('n1')))
-    ..add(RefreshList());
-  await tick(300);
-  print('a transformer per handler: ${split.state}');
-  await split.close();
-
-  final inline = InlineNotesBloc(Api())
-    ..add(UploadNote(Note('n1')))
-    ..add(RefreshList());
-  await tick(300);
-  print('the one-line refresh:      ${inline.state}');
-  await inline.close();
+  await run(TracedSplit(Api()), 'a transformer per handler:  ');
+  await run(TracedConcurrent(Api()), 'one handler, no transformer:');
+  await run(TracedInline(Api()), 'the one-line refresh:       ');
+  await run(TracedFunnel(Api()), 'one handler, sequential:    ');
 }
 ''')
 
 # --------------------------------------------------------------- item 1 solo
-FILES['solo/item1'] = (SOLO_IMPORTS + TRACE + NOTES_API + '''
+FILES['solo/item1'] = (SOLO_IMPORTS + TRACE + NOTES_API + NOTES_EMITTED + '''
 final class NotesState {
   const NotesState({this.notes = const [], this.uploading = false});
   final List<Note> notes;
@@ -677,13 +780,30 @@ final class NotesState {
   String toString() => 'NotesState($notes, uploading: $uploading)';
 }
 
-''' + snips['1_2'] + '''
+''' + snips['1/NotesController'] + '''
+/// The same trace as the bloc bench: `onChange` runs inside the change,
+/// and the transition names the job that made it.
+final class TracedNotesController extends NotesController {
+  TracedNotesController(super.api);
+
+  @override
+  void onChange(SoloTransition<NotesState> transition) {
+    trace.add(
+      '${transition.job?.key} '
+      '${emitted(transition.previous, transition.current)}',
+    );
+  }
+}
+
 Future<void> main() async {
-  final notes = NotesController(Api())
+  final notes = TracedNotesController(Api())
     ..upload(Note('n1'))
     ..refresh();
   await tick(300);
-  print('final: ${notes.state}');
+  print('final: ${notes.currentState}');
+  for (final entry in trace) {
+    print('    $entry');
+  }
   await notes.close();
 }
 ''')
@@ -724,22 +844,8 @@ class Broken extends FirmwareState {
   String toString() => 'Broken($error)';
 }
 
-''' + snips['9_1'] + snips['9_2'] + '''
-/// The same loop with the `emit.isDone` line left out.
-class UnguardedFirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
-  UnguardedFirmwareBloc(this._ble) : super(Idle()) {
-    on<Flash>((e, emit) async {
-      var written = 0;
-      for (final chunk in e.chunks) {
-        await _ble.write(chunk);
-        emit(Flashing(++written, e.chunks.length));
-      }
-    }, transformer: restartable());
-  }
-
-  final Ble _ble;
-}
-
+''' + snips['9/UnguardedFirmwareBloc'] + snips['9/FirmwareBloc']
+                       + snips['9/LockedFirmwareBloc'] + '''
 /// The same loop, with the failure arriving as a state instead of a restart.
 class GuardedFirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
   GuardedFirmwareBloc(this._ble) : super(Idle()) {
@@ -832,7 +938,7 @@ final class Broken extends FirmwareState {
   String toString() => 'Broken($error)';
 }
 
-''' + snips['9_3'] + '''
+''' + snips['9/FirmwareController'] + '''
 extension on FirmwareController {
   // ignore: invalid_use_of_protected_member
   void hardwareFailed(Object error) => externalSetState(Broken(error));
@@ -845,7 +951,7 @@ Future<void> main() async {
   await tick(30);
   final second = firmware.flash([for (var i = 100; i < 106; i++) Chunk(i)]);
   await tick(300);
-  print('restart: written ${ble.written}, state ${firmware.state}');
+  print('restart: written ${ble.written}, state ${firmware.currentState}');
   print('restart trace: ${trace.take(6).toList()}');
   print('first ${first.outcome}  second ${second.outcome}');
   await firmware.close();
@@ -883,7 +989,7 @@ class PaymentFailed extends CheckoutState {
   final Object error;
 }
 
-''' + snips['7_1'] + snips['7_2'] + '''
+''' + snips['7/Pay'] + snips['7/CheckoutBloc'] + snips['7/CheckoutCubit'] + '''
 /// The cubit the paragraph before the snippet describes: a method you can
 /// await, and nothing around it.
 class PlainCheckoutCubit extends Cubit<CheckoutState> {
@@ -899,7 +1005,26 @@ class PlainCheckoutCubit extends Cubit<CheckoutState> {
   }
 }
 
+/// What a caller got, or that it is still waiting long after the charge.
+Future<String> answered(Future<Receipt> result) => result.then(
+      (receipt) => '$receipt',
+      onError: (Object error) => '$error',
+    ).timeout(
+      const Duration(milliseconds: 200),
+      onTimeout: () => 'never answered',
+    );
+
 Future<void> main() async {
+  final droppableApi = Api();
+  final droppable = DroppableCheckoutBloc(droppableApi);
+  final dropped = await Future.wait([
+    answered(droppable.pay(const Order('A'))),
+    answered(droppable.pay(const Order('A'))),
+    answered(droppable.pay(const Order('B'))),
+  ]);
+  print('droppable: api.pay calls ${droppableApi.calls}, $dropped');
+  await droppable.close();
+
   final api = Api();
   final bloc = CheckoutBloc(api);
   // Three calls for two orders: one order twice, then a different one.
@@ -978,7 +1103,7 @@ final class Paid extends CheckoutState {
   String toString() => 'Paid($receipt)';
 }
 
-''' + snips['7_3'] + '\n' + snips['7_4'] + '''
+''' + snips['7/CheckoutController'] + '\n' + snips['7/handlePayRequest'] + '''
 Future<void> main() async {
   final dedupe = CheckoutController(Api());
   final callA = dedupe.pay(const Order('Z'));
@@ -1003,7 +1128,8 @@ Future<void> main() async {
   final inFlight = handlePayRequest(closing, const Order('C'));
   await tick(10);
   await closing.close();
-  print('close mid-payment: ${await inFlight}, state ${closing.state}');
+  print('close mid-payment: ${await inFlight}, '
+      'state ${closing.currentState}');
 
   final pendingApi = Api();
   final pending = CheckoutController(pendingApi);
@@ -1031,7 +1157,7 @@ FILES['bloc/item5'] = (BLOC_MAP_IMPORTS.replace(
     "import 'package:bloc/bloc.dart';",
     "import 'package:bloc/bloc.dart';\n"
     "import 'package:bloc_concurrency/bloc_concurrency.dart';",
-) + TRACE + MAP_API + '\n' + snips['5_1'] + '\n' + snips['5_2'] + '''
+) + TRACE + MAP_API + '\n' + snips['5/MapCubit'] + '\n' + snips['5/CommandMapBloc'] + '''
 Future<void> main() async {
   final cubit = MapCubit(MapApi());
   for (var i = 1; i <= 3; i++) {
@@ -1054,7 +1180,7 @@ Future<void> main() async {
 ''')
 
 # --------------------------------------------------------------- item 5 solo
-FILES['solo/item5'] = (SOLO_MAP_IMPORTS + TRACE + MAP_API + '\n' + snips['5_3'] + '''
+FILES['solo/item5'] = (SOLO_MAP_IMPORTS + TRACE + MAP_API + '\n' + snips['5/MapController'] + '''
 Future<void> main() async {
   final map = MapController(MapApi());
   onMapDrag(map, const Point<double>(1, 0));
@@ -1063,7 +1189,7 @@ Future<void> main() async {
   onMapDrag(map, const Point<double>(3, 0));
   map.setZoom(4);
   await tick(300);
-  print('drag: $trace  state ${map.state}');
+  print('drag: $trace  state ${map.currentState}');
   await map.close();
 }
 ''')
@@ -1083,18 +1209,7 @@ class MarkReplyRead extends ChatEvent {
   const MarkReplyRead();
 }
 
-''' + snips['3_1'] + '''
-/// The same bloc with the guard left out.
-class UnguardedChatBloc extends Bloc<ChatEvent, ChatState> {
-  UnguardedChatBloc(this._api) : super(const ChatState()) {
-    on<SendMessage>((e, emit) async {
-      final reply = await _api.send(e.text);
-      emit(state.withReply(reply));
-    }, transformer: sequential());
-  }
-
-  final Api _api;
-}
+''' + snips['3/ChatBloc'] + '\n' + snips['3/UnguardedChatBloc'] + '''
 
 /// A future started inside the handler and left unawaited.
 class LateChatBloc extends Bloc<ChatEvent, ChatState> {
@@ -1122,10 +1237,17 @@ Future<void> main() async {
     print('add after close: $error');
   }
 
-  final unguarded = UnguardedChatBloc(Api())..add(const SendMessage('hi'));
-  await tick(10);
-  await unguarded.close();
-  print('one missed guard: state after close ${unguarded.state}');
+  await runZonedGuarded(() async {
+    final unguarded = UnguardedChatBloc(Api())..add(const SendMessage('hi'));
+    await tick(10);
+    final closing = DateTime.now();
+    await unguarded.close();
+    print('no guard: close took '
+        '${DateTime.now().difference(closing).inMilliseconds}ms, '
+        'state ${unguarded.state}');
+  }, (error, _) {
+    print('no guard, the follow-up add: $error');
+  });
 
   await runZonedGuarded(() async {
     final late = LateChatBloc(Api())..add(const SendMessage('hi'));
@@ -1141,7 +1263,7 @@ Future<void> main() async {
 
 # --------------------------------------------------------------- item 3 solo
 FILES['solo/item3'] = (SOLO_IMPORTS + TRACE + CHAT_API + '\n'
-                       + snips['3_2'] + '''
+                       + snips['3/ChatController'] + '''
 /// A future started inside a job and left unawaited.
 final class LateChatController extends Solo<ChatState> {
   LateChatController(this._api) : super(const ChatState());
@@ -1167,14 +1289,14 @@ Future<void> main() async {
   await tick(10);
   await onScreenClosed(chat);
   print('running ${running.outcome}  queued ${queued.outcome}');
-  print('state after close: ${chat.state}');
+  print('state after close: ${chat.currentState}');
   print('send after close: ${chat.send('later').outcome}');
 
   await runZonedGuarded(
     () async {
       final late = LateChatController(Api())..send('hi');
       await tick(200);
-      print('late emit: state ${late.state}');
+      print('late emit: state ${late.currentState}');
       await late.close();
     },
     (error, _) => print('late emit raised: $error'),
@@ -1212,28 +1334,7 @@ class Broken extends SensorState {
   String toString() => 'Broken($error)';
 }
 
-''' + snips['8_1'] + '''
-/// The same bloc with item 3's cure applied: one funnel, one queue.
-class FunnelSensorBloc extends Bloc<SensorEvent, SensorState> {
-  FunnelSensorBloc(this._hw) : super(Ready()) {
-    _hw.onError = (error) => add(HardwareFailed(error));
-    on<SensorEvent>((e, emit) async {
-      switch (e) {
-        case HardwareFailed(:final error):
-          emit(Broken(error));
-        case Calibrate():
-          if (state is! Ready) return;
-          await _hw.zero();
-          if (state is! Ready) return;
-          await _hw.sample();
-          if (state is! Ready) return;
-          emit(Calibrated());
-      }
-    }, transformer: sequential());
-  }
-
-  final Sensor _hw;
-}
+''' + snips['8/SensorBloc'] + '\n' + snips['8/FunnelSensorBloc'] + '''
 
 Future<void> main() async {
   final hw = Sensor();
@@ -1288,7 +1389,7 @@ final class Broken extends SensorState {
   String toString() => 'Broken($error)';
 }
 
-''' + snips['8_2'] + '''
+''' + snips['8/SensorController'] + '''
 Future<void> main() async {
   final hw = Sensor();
   final sensor = SensorController(hw);
@@ -1299,7 +1400,7 @@ Future<void> main() async {
   hw.fail('cable unplugged');
   await tick(300);
   print('outcome: ${job.outcome}');
-  print('states: $states  final ${sensor.state}');
+  print('states: $states  final ${sensor.currentState}');
   print('zeroed=${hw.zeroed} sampled=${hw.sampled}');
   await sub.cancel();
   await sensor.close();
@@ -1372,8 +1473,8 @@ class StartRecording {}
 """
 
 # --------------------------------------------------------------- item 2 bloc
-FILES['bloc/item2'] = (BLOC_PLAIN_IMPORTS + TRACE + RECORDER + '\n' + snips['2_1'] + '\n'
-                       + snips['2_2'] + '''
+FILES['bloc/item2'] = (BLOC_PLAIN_IMPORTS + TRACE + RECORDER + '\n' + snips['2/RecorderBloc'] + '\n'
+                       + snips['2/GuardedTelemetryObserver'] + '''
 /// The same body as a cubit method, to show the caller's side of it.
 class RecorderCubit extends Cubit<RecorderState> {
   final Recorder _recorder;
@@ -1434,7 +1535,7 @@ Future<void> main() async {
 ''')
 
 # --------------------------------------------------------------- item 2 solo
-FILES['solo/item2'] = (SOLO_IMPORTS + TRACE + RECORDER + '\n' + snips['2_3'] + '''
+FILES['solo/item2'] = (SOLO_IMPORTS + TRACE + RECORDER + '\n' + snips['2/RecorderController'] + '''
 Future<void> main() async {
   SoloBase.observer = TelemetryObserver(Telemetry());
   final recorder = Recorder();
@@ -1444,7 +1545,7 @@ Future<void> main() async {
   await runZonedGuarded(
     () async {
       final outcome = await controller.start().done;
-      print('solo: state ${controller.state}, outcome $outcome, '
+      print('solo: state ${controller.currentState}, outcome $outcome, '
           'journal ${journal.entries}, trace ${recorder.trace}');
     },
     (error, _) => zone.add('$error'),
@@ -1536,8 +1637,8 @@ class OpenPreview {
 """
 
 # -------------------------------------------------------------- item 10 bloc
-FILES['bloc/item10'] = (BLOC_IMPORTS + TRACE + PREVIEW + '\n' + snips['10_1'] + '\n'
-                        + snips['10_2'] + '''
+FILES['bloc/item10'] = (BLOC_IMPORTS + TRACE + PREVIEW + '\n' + snips['10/PreviewBloc'] + '\n'
+                        + snips['10/GuardedPreviewBloc'] + '''
 /// Completes an event's future when its handler is done, so the driver can
 /// watch a handler the document's snippet knows nothing about.
 mixin Finishing on Bloc<OpenPreview, PreviewState> {
@@ -1589,7 +1690,7 @@ Future<void> main() async {
 ''')
 
 # -------------------------------------------------------------- item 10 solo
-FILES['solo/item10'] = (SOLO_IMPORTS + TRACE + PREVIEW + '\n' + snips['10_3'] + '''
+FILES['solo/item10'] = (SOLO_IMPORTS + TRACE + PREVIEW + '\n' + snips['10/PreviewController'] + '''
 Future<void> main() async {
   final decoder = Decoder();
   final controller = PreviewController(decoder);
@@ -1609,7 +1710,7 @@ Future<void> main() async {
 
   final staleBuffer = decoder.deliver(first);
   await staleBuffer.released.future;
-  print('dispose: state ${controller.state}, stale releases '
+  print('dispose: state ${controller.currentState}, stale releases '
       '${staleBuffer.releases}, current releases ${currentBuffer.releases}');
   print('trace: ${decoder.trace}');
 }
@@ -1642,14 +1743,14 @@ void require(bool condition, String message) {
 }
 '''
 
-fixed_refresh = snips['3_3'].replace(
+fixed_refresh = snips['3/RefreshBloc'].replace(
     'class RefreshBloc ', 'class GuardedRefreshBloc ',
 ).replace('RefreshBloc(this._api)', 'GuardedRefreshBloc(this._api)').replace(
-    'if (event is CancelRefresh) return;', snips['3_4'].strip(),
+    'if (event is CancelRefresh) return;', snips['3/if-event-is-cancelrefresh'].strip(),
 )
 FILES['bloc/item3_cancel'] = (
     BLOC_IMPORTS + "import 'package:fake_async/fake_async.dart';\n"
-    + REFRESH_MODEL + snips['3_3'] + fixed_refresh + '''
+    + REFRESH_MODEL + snips['3/RefreshBloc'] + fixed_refresh + '''
 void main() {
   fakeAsync((clock) {
     final api = RefreshApi();
@@ -1691,24 +1792,31 @@ FILES['solo/item3_cancel'] = (
         "import 'package:fake_async/fake_async.dart';\n"
         "import 'package:solo/solo.dart';",
     )
-    + REFRESH_MODEL + snips['3_5'] + '''
+    + REFRESH_MODEL + snips['3/RefreshController'] + '''
 void main() {
   fakeAsync((clock) {
     final api = RefreshApi();
     final controller = RefreshController(api);
     final job = controller.refresh();
     clock.flushMicrotasks();
-    require(controller.state is Loading, 'refresh must start in Loading');
+    require(
+      controller.currentState is Loading,
+      'refresh must start in Loading',
+    );
     var cancelled = false;
     job.cancel().then((_) => cancelled = true);
     clock.flushMicrotasks();
     require(cancelled, 'cancel must finish before abandoned API response');
     require(job.outcome is Cancelled, 'job must report cancellation');
-    require(controller.state is Initial, 'onCancel must reset state');
-    print('onCancel reset: ${controller.state.runtimeType}, ${job.outcome}');
+    require(controller.currentState is Initial, 'onCancel must reset state');
+    print('onCancel reset: ${controller.currentState.runtimeType}, '
+        '${job.outcome}');
     api.pending.complete();
     clock.flushMicrotasks();
-    require(controller.state is Initial, 'late response must preserve state');
+    require(
+      controller.currentState is Initial,
+      'late response must preserve state',
+    );
     controller.close();
     clock.flushMicrotasks();
   });
