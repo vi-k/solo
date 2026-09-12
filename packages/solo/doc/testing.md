@@ -12,7 +12,7 @@ test('load fills in the name', () async {
 
   expect(outcome, isA<Done<String>>());
   expect(
-    profile.state,
+    profile.currentState,
     isA<Loaded>().having((state) => state.name, 'name', 'Ada Lovelace'),
   );
 
@@ -80,7 +80,8 @@ Inside `fakeAsync`, request cancellation with `job.cancel().ignore()` and
 advance pending work before asserting. `flushMicrotasks()` runs microtasks;
 `Future(...)` and `Future.delayed(...)` use timers and require `elapse(...)`
 or `flushTimers()`. Use `emitsInOrder` when the stream itself matters;
-for final state, reading `state` after `job.done` is usually sufficient.
+for final state, reading `currentState` after `job.done` is usually
+sufficient.
 
 ## Timeouts
 

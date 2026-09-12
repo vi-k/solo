@@ -79,15 +79,18 @@ whether those handlers may update state; see
 
 ```dart
 // A read at any moment.
-print(camera.state);
+print(camera.currentState);
 
 // Every update, in order, on a microtask. The initial state is not
 // replayed, and an equal state still produces an event.
 final subscription = camera.stream.listen(print);
 ```
 
-Anyone holding the controller can read `state`. By the time a stream event
-arrives, `state` may already contain a newer value.
+Anyone holding the controller can read `currentState`. By the time a
+stream event arrives, `currentState` may already contain a newer value.
+It is deliberately not called `state`: a job body reaches every member of
+its controller unqualified, and an unchecked read there would look
+exactly like the checked `ctx.state`.
 
 | Type | Provides |
 | --- | --- |
@@ -150,8 +153,9 @@ does not by itself justify bypassing the queue.
 
 Use job bodies and their state handlers for the controller's own success,
 failure and cancellation. `externalSetState` is an exception for external
-facts, not a general setter for those operations. It still changes `state`
-and calls change hooks after `close()`, while `Solo`'s closed stream no
+facts, not a general setter for those operations. It still changes
+`currentState` and calls change hooks after `close()`, while `Solo`'s
+closed stream no
 longer delivers updates — which is why the listener is stopped first.
 
 ## State after failure or cancellation

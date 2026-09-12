@@ -163,7 +163,7 @@ void main() {
       solo.externalSetState(const Working());
       async.flushMicrotasks();
       expect(journal.take(), ['state: Working(a: 0, b: 0)']);
-      expect(solo.state, const Working());
+      expect(solo.currentState, const Working());
     });
   });
 }

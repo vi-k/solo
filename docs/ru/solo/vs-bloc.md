@@ -40,7 +40,7 @@
 | `emit(next)` | `ctx.emit(next)` |
 | `if (emit.isDone) return;` | Контрольные точки отмены, например `ctx.wait` и `ctx.check` |
 | `emit.onEach`, `emit.forEach` | `ctx.each(stream, onData)` |
-| `state`, `stream` | `state`, `stream` |
+| `state`, `stream` | `currentState`, `stream` |
 | `BlocObserver` | `SoloObserver` |
 | `BlocBuilder`, `BlocSelector` | `ValueListenableBuilder`; выбор части состояния делает приложение |
 | `BlocListener` для результата операции | Ожидание `job.done` этой операции |

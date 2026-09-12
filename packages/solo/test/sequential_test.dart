@@ -35,7 +35,7 @@ void main() {
       ]);
       expect(job.outcome, isA<Done<void>>());
       expect(job.isFinished, isTrue);
-      expect(solo.state, const Disposed());
+      expect(solo.currentState, const Disposed());
     });
   });
 
@@ -113,7 +113,7 @@ void main() {
       List<TestState>? seenAfterEmit;
       solo.run<TestState, void>((ctx) async {
         ctx.emit(const Preparing());
-        stateAfterEmit = solo.state;
+        stateAfterEmit = solo.currentState;
         seenAfterEmit = [...seen];
         ctx.emit(const Working());
       });

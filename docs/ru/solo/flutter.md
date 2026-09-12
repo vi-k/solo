@@ -89,7 +89,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 }
 ```
 
-`value` и `state` ссылаются на один объект. Сеттера значения нет;
+`value` и `currentState` ссылаются на один объект. Сеттера значения нет;
 Job контроллера выполняют обновления через контекст.
 `ListenableBuilder` и `AnimatedBuilder` также принимают контроллер,
 когда самому билдеру значение состояния не нужно.

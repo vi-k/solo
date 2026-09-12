@@ -12,7 +12,7 @@ test('load fills in the name', () async {
 
   expect(outcome, isA<Done<String>>());
   expect(
-    profile.state,
+    profile.currentState,
     isA<Loaded>().having((state) => state.name, 'name', 'Ada Lovelace'),
   );
 
@@ -81,7 +81,7 @@ test('a second load while the first one runs is dropped', () {
 выполняет микротаски; `Future(...)` и `Future.delayed(...)` используют
 таймеры и требуют `elapse(...)` или `flushTimers()`. Используйте
 `emitsInOrder`, когда важен сам стрим; для итогового состояния обычно
-достаточно прочитать `state` после `job.done`.
+достаточно прочитать `currentState` после `job.done`.
 
 ## Таймауты
 

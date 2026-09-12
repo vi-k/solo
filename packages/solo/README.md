@@ -122,7 +122,7 @@ Future<void> main() async {
     profile.load(); // the existing job is returned
 
     print(await job.value);
-    if (profile.state case Loaded(:final name)) {
+    if (profile.currentState case Loaded(:final name)) {
       print(name);
     }
   } finally {
@@ -132,7 +132,7 @@ Future<void> main() async {
 }
 ```
 
-`profile.state` is available synchronously. `profile.stream` broadcasts
+`profile.currentState` is available synchronously. `profile.stream` broadcasts
 changes asynchronously. `job.value` returns the loaded name, or throws
 the job's error or `Cancelled`. The `finally` block releases the listener
 and closes the controller even if loading fails.
@@ -161,6 +161,40 @@ children, cleanup and state handler.
 The guides below explain results, queue policies and cancellation in
 more detail. In particular, cancellation of a job does not automatically
 stop an API request that has already been sent.
+
+## Why `currentState` and not `state`
+
+A method of `ProfileController` that also watches a session:
+
+```dart
+Job<String> reload() => run<ProfileState, String>(
+      (ctx) async {
+        // Another controller's snapshot: a plain read, and the name says
+        // as much.
+        final user = session.currentState.user;
+        final name = await ctx.wait(() => api.fetchName(user));
+        // This job's own state: a checkpoint that throws `Cancelled` if
+        // the load lost the state while it waited.
+        if (ctx.state case Loading()) {
+          ctx.emit(Loaded(name));
+        }
+        return name;
+      },
+    );
+```
+
+A job body is a closure inside a method of the controller, so every
+member of the controller is in scope there. A plain read named `state`
+would look exactly like `ctx.state`, and a body that typed it out of
+habit would read past a cancellation it was supposed to honour: no
+`Cancelled`, no `keepWhile` check, and the whole of `S` instead of the
+job's working type `W`. Nobody writes `currentState` by habit where a
+checkpoint is meant, so what used to be a silent read is a compile error.
+
+Outside a job `currentState` is the read to use. Inside one it stays
+right for a different controller: `session.currentState` above is
+somebody else's snapshot, and this job's rules have nothing to say about
+it.
 
 ## The dozen calls
 

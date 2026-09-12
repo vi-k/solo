@@ -66,7 +66,7 @@ void main() {
         onCancel: (_, __) => fail('unexpected cancellation'),
       )..ignore();
       clock.flushMicrotasks();
-      expect(solo.state, 'failure');
+      expect(solo.currentState, 'failure');
       expect(
         job.outcome,
         isA<Failed>().having((o) => o.error, 'error', same(failure)),
@@ -145,7 +145,7 @@ void main() {
         onCancel: (_, __) => fail('unexpected cancellation'),
       );
       clock.flushMicrotasks();
-      expect(solo.state, 'loaded');
+      expect(solo.currentState, 'loaded');
       expect(job.outcome, isA<Done<int>>().having((o) => o.value, 'value', 42));
     });
   });
@@ -166,10 +166,10 @@ void main() {
       final first = load();
       clock.flushMicrotasks();
       expect(load(), same(first));
-      expect(solo.state, 'loading');
+      expect(solo.currentState, 'loading');
       operation.complete();
       clock.flushMicrotasks();
-      expect(solo.state, 'loaded');
+      expect(solo.currentState, 'loaded');
     });
   });
 
@@ -193,7 +193,7 @@ void main() {
           )
           .ignore();
       clock.flushMicrotasks();
-      expect(solo.state, 'initial');
+      expect(solo.currentState, 'initial');
       expect(solo.errors, hasLength(1));
     });
   });
@@ -226,7 +226,7 @@ void main() {
         solo.external('disconnected');
         cleanup.complete();
         clock.flushMicrotasks();
-        expect(solo.state, 'disconnected');
+        expect(solo.currentState, 'disconnected');
         expect(job.outcome, failBody ? isA<Failed>() : isA<Cancelled>());
         if (!failBody) operation.complete();
       });
@@ -250,7 +250,7 @@ void main() {
       solo.external('connected');
       cleanup.complete();
       clock.flushMicrotasks();
-      expect(solo.state, 'cancelled:connected');
+      expect(solo.currentState, 'cancelled:connected');
     });
   });
 
@@ -264,7 +264,7 @@ void main() {
       clock.flushMicrotasks();
       solo.external(42);
       clock.flushMicrotasks();
-      expect(solo.state, 42);
+      expect(solo.currentState, 42);
       expect(job.outcome, isA<Cancelled>());
       solo.close();
       clock.flushMicrotasks();
@@ -289,7 +289,7 @@ void main() {
       clock.flushMicrotasks();
       cleanup.complete();
       clock.flushMicrotasks();
-      expect(solo.state, 'reconnected');
+      expect(solo.currentState, 'reconnected');
     });
   });
 
@@ -313,7 +313,7 @@ void main() {
       solo.external('disconnected');
       cleanup.complete();
       clock.flushMicrotasks();
-      expect(solo.state, 'reconnected');
+      expect(solo.currentState, 'reconnected');
     });
   });
 
@@ -334,7 +334,7 @@ void main() {
       )..ignore();
       clock.flushMicrotasks();
       expect(starts, 1);
-      expect(solo.state, 'failure');
+      expect(solo.currentState, 'failure');
       expect(job.outcome, isA<Failed>());
       solo.close();
       clock.flushMicrotasks();
@@ -364,7 +364,7 @@ void main() {
       solo.external('disconnected');
       cleanup.complete();
       clock.flushMicrotasks();
-      expect(solo.state, 'disconnected');
+      expect(solo.currentState, 'disconnected');
     });
   });
 
@@ -383,7 +383,7 @@ void main() {
         isA<Failed>().having((o) => o.error, 'error', same(failure)),
       );
       expect(solo.errors, [failure, correctionFailure]);
-      expect(solo.state, 'next');
+      expect(solo.currentState, 'next');
     });
   });
 
@@ -401,7 +401,7 @@ void main() {
       )..ignore();
       clock.flushMicrotasks();
       expect(job.outcome, isA<Failed>());
-      expect(solo.state, 'failure');
+      expect(solo.currentState, 'failure');
     });
   });
 
@@ -416,7 +416,7 @@ void main() {
         },
       )..ignore();
       clock.flushMicrotasks();
-      expect(solo.state, 'disconnected');
+      expect(solo.currentState, 'disconnected');
       expect(job.outcome, isA<Failed>());
     });
   });
@@ -444,7 +444,7 @@ void main() {
       cleanup.complete();
       clock.flushMicrotasks();
       expect(closed, isTrue);
-      expect(solo.state, 'initial');
+      expect(solo.currentState, 'initial');
     });
   });
   test('a throwing external rule is reported once and blocks correction', () {
@@ -465,7 +465,7 @@ void main() {
       expect(solo.errors, [ruleError]);
       job.cancel();
       clock.flushMicrotasks();
-      expect(solo.state, 'changed');
+      expect(solo.currentState, 'changed');
     });
   });
 
@@ -527,7 +527,7 @@ void main() {
       solo.external('disconnected');
       parent.cancel();
       clock.flushMicrotasks();
-      expect(solo.state, 'disconnected');
+      expect(solo.currentState, 'disconnected');
       expect(parent.outcome, isA<Cancelled>());
       stream.close();
       clock.flushMicrotasks();
@@ -548,7 +548,7 @@ void main() {
       clock.flushMicrotasks();
       solo.external('disconnected');
       clock.flushMicrotasks();
-      expect(solo.state, 'disconnected');
+      expect(solo.currentState, 'disconnected');
       expect(parent.outcome, isA<Cancelled>());
     });
   });
@@ -564,7 +564,7 @@ void main() {
             onError: (_, __, ___) => 'failure',
           );
           clock.flushMicrotasks();
-          expect(solo.state, 'failure');
+          expect(solo.currentState, 'failure');
           expect(solo.errors, [failure]);
         });
       },
@@ -590,7 +590,7 @@ void main() {
       solo.external('changed');
       clock.flushMicrotasks();
       expect(parent.outcome, isA<Cancelled>());
-      expect(solo.state, 'changed');
+      expect(solo.currentState, 'changed');
     });
   });
 
@@ -630,7 +630,7 @@ void main() {
       startGrandchild.complete();
       clock.flushMicrotasks();
       expect(corrections, 1);
-      expect(solo.state, 'failure');
+      expect(solo.currentState, 'failure');
       expect(parent.outcome, isA<Done<void>>());
     });
   });
@@ -650,7 +650,7 @@ void main() {
       expect(solo.errors, hasLength(1));
       job.cancel();
       clock.flushMicrotasks();
-      expect(solo.state, 'changed');
+      expect(solo.currentState, 'changed');
     });
   });
   test('an ordinary parent does not check rules after its body returns', () {

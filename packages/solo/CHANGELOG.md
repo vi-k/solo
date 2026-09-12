@@ -1,5 +1,17 @@
 ## Unreleased
 
+- **Breaking:** the controller's synchronous read is `currentState`, not
+  `state`. A job body is a closure inside a method of the controller, so
+  every member of the controller is in scope there, and a read named
+  `state` looked exactly like the checked `ctx.state` while doing none of
+  its work: no `Cancelled` for a job that had lost the state, no
+  `keepWhile` check, and the whole of `S` instead of the job's working
+  type `W`. Under the new name that mistake is a compile error. Reads
+  through the context, the `state` parameters of `canStart`, `keepWhile`,
+  `onError` and `onCancel`, and `externalSetState` are unchanged. No
+  deprecated alias is kept: one that still compiled inside a body would
+  leave the hole open.
+
 - A recipe for `doc/errors.md`: why cancellation was slow. An observer
   that stamps the clock in `Job.whenCancelled` and subtracts in
   `onFinish` reports the wait the caller of `cancel` or `close` sat

@@ -13,8 +13,9 @@ class Solo<S extends Object> extends SoloBase<S> {
   Solo(super.initialState);
 
   /// Every state change, in order, delivered on the next microtask. The
-  /// source of truth is [state]; an event may be older than [state] by the
-  /// time it arrives. Equality is not checked: each change is an event.
+  /// source of truth is [currentState]; an event may be older than it by
+  /// the time it arrives. Equality is not checked: each change is an
+  /// event.
   Stream<S> get stream => _controller.stream;
 
   /// Closes the engine, then the stream. Repeated calls return the same

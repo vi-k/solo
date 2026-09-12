@@ -38,12 +38,12 @@ void main() {
     name.addListener(() => calls++);
 
     for (var progress = 1; progress <= 10; progress++) {
-      controller.set(controller.state.copyWith(progress: progress));
+      controller.set(controller.currentState.copyWith(progress: progress));
     }
     expect(calls, 0);
     expect(name.value, '');
 
-    controller.set(controller.state.copyWith(name: 'Ada'));
+    controller.set(controller.currentState.copyWith(name: 'Ada'));
     expect(calls, 1);
     expect(name.value, 'Ada');
   });

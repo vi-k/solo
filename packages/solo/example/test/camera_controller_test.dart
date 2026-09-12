@@ -130,7 +130,11 @@ void main() {
       expect((shot.outcome! as Cancelled).description, 'canStart');
       camera.resume();
       async.flushMicrotasks();
-      expect(camera.state, const Ready(), reason: 'resume cleared paused');
+      expect(
+        camera.currentState,
+        const Ready(),
+        reason: 'resume cleared paused',
+      );
     });
   });
 
@@ -165,7 +169,7 @@ void main() {
         ..init()
         ..setFocusPoint(const Point(0.5, 0.5));
       async.elapse(const Duration(milliseconds: 20));
-      expect(camera.state, const Ready(focusPoint: Point(0.5, 0.5)));
+      expect(camera.currentState, const Ready(focusPoint: Point(0.5, 0.5)));
       journal.take();
 
       camera.resetFocusPoint();
@@ -175,7 +179,11 @@ void main() {
         'state: Ready(zoom: 1.0, focusPoint: null, paused: false)',
         '[resetFocusPoint] finished Done(null)',
       ]);
-      expect(camera.state, const Ready(), reason: 'copyWith cannot clear it');
+      expect(
+        camera.currentState,
+        const Ready(),
+        reason: 'copyWith cannot clear it',
+      );
       expect(hw.log, contains('focus null: begin'));
     });
   });
@@ -235,7 +243,7 @@ void main() {
       async.flushTimers();
       expect(disposal.outcome, isA<Failed>());
       expect(
-        camera.state,
+        camera.currentState,
         isNot(isA<Disposed>()),
         reason: 'the hardware is still open',
       );
@@ -248,12 +256,12 @@ void main() {
       final first = camera.init()..ignore();
       async.flushTimers();
       expect(first.outcome, isA<Failed>());
-      expect(camera.state, isA<Broken>());
+      expect(camera.currentState, isA<Broken>());
       hw.failures.remove('open');
       final rescue = camera.reopen();
       async.flushTimers();
       expect(rescue.outcome, isA<Done<void>>());
-      expect(camera.state, isA<Ready>());
+      expect(camera.currentState, isA<Ready>());
     });
   });
 }

@@ -1,5 +1,10 @@
 ## Unreleased
 
+- **Breaking:** the controller's synchronous read is `solo`'s new
+  `currentState`, so `SoloListenable.state` is gone. `value` is unchanged
+  and is still the same object; a widget that reads the controller
+  directly reads `currentState`.
+
 - The notes at the end of the README became a table of the four questions
   they answer: when listeners run, whether equal states are filtered, how
   several controllers share a screen, and why `value` has no setter.

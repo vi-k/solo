@@ -10,7 +10,7 @@ void main() {
 
   test('state is the initial state and the controller is open', () {
     final solo = TestSolo();
-    expect(solo.state, const Initial());
+    expect(solo.currentState, const Initial());
     expect(solo.isClosed, isFalse);
   });
 
@@ -23,7 +23,7 @@ void main() {
 
   test('a SoloBase subclass without a stream compiles and reads state', () {
     final solo = _Bare(const Preparing());
-    expect(solo.state, const Preparing());
+    expect(solo.currentState, const Preparing());
   });
 }
 

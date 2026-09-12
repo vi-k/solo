@@ -38,7 +38,7 @@ The main API correspondences, for a reader who knows bloc:
 | `emit(next)` | `ctx.emit(next)` |
 | `if (emit.isDone) return;` | Cancellation checkpoints such as `ctx.wait` and `ctx.check` |
 | `emit.onEach`, `emit.forEach` | `ctx.each(stream, onData)` |
-| `state`, `stream` | `state`, `stream` |
+| `state`, `stream` | `currentState`, `stream` |
 | `BlocObserver` | `SoloObserver` |
 | `BlocBuilder`, `BlocSelector` | `ValueListenableBuilder`; selection is application code |
 | `BlocListener` for an operation's result | Await that operation's `job.done` |

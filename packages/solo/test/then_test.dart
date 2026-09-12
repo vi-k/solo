@@ -90,7 +90,7 @@ void main() {
       final next = solo.run<int, void>((ctx) async => ctx.emit(2));
       async.flushMicrotasks();
       expect(next.outcome, isA<Done<void>>());
-      expect(solo.state, 2);
+      expect(solo.currentState, 2);
       expect(continuation.isRunning, isTrue);
       var closed = false;
       unawaited(solo.close().then((_) => closed = true));

@@ -141,7 +141,7 @@ void main() {
     runSolo(initialState: const Working(), (solo, journal, async) {
       solo.close();
       async.flushMicrotasks();
-      expect(solo.state, const Working());
+      expect(solo.currentState, const Working());
     });
   });
 
@@ -158,7 +158,7 @@ void main() {
       try {
         solo.run<NotDisposed, void>(key: 'job', (ctx) async {
           ctx.emit(const Preparing());
-          stateAfterEmit = solo.state;
+          stateAfterEmit = solo.currentState;
         });
         async.flushMicrotasks();
         expect(stateAfterEmit, const Working(), reason: 'hook already ran');
@@ -189,7 +189,7 @@ void main() {
       TestState? stateAfterEmit;
       solo.run<NotDisposed, void>(key: 'job', (ctx) async {
         ctx.emit(const Preparing());
-        stateAfterEmit = solo.state;
+        stateAfterEmit = solo.currentState;
       });
       async.flushMicrotasks();
       expect(
@@ -198,7 +198,7 @@ void main() {
         reason: 'listener not yet run',
       );
       expect(seen, [const Preparing(), const Working()]);
-      expect(solo.state, const Working());
+      expect(solo.currentState, const Working());
     });
   });
 

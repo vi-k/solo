@@ -9,7 +9,7 @@ import 'listeners.dart';
 /// `ValueListenableBuilder` or `ListenableBuilder`.
 ///
 /// Read-only on purpose: a `ValueNotifier` setter would break the
-/// ownership guarantee. [value] and [state] are the same object.
+/// ownership guarantee. [value] and [currentState] are the same object.
 class SoloListenable<S extends Object> extends Solo<S>
     implements ValueListenable<S> {
   final _listeners = Listeners();
@@ -19,9 +19,9 @@ class SoloListenable<S extends Object> extends Solo<S>
   /// Creates a controller in [initialState].
   SoloListenable(super.initialState);
 
-  /// The current state; the same object as [state].
+  /// The current state; the same object as [currentState].
   @override
-  S get value => state;
+  S get value => currentState;
 
   /// Adds [listener], called on every state change until removed.
   @override

@@ -14,7 +14,7 @@ void main() {
     expect(counter.value, 0);
     counter.set(1);
     expect(counter.value, 1);
-    expect(counter.value, counter.state);
+    expect(counter.value, counter.currentState);
     await counter.close();
   });
 

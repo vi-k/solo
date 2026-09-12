@@ -26,13 +26,13 @@ void main() {
       final a = events.add(1);
       final b = events.add(2);
       expect(identical(a, b), isTrue);
-      expect(solo.state, 0);
+      expect(solo.currentState, 0);
       expect(calls, isEmpty);
       async.flushMicrotasks();
       expect(calls, [
         [1, 2],
       ]);
-      expect(solo.state, 2);
+      expect(solo.currentState, 2);
       solo.close();
       async.flushMicrotasks();
     });
@@ -69,7 +69,7 @@ void main() {
           });
           final second = events.add('2');
           expect(identical(first, second), policy == AccumulationPolicy.join);
-          expect(solo.state, '');
+          expect(solo.currentState, '');
           if (policy == AccumulationPolicy.replace) {
             final outcome = first.outcome! as Cancelled;
             expect(outcome.reason, isA<ManualCancelReason>());
@@ -961,13 +961,13 @@ void main() {
         ..add(const _Patch(theme: 'dark'))
         ..add(const _Patch(language: 'ru'))
         ..add(const _Patch(theme: 'system'));
-      expect(solo.state.notifications, isTrue);
-      expect(solo.state.theme, 'light');
-      expect(solo.state.language, 'en');
+      expect(solo.currentState.notifications, isTrue);
+      expect(solo.currentState.theme, 'light');
+      expect(solo.currentState.language, 'en');
       async.flushMicrotasks();
-      expect(solo.state.notifications, isFalse);
-      expect(solo.state.theme, 'system');
-      expect(solo.state.language, 'ru');
+      expect(solo.currentState.notifications, isFalse);
+      expect(solo.currentState.theme, 'system');
+      expect(solo.currentState.language, 'ru');
       solo.close();
       async.flushMicrotasks();
     });

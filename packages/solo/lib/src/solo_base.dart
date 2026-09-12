@@ -104,8 +104,16 @@ abstract class SoloBase<S extends Object> {
     }
   }
 
-  /// The current state. Reading is always safe; only jobs write.
-  S get state => _state;
+  /// The current state, for a reader outside a job. Reading is always
+  /// safe; only jobs write.
+  ///
+  /// Not named `state` on purpose. A job body is a closure inside a method
+  /// of the controller, so every member of the controller is in scope
+  /// there, and a bare `state` would compile and read the state without a
+  /// checkpoint — past a cancellation the body was supposed to honour. A
+  /// body reads through [SoloContext.state] instead, and this name makes
+  /// the wrong one impossible to write by habit.
+  S get currentState => _state;
 
   /// Whether [close] was called.
   bool get isClosed => _closing != null;
@@ -455,7 +463,8 @@ abstract class SoloBase<S extends Object> {
   /// Use the state handlers of [run] or [job] for an operation's own
   /// failure or cancellation.
   ///
-  /// Not blocked by [close]: after closing it still changes [state], calls
+  /// Not blocked by [close]: after closing it still changes
+  /// [currentState], calls
   /// `onChange` and re-evaluates the rules, while a subclass channel that is
   /// already closed — `Solo`'s stream, for one — drops the event. Stop the
   /// source of external states before closing the controller.

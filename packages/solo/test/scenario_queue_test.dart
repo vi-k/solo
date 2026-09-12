@@ -84,7 +84,7 @@ void main() {
       sequential(solo, 1);
       sequential(solo, 2);
       async.flushTimers();
-      expect((solo.state as Special).sequentialCount, 2);
+      expect((solo.currentState as Special).sequentialCount, 2);
       expect(journal.take(), [
         '[sequential: 1] started',
         'state: Special(sequential: 1)',
@@ -104,7 +104,7 @@ void main() {
       sequential(solo, 2);
       noop(solo, 3);
       async.flushTimers();
-      expect((solo.state as Special).sequentialCount, 2);
+      expect((solo.currentState as Special).sequentialCount, 2);
       expect(journal.take(), [
         '[noop: 1] started',
         'state: Special(noop: 1)',
@@ -131,7 +131,7 @@ void main() {
       async.elapse(const Duration(milliseconds: 50));
       sequential(solo, 2);
       async.flushTimers();
-      expect((solo.state as Special).sequentialCount, 2);
+      expect((solo.currentState as Special).sequentialCount, 2);
       expect(journal.take(), [
         '[sequential: 1] started',
         'state: Special(sequential: 1)',
@@ -152,7 +152,7 @@ void main() {
       sequential(solo, 2);
       noop(solo, 3);
       async.flushTimers();
-      expect((solo.state as Special).sequentialCount, 2);
+      expect((solo.currentState as Special).sequentialCount, 2);
       expect(journal.take(), [
         '[noop: 1] started',
         'state: Special(noop: 1)',
@@ -179,7 +179,7 @@ void main() {
       async.elapse(const Duration(milliseconds: 150));
       sequential(solo, 2);
       async.flushTimers();
-      expect((solo.state as Special).sequentialCount, 2);
+      expect((solo.currentState as Special).sequentialCount, 2);
       expect(journal.take(), [
         '[sequential: 1] started',
         'state: Special(sequential: 1)',
@@ -200,7 +200,7 @@ void main() {
       sequential(solo, 2);
       noop(solo, 3);
       async.flushTimers();
-      expect((solo.state as Special).sequentialCount, 2);
+      expect((solo.currentState as Special).sequentialCount, 2);
       expect(journal.take(), [
         '[noop: 1] started',
         'state: Special(noop: 1)',
@@ -227,7 +227,7 @@ void main() {
       final second = droppableByQueue(solo, 2);
       expect(identical(first, second), isTrue);
       async.flushTimers();
-      expect((solo.state as Special).droppableCount, 1);
+      expect((solo.currentState as Special).droppableCount, 1);
       expect(journal.take(), [
         '[droppable: 2] dropped Cancelled(manual)',
         '[droppable: 1] started',
@@ -246,7 +246,7 @@ void main() {
       noop(solo, 3);
       expect(identical(first, second), isTrue);
       async.flushTimers();
-      expect((solo.state as Special).droppableCount, 1);
+      expect((solo.currentState as Special).droppableCount, 1);
       expect(journal.take(), [
         '[droppable: 2] dropped Cancelled(manual)',
         '[noop: 1] started',
@@ -272,7 +272,7 @@ void main() {
       final second = droppableByQueue(solo, 2);
       expect(identical(first, second), isTrue);
       async.flushTimers();
-      expect((solo.state as Special).droppableCount, 1);
+      expect((solo.currentState as Special).droppableCount, 1);
       expect(journal.take(), [
         '[droppable: 1] started',
         '[droppable: 2] dropped Cancelled(manual)',
@@ -292,7 +292,7 @@ void main() {
       noop(solo, 3);
       expect(identical(first, second), isTrue);
       async.flushTimers();
-      expect((solo.state as Special).droppableCount, 1);
+      expect((solo.currentState as Special).droppableCount, 1);
       expect(journal.take(), [
         '[noop: 1] started',
         'state: Special(noop: 1)',
@@ -318,7 +318,7 @@ void main() {
       final second = droppableByQueue(solo, 2);
       expect(identical(first, second), isFalse);
       async.flushTimers();
-      expect((solo.state as Special).droppableCount, 2);
+      expect((solo.currentState as Special).droppableCount, 2);
       expect(journal.take(), [
         '[droppable: 1] started',
         'state: Special(droppable: 1)',
@@ -340,7 +340,7 @@ void main() {
       noop(solo, 3);
       expect(identical(first, second), isFalse);
       async.flushTimers();
-      expect((solo.state as Special).droppableCount, 2);
+      expect((solo.currentState as Special).droppableCount, 2);
       expect(journal.take(), [
         '[noop: 1] started',
         'state: Special(noop: 1)',
@@ -366,7 +366,7 @@ void main() {
       restartableByQueue(solo, 1);
       restartableByQueue(solo, 2);
       async.flushTimers();
-      expect((solo.state as Special).restartableCount, 2);
+      expect((solo.currentState as Special).restartableCount, 2);
       expect(journal.take(), [
         '[restartable: 1] dropped Cancelled(manual)',
         '[restartable: 2] started',
@@ -385,7 +385,7 @@ void main() {
       restartableByQueue(solo, 2);
       noop(solo, 3);
       async.flushTimers();
-      expect((solo.state as Special).restartableCount, 2);
+      expect((solo.currentState as Special).restartableCount, 2);
       expect(journal.take(), [
         '[restartable: 1] dropped Cancelled(manual)',
         '[noop: 1] started',
@@ -413,7 +413,7 @@ void main() {
       expect(second.isQueued, isTrue);
       expect(solo.current!.isCancelled, isTrue);
       async.flushTimers();
-      expect((solo.state as Special).restartableCount, 3);
+      expect((solo.currentState as Special).restartableCount, 3);
       expect(journal.take(), [
         '[restartable: 1] started',
         'state: Special(restartable: 1)',
@@ -435,7 +435,7 @@ void main() {
       restartableByQueue(solo, 2);
       noop(solo, 3);
       async.flushTimers();
-      expect((solo.state as Special).restartableCount, 3);
+      expect((solo.currentState as Special).restartableCount, 3);
       expect(journal.take(), [
         '[noop: 1] started',
         'state: Special(noop: 1)',
@@ -463,7 +463,7 @@ void main() {
       async.elapse(const Duration(milliseconds: 150));
       restartableByQueue(solo, 2);
       async.flushTimers();
-      expect((solo.state as Special).restartableCount, 4);
+      expect((solo.currentState as Special).restartableCount, 4);
       expect(journal.take(), [
         '[restartable: 1] started',
         'state: Special(restartable: 1)',
@@ -486,7 +486,7 @@ void main() {
       restartableByQueue(solo, 2);
       noop(solo, 3);
       async.flushTimers();
-      expect((solo.state as Special).restartableCount, 4);
+      expect((solo.currentState as Special).restartableCount, 4);
       expect(journal.take(), [
         '[noop: 1] started',
         'state: Special(noop: 1)',

@@ -29,7 +29,7 @@ void main() {
       async.flushMicrotasks();
       source.add(3);
       async.flushMicrotasks();
-      expect(solo.state, const Preparing(progress: 3));
+      expect(solo.currentState, const Preparing(progress: 3));
       expect(nextStarted, isFalse);
       expect(parent.isFinished, isFalse);
       expect(listening, isA<SoloJob<void>>());
@@ -144,7 +144,7 @@ void main() {
       async.flushMicrotasks();
       source.add(4);
       async.flushMicrotasks();
-      expect(solo.state, const Preparing(progress: 4));
+      expect(solo.currentState, const Preparing(progress: 4));
       source.close().ignore();
       async.flushMicrotasks();
       expect(parent.outcome, isA<Done<void>>());

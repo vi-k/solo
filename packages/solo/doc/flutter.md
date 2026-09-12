@@ -88,7 +88,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 }
 ```
 
-`value` and `state` refer to the same object. There is no value setter;
+`value` and `currentState` refer to the same object. There is no value setter;
 controller jobs perform updates through their context. `ListenableBuilder`
 and `AnimatedBuilder` also accept the controller when the builder does
 not need the state value itself.
