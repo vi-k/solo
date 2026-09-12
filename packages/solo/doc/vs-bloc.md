@@ -126,7 +126,7 @@ the upload flag as well.
 
 The missing half is one registration for both commands. By itself it is not
 enough either. The default is one field, `Bloc.transformer`, which a program
-may assign; each Bloc reads it while being constructed, so an assignment
+may assign; each `Bloc` reads it while being constructed, so an assignment
 governs the blocs made after it and leaves the ones already alive as they were.
 A registration that names no transformer runs its events concurrently:
 
@@ -309,7 +309,7 @@ first, which puts the global observer ahead of the controller's own note.
 Writing that note before `super` saves the journal — it then holds
 `[Recording]` — and saves nothing else: the state is still `Idle` and the meter
 still unarmed. The handler reports `telemetry unavailable`, and the same
-observer failure in a Cubit method reaches the method's caller.
+observer failure in a `Cubit` method reaches the method's caller.
 
 Both `Bloc` and `Cubit` publish through `BlocBase.emit`. It calls `onChange`
 before updating the state, and an exception from that call is passed to
@@ -476,11 +476,11 @@ still waits for the API call and handler to return. The separate
 shared state; otherwise section 1's ordering concern would apply.
 
 `add` after close throws `StateError`, so callers that can submit late events
-need their own handling. A Cubit method also continues after closure, but its
+need their own handling. A `Cubit` method also continues after closure, but its
 direct `emit` then throws rather than using a cancelled handler emitter.
 
 Another case is an unawaited future that emits after its handler completed
-normally, while the Bloc is still open. This triggers a debug assertion; with
+normally, while the `Bloc` is still open. This triggers a debug assertion; with
 assertions disabled, the late write changes state. The
 [completed-handler issue](https://github.com/felangel/bloc/issues/2961)
 discusses this lifetime constraint. Cancellation support is also discussed in
@@ -535,7 +535,7 @@ event begins work; `CancelRefresh` cancels that handler through the same
 `restartable()` registration. This example tracks only whether refresh is
 active; the API returns no data to display.
 
-In Bloc, putting the reset in the old handler's `finally` is insufficient:
+In bloc, putting the reset in the old handler's `finally` is insufficient:
 
 ```dart
 class RefreshBloc extends Bloc<RefreshEvent, RefreshState> {
@@ -561,7 +561,7 @@ eventually completes, `finally` calls the old, cancelled emitter, which ignores
 `Initial`. The state therefore remains `Loading` even after the API call ends.
 Cancellation itself did not throw into the old body.
 
-The Bloc solution is to publish the reset from the active cancellation handler.
+The bloc solution is to publish the reset from the active cancellation handler.
 Replace the `CancelRefresh` branch with:
 
 ```dart
@@ -572,7 +572,7 @@ if (event is CancelRefresh) {
 ```
 
 Now state becomes `Initial` when the cancel event is handled. The old handler's
-later emit is still ignored and cannot overwrite a newer refresh. With
+later `emit` is still ignored and cannot overwrite a newer refresh. With
 `restartable`, all event types in this registration can replace the current
 handler; a separate `on<CancelRefresh>` registration would not cancel
 `StartRefresh` by itself.
@@ -605,7 +605,7 @@ returns `Initial` before the queue proceeds. A successful refresh publishes
 `Initial` from the body; `onError` resets the indicator on failure while the
 job still reports `Failed`.
 
-The timing differs: Bloc's cancel-event handler updates state when it runs,
+The timing differs: bloc's cancel-event handler updates state when it runs,
 while solo's state handler runs after the cancelled job's cleanup. Neither
 example stops the API operation itself. If an independent external state makes
 the solo job invalid, its final state handlers are skipped; section 8 explains
@@ -647,7 +647,7 @@ Two things went wrong at once. A transformer orders the events of its own
 registration, so pause no longer waits for play. And `restartable()` cancels
 the replaced handler's emitter without stopping the native call it is awaiting:
 all three seeks ran on the device, the third of them after pause. Only the last
-emit reached the state, which is why the state alone shows none of this.
+`emit` reached the state, which is why the state alone shows none of this.
 
 ### Bloc
 
@@ -747,7 +747,7 @@ the current job can finish and the replacement can start. If the operation
 fails after cancellation, its error reaches the body; the job's outcome still
 remains cancelled.
 
-The observed traces match the successful Bloc cases above. Pause and play
+The observed traces match the successful bloc cases above. Pause and play
 remain in the same queue with their default sequential policy. The token is
 local to the seek body, and callers can inspect each seek's outcome, including
 `Cancelled(manual)` for a replaced request.
@@ -759,7 +759,7 @@ drag updates should not make the map finish at an older position.
 
 ### The first attempt
 
-Cubit supports methods that return futures directly, so the typed call
+`Cubit` supports methods that return futures directly, so the typed call
 interface costs nothing:
 
 ```dart
@@ -787,7 +787,7 @@ request because it finished last.
 
 A future chain can serialize calls, with additional tracking to discard
 obsolete requests. The application must also decide how closure waits for or
-invalidates that chain; Cubit does not manage it automatically.
+invalidates that chain; `Cubit` does not manage it automatically.
 
 ### Bloc with function events
 
@@ -867,8 +867,8 @@ The restart trace is
 request does not start; the first stops before the latest one begins. Both the
 map and `MapState(3, z4)` reflect the latest request. Callers may await
 `job.value` or `job.done` to wait for the operation, or omit waiting. The
-returned job itself is not a Future; its error-handling rules are described in
-the README.
+returned job itself is not a `Future`; its error-handling rules are described
+in the README.
 
 ## 6. Removing selected pending work
 
@@ -879,7 +879,7 @@ rename must still complete before disconnect.
 ### The first attempt
 
 One `sequential()` registration orders all device commands. Its pending events
-cannot be enumerated or removed through the Bloc API, so the handler has to
+cannot be enumerated or removed through the `Bloc` API, so the handler has to
 check whether a read is still relevant, and a leaving flag is the obvious thing
 to check: the screen sets it when it goes and clears it when it comes back.
 
@@ -1119,16 +1119,16 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
 two API calls, and both callers for one order receive its receipt.
 
 The completer must finish on every path. The `add` catch removes the map entry
-when a closed Bloc refuses the event. `isCompleted` prevents double completion
-if an emit throws after the receipt has been delivered. Completing the receipt
-before publishing `Paid` prevents an observer error from replacing an already
-obtained receipt. The transformer stays `sequential()`: the map is what shares
-a payment, and what reaches the queue after it are distinct orders, which
-should run in order rather than drop one another.
+when a closed `Bloc` refuses the event. `isCompleted` prevents double
+completion if an `emit` throws after the receipt has been delivered. Completing
+the receipt before publishing `Paid` prevents an observer error from replacing
+an already obtained receipt. The transformer stays `sequential()`: the map is
+what shares a payment, and what reaches the queue after it are distinct orders,
+which should run in order rather than drop one another.
 
 ### Cubit
 
-A Cubit method can return a receipt directly, but overlapping calls are not
+A `Cubit` method can return a receipt directly, but overlapping calls are not
 deduplicated or serialized automatically. This version adds an in-flight map
 and a future chain:
 
@@ -1167,9 +1167,9 @@ class CheckoutCubit extends Cubit<CheckoutState> {
 ```
 
 It also makes two API calls for three requests covering two orders. Its closure
-handling remains incomplete: Cubit does not wait for this custom chain. In the
-case where closure happens during payment, the charge succeeds, but the later
-`emit(Paid(...))` throws
+handling remains incomplete: `Cubit` does not wait for this custom chain. In
+the case where closure happens during payment, the charge succeeds, but the
+later `emit(Paid(...))` throws
 `Bad state: Cannot emit new states after calling close`, so the caller receives
 that error instead of the receipt. A production implementation must coordinate
 closure with its payment chain and result delivery.
@@ -1255,10 +1255,10 @@ later publishing `Calibrated` over it.
 
 ### The first attempt
 
-Bloc's direct `emit` is marked `@visibleForTesting` and documented for internal
-use, so the listener adds a `HardwareFailed` event instead. One registration
-for both events is what section 1 asks for, and it is what a reader who has
-just learned that lesson writes:
+`Bloc`'s direct `emit` is marked `@visibleForTesting` and documented for
+internal use, so the listener adds a `HardwareFailed` event instead. One
+registration for both events is what section 1 asks for, and it is what a
+reader who has just learned that lesson writes:
 
 ```dart
 class FunnelSensorBloc extends Bloc<SensorEvent, SensorState> {
@@ -1321,7 +1321,7 @@ Calibration checks state after each await because the failure event does not
 cancel its handler or emitter; the checks are what the second registration
 buys, not something it replaces.
 
-Cubit can reflect the notification directly from a subclass method, but its
+`Cubit` can reflect the notification directly from a subclass method, but its
 asynchronous operations still need equivalent validity checks.
 
 ### Solo
@@ -1362,8 +1362,8 @@ hardware listener before closing either controller; the snippets show
 registration, not application-specific listener teardown.
 
 On the success path, the job may finish by emitting `Calibrated`, even though
-that state is outside `Ready`. Its own emit is excluded from the rule check; a
-later state checkpoint would cancel it. This allows a final transition while
+that state is outside `Ready`. Its own `emit` is excluded from the rule check;
+a later state checkpoint would cancel it. This allows a final transition while
 requiring the working type to cover continued work.
 
 The sensor call already in progress still finishes in both examples. `join`
@@ -1514,7 +1514,7 @@ final class FirmwareController extends Solo<FirmwareState> {
 `Policy.restart` requests cancellation and enqueues the replacement. `join`
 waits for the current write; after a successful write it detects cancellation
 and throws before the next iteration. The replacement starts after the old job
-completes. The observed chunk sequence and non-overlap match the locked Bloc
+completes. The observed chunk sequence and non-overlap match the locked bloc
 implementation.
 
 An external `Broken` state also cancels this job because it no longer matches
@@ -1589,9 +1589,9 @@ stale buffer is released at all.
 The handler continues waiting after emitter cancellation and releases the
 buffer when it arrives. This is a working resource-management pattern; every
 exit after acquisition must remain inside the `try` block. Additional resources
-or ownership transfers need corresponding cleanup decisions. Cubit can use the
-same pattern with an application-defined stale-request check, since it has no
-handler emitter or `emit.isDone`.
+or ownership transfers need corresponding cleanup decisions. `Cubit` can use
+the same pattern with an application-defined stale-request check, since it has
+no handler emitter or `emit.isDone`.
 
 ### Solo
 
@@ -1626,7 +1626,7 @@ Use `dispose` here because the buffer is temporary, including on success.
 `discard` is for a resource handed to the caller as the successful result; it
 would not release this temporary buffer after a successful waveform update.
 
-The guarded Bloc and solo runs both record
+The guarded bloc and solo runs both record
 `[open 1, open 2, ready 2, sample 2, release 2, ready 1, release 1]` and end at
 `Preview(2)`.
 
