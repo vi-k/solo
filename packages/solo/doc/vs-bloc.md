@@ -787,9 +787,8 @@ or interrupted `seek` leaves the caller no outcome to read.
 
 ### Solo
 
-Queue policy belongs to each job submission. The fragment shows `pause` and
-`seek`; `play` follows the same sequential pattern as `pause`. `Ready` is the
-working state type accepted by these player jobs:
+Queue policy belongs to each job submission, and `Ready` is the working state
+type these player jobs accept:
 
 ```dart
 enum PlayerKey { play, pause, seek }
@@ -798,6 +797,14 @@ final class PlayerController extends Solo<PlayerState> {
   final Player _player;
 
   PlayerController(this._player) : super(Ready());
+
+  Job<void> play() => run<Ready, void>(
+        key: PlayerKey.play,
+        (ctx) async {
+          await ctx.join(_player.play);
+          ctx.emit(ctx.state.copyWith(playing: true));
+        },
+      );
 
   Job<void> pause() => run<Ready, void>(
         key: PlayerKey.pause,

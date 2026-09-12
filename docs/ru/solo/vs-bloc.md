@@ -796,9 +796,8 @@ class PlayerBloc extends Bloc<PlayerCommand, PlayerState> {
 
 ### Solo
 
-Политика очереди задаётся при добавлении каждой `Job`. Фрагмент показывает
-`pause` и `seek`; `play` следует той же последовательной схеме, что `pause`.
-`Ready` является рабочим типом состояния этих `Job` плеера:
+Политика очереди задаётся при добавлении каждой `Job`, а `Ready` — рабочий тип
+состояния, который принимают эти `Job` плеера:
 
 ```dart
 enum PlayerKey { play, pause, seek }
@@ -807,6 +806,14 @@ final class PlayerController extends Solo<PlayerState> {
   final Player _player;
 
   PlayerController(this._player) : super(Ready());
+
+  Job<void> play() => run<Ready, void>(
+        key: PlayerKey.play,
+        (ctx) async {
+          await ctx.join(_player.play);
+          ctx.emit(ctx.state.copyWith(playing: true));
+        },
+      );
 
   Job<void> pause() => run<Ready, void>(
         key: PlayerKey.pause,

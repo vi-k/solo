@@ -640,17 +640,6 @@ final class Ready extends PlayerState {
 }
 
 ''' + snips['5/PlayerController'] + '''
-extension on PlayerController {
-  // The other toggle, in the same shape as pause().
-  Job<void> play() => run<Ready, void>(
-        key: PlayerKey.play,
-        (ctx) async {
-          await _player.play();
-          ctx.emit(ctx.state.copyWith(playing: true));
-        },
-      );
-}
-
 Future<void> main() async {
   final player = PlayerController(Player())
     ..play()
