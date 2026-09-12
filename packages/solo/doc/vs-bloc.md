@@ -610,14 +610,20 @@ final class RefreshController extends Solo<RefreshState> {
           ctx.emit(const Initial());
         },
       );
+
+  Future<void> cancelRefresh() async {
+    await lastJobWhere((job) => job.key == 'refresh')?.cancel();
+  }
 }
 ```
 
-Call `controller.refresh()` and retain its job; `await job.cancel()` waits for
-cancellation and cleanup. `ctx.wait` ends the wait for the API, and `onCancel`
-returns `Initial` before the queue proceeds. A successful refresh publishes
-`Initial` from the body; `onError` resets the indicator on failure while the
-job still reports `Failed`.
+`cancelRefresh()` finds the running refresh by its key and cancels it, so the
+screen keeps nothing between the two calls, exactly as it keeps nothing between
+two events. A caller that wants the outcome can still hold the job `refresh()`
+returns and await its `cancel()`; both wait for cancellation and cleanup.
+`ctx.wait` ends the wait for the API, and `onCancel` returns `Initial` before
+the queue proceeds. A successful refresh publishes `Initial` from the body;
+`onError` resets the indicator on failure while the job still reports `Failed`.
 
 The timing differs: bloc's cancel-event handler updates state when it runs,
 while solo's state handler runs after the cancelled job's cleanup. Neither

@@ -617,11 +617,18 @@ final class RefreshController extends Solo<RefreshState> {
           ctx.emit(const Initial());
         },
       );
+
+  Future<void> cancelRefresh() async {
+    await lastJobWhere((job) => job.key == 'refresh')?.cancel();
+  }
 }
 ```
 
-Вызовите `controller.refresh()` и сохраните его `Job`; `await job.cancel()`
-дождётся отмены и освобождения ресурсов. `ctx.wait` прекращает ожидание API,
+`cancelRefresh()` находит работающее обновление по его ключу и отменяет,
+поэтому экрану между двумя вызовами хранить нечего — ровно так же, как ему
+нечего хранить между двумя событиями. Тот, кому нужен исход, по-прежнему может
+удержать `Job`, которую вернул `refresh()`, и дождаться её `cancel()`; оба пути
+ждут отмены и освобождения ресурсов. `ctx.wait` прекращает ожидание API,
 а `onCancel` возвращает `Initial` до продвижения очереди. Успешное обновление
 публикует `Initial` из тела; `onError` сбрасывает индикатор при ошибке, при
 этом `Job` по-прежнему сообщает `Failed`.
