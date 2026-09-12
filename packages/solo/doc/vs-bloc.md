@@ -773,8 +773,10 @@ For positions `1, 2, 3` queued together, the device receives
 the trace is `[seek 1 start, seek 1 stopped, seek 3 start, seek 3 end]`.
 
 Comparing position values is insufficient when the drag repeats a value. Input
-`1, 2, 1` produces `[play, seek 1, seek 1, pause]`. Identifying the latest
-event with a generation counter instead of its position fixes that case.
+`1, 2, 1` produces `[play, seek 1, seek 1, pause]`. Telling such events apart
+means marking each one as it arrives instead of comparing what it carries — the
+scheme section 7 writes out, with the condition it comes with: the events have
+to be distinct objects.
 
 The application maintains the latest-request identity, active token and
 post-await check. Each command requiring different replacement behavior needs
