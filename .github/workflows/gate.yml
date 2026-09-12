@@ -17,11 +17,26 @@ name: gate
 # without a commit. That is the same news the maintainer would get on the
 # next local run, a few days earlier.
 #
-# Three jobs rather than one, and the split is the point. `dart` never
+# Four jobs rather than one, and the split is the point. `dart` never
 # installs Flutter: that is what keeps `solo` and `async_job` the pure Dart
 # they promise to be, because a stray `package:flutter` import would stop
 # resolving there and nowhere else. `flutter` covers the package that needs
-# it. `docs` needs no SDK at all.
+# it. `docs` needs no SDK at all. `snippets` builds the code of
+# `packages/solo/doc/vs-bloc.md` and runs it.
+#
+# What `snippets` proves is narrow and worth stating: that every fragment
+# of that document still compiles against the tree and still runs to the
+# end. It does not compare the traces the document quotes against the ones
+# a run prints — the drivers print, they do not assert — so a number can
+# still go stale there without turning this red. Narrow is not nothing: the
+# recorder snippets of section 2 stopped compiling when `onChange` took a
+# `SoloTransition`, and lived on in the document for a release because
+# nothing here built them.
+#
+# The wall-clock fakes in those drivers cannot make the job flaky either,
+# for the same reason: a slow runner changes what is printed, not whether
+# the process exits zero. The one driver that does assert, `item3_cancel`,
+# runs under `FakeAsync` and has no wall clock to lose.
 #
 # `dart pub publish --dry-run` is deliberately absent. Between releases the
 # tree carries `pubspec_overrides.yaml` files pointing at the packages next
@@ -165,6 +180,65 @@ jobs:
 
       - name: Tests
         run: cd packages/flutter_solo && flutter test
+
+      - name: Nothing drifted
+        run: |
+          git status --porcelain
+          test -z "$(git status --porcelain)"
+
+  snippets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      # Two packages of its own making, and bloc 9 with `bloc_concurrency`
+      # on top of what the other Dart job pulls. The generator carries the
+      # manifests, so it keys the cache along with the packages it resolves
+      # by path.
+      - uses: actions/cache@v6
+        with:
+          path: ~/.pub-cache
+          key: pub-snippets-${{ runner.os }}-${{ hashFiles('tool/doc_snippets.py', 'packages/*/pubspec.yaml') }}
+          restore-keys: pub-snippets-${{ runner.os }}-
+
+      # Outside the checkout, which is what lets the last step of this job
+      # mean anything: the bench writes two packages and never the tree.
+      - name: Build the bench out of the document
+        run: python3 tool/doc_snippets.py "$RUNNER_TEMP/doc-check"
+
+      - name: Dependencies
+        run: |
+          for package in bloc_check solo_check; do
+            echo "== $package"
+            (cd "$RUNNER_TEMP/doc-check/$package" && dart pub get)
+          done
+
+      # `solo_check` analyzes under the package's own `analysis_options.yaml`,
+      # copied there by the generator: a fragment that passes here is a
+      # fragment that would pass inside `packages/solo`.
+      - name: Analyze
+        run: |
+          for package in bloc_check solo_check; do
+            echo "== $package"
+            (cd "$RUNNER_TEMP/doc-check/$package" && dart analyze bin/v)
+          done
+
+      # Unsilenced on purpose. These are the traces the document quotes,
+      # and the log is where a reader of a red run compares them by eye.
+      - name: Every scenario runs
+        run: |
+          for package in bloc_check solo_check; do
+            cd "$RUNNER_TEMP/doc-check/$package"
+            for driver in bin/v/*.dart; do
+              echo "== $package/$driver"
+              dart run "$driver"
+            done
+          done
 
       - name: Nothing drifted
         run: |
