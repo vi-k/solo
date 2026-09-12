@@ -1,7 +1,7 @@
 # solo and bloc, side by side
 
 This guide compares [solo](https://pub.dev/packages/solo) with `Bloc` and
-`Cubit` through ten controller scenarios. Each section states the required
+`Cubit` through eleven controller scenarios. Each section states the required
 behavior, starts from the code that behavior invites, says what that code
 actually does, and only then shows the implementations that meet it — bloc's
 and solo's — with what the library handles and what remains application code.
@@ -250,7 +250,7 @@ that is the only way they run. Adding another queued method preserves the
 ordering, because the queue is one per controller rather than one per command;
 no arrangement of the methods can give two of them a queue each. This guarantee
 covers root jobs; child jobs can run inside a parent, and independent device
-changes have a separate path described in section 8.
+changes have a separate path described in section 9.
 
 Use context waiting methods inside job bodies to check cancellation and state
 rules. A plain `await` still keeps the body and queue occupied but does not
@@ -533,15 +533,19 @@ then calls `ctx.emit` on a job that is over. That call throws
 alike, and the state stays as it was. Where bloc has an assertion that
 disappears in release, this is an ordinary error that does not.
 
-### Returning from Loading after cancellation
+## 4. Leaving a loading state when the work is cancelled
 
-Cancellation can also happen while the controller remains open. Consider a
-refresh indicator with two states, `Initial` and `Loading`. A `StartRefresh`
-event begins work; `CancelRefresh` cancels that handler through the same
-`restartable()` registration. This example tracks only whether refresh is
-active; the API returns no data to display.
+Cancellation can also happen while the controller remains open. A refresh
+indicator has two states, `Initial` and `Loading`. A `StartRefresh` event
+begins work; `CancelRefresh` cancels that handler through the same
+`restartable()` registration. The indicator must return to `Initial` when the
+refresh is cancelled. This example tracks only whether refresh is active; the
+API returns no data to display.
 
-In bloc, putting the reset in the old handler's `finally` is insufficient:
+### The first attempt
+
+The reset belongs where the work ends, whichever way it ends, and `finally` is
+where a body says that:
 
 ```dart
 class RefreshBloc extends Bloc<RefreshEvent, RefreshState> {
@@ -567,8 +571,10 @@ eventually completes, `finally` calls the old, cancelled emitter, which ignores
 `Initial`. The state therefore remains `Loading` even after the API call ends.
 Cancellation itself did not throw into the old body.
 
-The bloc solution is to publish the reset from the active cancellation handler.
-Replace the `CancelRefresh` branch with:
+### Bloc
+
+Publish the reset from the handler that is actually running — the one for the
+cancel event. Replace the `CancelRefresh` branch with:
 
 ```dart
 if (event is CancelRefresh) {
@@ -583,7 +589,9 @@ later `emit` is still ignored and cannot overwrite a newer refresh. With
 handler; a separate `on<CancelRefresh>` registration would not cancel
 `StartRefresh` by itself.
 
-In solo, attach the reset to the operation's final outcome:
+### Solo
+
+Attach the reset to the operation's final outcome:
 
 ```dart
 final class RefreshController extends Solo<RefreshState> {
@@ -614,10 +622,10 @@ job still reports `Failed`.
 The timing differs: bloc's cancel-event handler updates state when it runs,
 while solo's state handler runs after the cancelled job's cleanup. Neither
 example stops the API operation itself. If an independent external state makes
-the solo job invalid, its final state handlers are skipped; section 8 explains
+the solo job invalid, its final state handlers are skipped; section 9 explains
 external state and the README describes handler rules.
 
-## 4. Restarting one operation within a shared queue
+## 5. Restarting one operation within a shared queue
 
 A player must run `play`, `pause` and `seek` one at a time. During a slider
 drag, queued seek positions become obsolete and an active seek should stop
@@ -758,7 +766,7 @@ remain in the same queue with their default sequential policy. The token is
 local to the seek body, and callers can inspect each seek's outcome, including
 `Cancelled(manual)` for a replaced request.
 
-## 5. Typed methods with queued execution
+## 6. Typed methods with queued execution
 
 A map exposes `moveTo` and `setZoom`. Callers need typed arguments, and rapid
 drag updates should not make the map finish at an older position.
@@ -828,7 +836,7 @@ class CommandMapBloc extends Bloc<MapCommand, MapState> {
 The calls now run in order and end at `MapState(3, z4)`. This provides typed
 methods and shared ordering without a separate event class per method. All
 commands still use one transformer, and the shown methods return `void`.
-Returning a result requires an additional mechanism, as in section 7.
+Returning a result requires an additional mechanism, as in section 8.
 
 ### Solo
 
@@ -876,7 +884,7 @@ map and `MapState(3, z4)` reflect the latest request. Callers may await
 returned job itself is not a `Future`; its error-handling rules are described
 in the README.
 
-## 6. Removing selected pending work
+## 7. Removing selected pending work
 
 A BLE screen queues connect, battery and signal reads, rename and disconnect.
 When the screen closes, pending reads should be discarded, while the requested
@@ -1019,7 +1027,7 @@ can observe that result. Rename stays queued, and disconnect runs after it.
 `removeWhere` does not affect an already running connect. Jobs marked
 `cancellable: false` require `force: true` for queue removal.
 
-## 7. Awaiting a particular request
+## 8. Awaiting a particular request
 
 A checkout can be called by both a Pay button and a platform request. The
 platform handler must return the result of its order. Concurrent requests for
@@ -1253,7 +1261,7 @@ Sharing an in-memory job only deduplicates concurrent calls to this controller.
 Payment retries across process restarts or network failures also require an
 idempotent payment API; neither example provides that.
 
-## 8. Reacting to an independent external state change
+## 9. Reacting to an independent external state change
 
 A sensor reports a hardware failure while calibration is waiting for a sample.
 The controller must reflect `Broken` promptly and prevent the calibration from
@@ -1375,11 +1383,11 @@ requiring the working type to cover continued work.
 The sensor call already in progress still finishes in both examples. `join`
 waits for it before allowing another root job to start. A device with a
 cancellation token can additionally be stopped through `ctx.onCancel`, as in
-section 4. Final `onError` and `onCancel` state handlers, if supplied, are
+section 5. Final `onError` and `onCancel` state handlers, if supplied, are
 disabled by an incompatible external update, so they do not overwrite `Broken`
 during cleanup.
 
-## 9. Finishing an in-flight write before restarting
+## 10. Finishing an in-flight write before restarting
 
 A firmware upload writes BLE chunks sequentially. A replacement upload must
 stop the old loop and wait for its current write before sending any new chunk.
@@ -1491,7 +1499,7 @@ the same locking rule.
 
 A separate `HardwareFailed` event that publishes `Broken` does not change this
 emitter's `isDone`. In that scenario, additional state checks are still needed
-to stop flashing and preserve `Broken`, as in section 8.
+to stop flashing and preserve `Broken`, as in section 9.
 
 ### Solo
 
@@ -1533,18 +1541,18 @@ those children and their cleanup. Work intentionally allowed to outlive the job
 can use `ctx.unattended`, whose errors are reported through the job's hooks; it
 does not keep the queue occupied.
 
-## 10. Releasing a resource returned after cancellation
+## 11. Releasing a resource returned after cancellation
 
 An audio editor opens a native PCM buffer to draw a waveform. The user selects
 a different clip while decoding is pending. The old waveform should be
 discarded, but its buffer must still be released. These decoder calls may
 overlap safely because their buffers are independent. A decoder requiring
-serialized access needs section 9's waiting behavior instead.
+serialized access needs section 10's waiting behavior instead.
 
 ### The first attempt
 
 Checking `emit.isDone` before using the result prevents a stale waveform
-update, and after section 9 that check is the reflex:
+update, and after section 10 that check is the reflex:
 
 ```dart
 class PreviewBloc extends Bloc<OpenPreview, PreviewState> {

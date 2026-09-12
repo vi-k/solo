@@ -10,12 +10,11 @@ Usage, from the repository root:
 
 It creates two packages under the workdir, bloc_check (bloc 9 with
 bloc_concurrency) and solo_check (a path dependency on packages/solo), and
-writes bin/v/item1..10.dart plus item3_cancel.dart into each. Then:
+writes bin/v/item1..11.dart into each. Then:
 
     dart pub get
     dart analyze bin/v
-    dart run bin/v/item1.dart          # and so on, up to item10
-    dart run bin/v/item3_cancel.dart   # Loading after cancellation
+    dart run bin/v/item1.dart          # and so on, up to item11
 
 The traces the document quotes come from those runs. The main ten drivers
 use wall-clock fakes with timing margins. The Loading cancellation driver
@@ -362,8 +361,8 @@ import 'package:solo/solo.dart';
 
 FILES = {}
 
-# --------------------------------------------------------------- item 6 bloc
-FILES['bloc/item6'] = (BLOC_IMPORTS + TRACE + BLE + '''
+# --------------------------------------------------------------- item 7 bloc
+FILES['bloc/item7'] = (BLOC_IMPORTS + TRACE + BLE + '''
 sealed class DeviceEvent {}
 
 class Connect extends DeviceEvent {}
@@ -394,7 +393,7 @@ class DeviceState {
   String toString() => 'DeviceState($online, b:$battery, s:$signal)';
 }
 
-''' + snips['6/DeviceBloc'] + '\n' + snips['6/FlagDeviceBloc'] + '''
+''' + snips['7/DeviceBloc'] + '\n' + snips['7/FlagDeviceBloc'] + '''
 Future<void> run(Bloc<DeviceEvent, DeviceState> bloc, String label) async {
   trace.clear();
   bloc
@@ -455,8 +454,8 @@ Future<void> main() async {
 }
 ''')
 
-# --------------------------------------------------------------- item 6 solo
-FILES['solo/item6'] = (SOLO_IMPORTS + TRACE + BLE + '''
+# --------------------------------------------------------------- item 7 solo
+FILES['solo/item7'] = (SOLO_IMPORTS + TRACE + BLE + '''
 sealed class DeviceState {
   const DeviceState();
 }
@@ -479,7 +478,7 @@ final class Connected extends DeviceState {
   String toString() => 'Connected(b:$battery, s:$signal)';
 }
 
-''' + snips['6/DeviceController'] + '''
+''' + snips['7/DeviceController'] + '''
 // The four "ordinary jobs" the snippet refers to.
 extension on DeviceController {
   Job<void> connect() => run<DeviceState, void>(
@@ -528,7 +527,7 @@ Future<void> main() async {
 }
 ''')
 
-# --------------------------------------------------------------- item 4 bloc
+# --------------------------------------------------------------- item 5 bloc
 PLAYER_EVENTS = '''
 sealed class PlayerCommand {}
 
@@ -549,9 +548,9 @@ class PlayerState {
 }
 '''
 
-FILES['bloc/item4'] = (BLOC_IMPORTS + TRACE + PLAYER + PLAYER_EVENTS + '\n'
-                       + snips['4/PlayerBloc'] + '\n'
-                       + snips['4/SplitPlayerBloc'] + '''
+FILES['bloc/item5'] = (BLOC_IMPORTS + TRACE + PLAYER + PLAYER_EVENTS + '\n'
+                       + snips['5/PlayerBloc'] + '\n'
+                       + snips['5/SplitPlayerBloc'] + '''
 Future<void> main() async {
   final split = SplitPlayerBloc(Player());
   split
@@ -609,8 +608,8 @@ Future<void> main() async {
 }
 ''')
 
-# --------------------------------------------------------------- item 4 solo
-FILES['solo/item4'] = (SOLO_IMPORTS + TRACE + PLAYER + '''
+# --------------------------------------------------------------- item 5 solo
+FILES['solo/item5'] = (SOLO_IMPORTS + TRACE + PLAYER + '''
 sealed class PlayerState {}
 
 final class Ready extends PlayerState {
@@ -625,7 +624,7 @@ final class Ready extends PlayerState {
   String toString() => 'Ready(${position.inMilliseconds}ms)';
 }
 
-''' + snips['4/PlayerController'] + '''
+''' + snips['5/PlayerController'] + '''
 extension on PlayerController {
   // The other toggle, in the same shape as pause().
   Job<void> play() => run<Ready, void>(
@@ -815,8 +814,8 @@ Future<void> main() async {
 }
 ''')
 
-# --------------------------------------------------------------- item 9 bloc
-FILES['bloc/item9'] = (BLOC_IMPORTS + TRACE + BLE + '''
+# --------------------------------------------------------------- item 10 bloc
+FILES['bloc/item10'] = (BLOC_IMPORTS + TRACE + BLE + '''
 sealed class FirmwareEvent {}
 
 class Flash extends FirmwareEvent {
@@ -851,8 +850,8 @@ class Broken extends FirmwareState {
   String toString() => 'Broken($error)';
 }
 
-''' + snips['9/UnguardedFirmwareBloc'] + snips['9/FirmwareBloc']
-                       + snips['9/LockedFirmwareBloc'] + '''
+''' + snips['10/UnguardedFirmwareBloc'] + snips['10/FirmwareBloc']
+                       + snips['10/LockedFirmwareBloc'] + '''
 /// The same loop, with the failure arriving as a state instead of a restart.
 class GuardedFirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
   GuardedFirmwareBloc(this._ble) : super(Idle()) {
@@ -914,8 +913,8 @@ Future<void> main() async {
 }
 ''')
 
-# --------------------------------------------------------------- item 9 solo
-FILES['solo/item9'] = (SOLO_IMPORTS + TRACE + BLE + '''
+# --------------------------------------------------------------- item 10 solo
+FILES['solo/item10'] = (SOLO_IMPORTS + TRACE + BLE + '''
 sealed class FirmwareState {
   const FirmwareState();
 }
@@ -945,7 +944,7 @@ final class Broken extends FirmwareState {
   String toString() => 'Broken($error)';
 }
 
-''' + snips['9/FirmwareController'] + '''
+''' + snips['10/FirmwareController'] + '''
 extension on FirmwareController {
   // ignore: invalid_use_of_protected_member
   void hardwareFailed(Object error) => externalSetState(Broken(error));
@@ -976,8 +975,8 @@ Future<void> main() async {
 }
 ''')
 
-# --------------------------------------------------------------- item 7 bloc
-FILES['bloc/item7'] = (BLOC_IMPORTS + TRACE + PAY_API + '''
+# --------------------------------------------------------------- item 8 bloc
+FILES['bloc/item8'] = (BLOC_IMPORTS + TRACE + PAY_API + '''
 sealed class CheckoutEvent {}
 
 sealed class CheckoutState {}
@@ -996,7 +995,7 @@ class PaymentFailed extends CheckoutState {
   final Object error;
 }
 
-''' + snips['7/Pay'] + snips['7/CheckoutBloc'] + snips['7/CheckoutCubit'] + '''
+''' + snips['8/Pay'] + snips['8/CheckoutBloc'] + snips['8/CheckoutCubit'] + '''
 /// The cubit the paragraph before the snippet describes: a method you can
 /// await, and nothing around it.
 class PlainCheckoutCubit extends Cubit<CheckoutState> {
@@ -1085,8 +1084,8 @@ Future<void> main() async {
 }
 ''')
 
-# --------------------------------------------------------------- item 7 solo
-FILES['solo/item7'] = (SOLO_IMPORTS + TRACE + PAY_API + '''
+# --------------------------------------------------------------- item 8 solo
+FILES['solo/item8'] = (SOLO_IMPORTS + TRACE + PAY_API + '''
 sealed class CheckoutState {
   const CheckoutState();
 }
@@ -1110,7 +1109,7 @@ final class Paid extends CheckoutState {
   String toString() => 'Paid($receipt)';
 }
 
-''' + snips['7/CheckoutController'] + '\n' + snips['7/handlePayRequest'] + '''
+''' + snips['8/CheckoutController'] + '\n' + snips['8/handlePayRequest'] + '''
 Future<void> main() async {
   final dedupe = CheckoutController(Api());
   final callA = dedupe.pay(const Order('Z'));
@@ -1159,12 +1158,12 @@ Future<void> main() async {
 }
 ''')
 
-# --------------------------------------------------------------- item 5 bloc
-FILES['bloc/item5'] = (BLOC_MAP_IMPORTS.replace(
+# --------------------------------------------------------------- item 6 bloc
+FILES['bloc/item6'] = (BLOC_MAP_IMPORTS.replace(
     "import 'package:bloc/bloc.dart';",
     "import 'package:bloc/bloc.dart';\n"
     "import 'package:bloc_concurrency/bloc_concurrency.dart';",
-) + TRACE + MAP_API + '\n' + snips['5/MapCubit'] + '\n' + snips['5/CommandMapBloc'] + '''
+) + TRACE + MAP_API + '\n' + snips['6/MapCubit'] + '\n' + snips['6/CommandMapBloc'] + '''
 Future<void> main() async {
   final cubit = MapCubit(MapApi());
   for (var i = 1; i <= 3; i++) {
@@ -1186,8 +1185,8 @@ Future<void> main() async {
 }
 ''')
 
-# --------------------------------------------------------------- item 5 solo
-FILES['solo/item5'] = (SOLO_MAP_IMPORTS + TRACE + MAP_API + '\n' + snips['5/MapController'] + '''
+# --------------------------------------------------------------- item 6 solo
+FILES['solo/item6'] = (SOLO_MAP_IMPORTS + TRACE + MAP_API + '\n' + snips['6/MapController'] + '''
 Future<void> main() async {
   final map = MapController(MapApi());
   onMapDrag(map, const Point<double>(1, 0));
@@ -1315,8 +1314,8 @@ Future<void> main() async {
 }
 ''')
 
-# --------------------------------------------------------------- item 8 bloc
-FILES['bloc/item8'] = (BLOC_IMPORTS + TRACE + SENSOR + '''
+# --------------------------------------------------------------- item 9 bloc
+FILES['bloc/item9'] = (BLOC_IMPORTS + TRACE + SENSOR + '''
 sealed class SensorEvent {}
 
 class Calibrate extends SensorEvent {}
@@ -1345,7 +1344,7 @@ class Broken extends SensorState {
   String toString() => 'Broken($error)';
 }
 
-''' + snips['8/SensorBloc'] + '\n' + snips['8/FunnelSensorBloc'] + '''
+''' + snips['9/SensorBloc'] + '\n' + snips['9/FunnelSensorBloc'] + '''
 
 Future<void> main() async {
   final hw = Sensor();
@@ -1375,8 +1374,8 @@ Future<void> main() async {
 }
 ''')
 
-# --------------------------------------------------------------- item 8 solo
-FILES['solo/item8'] = (SOLO_IMPORTS + TRACE + SENSOR + '''
+# --------------------------------------------------------------- item 9 solo
+FILES['solo/item9'] = (SOLO_IMPORTS + TRACE + SENSOR + '''
 sealed class SensorState {
   const SensorState();
 }
@@ -1400,7 +1399,7 @@ final class Broken extends SensorState {
   String toString() => 'Broken($error)';
 }
 
-''' + snips['8/SensorController'] + '''
+''' + snips['9/SensorController'] + '''
 Future<void> main() async {
   final hw = Sensor();
   final sensor = SensorController(hw);
@@ -1727,9 +1726,9 @@ class OpenPreview {
 }
 """
 
-# -------------------------------------------------------------- item 10 bloc
-FILES['bloc/item10'] = (BLOC_IMPORTS + TRACE + PREVIEW + '\n' + snips['10/PreviewBloc'] + '\n'
-                        + snips['10/GuardedPreviewBloc'] + '''
+# -------------------------------------------------------------- item 11 bloc
+FILES['bloc/item11'] = (BLOC_IMPORTS + TRACE + PREVIEW + '\n' + snips['11/PreviewBloc'] + '\n'
+                        + snips['11/GuardedPreviewBloc'] + '''
 /// Completes an event's future when its handler is done, so the driver can
 /// watch a handler the document's snippet knows nothing about.
 mixin Finishing on Bloc<OpenPreview, PreviewState> {
@@ -1780,8 +1779,8 @@ Future<void> main() async {
 }
 ''')
 
-# -------------------------------------------------------------- item 10 solo
-FILES['solo/item10'] = (SOLO_IMPORTS + TRACE + PREVIEW + '\n' + snips['10/PreviewController'] + '''
+# -------------------------------------------------------------- item 11 solo
+FILES['solo/item11'] = (SOLO_IMPORTS + TRACE + PREVIEW + '\n' + snips['11/PreviewController'] + '''
 Future<void> main() async {
   final decoder = Decoder();
   final controller = PreviewController(decoder);
@@ -1834,14 +1833,15 @@ void require(bool condition, String message) {
 }
 '''
 
-fixed_refresh = snips['3/RefreshBloc'].replace(
+# --------------------------------------------------------------- item 4
+fixed_refresh = snips['4/RefreshBloc'].replace(
     'class RefreshBloc ', 'class GuardedRefreshBloc ',
 ).replace('RefreshBloc(this._api)', 'GuardedRefreshBloc(this._api)').replace(
-    'if (event is CancelRefresh) return;', snips['3/if-event-is-cancelrefresh'].strip(),
+    'if (event is CancelRefresh) return;', snips['4/if-event-is-cancelrefresh'].strip(),
 )
-FILES['bloc/item3_cancel'] = (
+FILES['bloc/item4'] = (
     BLOC_IMPORTS + "import 'package:fake_async/fake_async.dart';\n"
-    + REFRESH_MODEL + snips['3/RefreshBloc'] + fixed_refresh + '''
+    + REFRESH_MODEL + snips['4/RefreshBloc'] + fixed_refresh + '''
 void main() {
   fakeAsync((clock) {
     final api = RefreshApi();
@@ -1877,13 +1877,13 @@ void main() {
 }
 ''')
 
-FILES['solo/item3_cancel'] = (
+FILES['solo/item4'] = (
     SOLO_IMPORTS.replace(
         "import 'package:solo/solo.dart';",
         "import 'package:fake_async/fake_async.dart';\n"
         "import 'package:solo/solo.dart';",
     )
-    + REFRESH_MODEL + snips['3/RefreshController'] + '''
+    + REFRESH_MODEL + snips['4/RefreshController'] + '''
 void main() {
   fakeAsync((clock) {
     final api = RefreshApi();
