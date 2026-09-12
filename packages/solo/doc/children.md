@@ -157,3 +157,15 @@ the tail waits for those sources and their cleanup, including a source
 that refuses cancellation. `close()` reaches a continuation through an
 unfinished source, but does not own a continuation already running after
 the source finished.
+
+Inside a controller's body `ctx.run` is narrower still: it takes jobs of
+that controller, the ones `job(...)` makes and nobody has queued. A
+continuation is a root job of the core, so it is turned away there as
+well, with the controller's own complaint — that the job was not created
+by this `Solo`, which is what a bare core job gets too.
+
+The queue does not wait for a tail. The slot is freed when the root job
+finishes, and the next queued job starts while the continuation still has
+to run: a `then` hung off `load()` can be working after `save()` has
+taken the queue. Where that would be wrong, keep the sequence inside one
+job and make its steps children.

@@ -1,5 +1,13 @@
 ## Unreleased
 
+- `doc/children.md` says what `ctx.run` does with a chain, and why: a
+  continuation starts itself when its source finishes, so no link of one
+  can be adopted — the head is the only job in a chain a parent can take.
+  And the parent waits for its children, not for what hangs off them: a
+  slow tail runs on after the parent has finished `Done`, its failure
+  goes to the zone that built the chain rather than to the parent, and
+  only cancellation still reaches it, forward through the source.
+
 - `doc/observing.md` now says how to measure the wait a cancellation
   costs, with no hook of its own: `Job.whenCancelled` fires when the
   cancellation takes effect and `onFinish` when the outcome arrives, so

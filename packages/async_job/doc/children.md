@@ -185,3 +185,40 @@ argument and inherits neither the source's observer nor domain state,
 rules or a queue slot. Cleanup registered by the source has already run
 when the continuation receives its value; a resource closed by the
 source's `onDispose` is therefore already closed at that point.
+
+### A chain is not a child
+
+```dart
+final child = Job.deferred<int>((ctx) => ctx.wait(load));
+final tail = child.then<void>((ctx, rows) => report(rows * 2));
+
+final parent = Job<void>((ctx) async {
+  // The head is a child: the parent starts it and waits for it.
+  ctx.log(await ctx.run(child));
+  // await ctx.run(tail) would throw ArgumentError here: a continuation
+  // starts itself when its source finishes.
+});
+
+await parent.value; // Done, whatever the tail is doing.
+await tail.value; // The tail is yours to observe.
+```
+
+`ctx.run` takes a job nobody starts by itself, and a continuation is not
+one of those: it starts when its source finishes. The length of the chain
+changes nothing — `child.then(...).then(...)` is a continuation of a
+continuation, and every link refuses adoption the same way. The head is
+the only job in a chain a parent can adopt.
+
+The parent waits for its children, not for what hangs off them. Once
+`ctx.run(child)` has returned and the body ends, the parent finishes
+`Done` while a slow tail is still running. Cancellation still reaches
+that tail, through the source rather than through the parent: cancelling
+the parent cancels the child, and the child's cancellation travels
+forward to the tail as `ChainCancelReason`.
+
+A failure in the tail is nobody's business but the tail's. Observe it
+through `value`, `done` or `ignore`; an unobserved one goes to the zone
+that created the chain, after the parent has already finished. So: a
+sequence that belongs to the operation is children — `await ctx.run(a)`,
+then `await ctx.run(b)`. A sequence that deliberately outlives it is a
+chain, and its outcome comes back to you, not to the parent.
