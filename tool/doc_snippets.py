@@ -1490,6 +1490,29 @@ class HandledRecorderBloc extends RecorderBloc {
   }
 }
 
+/// The journal written before the observer is called, against the note in
+/// `onChange`'s own dartdoc: "`super.onChange` should always be called
+/// first."
+class JournalFirstRecorderBloc extends Bloc<StartRecording, RecorderState> {
+  final Recorder _recorder;
+  final Journal _journal;
+
+  JournalFirstRecorderBloc(this._recorder, this._journal)
+      : super(const Idle()) {
+    on<StartRecording>((e, emit) async {
+      await _recorder.start();
+      emit(const Recording());
+      _recorder.armMeter();
+    });
+  }
+
+  @override
+  void onChange(Change<RecorderState> change) {
+    _journal.note('${change.nextState}');
+    super.onChange(change);
+  }
+}
+
 /// The same body as a cubit method, to show the caller's side of it.
 class RecorderCubit extends Cubit<RecorderState> {
   final Recorder _recorder;
@@ -1563,10 +1586,31 @@ Future<void> handled() async {
   print('onError overridden, still escaped to the zone: $zone');
 }
 
+/// What the local hook gets by going before `super`, and what it does not.
+Future<void> journalFirst() async {
+  Bloc.observer = TelemetryObserver(Telemetry());
+  final zone = <String>[];
+  await runZonedGuarded(
+    () async {
+      final recorder = Recorder();
+      final journal = Journal();
+      final bloc = JournalFirstRecorderBloc(recorder, journal);
+      bloc.add(StartRecording());
+      await tick(20);
+      print('journal before super: state ${bloc.state}, '
+          'journal ${journal.entries}, trace ${recorder.trace}');
+      await bloc.close();
+    },
+    (error, _) => zone.add('$error'),
+  );
+  print('journal before super, zone: $zone');
+}
+
 Future<void> main() async {
   await go(guarded: false);
   await go(guarded: true);
   await handled();
+  await journalFirst();
 }
 ''')
 

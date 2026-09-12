@@ -303,9 +303,13 @@ class TelemetryObserver extends BlocObserver {
 ```
 
 In this run the device starts, but the state remains `Idle`. The level
-meter is never armed. The local journal is empty, because its write
-follows the failing `super.onChange` call. The handler reports
-`telemetry unavailable`. The same observer failure in a Cubit method
+meter is never armed. The local journal is empty too, and not through an
+unlucky line order: `onChange`'s own documentation asks for
+`super.onChange` to be called first, which puts the global observer ahead
+of the controller's own note. Writing that note before `super` saves the
+journal — a measured `[Recording]` — and saves nothing else: the state is
+still `Idle` and the meter still unarmed. The handler reports
+`telemetry unavailable`, and the same observer failure in a Cubit method
 reaches the method's caller.
 
 Both `Bloc` and `Cubit` publish through `BlocBase.emit`. It calls
