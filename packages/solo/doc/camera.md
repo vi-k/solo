@@ -1,9 +1,9 @@
 # Camera example
 
-The following example combines state rules, queue policies and explicit
-device cleanup. It uses a separate state hierarchy from the profile
-example. `NotDisposed` groups every state in which hardware operations
-may still be performed:
+The following example combines state rules, queue policies and explicit device
+cleanup. It uses a separate state hierarchy from the profile example.
+`NotDisposed` groups every state in which hardware operations may still be
+performed:
 
 ```dart
 sealed class CameraState {
@@ -110,21 +110,20 @@ final class CameraController extends Solo<CameraState> {
 }
 ```
 
-`init` starts only from `Initial`, but uses `NotDisposed` as its working
-type so it can continue after emitting `Preparing`. `setZoom` replaces
-queued zoom requests while allowing the running request to finish.
+`init` starts only from `Initial`, but uses `NotDisposed` as its working type
+so it can continue after emitting `Preparing`. `setZoom` replaces queued zoom
+requests while allowing the running request to finish.
 
 After taking a photo, `takePhoto` clears cancellable queued commands. This
 example treats commands accumulated during capture as belonging to that
-capture; clearing prevents them from affecting the next one. The running
-job is unaffected by `queue.clear()`.
+capture; clearing prevents them from affecting the next one. The running job is
+unaffected by `queue.clear()`.
 
-`dispose()` is an application operation that closes the hardware and
-publishes `Disposed`. It clears pending work and requests cancellation of
-the running job before queuing its own non-cancellable teardown. The
-child `_closeCameraJob` also refuses ordinary cancellation. The controller's
-`close()` is a separate lifecycle operation, so await device disposal
-before closing the controller:
+`dispose()` is an application operation that closes the hardware and publishes
+`Disposed`. It clears pending work and requests cancellation of the running job
+before queuing its own non-cancellable teardown. The child `_closeCameraJob`
+also refuses ordinary cancellation. The controller's `close()` is a separate
+lifecycle operation, so await device disposal before closing the controller:
 
 ```dart
 final camera = CameraController(FakeCameraHardware());
@@ -146,10 +145,10 @@ switch (await camera.dispose().done) {
 await camera.close();
 ```
 
-The runnable example extends this controller with a `Broken` state,
-reopening, pause, resume and focus operations. Its fake hardware responds
-with delays and can fail independently. Tests check ordered event journals,
-and `bin/main.dart` prints one while the scenario runs:
+The runnable example extends this controller with a `Broken` state, reopening,
+pause, resume and focus operations. Its fake hardware responds with delays and
+can fail independently. Tests check ordered event journals, and `bin/main.dart`
+prints one while the scenario runs:
 
 ```sh
 cd example

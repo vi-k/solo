@@ -23,9 +23,9 @@ test('load fills in the name', () async {
 Use `job.value` when testing the returned value, or
 `await expectLater(profile.load().value, throwsA(...))` for a failure.
 
-For timing and ordering, use `package:fake_async`. In the following test,
-the fake API completes after 20 ms. An observer records state changes and
-job completion in one ordered list:
+For timing and ordering, use `package:fake_async`. In the following test, the
+fake API completes after 20 ms. An observer records state changes and job
+completion in one ordered list:
 
 ```dart
 final class Journal extends SoloObserver {
@@ -72,27 +72,26 @@ test('a second load while the first one runs is dropped', () {
 ```
 
 The cancelled duplicate in the journal is the newly created job that
-`droppable` discarded. Both method calls returned the original job.
-Reset the global observer with `addTearDown` so a failed test cannot leave
-it installed for later tests.
+`droppable` discarded. Both method calls returned the original job. Reset the
+global observer with `addTearDown` so a failed test cannot leave it installed
+for later tests.
 
 Inside `fakeAsync`, request cancellation with `job.cancel().ignore()` and
 advance pending work before asserting. `flushMicrotasks()` runs microtasks;
-`Future(...)` and `Future.delayed(...)` use timers and require `elapse(...)`
-or `flushTimers()`. Use `emitsInOrder` when the stream itself matters;
-for final state, reading `currentState` after `job.done` is usually
-sufficient.
+`Future(...)` and `Future.delayed(...)` use timers and require `elapse(...)` or
+`flushTimers()`. Use `emitsInOrder` when the stream itself matters; for final
+state, reading `currentState` after `job.done` is usually sufficient.
 
 ## Timeouts
 
-`Future.timeout` limits waiting for a future; it does not stop the
-underlying operation. For a request whose result may be abandoned,
+`Future.timeout` limits waiting for a future; it does not stop the underlying
+operation. For a request whose result may be abandoned,
 `ctx.wait(() => api.fetch().timeout(...))` can be sufficient.
 
-For a device operation that must stop before the next job, connect a timer
-to the device's cancellation mechanism and await the operation with
-`join`. In this example, the hardware API completes with an error when
-its token is cancelled, so a timeout fails the job:
+For a device operation that must stop before the next job, connect a timer to
+the device's cancellation mechanism and await the operation with `join`. In
+this example, the hardware API completes with an error when its token is
+cancelled, so a timeout fails the job:
 
 ```dart
 Job<void> connect() => run<Idle, void>(

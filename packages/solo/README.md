@@ -1,14 +1,14 @@
 # solo
 
-`solo` manages state and asynchronous work in Dart. A controller holds
-the current state and processes jobs one at a time. Each job can declare
-which states allow it to start and continue, and callers can await its
-result or request cancellation.
+`solo` manages state and asynchronous work in Dart. A controller holds the
+current state and processes jobs one at a time. Each job can declare which
+states allow it to start and continue, and callers can await its result or
+request cancellation.
 
-Use it for screens, sessions and devices where operations share state
-and need an explicit order. The package has no Flutter dependency.
-[`flutter_solo`](https://pub.dev/packages/flutter_solo) adds a controller
-that implements `ValueListenable` for Flutter widgets.
+Use it for screens, sessions and devices where operations share state and need
+an explicit order. The package has no Flutter dependency.
+[`flutter_solo`](https://pub.dev/packages/flutter_solo) adds a controller that
+implements `ValueListenable` for Flutter widgets.
 
 ## Install
 
@@ -24,13 +24,13 @@ flutter pub add flutter_solo
 
 `solo` re-exports [async_job](https://pub.dev/packages/async_job), which
 provides jobs, cancellation and resource cleanup. One import,
-`package:solo/solo.dart`, gives access to both APIs. You do not need to
-learn the underlying package before using the examples below.
+`package:solo/solo.dart`, gives access to both APIs. You do not need to learn
+the underlying package before using the examples below.
 
 ## Quick start
 
-A controller exposes methods for application operations. Here, `load()`
-loads a profile name and reports progress through four immutable states:
+A controller exposes methods for application operations. Here, `load()` loads a
+profile name and reports progress through four immutable states:
 
 ```dart
 import 'package:solo/solo.dart';
@@ -91,10 +91,10 @@ final class ProfileController extends Solo<ProfileState> {
 }
 ```
 
-`run<ProfileState, String>` creates and queues a job. `ProfileState` is
-the state type its body can work with; `String` is its result type.
-The body receives a context, `ctx`, which provides state updates and
-cancellation-aware waiting:
+`run<ProfileState, String>` creates and queues a job. `ProfileState` is the
+state type its body can work with; `String` is its result type. The body
+receives a context, `ctx`, which provides state updates and cancellation-aware
+waiting:
 
 - `ctx.emit` updates the controller's state.
 - `ctx.wait` waits for the API response, or throws `Cancelled` if the job
@@ -102,14 +102,14 @@ cancellation-aware waiting:
 - `onError` returns the state to publish if the job fails.
 - `onCancel` returns the state to publish if a started job is cancelled.
 
-The state handlers run after the body and its cleanup. In this example,
-the state becomes `Loaded` on success, `Failure` on error, or `Initial`
-on cancellation. Failure and cancellation remain the job's outcome even
-when a handler updates the state.
+The state handlers run after the body and its cleanup. In this example, the
+state becomes `Loaded` on success, `Failure` on error, or `Initial` on
+cancellation. Failure and cancellation remain the job's outcome even when a
+handler updates the state.
 
-`Policy.droppable` and `key: 'load'` make repeated calls share the queued
-or running load. A second call returns the existing job. Once that job
-finishes, another call can start a new load.
+`Policy.droppable` and `key: 'load'` make repeated calls share the queued or
+running load. A second call returns the existing job. Once that job finishes,
+another call can start a new load.
 
 The caller uses the returned `Job<String>` to await this particular load:
 
@@ -133,9 +133,9 @@ Future<void> main() async {
 ```
 
 `profile.currentState` is available synchronously. `profile.stream` broadcasts
-changes asynchronously. `job.value` returns the loaded name, or throws
-the job's error or `Cancelled`. The `finally` block releases the listener
-and closes the controller even if loading fails.
+changes asynchronously. `job.value` returns the loaded name, or throws the
+job's error or `Cancelled`. The `finally` block releases the listener and
+closes the controller even if loading fails.
 
 Cancellation uses the same job object. This separate example requests
 cancellation immediately, so the job may still be in the queue:
@@ -151,16 +151,15 @@ Future<void> cancelLoading() async {
 }
 ```
 
-`cancel()` waits for the job to finish, including cleanup if it started.
-A job cancelled before its body starts does not call `onCancel`.
-Jobs can start child jobs as part of their work; the starting job is
-their parent and waits for them before finishing.
-The next queued job starts only after the previous job finishes its body,
-children, cleanup and state handler.
+`cancel()` waits for the job to finish, including cleanup if it started. A job
+cancelled before its body starts does not call `onCancel`. Jobs can start child
+jobs as part of their work; the starting job is their parent and waits for them
+before finishing. The next queued job starts only after the previous job
+finishes its body, children, cleanup and state handler.
 
-The guides below explain results, queue policies and cancellation in
-more detail. In particular, cancellation of a job does not automatically
-stop an API request that has already been sent.
+The guides below explain results, queue policies and cancellation in more
+detail. In particular, cancellation of a job does not automatically stop an API
+request that has already been sent.
 
 ## Why `currentState` and not `state`
 
@@ -183,23 +182,22 @@ Job<String> reload() => run<ProfileState, String>(
     );
 ```
 
-A job body is a closure inside a method of the controller, so every
-member of the controller is in scope there. A plain read named `state`
-would look exactly like `ctx.state`, and a body that typed it out of
-habit would read past a cancellation it was supposed to honour: no
-`Cancelled`, no `keepWhile` check, and the whole of `S` instead of the
-job's working type `W`. Nobody writes `currentState` by habit where a
-checkpoint is meant, so what used to be a silent read is a compile error.
+A job body is a closure inside a method of the controller, so every member of
+the controller is in scope there. A plain read named `state` would look exactly
+like `ctx.state`, and a body that typed it out of habit would read past a
+cancellation it was supposed to honour: no `Cancelled`, no `keepWhile` check,
+and the whole of `S` instead of the job's working type `W`. Nobody writes
+`currentState` by habit where a checkpoint is meant, so what used to be a
+silent read is a compile error.
 
-Outside a job `currentState` is the read to use. Inside one it stays
-right for a different controller: `session.currentState` above is
-somebody else's snapshot, and this job's rules have nothing to say about
-it.
+Outside a job `currentState` is the read to use. Inside one it stays right for
+a different controller: `session.currentState` above is somebody else's
+snapshot, and this job's rules have nothing to say about it.
 
 ## The dozen calls
 
-Everything reached for day to day, in one controller. `PlayerState`,
-`Api` and `Device` belong to the application; the rest is the package.
+Everything reached for day to day, in one controller. `PlayerState`, `Api` and
+`Device` belong to the application; the rest is the package.
 
 ```dart
 enum _Op { play }
@@ -273,7 +271,8 @@ await player.close(mode: SoloCloseMode.drain);
 
 ## Guides
 
-Also on the [documentation site](https://docs.yet-another.dev/solo/), with search.
+Also on the [documentation site](https://docs.yet-another.dev/solo/), with
+search.
 
 | Page | What it covers |
 | --- | --- |
@@ -291,8 +290,8 @@ Also on the [documentation site](https://docs.yet-another.dev/solo/), with searc
 
 ## Recipes
 
-Situations that come up, and what to reach for. Each one is explained on
-the page named beside it.
+Situations that come up, and what to reach for. Each one is explained on the
+page named beside it.
 
 | Situation | Reach for | Where |
 | --- | --- | --- |
@@ -311,14 +310,13 @@ the page named beside it.
 
 ## Coming from bloc
 
-Callers invoke controller methods and receive a job for each operation.
-Queue policy is selected per call, and all root jobs share one queue.
-[solo and bloc, side by side](doc/vs-bloc.md) holds the API
-correspondences and compares ten application scenarios with
-implementations in both packages.
+Callers invoke controller methods and receive a job for each operation. Queue
+policy is selected per call, and all root jobs share one queue.
+[solo and bloc, side by side](doc/vs-bloc.md) holds the API correspondences and
+compares ten application scenarios with implementations in both packages.
 
-The package does not include retry policies, built-in timeouts, worker
-pools, dependency injection, persistence or state equality filtering.
-If work needs cancellation and cleanup but no state rules or controller
-queue, [async_job](https://pub.dev/packages/async_job) can be used directly.
-For a value with no asynchronous lifecycle, a `ValueNotifier` may suffice.
+The package does not include retry policies, built-in timeouts, worker pools,
+dependency injection, persistence or state equality filtering. If work needs
+cancellation and cleanup but no state rules or controller queue,
+[async_job](https://pub.dev/packages/async_job) can be used directly. For a
+value with no asynchronous lifecycle, a `ValueNotifier` may suffice.

@@ -254,6 +254,12 @@ jobs:
       - name: Line width
         run: python3 tool/check_line_width.py
 
+      # The width check says no line is too long; this one says no line is
+      # too short. A paragraph is filled greedily, so where the break falls
+      # is not a decision anyone has to make or review.
+      - name: Paragraphs are filled
+        run: python3 tool/reflow.py --check
+
       - name: A section starts with code
         run: python3 tool/check_doc_shape.py
 

@@ -1,9 +1,9 @@
 # solo example
 
-A fake camera controller: hardware that answers late and may break on its
-own, and a controller that keeps the state honest. It shows a sealed state
-hierarchy, working types, job keys and policies, cooperative cancellation
-and an observer that prints every job.
+A fake camera controller: hardware that answers late and may break on its own,
+and a controller that keeps the state honest. It shows a sealed state
+hierarchy, working types, job keys and policies, cooperative cancellation and
+an observer that prints every job.
 
 Run it from this directory:
 
@@ -12,8 +12,8 @@ dart pub get
 dart run bin/main.dart
 ```
 
-The output is one line per job and per state change, printed by the
-observer in `bin/main.dart`:
+The output is one line per job and per state change, printed by the observer in
+`bin/main.dart`:
 
 ```text
 [init] started

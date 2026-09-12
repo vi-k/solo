@@ -23,8 +23,8 @@ final class ProfileController extends Solo<ProfileState> {
 }
 ```
 
-`SoloObserver` receives the same events across controllers, plus
-`onCreate` and `onClose`. Install one at application startup:
+`SoloObserver` receives the same events across controllers, plus `onCreate` and
+`onClose`. Install one at application startup:
 
 ```dart
 final class LoggingObserver extends SoloObserver {
@@ -46,33 +46,31 @@ void main() {
 }
 ```
 
-A change hook is given a `SoloTransition`: the state before and after,
-the `job` whose `emit` made it — `null` for an `externalSetState`, and a
-child of the running job rather than the root it belongs to — and a
-`revision` that grows by one per change, so two transitions are in order
-even when a hook changed the state again from inside the first. It
-answers who changed the state, which nothing outside the engine can work
-out.
+A change hook is given a `SoloTransition`: the state before and after, the
+`job` whose `emit` made it — `null` for an `externalSetState`, and a child of
+the running job rather than the root it belongs to — and a `revision` that
+grows by one per change, so two transitions are in order even when a hook
+changed the state again from inside the first. It answers who changed the
+state, which nothing outside the engine can work out.
 
-The observer is called before the controller's corresponding hook.
-Each call is independent; omitting `super` in a controller hook does not
-disable the observer. An error thrown by either hook is sent to the
-current Dart zone without changing the job's outcome, stopping the queue,
-or preventing the other hook from running.
+The observer is called before the controller's corresponding hook. Each call is
+independent; omitting `super` in a controller hook does not disable the
+observer. An error thrown by either hook is sent to the current Dart zone
+without changing the job's outcome, stopping the queue, or preventing the other
+hook from running.
 
-An observer only watches. Setting one changes nothing about where an
-error then goes. To answer for the errors that have nowhere else to go,
-set a handler:
+An observer only watches. Setting one changes nothing about where an error then
+goes. To answer for the errors that have nowhere else to go, set a handler:
 
 ```dart
 SoloBase.errorHandler = (solo, job, error, stackTrace) =>
     Sentry.captureException(error, stackTrace: stackTrace);
 ```
 
-One handler for the process, set once at startup. With it set, those
-errors go to it instead of the zone; with nobody set, they go to the
-zone. Separating the two is deliberate: answering for an error is a
-responsibility somebody takes, not a side effect of switching a log on.
+One handler for the process, set once at startup. With it set, those errors go
+to it instead of the zone; with nobody set, they go to the zone. Separating the
+two is deliberate: answering for an error is a responsibility somebody takes,
+not a side effect of switching a log on.
 
 ## What is holding the controller
 
@@ -87,9 +85,9 @@ unawaited(controller.close().timeout(
 ```
 
 `SoloPending` names the job, its `phase` — body, children, cleanup — the
-cancellation it carries, whether a `ctx.uncancellable` section is holding
-one back, and whether the job was created with `cancellable: false` and
-turns them down.
+cancellation it carries, whether a `ctx.uncancellable` section is holding one
+back, and whether the job was created with `cancellable: false` and turns them
+down.
 
 It reports and does not diagnose. A long wait does not prove a forgotten
 `ctx.wait`: a body inside an external call looks the same, and so does a
@@ -123,62 +121,60 @@ final class SlowCancellations extends SoloObserver {
 }
 ```
 
-`SoloPending` says what is being waited for while the wait is on; this
-says how long it took, once it is over, and it goes on saying it where
-nobody is watching. The number is what the caller of `cancel` or `close`
-sat through: from the moment the cancellation took effect to the outcome,
-children and cleanup included.
+`SoloPending` says what is being waited for while the wait is on; this says how
+long it took, once it is over, and it goes on saying it where nobody is
+watching. The number is what the caller of `cancel` or `close` sat through:
+from the moment the cancellation took effect to the outcome, children and
+cleanup included.
 
 It is worth watching for one mistake in particular. A body that waits on
-something slow with a bare `await` holds the cancellation for the whole
-wait, where the same call through `ctx.wait` gives it up at once. A 300 ms
-wait, cancelled 10 ms in:
+something slow with a bare `await` holds the cancellation for the whole wait,
+where the same call through `ctx.wait` gives it up at once. A 300 ms wait,
+cancelled 10 ms in:
 
 | how the body waits | reported delay |
 | --- | --- |
 | `await Future.delayed(...)` | 290 ms |
 | `ctx.wait(() => Future.delayed(...))` | 0 ms |
 
-A job cancelled before it started reports nothing, because `onStart`
-never runs for it and so nothing was ever registered or stamped. There
-was no body to notice the cancellation, and in a controller that covers
-every job dropped from the queue.
+A job cancelled before it started reports nothing, because `onStart` never runs
+for it and so nothing was ever registered or stamped. There was no body to
+notice the cancellation, and in a controller that covers every job dropped from
+the queue.
 
-`clock.now()` rather than `DateTime.now()`: under `fake_async` the first
-moves with the fake time and the second stands still, so the same observer
-can be checked by a test. `package:clock` is a leaf package and already
-sits in the graph of anything that uses `fake_async`.
+`clock.now()` rather than `DateTime.now()`: under `fake_async` the first moves
+with the fake time and the second stands still, so the same observer can be
+checked by a test. `package:clock` is a leaf package and already sits in the
+graph of anything that uses `fake_async`.
 
 ## Handled and unhandled failures
 
 Accessing `job.done` or `job.value`, or calling `job.ignore()`, marks the
-outcome as observed. A `Failed` outcome that nobody observes goes to the
-job's creation zone through `Zone.handleUncaughtError`, in addition to
-the error hooks. An installed observer alone does not mark outcomes as
-observed. If reporting is handled elsewhere and the caller needs no result:
+outcome as observed. A `Failed` outcome that nobody observes goes to the job's
+creation zone through `Zone.handleUncaughtError`, in addition to the error
+hooks. An installed observer alone does not mark outcomes as observed. If
+reporting is handled elsewhere and the caller needs no result:
 
 ```dart
 profile.load().ignore(); // the counterpart of Future.ignore
 ```
 
-Errors from cleanup, cancellation callbacks and operations abandoned by
-`wait` go to the reporting hooks. Without an overridden error hook or an
-installed `SoloBase.errorHandler`, they fall back to the job's creation
-zone. Such an
-error can arrive after the job has already completed. It does not replace
-an existing cancellation outcome. These reporting paths exclude
-`Cancelled` itself.
+Errors from cleanup, cancellation callbacks and operations abandoned by `wait`
+go to the reporting hooks. Without an overridden error hook or an installed
+`SoloBase.errorHandler`, they fall back to the job's creation zone. Such an
+error can arrive after the job has already completed. It does not replace an
+existing cancellation outcome. These reporting paths exclude `Cancelled`
+itself.
 
 An unhandled error of `job.value` or `ctx.run(child)` is still an unhandled
-Future error under Dart's rules, even if that error is `Cancelled`.
-Handle those futures with `await`, `catchError` or `ignore()` as appropriate.
+Future error under Dart's rules, even if that error is `Cancelled`. Handle
+those futures with `await`, `catchError` or `ignore()` as appropriate.
 
 ## Catching errors inside a body
 
 `Cancelled` implements `Exception`, so a broad `catch` also catches
-cancellation. If a body needs its own error handling, pass cancellation
-through first. This fragment handles a camera failure while preserving
-cancellation:
+cancellation. If a body needs its own error handling, pass cancellation through
+first. This fragment handles a camera failure while preserving cancellation:
 
 ```dart
 try {
@@ -192,11 +188,10 @@ try {
 }
 ```
 
-Once a job has accepted cancellation, its outcome remains `Cancelled`
-even if the body catches it. A catch block can still execute unwanted
-work, such as retrying the operation. For a final failure state, prefer
-the `onError` parameter of `run` rather than writing that correction
-inside a broad catch.
+Once a job has accepted cancellation, its outcome remains `Cancelled` even if
+the body catches it. A catch block can still execute unwanted work, such as
+retrying the operation. For a final failure state, prefer the `onError`
+parameter of `run` rather than writing that correction inside a broad catch.
 
 ## Errors in state rules
 
@@ -214,11 +209,10 @@ Where a rule throws anyway decides who hears about it:
 | Re-evaluation after a state update | Reported; it does not itself cancel the running body. |
 | A check that also controls a final state handler | The handler is disabled. |
 
-Re-evaluation errors fall back to the controller's creation zone when no
-error hook and no `SoloBase.errorHandler` answers for them. In the root
-Dart zone, an unhandled error can terminate the application. Install
-error reporting and observe job outcomes according to your application's
-needs.
+Re-evaluation errors fall back to the controller's creation zone when no error
+hook and no `SoloBase.errorHandler` answers for them. In the root Dart zone, an
+unhandled error can terminate the application. Install error reporting and
+observe job outcomes according to your application's needs.
 
 ## Background work and logs
 
@@ -234,17 +228,15 @@ ctx.log(('zoom', zoom));
 SoloBase.debug = print;
 ```
 
-`ctx.unattended(action)` starts work that the job does not wait for or
-cancel. Its errors are reported through the job's error hooks, even after
-the job finishes, with the same zone fallback when no handler is installed.
-Use it for work with an independent lifetime. Starting children from
-this work is prohibited. A captured context still belongs to the original
-job: `emit` can work while that job is active, but is rejected after
-cancellation or completion. The background operation does not extend
-the context's lifetime. A bare `unawaited(future)` does not provide
-the error routing of `unattended`.
+`ctx.unattended(action)` starts work that the job does not wait for or cancel.
+Its errors are reported through the job's error hooks, even after the job
+finishes, with the same zone fallback when no handler is installed. Use it for
+work with an independent lifetime. Starting children from this work is
+prohibited. A captured context still belongs to the original job: `emit` can
+work while that job is active, but is rejected after cancellation or
+completion. The background operation does not extend the context's lifetime. A
+bare `unawaited(future)` does not provide the error routing of `unattended`.
 
-`ctx.log(data)` forwards application data to log hooks and observers as
-it is, so a listener that wants a line makes one. `SoloBase.debug`
-additionally traces the controller's internal queue and lifecycle
-operations.
+`ctx.log(data)` forwards application data to log hooks and observers as it is,
+so a listener that wants a line makes one. `SoloBase.debug` additionally traces
+the controller's internal queue and lifecycle operations.
