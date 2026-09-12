@@ -1,10 +1,21 @@
 name: gate
 
 # The checks of `AGENTS.md`, run by a machine instead of by a person: the
-# commands the regimen asks for before a commit, on the toolchain the
-# packages declare as their floor — Dart 3.6.0, and Flutter 3.27.0, which
-# carries it. Locally those come from `fvm`; here the actions pin the same
-# numbers, so `dart` and `flutter` on the PATH are already the right ones.
+# commands the regimen asks for before a commit, on the latest stable,
+# which is what `docs/conventions.md` says is installed locally.
+#
+# Not on the floor the packages declare. `sdk: ^3.6.0` is a promise to
+# whoever depends on them, and it cannot be the toolchain here: `pub get`
+# in a package's own directory resolves its dev dependencies too, and
+# `lints ^6.1.0` and `flutter_lints ^6.0.0` want 3.8.0 and up. The first
+# run of this workflow said so on both jobs, and nothing but a run would
+# have. The floor stays unchecked by CI — a job that proves it needs a
+# consumer package of its own, resolving the package by path on an SDK
+# pinned to 3.6.0, where the dev dependencies do not come along.
+#
+# Following stable means a release of Dart or Flutter can turn this red
+# without a commit. That is the same news the maintainer would get on the
+# next local run, a few days earlier.
 #
 # Three jobs rather than one, and the split is the point. `dart` never
 # installs Flutter: that is what keeps `solo` and `async_job` the pure Dart
@@ -45,7 +56,7 @@ jobs:
 
       - uses: dart-lang/setup-dart@v1
         with:
-          sdk: 3.6.0
+          sdk: stable
 
       # The action's own cache holds the SDK and nothing else, so every run
       # would re-download every package. No lockfile is committed — these
@@ -110,7 +121,6 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: 3.27.0
           channel: stable
           cache: true
 
