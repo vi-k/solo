@@ -402,7 +402,8 @@ control flow, it does not take over the reporting.
 
 A user sends a chat message and leaves the screen before the reply arrives. The
 controller must prevent the old operation from updating a closed screen or
-scheduling follow-up work after closure.
+scheduling follow-up work after closure: the user never saw the reply, and
+marking it read would tell the server that they did.
 
 ### The first attempt
 
@@ -432,7 +433,9 @@ state after it is `ChatState(reply to hi)`: the reply was published into a
 controller that was already closing. The follow-up `add` then throws
 `Bad state: Cannot add new events after calling close`, and that error arrives
 in the zone while `close()` is still being awaited, not at the caller of the
-handler.
+handler. No read is reported to the server — but only because the `add` that
+would have reported it is the call that threw. Half the requirement holds by
+the accident that broke the other half.
 
 Closing behavior depends on the transformer in these versions. With
 `sequential()`, `close()` waits for the running handler, which can still emit

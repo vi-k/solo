@@ -286,12 +286,19 @@ class MapState {
 
 CHAT_API = '''
 class Api {
+  /// Reads reported to the server. The point of the scenario is that a
+  /// reply the user never saw must not be one of them.
+  int reads = 0;
+
   Future<String> send(String text) async {
     await tick(50);
     return 'reply to $text';
   }
 
-  Future<void> markRead() async => tick(10);
+  Future<void> markRead() async {
+    reads++;
+    await tick(10);
+  }
 }
 
 class ChatState {
@@ -1225,12 +1232,13 @@ class LateChatBloc extends Bloc<ChatEvent, ChatState> {
 }
 
 Future<void> main() async {
-  final chat = ChatBloc(Api())..add(const SendMessage('hi'));
+  final api = Api();
+  final chat = ChatBloc(api)..add(const SendMessage('hi'));
   await tick(10);
   final started = DateTime.now();
   await chat.close();
   print('close took ${DateTime.now().difference(started).inMilliseconds}ms, '
-      'state ${chat.state}');
+      'state ${chat.state}, reads reported ${api.reads}');
   try {
     chat.add(const SendMessage('bye'));
   } on Object catch (error) {
@@ -1238,13 +1246,14 @@ Future<void> main() async {
   }
 
   await runZonedGuarded(() async {
-    final unguarded = UnguardedChatBloc(Api())..add(const SendMessage('hi'));
+    final api = Api();
+    final unguarded = UnguardedChatBloc(api)..add(const SendMessage('hi'));
     await tick(10);
     final closing = DateTime.now();
     await unguarded.close();
     print('no guard: close took '
         '${DateTime.now().difference(closing).inMilliseconds}ms, '
-        'state ${unguarded.state}');
+        'state ${unguarded.state}, reads reported ${api.reads}');
   }, (error, _) {
     print('no guard, the follow-up add: $error');
   });
@@ -1283,13 +1292,15 @@ final class LateChatController extends Solo<ChatState> {
 }
 
 Future<void> main() async {
-  final chat = ChatController(Api());
+  final api = Api();
+  final chat = ChatController(api);
   final running = chat.send('hi');
   final queued = chat.send('and again');
   await tick(10);
   await onScreenClosed(chat);
   print('running ${running.outcome}  queued ${queued.outcome}');
-  print('state after close: ${chat.currentState}');
+  print('state after close: ${chat.currentState}, '
+      'reads reported ${api.reads}');
   print('send after close: ${chat.send('later').outcome}');
 
   await runZonedGuarded(
