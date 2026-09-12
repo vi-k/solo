@@ -1,5 +1,11 @@
 ## Unreleased
 
+- `doc/observing.md` now says how to measure the wait a cancellation
+  costs, with no hook of its own: `Job.whenCancelled` fires when the
+  cancellation takes effect and `onFinish` when the outcome arrives, so
+  an observer that stamps the clock in one and subtracts in the other has
+  the number. `solo` shows the observer in full.
+
 - The README is a starting page: what a job is, why a plain `Future` does
   not cover it — now shown as the flag that asks and the job that answers
   — `Install`, `Quick start` and a map of the guides. The reference

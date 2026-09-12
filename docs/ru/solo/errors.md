@@ -94,6 +94,57 @@ unawaited(controller.close().timeout(
 освобождение ресурса тоже. Чего движок не видит, то `SoloPhase.unknown`,
 а не догадка.
 
+## Почему отмена была долгой
+
+```dart
+final class SlowCancellations extends SoloObserver {
+  // Expando держит ключ слабо: запись уходит вместе с задачей,
+  // и чистить нечего.
+  final _markedAt = Expando<DateTime>('cancellation');
+
+  @override
+  void onStart(SoloBase<Object> solo, Job<Object?> job) {
+    // whenCancelled срабатывает, когда отмена стала действующей, а не
+    // когда позвали cancel(): шаг под ctx.uncancellable отработает раньше.
+    job.whenCancelled((_) => _markedAt[job] = clock.now());
+  }
+
+  @override
+  void onFinish(SoloBase<Object> solo, Job<Object?> job) {
+    final markedAt = _markedAt[job];
+    if (markedAt == null) return;
+    final delay = clock.now().difference(markedAt);
+    if (delay > const Duration(milliseconds: 50)) {
+      log('${job.key} ran ${delay.inMilliseconds} ms past its cancellation');
+    }
+  }
+}
+```
+
+`SoloPending` говорит, чего ждут, пока ждут; это — сколько ждали, когда
+уже дождались, и говорит это там, где никто не смотрит. Число — то самое
+ожидание, которое высидел вызвавший `cancel` или `close`: от момента,
+когда отмена стала действующей, до исхода, вместе с детьми и уборкой.
+
+Смотреть на него стоит ради одной конкретной ошибки. Тело, ждущее
+что-то долгое голым `await`, держит отмену всё это ожидание целиком, а
+тот же вызов через `ctx.wait` отдаёт её сразу. Ожидание на 300 мс,
+отменённое на десятой:
+
+| как тело ждёт | сообщённая задержка |
+| --- | --- |
+| `await Future.delayed(...)` | 290 мс |
+| `ctx.wait(() => Future.delayed(...))` | 0 мс |
+
+Задача, отменённая до старта, не сообщает ничего: `onStart` для неё не
+зовут вовсе, значит регистрации и отметки не было. Замечать отмену было
+некому, и в контроллере под это попадает всё, что выброшено из очереди.
+
+`clock.now()`, а не `DateTime.now()`: под `fake_async` первый идёт вместе
+с фальшивым временем, а второй стоит на месте, так что того же
+наблюдателя можно проверить тестом. `package:clock` — пакет без своих
+зависимостей, и он уже стоит в графе у всех, кто пользуется `fake_async`.
+
 ## Обработанные и необработанные ошибки
 
 Обращение к `job.done` или `job.value`, а также вызов `job.ignore()`

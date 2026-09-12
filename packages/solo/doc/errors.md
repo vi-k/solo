@@ -96,6 +96,59 @@ It reports and does not diagnose. A long wait does not prove a forgotten
 resource that takes its time to release. What the engine cannot see is
 `SoloPhase.unknown`, not a guess.
 
+## Why cancellation was slow
+
+```dart
+final class SlowCancellations extends SoloObserver {
+  // An Expando holds its key weakly, so a job takes its stamp with it and
+  // there is nothing to clean up.
+  final _markedAt = Expando<DateTime>('cancellation');
+
+  @override
+  void onStart(SoloBase<Object> solo, Job<Object?> job) {
+    // whenCancelled fires when the cancellation takes effect, not when
+    // cancel() was called: a step held by ctx.uncancellable runs first.
+    job.whenCancelled((_) => _markedAt[job] = clock.now());
+  }
+
+  @override
+  void onFinish(SoloBase<Object> solo, Job<Object?> job) {
+    final markedAt = _markedAt[job];
+    if (markedAt == null) return;
+    final delay = clock.now().difference(markedAt);
+    if (delay > const Duration(milliseconds: 50)) {
+      log('${job.key} ran ${delay.inMilliseconds} ms past its cancellation');
+    }
+  }
+}
+```
+
+`SoloPending` says what is being waited for while the wait is on; this
+says how long it took, once it is over, and it goes on saying it where
+nobody is watching. The number is what the caller of `cancel` or `close`
+sat through: from the moment the cancellation took effect to the outcome,
+children and cleanup included.
+
+It is worth watching for one mistake in particular. A body that waits on
+something slow with a bare `await` holds the cancellation for the whole
+wait, where the same call through `ctx.wait` gives it up at once. A 300 ms
+wait, cancelled 10 ms in:
+
+| how the body waits | reported delay |
+| --- | --- |
+| `await Future.delayed(...)` | 290 ms |
+| `ctx.wait(() => Future.delayed(...))` | 0 ms |
+
+A job cancelled before it started reports nothing, because `onStart`
+never runs for it and so nothing was ever registered or stamped. There
+was no body to notice the cancellation, and in a controller that covers
+every job dropped from the queue.
+
+`clock.now()` rather than `DateTime.now()`: under `fake_async` the first
+moves with the fake time and the second stands still, so the same observer
+can be checked by a test. `package:clock` is a leaf package and already
+sits in the graph of anything that uses `fake_async`.
+
 ## Handled and unhandled failures
 
 Accessing `job.done` or `job.value`, or calling `job.ignore()`, marks the

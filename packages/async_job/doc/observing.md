@@ -67,6 +67,16 @@ zone if there is no observer. An observer decides how to handle them.
 A `Cancelled` reported through this route goes only to the observer and
 is never forwarded to the zone as an unhandled error.
 
+How long a cancelled job kept running is not a hook of its own, and does
+not need one. `Job.whenCancelled` fires when the cancellation takes
+effect and `onFinish` when the outcome arrives, so an observer that
+stamps the clock in the first and subtracts in the second has the number:
+the wait the caller of `cancel` sits through. It catches what causes that
+wait — a body waiting on something slow with a bare `await` holds the
+cancellation for its whole length, where the same call through `ctx.wait`
+gives it up at once. `solo` shows the observer in full; see
+`doc/errors.md` there.
+
 ## Testing
 
 Testing start, cancellation and cleanup requires controlling microtasks

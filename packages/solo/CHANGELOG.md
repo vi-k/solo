@@ -1,5 +1,17 @@
 ## Unreleased
 
+- A recipe for `doc/errors.md`: why cancellation was slow. An observer
+  that stamps the clock in `Job.whenCancelled` and subtracts in
+  `onFinish` reports the wait the caller of `cancel` or `close` sat
+  through — 290 ms against 0 on a 300 ms wait cancelled 10 ms in, which
+  is the difference between a bare `await` and the same call through
+  `ctx.wait`. `SoloPending` reports while the wait is on; this reports
+  once it is over, where nobody is watching. A step held by
+  `ctx.uncancellable` is not counted, and a job dropped before it started
+  is not reported at all. The stamp lives in an `Expando`, so it goes
+  with the job and there is nothing to clean up. No API was added: the
+  hooks it needs were already there.
+
 - The README is a starting page again: what the package is, `Install`,
   `Quick start`, `The dozen calls` — one controller holding everything
   reached for day to day — and a map of the guides. The reference material
