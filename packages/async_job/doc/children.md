@@ -83,7 +83,7 @@ A thrown `Cancelled` follows the cancellation path. Use the child's
 context inside the callback, as `child.join` does here, so its cancellation
 is checked around the save operation.
 
-The returned Job also lets the parent stop listening separately. This
+The returned job also lets the parent stop listening separately. This
 example prints a tick every second, stops listening after 2.5 seconds,
 and continues the parent body:
 
