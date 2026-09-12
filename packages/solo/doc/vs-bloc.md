@@ -670,13 +670,18 @@ class SplitPlayerBloc extends Bloc<PlayerCommand, PlayerState> {
 }
 ```
 
+The user starts playback, drags the slider through three positions and presses
+pause: `Play`, `Seek(1ms)`, `Seek(2ms)`, `Seek(3ms)`, `Pause`, one after
+another with nothing awaited in between.
+
 The device trace is `[play start, seek 1 start, seek 2 start, pause start, seek
 3 start, play end, pause end, seek 1 end, seek 2 end, seek 3 end]`, and the
 final state is `PlayerState(3ms)` — the position the user asked for. The state
 is right and the device is not.
 
-Two things went wrong at once. A transformer orders the events of its own
-registration, so `pause` no longer waits for `play`. And `restartable()`
+Two things went wrong at once. A transformer orders the events of one
+registration and nothing beyond it, and there are three registrations here: a
+`pause` waits for another `pause` and never for `play`. And `restartable()`
 cancels the replaced handler's emitter without stopping the native call it is
 awaiting: all three seeks ran on the device, the third of them after `pause`.
 Only the last `emit` reached the state, which is why the state alone shows none
