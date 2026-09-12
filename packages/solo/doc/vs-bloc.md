@@ -512,7 +512,7 @@ final class ChatController extends Solo<ChatState> {
 
 Future<void> onScreenClosed(ChatController chat) async {
   await chat.close();
-  chat.send('bye'); // a job already finished with Cancelled(closed)
+  chat.send('bye'); // never runs: the job comes back Cancelled(closed)
 }
 ```
 
@@ -522,10 +522,16 @@ submit a separate root job through the controller's `run`; it is not a child of
 `send`.
 
 With a plain await instead, closing would wait for the API response. The later
-`ctx.emit` would still reject the cancelled job. A captured context used after
-job completion throws `StateError` in both debug and release builds. Calls made
-after closure return jobs already completed with `Cancelled(closed)`, so the
-call site needs no `isClosed` guard.
+`ctx.emit` would still reject the cancelled job. Calls made after closure
+return jobs already completed with `Cancelled(closed)`, so the call site needs
+no `isClosed` guard.
+
+A `ctx` is valid while its job runs, and the bloc case above has a counterpart
+here: a body that starts a future and does not await it returns, and the future
+then calls `ctx.emit` on a job that is over. That call throws
+`Bad state: Job(send) has already finished, cannot emit`, in debug and release
+alike, and the state stays as it was. Where bloc has an assertion that
+disappears in release, this is an ordinary error that does not.
 
 ### Returning from Loading after cancellation
 

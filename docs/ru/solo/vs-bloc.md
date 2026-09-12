@@ -518,7 +518,7 @@ final class ChatController extends Solo<ChatState> {
 
 Future<void> onScreenClosed(ChatController chat) async {
   await chat.close();
-  chat.send('bye'); // задача, уже завершённая с Cancelled(closed)
+  chat.send('bye'); // не выполнится: Job сразу вернётся с Cancelled(closed)
 }
 ```
 
@@ -528,10 +528,16 @@ Future<void> onScreenClosed(ChatController chat) async {
 `send`.
 
 С обычным `await` закрытие ждало бы ответа API. Последующий `ctx.emit` всё
-равно отклонил бы отменённую `Job`. Захваченный контекст, использованный после
-завершения `Job`, бросает `StateError` и в отладочной, и в релизной сборке.
-Вызовы после закрытия возвращают `Job`, уже завершённые с `Cancelled(closed)`,
-поэтому проверка `isClosed` в месте вызова не нужна.
+равно отклонил бы отменённую `Job`. Вызовы после закрытия возвращают `Job`, уже
+завершённые с `Cancelled(closed)`, поэтому проверка `isClosed` в месте вызова
+не нужна.
+
+`ctx` действителен, пока выполняется его `Job`, и у случая с bloc выше есть
+здесь пара: тело, которое начало future и не стало её ждать, возвращается,
+а future потом зовёт `ctx.emit` у законченной `Job`. Этот вызов бросает
+`Bad state: Job(send) has already finished, cannot emit` — и в отладочной
+сборке, и в релизной, — а состояние остаётся прежним. Там, где у bloc assert,
+исчезающий в релизе, здесь обычная ошибка, которая не исчезает.
 
 ### Выход из Loading после отмены
 
