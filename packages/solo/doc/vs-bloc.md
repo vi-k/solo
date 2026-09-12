@@ -1013,12 +1013,13 @@ class FlagDeviceBloc extends Bloc<DeviceEvent, DeviceState> {
 ```
 
 On the way out the flag works: the device receives
-`[connect, rename kitchen, disconnect]`, and the queued reads are skipped. What
-it cannot express is a screen that comes back before the old events drain.
-Adding the new `Connect` clears the flag while the previous screen's read is
-still queued, so that read becomes valid again and runs:
-`[connect, battery, disconnect, connect, battery]`. The battery it reports
-belongs to the screen that is gone.
+`[connect, rename kitchen, disconnect]`, and both queued reads are skipped.
+What it cannot express is a screen that comes back before the old events drain.
+The same five commands, and a `Connect` after them from the screen that opened:
+that `Connect` clears the flag while the reads of the screen that left are
+still queued, so both become valid again and run:
+`[connect, battery, signal, rename kitchen, disconnect, connect]`. Both
+readings were taken for a screen that is gone.
 
 ### Bloc
 
@@ -1062,16 +1063,18 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
 }
 ```
 
-The device receives `[connect, rename kitchen, disconnect]`. If the screen
-reopens before pending work drains, the old read is skipped and the new one
-runs: `[connect, disconnect, connect, battery]`.
+The device receives `[connect, rename kitchen, disconnect]`. The same commands
+with a `Connect` after them leave both reads out:
+`[connect, rename kitchen, disconnect, connect]`.
 
 The generation records are application state associated with the queue. Events
 still reach the handler, which must check each discardable command. The
-`Expando` scheme also requires distinct event objects. Reusing a canonical
-const event overwrites its earlier stamp; the sequence then includes the stale
-read: `[connect, battery, disconnect, connect, battery]`. `add` provides no
-result indicating that a read was skipped.
+`Expando` scheme also requires distinct event objects. If the screen that opens
+asks for the battery through the same canonical `const ReadBattery()`, that
+`add` overwrites the stamp of the queued read, and the stale read runs after
+all: `[connect, battery, rename kitchen, disconnect, connect, battery]`. The
+signal, a distinct object, stays out of the trace. `add` provides no result
+indicating that a read was skipped.
 
 ### Solo
 

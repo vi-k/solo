@@ -363,11 +363,16 @@ FILES = {}
 
 # --------------------------------------------------------------- item 7 bloc
 FILES['bloc/item7'] = (BLOC_IMPORTS + TRACE + BLE + '''
-sealed class DeviceEvent {}
+sealed class DeviceEvent {
+  const DeviceEvent();
+}
 
 class Connect extends DeviceEvent {}
 
-class ReadBattery extends DeviceEvent {}
+// Const so that one canonical instance can be added by two screens.
+class ReadBattery extends DeviceEvent {
+  const ReadBattery();
+}
 
 class ReadSignal extends DeviceEvent {}
 
@@ -399,6 +404,7 @@ Future<void> run(Bloc<DeviceEvent, DeviceState> bloc, String label) async {
   bloc
     ..add(Connect())
     ..add(ReadBattery())
+    ..add(ReadSignal())
     ..add(Rename('kitchen'))
     ..add(Disconnect());
   await tick(300);
@@ -415,9 +421,10 @@ Future<void> runReopen(
   bloc
     ..add(Connect())
     ..add(ReadBattery())
+    ..add(ReadSignal())
+    ..add(Rename('kitchen'))
     ..add(Disconnect())
-    ..add(Connect())
-    ..add(ReadBattery());
+    ..add(Connect());
   await tick(300);
   print('$label reopen fast: $trace');
   await bloc.close();
@@ -440,17 +447,24 @@ Future<void> main() async {
   print('state: ${bloc.state}');
   await bloc.close();
 
+  await runReopen(DeviceBloc(Ble()), 'a stamp,');
+
+  // The screen that comes back asks for the battery through the same
+  // canonical value, so its add overwrites the stamp the queued read got.
   trace.clear();
-  final fast = DeviceBloc(Ble());
-  fast
+  final shared = DeviceBloc(Ble());
+  const read = ReadBattery();
+  shared
     ..add(Connect())
-    ..add(ReadBattery())
+    ..add(read)
+    ..add(ReadSignal())
+    ..add(Rename('kitchen'))
     ..add(Disconnect())
     ..add(Connect())
-    ..add(ReadBattery());
+    ..add(read);
   await tick(300);
-  print('reopen fast: $trace');
-  await fast.close();
+  print('shared event: $trace');
+  await shared.close();
 }
 ''')
 
