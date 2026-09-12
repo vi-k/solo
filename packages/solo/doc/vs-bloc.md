@@ -125,7 +125,10 @@ the upload flag as well.
 ### The second attempt
 
 The missing half is one registration for both commands. By itself it is not
-enough either, because the default scheduling is concurrent:
+enough either. The default is one field, `Bloc.transformer`, which a program
+may assign; each Bloc reads it while being constructed, so an assignment
+governs the blocs made after it and leaves the ones already alive as they were.
+A registration that names no transformer runs its events concurrently:
 
 ```dart
 class ConcurrentNotesBloc extends Bloc<NotesEvent, NotesState> {
@@ -439,10 +442,10 @@ the accident that broke the other half.
 
 Closing behavior depends on the transformer in these versions. With
 `sequential()`, `close()` waits for the running handler, which can still emit
-while closure is pending. With the default transformer, `concurrent`,
-`droppable` or `restartable`, `close()` returns before the body finishes and
-the cancelled emitter ignores subsequent writes. Neither case interrupts the
-API call or the rest of the handler body.
+while closure is pending. With `concurrent` — the one a registration gets by
+default — or with `droppable` or `restartable`, `close()` returns before the
+body finishes and the cancelled emitter ignores subsequent writes. Neither case
+interrupts the API call or the rest of the handler body.
 
 ### Bloc
 
