@@ -427,18 +427,18 @@ class UnguardedChatBloc extends Bloc<ChatEvent, ChatState> {
 }
 ```
 
-With `sequential()` the measured close waits for the API call still in flight,
-and the state after it is `ChatState(reply to hi)`: the reply was published
-into a controller that was already closing. The follow-up `add` then throws
-`Bad state: Cannot add new events after calling close`, and that error arrives
-in the zone while `close()` is still being awaited, not at the caller of the
-handler.
+With `sequential()` the run shows `close()` waiting for the API call still in
+flight, and the state after it is `ChatState(reply to hi)`: the reply was
+published into a controller that was already closing. The follow-up `add` then
+throws `Bad state: Cannot add new events after calling close`, and that error
+arrives in the zone while `close()` is still being awaited, not at the caller
+of the handler.
 
 Closing behavior depends on the transformer in these versions. With
 `sequential()`, `close()` waits for the running handler, which can still emit
 while closure is pending. With the default transformer, `concurrent`,
-`droppable` or `restartable`, the measured close returns before the body
-finishes and the cancelled emitter ignores subsequent writes. Neither case
+`droppable` or `restartable`, the run shows `close()` returning before the body
+finishes and the cancelled emitter ignoring subsequent writes. Neither case
 interrupts the API call or the rest of the handler body.
 
 ### Bloc
@@ -1162,7 +1162,7 @@ class CheckoutCubit extends Cubit<CheckoutState> {
 
 It also makes two API calls for three requests covering two orders. Its closure
 handling remains incomplete: Cubit does not wait for this custom chain. In the
-measured close-during-payment case, the charge succeeds, but the later
+run that closes during payment, the charge succeeds, but the later
 `emit(Paid(...))` throws
 `Bad state: Cannot emit new states after calling close`, so the caller receives
 that error instead of the receipt. A production implementation must coordinate
