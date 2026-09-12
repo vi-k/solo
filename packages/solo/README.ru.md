@@ -310,6 +310,7 @@ await player.close(mode: SoloCloseMode.drain);
 | Ресурс, открытый вызовом, которого никто не дождался, всё равно надо закрыть | `dispose` или `discard` у `ctx.wait` и `ctx.join` | [Ресурсы и освобождение](../../docs/ru/solo/resources.md) |
 | Виджет перестраивается из-за состояния, которым не пользуется | `select` на `SoloListenable` | [Flutter](../../docs/ru/solo/flutter.md) |
 | Очередь нужно на время остановить | задача, ждущая `Completer` в её голове | [Задачи и очередь](../../docs/ru/solo/jobs.md) |
+| Событие стрима приходит микротаской позже, и это поздно | `publish` в наследнике `SoloBase`, уведомляющий внутри изменения | [Состояние](../../docs/ru/solo/state.md) |
 
 ## Переход с bloc
 

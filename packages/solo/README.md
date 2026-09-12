@@ -307,6 +307,7 @@ the page named beside it.
 | A resource opened by a call nobody waited for still has to close | `dispose` or `discard` on `ctx.wait` and `ctx.join` | [Resources and cleanup](doc/resources.md) |
 | A widget rebuilds for state it does not use | `select` on `SoloListenable` | [Flutter](doc/flutter.md) |
 | The queue has to stand still for a while | a job waiting on a `Completer` at the head of it | [Jobs and the queue](doc/jobs.md) |
+| A stream event arrives a microtask late, and that is too late | `publish` on a `SoloBase` subclass, notifying inside the change | [State](doc/state.md) |
 
 ## Coming from bloc
 

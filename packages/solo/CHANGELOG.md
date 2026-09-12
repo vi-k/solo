@@ -1,5 +1,16 @@
 ## Unreleased
 
+- A recipe for `doc/state.md`: a delivery of your own. `publish` is where
+  a change leaves the engine, and a `SoloBase` subclass that overrides it
+  notifies listeners inside the change — what `SoloListenable` does for
+  Flutter, in pure Dart and in forty lines. Three things such an override
+  owes stand in a table beside it: a listener's failure must not leave
+  `publish`, or the re-evaluation of the rules that follows the call costs
+  a job the cancellation the new state owes it; the pass walks a copy and
+  skips what was removed on the way; `close` drops the listeners for good.
+  No API was added — `publish` was the extension point all along, and it
+  had not been written down anywhere outside the package's own records.
+
 - **Breaking:** the controller's synchronous read is `currentState`, not
   `state`. A job body is a closure inside a method of the controller, so
   every member of the controller is in scope there, and a read named
