@@ -619,12 +619,12 @@ final class RefreshController extends Solo<RefreshState> {
 }
 ```
 
-`cancelRefresh()` finds the running refresh by its key and cancels it, so the
-screen keeps nothing between the two calls, exactly as it keeps nothing between
-two events. It hands back the job it is cancelling rather than a future, for
-the same reason `refresh()` does: `controller.cancelRefresh();` is a finished
-statement, and a project with `discarded_futures` enabled has nothing to say
-about it. A caller that wants the outcome awaits
+`cancelRefresh()` finds the running refresh by its key and cancels it, so
+cancelling takes no more than the controller — as sending `CancelRefresh` takes
+no more than the bloc. It hands back the job it is cancelling rather than a
+future, for the same reason `refresh()` does: `controller.cancelRefresh();` is
+a finished statement, and a project with `discarded_futures` enabled has
+nothing to say about it. A caller that wants the outcome awaits
 `controller.cancelRefresh()?.done` instead, and `null` there means there was
 nothing to cancel.
 
