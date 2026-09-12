@@ -682,10 +682,10 @@ class SplitPlayerBloc extends Bloc<PlayerCommand, PlayerState> {
 и жмёт паузу: `Play`, `Seek(1ms)`, `Seek(2ms)`, `Seek(3ms)`, `Pause` — подряд,
 ничего между ними не дожидаясь.
 
-Трасса устройства — `[play start, seek 1 start, seek 2 start, pause start, seek
-3 start, play end, pause end, seek 1 end, seek 2 end, seek 3 end]`, а итоговое
-состояние `PlayerState(3ms)`, то есть ровно та позиция, которую просил
-пользователь. Состояние верное, устройство — нет.
+Трасса устройства — `[play start, seek 1 start, seek 2 start, pause start,
+seek 3 start, play end, pause end, seek 1 end, seek 2 end, seek 3 end]`,
+а итоговое состояние `PlayerState(3ms)`, то есть ровно та позиция, которую
+просил пользователь. Состояние верное, устройство — нет.
 
 Не сработало сразу двое. Трансформер упорядочивает события одной регистрации
 и ничего сверх того, а регистраций здесь три: `pause` ждёт другую `pause`,
@@ -722,8 +722,8 @@ class SerialPlayerBloc extends Bloc<PlayerCommand, PlayerState> {
 Теперь команды доходят до устройства в том порядке, в каком их нажимали,
 а состояние снова заканчивается на `PlayerState(3ms)` — и в этот раз с ним
 согласно устройство: оно действительно стоит на паузе на третьей позиции.
-Трасса — `[play start, play end, seek 1 start, seek 1 end, seek 2 start, seek 2
-end, seek 3 start, seek 3 end, pause start, pause end]`.
+Трасса — `[play start, play end, seek 1 start, seek 1 end, seek 2 start,
+seek 2 end, seek 3 start, seek 3 end, pause start, pause end]`.
 
 Чего очередь не умеет — так это выбрасывать то, что перетаскивание уже
 обессмыслило. Позиции 1 и 2 устарели, не успев начаться, и устройство
@@ -878,10 +878,11 @@ class MapCubit extends Cubit<MapState> {
 ```
 
 Эти методы не упорядочивают вызовы. При разной длительности нативных вызовов
-трасса выглядит так: `[moveTo 1 start, moveTo 2 start, moveTo 3 start, moveTo 3
-end, moveTo 2 end, moveTo 1 end]`. Состояние заканчивается
-на `MapState(1, z1)`, отражая самый старый запрос, поскольку он завершился
-последним.
+трасса выглядит так: `[moveTo 1 start, moveTo 2 start, moveTo 3 start,
+moveTo 3 end, moveTo 2 end, moveTo 1 end]`. Состояние может закончиться
+на любом из трёх запросов: в этом прогоне — на `MapState(1, z1)`, самом старом,
+потому что именно он вернулся последним. В коде нет ничего, что решало бы,
+какой победит.
 
 Цепочка future может упорядочить вызовы; для отбрасывания устаревших запросов
 нужен дополнительный учёт. Приложение также должно решить, как закрытие
@@ -1539,10 +1540,10 @@ class FirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
 
 Теперь части принадлежат одной загрузке: перезапуск посреди неё записывает
 `[0, 1, 100, 101, …]`. Но устройство по-прежнему видит двух пишущих. Новый
-обработчик начинается, пока старая запись ещё ожидается, и трасса — `[write 0
-start, write 0 end, write 1 start, write 100 start, write 1 end, write 100 end,
-…]`: проверка распоряжается тем, что публикуется, а не тем, что происходит
-в эфире.
+обработчик начинается, пока старая запись ещё ожидается, и трасса —
+`[write 0 start, write 0 end, write 1 start, write 100 start, write 1 end,
+write 100 end, …]`: проверка распоряжается тем, что публикуется, а не тем, что
+происходит в эфире.
 
 ### Bloc
 

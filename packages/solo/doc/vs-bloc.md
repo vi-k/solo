@@ -674,10 +674,10 @@ The user starts playback, drags the slider through three positions and presses
 pause: `Play`, `Seek(1ms)`, `Seek(2ms)`, `Seek(3ms)`, `Pause`, one after
 another with nothing awaited in between.
 
-The device trace is `[play start, seek 1 start, seek 2 start, pause start, seek
-3 start, play end, pause end, seek 1 end, seek 2 end, seek 3 end]`, and the
-final state is `PlayerState(3ms)` — the position the user asked for. The state
-is right and the device is not.
+The device trace is `[play start, seek 1 start, seek 2 start, pause start,
+seek 3 start, play end, pause end, seek 1 end, seek 2 end, seek 3 end]`, and
+the final state is `PlayerState(3ms)` — the position the user asked for. The
+state is right and the device is not.
 
 Two things went wrong at once. A transformer orders the events of one
 registration and nothing beyond it, and there are three registrations here: a
@@ -869,9 +869,10 @@ class MapCubit extends Cubit<MapState> {
 ```
 
 These methods do not serialize calls. With unequal native-call durations, the
-trace is `[moveTo 1 start, moveTo 2 start, moveTo 3 start, moveTo 3 end, moveTo
-2 end, moveTo 1 end]`. State ends at `MapState(1, z1)`, reflecting the oldest
-request because it finished last.
+trace is `[moveTo 1 start, moveTo 2 start, moveTo 3 start, moveTo 3 end,
+moveTo 2 end, moveTo 1 end]`. The state can end at any of the three: in this
+run it ends at `MapState(1, z1)`, the oldest request, because that call
+happened to return last. Nothing in the code decides which one wins.
 
 A future chain can serialize calls, with additional tracking to discard
 obsolete requests. The application must also decide how closure waits for or
@@ -1566,9 +1567,9 @@ class LockedFirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
 }
 ```
 
-The trace now orders each write's completion before the next start: `[write 0
-start, write 0 end, write 1 start, write 1 end, write 100 start, write 100 end,
-…]`.
+The trace now orders each write's completion before the next start:
+`[write 0 start, write 0 end, write 1 start, write 1 end, write 100 start,
+write 100 end, …]`.
 
 Check `emit.isDone` inside the lock as well as after the write. An event may be
 replaced while waiting for the lock; checking only before entry would let its

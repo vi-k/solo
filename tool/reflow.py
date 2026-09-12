@@ -100,16 +100,28 @@ def fill(body, first_indent, next_indent):
     links = []
     room = WIDTH - len(next_indent)
 
+    def stand_in(text):
+        links.append(text)
+        tag = f'\x00{len(links) - 1}'
+        return tag + '~' * (len(text) - len(tag) - 1) + '\x00'
+
     def hide(match):
         atom = match.group(0)
         # A span wider than the line has to break somewhere: a quoted trace
         # of a whole run is written to be read, not copied. A link is kept
         # whole at any width -- see `check_line_width.py` on long URLs.
         if len(atom) > room and not LINK_ONLY.fullmatch(atom):
+            # It breaks after a comma, never inside an entry: `seek` at the
+            # end of one line and `3 start` at the start of the next is two
+            # things to the eye and one in the trace.
+            pieces = re.split(r'(?<=,) ', atom)
+            if len(pieces) > 1:
+                return ' '.join(
+                    stand_in(piece) if len(piece) <= room else piece
+                    for piece in pieces
+                )
             return atom
-        links.append(atom)
-        tag = f'\x00{len(links) - 1}'
-        return tag + '~' * (len(atom) - len(tag) - 1) + '\x00'
+        return stand_in(atom)
 
     # An odd number of backticks is broken markup, not a span: leave the
     # spans alone there and keep the links safe.
