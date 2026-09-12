@@ -720,9 +720,10 @@ class SerialPlayerBloc extends Bloc<PlayerCommand, PlayerState> {
 ```
 
 Теперь команды доходят до устройства в том порядке, в каком их нажимали,
-а состояние снова заканчивается на `PlayerState(3ms)`. Трасса — `[play start,
-play end, seek 1 start, seek 1 end, seek 2 start, seek 2 end, seek 3 start,
-seek 3 end, pause start, pause end]`.
+а состояние снова заканчивается на `PlayerState(3ms)` — и в этот раз с ним
+согласно устройство: оно действительно стоит на паузе на третьей позиции.
+Трасса — `[play start, play end, seek 1 start, seek 1 end, seek 2 start, seek 2
+end, seek 3 start, seek 3 end, pause start, pause end]`.
 
 Чего очередь не умеет — так это выбрасывать то, что перетаскивание уже
 обессмыслило. Позиции 1 и 2 устарели, не успев начаться, и устройство

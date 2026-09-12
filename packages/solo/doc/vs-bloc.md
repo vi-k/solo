@@ -712,9 +712,10 @@ class SerialPlayerBloc extends Bloc<PlayerCommand, PlayerState> {
 ```
 
 The commands now reach the device in the order they were pressed, and the state
-ends at `PlayerState(3ms)` again. The trace is `[play start, play end, seek 1
-start, seek 1 end, seek 2 start, seek 2 end, seek 3 start, seek 3 end, pause
-start, pause end]`.
+ends at `PlayerState(3ms)` again — this time with the device agreeing, since it
+really is paused at the third position. The trace is `[play start, play end,
+seek 1 start, seek 1 end, seek 2 start, seek 2 end, seek 3 start, seek 3 end,
+pause start, pause end]`.
 
 What the queue cannot do is drop what the drag has already made pointless.
 Positions 1 and 2 were obsolete before they started, and the device seeks to
