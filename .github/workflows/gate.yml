@@ -61,7 +61,7 @@ jobs:
       # The action's own cache holds the SDK and nothing else, so every run
       # would re-download every package. No lockfile is committed — these
       # are library packages — so the manifests key the cache.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.pub-cache
           key: pub-dart-${{ runner.os }}-${{ hashFiles('packages/*/pubspec.yaml', 'packages/*/example/pubspec.yaml') }}
@@ -124,7 +124,7 @@ jobs:
           channel: stable
           cache: true
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.pub-cache
           key: pub-flutter-${{ runner.os }}-${{ hashFiles('packages/*/pubspec.yaml', 'packages/*/example/pubspec.yaml') }}
