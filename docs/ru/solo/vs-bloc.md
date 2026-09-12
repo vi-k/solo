@@ -1104,7 +1104,7 @@ final class DeviceController extends Solo<DeviceState> {
 
   DeviceController(this._ble) : super(const Offline());
 
-  Job<void> connect() => run<DeviceState, void>(
+  Job<void> connect() => run<Offline, void>(
         key: DeviceKey.connect,
         (ctx) async {
           await ctx.join(_ble.connect);

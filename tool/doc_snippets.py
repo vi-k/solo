@@ -519,6 +519,23 @@ Future<void> main() async {
   print('rename ${rename.outcome}');
   print('disconnect ${disconnect.outcome}  state ${device.currentState}');
   await device.close();
+
+  // `run<Offline, void>` is what makes connect a connect. The rule is
+  // checked when the job starts and not when it is made, so a connect
+  // queued behind a disconnect still runs.
+  final second = DeviceController(Ble());
+  await second.connect().done;
+  final refused = second.connect();
+  await tick(50);
+  final off = second.disconnect();
+  final back = second.connect();
+  await tick(100);
+  print('refused ${refused.outcome}  off ${off.outcome}  back '
+      '${back.outcome}  state ${second.currentState}');
+  if (refused.outcome is! Cancelled || back.outcome is! Done) {
+    throw StateError('the state rule must refuse only the second connect');
+  }
+  await second.close();
 }
 ''')
 
