@@ -1475,6 +1475,21 @@ class StartRecording {}
 # --------------------------------------------------------------- item 2 bloc
 FILES['bloc/item2'] = (BLOC_PLAIN_IMPORTS + TRACE + RECORDER + '\n' + snips['2/RecorderBloc'] + '\n'
                        + snips['2/GuardedTelemetryObserver'] + '''
+/// The same bloc with every hook that looks like a place to handle the
+/// error overridden, to show that none of them is one: `emit` calls
+/// `onError` on its way out and rethrows regardless.
+class HandledRecorderBloc extends RecorderBloc {
+  HandledRecorderBloc(super.recorder, super.journal);
+
+  final reported = <String>[];
+
+  @override
+  void onError(Object error, StackTrace stackTrace) {
+    reported.add('$error');
+    super.onError(error, stackTrace);
+  }
+}
+
 /// The same body as a cubit method, to show the caller's side of it.
 class RecorderCubit extends Cubit<RecorderState> {
   final Recorder _recorder;
@@ -1528,9 +1543,30 @@ Future<void> go({required bool guarded}) async {
   print('$label zone: $zone');
 }
 
+/// What an overridden `onError` buys, with the observer still throwing.
+Future<void> handled() async {
+  Bloc.observer = TelemetryObserver(Telemetry());
+  final zone = <String>[];
+  await runZonedGuarded(
+    () async {
+      final recorder = Recorder();
+      final journal = Journal();
+      final bloc = HandledRecorderBloc(recorder, journal);
+      bloc.add(StartRecording());
+      await tick(20);
+      print('onError overridden: state ${bloc.state}, '
+          'trace ${recorder.trace}, reported ${bloc.reported}');
+      await bloc.close();
+    },
+    (error, _) => zone.add('$error'),
+  );
+  print('onError overridden, still escaped to the zone: $zone');
+}
+
 Future<void> main() async {
   await go(guarded: false);
   await go(guarded: true);
+  await handled();
 }
 ''')
 

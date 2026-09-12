@@ -341,9 +341,14 @@ class GuardedTelemetryObserver extends BlocObserver {
 The guarded run reaches `Recording`, records `[native start, arm meter]`
 and writes `[Recording]` to the journal. The fallback logger receives
 the telemetry error. This approach works when every relevant observation
-callback handles its failures and its fallback does not throw. Overriding
-`onError` alone does not prevent `emit` from rethrowing: the guard has to
-be in the callback that throws.
+callback handles its failures and its fallback does not throw.
+
+`onError` is not a second place to put that guard. `emit` catches the
+exception, hands it to `onError` and rethrows it, so an override there
+reports the failure without preventing it. With `onError` overridden and
+the observer still throwing, the measured run ends at `Idle` with the
+meter unarmed, exactly as the unguarded one did, and the failure is
+reported twice: once by `emit`, once by the handler it broke.
 
 ### Solo
 
