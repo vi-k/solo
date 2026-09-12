@@ -520,6 +520,22 @@ Future<void> main() async {
   print('disconnect ${disconnect.outcome}  state ${device.currentState}');
   await device.close();
 
+  // `removeWhere` is about the queue. A read that has already started is
+  // not in it, so disconnect removes nothing and waits for it.
+  trace.clear();
+  final started = DeviceController(Ble());
+  await started.connect().done;
+  final reading = started.readBattery();
+  await tick(5);
+  final leave = started.disconnect();
+  await tick(100);
+  print('read already running: $trace, battery ${reading.outcome}, '
+      'disconnect ${leave.outcome}');
+  if (reading.outcome is! Done) {
+    throw StateError('a running read must survive removeWhere');
+  }
+  await started.close();
+
   // `run<Offline, void>` is what makes connect a connect. The rule is
   // checked when the job starts and not when it is made, so a connect
   // queued behind a disconnect still runs.

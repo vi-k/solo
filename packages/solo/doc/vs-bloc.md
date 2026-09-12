@@ -1128,7 +1128,9 @@ final class DeviceController extends Solo<DeviceState> {
 The device calls are the same, but the removal happens when `disconnect` is
 called. The removed read job completes with `Cancelled(manual)`; its caller can
 observe that result. Rename stays queued, and disconnect runs after it.
-`removeWhere` does not affect an already running connect.
+`removeWhere` works on the queue alone: a read that has already started is not
+in it, so the same call removes nothing and the device receives
+`[connect, battery, disconnect]`.
 
 ## 8. Awaiting a particular request
 
