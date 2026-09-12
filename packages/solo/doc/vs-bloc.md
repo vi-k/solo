@@ -868,11 +868,11 @@ class MapCubit extends Cubit<MapState> {
 }
 ```
 
-These methods do not serialize calls. With unequal native-call durations, the
-trace is `[moveTo 1 start, moveTo 2 start, moveTo 3 start, moveTo 3 end,
-moveTo 2 end, moveTo 1 end]`. The state can end at any of the three: in this
-run it ends at `MapState(1, z1)`, the oldest request, because that call
-happened to return last. Nothing in the code decides which one wins.
+These methods do not serialize calls. With unequal native-call durations the
+trace can come out like this: `[moveTo 1 start, moveTo 2 start, moveTo 3 start,
+moveTo 3 end, moveTo 2 end, moveTo 1 end]`. The state can end at any of the
+three: here it ends at `MapState(1, z1)`, the oldest request, because that call
+returned last. Nothing in the code decides which one wins.
 
 A future chain can serialize calls, with additional tracking to discard
 obsolete requests. The application must also decide how closure waits for or
