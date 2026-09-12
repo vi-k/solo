@@ -762,11 +762,11 @@ class PlayerBloc extends Bloc<PlayerCommand, PlayerState> {
 
   @override
   void onEvent(PlayerCommand event) {
+    super.onEvent(event);
     if (event is Seek) {
       _newestSeek = event.position;
       _seeking?.cancel();
     }
-    super.onEvent(event);
   }
 }
 ```
@@ -1004,9 +1004,9 @@ class FlagDeviceBloc extends Bloc<DeviceEvent, DeviceState> {
 
   @override
   void onEvent(DeviceEvent event) {
+    super.onEvent(event);
     if (event is Disconnect) _leaving = true;
     if (event is Connect) _leaving = false;
-    super.onEvent(event);
   }
 }
 ```
@@ -1054,9 +1054,9 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
 
   @override
   void onEvent(DeviceEvent event) {
+    super.onEvent(event);
     if (event is Disconnect) _screen++;
     _stampOf[event] = _screen;
-    super.onEvent(event);
   }
 }
 ```
