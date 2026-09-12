@@ -1915,6 +1915,26 @@ void main() {
     controller.close();
     clock.flushMicrotasks();
   });
+
+  // Which of the two the lookup takes. A queued refresh exists only after
+  // a second call, and `Policy.restart` has cancelled the running one by
+  // then, so preferring the queue is what stops the refresh that would
+  // otherwise start.
+  fakeAsync((clock) {
+    final controller = RefreshController(RefreshApi());
+    final first = controller.refresh();
+    clock.flushMicrotasks();
+    final second = controller.refresh();
+    final found = controller.cancelRefresh();
+    require(identical(found, second), 'the queued refresh comes first');
+    require(first.isCancelled, 'restart cancelled the running one already');
+    clock.flushMicrotasks();
+    print('restart, then cancel: first ${first.outcome}, '
+        'second ${second.outcome}, '
+        'state ${controller.currentState.runtimeType}');
+    controller.close();
+    clock.flushMicrotasks();
+  });
 }
 ''')
 

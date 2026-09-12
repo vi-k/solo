@@ -626,7 +626,13 @@ the same reason `refresh()` does: `controller.cancelRefresh();` is a finished
 statement, and a project with `discarded_futures` enabled has nothing to say
 about it. A caller that wants the outcome awaits
 `controller.cancelRefresh()?.done` instead, and `null` there means there was
-nothing to cancel. `ctx.wait` ends the wait for the API, and `onCancel` returns
+nothing to cancel.
+
+`lastJobWhere` searches the queue from the end and falls back to the running
+job, so it answers with the queued refresh when one is waiting. That order is
+the one this method needs: a refresh can only be queued behind another because
+a second `refresh()` was called, and `Policy.restart` cancelled the running one
+at that moment. `ctx.wait` ends the wait for the API, and `onCancel` returns
 `Initial` before the queue proceeds. A successful refresh publishes `Initial`
 from the body; `onError` resets the indicator on failure while the job still
 reports `Failed`.
