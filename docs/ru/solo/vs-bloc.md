@@ -695,10 +695,44 @@ class SplitPlayerBloc extends Bloc<PlayerCommand, PlayerState> {
 До состояния дошёл только последний `emit`, поэтому по состоянию ничего этого
 не видно.
 
+### Вторая попытка
+
+Одна регистрация на все три команды, чтобы очередь была одна:
+
+```dart
+class SerialPlayerBloc extends Bloc<PlayerCommand, PlayerState> {
+  final Player _player;
+
+  SerialPlayerBloc(this._player) : super(const PlayerState()) {
+    on<PlayerCommand>((command, emit) async {
+      switch (command) {
+        case Play():
+          await _player.play();
+        case Pause():
+          await _player.pause();
+        case Seek(:final position):
+          await _player.seek(position);
+          emit(PlayerState(position: position));
+      }
+    }, transformer: sequential());
+  }
+}
+```
+
+Теперь команды доходят до устройства в том порядке, в каком их нажимали,
+а состояние снова заканчивается на `PlayerState(3ms)`. Трасса — `[play start,
+play end, seek 1 start, seek 1 end, seek 2 start, seek 2 end, seek 3 start,
+seek 3 end, pause start, pause end]`.
+
+Чего очередь не умеет — так это выбрасывать то, что перетаскивание уже
+обессмыслило. Позиции 1 и 2 устарели, не успев начаться, и устройство
+перематывает на каждую по очереди; `pause` ждёт за всеми тремя. Порядок
+и замена — разные требования, и `sequential()` отвечает только на первое.
+
 ### Bloc
 
-Для последовательности всех команд эта реализация использует одну регистрацию
-с `sequential()` и отслеживает последнюю позицию и активный токен:
+Одна очередь остаётся. Реализация добавляет к ней способ понять, какая
+перемотка ещё нужна, и остановить ту, что уже выполняется:
 
 ```dart
 class PlayerBloc extends Bloc<PlayerCommand, PlayerState> {

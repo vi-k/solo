@@ -550,7 +550,8 @@ class PlayerState {
 
 FILES['bloc/item5'] = (BLOC_IMPORTS + TRACE + PLAYER + PLAYER_EVENTS + '\n'
                        + snips['5/PlayerBloc'] + '\n'
-                       + snips['5/SplitPlayerBloc'] + '''
+                       + snips['5/SplitPlayerBloc'] + '\n'
+                       + snips['5/SerialPlayerBloc'] + '''
 Future<void> main() async {
   final split = SplitPlayerBloc(Player());
   split
@@ -564,6 +565,20 @@ Future<void> main() async {
   print('  full:  $trace');
   print('  state ${split.state}');
   await split.close();
+  trace.clear();
+
+  final serial = SerialPlayerBloc(Player());
+  serial
+    ..add(Play())
+    ..add(Seek(const Duration(milliseconds: 1)))
+    ..add(Seek(const Duration(milliseconds: 2)))
+    ..add(Seek(const Duration(milliseconds: 3)))
+    ..add(Pause());
+  await tick(300);
+  print('one queue, no replacement: ${callsOf(trace)}');
+  print('  full:  $trace');
+  print('  state ${serial.state}');
+  await serial.close();
   trace.clear();
 
   final bloc = PlayerBloc(Player());

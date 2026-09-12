@@ -687,10 +687,44 @@ awaiting: all three seeks ran on the device, the third of them after `pause`.
 Only the last `emit` reached the state, which is why the state alone shows none
 of this.
 
+### The second attempt
+
+One registration for all three commands, so that one queue holds them all:
+
+```dart
+class SerialPlayerBloc extends Bloc<PlayerCommand, PlayerState> {
+  final Player _player;
+
+  SerialPlayerBloc(this._player) : super(const PlayerState()) {
+    on<PlayerCommand>((command, emit) async {
+      switch (command) {
+        case Play():
+          await _player.play();
+        case Pause():
+          await _player.pause();
+        case Seek(:final position):
+          await _player.seek(position);
+          emit(PlayerState(position: position));
+      }
+    }, transformer: sequential());
+  }
+}
+```
+
+The commands now reach the device in the order they were pressed, and the state
+ends at `PlayerState(3ms)` again. The trace is `[play start, play end, seek 1
+start, seek 1 end, seek 2 start, seek 2 end, seek 3 start, seek 3 end, pause
+start, pause end]`.
+
+What the queue cannot do is drop what the drag has already made pointless.
+Positions 1 and 2 were obsolete before they started, and the device seeks to
+each of them in turn; `pause` waits behind all three. Ordering and replacement
+are separate requirements, and `sequential()` answers only the first.
+
 ### Bloc
 
-To keep all commands serialized, this implementation uses one `sequential()`
-registration and tracks the latest `seek` and active token:
+The one queue stays. What the implementation adds is a way to tell which `seek`
+is still wanted and to stop the one in flight:
 
 ```dart
 class PlayerBloc extends Bloc<PlayerCommand, PlayerState> {
