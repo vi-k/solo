@@ -1894,15 +1894,18 @@ void main() {
       controller.currentState is Loading,
       'refresh must start in Loading',
     );
-    // The screen holds nothing: the controller finds its own job.
+    // The screen holds nothing: the controller finds its own job, and
+    // hands back the very one it cancels.
+    final same = controller.cancelRefresh();
+    require(identical(same, job), 'cancelRefresh returns the job it cancels');
     var cancelled = false;
-    controller.cancelRefresh().then((_) => cancelled = true);
+    same?.done.then((_) => cancelled = true);
     clock.flushMicrotasks();
     require(cancelled, 'cancel must finish before abandoned API response');
     require(job.outcome is Cancelled, 'job must report cancellation');
     require(controller.currentState is Initial, 'onCancel must reset state');
     print('cancelRefresh: ${controller.currentState.runtimeType}, '
-        'and the job a caller could have kept says ${job.outcome}');
+        'and the job it handed back says ${same?.outcome}');
     api.pending.complete();
     clock.flushMicrotasks();
     require(
