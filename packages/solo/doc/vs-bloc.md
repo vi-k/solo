@@ -8,8 +8,11 @@ and solo's — with what the library handles and what remains application code.
 
 A first attempt here is not a strawman: it is the version the API's own
 vocabulary suggests, and the states and traces quoted under it are what running
-that code produces. Reading it before the answer is the point of the section; a
-reader who already knows the trap can skip to `### Bloc` and `### Solo`.
+that code produces. It is bloc code as well: what the bloc heading after it
+adds is a version that meets the requirement. Where one attempt does not get
+close enough to that, a second follows under its own heading. Reading the
+attempts before the answer is the point of the section; a reader who already
+knows the trap can skip to `### Bloc` and `### Solo`.
 
 `Bloc` processes events registered with `on<E>`. A transformer determines how
 events in that registration are scheduled. `Cubit` exposes methods that update
