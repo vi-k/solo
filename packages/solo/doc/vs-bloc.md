@@ -1363,26 +1363,22 @@ Future<Map<String, Object?>> handlePayRequest(
 order key. Both callers share its receipt, while another order creates another
 job. The three requests again make two API calls.
 
-`cancellable: false` protects the complete payment operation from ordinary
-cancellation, including controller closure once it is running. The body
-publishes `Paid` before completing with the receipt, and `close()` waits for
-that completion. API failures still produce `Failed`; a failure state can be
-supplied with `run(onError: ...)`.
+The charge is a plain `await`. `ctx.wait`, `ctx.join` and `ctx.uncancellable`
+are for a job that can be cancelled, and they differ in what each does with a
+cancellation arriving during a call: `wait` lets go of the call, `join` stays
+with it until it answers, `uncancellable` holds the cancellation back until the
+step ends. This job cannot be cancelled while it runs. It sets no `keepWhile`
+and accepts the base `CheckoutState`, so no state rule can reject it — and that
+is the width that matters, because a state rule cancels even a non-cancellable
+job: a narrower type would allow cancellation after a charge was sent but
+before it was recorded. Every other cancellation is rejectable, and
+`cancellable: false` rejects it: `Job.cancel` from a screen, a closing
+controller.
 
-This job accepts the base `CheckoutState` and has no `keepWhile` restriction.
-State rules can cancel even a non-cancellable job, so a narrower type would
-allow cancellation after a charge was sent but before it was recorded. No
-waiting method can retract a charge from an API that provides no cancellation
-mechanism.
-
-That is also why the charge is a plain `await`. `ctx.wait`, `ctx.join` and
-`ctx.uncancellable` differ in what each does with a cancellation that arrives
-during the call: `wait` lets go of the call, `join` stays with it until it
-answers, `uncancellable` holds the cancellation back and applies it once the
-step ends — protecting the step, not the outcome of the job that goes on past
-it. All three need a cancellation that reaches the job, and while this one runs
-none does: `cancellable: false` turns away everything rejectable, and its state
-rule admits every `CheckoutState`.
+The body publishes `Paid` before completing with the receipt, and `close()`
+waits for that completion. API failures still produce `Failed`; a failure state
+can be supplied with `run(onError: ...)`. No waiting method could retract a
+charge anyway: this API provides no cancellation mechanism.
 
 The flag also refuses manual cancellation while the payment is queued. If users
 must be able to cancel before charging starts, model that admission decision
