@@ -1725,10 +1725,10 @@ class GuardedPreviewBloc extends Bloc<OpenPreview, PreviewState> {
 }
 ```
 
-Both versions finish at `Preview(2)`. The first releases the current buffer
-once and the stale buffer zero times; the guarded version releases each once.
-The `finally` runs on the cancelled path too, which is the only reason the
-stale buffer is released at all.
+Both versions finish at `Preview(2)`. The first attempt releases one buffer of
+the two — the current one; the guarded version releases both, once each. The
+`finally` runs on the cancelled path too, which is the only reason the stale
+buffer is released at all.
 
 The handler continues waiting after emitter cancellation and releases the
 buffer when it arrives. This is a working resource-management pattern; every
