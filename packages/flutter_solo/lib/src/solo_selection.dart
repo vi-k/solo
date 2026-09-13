@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
+import 'package:solo/solo.dart';
 
 import 'listeners.dart';
 import 'solo_listenable.dart';
@@ -55,6 +58,7 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
   /// The last value announced to the listeners, kept to tell a change
   /// from a change of the source that left the pick alone.
   T _selected;
+  var _subscribing = false;
 
   /// Picks [selector] out of [source]; [compare] answers whether the pick
   /// changed, `!=` when it is omitted.
@@ -66,6 +70,18 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
         _selector = selector,
         _compare = compare ?? _changed,
         _selected = selector(source.value);
+
+  /// Picks [selector] directly from [solo].
+  static SoloSelection<S, T> of<S extends Object, T>(
+    SoloBase<S> solo,
+    T Function(S state) selector, {
+    bool Function(T previous, T current)? compare,
+  }) =>
+      SoloSelection<S, T>(
+        _SoloSource(solo),
+        selector,
+        compare: compare,
+      );
 
   /// `true` means the pick changed, the same way `compare` answers.
   static bool _changed<T>(T previous, T current) => previous != current;
@@ -80,14 +96,34 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
   /// nothing more.
   @override
   void addListener(VoidCallback listener) {
-    if (_listeners.isEmpty) {
+    final first = _listeners.isEmpty;
+    _listeners.add(listener);
+    if (first) {
       // Before the subscription, not after: the pick kept from now on must
       // be the one the source has at this moment, or the first change would
       // be compared against a value from whenever this object was made.
-      _selected = _selector(_source.value);
-      _source.addListener(_onSourceChanged);
+      var subscriptionAttempted = false;
+      try {
+        _selected = _selector(_source.value);
+        _subscribing = true;
+        subscriptionAttempted = true;
+        _source.addListener(_onSourceChanged);
+        _subscribing = false;
+
+        final next = _selector(_source.value);
+        if (_compare(_selected, next)) {
+          _selected = next;
+          scheduleMicrotask(() => _listeners.notify(this));
+        }
+      } on Object catch (_) {
+        _subscribing = false;
+        if (subscriptionAttempted) {
+          _source.removeListener(_onSourceChanged);
+        }
+        _listeners.remove(listener);
+        rethrow;
+      }
     }
-    _listeners.add(listener);
   }
 
   /// Removes one registration of [listener]; unknown listeners are
@@ -101,6 +137,9 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
   }
 
   void _onSourceChanged() {
+    if (_subscribing) {
+      return;
+    }
     final next = _selector(_source.value);
     if (!_compare(_selected, next)) {
       return;
@@ -113,6 +152,21 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
     _selected = next;
     _listeners.notify(this);
   }
+}
+
+final class _SoloSource<S extends Object> implements ValueListenable<S> {
+  final SoloBase<S> _solo;
+
+  _SoloSource(this._solo);
+
+  @override
+  S get value => _solo.currentState;
+
+  @override
+  void addListener(VoidCallback listener) => _solo.addListener(listener);
+
+  @override
+  void removeListener(VoidCallback listener) => _solo.removeListener(listener);
 }
 
 /// [select] on every [ValueListenable].

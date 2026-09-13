@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_solo/flutter_solo.dart';
 import 'package:flutter_solo/listenable.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -24,6 +25,103 @@ final class _Controller extends SoloListenable<_Screen> {
   void set(_Screen next) => externalSetState(next);
 }
 
+final class _PlainController extends Solo<_Screen> {
+  _PlainController() : super(const _Screen());
+
+  void set(_Screen next) => externalSetState(next);
+}
+
+final class _SubscribePublishingSource implements ValueListenable<int> {
+  final _listeners = <VoidCallback>[];
+  var _value = 0;
+  var _published = false;
+
+  @override
+  int get value => _value;
+
+  @override
+  void addListener(VoidCallback listener) {
+    _listeners.add(listener);
+    if (_published) {
+      return;
+    }
+    _published = true;
+    _value = 1;
+    for (final current in List<VoidCallback>.of(_listeners)) {
+      current();
+    }
+  }
+
+  @override
+  void removeListener(VoidCallback listener) {
+    _listeners.remove(listener);
+  }
+}
+
+final class _ReentrantSource implements ValueListenable<int> {
+  final _listeners = <VoidCallback>[];
+  int subscriptionCount = 0;
+  var _value = 0;
+  VoidCallback? onFirstSubscription;
+
+  @override
+  int get value => _value;
+
+  @override
+  void addListener(VoidCallback listener) {
+    subscriptionCount++;
+    _listeners.add(listener);
+    final callback = onFirstSubscription;
+    onFirstSubscription = null;
+    callback?.call();
+  }
+
+  @override
+  void removeListener(VoidCallback listener) {
+    _listeners.remove(listener);
+  }
+
+  void set(int value) {
+    _value = value;
+    for (final listener in List<VoidCallback>.of(_listeners)) {
+      listener();
+    }
+  }
+}
+
+final class _ThrowingSource implements ValueListenable<int> {
+  final _listeners = <VoidCallback>[];
+  final error = StateError('subscription failed');
+  var _value = 0;
+  bool failNextSubscription = true;
+
+  @override
+  int get value => _value;
+
+  int get listenerCount => _listeners.length;
+
+  @override
+  void addListener(VoidCallback listener) {
+    _listeners.add(listener);
+    if (failNextSubscription) {
+      failNextSubscription = false;
+      throw error;
+    }
+  }
+
+  @override
+  void removeListener(VoidCallback listener) {
+    _listeners.remove(listener);
+  }
+
+  void set(int value) {
+    _value = value;
+    for (final listener in List<VoidCallback>.of(_listeners)) {
+      listener();
+    }
+  }
+}
+
 /// A controller with a `select` of its own: the extension must step aside
 /// and leave this member the winner.
 final class _ListController extends SoloListenable<String> {
@@ -33,6 +131,113 @@ final class _ListController extends SoloListenable<String> {
 }
 
 void main() {
+  test('of selects from a Solo controller and respects compare', () async {
+    final controller = _PlainController();
+    addTearDown(controller.close);
+    final name = SoloSelection.of(
+      controller,
+      (state) => state.name,
+      compare: (previous, current) =>
+          previous.toLowerCase() != current.toLowerCase(),
+    );
+    var calls = 0;
+    name.addListener(() => calls++);
+
+    controller
+      ..set(const _Screen(name: 'Ada'))
+      ..set(const _Screen(name: 'ADA'))
+      ..set(const _Screen(name: 'Grace'));
+
+    expect(name.value, 'Grace');
+    expect(calls, 2);
+  });
+
+  test('of selects from a SoloListenable controller', () async {
+    final controller = _Controller();
+    addTearDown(controller.close);
+    final progress = SoloSelection.of(controller, (state) => state.progress);
+    final values = <int>[];
+    progress.addListener(() => values.add(progress.value));
+
+    controller.set(const _Screen(progress: 7));
+
+    expect(progress.value, 7);
+    expect(values, [7]);
+  });
+
+  test('nullable source selection keeps the existing constructor working', () {
+    final source = ValueNotifier<int?>(null);
+    addTearDown(source.dispose);
+    final selection = SoloSelection<int?, int>(source, (value) => value ?? 0);
+    final values = <int>[];
+    selection.addListener(() => values.add(selection.value));
+
+    source.value = 3;
+
+    expect(selection.value, 3);
+    expect(values, [3]);
+  });
+
+  testWidgets(
+    'the first value published during subscription reaches the builder',
+    (tester) async {
+      final source = _SubscribePublishingSource();
+      final selection = SoloSelection(source, (value) => value);
+      final built = <int>[];
+
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: ValueListenableBuilder<int>(
+            valueListenable: selection,
+            builder: (context, value, _) {
+              built.add(value);
+
+              return Text('$value');
+            },
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(built, [0, 1]);
+      expect(find.text('1'), findsOneWidget);
+    },
+  );
+
+  test('a failed source subscription rolls back the listener', () {
+    final source = _ThrowingSource();
+    final selection = SoloSelection(source, (value) => value);
+    var calls = 0;
+    void listener() => calls++;
+
+    expect(() => selection.addListener(listener), throwsA(source.error));
+    expect(source.listenerCount, 0);
+
+    selection.addListener(listener);
+    source.set(1);
+    expect(calls, 1, reason: 'the failed registration was removed');
+
+    selection.removeListener(listener);
+    expect(source.listenerCount, 0);
+  });
+
+  test('a reentrant listener does not subscribe to the source twice', () {
+    final source = _ReentrantSource();
+    late final SoloSelection<int, int> selection;
+    var reentrantCalls = 0;
+    selection = SoloSelection(source, (value) => value);
+    source.onFirstSubscription = () {
+      selection.addListener(() => reentrantCalls++);
+    };
+
+    selection.addListener(() {});
+    source.set(1);
+
+    expect(source.subscriptionCount, 1);
+    expect(reentrantCalls, 1);
+  });
+
   test('a change that leaves the pick alone notifies nobody', () {
     final controller = _Controller();
     final name = controller.select((state) => state.name);
@@ -269,4 +474,31 @@ void main() {
       'the reporter blew up',
     );
   });
+
+  test('a source publishing during addListener must not notify synchronously',
+      () {
+    final selection = SoloSelection<int, int>(EagerSource(), (value) => value);
+    var inside = true;
+    var calls = 0;
+    selection.addListener(() {
+      calls++;
+      if (inside) {
+        fail('notified synchronously from inside addListener');
+      }
+    });
+    inside = false;
+    expect(calls, 0, reason: 'nothing may arrive before addListener returns');
+  });
+}
+
+/// Publishes a new value from inside `addListener`, the way a lazy source
+/// hooked up on its first subscriber does.
+class EagerSource extends ValueNotifier<int> {
+  EagerSource() : super(0);
+
+  @override
+  void addListener(VoidCallback listener) {
+    super.addListener(listener);
+    value = 1;
+  }
 }

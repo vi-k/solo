@@ -1,5 +1,22 @@
 ## Unreleased
 
+- Add `SoloSelection.of`: a selection straight from a controller, for the
+  controllers that are not `ValueListenable` -- `Solo` and anything else built
+  on `SoloBase`. It is a static method rather than a constructor because a
+  constructor introduces no type parameters of its own, and the class leaves
+  `S` unbounded while `SoloBase` requires `S extends Object`; the existing
+  constructor, nullable sources included, is untouched.
+- **Fix:** the first value of a source that publishes while it is being
+  subscribed to reaches the widget. The selection used to subscribe before
+  registering the incoming listener, so a value arriving in that window updated
+  the pick when there was nobody to notify, and `ValueListenableBuilder` --
+  which reads the value before subscribing -- stayed on the old one. The
+  listener is registered first now, the pick is read again after the
+  subscription, and a change found there is announced on a microtask:
+  announcing it synchronously would land in the caller's `initState`, where
+  `setState` throws. A subscription that throws leaves neither the registration
+  nor the source listener behind.
+
 - **Fix:** a selection counts registrations, not callbacks. The same callback
   registered twice is called twice and removed one registration at a time, and
   a registration cancelled during a notification pass is skipped rather than
