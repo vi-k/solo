@@ -1656,10 +1656,10 @@ final class FirmwareController extends Solo<FirmwareState> {
 ```
 
 `Policy.restart` requests cancellation and enqueues the replacement. `join`
-waits for the current write; after a successful write it detects cancellation
-and throws before the next iteration. The replacement starts after the old job
-completes. The observed chunk sequence and non-overlap match the locked bloc
-implementation.
+waits for the current write and throws `Cancelled` once it returns, before the
+next iteration; the replaced upload ends at `Cancelled(manual)`. The
+replacement starts after that job completes. The observed chunk sequence and
+non-overlap match the locked bloc implementation.
 
 An external `Broken` state also cancels this job because it no longer matches
 `NotBroken`. The failure run stops after `[0, 1, 2]` with
