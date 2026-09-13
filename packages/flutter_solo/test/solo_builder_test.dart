@@ -333,4 +333,32 @@ void main() {
       expect(find.text('Grace'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'the builder is handed the cached state, not a fresh read',
+    (tester) async {
+      final controller = _Controller(const _Screen(name: 'Ada'));
+
+      Widget tree() => _wrap(
+            SoloBuilder<_Screen>(
+              solo: controller,
+              builder: (context, state, _) => Text(state.name),
+            ),
+          );
+
+      await tester.pumpWidget(tree());
+      expect(find.text('Ada'), findsOneWidget);
+
+      // Closing stops the notifications, and `externalSetState` is not
+      // blocked by it: the state moves with nobody told.
+      await controller.close();
+      controller.set(const _Screen(name: 'Grace'));
+
+      // The parent rebuilds and hands the same controller back, so nothing
+      // is re-read. A builder that read `currentState` here would show
+      // 'Grace'; this one shows what it was last told.
+      await tester.pumpWidget(tree());
+      expect(find.text('Ada'), findsOneWidget);
+    },
+  );
 }
