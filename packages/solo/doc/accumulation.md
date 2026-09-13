@@ -11,39 +11,16 @@ sealed: when debounce expires, or when the queue takes the job for execution
 with other timing settings. The handler receives that input and an ordinary
 `SoloContext<S, W>`; it changes state through `ctx.emit`.
 
-## Accumulators and policies
+## Recipes
 
-```dart
-// One list per group: every accepted event is kept, in order.
-late final _logs = collect<Ready, LogEntry, void>(
-  (ctx, events) => ctx.join(() => sink.write(events)),
-);
+Four controllers, each with more events arriving than there is work worth
+doing. What differs is what survives: the last value, a merge of all of them,
+or every event in a list.
 
-// One value per group: merge decides what survives.
-late final _patches = accumulate<Ready, Patch, void>(
-  (ctx, patch) => ctx.join(() => store.apply(patch)),
-  merge: (previous, incoming) => previous.merge(incoming),
-  // Find this accumulator's open group anywhere in the queue and keep
-  // its position, instead of looking only at the tail.
-  policy: AccumulationPolicy.join,
-);
+### A search that fires on every keystroke
 
-SoloJob<void> log(LogEntry entry) => _logs.add(entry);
-```
-
-`accumulate` combines events with a synchronous `merge` function, which decides
-what to retain; keeping only the latest value is one possible choice. Only the
-queued job's handler updates controller state. A running group does not accept
-new input, and groups can combine only when they belong to the same
-accumulator.
-
-| Accumulation policy | How input joins queued work |
-| --- | --- |
-| `AccumulationPolicy.adjacent` | Join a compatible group only at the queue's tail. |
-| `AccumulationPolicy.join` | Join an existing queued group at its current position. |
-| `AccumulationPolicy.replace` | Transfer input to a new job at the tail and cancel the old group. |
-
-## Debounce and throttle
+A search box asks the server for results while the user types. Every keystroke
+is an event, and only the last one is worth a request.
 
 ```dart
 final class Search extends Solo<SearchState> {
@@ -65,28 +42,17 @@ final class Search extends Solo<SearchState> {
 }
 ```
 
-Set `timing` to delay a group's eligibility to start:
-
-- `AccumulationTiming.debounce(duration)` waits for a pause in input.
-- `AccumulationTiming.throttle(duration)` limits how often groups start,
-  measuring the interval from the previous group's actual start.
-
-These delays do not occupy the running job's position. Waiting groups remain in
-`queue` and let other ready jobs pass. The handlers themselves still run one at
-a time. Timing does not discard input: `collect` keeps accepted events and
-`accumulate` keeps what `merge` returns. Without `timing`, or with
-`Duration.zero`, groups are ready immediately.
-
 The search controller above retains the latest query and waits for 300 ms
 without new input before starting it. `SearchApi` and `SearchState` are
 application types.
 
 A search that has already started finishes before the next one starts. The
-returned job exposes the outcome and cancellation, like other jobs. Closing
-cancels waiting groups rather than flushing them. The sections below work
-through grouping, ordering and the outcomes returned to individual callers.
+returned job exposes the outcome and cancellation, like other jobs.
 
-## Combining settings changes
+### Settings saved on every flip of a switch
+
+A settings screen has a switch, a theme picker and a language picker. Each
+change is an event, and the server wants one write rather than three.
 
 A patch describes which settings to change. A new value for a field replaces
 the previous one; fields absent from the new patch are kept. Here, the settings
@@ -201,7 +167,64 @@ until that future completes, even after cancellation. A client timeout alone
 does not establish that a server has stopped writing. Cancellation can also
 prevent the final `emit` after the server has accepted the write.
 
-## Commands where only the last one counts
+### One request per log line
+
+An application writes log entries one at a time and the server takes them in
+batches. Every entry has to arrive, and in the order it was written.
+
+Logs need their individual entries and order. `collect` appends events to a
+private list and gives the handler an unmodifiable snapshot at the moment the
+group is sealed. It preserves duplicate events and does not copy the entire
+list on every addition. The entries themselves are not cloned; use immutable
+event objects.
+
+```dart
+import 'package:solo/solo.dart';
+
+class LogEntry {
+  final String message;
+
+  const LogEntry(this.message);
+}
+
+abstract interface class LogApi {
+  Future<void> send(List<LogEntry> entries);
+}
+
+class LogController extends Solo<int> {
+  final LogApi _api;
+  late final _logs = collect<int, LogEntry, void>(
+    (ctx, entries) async {
+      await ctx.join(() => _api.send(entries));
+      ctx.emit(ctx.state + entries.length);
+    },
+    key: 'logs',
+    policy: AccumulationPolicy.join,
+    timing: AccumulationTiming.throttle(const Duration(seconds: 1)),
+  );
+
+  LogController(this._api) : super(0);
+
+  SoloJob<void> logEvent(LogEntry entry) => _logs.add(entry);
+}
+```
+
+Three calls before execution send one list of three entries. The first group is
+ready immediately; later groups start at least one second apart. Entries
+received during that interval are kept for the next group. This controller's
+state counts entries whose send operation completed and whose handler reached
+`emit`. The policy section explains why this example chooses `join` as its
+accumulation policy.
+
+Collecting entries does not guarantee delivery. A failed send, a cancelled
+group or controller shutdown can leave them unsent. Durable storage, retries
+and a final send on shutdown require an application protocol beyond this
+accumulator.
+
+### Commands where only the last one counts
+
+A player puts resume and pause on one button, and the user taps it faster than
+the device answers.
 
 A queue holding `resume` and then `pause` is about to do two things that cancel
 each other out, and a `resume` arriving now makes the whole pair pointless: the
@@ -271,7 +294,7 @@ job of another kind added between two commands is a boundary and the merging
 stops there. That is what keeps the order with the rest of the work;
 `AccumulationPolicy.join` gives it up and joins the group where it stands.
 
-### When they are separate jobs after all
+#### When they are separate jobs after all
 
 Where `resume` and `pause` are genuinely different operations rather than one
 command with a value, they are ordinary jobs with keys of their own, and
@@ -297,73 +320,12 @@ clears the queue and cancels the current job — or give both commands one key
 and `Policy.restart`. Jobs created with `cancellable: false` are skipped unless
 `force: true` is given.
 
-## Collecting log entries
+## Reference
 
-Logs need their individual entries and order. `collect` appends events to a
-private list and gives the handler an unmodifiable snapshot at the moment the
-group is sealed. It preserves duplicate events and does not copy the entire
-list on every addition. The entries themselves are not cloned; use immutable
-event objects.
+These sections work through grouping, ordering and the outcomes returned to
+individual callers.
 
-```dart
-import 'package:solo/solo.dart';
-
-class LogEntry {
-  final String message;
-
-  const LogEntry(this.message);
-}
-
-abstract interface class LogApi {
-  Future<void> send(List<LogEntry> entries);
-}
-
-class LogController extends Solo<int> {
-  final LogApi _api;
-  late final _logs = collect<int, LogEntry, void>(
-    (ctx, entries) async {
-      await ctx.join(() => _api.send(entries));
-      ctx.emit(ctx.state + entries.length);
-    },
-    key: 'logs',
-    policy: AccumulationPolicy.join,
-    timing: AccumulationTiming.throttle(const Duration(seconds: 1)),
-  );
-
-  LogController(this._api) : super(0);
-
-  SoloJob<void> logEvent(LogEntry entry) => _logs.add(entry);
-}
-```
-
-Three calls before execution send one list of three entries. The first group is
-ready immediately; later groups start at least one second apart. Entries
-received during that interval are kept for the next group. This controller's
-state counts entries whose send operation completed and whose handler reached
-`emit`. The policy section explains why this example chooses `join` as its
-accumulation policy.
-
-Collecting entries does not guarantee delivery. A failed send, a cancelled
-group or controller shutdown can leave them unsent. Durable storage, retries
-and a final send on shutdown require an application protocol beyond this
-accumulator.
-
-## Choosing when a group is ready
-
-```dart
-// A pause in the input: every add restarts the 200 ms timer.
-late final _queries = accumulate<Ready, String, void>(
-  (ctx, text) => ctx.wait(() => api.search(text)),
-  merge: (previous, incoming) => incoming,
-  timing: AccumulationTiming.debounce(const Duration(milliseconds: 200)),
-);
-
-// A ceiling on how often groups start, measured from the actual start.
-late final _metrics = collect<Ready, Metric, void>(
-  (ctx, events) => ctx.join(() => api.send(events)),
-  timing: AccumulationTiming.throttle(const Duration(seconds: 5)),
-);
-```
+### Choosing when a group is ready
 
 Both factories accept an optional `timing`. The setting controls when a group
 may start; `collect` still keeps every accepted event, and `accumulate` keeps
@@ -406,7 +368,7 @@ order: an event processed before a debounce callback can restart the timer; an
 event processed after it belongs to a new group. A busy event loop can delay
 callbacks and starts.
 
-## Choosing where events join
+### Choosing where events join
 
 ```dart
 // All three while the current job still keeps the queue occupied:
@@ -455,7 +417,7 @@ accumulators with the same `key` remain separate. The key still labels their
 jobs for the ordinary queue's search and policies. Creating a new accumulator
 on every call prevents events from joining an existing one.
 
-## Start, cancellation and errors
+### Start, cancellation and errors
 
 ```dart
 final group = settings.report(metric);

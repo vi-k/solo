@@ -66,7 +66,7 @@ dependency_overrides:
 # A snippet is addressed by section and by a name it declares. The addressing
 # lives in doc_blocks.py, next to this file, and is shared with the vs-bloc
 # bench: `accumulation.md` has unnumbered headings, so its sections are keyed
-# by a slug of the heading -- 'combining-settings-changes/SettingsController'.
+# by a slug of the heading -- 'recipes/SettingsController'.
 snips = doc_blocks.blocks(
     open(DOC).read(), 'dart', doc_blocks.DECLARES['dart'])
 
@@ -128,7 +128,7 @@ FILES = {}
 
 # ------------------------------------------------------------------ settings
 FILES['settings'] = (
-    with_fake_async('combining-settings-changes/Settings')
+    with_fake_async('recipes/Settings')
     + SETTINGS_FAKE
     + REQUIRE
     + '''
@@ -180,9 +180,9 @@ void main() {
 # The document's own driver, verbatim. It prints three outcomes for what the
 # prose two paragraphs down calls one job -- which is the point of running it.
 FILES['settings_doc'] = (
-    with_fake_async('combining-settings-changes/Settings', dart_async=True)
+    with_fake_async('recipes/Settings', dart_async=True)
     + SETTINGS_FAKE
-    + snips['combining-settings-changes/changeSettings']
+    + snips['recipes/changeSettings']
     + REQUIRE
     + '''
 void main() {
@@ -228,7 +228,7 @@ final class Transport extends Solo<Playback> {
 
   Transport(this.device) : super(const Paused());
 
-''' + snips['commands-where-only-the-last-o/resume'].rstrip('\n') + '''
+''' + snips['recipes/resume'].rstrip('\n') + '''
 
   SoloJob<void> pause() => run<Playback, void>(
         key: Command.pause,
@@ -241,7 +241,7 @@ final class Transport extends Solo<Playback> {
 '''
 
 FILES['commands'] = (
-    with_fake_async('commands-where-only-the-last-o/Player', dart_async=True)
+    with_fake_async('recipes/Player', dart_async=True)
     + PLAYER_FAKE
     + TRANSPORT
     + REQUIRE
@@ -325,7 +325,7 @@ class RecordingLogApi implements LogApi {
 '''
 
 FILES['logs'] = (
-    with_fake_async('collecting-log-entries/LogController')
+    with_fake_async('recipes/LogController')
     + LOG_FAKE
     + REQUIRE
     + '''
@@ -394,7 +394,7 @@ class SearchApi {
 
 FILES['search'] = (
     SEARCH_TYPES
-    + snips['debounce-and-throttle/Search']
+    + snips['recipes/Search']
     + REQUIRE
     + '''
 void main() {
