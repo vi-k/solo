@@ -232,8 +232,9 @@ final class Player extends Solo<PlayerState> {
             () => device.open(track),
             dispose: (handle) => handle.close(),
           );
-          // Освобождение идёт в обратном порядке и при любом исходе.
-          ctx.onDispose(handle.close);
+          // Освобождение идёт в обратном порядке и при любом исходе:
+          // сперва остановка, потом закрытие. Каждое — по одному разу.
+          ctx.onDispose(device.stop);
           // Дочерняя Job: родитель дождётся её перед своим завершением.
           ctx.each(device.position, (childCtx, position) async {
             childCtx.emit(Playing(track, position));

@@ -228,8 +228,9 @@ final class Player extends Solo<PlayerState> {
             () => device.open(track),
             dispose: (handle) => handle.close(),
           );
-          // Cleanup runs in reverse order, on every outcome.
-          ctx.onDispose(handle.close);
+          // Cleanup runs in reverse order, on every outcome: playback
+          // stops, then the handle closes. Register each release once.
+          ctx.onDispose(device.stop);
           // A child job: the parent waits for it before it finishes.
           ctx.each(device.position, (childCtx, position) async {
             childCtx.emit(Playing(track, position));
