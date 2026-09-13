@@ -24,7 +24,7 @@ What is not built here, and why: the document also carries sketches -- the
 policy pair in the reference -- that name types the document never declares
 (`Ready`, `Metric`, `sink`, `store`) or call methods no controller in it
 has. They are not code that can run, and the restructure planned in
-2026-09-13[11]-accumulation-restructure-plan.md replaces them with examples
+2026-09-13[13]-accumulation-restructure-plan.md replaces them with examples
 that can.
 """
 import os
