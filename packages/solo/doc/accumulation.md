@@ -101,6 +101,8 @@ class SettingsPatch {
 
 abstract interface class SettingsApi {
   Future<void> save(Settings settings);
+
+  Future<Settings> load();
 }
 
 class SettingsController extends Solo<Settings> {
@@ -119,8 +121,16 @@ class SettingsController extends Solo<Settings> {
   SettingsController(this._api, Settings initial) : super(initial);
 
   SoloJob<void> update(SettingsPatch patch) => _updates.add(patch);
+
+  SoloJob<void> reload() => run<Settings, void>(
+        key: 'reload',
+        (ctx) async => ctx.emit(await ctx.wait(_api.load)),
+      );
 }
 ```
+
+The screen also reads the settings back from the server, and `reload` is an
+ordinary job rather than an accumulated one.
 
 The first event becomes the accumulated value without calling `merge`. Each
 following event calls `merge(accumulated, incoming)` synchronously from `add`,
@@ -371,10 +381,11 @@ callbacks and starts.
 ### Choosing where events join
 
 ```dart
-// All three while the current job still keeps the queue occupied:
-settings.change(a1); // A1, into this accumulator
-settings.save();     // B, an ordinary job of its own
-settings.change(a2); // A2 -- where it lands is the policy's decision
+// All three while the current job still keeps the queue occupied. Where A2
+// lands is the policy's decision.
+final a1 = settings.update(const SettingsPatch(theme: 'dark'));
+settings.reload(); // B, an ordinary job of its own
+final a2 = settings.update(const SettingsPatch(language: 'ru'));
 ```
 
 Both factories accept an `AccumulationPolicy`, fixed when the accumulator is
@@ -391,6 +402,13 @@ created.
 looking past other jobs. Those other jobs stay in the queue. In `join`, A
 retains its position before B; `replace` moves A behind B. Execution also
 depends on readiness: a ready B can pass A while A waits for timing.
+
+The log collector chooses `join` for that reason. An entry written while
+another job waits in the queue still belongs in the batch that is already
+there; under `adjacent` it would start a second group behind that job, and the
+throttle would hold that group for another interval — two requests for entries
+written moments apart. What `join` gives up is the boundary: the batch keeps
+its place ahead of the job that arrived between.
 
 Policies use the current queue. If B has already run, a waiting A may again be
 at the tail, so a later event can join it with `adjacent`. Already separate
@@ -420,7 +438,7 @@ on every call prevents events from joining an existing one.
 ### Start, cancellation and errors
 
 ```dart
-final group = settings.report(metric);
+final group = logs.logEvent(const LogEntry('checkout opened'));
 
 // Everyone who added to this group holds the same handle...
 switch (await group.done) {

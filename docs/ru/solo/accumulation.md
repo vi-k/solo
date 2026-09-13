@@ -101,6 +101,8 @@ class SettingsPatch {
 
 abstract interface class SettingsApi {
   Future<void> save(Settings settings);
+
+  Future<Settings> load();
 }
 
 class SettingsController extends Solo<Settings> {
@@ -119,8 +121,16 @@ class SettingsController extends Solo<Settings> {
   SettingsController(this._api, Settings initial) : super(initial);
 
   SoloJob<void> update(SettingsPatch patch) => _updates.add(patch);
+
+  SoloJob<void> reload() => run<Settings, void>(
+        key: 'reload',
+        (ctx) async => ctx.emit(await ctx.wait(_api.load)),
+      );
 }
 ```
+
+Экран ещё и читает настройки с сервера, и `reload` — обычная задача,
+а не накопленная.
 
 Первое событие становится накопленным значением без вызова `merge`. Каждое
 следующее синхронно вызывает `merge(accumulated, incoming)` из `add`, до старта
@@ -373,10 +383,11 @@ throttle. Колбэки таймеров следуют порядку собы
 ### Выбор места присоединения событий
 
 ```dart
-// Все три, пока текущая Job ещё удерживает очередь:
-settings.change(a1); // A1, в этот накопитель
-settings.save();     // B, обычная отдельная Job
-settings.change(a2); // A2 — куда он ляжет, решает политика
+// Все три, пока текущая Job ещё удерживает очередь. Куда ляжет A2,
+// решает политика.
+final a1 = settings.update(const SettingsPatch(theme: 'dark'));
+settings.reload(); // B, обычная отдельная Job
+final a2 = settings.update(const SettingsPatch(language: 'ru'));
 ```
 
 Обе фабрики принимают `AccumulationPolicy`, фиксируемую при создании
@@ -395,6 +406,13 @@ settings.change(a2); // A2 — куда он ляжет, решает полит
 `join` A сохраняет место перед B; `replace` переносит A за B. Выполнение также
 зависит от готовности: готовая B может пройти перед A, пока A ждёт свой
 временной срок.
+
+Сборщик журнала выбирает `join` по этой причине. Запись, сделанная, пока
+в очереди ждёт другая задача, всё равно принадлежит той пачке, которая уже
+стоит; при `adjacent` она завела бы вторую группу за этой задачей, а throttle
+придержал бы её ещё на интервал — два запроса на записи, сделанные почти
+одновременно. Чем `join` за это платит — границей: пачка сохраняет своё место
+впереди задачи, пришедшей между.
 
 Правила используют текущую очередь. Если B уже выполнилась, ожидающая A снова
 может оказаться хвостом, и следующее событие присоединится к ней при
@@ -424,7 +442,7 @@ debounce-группа не подходит ни одному из трёх пр
 ### Запуск, отмена и ошибки
 
 ```dart
-final group = settings.report(metric);
+final group = logs.logEvent(const LogEntry('checkout opened'));
 
 // Все, кто добавлял в эту группу, держат одну и ту же ручку...
 switch (await group.done) {

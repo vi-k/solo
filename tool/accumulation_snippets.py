@@ -93,10 +93,18 @@ SETTINGS_FAKE = '''
 /// instead of trusting the prose that there was only one.
 class RecordingSettingsApi implements SettingsApi {
   final saved = <Settings>[];
+  int loads = 0;
+  Completer<Settings>? loading;
 
   @override
   Future<void> save(Settings settings) async {
     saved.add(settings);
+  }
+
+  @override
+  Future<Settings> load() {
+    loads += 1;
+    return (loading = Completer<Settings>()).future;
   }
 }
 
@@ -128,8 +136,9 @@ FILES = {}
 
 # ------------------------------------------------------------------ settings
 FILES['settings'] = (
-    with_fake_async('recipes/Settings')
+    with_fake_async('recipes/Settings', dart_async=True)
     + SETTINGS_FAKE
+    + snips['recipes/changeSettings']
     + REQUIRE
     + '''
 void main() {
@@ -170,22 +179,25 @@ void main() {
     print('one handle for three calls: ${identical(first, third)}');
     print('outcome ${first.outcome}');
 
+    // The ordinary job of the same controller, the one the reference leans
+    // on: it is not accumulated, and its state comes from the server.
+    final reloading = controller.reload();
+    clock.flushMicrotasks();
+    require(api.loads == 1, 'reload reached the server');
+    require(!reloading.isFinished, 'and is waiting for it');
+    api.loading!.complete(
+      const Settings(notifications: false, theme: 'server', language: 'en'),
+    );
+    clock.flushMicrotasks();
+    require(controller.currentState.theme == 'server', 'reload emitted');
+    print('after reload: state ${describe(controller.currentState)}');
+
     controller.close();
     clock.flushMicrotasks();
   });
-}
-''')
 
-# ------------------------------------------------ settings, as the doc runs it
-# The document's own driver, verbatim. It prints three outcomes for what the
-# prose two paragraphs down calls one job -- which is the point of running it.
-FILES['settings_doc'] = (
-    with_fake_async('recipes/Settings', dart_async=True)
-    + SETTINGS_FAKE
-    + snips['recipes/changeSettings']
-    + REQUIRE
-    + '''
-void main() {
+  // The document's own driver, verbatim. Three outcomes are printed for what
+  // the prose calls one job, and all three are the same.
   fakeAsync((clock) {
     final api = RecordingSettingsApi();
     unawaited(changeSettings(api, start));
@@ -428,6 +440,58 @@ void main() {
         'state ${search.currentState.results}');
 
     search.close();
+    clock.flushMicrotasks();
+  });
+}
+''')
+
+# ------------------------------------------------------------------ policies
+# The reference's own three lines, run as written. They are statements, not a
+# declaration, so the bench gives them the controller they talk to and checks,
+# right under them, the row of the table they belong to: with B between the
+# two additions, A2 is a job of its own and not A1's.
+FILES['policies'] = (
+    with_fake_async('recipes/Settings', dart_async=True)
+    + SETTINGS_FAKE
+    + """
+void threeCalls(SettingsController settings) {
+"""
+    + snips['reference/all-three-while-the-current-jo'].rstrip('\n')
+    + """
+  require(!identical(a1, a2), "adjacent: A2 is a job of its own, not A1's");
+}
+"""
+    + REQUIRE
+    + '''
+void main() {
+  fakeAsync((clock) {
+    final api = RecordingSettingsApi();
+    final settings = SettingsController(api, start);
+
+    final busy = settings.reload();
+    clock.flushMicrotasks();
+    require(!busy.isFinished, 'the first reload holds the queue');
+
+    threeCalls(settings);
+
+    api.loading!.complete(start);
+    clock.flushMicrotasks();
+    require(busy.outcome is Done, 'the job that held the queue finished');
+    require(api.loads == 2, 'B, the second reload, took the slot next');
+    api.loading!.complete(start);
+    clock.elapse(const Duration(seconds: 1));
+
+    // What `adjacent` costs here: B stood between the two additions, so they
+    // are two groups and the server is written to twice.
+    require(api.saved.length == 2, 'two groups, two writes');
+    require(api.saved.first.theme == 'dark', 'A1 went first, with its field');
+    require(api.saved.last.language == 'ru', 'A2 followed, with its own');
+    print("the reference's three lines: loads ${api.loads}, "
+        'writes ${api.saved.length} '
+        '(${api.saved.first.theme}, then ${api.saved.last.language}), '
+        'state ${describe(settings.currentState)}');
+
+    settings.close();
     clock.flushMicrotasks();
   });
 }
