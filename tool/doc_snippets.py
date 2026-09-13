@@ -317,22 +317,48 @@ class ChatState {
 '''
 
 SENSOR = '''
+/// Where the calibration coefficient goes. Not the sensor, so an unplugged
+/// cable does not stop a write already under way.
+class Store {
+  int saved = 0;
+
+  Future<void> save(int coefficient) async {
+    await tick(30);
+    saved++;
+  }
+}
+
+/// Honest about the cable: once it is out, the device answers nothing --
+/// neither a call already travelling nor one started afterwards.
 class Sensor {
   void Function(Object error)? onError;
   int zeroed = 0;
   int sampled = 0;
+  Object? _broken;
 
   Future<void> zero() async {
+    _refuse();
     await tick(20);
+    _refuse();
     zeroed++;
   }
 
-  Future<void> sample() async {
+  Future<int> sample() async {
+    _refuse();
     await tick(20);
-    sampled++;
+    _refuse();
+    return ++sampled;
   }
 
-  void fail(Object error) => onError?.call(error);
+  void _refuse() {
+    final broken = _broken;
+    if (broken != null) throw StateError('sensor: $broken');
+  }
+
+  void fail(Object error) {
+    _broken = error;
+    onError?.call(error);
+  }
 }
 '''
 
@@ -1475,30 +1501,57 @@ class Broken extends SensorState {
 ''' + snips['9/SensorBloc'] + '\n' + snips['9/FunnelSensorBloc'] + '''
 
 Future<void> main() async {
+  // The cable goes out at 50ms: zero ends at 20, the reading at 40, and the
+  // store write runs 40..70. Nothing is on the wire to the device.
   final hw = Sensor();
-  final bloc = SensorBloc(hw);
+  final store = Store();
+  final bloc = SensorBloc(hw, store);
   final states = <SensorState>[];
   final sub = bloc.stream.listen(states.add);
   bloc.add(Calibrate());
-  await tick(25);
+  await tick(50);
   hw.fail('cable unplugged');
   await tick(300);
   print('separate handlers: $states  final ${bloc.state}');
-  print('zeroed=${hw.zeroed} sampled=${hw.sampled}');
+  print('zeroed=${hw.zeroed} sampled=${hw.sampled} saved=${store.saved}');
+  if (states.any((state) => state is Calibrated)) {
+    throw StateError('the separate registration must stop Calibrated');
+  }
+  if (hw.zeroed != 1 || hw.sampled != 1) {
+    throw StateError('the device work must finish while the cable is in');
+  }
   await sub.cancel();
   await bloc.close();
 
   final hw2 = Sensor();
-  final funnel = FunnelSensorBloc(hw2);
+  final funnel = FunnelSensorBloc(hw2, Store());
   final states2 = <SensorState>[];
   final sub2 = funnel.stream.listen(states2.add);
   funnel.add(Calibrate());
-  await tick(25);
+  await tick(50);
   hw2.fail('cable unplugged');
   await tick(300);
   print('one funnel: $states2  final ${funnel.state}');
+  // The defect the section is built on: success published after the failure.
+  if (states2.first is! Calibrated) {
+    throw StateError('the funnel must publish Calibrated over the failure');
+  }
   await sub2.cancel();
   await funnel.close();
+
+  // The fake is honest about the cable, and the section leans on it: the
+  // calibration survived only because it had no device call left.
+  final gone = Sensor()..fail('cable unplugged');
+  var refused = false;
+  try {
+    await gone.zero();
+  } on StateError catch (error) {
+    refused = true;
+    print('after the cable: $error');
+  }
+  if (!refused) {
+    throw StateError('an unplugged sensor must refuse zero');
+  }
 }
 ''')
 
@@ -1529,17 +1582,25 @@ final class Broken extends SensorState {
 
 ''' + snips['9/SensorController'] + '''
 Future<void> main() async {
+  // The cable goes out at 50ms, while the store write runs 40..70.
   final hw = Sensor();
-  final sensor = SensorController(hw);
+  final store = Store();
+  final sensor = SensorController(hw, store);
   final states = <SensorState>[];
   final sub = sensor.stream.listen(states.add);
   final job = sensor.calibrate();
-  await tick(25);
+  await tick(50);
   hw.fail('cable unplugged');
   await tick(300);
   print('outcome: ${job.outcome}');
   print('states: $states  final ${sensor.currentState}');
-  print('zeroed=${hw.zeroed} sampled=${hw.sampled}');
+  print('zeroed=${hw.zeroed} sampled=${hw.sampled} saved=${store.saved}');
+  if (job.outcome is! Cancelled) {
+    throw StateError('the state rule must cancel the calibration');
+  }
+  if (states.any((state) => state is Calibrated)) {
+    throw StateError('a cancelled calibration must not publish Calibrated');
+  }
   await sub.cancel();
   await sensor.close();
 }

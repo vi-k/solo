@@ -1392,9 +1392,11 @@ idempotent payment API; neither example provides that.
 
 ## 9. Reacting to an independent external state change
 
-A sensor reports a hardware failure while calibration is waiting for a sample.
-The controller must reflect `Broken` promptly and prevent the calibration from
-later publishing `Calibrated` over it.
+Calibration zeroes the sensor, takes a reading and stores the coefficient. The
+cable is unplugged while the coefficient is being stored, so the sensor reports
+a hardware failure and the calibration has no device call left to fail on. The
+controller must reflect `Broken` promptly and prevent the calibration from
+publishing `Calibrated` over it.
 
 ### The first attempt
 
@@ -1406,8 +1408,9 @@ reader who has just learned that lesson writes:
 ```dart
 class FunnelSensorBloc extends Bloc<SensorEvent, SensorState> {
   final Sensor _hw;
+  final Store _store;
 
-  FunnelSensorBloc(this._hw) : super(Ready()) {
+  FunnelSensorBloc(this._hw, this._store) : super(Ready()) {
     _hw.onError = (error) => add(HardwareFailed(error));
     on<SensorEvent>((e, emit) async {
       switch (e) {
@@ -1417,7 +1420,9 @@ class FunnelSensorBloc extends Bloc<SensorEvent, SensorState> {
           if (state is! Ready) return;
           await _hw.zero();
           if (state is! Ready) return;
-          await _hw.sample();
+          final reading = await _hw.sample();
+          if (state is! Ready) return;
+          await _store.save(reading);
           if (state is! Ready) return;
           emit(Calibrated());
       }
@@ -1443,15 +1448,18 @@ calibration:
 ```dart
 class SensorBloc extends Bloc<SensorEvent, SensorState> {
   final Sensor _hw;
+  final Store _store;
 
-  SensorBloc(this._hw) : super(Ready()) {
+  SensorBloc(this._hw, this._store) : super(Ready()) {
     _hw.onError = (error) => add(HardwareFailed(error));
     on<HardwareFailed>((e, emit) => emit(Broken(e.error)));
     on<Calibrate>((e, emit) async {
       if (state is! Ready) return;
       await _hw.zero();
       if (state is! Ready) return;
-      await _hw.sample();
+      final reading = await _hw.sample();
+      if (state is! Ready) return;
+      await _store.save(reading);
       if (state is! Ready) return;
       emit(Calibrated());
     }, transformer: sequential());
@@ -1476,8 +1484,9 @@ subclass:
 ```dart
 final class SensorController extends Solo<SensorState> {
   final Sensor _hw;
+  final Store _store;
 
-  SensorController(this._hw) : super(const Ready()) {
+  SensorController(this._hw, this._store) : super(const Ready()) {
     _hw.onError = (error) => externalSetState(Broken(error));
   }
 
@@ -1485,7 +1494,8 @@ final class SensorController extends Solo<SensorState> {
         key: 'calibrate',
         (ctx) async {
           await ctx.join(_hw.zero);
-          await ctx.join(_hw.sample);
+          final reading = await ctx.join(_hw.sample);
+          await ctx.join(() => _store.save(reading));
           ctx.emit(const Calibrated());
         },
       );
@@ -1509,7 +1519,7 @@ that state is outside `Ready`. Its own `emit` is excluded from the rule check;
 a later state checkpoint would cancel it. This allows a final transition while
 requiring the working type to cover continued work.
 
-The sensor call already in progress still finishes in both examples. `join`
+The store write already in progress still finishes in both examples. `join`
 waits for it before allowing another root job to start. A device with a
 cancellation token can additionally be stopped through `ctx.onCancel`, as in
 section 5. Final `onError` and `onCancel` state handlers, if supplied, are

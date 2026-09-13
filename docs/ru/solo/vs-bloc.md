@@ -1406,9 +1406,11 @@ Future<Map<String, Object?>> handlePayRequest(
 
 ## 9. Реакция на независимое внешнее изменение состояния
 
-Датчик сообщает об аппаратном сбое, пока калибровка ждёт измерение. Контроллер
-должен сразу отразить `Broken` и не дать калибровке позднее опубликовать поверх
-него `Calibrated`.
+Калибровка обнуляет датчик, снимает измерение и записывает коэффициент. Кабель
+выдёргивают, пока коэффициент записывается, поэтому датчик сообщает
+об аппаратном сбое, а падать калибровке уже не на чем: обращений к устройству
+у неё не осталось. Контроллер должен сразу отразить `Broken` и не дать
+калибровке опубликовать поверх него `Calibrated`.
 
 ### Первая попытка
 
@@ -1420,8 +1422,9 @@ Future<Map<String, Object?>> handlePayRequest(
 ```dart
 class FunnelSensorBloc extends Bloc<SensorEvent, SensorState> {
   final Sensor _hw;
+  final Store _store;
 
-  FunnelSensorBloc(this._hw) : super(Ready()) {
+  FunnelSensorBloc(this._hw, this._store) : super(Ready()) {
     _hw.onError = (error) => add(HardwareFailed(error));
     on<SensorEvent>((e, emit) async {
       switch (e) {
@@ -1431,7 +1434,9 @@ class FunnelSensorBloc extends Bloc<SensorEvent, SensorState> {
           if (state is! Ready) return;
           await _hw.zero();
           if (state is! Ready) return;
-          await _hw.sample();
+          final reading = await _hw.sample();
+          if (state is! Ready) return;
+          await _store.save(reading);
           if (state is! Ready) return;
           emit(Calibrated());
       }
@@ -1456,15 +1461,18 @@ class FunnelSensorBloc extends Bloc<SensorEvent, SensorState> {
 ```dart
 class SensorBloc extends Bloc<SensorEvent, SensorState> {
   final Sensor _hw;
+  final Store _store;
 
-  SensorBloc(this._hw) : super(Ready()) {
+  SensorBloc(this._hw, this._store) : super(Ready()) {
     _hw.onError = (error) => add(HardwareFailed(error));
     on<HardwareFailed>((e, emit) => emit(Broken(e.error)));
     on<Calibrate>((e, emit) async {
       if (state is! Ready) return;
       await _hw.zero();
       if (state is! Ready) return;
-      await _hw.sample();
+      final reading = await _hw.sample();
+      if (state is! Ready) return;
+      await _store.save(reading);
       if (state is! Ready) return;
       emit(Calibrated());
     }, transformer: sequential());
@@ -1489,8 +1497,9 @@ class SensorBloc extends Bloc<SensorEvent, SensorState> {
 ```dart
 final class SensorController extends Solo<SensorState> {
   final Sensor _hw;
+  final Store _store;
 
-  SensorController(this._hw) : super(const Ready()) {
+  SensorController(this._hw, this._store) : super(const Ready()) {
     _hw.onError = (error) => externalSetState(Broken(error));
   }
 
@@ -1498,7 +1507,8 @@ final class SensorController extends Solo<SensorState> {
         key: 'calibrate',
         (ctx) async {
           await ctx.join(_hw.zero);
-          await ctx.join(_hw.sample);
+          final reading = await ctx.join(_hw.sample);
+          await ctx.join(() => _store.save(reading));
           ctx.emit(const Calibrated());
         },
       );
@@ -1524,8 +1534,8 @@ final class SensorController extends Solo<SensorState> {
 итоговый переход, но требует, чтобы рабочий тип охватывал всё продолжение
 работы.
 
-Уже начатый вызов датчика завершается в обоих примерах. `join` ждёт его, прежде
-чем разрешить старт другой корневой `Job`. Устройство с токеном отмены можно
+Уже начатая запись завершается в обоих примерах. `join` ждёт её, прежде чем
+разрешить старт другой корневой `Job`. Устройство с токеном отмены можно
 дополнительно остановить через `ctx.onCancel`, как в разделе 5. Итоговые
 обработчики состояния `onError` и `onCancel`, если они заданы, запрещаются
 несовместимым внешним обновлением, поэтому не перезаписывают `Broken` при
