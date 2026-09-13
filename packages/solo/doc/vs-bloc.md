@@ -1491,17 +1491,20 @@ final class ReportController extends Solo<ReportState> {
 }
 ```
 
-Queuing a normal job to publish `SignedOut` would delay the fact behind the
-build that it invalidates. `externalSetState` updates state immediately and
-checks running bodies against their rules. Here, `run<SignedIn, void>` permits
-the build only while state is `SignedIn`, so the external revocation cancels it
-with `Cancelled(rules: is not SignedIn)`.
+An ordinary job could publish `SignedOut` too. It would then queue behind the
+build — waiting for the very work it makes worthless. `externalSetState`
+updates state immediately and checks running bodies against their rules. Here,
+`run<SignedIn, void>` permits the build only while state is `SignedIn`, so the
+revocation cancels it with `Cancelled(rules: is not SignedIn)`.
 
-This exception applies to facts such as a session that is already gone. A
-notification asking the controller to perform future work should enqueue an
-ordinary job. The source being a stream does not itself justify bypassing the
-queue. Stop the auth listener before closing either controller; the snippets
-show registration, not application-specific listener teardown.
+Only a fact that has already happened goes around the queue: the session is
+gone, and no job waiting in line can change that. A notification asking for
+work — refresh this, fetch that, try again — is ordinary work and belongs in
+the queue. Arriving on a stream decides nothing by itself; what matters is what
+arrived, not where from.
+
+Stop the auth listener before closing either controller. How is up to the
+application; the snippets show registration only.
 
 On the success path, the job may finish by emitting `Ready`, even though that
 state is outside `SignedIn`. Its own `emit` is excluded from the rule check; a
