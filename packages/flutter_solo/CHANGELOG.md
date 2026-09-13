@@ -1,5 +1,13 @@
 ## Unreleased
 
+- Add `SoloBuilder` and `SoloSelectBuilder`: what `ValueListenableBuilder` and
+  `SoloSelector` are, for a controller that is not a `ValueListenable`. Both
+  take any `SoloBase` -- a plain `Solo` included -- read the state after
+  subscribing and cache it, compare controllers by identity when the parent
+  hands over a new one, and pass `child` through untouched. `SoloSelectBuilder`
+  holds its selection across a parent rebuild, so the baseline `compare`
+  answers from survives one; it carries no `buildWhen`, because picking a value
+  is what it does.
 - Add `SoloSelection.of`: a selection straight from a controller, for the
   controllers that are not `ValueListenable` -- `Solo` and anything else built
   on `SoloBase`. It is a static method rather than a constructor because a

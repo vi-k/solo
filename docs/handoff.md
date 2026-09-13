@@ -1,12 +1,12 @@
 # Handoff: текущее состояние проекта
 
-Обновлено: 2026-09-13, `vs-bloc` вычитан владельцем по разделам и принят.
-Раньше: чтение контроллера переименовано в `currentState`, `SoloListenable`
-перенесён на `SoloBase`, у `solo` появился рецепт своей доставки, гейт
-запускает CI и собирает код документации, цепочки описаны, `vs-bloc` перестроен
-вокруг ошибки, абзацы заливаются жадно.
+Обновлено: 2026-09-13, шаги 1–6 плана слушателей сделаны и смержены. Раньше:
+`vs-bloc` вычитан владельцем и принят, чтение контроллера переименовано
+в `currentState`, `SoloListenable` перенесён на `SoloBase`, гейт запускает CI
+и собирает код документации, цепочки описаны, `vs-bloc` перестроен вокруг
+ошибки, абзацы заливаются жадно.
 
-## Идёт сейчас: слушатели в ядре и SoloBuilder
+## Идёт сейчас: слушатели в ядре и билдеры
 
 Владелец спросил, можно ли сделать `SoloBuilder` для `SoloBase`, чтобы виджет
 не зависел от стрима и подписки и чтобы у чужих реализаций был один инструмент.
@@ -28,11 +28,27 @@
 `SoloSelection.of` и новый виджет `SoloSelectBuilder`.
 
 Владелец взял все три новых имени — `SoloBuilder`, `SoloSelectBuilder`,
-`SoloSelection.of` — и велел писать план. План есть:
+`SoloSelection.of` — и велел писать план. План:
 `2026-09-13[9]-solo-listeners-plan.md`, семь шагов, восемь мутаций.
 
-**Следующий шаг — реализация по плану, с первого шага.** Кода ещё нет: ни одной
-строки в `packages/` по этой работе не написано.
+Шаги с первого по шестой сделаны и смержены. Слушатели живут в `SoloBase`
+вместе с защищёнными `hasListeners` и `onListenerError`; `SoloListenable`
+сведён к лицу `ValueListenable`; у выборки появилась `SoloSelection.of`,
+и закрылось окно первого значения; в `flutter_solo` добавлены `SoloBuilder`
+и `SoloSelectBuilder`.
+
+Каждый шаг делали одновременно два исполнителя в разных клонах — `agy`
+(`gemini-3.8-flash-high`) и Codex (`gpt-reserve:high`). Приёмка шла своими
+прогонами, своими зондами и своими мутациями сверх заказанных; так нашлись
+`identical` вместо `==` в снятии слушателя, синхронное уведомление изнутри
+`addListener` у выборки и `==` вместо `identical` при смене контроллера
+у `SoloBuilder`.
+
+**Следующий шаг — седьмой:** документы, переводы и `CHANGELOG`. Секция «A
+delivery of your own» в `packages/solo/doc/state.md` переписывается — доставку
+даёт ядро, а `publish` остаётся для доставки другого рода; дальше
+`packages/solo/doc/flutter.md`, `README.md` и `README.ru.md` пакета
+`flutter_solo`.
 
 Вычитка `vs-bloc` закончена и принята владельцем —
 `2026-09-13[1]-vs-bloc-proofreading-report.md`. Бэклог пуст.
@@ -65,7 +81,8 @@
 `ctx.join`, у `solo` пять ломающих (`currentState`, `SoloCloseMode`,
 `SoloTransition`, `errorHandler`, `ArgumentError` у `droppable`) плюс
 `SoloBase.pending`, у `flutter_solo` три ломающих и новые `SoloSelection`,
-`SoloSelector`, `select`/`listen`.
+`SoloSelector`, `select`/`listen`, `SoloSelection.of`, `SoloBuilder`
+и `SoloSelectBuilder`.
 
 Порядок связки задан зависимостями: `solo` уже пользуется новым
 `inUncancellableSection`, поэтому в дереве и живут четыре
