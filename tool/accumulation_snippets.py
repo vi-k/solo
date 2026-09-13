@@ -111,6 +111,19 @@ const start = Settings(
 );
 '''
 
+# The package's own rules with one taken off, and the reason on the spot.
+# `one_member_abstracts` is about over-abstraction inside a library. A
+# document's example declares "your API" as a one-method port on purpose --
+# something the reader implements. Obeying the rule here would make
+# SettingsApi a typedef and `_api.save(next)` a bare `_api(next)`, which
+# tells the reader less than the interface does.
+OPTIONS = """include: solo_rules.yaml
+
+linter:
+  rules:
+    one_member_abstracts: false
+"""
+
 FILES = {}
 
 # ------------------------------------------------------------------ settings
@@ -428,6 +441,7 @@ for key, body in FILES.items():
 open(f'{ROOT}/accumulation_check/pubspec.yaml', 'w').write(PUBSPEC)
 shutil.copyfile(
     os.path.join(REPO, 'packages', 'solo', 'analysis_options.yaml'),
-    f'{ROOT}/accumulation_check/analysis_options.yaml',
+    f'{ROOT}/accumulation_check/solo_rules.yaml',
 )
+open(f'{ROOT}/accumulation_check/analysis_options.yaml', 'w').write(OPTIONS)
 print('wrote', len(FILES), 'files under', ROOT)
