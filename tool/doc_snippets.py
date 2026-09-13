@@ -316,49 +316,36 @@ class ChatState {
 }
 '''
 
-SENSOR = '''
-/// Where the calibration coefficient goes. Not the sensor, so an unplugged
-/// cable does not stop a write already under way.
-class Store {
-  int saved = 0;
+REPORT = '''
+class Range {
+  const Range(this.days);
+  final int days;
+}
 
-  Future<void> save(int coefficient) async {
-    await tick(30);
-    saved++;
+class Report {
+  const Report(this.days);
+  final int days;
+  @override
+  String toString() => 'Report($days days)';
+}
+
+/// Builds from data already on the device. A revoked session is news from
+/// another service, so it cannot stop a build already under way -- there is
+/// nothing here for it to refuse.
+class Reports {
+  int built = 0;
+
+  Future<Report> build(Range range) async {
+    await tick(50);
+    built++;
+    return Report(range.days);
   }
 }
 
-/// Honest about the cable: once it is out, the device answers nothing --
-/// neither a call already travelling nor one started afterwards.
-class Sensor {
-  void Function(Object error)? onError;
-  int zeroed = 0;
-  int sampled = 0;
-  Object? _broken;
+class Auth {
+  void Function(String reason)? onRevoked;
 
-  Future<void> zero() async {
-    _refuse();
-    await tick(20);
-    _refuse();
-    zeroed++;
-  }
-
-  Future<int> sample() async {
-    _refuse();
-    await tick(20);
-    _refuse();
-    return ++sampled;
-  }
-
-  void _refuse() {
-    final broken = _broken;
-    if (broken != null) throw StateError('sensor: $broken');
-  }
-
-  void fail(Object error) {
-    _broken = error;
-    onError?.call(error);
-  }
+  void revoke(String reason) => onRevoked?.call(reason);
 }
 '''
 
@@ -1469,140 +1456,139 @@ Future<void> main() async {
 ''')
 
 # --------------------------------------------------------------- item 9 bloc
-FILES['bloc/item9'] = (BLOC_IMPORTS + TRACE + SENSOR + '''
-sealed class SensorEvent {}
+FILES['bloc/item9'] = (BLOC_IMPORTS + TRACE + REPORT + '''
+sealed class ReportEvent {}
 
-class Calibrate extends SensorEvent {}
-
-class HardwareFailed extends SensorEvent {
-  HardwareFailed(this.error);
-  final Object error;
+class BuildReport extends ReportEvent {
+  BuildReport(this.range);
+  final Range range;
 }
 
-sealed class SensorState {}
+class SessionRevoked extends ReportEvent {
+  SessionRevoked(this.reason);
+  final String reason;
+}
 
-class Ready extends SensorState {
+sealed class ReportState {}
+
+class SignedIn extends ReportState {
   @override
-  String toString() => 'Ready';
+  String toString() => 'SignedIn';
 }
 
-class Calibrated extends SensorState {
+class Ready extends ReportState {
+  Ready(this.report);
+  final Report report;
   @override
-  String toString() => 'Calibrated';
+  String toString() => 'Ready($report)';
 }
 
-class Broken extends SensorState {
-  Broken(this.error);
-  final Object error;
+class SignedOut extends ReportState {
+  SignedOut(this.reason);
+  final String reason;
   @override
-  String toString() => 'Broken($error)';
+  String toString() => 'SignedOut($reason)';
 }
 
-''' + snips['9/SensorBloc'] + '\n' + snips['9/FunnelSensorBloc'] + '''
+''' + snips['9/ReportBloc'] + '\n' + snips['9/FunnelReportBloc'] + '''
 
 Future<void> main() async {
-  // The cable goes out at 50ms: zero ends at 20, the reading at 40, and the
-  // store write runs 40..70. Nothing is on the wire to the device.
-  final hw = Sensor();
-  final store = Store();
-  final bloc = SensorBloc(hw, store);
-  final states = <SensorState>[];
+  // The session is revoked at 25ms, halfway through a build that runs
+  // 0..50. The build is local, so it finishes either way.
+  final reports = Reports();
+  final auth = Auth();
+  final bloc = ReportBloc(reports, auth);
+  final states = <ReportState>[];
   final sub = bloc.stream.listen(states.add);
-  bloc.add(Calibrate());
-  await tick(50);
-  hw.fail('cable unplugged');
+  bloc.add(BuildReport(const Range(30)));
+  await tick(25);
+  auth.revoke('signed out elsewhere');
   await tick(300);
   print('separate handlers: $states  final ${bloc.state}');
-  print('zeroed=${hw.zeroed} sampled=${hw.sampled} saved=${store.saved}');
-  if (states.any((state) => state is Calibrated)) {
-    throw StateError('the separate registration must stop Calibrated');
+  print('builds=${reports.built}');
+  if (states.any((state) => state is Ready)) {
+    throw StateError('the separate registration must stop the report');
   }
-  if (hw.zeroed != 1 || hw.sampled != 1) {
-    throw StateError('the device work must finish while the cable is in');
+  if (reports.built != 1) {
+    throw StateError('a revoked session must not stop a local build');
   }
   await sub.cancel();
   await bloc.close();
 
-  final hw2 = Sensor();
-  final funnel = FunnelSensorBloc(hw2, Store());
-  final states2 = <SensorState>[];
+  final funnelAuth = Auth();
+  final funnel = FunnelReportBloc(Reports(), funnelAuth);
+  final states2 = <ReportState>[];
   final sub2 = funnel.stream.listen(states2.add);
-  funnel.add(Calibrate());
-  await tick(50);
-  hw2.fail('cable unplugged');
+  funnel.add(BuildReport(const Range(30)));
+  await tick(25);
+  funnelAuth.revoke('signed out elsewhere');
   await tick(300);
   print('one funnel: $states2  final ${funnel.state}');
-  // The defect the section is built on: success published after the failure.
-  if (states2.first is! Calibrated) {
-    throw StateError('the funnel must publish Calibrated over the failure');
+  // The defect the section is built on: the report reaches the screen after
+  // the session it belongs to is gone.
+  if (states2.first is! Ready) {
+    throw StateError('the funnel must publish the report over the sign-out');
   }
   await sub2.cancel();
   await funnel.close();
-
-  // The fake is honest about the cable, and the section leans on it: the
-  // calibration survived only because it had no device call left.
-  final gone = Sensor()..fail('cable unplugged');
-  var refused = false;
-  try {
-    await gone.zero();
-  } on StateError catch (error) {
-    refused = true;
-    print('after the cable: $error');
-  }
-  if (!refused) {
-    throw StateError('an unplugged sensor must refuse zero');
-  }
 }
 ''')
 
 # --------------------------------------------------------------- item 9 solo
-FILES['solo/item9'] = (SOLO_IMPORTS + TRACE + SENSOR + '''
-sealed class SensorState {
-  const SensorState();
+FILES['solo/item9'] = (SOLO_IMPORTS + TRACE + REPORT + '''
+sealed class ReportState {
+  const ReportState();
 }
 
-final class Ready extends SensorState {
-  const Ready();
+final class SignedIn extends ReportState {
+  const SignedIn();
   @override
-  String toString() => 'Ready';
+  String toString() => 'SignedIn';
 }
 
-final class Calibrated extends SensorState {
-  const Calibrated();
+final class Ready extends ReportState {
+  const Ready(this.report);
+  final Report report;
   @override
-  String toString() => 'Calibrated';
+  String toString() => 'Ready($report)';
 }
 
-final class Broken extends SensorState {
-  const Broken(this.error);
-  final Object error;
+final class SignedOut extends ReportState {
+  const SignedOut(this.reason);
+  final String reason;
   @override
-  String toString() => 'Broken($error)';
+  String toString() => 'SignedOut($reason)';
 }
 
-''' + snips['9/SensorController'] + '''
+''' + snips['9/ReportController'] + '''
 Future<void> main() async {
-  // The cable goes out at 50ms, while the store write runs 40..70.
-  final hw = Sensor();
-  final store = Store();
-  final sensor = SensorController(hw, store);
-  final states = <SensorState>[];
-  final sub = sensor.stream.listen(states.add);
-  final job = sensor.calibrate();
-  await tick(50);
-  hw.fail('cable unplugged');
+  // The session is revoked at 25ms, halfway through a build that runs 0..50.
+  final reports = Reports();
+  final auth = Auth();
+  final controller = ReportController(reports, auth);
+  final states = <ReportState>[];
+  final sub = controller.stream.listen(states.add);
+  final job = controller.build(const Range(30));
+  await tick(25);
+  auth.revoke('signed out elsewhere');
+  await job.done;
+  // What `join` buys: the job ends after the build it cannot stop returns,
+  // not at the cancellation. With `ctx.wait` the count here would be 0.
+  if (reports.built != 1) {
+    throw StateError('join must end the job only after the build returns');
+  }
   await tick(300);
   print('outcome: ${job.outcome}');
-  print('states: $states  final ${sensor.currentState}');
-  print('zeroed=${hw.zeroed} sampled=${hw.sampled} saved=${store.saved}');
+  print('states: $states  final ${controller.currentState}');
+  print('builds=${reports.built}');
   if (job.outcome is! Cancelled) {
-    throw StateError('the state rule must cancel the calibration');
+    throw StateError('the state rule must cancel the build');
   }
-  if (states.any((state) => state is Calibrated)) {
-    throw StateError('a cancelled calibration must not publish Calibrated');
+  if (states.any((state) => state is Ready)) {
+    throw StateError('a cancelled build must not publish its report');
   }
   await sub.cancel();
-  await sensor.close();
+  await controller.close();
 }
 ''')
 

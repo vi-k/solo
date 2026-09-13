@@ -29,7 +29,7 @@ API, а состояния и трассы под ней — то, что это
 есть полное введение и подробные контракты.
 
 Примеры используют отдельные модели приложений: `Ready` у плеера не является
-`Ready` датчика. Вспомогательные классы состояний, событий и фейковые API здесь
+`Ready` отчёта. Вспомогательные классы состояний, событий и фейковые API здесь
 не показаны: они лежат рядом с кодом, который извлекает эти примеры
 из документа, — `tool/doc_snippets.py` в репозитории. Примеры проверены с bloc
 9.2.1, bloc_concurrency 0.3.0 и локальным кодом solo 0.2.0. Трассы описывают
@@ -252,7 +252,7 @@ final class NotesController extends Solo<NotesState> {
 порядок: очередь одна на контроллер, а не на команду, и расположить методы так,
 чтобы у двух из них оказалось по своей очереди, нельзя. Гарантия относится
 к корневым `Job`; дочерние `Job` могут работать внутри родителя, а независимые
-изменения устройства имеют отдельный путь, описанный в разделе 9.
+внешние изменения имеют отдельный путь, описанный в разделе 9.
 
 В телах `Job` используйте методы ожидания контекста для проверки отмены
 и правил состояния. Обычный `await` продолжает удерживать тело и очередь,
@@ -1406,84 +1406,74 @@ Future<Map<String, Object?>> handlePayRequest(
 
 ## 9. Реакция на независимое внешнее изменение состояния
 
-Калибровка обнуляет датчик, снимает измерение и записывает коэффициент. Кабель
-выдёргивают, пока коэффициент записывается, поэтому датчик сообщает
-об аппаратном сбое, а падать калибровке уже не на чем: обращений к устройству
-у неё не осталось. Контроллер должен сразу отразить `Broken` и не дать
-калибровке опубликовать поверх него `Calibrated`.
+Контроллер собирает отчёт из данных, уже лежащих на устройстве. Сессию
+отзывают, пока идёт сборка, — пользователь вышел с другого устройства; сборка
+локальная, и её это не останавливает. Контроллер должен сразу отразить
+`SignedOut` и не дать законченной сборке опубликовать свой отчёт поверх него.
 
 ### Первая попытка
 
 Прямой `emit` у `Bloc` помечен `@visibleForTesting` и документирован для
 внутреннего использования, поэтому слушатель вместо него добавляет событие
-`HardwareFailed`. Одна регистрация на оба события — это то, чего требует раздел
+`SessionRevoked`. Одна регистрация на оба события — это то, чего требует раздел
 1, и это то, что напишет читатель, только что усвоивший тот урок:
 
 ```dart
-class FunnelSensorBloc extends Bloc<SensorEvent, SensorState> {
-  final Sensor _hw;
-  final Store _store;
+class FunnelReportBloc extends Bloc<ReportEvent, ReportState> {
+  final Reports _reports;
 
-  FunnelSensorBloc(this._hw, this._store) : super(Ready()) {
-    _hw.onError = (error) => add(HardwareFailed(error));
-    on<SensorEvent>((e, emit) async {
+  FunnelReportBloc(this._reports, Auth auth) : super(SignedIn()) {
+    auth.onRevoked = (reason) => add(SessionRevoked(reason));
+    on<ReportEvent>((e, emit) async {
       switch (e) {
-        case HardwareFailed(:final error):
-          emit(Broken(error));
-        case Calibrate():
-          if (state is! Ready) return;
-          await _hw.zero();
-          if (state is! Ready) return;
-          final reading = await _hw.sample();
-          if (state is! Ready) return;
-          await _store.save(reading);
-          if (state is! Ready) return;
-          emit(Calibrated());
+        case SessionRevoked(:final reason):
+          emit(SignedOut(reason));
+        case BuildReport(:final range):
+          if (state is! SignedIn) return;
+          final report = await _reports.build(range);
+          if (state is! SignedIn) return;
+          emit(Ready(report));
       }
     }, transformer: sequential());
   }
 }
 ```
 
-Опубликованные состояния — `[Calibrated, Broken(cable unplugged)]`. Кабель был
-уже выдернут, когда публиковался `Calibrated`: событие сбоя ждало своей очереди
-за калибровкой, которую оно делает недопустимой, а каждая проверка в этом
+Опубликованные состояния —
+`[Ready(Report(30 days)), SignedOut(signed out elsewhere)]`. Сессия была уже
+отозвана, когда публиковался отчёт: событие отзыва ждало своей очереди
+за сборкой, которую оно делает недопустимой, а каждая проверка в этом
 обработчике читала состояние, которое никому не дали изменить. Экран, следящий
-за контроллером, сообщает об успехе после сбоя устройства.
+за контроллером, показывает отчёт сессии, которой больше нет.
 
 Порядок из раздела 1 и нужная здесь быстрота тянут в разные стороны, и одной
 регистрацией не сделать и то и другое.
 
 ### Bloc
 
-Выделите сбою отдельную регистрацию, чтобы он не ждал за калибровкой:
+Выделите отзыву отдельную регистрацию, чтобы он не ждал за сборкой:
 
 ```dart
-class SensorBloc extends Bloc<SensorEvent, SensorState> {
-  final Sensor _hw;
-  final Store _store;
+class ReportBloc extends Bloc<ReportEvent, ReportState> {
+  final Reports _reports;
 
-  SensorBloc(this._hw, this._store) : super(Ready()) {
-    _hw.onError = (error) => add(HardwareFailed(error));
-    on<HardwareFailed>((e, emit) => emit(Broken(e.error)));
-    on<Calibrate>((e, emit) async {
-      if (state is! Ready) return;
-      await _hw.zero();
-      if (state is! Ready) return;
-      final reading = await _hw.sample();
-      if (state is! Ready) return;
-      await _store.save(reading);
-      if (state is! Ready) return;
-      emit(Calibrated());
+  ReportBloc(this._reports, Auth auth) : super(SignedIn()) {
+    auth.onRevoked = (reason) => add(SessionRevoked(reason));
+    on<SessionRevoked>((e, emit) => emit(SignedOut(e.reason)));
+    on<BuildReport>((e, emit) async {
+      if (state is! SignedIn) return;
+      final report = await _reports.build(e.range);
+      if (state is! SignedIn) return;
+      emit(Ready(report));
     }, transformer: sequential());
   }
 }
 ```
 
-Выполнение заканчивается на `Broken(cable unplugged)` без публикации
-`Calibrated`. Калибровка проверяет состояние после каждого `await`, поскольку
-событие сбоя не отменяет её обработчик или emitter: проверки — это то, что
-вторая регистрация делает нужным, а не то, что она заменяет.
+Выполнение заканчивается на `SignedOut(signed out elsewhere)` без публикации
+отчёта. Сборка проверяет состояние после своего `await`, поскольку событие
+отзыва не отменяет её обработчик или emitter: проверка — это то, что вторая
+регистрация делает нужным, а не то, что она заменяет.
 
 `Cubit` может отразить уведомление напрямую из метода наследника, но его
 асинхронным операциям всё ещё нужны такие же проверки допустимости.
@@ -1495,50 +1485,47 @@ class SensorBloc extends Bloc<SensorEvent, SensorState> {
 контроллера:
 
 ```dart
-final class SensorController extends Solo<SensorState> {
-  final Sensor _hw;
-  final Store _store;
+final class ReportController extends Solo<ReportState> {
+  final Reports _reports;
 
-  SensorController(this._hw, this._store) : super(const Ready()) {
-    _hw.onError = (error) => externalSetState(Broken(error));
+  ReportController(this._reports, Auth auth) : super(const SignedIn()) {
+    auth.onRevoked = (reason) => externalSetState(SignedOut(reason));
   }
 
-  Job<void> calibrate() => run<Ready, void>(
-        key: 'calibrate',
+  Job<void> build(Range range) => run<SignedIn, void>(
+        key: 'report',
         (ctx) async {
-          await ctx.join(_hw.zero);
-          final reading = await ctx.join(_hw.sample);
-          await ctx.join(() => _store.save(reading));
-          ctx.emit(const Calibrated());
+          final report = await ctx.join(() => _reports.build(range));
+          ctx.emit(Ready(report));
         },
       );
 }
 ```
 
-Обычная `Job` для публикации `Broken` задержала бы этот факт в очереди
-за калибровкой, которую он делает недопустимой. `externalSetState` сразу
-обновляет состояние и проверяет работающие тела по их правилам. Здесь
-`run<Ready, void>` разрешает калибровку только при `Ready`, поэтому внешний
-сбой отменяет её с `Cancelled(rules: is not Ready)`.
+Обычная `Job` для публикации `SignedOut` задержала бы этот факт в очереди
+за сборкой, которую он делает недопустимой. `externalSetState` сразу обновляет
+состояние и проверяет работающие тела по их правилам. Здесь
+`run<SignedIn, void>` разрешает сборку только при `SignedIn`, поэтому внешний
+отзыв отменяет её с `Cancelled(rules: is not SignedIn)`.
 
-Исключение относится к фактам вроде уже отключённого кабеля. Уведомление
+Исключение относится к фактам вроде уже пропавшей сессии. Уведомление
 с просьбой выполнить будущую работу должно поставить обычную `Job` в очередь.
 Само получение данных из стрима не является основанием обходить очередь.
-Остановите слушатель устройства перед закрытием любого из контроллеров;
+Остановите слушатель авторизации перед закрытием любого из контроллеров;
 фрагменты показывают регистрацию, а не зависящее от приложения снятие
 слушателя.
 
-При успехе `Job` может закончиться публикацией `Calibrated`, хотя это состояние
-за пределами `Ready`. Собственный `emit` исключён из проверки правил;
+При успехе `Job` может закончиться публикацией `Ready`, хотя это состояние
+за пределами `SignedIn`. Собственный `emit` исключён из проверки правил;
 последующая контрольная точка состояния отменила бы `Job`. Это позволяет
 итоговый переход, но требует, чтобы рабочий тип охватывал всё продолжение
 работы.
 
-Уже начатая запись завершается в обоих примерах. `join` ждёт её, прежде чем
-разрешить старт другой корневой `Job`. Устройство с токеном отмены можно
-дополнительно остановить через `ctx.onCancel`, как в разделе 5. Итоговые
+Уже начатая сборка завершается в обоих примерах. `join` ждёт её, прежде чем
+разрешить старт другой корневой `Job`. До работы, которую можно остановить,
+дополнительно дотягивается `ctx.onCancel`, как в разделе 5. Итоговые
 обработчики состояния `onError` и `onCancel`, если они заданы, запрещаются
-несовместимым внешним обновлением, поэтому не перезаписывают `Broken` при
+несовместимым внешним обновлением, поэтому не перезаписывают `SignedOut` при
 уборке.
 
 ## 10. Завершение начатой записи перед перезапуском
@@ -1649,9 +1636,9 @@ write 0 end, write 1 start, write 1 end, write 100 start, write 100 end, …]`.
 доступ к устройству, а проверка emitter останавливает устаревшие обработчики.
 Все операции с этим устройством должны соблюдать то же правило блокировки.
 
-Отдельное событие `HardwareFailed`, публикующее `Broken`, не меняет `isDone`
-этого emitter. В таком сценарии всё ещё нужны дополнительные проверки
-состояния, чтобы остановить прошивку и сохранить `Broken`, как в разделе 9.
+Отдельное событие, публикующее `Broken`, не меняет `isDone` этого emitter.
+В таком сценарии всё ещё нужны дополнительные проверки состояния, чтобы
+остановить прошивку и сохранить `Broken`, как в разделе 9.
 
 ### Solo
 

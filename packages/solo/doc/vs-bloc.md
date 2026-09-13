@@ -27,13 +27,12 @@ The examples introduce other solo APIs where they are used. The
 [README](https://github.com/vi-k/solo/blob/main/packages/solo/README.md)
 provides a complete introduction and the detailed contracts.
 
-Examples use separate application models: a `Ready` state in the player example
-is not the sensor's `Ready`. Supporting state classes, event classes and fake
-APIs are not shown here: they live with the code that extracts these examples
-from the document, `tool/doc_snippets.py` in the repository. The examples were
-checked with bloc 9.2.1, bloc_concurrency 0.3.0 and the local solo 0.2.0
-source. Traces describe those runs, not timing guarantees for arbitrary
-devices.
+Examples use separate application models: the player's `Ready` is not the
+report's `Ready`. Supporting state classes, event classes and fake APIs are not
+shown here: they live with the code that extracts these examples from the
+document, `tool/doc_snippets.py` in the repository. The examples were checked
+with bloc 9.2.1, bloc_concurrency 0.3.0 and the local solo 0.2.0 source. Traces
+describe those runs, not timing guarantees for arbitrary devices.
 
 ## Correspondences
 
@@ -252,7 +251,7 @@ root jobs of a controller run one at a time, in the order they were added, and
 that is the only way they run. Adding another queued method preserves the
 ordering, because the queue is one per controller rather than one per command;
 no arrangement of the methods can give two of them a queue each. This guarantee
-covers root jobs; child jobs can run inside a parent, and independent device
+covers root jobs; child jobs can run inside a parent, and independent external
 changes have a separate path described in section 9.
 
 Use context waiting methods inside job bodies to check cancellation and state
@@ -1392,85 +1391,76 @@ idempotent payment API; neither example provides that.
 
 ## 9. Reacting to an independent external state change
 
-Calibration zeroes the sensor, takes a reading and stores the coefficient. The
-cable is unplugged while the coefficient is being stored, so the sensor reports
-a hardware failure and the calibration has no device call left to fail on. The
-controller must reflect `Broken` promptly and prevent the calibration from
-publishing `Calibrated` over it.
+A controller builds a report from data already on the device. The session is
+revoked while the build runs, because the user signed out on another device;
+the build is local, so nothing stops it. The controller must reflect
+`SignedOut` promptly and prevent the finished build from publishing its report
+over it.
 
 ### The first attempt
 
 `Bloc`'s direct `emit` is marked `@visibleForTesting` and documented for
-internal use, so the listener adds a `HardwareFailed` event instead. One
+internal use, so the listener adds a `SessionRevoked` event instead. One
 registration for both events is what section 1 asks for, and it is what a
 reader who has just learned that lesson writes:
 
 ```dart
-class FunnelSensorBloc extends Bloc<SensorEvent, SensorState> {
-  final Sensor _hw;
-  final Store _store;
+class FunnelReportBloc extends Bloc<ReportEvent, ReportState> {
+  final Reports _reports;
 
-  FunnelSensorBloc(this._hw, this._store) : super(Ready()) {
-    _hw.onError = (error) => add(HardwareFailed(error));
-    on<SensorEvent>((e, emit) async {
+  FunnelReportBloc(this._reports, Auth auth) : super(SignedIn()) {
+    auth.onRevoked = (reason) => add(SessionRevoked(reason));
+    on<ReportEvent>((e, emit) async {
       switch (e) {
-        case HardwareFailed(:final error):
-          emit(Broken(error));
-        case Calibrate():
-          if (state is! Ready) return;
-          await _hw.zero();
-          if (state is! Ready) return;
-          final reading = await _hw.sample();
-          if (state is! Ready) return;
-          await _store.save(reading);
-          if (state is! Ready) return;
-          emit(Calibrated());
+        case SessionRevoked(:final reason):
+          emit(SignedOut(reason));
+        case BuildReport(:final range):
+          if (state is! SignedIn) return;
+          final report = await _reports.build(range);
+          if (state is! SignedIn) return;
+          emit(Ready(report));
       }
     }, transformer: sequential());
   }
 }
 ```
 
-The published states are `[Calibrated, Broken(cable unplugged)]`. The cable was
-already unplugged when `Calibrated` was published: the failure event waited its
-turn behind the calibration it invalidates, and every check in that handler
-read a state that nothing had been allowed to change yet. A screen watching
-this controller reports success after the device has failed.
+The published states are
+`[Ready(Report(30 days)), SignedOut(signed out elsewhere)]`. The session was
+already revoked when the report was published: the revocation event waited its
+turn behind the build it invalidates, and every check in that handler read a
+state that nothing had been allowed to change yet. A screen watching this
+controller shows the report of a session that is gone.
 
 The ordering of section 1 and the promptness needed here pull in opposite
 directions, and one registration cannot do both.
 
 ### Bloc
 
-Give the failure its own registration, so that it does not wait behind
-calibration:
+Give the revocation its own registration, so that it does not wait behind the
+build:
 
 ```dart
-class SensorBloc extends Bloc<SensorEvent, SensorState> {
-  final Sensor _hw;
-  final Store _store;
+class ReportBloc extends Bloc<ReportEvent, ReportState> {
+  final Reports _reports;
 
-  SensorBloc(this._hw, this._store) : super(Ready()) {
-    _hw.onError = (error) => add(HardwareFailed(error));
-    on<HardwareFailed>((e, emit) => emit(Broken(e.error)));
-    on<Calibrate>((e, emit) async {
-      if (state is! Ready) return;
-      await _hw.zero();
-      if (state is! Ready) return;
-      final reading = await _hw.sample();
-      if (state is! Ready) return;
-      await _store.save(reading);
-      if (state is! Ready) return;
-      emit(Calibrated());
+  ReportBloc(this._reports, Auth auth) : super(SignedIn()) {
+    auth.onRevoked = (reason) => add(SessionRevoked(reason));
+    on<SessionRevoked>((e, emit) => emit(SignedOut(e.reason)));
+    on<BuildReport>((e, emit) async {
+      if (state is! SignedIn) return;
+      final report = await _reports.build(e.range);
+      if (state is! SignedIn) return;
+      emit(Ready(report));
     }, transformer: sequential());
   }
 }
 ```
 
-The run ends at `Broken(cable unplugged)` without publishing `Calibrated`.
-Calibration checks state after each await because the failure event does not
-cancel its handler or emitter; the checks are what the second registration
-buys, not something it replaces.
+The run ends at `SignedOut(signed out elsewhere)` without publishing the
+report. The build checks state after its await because the revocation event
+does not cancel its handler or emitter; the check is what the second
+registration buys, not something it replaces.
 
 `Cubit` can reflect the notification directly from a subclass method, but its
 asynchronous operations still need equivalent validity checks.
@@ -1482,49 +1472,46 @@ already completed state change. The listener belongs inside the controller
 subclass:
 
 ```dart
-final class SensorController extends Solo<SensorState> {
-  final Sensor _hw;
-  final Store _store;
+final class ReportController extends Solo<ReportState> {
+  final Reports _reports;
 
-  SensorController(this._hw, this._store) : super(const Ready()) {
-    _hw.onError = (error) => externalSetState(Broken(error));
+  ReportController(this._reports, Auth auth) : super(const SignedIn()) {
+    auth.onRevoked = (reason) => externalSetState(SignedOut(reason));
   }
 
-  Job<void> calibrate() => run<Ready, void>(
-        key: 'calibrate',
+  Job<void> build(Range range) => run<SignedIn, void>(
+        key: 'report',
         (ctx) async {
-          await ctx.join(_hw.zero);
-          final reading = await ctx.join(_hw.sample);
-          await ctx.join(() => _store.save(reading));
-          ctx.emit(const Calibrated());
+          final report = await ctx.join(() => _reports.build(range));
+          ctx.emit(Ready(report));
         },
       );
 }
 ```
 
-Queuing a normal job to publish `Broken` would delay the fact behind the
-calibration that it invalidates. `externalSetState` updates state immediately
-and checks running bodies against their rules. Here, `run<Ready, void>` permits
-calibration only while state is `Ready`, so the external failure cancels it
-with `Cancelled(rules: is not Ready)`.
+Queuing a normal job to publish `SignedOut` would delay the fact behind the
+build that it invalidates. `externalSetState` updates state immediately and
+checks running bodies against their rules. Here, `run<SignedIn, void>` permits
+the build only while state is `SignedIn`, so the external revocation cancels it
+with `Cancelled(rules: is not SignedIn)`.
 
-This exception applies to facts such as an unplugged cable. A notification
-asking the controller to perform future work should enqueue an ordinary job.
-The source being a stream does not itself justify bypassing the queue. Stop the
-hardware listener before closing either controller; the snippets show
-registration, not application-specific listener teardown.
+This exception applies to facts such as a session that is already gone. A
+notification asking the controller to perform future work should enqueue an
+ordinary job. The source being a stream does not itself justify bypassing the
+queue. Stop the auth listener before closing either controller; the snippets
+show registration, not application-specific listener teardown.
 
-On the success path, the job may finish by emitting `Calibrated`, even though
-that state is outside `Ready`. Its own `emit` is excluded from the rule check;
-a later state checkpoint would cancel it. This allows a final transition while
+On the success path, the job may finish by emitting `Ready`, even though that
+state is outside `SignedIn`. Its own `emit` is excluded from the rule check; a
+later state checkpoint would cancel it. This allows a final transition while
 requiring the working type to cover continued work.
 
-The store write already in progress still finishes in both examples. `join`
-waits for it before allowing another root job to start. A device with a
-cancellation token can additionally be stopped through `ctx.onCancel`, as in
-section 5. Final `onError` and `onCancel` state handlers, if supplied, are
-disabled by an incompatible external update, so they do not overwrite `Broken`
-during cleanup.
+The build already in progress still finishes in both examples. `join` waits for
+it before allowing another root job to start. Work that can be stopped can
+additionally be reached through `ctx.onCancel`, as in section 5. Final
+`onError` and `onCancel` state handlers, if supplied, are disabled by an
+incompatible external update, so they do not overwrite `SignedOut` during
+cleanup.
 
 ## 10. Finishing an in-flight write before restarting
 
@@ -1636,9 +1623,9 @@ obsolete write start later. The lock orders device access, while the emitter
 check stops obsolete handlers. Every operation using that device must follow
 the same locking rule.
 
-A separate `HardwareFailed` event that publishes `Broken` does not change this
-emitter's `isDone`. In that scenario, additional state checks are still needed
-to stop flashing and preserve `Broken`, as in section 9.
+A separate event that publishes `Broken` does not change this emitter's
+`isDone`. In that scenario, additional state checks are still needed to stop
+flashing and preserve `Broken`, as in section 9.
 
 ### Solo
 
