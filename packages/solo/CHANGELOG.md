@@ -15,8 +15,8 @@
   asserted.
 
 - Two stale snippets in `doc/vs-bloc.md` fixed: the recorder and the telemetry
-  observer still overrode `onChange(previous, current)`, which has taken a
-  `SoloTransition` since 0.2.0 and no longer compiled.
+  observer still overrode `onChange(previous, current)` and no longer compiled
+  against the hook's new `SoloTransition`.
 
 - `doc/children.md` adds what a chain costs on a controller: inside a body
   `ctx.run` takes jobs of that controller alone, so a continuation is turned

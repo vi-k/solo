@@ -34,6 +34,29 @@
 прогоняет код документа; `doc-reader` — как писать для читателя, а не про свою
 работу; `reflow` — заливка абзацев.
 
+## На следующий релиз собрано у всех трёх
+
+Ломающие правки есть в каждом пакете, поэтому все трое идут на `0.3.0`.
+Развёрнуто — в разделах `## Unreleased` их `CHANGELOG.md`; коротко:
+у `async_job` протектед `JobBase.inUncancellableSection` и починенный
+`ctx.join`, у `solo` пять ломающих (`currentState`, `SoloCloseMode`,
+`SoloTransition`, `errorHandler`, `ArgumentError` у `droppable`) плюс
+`SoloBase.pending`, у `flutter_solo` три ломающих и новые `SoloSelection`,
+`SoloSelector`, `select`/`listen`.
+
+Порядок связки задан зависимостями: `solo` уже пользуется новым
+`inUncancellableSection`, поэтому в дереве и живут четыре
+`pubspec_overrides.yaml`. Сперва `async_job`, затем `^0.3.0`
+в `packages/solo/pubspec.yaml` и `solo`, затем `^0.3.0`
+в `packages/flutter_solo/pubspec.yaml` и `flutter_solo`. Оверрайды снимаются
+и добавляются в индекс — порядок
+в `2026-09-11[1]-solo-release-readiness-report.md`.
+
+Версии в трёх `pubspec.yaml` пока `0.2.0`, заголовки в `CHANGELOG.md` —
+`## Unreleased`; и то и другое меняется при подготовке. Вместе с ними — строка
+про стенд во вступлении `vs-bloc` (оригинал и перевод): там названа версия
+исходников, на которых собраны фрагменты, и сейчас это `0.2.0`.
+
 ## Абзацы заливаются жадно
 
 Переносы внутри абзаца больше не решение: текст заливается до 79 колонок
