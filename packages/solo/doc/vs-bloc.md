@@ -1491,9 +1491,9 @@ final class ReportController extends Solo<ReportState> {
 }
 ```
 
-An ordinary job could publish `SignedOut` too. It would then queue behind the
-build — waiting for the very work it makes worthless. `externalSetState`
-updates state immediately and checks running bodies against their rules. Here,
+Published by an ordinary job, `SignedOut` would queue behind the build and wait
+for the very work it makes worthless. `externalSetState` updates state
+immediately and checks running bodies against their rules. Here,
 `run<SignedIn, void>` permits the build only while state is `SignedIn`, so the
 revocation cancels it with `Cancelled(rules: is not SignedIn)`.
 
