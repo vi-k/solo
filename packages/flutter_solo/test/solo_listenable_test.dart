@@ -1,21 +1,86 @@
-import 'package:flutter/foundation.dart';
+import 'dart:async';
+
+import 'package:flutter/widgets.dart';
 import 'package:flutter_solo/flutter_solo.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 final class _Counter extends SoloListenable<int> {
   _Counter() : super(0);
 
+  @override
+  bool get hasListeners => super.hasListeners;
+
   void set(int value) => externalSetState(value);
 }
 
+final class _ObjectController extends SoloListenable<Object> {
+  _ObjectController(super.initialState);
+
+  void set(Object value) => externalSetState(value);
+}
+
+final class _ClosingObserver extends SoloObserver {
+  final void Function(SoloBase<Object> solo) onCloseCallback;
+
+  _ClosingObserver(this.onCloseCallback);
+
+  @override
+  void onClose(SoloBase<Object> solo) => onCloseCallback(solo);
+}
+
 void main() {
+  testWidgets('controller works with ValueListenableBuilder', (tester) async {
+    final counter = _Counter();
+    addTearDown(counter.close);
+    final built = <int>[];
+
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: ValueListenableBuilder<int>(
+          valueListenable: counter,
+          builder: (context, value, _) {
+            built.add(value);
+            return Text('$value');
+          },
+        ),
+      ),
+    );
+    expect(built, [0]);
+    expect(find.text('0'), findsOneWidget);
+
+    counter.set(1);
+    await tester.pump();
+    expect(built, [0, 1]);
+    expect(find.text('1'), findsOneWidget);
+
+    counter.set(2);
+    await tester.pump();
+    expect(built, [0, 1, 2]);
+    expect(find.text('2'), findsOneWidget);
+  });
+
   test('value mirrors state', () async {
     final counter = _Counter();
     expect(counter.value, 0);
     counter.set(1);
     expect(counter.value, 1);
     expect(counter.value, counter.currentState);
+    expect(identical(counter.value, counter.currentState), isTrue);
     await counter.close();
+  });
+
+  test('value and currentState are the exact same object', () async {
+    final initial = Object();
+    final next = Object();
+    final controller = _ObjectController(initial);
+    expect(identical(controller.value, controller.currentState), isTrue);
+    expect(identical(controller.value, initial), isTrue);
+
+    controller.set(next);
+    expect(identical(controller.value, controller.currentState), isTrue);
+    expect(identical(controller.value, next), isTrue);
+    await controller.close();
   });
 
   test('listeners fire inside the change, not on a microtask', () async {
@@ -82,9 +147,9 @@ void main() {
 
   test('a throwing listener is reported and the rest still hear', () async {
     final counter = _Counter();
-    final errors = <Object>[];
+    final reports = <FlutterErrorDetails>[];
     final previous = FlutterError.onError;
-    FlutterError.onError = (details) => errors.add(details.exception);
+    FlutterError.onError = reports.add;
     addTearDown(() => FlutterError.onError = previous);
 
     final calls = <String>[];
@@ -95,7 +160,14 @@ void main() {
       ..set(1);
 
     expect(calls, ['before', 'after']);
-    expect(errors, [isStateError]);
+    expect(reports, hasLength(1));
+    final details = reports.single;
+    expect(details.exception, isA<StateError>());
+    expect(details.library, 'flutter_solo');
+    expect(
+      details.context.toString(),
+      contains('notifying a listener of _Counter'),
+    );
     await counter.close();
   });
 
@@ -146,17 +218,22 @@ void main() {
     await counter.close();
   });
 
-  test('a listener added after close hears nothing', () async {
-    final counter = _Counter();
-    await counter.close();
+  test(
+    'a listener added after close hears nothing and is not retained',
+    () async {
+      final counter = _Counter();
+      await counter.close();
 
-    final calls = <int>[];
-    counter.addListener(() => calls.add(counter.value));
-    counter.set(7);
+      final calls = <int>[];
+      expect(counter.hasListeners, isFalse);
+      counter.addListener(() => calls.add(counter.value));
+      expect(counter.hasListeners, isFalse);
+      counter.set(7);
 
-    expect(counter.value, 7);
-    expect(calls, isEmpty);
-  });
+      expect(counter.value, 7);
+      expect(calls, isEmpty);
+    },
+  );
 
   test('close returns the same future on repeated calls', () async {
     final counter = _Counter();
@@ -165,4 +242,51 @@ void main() {
     expect(identical(first, second), isTrue);
     await first;
   });
+
+  test(
+    'a microtask scheduled from observer.onClose does not notify listeners',
+    () async {
+      final counter = _Counter();
+      final heard = <int>[];
+      counter.addListener(() => heard.add(counter.value));
+
+      final previousObserver = SoloBase.observer;
+      SoloBase.observer = _ClosingObserver((solo) {
+        if (identical(solo, counter)) {
+          scheduleMicrotask(() {
+            counter.set(9);
+          });
+        }
+      });
+      addTearDown(() => SoloBase.observer = previousObserver);
+
+      await counter.close();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(counter.value, 9);
+      expect(heard, isEmpty);
+    },
+  );
+
+  test(
+    'a synchronous change from observer.onClose notifies listeners before drop',
+    () async {
+      final counter = _Counter();
+      final heard = <int>[];
+      counter.addListener(() => heard.add(counter.value));
+
+      final previousObserver = SoloBase.observer;
+      SoloBase.observer = _ClosingObserver((solo) {
+        if (identical(solo, counter)) {
+          counter.set(8);
+        }
+      });
+      addTearDown(() => SoloBase.observer = previousObserver);
+
+      await counter.close();
+
+      expect(counter.value, 8);
+      expect(heard, [8]);
+    },
+  );
 }

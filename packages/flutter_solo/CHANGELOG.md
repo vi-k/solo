@@ -1,5 +1,19 @@
 ## Unreleased
 
+- `SoloListenable` keeps only the `ValueListenable` face: the listeners, the
+  registration and the pass over them moved into `solo`'s `SoloBase`, and what
+  stays here is `value` and the report of a listener's failure through
+  `FlutterError.reportError`. The class behaves as it did, with one exception
+  below.
+- **Fix:** a listener registered after `close` had finished was kept in memory
+  for good. It was never notified -- a flag saw to that -- but it was held; now
+  the registration is refused outright and nothing is retained.
+- A change delivered from a microtask scheduled inside the observer's `onClose`
+  no longer reaches listeners. The list used to be dropped one microtask later,
+  in the continuation of the engine's close; the engine now drops it
+  synchronously, right after the hook. A change made *inside* the hook still
+  reaches them.
+
 - **Breaking:** `SoloListenable` is built on `SoloBase`, not on `Solo`, and has
   no `stream`. The listeners are its whole delivery: a widget rebuilds from
   `value`, and an operation's result is awaited through its `Job`, so the
