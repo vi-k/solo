@@ -78,6 +78,7 @@ final class SoloSelector<S, T> extends StatefulWidget {
 
 final class _SoloSelectorState<S, T> extends State<SoloSelector<S, T>> {
   late SoloSelection<S, T> _selection = _select();
+  late T _value;
 
   SoloSelection<S, T> _select() => SoloSelection<S, T>(
         widget.listenable,
@@ -86,25 +87,43 @@ final class _SoloSelectorState<S, T> extends State<SoloSelector<S, T>> {
       );
 
   @override
+  void initState() {
+    super.initState();
+    _selection.addListener(_valueChanged);
+    _value = _selection.value;
+  }
+
+  @override
   void didUpdateWidget(covariant SoloSelector<S, T> oldWidget) {
     super.didUpdateWidget(oldWidget);
     // The selector and the comparison are as much a part of what this
     // widget watches as the listenable is: a parent handing over a new
     // one is asking for something else to be picked, or for a different
-    // answer to "did it change?". The old selection is not cancelled
-    // here and needs no cancelling — the builder below takes its listener
-    // away as it moves to the new one, and that was its only listener.
+    // answer to "did it change?". The widget manages the subscription
+    // itself, moving its listener from the old selection to the new one.
     if (!identical(widget.listenable, oldWidget.listenable) ||
         !identical(widget.selector, oldWidget.selector) ||
         !identical(widget.compare, oldWidget.compare)) {
+      _selection.removeListener(_valueChanged);
       _selection = _select();
+      _selection.addListener(_valueChanged);
+      _value = _selection.value;
     }
   }
 
   @override
-  Widget build(BuildContext context) => ValueListenableBuilder<T>(
-        valueListenable: _selection,
-        builder: widget.builder,
-        child: widget.child,
-      );
+  void dispose() {
+    _selection.removeListener(_valueChanged);
+    super.dispose();
+  }
+
+  void _valueChanged() {
+    setState(() {
+      _value = _selection.value;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      widget.builder(context, _value, widget.child);
 }

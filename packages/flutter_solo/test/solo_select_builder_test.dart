@@ -37,6 +37,31 @@ mixin _EqualByKind on SoloBase<_Screen> {
   int get hashCode => 0;
 }
 
+/// Counts every registration and removal, so a leaked listener is a number
+/// and not a guess.
+final class _CountingController extends SoloBase<int> {
+  _CountingController() : super(0);
+
+  int adds = 0;
+  int removes = 0;
+
+  int get live => adds - removes;
+
+  void set(int next) => externalSetState(next);
+
+  @override
+  void addListener(void Function() listener) {
+    adds++;
+    super.addListener(listener);
+  }
+
+  @override
+  void removeListener(void Function() listener) {
+    removes++;
+    super.removeListener(listener);
+  }
+}
+
 Widget _wrap(Widget child) => Directionality(
       textDirection: TextDirection.ltr,
       child: child,
@@ -264,4 +289,98 @@ void main() {
       expect(find.text('kept'), findsOneWidget);
     },
   );
+
+  testWidgets('mounting tree contains no ValueListenableBuilder', (
+    tester,
+  ) async {
+    final controller = _Controller();
+    addTearDown(controller.close);
+
+    await tester.pumpWidget(
+      _wrap(
+        SoloSelectBuilder<_Screen, bool>(
+          solo: controller,
+          selector: (state) => state.name.isNotEmpty,
+          builder: (context, hasName, _) => Text('$hasName'),
+        ),
+      ),
+    );
+
+    expect(find.byType(ValueListenableBuilder<bool>), findsNothing);
+    expect(find.text('false'), findsOneWidget);
+  });
+
+  testWidgets(
+    'mounting and immediate unmounting in one frame does not throw when '
+    'source publishes on listen',
+    (tester) async {
+      final solo = _PublishOnListenSolo();
+      addTearDown(solo.close);
+
+      await tester.pumpWidget(
+        _wrap(
+          SoloSelectBuilder<int, bool>(
+            solo: solo,
+            selector: (state) => state > 0,
+            builder: (context, positive, _) => Text('$positive'),
+          ),
+        ),
+      );
+      await tester.pumpWidget(_wrap(const SizedBox.shrink()));
+
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'three selections in a row leave one registration, not three',
+    (tester) async {
+      final controller = _CountingController();
+      addTearDown(controller.close);
+
+      // A new closure on every call, so every parent rebuild asks for a new
+      // selection and the widget has to move its listener across.
+      Widget tree(int seed) => _wrap(
+            SoloSelectBuilder<int, String>(
+              solo: controller,
+              selector: (state) => '$state/$seed',
+              builder: (context, label, _) => Text(label),
+            ),
+          );
+
+      await tester.pumpWidget(tree(1));
+      expect(controller.live, 1);
+
+      await tester.pumpWidget(tree(2));
+      await tester.pumpWidget(tree(3));
+      await tester.pumpWidget(tree(4));
+      expect(
+        controller.live,
+        1,
+        reason: 'adds=${controller.adds} removes=${controller.removes}',
+      );
+
+      controller.set(7);
+      await tester.pump();
+      expect(find.text('7/4'), findsOneWidget);
+
+      await tester.pumpWidget(_wrap(const SizedBox()));
+      expect(controller.live, 0);
+    },
+  );
+}
+
+final class _PublishOnListenSolo extends SoloBase<int> {
+  _PublishOnListenSolo() : super(0);
+
+  var _published = false;
+
+  @override
+  void addListener(VoidCallback listener) {
+    super.addListener(listener);
+    if (_published) {
+      return;
+    }
+    _published = true;
+    externalSetState(1);
+  }
 }

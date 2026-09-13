@@ -1,5 +1,13 @@
 ## Unreleased
 
+- `SoloSelector` and `SoloSelectBuilder` keep the subscription to their
+  selection themselves instead of wrapping a `ValueListenableBuilder` around
+  it. Behaviour is unchanged -- the value is read after subscribing, kept until
+  the next notification, moved across when the selection is rebuilt, and let go
+  in `dispose` -- but the widget tree is one element shorter under each of
+  them, and the lifecycle now lives in one place rather than in two nested
+  states. A test that looked for a `ValueListenableBuilder` under them will no
+  longer find one.
 - Add `SoloBuilder` and `SoloSelectBuilder`: what `ValueListenableBuilder` and
   `SoloSelector` are, for a controller that is not a `ValueListenable`. Both
   take any `SoloBase` -- a plain `Solo` included -- read the state after

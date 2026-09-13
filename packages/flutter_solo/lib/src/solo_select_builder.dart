@@ -77,6 +77,7 @@ final class SoloSelectBuilder<S extends Object, T> extends StatefulWidget {
 final class _SoloSelectBuilderState<S extends Object, T>
     extends State<SoloSelectBuilder<S, T>> {
   late SoloSelection<S, T> _selection = _select();
+  late T _value;
 
   SoloSelection<S, T> _select() => SoloSelection.of<S, T>(
         widget.solo,
@@ -85,19 +86,38 @@ final class _SoloSelectBuilderState<S extends Object, T>
       );
 
   @override
+  void initState() {
+    super.initState();
+    _selection.addListener(_valueChanged);
+    _value = _selection.value;
+  }
+
+  @override
   void didUpdateWidget(covariant SoloSelectBuilder<S, T> oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(widget.solo, oldWidget.solo) ||
         !identical(widget.selector, oldWidget.selector) ||
         !identical(widget.compare, oldWidget.compare)) {
+      _selection.removeListener(_valueChanged);
       _selection = _select();
+      _selection.addListener(_valueChanged);
+      _value = _selection.value;
     }
   }
 
   @override
-  Widget build(BuildContext context) => ValueListenableBuilder<T>(
-        valueListenable: _selection,
-        builder: widget.builder,
-        child: widget.child,
-      );
+  void dispose() {
+    _selection.removeListener(_valueChanged);
+    super.dispose();
+  }
+
+  void _valueChanged() {
+    setState(() {
+      _value = _selection.value;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      widget.builder(context, _value, widget.child);
 }

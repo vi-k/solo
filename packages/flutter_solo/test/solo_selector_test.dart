@@ -16,6 +16,29 @@ final class _Controller extends SoloListenable<_Screen> {
   void set(_Screen next) => externalSetState(next);
 }
 
+/// Counts every registration and removal, so a leaked listener is a number
+/// and not a guess.
+final class _CountingSource extends ValueNotifier<int> {
+  _CountingSource() : super(0);
+
+  int adds = 0;
+  int removes = 0;
+
+  int get live => adds - removes;
+
+  @override
+  void addListener(VoidCallback listener) {
+    adds++;
+    super.addListener(listener);
+  }
+
+  @override
+  void removeListener(VoidCallback listener) {
+    removes++;
+    super.removeListener(listener);
+  }
+}
+
 Widget _wrap(Widget child) => Directionality(
       textDirection: TextDirection.ltr,
       child: child,
@@ -164,4 +187,107 @@ void main() {
 
     expect(picks, 0, reason: 'the last listener took the subscription away');
   });
+
+  testWidgets('mounting tree contains no ValueListenableBuilder', (
+    tester,
+  ) async {
+    final controller = _Controller();
+    addTearDown(controller.close);
+
+    await tester.pumpWidget(
+      _wrap(
+        SoloSelector<_Screen, bool>(
+          listenable: controller,
+          selector: (state) => state.name.isNotEmpty,
+          builder: (context, hasName, _) => Text('$hasName'),
+        ),
+      ),
+    );
+
+    expect(find.byType(ValueListenableBuilder<bool>), findsNothing);
+    expect(find.text('false'), findsOneWidget);
+  });
+
+  testWidgets(
+    'mounting and immediate unmounting in one frame does not throw when '
+    'source publishes on listen',
+    (tester) async {
+      final source = _PublishOnListenSource();
+
+      await tester.pumpWidget(
+        _wrap(
+          SoloSelector<int, bool>(
+            listenable: source,
+            selector: (value) => value > 0,
+            builder: (context, positive, _) => Text('$positive'),
+          ),
+        ),
+      );
+      await tester.pumpWidget(_wrap(const SizedBox.shrink()));
+
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'three selections in a row leave one registration, not three',
+    (tester) async {
+      final source = _CountingSource();
+
+      // A new closure on every call, so every parent rebuild asks for a new
+      // selection and the widget has to move its listener across.
+      Widget tree(int seed) => _wrap(
+            SoloSelector<int, String>(
+              listenable: source,
+              selector: (value) => '$value/$seed',
+              builder: (context, label, _) => Text(label),
+            ),
+          );
+
+      await tester.pumpWidget(tree(1));
+      expect(source.live, 1);
+
+      await tester.pumpWidget(tree(2));
+      await tester.pumpWidget(tree(3));
+      await tester.pumpWidget(tree(4));
+      expect(
+        source.live,
+        1,
+        reason: 'adds=${source.adds} removes=${source.removes}',
+      );
+
+      source.value = 7;
+      await tester.pump();
+      expect(find.text('7/4'), findsOneWidget);
+
+      await tester.pumpWidget(_wrap(const SizedBox()));
+      expect(source.live, 0);
+    },
+  );
+}
+
+final class _PublishOnListenSource implements ValueListenable<int> {
+  final _listeners = <VoidCallback>[];
+  var _value = 0;
+  var _published = false;
+
+  @override
+  int get value => _value;
+
+  @override
+  void addListener(VoidCallback listener) {
+    _listeners.add(listener);
+    if (_published) {
+      return;
+    }
+    _published = true;
+    _value = 1;
+    for (final current in List<VoidCallback>.of(_listeners)) {
+      current();
+    }
+  }
+
+  @override
+  void removeListener(VoidCallback listener) {
+    _listeners.remove(listener);
+  }
 }
