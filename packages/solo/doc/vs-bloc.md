@@ -1333,7 +1333,7 @@ final class CheckoutController extends Solo<CheckoutState> {
         cancellable: false,
         (ctx) async {
           ctx.emit(Paying(order.id));
-          final receipt = await ctx.join(() => _api.pay(order));
+          final receipt = await _api.pay(order);
           ctx.emit(Paid(receipt));
           return receipt;
         },
@@ -1364,10 +1364,10 @@ order key. Both callers share its receipt, while another order creates another
 job. The three requests again make two API calls.
 
 `cancellable: false` protects the complete payment operation from ordinary
-cancellation, including controller closure once it is running. `join` waits for
-the API result, and the body publishes `Paid` before completing with the
-receipt. `close()` waits for that completion. API failures still produce
-`Failed`; a failure state can be supplied with `run(onError: ...)`.
+cancellation, including controller closure once it is running. The body
+publishes `Paid` before completing with the receipt, and `close()` waits for
+that completion. API failures still produce `Failed`; a failure state can be
+supplied with `run(onError: ...)`.
 
 This job accepts the base `CheckoutState` and has no `keepWhile` restriction.
 State rules can cancel even a non-cancellable job, so a narrower type would
@@ -1375,10 +1375,14 @@ allow cancellation after a charge was sent but before it was recorded. No
 waiting method can retract a charge from an API that provides no cancellation
 mechanism.
 
-`ctx.uncancellable` has a different purpose: it holds ordinary cancellation for
-one step, then applies the request afterwards. It does not guarantee a
-successful job outcome for a payment that completed during that step. It is
-unnecessary for the non-cancellable job shown here.
+That is also why the charge is a plain `await`. `ctx.wait`, `ctx.join` and
+`ctx.uncancellable` differ in what each does with a cancellation that arrives
+during the call: `wait` lets go of the call, `join` stays with it until it
+answers, `uncancellable` holds the cancellation back and applies it once the
+step ends — protecting the step, not the outcome of the job that goes on past
+it. All three need a cancellation that reaches the job, and while this one runs
+none does: `cancellable: false` turns away everything rejectable, and its state
+rule admits every `CheckoutState`.
 
 The flag also refuses manual cancellation while the payment is queued. If users
 must be able to cancel before charging starts, model that admission decision

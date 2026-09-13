@@ -1134,6 +1134,10 @@ Future<void> main() async {
   ]);
   print('bloc: api.pay calls ${api.calls}, $receipts');
   print('  state left behind: ${bloc.state}');
+  // The document quotes this state: one receipt, the last payment's.
+  if ('${bloc.state}' != 'Paid(Receipt(for B))') {
+    throw StateError('the state must keep only the receipt of the last order');
+  }
   await bloc.close();
 
   final closed = CheckoutBloc(Api());
@@ -1224,6 +1228,10 @@ Future<void> main() async {
   ]);
   print('api.pay calls: ${api.calls}, $replies');
   print('  state left behind: ${checkout.currentState}');
+  // The document quotes this state: one receipt, the last payment's.
+  if ('${checkout.currentState}' != 'Paid(Receipt(for B))') {
+    throw StateError('the state must keep only the receipt of the last order');
+  }
   await checkout.close();
 
   final closingApi = Api();
@@ -1243,6 +1251,11 @@ Future<void> main() async {
   unawaited(charging.cancel());
   print('queued cancelled: ${queued.outcome}');
   print('charge spared:    ${charging.isCancelled == false}');
+  // Why the charge is a plain `await` and needs no cancellation checkpoint:
+  // nothing rejectable reaches this job while it runs.
+  if (charging.isCancelled) {
+    throw StateError('cancellable: false must refuse a cancel while running');
+  }
   await tick(100);
   print('  A ${charging.outcome}, B ${queued.outcome}, '
       'api.pay calls ${pendingApi.calls}');
