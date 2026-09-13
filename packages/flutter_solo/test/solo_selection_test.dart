@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_solo/flutter_solo.dart';
 import 'package:flutter_solo/listenable.dart';
@@ -235,5 +237,36 @@ void main() {
 
     controller.set(const _Screen(name: 'Grace'));
     expect(calls, 1, reason: 'still not empty');
+  });
+
+  test('a throwing FlutterError.onError does not abort the selection pass', () {
+    final controller = _Controller();
+    final zoneErrors = <Object>[];
+    final previous = FlutterError.onError;
+    FlutterError.onError = (_) => throw StateError('the reporter blew up');
+    addTearDown(() => FlutterError.onError = previous);
+
+    final name = controller.select((state) => state.name);
+    var secondCalled = false;
+    name
+      ..addListener(() => throw StateError('the listener blew up'))
+      ..addListener(() => secondCalled = true);
+
+    runZonedGuarded(() {
+      controller.set(const _Screen(name: 'Ada'));
+    }, (error, stackTrace) {
+      zoneErrors.add(error);
+    });
+
+    expect(
+      secondCalled,
+      isTrue,
+      reason: 'the second listener of the selection still receives the event',
+    );
+    expect(zoneErrors, hasLength(1));
+    expect(
+      (zoneErrors.first as StateError).message,
+      'the reporter blew up',
+    );
   });
 }

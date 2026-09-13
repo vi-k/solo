@@ -1,71 +1,88 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 /// The listeners of one notifier, in subscription order.
 ///
-/// A list keeps the order and the repeated registrations; the map beside
-/// it answers whether one is still registered in a single step, so a pass
-/// over n listeners costs n lookups and not n squared.
+/// Duplicated from `solo` because the core cannot import Flutter.
 final class Listeners {
-  final _order = <VoidCallback>[];
-  final _registrations = <VoidCallback, int>{};
+  final _entries = <_ListenerEntry>[];
 
   /// Whether nobody is listening.
-  bool get isEmpty => _order.isEmpty;
+  bool get isEmpty => _entries.isEmpty;
 
   /// Adds one registration of [listener].
   void add(VoidCallback listener) {
-    _order.add(listener);
-    _registrations.update(listener, (count) => count + 1, ifAbsent: () => 1);
+    _entries.add(_ListenerEntry(listener));
   }
 
-  /// Removes one registration of [listener] and says whether there was
-  /// one; unknown listeners are ignored.
-  bool remove(VoidCallback listener) {
-    if (!_order.remove(listener)) {
-      return false;
-    }
-    final count = _registrations[listener]!;
-    if (count == 1) {
-      _registrations.remove(listener);
-    } else {
-      _registrations[listener] = count - 1;
-    }
-
-    return true;
-  }
-
-  /// Drops every registration.
-  void clear() {
-    _order.clear();
-    _registrations.clear();
-  }
-
-  /// Calls every listener in subscription order, synchronously.
+  /// Deactivates and removes the earliest active registration of [listener].
   ///
-  /// One removed during the pass is skipped; one added during it hears the
-  /// next change. A listener that throws is reported through
-  /// [FlutterError.reportError], the way [ChangeNotifier] reports one, and
-  /// the pass goes on to the listeners behind it: [owner] names the
-  /// notifier in the report.
+  /// Returns `true` if a registration was found and removed, or `false`
+  /// otherwise.
+  bool remove(VoidCallback listener) {
+    for (var i = 0; i < _entries.length; i++) {
+      final entry = _entries[i];
+      if (entry.alive && entry.listener == listener) {
+        entry.alive = false;
+        _entries.removeAt(i);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Deactivates and drops every registration.
+  void clear() {
+    for (final entry in _entries) {
+      entry.alive = false;
+    }
+    _entries.clear();
+  }
+
+  /// Calls every active listener in subscription order, synchronously.
+  ///
+  /// Iterates over a snapshot of entries. A listener removed during the pass
+  /// is skipped; one added during the pass hears the next change. Each call
+  /// is isolated: an error thrown by a listener is reported through
+  /// [FlutterError.reportError], with [owner] naming the notifier in the
+  /// report. If the reporter itself throws, the pass continues and the
+  /// reporter's error is routed to [Zone.handleUncaughtError].
   void notify(Object owner) {
-    for (final listener in _order.toList()) {
-      if (!_registrations.containsKey(listener)) {
+    final snapshot = _entries.toList();
+    for (final entry in snapshot) {
+      if (!entry.alive) {
         continue;
       }
       try {
-        listener();
+        entry.listener();
       } on Object catch (error, stackTrace) {
-        FlutterError.reportError(
-          FlutterErrorDetails(
-            exception: error,
-            stack: stackTrace,
-            library: 'flutter_solo',
-            context: ErrorDescription(
-              'notifying a listener of ${owner.runtimeType}',
-            ),
-          ),
-        );
+        _report(owner, error, stackTrace);
       }
     }
   }
+
+  static void _report(Object owner, Object error, StackTrace stackTrace) {
+    try {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'flutter_solo',
+          context: ErrorDescription(
+            'notifying a listener of ${owner.runtimeType}',
+          ),
+        ),
+      );
+    } on Object catch (reporterError, reporterStackTrace) {
+      Zone.current.handleUncaughtError(reporterError, reporterStackTrace);
+    }
+  }
+}
+
+final class _ListenerEntry {
+  final VoidCallback listener;
+  bool alive = true;
+
+  _ListenerEntry(this.listener);
 }

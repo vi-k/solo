@@ -1,5 +1,17 @@
 ## Unreleased
 
+- **Fix:** a selection counts registrations, not callbacks. The same callback
+  registered twice is called twice and removed one registration at a time, and
+  a registration cancelled during a notification pass is skipped rather than
+  called anyway -- which is what happened before, because the container asked
+  whether the callback was still registered and could not tell one registration
+  from another. A callback removed and added again during a pass now waits for
+  the next change, as the rule says.
+- **Fix:** a listener failure is reported through `FlutterError.reportError`,
+  and if the report itself throws -- an `onError` of the application's own --
+  the pass no longer stops there. The remaining listeners of that selection
+  hear the change, and the reporter's error goes to the zone.
+
 - `SoloListenable` keeps only the `ValueListenable` face: the listeners, the
   registration and the pass over them moved into `solo`'s `SoloBase`, and what
   stays here is `value` and the report of a listener's failure through
