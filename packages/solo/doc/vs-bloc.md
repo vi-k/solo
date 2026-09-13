@@ -1497,7 +1497,7 @@ immediately and checks running bodies against their rules. Here,
 `run<SignedIn, void>` permits the build only while state is `SignedIn`, so the
 revocation cancels it with `Cancelled(rules: is not SignedIn)`.
 
-Only a fact that has already happened goes around the queue: the session is
+`externalSetState` is for a fact that has already happened: the session is
 gone, and no job waiting in line can change that. A notification asking for
 work — refresh this, fetch that, try again — is ordinary work and belongs in
 the queue. Arriving on a stream decides nothing by itself; what matters is what
