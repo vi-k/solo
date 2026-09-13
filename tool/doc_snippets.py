@@ -1061,30 +1061,43 @@ sealed class CheckoutEvent {}
 
 sealed class CheckoutState {}
 
-class Cart extends CheckoutState {}
+class Idle extends CheckoutState {
+  @override
+  String toString() => 'Idle';
+}
 
-class Paying extends CheckoutState {}
+class Paying extends CheckoutState {
+  Paying(this.orderId);
+  final String orderId;
+  @override
+  String toString() => 'Paying($orderId)';
+}
 
 class Paid extends CheckoutState {
   Paid(this.receipt);
   final Receipt receipt;
+  @override
+  String toString() => 'Paid($receipt)';
 }
 
 class PaymentFailed extends CheckoutState {
-  PaymentFailed(this.error);
+  PaymentFailed(this.orderId, this.error);
+  final String orderId;
   final Object error;
+  @override
+  String toString() => 'PaymentFailed($orderId, $error)';
 }
 
 ''' + snips['8/Pay'] + snips['8/CheckoutBloc'] + snips['8/CheckoutCubit'] + '''
 /// The cubit the paragraph before the snippet describes: a method you can
 /// await, and nothing around it.
 class PlainCheckoutCubit extends Cubit<CheckoutState> {
-  PlainCheckoutCubit(this._api) : super(Cart());
+  PlainCheckoutCubit(this._api) : super(Idle());
 
   final Api _api;
 
   Future<Receipt> pay(Order order) async {
-    emit(Paying());
+    emit(Paying(order.id));
     final receipt = await _api.pay(order);
     emit(Paid(receipt));
     return receipt;
@@ -1120,6 +1133,7 @@ Future<void> main() async {
     bloc.pay(const Order('B')),
   ]);
   print('bloc: api.pay calls ${api.calls}, $receipts');
+  print('  state left behind: ${bloc.state}');
   await bloc.close();
 
   final closed = CheckoutBloc(Api());
@@ -1147,6 +1161,7 @@ Future<void> main() async {
     cubit.pay(const Order('B')),
   ]);
   print('queued cubit: api.pay calls ${cubitApi.calls}, $cubitReceipts');
+  print('  state left behind: ${cubit.state}');
   await cubit.close();
 
   final closingApi = Api();
@@ -1170,16 +1185,17 @@ sealed class CheckoutState {
   const CheckoutState();
 }
 
-final class Cart extends CheckoutState {
-  const Cart();
+final class Idle extends CheckoutState {
+  const Idle();
   @override
-  String toString() => 'Cart';
+  String toString() => 'Idle';
 }
 
 final class Paying extends CheckoutState {
-  const Paying();
+  const Paying(this.orderId);
+  final String orderId;
   @override
-  String toString() => 'Paying';
+  String toString() => 'Paying($orderId)';
 }
 
 final class Paid extends CheckoutState {
@@ -1207,6 +1223,7 @@ Future<void> main() async {
     handlePayRequest(checkout, const Order('B')),
   ]);
   print('api.pay calls: ${api.calls}, $replies');
+  print('  state left behind: ${checkout.currentState}');
   await checkout.close();
 
   final closingApi = Api();

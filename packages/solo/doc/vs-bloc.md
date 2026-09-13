@@ -1158,9 +1158,12 @@ platform handler must return the result of its order. Concurrent requests for
 the same order should share one payment; distinct orders should execute
 sequentially.
 
-Watching `Paid` through a `BlocListener` can serve a screen's navigation, but a
-function answering a platform request needs a result associated with that
-request. `Bloc.add` returns `void`; the
+The controller keeps one state. It names the order being charged and carries
+the receipt of the payment that finished last, so two orders paid one after
+another leave only the second receipt in it. A screen can navigate on `Paid`
+through a `BlocListener` once it checks whose receipt arrived; a function
+answering a platform request needs the result of its own request, delivered
+whether or not another order followed it. `Bloc.add` returns `void`; the
 [awaiting-events discussion](https://github.com/felangel/bloc/issues/1556)
 covers this use case.
 
@@ -1181,9 +1184,9 @@ class Pay extends CheckoutEvent {
 class DroppableCheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
   final Api _api;
 
-  DroppableCheckoutBloc(this._api) : super(Cart()) {
+  DroppableCheckoutBloc(this._api) : super(Idle()) {
     on<Pay>((e, emit) async {
-      emit(Paying());
+      emit(Paying(e.order.id));
       final receipt = await _api.pay(e.order);
       e.result.complete(receipt);
       emit(Paid(receipt));
@@ -1219,10 +1222,10 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
   final Api _api;
   final _inFlight = <String, Completer<Receipt>>{};
 
-  CheckoutBloc(this._api) : super(Cart()) {
+  CheckoutBloc(this._api) : super(Idle()) {
     on<Pay>((e, emit) async {
       try {
-        emit(Paying());
+        emit(Paying(e.order.id));
         final receipt = await _api.pay(e.order);
         e.result.complete(receipt);
         emit(Paid(receipt));
@@ -1230,7 +1233,7 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
         if (!e.result.isCompleted) {
           e.result.completeError(error, stackTrace);
         }
-        emit(PaymentFailed(error));
+        emit(PaymentFailed(e.order.id, error));
       } finally {
         _inFlight.remove(e.order.id);
       }
@@ -1254,7 +1257,9 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
 ```
 
 `await bloc.pay(order)` now returns a receipt. Three calls for two orders make
-two API calls, and both callers for one order receive its receipt.
+two API calls, and both callers for one order receive its receipt. The state
+left behind is `Paid(Receipt(for B))`: the payment that finished last, not a
+record of both.
 
 The completer must finish on every path. The `add` catch removes the map entry
 when a closed `Bloc` refuses the event. `isCompleted` prevents double
@@ -1276,7 +1281,7 @@ class CheckoutCubit extends Cubit<CheckoutState> {
   final _inFlight = <String, Future<Receipt>>{};
   Future<void> _tail = Future.value();
 
-  CheckoutCubit(this._api) : super(Cart());
+  CheckoutCubit(this._api) : super(Idle());
 
   Future<Receipt> pay(Order order) {
     final running = _inFlight[order.id];
@@ -1293,7 +1298,7 @@ class CheckoutCubit extends Cubit<CheckoutState> {
 
   Future<Receipt> _pay(Order order) async {
     try {
-      emit(Paying());
+      emit(Paying(order.id));
       final receipt = await _api.pay(order);
       emit(Paid(receipt));
       return receipt;
@@ -1320,14 +1325,14 @@ Use the order identity as the key and return the job directly:
 final class CheckoutController extends Solo<CheckoutState> {
   final Api _api;
 
-  CheckoutController(this._api) : super(const Cart());
+  CheckoutController(this._api) : super(const Idle());
 
   Job<Receipt> pay(Order order) => run<CheckoutState, Receipt>(
         key: ('pay', order.id),
         policy: Policy.droppable,
         cancellable: false,
         (ctx) async {
-          ctx.emit(const Paying());
+          ctx.emit(Paying(order.id));
           final receipt = await ctx.join(() => _api.pay(order));
           ctx.emit(Paid(receipt));
           return receipt;

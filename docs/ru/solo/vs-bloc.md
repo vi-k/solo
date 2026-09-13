@@ -1172,9 +1172,13 @@ final class DeviceController extends Solo<DeviceState> {
 должны использовать одну оплату; разные заказы должны выполняться
 последовательно.
 
-Наблюдение `Paid` через `BlocListener` может обслужить навигацию экрана,
-но функции, отвечающей на запрос платформы, нужен результат именно этого
-запроса. `Bloc.add` возвращает `void`; этот случай затронут
+Контроллер держит одно состояние. Оно называет заказ, который списывается,
+и несёт квитанцию последней завершившейся оплаты, поэтому от двух заказов,
+оплаченных один за другим, в нём останется только вторая квитанция. Экран может
+навигировать по `Paid` через `BlocListener`, если проверит, чья квитанция
+пришла; функции, отвечающей на запрос платформы, нужен результат именно её
+запроса — независимо от того, пошёл ли следом другой заказ. `Bloc.add`
+возвращает `void`; этот случай затронут
 в [обсуждении ожидания событий](https://github.com/felangel/bloc/issues/1556).
 
 ### Первая попытка
@@ -1194,9 +1198,9 @@ class Pay extends CheckoutEvent {
 class DroppableCheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
   final Api _api;
 
-  DroppableCheckoutBloc(this._api) : super(Cart()) {
+  DroppableCheckoutBloc(this._api) : super(Idle()) {
     on<Pay>((e, emit) async {
-      emit(Paying());
+      emit(Paying(e.order.id));
       final receipt = await _api.pay(e.order);
       e.result.complete(receipt);
       emit(Paid(receipt));
@@ -1232,10 +1236,10 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
   final Api _api;
   final _inFlight = <String, Completer<Receipt>>{};
 
-  CheckoutBloc(this._api) : super(Cart()) {
+  CheckoutBloc(this._api) : super(Idle()) {
     on<Pay>((e, emit) async {
       try {
-        emit(Paying());
+        emit(Paying(e.order.id));
         final receipt = await _api.pay(e.order);
         e.result.complete(receipt);
         emit(Paid(receipt));
@@ -1243,7 +1247,7 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
         if (!e.result.isCompleted) {
           e.result.completeError(error, stackTrace);
         }
-        emit(PaymentFailed(error));
+        emit(PaymentFailed(e.order.id, error));
       } finally {
         _inFlight.remove(e.order.id);
       }
@@ -1268,6 +1272,8 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
 
 `await bloc.pay(order)` теперь возвращает квитанцию. Три вызова по двум заказам
 дают два обращения к API, а оба вызывающих один заказ получают его квитанцию.
+В контроллере остаётся `Paid(Receipt(for B))` — оплата, завершившаяся
+последней, а не запись об обеих.
 
 `Completer` должен завершаться на каждом пути. `catch` вокруг `add` удаляет
 запись из карты, когда закрытый `Bloc` отклоняет событие. `isCompleted`
@@ -1289,7 +1295,7 @@ class CheckoutCubit extends Cubit<CheckoutState> {
   final _inFlight = <String, Future<Receipt>>{};
   Future<void> _tail = Future.value();
 
-  CheckoutCubit(this._api) : super(Cart());
+  CheckoutCubit(this._api) : super(Idle());
 
   Future<Receipt> pay(Order order) {
     final running = _inFlight[order.id];
@@ -1306,7 +1312,7 @@ class CheckoutCubit extends Cubit<CheckoutState> {
 
   Future<Receipt> _pay(Order order) async {
     try {
-      emit(Paying());
+      emit(Paying(order.id));
       final receipt = await _api.pay(order);
       emit(Paid(receipt));
       return receipt;
@@ -1332,14 +1338,14 @@ class CheckoutCubit extends Cubit<CheckoutState> {
 final class CheckoutController extends Solo<CheckoutState> {
   final Api _api;
 
-  CheckoutController(this._api) : super(const Cart());
+  CheckoutController(this._api) : super(const Idle());
 
   Job<Receipt> pay(Order order) => run<CheckoutState, Receipt>(
         key: ('pay', order.id),
         policy: Policy.droppable,
         cancellable: false,
         (ctx) async {
-          ctx.emit(const Paying());
+          ctx.emit(Paying(order.id));
           final receipt = await ctx.join(() => _api.pay(order));
           ctx.emit(Paid(receipt));
           return receipt;
