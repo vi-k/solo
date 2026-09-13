@@ -1428,9 +1428,11 @@ class FunnelReportBloc extends Bloc<ReportEvent, ReportState> {
 The published states are
 `[Ready(Report(30 days)), SignedOut(signed out elsewhere)]`. The session was
 already revoked when the report was published: the revocation event waited its
-turn behind the build it invalidates, and every check in that handler read a
-state that nothing had been allowed to change yet. A screen watching this
-controller shows the report of a session that is gone.
+turn behind the build it invalidates. The check after the await is the part
+worth looking at. It cannot fire here at all — the one event that would change
+the state is queued behind this very handler — so deleting it changes nothing
+that this controller does. A screen watching it shows the report of a session
+that is gone.
 
 The ordering of section 1 and the promptness needed here pull in opposite
 directions, and one registration cannot do both.
@@ -1458,9 +1460,9 @@ class ReportBloc extends Bloc<ReportEvent, ReportState> {
 ```
 
 The run ends at `SignedOut(signed out elsewhere)` without publishing the
-report. The build checks state after its await because the revocation event
-does not cancel its handler or emitter; the check is what the second
-registration buys, not something it replaces.
+report. The same check now fires: the revocation no longer waits behind the
+build, and it does not cancel the build's handler or emitter either. That check
+is what the second registration buys, not something it replaces.
 
 `Cubit` can reflect the notification directly from a subclass method, but its
 asynchronous operations still need equivalent validity checks.
