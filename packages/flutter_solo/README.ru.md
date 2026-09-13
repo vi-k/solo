@@ -175,6 +175,37 @@ class _SaveButtonState extends State<SaveButton> {
 от которого избавляет `SoloSelector`. На источник проекция подписана, только
 пока у неё есть слушатели, и освобождать её не нужно.
 
+## Билдеры для любого контроллера
+
+`ValueListenableBuilder` и `SoloSelector` требуют `ValueListenable`,
+и `SoloListenable` им является. Контроллер, построенный прямо на `SoloBase`, —
+нет: ни `Solo` со своим стримом, ни базовый класс какого-нибудь другого пакета.
+Для них есть два виджета, принимающие сам контроллер:
+
+```dart
+SoloBuilder<Profile>(
+  solo: controller,
+  builder: (context, state, _) => Text('$state'),
+)
+
+SoloSelectBuilder<Profile, bool>(
+  solo: controller,
+  selector: (state) => state.canSave,
+  builder: (context, canSave, _) => ElevatedButton(
+    onPressed: canSave ? controller.save : null,
+    child: const Text('Save'),
+  ),
+)
+```
+
+`SoloBuilder` перестраивается на каждое изменение состояния,
+`SoloSelectBuilder` — только когда изменилась выборка, и проекцию он держит
+через перестроение родителя, поэтому значение, с которым идёт сравнение,
+перестроение переживает. Оба читают состояние после подписки и передают `child`
+нетронутым, и оба сравнивают контроллеры по идентичности, когда родитель даёт
+им новый. `SoloSelection.of(controller, selector)` — та же проекция без виджета
+вокруг, для поля в `State`.
+
 ## Подписка без хранения колбэка
 
 `addListener` требует вернуть тот же самый колбэк, поэтому замыканию нужно

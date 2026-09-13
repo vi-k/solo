@@ -174,6 +174,37 @@ holds notifications back with would go with it — which is the field
 `SoloSelector` spares you. The source is subscribed to only while the selection
 has listeners, and there is nothing to dispose of.
 
+## Builders for any controller
+
+`ValueListenableBuilder` and `SoloSelector` need a `ValueListenable`, and
+`SoloListenable` is one. A controller built on `SoloBase` directly is not — a
+`Solo` with its stream, or the base class of some other package — and for those
+there are two widgets that take the controller itself:
+
+```dart
+SoloBuilder<Profile>(
+  solo: controller,
+  builder: (context, state, _) => Text('$state'),
+)
+
+SoloSelectBuilder<Profile, bool>(
+  solo: controller,
+  selector: (state) => state.canSave,
+  builder: (context, canSave, _) => ElevatedButton(
+    onPressed: canSave ? controller.save : null,
+    child: const Text('Save'),
+  ),
+)
+```
+
+`SoloBuilder` rebuilds on every change of the state; `SoloSelectBuilder` only
+when the pick changes, and it keeps its selection across a parent rebuild, so
+the value the comparison answers from survives one. Both read the state after
+subscribing and hand `child` through untouched, and both compare controllers by
+identity when the parent gives them a new one.
+`SoloSelection.of(controller, selector)` is that selection without a widget
+around it, for a `State` field.
+
 ## Listening without keeping the callback
 
 `addListener` has to be given the same callback back, so a closure needs a

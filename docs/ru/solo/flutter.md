@@ -95,3 +95,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
 контроллера выполняют обновления через контекст. `ListenableBuilder`
 и `AnimatedBuilder` также принимают контроллер, когда самому билдеру значение
 состояния не нужно.
+
+Контроллеру, который не является `ValueListenable`, — `Solo` со своим стримом
+или собственному наследнику `SoloBase` — достаётся `SoloBuilder`: он принимает
+любой `SoloBase`, а во всём остальном это `ValueListenableBuilder`. Когда экран
+следит за одним значением из большого состояния, `SoloSelectBuilder`
+перестраивается только на изменение этого значения, а остальное состояние
+оставляет в покое:
+
+```dart
+SoloSelectBuilder<ProfileState, bool>(
+  solo: profile,
+  selector: (state) => state is Loading,
+  builder: (context, loading, _) => loading
+      ? const CircularProgressIndicator()
+      : ElevatedButton(
+          onPressed: _open,
+          child: const Text('Open profile'),
+        ),
+)
+```
+
+Там, где родитель перестраивается часто, держите выбирающую функцию в поле или
+в `static`: её сравнивают по идентичности, поэтому написанное на месте
+замыкание — каждый раз новое, и каждое такое перестроение делает новую выборку.

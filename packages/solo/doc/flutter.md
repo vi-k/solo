@@ -93,3 +93,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
 controller jobs perform updates through their context. `ListenableBuilder` and
 `AnimatedBuilder` also accept the controller when the builder does not need the
 state value itself.
+
+A controller that is not a `ValueListenable` — a `Solo` with its stream, or a
+`SoloBase` of your own — has `SoloBuilder` instead: it takes any `SoloBase` and
+is `ValueListenableBuilder` in every other respect. When the screen watches one
+value out of a larger state, `SoloSelectBuilder` rebuilds only when that value
+changes and leaves the rest of the state alone:
+
+```dart
+SoloSelectBuilder<ProfileState, bool>(
+  solo: profile,
+  selector: (state) => state is Loading,
+  builder: (context, loading, _) => loading
+      ? const CircularProgressIndicator()
+      : ElevatedButton(
+          onPressed: _open,
+          child: const Text('Open profile'),
+        ),
+)
+```
+
+Hold the picking function in a field or a `static` where the parent rebuilds
+often: it is compared by identity, so an inline closure is a new one every
+build, and each of those builds makes a new selection.

@@ -24,17 +24,6 @@
   slot is freed when the root job finishes, and the next queued job starts
   while the continuation still has to run.
 
-- A recipe for `doc/state.md`: a delivery of your own. `publish` is where a
-  change leaves the engine, and a `SoloBase` subclass that overrides it
-  notifies listeners inside the change — what `SoloListenable` does for
-  Flutter, in pure Dart and in forty lines. Three things such an override owes
-  stand in a table beside it: a listener's failure must not leave `publish`, or
-  the re-evaluation of the rules that follows the call costs a job the
-  cancellation the new state owes it; the pass walks a copy and skips what was
-  removed on the way; `close` drops the listeners for good. No API was added —
-  `publish` was the extension point all along, and it had not been written down
-  anywhere outside the package's own records.
-
 - **Breaking:** `SoloBase` carries its own listeners: `addListener` and
   `removeListener`, and the protected `hasListeners` and `onListenerError`
   beside them. A controller is now observable without a delivery of its own,
@@ -48,6 +37,18 @@
   state owes it. Listeners are dropped when `close` finishes, after the
   observer's `onClose`, and a registration made after that is ignored rather
   than retained.
+
+- `doc/state.md` says what the listeners are and what is left for `publish`.
+  "Observing state" now shows `addListener` beside `currentState` and the
+  stream, and names what the engine promises: the order, the `==` that
+  `removeListener` matches on, the error that goes to `onListenerError` without
+  stopping the pass, and the drop at close. "A delivery of your own" is about
+  the other kind of delivery — a stream, a signal, a line in a log — and what
+  such an override owes; a subclass that used to keep a list of its own is told
+  to drop it, because overriding `addListener` without `super` intercepts the
+  registration rather than adding to it. `doc/flutter.md` names `SoloBuilder`
+  and `SoloSelectBuilder` from `flutter_solo`, the builders for a controller
+  that is not a `ValueListenable`.
 
 - **Breaking:** the controller's synchronous read is `currentState`, not
   `state`. A job body is a closure inside a method of the controller, so every

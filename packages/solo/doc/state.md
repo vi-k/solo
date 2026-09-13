@@ -81,6 +81,10 @@ those handlers may update state; see
 // A read at any moment.
 print(camera.currentState);
 
+// Every change, synchronously, inside the change itself. The listener
+// reads the new state itself, so nothing it reads can be stale.
+camera.addListener(() => print(camera.currentState));
+
 // Every update, in order, on a microtask. The initial state is not
 // replayed, and an equal state still produces an event.
 final subscription = camera.stream.listen(print);
@@ -94,82 +98,73 @@ checked `ctx.state`.
 
 | Type | Provides |
 | --- | --- |
-| `SoloBase<S>` | State, jobs, queue and rules. |
+| `SoloBase<S>` | State, jobs, queue, rules and listeners. |
 | `Solo<S>` | All of `SoloBase` plus a broadcast `stream`. |
 | `SoloListenable<S>` | All of `SoloBase` plus Flutter's `ValueListenable<S>`. |
 
-`SoloListenable` listeners run synchronously, in subscription order. It is a
-sibling of `Solo`, not a subclass: a widget rebuilds from `value`, so the
+The listeners belong to the engine. They run synchronously, in registration
+order, inside the change and before the rules of the running jobs are
+re-evaluated, so a listener is called before the next line of the code that
+changed the state. `removeListener` matches with `==` rather than identity, the
+way `ChangeNotifier` does, so a widget can subscribe in `initState` and
+unsubscribe in `dispose` with a method of its own. A listener that throws does
+not stop the pass: its error goes to `onListenerError`, which hands it to the
+zone unless a subclass says otherwise. Closing drops them for good — a
+registration made afterwards is refused rather than kept, and
+`externalSetState` after that notifies nobody.
+
+`SoloListenable` adds Flutter's `ValueListenable` to that and nothing else. It
+is a sibling of `Solo`, not a subclass: a widget rebuilds from `value`, so the
 controller carries no stream at all.
 
 ### A delivery of your own
 
-`publish` is where a change leaves the engine: override it and the controller
-tells whoever you like. Here it is listeners called inside the change, the way
-`SoloListenable` does it, but in pure Dart:
+The listeners above are the engine's, and they cover the common case. `publish`
+is the seam for delivery of another kind — a stream, a signal, a line in a log:
 
 ```dart
-/// A controller that calls listeners inside the change, synchronously.
-class Watchable<S extends Object> extends SoloBase<S> {
-  final _listeners = <void Function()>[];
-  var _dropped = false;
+/// A controller that writes every change to a log.
+class Logged<S extends Object> extends SoloBase<S> {
+  final void Function(String line) write;
 
-  Watchable(super.initialState);
-
-  void addListener(void Function() listener) => _listeners.add(listener);
-
-  void removeListener(void Function() listener) => _listeners.remove(listener);
+  Logged(super.initialState, this.write);
 
   @override
   void publish(S previous, S current) {
     super.publish(previous, current);
-    if (_dropped) {
-      return;
+    try {
+      write('$previous -> $current');
+    } on Object catch (error, stackTrace) {
+      // The engine re-evaluates the rules of the running jobs right after
+      // this call. An error let out of here would cost a job the
+      // cancellation the new state owes it.
+      Zone.current.handleUncaughtError(error, stackTrace);
     }
-    // Over a copy: a listener may add or remove one while the pass is on.
-    for (final listener in _listeners.toList()) {
-      // One removed earlier in this same pass is not called.
-      if (!_listeners.contains(listener)) {
-        continue;
-      }
-      try {
-        listener();
-      } on Object catch (error, stackTrace) {
-        // The engine re-evaluates the rules of running jobs right after
-        // this call. An error let out of here would cost a job the
-        // cancellation the new state owes it.
-        Zone.current.handleUncaughtError(error, stackTrace);
-      }
-    }
-  }
-
-  @override
-  Future<void> close({SoloCloseMode mode = SoloCloseMode.cancel}) async {
-    await super.close(mode: mode);
-    _dropped = true;
-    _listeners.clear();
   }
 }
 ```
 
-A listener is called before the next line of the code that changed the state,
-and before the engine re-evaluates the rules of the running jobs. It reads the
-new state itself — nothing is handed to it, so nothing it reads can be stale.
-It may change the state again: the nested change joins the publication queue
-instead of overtaking the one it is nested in. Three things such an override
-owes:
+Two things such an override owes:
 
 | What it owes | Why |
 | --- | --- |
-| A listener's failure must not leave `publish` | The rules of the running jobs are re-evaluated right after the call, and an error let out of here costs a job the cancellation the new state owes it. It goes to `Zone.current.handleUncaughtError` from `dart:async`, where a failing hook's error goes. |
-| The pass walks a copy and skips what was removed on the way | A listener may add or remove listeners while it runs. `contains` is enough for a handful; `flutter_solo` keeps a map beside the list, so a pass over n listeners costs n lookups and not n squared. |
-| `close` drops the listeners and stops notifying for good | Otherwise they outlive the controller. The state can still change after `close`: `externalSetState` is not blocked by it. |
+| `super.publish` comes first | It is what calls the listeners, so a delivery of your own runs after the engine's rather than instead of it. `@mustCallSuper` says so and the analyzer holds you to it. |
+| A failure must not leave `publish` | The rules of the running jobs are re-evaluated right after the call, and an error let out of here costs a job the cancellation the new state owes it. It goes to `Zone.current.handleUncaughtError` from `dart:async`, where a failing hook's error goes. |
 
-If a stream is what you want, `Solo` already has one; this is for when a
-microtask is too late. `SoloListenable` is this code plus Flutter's
-`ValueListenable`, which is what makes builders and `Listenable.merge`
-understand it. Pure Dart has no such interface to implement, so a delivery of
-your own speaks to your own code alone — which is why the package ships none.
+`Solo` is this override with a broadcast `StreamController` behind it, and
+`SoloListenable` is the engine's listeners plus Flutter's `ValueListenable`,
+which is what makes builders and `Listenable.merge` understand a controller.
+
+**Coming from a delivery of your own.** A subclass written before the engine
+carried listeners keeps a list of its own and overrides `addListener` and
+`removeListener` without calling `super`. It still compiles, and it is not
+merely one list too many: those overrides intercept the registration, so a
+builder's listener lands in the subclass's list, where the engine's
+`hasListeners` and `onListenerError` do not serve it. Drop the list and the
+overrides. If you still need them — to log a subscription, to connect a source
+lazily — call `super` first, and do not publish state synchronously from inside
+`addListener`: the listener the connection was made for is not registered yet
+at that moment.
 
 ## External state
 
