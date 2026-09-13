@@ -1500,8 +1500,7 @@ revocation cancels it with `Cancelled(rules: is not SignedIn)`.
 `externalSetState` is for a fact that has already happened: the session is
 gone, and no job waiting in line can change that. A request to do something —
 refresh this, fetch that, try again — is ordinary work and belongs in the
-queue. What arrived decides it, not where it came from: a stream is not on its
-own a reason to skip the queue.
+queue.
 
 Stop the auth listener before closing either controller. How is up to the
 application; the snippets show registration only.
