@@ -17,5 +17,8 @@ final class TestSolo extends Solo<TestState> {
       super.lastJobWhere(test);
 
   @override
+  bool get hasListeners => super.hasListeners;
+
+  @override
   void externalSetState(TestState state) => super.externalSetState(state);
 }

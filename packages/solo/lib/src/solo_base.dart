@@ -5,6 +5,7 @@ import 'package:async_job/async_job.dart';
 import 'package:meta/meta.dart';
 
 import 'close_mode.dart';
+import 'listeners.dart';
 import 'observer.dart';
 import 'pending.dart';
 import 'policy.dart';
@@ -81,6 +82,8 @@ abstract class SoloBase<S extends Object> {
   bool _pumpScheduled = false;
   final _unpublished = <(S, S)>[];
   bool _publishing = false;
+  static const Object _closedListeners = Object();
+  Object? _listeners;
 
   /// Creates a controller in [initialState].
   SoloBase(S initialState) : _state = initialState {
@@ -125,11 +128,67 @@ abstract class SoloBase<S extends Object> {
   /// the call — while the engine goes on with the ones it already had.
   bool get isDraining => _draining;
 
+  /// Whether at least one listener is registered on this controller.
+  @protected
+  bool get hasListeners {
+    final listeners = _listeners;
+    return listeners is Listeners && !listeners.isEmpty;
+  }
+
+  /// Registers [listener] to be called synchronously when the state changes.
+  ///
+  /// If the controller has finished closing, this is a no-op: the listener
+  /// is neither registered nor retained, and no error is thrown.
+  void addListener(void Function() listener) {
+    if (identical(_listeners, _closedListeners)) {
+      return;
+    }
+    final existing = _listeners;
+    final Listeners listeners;
+    if (existing is Listeners) {
+      listeners = existing;
+    } else {
+      listeners = Listeners();
+      _listeners = listeners;
+    }
+    listeners.add(listener);
+  }
+
+  /// Removes the earliest active registration of [listener].
+  ///
+  /// If the listener was not registered or was already removed, this is a
+  /// no-op.
+  void removeListener(void Function() listener) {
+    final listeners = _listeners;
+    if (listeners is Listeners) {
+      listeners.remove(listener);
+    }
+  }
+
+  /// Called when a listener throws during notification.
+  ///
+  /// By default forwards the error to [Zone.handleUncaughtError].
+  /// Subclasses may override this to integrate with framework error
+  /// reporting (such as Flutter error reporting).
+  @protected
+  void onListenerError(Object error, StackTrace stackTrace) {
+    Zone.current.handleUncaughtError(error, stackTrace);
+  }
+
   /// Delivery point for subclasses; empty here. Called after `onChange` and
   /// before running jobs are re-evaluated.
   @protected
   @mustCallSuper
-  void publish(S previous, S current) {}
+  void publish(S previous, S current) {
+    final listeners = _listeners;
+    if (listeners is Listeners) {
+      listeners.notify(_reportListenerError);
+    }
+  }
+
+  void _reportListenerError(Object error, StackTrace stackTrace) {
+    _callHook(() => onListenerError(error, stackTrace));
+  }
 
   /// Creates a job without queueing it. Use for job factories such as
   /// `_closeCameraJob()` that are added or run as children later.
@@ -576,6 +635,11 @@ abstract class SoloBase<S extends Object> {
     _draining = false;
     _debug(() => 'closed');
     _callHook(() => observer?.onClose(this));
+    final listeners = _listeners;
+    _listeners = _closedListeners;
+    if (listeners is Listeners) {
+      listeners.clear();
+    }
     completer.complete();
   }
 

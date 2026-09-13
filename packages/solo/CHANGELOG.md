@@ -35,6 +35,20 @@
   `publish` was the extension point all along, and it had not been written down
   anywhere outside the package's own records.
 
+- **Breaking:** `SoloBase` carries its own listeners: `addListener` and
+  `removeListener`, and the protected `hasListeners` and `onListenerError`
+  beside them. A controller is now observable without a delivery of its own,
+  which is what a widget or another package's binding needs; `Solo` keeps its
+  stream and notifies listeners before it. Adding members to a class meant to
+  be extended is breaking on its own: a subclass with a member of one of those
+  names stops compiling. Notification is synchronous and in subscription order,
+  one call per registration; a listener that throws is reported through
+  `onListenerError` -- the zone by default -- and the pass goes on, because an
+  error escaping `publish` would cost a running job the cancellation the new
+  state owes it. Listeners are dropped when `close` finishes, after the
+  observer's `onClose`, and a registration made after that is ignored rather
+  than retained.
+
 - **Breaking:** the controller's synchronous read is `currentState`, not
   `state`. A job body is a closure inside a method of the controller, so every
   member of the controller is in scope there, and a read named `state` looked
