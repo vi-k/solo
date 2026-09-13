@@ -154,7 +154,14 @@ abstract class SoloBase<S extends Object> {
     listeners.add(listener);
   }
 
-  /// Removes the earliest active registration of [listener].
+  /// Removes the earliest active registration equal to [listener].
+  ///
+  /// Registrations are matched with `==`, not identity, because a widget
+  /// subscribes and unsubscribes with a method of its own: `addListener` in
+  /// `initState`, `removeListener` in `dispose`. Naming the method twice
+  /// tears it off twice, and the two function values are equal without being
+  /// identical -- matching by identity would leave the listener registered
+  /// for good. `ChangeNotifier` matches the same way.
   ///
   /// If the listener was not registered or was already removed, this is a
   /// no-op.
