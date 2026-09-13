@@ -287,7 +287,7 @@ search.
 | [Testing](doc/testing.md) | Awaiting outcomes, fake time, timeouts |
 | [Flutter](doc/flutter.md) | `SoloListenable`, owning a controller, rebuilding a screen |
 | [Camera example](doc/camera.md) | One controller with rules, cleanup and a device |
-| [solo and bloc, side by side](doc/vs-bloc.md) | Ten scenarios in both packages |
+| [solo and bloc, side by side](doc/vs-bloc.md) | Eleven scenarios in both packages |
 
 ## Recipes
 
@@ -314,7 +314,7 @@ page named beside it.
 Callers invoke controller methods and receive a job for each operation. Queue
 policy is selected per call, and all root jobs share one queue.
 [solo and bloc, side by side](doc/vs-bloc.md) holds the API correspondences and
-compares ten application scenarios with implementations in both packages.
+compares eleven application scenarios with implementations in both packages.
 
 The package does not include retry policies, built-in timeouts, worker pools,
 dependency injection, persistence or state equality filtering. If work needs
