@@ -74,6 +74,10 @@
 - Document what a job key can be: any object compared with `==`, so a record
   gives a policy the identity of one request — `(_Op.load, id)` — rather than
   of the operation.
+- Document what `add(first: true)` passes: the queue, and nothing else. A
+  replacement queued by `Policy.restart` waits at the tail like any other job,
+  so a job added `first` after it starts ahead of it — cancelling the running
+  job does not reserve the slot after it.
 - Document commands where only the last one counts, in `doc/accumulation.md`: a
   burst that cancels itself out never becomes jobs to take back, and what to do
   when they are separate jobs after all. A recipes table in the README points

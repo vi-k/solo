@@ -267,6 +267,13 @@ abstract class SoloBase<S extends Object> {
   /// Queues [job] and returns it, or the existing job found by
   /// [Policy.droppable].
   ///
+  /// [first] puts the job at the head of the queue instead of the tail. It
+  /// passes what is waiting and nothing else: the running job is not the
+  /// queue's to touch, so this one starts when that job finishes. A
+  /// replacement queued by [Policy.restart] waits at the tail like any
+  /// other, so a job added `first` after it starts ahead of it — cancelling
+  /// the running job does not reserve the slot after it.
+  ///
   /// Throws [StateError] if [job] was already added or run, and
   /// [ArgumentError] if [policy] is not [Policy.sequential] and the job has
   /// no key, if [job] was created by another controller, or if
