@@ -1,12 +1,14 @@
-> **Состояние на 2026-09-13:** вторая редакция, после круга независимого ревью
-> двумя ревьюерами одновременно; имя признака выбрал владелец. К реализации
-> не бралась; план не написан.
+> **Состояние на 2026-09-13:** третья редакция, после двух кругов независимого
+> ревью, в каждом по два ревьюера одновременно; имя признака и судьбу кеша
+> выбрал владелец. К реализации не бралась; план не написан.
 > **Что это:** состояние перестаёт меняться после того, как движок закончил
 > закрытие; запись после этой черты — ошибка программиста.
-> **Связанные записи:** ревью
+> **Связанные записи:** первый круг ревью —
 > `2026-09-13[11]-closed-state-freeze-review.md` и
-> `2026-09-13[12]-closed-state-freeze-review-2.md` — вердикты стоят в конце
-> каждой находки; `2026-09-13[2]-solo-listeners-design.md` — слушатели в ядре
+> `2026-09-13[12]-closed-state-freeze-review-2.md`; второй —
+> `2026-09-13[14]-closed-state-freeze-review-3.md` и
+> `2026-09-13[15]-closed-state-freeze-review-4.md`; вердикты стоят в конце
+> каждой находки. `2026-09-13[2]-solo-listeners-design.md` — слушатели в ядре
 > и точка их сброса.
 
 # Закрытый контроллер не меняет состояние
@@ -110,7 +112,17 @@ bool get isFinished;
 ```
 
 Проверка и запись идут в одном синхронном шаге, поэтому гонки между ними нет:
-между `if (!isFinished)` и `externalSetState` выполниться нечему.
+между `if (!isFinished)` и `externalSetState` выполниться нечему. Ревьюер
+проверил это зондом на реентрантном вызове из `onChange`, на закрытии
+из диагностического колбэка внутри записи, на таймере и на зоне,
+перехватывающей `scheduleMicrotask`: черта синхронную запись не обгоняет.
+
+**Но «синхронный шаг» надо понимать буквально, и в рецепт это идёт отдельной
+строкой: проверять после последнего `await`.** Контрпример ревьюера —
+`if (!isFinished) { write(await something); }` — даёт
+`AWAIT_GAP caught=StateError`, потому что за время ожидания черта успевает
+наступить. Основанием менять бросок на молчание это не является: ошибка здесь
+в проверке, а не в контракте.
 
 **Имя выбрал владелец: `isFinished`.** Оно держит строй с `isClosed`
 и `isDraining` и платит за это тем, что читателю приходится различать
@@ -148,51 +160,80 @@ bool get isFinished;
 
 ## Что становится неправдой
 
-Первая редакция назвала три места и один тест. Ревьюеры довели список до семи
-мест и восьми тестов.
+Первая редакция назвала три места, вторая семь; два круга ревью довели список
+до тринадцати. В дартдоках и в примере:
 
 - **дартдок `externalSetState`** обещает работу после закрытия — переписать;
+- **дартдок `SoloBase.close`**: «The state is left as is» читается теперь
+  наоборот — состояние не «оставлено как есть», а заморожено;
+- **дартдок `SoloObserver.onClose`**: «The controller finished closing»
+  спорит с новым признаком — внутри этого хука `isFinished` ещё ложен;
 - **дартдок `SoloSelection`** в
   `packages/flutter_solo/lib/src/solo_selection.dart`: «`externalSetState`
   is not blocked by closing either» — переписать на то, что выборка
   продолжает читать окончательное состояние;
-- **дартдок `SoloBuilder`** — обещание кеша; см. ниже про тест;
+- **дартдок `SoloBuilder`** — обещание кеша уходит вместе с полем, см. раздел
+  о кеше;
+- **комментарий в `CameraController.dispose`**
+  (`packages/solo/example/lib/src/camera_controller.dart`): «`close()` does
+  not block `externalSetState`» — переписать.
+
+В документах проекта:
+
 - **`doc/state.md`, «External state»**: «It still changes `currentState` and
   calls change hooks after `close()`» — переписать, вместе с переводом
   `docs/ru/solo/state.md`. Там же разобрать разницу между `cancel` и `drain`:
-  при `drain` источник гасят не перед `super.close()`, а защищают признаком;
+  при `drain` источник гасят не перед `super.close()`, а защищают признаком,
+  и проверяют его после последнего `await`;
 - **`doc/state.md`, «Observing state»**: строка про сброс слушателей кончается
   словами «и `externalSetState` после этого не уведомляет никого»; станет
-  «не меняет состояние»;
-- **комментарий в `CameraController.dispose`**
-  (`packages/solo/example/lib/src/camera_controller.dart`): «`close()` does
-  not block `externalSetState`» — переписать;
-- **запись `## Unreleased` в `packages/flutter_solo/CHANGELOG.md`** про
+  «не меняет состояние». **Перевод правится тем же коммитом** — во второй
+  редакции он был назван только для соседней секции, и `check_translations.py`
+  уронил бы гейт;
+- **`docs/architecture.md`, инвариант 8**: там перечислены писатели, бросающие
+  `StateError` вне жизненного цикла — `emit`, `ctx.run`, `each`, `wait`,
+  `join`, `uncancellable`. `externalSetState` после черты добавляется к ним.
+
+В `CHANGELOG`:
+
+- **`packages/flutter_solo/CHANGELOG.md`, `## Unreleased`**, запись про
   микротаску из `observer.onClose`: теперь она получает ошибку записи, а не
   просто теряет доставку;
+- **`packages/solo/CHANGELOG.md`, `## Unreleased`**: «Listeners are dropped
+  when `close` finishes» — привязка к завершению `close` неточна, при
+  приостановленной подписке это разные моменты.
+
+В записях:
+
 - **раздел «Закрытие» в `2026-09-13[2]-solo-listeners-design.md`** пометить
-  пересмотренным. Исторические трассы не переписывать.
+  пересмотренным, и вместе со снятием кеша — **раздел `SoloBuilder`** там же.
+  Исторические трассы не переписывать; пересмотр отмечается только там, где
+  запись работает действующим обоснованием.
 
 ## Тесты
 
-**Восемь существующих тестов краснеют под запретом, и снимается из них один.**
-Списки обоих ревьюеров совпали до имени:
+**Восемь существующих тестов краснеют под запретом: два снимаются, шесть
+переписываются.** Списки обоих ревьюеров первого круга совпали до имени;
+второй круг уточнил, что с каждым делать.
 
 | файл | тест | что с ним |
 |---|---|---|
-| `solo/test/listeners_base_test.dart` | `after close addListener does not retain listener and does not notify` | переписать: ждать `StateError` |
-| `flutter_solo/test/solo_builder_test.dart` | `externalSetState after close rebuilds nothing` | переписать |
-| `flutter_solo/test/solo_builder_test.dart` | `connecting an already closed controller shows its state and does not update further` | переписать |
-| `flutter_solo/test/solo_builder_test.dart` | `the builder is handed the cached state, not a fresh read` | **снять**: кеш и свежее чтение становятся неразличимы |
-| `flutter_solo/test/solo_listenable_test.dart` | `close removes every listener` | переписать |
-| `flutter_solo/test/solo_listenable_test.dart` | `a listener added after close hears nothing and is not retained` | переписать |
-| `flutter_solo/test/solo_listenable_test.dart` | `a microtask scheduled from observer.onClose does not notify listeners` | переписать: микротаска теперь получает ошибку записи |
-| `flutter_solo/test/solo_selection_test.dart` | `a selection of a closed controller answers from the state` | переписать |
+| `solo/test/listeners_base_test.dart` | `after close addListener does not retain listener and does not notify` | переписать: `StateError` на запись плюс прямая проверка, что регистрация не удержана |
+| `flutter_solo/test/solo_builder_test.dart` | `externalSetState after close rebuilds nothing` | **снять**: довести состояние до нового значения нечем, а «бросившая функция не перестроила виджет» — проверка ни о чём |
+| `flutter_solo/test/solo_builder_test.dart` | `connecting an already closed controller shows its state and does not update further` | переписать; предмет снятого соседа целиком лежит здесь |
+| `flutter_solo/test/solo_builder_test.dart` | `the builder is handed the cached state, not a fresh read` | **снять**: кеша больше нет |
+| `flutter_solo/test/solo_listenable_test.dart` | `close removes every listener` | переписать **с прямой проверкой `hasListeners` до и после**: без неё тест проходит и при сохранённом списке |
+| `flutter_solo/test/solo_listenable_test.dart` | `a listener added after close hears nothing and is not retained` | переписать: удержание проверять напрямую, а не отсутствием вызова |
+| `flutter_solo/test/solo_listenable_test.dart` | `a microtask scheduled from observer.onClose does not notify listeners` | переписать: проверять сброс **внутри микротаски**, иначе остаётся ещё один тест запрета записи |
+| `flutter_solo/test/solo_selection_test.dart` | `a selection of a closed controller answers from the state` | переписать: выборка по-прежнему читает окончательное состояние |
 
-Семь из восьми проверяют самостоятельные обещания — сброс слушателей,
-подключение закрытого контроллера, чтение выборки от закрытого источника, —
-и снимать их вместе с тестом кеша нельзя: они меняют только способ довести
-состояние до нужного, а проверяют по-прежнему своё.
+**Механически переписать удаётся не всё, и это доказано мутацией.** Ревьюер
+второго круга запретил запись отдельным флагом, оставив старый список
+слушателей: механически переписанный `close removes every listener` прошёл
+(`RETAINED=true calls=0`, `All tests passed!`), а с прямой проверкой упал.
+Отсюда правило для плана: у каждого переписанного теста назван предмет,
+который он обязан проверять после правки, и отсутствие вызова предметом
+не считается — запись после черты до доставки не доходит в принципе.
 
 Новое, ядро (`packages/solo`):
 
@@ -202,7 +243,7 @@ bool get isFinished;
 - во время `drain` состояние меняется и доходит до слушателей и до стрима,
   а `isFinished` там ложен;
 - `externalSetState` изнутри `observer.onClose` меняет состояние и доходит
-  до слушателя, подписавшегося в том же хуке;
+  до слушателя, подписавшегося в том же хуке, — и `isFinished` там ещё ложен;
 - задача `cancellable: false`, которую дожидается закрытие, пишет состояние
   до конца;
 - повторный `close()` ничего не меняет;
@@ -212,7 +253,27 @@ bool get isFinished;
 `flutter_solo`:
 
 - `SoloListenable.value` после черты не меняется;
-- набор остаётся зелёным после переписывания семи тестов и снятия восьмого.
+- набор остаётся зелёным после переписывания шести тестов и снятия двух.
+
+## Что круги подтвердили
+
+Не находки, а проверенное — чтобы план не перепроверял заново:
+
+- **`isFinished` закрывает дыру с `drain` полностью.** Оба ревьюера написали
+  наследника с защищённым источником, закрыли его через `SoloCloseMode.drain`
+  и показали: во время дренажа факты доходят, после черты отбрасываются
+  молча, `StateError` не летит;
+- **штатного пути к `StateError` у корректной программы не остаётся.**
+  Проверены дренаж, дети через `each`, `cancellable: false`, окна аккумуляции
+  (`debounce`, `throttle`, `collect`), `onDispose`/`onDiscard` — они идут
+  внутри `_execute` до `finish()`, то есть черта ещё не наступила, — и
+  наследник с приостановленной подпиской;
+- **после `await super.close()` наследник записать уже ничего не может**:
+  базовый `Future` завершается за чертой. Терминальное состояние пишется
+  до `super.close()` или синхронно изнутри `observer.onClose`;
+- **признак действительно ломающий**: наследник с собственным членом
+  `isFinished` перестаёт компилироваться — `invalid_override` при другом
+  типе, `conflicting_method_and_field` при методе вместо геттера.
 
 ## Мутации
 
@@ -221,7 +282,10 @@ bool get isFinished;
   хука;
 - заменить бросок на молчаливый выход — падает тест про `StateError`;
 - снять проверку совсем — падает тест про неизменный `currentState`;
-- сделать `isFinished` синонимом `isClosed` — падает тест про `drain`.
+- сделать `isFinished` синонимом `isClosed` — падает тест про `drain`;
+- запретить запись, но оставить список слушателей нетронутым — падает
+  `close removes every listener`. Эта мутация и показала, что механическая
+  замена поздней записи на `throwsStateError` теста не сохраняет.
 
 ## Кеш `SoloBuilder` уходит
 
@@ -247,6 +311,10 @@ bool get isFinished;
 
 `isFinished` — добавление члена в наследуемый класс, то есть само по себе
 ломающее, ровно как `hasListeners` и `onListenerError` в прошлой правке.
+В самом монорепозитории конфликтов нет ни одного, но имя не свободное:
+у `Job` в соседнем `async_job` геттер `isFinished` уже есть, и у контроллера,
+который ведёт загрузку или синхронизацию, это одно из первых имён, какое
+приходит в голову. В `CHANGELOG` это стоит сказать прямо.
 
 ## Чего спека не делает
 
