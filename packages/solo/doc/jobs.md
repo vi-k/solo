@@ -182,6 +182,6 @@ showing what runs shows the pause instead. Whether the controller is paused is
 yours to keep.
 
 `canStart` is not a pause. A job whose rule does not fit the state is not held
-back: it is cancelled where it stands, with `Cancelled(rules: is not Ready)`,
-and the queue empties instead of filling up. A pause built on it loses the work
+back: it is cancelled where it stands, with `Cancelled(rules: canStart)`, and
+the queue empties instead of filling up. A pause built on it loses the work
 silently.
