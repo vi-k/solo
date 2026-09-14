@@ -65,8 +65,9 @@ had already typed past.
 
 #### The second attempt
 
-`Policy.restart` cancels the job that is running when the next one arrives.
-Only the method changes:
+`Policy.restart` cancels the job that is running when the next one arrives; the
+queue's own policies are in [Jobs and the queue](jobs.md). Only the method
+changes:
 
 ```dart
 SoloJob<void> query(String text) => run<SearchState, void>(
@@ -430,11 +431,10 @@ the buffer is the job's input: the entries are sealed into the group the queue
 takes, the caller gets the same `SoloJob` every other addition got, and closing
 the controller drops the group instead of leaving a list and a timer behind.
 
-The first group is ready immediately; later groups start at least one second
-apart. Entries received during that interval are kept for the next group. This
-controller's state counts entries whose send operation completed and whose
+This controller's state counts entries whose send operation completed and whose
 handler reached `emit`. The policy section explains why this example chooses
-`join` as its accumulation policy.
+`join` as its accumulation policy, and the timing section explains what a
+throttle interval measures from.
 
 Collecting entries does not guarantee delivery. A failed send, a cancelled
 group or controller shutdown can leave them unsent. Durable storage, retries
@@ -614,7 +614,7 @@ accepted event in each group. Every addition restarts the timer, even when
 120 ms make the group ready at 320 ms. Continuous input can keep an open group
 waiting indefinitely. When the timer fires, the group is sealed even if another
 job is running. Later events form a new group; they cannot change the sealed
-input. `collect` makes its unmodifiable snapshot once, when sealing.
+input. `collect` takes its snapshot then, and not again.
 
 `AccumulationTiming.throttle(duration)` allows the first group to start
 immediately, then waits at least `duration` between actual starts of the same
@@ -723,8 +723,8 @@ await group.cancel();
 All three policies operate on queued groups. A group stops accepting events
 when debounce seals it or when it is taken from the queue, before `canStart`
 and `onStart`. Events added from either callback go to a later group. The
-handler gets the configured working type and rules, and the queue waits for its
-children and cleanup just as it does for any other `SoloJob`.
+handler gets the configured working type and rules, and is an ordinary
+`SoloJob` to the queue in every other way.
 
 An accumulator creates no job until the first event. Without timing, if each
 group finishes before the next event arrives, each event starts a separate job.
@@ -744,11 +744,12 @@ Calling the same accumulator's `add` from within its `merge` throws
 `StateError`. The engine also checks that the target group is still eligible
 after the callback, before committing the result.
 
-`canStart`, `keepWhile` and cancellation apply to the whole job. A start rule
-can cancel all of its accumulated input. The handler's result and errors follow
-the ordinary `Job` contract; accepted cancellation still takes precedence over
-a later value or error. The accumulator does not roll back partial external
-effects or resend failed input automatically.
+`canStart`, `keepWhile` and cancellation apply to the whole job, and the rules
+themselves are in [State and rules](state.md). A start rule can cancel all of
+its accumulated input. The handler's result and errors follow the ordinary
+`Job` contract; accepted cancellation still takes precedence over a later value
+or error. The accumulator does not roll back partial external effects or resend
+failed input automatically.
 
 Cancelling a queued debounce group removes its timer. Removing or clearing
 throttle groups preserves an already started interval, so adding another event
