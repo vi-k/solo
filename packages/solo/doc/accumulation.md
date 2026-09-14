@@ -628,6 +628,12 @@ may start; `collect` still keeps every accepted event, and `accumulate` keeps
 whatever its `merge` returns. For example,
 `merge: (previous, incoming) => incoming` keeps only the latest value.
 
+| | `debounce(duration)` | `throttle(duration)` |
+| --- | --- | --- |
+| The first group is ready | after `duration` with no new event | at once |
+| An addition | restarts the timer | does not extend it |
+| The wait is measured from | the last accepted event | the previous actual start |
+
 `AccumulationTiming.debounce(duration)` waits for a pause after the last
 accepted event in each group. Every addition restarts the timer, even when
 `merge` returns an unchanged value. With a 200 ms interval, events at 0, 60 and
