@@ -7,7 +7,7 @@
 > адрес записи — результат отдельного `wait`, а не то, что ребёнок вернул.
 > Он и решил вопрос в пользу `ctx.disownFrom(child)`.
 > **Связанные записи:** спека — `2026-09-14[17]-discard-follows-the-value-design.md`;
-> первый ревьюер круга — `2026-09-14[20]-discard-follows-the-value-review-3.md`.
+> первый ревьюер круга — `2026-09-14[26]-discard-follows-the-value-review-3.md`.
 
 # Ревью спеки «Отложенное освобождение следует за значением»
 
@@ -95,7 +95,7 @@ DOMAIN valuedConditional=true removerExists=true sameShapeAsWait=true
 снятия, однако продолжает обещать сохранение «новейшей регистрации ребёнка».
 
 Это **незакрытая часть принятой находки 5**
-из `docs/records/2026-09-14[19]-discard-follows-the-value-review-2.md`. Там был
+из `docs/records/2026-09-14[25]-discard-follows-the-value-review-2.md`. Там был
 не только совет развернуть список, но и конкретный вход `[3, 4, 1]`.
 
 **Доказательство:** зонд `address_and_order.dart` использует публичную основу
@@ -138,8 +138,8 @@ DYNAMIC localDisownRemoves=late remaining=[top, bottom] specRenumberWouldRemove=
 **Что не так:** заголовок строки 219 требует покраснения до правки, однако
 критерии 2, 5, 6, 7, 8, 9, 15 и корневая половина 16 описывают существующее
 поведение. Это повтор **принятых, но не внесённых** находок 7–8
-из `docs/records/2026-09-14[18]-discard-follows-the-value-review.md` и находки
-7 из `docs/records/2026-09-14[19]-discard-follows-the-value-review-2.md`.
+из `docs/records/2026-09-14[24]-discard-follows-the-value-review.md` и находки
+7 из `docs/records/2026-09-14[25]-discard-follows-the-value-review-2.md`.
 
 Добавление группы 18–23 не перенесло туда старые зелёные входы. Более того,
 критерии 4, 6 и 12 не различают названные изменения шва в указанном виде.
@@ -201,7 +201,7 @@ ROOT_THEN sourceParent=null tailParent=null closes=0
 **Важность:** править до плана
 
 **Что не так:** принятая находка 6
-из `docs/records/2026-09-14[19]-discard-follows-the-value-review-2.md`
+из `docs/records/2026-09-14[25]-discard-follows-the-value-review-2.md`
 требовала миграции повторной регистрации и сторонних получателей. Вторая
 редакция оставила пример повторного `onDiscard` со словами «нет ничего
 неверного», не назвала необходимое удаление повторной записи и обобщила
@@ -337,7 +337,7 @@ ERROR_ROUTE mode=cancelled ignoredParent=true childObserver=0 parentObserver=nul
 
 ### Что осталось от пятнадцати принятых вердиктов
 
-По `docs/records/2026-09-14[18]-discard-follows-the-value-review.md`:
+По `docs/records/2026-09-14[24]-discard-follows-the-value-review.md`:
 
 | Находка первого круга | Состояние во второй редакции |
 | --- | --- |
@@ -350,7 +350,7 @@ ERROR_ROUTE mode=cancelled ignoredParent=true childObserver=0 parentObserver=nul
 | 7. Мутация `order` | Не закрыто: в нынешнем критерии 12 та же мутация без `disown`. |
 | 8. Уже зелёные критерии | Не закрыто: добавлен заголовок сторожей, но исходные зелёные входы остались среди обязанных краснеть. |
 
-По `docs/records/2026-09-14[19]-discard-follows-the-value-review-2.md`:
+По `docs/records/2026-09-14[25]-discard-follows-the-value-review-2.md`:
 
 | Находка первого круга | Состояние во второй редакции |
 | --- | --- |
