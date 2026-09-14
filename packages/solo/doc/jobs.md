@@ -144,8 +144,12 @@ SoloJob<void> stop() {
 `queue` exposes `jobs`, `length`, `isEmpty`, `isNotEmpty`, `remove`,
 `removeWhere`, `clear` and `lastWhere`. Removal methods affect queued jobs only
 — the running job is not theirs to touch — and they preserve jobs with
-`cancellable: false` unless called with `force: true`. Time-delayed accumulator
-groups can let ready jobs pass; see [Event accumulation](accumulation.md).
+`cancellable: false` unless called with `force: true`.
+
+The order in `jobs` is not the order jobs will run in: a job waiting for an
+accumulation window can be passed by a ready one standing behind it, so the
+head of the queue is not always what starts next. See
+[Event accumulation](accumulation.md).
 
 ### Pausing the queue
 
