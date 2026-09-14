@@ -751,14 +751,74 @@ void main() {
 """)
 
 # ------------------------------------------------------------------ policies
-# The reference's own three lines, run as written. They are statements, not a
-# declaration, so the bench gives them the controller they talk to and checks,
-# right under them, the row of the table they belong to: with B between the
-# two additions, A2 is a job of its own and not A1's.
+# The reference's own three lines, run as written, and then the table they
+# belong to: all three rows, on three controllers made out of the document's
+# own by changing exactly two things -- the policy, and no debounce, because
+# a waiting group is about readiness and the table is about position.
+CONTROLLER = snips['recipes/SettingsController']
+
+
+def with_policy(name, policy):
+    body = (CONTROLLER
+            .replace('class SettingsController extends Solo<Settings> {',
+                     f'final class {name} extends Solo<Settings> {{')
+            .replace('SettingsController(this._api, Settings initial)',
+                     f'{name}(this._api, Settings initial)')
+            .replace(
+                "    timing: AccumulationTiming.debounce("
+                "const Duration(milliseconds: 200)),\n",
+                f'    policy: AccumulationPolicy.{policy},\n'))
+    assert f'class {name} ' in body, name
+    assert f'AccumulationPolicy.{policy}' in body, policy
+    assert 'AccumulationTiming' not in body, 'the debounce has to be gone'
+    return body
+
+
+ORDERED_FAKE = '''
+/// Records what reached the server and in which order. Both calls take
+/// 100 ms, so nothing is ready ahead of its turn for a reason of its own.
+class OrderedSettingsApi implements SettingsApi {
+  final order = <String>[];
+
+  @override
+  Future<void> save(Settings settings) {
+    order.add('save ${settings.theme}/${settings.language}');
+    return Future<void>.delayed(const Duration(milliseconds: 100));
+  }
+
+  @override
+  Future<Settings> load() {
+    order.add('load');
+    return Future<Settings>.delayed(
+      const Duration(milliseconds: 100),
+      () => start,
+    );
+  }
+}
+
+/// A1, then B, then A2, with the queue already occupied by a job of its own.
+/// The same three additions for every row of the table.
+List<Object?> threeAdditions(
+  OrderedSettingsApi api,
+  SoloJob<void> Function() reload,
+  SoloJob<void> Function(SettingsPatch) update,
+) {
+  final busy = reload();
+  final a1 = update(const SettingsPatch(theme: 'dark'));
+  reload();
+  final a2 = update(const SettingsPatch(language: 'ru'));
+  return [busy, a1, a2];
+}
+'''
+
 FILES['policies'] = (
     with_fake_async('recipes/Settings', dart_async=True)
     + snips['recipes/SettingsController']
+    + with_policy('AdjacentSettingsController', 'adjacent')
+    + with_policy('JoiningSettingsController', 'join')
+    + with_policy('ReplacingSettingsController', 'replace')
     + SETTINGS_FAKE
+    + ORDERED_FAKE
     + """
 void threeCalls(SettingsController settings) {
 """
@@ -770,6 +830,8 @@ void threeCalls(SettingsController settings) {
     + REQUIRE
     + '''
 void main() {
+  // The reference's three lines, exactly as it prints them, against a
+  // controller whose queue is already occupied.
   fakeAsync((clock) {
     final api = RecordingSettingsApi();
     final settings = SettingsController(api, start);
@@ -787,8 +849,6 @@ void main() {
     api.loading!.complete(start);
     clock.elapse(const Duration(seconds: 1));
 
-    // What `adjacent` costs here: B stood between the two additions, so they
-    // are two groups and the server is written to twice.
     require(api.saved.length == 2, 'two groups, two writes');
     require(api.saved.first.theme == 'dark', 'A1 went first, with its field');
     require(api.saved.last.language == 'ru', 'A2 followed, with its own');
@@ -796,6 +856,87 @@ void main() {
         'writes ${api.saved.length} '
         '(${api.saved.first.theme}, then ${api.saved.last.language}), '
         'state ${describe(settings.currentState)}');
+    print('');
+
+    settings.close();
+    clock.flushMicrotasks();
+  });
+
+  // The table, row by row. What the queue holds is not readable from
+  // outside, so what is checked is what it does: the order the server is
+  // called in, and the handle A2 came back with.
+  print('| policy | the server is called | handle for A2 |');
+
+  // adjacent: [A1, B, A2] -- A1 writes, B loads, A2 writes.
+  fakeAsync((clock) {
+    final api = OrderedSettingsApi();
+    final settings = AdjacentSettingsController(api, start);
+    final handles =
+        threeAdditions(api, settings.reload, settings.update);
+    final a1 = handles[1]! as SoloJob<void>;
+    final a2 = handles[2]! as SoloJob<void>;
+    clock.elapse(const Duration(seconds: 2));
+
+    require(
+      api.order.join(', ') == 'load, save dark/en, load, save light/ru',
+      'adjacent: A1 writes, B loads between them, A2 writes -- and A2 builds '
+          'on what B left, which is why the theme is back to light',
+    );
+    require(!identical(a1, a2), 'adjacent: A2 is a new job');
+    print('| adjacent | ${api.order.join(', ')} | a new job |');
+
+    settings.close();
+    clock.flushMicrotasks();
+  });
+
+  // join: [A(A1 + A2), B] -- one write, ahead of B, and A2 is A1's job.
+  fakeAsync((clock) {
+    final api = OrderedSettingsApi();
+    final settings = JoiningSettingsController(api, start);
+    final handles =
+        threeAdditions(api, settings.reload, settings.update);
+    final a1 = handles[1]! as SoloJob<void>;
+    final a2 = handles[2]! as SoloJob<void>;
+    clock.elapse(const Duration(seconds: 2));
+
+    require(
+      api.order.join(', ') == 'load, save dark/ru, load',
+      'join: one write, carrying both, and it keeps its place before B',
+    );
+    require(identical(a1, a2), "join: A2 is A1's existing job");
+    print("| join | ${api.order.join(', ')} | A1's existing job |");
+
+    settings.close();
+    clock.flushMicrotasks();
+  });
+
+  // replace: [B, A(A1 + A2)] -- one write, behind B, and A1 is cancelled.
+  fakeAsync((clock) {
+    final api = OrderedSettingsApi();
+    final settings = ReplacingSettingsController(api, start);
+    final handles =
+        threeAdditions(api, settings.reload, settings.update);
+    final a1 = handles[1]! as SoloJob<void>;
+    final a2 = handles[2]! as SoloJob<void>;
+    clock.elapse(const Duration(seconds: 2));
+
+    require(
+      api.order.join(', ') == 'load, load, save dark/ru',
+      'replace: one write, carrying both, moved behind B',
+    );
+    require(!identical(a1, a2), 'replace: A2 is a new job');
+    final outcome = a1.outcome;
+    require(outcome is Cancelled, "replace: A1's job is cancelled");
+    require(
+      (outcome! as Cancelled).description == 'replaced by accumulated group',
+      'and it says what replaced it',
+    );
+    require(
+      !(outcome as Cancelled).started,
+      'the replaced group had not started',
+    );
+    print('| replace | ${api.order.join(', ')} | '
+        'a new job; A1 ${a1.outcome} |');
 
     settings.close();
     clock.flushMicrotasks();
