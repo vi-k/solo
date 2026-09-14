@@ -1162,15 +1162,16 @@ the receipt of the payment that finished last, so two orders paid one after
 another leave only the second receipt in it. A screen can navigate on `Paid`
 through a `BlocListener` once it checks whose receipt arrived; a function
 answering a platform request needs the result of its own request, delivered
-whether or not another order followed it. `Bloc.add` returns `void`; the
-[awaiting-events discussion](https://github.com/felangel/bloc/issues/1556)
-covers this use case.
+whether or not another order followed it.
 
 ### The first attempt
 
-The result has to travel on the event itself, as a completer the caller awaits.
-`droppable()` reads like the policy for sharing one payment: while a charge is
-running, another request for it should not start a second one.
+`Bloc.add` returns `void`, and the
+[awaiting-events discussion](https://github.com/felangel/bloc/issues/1556)
+covers this use case: the result has to travel on the event itself, as a
+completer the caller awaits. `droppable()` reads like the policy for sharing
+one payment: while a charge is running, another request for it should not start
+a second one.
 
 ```dart
 class Pay extends CheckoutEvent {
