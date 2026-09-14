@@ -5,6 +5,7 @@ import 'package:meta/meta.dart';
 
 import 'observer.dart';
 
+part 'envelope.dart';
 part 'job_context.dart';
 part 'job_stream.dart';
 part 'job_then.dart';
@@ -828,6 +829,11 @@ abstract class JobBase<T> implements Job<T> {
       _debug(() => '$this kept a cancellation out of the zone: $error');
       return;
     }
+    final envelope = _analyzeEnvelope(error);
+    if (envelope != null && envelope.isCleanCancellation) {
+      _debug(() => '$this kept a cancellation envelope out of the zone');
+      return;
+    }
     _debug(() => '$this error went to the zone: $error');
     _zone.handleUncaughtError(error, stackTrace);
   }
@@ -898,13 +904,24 @@ abstract class JobBase<T> implements Job<T> {
         outcome = selfCancelled = _handlerCancel(cancelled, stackTrace);
       }
     } on Object catch (error, stackTrace) {
-      // Read before the observer hears: it is handed the job, and an
-      // `onError` that cancels would otherwise make a failure that came
-      // first look like it came second. The order is the whole diagnosis,
-      // and it is settled at the moment of the throw.
-      failedFirst = _pendingCancel == null;
-      notifyObserver(error, stackTrace);
-      outcome = Failed(error, stackTrace);
+      final envelope = _analyzeEnvelope(error);
+      if (envelope != null && envelope.isCleanCancellation) {
+        final cancelled = envelope.firstCancelled!;
+        if (_pendingCancel case final pending?) {
+          outcome = pending;
+        } else {
+          outcome = selfCancelled =
+              _handlerCancel(cancelled, envelope.firstStackTrace!);
+        }
+      } else {
+        // Read before the observer hears: it is handed the job, and an
+        // `onError` that cancels would otherwise make a failure that came
+        // first look like it came second. The order is the whole diagnosis,
+        // and it is settled at the moment of the throw.
+        failedFirst = _pendingCancel == null;
+        notifyObserver(error, stackTrace);
+        outcome = Failed(error, stackTrace);
+      }
     }
     // The body has ended: from here a value coming out of a call it walked
     // away from can no longer reach it, and no child is started any more.
