@@ -110,8 +110,8 @@ way `ChangeNotifier` does, so a widget can subscribe in `initState` and
 unsubscribe in `dispose` with a method of its own. A listener that throws does
 not stop the pass: its error goes to `onListenerError`, which hands it to the
 zone unless a subclass says otherwise. Closing drops them for good — a
-registration made afterwards is refused rather than kept, and
-`externalSetState` after that notifies nobody.
+registration made afterwards is refused rather than kept, and the state stops
+moving with them: `externalSetState` past that point throws a `StateError`.
 
 `SoloListenable` adds Flutter's `ValueListenable` to that and nothing else. It
 is a sibling of `Solo`, not a subclass: a widget rebuilds from `value`, so the
@@ -181,7 +181,9 @@ final class Camera extends Solo<CameraState> {
     _link = device.connection.listen((connected) {
       // The device has already disconnected: reflect the fact at once
       // instead of queueing a job that would wait behind the current one.
-      if (!connected) {
+      // `isFinished` is false for as long as the engine runs, a drain
+      // included, and true once the state is final.
+      if (!connected && !isFinished) {
         externalSetState(const Disconnected());
       }
     });
@@ -189,9 +191,8 @@ final class Camera extends Solo<CameraState> {
 
   @override
   Future<void> close({SoloCloseMode mode = SoloCloseMode.cancel}) async {
-    // Stop the external listener first: it can still change state.
-    await _link.cancel();
     await super.close(mode: mode);
+    await _link.cancel();
   }
 }
 ```
@@ -215,11 +216,19 @@ asks the controller to perform work, such as refresh data or save an incoming
 value, enqueue a normal job. An event being delivered by a stream does not by
 itself justify bypassing the queue.
 
+Stopping the source before `super.close()` is the tidier-looking order, and
+with `SoloCloseMode.cancel` it costs nothing. With `SoloCloseMode.drain` it
+costs the drain: the queue goes on running after the call, and the jobs in it
+are the ones that most need to hear that the device is gone. The guard is what
+lets one order serve both modes. Check it after the last `await` of the handler
+— a suspension between the check and the write lets the engine finish in
+between, and the write then throws.
+
 Use job bodies and their state handlers for the controller's own success,
 failure and cancellation. `externalSetState` is an exception for external
-facts, not a general setter for those operations. It still changes
-`currentState` and calls change hooks after `close()`, while `Solo`'s closed
-stream no longer delivers updates — which is why the listener is stopped first.
+facts, not a general setter for those operations. It works for as long as the
+engine does, a drain included, and throws a `StateError` once closing has
+finished: the state a controller stops at is the state it keeps.
 
 ## State after failure or cancellation
 

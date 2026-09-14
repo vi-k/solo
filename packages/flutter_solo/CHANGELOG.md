@@ -1,5 +1,11 @@
 ## Unreleased
 
+- `SoloBuilder` no longer keeps a copy of the state. It subscribes, and every
+  rebuild reads `SoloBase.currentState`; the field, the two reads that filled
+  it and the promise in the dartdoc are gone together. The copy could differ
+  from a fresh read in one place only -- a closed controller whose state moved
+  on with nobody told -- and `solo` no longer lets the state move there.
+
 - `SoloSelector` and `SoloSelectBuilder` keep the subscription to their
   selection themselves instead of wrapping a `ValueListenableBuilder` around
   it. Behaviour is unchanged -- the value is read after subscribing, kept until
@@ -54,10 +60,12 @@
   for good. It was never notified -- a flag saw to that -- but it was held; now
   the registration is refused outright and nothing is retained.
 - A change delivered from a microtask scheduled inside the observer's `onClose`
-  no longer reaches listeners. The list used to be dropped one microtask later,
-  in the continuation of the engine's close; the engine now drops it
-  synchronously, right after the hook. A change made *inside* the hook still
-  reaches them.
+  no longer reaches listeners -- and with `solo` freezing the state of a closed
+  controller, it is no longer a change at all: the engine has finished by then,
+  so `externalSetState` from there throws a `StateError`. The list used to be
+  dropped one microtask later, in the continuation of the engine's close; the
+  engine now drops it synchronously, right after the hook. A change made
+  *inside* the hook still reaches them.
 
 - **Breaking:** `SoloListenable` is built on `SoloBase`, not on `Solo`, and has
   no `stream`. The listeners are its whole delivery: a widget rebuilds from

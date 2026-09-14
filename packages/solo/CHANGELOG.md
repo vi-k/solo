@@ -1,5 +1,26 @@
 ## Unreleased
 
+- **Breaking:** the state of a closed controller is final. Once the engine has
+  finished closing, `externalSetState` throws a `StateError` where it used to
+  change `currentState` and call the change hooks with nobody left to hear them
+  -- the listeners were gone and a closed stream dropped the event, so the
+  state moved in silence and every reader had to choose for itself between the
+  last thing it was told and what the controller holds now.
+
+- **Breaking:** `SoloBase` gains `isFinished`, the guard a subclass checks
+  before feeding an external fact. `isClosed` will not do: it is true from the
+  first line of `close`, so guarding with it starves a `SoloCloseMode.drain` of
+  the very facts the queue it is running still needs. The line is where the
+  listeners are dropped, not where `close` returns. Check it after the last
+  `await` -- a suspension between the check and the write lets the engine
+  finish in between. The documented order changes with it: a source is no
+  longer stopped before `super.close()`, it is guarded and cancelled
+  afterwards, which is the one order that serves both close modes. Adding a
+  member to a class meant to be extended is breaking on its own, and this name
+  is not a free one: `Job` in `async_job` already has `isFinished`, and a
+  controller that drives a download or a sync is where a subclass would most
+  likely have spelled it the same way.
+
 - `doc/vs-bloc.md` is rebuilt around the mistake. Every one of the eleven
   scenarios now opens with "The first attempt" — the code the requirement
   invites, and the proof that it does not hold — before the implementation that
@@ -34,9 +55,11 @@
   one call per registration; a listener that throws is reported through
   `onListenerError` -- the zone by default -- and the pass goes on, because an
   error escaping `publish` would cost a running job the cancellation the new
-  state owes it. Listeners are dropped when `close` finishes, after the
-  observer's `onClose`, and a registration made after that is ignored rather
-  than retained.
+  state owes it. Listeners are dropped when the engine finishes closing, right
+  after the observer's `onClose` -- which is not the same moment as the future
+  of a subclass's `close` completing: a paused stream subscription holds that
+  future open long after the engine is done -- and a registration made after
+  that is ignored rather than retained.
 
 - `doc/state.md` says what the listeners are and what is left for `publish`.
   "Observing state" now shows `addListener` beside `currentState` and the
