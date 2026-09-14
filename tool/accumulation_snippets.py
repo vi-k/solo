@@ -1403,7 +1403,7 @@ void main() {
     clock.flushMicrotasks();
   });
 
-  // replace: [B, A(A1 + A2)] -- one write, behind B, and A1 is cancelled.
+  // replace: [B, A(A1 + A2)] -- one write, behind B, on the same job.
   fakeAsync((clock) {
     final api = OrderedSettingsApi();
     final settings = ReplacingSettingsController(api, start);
@@ -1417,19 +1417,10 @@ void main() {
       api.order.join(', ') == 'load, load, save dark/ru',
       'replace: one write, carrying both, moved behind B',
     );
-    require(!identical(a1, a2), 'replace: A2 is a new job');
-    final outcome = a1.outcome;
-    require(outcome is Cancelled, "replace: A1's job is cancelled");
-    require(
-      (outcome! as Cancelled).description == 'replaced by accumulated group',
-      'and it says what replaced it',
-    );
-    require(
-      !(outcome as Cancelled).started,
-      'the replaced group had not started',
-    );
-    print('| replace | ${api.order.join(', ')} | '
-        'a new job; A1 ${a1.outcome} |');
+    require(identical(a1, a2), "replace: A2 is A1's job, moved");
+    require(a1.outcome is Done, 'and the caller of A1 is told it was done');
+    print("| replace | ${api.order.join(', ')} | "
+        "A1's existing job, moved behind B |");
 
     settings.close();
     clock.flushMicrotasks();

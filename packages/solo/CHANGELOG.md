@@ -1,5 +1,26 @@
 ## Unreleased
 
+- **Breaking:** `AccumulationPolicy.replace` moves the waiting group's job to
+  the tail instead of building a new job and cancelling this one. Every event
+  of one group now shares its handle and outcome under every policy: five
+  events into a busy queue give one handle and one `Done`, where they used to
+  give five handles and four
+  `Cancelled(manual, 'replaced by accumulated group')`. The grouping and the
+  moments a group starts are unchanged; what changes is the handle and the
+  outcome of the events that used to be replaced. `cancellable: false` no
+  longer means anything here -- a move is not a removal -- and the cancellation
+  callbacks that used to run in the middle of a replacement do not run at all,
+  so a group can no longer be cancelled or closed from inside another event's
+  `add`. The engine's debug trace says `move <job> to the tail` where the
+  observer used to see a job dropped.
+
+- **Migrating.** Code that waits on the handle an `add` returned keeps working
+  and now sees the group's real outcome. Code that treated
+  `Cancelled(manual, 'replaced by accumulated group')` as "mine was pushed out"
+  has nothing to react to any more: the event was not pushed out, it is in the
+  group. Code that held an earlier handle and compared it with a later one to
+  detect a replacement should compare what the group carries instead.
+
 - `AccumulationTiming.throttle` takes `startAtOnce`. With `startAtOnce: false`
   the interval is counted before the first group as well: an idle accumulator
   starts its interval where the group appears, and the group runs when the

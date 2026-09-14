@@ -5,8 +5,8 @@ enum AccumulationPolicy {
   /// Joins only the queue's tail, preserving intervening jobs as boundaries.
   adjacent,
 
-  /// Transfers the last matching group's data to a new job at the tail.
-  /// The old handle finishes cancelled, including with `cancellable: false`.
+  /// Moves the last matching group's job to the tail, keeping its handle.
+  /// Nothing is cancelled, so `cancellable: false` has nothing to refuse.
   replace,
 
   /// Joins the last matching group at its existing position in the queue.
@@ -22,10 +22,11 @@ enum AccumulationPolicy {
 abstract interface class SoloAccumulator<E, T> {
   /// Adds [event] synchronously and returns the job containing it.
   ///
-  /// Adjacent and joined events share a handle and outcome; replacement
-  /// creates a new handle and cancels the previous one before start.
-  /// After controller closure, returns a new `Cancelled(closed)` job
-  /// without retaining the event or calling the merge function.
+  /// Every event of one group shares its handle and outcome, whatever the
+  /// policy: replacement moves that group's job to the tail and gives back
+  /// the same job. After controller closure, returns a new
+  /// `Cancelled(closed)` job without retaining the event or calling the
+  /// merge function.
   ///
   /// A merge error escapes synchronously without accepting the event.
   /// Throws [StateError] on recursive addition from this accumulator's
@@ -131,32 +132,19 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
     if (_solo.isClosed || !identical(_candidate(), previous)) {
       throw StateError('The accumulation group changed during merge');
     }
-    if (_policy != AccumulationPolicy.replace) {
-      group
-        .._value = next
-        .._accepted();
-      return previous;
+    group._value = next;
+    if (_policy == AccumulationPolicy.replace) {
+      // The rule is about position and nothing else: the group keeps its
+      // job, its handle and its buffer, and the job moves behind whatever
+      // was queued after it. Nothing is cancelled here, so no cancellation
+      // hook can re-enter in the middle of the move.
+      _solo._queue._jobs.remove(previous);
+      _solo._queue._insert(previous, first: false);
+      SoloBase._debug(() => 'move $previous to the tail');
+      _solo._schedulePump();
     }
-    final nextGroup = _AccumulationGroup(this, next, _snapshot);
-    final replacement = _job(nextGroup);
-    // Transfer ownership and publish the new queue state before cancellation
-    // hooks can add, clear, cancel or close reentrantly. A collect buffer is
-    // transferred as-is; releasing the old group must not clear its list.
-    group._release();
-    _solo._queue._jobs.remove(previous);
-    replacement._added = true;
-    _solo._queue._insert(replacement, first: false);
-    nextGroup._accepted();
-    _solo._schedulePump();
-    previous._drop(
-      Cancelled.by(
-        reason: const ManualCancelReason(),
-        started: false,
-        description: 'replaced by accumulated group',
-        stackTrace: StackTrace.current,
-      ),
-    );
-    return replacement;
+    group._accepted();
+    return previous;
   }
 
   @override

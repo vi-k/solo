@@ -56,7 +56,7 @@ void main() {
 
               expect(
                 identical(first, second),
-                policy == AccumulationPolicy.join,
+                policy != AccumulationPolicy.adjacent,
               );
               expect(
                 solo.queue.jobs,
@@ -67,7 +67,7 @@ void main() {
                 },
               );
               if (policy == AccumulationPolicy.replace) {
-                expect(first.outcome, isA<Cancelled>());
+                expect(first.outcome, isNull);
               }
 
               async.flushMicrotasks();
@@ -227,131 +227,6 @@ void main() {
       });
     });
   }
-
-  for (final hook in ['whenCancelled', 'onFinish']) {
-    test('debounce replace publishes before $hook re-enters add', () {
-      fakeAsync((async) {
-        final solo = TestSolo();
-        final calls = <String>[];
-        final events = solo.accumulate<TestState, int, void>(
-          (ctx, value) async => calls.add('${async.elapsed}:$value'),
-          merge: (a, b) => a + b,
-          policy: AccumulationPolicy.replace,
-          timing: AccumulationTiming.debounce(_interval),
-        );
-        final first = events.add(1);
-        Job<Object?>? published;
-        SoloJob<void>? reentrant;
-        void callback() {
-          published = solo.queue.jobs.single;
-          expect(identical(published, first), isFalse);
-          reentrant = events.add(4);
-        }
-
-        if (hook == 'whenCancelled') {
-          first.whenCancelled((_) => callback());
-        } else {
-          SoloBase.observer = _Callbacks(
-            onFinish: (job) {
-              if (identical(job, first)) callback();
-            },
-          );
-        }
-        async.elapse(const Duration(milliseconds: 100));
-        final outer = events.add(2);
-
-        expect(identical(outer, published), isTrue);
-        expect(outer.outcome, isA<Cancelled>());
-        expect(solo.queue.jobs, [reentrant]);
-        async.elapse(const Duration(milliseconds: 199));
-        expect(calls, isEmpty);
-        async.elapse(const Duration(milliseconds: 1));
-        expect(calls, ['0:00:00.300000:7']);
-
-        solo.close();
-        async.flushMicrotasks();
-      });
-    });
-
-    for (final action in ['cancel', 'close']) {
-      test('debounce replace lets $hook $action the published group', () {
-        fakeAsync((async) {
-          final solo = TestSolo();
-          var handlerCalls = 0;
-          final events = solo.collect<TestState, int, void>(
-            (ctx, values) async => handlerCalls++,
-            policy: AccumulationPolicy.replace,
-            timing: AccumulationTiming.debounce(_interval),
-          );
-          final first = events.add(1);
-          Job<Object?>? published;
-          void callback() {
-            published = solo.queue.jobs.single;
-            if (action == 'cancel') {
-              published!.cancel();
-            } else {
-              solo.close();
-            }
-          }
-
-          if (hook == 'whenCancelled') {
-            first.whenCancelled((_) => callback());
-          } else {
-            SoloBase.observer = _Callbacks(
-              onFinish: (job) {
-                if (identical(job, first)) callback();
-              },
-            );
-          }
-          final replacement = events.add(2);
-
-          expect(identical(replacement, published), isTrue);
-          expect(replacement.outcome, isA<Cancelled>());
-          expect(solo.queue, isEmpty);
-          expect(async.nonPeriodicTimerCount, 0);
-          async.elapse(_interval);
-          expect(handlerCalls, 0);
-          solo.close();
-          async.flushMicrotasks();
-        });
-      });
-    }
-  }
-
-  test('throttle replace re-entry keeps the running cooldown', () {
-    fakeAsync((async) {
-      final solo = TestSolo();
-      final calls = <String>[];
-      final events = solo.accumulate<TestState, int, void>(
-        (ctx, value) async => calls.add('${async.elapsed}:$value'),
-        merge: (a, b) => a + b,
-        policy: AccumulationPolicy.replace,
-        timing: AccumulationTiming.throttle(_interval),
-      );
-      // The first start establishes the cooldown used by later additions.
-      // ignore: cascade_invocations
-      events.add(0);
-      async.flushMicrotasks();
-      final first = events.add(1);
-      SoloJob<void>? reentrant;
-      first.whenCancelled((_) {
-        expect(solo.queue.jobs.single, isNot(same(first)));
-        reentrant = events.add(4);
-      });
-      async.elapse(const Duration(milliseconds: 50));
-      final outer = events.add(2);
-
-      expect(outer.outcome, isA<Cancelled>());
-      expect(solo.queue.jobs, [reentrant]);
-      async.elapse(const Duration(milliseconds: 149));
-      expect(calls, ['0:00:00.000000:0']);
-      async.elapse(const Duration(milliseconds: 1));
-      expect(calls, ['0:00:00.000000:0', '0:00:00.200000:7']);
-
-      solo.close();
-      async.flushMicrotasks();
-    });
-  });
 
   for (final kind in _TimingKind.values) {
     for (final operation in ['remove', 'clear']) {

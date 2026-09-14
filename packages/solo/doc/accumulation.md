@@ -603,12 +603,13 @@ SoloJob<void> resume() {
 }
 ```
 
-Removing and adding gives the shape of `AccumulationPolicy.replace`: the new
-job goes to the tail, behind whatever was queued between. The queue can remove
-a job and it can add one, but it cannot change what a queued job will do, so
-the place `join` keeps is not reachable this way — keeping it means holding the
-command outside the job, which is what an accumulator does with the input
-inside it.
+Removing and adding gives the shape of `AccumulationPolicy.replace`: the
+command ends up at the tail, behind whatever was queued between. What differs
+is the handle — the queue has to build a new job, where the accumulator moves
+the one it already has. The queue can remove a job and it can add one, but it
+cannot change what a queued job will do, so the place `join` keeps is not
+reachable this way — keeping it means holding the command outside the job,
+which is what an accumulator does with the input inside it.
 
 The queue never touches the running job: a `pause` that has already started
 runs to its end whatever is removed behind it. Reach for `cancelAll()` — it
@@ -711,7 +712,7 @@ created.
 | Policy | Queue after the additions | Handle for A2 |
 | --- | --- | --- |
 | `adjacent` (default) | `[A1, B, A2]` | A new job |
-| `replace` | `[B, A(A1 + A2)]` | A new job; A1's job is cancelled |
+| `replace` | `[B, A(A1 + A2)]` | A1's existing job, moved behind B |
 | `join` | `[A(A1 + A2), B]` | A1's existing job |
 
 `adjacent` accepts into the group only when it is at the queue's tail.
@@ -740,20 +741,20 @@ at the tail, so a later event can join it with `adjacent`. Already separate
 groups are never combined retroactively. A sealed debounce group is ineligible
 for all three policies.
 
-`replace` transfers all accumulated data into a new queued job and adds the
-incoming event. It creates a new handle even when the old group was already at
-the tail. The old job completes with `Cancelled`, a `ManualCancelReason`,
-`started: false`, and the description `replaced by accumulated group`. The new
-group is in the queue before the old job's finish and cancellation callbacks
-run. Those callbacks can add, cancel or close again, so the returned new handle
-may already be cancelled by the time the outer `add` returns. A replacement
-starts a fresh debounce interval; it preserves the accumulator's throttle
-interval.
+`replace` adds the incoming event to the group it found and moves that group's
+job to the tail. The handle is the one every addition to this group got, the
+events already accepted stay in it, and a group that is already at the tail
+keeps the place it has. Nothing is cancelled on the way, so no cancellation
+callback runs in the middle of the move. The engine's debug trace says
+`move <job> to the tail`; there is no observer event, because no job started or
+finished.
 
-Replacement is mandatory for a queued group, including one configured with
-`cancellable: false`. It never cancels a running group. The ordinary queue's
-`Policy.replace` has its own existing cancellation rules; `AccumulationPolicy`
-is a separate enum.
+The move starts a fresh debounce window and preserves the accumulator's
+throttle interval. It applies to a queued group, including one configured with
+`cancellable: false` — a move is not a removal, and the flag has nothing to
+refuse. A running group is never moved: it stops accepting events when the
+queue takes it. The ordinary queue's `Policy.replace` has its own cancellation
+rules; `AccumulationPolicy` is a separate enum.
 
 The accumulator's identity determines which groups can combine. Two
 accumulators with the same `key` remain separate. The key still labels their
@@ -790,18 +791,18 @@ group finishes before the next event arrives, each event starts a separate job.
 A `join` policy's search can scan the queue; `adjacent` only checks its tail.
 `replace` also searches the queue.
 
-In `adjacent` and `join`, additions to one group share one handle, result and
-cancellation. Cancelling it affects the whole group. In `replace`, old handles
-remain cancelled; they do not forward to the new job, and cancelling an already
-replaced handle does not cancel its successor. Await the new handle to observe
-the transferred work.
+Additions to one group share one handle, result and cancellation under every
+policy, and cancelling it affects the whole group. `replace` moves the job
+rather than building another, so the handle outlives the move: cancelling it
+cancels the group wherever the job now stands, and there is no second handle to
+await.
 
 `merge` must be synchronous and pure. It must not mutate either argument or
 call into the controller. If it throws, `add` throws the same error and the
-existing group and timer remain unchanged; even `replace` keeps the old job.
-Calling the same accumulator's `add` from within its `merge` throws
-`StateError`. The engine also checks that the target group is still eligible
-after the callback, before committing the result.
+existing group, its job and its timer remain unchanged. Calling the same
+accumulator's `add` from within its `merge` throws `StateError`. The engine
+also checks that the target group is still eligible after the callback, before
+committing the result.
 
 `canStart`, `keepWhile` and cancellation apply to the whole job, and the rules
 themselves are in [State and rules](state.md). A start rule can cancel all of
