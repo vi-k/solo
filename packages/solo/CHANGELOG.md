@@ -1,5 +1,16 @@
 ## Unreleased
 
+- `AccumulationTiming.throttle` takes `startAtOnce`. With `startAtOnce: false`
+  the interval is counted before the first group as well: an idle accumulator
+  starts its interval where the group appears, and the group runs when the
+  interval ends, carrying everything written meanwhile. The default is
+  unchanged, and so is everything else about the mode -- an addition does not
+  extend a running interval, and a group that has waited its interval out and
+  needs only the execution slot is not pushed back by a later event. Take it
+  where the rate matters more than the latency of the first event; the cost is
+  that a single event waits the whole interval, and a draining `close` waits
+  with it.
+
 - **Breaking:** the state of a closed controller is final. Once the engine has
   finished closing, `externalSetState` throws a `StateError` where it used to
   change `currentState` and call the change hooks with nobody left to hear them

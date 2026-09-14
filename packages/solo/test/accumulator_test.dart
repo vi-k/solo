@@ -1330,11 +1330,16 @@ final class _Patch {
 }
 
 /// The timings a zero duration makes indistinguishable from none at all.
-/// Step 1 of the accumulator wave adds a third throttle to this table.
+/// A zero duration is cut off before `startAtOnce` means anything, so the
+/// trailing throttle belongs in this table as much as the other two.
 final _zeroTimings = <String, AccumulationTiming?>{
   'no timing': null,
   'a zero debounce': AccumulationTiming.debounce(Duration.zero),
   'a zero throttle': AccumulationTiming.throttle(Duration.zero),
+  'a zero trailing throttle': AccumulationTiming.throttle(
+    Duration.zero,
+    startAtOnce: false,
+  ),
 };
 
 /// Runs A1, a job of another kind, then A2 fifty milliseconds later, and

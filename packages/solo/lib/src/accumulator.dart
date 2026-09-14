@@ -114,7 +114,10 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
     if (previous == null) {
       final group = _AccumulationGroup(this, _seed(event), _snapshot);
       final job = _solo.add(_job(group));
-      if (job.isQueued && group._open) group._accepted();
+      if (job.isQueued && group._open) {
+        group._accepted();
+        _armCooldown();
+      }
       return job;
     }
     final group = previous._accumulation! as _AccumulationGroup<V>;
@@ -172,6 +175,23 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
 
   @override
   void _schedulePump() => _solo._schedulePump();
+
+  /// Starts the interval of a throttle that does not start at once, where
+  /// the group appears and nowhere else.
+  ///
+  /// Arming it on every accepted event instead would push back a group that
+  /// has already waited out its interval and needs only the execution slot,
+  /// which is what `An addition does not extend it` promises against.
+  void _armCooldown() {
+    final timing = _timing;
+    if (timing == null ||
+        timing._kind != _AccumulationTimingKind.throttle ||
+        timing._startAtOnce) {
+      return;
+    }
+    if (_throttleTimer?.isActive ?? false) return;
+    _started();
+  }
 
   @override
   void _started() {

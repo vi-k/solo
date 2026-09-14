@@ -412,6 +412,94 @@ void main() {
     });
   });
 
+  // `startAtOnce: false` counts the interval before the first group too.
+  // Each of the three below keeps the half that tells the mode from an
+  // ordinary throttle: drop `startAtOnce: false` and it fails.
+  test('a trailing throttle burst with a microtask after the first', () {
+    fakeAsync((async) {
+      final solo = Solo<int>(0);
+      final calls = <String>[];
+      final events = solo.collect<int, int, void>(
+        (ctx, values) async => calls.add('${async.elapsed}:$values'),
+        timing: AccumulationTiming.throttle(
+          const Duration(seconds: 1),
+          startAtOnce: false,
+        ),
+      );
+
+      // The microtask between the additions is the shape under test.
+      // ignore: cascade_invocations
+      events.add(1);
+      async.flushMicrotasks();
+      expect(calls, isEmpty);
+      events
+        ..add(2)
+        ..add(3);
+      async.elapse(const Duration(seconds: 3));
+      expect(calls, ['0:00:01.000000:[1, 2, 3]']);
+
+      solo.close();
+      async.flushMicrotasks();
+    });
+  });
+
+  test('a trailing throttle with a single event', () {
+    fakeAsync((async) {
+      final solo = Solo<int>(0);
+      final calls = <String>[];
+      final events = solo.collect<int, int, void>(
+        (ctx, values) async => calls.add('${async.elapsed}:$values'),
+        timing: AccumulationTiming.throttle(
+          const Duration(seconds: 1),
+          startAtOnce: false,
+        ),
+      );
+
+      // The clock moves between the assertions, so a cascade is misleading.
+      // ignore: cascade_invocations
+      events.add(1);
+      async.elapse(const Duration(milliseconds: 999));
+      expect(calls, isEmpty);
+      async.elapse(const Duration(milliseconds: 1));
+      expect(calls, ['0:00:01.000000:[1]']);
+
+      solo.close();
+      async.flushMicrotasks();
+    });
+  });
+
+  test('a trailing throttle under input that never stops', () {
+    fakeAsync((async) {
+      final solo = Solo<int>(0);
+      final calls = <String>[];
+      final events = solo.collect<int, int, void>(
+        (ctx, values) async => calls.add('${async.elapsed}:${values.length}'),
+        timing: AccumulationTiming.throttle(
+          const Duration(seconds: 1),
+          startAtOnce: false,
+        ),
+      );
+
+      for (var event = 0; event < 20; event++) {
+        events.add(event);
+        async.elapse(const Duration(milliseconds: 200));
+      }
+      async.elapse(const Duration(seconds: 3));
+      // Every group carries the five events of its own interval, the first
+      // one included: the ceiling holds from the start, and it is what a
+      // debounce under input like this would never reach.
+      expect(calls, [
+        '0:00:01.000000:5',
+        '0:00:02.000000:5',
+        '0:00:03.000000:5',
+        '0:00:04.000000:5',
+      ]);
+
+      solo.close();
+      async.flushMicrotasks();
+    });
+  });
+
   test('negative timing is rejected and zero preserves queue order', () {
     expect(
       () => AccumulationTiming.debounce(

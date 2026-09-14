@@ -755,10 +755,40 @@ int drive(
 }
 '''
 
+# The reference's second throttle mode, on the recipe's own controller: one
+# changed argument, plus a gate the driver can close, because the sentence
+# about a refused start has to have something to refuse. The gate is the
+# bench's, and it is open unless a driver shuts it.
+LOG_CONTROLLER = snips['recipes/LogController']
+
+
+def with_trailing(name):
+    body = (LOG_CONTROLLER
+            .replace('class LogController extends Solo<int> {',
+                     f'final class {name} extends Solo<int> {{')
+            .replace('LogController(this._api)', f'{name}(this._api)')
+            .replace('  final LogApi _api;\n',
+                     '  final LogApi _api;\n  bool allowed = true;\n')
+            .replace(
+                '    timing: AccumulationTiming.throttle('
+                'const Duration(seconds: 1)),\n',
+                '    canStart: (state) => allowed,\n'
+                '    timing: AccumulationTiming.throttle(\n'
+                '      const Duration(seconds: 1),\n'
+                '      startAtOnce: false,\n'
+                '    ),\n'))
+    assert f'final class {name} ' in body, name
+    assert 'startAtOnce: false' in body, 'the mode has to be in the class'
+    assert 'canStart: (state) => allowed' in body, 'and the gate with it'
+    assert 'throttle(const' not in body, 'the old throttle has to be gone'
+    return body
+
+
 FILES['logs'] = (
-    with_fake_async('recipes/LogEntry')
+    with_fake_async('recipes/LogEntry', dart_async=True)
     + snips['recipes/EagerLogController']
     + snips['recipes/LogController']
+    + with_trailing('TrailingLogController')
     + LOG_FAKE
     + REQUIRE
     + LOG_DRIVE
@@ -848,6 +878,77 @@ void main() {
       api.sent.last.single == 'changed after add',
       'and it was sent as it was changed, not as it was added',
     );
+  });
+
+  // The table's second throttle mode: `startAtOnce: false` counts the
+  // interval before the first group too, and an addition inside it still
+  // does not extend it.
+  fakeAsync((clock) {
+    final api = RecordingLogApi();
+    final logs = TrailingLogController(api);
+    for (final message in ['opened', 'loaded', 'shown']) {
+      logs.logEvent(LogEntry(message));
+    }
+    clock.elapse(const Duration(milliseconds: 500));
+    require(api.sent.isEmpty, 'the first group waits out the interval too');
+
+    logs.logEvent(const LogEntry('tapped'));
+    clock.elapse(const Duration(milliseconds: 499));
+    require(api.sent.isEmpty, 'and the addition did not extend it');
+    clock.elapse(const Duration(milliseconds: 1));
+    require(api.sent.length == 1, 'the interval ended and the group went');
+    require(api.sent.single.length == 4, 'carrying everything written in it');
+
+    print('== the journal recipe with startAtOnce: false');
+    print('the server got 1 request: ${api.sent.single}');
+    print('');
+    logs.close();
+    clock.flushMicrotasks();
+  });
+
+  // What waiting costs: a single entry on an idle accumulator waits the
+  // whole interval, and a draining close has to wait with it.
+  fakeAsync((clock) {
+    final api = RecordingLogApi();
+    final logs = TrailingLogController(api)
+      ..logEvent(const LogEntry('alone'));
+    var closed = false;
+    unawaited(
+      logs.close(mode: SoloCloseMode.drain).then((_) => closed = true),
+    );
+    clock.elapse(const Duration(milliseconds: 999));
+    require(api.sent.isEmpty, 'one entry waits the whole interval');
+    require(!closed, 'and the close waits with it');
+
+    clock.elapse(const Duration(milliseconds: 1));
+    require(api.sent.single.single == 'alone', 'then the entry is sent');
+    require(!closed, 'the close still waits for the request it started');
+
+    clock.elapse(const Duration(milliseconds: 100));
+    require(closed, 'and is over when the request comes back');
+  });
+
+  // The sentence about start rules, in this mode: a refused group spends no
+  // interval, and the next one counts its own from where it appears.
+  fakeAsync((clock) {
+    final api = RecordingLogApi();
+    final logs = TrailingLogController(api)
+      ..allowed = false
+      ..logEvent(const LogEntry('refused'));
+    clock.elapse(const Duration(seconds: 1));
+    require(api.sent.isEmpty, 'the refused group sent nothing');
+
+    clock.elapse(const Duration(milliseconds: 100));
+    logs
+      ..allowed = true
+      ..logEvent(const LogEntry('next'));
+    clock.elapse(const Duration(milliseconds: 999));
+    require(api.sent.isEmpty, 'the next group counts its own full interval');
+    clock.elapse(const Duration(milliseconds: 1));
+    require(api.sent.single.single == 'next', 'and goes when it ends');
+
+    logs.close();
+    clock.flushMicrotasks();
   });
 
   // The throttle is a floor under the rate: entries written inside the

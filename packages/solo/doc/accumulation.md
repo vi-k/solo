@@ -628,11 +628,11 @@ may start; `collect` still keeps every accepted event, and `accumulate` keeps
 whatever its `merge` returns. For example,
 `merge: (previous, incoming) => incoming` keeps only the latest value.
 
-| | `debounce(duration)` | `throttle(duration)` |
-| --- | --- | --- |
-| The first group is ready | after `duration` with no new event | at once |
-| An addition | restarts the timer | does not extend it |
-| The wait is measured from | the last accepted event | the previous actual start |
+| | `debounce(duration)` | `throttle(duration)` | `throttle(duration, startAtOnce: false)` |
+| --- | --- | --- | --- |
+| The first group is ready | after `duration` with no new event | at once | after `duration` |
+| An addition | restarts the timer | does not extend it | does not extend it |
+| The wait is measured from | the last accepted event | the previous actual start | the previous start, or where the group appeared |
 
 `AccumulationTiming.debounce(duration)` waits for a pause after the last
 accepted event in each group. Every addition restarts the timer, even when
@@ -652,6 +652,13 @@ extending the timer. When the interval ends, queued input is ready without
 needing another event. The group accepts events until the queue takes it for
 execution. No job is created for an empty interval.
 
+`startAtOnce: false` counts the interval before the first group as well. An
+idle accumulator starts its interval where the group appears, and the group
+becomes ready when the interval ends, carrying everything written meanwhile. A
+group that has already waited out its interval and needs only the execution
+slot is not pushed back by a later event: the interval is counted once, where
+the group appeared, and an addition does not renew it.
+
 Starting at once has a price on an idle accumulator. Nothing is running, so the
 queue takes the first group on the next microtask, and a burst that does not
 fit in one synchronous turn is split: the first event goes on its own and the
@@ -659,9 +666,17 @@ rest wait out the whole interval. While another job occupies the queue the
 burst gathers in one group instead, which is the log recipe's own scenario —
 its entries are written while a screen transition is being handled.
 
+Waiting has a price of its own. A single event on an idle accumulator is held
+for the whole interval, and `close(mode: SoloCloseMode.drain)` waits with it —
+a plain `close()` drops it. Take `startAtOnce: false` where the rate matters
+more than the latency of the first event, and leave the default where the first
+event is what the user is waiting for.
+
 The start is the transition to running, before `onStart`. A group rejected by
-start rules consumes no throttle interval; cancellation from `onStart` does. If
-a group starts at 0 ms with a 200 ms interval, but another job holds the slot
+start rules consumes no throttle interval; cancellation from `onStart` does.
+With `startAtOnce: false` the group that follows a refusal counts its own full
+interval from where it appears, not what was left of the refused one's. If a
+group starts at 0 ms with a 200 ms interval, but another job holds the slot
 until 500 ms, the next group starts at 500 ms and the one after that cannot
 start before 700 ms. If the group's own handler, children or cleanup outlast
 the interval, the next group can start as soon as they finish.
@@ -673,12 +688,12 @@ execution slot; once a handler starts, the queue waits for its children and
 cleanup before starting another root job.
 
 Omitting `timing`, or passing `Duration.zero`, makes groups ready immediately
-and creates no timers. Negative durations throw `ArgumentError`. A timing
-configuration can be shared by several accumulators; each accumulator has its
-own groups and throttle interval. Timer callbacks follow Dart's event-loop
-order: an event processed before a debounce callback can restart the timer; an
-event processed after it belongs to a new group. A busy event loop can delay
-callbacks and starts.
+and creates no timers, whatever `startAtOnce` says. Negative durations throw
+`ArgumentError`. A timing configuration can be shared by several accumulators;
+each accumulator has its own groups and throttle interval. Timer callbacks
+follow Dart's event-loop order: an event processed before a debounce callback
+can restart the timer; an event processed after it belongs to a new group. A
+busy event loop can delay callbacks and starts.
 
 ### Choosing where events join
 

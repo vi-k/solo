@@ -790,69 +790,139 @@ void main() {
     });
   });
 
+  test('close(mode: drain) over a waiting trailing throttle group', () {
+    fakeAsync((async) {
+      final solo = TestSolo();
+      final calls = <String>[];
+      var closed = false;
+      final events = solo.collect<TestState, int, void>(
+        (ctx, values) async => calls.add('${async.elapsed}:$values'),
+        timing: AccumulationTiming.throttle(
+          const Duration(seconds: 1),
+          startAtOnce: false,
+        ),
+      );
+
+      // The close comes between the addition and the assertions.
+      // ignore: cascade_invocations
+      events.add(1);
+      unawaited(
+        solo.close(mode: SoloCloseMode.drain).then((_) => closed = true),
+      );
+      async.elapse(const Duration(milliseconds: 999));
+      expect(calls, isEmpty);
+      expect(closed, isFalse);
+      async.elapse(const Duration(milliseconds: 1));
+      expect(calls, ['0:00:01.000000:[1]']);
+      expect(closed, isTrue);
+    });
+  });
+
+  test('a start refused under a trailing throttle', () {
+    fakeAsync((async) {
+      final solo = TestSolo();
+      final calls = <String>[];
+      var allow = false;
+      final events = solo.collect<TestState, int, void>(
+        (ctx, values) async => calls.add('${async.elapsed}:$values'),
+        timing: AccumulationTiming.throttle(
+          const Duration(seconds: 1),
+          startAtOnce: false,
+        ),
+        canStart: (state) => allow,
+      );
+      final refused = events.add(1);
+      async.elapse(const Duration(seconds: 1));
+      expect((refused.outcome! as Cancelled).reason, isA<RulesCancelReason>());
+
+      // The refusal spends no interval of its own: the next group waits its
+      // full second from its own `add`, not from the refusal.
+      async.elapse(const Duration(milliseconds: 100));
+      allow = true;
+      events.add(2);
+      async.elapse(const Duration(milliseconds: 999));
+      expect(calls, isEmpty);
+      async.elapse(const Duration(milliseconds: 1));
+      expect(calls, ['0:00:02.100000:[2]']);
+
+      solo.close();
+      async.flushMicrotasks();
+    });
+  });
+
   // A group whose interval has already elapsed and which waits only for the
   // slot must not be pushed back by a further event. Both are green on the
   // untouched tree; what proves them is the mutation named in
   // 2026-09-14[32]-accumulation-rules-plan.md -- arming the interval in
   // `_AccumulationGroup._accepted` instead of where the group appears.
-  // Step 1 of the wave repeats both under `startAtOnce: false`, which is
-  // where criterion 6 of the spec asks for them.
-  test('a throttle group waiting for the slot meets a later event', () {
-    fakeAsync((async) {
-      final solo = TestSolo();
-      final calls = <String>[];
-      final events = solo.collect<TestState, int, void>(
-        (ctx, values) async => calls.add('${async.elapsed}:$values'),
-        key: 'group',
-        timing: AccumulationTiming.throttle(const Duration(seconds: 1)),
-      );
-      solo.run<TestState, void>(
-        key: 'busy',
-        (ctx) => ctx.wait(
-          () => Future<void>.delayed(const Duration(milliseconds: 1500)),
-        ),
-      );
-      events.add(1);
-      async.elapse(const Duration(milliseconds: 1200));
-      events.add(2);
-      expect(calls, isEmpty);
-      async.elapse(const Duration(milliseconds: 300));
-      expect(calls, ['0:00:01.500000:[1, 2]']);
+  for (final startAtOnce in [true, false]) {
+    test(
+        'a throttle group waiting for the slot meets a later event, '
+        'startAtOnce: $startAtOnce', () {
+      fakeAsync((async) {
+        final solo = TestSolo();
+        final calls = <String>[];
+        final events = solo.collect<TestState, int, void>(
+          (ctx, values) async => calls.add('${async.elapsed}:$values'),
+          key: 'group',
+          timing: AccumulationTiming.throttle(
+            const Duration(seconds: 1),
+            startAtOnce: startAtOnce,
+          ),
+        );
+        solo.run<TestState, void>(
+          key: 'busy',
+          (ctx) => ctx.wait(
+            () => Future<void>.delayed(const Duration(milliseconds: 1500)),
+          ),
+        );
+        events.add(1);
+        async.elapse(const Duration(milliseconds: 1200));
+        events.add(2);
+        expect(calls, isEmpty);
+        async.elapse(const Duration(milliseconds: 300));
+        expect(calls, ['0:00:01.500000:[1, 2]']);
 
-      solo.close();
-      async.flushTimers();
+        solo.close();
+        async.flushTimers();
+      });
     });
-  });
 
-  test('replace meets a throttle group already waiting for the slot', () {
-    fakeAsync((async) {
-      final solo = TestSolo();
-      final calls = <String>[];
-      final events = solo.accumulate<TestState, int, void>(
-        (ctx, value) async => calls.add('${async.elapsed}:$value'),
-        merge: (a, b) => a + b,
-        key: 'group',
-        policy: AccumulationPolicy.replace,
-        timing: AccumulationTiming.throttle(const Duration(seconds: 1)),
-      );
-      solo.run<TestState, void>(
-        key: 'busy',
-        (ctx) => ctx.wait(
-          () => Future<void>.delayed(const Duration(milliseconds: 1500)),
-        ),
-      );
-      events.add(1);
-      async.elapse(const Duration(milliseconds: 1200));
-      final last = events.add(2);
-      expect(calls, isEmpty);
-      async.elapse(const Duration(milliseconds: 300));
-      expect(calls, ['0:00:01.500000:3']);
-      expect(last.outcome, isA<Done<void>>());
+    test(
+        'replace meets a throttle group already waiting for the slot, '
+        'startAtOnce: $startAtOnce', () {
+      fakeAsync((async) {
+        final solo = TestSolo();
+        final calls = <String>[];
+        final events = solo.accumulate<TestState, int, void>(
+          (ctx, value) async => calls.add('${async.elapsed}:$value'),
+          merge: (a, b) => a + b,
+          key: 'group',
+          policy: AccumulationPolicy.replace,
+          timing: AccumulationTiming.throttle(
+            const Duration(seconds: 1),
+            startAtOnce: startAtOnce,
+          ),
+        );
+        solo.run<TestState, void>(
+          key: 'busy',
+          (ctx) => ctx.wait(
+            () => Future<void>.delayed(const Duration(milliseconds: 1500)),
+          ),
+        );
+        events.add(1);
+        async.elapse(const Duration(milliseconds: 1200));
+        final last = events.add(2);
+        expect(calls, isEmpty);
+        async.elapse(const Duration(milliseconds: 300));
+        expect(calls, ['0:00:01.500000:3']);
+        expect(last.outcome, isA<Done<void>>());
 
-      solo.close();
-      async.flushTimers();
+        solo.close();
+        async.flushTimers();
+      });
     });
-  });
+  }
 
   // Criterion 20: the timers a replacement leaves behind. The first half
   // lives today in the second assertion of `throttle replace re-entry keeps
