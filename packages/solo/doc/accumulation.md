@@ -533,9 +533,8 @@ settles.
 
 A queue holding `resume` and then `pause` is about to do two things that cancel
 each other out, and a `resume` arriving now makes the whole pair pointless: the
-end of it is what a single `resume` would have reached. Nothing has to be taken
-back, because an accumulator never creates the jobs to take back. `merge` keeps
-the incoming command and drops the one it had:
+end of it is what a single `resume` would have reached. `merge` keeps the
+incoming command and drops the one it had:
 
 ```dart
 final class Player extends Solo<Playback> {
