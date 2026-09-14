@@ -43,6 +43,23 @@ A child inherits the parent's observer unless it has its own. If a child's
 cancellation escapes through `await ctx.run(child)` or `child.value`, the
 parent ends with `HandlerCancelReason` and a description naming the child.
 
+To wait for several children at once, write `[ctx.run(a), ctx.run(b)].wait`
+rather than `Future.wait`. Both wait for all of them; the difference is what
+survives. `.wait` collects every error into one `ParallelWaitError`, and the
+kernel reads that envelope: one carrying cancellations and successes ends the
+parent with that cancellation, exactly as awaiting a single child does, while
+one carrying a real failure stays a failure, with its errors and values
+untouched. `Future.wait` reports the first error to reach it and discards the
+rest -- a cancellation among them included -- where neither the observer nor
+the zone will ever see them.
+
+Neither of them stops a branch early. `.wait` returns once every branch is
+done, so a sibling of a cancelled child runs to its end; what the parent's
+cancellation reaches is the children it started outside that waiting. A
+resource a branch opened is still released on time when the branch took it
+through `ctx.wait(() => open(), dispose: (value) => value.close())`: the
+cleanup belongs to the job, not to the waiting.
+
 `ctx.run` throws synchronously for an invalid start: `ArgumentError` for a job
 from another implementation or a job that starts automatically. It throws
 `StateError` if the child has already started or the parent body has ended. If

@@ -1,5 +1,32 @@
 ## Unreleased
 
+- **Breaking:** a cancellation that travels inside a `ParallelWaitError` is a
+  cancellation again. `[...].wait` wraps every branch error in that envelope,
+  and the kernel read a caught error by type, so a child cancelled under
+  `[ctx.run(a), ctx.run(b)].wait` ended the parent `Failed` -- where the same
+  code written as `await ctx.run(child)` ends it `Cancelled`, as
+  `doc/children.md` promises. An envelope carrying cancellations and successful
+  branches now decides the outcome the way the cancellation it carries would,
+  with the stack trace of that branch; the children the body started outside
+  the waiting are cascaded to, and an unobserved outcome no longer sends the
+  envelope to the zone. An envelope carrying a real failure is untouched: the
+  outcome stays `Failed` with the same object, its `errors` and `values`
+  intact, because a failure must not hide behind a cancellation. What changes
+  for a caller: `job.value` throws the `Cancelled` instead of the envelope, a
+  `catch (ParallelWaitError)` around it no longer runs, `whenCancelled` fires,
+  and in `solo` the job's `onCancel` handler takes the outcome where `onError`
+  used to. **Migrating.** A resource opened in a successful branch and closed
+  from that outer `catch` should be taken through
+  `ctx.wait(() => open(), dispose: (value) => value.close())`: the kernel then
+  closes it whatever the outcome, and nothing is needed at the call site. For a
+  branch that cannot go through `ctx.wait`, catch the envelope inside the body,
+  where it still arrives as it did. An envelope built by hand is read by the
+  same rule -- it cannot be told apart from the one the language builds -- so
+  code that deliberately throws an aggregate with a cancellation inside should
+  wrap it in an error of its own. `Future.wait` is unchanged and cannot be
+  changed: it reports the first error to reach it and discards the rest before
+  anything else can see them.
+
 - `doc/children.md` says what `ctx.run` does with a chain, and why: a
   continuation starts itself when its source finishes, so no link of one can be
   adopted — the head is the only job in a chain a parent can take. And the
