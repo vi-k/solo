@@ -1,11 +1,11 @@
 > **Состояние на 2026-09-14:** все восемь шагов пройдены в ветке
 > `docs/accumulation`, в `main` не смержено. Итог —
-> `2026-09-14[2]-accumulation-restructure-report.md`.
+> `2026-09-14[18]-accumulation-restructure-report.md`.
 > **Что это:** порядок работ по `packages/solo/doc/accumulation.md`: стенд,
 > перекладка на рецепты и справочник, перестройка рецептов вокруг первой
 > попытки.
 > **Связанные записи:** отчёт
-> `2026-09-14[2]-accumulation-restructure-report.md`;
+> `2026-09-14[18]-accumulation-restructure-report.md`;
 > `2026-09-13[1]-vs-bloc-proofreading-report.md` — откуда правила;
 > `2026-09-12[8]-vs-bloc-first-attempt-report.md` — форма раздела;
 > `2026-09-12[6]-ci-gate-report.md` — гейт, куда встаёт стенд.
