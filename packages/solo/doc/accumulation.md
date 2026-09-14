@@ -17,10 +17,78 @@ Four controllers, each with more events arriving than there is work worth
 doing. What differs is what survives: the last value, a merge of all of them,
 or every event in a list.
 
+Each recipe opens with the version the controller's own vocabulary leads to. It
+is not a straw man: it is what you write when you reach for `run` and stop
+there. Where the obvious fix is worth seeing on its own, a second attempt
+follows it. The traces under them are what that code prints when it runs.
+
 ### A search that fires on every keystroke
 
 A search box asks the server for results while the user types. Every keystroke
 is an event, and only the last one is worth a request.
+
+#### The first attempt
+
+The controller's vocabulary says `run`, so every keystroke gets a job:
+
+```dart
+final class QueuedSearch extends Solo<SearchState> {
+  final SearchApi api;
+
+  QueuedSearch(this.api) : super(const SearchState.idle());
+
+  SoloJob<void> query(String text) => run<SearchState, void>(
+        key: 'query',
+        (ctx) async {
+          final results = await ctx.wait(() => api.search(text));
+          ctx.emit(SearchState.results(results));
+        },
+      );
+}
+```
+
+Typing `solo`, one character every 50 ms, against a server that answers in 100
+ms:
+
+```
+the server was asked 4 times: [s, so, sol, solo]
+at 100 ms the screen shows [hits for s]
+at 200 ms the screen shows [hits for so]
+at 300 ms the screen shows [hits for sol]
+at 400 ms the screen shows [hits for solo]
+```
+
+The queue is doing its job, and that is the problem. Each request waits for the
+one before it, so the answer to `solo` arrives 400 ms after the first keystroke
+— four round trips, not one. On the way the screen answers three words the user
+had already typed past.
+
+#### The second attempt
+
+`Policy.restart` cancels the job that is running when the next one arrives.
+Only the method changes:
+
+```dart
+SoloJob<void> query(String text) => run<SearchState, void>(
+      key: 'query',
+      policy: Policy.restart,
+      (ctx) async {
+        final results = await ctx.wait(() => api.search(text));
+        ctx.emit(SearchState.results(results));
+      },
+    );
+```
+
+```
+the server was asked 4 times: [s, so, sol, solo]
+at 250 ms the screen shows [hits for solo]
+```
+
+Nothing stale reaches the screen now, and the answer comes sooner because the
+requests overlap instead of queueing. The server was still asked four times:
+cancelling a job does not unsend what it has already sent.
+
+#### The accumulator
 
 ```dart
 final class Search extends Solo<SearchState> {
@@ -42,12 +110,19 @@ final class Search extends Solo<SearchState> {
 }
 ```
 
-The search controller above retains the latest query and waits for 300 ms
-without new input before starting it. `SearchApi` and `SearchState` are
-application types.
+```
+the server was asked 1 time: [solo]
+at 550 ms the screen shows [hits for solo]
+```
 
-A search that has already started finishes before the next one starts. The
-returned job exposes the outcome and cancellation, like other jobs.
+One request. `merge` keeps the incoming text and drops what it had, so the
+group carries the latest query; the debounce holds the group until the typing
+stops for 300 ms. That pause is what it costs: the answer arrives later than
+either attempt above, and it is the only answer sent.
+
+`SearchApi` and `SearchState` are application types. A search that has already
+started finishes before the next one starts, and the returned job exposes the
+outcome and cancellation, like other jobs.
 
 ### Settings saved on every flip of a switch
 

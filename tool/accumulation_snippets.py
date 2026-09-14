@@ -379,7 +379,8 @@ void main() {
 
 # -------------------------------------------------------------------- search
 # The document calls SearchState and SearchApi application types and declares
-# neither; a bench cannot leave them undeclared.
+# neither; a bench cannot leave them undeclared. The API answers 100 ms after
+# it is asked, which is what the section's traces are measured against.
 SEARCH_TYPES = """import 'package:fake_async/fake_async.dart';
 import 'package:solo/solo.dart';
 
@@ -391,59 +392,120 @@ class SearchState {
   const SearchState.results(this.results);
 }
 
-/// Records every query that reached it: the point of debounce is how few
-/// of them there are.
 class SearchApi {
-  final queries = <String>[];
+  final asked = <String>[];
 
-  Future<List<String>> search(String text) async {
-    queries.add(text);
-    return ['$text one', '$text two'];
+  Future<List<String>> search(String text) {
+    asked.add(text);
+    return Future<List<String>>.delayed(
+      const Duration(milliseconds: 100),
+      () => ['hits for $text'],
+    );
   }
 }
 
 """
 
+# The second attempt is a method, and this is the class it belongs to: the
+# first attempt's, with nothing else changed. That is what the document says,
+# and grafting it here is how the bench holds it to that.
+RESTARTING = """
+final class RestartingSearch extends Solo<SearchState> {
+  final SearchApi api;
+
+  RestartingSearch(this.api) : super(const SearchState.idle());
+
+""" + snips['recipes/query'].rstrip('\n') + """
+}
+"""
+
+DRIVE = """
+/// Types `solo`, one character every 50 ms, and reports every state the
+/// screen passes through. One scenario for all three versions.
+int drive(
+  String name,
+  SearchApi api,
+  SoloJob<void> Function(String) query,
+  List<String> Function() state,
+) {
+  final shown = <String>[];
+  fakeAsync((clock) {
+    var now = 0;
+    var last = state().toString();
+    void step(int ms) {
+      clock.elapse(Duration(milliseconds: ms));
+      now += ms;
+      final current = state().toString();
+      if (current != last) {
+        shown.add('at $now ms the screen shows $current');
+        last = current;
+      }
+    }
+
+    for (final text in ['s', 'so', 'sol', 'solo']) {
+      query(text);
+      step(50);
+    }
+    while (now < 900) {
+      step(25);
+    }
+  });
+  final times = api.asked.length == 1 ? 'time' : 'times';
+  print('== $name');
+  print('the server was asked ${api.asked.length} $times: ${api.asked}');
+  shown.forEach(print);
+  print('');
+  require(
+    state().length == 1 && state().single == 'hits for solo',
+    'every version ends up showing the answer to the last keystroke',
+  );
+  return shown.length;
+}
+"""
+
 FILES['search'] = (
     SEARCH_TYPES
+    + snips['recipes/QueuedSearch']
+    + RESTARTING
     + snips['recipes/Search']
     + REQUIRE
-    + '''
+    + DRIVE
+    + """
 void main() {
-  // What the document says: the controller retains the latest query and
-  // waits for 300 ms without new input before starting it.
-  fakeAsync((clock) {
-    final api = SearchApi();
-    final search = Search(api);
+  final first = SearchApi();
+  final queued = QueuedSearch(first);
+  final queuedScreens = drive(
+    'a job per keystroke',
+    first,
+    queued.query,
+    () => queued.currentState.results,
+  );
+  require(first.asked.length == 4, 'a request for every keystroke');
+  require(queuedScreens == 4, 'and a screen for every answer on the way');
 
-    final first = search.query('s');
-    clock.elapse(const Duration(milliseconds: 100));
-    final second = search.query('so');
-    clock.elapse(const Duration(milliseconds: 100));
-    final third = search.query('sol');
+  final second = SearchApi();
+  final restarting = RestartingSearch(second);
+  final restartedScreens = drive(
+    'Policy.restart',
+    second,
+    restarting.query,
+    () => restarting.currentState.results,
+  );
+  require(second.asked.length == 4, 'restart cancels jobs, not requests');
+  require(restartedScreens == 1, 'but only the last answer reaches the screen');
 
-    require(identical(first, second), 'one group for the keystrokes');
-    require(identical(second, third), 'all of them');
-
-    clock.elapse(const Duration(milliseconds: 299));
-    require(api.queries.isEmpty, 'every keystroke restarted the timer');
-    print('499 ms after the first keystroke: queries ${api.queries}');
-
-    clock.elapse(const Duration(milliseconds: 2));
-    require(api.queries.length == 1, 'three keystrokes, one request');
-    require(api.queries.single == 'sol', 'and it asks for the last one');
-    require(
-      search.currentState.results.length == 2,
-      'the results reached the state',
-    );
-    print('501 ms: queries ${api.queries}, '
-        'state ${search.currentState.results}');
-
-    search.close();
-    clock.flushMicrotasks();
-  });
+  final third = SearchApi();
+  final search = Search(third);
+  final debouncedScreens = drive(
+    'accumulate with debounce',
+    third,
+    search.query,
+    () => search.currentState.results,
+  );
+  require(third.asked.length == 1, 'one group, one request');
+  require(debouncedScreens == 1, 'and one screen, the answer to `solo`');
 }
-''')
+""")
 
 # ------------------------------------------------------------------ policies
 # The reference's own three lines, run as written. They are statements, not a
