@@ -317,28 +317,35 @@ void main() {
 ''')
 
 # ------------------------------------------------------------------ commands
-# One driver for the whole section: its two halves are the same three
-# commands solved twice, and a reader compares them by their traces.
+# One driver for the whole section: the same three taps solved three ways, and
+# a reader compares them by their traces.
 PLAYER_FAKE = '''
-/// Records what the device was actually told to do, so the driver counts
-/// commands instead of trusting that only one arrived.
+/// Records what the device was told and when, so the driver counts commands
+/// instead of trusting that only one arrived. 100 ms to obey is what the
+/// section's traces are measured against.
 class RecordingDevice implements PlayerDevice {
-  final calls = <String>[];
+  final heard = <String>[];
+  int Function() now = () => 0;
   Completer<void>? pausing;
 
   @override
-  Future<void> resume() async {
-    calls.add('resume');
+  Future<void> resume() {
+    heard.add('resume at ${now()} ms');
+    return Future<void>.delayed(const Duration(milliseconds: 100));
   }
 
   @override
   Future<void> pause() {
-    calls.add('pause');
-    return (pausing = Completer<void>()).future;
+    heard.add('pause at ${now()} ms');
+    if (pausing != null) return pausing!.future;
+    return Future<void>.delayed(const Duration(milliseconds: 100));
   }
 }
 '''
 
+# The section's second half: two ordinary jobs with keys of their own, and the
+# controller's queue as what removes them. The snippet is a method, so the
+# bench puts it in the controller it belongs to.
 TRANSPORT = '''
 /// The `resume` above, in the controller the section describes. `pause` is
 /// its mirror image and is the bench's, not the document's.
@@ -359,69 +366,133 @@ final class Transport extends Solo<Playback> {
 }
 '''
 
+PLAYER_DRIVE = '''
+/// Three taps in a row: resume, pause, resume. One scenario for both
+/// versions of the button.
+void drive(
+  String name,
+  RecordingDevice device,
+  SoloJob<void> Function() resume,
+  SoloJob<void> Function() pause,
+  Playback Function() state,
+) {
+  fakeAsync((clock) {
+    device.now = () => clock.elapsed.inMilliseconds;
+    final first = resume();
+    pause();
+    final third = resume();
+
+    var settled = -1;
+    while (clock.elapsed.inMilliseconds < 800) {
+      clock.elapse(const Duration(milliseconds: 25));
+      if (settled < 0 && first.isFinished && third.isFinished) {
+        settled = clock.elapsed.inMilliseconds;
+      }
+    }
+
+    print('== $name');
+    print('the device heard ${device.heard.length} '
+        '${device.heard.length == 1 ? 'command' : 'commands'}:');
+    for (final command in device.heard) {
+      print('  $command');
+    }
+    print('the button gave back '
+        '${identical(first, third) ? 'one job' : 'a job for every tap'}');
+    print('the player settles ${state().runtimeType} at $settled ms');
+    print('');
+  });
+}
+'''
+
 FILES['commands'] = (
-    with_fake_async('recipes/Player', dart_async=True)
+    with_fake_async('recipes/Command', dart_async=True)
+    + snips['recipes/QueuedPlayer']
+    + snips['recipes/Player']
     + PLAYER_FAKE
     + TRANSPORT
     + REQUIRE
+    + PLAYER_DRIVE
     + '''
 void main() {
-  // One command with a value. What the document says: resume, pause, resume
-  // in a row leave one job in the queue, all three return the same handle,
-  // and the device is told to resume once -- nothing was queued and
-  // cancelled on the way.
+  // A job per command: the device is told everything the user tapped, and
+  // the stop in the middle is something they hear.
+  final queuedDevice = RecordingDevice();
+  final queued = QueuedPlayer(queuedDevice);
+  drive(
+    'a job per command',
+    queuedDevice,
+    queued.resume,
+    queued.pause,
+    () => queued.currentState,
+  );
+  require(queuedDevice.heard.length == 3, 'the device hears every tap');
+  require(
+    queuedDevice.heard[1].startsWith('pause'),
+    'including the stop nobody wanted',
+  );
+  require(queued.currentState is Playing, 'and it does end up playing');
+
+  // The accumulator: one command, because the merge kept the last one and
+  // no job was ever created for the others.
+  final device = RecordingDevice();
+  final player = Player(device);
+  drive(
+    'the accumulator',
+    device,
+    player.resume,
+    player.pause,
+    () => player.currentState,
+  );
+  require(device.heard.length == 1, 'the device hears one command');
+  require(device.heard.single.startsWith('resume'), 'and it is the last one');
+  require(player.currentState is Playing, 'the state follows the device');
+
+  // Which of the two the merge keeps. Three alternating taps start and end
+  // on the same command, so they cannot tell `incoming` from `accumulated`;
+  // two taps can.
   fakeAsync((clock) {
     final device = RecordingDevice();
-    final player = Player(device);
-
-    final first = player.resume();
-    final second = player.pause();
-    final third = player.resume();
-
-    require(identical(first, second), 'the pause joins the open group');
-    require(identical(second, third), 'and so does the second resume');
-
-    clock.flushMicrotasks();
-    require(device.calls.length == 1, 'the device hears one command');
-    require(device.calls.single == 'resume', 'and it is the last one');
-    require(player.currentState is Playing, 'the state follows the device');
-    require(first.outcome is Done, 'the one job finished, none was cancelled');
-
-    print('accumulated: device heard ${device.calls}, '
-        'state ${player.currentState.runtimeType}, '
-        'one handle ${identical(first, third)}, outcome ${first.outcome}');
-
+    final player = Player(device)
+      ..resume()
+      ..pause();
+    clock.elapse(const Duration(milliseconds: 300));
+    require(device.heard.length == 1, 'still one command for two taps');
+    require(
+      device.heard.single.startsWith('pause'),
+      'and merge keeps the incoming one, not the one it had',
+    );
+    require(player.currentState is Paused, 'the player ends up stopped');
     player.close();
     clock.flushMicrotasks();
   });
 
-  // Two operations of their own, with a fresh device: ordinary jobs with
-  // keys, and the controller's queue as what removes them. What the document
-  // says: the queue never touches the running job, so a pause that has
-  // already started runs to its end whatever is removed behind it.
+  // Two operations of their own, with a device that holds the pause: the
+  // queue never touches the running job, so a pause that has already started
+  // runs to its end whatever is removed behind it.
   fakeAsync((clock) {
-    final device = RecordingDevice();
+    final device = RecordingDevice()..pausing = Completer<void>();
     final transport = Transport(device);
 
     final pausing = transport.pause();
     clock.flushMicrotasks();
-    require(device.calls.single == 'pause', 'the pause is running');
+    require(device.heard.length == 1, 'the pause is running');
     require(!pausing.isFinished, 'and it is waiting for the device');
 
     final resuming = transport.resume();
     clock.flushMicrotasks();
     require(!pausing.isFinished, 'removeWhere did not touch the running job');
-    require(device.calls.length == 1, 'the resume waits its turn');
+    require(device.heard.length == 1, 'the resume waits its turn');
 
     device.pausing!.complete();
-    clock.flushMicrotasks();
+    clock.elapse(const Duration(milliseconds: 300));
     require(pausing.outcome is Done, 'the pause ran to its end');
-    require(device.calls.length == 2, 'and only then the resume started');
+    require(device.heard.length == 2, 'and only then the resume started');
     require(resuming.outcome is Done, 'the resume finished too');
     require(transport.currentState is Playing, 'ending where resume leaves it');
 
-    print('separate jobs: device heard ${device.calls}, '
-        'pause ${pausing.outcome}, resume ${resuming.outcome}, '
+    print('== separate jobs, with a pause already running');
+    print('the device heard ${device.heard}');
+    print('pause ${pausing.outcome}, resume ${resuming.outcome}, '
         'state ${transport.currentState.runtimeType}');
 
     transport.close();
@@ -432,27 +503,97 @@ void main() {
 
 # ---------------------------------------------------------------------- logs
 LOG_FAKE = '''
-/// Records every batch, so the driver counts requests and their contents.
+/// Records every batch and how long the server took, so a driver counts
+/// requests instead of trusting that there was one. 100 ms per request is
+/// what the section's traces are measured against.
 class RecordingLogApi implements LogApi {
   final sent = <List<String>>[];
 
   @override
-  Future<void> send(List<LogEntry> entries) async {
+  Future<void> send(List<LogEntry> entries) {
     sent.add([for (final entry in entries) entry.message]);
+    return Future<void>.delayed(const Duration(milliseconds: 100));
   }
 }
 '''
 
+LOG_DRIVE = '''
+/// Three lines written while one screen transition is handled, then one more
+/// half a second later. One scenario for both versions.
+int drive(
+  String name,
+  RecordingLogApi api,
+  SoloJob<void> Function(LogEntry) log,
+  int Function() counter,
+) {
+  var burst = 0;
+  fakeAsync((clock) {
+    for (final message in ['opened', 'loaded', 'shown']) {
+      log(LogEntry(message));
+    }
+    clock.elapse(const Duration(milliseconds: 500));
+    burst = api.sent.length;
+    log(const LogEntry('tapped'));
+    clock.elapse(const Duration(seconds: 3));
+
+    final requests = api.sent.length == 1 ? 'request' : 'requests';
+    print('== $name');
+    print('the server got ${api.sent.length} $requests:');
+    for (final batch in api.sent) {
+      print('  $batch');
+    }
+    print('the three lines of the transition cost $burst of them');
+    print('the counter says ${counter()}');
+    print('');
+  });
+  return burst;
+}
+'''
+
 FILES['logs'] = (
-    with_fake_async('recipes/LogController')
+    with_fake_async('recipes/LogEntry')
+    + snips['recipes/EagerLogController']
+    + snips['recipes/LogController']
     + LOG_FAKE
     + REQUIRE
+    + LOG_DRIVE
     + '''
 void main() {
-  // What the document says: three calls before execution send one list of
-  // three entries; the first group is ready immediately, later groups start
-  // at least a second apart, and entries arriving inside that interval are
-  // kept for the next group.
+  // Every line is a job, and every job sends: four lines, four round trips,
+  // and the queue is what makes each one wait for the last.
+  final eagerApi = RecordingLogApi();
+  final eager = EagerLogController(eagerApi);
+  final eagerBurst = drive(
+    'a request per entry',
+    eagerApi,
+    eager.logEvent,
+    () => eager.currentState,
+  );
+  require(eagerApi.sent.length == 4, 'a request for every line');
+  require(eagerBurst == 3, 'three of them for one screen transition');
+  require(
+    eagerApi.sent.every((batch) => batch.length == 1),
+    'and every request carries a single entry',
+  );
+
+  // collect: the three lines of the transition travel together, and the
+  // fourth goes on its own because the interval had already passed.
+  final api = RecordingLogApi();
+  final logs = LogController(api);
+  final burst = drive(
+    'collect with throttle',
+    api,
+    logs.logEvent,
+    () => logs.currentState,
+  );
+  require(burst == 1, 'one request for the whole transition');
+  require(api.sent.first.length == 3, 'carrying all three lines');
+  require(api.sent.first.first == 'opened', 'in the order they were written');
+  require(api.sent.last.single == 'tapped', 'the fourth went on its own');
+  require(logs.currentState == 4, 'the counter saw every entry');
+
+  // The throttle is a floor under the rate: entries written inside the
+  // interval wait for it, and are sent together when it ends.
   fakeAsync((clock) {
     final api = RecordingLogApi();
     final logs = LogController(api)
@@ -463,20 +604,15 @@ void main() {
     clock.flushMicrotasks();
     require(api.sent.length == 1, 'three calls, one request');
     require(api.sent.single.length == 3, 'and it carries all three entries');
-    require(logs.currentState == 3, 'state counts what was sent');
-    print('first group: ${api.sent.single}, state ${logs.currentState}');
 
     logs.logEvent(const LogEntry('four'));
     clock.elapse(const Duration(milliseconds: 999));
     require(api.sent.length == 1, 'the throttle interval is not over');
-    print('at 999 ms: requests ${api.sent.length}, '
-        'state ${logs.currentState}');
 
-    clock.elapse(const Duration(milliseconds: 2));
+    clock.elapse(const Duration(milliseconds: 200));
     require(api.sent.length == 2, 'the interval ended and the group went');
     require(api.sent.last.single == 'four', 'carrying what arrived inside it');
     require(logs.currentState == 4, 'and the count grew by one');
-    print('second group: ${api.sent.last}, state ${logs.currentState}');
 
     logs.close();
     clock.flushMicrotasks();

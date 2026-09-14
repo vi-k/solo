@@ -334,12 +334,6 @@ prevent the final `emit` after the server has accepted the write.
 An application writes log entries one at a time and the server takes them in
 batches. Every entry has to arrive, and in the order it was written.
 
-Logs need their individual entries and order. `collect` appends events to a
-private list and gives the handler an unmodifiable snapshot at the moment the
-group is sealed. It preserves duplicate events and does not copy the entire
-list on every addition. The entries themselves are not cloned; use immutable
-event objects.
-
 ```dart
 import 'package:solo/solo.dart';
 
@@ -352,7 +346,54 @@ class LogEntry {
 abstract interface class LogApi {
   Future<void> send(List<LogEntry> entries);
 }
+```
 
+#### The first attempt
+
+Every line is a job, and the job sends:
+
+```dart
+final class EagerLogController extends Solo<int> {
+  final LogApi _api;
+
+  EagerLogController(this._api) : super(0);
+
+  SoloJob<void> logEvent(LogEntry entry) => run<int, void>(
+        key: 'logs',
+        (ctx) async {
+          await ctx.join(() => _api.send([entry]));
+          ctx.emit(ctx.state + 1);
+        },
+      );
+}
+```
+
+Three lines written while one screen transition is handled, then one more half
+a second later, against a server that takes 100 ms per request:
+
+```
+the server got 4 requests:
+  [opened]
+  [loaded]
+  [shown]
+  [tapped]
+the three lines of the transition cost 3 of them
+the counter says 4
+```
+
+Four lines, four requests. The queue is what keeps them in order, and it is
+also what makes them wait: each send starts only when the one before it has
+finished, so a burst of logging turns into a chain of round trips that outlives
+the event that produced it.
+
+#### The accumulator
+
+`collect` appends events to a private list and gives the handler an
+unmodifiable snapshot at the moment the group is sealed. It preserves duplicate
+events and does not copy the entire list on every addition. The entries
+themselves are not cloned; use immutable event objects.
+
+```dart
 class LogController extends Solo<int> {
   final LogApi _api;
   late final _logs = collect<int, LogEntry, void>(
@@ -371,12 +412,29 @@ class LogController extends Solo<int> {
 }
 ```
 
-Three calls before execution send one list of three entries. The first group is
-ready immediately; later groups start at least one second apart. Entries
-received during that interval are kept for the next group. This controller's
-state counts entries whose send operation completed and whose handler reached
-`emit`. The policy section explains why this example chooses `join` as its
-accumulation policy.
+```
+the server got 2 requests:
+  [opened, loaded, shown]
+  [tapped]
+the three lines of the transition cost 1 of them
+the counter says 4
+```
+
+The three lines of the transition travel together. The fourth arrives after the
+throttle interval has passed, so it goes on its own rather than waiting for
+company — the interval is a floor under the rate, not a delay added to every
+entry.
+
+A buffer you keep yourself would batch them too. What `collect` adds is that
+the buffer is the job's input: the entries are sealed into the group the queue
+takes, the caller gets the same `SoloJob` every other addition got, and closing
+the controller drops the group instead of leaving a list and a timer behind.
+
+The first group is ready immediately; later groups start at least one second
+apart. Entries received during that interval are kept for the next group. This
+controller's state counts entries whose send operation completed and whose
+handler reached `emit`. The policy section explains why this example chooses
+`join` as its accumulation policy.
 
 Collecting entries does not guarantee delivery. A failed send, a cancelled
 group or controller shutdown can leave them unsent. Durable storage, retries
@@ -387,12 +445,6 @@ accumulator.
 
 A player puts resume and pause on one button, and the user taps it faster than
 the device answers.
-
-A queue holding `resume` and then `pause` is about to do two things that cancel
-each other out, and a `resume` arriving now makes the whole pair pointless: the
-end of it is what a single `resume` would have reached. Nothing has to be taken
-back, because an accumulator never creates the jobs to take back. `merge` keeps
-the incoming command and drops the one it had:
 
 ```dart
 import 'package:solo/solo.dart';
@@ -416,7 +468,62 @@ abstract interface class PlayerDevice {
 
   Future<void> pause();
 }
+```
 
+#### The first attempt
+
+Each command is a job of its own:
+
+```dart
+final class QueuedPlayer extends Solo<Playback> {
+  final PlayerDevice device;
+
+  QueuedPlayer(this.device) : super(const Paused());
+
+  SoloJob<void> resume() => run<Playback, void>(
+        key: Command.resume,
+        (ctx) async {
+          await ctx.join(device.resume);
+          ctx.emit(const Playing());
+        },
+      );
+
+  SoloJob<void> pause() => run<Playback, void>(
+        key: Command.pause,
+        (ctx) async {
+          await ctx.join(device.pause);
+          ctx.emit(const Paused());
+        },
+      );
+}
+```
+
+Three taps in a row — resume, pause, resume — against a device that takes 100
+ms to obey:
+
+```
+the device heard 3 commands:
+  resume at 0 ms
+  pause at 100 ms
+  resume at 200 ms
+the button gave back a job for every tap
+the player settles Playing at 300 ms
+```
+
+The player ends up where the last tap asked, and gets there by doing what no
+tap asked for: it plays, stops, and plays again, and the stop in the middle is
+something the user hears. Three round trips to the device, and 300 ms before it
+settles.
+
+#### The accumulator
+
+A queue holding `resume` and then `pause` is about to do two things that cancel
+each other out, and a `resume` arriving now makes the whole pair pointless: the
+end of it is what a single `resume` would have reached. Nothing has to be taken
+back, because an accumulator never creates the jobs to take back. `merge` keeps
+the incoming command and drops the one it had:
+
+```dart
 final class Player extends Solo<Playback> {
   final PlayerDevice device;
 
@@ -443,9 +550,16 @@ final class Player extends Solo<Playback> {
 }
 ```
 
-Three calls in a row — `resume`, `pause`, `resume` — leave one job in the
-queue, and all three return the same handle. The device is told to resume once.
-Nothing was queued and cancelled on the way.
+```
+the device heard 1 command:
+  resume at 0 ms
+the button gave back one job
+the player settles Playing at 100 ms
+```
+
+Three calls in a row leave one job in the queue, and all three return the same
+handle. The device is told to resume once. Nothing was queued and cancelled on
+the way.
 
 This works because the commands are absolute: each one says what the end state
 is, so the last one is the answer. Commands that build on each other — "ten
