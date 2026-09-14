@@ -428,8 +428,8 @@ entry.
 
 A buffer you keep yourself would batch them too. What `collect` adds is that
 the buffer is the job's input: the entries are sealed into the group the queue
-takes, the caller gets the same `SoloJob` every other addition got, and closing
-the controller drops the group instead of leaving a list and a timer behind.
+takes, the caller gets the same `SoloJob` every other addition got, and
+`close()` drops the group instead of leaving a list and a timer behind.
 
 This controller's state counts entries whose send operation completed and whose
 handler reached `emit`. The policy section explains why this example chooses
@@ -437,9 +437,9 @@ handler reached `emit`. The policy section explains why this example chooses
 throttle interval measures from.
 
 Collecting entries does not guarantee delivery. A failed send, a cancelled
-group or controller shutdown can leave them unsent. Durable storage, retries
-and a final send on shutdown require an application protocol beyond this
-accumulator.
+group or a plain `close()` can leave them unsent; `close()` with
+`SoloCloseMode.drain` sends what is already queued. Durable storage and retries
+require an application protocol beyond this accumulator.
 
 ### Commands where only the last one counts
 
@@ -762,7 +762,7 @@ still waiting for its window is dropped, and the jobs it handed out complete
 with `Cancelled(closed)`. `close(mode: SoloCloseMode.drain)` is the other
 choice — it waits the accumulation window out and runs the groups already
 queued, by the rules in [Cancellation](cancellation.md). Neither mode takes
-anything new: an `add` after closing returns a new job already completed with
+anything new: an `add` after `close()` returns a new job already completed with
 `Cancelled(closed)`; it does not call `merge` or the handler. Once a group
 completes, its internal input storage is released. A handler, result or error
 that retains the input still owns those references.
