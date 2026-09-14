@@ -404,22 +404,34 @@ void main() {
 
   test('a selection of a closed controller answers from the state', () async {
     final controller = _Controller();
-    final name = controller.select((state) => state.name);
+    // A `compare` that ignores case lets the source move without an
+    // announcement. That is the only way to tell a read of the source from
+    // a replay of the last announced pick: after the second change the two
+    // differ, and only one of them is the state the controller holds.
+    final name = controller.select(
+      (state) => state.name,
+      // `compare` answers whether the pick CHANGED, the way `!=` does.
+      compare: (previous, current) =>
+          previous.toLowerCase() != current.toLowerCase(),
+    );
     var calls = 0;
     name.addListener(() => calls++);
 
     controller.set(const _Screen(name: 'Ada'));
     expect(calls, 1, reason: 'an open controller does announce a pick');
 
+    controller.set(const _Screen(name: 'ADA'));
+    expect(calls, 1, reason: 'the same pick by `compare`, nothing announced');
+
     await controller.close();
 
+    expect(name.value, 'ADA', reason: 'the source is read, not replayed');
     expect(
       () => controller.set(const _Screen(name: 'Grace')),
       throwsA(isA<StateError>()),
       reason: 'a closed controller has no state to move',
     );
     expect(calls, 1, reason: 'and therefore announces nothing more');
-    expect(name.value, 'Ada', reason: 'the final state still answers');
   });
 
   test('the source is any value listenable, not only a controller', () {

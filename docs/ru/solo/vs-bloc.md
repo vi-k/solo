@@ -1491,7 +1491,9 @@ final class ReportController extends Solo<ReportState> {
   final Reports _reports;
 
   ReportController(this._reports, Auth auth) : super(const SignedIn()) {
-    auth.onRevoked = (reason) => externalSetState(SignedOut(reason));
+    auth.onRevoked = (reason) {
+      if (!isFinished) externalSetState(SignedOut(reason));
+    };
   }
 
   Job<void> build(Range range) => run<SignedIn, void>(
@@ -1514,8 +1516,13 @@ final class ReportController extends Solo<ReportState> {
 и ни одна `Job` в очереди этого не изменит. А просьба что-то сделать —
 обновить, дозагрузить, повторить — это обычная работа, и ей место в очереди.
 
-Остановите слушатель авторизации до закрытия любого из контроллеров. Как
-именно, решает приложение; фрагменты показывают только регистрацию.
+Слушатель авторизации останавливают осознанно в обеих реализациях,
+но не в одном порядке. Bloc закрывают после слушателя. С контроллером наоборот:
+запись защищают признаком `isFinished`, а слушатель останавливают после
+`super.close()`, чтобы `SoloCloseMode.drain` услышал отзыв, пока крутится его
+очередь, а отзыв, пришедший после конца, был отброшен защитой, а не бросил
+ошибку. Как именно останавливать, решает приложение; фрагменты показывают
+только регистрацию.
 
 При успехе `Job` может закончиться публикацией `Ready`, хотя это состояние
 за пределами `SignedIn`. Собственный `emit` исключён из проверки правил;

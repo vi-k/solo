@@ -1478,7 +1478,9 @@ final class ReportController extends Solo<ReportState> {
   final Reports _reports;
 
   ReportController(this._reports, Auth auth) : super(const SignedIn()) {
-    auth.onRevoked = (reason) => externalSetState(SignedOut(reason));
+    auth.onRevoked = (reason) {
+      if (!isFinished) externalSetState(SignedOut(reason));
+    };
   }
 
   Job<void> build(Range range) => run<SignedIn, void>(
@@ -1502,8 +1504,13 @@ gone, and no job waiting in line can change that. A request to do something —
 refresh this, fetch that, try again — is ordinary work and belongs in the
 queue.
 
-Stop the auth listener before closing either controller. How is up to the
-application; the snippets show registration only.
+Stop the auth listener deliberately in both implementations, but not in the
+same order. The bloc is closed after the listener. The controller is the other
+way round: the write is guarded with `isFinished` and the listener is stopped
+after `super.close()`, so that a `SoloCloseMode.drain` still hears the
+revocation while its queue runs, and a revocation arriving after the end is
+dropped by the guard instead of throwing. How the listener is stopped is up to
+the application; the snippets show registration only.
 
 On the success path, the job may finish by emitting `Ready`, even though that
 state is outside `SignedIn`. Its own `emit` is excluded from the rule check; a

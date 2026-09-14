@@ -11,15 +11,27 @@
   before feeding an external fact. `isClosed` will not do: it is true from the
   first line of `close`, so guarding with it starves a `SoloCloseMode.drain` of
   the very facts the queue it is running still needs. The line is where the
-  listeners are dropped, not where `close` returns. Check it after the last
-  `await` -- a suspension between the check and the write lets the engine
-  finish in between. The documented order changes with it: a source is no
-  longer stopped before `super.close()`, it is guarded and cancelled
-  afterwards, which is the one order that serves both close modes. Adding a
-  member to a class meant to be extended is breaking on its own, and this name
-  is not a free one: `Job` in `async_job` already has `isFinished`, and a
-  controller that drives a download or a sync is where a subclass would most
-  likely have spelled it the same way.
+  listeners are dropped, not where the future `close` returns completes: a
+  paused stream subscription holds that future open long after the engine is
+  done. Check it after the last `await` -- a suspension between the check and
+  the write lets the engine finish in between. The documented order changes
+  with it: a source is no longer stopped before `super.close()`, it is guarded
+  and cancelled afterwards, which is the one order that serves both close
+  modes. Adding a member to a class meant to be extended is breaking on its
+  own, and this name is not a free one: `Job` in `async_job` already has
+  `isFinished`, and a controller that drives a download or a sync is where a
+  subclass would most likely have spelled it the same way.
+
+- **Migrating a subclass.** A terminal state set after closing has to move:
+  write it before `super.close()`, or synchronously from the observer's
+  `onClose`, which still reaches the listeners. After `await super.close()`
+  there is nowhere left to put it. And if the subclass already has an
+  `isFinished` of its own that happens to be a `bool` -- a download that is
+  complete, a sync that is done -- it keeps compiling, which is the dangerous
+  case: the member now overrides the engine's, every `if (!isFinished)` in the
+  subclass answers from the domain flag, and the engine, which checks its own
+  private state, goes on refusing the write. Rename the domain one. A member of
+  another type fails to compile instead, which is the easy case.
 
 - `doc/vs-bloc.md` is rebuilt around the mistake. Every one of the eleven
   scenarios now opens with "The first attempt" — the code the requirement

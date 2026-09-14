@@ -16,12 +16,12 @@
   longer find one.
 - Add `SoloBuilder` and `SoloSelectBuilder`: what `ValueListenableBuilder` and
   `SoloSelector` are, for a controller that is not a `ValueListenable`. Both
-  take any `SoloBase` -- a plain `Solo` included -- read the state after
-  subscribing and cache it, compare controllers by identity when the parent
-  hands over a new one, and pass `child` through untouched. `SoloSelectBuilder`
-  holds its selection across a parent rebuild, so the baseline `compare`
-  answers from survives one; it carries no `buildWhen`, because picking a value
-  is what it does.
+  take any `SoloBase` -- a plain `Solo` included -- subscribe in `initState`,
+  read the controller's state on every build, compare controllers by identity
+  when the parent hands over a new one, and pass `child` through untouched.
+  `SoloSelectBuilder` holds its selection across a parent rebuild, so the
+  baseline `compare` answers from survives one; it carries no `buildWhen`,
+  because picking a value is what it does.
 - Add `SoloSelection.of`: a selection straight from a controller, for the
   controllers that are not `ValueListenable` -- `Solo` and anything else built
   on `SoloBase`. It is a static method rather than a constructor because a
@@ -56,16 +56,16 @@
   stays here is `value` and the report of a listener's failure through
   `FlutterError.reportError`. The class behaves as it did, with one exception
   below.
-- **Fix:** a listener registered after `close` had finished was kept in memory
-  for good. It was never notified -- a flag saw to that -- but it was held; now
-  the registration is refused outright and nothing is retained.
-- A change delivered from a microtask scheduled inside the observer's `onClose`
-  no longer reaches listeners -- and with `solo` freezing the state of a closed
-  controller, it is no longer a change at all: the engine has finished by then,
-  so `externalSetState` from there throws a `StateError`. The list used to be
-  dropped one microtask later, in the continuation of the engine's close; the
-  engine now drops it synchronously, right after the hook. A change made
-  *inside* the hook still reaches them.
+- **Fix:** a listener registered after the engine had finished closing was kept
+  in memory for good. It was never notified -- a flag saw to that -- but it was
+  held; now the registration is refused outright and nothing is retained.
+- **Breaking:** a change delivered from a microtask scheduled inside the
+  observer's `onClose` no longer reaches listeners -- and with `solo` freezing
+  the state of a closed controller, it is no longer a change at all: the engine
+  has finished by then, so `externalSetState` from there throws a `StateError`.
+  The list used to be dropped one microtask later, in the continuation of the
+  engine's close; the engine now drops it synchronously, right after the hook.
+  A change made *inside* the hook still reaches them.
 
 - **Breaking:** `SoloListenable` is built on `SoloBase`, not on `Solo`, and has
   no `stream`. The listeners are its whole delivery: a widget rebuilds from

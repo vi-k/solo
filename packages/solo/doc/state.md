@@ -105,13 +105,17 @@ checked `ctx.state`.
 The listeners belong to the engine. They run synchronously, in registration
 order, inside the change and before the rules of the running jobs are
 re-evaluated, so a listener is called before the next line of the code that
-changed the state. `removeListener` matches with `==` rather than identity, the
-way `ChangeNotifier` does, so a widget can subscribe in `initState` and
-unsubscribe in `dispose` with a method of its own. A listener that throws does
-not stop the pass: its error goes to `onListenerError`, which hands it to the
-zone unless a subclass says otherwise. Closing drops them for good — a
-registration made afterwards is refused rather than kept, and the state stops
-moving with them: `externalSetState` past that point throws a `StateError`.
+changed the state. Both halves of that are about the change that opened the
+pass: a change made from inside a listener joins the publication queue instead
+of cutting in, so the writer's next line runs first and its own pass comes
+after the rules have been re-evaluated for it. `removeListener` matches with
+`==` rather than identity, the way `ChangeNotifier` does, so a widget can
+subscribe in `initState` and unsubscribe in `dispose` with a method of its own.
+A listener that throws does not stop the pass: its error goes to
+`onListenerError`, which hands it to the zone unless a subclass says otherwise.
+Closing drops them for good — a registration made afterwards is refused rather
+than kept, and the state stops moving with them: `externalSetState` past that
+point throws a `StateError`.
 
 `SoloListenable` adds Flutter's `ValueListenable` to that and nothing else. It
 is a sibling of `Solo`, not a subclass: a widget rebuilds from `value`, so the
@@ -216,10 +220,13 @@ asks the controller to perform work, such as refresh data or save an incoming
 value, enqueue a normal job. An event being delivered by a stream does not by
 itself justify bypassing the queue.
 
-Stopping the source before `super.close()` is the tidier-looking order, and
-with `SoloCloseMode.cancel` it costs nothing. With `SoloCloseMode.drain` it
-costs the drain: the queue goes on running after the call, and the jobs in it
-are the ones that most need to hear that the device is gone. The guard is what
+Stopping the source before `super.close()` is the tidier-looking order, and it
+costs nothing only while no running job depends on the fact. With
+`SoloCloseMode.drain` it costs the drain: the queue goes on running after the
+call, and the jobs in it are the ones that most need to hear that the device is
+gone. `SoloCloseMode.cancel` is not safe from it either — a
+`cancellable: false` job waiting for an answer the device will never give is
+freed by the disconnection, and `close` waits for that job. The guard is what
 lets one order serve both modes. Check it after the last `await` of the handler
 — a suspension between the check and the write lets the engine finish in
 between, and the write then throws.
