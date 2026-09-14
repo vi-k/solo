@@ -60,6 +60,61 @@ resource a branch opened is still released on time when the branch took it
 through `ctx.wait(() => open(), dispose: (value) => value.close())`: the
 cleanup belongs to the job, not to the waiting.
 
+When one failure makes the rest of the work pointless, `ctx.runAll` runs the
+children together and stops the others at the first sign of trouble:
+
+```dart
+final values = await ctx.runAll([
+  Job.deferred<int>((ctx) => ctx.wait(loadRows)),
+  Job.deferred<int>((ctx) => ctx.wait(loadExtra)),
+]);
+```
+
+It starts every child synchronously, in the order of the list, and returns
+their values in that order. As soon as the body of any branch ends in anything
+but a value, the others are asked to stop with `SiblingCancelReason`; the
+branch the trouble came from is not, or its error would turn into a
+cancellation and be lost. What comes out is decided by the final outcomes: a
+real failure if there is one, otherwise the first cancellation that arrived,
+thrown as the object that outcome carries -- exactly what
+`await ctx.run(child)` would have thrown. A failure the group received and did
+not throw is not dropped; it goes where an error nobody answered for goes, and
+goes there once.
+
+When which: `[ctx.run(a), ctx.run(b)].wait` waits for every branch and stops
+none, so use it when the branches are independent of each other's failure, or
+when one of them waits for another. `ctx.runAll` stops the rest, so use it when
+a result missing one of its parts is of no use anyway.
+
+Ownership is the same rule as everywhere else, and a group is where it starts
+to matter. A resource a branch keeps for itself goes to `onDispose`, and the
+end of the branch closes it whatever the outcome. A resource a branch hands out
+goes to `onDiscard`, or to the `discard` of `ctx.wait` and `ctx.join`: it then
+lives until the group succeeds in full and reaches the caller open. On any
+other outcome the branch closes it itself, before the group returns -- so by
+the time the parent catches the error, nothing is left open.
+
+Four things `runAll` does not promise.
+
+**The stop is cooperative.** A branch waiting through `ctx.wait` ends, and the
+operation behind it plays on and writes its result. To stop the work itself,
+hand the cancellation to it with `ctx.onCancel` and wait for it with
+`ctx.join`. A branch created with `cancellable: false` refuses the stop
+outright, and the group waits for it.
+
+**The descendants of the branch that failed play out.** A failure never
+cascades, so the children that branch started are not cancelled, and the group
+waits for them as it waits for everything else.
+
+**The outcome of a branch is not final until the group decides.** A body that
+returned a value can still end `Cancelled`, and until the group has committed,
+neither `child.outcome` nor `child.isCancelled` is the last word.
+
+**A branch must not wait for another branch of the same group.** Awaiting a
+sibling's `Job.value` never finishes: the sibling is held until the group
+decides, and the group decides only once every branch is held. Nothing catches
+that. For branches that depend on each other, `[...].wait` is the answer.
+
 `ctx.run` throws synchronously for an invalid start: `ArgumentError` for a job
 from another implementation or a job that starts automatically. It throws
 `StateError` if the child has already started or the parent body has ended. If

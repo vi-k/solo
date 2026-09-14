@@ -1,5 +1,14 @@
 ## Unreleased
 
+- **Breaking:** `JobContext` gains `runAll`, which runs children side by side
+  and asks the rest to stop as soon as one of them goes wrong. New on an
+  `abstract interface class`, so an implementation of `JobContext` written by
+  hand no longer compiles, and so does an extension of the same name on
+  `JobContext` -- the member now wins over it. `JobContextBase` gets it once
+  and every engine built on it, `solo` included, gets it for nothing. The
+  contract of `discard` is untouched: it still runs only when the job ends
+  without handing its value over, and in a branch of a group the group is what
+  says whether it did. See `doc/children.md`.
 - **Breaking:** a cancellation that travels inside a `ParallelWaitError` is a
   cancellation again. `[...].wait` wraps every branch error in that envelope,
   and the kernel read a caught error by type, so a child cancelled under

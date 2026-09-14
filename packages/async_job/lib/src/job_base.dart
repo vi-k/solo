@@ -105,7 +105,9 @@ abstract interface class Job<T> {
   /// Whether the body is running or its children are still finishing.
   ///
   /// Still `true` while the engine cleans up after the body: the outcome
-  /// is decided by then, but the job has not finished.
+  /// is decided by then, but the job has not finished. For a branch of
+  /// [JobContext.runAll] not even that much — a branch is held until the
+  /// group decides, and until then its outcome is not settled at all.
   bool get isRunning;
 
   /// Whether [outcome] is set.
@@ -115,7 +117,10 @@ abstract interface class Job<T> {
   ///
   /// While the engine cleans up after the body it answers by the decided
   /// outcome, so a disposer of a body that threw a [Cancelled] of its own
-  /// sees `true` here as well.
+  /// sees `true` here as well. On a branch of [JobContext.runAll] it can
+  /// still change after the body returned a value: a branch is held until
+  /// the group decides, and a cancellation reaching it in that window
+  /// ends it [Cancelled].
   bool get isCancelled;
 
   /// The outcome, or `null` until the job is finished.
@@ -643,6 +648,12 @@ abstract class JobBase<T> implements Job<T> {
   ///
   /// The body is gone and the outcome is decided, but the job has not
   /// finished: [isFinished] is still `false`.
+  ///
+  /// A branch of [JobContext.runAll] answers `true` while it waits for the
+  /// group between the two passes of its unwinding, whether or not it has
+  /// a cleanup stack at all: what a branch may do while it is held must
+  /// not depend on that. Its outcome is not decided there — the group has
+  /// yet to say so.
   @protected
   bool get isDisposing => _disposing;
 

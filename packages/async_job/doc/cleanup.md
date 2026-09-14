@@ -78,6 +78,14 @@ then be closed instead of being returned to the caller. If a `discard` was
 already skipped on the successful path, it runs in a second pass. It can
 therefore run after callbacks registered earlier than it.
 
+A branch of `ctx.runAll` is the one exception, and it is the whole point of the
+hold. A branch is not let to an outcome until its group has decided, and once
+the group has handed the values to the caller, a `discard` of that branch no
+longer runs — not in a second pass, not on a cancellation arriving into the
+unwinding, not at all. The value is in the caller's hands, and `discard` means
+the value went to nobody. Until the group decides, everything above holds as
+written: a cancellation reaching the branch closes what the branch took.
+
 A value returned by an action abandoned by `wait` also needs cleanup,
 regardless of the outcome, because it was never delivered to the body. Its
 registered cleanup callback runs even if the job has already ended.

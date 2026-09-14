@@ -253,6 +253,11 @@ abstract interface class JobContext {
   /// lock, a temporary file, a subscription — takes [onDispose], or it
   /// leaks on the successful path where no test on cancellation will see
   /// it. Returns a function that unregisters it.
+  ///
+  /// In a branch of [runAll] the hand-over is the group's to declare, not
+  /// the branch's: this runs when the group ends in anything but success,
+  /// and it does not run once the group has handed the values to the
+  /// caller — whatever outcome the branch itself ends with afterwards.
   void Function() onDiscard(FutureOr<void> Function() disposer);
 
   /// Drops the cleanup registered for [value] by [wait] or [join].
