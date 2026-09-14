@@ -757,8 +757,12 @@ cannot bypass the limit. That timer expires once and is not renewed until
 another group starts.
 
 `close()` cancels every timing timer, drops queued groups and cancels or waits
-for the running job under the usual rules. It does not send a final batch. An
-`add` after closing returns a new job already completed with
+for the running job under the usual rules. It sends no final batch: a group
+still waiting for its window is dropped, and the jobs it handed out complete
+with `Cancelled(closed)`. `close(mode: SoloCloseMode.drain)` is the other
+choice — it waits the accumulation window out and runs the groups already
+queued, by the rules in [Cancellation](cancellation.md). Neither mode takes
+anything new: an `add` after closing returns a new job already completed with
 `Cancelled(closed)`; it does not call `merge` or the handler. Once a group
 completes, its internal input storage is released. A handler, result or error
 that retains the input still owns those references.
