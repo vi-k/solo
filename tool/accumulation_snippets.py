@@ -1020,6 +1020,26 @@ void main() {
     'against a server faster than the typing it saves nothing',
   );
 
+  // "Continuous input can keep an open group waiting indefinitely": typing
+  // that never pauses for the window never sends anything, and the request
+  // goes out only when it stops. The document's own 300 ms debounce.
+  fakeAsync((clock) {
+    final api = SearchApi();
+    final search = Search(api);
+    for (var tap = 0; tap < 50; tap += 1) {
+      search.query('q$tap');
+      clock.elapse(const Duration(milliseconds: 200));
+    }
+    require(
+      api.asked.isEmpty,
+      'ten seconds of typing without a 300 ms pause asked nothing',
+    );
+
+    clock.elapse(const Duration(milliseconds: 400));
+    require(api.asked.length == 1, 'the pause is what sends it');
+    require(api.asked.single == 'q49', 'and it carries the last keystroke');
+  });
+
   // The sentence under the accumulator: what finishes before the next group
   // starts is the job, and a cancelled one leaves its request running.
   fakeAsync((clock) {

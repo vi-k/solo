@@ -632,9 +632,12 @@ whatever its `merge` returns. For example,
 accepted event in each group. Every addition restarts the timer, even when
 `merge` returns an unchanged value. With a 200 ms interval, events at 0, 60 and
 120 ms make the group ready at 320 ms. Continuous input can keep an open group
-waiting indefinitely. When the timer fires, the group is sealed even if another
-job is running. Later events form a new group; they cannot change the sealed
-input. `collect` takes its snapshot then, and not again.
+waiting indefinitely. That wait is the point in the search recipe — the request
+goes out when the typing stops — and the reason the log collector takes a
+throttle instead: entries that all have to arrive cannot wait on a pause that
+may never come. When the timer fires, the group is sealed even if another job
+is running. Later events form a new group; they cannot change the sealed input.
+`collect` takes its snapshot then, and not again.
 
 `AccumulationTiming.throttle(duration)` allows the first group to start
 immediately, then waits at least `duration` between actual starts of the same
