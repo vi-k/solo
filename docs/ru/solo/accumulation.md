@@ -130,11 +130,11 @@ at 550 ms the screen shows [hits for solo]
 На экране настроек есть переключатель, выбор темы и выбор языка. Каждое
 изменение — событие, а серверу нужна одна запись, а не три.
 
-Правка описывает, какие настройки изменить. Новое значение поля заменяет
-прежнее; отсутствующие в новой правке поля сохраняются. В этом примере сами
-настройки не могут быть `null`, поэтому `null` в правке означает «оставить поле
-без изменения». Для nullable-настройки с возможностью очистки понадобится
-отдельно представлять наличие значения в правке.
+`SettingsPatch` описывает, какие настройки изменить. Новое значение поля
+заменяет прежнее; поля, которых в новом патче нет, сохраняются. В этом примере
+сами настройки не могут быть `null`, поэтому `null` в поле патча означает «это
+не трогать». Для nullable-настройки, которую можно очистить, понадобится
+отдельно выражать, есть ли в патче значение.
 
 ```dart
 import 'package:solo/solo.dart';
@@ -180,7 +180,79 @@ abstract interface class SettingsApi {
 
   Future<Settings> load();
 }
+```
 
+#### Первая попытка
+
+Каждое изменение — задача, и задача пишет:
+
+```dart
+final class EagerSettingsController extends Solo<Settings> {
+  final SettingsApi _api;
+
+  EagerSettingsController(this._api, Settings initial) : super(initial);
+
+  SoloJob<void> update(SettingsPatch patch) => run<Settings, void>(
+        key: 'settings',
+        (ctx) async {
+          final next = patch.apply(ctx.state);
+          await ctx.join(() => _api.save(next));
+          ctx.emit(next);
+        },
+      );
+}
+```
+
+Переключатель, потом тема, потом язык, с промежутком в 20 мс, сервер пишет 100
+мс:
+
+```
+the server was written to 3 times:
+  notifications: true, theme: light, language: en
+  notifications: true, theme: dark, language: en
+  notifications: true, theme: dark, language: ru
+the screen ends up with notifications: true, theme: dark, language: ru
+```
+
+К концу экран прав, а цена — на проводе: три обращения за один заход
+в настройки, и два из них публикуют настройки, которых пользователь не выбирал.
+Другое устройство, прочитавшее между ними, найдёт светлую тему, хотя её хозяин
+уже выбрал тёмную.
+
+#### Вторая попытка
+
+`Policy.restart` отменяет ту запись, которая идёт, когда приходит следующее
+изменение. Меняется только метод:
+
+```dart
+SoloJob<void> update(SettingsPatch patch) => run<Settings, void>(
+      key: 'settings',
+      policy: Policy.restart,
+      (ctx) async {
+        final next = patch.apply(ctx.state);
+        await ctx.join(() => _api.save(next));
+        ctx.emit(next);
+      },
+    );
+```
+
+```
+the server was written to 2 times:
+  notifications: true, theme: light, language: en
+  notifications: false, theme: light, language: ru
+the screen ends up with notifications: false, theme: light, language: ru
+```
+
+Переключатель вернулся в положение «выключено», а тема — в светлую. Каждая
+задача читает состояние, с которым стартовала, и пишет целый `Settings`,
+поэтому задача, заменившая другую, не наследует того, что та собиралась
+изменить, — она переписывает это из состояния, где того изменения не было. Два
+пользовательских изменения из трёх исчезли, и с сервера, и с экрана, и при этом
+ничего не упало.
+
+#### Аккумулятор
+
+```dart
 class SettingsController extends Solo<Settings> {
   final SettingsApi _api;
   late final _updates = accumulate<Settings, SettingsPatch, void>(
@@ -205,15 +277,25 @@ class SettingsController extends Solo<Settings> {
 }
 ```
 
+```
+the server was written to 1 time:
+  notifications: true, theme: dark, language: ru
+the screen ends up with notifications: true, theme: dark, language: ru
+```
+
+`merge` объединяет патчи, а не выбирает между ними, поэтому ничего
+из сделанного пользователем не пропадает, а группа несёт все три изменения
+в одну запись.
+
 Экран ещё и читает настройки с сервера, и `reload` — обычная задача,
 а не накопленная.
 
 Первое событие становится накопленным значением без вызова `merge`. Каждое
 следующее синхронно вызывает `merge(accumulated, incoming)` из `add`, до старта
-обработчика. Сохраняется только результат. `false` — заданное значение, которое
-функция слияния в примере сохраняет.
+обработчика. Сохраняется только результат.
 
-Например, внесите три изменения в одну группу:
+Три вызова возвращают одну задачу, и дождаться её один раз — значит дождаться
+всех трёх:
 
 ```dart
 Future<void> changeSettings(SettingsApi api, Settings initial) async {
@@ -225,33 +307,31 @@ Future<void> changeSettings(SettingsApi api, Settings initial) async {
     final second = controller.update(const SettingsPatch(theme: 'dark'));
     final third = controller.update(const SettingsPatch(language: 'ru'));
 
-    final outcomes = await Future.wait([
-      first.done,
-      second.done,
-      third.done,
-    ]);
-    for (final outcome in outcomes) {
-      print(outcome);
-    }
+    print(identical(first, second) && identical(second, third));
+    print(await first.done);
   } finally {
     await controller.close();
   }
 }
 ```
 
-При политике по умолчанию вызовы разделяют один `SoloJob<void>`. Его обработчик
-сохраняет один снимок со всеми тремя правками, затем излучает этот снимок после
-200 мс без новых правок. До запуска обработчика состояние остаётся исходным.
-За время паузы могут выполниться готовые `Job`. Наблюдение `.done` сообщает
-`Done`, `Failed` или `Cancelled` без броска.
+```
+true
+Done(null)
+```
+
+Обработчик сохраняет один снимок со всеми тремя изменениями, затем излучает
+этот снимок после 200 мс без новых. До запуска обработчика состояние остаётся
+исходным. За время паузы могут выполниться готовые `Job`. Наблюдение `.done`
+сообщает `Done`, `Failed` или `Cancelled` без броска.
 
 Если сохранение падает, состояние не меняется, а группа завершается провалом.
-Повторять неудачные правки решает вызывающий; более поздняя независимая правка
-не включает их автоматически. Пример предполагает одного писателя и future API,
-которая завершается при фактическом окончании записи. `join` удерживает слот
-очереди до её завершения, в том числе после отмены. Один клиентский таймаут
-не доказывает, что сервер перестал записывать. Отмена также может помешать
-финальному `emit` после того, как сервер уже принял запись.
+Повторять неудавшиеся изменения решает вызывающий; более поздний независимый
+патч не включает их автоматически. Пример предполагает одного писателя и future
+API, которая завершается при фактическом окончании записи. `join` удерживает
+слот очереди до её завершения, в том числе после отмены. Один клиентский
+таймаут не доказывает, что сервер перестал записывать. Отмена также может
+помешать финальному `emit` после того, как сервер уже принял запись.
 
 ### Один запрос на строку журнала
 

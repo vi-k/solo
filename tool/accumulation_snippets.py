@@ -135,16 +135,138 @@ linter:
 FILES = {}
 
 # ------------------------------------------------------------------ settings
+SETTINGS_FAKE = '''
+/// Records what reached the API and when, so a driver can count writes
+/// instead of trusting the prose that there was only one. The server takes
+/// 100 ms to write, which is what the section's traces are measured against.
+class RecordingSettingsApi implements SettingsApi {
+  final saved = <Settings>[];
+  int loads = 0;
+  Completer<Settings>? loading;
+
+  @override
+  Future<void> save(Settings settings) {
+    saved.add(settings);
+    return Future<void>.delayed(const Duration(milliseconds: 100));
+  }
+
+  @override
+  Future<Settings> load() {
+    loads += 1;
+    return (loading = Completer<Settings>()).future;
+  }
+}
+
+String describe(Settings settings) =>
+    'notifications: ${settings.notifications}, '
+    'theme: ${settings.theme}, language: ${settings.language}';
+
+const start = Settings(
+  notifications: false,
+  theme: 'light',
+  language: 'en',
+);
+'''
+
+# The second attempt is a method, and this is the class it belongs to: the
+# first attempt's, with nothing else changed.
+RESTARTING_SETTINGS = """
+final class RestartingSettingsController extends Solo<Settings> {
+  final SettingsApi _api;
+
+  RestartingSettingsController(this._api, Settings initial) : super(initial);
+
+""" + snips['recipes/update'].rstrip('\n') + """
+}
+"""
+
+SETTINGS_DRIVE = '''
+/// The switch, then the theme, then the language, 20 ms apart. One scenario
+/// for all three versions.
+void drive(
+  String name,
+  RecordingSettingsApi api,
+  SoloJob<void> Function(SettingsPatch) update,
+  Settings Function() state,
+) {
+  fakeAsync((clock) {
+    update(const SettingsPatch(notifications: true));
+    clock.elapse(const Duration(milliseconds: 20));
+    update(const SettingsPatch(theme: 'dark'));
+    clock.elapse(const Duration(milliseconds: 20));
+    update(const SettingsPatch(language: 'ru'));
+    clock.elapse(const Duration(seconds: 2));
+
+    final times = api.saved.length == 1 ? 'time' : 'times';
+    print('== $name');
+    print('the server was written to ${api.saved.length} $times:');
+    for (final written in api.saved) {
+      print('  ${describe(written)}');
+    }
+    print('the screen ends up with ${describe(state())}');
+    print('');
+  });
+}
+'''
+
 FILES['settings'] = (
     with_fake_async('recipes/Settings', dart_async=True)
-    + SETTINGS_FAKE
+    + snips['recipes/EagerSettingsController']
+    + RESTARTING_SETTINGS
+    + snips['recipes/SettingsController']
     + snips['recipes/changeSettings']
+    + SETTINGS_FAKE
     + REQUIRE
+    + SETTINGS_DRIVE
     + '''
 void main() {
-  // What the document says: three calls share one job, its handler saves one
-  // snapshot with all three changes, and state still holds its initial value
-  // until the handler runs.
+  // Every change is a job, and every job writes: three round trips, and the
+  // two in the middle publish settings the user never chose.
+  final eagerApi = RecordingSettingsApi();
+  final eager = EagerSettingsController(eagerApi, start);
+  drive('a job per change', eagerApi, eager.update, () => eager.currentState);
+  require(eagerApi.saved.length == 3, 'a write for every change');
+  require(
+    eagerApi.saved[1].theme == 'dark' && eagerApi.saved[1].language == 'en',
+    'and the middle one is a state the user never asked for',
+  );
+  require(
+    eager.currentState.notifications &&
+        eager.currentState.theme == 'dark' &&
+        eager.currentState.language == 'ru',
+    'the screen is right at the end',
+  );
+
+  // Policy.restart: a job that replaces another overwrites it from a state
+  // where that change never happened.
+  final restartApi = RecordingSettingsApi();
+  final restarting = RestartingSettingsController(restartApi, start);
+  drive(
+    'Policy.restart',
+    restartApi,
+    restarting.update,
+    () => restarting.currentState,
+  );
+  require(restartApi.saved.length == 2, 'one write was cancelled before it');
+  require(
+    !restarting.currentState.notifications &&
+        restarting.currentState.theme == 'light',
+    'two of the three changes are gone, and nothing failed',
+  );
+
+  // The accumulator: merge combines the patches instead of choosing.
+  final api = RecordingSettingsApi();
+  final settings = SettingsController(api, start);
+  drive('the accumulator', api, settings.update, () => settings.currentState);
+  require(api.saved.length == 1, 'one group, one write');
+  require(
+    api.saved.single.notifications &&
+        api.saved.single.theme == 'dark' &&
+        api.saved.single.language == 'ru',
+    'carrying all three changes',
+  );
+
+  // The timing of that one group, and the ordinary job beside it.
   fakeAsync((clock) {
     final api = RecordingSettingsApi();
     final controller = SettingsController(api, start);
@@ -159,25 +281,14 @@ void main() {
     require(identical(second, third), 'and so does the third');
 
     clock.elapse(const Duration(milliseconds: 199));
-    require(api.saved.isEmpty, 'debounce has not expired yet');
+    require(api.saved.isEmpty, 'the debounce has not expired yet');
     require(
       describe(controller.currentState) == describe(start),
       'state holds its initial value until the handler runs',
     );
-    print('at 199 ms: saves ${api.saved.length}, '
-        'state ${describe(controller.currentState)}');
 
     clock.elapse(const Duration(milliseconds: 200));
-    require(api.saved.length == 1, 'one group, one save');
-    require(
-      describe(api.saved.single) ==
-          'notifications: true, theme: dark, language: ru',
-      'merge keeps a field from each of the three patches',
-    );
-    print('at 399 ms: saves ${api.saved.length}, '
-        'state ${describe(controller.currentState)}');
-    print('one handle for three calls: ${identical(first, third)}');
-    print('outcome ${first.outcome}');
+    require(api.saved.length == 1, 'one group, one write');
 
     // The ordinary job of the same controller, the one the reference leans
     // on: it is not accumulated, and its state comes from the server.
@@ -190,21 +301,17 @@ void main() {
     );
     clock.flushMicrotasks();
     require(controller.currentState.theme == 'server', 'reload emitted');
-    print('after reload: state ${describe(controller.currentState)}');
 
     controller.close();
     clock.flushMicrotasks();
   });
 
-  // The document's own driver, verbatim. Three outcomes are printed for what
-  // the prose calls one job, and all three are the same.
+  // The document's own driver, verbatim.
   fakeAsync((clock) {
     final api = RecordingSettingsApi();
     unawaited(changeSettings(api, start));
     clock.elapse(const Duration(seconds: 1));
-    require(api.saved.length == 1, 'the document promises a single save');
-    print('the API was called ${api.saved.length} time with '
-        '${describe(api.saved.single)}');
+    require(api.saved.length == 1, 'the document promises a single write');
   });
 }
 ''')
@@ -514,6 +621,7 @@ void main() {
 # two additions, A2 is a job of its own and not A1's.
 FILES['policies'] = (
     with_fake_async('recipes/Settings', dart_async=True)
+    + snips['recipes/SettingsController']
     + SETTINGS_FAKE
     + """
 void threeCalls(SettingsController settings) {

@@ -129,11 +129,11 @@ outcome and cancellation, like other jobs.
 A settings screen has a switch, a theme picker and a language picker. Each
 change is an event, and the server wants one write rather than three.
 
-A patch describes which settings to change. A new value for a field replaces
-the previous one; fields absent from the new patch are kept. Here, the settings
-themselves cannot be null, so a null patch field means "leave this field
-unchanged". A nullable setting that can be cleared needs a separate way to
-represent whether the patch has a value.
+`SettingsPatch` describes which settings to change. A new value for a field
+replaces the previous one; fields absent from the new patch are kept. Here the
+settings themselves cannot be null, so a null field in the patch means "leave
+this one alone". A nullable setting that can be cleared needs a separate way to
+say whether the patch carries a value.
 
 ```dart
 import 'package:solo/solo.dart';
@@ -179,7 +179,78 @@ abstract interface class SettingsApi {
 
   Future<Settings> load();
 }
+```
 
+#### The first attempt
+
+Every change is a job, and the job writes:
+
+```dart
+final class EagerSettingsController extends Solo<Settings> {
+  final SettingsApi _api;
+
+  EagerSettingsController(this._api, Settings initial) : super(initial);
+
+  SoloJob<void> update(SettingsPatch patch) => run<Settings, void>(
+        key: 'settings',
+        (ctx) async {
+          final next = patch.apply(ctx.state);
+          await ctx.join(() => _api.save(next));
+          ctx.emit(next);
+        },
+      );
+}
+```
+
+The switch, then the theme, then the language, 20 ms apart, against a server
+that takes 100 ms to write:
+
+```
+the server was written to 3 times:
+  notifications: true, theme: light, language: en
+  notifications: true, theme: dark, language: en
+  notifications: true, theme: dark, language: ru
+the screen ends up with notifications: true, theme: dark, language: ru
+```
+
+The screen is right at the end, and the cost is on the wire: three round trips
+for one visit to the settings, and the two in the middle publish settings the
+user never chose. Another device reading between them finds the light theme
+after its owner has already picked the dark one.
+
+#### The second attempt
+
+`Policy.restart` cancels the write that is running when the next change
+arrives. Only the method changes:
+
+```dart
+SoloJob<void> update(SettingsPatch patch) => run<Settings, void>(
+      key: 'settings',
+      policy: Policy.restart,
+      (ctx) async {
+        final next = patch.apply(ctx.state);
+        await ctx.join(() => _api.save(next));
+        ctx.emit(next);
+      },
+    );
+```
+
+```
+the server was written to 2 times:
+  notifications: true, theme: light, language: en
+  notifications: false, theme: light, language: ru
+the screen ends up with notifications: false, theme: light, language: ru
+```
+
+The switch went back off and the theme went back to light. Each job reads the
+state it starts with and writes a whole `Settings`, so a job that replaces
+another does not inherit what that one was going to change — it overwrites it
+from a state where it never happened. Two of the user's three changes are gone,
+from the server and from the screen both, and nothing failed.
+
+#### The accumulator
+
+```dart
 class SettingsController extends Solo<Settings> {
   final SettingsApi _api;
   late final _updates = accumulate<Settings, SettingsPatch, void>(
@@ -204,15 +275,23 @@ class SettingsController extends Solo<Settings> {
 }
 ```
 
+```
+the server was written to 1 time:
+  notifications: true, theme: dark, language: ru
+the screen ends up with notifications: true, theme: dark, language: ru
+```
+
+`merge` combines the patches instead of choosing between them, so nothing the
+user did is dropped, and the group carries all three changes into one write.
+
 The screen also reads the settings back from the server, and `reload` is an
 ordinary job rather than an accumulated one.
 
 The first event becomes the accumulated value without calling `merge`. Each
 following event calls `merge(accumulated, incoming)` synchronously from `add`,
-before the handler starts. Only its result is kept. `false` is a specified
-value and is preserved by the example's merge function.
+before the handler starts. Only its result is kept.
 
-For example, make three changes in one group:
+The three calls hand back one job, and awaiting it once is awaiting all three:
 
 ```dart
 Future<void> changeSettings(SettingsApi api, Settings initial) async {
@@ -224,25 +303,23 @@ Future<void> changeSettings(SettingsApi api, Settings initial) async {
     final second = controller.update(const SettingsPatch(theme: 'dark'));
     final third = controller.update(const SettingsPatch(language: 'ru'));
 
-    final outcomes = await Future.wait([
-      first.done,
-      second.done,
-      third.done,
-    ]);
-    for (final outcome in outcomes) {
-      print(outcome);
-    }
+    print(identical(first, second) && identical(second, third));
+    print(await first.done);
   } finally {
     await controller.close();
   }
 }
 ```
 
-With the default policy, these calls share one `SoloJob<void>`. Its handler
-saves one snapshot with all three changes, then emits that snapshot after 200
-ms without another change. State still has its initial value before the handler
-runs. Other ready jobs can run during the pause. Observing `.done` reports
-`Done`, `Failed` or `Cancelled` without throwing.
+```
+true
+Done(null)
+```
+
+Its handler saves one snapshot with all three changes, then emits that snapshot
+after 200 ms without another change. State still has its initial value before
+the handler runs. Other ready jobs can run during the pause. Observing `.done`
+reports `Done`, `Failed` or `Cancelled` without throwing.
 
 If saving fails, the state is unchanged and the group fails. Retrying the
 failed changes is the caller's decision; a later independent patch does not
