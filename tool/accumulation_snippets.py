@@ -674,7 +674,9 @@ void main() {
 # The document calls SearchState and SearchApi application types and declares
 # neither; a bench cannot leave them undeclared. The API answers 100 ms after
 # it is asked, which is what the section's traces are measured against.
-SEARCH_TYPES = """import 'package:fake_async/fake_async.dart';
+SEARCH_TYPES = """import 'dart:async';
+
+import 'package:fake_async/fake_async.dart';
 import 'package:solo/solo.dart';
 
 class SearchState {
@@ -691,11 +693,19 @@ class SearchApi {
   final int latency;
   final asked = <String>[];
 
+  /// Requests sent and not answered yet: what a cancelled job leaves behind
+  /// is invisible in [asked] alone.
+  int open = 0;
+
   Future<List<String>> search(String text) {
     asked.add(text);
+    open += 1;
     return Future<List<String>>.delayed(
       Duration(milliseconds: latency),
-      () => ['hits for $text'],
+      () {
+        open -= 1;
+        return ['hits for $text'];
+      },
     );
   }
 }
@@ -879,6 +889,28 @@ void main() {
     probeJoin(SearchApi(40)).$1 == probeWait(SearchApi(40)).$1,
     'against a server faster than the typing it saves nothing',
   );
+
+  // The sentence under the accumulator: what finishes before the next group
+  // starts is the job, and a cancelled one leaves its request running.
+  fakeAsync((clock) {
+    final api = SearchApi(1000);
+    final search = Search(api);
+    final first = search.query('solo');
+    clock.elapse(const Duration(milliseconds: 400));
+    require(api.open == 1, 'the group started and its request is on its way');
+
+    unawaited(first.cancel());
+    clock.elapse(const Duration(milliseconds: 10));
+    require(first.isFinished, 'the job is over');
+    require(api.open == 1, 'and the request it sent is not');
+
+    search.query('dart');
+    clock.elapse(const Duration(milliseconds: 400));
+    require(api.open == 2, 'so the next group sends while the first is open');
+
+    clock.elapse(const Duration(seconds: 3));
+    require(api.open == 0, 'both answers arrive in the end');
+  });
 }
 """)
 

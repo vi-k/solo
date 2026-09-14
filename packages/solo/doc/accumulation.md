@@ -124,9 +124,11 @@ group carries the latest query; the debounce holds the group until the typing
 stops for 300 ms. That pause is what it costs: the answer arrives later than
 either attempt above, and it is the only answer sent.
 
-`SearchApi` and `SearchState` are application types. A search that has already
+`SearchApi` and `SearchState` are application types. A group that has already
 started finishes before the next one starts, and the returned job exposes the
-outcome and cancellation, like other jobs.
+outcome and cancellation, like other jobs. What finishes there is the job:
+cancelling one ends its waiting, not the request it has already sent, so that
+request can still be in flight when the next group starts.
 
 ### Settings saved on every flip of a switch
 
