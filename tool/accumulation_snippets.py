@@ -469,6 +469,22 @@ final class Transport extends Solo<Playback> {
           ctx.emit(const Paused());
         },
       );
+
+  /// An ordinary job of another kind, so the claim about where a re-added
+  /// command lands has something to land behind. It takes 50 ms, which is
+  /// how the driver sees which of the two went first. The bench's, not the
+  /// document's.
+  bool rang = false;
+
+  SoloJob<void> chime() => run<Playback, void>(
+        key: 'chime',
+        (ctx) async {
+          rang = true;
+          await ctx.wait(
+            () => Future<void>.delayed(const Duration(milliseconds: 50)),
+          );
+        },
+      );
 }
 '''
 
@@ -570,6 +586,33 @@ void main() {
     require(player.currentState is Paused, 'the player ends up stopped');
     player.close();
     clock.flushMicrotasks();
+  });
+
+  // The sentence about what removing and adding gives: the shape of
+  // `replace`, with the re-added command at the tail behind whatever was
+  // queued between. The held pause is what keeps them queued to see it.
+  fakeAsync((clock) {
+    final device = RecordingDevice()..pausing = Completer<void>();
+    final transport = Transport(device)..pause();
+    clock.flushMicrotasks();
+
+    transport
+      ..resume() // queued behind the running pause
+      ..chime() // and this behind the resume
+      ..resume(); // removes the queued resume, appends a new one
+
+    device.pausing!.complete();
+    clock.elapse(const Duration(milliseconds: 10));
+    require(transport.rang, 'the job queued between the two runs first');
+    require(
+      device.heard.length == 1,
+      'and the re-added command has not, because it went to the tail '
+      'instead of keeping the place the removed one had',
+    );
+
+    clock.elapse(const Duration(seconds: 2));
+    require(device.heard.length == 2, 'it runs after that job, not before');
+    require(device.heard.last.startsWith('resume'), 'and it is the resume');
   });
 
   // Two operations of their own, with a device that holds the pause: the

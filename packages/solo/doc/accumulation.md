@@ -603,6 +603,13 @@ SoloJob<void> resume() {
 }
 ```
 
+Removing and adding gives the shape of `AccumulationPolicy.replace`: the new
+job goes to the tail, behind whatever was queued between. The queue can remove
+a job and it can add one, but it cannot change what a queued job will do, so
+the place `join` keeps is not reachable this way — keeping it means holding the
+command outside the job, which is what an accumulator does with the input
+inside it.
+
 The queue never touches the running job: a `pause` that has already started
 runs to its end whatever is removed behind it. Reach for `cancelAll()` — it
 clears the queue and cancels the current job — or give both commands one key
