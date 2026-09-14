@@ -261,6 +261,13 @@ abstract interface class JobContext {
   /// that accepted the stop — and not for one created with
   /// `cancellable: false`, which refuses the stop, ends [Done] and hands
   /// its value over through [Job.value] as it always would.
+  ///
+  /// The registration goes nowhere with the value. It is settled by the
+  /// outcome of the job that made it, so a job that took the value — a
+  /// parent awaiting [run], a caller holding [Job.value] — has to register
+  /// its release itself, and `ctx.wait(() => ctx.run(child), discard: ...)`
+  /// is how a parent does that. The debug channel names every job that
+  /// handed a value over and dropped registrations doing so.
   void Function() onDiscard(FutureOr<void> Function() disposer);
 
   /// Drops the cleanup registered for [value] by [wait] or [join].
@@ -1526,7 +1533,12 @@ final class _RunAllGroup<T> {
     for (final branch in _branches) {
       // Step four. On the successful path nobody runs them — exactly as
       // nobody runs what is still put aside at the end of the unwinding.
-      branch.job._skipped.clear();
+      // Traced here and not by the branch: by the time it reaches the end
+      // of its own unwinding the list is already empty, and the receiver of
+      // the values would learn nothing.
+      branch.job
+        ..traceDroppedCleanups()
+        .._skipped.clear();
     }
     for (final branch in _branches) {
       // Step five: released with the verdict, and the list goes back.

@@ -1,5 +1,14 @@
 ## Unreleased
 
+- **Added:** the debug channel names a job that handed its value over and
+  dropped the conditional registrations that went with it --
+  `Job(opener) handed its value over: 1 conditional cleanup dropped`. A
+  registration made by `discard` or `onDiscard` is settled by the outcome of
+  the job that made it and travels with no value, so a receiver that keeps the
+  resource has to register it again; forgetting that leaks nothing visible
+  until the receiver ends badly. The line marks every hand-over, a branch of
+  `ctx.runAll` included, where the group strips the registrations as it
+  commits. See `doc/cleanup.md`.
 - **Breaking:** `JobContext` gains `runAll`, which runs children side by side
   and asks the rest to stop as soon as one of them goes wrong. New on an
   `abstract interface class`, so an implementation of `JobContext` written by

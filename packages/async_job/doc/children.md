@@ -95,15 +95,17 @@ group ends in anything else, the branch that accepted the stop closes what it
 took, and it closes it before the group returns -- so by the time the parent
 catches the error, that much is already closed.
 
-Two things stay open, and both follow from rules written elsewhere. A branch
+A branch that did not take the resource itself but got it from a child of its
+own registers it on arrival, the way every receiver does: the child ended
+`Done` inside the branch, and a child's registration is settled by the child's
+outcome. `ctx.wait(() => ctx.run(opener), discard: ...)` puts the registration
+on the branch, and everything above then holds for it. See
+[Cleanup](cleanup.md).
+
+One thing stays open, and it follows from a rule written elsewhere. A branch
 created with `cancellable: false` refuses the stop and ends `Done`: it hands
 its value over through its own `Job.value`, so its `discard` does not run and
-the resource is the caller's to close, through the handle it passed in. And a
-branch that did not take the resource itself but got it from a child of its own
-and returned it on is not covered at all: the child ended `Done` inside the
-branch, and a child's registration is settled by the child's outcome. That one
-is a hole in the kernel rather than in the group -- it reproduces without any
-group, with a single `Job.deferred<Db>((ctx) => ctx.run(opener))`.
+the resource is the caller's to close, through the handle it passed in.
 
 Four things `runAll` does not promise.
 

@@ -745,6 +745,25 @@ abstract class JobBase<T> implements Job<T> {
   /// waits for no children and unwinds no cleanup stack, so everything the
   /// body opened stays open. Cancel with [cancelWith] instead, and let the
   /// body unwind; how many cleanups were left behind is in the debug
+  /// Says what went nowhere when the value of this job went to somebody.
+  ///
+  /// Said out loud because the silence is the whole trouble. A conditional
+  /// registration is settled by the outcome of the job that made it, so a
+  /// value handed over takes none of them with it: from here on the
+  /// resource belongs to whoever received it, and registering its release
+  /// is theirs to do. Forget that, and nothing looks wrong until the
+  /// receiver ends badly — and then the resource is simply lost, with no
+  /// trace anywhere.
+  void traceDroppedCleanups() {
+    if (_skipped.isEmpty) {
+      return;
+    }
+    _debug(
+      () => '$this handed its value over: ${_skipped.length} '
+          'conditional cleanup${_skipped.length == 1 ? '' : 's'} dropped',
+    );
+  }
+
   /// trace.
   @protected
   void finish(Outcome<T> outcome) {
@@ -1093,6 +1112,7 @@ abstract class JobBase<T> implements Job<T> {
       // them there. Left behind, they would hold their values and their
       // closures for as long as anyone holds the handle — the job is over,
       // and the list is a field now, not a local that dies with the call.
+      traceDroppedCleanups();
       _skipped.clear();
       _disposing = false;
     }

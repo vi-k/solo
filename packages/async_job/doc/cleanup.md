@@ -27,6 +27,43 @@ Choose the callback according to who needs the resource after success:
 Using `discard` for a temporary resource that the body keeps to itself leaks
 that resource on success, because the callback will not run.
 
+**A resource that travels registers again on arrival.** A conditional
+registration is settled by the outcome of the job that made it, and by nothing
+else. A job that ends `Done` handed its value to somebody, so its `discard` is
+dropped together with the value, and nothing carries it to the receiver. Here
+the database ends up with nobody to close it:
+
+```dart
+final opener = Job.deferred<Database>(
+  (ctx) => ctx.wait(Database.open, discard: (db) => db.close()),
+);
+final wrapper = Job.deferred<Database>((ctx) => ctx.run(opener));
+```
+
+`opener` ended `Done`, so its `discard` never runs; `wrapper` has a database
+and no registration of its own, and when it fails or is cancelled the
+connection stays open. Register the resource where it arrives, and the rule
+carries on from there:
+
+```dart
+final wrapper = Job.deferred<Database>(
+  (ctx) => ctx.wait(() => ctx.run(opener), discard: (db) => db.close()),
+);
+```
+
+Now `wrapper` closes the database when it ends in anything but a value, and
+hands it on untouched when it succeeds — to a receiver that registers it the
+same way. This holds for every hand-over, a group included: a branch of
+`ctx.runAll` that got its value from a child of its own registers it on arrival
+like anyone else.
+
+The debug channel names every hand-over, whether or not the receiver registered
+anything, so the places where this rule applies can be read off a run:
+
+```text
+Job(opener) handed its value over: 1 conditional cleanup dropped
+```
+
 If there is no acquisition call to wrap, register a callback directly with
 `ctx.onDispose` or `ctx.onDiscard`. They follow the same outcome rules. The
 callback can also perform other final work, such as flushing a buffer when the

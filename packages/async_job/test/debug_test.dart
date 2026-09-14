@@ -126,6 +126,90 @@ void main() {
     );
   });
 
+  test('a job that hands its value over says what it dropped', () {
+    final traces = <String>[];
+    JobBase.debug = traces.add;
+    fakeAsync((async) {
+      final opener = Job.deferred<String>(
+        key: 'opener',
+        (ctx) => ctx.wait(() => 'db', discard: (db) {}),
+      );
+      // The registration of the child is settled by the child's own
+      // outcome, so nothing closes `db` when the wrapper fails. The trace
+      // is the only place that says so.
+      Job<String>(key: 'wrapper', (ctx) async {
+        await ctx.run(opener);
+        throw StateError('boom');
+      }).ignore();
+      async.flushTimers();
+    });
+    expect(
+      traces,
+      containsAllInOrder(<String>[
+        'Job(opener) handed its value over: 1 conditional cleanup dropped',
+        'Job(opener) finished: Done(db)',
+      ]),
+    );
+  });
+
+  test('the line counts them, and a job that keeps them gets no line', () {
+    final handedOver = <String>[];
+    final ranThem = <String>[];
+    fakeAsync((async) {
+      JobBase.debug = handedOver.add;
+      final two = Job.deferred<String>(key: 'two', (ctx) async {
+        ctx.onDiscard(() {});
+        return ctx.wait(() => 'db', discard: (db) {});
+      });
+      Job<String>(key: 'taker', (ctx) async {
+        await ctx.run(two);
+        throw StateError('boom');
+      }).ignore();
+      async.flushTimers();
+      JobBase.debug = ranThem.add;
+      Job<String>(key: 'failing', (ctx) async {
+        ctx.onDiscard(() {});
+        throw StateError('boom');
+      }).ignore();
+      async.flushTimers();
+    });
+    expect(
+      handedOver,
+      contains(
+        'Job(two) handed its value over: 2 conditional cleanups dropped',
+      ),
+    );
+    expect(
+      ranThem.where((line) => line.contains('handed its value over')),
+      isEmpty,
+      reason: 'it ended badly, so it ran them instead of dropping them',
+    );
+  });
+
+  test('a branch of a group says it too, once the group has committed', () {
+    final traces = <String>[];
+    JobBase.debug = traces.add;
+    fakeAsync((async) {
+      Job<List<String>>(
+        key: 'group',
+        (ctx) => ctx.runAll([
+          Job.deferred<String>(
+            key: 'branch',
+            (ctx) => ctx.wait(() => 'db', discard: (db) {}),
+          ),
+        ]),
+      ).ignore();
+      async.flushTimers();
+    });
+    expect(
+      traces,
+      contains(
+        'Job(branch) handed its value over: 1 conditional cleanup dropped',
+      ),
+      reason: 'the values reached the caller, and so did what they hold',
+    );
+  });
+
   test('a debug channel that throws does not break the life of a job', () {
     final caught = <Object>[];
     var doneSeen = false;
