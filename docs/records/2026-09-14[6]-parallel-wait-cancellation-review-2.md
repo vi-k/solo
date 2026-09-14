@@ -7,7 +7,9 @@
 > `gpt-6-astra:xhigh`, 1075 с, 24 команды, четыре своих зонда, включая копию
 > алгоритма `job_stream.dart` с тремя вариантами условия. Дерево не менял.
 > Первая попытка того же прогона умерла через 129 с на
-> `Selected model is at capacity` и не сделала ничего.
+> `Selected model is at capacity` и не сделала ничего. Журналы прогона,
+> на которые ссылается отчёт, и его зонды сохранены в
+> `.artifacts/2026-09-14-parallel-wait-review/codex/`.
 > **Связанные записи:** первый ревьюер того же круга, шёл одновременно —
 > `2026-09-14[5]-parallel-wait-cancellation-review.md`; спека —
 > `2026-09-14[4]-parallel-wait-cancellation-design.md`.
