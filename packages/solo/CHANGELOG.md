@@ -34,18 +34,19 @@
   `Cancelled(manual, 'replaced by accumulated group')` as "mine was pushed out"
   has nothing to react to any more: the event was not pushed out, it is in the
   group. Code that held an earlier handle and compared it with a later one to
-  detect a replacement should compare what the group carries instead.
+  detect a replacement has nothing left to compare: there is one handle per
+  group now, and its outcome is the group's.
 
 - `AccumulationTiming.throttle` takes `startAtOnce`. With `startAtOnce: false`
-  the interval is counted before the first group as well: an idle accumulator
-  starts its interval where the group appears, and the group runs when the
-  interval ends, carrying everything written meanwhile. The default is
-  unchanged, and so is everything else about the mode -- an addition does not
-  extend a running interval, and a group that has waited its interval out and
-  needs only the execution slot is not pushed back by a later event. Take it
-  where the rate matters more than the latency of the first event; the cost is
-  that a single event waits the whole interval, and a draining `close` waits
-  with it.
+  the interval is counted before the first group as well: an accumulator with
+  nothing of its own queued or running starts its interval where the group
+  appears, and the group runs when the interval ends, carrying everything
+  written meanwhile. The default is unchanged, and so is everything else about
+  the mode -- a running interval is never restarted, so a group that has waited
+  its interval out and needs only the execution slot is not pushed back by a
+  later event. Take it where the rate matters more than the latency of the
+  first event; the cost is that a single event waits the whole interval, and a
+  draining `close` waits with it.
 
 - **Breaking:** the state of a closed controller is final. Once the engine has
   finished closing, `externalSetState` throws a `StateError` where it used to

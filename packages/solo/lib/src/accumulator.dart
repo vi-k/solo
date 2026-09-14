@@ -113,11 +113,16 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
     if (_solo.isClosed) return _solo.add(_job(null));
     final previous = _candidate();
     if (previous == null) {
+      // Whether this accumulator is idle has to be read before its new job
+      // joins the queue. The interval belongs to the accumulator, not to a
+      // group, so a group appearing next to one that is already queued or
+      // running must not start a second interval under it.
+      final idle = _isIdle;
       final group = _AccumulationGroup(this, _seed(event), _snapshot);
       final job = _solo.add(_job(group));
       if (job.isQueued && group._open) {
         group._accepted();
-        _armCooldown();
+        if (idle) _armCooldown();
       }
       return job;
     }
@@ -141,7 +146,6 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
       _solo._queue._jobs.remove(previous);
       _solo._queue._insert(previous, first: false);
       SoloBase._debug(() => 'move $previous to the tail');
-      _solo._schedulePump();
     }
     group._accepted();
     return previous;
@@ -154,6 +158,11 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
         (job) => identical(job._accumulation?._owner, this),
       );
 
+  /// Whether this accumulator has no group of its own queued or running.
+  bool get _isIdle =>
+      !_hasQueuedGroup &&
+      !identical(_solo._current?._accumulation?._owner, this);
+
   @override
   Timer _startTimer(Duration duration, void Function(Timer) callback) =>
       _solo._startTimer(duration, callback);
@@ -165,11 +174,14 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
   void _schedulePump() => _solo._schedulePump();
 
   /// Starts the interval of a throttle that does not start at once, where
-  /// the group appears and nowhere else.
+  /// a group appears on an idle accumulator and nowhere else.
   ///
   /// Arming it on every accepted event instead would push back a group that
   /// has already waited out its interval and needs only the execution slot,
-  /// which is what `An addition does not extend it` promises against.
+  /// which is what `An addition does not extend it` promises against. The
+  /// same holds for a group appearing beside one that is queued or running:
+  /// the caller is told the interval is counted once, and a running one is
+  /// never restarted from under a group that is already waiting on it.
   void _armCooldown() {
     final timing = _timing;
     if (timing == null ||

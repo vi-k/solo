@@ -803,6 +803,149 @@ void main() {
     });
   }
 
+  // The interval of a trailing throttle belongs to the accumulator, and it
+  // is counted once. Three ways a second group can appear next to the first
+  // one, and none of them may restart it. Found by review after the wave
+  // landed; the mutation for the first two is dropping the `idle` check in
+  // `_SoloAccumulator.add`, for the third the active-timer check inside
+  // `_armCooldown`.
+  test('a second trailing group appears beside one waiting in the queue', () {
+    fakeAsync((async) {
+      final solo = TestSolo();
+      final calls = <String>[];
+      final events = solo.collect<TestState, int, void>(
+        (ctx, values) async => calls.add('${async.elapsed}:$values'),
+        key: 'group',
+        policy: AccumulationPolicy.adjacent,
+        timing: AccumulationTiming.throttle(
+          const Duration(seconds: 1),
+          startAtOnce: false,
+        ),
+      );
+      solo.run<TestState, void>(
+        key: 'busy',
+        (ctx) => ctx.wait(
+          () => Future<void>.delayed(const Duration(milliseconds: 1500)),
+        ),
+      );
+      events.add(1);
+      async.elapse(const Duration(milliseconds: 100));
+      solo.run<TestState, void>(
+        key: 'other',
+        (ctx) async => calls.add('${async.elapsed}:other'),
+      );
+
+      // `adjacent` makes the foreign job a boundary, so this opens a second
+      // group while the first one has already waited its interval out.
+      async.elapse(const Duration(milliseconds: 1100));
+      events.add(2);
+      async.elapse(const Duration(seconds: 4));
+      expect(calls, [
+        '0:00:01.500000:[1]',
+        '0:00:01.500000:other',
+        '0:00:02.500000:[2]',
+      ]);
+
+      solo.close();
+      async.flushTimers();
+    });
+  });
+
+  test('a trailing group appears while another of its own runs', () {
+    fakeAsync((async) {
+      final solo = TestSolo();
+      final calls = <String>[];
+      final events = solo.collect<TestState, int, void>(
+        (ctx, values) async {
+          calls.add('${async.elapsed}:start $values');
+          await ctx.wait(
+            () => Future<void>.delayed(const Duration(milliseconds: 2500)),
+          );
+        },
+        key: 'group',
+        timing: AccumulationTiming.throttle(
+          const Duration(seconds: 1),
+          startAtOnce: false,
+        ),
+      );
+
+      // The group starts at a second and runs past its own interval, so the
+      // accumulator is busy with it when the next event arrives.
+      // ignore: cascade_invocations
+      events.add(1);
+      async.elapse(const Duration(milliseconds: 3400));
+      expect(calls, ['0:00:01.000000:start [1]']);
+      events.add(2);
+      async.elapse(const Duration(seconds: 4));
+      expect(calls, [
+        '0:00:01.000000:start [1]',
+        '0:00:03.500000:start [2]',
+      ]);
+
+      solo.close();
+      async.flushTimers();
+    });
+  });
+
+  test('a trailing group appears while the interval is still running', () {
+    fakeAsync((async) {
+      final solo = TestSolo();
+      final calls = <String>[];
+      final events = solo.collect<TestState, int, void>(
+        (ctx, values) async => calls.add('${async.elapsed}:$values'),
+        key: 'group',
+        timing: AccumulationTiming.throttle(
+          const Duration(seconds: 1),
+          startAtOnce: false,
+        ),
+      );
+
+      // The first group starts at a second and the interval runs from there.
+      // ignore: cascade_invocations
+      events.add(1);
+      async.elapse(const Duration(milliseconds: 1500));
+      expect(calls, ['0:00:01.000000:[1]']);
+
+      // Half an interval in: the group that appears now waits out what is
+      // left of it, not a fresh one.
+      events.add(2);
+      async.elapse(const Duration(milliseconds: 499));
+      expect(calls.length, 1);
+      async.elapse(const Duration(milliseconds: 1));
+      expect(calls, ['0:00:01.000000:[1]', '0:00:02.000000:[2]']);
+
+      solo.close();
+      async.flushTimers();
+    });
+  });
+
+  test('cancelling a waiting debounce group leaves no timer', () {
+    fakeAsync((async) {
+      final solo = TestSolo();
+      var calls = 0;
+      final events = solo.collect<TestState, int, void>(
+        (ctx, values) async => calls++,
+        timing: AccumulationTiming.debounce(_interval),
+      );
+
+      // The property used to ride along in tests that step 2 of the wave
+      // deleted with the node they exercised; it lives in the group's own
+      // release. Mutation: drop `_stopDebounce()` from `_release`.
+      // ignore: cascade_invocations
+      final first = events.add(1);
+      expect(async.nonPeriodicTimerCount, 1);
+      unawaited(first.cancel());
+      expect(first.isCancelled, isTrue);
+      expect(async.nonPeriodicTimerCount, 0);
+
+      async.elapse(_interval * 2);
+      expect(calls, 0);
+
+      solo.close();
+      async.flushMicrotasks();
+    });
+  });
+
   // Criterion 20: the timers a replacement leaves behind. The first half
   // lives today in the second assertion of `throttle replace re-entry keeps
   // the running cooldown`, and step 2 of the wave deletes that test with the

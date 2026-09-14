@@ -656,11 +656,13 @@ needing another event. The group accepts events until the queue takes it for
 execution. No job is created for an empty interval.
 
 `startAtOnce: false` counts the interval before the first group as well. An
-idle accumulator starts its interval where the group appears, and the group
-becomes ready when the interval ends, carrying everything written meanwhile. A
-group that has already waited out its interval and needs only the execution
-slot is not pushed back by a later event: the interval is counted once, where
-the group appeared, and an addition does not renew it.
+accumulator with nothing of its own queued or running starts its interval where
+the group appears, and the group becomes ready when the interval ends, carrying
+everything written meanwhile. That condition is the whole of it: an interval
+already running is never restarted, and neither is one restarted by a group
+that appears beside a group that is waiting in the queue or running. So a group
+that has waited its interval out and needs only the execution slot is not
+pushed back by a later event, whatever the policy does with that event.
 
 Starting at once has a price on an idle accumulator. Nothing is running, so the
 queue takes the first group on the next microtask, and a burst that does not
@@ -677,12 +679,13 @@ event is what the user is waiting for.
 
 The start is the transition to running, before `onStart`. A group rejected by
 start rules consumes no throttle interval; cancellation from `onStart` does.
-With `startAtOnce: false` the group that follows a refusal counts its own full
-interval from where it appears, not what was left of the refused one's. If a
-group starts at 0 ms with a 200 ms interval, but another job holds the slot
-until 500 ms, the next group starts at 500 ms and the one after that cannot
-start before 700 ms. If the group's own handler, children or cleanup outlast
-the interval, the next group can start as soon as they finish.
+With `startAtOnce: false` a refusal leaves the accumulator with nothing queued,
+so the next group to appear counts its own full interval from where it appears,
+not what was left of the refused one's. If a group starts at 0 ms with a 200 ms
+interval, but another job holds the slot until 500 ms, the next group starts at
+500 ms and the one after that cannot start before 700 ms. If the group's own
+handler, children or cleanup outlast the interval, the next group can start as
+soon as they finish.
 
 Waiting groups stay visible in `queue.jobs`. The queue takes the first ready
 job in list order, allowing ready jobs to pass waiting groups. The list can
@@ -814,8 +817,9 @@ failed input automatically.
 
 Cancelling a queued debounce group removes its timer. Removing or clearing
 throttle groups preserves an already started interval, so adding another event
-cannot bypass the limit. That timer expires once and is not renewed until
-another group starts.
+cannot bypass the limit. That timer expires once; it is renewed when a group
+actually starts, and with `startAtOnce: false` also when a group appears on an
+accumulator that has none of its own queued or running.
 
 `close()` cancels every timing timer, drops queued groups and cancels or waits
 for the running job under the usual rules. It sends no final batch: a group

@@ -6,10 +6,10 @@ enum _AccumulationTimingKind { debounce, throttle }
 ///
 /// A debounce window restarts after every accepted event. A throttle
 /// interval starts when a group actually starts, or, with
-/// `startAtOnce: false`, when the first group of an idle accumulator
-/// appears; either way it is shared by the groups of one accumulator. The
-/// same setting can be reused by independent accumulators without sharing
-/// their timers.
+/// `startAtOnce: false`, when a group appears on an accumulator that has
+/// none of its own queued or running; either way it is shared by the
+/// groups of one accumulator. The same setting can be reused by
+/// independent accumulators without sharing their timers.
 final class AccumulationTiming {
   /// The length of the debounce window or throttle interval.
   final Duration duration;
@@ -31,11 +31,11 @@ final class AccumulationTiming {
   /// Creates a throttle interval of [duration].
   ///
   /// With `startAtOnce: false` the interval is counted before the first
-  /// group as well: an idle accumulator starts its interval where the
-  /// group appears, and the group runs when the interval ends. Nothing
-  /// else changes — an addition still does not extend a running interval,
-  /// and a group already waiting only for the execution slot is not
-  /// pushed back by one.
+  /// group as well: an accumulator with nothing of its own queued or
+  /// running starts its interval where the group appears, and the group
+  /// runs when the interval ends. Nothing else changes — a running
+  /// interval is never restarted, so a group already waiting only for the
+  /// execution slot is not pushed back by a later event.
   ///
   /// Throws [ArgumentError] when [duration] is negative. A zero duration
   /// preserves the behavior of an accumulator without timing, whatever
