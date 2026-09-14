@@ -404,9 +404,9 @@ the event that produced it.
 #### The accumulator
 
 `collect` appends events to a private list and gives the handler an
-unmodifiable snapshot at the moment the group is sealed. It preserves duplicate
-events and does not copy the entire list on every addition. The entries
-themselves are not cloned; use immutable event objects.
+unmodifiable snapshot at the moment the group is sealed: every entry, in the
+order it was written. The snapshot copies the list, not the entries in it, so
+an entry changed after `add` is sent changed — use immutable event objects.
 
 ```dart
 class LogController extends Solo<int> {

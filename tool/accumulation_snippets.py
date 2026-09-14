@@ -612,6 +612,15 @@ LOG_FAKE = '''
 /// Records every batch and how long the server took, so a driver counts
 /// requests instead of trusting that there was one. 100 ms per request is
 /// what the section's traces are measured against.
+class MutableEntry extends LogEntry {
+  MutableEntry(this.text) : super('');
+
+  String text;
+
+  @override
+  String get message => text;
+}
+
 class RecordingLogApi implements LogApi {
   final sent = <List<String>>[];
 
@@ -697,6 +706,28 @@ void main() {
   require(api.sent.first.first == 'opened', 'in the order they were written');
   require(api.sent.last.single == 'tapped', 'the fourth went on its own');
   require(logs.currentState == 4, 'the counter saw every entry');
+
+  // The sentence under the heading: the snapshot copies the list, not the
+  // entries in it. An entry changed while its group waits is sent changed.
+  fakeAsync((clock) {
+    final api = RecordingLogApi();
+    final logs = LogController(api)..logEvent(const LogEntry('opened'));
+    clock.elapse(const Duration(milliseconds: 10));
+
+    // This group waits out the throttle interval, and the entry it carries
+    // is changed while it waits.
+    final entry = MutableEntry('loaded');
+    logs.logEvent(entry);
+    clock.elapse(const Duration(milliseconds: 10));
+    entry.text = 'changed after add';
+    clock.elapse(const Duration(seconds: 3));
+
+    require(api.sent.length == 2, 'the second entry went in its own batch');
+    require(
+      api.sent.last.single == 'changed after add',
+      'and it was sent as it was changed, not as it was added',
+    );
+  });
 
   // The throttle is a floor under the rate: entries written inside the
   // interval wait for it, and are sent together when it ends.
