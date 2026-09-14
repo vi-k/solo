@@ -292,10 +292,9 @@ user did is dropped, and the group carries all three changes into one write.
 
 The screen also reads the settings back from the server, and `reload` is an
 ordinary job rather than an accumulated one. This accumulator takes the default
-policy, `adjacent`, so a `reload` queued between two flips ends the group and
-the flips after it are written separately — but only while the queue is busy
-enough that the `reload` is still there when the next flip arrives. The policy
-section says what `join` would do instead.
+policy, `join`, so a `reload` queued between two flips is not a boundary: the
+flips are one group and one write whatever else the queue was doing. The policy
+section says when to take `adjacent` instead.
 
 The first event becomes the accumulated value without calling `merge`. Each
 following event calls `merge(accumulated, incoming)` synchronously from `add`,
@@ -446,9 +445,9 @@ takes, the caller gets the same `SoloJob` every other addition got, and
 `close()` drops the group instead of leaving a list and a timer behind.
 
 This controller's state counts entries whose send operation completed and whose
-handler reached `emit`. The policy section explains why this example chooses
-`join` as its accumulation policy, and the timing section explains what a
-throttle interval measures from.
+handler reached `emit`. The policy section explains why `join` is the default
+this example spells out, and the timing section explains what a throttle
+interval measures from.
 
 Collecting entries does not guarantee delivery. A failed send, a cancelled
 group or a plain `close()` can leave them unsent; `close()` with
@@ -542,6 +541,7 @@ final class Player extends Solo<Playback> {
 
   late final _transport = accumulate<Playback, Command, void>(
     key: 'transport',
+    policy: AccumulationPolicy.adjacent,
     merge: (accumulated, incoming) => incoming,
     (ctx, command) async {
       switch (command) {
@@ -578,10 +578,12 @@ This works because the commands are absolute: each one says what the end state
 is, so the last one is the answer. Commands that build on each other — "ten
 seconds further on" — are merged by adding them up, not by replacing.
 
-`adjacent`, the default policy, joins a group only at the queue's tail, so a
-job of another kind added between two commands is a boundary and the merging
-stops there. That is what keeps the order with the rest of the work;
-`AccumulationPolicy.join` gives it up and joins the group where it stands.
+`adjacent` joins a group only at the queue's tail, so a job of another kind
+added between two commands is a boundary and the merging stops there. That is
+what keeps the order with the rest of the work, and why this recipe names the
+policy instead of taking the default: `join` joins the group where it stands,
+and here that would drop the `resume` the user tapped and leave the device with
+the `pause` alone.
 
 #### When they are separate jobs after all
 
@@ -711,9 +713,9 @@ created.
 
 | Policy | Queue after the additions | Handle for A2 |
 | --- | --- | --- |
-| `adjacent` (default) | `[A1, B, A2]` | A new job |
+| `adjacent` | `[A1, B, A2]` | A new job |
 | `replace` | `[B, A(A1 + A2)]` | A1's existing job, moved behind B |
-| `join` | `[A(A1 + A2), B]` | A1's existing job |
+| `join` (default) | `[A(A1 + A2), B]` | A1's existing job |
 
 `adjacent` accepts into the group only when it is at the queue's tail.
 `replace` and `join` find the last open queued group of the same accumulator,
@@ -721,20 +723,19 @@ looking past other jobs. Those other jobs stay in the queue. In `join`, A
 retains its position before B; `replace` moves A behind B. Execution also
 depends on readiness: a ready B can pass A while A waits for timing.
 
-The log collector chooses `join` for that reason. An entry written while
-another job waits in the queue still belongs in the batch that is already
-there; under `adjacent` it would start a second group behind that job, and the
-throttle would hold that group for another interval — two requests for entries
-written moments apart. What `join` gives up is the boundary: the batch keeps
-its place ahead of the job that arrived between.
+`join` is the default for that reason. An entry written while another job waits
+in the queue still belongs in the batch that is already there; under `adjacent`
+it would start a second group behind that job, and a throttle would hold that
+group for another interval — two requests for entries written moments apart.
+The same two events would be one group or two depending on what else the
+controller happened to be doing, which is a decision no caller made. What
+`join` gives up is the boundary: the batch keeps its place ahead of the job
+that arrived between.
 
-An accumulator with `timing` usually wants `join` for that reason. The window
-says a group ends when the events stop; `adjacent` says it ends when another
-job is queued behind it. With both in force it ends at whichever comes first,
-so the same two events are one group or two depending on what else the
-controller happened to be doing. The boundary `adjacent` keeps in exchange is
-already the weaker one under a window, because a ready job passes a group that
-is still waiting for it.
+Take `adjacent` where that boundary is the point: where `merge` throws away
+what it replaces and a job queued between two events has to run between them,
+as the command recipe does, or where such a job changes what the accumulated
+input means.
 
 Policies use the current queue. If B has already run, a waiting A may again be
 at the tail, so a later event can join it with `adjacent`. Already separate

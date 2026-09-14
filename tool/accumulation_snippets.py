@@ -332,9 +332,8 @@ void main() {
     clock.flushMicrotasks();
   });
 
-  // The recipe's note about `adjacent`, both halves of it. A reload that
-  // got to start is gone from the queue, the group is at the tail again,
-  // and the next flip joins it.
+  // The recipe's note about the default, first half: a reload that got to
+  // start is gone from the queue, and the next flip joins the group.
   fakeAsync((clock) {
     final api = RecordingSettingsApi();
     final controller = SettingsController(api, start);
@@ -354,9 +353,11 @@ void main() {
     require(api.saved.length == 1, 'so the two flips are one write');
   });
 
-  // The same two flips, with something holding the queue so the reload is
-  // still queued behind the group: now it is a boundary, and the flips are
-  // written separately.
+  // The same two flips with the reload still queued behind the group.
+  // Under `adjacent` that reload was a boundary and the flips were two
+  // writes; under the default it is not, and the answer is the same as
+  // above -- which is what makes the recipe's note a note and not a
+  // condition on how busy the queue was.
   fakeAsync((clock) {
     final api = RecordingSettingsApi();
     // The reload starts at once and its load is left hanging, so it holds
@@ -371,15 +372,15 @@ void main() {
     clock.elapse(const Duration(milliseconds: 50));
     final second = controller.update(const SettingsPatch(theme: 'dark'));
     require(
-      !identical(first, second),
-      'a reload still queued ends the group under adjacent',
+      identical(first, second),
+      'a reload still queued does not end the group under join',
     );
 
     api.loading!.complete(start);
     clock.elapse(const Duration(seconds: 1));
     api.loading!.complete(start);
     clock.elapse(const Duration(seconds: 2));
-    require(api.saved.length == 2, 'and the same two flips are two writes');
+    require(api.saved.length == 1, 'and the same two flips are one write');
   });
 
   // The sentence about a client timeout: `join` holds the slot only as far
@@ -1317,7 +1318,7 @@ void threeCalls(SettingsController settings) {
 """
     + snips['reference/all-three-while-the-current-jo'].rstrip('\n')
     + """
-  require(!identical(a1, a2), "adjacent: A2 is a job of its own, not A1's");
+  require(identical(a1, a2), "join: A2 is A1's own job, joined where it is");
 }
 """
     + REQUIRE
@@ -1342,12 +1343,15 @@ void main() {
     api.loading!.complete(start);
     clock.elapse(const Duration(seconds: 1));
 
-    require(api.saved.length == 2, 'two groups, two writes');
-    require(api.saved.first.theme == 'dark', 'A1 went first, with its field');
-    require(api.saved.last.language == 'ru', 'A2 followed, with its own');
+    require(api.saved.length == 1, 'one group, one write');
+    require(
+      api.saved.single.theme == 'dark' && api.saved.single.language == 'ru',
+      'carrying what A1 and A2 each put in',
+    );
     print("the reference's three lines: loads ${api.loads}, "
         'writes ${api.saved.length} '
-        '(${api.saved.first.theme}, then ${api.saved.last.language}), '
+        '(${api.saved.single.theme} and ${api.saved.single.language} '
+        'together), '
         'state ${describe(settings.currentState)}');
     print('');
 

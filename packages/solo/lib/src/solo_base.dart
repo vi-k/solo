@@ -279,14 +279,18 @@ abstract class SoloBase<S extends Object> {
   /// and duplicates; the list is copied once when the group is sealed.
   /// The handler receives a regular context and runs under the same rules as
   /// [job]. It changes state only when it runs, never when an event is added.
-  /// [policy] chooses the waiting group and its position; [key] is an ordinary
-  /// job key and does not make different accumulators compatible. [timing]
+  /// [policy] chooses the waiting group and its position; the default joins
+  /// the last open group of this accumulator wherever it stands, so a job of
+  /// another kind queued between two events is not a boundary. Take
+  /// [AccumulationPolicy.adjacent] where it has to be one. [key] is an
+  /// ordinary job key and does not make different accumulators compatible.
+  /// [timing]
   /// can debounce each group or throttle starts across this accumulator;
   /// ready jobs later in the queue can bypass a group waiting for its window.
   SoloAccumulator<E, T> collect<W extends S, E, T>(
     Future<T> Function(SoloContext<S, W> ctx, List<E> events) handler, {
     Object? key,
-    AccumulationPolicy policy = AccumulationPolicy.adjacent,
+    AccumulationPolicy policy = AccumulationPolicy.join,
     AccumulationTiming? timing,
     bool Function(W state)? canStart,
     bool Function(W state)? keepWhile,
@@ -322,7 +326,7 @@ abstract class SoloBase<S extends Object> {
     Future<T> Function(SoloContext<S, W> ctx, E value) handler, {
     required E Function(E accumulated, E incoming) merge,
     Object? key,
-    AccumulationPolicy policy = AccumulationPolicy.adjacent,
+    AccumulationPolicy policy = AccumulationPolicy.join,
     AccumulationTiming? timing,
     bool Function(W state)? canStart,
     bool Function(W state)? keepWhile,

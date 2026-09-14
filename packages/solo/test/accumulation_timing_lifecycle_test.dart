@@ -122,8 +122,11 @@ void main() {
       fakeAsync((async) {
         final solo = TestSolo();
         final calls = <String>[];
+        // The rule is the point here: `join` would reuse the group wherever
+        // it stood, and this is about a group that is at the tail again.
         final events = solo.collect<TestState, int, void>(
           (ctx, values) async => calls.add('${async.elapsed}:$values'),
+          policy: AccumulationPolicy.adjacent,
           timing: _timing(kind),
         );
         if (kind == _TimingKind.throttle) {
@@ -554,6 +557,7 @@ void main() {
       final calls = <String>[];
       final events = solo.collect<TestState, int, void>(
         (ctx, values) async => calls.add('${async.elapsed}:A$values'),
+        policy: AccumulationPolicy.adjacent,
         timing: AccumulationTiming.throttle(_interval),
       );
       // Separators below deliberately split subsequent adjacent groups.

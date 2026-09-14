@@ -1,5 +1,20 @@
 ## Unreleased
 
+- **Breaking:** `collect` and `accumulate` default to
+  `AccumulationPolicy.join`, not `adjacent`. A job of another kind queued
+  between two events is no longer a boundary: the events are one group, where
+  the group already stands in the queue. The old default made the same two
+  events one group or two depending on what else the controller happened to be
+  doing at that moment, which is a decision no caller made, and under a
+  `timing` it also cost the second group a whole interval.
+
+- **Staying on `adjacent`.** Name it explicitly where the boundary is the
+  point: where `merge` throws away what it replaces and a job queued between
+  two events has to run between them — a transport control that keeps only the
+  last command is the case — or where such a job changes what the accumulated
+  input means. Everywhere else the default is what the call already wanted. A
+  call that names a policy today is unaffected.
+
 - **Breaking:** `AccumulationPolicy.replace` moves the waiting group's job to
   the tail instead of building a new job and cancelling this one. Every event
   of one group now shares its handle and outcome under every policy: five

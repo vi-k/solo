@@ -523,6 +523,7 @@ void main() {
         final calls = <String>[];
         final events = solo.collect<int, int, void>(
           (ctx, values) async => calls.add('A$values'),
+          policy: AccumulationPolicy.adjacent,
           timing: timing,
         );
         // The ordinary job deliberately separates these accumulation calls.

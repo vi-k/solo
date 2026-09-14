@@ -533,9 +533,12 @@ void main() {
     fakeAsync((async) {
       final solo = TestSolo();
       final calls = <List<int>>[];
-      final events = solo.collect<TestState, int, void>((ctx, values) async {
-        calls.add(values);
-      });
+      final events = solo.collect<TestState, int, void>(
+        (ctx, values) async {
+          calls.add(values);
+        },
+        policy: AccumulationPolicy.adjacent,
+      );
       final first = events.add(1);
       final separator = solo.run<TestState, void>((ctx) async {});
       final next = events.add(2);
@@ -905,6 +908,35 @@ void main() {
       solo.close();
       async.flushMicrotasks();
     });
+  });
+
+  // The default rule is `AccumulationPolicy.join`: a job of another kind
+  // between two events is not a boundary, and the events of one group share
+  // one handle. All three below fail against `adjacent` as the default.
+  for (final timing in _defaultTimings.entries) {
+    test('a call without a policy, ${timing.key}, behind a running job', () {
+      final handles = <SoloJob<void>>[];
+      expect(
+        _defaultTrace(timing: timing.value, handles: handles),
+        ['run[a1+a2]@100', 'other@100'],
+      );
+      expect(identical(handles.first, handles.last), isTrue);
+    });
+  }
+
+  test('a call without a policy under a trailing throttle', () {
+    final handles = <SoloJob<void>>[];
+    expect(
+      _defaultTrace(
+        timing: AccumulationTiming.throttle(
+          const Duration(seconds: 1),
+          startAtOnce: false,
+        ),
+        handles: handles,
+      ),
+      ['other@100', 'run[a1+a2]@1000'],
+    );
+    expect(identical(handles.first, handles.last), isTrue);
   });
 
   // What the wave of three accumulator changes must not move. These are
@@ -1463,6 +1495,52 @@ List<String> _rulesTrace(
     async.elapse(const Duration(milliseconds: 50));
     events.add('a2');
     async.elapse(const Duration(seconds: 2));
+    solo.close();
+    async.flushMicrotasks();
+  });
+  return trace;
+}
+
+/// The timings a call without a policy is written with in the wild: none,
+/// and the two zero durations that used to be a reason for the rule to
+/// differ. Comparing them with each other proves nothing -- before the
+/// default changed they agreed too -- so each is checked against the trace.
+final _defaultTimings = <String, AccumulationTiming?>{
+  'no timing': null,
+  'a zero debounce': AccumulationTiming.debounce(Duration.zero),
+  'a zero throttle': AccumulationTiming.throttle(Duration.zero),
+};
+
+/// [_rulesTrace] for a call that names no policy at all, collecting the
+/// handles the two additions came back with.
+List<String> _defaultTrace({
+  required AccumulationTiming? timing,
+  required List<SoloJob<void>> handles,
+}) {
+  final trace = <String>[];
+  fakeAsync((async) {
+    int now() => async.elapsed.inMilliseconds;
+    final solo = Solo<int>(0);
+    final events = solo.accumulate<int, String, void>(
+      (ctx, value) async => trace.add('run[$value]@${now()}'),
+      merge: (accumulated, incoming) => '$accumulated+$incoming',
+      key: 'a',
+      timing: timing,
+    );
+    solo.run<int, void>(
+      key: 'busy',
+      (ctx) => ctx.wait(
+        () => Future<void>.delayed(const Duration(milliseconds: 100)),
+      ),
+    );
+    handles.add(events.add('a1'));
+    solo.run<int, void>(
+      key: 'other',
+      (ctx) async => trace.add('other@${now()}'),
+    );
+    async.elapse(const Duration(milliseconds: 50));
+    handles.add(events.add('a2'));
+    async.elapse(const Duration(seconds: 3));
     solo.close();
     async.flushMicrotasks();
   });
