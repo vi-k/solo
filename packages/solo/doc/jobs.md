@@ -146,6 +146,7 @@ Removal methods affect queued jobs only — the running job is not theirs to
 touch — and they preserve jobs with `cancellable: false` unless called with
 `force: true`. Time-delayed accumulator groups can let ready jobs pass; see
 [Event accumulation](accumulation.md).
+
 ### Pausing the queue
 
 ```dart
