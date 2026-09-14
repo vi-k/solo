@@ -178,7 +178,7 @@ The cases:
 | `cancelAll(force: true)` | The gate goes with everything else and the queue moves on, with nobody having opened it. |
 
 What the gate does not give you is a name. The observer sees an ordinary job
-start, and `current` answers with the gate rather than with work, so a screen
+start, and `pending` answers with the gate rather than with work, so a screen
 showing what runs shows the pause instead. Whether the controller is paused is
 yours to keep.
 
