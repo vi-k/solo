@@ -82,9 +82,11 @@ without new input before starting it. `SearchApi` and `SearchState` are
 application types.
 
 A search that has already started finishes before the next one starts. The
-returned job exposes the outcome and cancellation, like other jobs. Closing
-cancels waiting groups rather than flushing them. The sections below work
-through grouping, ordering and the outcomes returned to individual callers.
+returned job exposes the outcome and cancellation, like other jobs. `close()`
+cancels waiting groups rather than flushing them;
+`close(mode: SoloCloseMode.drain)` waits their window out and runs them. The
+sections below work through grouping, ordering and the outcomes returned to
+individual callers.
 
 ## Combining settings changes
 
@@ -344,9 +346,9 @@ state counts entries whose send operation completed and whose handler reached
 accumulation policy.
 
 Collecting entries does not guarantee delivery. A failed send, a cancelled
-group or controller shutdown can leave them unsent. Durable storage, retries
-and a final send on shutdown require an application protocol beyond this
-accumulator.
+group or a plain `close()` can leave them unsent; `close()` with
+`SoloCloseMode.drain` sends what is already queued. Durable storage and retries
+require an application protocol beyond this accumulator.
 
 ## Choosing when a group is ready
 
@@ -510,8 +512,10 @@ cannot bypass the limit. That timer expires once and is not renewed until
 another group starts.
 
 `close()` cancels every timing timer, drops queued groups and cancels or waits
-for the running job under the usual rules. It does not send a final batch. An
-`add` after closing returns a new job already completed with
+for the running job under the usual rules. It sends no final batch;
+`close(mode: SoloCloseMode.drain)` waits the accumulation window out and runs
+the groups already queued, by the rules in [Cancellation](cancellation.md). An
+`add` after `close()` returns a new job already completed with
 `Cancelled(closed)`; it does not call `merge` or the handler. Once a group
 completes, its internal input storage is released. A handler, result or error
 that retains the input still owns those references.
