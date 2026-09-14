@@ -735,9 +735,14 @@ abstract class JobBase<T> implements Job<T> {
     // an outcome to the child that carried it lives on, in the parent's
     // `Expando`. Both happen here, where they are observable: in `finished`
     // and in `onFinish` the parent's list is already without this child.
+    // By identity, never by `==`: a job of a domain may compare itself by a
+    // key, and two children equal by that key are still two jobs. Plain
+    // `remove` would take the first equal one off the list and leave this
+    // one on it — the parent would then wait for a job that is over and
+    // walk away from one that is still running.
     final parent = _parent;
     if (parent != null) {
-      parent._children.remove(this);
+      parent._children.removeWhere((child) => identical(child, this));
       if (outcome is Cancelled) {
         parent._outcomeChild[outcome] = this;
       }

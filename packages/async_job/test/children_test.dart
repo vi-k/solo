@@ -750,6 +750,112 @@ void main() {
           'child it never waited for',
     );
   });
+  test('a child leaves the waiting list by identity, not by ==', () {
+    // A job of a domain is free to compare itself by its key, and then two
+    // children of one queue are equal and still two jobs. Whoever takes a
+    // child off the list has to name the one that ended.
+    fakeAsync((async) {
+      // The twins run side by side; the fast one ends first, the slow one
+      // holds its cleanup open. The parent must not walk away from it.
+      final tail = Completer<void>();
+      var parentCleaned = false;
+      final slow = _KeyedJob<int>(key: 'twin', (ctx) async {
+        ctx.onDispose(() => tail.future);
+        return 1;
+      });
+      final fast = _KeyedJob<int>(key: 'twin', (ctx) async => 2);
+      final parent = ProbeJob<void>((ctx) async {
+        ctx.onDispose(() => parentCleaned = true);
+        ctx.run(slow).ignore();
+        await ctx.run(fast);
+      })
+        ..launch();
+      async.elapse(const Duration(milliseconds: 50));
+      expect(fast.isFinished, isTrue);
+      expect(slow.isFinished, isFalse, reason: 'its cleanup still holds');
+      expect(
+        parent.childrenList,
+        [same(slow)],
+        reason: 'the fast twin left, the slow one stayed',
+      );
+      expect(
+        parent.isFinished,
+        isFalse,
+        reason: 'the parent waits for the child that is still running',
+      );
+      expect(parentCleaned, isFalse, reason: 'and has not unwound yet');
+      tail.complete();
+      async.elapse(const Duration(milliseconds: 10));
+      expect(parent.isFinished, isTrue);
+      expect(parentCleaned, isTrue);
+    });
+    fakeAsync((async) {
+      // The same twins, one step earlier: a rule of a domain throws over
+      // the second handle. That one never joined the list, so the one on
+      // it must stay.
+      Object? refusal;
+      final live = _KeyedJob<int>(key: 'twin', (ctx) async {
+        await ctx.wait(() => delay(100));
+        return 1;
+      });
+      final parent = _SwitchableRulesJob<void>((ctx) async {
+        ctx.run(live).ignore();
+        ctx.refuseNextChild = true;
+        try {
+          ctx.run(_KeyedJob<int>(key: 'twin', (ctx) async => 2)).ignore();
+        } on Object catch (error) {
+          refusal = error;
+        }
+      })
+        ..launch();
+      async.elapse(const Duration(milliseconds: 20));
+      expect(refusal, isA<StateError>());
+      expect(parent.childrenList, [same(live)]);
+      expect(
+        parent.isFinished,
+        isFalse,
+        reason: 'the refused handle did not take the live child with it',
+      );
+      parent.cancel().ignore();
+      async.elapse(const Duration(milliseconds: 20));
+      expect(
+        live.outcome,
+        isA<Cancelled>(),
+        reason: 'and the cascade still reaches the child on the list',
+      );
+      expect(parent.isFinished, isTrue);
+    });
+    fakeAsync((async) {
+      // The same refusal one step later: the handle is on the list
+      // already, and its own context is what throws.
+      Object? refusal;
+      final live = _KeyedJob<int>(key: 'twin', (ctx) async {
+        await ctx.wait(() => delay(100));
+        return 1;
+      });
+      final parent = ProbeJob<void>((ctx) async {
+        ctx.run(live).ignore();
+        try {
+          ctx.run(_UnstartableKeyedJob<int>(key: 'twin')).ignore();
+        } on Object catch (error) {
+          refusal = error;
+        }
+      })
+        ..launch();
+      async.elapse(const Duration(milliseconds: 20));
+      expect(refusal, isA<StateError>());
+      expect(parent.childrenList, [same(live)]);
+      expect(
+        parent.isFinished,
+        isFalse,
+        reason: 'the handle taken off the list is the one that was refused',
+      );
+      parent.cancel().ignore();
+      async.elapse(const Duration(milliseconds: 20));
+      expect(live.outcome, isA<Cancelled>());
+      expect(parent.isFinished, isTrue);
+    });
+  });
 }
 
 /// A handle that implements [Job] without being a job of this core.
@@ -766,4 +872,77 @@ final class _OnStartObserver extends JobObserver {
 
   @override
   void onStart(Job<Object?> job) => _onStart();
+}
+
+/// A job of a domain that compares itself by its key.
+///
+/// Two children of one queue are equal to each other and are still two
+/// jobs — the core has to take the right one off the waiting list.
+class _KeyedJob<T> extends JobBase<T> {
+  final Future<T> Function(JobContext ctx) _body;
+
+  _KeyedJob(this._body, {required Object super.key});
+
+  // A job is mutable by nature, and the equality here is the point of the
+  // helper: it stands in for a domain that compares its jobs by key.
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) => other is _KeyedJob && other.key == key;
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => key.hashCode;
+
+  @override
+  JobContextBase createContext() => ProbeContext(this);
+
+  @override
+  Future<T> execute(covariant ProbeContext ctx) => _body(ctx);
+}
+
+/// The same job of a domain, with a context that refuses to be built.
+final class _UnstartableKeyedJob<T> extends _KeyedJob<T> {
+  _UnstartableKeyedJob({required super.key})
+      : super((_) async => throw StateError('never runs'));
+
+  @override
+  JobContextBase createContext() => throw StateError('no context');
+}
+
+/// A parent whose rule throws when the body tells it to.
+///
+/// Stands in for a rule of a domain — `canStart` in `solo` — that lets one
+/// child in and throws over the next.
+final class _SwitchableRulesJob<T> extends JobBase<T> {
+  final Future<T> Function(_SwitchableRulesContext ctx) _body;
+
+  _SwitchableRulesJob(this._body);
+
+  /// The waiting list itself, as a subclass of the core sees it.
+  List<JobBase<Object?>> get childrenList => children;
+
+  /// Starts the body the way an engine of a domain would.
+  void launch() => start();
+
+  @override
+  JobContextBase createContext() => _SwitchableRulesContext(this);
+
+  @override
+  Future<T> execute(covariant _SwitchableRulesContext ctx) => _body(ctx);
+}
+
+/// The context of [_SwitchableRulesJob].
+final class _SwitchableRulesContext extends JobContextBase {
+  _SwitchableRulesContext(super.owner);
+
+  /// Turned on by the body between two children.
+  bool refuseNextChild = false;
+
+  @override
+  Cancelled? beforeChildStart(JobBase<Object?> child) {
+    if (refuseNextChild) {
+      throw StateError('rule failed');
+    }
+    return null;
+  }
 }

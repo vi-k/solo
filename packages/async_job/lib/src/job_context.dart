@@ -977,7 +977,10 @@ abstract class JobContextBase implements JobContext {
         child.start();
       }
     } on Object catch (error, stackTrace) {
-      _owner._children.remove(child);
+      // By identity, as in `finish`: the refused child is taken off the
+      // list here, before it is finished, so `finish` will not do it later
+      // and a plain `remove` would take a sibling equal by `==` instead.
+      _owner._children.removeWhere((each) => identical(each, child));
       child
         ..ignore()
         ..finish(Failed(error, stackTrace));
