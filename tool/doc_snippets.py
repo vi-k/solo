@@ -21,9 +21,10 @@ use wall-clock fakes with timing margins. The Loading cancellation driver
 uses FakeAsync and completers, checking each state transition explicitly.
 """
 import os
-import re
 import shutil
 import sys
+
+import doc_blocks
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ROOT = sys.argv[1] if len(sys.argv) > 1 else '/tmp/solo-doc-check'
@@ -67,31 +68,12 @@ dependency_overrides:
     async_job=os.path.join(REPO, 'packages', 'async_job'),
 )
 
-# What a snippet declares at column 0: a type, or a top-level function.
-DECLARES = re.compile(
-    r'^(?:(?:final|abstract|sealed|base|interface) )*'
-    r'(?:class|enum|mixin|extension|typedef)\s+(\w+)'
-    r'|^[A-Za-z_][\w<>,?\[\] ]*\s(\w+)\s*\(', re.M)
-
-doc = open(DOC).read()
-parts = re.split(r'\n## ', doc)
-
 # A snippet is addressed by section and by a name it declares -- '1/NotesBloc'
 # -- so that inserting a block into a section does not renumber the rest.
-# A block declaring several names answers to each of them. A name declared
-# twice in one section answers to neither: the entry is poisoned, and a use
-# of it fails here instead of quietly building the wrong file. A block that
-# declares nothing is addressed by its first line instead, slugified:
-# '3/if-event-is-cancelrefresh'. Nothing here is addressed by position.
-snips = {}
-for p in parts[1:]:
-    n = p.split('.')[0].strip()
-    for j, b in enumerate(re.findall(r'```dart\n(.*?)```', p, re.S)):
-        slug = re.sub(r'[^a-z0-9]+', '-', b.split('\n')[0].lower()).strip('-')
-        names = [a or c for a, c in DECLARES.findall(b)] or [slug[:30]]
-        for name in names:
-            key = f'{n}/{name}'
-            snips[key] = None if key in snips else b
+# The addressing itself lives in doc_blocks.py, next to this file: it is the
+# part every bench shares, and the second document uses the same one.
+snips = doc_blocks.blocks(
+    open(DOC).read(), 'dart', doc_blocks.DECLARES['dart'])
 
 TRACE = '''
 final trace = <String>[];

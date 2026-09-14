@@ -203,42 +203,64 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: ~/.pub-cache
-          key: pub-snippets-${{ runner.os }}-${{ hashFiles('tool/doc_snippets.py', 'packages/*/pubspec.yaml') }}
+          key: pub-snippets-${{ runner.os }}-${{ hashFiles('tool/doc_snippets.py', 'tool/accumulation_snippets.py', 'tool/doc_blocks.py', 'packages/*/pubspec.yaml') }}
           restore-keys: pub-snippets-${{ runner.os }}-
 
       # Outside the checkout, which is what lets the last step of this job
-      # mean anything: the bench writes two packages and never the tree.
-      - name: Build the bench out of the document
-        run: python3 tool/doc_snippets.py "$RUNNER_TEMP/doc-check"
+      # mean anything: the benches write three packages and never the tree.
+      - name: Build the benches out of the documents
+        run: |
+          python3 tool/doc_snippets.py "$RUNNER_TEMP/doc-check"
+          python3 tool/accumulation_snippets.py "$RUNNER_TEMP/doc-check"
 
       - name: Dependencies
         run: |
-          for package in bloc_check solo_check; do
+          for package in bloc_check solo_check accumulation_check; do
             echo "== $package"
             (cd "$RUNNER_TEMP/doc-check/$package" && dart pub get)
           done
 
       # `solo_check` analyzes under the package's own `analysis_options.yaml`,
       # copied there by the generator: a fragment that passes here is a
-      # fragment that would pass inside `packages/solo`.
+      # fragment that would pass inside `packages/solo`. `accumulation_check`
+      # takes the same rules with `one_member_abstracts` off, and says why in
+      # the file it writes.
       - name: Analyze
         run: |
-          for package in bloc_check solo_check; do
+          for package in bloc_check solo_check accumulation_check; do
             echo "== $package"
             (cd "$RUNNER_TEMP/doc-check/$package" && dart analyze bin/v)
           done
 
-      # Unsilenced on purpose. These are the traces the document quotes,
-      # and the log is where a reader of a red run compares them by eye.
+      # Unsilenced on purpose. These are the traces the documents quote,
+      # and the log is where a reader of a red run compares them by eye. The
+      # output is kept as well, for the step below to compare by machine.
       - name: Every scenario runs
         run: |
-          for package in bloc_check solo_check; do
+          set -eo pipefail
+          : > "$RUNNER_TEMP/vs-bloc.out"
+          : > "$RUNNER_TEMP/accumulation.out"
+          for package in bloc_check solo_check accumulation_check; do
             cd "$RUNNER_TEMP/doc-check/$package"
+            if [ "$package" = accumulation_check ]; then
+              out="$RUNNER_TEMP/accumulation.out"
+            else
+              out="$RUNNER_TEMP/vs-bloc.out"
+            fi
             for driver in bin/v/*.dart; do
               echo "== $package/$driver"
-              dart run "$driver"
+              dart run "$driver" | tee -a "$out"
             done
           done
+
+      # The benches prove every fragment builds against the tree and runs.
+      # This proves the other half: that a trace quoted next to a fragment
+      # is the trace that fragment prints, and not one that used to be true.
+      - name: The quoted traces are the printed ones
+        run: |
+          python3 tool/check_traces.py \
+            packages/solo/doc/vs-bloc.md "$RUNNER_TEMP/vs-bloc.out" \
+            packages/solo/doc/accumulation.md "$RUNNER_TEMP/accumulation.out"
 
       - name: Nothing drifted
         run: |
