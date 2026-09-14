@@ -96,7 +96,12 @@ SoloJob<void> setZoom(double zoom) => run<Ready, void>(
 SoloJob<void> seek(Duration position) => run<Ready, void>(
       key: _Op.seek,
       policy: Policy.restart,
-      (ctx) => ctx.join(() => camera.seek(position)),
+      (ctx) async {
+        final token = CancelToken();
+        ctx.onCancel(token.cancel);
+        // Дождаться остановки устройства до следующей перемотки.
+        await ctx.join(() => camera.seek(position, cancelToken: token));
+      },
     );
 ```
 
@@ -113,7 +118,11 @@ SoloJob<void> seek(Duration position) => run<Ready, void>(
 
 `restart` запрашивает отмену при добавлении новой `Job`. Новая `Job` всё равно
 ждёт завершения текущей; их тела не пересекаются. Поэтому `Job`, отклоняющая
-отмену, может задержать свою замену.
+отмену, может задержать свою замену — и так же её задержит та, которой отмену
+некому передать: `join` вокруг вызова, до которого запрос не доходит, дождётся
+его до конца, а исход всё равно будет `Cancelled`. Токен выше — способ передать
+отмену; второй способ — `ctx.wait`, для операции, которую можно оставить
+доигрывать самой. Оба — на странице [Отмена](cancellation.md).
 
 Ключом может быть любой объект со сравнением через `==`, поэтому запись
 `(_Op.load, id)` выше даёт политике идентичность одного запроса, а не операции

@@ -95,7 +95,12 @@ SoloJob<void> setZoom(double zoom) => run<Ready, void>(
 SoloJob<void> seek(Duration position) => run<Ready, void>(
       key: _Op.seek,
       policy: Policy.restart,
-      (ctx) => ctx.join(() => camera.seek(position)),
+      (ctx) async {
+        final token = CancelToken();
+        ctx.onCancel(token.cancel);
+        // Wait for the device to stop before the next seek starts.
+        await ctx.join(() => camera.seek(position, cancelToken: token));
+      },
     );
 ```
 
@@ -112,7 +117,12 @@ handler finish. Child jobs can run within that interval; they are described in
 
 `restart` requests cancellation when the new job is submitted. The new job
 still waits for the current job to finish; their bodies do not overlap. A job
-that refuses cancellation can therefore delay its replacement.
+that refuses cancellation can therefore delay its replacement — and so can one
+that has nothing to hand the request to: a `join` around a call the request
+cannot reach waits that call out to the end, and the outcome is `Cancelled` all
+the same. The token above is the way in; `ctx.wait` is the other, for an
+operation that can be left to finish on its own. Both are on
+[Cancellation](cancellation.md).
 
 A key is any object, compared with `==`, so the record `(_Op.load, id)` above
 gives the policy the identity of one request rather than of the operation:
