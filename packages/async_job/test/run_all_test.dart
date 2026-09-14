@@ -280,11 +280,14 @@ void main() {
 
   test('a failure covered by the stop does not beat a real cancellation', () {
     final zone = <Object>[];
+    final journal = JobJournal();
+    final covered = StateError('covered');
+    Object? thrown;
+    Outcome<int>? acceptingOutcome;
+    Outcome<int>? foreignOutcome;
     runZonedGuarded(
       () {
         fakeAsync((async) {
-          final journal = JobJournal();
-          final covered = StateError('covered');
           final accepting = Job.deferred<int>(key: 'a', (ctx) async {
             try {
               await ctx.wait(() => delay(1000));
@@ -300,7 +303,6 @@ void main() {
             await ctx.wait(() => delay(1000));
             return 2;
           });
-          Object? thrown;
           Job<void>(key: 'parent', observer: journal, (ctx) async {
             try {
               await ctx.runAll([accepting, foreign]);
@@ -311,24 +313,29 @@ void main() {
           async.elapse(const Duration(milliseconds: 10));
           foreign.cancel().ignore();
           async.flushTimers();
-          expect(
-            accepting.outcome,
-            isA<Cancelled>().having(
-              (cancelled) => cancelled.reason,
-              'reason',
-              isA<SiblingCancelReason>(),
-            ),
-            reason: 'a failure thrown after the mark is the body giving up',
-          );
-          expect(thrown, same(foreign.outcome));
-          expect(
-            journal.take().where((line) => line.contains('error')).toList(),
-            ['> [a] error Bad state: covered'],
-            reason: 'the observer of the branch hears it, and only it',
-          );
+          acceptingOutcome = accepting.outcome;
+          foreignOutcome = foreign.outcome;
         });
       },
       (error, stackTrace) => zone.add(error),
+    );
+    // Outside the guarded zone, every one of them: an `expect` that fails
+    // inside it is caught by the handler, added to `zone`, and never fails
+    // the test.
+    expect(
+      acceptingOutcome,
+      isA<Cancelled>().having(
+        (cancelled) => cancelled.reason,
+        'reason',
+        isA<SiblingCancelReason>(),
+      ),
+      reason: 'a failure thrown after the mark is the body giving up',
+    );
+    expect(thrown, same(foreignOutcome));
+    expect(
+      journal.take().where((line) => line.contains('error')).toList(),
+      ['> [a] error Bad state: covered'],
+      reason: 'the observer of the branch hears it, and only it',
     );
     expect(zone, isEmpty);
   });
@@ -512,6 +519,11 @@ void main() {
 
   test('a cancellation this call asked for never comes out of it', () {
     final zone = <Object>[];
+    final errors = <Object>[];
+    Object? thrown;
+    Outcome<int>? foreignOutcome;
+    var stoppedFinishedFirst = false;
+    var foreignStillHeldUp = false;
     runZonedGuarded(
       () {
         fakeAsync((async) {
@@ -528,8 +540,6 @@ void main() {
             await ctx.wait(() => delay(1000));
             return 2;
           });
-          Object? thrown;
-          final errors = <Object>[];
           Job<void>(
             key: 'parent',
             observer: ErrorObserver(errors),
@@ -544,17 +554,175 @@ void main() {
           async.elapse(const Duration(milliseconds: 10));
           foreign.cancel(reason: const TestCancelReason('outside')).ignore();
           async.elapse(const Duration(milliseconds: 10));
-          expect(stopped.isFinished, isTrue, reason: 'ours arrives first');
-          expect(foreign.isFinished, isFalse, reason: 'the other is held up');
+          stoppedFinishedFirst = stopped.isFinished;
+          foreignStillHeldUp = !foreign.isFinished;
           tail.complete();
           async.flushTimers();
-          expect(thrown, same(foreign.outcome));
-          expect(errors, isEmpty);
+          foreignOutcome = foreign.outcome;
         });
       },
       (error, stackTrace) => zone.add(error),
     );
-    expect(zone, isEmpty, reason: 'a cancellation is nobody"s failure');
+    expect(stoppedFinishedFirst, isTrue, reason: 'ours arrives first');
+    expect(foreignStillHeldUp, isTrue, reason: 'the other is held up');
+    expect(thrown, same(foreignOutcome));
+    expect(errors, isEmpty);
+    expect(zone, isEmpty, reason: 'a cancellation is nobody’s failure');
+  });
+
+  test('a cancellation nobody asked for is trouble, whatever it wears', () {
+    fakeAsync((async) {
+      // The stop is recognised by whom this call asked, not by the kind of
+      // reason the cancellation carries: `SiblingCancelReason` is public,
+      // and anyone may build one.
+      var neighbourFinishedItsWork = false;
+      final neighbour = Job.deferred<int>(key: 'a', (ctx) async {
+        await ctx.wait(() => delay(1000));
+        neighbourFinishedItsWork = true;
+        return 1;
+      });
+      final foreign = Job.deferred<int>(key: 'b', (ctx) async {
+        await ctx.wait(() => delay(1000));
+        return 2;
+      });
+      Object? thrown;
+      Job<void>(key: 'parent', (ctx) async {
+        try {
+          await ctx.runAll([neighbour, foreign]);
+        } on Object catch (error) {
+          thrown = error;
+        }
+      }).ignore();
+      async.elapse(const Duration(milliseconds: 10));
+      foreign
+          .cancel(reason: const SiblingCancelReason(cause: 'another group'))
+          .ignore();
+      async.flushTimers();
+      expect(thrown, same(foreign.outcome));
+      expect(
+        neighbour.outcome,
+        isA<Cancelled>().having(
+          (cancelled) => cancelled.reason,
+          'reason',
+          isA<SiblingCancelReason>(),
+        ),
+      );
+      expect(
+        neighbourFinishedItsWork,
+        isFalse,
+        reason: 'the neighbour was stopped at once, not left to run out',
+      );
+    });
+  });
+
+  test('a branch the group stopped never gives the group its outcome', () {
+    fakeAsync((async) {
+      // The request to stop can lose: a cancellation from elsewhere was
+      // already held inside `uncancellable` and lands first. The branch
+      // then ends with somebody else's object — and it is still the stop
+      // this call asked for, so it is not what the group gives back.
+      final inside = Completer<void>();
+      final tail = Completer<void>();
+      final stopped = Job.deferred<int>(key: 'b', (ctx) async {
+        await ctx.uncancellable(() => inside.future);
+        return 2;
+      });
+      final source = Job.deferred<int>(key: 'a', (ctx) async {
+        ctx.onDispose(() => tail.future);
+        await ctx.wait(() => delay(10));
+        throw const Cancelled('a gave up');
+      });
+      Object? thrown;
+      Job<void>(key: 'parent', (ctx) async {
+        try {
+          await ctx.runAll([source, stopped]);
+        } on Object catch (error) {
+          thrown = error;
+        }
+      }).ignore();
+      async.elapse(const Duration(milliseconds: 5));
+      // Held, not accepted: the branch is inside an uncancellable step.
+      stopped.cancel(reason: const TestCancelReason('outside')).ignore();
+      async.elapse(const Duration(milliseconds: 20));
+      inside.complete();
+      async.elapse(const Duration(milliseconds: 10));
+      expect(stopped.isFinished, isTrue, reason: 'it ends first of the two');
+      expect(source.isFinished, isFalse);
+      tail.complete();
+      async.flushTimers();
+      expect(
+        stopped.outcome,
+        isA<Cancelled>().having(
+          (cancelled) => cancelled.reason,
+          'reason',
+          isA<TestCancelReason>(),
+        ),
+        reason: "the request lost: the object is not the group's",
+      );
+      expect(
+        thrown,
+        same(source.outcome),
+        reason: 'and the group still gives back the branch nobody stopped',
+      );
+    });
+  });
+
+  test('between two cancellations the first one to arrive wins', () {
+    for (final dropOrder in ['ab', 'ba']) {
+      fakeAsync((async) {
+        // Two branches are ended by hand while they stand at the second
+        // barrier, one after the other in the same synchronous burst. The
+        // group asked neither of them to stop, so both are outcomes of its
+        // own; the one it learned first is the one it gives back.
+        final gate = Completer<void>();
+        final cancellations = {
+          for (final name in ['a', 'b'])
+            name: Cancelled.by(
+              reason: TestCancelReason('dropped-$name'),
+              started: true,
+              stackTrace: StackTrace.current,
+            ),
+        };
+        final dropped = {
+          for (final name in ['a', 'b'])
+            name: ProbeJob<int>(key: name, (ctx) async => 1),
+        };
+        // The slow branch keeps the group in the first pass, so the other
+        // two are standing at the second barrier when they are dropped.
+        final slow = Job.deferred<int>(key: 'slow', (ctx) async {
+          ctx.onDispose(() => gate.future);
+          return 3;
+        });
+        Object? thrown;
+        Job<void>(key: 'parent', (ctx) async {
+          try {
+            await ctx.runAll(<Job<int>>[dropped['a']!, dropped['b']!, slow]);
+          } on Object catch (error) {
+            thrown = error;
+          }
+        }).ignore();
+        async.flushMicrotasks();
+        expect(dropped['a']!.isFinished, isFalse, reason: 'both are held');
+        dropped[dropOrder[0]]!.drop(cancellations[dropOrder[0]]!);
+        dropped[dropOrder[1]]!.drop(cancellations[dropOrder[1]]!);
+        gate.complete();
+        async.flushTimers();
+        expect(
+          thrown,
+          same(cancellations[dropOrder[0]]),
+          reason: 'drop order $dropOrder',
+        );
+        expect(
+          slow.outcome,
+          isA<Cancelled>().having(
+            (cancelled) => cancelled.reason,
+            'reason',
+            isA<SiblingCancelReason>(),
+          ),
+          reason: 'and the branch the group stopped is not in the running',
+        );
+      });
+    }
   });
 
   test('a failure the group received and did not throw is not lost', () {
@@ -611,16 +779,75 @@ void main() {
             }
           }).ignore();
           async.flushTimers();
-          expect(
-            zone.map((error) => '$error').toList(),
-            ['Bad state: other'],
-            reason: 'with nobody watching, the one nobody received goes to '
-                'the zone, once',
-          );
         });
       },
       (error, stackTrace) => zone.add(error),
     );
+    // Outside the guarded zone: an `expect` that fails inside it lands in
+    // the handler and is counted as a zone error instead of failing.
+    expect(
+      zone.map((error) => '$error').toList(),
+      ['Bad state: other'],
+      reason: 'with nobody watching, the one nobody received goes to the '
+          'zone, once',
+    );
+  });
+
+  test('a failure that never went through a body is not lost either', () {
+    for (final withObserver in [false, true]) {
+      final zone = <Object>[];
+      final heard = <Object>[];
+      final chosen = StateError('chosen');
+      final other = StateError('other');
+      runZonedGuarded(
+        () {
+          fakeAsync((async) {
+            // An engine of a domain may end a branch by hand while it
+            // stands at a barrier. Such a failure went through no body, so
+            // nobody announced it: the group is the last one holding it.
+            final gate = Completer<void>();
+            final dropped = {
+              for (final name in ['a', 'b'])
+                name: ProbeJob<int>(key: name, (ctx) async => 1),
+            };
+            final slow = Job.deferred<int>(key: 'slow', (ctx) async {
+              ctx.onDispose(() => gate.future);
+              return 3;
+            });
+            Job<void>(
+              key: 'parent',
+              observer: withObserver ? ErrorObserver(heard) : null,
+              (ctx) async {
+                try {
+                  await ctx
+                      .runAll(<Job<int>>[dropped['a']!, dropped['b']!, slow]);
+                } on Object catch (_) {
+                  // Which one comes out is settled by the arrival order.
+                }
+              },
+            ).ignore();
+            async.flushMicrotasks();
+            dropped['a']!.drop(Failed(chosen, StackTrace.current));
+            dropped['b']!.drop(Failed(other, StackTrace.current));
+            gate.complete();
+            async.flushTimers();
+          });
+        },
+        (error, stackTrace) => zone.add(error),
+      );
+      // Outside the guarded zone: a failing `expect` inside it would be
+      // swallowed by the handler and never fail the test.
+      expect(
+        heard.where((error) => identical(error, other)).length,
+        withObserver ? 1 : 0,
+        reason: 'observer: $withObserver',
+      );
+      expect(
+        zone.where((error) => identical(error, other)).length,
+        withObserver ? 0 : 1,
+        reason: 'observer: $withObserver',
+      );
+    }
   });
 
   test('a refusal of admission stops whatever already started', () {
@@ -666,6 +893,8 @@ void main() {
       expect(zone, isEmpty);
     });
     final zone = <Object>[];
+    Object? refusal;
+    Outcome<int>? stubbornOutcome;
     runZonedGuarded(
       () {
         fakeAsync((async) {
@@ -690,12 +919,14 @@ void main() {
             }
           }).ignore();
           async.flushTimers();
-          expect(thrown, isA<ArgumentError>());
-          expect(stubborn.outcome, isA<Failed>());
+          refusal = thrown;
+          stubbornOutcome = stubborn.outcome;
         });
       },
       (error, stackTrace) => zone.add(error),
     );
+    expect(refusal, isA<ArgumentError>());
+    expect(stubbornOutcome, isA<Failed>());
     expect(zone.map((error) => '$error').toList(), ['Bad state: other']);
   });
 
@@ -786,6 +1017,7 @@ void main() {
     for (final trigger in ['cancel', 'rules', 'reentrant']) {
       fakeAsync((async) {
         var continued = false;
+        var closes = 0;
         List<int>? values;
         Object? thrown;
         final stubborn = [
@@ -795,7 +1027,10 @@ void main() {
               cancellable: trigger == 'reentrant',
               (ctx) async {
                 await ctx.wait(() => delay(50));
-                return 1;
+                // A resource taken for the caller: on every one of these
+                // paths the caller gets an error instead, so the branch
+                // has to close it itself.
+                return ctx.wait(() async => 1, discard: (_) => closes++);
               },
             ),
         ];
@@ -834,6 +1069,15 @@ void main() {
         expect(continued, isFalse, reason: trigger);
         expect(values, isNull, reason: trigger);
         expect(thrown, isA<Cancelled>(), reason: trigger);
+        expect(
+          closes,
+          trigger == 'reentrant' ? 2 : 0,
+          reason: trigger == 'reentrant'
+              ? 'both branches took the stop and closed what they held'
+              : 'both refused the stop and hand their values over through '
+                  'their own `value`: the named boundary of cancellable '
+                  'false',
+        );
       });
     }
   });
@@ -1392,6 +1636,51 @@ void main() {
       expect(closes, 0, reason: 'the values were already handed over');
       expect(b.outcome, isA<Cancelled>());
       expect(heardCancelled, 1);
+    });
+  });
+
+  test('on success the group does not wait for the tails of its branches', () {
+    fakeAsync((async) {
+      final unwinding = Completer<void>();
+      final tail = Completer<void>();
+      var tailRan = false;
+      var tailEnded = false;
+      late JobContext quick;
+      final bare = Job.deferred<String>(key: 'bare', (ctx) async {
+        quick = ctx;
+        return 'bare';
+      });
+      final slow = Job.deferred<String>(key: 'slow', (ctx) async {
+        ctx.onDispose(() => unwinding.future);
+        return 'slow';
+      });
+      List<String>? values;
+      final parent = Job<void>(key: 'parent', (ctx) async {
+        values = await ctx.runAll([slow, bare]);
+      })
+        ..ignore();
+      async.flushMicrotasks();
+      Timer.run(() {
+        // Registered at the second barrier and not in the body: a tail
+        // registered in the body holds the first pass, and then no group
+        // reaches its decision early enough to tell the two apart.
+        quick.onDispose(() async {
+          tailRan = true;
+          await tail.future;
+          tailEnded = true;
+        });
+      });
+      async.elapse(const Duration(milliseconds: 10));
+      unwinding.complete();
+      async.elapse(const Duration(milliseconds: 10));
+      expect(values, ['slow', 'bare'], reason: 'the list is already here');
+      expect(tailRan, isTrue);
+      expect(tailEnded, isFalse, reason: 'and the tail is still playing out');
+      expect(parent.isFinished, isFalse, reason: 'under the parent, as ever');
+      tail.complete();
+      async.flushTimers();
+      expect(tailEnded, isTrue);
+      expect(parent.isFinished, isTrue);
     });
   });
 

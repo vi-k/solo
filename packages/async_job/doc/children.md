@@ -90,9 +90,20 @@ Ownership is the same rule as everywhere else, and a group is where it starts
 to matter. A resource a branch keeps for itself goes to `onDispose`, and the
 end of the branch closes it whatever the outcome. A resource a branch hands out
 goes to `onDiscard`, or to the `discard` of `ctx.wait` and `ctx.join`: it then
-lives until the group succeeds in full and reaches the caller open. On any
-other outcome the branch closes it itself, before the group returns -- so by
-the time the parent catches the error, nothing is left open.
+lives until the group succeeds in full and reaches the caller open. When the
+group ends in anything else, the branch that accepted the stop closes what it
+took, and it closes it before the group returns -- so by the time the parent
+catches the error, that much is already closed.
+
+Two things stay open, and both follow from rules written elsewhere. A branch
+created with `cancellable: false` refuses the stop and ends `Done`: it hands
+its value over through its own `Job.value`, so its `discard` does not run and
+the resource is the caller's to close, through the handle it passed in. And a
+branch that did not take the resource itself but got it from a child of its own
+and returned it on is not covered at all: the child ended `Done` inside the
+branch, and a child's registration is settled by the child's outcome. That one
+is a hole in the kernel rather than in the group -- it reproduces without any
+group, with a single `Job.deferred<Db>((ctx) => ctx.run(opener))`.
 
 Four things `runAll` does not promise.
 

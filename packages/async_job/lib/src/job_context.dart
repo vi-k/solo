@@ -255,9 +255,12 @@ abstract interface class JobContext {
   /// it. Returns a function that unregisters it.
   ///
   /// In a branch of [runAll] the hand-over is the group's to declare, not
-  /// the branch's: this runs when the group ends in anything but success,
-  /// and it does not run once the group has handed the values to the
-  /// caller — whatever outcome the branch itself ends with afterwards.
+  /// the branch's: once the group has handed the values to the caller this
+  /// does not run, whatever outcome the branch itself ends with
+  /// afterwards. When the group ends otherwise, this runs for a branch
+  /// that accepted the stop — and not for one created with
+  /// `cancellable: false`, which refuses the stop, ends [Done] and hands
+  /// its value over through [Job.value] as it always would.
   void Function() onDiscard(FutureOr<void> Function() disposer);
 
   /// Drops the cleanup registered for [value] by [wait] or [join].
@@ -1216,10 +1219,15 @@ final class _GroupBranch<T> {
   /// The outcome of the body, as the early word gave it.
   Outcome<T>? bodyOutcome;
 
-  /// The cancellation this group asked this branch for, if it asked at
-  /// all. The filter of the group works by the identity of this object:
-  /// a cancellation the call asked for is not an outcome of the group.
-  Cancelled? requested;
+  /// Whether this call asked the branch to stop.
+  ///
+  /// The cancellation that then ends the branch is not an outcome of the
+  /// group, whoever built it: the request may have been refused, or lost
+  /// to a cancellation that arrived in the same minute, and a match of
+  /// objects would not prove who created one anyway. A [Failed] is never
+  /// filtered — a branch that refused the stop and failed on its own has
+  /// a diagnosis of its own.
+  bool askedToStop = false;
 
   /// The final outcome, once the branch has one.
   Outcome<T>? settled;
@@ -1331,7 +1339,7 @@ final class _RunAllGroup<T> {
     if (_failing || _committed || outcome is Done<Object?>) {
       return;
     }
-    if (identical(outcome, branch.requested)) {
+    if (outcome is Cancelled && branch.askedToStop) {
       // Not trouble: the stop working.
       return;
     }
@@ -1348,7 +1356,7 @@ final class _RunAllGroup<T> {
     final reason = SiblingCancelReason(cause: cause);
     for (final branch in _branches) {
       if (identical(branch, source) ||
-          branch.requested != null ||
+          branch.askedToStop ||
           branch.job.isFinished) {
         continue;
       }
@@ -1359,7 +1367,7 @@ final class _RunAllGroup<T> {
       );
       // Remembered before the call and not after it: `cancelWith` reaches
       // code that may come straight back here.
-      branch.requested = cancelled;
+      branch.askedToStop = true;
       try {
         branch.job.cancelWith(cancelled);
       } on Object catch (error, stackTrace) {
@@ -1491,11 +1499,15 @@ final class _RunAllGroup<T> {
       if (provisional is Done<T>) {
         continue;
       }
+      // The branch that changed is the source, exactly as it would be had
+      // it spoken up earlier: naming nobody would mark it asked-to-stop
+      // along with the rest, and the filter would then swallow the very
+      // outcome the group has to give.
       _beginFailing(
         provisional == null
             ? StateError('${branch.job} stands at the barrier with no outcome')
             : _causeOf(provisional),
-        null,
+        branch,
       );
       return;
     }
@@ -1535,10 +1547,18 @@ final class _RunAllGroup<T> {
         // The caller is about to receive this one.
         continue;
       }
-      // Received and not chosen. The branch told its observer about it
-      // itself; what is left is the route for an error nobody answered
-      // for, and it is walked once.
-      branch.job.handleUnanswered(outcome.error, outcome.stackTrace);
+      // Received and not chosen, and where it goes depends on whether it
+      // has been announced once already. A failure the body threw was
+      // handed to the observer where it was caught, so only the route for
+      // an error nobody answered for is left. A failure that never went
+      // through the body — an engine of a domain ending the branch by hand
+      // with [Failed] — was announced nowhere, and the group is the last
+      // one holding it.
+      if (identical(outcome, branch.bodyOutcome)) {
+        branch.job.handleUnanswered(outcome.error, outcome.stackTrace);
+      } else {
+        branch.job.notifyError(outcome.error, outcome.stackTrace);
+      }
     }
     if (refusal != null) {
       Error.throwWithStackTrace(refusal.$1, refusal.$2);
@@ -1561,7 +1581,7 @@ final class _RunAllGroup<T> {
     Cancelled? cancelled;
     for (final branch in _received) {
       final outcome = branch.settled;
-      if (outcome == null || identical(outcome, branch.requested)) {
+      if (outcome == null || (outcome is Cancelled && branch.askedToStop)) {
         continue;
       }
       if (outcome is Failed) {
