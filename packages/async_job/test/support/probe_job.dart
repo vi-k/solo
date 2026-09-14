@@ -23,6 +23,9 @@ final class ProbeJob<T> extends JobBase<T> {
   /// The waiting list itself, as a subclass of the core sees it.
   List<JobBase<Object?>> get childrenList => children;
 
+  /// The phase the job is in; protected on [JobBase].
+  bool get isDisposingNow => isDisposing;
+
   /// Starts the body the way an engine of a domain would.
   void launch() => start();
 
@@ -229,4 +232,117 @@ final class RulesContext extends JobContextBase {
           stackTrace: StackTrace.current,
         ),
       );
+}
+
+/// A job of a domain that compares itself by its key.
+///
+/// Two children of one queue are equal to each other and are still two
+/// jobs — the core has to take the right one off the waiting list.
+class KeyedJob<T> extends JobBase<T> {
+  final Future<T> Function(JobContext ctx) _body;
+
+  KeyedJob(this._body, {required Object super.key});
+
+  // A job is mutable by nature, and the equality here is the point of the
+  // helper: it stands in for a domain that compares its jobs by key.
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) => other is KeyedJob && other.key == key;
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => key.hashCode;
+
+  @override
+  JobContextBase createContext() => ProbeContext(this);
+
+  @override
+  Future<T> execute(covariant ProbeContext ctx) => _body(ctx);
+}
+
+/// The same job of a domain, with a context that refuses to be built.
+final class UnstartableKeyedJob<T> extends KeyedJob<T> {
+  UnstartableKeyedJob({required super.key})
+      : super((_) async => throw StateError('never runs'));
+
+  @override
+  JobContextBase createContext() => throw StateError('no context');
+}
+
+/// A job whose context lets a test stand in for the rules of a domain.
+///
+/// The group checks its parent before it commits, and in `solo` that check
+/// runs `keepWhile`. Here [CheckingContext.rules] is that predicate: it
+/// may throw, and it may cancel something and still answer yes.
+final class CheckingJob<T> extends JobBase<T> {
+  final Future<T> Function(CheckingContext ctx) _body;
+
+  CheckingJob(this._body, {super.key, super.observer});
+
+  /// Starts the body the way an engine of a domain would.
+  void launch() => start();
+
+  /// Cancels the job with a cancellation of its own, the way an engine of
+  /// a domain does.
+  void cancelBy(Cancelled cancelled) => cancelWith(cancelled);
+
+  @override
+  JobContextBase createContext() => CheckingContext(this);
+
+  @override
+  Future<T> execute(covariant CheckingContext ctx) => _body(ctx);
+}
+
+/// The context of [CheckingJob].
+final class CheckingContext extends JobContextBase {
+  CheckingContext(super.owner);
+
+  /// The rules of the domain, asked once and then forgotten.
+  void Function()? rules;
+
+  @override
+  void check() {
+    super.check();
+    final asking = rules;
+    if (asking == null) {
+      return;
+    }
+    rules = null;
+    asking();
+  }
+}
+
+/// A job of a domain that throws when it is asked to stop.
+///
+/// Stands in for an engine whose own `cancelWith` fails: whoever asked has
+/// to go on, or the rest of a group would stand at its barriers for good.
+final class UncancellableByBugJob<T> extends JobBase<T> {
+  final Future<T> Function(JobContext ctx) _body;
+
+  UncancellableByBugJob(this._body, {super.key});
+
+  @override
+  // The point of the helper is an engine that never gets to `super`.
+  // ignore: must_call_super
+  void cancelWith(Cancelled cancelled, {bool rejectable = true}) =>
+      throw StateError('engine failed to cancel');
+
+  @override
+  JobContextBase createContext() => ProbeContext(this);
+
+  @override
+  Future<T> execute(covariant ProbeContext ctx) => _body(ctx);
+}
+
+/// An observer that runs [onEachFinish] as each job finishes.
+///
+/// Reaches a branch of a group synchronously, in the window a schedule of
+/// microtasks cannot be picked into.
+final class FinishHook extends JobObserver {
+  final void Function(Job<Object?> job) onEachFinish;
+
+  FinishHook(this.onEachFinish);
+
+  @override
+  void onFinish(Job<Object?> job) => onEachFinish(job);
 }

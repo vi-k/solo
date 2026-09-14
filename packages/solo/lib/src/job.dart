@@ -235,6 +235,25 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   void _reportToZone(Object error, StackTrace stackTrace) =>
       reportToZone(error, stackTrace);
 
+  /// The route of a failure of this job that its group did not throw.
+  ///
+  /// Not through the observer: the body's failure was announced there
+  /// already, where it was caught, and one error is announced once. What
+  /// is left is the answer for an error nobody handled, and in a
+  /// controller that is [SoloBase.onError] and the [SoloBase.errorHandler]
+  /// behind it. Marked homeless the same way [notifyError] marks it, so
+  /// the hook knows this error has nowhere else to go.
+  @override
+  void handleUnanswered(Object error, StackTrace stackTrace) {
+    final previous = _solo._homeless;
+    _solo._homeless = this;
+    try {
+      SoloBase._callHook(() => _solo.onError(this, error, stackTrace));
+    } finally {
+      _solo._homeless = previous;
+    }
+  }
+
   void _cancelWith(Cancelled cancelled, {bool rejectable = true}) =>
       cancelWith(cancelled, rejectable: rejectable);
 

@@ -385,6 +385,22 @@ abstract class JobBase<T> implements Job<T> {
   bool _disposing = false;
   int _level = 0;
 
+  /// What holds this job while a group of [JobContext.runAll] decides.
+  ///
+  /// Set by the group before the branch starts and never again. The
+  /// branch stands at its barriers in [_execute] and takes the verdict
+  /// from there; a job nobody grouped has none of this.
+  _GroupHold? _hold;
+
+  /// Whether a group has committed the value of this branch.
+  ///
+  /// A committed value is in the caller's hands, so a conditional
+  /// registration of this job must not run any more, whatever outcome the
+  /// branch itself ends with. The other way round it does not work: a
+  /// group that failed does not make a branch give up a value it hands
+  /// over through [Job.value] all the same.
+  bool _committedByGroup = false;
+
   /// Creates a job that has not started yet.
   JobBase({
     Object? key,
@@ -817,6 +833,32 @@ abstract class JobBase<T> implements Job<T> {
   void reportToZone(Object error, StackTrace stackTrace) =>
       _toZone(error, stackTrace);
 
+  /// Handles [error] without announcing it a second time.
+  ///
+  /// For an error this job has announced once already: the failure of a
+  /// branch of [JobContext.runAll] that the group did not throw. The
+  /// branch told its observer itself, where its body was caught, and one
+  /// error is announced once — but an error nobody answered for still has
+  /// to reach somebody.
+  ///
+  /// The route is [notifyError]'s with that second announcement left out:
+  /// an observer has heard this error and hears nothing more, and without
+  /// one the error goes to the zone the job was created in. A [Cancelled]
+  /// never goes there, as everywhere else.
+  ///
+  /// An engine of a domain overrides this to reach its own answer for an
+  /// error instead — `solo` sends it to `SoloBase.errorHandler`. It has
+  /// to: an engine that puts an observer of its own on every job makes the
+  /// check below true always, and the error would be swallowed.
+  @protected
+  void handleUnanswered(Object error, StackTrace stackTrace) {
+    _debug(() => '$this error nobody answered for: $error');
+    if (_observer != null) {
+      return;
+    }
+    _toZone(error, stackTrace);
+  }
+
   /// The one door to the zone for an error with nowhere else to go.
   ///
   /// A [Cancelled] does not go through it. A cancellation is a decision
@@ -931,6 +973,13 @@ abstract class JobBase<T> implements Job<T> {
     // The body has ended: from here a value coming out of a call it walked
     // away from can no longer reach it, and no child is started any more.
     _bodyEnded = true;
+    // The early word of a branch to its group: the siblings are asked to
+    // stop while this one is still waiting for its own descendants. It
+    // decides nothing and hands nothing over — what comes out of a group
+    // is settled by the final outcomes, later and elsewhere. After the
+    // classification and not before it: a clean envelope thrown by a child
+    // is a cancellation here, not a failure.
+    _hold?.bodyEnded(outcome);
     if (selfCancelled != null) {
       cascadeToChildren(selfCancelled);
     }
@@ -953,7 +1002,30 @@ abstract class JobBase<T> implements Job<T> {
       // A synchronous subscriber may reach an engine that finishes by hand.
       if (isFinished) return;
     }
-    if (_cleanups.isNotEmpty) {
+    final hold = _hold;
+    if (hold != null) {
+      // The first barrier. The body is over, the descendants are done and
+      // the outcome is counted — but it is not final, and nothing has
+      // looked at the cleanup stack yet. The group gathers every branch
+      // here before any of them starts unwinding.
+      await hold.beforeDisposal();
+      if (isFinished) {
+        // An engine of a domain ended the branch by hand while it stood
+        // there. A bare `return` would leave the phase where it is, and
+        // the job would read as disposing for good.
+        _disposing = false;
+        return;
+      }
+    }
+    // Whether a conditional registration has to be passed over: its value
+    // went to somebody. A group overrides this one way only — towards
+    // success. A branch that refused the group's cancellation and ends
+    // [Done] hands its value over through [Job.value] all the same, and a
+    // group that failed must not close what that branch is about to give.
+    bool valueHandedOver() =>
+        _committedByGroup || (_pendingCancel ?? outcome) is Done<T>;
+
+    if (_cleanups.isNotEmpty || hold != null) {
       _disposing = true;
       // The loop lives here and not in a method of its own: between the
       // last look at the stack and `finish` there must be no `await`, or
@@ -965,17 +1037,41 @@ abstract class JobBase<T> implements Job<T> {
       // a second pass instead of being dropped.
       while (_cleanups.isNotEmpty) {
         final cleanup = _cleanups.removeLast();
-        if (!cleanup.always && (_pendingCancel ?? outcome) is Done<T>) {
+        if (!cleanup.always && valueHandedOver()) {
           _skipped.add(cleanup);
           continue;
         }
         await _runCleanup(cleanup);
       }
+      if (hold != null) {
+        // The second barrier, between the two passes — where the kernel
+        // re-reads the outcome anyway. A branch stands here disposing
+        // whether or not it registered a thing: what it may do while it
+        // waits must not depend on that, and the group needs every branch
+        // to check against, not only the ones with a cleanup stack.
+        _committedByGroup = await hold.beforeOutcome();
+        if (isFinished) {
+          _disposing = false;
+          return;
+        }
+        // The stack is read again, and this pass is not the second one: a
+        // branch at the barrier is not over, and an `onDispose` from a
+        // background timer or an event of a domain lands on it legally.
+        // Without this reading such a registration would never run at all.
+        while (_cleanups.isNotEmpty) {
+          final cleanup = _cleanups.removeLast();
+          if (!cleanup.always && valueHandedOver()) {
+            _skipped.add(cleanup);
+            continue;
+          }
+          await _runCleanup(cleanup);
+        }
+      }
       // `removeAt(0)`, not `removeLast`: the skipped registrations were
       // collected in the order they came off the stack, and that is the
       // order they run in — the top one first, as if they had never been
       // put aside.
-      while (_skipped.isNotEmpty && (_pendingCancel ?? outcome) is! Done<T>) {
+      while (_skipped.isNotEmpty && !valueHandedOver()) {
         await _runCleanup(_skipped.removeAt(0));
         while (_cleanups.isNotEmpty) {
           await _runCleanup(_cleanups.removeLast());
