@@ -78,10 +78,10 @@ SoloJob<void> save() =>
     run<Ready, void>(key: _Op.save, (ctx) => ctx.join(store.save));
 
 // droppable: повторная загрузка того же профиля вернёт первую Job.
-SoloJob<Profile> load(String id) => run<Loaded, Profile>(
+SoloJob<Profile> load(String id) => run<Ready, Profile>(
       key: (_Op.load, id),
       policy: Policy.droppable,
-      (ctx) async => ctx.wait(() => api.load(id)),
+      (ctx) => ctx.wait(() => api.load(id)),
     );
 
 // replace: ожидающий зум уходит, работающий остаётся нетронутым.

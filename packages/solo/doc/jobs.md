@@ -77,10 +77,10 @@ SoloJob<void> save() =>
     run<Ready, void>(key: _Op.save, (ctx) => ctx.join(store.save));
 
 // droppable: a second load of the same profile returns the first job.
-SoloJob<Profile> load(String id) => run<Loaded, Profile>(
+SoloJob<Profile> load(String id) => run<Ready, Profile>(
       key: (_Op.load, id),
       policy: Policy.droppable,
-      (ctx) async => ctx.wait(() => api.load(id)),
+      (ctx) => ctx.wait(() => api.load(id)),
     );
 
 // replace: the queued zoom goes, a running one is left alone.
