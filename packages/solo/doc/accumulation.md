@@ -646,6 +646,13 @@ extending the timer. When the interval ends, queued input is ready without
 needing another event. The group accepts events until the queue takes it for
 execution. No job is created for an empty interval.
 
+Starting at once has a price on an idle accumulator. Nothing is running, so the
+queue takes the first group on the next microtask, and a burst that does not
+fit in one synchronous turn is split: the first event goes on its own and the
+rest wait out the whole interval. While another job occupies the queue the
+burst gathers in one group instead, which is the log recipe's own scenario —
+its entries are written while a screen transition is being handled.
+
 The start is the transition to running, before `onStart`. A group rejected by
 start rules consumes no throttle interval; cancellation from `onStart` does. If
 a group starts at 0 ms with a 200 ms interval, but another job holds the slot

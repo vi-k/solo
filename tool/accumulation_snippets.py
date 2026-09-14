@@ -750,6 +750,37 @@ void main() {
   require(api.sent.last.single == 'tapped', 'the fourth went on its own');
   require(logs.currentState == 4, 'the counter saw every entry');
 
+  // What starting at once costs an idle accumulator. The same four entries
+  // written in one synchronous turn, and then with a single microtask
+  // between the first and the rest.
+  fakeAsync((clock) {
+    final api = RecordingLogApi();
+    final logs = LogController(api);
+    for (var i = 0; i < 4; i += 1) {
+      logs.logEvent(LogEntry('e$i'));
+    }
+    clock.elapse(const Duration(seconds: 5));
+    require(api.sent.length == 1, 'one synchronous turn is one request');
+    require(api.sent.single.length == 4, 'carrying every entry');
+  });
+
+  fakeAsync((clock) {
+    final api = RecordingLogApi();
+    final logs = LogController(api)..logEvent(const LogEntry('e0'));
+    clock.flushMicrotasks(); // no time passes, only a turn of the loop
+    for (var i = 1; i < 4; i += 1) {
+      logs.logEvent(LogEntry('e$i'));
+    }
+    clock.elapse(const Duration(milliseconds: 500));
+    require(api.sent.length == 1, 'nothing else has been sent yet');
+    require(api.sent.first.length == 1, 'the first entry went on its own');
+    require(api.sent.first.single == 'e0', 'and it is the first one');
+
+    clock.elapse(const Duration(seconds: 5));
+    require(api.sent.length == 2, 'and the rest waited out the interval');
+    require(api.sent.last.length == 3, 'then went together');
+  });
+
   // The sentence under the heading: the snapshot copies the list, not the
   // entries in it. An entry changed while its group waits is sent changed.
   fakeAsync((clock) {
