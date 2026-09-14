@@ -1529,6 +1529,52 @@ void main() {
     });
   });
 
+  test('a handle refused to a second group keeps the hold of the first', () {
+    fakeAsync((async) {
+      // A handle already running as a branch of one group is refused to
+      // another — and the refusal must cost the first group nothing. Get
+      // this wrong and the branch is quietly taken out of its hold: it
+      // ends `Done`, its `discard` is passed over, and the resource it
+      // took for a caller that gets an error is closed by nobody.
+      var closes = 0;
+      final shared = Job.deferred<String>(key: 'shared', (ctx) async {
+        await ctx.wait(() => delay(40));
+        return ctx.wait(() async => 'db', discard: (_) => closes++);
+      });
+      final bad = Job.deferred<String>(key: 'bad', (ctx) async {
+        await ctx.wait(() => delay(80));
+        throw StateError('boom');
+      });
+      Job<void>(key: 'first', observer: ErrorObserver(<Object>[]), (ctx) async {
+        try {
+          await ctx.runAll([shared, bad]);
+        } on Object catch (_) {
+          // The closing below is what this checks.
+        }
+      }).ignore();
+      async.elapse(const Duration(milliseconds: 10));
+      Object? refused;
+      Job<void>(key: 'second', (ctx) async {
+        try {
+          await ctx.runAll([shared]);
+        } on Object catch (error) {
+          refused = error;
+        }
+      }).ignore();
+      async.flushTimers();
+      expect(refused, isA<StateError>());
+      expect(
+        shared.outcome,
+        isA<Cancelled>().having(
+          (cancelled) => cancelled.reason,
+          'reason',
+          isA<SiblingCancelReason>(),
+        ),
+      );
+      expect(closes, 1, reason: 'the branch still closed what it took');
+    });
+  });
+
   test('a lone child is not held: it ends on its own', () {
     fakeAsync((async) {
       var discarded = 0;

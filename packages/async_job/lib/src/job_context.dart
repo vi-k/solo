@@ -1263,10 +1263,6 @@ final class _RunAllGroup<T> {
 
   Future<List<T>> run() {
     for (final child in _children) {
-      final branch = child is JobBase<T> ? _GroupBranch<T>(child) : null;
-      // Attached before the start: the body runs after an `await` in any
-      // case, but the seams must not depend on that.
-      branch?.job._hold = _holdFor(branch);
       try {
         _ctx.startChild(child);
       } on Object catch (error, stackTrace) {
@@ -1274,13 +1270,22 @@ final class _RunAllGroup<T> {
         // error, and the error is what comes out of the group. The child
         // does not join the branches, or the group would report it a
         // second time as a failure nobody chose.
-        branch?.job._hold = null;
         _refusal = (error, stackTrace);
         break;
       }
-      if (branch == null) {
+      if (child is! JobBase<T>) {
+        // Unreachable: `startChild` refuses a handle that is not a job of
+        // this core before it starts anything.
         continue;
       }
+      // Attached after the admission and not before it, and the difference
+      // is not cosmetic: a handle already running as a branch of another
+      // group is refused here by `StateError`, and touching its hold on
+      // the way would take that group's branch out of its hold — the very
+      // hole this member exists to close. Safe after, because the body
+      // cannot reach a seam before this returns: `_execute` awaits it.
+      final branch = _GroupBranch<T>(child);
+      branch.job._hold = _holdFor(branch);
       _branches.add(branch);
       // `done` and not `whenDone`: the group looks at every outcome and
       // answers for the failures it does not throw, so no branch is left
