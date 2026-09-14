@@ -180,6 +180,31 @@ final class RestartingSettingsController extends Solo<Settings> {
 }
 """
 
+TIMING_OUT_FAKE = '''
+/// A server that keeps writing after the client has given up: `save`
+/// completes its future on a 100 ms timeout, and the write itself lands
+/// when the server is done with it. The document's own controller cannot
+/// tell the difference -- that is the point of the sentence it guards.
+class TimingOutSettingsApi implements SettingsApi {
+  int serverTakes = 100;
+  int openWrites = 0;
+  Settings? stored;
+
+  @override
+  Future<void> save(Settings settings) {
+    openWrites += 1;
+    Future<void>.delayed(Duration(milliseconds: serverTakes), () {
+      stored = settings;
+      openWrites -= 1;
+    });
+    return Future<void>.delayed(const Duration(milliseconds: 100));
+  }
+
+  @override
+  Future<Settings> load() async => stored ?? start;
+}
+'''
+
 SETTINGS_DRIVE = '''
 /// The switch, then the theme, then the language, 20 ms apart. One scenario
 /// for all three versions.
@@ -216,6 +241,7 @@ FILES['settings'] = (
     + snips['recipes/SettingsController']
     + snips['recipes/changeSettings']
     + SETTINGS_FAKE
+    + TIMING_OUT_FAKE
     + REQUIRE
     + SETTINGS_DRIVE
     + '''
@@ -354,6 +380,36 @@ void main() {
     api.loading!.complete(start);
     clock.elapse(const Duration(seconds: 2));
     require(api.saved.length == 2, 'and the same two flips are two writes');
+  });
+
+  // The sentence about a client timeout: `join` holds the slot only as far
+  // as the future is honest about the write. This API completes on a
+  // timeout, so the slot comes back while the server is still writing.
+  fakeAsync((clock) {
+    final api = TimingOutSettingsApi();
+    final controller = SettingsController(api, start);
+
+    api.serverTakes = 800; // the first write is slow on the server
+    controller.update(const SettingsPatch(theme: 'dark'));
+    clock.elapse(const Duration(milliseconds: 400));
+    require(api.openWrites == 1, 'the first write is still going');
+
+    api.serverTakes = 100; // the second one is quick
+    controller.update(const SettingsPatch(theme: 'light'));
+    // Its group starts at 600 ms and the write lands at 700; look between,
+    // while the first write is still open on the server.
+    clock.elapse(const Duration(milliseconds: 250));
+    require(api.openWrites == 2, 'and the next one went out on top of it');
+
+    clock.elapse(const Duration(seconds: 3));
+    require(
+      controller.currentState.theme == 'light',
+      'the screen holds the last patch',
+    );
+    require(
+      api.stored!.theme == 'dark',
+      'and the server holds the older one, for good',
+    );
   });
 
   // The document's own driver, verbatim.

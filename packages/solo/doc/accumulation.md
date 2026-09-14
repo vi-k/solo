@@ -335,9 +335,14 @@ If saving fails, the state is unchanged and the group fails. Retrying the
 failed changes is the caller's decision; a later independent patch does not
 automatically include them. This example assumes one writer and an API future
 that completes when the write has actually ended. `join` keeps the queue slot
-until that future completes, even after cancellation. A client timeout alone
-does not establish that a server has stopped writing. Cancellation can also
-prevent the final `emit` after the server has accepted the write.
+until that future completes, even after cancellation, and that is what stops
+the next write from starting on top of this one. A client timeout alone does
+not establish that a server has stopped writing: a `save` that completes its
+future on a timeout hands the slot back while the server is still writing, the
+next group's write goes out over an unfinished one, and which of the two the
+server keeps is no longer the queue's decision — the screen and the server can
+end up disagreeing for good. Cancellation can also prevent the final `emit`
+after the server has accepted the write.
 
 ### One request per log line
 
