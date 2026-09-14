@@ -2,9 +2,10 @@
 
 ## Jobs and results
 
-A `Job<T>` represents one operation and its eventual outcome. It is not a
-`Future`: calling `profile.load()` without `await` is allowed, and the call
-site decides what to do with the result.
+A `Job<T>` represents one operation and its eventual outcome. The call queues
+the work and hands back the handle: `await` reads how the operation ended, it
+does not set it going. It is not a `Future` — a job can be cancelled, and its
+failure reaches the controller whether or not anybody waits for it.
 
 ```dart
 switch (await profile.load().done) {
