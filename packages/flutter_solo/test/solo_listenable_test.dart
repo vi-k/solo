@@ -70,6 +70,14 @@ void main() {
     await counter.close();
   });
 
+  test('value stays final after the controller finishes closing', () async {
+    final counter = _Counter()..set(1);
+    await counter.close();
+
+    expect(() => counter.set(2), throwsA(isA<StateError>()));
+    expect(counter.value, 1);
+  });
+
   test('value and currentState are the exact same object', () async {
     final initial = Object();
     final next = Object();
@@ -197,12 +205,12 @@ void main() {
   });
 
   test('close removes every listener', () async {
-    final counter = _Counter();
-    var calls = 0;
-    counter.addListener(() => calls++);
+    final counter = _Counter()..addListener(() {});
+    expect(counter.hasListeners, isTrue);
+
     await counter.close();
-    counter.set(1);
-    expect(calls, 0);
+
+    expect(counter.hasListeners, isFalse);
   });
 
   test('a job emit notifies listeners', () async {
@@ -228,9 +236,9 @@ void main() {
       expect(counter.hasListeners, isFalse);
       counter.addListener(() => calls.add(counter.value));
       expect(counter.hasListeners, isFalse);
-      counter.set(7);
 
-      expect(counter.value, 7);
+      expect(() => counter.set(7), throwsA(isA<StateError>()));
+      expect(counter.value, 0);
       expect(calls, isEmpty);
     },
   );
@@ -251,10 +259,19 @@ void main() {
       counter.addListener(() => heard.add(counter.value));
 
       final previousObserver = SoloBase.observer;
+      Object? error;
+      // Both checks live inside the microtask: taken after it, they would
+      // also pass if the drop happened later than the boundary claims.
+      bool? retainedInMicrotask;
       SoloBase.observer = _ClosingObserver((solo) {
         if (identical(solo, counter)) {
           scheduleMicrotask(() {
-            counter.set(9);
+            retainedInMicrotask = counter.hasListeners;
+            try {
+              counter.set(9);
+            } on Object catch (caught) {
+              error = caught;
+            }
           });
         }
       });
@@ -263,8 +280,11 @@ void main() {
       await counter.close();
       await Future<void>.delayed(Duration.zero);
 
-      expect(counter.value, 9);
+      expect(retainedInMicrotask, isFalse);
+      expect(counter.hasListeners, isFalse);
+      expect(counter.value, 0);
       expect(heard, isEmpty);
+      expect(error, isA<StateError>());
     },
   );
 

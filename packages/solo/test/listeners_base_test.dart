@@ -256,7 +256,11 @@ void main() {
 
       expect(solo.hasListeners, isFalse);
 
-      solo.externalSetState(const Working(a: 42));
+      expect(
+        () => solo.externalSetState(const Working(a: 42)),
+        throwsA(isA<StateError>()),
+      );
+      expect(solo.currentState, const Initial());
       expect(called, isFalse);
       expect(solo.hasListeners, isFalse);
     },

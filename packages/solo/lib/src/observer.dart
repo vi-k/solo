@@ -56,7 +56,10 @@ abstract class SoloObserver {
   /// A job called [JobContext.log].
   void onLog(SoloBase<Object> solo, Job<Object?> job, Object? message) {}
 
-  /// The controller finished closing.
+  /// The engine is about to finish closing: [SoloBase.isFinished] is still
+  /// false, listeners are still registered, and a synchronous
+  /// `externalSetState` still reaches them. Work scheduled after this hook
+  /// runs after the engine has crossed that boundary.
   void onClose(SoloBase<Object> solo) {}
 }
 

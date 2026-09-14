@@ -16,13 +16,11 @@ import 'solo_select_builder.dart';
 /// )
 /// ```
 ///
-/// The widget subscribes to [solo] in [State.initState] and caches
-/// [SoloBase.currentState] after subscribing. The [builder] receives this
-/// cached state rather than reading [SoloBase.currentState] freshly on each
-/// frame. When [solo] notifies of a change, the widget reads the new
-/// [SoloBase.currentState] and calls [State.setState].
+/// The widget subscribes to [solo] in [State.initState], removes the
+/// subscription in [State.dispose], and rebuilds from the controller's
+/// current state on every notification.
 ///
-/// If [SoloBase.close] was called, the controller drops all listeners and
+/// If [SoloBase.close] has finished, the controller drops all listeners and
 /// stops notifying; connecting an already closed controller displays its
 /// current state and receives no further updates.
 ///
@@ -32,7 +30,7 @@ final class SoloBuilder<S extends Object> extends StatefulWidget {
   /// The controller whose state transitions trigger rebuilds.
   final SoloBase<S> solo;
 
-  /// Builds the subtree for the current cached state.
+  /// Builds the subtree for the controller's current state.
   final ValueWidgetBuilder<S> builder;
 
   /// Handed back to [builder] untouched, to keep an independent subtree
@@ -59,15 +57,11 @@ final class SoloBuilder<S extends Object> extends StatefulWidget {
   }
 }
 
-final class _SoloBuilderState<S extends Object>
-    extends State<SoloBuilder<S>> {
-  late S _state;
-
+final class _SoloBuilderState<S extends Object> extends State<SoloBuilder<S>> {
   @override
   void initState() {
     super.initState();
     widget.solo.addListener(_valueChanged);
-    _state = widget.solo.currentState;
   }
 
   @override
@@ -76,7 +70,6 @@ final class _SoloBuilderState<S extends Object>
     if (!identical(widget.solo, oldWidget.solo)) {
       oldWidget.solo.removeListener(_valueChanged);
       widget.solo.addListener(_valueChanged);
-      _state = widget.solo.currentState;
     }
   }
 
@@ -87,12 +80,10 @@ final class _SoloBuilderState<S extends Object>
   }
 
   void _valueChanged() {
-    setState(() {
-      _state = widget.solo.currentState;
-    });
+    setState(() {});
   }
 
   @override
   Widget build(BuildContext context) =>
-      widget.builder(context, _state, widget.child);
+      widget.builder(context, widget.solo.currentState, widget.child);
 }

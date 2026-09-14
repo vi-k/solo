@@ -85,6 +85,8 @@ abstract class SoloBase<S extends Object> {
   static const Object _closedListeners = Object();
   Object? _listeners;
 
+  bool get _finished => identical(_listeners, _closedListeners);
+
   /// Creates a controller in [initialState].
   SoloBase(S initialState) : _state = initialState {
     _callHook(() => observer?.onCreate(this));
@@ -128,6 +130,18 @@ abstract class SoloBase<S extends Object> {
   /// the call — while the engine goes on with the ones it already had.
   bool get isDraining => _draining;
 
+  /// Whether the engine has finished closing: the queue is empty, the
+  /// observer's `onClose` has run, the listeners are gone, and the state
+  /// can no longer change.
+  ///
+  /// [isClosed] says that `close` was asked for, [isDraining] that the
+  /// queue it left is still running; this says the engine is done. A
+  /// subclass that feeds external facts guards [externalSetState] with it,
+  /// and a `drain` goes on being fed for as long as it runs. Check it after
+  /// the last `await`: a suspension between the check and the write lets
+  /// the line arrive in between.
+  bool get isFinished => _finished;
+
   /// Whether at least one listener is registered on this controller.
   @protected
   bool get hasListeners {
@@ -140,7 +154,7 @@ abstract class SoloBase<S extends Object> {
   /// If the controller has finished closing, this is a no-op: the listener
   /// is neither registered nor retained, and no error is thrown.
   void addListener(void Function() listener) {
-    if (identical(_listeners, _closedListeners)) {
+    if (_finished) {
       return;
     }
     final existing = _listeners;
@@ -536,19 +550,26 @@ abstract class SoloBase<S extends Object> {
   /// Use the state handlers of [run] or [job] for an operation's own
   /// failure or cancellation.
   ///
-  /// Not blocked by [close]: after closing it still changes
-  /// [currentState], calls
-  /// `onChange` and re-evaluates the rules, while a subclass channel that is
-  /// already closed — `Solo`'s stream, for one — drops the event. Stop the
-  /// source of external states before closing the controller.
+  /// Accepted for as long as the engine is running, a [close] with
+  /// [SoloCloseMode.drain] included. Once closing has finished the state is
+  /// final, and this throws a [StateError]. A subclass that feeds external
+  /// facts guards its source with [isFinished], checked after the last
+  /// `await`: a suspension between the check and the write lets the engine
+  /// finish in between.
   @protected
   void externalSetState(S state) {
+    if (_finished) {
+      throw StateError(
+        '$runtimeType has finished closing, cannot set state',
+      );
+    }
     _debug(() => 'externalSetState: $state');
     _setState(state, emitter: null, stackTrace: StackTrace.current);
   }
 
   /// Closes the controller, then calls the observer's `onClose`. Repeated
-  /// calls return the same future. The state is left as is.
+  /// calls return the same future. Once closing finishes, the state is final
+  /// and cannot change.
   ///
   /// [SoloCloseMode.cancel], the default, drops every queued job with
   /// `Cancelled(closed)` and cancels the current one — a

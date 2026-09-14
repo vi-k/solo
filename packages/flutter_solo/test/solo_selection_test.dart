@@ -407,11 +407,19 @@ void main() {
     final name = controller.select((state) => state.name);
     var calls = 0;
     name.addListener(() => calls++);
-    await controller.close();
-    controller.set(const _Screen(name: 'Ada'));
 
-    expect(calls, 0, reason: 'a closed controller notifies nobody');
-    expect(name.value, 'Ada', reason: 'the state still answers');
+    controller.set(const _Screen(name: 'Ada'));
+    expect(calls, 1, reason: 'an open controller does announce a pick');
+
+    await controller.close();
+
+    expect(
+      () => controller.set(const _Screen(name: 'Grace')),
+      throwsA(isA<StateError>()),
+      reason: 'a closed controller has no state to move',
+    );
+    expect(calls, 1, reason: 'and therefore announces nothing more');
+    expect(name.value, 'Ada', reason: 'the final state still answers');
   });
 
   test('the source is any value listenable, not only a controller', () {

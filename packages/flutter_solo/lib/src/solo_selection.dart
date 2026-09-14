@@ -41,9 +41,8 @@ import 'solo_selector.dart';
 /// with nowhere to hold it — the widget keeps the selection itself.
 /// Nothing has to be disposed of — the last listener to go takes the
 /// subscription with it — and a selection outlives its source harmlessly:
-/// a closed [SoloListenable] notifies nobody, while [value] goes on
-/// answering, because it reads the source and `externalSetState` is not
-/// blocked by closing either.
+/// a closed [SoloListenable] no longer changes state, while [value] keeps
+/// reading the source's final state.
 ///
 /// The selector runs inside the change that triggered it, so it should
 /// only pick: over a [SoloListenable] that means it must not change the

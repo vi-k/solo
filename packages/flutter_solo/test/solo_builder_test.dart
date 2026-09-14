@@ -181,35 +181,6 @@ void main() {
   );
 
   testWidgets(
-    'externalSetState after close rebuilds nothing',
-    (tester) async {
-      final controller = _Controller(const _Screen(name: 'Ada'));
-      var buildCount = 0;
-
-      await tester.pumpWidget(
-        _wrap(
-          SoloBuilder<_Screen>(
-            solo: controller,
-            builder: (context, state, _) {
-              buildCount++;
-
-              return Text(state.name);
-            },
-          ),
-        ),
-      );
-      expect(buildCount, 1);
-
-      await controller.close();
-      controller.set(const _Screen(name: 'Grace'));
-      await tester.pump();
-
-      expect(buildCount, 1);
-      expect(find.text('Ada'), findsOneWidget);
-    },
-  );
-
-  testWidgets(
     'connecting an already closed controller shows its state and does not '
     'update further',
     (tester) async {
@@ -234,11 +205,61 @@ void main() {
       expect(buildCount, 1);
       expect(find.text('Grace'), findsOneWidget);
 
-      controller.set(const _Screen(name: 'Margaret'));
+      await tester.pumpWidget(
+        _wrap(
+          SoloBuilder<_Screen>(
+            solo: controller,
+            builder: (context, state, _) {
+              buildCount++;
+
+              return Text(state.name);
+            },
+          ),
+        ),
+      );
+
+      expect(buildCount, 2);
+      expect(find.text('Grace'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'a controller closed under a mounted builder keeps showing its state',
+    (tester) async {
+      final controller = _Controller(const _Screen(name: 'Ada'));
+      var buildCount = 0;
+
+      await tester.pumpWidget(
+        _wrap(
+          SoloBuilder<_Screen>(
+            solo: controller,
+            builder: (context, state, _) {
+              buildCount++;
+
+              return Text(state.name);
+            },
+          ),
+        ),
+      );
+      expect(buildCount, 1);
+
+      controller.set(const _Screen(name: 'Grace'));
       await tester.pump();
 
-      expect(buildCount, 1);
+      expect(buildCount, 2);
       expect(find.text('Grace'), findsOneWidget);
+
+      await controller.close();
+      await tester.pump();
+
+      // The widget outlives the controller: the last state stays on screen,
+      // and the source that used to move it is refused.
+      expect(buildCount, 2);
+      expect(find.text('Grace'), findsOneWidget);
+      expect(
+        () => controller.set(const _Screen(name: 'Margaret')),
+        throwsA(isA<StateError>()),
+      );
     },
   );
 
@@ -331,34 +352,6 @@ void main() {
       controller.set(const _Screen(name: 'Grace'));
       await tester.pump();
       expect(find.text('Grace'), findsOneWidget);
-    },
-  );
-
-  testWidgets(
-    'the builder is handed the cached state, not a fresh read',
-    (tester) async {
-      final controller = _Controller(const _Screen(name: 'Ada'));
-
-      Widget tree() => _wrap(
-            SoloBuilder<_Screen>(
-              solo: controller,
-              builder: (context, state, _) => Text(state.name),
-            ),
-          );
-
-      await tester.pumpWidget(tree());
-      expect(find.text('Ada'), findsOneWidget);
-
-      // Closing stops the notifications, and `externalSetState` is not
-      // blocked by it: the state moves with nobody told.
-      await controller.close();
-      controller.set(const _Screen(name: 'Grace'));
-
-      // The parent rebuilds and hands the same controller back, so nothing
-      // is re-read. A builder that read `currentState` here would show
-      // 'Grace'; this one shows what it was last told.
-      await tester.pumpWidget(tree());
-      expect(find.text('Ada'), findsOneWidget);
     },
   );
 }
