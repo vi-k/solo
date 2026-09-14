@@ -5,7 +5,7 @@
 > «не годится для плана».
 > **Связанные записи:** спека —
 > `2026-09-14[10]-eager-parallel-run-design.md`; второй ревьюер этого круга —
-> `2026-09-14[26]-eager-parallel-run-review-7.md`. Прошлые круги —
+> `2026-09-14[28]-eager-parallel-run-review-7.md`. Прошлые круги —
 > `2026-09-14[11]-eager-parallel-run-review.md`,
 > `2026-09-14[12]-eager-parallel-run-review-2.md`,
 > `2026-09-14[13]-eager-parallel-run-review-3.md`,

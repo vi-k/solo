@@ -32,8 +32,8 @@
 > `2026-09-14[14]-eager-parallel-run-review-4.md`; третий круг —
 > `2026-09-14[15]-eager-parallel-run-review-5.md` и
 > `2026-09-14[16]-eager-parallel-run-review-6.md`; четвёртый круг —
-> `2026-09-14[26]-eager-parallel-run-review-7.md` и
-> `2026-09-14[27]-eager-parallel-run-review-8.md`. Отложенная соседняя
+> `2026-09-14[28]-eager-parallel-run-review-7.md` и
+> `2026-09-14[29]-eager-parallel-run-review-8.md`. Отложенная соседняя
 > работа — `2026-09-14[17]-discard-follows-the-value-design.md`.
 > `2026-09-14[4]-parallel-wait-cancellation-design.md` — разбор конверта
 > `[...].wait`; эта работа его не отменяет и обязана с ним не спорить.
