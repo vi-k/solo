@@ -131,7 +131,7 @@ SoloJob<void> seek(Duration position) => run<Ready, void>(
 ```dart
 SoloJob<void> stop() {
   // Что ждёт прямо сейчас.
-  print(queue.jobs.length);
+  print(queue.length);
   // Убрать то, что эта команда обесценила...
   queue.removeWhere((job) => job.key == _Op.zoom);
   // ...и пропустить саму остановку без очереди.
@@ -142,10 +142,11 @@ SoloJob<void> stop() {
 }
 ```
 
-`queue` предоставляет `jobs`, `remove`, `removeWhere`, `clear` и `lastWhere`.
-Методы удаления касаются только `Job` в очереди — работающая им не принадлежит
-— и сохраняют `Job` с `cancellable: false`, если не вызваны с `force: true`.
-Группы накопителя, ждущие своего окна, могут пропускать готовые `Job`; см.
+`queue` предоставляет `jobs`, `length`, `isEmpty`, `isNotEmpty`, `remove`,
+`removeWhere`, `clear` и `lastWhere`. Методы удаления касаются только `Job`
+в очереди — работающая им не принадлежит — и сохраняют `Job`
+с `cancellable: false`, если не вызваны с `force: true`. Группы накопителя,
+ждущие своего окна, могут пропускать готовые `Job`; см.
 [Накопление событий](accumulation.md).
 
 ### Пауза очереди

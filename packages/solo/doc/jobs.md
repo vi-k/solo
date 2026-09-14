@@ -130,7 +130,7 @@ The queue itself is the controller's own, and a method can work it directly:
 ```dart
 SoloJob<void> stop() {
   // What is waiting right now.
-  print(queue.jobs.length);
+  print(queue.length);
   // Drop what this command makes pointless...
   queue.removeWhere((job) => job.key == _Op.zoom);
   // ...and jump the line with the stop itself.
@@ -141,11 +141,11 @@ SoloJob<void> stop() {
 }
 ```
 
-`queue` exposes `jobs`, `remove`, `removeWhere`, `clear` and `lastWhere`.
-Removal methods affect queued jobs only — the running job is not theirs to
-touch — and they preserve jobs with `cancellable: false` unless called with
-`force: true`. Time-delayed accumulator groups can let ready jobs pass; see
-[Event accumulation](accumulation.md).
+`queue` exposes `jobs`, `length`, `isEmpty`, `isNotEmpty`, `remove`,
+`removeWhere`, `clear` and `lastWhere`. Removal methods affect queued jobs only
+— the running job is not theirs to touch — and they preserve jobs with
+`cancellable: false` unless called with `force: true`. Time-delayed accumulator
+groups can let ready jobs pass; see [Event accumulation](accumulation.md).
 
 ### Pausing the queue
 
