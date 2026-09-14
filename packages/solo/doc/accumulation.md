@@ -289,7 +289,11 @@ the screen ends up with notifications: true, theme: dark, language: ru
 user did is dropped, and the group carries all three changes into one write.
 
 The screen also reads the settings back from the server, and `reload` is an
-ordinary job rather than an accumulated one.
+ordinary job rather than an accumulated one. This accumulator takes the default
+policy, `adjacent`, so a `reload` queued between two flips ends the group and
+the flips after it are written separately — but only while the queue is busy
+enough that the `reload` is still there when the next flip arrives. The policy
+section says what `join` would do instead.
 
 The first event becomes the accumulated value without calling `merge`. Each
 following event calls `merge(accumulated, incoming)` synchronously from `add`,
@@ -678,6 +682,14 @@ there; under `adjacent` it would start a second group behind that job, and the
 throttle would hold that group for another interval — two requests for entries
 written moments apart. What `join` gives up is the boundary: the batch keeps
 its place ahead of the job that arrived between.
+
+An accumulator with `timing` usually wants `join` for that reason. The window
+says a group ends when the events stop; `adjacent` says it ends when another
+job is queued behind it. With both in force it ends at whichever comes first,
+so the same two events are one group or two depending on what else the
+controller happened to be doing. The boundary `adjacent` keeps in exchange is
+already the weaker one under a window, because a ready job passes a group that
+is still waiting for it.
 
 Policies use the current queue. If B has already run, a waiting A may again be
 at the tail, so a later event can join it with `adjacent`. Already separate

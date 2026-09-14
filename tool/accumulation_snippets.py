@@ -306,6 +306,56 @@ void main() {
     clock.flushMicrotasks();
   });
 
+  // The recipe's note about `adjacent`, both halves of it. A reload that
+  // got to start is gone from the queue, the group is at the tail again,
+  // and the next flip joins it.
+  fakeAsync((clock) {
+    final api = RecordingSettingsApi();
+    final controller = SettingsController(api, start);
+    final first = controller.update(
+      const SettingsPatch(notifications: true),
+    );
+    controller.reload();
+    clock.flushMicrotasks();
+    api.loading!.complete(start);
+    clock.elapse(const Duration(milliseconds: 50));
+    final second = controller.update(const SettingsPatch(theme: 'dark'));
+    require(
+      identical(first, second),
+      'a reload that started leaves the waiting group at the tail',
+    );
+    clock.elapse(const Duration(seconds: 1));
+    require(api.saved.length == 1, 'so the two flips are one write');
+  });
+
+  // The same two flips, with something holding the queue so the reload is
+  // still queued behind the group: now it is a boundary, and the flips are
+  // written separately.
+  fakeAsync((clock) {
+    final api = RecordingSettingsApi();
+    // The reload starts at once and its load is left hanging, so it holds
+    // the queue for everything added next.
+    final controller = SettingsController(api, start)..reload();
+    clock.flushMicrotasks();
+
+    final first = controller.update(
+      const SettingsPatch(notifications: true),
+    );
+    controller.reload(); // this one cannot start, and sits behind the group
+    clock.elapse(const Duration(milliseconds: 50));
+    final second = controller.update(const SettingsPatch(theme: 'dark'));
+    require(
+      !identical(first, second),
+      'a reload still queued ends the group under adjacent',
+    );
+
+    api.loading!.complete(start);
+    clock.elapse(const Duration(seconds: 1));
+    api.loading!.complete(start);
+    clock.elapse(const Duration(seconds: 2));
+    require(api.saved.length == 2, 'and the same two flips are two writes');
+  });
+
   // The document's own driver, verbatim.
   fakeAsync((clock) {
     final api = RecordingSettingsApi();
