@@ -232,17 +232,35 @@ jobs:
             (cd "$RUNNER_TEMP/doc-check/$package" && dart analyze bin/v)
           done
 
-      # Unsilenced on purpose. These are the traces the document quotes,
-      # and the log is where a reader of a red run compares them by eye.
+      # Unsilenced on purpose. These are the traces the documents quote,
+      # and the log is where a reader of a red run compares them by eye. The
+      # output is kept as well, for the step below to compare by machine.
       - name: Every scenario runs
         run: |
+          set -eo pipefail
+          : > "$RUNNER_TEMP/vs-bloc.out"
+          : > "$RUNNER_TEMP/accumulation.out"
           for package in bloc_check solo_check accumulation_check; do
             cd "$RUNNER_TEMP/doc-check/$package"
+            if [ "$package" = accumulation_check ]; then
+              out="$RUNNER_TEMP/accumulation.out"
+            else
+              out="$RUNNER_TEMP/vs-bloc.out"
+            fi
             for driver in bin/v/*.dart; do
               echo "== $package/$driver"
-              dart run "$driver"
+              dart run "$driver" | tee -a "$out"
             done
           done
+
+      # The benches prove every fragment builds against the tree and runs.
+      # This proves the other half: that a trace quoted next to a fragment
+      # is the trace that fragment prints, and not one that used to be true.
+      - name: The quoted traces are the printed ones
+        run: |
+          python3 tool/check_traces.py \
+            packages/solo/doc/vs-bloc.md "$RUNNER_TEMP/vs-bloc.out" \
+            packages/solo/doc/accumulation.md "$RUNNER_TEMP/accumulation.out"
 
       - name: Nothing drifted
         run: |
