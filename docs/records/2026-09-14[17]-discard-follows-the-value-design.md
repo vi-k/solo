@@ -20,9 +20,9 @@
 > назван получатель ошибки уборщика и переписана приёмка.
 > **Связанные записи:** первый круг —
 > `2026-09-14[24]-discard-follows-the-value-review.md`
-> и `2026-09-14[25]-discard-follows-the-value-review-2.md`; второй —
-> `2026-09-14[26]-discard-follows-the-value-review-3.md`
-> и `2026-09-14[27]-discard-follows-the-value-review-4.md`; третий круг
+> и `2026-09-14[19]-discard-follows-the-value-review-2.md`; второй —
+> `2026-09-14[25]-discard-follows-the-value-review-3.md`
+> и `2026-09-14[21]-discard-follows-the-value-review-4.md`; третий круг
 > записью не стал, его итог — в разделе «Третий круг: что осталось
 > неразобранным». Работа, ради которой это затевалось, —
 > `2026-09-14[10]-eager-parallel-run-design.md`; устройство ядра —
