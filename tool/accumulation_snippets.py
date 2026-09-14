@@ -636,12 +636,15 @@ class SearchState {
 }
 
 class SearchApi {
+  SearchApi([this.latency = 100]);
+
+  final int latency;
   final asked = <String>[];
 
   Future<List<String>> search(String text) {
     asked.add(text);
     return Future<List<String>>.delayed(
-      const Duration(milliseconds: 100),
+      Duration(milliseconds: latency),
       () => ['hits for $text'],
     );
   }
@@ -659,6 +662,67 @@ final class RestartingSearch extends Solo<SearchState> {
   RestartingSearch(this.api) : super(const SearchState.idle());
 
 """ + snips['recipes/query'].rstrip('\n') + """
+}
+"""
+
+# The second attempt's own method with the waiting swapped: the sentence about
+# `ctx.join` is measured, not reasoned about. Deriving it from the document's
+# block means it cannot drift away from the attempt it talks about.
+JOINED = snips['recipes/query'].replace('ctx.wait', 'ctx.join')
+assert JOINED != snips['recipes/query'], 'the second attempt must use ctx.wait'
+assert JOINED.count('ctx.join') == 1, 'one call to swap, no more'
+
+JOINING = """
+final class JoiningSearch extends Solo<SearchState> {
+  final SearchApi api;
+
+  JoiningSearch(this.api) : super(const SearchState.idle());
+
+""" + JOINED.rstrip('\n') + """
+}
+"""
+
+# Same scenario as drive, reported as numbers instead of prose: how many
+# requests reached the server, and when the last screen appeared.
+PROBE = """
+(int, int) probeWait(SearchApi api) {
+  final search = RestartingSearch(api);
+  return probe(api, search.query, () => search.currentState.results);
+}
+
+(int, int) probeJoin(SearchApi api) {
+  final search = JoiningSearch(api);
+  return probe(api, search.query, () => search.currentState.results);
+}
+
+(int, int) probe(
+  SearchApi api,
+  SoloJob<void> Function(String) query,
+  List<String> Function() state,
+) {
+  var settled = 0;
+  fakeAsync((clock) {
+    var now = 0;
+    var last = state().toString();
+    void step(int ms) {
+      clock.elapse(Duration(milliseconds: ms));
+      now += ms;
+      final current = state().toString();
+      if (current != last) {
+        settled = now;
+        last = current;
+      }
+    }
+
+    for (final text in ['s', 'so', 'sol', 'solo']) {
+      query(text);
+      step(50);
+    }
+    while (now < 1500) {
+      step(25);
+    }
+  });
+  return (api.asked.length, settled);
 }
 """
 
@@ -710,9 +774,11 @@ FILES['search'] = (
     SEARCH_TYPES
     + snips['recipes/QueuedSearch']
     + RESTARTING
+    + JOINING
     + snips['recipes/Search']
     + REQUIRE
     + DRIVE
+    + PROBE
     + """
 void main() {
   final first = SearchApi();
@@ -747,6 +813,22 @@ void main() {
   );
   require(third.asked.length == 1, 'one group, one request');
   require(debouncedScreens == 1, 'and one screen, the answer to `solo`');
+
+  // The sentence about `ctx.join`: it sends fewer requests than `ctx.wait`
+  // against this server and answers later, and the saving is the held slot
+  // rather than a property -- against a server faster than the typing it
+  // saves nothing at all.
+  final waited = probeWait(SearchApi());
+  final joined = probeJoin(SearchApi());
+  require(
+    waited.$1 == 4 && joined.$1 < waited.$1,
+    'ctx.join lets fewer requests out than ctx.wait against this server',
+  );
+  require(joined.$2 > waited.$2, 'and the answer arrives later for it');
+  require(
+    probeJoin(SearchApi(40)).$1 == probeWait(SearchApi(40)).$1,
+    'against a server faster than the typing it saves nothing',
+  );
 }
 """)
 

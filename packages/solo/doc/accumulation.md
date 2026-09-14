@@ -87,7 +87,10 @@ at 250 ms the screen shows [hits for solo]
 
 Nothing stale reaches the screen now, and the answer comes sooner because the
 requests overlap instead of queueing. The server was still asked four times:
-cancelling a job does not unsend what it has already sent.
+cancelling a job does not unsend what it has already sent. `ctx.join` in place
+of `ctx.wait` would not unsend them either; it holds the controller's slot
+until the answer returns, so how many requests go out depends on how much
+faster the server is than the typing.
 
 #### The accumulator
 
