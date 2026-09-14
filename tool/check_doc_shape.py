@@ -7,12 +7,20 @@ cannot show code is not a section -- it belongs inside a neighbour, or its
 rules belong in a reference table.
 
 So a heading must be followed, within LEAD lines of prose, by a fenced
-code block or a table. Three kinds of heading are exempt. A page title
-(`#`): an intro paragraph before the first section is the page saying
-what it is. A container, whose next heading is a deeper one -- the code
-lives in the subsections, and the lines under the container introduce
-them. And a section shorter than LEAD lines altogether, which is a
-pointer rather than an explanation.
+code block, a table, or a deeper heading. Two kinds of heading are exempt
+outright. A page title (`#`): an intro paragraph before the first section
+is the page saying what it is. And a section shorter than LEAD lines
+altogether, which is a pointer rather than an explanation.
+
+A container -- a section whose next heading is a deeper one -- is cleared
+by that heading, because the code lives in its subsections. It is not
+exempt from the count: the lines introducing the subsections get the same
+LEAD budget. That budget is generous rather than tight, which is why the
+distinction is worth stating. Of the fifteen containers in the checked
+documents on 2026-09-14, thirteen introduced their subsections in seven
+lines or fewer; the one that went over had grown a paragraph about
+`Bloc.add` into an intro that was supposed to state a requirement, and the
+paragraph belonged in the attempt below it.
 
 `docs/records/` is not checked: a record is history, not documentation.
 Translations mirror their originals, and `check_translations.py` already
