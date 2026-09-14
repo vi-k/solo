@@ -789,6 +789,131 @@ void main() {
       async.flushMicrotasks();
     });
   });
+
+  // A group whose interval has already elapsed and which waits only for the
+  // slot must not be pushed back by a further event. Both are green on the
+  // untouched tree; what proves them is the mutation named in
+  // 2026-09-14[32]-accumulation-rules-plan.md -- arming the interval in
+  // `_AccumulationGroup._accepted` instead of where the group appears.
+  // Step 1 of the wave repeats both under `startAtOnce: false`, which is
+  // where criterion 6 of the spec asks for them.
+  test('a throttle group waiting for the slot meets a later event', () {
+    fakeAsync((async) {
+      final solo = TestSolo();
+      final calls = <String>[];
+      final events = solo.collect<TestState, int, void>(
+        (ctx, values) async => calls.add('${async.elapsed}:$values'),
+        key: 'group',
+        timing: AccumulationTiming.throttle(const Duration(seconds: 1)),
+      );
+      solo.run<TestState, void>(
+        key: 'busy',
+        (ctx) => ctx.wait(
+          () => Future<void>.delayed(const Duration(milliseconds: 1500)),
+        ),
+      );
+      events.add(1);
+      async.elapse(const Duration(milliseconds: 1200));
+      events.add(2);
+      expect(calls, isEmpty);
+      async.elapse(const Duration(milliseconds: 300));
+      expect(calls, ['0:00:01.500000:[1, 2]']);
+
+      solo.close();
+      async.flushTimers();
+    });
+  });
+
+  test('replace meets a throttle group already waiting for the slot', () {
+    fakeAsync((async) {
+      final solo = TestSolo();
+      final calls = <String>[];
+      final events = solo.accumulate<TestState, int, void>(
+        (ctx, value) async => calls.add('${async.elapsed}:$value'),
+        merge: (a, b) => a + b,
+        key: 'group',
+        policy: AccumulationPolicy.replace,
+        timing: AccumulationTiming.throttle(const Duration(seconds: 1)),
+      );
+      solo.run<TestState, void>(
+        key: 'busy',
+        (ctx) => ctx.wait(
+          () => Future<void>.delayed(const Duration(milliseconds: 1500)),
+        ),
+      );
+      events.add(1);
+      async.elapse(const Duration(milliseconds: 1200));
+      final last = events.add(2);
+      expect(calls, isEmpty);
+      async.elapse(const Duration(milliseconds: 300));
+      expect(calls, ['0:00:01.500000:3']);
+      expect(last.outcome, isA<Done<void>>());
+
+      solo.close();
+      async.flushTimers();
+    });
+  });
+
+  // Criterion 20: the timers a replacement leaves behind. The first half
+  // lives today in the second assertion of `throttle replace re-entry keeps
+  // the running cooldown`, and step 2 of the wave deletes that test with the
+  // node it exercises.
+  test('replace under a running throttle interval', () {
+    fakeAsync((async) {
+      final solo = TestSolo();
+      final calls = <String>[];
+      final events = solo.accumulate<TestState, int, void>(
+        (ctx, value) async => calls.add('${async.elapsed}:$value'),
+        merge: (a, b) => a + b,
+        policy: AccumulationPolicy.replace,
+        timing: AccumulationTiming.throttle(_interval),
+      );
+      // The first start is what establishes the interval later additions
+      // share, so the clock moves between the additions below.
+      // ignore: cascade_invocations
+      events.add(0);
+      async
+        ..flushMicrotasks()
+        ..elapse(const Duration(milliseconds: 100));
+      events.add(1);
+      final last = events.add(2);
+      async.elapse(const Duration(milliseconds: 99));
+      expect(calls, ['0:00:00.000000:0']);
+      async.elapse(const Duration(milliseconds: 1));
+      expect(calls, ['0:00:00.000000:0', '0:00:00.200000:3']);
+      expect(last.outcome, isA<Done<void>>());
+
+      solo.close();
+      async.flushMicrotasks();
+    });
+  });
+
+  test('replace inside an open debounce window', () {
+    fakeAsync((async) {
+      final solo = TestSolo();
+      final calls = <String>[];
+      final events = solo.accumulate<TestState, int, void>(
+        (ctx, value) async => calls.add('${async.elapsed}:$value'),
+        merge: (a, b) => a + b,
+        policy: AccumulationPolicy.replace,
+        timing: AccumulationTiming.debounce(_interval),
+      );
+      // The clock moves between the additions, so a cascade is misleading.
+      // ignore: cascade_invocations
+      events.add(1);
+      async.elapse(const Duration(milliseconds: 150));
+      final last = events.add(2);
+      expect(async.nonPeriodicTimerCount, 1);
+      async.elapse(const Duration(milliseconds: 199));
+      expect(calls, isEmpty);
+      async.elapse(const Duration(milliseconds: 1));
+      expect(calls, ['0:00:00.350000:3']);
+      expect(last.outcome, isA<Done<void>>());
+
+      solo.close();
+      async.flushMicrotasks();
+    });
+  });
 }
 
 AccumulationTiming _timing(_TimingKind kind) => switch (kind) {

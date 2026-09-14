@@ -318,6 +318,100 @@ void main() {
     });
   });
 
+  // Criterion 17 of 2026-09-14[20]-accumulation-rules-design.md: what a
+  // throttle does in all three shapes a burst arrives in. The wave's change
+  // B adds a mode to `AccumulationTiming.throttle`, and this is the promise
+  // that makes it a non-breaking one; without these three it hangs on the
+  // count of the suite alone.
+  test('a throttle burst written in one synchronous pass', () {
+    fakeAsync((async) {
+      final solo = Solo<int>(0);
+      final calls = <String>[];
+      final events = solo.collect<int, int, void>(
+        (ctx, values) async => calls.add('${async.elapsed}:$values'),
+        timing: AccumulationTiming.throttle(
+          const Duration(milliseconds: 200),
+        ),
+      );
+
+      // Keep the accumulator visible for the timing-specific setup above.
+      // ignore: cascade_invocations
+      events
+        ..add(1)
+        ..add(2)
+        ..add(3);
+      async.flushMicrotasks();
+      expect(calls, ['0:00:00.000000:[1, 2, 3]']);
+      async.elapse(const Duration(milliseconds: 400));
+      expect(calls.length, 1);
+
+      solo.close();
+      async.flushMicrotasks();
+    });
+  });
+
+  test('a throttle burst with a microtask after the first event', () {
+    fakeAsync((async) {
+      final solo = Solo<int>(0);
+      final calls = <String>[];
+      final events = solo.collect<int, int, void>(
+        (ctx, values) async => calls.add('${async.elapsed}:$values'),
+        timing: AccumulationTiming.throttle(
+          const Duration(milliseconds: 200),
+        ),
+      );
+
+      // The microtask between the additions is the shape under test.
+      // ignore: cascade_invocations
+      events.add(1);
+      async.flushMicrotasks();
+      expect(calls, ['0:00:00.000000:[1]']);
+      events
+        ..add(2)
+        ..add(3);
+      async.elapse(const Duration(milliseconds: 199));
+      expect(calls.length, 1);
+      async.elapse(const Duration(milliseconds: 1));
+      expect(calls, ['0:00:00.000000:[1]', '0:00:00.200000:[2, 3]']);
+
+      solo.close();
+      async.flushMicrotasks();
+    });
+  });
+
+  test('a throttle burst that arrives while another job runs', () {
+    fakeAsync((async) {
+      final solo = Solo<int>(0);
+      final gate = Completer<void>();
+      final calls = <String>[];
+      solo.run<int, void>((ctx) => ctx.join(() => gate.future));
+      final events = solo.collect<int, int, void>(
+        (ctx, values) async => calls.add('${async.elapsed}:$values'),
+        timing: AccumulationTiming.throttle(
+          const Duration(milliseconds: 200),
+        ),
+      );
+
+      async.flushMicrotasks();
+      final first = events.add(1);
+      async.elapse(const Duration(milliseconds: 50));
+      events.add(2);
+      expect(calls, isEmpty);
+      expect(first.isQueued, isTrue);
+      gate.complete();
+      async.flushMicrotasks();
+      expect(calls, ['0:00:00.050000:[1, 2]']);
+      events.add(3);
+      async.elapse(const Duration(milliseconds: 199));
+      expect(calls.length, 1);
+      async.elapse(const Duration(milliseconds: 1));
+      expect(calls.last, '0:00:00.250000:[3]');
+
+      solo.close();
+      async.flushMicrotasks();
+    });
+  });
+
   test('negative timing is rejected and zero preserves queue order', () {
     expect(
       () => AccumulationTiming.debounce(

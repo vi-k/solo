@@ -428,11 +428,16 @@ void main() {
 PLAYER_FAKE = '''
 /// Records what the device was told and when, so the driver counts commands
 /// instead of trusting that only one arrived. 100 ms to obey is what the
-/// section's traces are measured against.
+/// section's traces are measured against. A driver that queues a job of
+/// another kind between two commands marks it here too, so the order of
+/// all three is one list.
 class RecordingDevice implements PlayerDevice {
   final heard = <String>[];
   int Function() now = () => 0;
   Completer<void>? pausing;
+
+  /// The bench's own mark for something that is not a command.
+  void note(String what) => heard.add('$what at ${now()} ms');
 
   @override
   Future<void> resume() {
@@ -568,6 +573,48 @@ void main() {
   require(device.heard.length == 1, 'the device hears one command');
   require(device.heard.single.startsWith('resume'), 'and it is the last one');
   require(player.currentState is Playing, 'the state follows the device');
+
+  // Where the recipe's rule draws its boundary: a job of another kind
+  // between two commands. Under a rule that joined across it the device
+  // would hear the pause alone, and the resume the user tapped would never
+  // reach it. The busy job is what keeps all three queued long enough for
+  // the order to show.
+  fakeAsync((clock) {
+    final device = RecordingDevice();
+    final player = Player(device);
+    device.now = () => clock.elapsed.inMilliseconds;
+    player
+      ..run<Playback, void>(
+        key: 'busy',
+        (ctx) => ctx.wait(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)),
+        ),
+      )
+      ..resume()
+      ..run<Playback, void>(
+        key: 'chime',
+        (ctx) async => device.note('chime'),
+      )
+      ..pause();
+    clock.elapse(const Duration(seconds: 1));
+
+    print('== a job of another kind between two commands');
+    print('the device heard ${device.heard}');
+    print('');
+    require(device.heard.length == 3, 'three things happened, not two');
+    require(
+      device.heard[0].startsWith('resume'),
+      'the resume the user tapped reaches the device',
+    );
+    require(
+      device.heard[1].startsWith('chime'),
+      'the job between the commands runs between them',
+    );
+    require(device.heard[2].startsWith('pause'), 'and the pause follows it');
+    require(player.currentState is Paused, 'the player ends up stopped');
+    player.close();
+    clock.flushMicrotasks();
+  });
 
   // Which of the two the merge keeps. Three alternating taps start and end
   // on the same command, so they cannot tell `incoming` from `accumulated`;

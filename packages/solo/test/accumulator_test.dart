@@ -972,6 +972,307 @@ void main() {
       async.flushMicrotasks();
     });
   });
+
+  // What the wave of three accumulator changes must not move. These are
+  // green on the untouched tree and stay green with the wave applied; the
+  // plan 2026-09-14[32]-accumulation-rules-plan.md names what proves each.
+  //
+  // None of them asserts a handle beyond the one the last `add` returned:
+  // `replace` changes handles on purpose, and a guard that named them
+  // would be rewritten by the very change it is there to witness.
+  for (final policy in AccumulationPolicy.values) {
+    for (final timing in _zeroTimings.entries) {
+      test('$policy with ${timing.key} on a free queue', () {
+        expect(
+          _rulesTrace(policy, timing: timing.value, busy: false),
+          ['run[a1]@0', 'other@0', 'run[a2]@50'],
+        );
+      });
+
+      test('$policy with ${timing.key} behind a running job', () {
+        expect(
+          _rulesTrace(policy, timing: timing.value, busy: true),
+          switch (policy) {
+            AccumulationPolicy.adjacent => [
+                'run[a1]@100',
+                'other@100',
+                'run[a2]@100',
+              ],
+            AccumulationPolicy.replace => ['other@100', 'run[a1+a2]@100'],
+            AccumulationPolicy.join => ['run[a1+a2]@100', 'other@100'],
+          },
+        );
+      });
+    }
+  }
+
+  test('replace: a restart with the same key takes the waiting group', () {
+    fakeAsync((async) {
+      final solo = TestSolo();
+      final calls = <String>[];
+      final gate = Completer<void>();
+      solo.run<TestState, void>(
+        key: 'busy',
+        (ctx) => ctx.join(() => gate.future),
+      );
+      final events = solo.accumulate<TestState, int, void>(
+        (ctx, value) async => calls.add('group:$value'),
+        merge: (a, b) => a + b,
+        key: 'shared',
+        policy: AccumulationPolicy.replace,
+      );
+      async.flushMicrotasks();
+      events.add(1);
+      expect(solo.queue.length, 1);
+      final group = events.add(2);
+      solo.run<TestState, void>(
+        key: 'shared',
+        policy: Policy.restart,
+        (ctx) async => calls.add('restart'),
+      );
+      expect(solo.queue.length, 1);
+      expect(group.isCancelled, isTrue);
+      gate.complete();
+      async.flushMicrotasks();
+      expect(calls, ['restart']);
+      solo.close();
+      async.flushMicrotasks();
+    });
+  });
+
+  test('replace: an open group stays behind a sealed one', () {
+    fakeAsync((async) {
+      final solo = TestSolo();
+      final calls = <String>[];
+      final gate = Completer<void>();
+      solo.run<TestState, void>(
+        key: 'busy',
+        (ctx) => ctx.join(() => gate.future),
+      );
+      final events = solo.accumulate<TestState, int, void>(
+        (ctx, value) async => calls.add('${async.elapsed}:$value'),
+        merge: (a, b) => a + b,
+        key: 'shared',
+        policy: AccumulationPolicy.replace,
+        timing: AccumulationTiming.debounce(const Duration(milliseconds: 200)),
+      );
+      async.flushMicrotasks();
+      events.add(1);
+      async.elapse(const Duration(milliseconds: 250));
+      events.add(2);
+      final second = events.add(4);
+      expect(solo.queue.length, 2);
+      gate.complete();
+      async.flushMicrotasks();
+      expect(calls, ['0:00:00.250000:1']);
+      async.elapse(const Duration(milliseconds: 200));
+      expect(calls, ['0:00:00.250000:1', '0:00:00.450000:6']);
+      expect(second.outcome, isA<Done<void>>());
+      solo.close();
+      async.flushMicrotasks();
+    });
+  });
+
+  test('replace: a failed merge leaves the group and its deadline', () {
+    fakeAsync((async) {
+      final solo = TestSolo();
+      final calls = <String>[];
+      final error = StateError('merge failed');
+      final events = solo.accumulate<TestState, int, void>(
+        (ctx, value) async => calls.add('${async.elapsed}:$value'),
+        merge: (a, b) => b == 99 ? throw error : a + b,
+        policy: AccumulationPolicy.replace,
+        timing: AccumulationTiming.debounce(const Duration(milliseconds: 200)),
+      );
+      // The clock moves between the additions, so a cascade is misleading.
+      // ignore: cascade_invocations
+      events.add(1);
+      async.elapse(const Duration(milliseconds: 100));
+      expect(() => events.add(99), throwsA(same(error)));
+      expect(solo.queue.length, 1);
+      async.elapse(const Duration(milliseconds: 99));
+      expect(calls, isEmpty);
+      async.elapse(const Duration(milliseconds: 1));
+      expect(calls, ['0:00:00.200000:1']);
+      solo.close();
+      async.flushMicrotasks();
+    });
+  });
+
+  test('replace: clear without force leaves a protected group', () {
+    fakeAsync((async) {
+      final solo = TestSolo();
+      final calls = <int>[];
+      final gate = Completer<void>();
+      solo.run<TestState, void>(
+        key: 'busy',
+        (ctx) => ctx.join(() => gate.future),
+      );
+      final events = solo.accumulate<TestState, int, void>(
+        (ctx, value) async => calls.add(value),
+        merge: (a, b) => a + b,
+        policy: AccumulationPolicy.replace,
+        cancellable: false,
+      );
+      async.flushMicrotasks();
+      events.add(1);
+      final group = events.add(2);
+      expect(solo.queue.clear(), 0);
+      expect(solo.queue.length, 1);
+      expect(group.isCancelled, isFalse);
+      expect(solo.queue.clear(force: true), 1);
+      expect(group.isCancelled, isTrue);
+      gate.complete();
+      async.flushMicrotasks();
+      expect(calls, isEmpty);
+      solo.close();
+      async.flushMicrotasks();
+    });
+  });
+
+  test('replace: cancelAll takes the waiting group', () {
+    fakeAsync((async) {
+      final solo = TestSolo();
+      final calls = <int>[];
+      final gate = Completer<void>();
+      solo.run<TestState, void>(
+        key: 'busy',
+        (ctx) => ctx.join(() => gate.future),
+      );
+      final events = solo.accumulate<TestState, int, void>(
+        (ctx, value) async => calls.add(value),
+        merge: (a, b) => a + b,
+        policy: AccumulationPolicy.replace,
+      );
+      async.flushMicrotasks();
+      events.add(1);
+      final group = events.add(2);
+      solo.cancelAll();
+      expect(solo.queue.isEmpty, isTrue);
+      expect(group.isCancelled, isTrue);
+      gate.complete();
+      async.flushMicrotasks();
+      expect(calls, isEmpty);
+      solo.close();
+      async.flushMicrotasks();
+    });
+  });
+
+  for (final mode in SoloCloseMode.values) {
+    test('replace: close(mode: ${mode.name}) treats it as any queued job', () {
+      fakeAsync((async) {
+        final solo = TestSolo();
+        final calls = <int>[];
+        final gate = Completer<void>();
+        solo.run<TestState, void>(
+          key: 'busy',
+          (ctx) => ctx.join(() => gate.future),
+        );
+        final events = solo.accumulate<TestState, int, void>(
+          (ctx, value) async => calls.add(value),
+          merge: (a, b) => a + b,
+          policy: AccumulationPolicy.replace,
+        );
+        async.flushMicrotasks();
+        events.add(1);
+        final group = events.add(2);
+        solo.close(mode: mode);
+        gate.complete();
+        async.flushMicrotasks();
+        expect(calls, mode == SoloCloseMode.drain ? [3] : isEmpty);
+        expect(group.isCancelled, mode == SoloCloseMode.cancel);
+      });
+    });
+  }
+
+  test('replace: a job added first runs ahead of the waiting group', () {
+    fakeAsync((async) {
+      final solo = TestSolo();
+      final calls = <String>[];
+      final gate = Completer<void>();
+      solo.run<TestState, void>(
+        key: 'busy',
+        (ctx) => ctx.join(() => gate.future),
+      );
+      final events = solo.accumulate<TestState, int, void>(
+        (ctx, value) async => calls.add('group:$value'),
+        merge: (a, b) => a + b,
+        policy: AccumulationPolicy.replace,
+      );
+      async.flushMicrotasks();
+      events
+        ..add(1)
+        ..add(2);
+      solo.add(
+        solo.job<TestState, void>(
+          key: 'ahead',
+          (ctx) async => calls.add('ahead'),
+        ),
+        first: true,
+      );
+      gate.complete();
+      async.flushMicrotasks();
+      expect(calls, ['ahead', 'group:3']);
+      solo.close();
+      async.flushMicrotasks();
+    });
+  });
+
+  test('replace: a refused start cancels the group with its rules', () {
+    fakeAsync((async) {
+      final solo = TestSolo();
+      final calls = <int>[];
+      final events = solo.accumulate<TestState, int, void>(
+        (ctx, value) async => calls.add(value),
+        merge: (a, b) => a + b,
+        policy: AccumulationPolicy.replace,
+        canStart: (state) => state is Working,
+      );
+      // What the queue holds between the additions is the point here.
+      // ignore: cascade_invocations
+      events.add(1);
+      expect(solo.queue.length, 1);
+      final group = events.add(2);
+      async.flushMicrotasks();
+      expect(calls, isEmpty);
+      expect((group.outcome! as Cancelled).reason, isA<RulesCancelReason>());
+      solo.close();
+      async.flushMicrotasks();
+    });
+  });
+
+  test('replace: a new event leaves a running group to its keepWhile', () {
+    fakeAsync((async) {
+      final solo = TestSolo(const Working());
+      final gate = Completer<void>();
+      final calls = <String>[];
+      final events = solo.accumulate<Working, int, void>(
+        (ctx, value) async {
+          calls.add('start:$value');
+          await ctx.join(() => gate.future);
+          calls.add('end:$value');
+        },
+        merge: (a, b) => a + b,
+        policy: AccumulationPolicy.replace,
+        keepWhile: (state) => state.a == 0,
+      );
+      final running = events.add(1);
+      async.flushMicrotasks();
+      expect(calls, ['start:1']);
+      final next = events.add(2);
+      solo.externalSetState(const Working(a: 1));
+      expect(running.isCancelled, isTrue);
+      expect(running.isFinished, isFalse);
+      expect(next.isCancelled, isFalse);
+      gate.complete();
+      async.flushMicrotasks();
+      expect(calls, ['start:1']);
+      expect((running.outcome! as Cancelled).reason, isA<RulesCancelReason>());
+      expect((next.outcome! as Cancelled).reason, isA<RulesCancelReason>());
+      solo.close();
+      async.flushMicrotasks();
+    });
+  });
 }
 
 final class _Callbacks extends SoloObserver {
@@ -1026,4 +1327,55 @@ final class _Patch {
   final String? language;
 
   const _Patch({this.notifications, this.theme, this.language});
+}
+
+/// The timings a zero duration makes indistinguishable from none at all.
+/// Step 1 of the accumulator wave adds a third throttle to this table.
+final _zeroTimings = <String, AccumulationTiming?>{
+  'no timing': null,
+  'a zero debounce': AccumulationTiming.debounce(Duration.zero),
+  'a zero throttle': AccumulationTiming.throttle(Duration.zero),
+};
+
+/// Runs A1, a job of another kind, then A2 fifty milliseconds later, and
+/// returns what ran and when. With [busy] another job holds the queue for
+/// the first hundred milliseconds, so the rule has something to rule on:
+/// on a free queue every event finds the queue empty and starts its own
+/// group whatever the rule says.
+List<String> _rulesTrace(
+  AccumulationPolicy policy, {
+  required AccumulationTiming? timing,
+  required bool busy,
+}) {
+  final trace = <String>[];
+  fakeAsync((async) {
+    int now() => async.elapsed.inMilliseconds;
+    final solo = Solo<int>(0);
+    final events = solo.accumulate<int, String, void>(
+      (ctx, value) async => trace.add('run[$value]@${now()}'),
+      merge: (accumulated, incoming) => '$accumulated+$incoming',
+      key: 'a',
+      policy: policy,
+      timing: timing,
+    );
+    if (busy) {
+      solo.run<int, void>(
+        key: 'busy',
+        (ctx) => ctx.wait(
+          () => Future<void>.delayed(const Duration(milliseconds: 100)),
+        ),
+      );
+    }
+    events.add('a1');
+    solo.run<int, void>(
+      key: 'other',
+      (ctx) async => trace.add('other@${now()}'),
+    );
+    async.elapse(const Duration(milliseconds: 50));
+    events.add('a2');
+    async.elapse(const Duration(seconds: 2));
+    solo.close();
+    async.flushMicrotasks();
+  });
+  return trace;
 }
