@@ -188,6 +188,67 @@ void main() {
     });
   });
 
+  test('what a cancelled chain leaves open depends on the source', () {
+    // What `doc/children.md` promises about a `discard` of the source: the
+    // continuation is the receiver, and a continuation cancelled while it
+    // waited never becomes one. Which of the two ways that goes is decided
+    // by the source, because cancelling a continuation cancels it too.
+    fakeAsync((async) {
+      // The source takes the cancellation with it and unwinds its own
+      // stack on the way out.
+      final closedByTheSource = <String>[];
+      final taking = Job<String>((ctx) async {
+        final db = await ctx.wait(() => 'db', discard: closedByTheSource.add);
+        await ctx.wait(() => Completer<void>().future);
+
+        return db;
+      });
+      final overTaking = taking.then<void>((ctx, value) => fail('no receiver'));
+      async.flushMicrotasks();
+      overTaking.cancel().ignore();
+      async.flushMicrotasks();
+      expect(taking.outcome, isA<Cancelled>());
+      expect(closedByTheSource, ['db'], reason: 'the source closed its own');
+
+      // The source refuses it, ends `Done` and hands the value over -- to
+      // a receiver that is already gone.
+      final closedByTheChain = <String>[];
+      final gate = Completer<void>();
+      final refusing = Job<String>(
+        cancellable: false,
+        (ctx) async {
+          final db = await ctx.wait(() => 'db', discard: closedByTheChain.add);
+          await ctx.wait(() => gate.future);
+
+          return db;
+        },
+      );
+      final overRefusing = refusing.then<void>(
+        (ctx, value) => fail('no receiver'),
+      );
+      async.flushMicrotasks();
+      overRefusing.cancel().ignore();
+      async.flushMicrotasks();
+      gate.complete();
+      async.flushMicrotasks();
+      expect(refusing.outcome, isA<Done<String>>());
+      expect(overRefusing.outcome, isA<Cancelled>());
+      expect(
+        closedByTheChain,
+        isEmpty,
+        reason: 'the value was handed over and the receiver never came',
+      );
+      String? throughTheHandle;
+      refusing.value.then((db) => throughTheHandle = db).ignore();
+      async.flushMicrotasks();
+      expect(
+        throughTheHandle,
+        'db',
+        reason: 'the handle is what the caller closes it through',
+      );
+    });
+  });
+
   test('cancelling the tail leaves completed predecessors unchanged', () {
     fakeAsync((async) {
       final gate = Completer<void>();

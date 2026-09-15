@@ -82,8 +82,9 @@ way. This holds for every hand-over, a group included: a branch of `ctx.runAll`
 that got its value from a child of its own registers it on arrival like anyone
 else.
 
-The debug channel names every hand-over, whether or not the receiver registered
-anything, so the places where this rule applies can be read off a run:
+The debug channel names every hand-over that drops a registration, whether or
+not the receiver registered anything, so the places where this rule applies can
+be read off a run:
 
 ```text
 Job(opener) handed its value over: 1 conditional cleanup dropped
