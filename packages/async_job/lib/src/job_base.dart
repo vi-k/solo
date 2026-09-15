@@ -365,7 +365,12 @@ abstract class JobBase<T> implements Job<T> {
   /// `const Cancelled.by(...)` are one object and one entry. Today that
   /// holds by itself — every cancellation the engine builds carries a
   /// stack trace of its own.
-  final _outcomeChild = Expando<JobBase<Object?>>();
+  ///
+  /// `late final` and not `final`, the way `_cascadeChild` below already
+  /// is: only a parent whose child's outcome came out through its body
+  /// ever writes here, and an `Expando` on every job that never has a
+  /// child is most of what a job weighs.
+  late final _outcomeChild = Expando<JobBase<Object?>>();
 
   // A public reason type is not proof that this job issued the cancellation.
   // Tokens identify the child without retaining its handle through a reason.
