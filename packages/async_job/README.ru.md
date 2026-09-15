@@ -39,6 +39,9 @@ final job = Job<void>((ctx) async {
   use(await ctx.join(db.readAll));
 });
 
+// Кто-то ушёл с экрана, пока шло чтение.
+await Future<void>.delayed(const Duration(milliseconds: 50));
+
 // Ждёт тело, его детей и его уборку.
 await job.cancel();
 print(job.outcome); // Cancelled(manual)

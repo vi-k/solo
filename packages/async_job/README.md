@@ -38,6 +38,9 @@ final job = Job<void>((ctx) async {
   use(await ctx.join(db.readAll));
 });
 
+// Somebody left the screen while the read was in flight.
+await Future<void>.delayed(const Duration(milliseconds: 50));
+
 // Waits for the body, its children and its cleanup.
 await job.cancel();
 print(job.outcome); // Cancelled(manual)

@@ -457,6 +457,7 @@ void main() {
 
     test('unattended cancellation keeps ownership filtering', () async {
       final ownErrors = <Object>[];
+      final entered = Completer<void>();
       final own = Job<void>(
         observer: ErrorObserver(ownErrors),
         (ctx) async {
@@ -464,13 +465,24 @@ void main() {
             await Future<void>.delayed(Duration.zero);
             ctx.check();
           });
-          await Future<void>.delayed(const Duration(milliseconds: 10));
+          entered.complete();
+          await Future<void>.delayed(Duration.zero);
         },
       );
+      // Waited for, and the wait is the test. A job cancelled straight
+      // after its constructor never enters its body: there is no
+      // unattended work to filter, and the expectation below then holds
+      // over an empty list for the wrong reason.
+      await entered.future;
       own.cancel().ignore();
       await own.done;
       await Future<void>.delayed(Duration.zero);
-      expect(ownErrors, isEmpty);
+      expect(
+        ownErrors,
+        isEmpty,
+        reason: 'the work threw the cancellation of the very job that owns '
+            'it, and a job giving up is not an error',
+      );
 
       final foreignErrors = <Object>[];
       const foreign = Cancelled('foreign');
