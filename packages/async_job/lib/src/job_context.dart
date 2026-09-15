@@ -976,7 +976,16 @@ abstract class JobContextBase implements JobContext {
         }
       } on Object catch (error, stackTrace) {
         if (completer.isCompleted) {
-          notifyError(error, stackTrace);
+          // Less this job giving up. A call the body walked away from
+          // keeps the context, and after the mark every door back into it
+          // — `check`, `join`, `run` — throws the very cancellation that
+          // became the outcome. Reported, it would arrive at `onError` as
+          // a failure of something, when it is the answer to a decision
+          // whoever listens has heard already. The same filter stands in
+          // `_unattendedError`, for work handed over the same way.
+          if (!_isOwnCancellation(error)) {
+            notifyError(error, stackTrace);
+          }
         } else {
           completer.completeError(error, stackTrace);
         }

@@ -8,6 +8,7 @@ import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart';
 
 import 'support/delay.dart';
+import 'support/error_observer.dart';
 import 'support/journal.dart';
 
 void main() {
@@ -275,5 +276,35 @@ void main() {
           'and the answer does not turn on whether the action was '
           'synchronous',
     );
+  });
+
+  test('the job giving up does not reach the observer as an error', () {
+    fakeAsync((async) {
+      final errors = <Object>[];
+      final job = Job<void>(
+        observer: ErrorObserver(errors),
+        (ctx) async {
+          // A helper that took the context and walked back into it. After
+          // the mark the call throws this job's own cancellation, and the
+          // body is long gone from the wait.
+          Future<void> helper() async {
+            await delay(50);
+            ctx.check();
+          }
+
+          await ctx.wait(helper);
+        },
+      );
+      async.elapse(const Duration(milliseconds: 10));
+      job.cancel().ignore();
+      async.flushTimers();
+      expect(job.outcome, isA<Cancelled>());
+      expect(
+        errors,
+        isEmpty,
+        reason: 'the job giving up is not an error, and the abandoned call '
+            'throwing that very cancellation says nothing new',
+      );
+    });
   });
 }

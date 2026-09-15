@@ -265,7 +265,7 @@ void main() {
         ctx.unattended(() async {
           await ctx.wait(() async {
             await delay(50);
-            ctx.check();
+            throw StateError('the action failed on its own');
           });
         });
         await ctx.wait(() => delay(100));
@@ -276,12 +276,39 @@ void main() {
     });
     // The filter covers what the work leaves uncaught, and nothing else: a
     // `wait` made in here keeps its own rules, and an action it was left
-    // holding reports its late failure as it does anywhere — a `Cancelled`
-    // included. Pinned so the two rules are not confused for one.
+    // holding reports its late failure as it does anywhere. Pinned so the
+    // two rules are not confused for one.
     expect(journal.take(), [
       '[j] started',
       '[j] finished Cancelled(manual)',
-      '[j] error Cancelled(manual)',
+      '[j] error Bad state: the action failed on its own',
+    ]);
+  });
+
+  test('the job giving up is filtered on the path of a wait as well', () {
+    final journal = JobJournal();
+    fakeAsync((async) {
+      final job = Job<void>(key: 'j', observer: journal, (ctx) async {
+        ctx.unattended(() async {
+          await ctx.wait(() async {
+            await delay(50);
+            // Back into the context of a job that is over: what comes out
+            // is the very cancellation that became its outcome.
+            ctx.check();
+          });
+        });
+        await ctx.wait(() => delay(100));
+      });
+      async.elapse(const Duration(milliseconds: 5));
+      job.cancel();
+      async.flushTimers();
+    });
+    // One rule, two paths. Work handed over and an action walked away from
+    // both throw this job's own cancellation once it is marked, and
+    // neither of them is news: whoever listens took it off the outcome.
+    expect(journal.take(), [
+      '[j] started',
+      '[j] finished Cancelled(manual)',
     ]);
   });
 

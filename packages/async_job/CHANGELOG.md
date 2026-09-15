@@ -1,5 +1,17 @@
 ## Unreleased
 
+- **Fix:** a job giving up no longer reaches `JobObserver.onError`. A call the
+  body walked away from with `ctx.wait` keeps the context, and after the mark
+  every door back into it -- `check`, `join`, `run` -- throws the very
+  `Cancelled` that became the outcome; the kernel took that for a late failure
+  of the abandoned action and reported it. `JobObserver.onError` says the
+  opposite in so many words -- "never the job giving up, which is not an error"
+  -- and in an engine of a domain that hook is the error channel of the
+  application, so every cancellation of a job written with a helper that takes
+  the context showed up there as a failure. The filter `unattended` already
+  applies to work handed over now stands on this path as well, by identity
+  against the outcome and the mark: a `Cancelled` built inside the action, and
+  one belonging to another job, report exactly as they did.
 - **Breaking:** `ctx.run` takes `dispose` and `discard`, the way `ctx.wait`
   does, and makes the registration the moment the child's value comes back. New
   named parameters on a member of an `abstract interface class`, so an
