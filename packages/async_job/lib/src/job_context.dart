@@ -341,6 +341,16 @@ abstract interface class JobContext {
   /// did not throw is not lost either: it goes the way an error nobody
   /// answered for goes, once.
   ///
+  /// **When which.** `[ctx.run(a), ctx.run(b)].wait` and [Future.wait] wait
+  /// for every branch and stop none, so a branch whose sibling has already
+  /// failed runs to its end and settles its own registrations on the way,
+  /// and what they throw is a `ParallelWaitError` holding the values and the
+  /// errors of every branch at once. Take them when the branches do not
+  /// depend on each other's failure, or when one of them waits for another.
+  /// Take this one when a result missing one of its parts is of no use
+  /// anyway: it asks the rest to stop, holds every branch until the decision
+  /// is made, and throws the outcome itself.
+  ///
   /// **The stop is cooperative.** A branch that waits through [wait] ends,
   /// and the operation behind it plays on and writes its result; to stop
   /// the work itself, hand the cancellation to it through [onCancel] and
