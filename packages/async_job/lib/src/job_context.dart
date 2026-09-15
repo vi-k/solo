@@ -966,8 +966,16 @@ abstract class JobContextBase implements JobContext {
           // waits for the job waits for the release too.
           await _keepLate(dispose, discard, value);
         } else if (_owner.bodyEnded) {
+          // The registration below costs a microtask even when there is
+          // nothing to register, and a cancellation arriving in it
+          // finishes this future through the callback still standing.
+          // Hence the second reading: without it the completion throws
+          // `Future already completed` out of the kernel, and the job
+          // reports an error of its own internals to whoever listens.
           await _keepLate(dispose, discard, value);
-          completer.complete(value);
+          if (!completer.isCompleted) {
+            completer.complete(value);
+          }
         } else {
           // Synchronously and before `complete`: between the registration
           // and the body there must be no `await`.

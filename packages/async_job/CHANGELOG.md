@@ -1,5 +1,13 @@
 ## Unreleased
 
+- **Fix:** a value that comes back after the body has ended no longer finishes
+  the same wait twice. Putting the late value on the cleanup stack costs a
+  microtask even when there is nothing to put there, and a cancellation
+  arriving in that microtask finished the wait through the callback still
+  standing; the completion that followed threw `Future already completed` out
+  of the kernel, and the job reported that to `onError` as an error of its own.
+  The value was never in danger -- the registration had it -- but whoever
+  listens saw a defect of the package where there was none.
 - **Fix:** a body that gives itself up is marked there and then. Until now the
   mark went on only after the job had waited for its children, so between the
   `throw Cancelled(...)` and that wait the job answered `isCancelled` with

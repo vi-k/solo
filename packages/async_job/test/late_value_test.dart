@@ -8,6 +8,7 @@ import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart';
 
 import 'support/delay.dart';
+import 'support/error_observer.dart';
 import 'support/journal.dart';
 
 void main() {
@@ -164,6 +165,49 @@ void main() {
         'discard ends',
         'done',
       ]);
+    });
+  });
+
+  test('a value arriving after the body does not finish the wait twice', () {
+    fakeAsync((async) {
+      final errors = <Object>[];
+      final action = Completer<String>();
+      final child = Completer<void>();
+      final disposed = <String>[];
+      final job = Job<void>(
+        observer: ErrorObserver(errors),
+        (ctx) async {
+          // Walked away from: the body ends while the action is still in
+          // flight, so the value comes back to a job whose body is gone.
+          ctx.wait<String>(() => action.future, dispose: disposed.add).ignore();
+          // And a child, so the job is still running when it does. Without
+          // one the job would be over by then, and the window this test is
+          // about would not exist.
+          ctx
+              .run(Job.deferred<void>((ctx) => ctx.join(() => child.future)))
+              .ignore();
+        },
+      );
+      async.flushMicrotasks();
+      action.complete('v');
+      // Into the microtask the registration of the late value costs: the
+      // wait is finished by the cancellation there, and the value lands a
+      // microtask later on a future that is already done.
+      scheduleMicrotask(() => job.cancel().ignore());
+      child.complete();
+      async.flushTimers();
+      expect(job.outcome, isA<Cancelled>());
+      expect(
+        disposed,
+        ['v'],
+        reason: 'the value did not reach the body, so it is cleaned up',
+      );
+      expect(
+        errors,
+        isEmpty,
+        reason: 'and the observer hears nothing: a second completion of an '
+            'internal future is not news of the job',
+      );
     });
   });
 }

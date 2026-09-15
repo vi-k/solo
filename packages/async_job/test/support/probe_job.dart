@@ -160,7 +160,7 @@ final class UnstartableJob<T> extends JobBase<T> {
 final class ThrowingRulesJob<T> extends JobBase<T> {
   final Future<T> Function(JobContext ctx) _body;
 
-  ThrowingRulesJob(this._body, {super.key});
+  ThrowingRulesJob(this._body, {super.key, super.observer});
 
   /// Starts the body the way an engine of a domain would.
   void launch() => start();

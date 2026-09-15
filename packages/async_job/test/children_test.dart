@@ -688,8 +688,9 @@ void main() {
   test('a child a throwing rule turned away never runs', () {
     fakeAsync((async) {
       final log = <String>[];
+      final journal = JobJournal();
       late Job<void> child;
-      final parent = ThrowingRulesJob<int>((ctx) async {
+      final parent = ThrowingRulesJob<int>(observer: journal, (ctx) async {
         // Left half-adopted it would be a job nobody starts and nobody
         // waits for: the rule turns it away, and it is dropped instead.
         child = Job.deferred<void>(key: 'ghost', (c) async {
@@ -709,6 +710,18 @@ void main() {
       expect(log, ['run threw StateError']);
       expect(child.outcome, isA<Failed>());
       expect(parent.outcome, isA<Done<int>>());
+      // The one place a `Failed` does not call `onError`, and the reason
+      // is that the very same error went to the body by the throw above:
+      // announced once, where somebody can do something about it. The
+      // parent swallowed it here, as a `try/catch` of its own would.
+      expect(
+        journal.take(),
+        [
+          '[null] started',
+          '> [ghost] finished Failed(Bad state: rule failed)',
+          '[null] finished Done(7)',
+        ],
+      );
     });
   });
 
