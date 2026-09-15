@@ -1,11 +1,15 @@
 # Building on the core
 
 If your library needs its own state, queue or scheduling rules, extend
-`JobBase<T>` and `JobContextBase`. The base classes handle the job lifetime
-described above, while your subclasses add the library's behavior. Their
-protected API provides access to job status, pending cancellation, children,
-start and completion. Cancellation has a flag controlling whether the job may
-refuse it. Override `started()` and `finished()` to handle lifecycle events.
+`JobBase<T>` and `JobContextBase`. The base classes handle the job lifetime of
+[Outcomes](outcomes.md) and [Cancellation](cancellation.md), while your
+subclasses add the library's behavior. Their protected API provides access to
+job status, pending cancellation, children, start and completion. Cancellation
+has a flag controlling whether the job may refuse it. Override `started()` and
+`finished()` to handle lifecycle events, and `handleUnanswered` to give an
+error nobody answered for an answer of your own — an engine that puts an
+observer of its own on every job has to, or the kernel takes the observer for
+the answer and the error stops there.
 
 For example, a custom job can create its own context type and expose a method
 for its coordinator to start it:

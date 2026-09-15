@@ -34,9 +34,11 @@ another class. Pass the observer when creating the job; children inherit it
 unless they have their own. If a hook throws, its error goes to the current
 zone without changing the job's behavior.
 
-A job's string representation is `Job($key)`. Use `key` to identify it in logs
-or in a library's scheduling rules, such as `solo` queue policies. `describe`
-adds context to the log description.
+A job's string representation is `Job($key)`, or `Job($key: $description)` when
+`describe` returns something, or `Job($description)` when there is no key, or
+`Job()` when there is neither. Use `key` to identify it in logs or in a
+library's scheduling rules, such as `solo` queue policies. `describe` adds
+context to the log description.
 
 Messages passed to `ctx.log` remain objects until the listener formats them.
 With no observer, `ctx.log` does nothing, but Dart still evaluates its
@@ -57,6 +59,14 @@ A body error is sent to the observer. If the job ends with that error, it is
 stored in `Failed` and is also reported to the job's creation zone if the
 outcome remains unobserved.
 
+When the job ends with something else, which order the two came in decides
+where the error goes. A failure thrown before anything marked the job is
+covered by the cancellation that took its place, and still reaches the zone on
+the same terms: only if nobody looked at the outcome. A failure thrown after
+the mark is the body giving up on a job that was already cancelled, and it goes
+to the observer alone — never to the zone, whoever listens. Without an observer
+that one is silent, and it is the case an observer is for.
+
 Errors outside the body cannot become its outcome. These include late errors
 from an action abandoned by `wait`, cleanup errors, cancellation callback
 errors (`ctx.onCancel` or `job.whenCancelled`), errors from `ctx.unattended`
@@ -73,7 +83,7 @@ the first and subtracts in the second has the number: the wait the caller of
 `cancel` sits through. It catches what causes that wait — a body waiting on
 something slow with a bare `await` holds the cancellation for its whole length,
 where the same call through `ctx.wait` gives it up at once. `solo` shows the
-observer in full; see `doc/errors.md` there.
+observer in full; see `doc/errors.md` in that package.
 
 ## Testing
 

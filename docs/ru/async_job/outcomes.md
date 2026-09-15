@@ -28,8 +28,9 @@ final message = switch (await job.done) {
 содержит причину `reason`, флаг `started`, необязательное описание
 `description` и стектрейс отмены. Флаг `started` показывает, успело ли тело
 запуститься или отмена произошла до запуска. Встроенные классы причин:
-`ManualCancelReason`, `ParentCancelReason`, `HandlerCancelReason`
-и `ChainCancelReason`. Все они наследуют `CancelReason`.
+`ManualCancelReason`, `ParentCancelReason`, `HandlerCancelReason`,
+`ChainCancelReason` и `SiblingCancelReason` — последнюю группа `ctx.runAll`
+выдаёт соседям ветки, которая пошла не так. Все они наследуют `CancelReason`.
 
 Проверяйте причину по типу, например `reason is ParentCancelReason`. Свойство
 `name` служит меткой для журнала и не определяет равенство. По умолчанию

@@ -28,8 +28,9 @@ For a cancelled job, the outcome also explains why it stopped. `Cancelled`
 contains a `reason`, a `started` flag, an optional `description` and the stack
 trace of the cancellation. `started` tells you whether the body ran or was
 cancelled before start. The built-in reason classes are `ManualCancelReason`,
-`ParentCancelReason`, `HandlerCancelReason` and `ChainCancelReason`, all
-extending `CancelReason`.
+`ParentCancelReason`, `HandlerCancelReason`, `ChainCancelReason` and
+`SiblingCancelReason` — the last one is what a group of `ctx.runAll` gives the
+siblings of a branch that went wrong. All extend `CancelReason`.
 
 Check reasons by type, for example `reason is ParentCancelReason`. The `name`
 property is a label for logs and does not determine equality. Reasons use

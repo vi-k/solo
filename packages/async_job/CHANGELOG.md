@@ -118,7 +118,9 @@
   `abstract interface class`, so an implementation of `JobContext` written by
   hand no longer compiles, and so does an extension of the same name on
   `JobContext` -- the member now wins over it. `JobContextBase` gets it once
-  and every engine built on it, `solo` included, gets it for nothing. The
+  and every engine built on it, `solo` included, gets it for nothing. It brings
+  a fifth built-in reason with it, `SiblingCancelReason`, which is what the
+  group gives the branches it asks to stop; its `cause` is what went wrong. The
   contract of `discard` is untouched: it still runs only when the job ends
   without handing its value over, and in a branch of a group the group is what
   says whether it did. See `doc/children.md`.
@@ -174,6 +176,15 @@
   rule of a domain that threw instead of answering used to cost the job the
   resource it already held: the value reached no body and was registered on no
   cleanup stack.
+- **Breaking:** add the protected `JobBase.handleUnanswered`, the route for an
+  error of a job that nobody answered for -- today a branch of `ctx.runAll`
+  whose failure the group did not throw. Its default is `notifyError` with the
+  second announcement left out, and an engine of a domain overrides it to reach
+  an answer of its own: `solo` sends it to `SoloBase.errorHandler`. Such an
+  engine has to, because one that puts an observer on every job makes the
+  kernel's check for an observer true always, and the error would stop there.
+  Adding a member to a class meant to be extended is breaking on its own: a
+  subclass with a member of that name stops compiling. See `doc/extending.md`.
 - **Breaking:** add the protected `JobBase.inUncancellableSection`, for an
   engine that waits for a job and wants to say why. Adding a member to a class
   meant to be extended is breaking on its own: a subclass with a member of that

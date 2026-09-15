@@ -116,7 +116,10 @@ final outcome = await job.done; // Cancelled(manual)
 - **`ctx.join(Database.open)`** calls `Database.open` and returns the opened
   database. If cancellation arrives during opening, it waits for the call to
   finish and throws `Cancelled` if opening succeeded. If opening fails, it
-  throws the original error, even after cancellation.
+  throws the original error, even after cancellation. The job still ends
+  `Cancelled`, so that error becomes nobody's outcome: it reaches the observer
+  and stops there. Without one, an open that failed after a cancellation leaves
+  no trace. See [Observing](doc/observing.md).
 - **`discard: (database) => database.close()`** closes the database if the job
   ends with cancellation or an error. With `Done(database)`, it stays open for
   the caller. Cleanup also covers cancellation after `return database`: for
