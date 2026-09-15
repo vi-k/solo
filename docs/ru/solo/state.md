@@ -12,7 +12,7 @@ Job<void> record() => run<Ready, void>(
       canStart: (state) => state.free > 0,
       keepWhile: (state) => !state.paused,
       (ctx) => ctx.each(
-        camera.frames,
+        device.frames,
         (child, frame) => child.join(() => store(frame)),
       ).value,
     );
@@ -22,7 +22,7 @@ Job<void> record() => run<Ready, void>(
 `W extends S`. Его проверяет движок, поэтому `run<Ready, void>` начинается
 только в `Ready`; по той же причине тело читает `ctx.state` как `W`. Когда
 чужое обновление состояния устанавливает `paused` в `true`, `keepWhile`
-отменяет запись; повторять это условие телу не нужно. Здесь `Ready`, `camera`
+отменяет запись; повторять это условие телу не нужно. Здесь `Ready`, `device`
 и `store` принадлежат приложению, а `ctx.each` обрабатывает стрим — его
 жизненный цикл разобран в [Дочерние задачи и стримы](children.md).
 

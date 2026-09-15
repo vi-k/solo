@@ -12,7 +12,7 @@ Job<void> record() => run<Ready, void>(
       canStart: (state) => state.free > 0,
       keepWhile: (state) => !state.paused,
       (ctx) => ctx.each(
-        camera.frames,
+        device.frames,
         (child, frame) => child.join(() => store(frame)),
       ).value,
     );
@@ -22,7 +22,7 @@ The first type argument of `run<W, T>` is the job's working state type,
 `W extends S`. The engine checks it, so `run<Ready, void>` starts only in
 `Ready`; the body reads `ctx.state` as `W` for the same reason. When another
 state update sets `paused` to true, `keepWhile` cancels the recording; the body
-does not need to repeat that condition. Here `Ready`, `camera` and `store`
+does not need to repeat that condition. Here `Ready`, `device` and `store`
 belong to the application, and `ctx.each` processes the stream — its full
 lifecycle is explained under [Children and streams](children.md).
 
