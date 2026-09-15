@@ -69,6 +69,13 @@ that refuses a cancellation ends `Done` while its parent is already cancelled,
 on the next line is never reached. `wait` is handed the value all the same and
 runs the `discard`.
 
+A received value then has two ways back to the same resource: the registration
+the receiver made, and the child's own `Job.value`, which carries it for as
+long as anyone holds the handle. Only one of them may close it. The receiver
+that registered it on arrival owns it, and closing it through the handle as
+well closes it twice; [Children, streams and chains](children.md) names the
+handle for the case where the value reaches no receiver at all.
+
 Now `ready` closes the database when it ends in anything but a value, and hands
 it on untouched when it succeeds — to a receiver that registers it the same
 way. This holds for every hand-over, a group included: a branch of `ctx.runAll`

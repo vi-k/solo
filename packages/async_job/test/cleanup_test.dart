@@ -902,10 +902,11 @@ void main() {
     // parent's own [Cancelled], and a registration written after it never
     // happens. Taken through `wait`, the same value still reaches a
     // `discard`.
+    Job<String>? lastChild;
     List<String> run({required bool throughWait}) {
       final closed = <String>[];
       fakeAsync((async) {
-        final child = Job.deferred<String>(
+        final child = lastChild = Job.deferred<String>(
           cancellable: false,
           (ctx) async {
             await ctx.wait(() => delay(20));
@@ -943,6 +944,12 @@ void main() {
           'have registered it was never reached',
     );
     expect(run(throughWait: true), ['outer']);
+    expect(
+      lastChild?.outcome,
+      isA<Done<String>>().having((outcome) => outcome.value, 'value', 'db'),
+      reason: 'the handle still carries the value the receiver closed: two '
+          'ways to one resource, and only one of them may close it',
+    );
   });
 
   test('a successful job lets go of the registrations it never ran', () {
