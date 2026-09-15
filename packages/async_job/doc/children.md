@@ -155,16 +155,20 @@ that makes its own child before it suspends builds the whole chain on one
 stack: about a thousand levels on a desktop VM, and the overflow lands while
 the tree is still being built. A single `await` before `ctx.run` breaks that
 into microtasks and lifts the limit to the other walk -- cancellation, which
-descends the tree recursively and reaches about two and a half thousand.
-Neither number is a promise; both follow from the size of a body's frame.
+descends the tree recursively and reaches about three thousand. Neither number
+is a promise; both follow from the size of a body's frame, and the second one
+moves between runs of the same program as the compiler optimizes the descent
+under way.
 
-A cascade that runs out of stack tells every job it marked to stop, and the
-error reaches whoever called `cancel`. A callback of yours that needs frames of
-its own may not get them at the very deep end, where the stack has only just
-run out; that overflow is not announced as a failure of the callback, because
-it is not one. What the cascade never reached -- the depth below the break --
-is left running. Recursion measured in thousands of nested jobs wants
-flattening, not a deeper stack.
+A cascade that runs out of stack tells every job it marked to stop, save a
+handful at the deep end: down there the stack has only just run out, and a
+callback that asks for a few frames of its own may not get them. An overflow
+landing there is not announced as a failure of that callback, because it is not
+one; anywhere else a callback that runs out of stack by itself is reported like
+any other failure of one, and changes nothing about the cancellation. What the
+cascade never reached -- the depth below the break -- is left running.
+Recursion measured in thousands of nested jobs wants flattening, not a deeper
+stack.
 
 ## Processing streams
 

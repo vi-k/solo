@@ -855,8 +855,9 @@ abstract class JobContextBase implements JobContext {
       try {
         callback();
       } on Object catch (error, stackTrace) {
-        if (error is StackOverflowError) {
-          // Not `onError`, and above all not the zone: see
+        if (error is StackOverflowError && _owner._outOfStack) {
+          // Not `onError`, and above all not the zone, while the engine
+          // is unwinding a cascade that ran out of stack: see
           // `JobBase.whenCancelled`, which keeps the same rule for the
           // same reason.
           rethrow;

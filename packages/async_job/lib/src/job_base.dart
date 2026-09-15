@@ -411,6 +411,17 @@ abstract class JobBase<T> implements Job<T> {
   /// saying which came first.
   bool _failedBeforeMark = false;
 
+  /// Whether this job is unwinding a cascade that ran out of stack.
+  ///
+  /// True only between the moment the descent threw and the end of the
+  /// pass that tells this job's callbacks. In that window an overflow
+  /// landing in a callback is the cascade's own, not the callback's, and
+  /// the two guards that wrap user code let it through instead of
+  /// announcing it. Outside the window a callback that runs out of stack
+  /// did it by itself, and the promise stands: its error goes to
+  /// `onError` and changes nothing else.
+  bool _outOfStack = false;
+
   /// What the body ended with, from that moment until the job has an
   /// outcome of its own.
   ///
@@ -569,14 +580,15 @@ abstract class JobBase<T> implements Job<T> {
       try {
         callback(cancelled);
       } on Object catch (error, stackTrace) {
-        if (error is StackOverflowError) {
+        if (error is StackOverflowError && _outOfStack) {
           // Not `onError`, and above all not the zone. At the bottom of a
           // cascade that has just run out of stack this is that same
           // overflow, landing in the first callback to ask for a few
           // frames more; reporting it would name the callback for
           // something it did not do, and would format a stack trace with
           // no stack left to do it on. It leaves with the error that is
-          // already unwinding.
+          // already unwinding. Outside that window the callback ran out
+          // of stack on its own, and that is its error like any other.
           rethrow;
         }
         notifyError(error, stackTrace);
@@ -707,8 +719,26 @@ abstract class JobBase<T> implements Job<T> {
     (Object, StackTrace)? failure;
     for (final child in _children.reversed.toList()) {
       try {
-        _cancelChild(child, cancelled);
+        // The body of `_cancelChild`, written out rather than called.
+        // Every frame on this path is paid for at every level of the
+        // descent, and one function is worth about six hundred levels of
+        // depth: with the call the tree runs out of stack at 2463 jobs,
+        // without it at 3128 -- where it was before this loop learned to
+        // guard each child at all. `_cancelChild` stays for the other
+        // caller, the one that turns a child away before it starts.
+        final reason = ParentCancelReason(cause: cancelled);
+        _cascadeChild[reason] = child._cascadeIdentity;
+        child.cancelWith(
+          Cancelled.by(
+            reason: reason,
+            started: child.isRunning,
+            stackTrace: cancelled.stackTrace,
+          ),
+        );
       } on Object catch (error, stackTrace) {
+        if (error is StackOverflowError) {
+          _outOfStack = true;
+        }
         // One child is not the rest of them. A subtree deep enough to run
         // the stack out, or an engine of a domain whose `cancelWith`
         // threw, must not take the cancellation away from the siblings
@@ -1162,6 +1192,10 @@ abstract class JobBase<T> implements Job<T> {
         // `_execute` would leave it running for good. It goes out the one
         // door for an error with nowhere else to go.
         notifyError(error, stackTrace);
+        // The window closes here and not in the pass below: that pass is
+        // reached after the children have been waited for, on a stack
+        // that is whole again.
+        _outOfStack = false;
       }
     }
     await _awaitChildren();
@@ -1382,15 +1416,22 @@ abstract class JobBase<T> implements Job<T> {
   /// callback that comes back to `cancelWith` through a path of its own
   /// turns around at the early return and never reaches this.
   void _markCancelled(Cancelled cancelled) {
-    // In registration order, and from a copy: a callback may register
-    // another one, and one it removes still runs. `JobContext.onCancel`
-    // wraps the caller's callbacks, so an error of theirs never reaches
-    // this loop.
-    for (final callback in _onCancel.toList()) {
-      callback();
+    try {
+      // In registration order, and from a copy: a callback may register
+      // another one, and one it removes still runs. `JobContext.onCancel`
+      // wraps the caller's callbacks, so an error of theirs never reaches
+      // this loop -- an overflow of the cascade itself does, and it is on
+      // its way out anyway.
+      for (final callback in _onCancel.toList()) {
+        callback();
+      }
+      _onCancel.clear();
+      _notifyCancelled(cancelled);
+    } finally {
+      // Whatever happened, the pass is over and the window with it: what
+      // runs out of stack after this did it on its own.
+      _outOfStack = false;
     }
-    _onCancel.clear();
-    _notifyCancelled(cancelled);
   }
 
   /// Saves the event before calling user code, including reentrant listeners.

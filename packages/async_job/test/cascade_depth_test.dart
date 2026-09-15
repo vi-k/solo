@@ -125,6 +125,71 @@ void main() {
     expect(leafTold, isTrue, reason: 'and it was told to stop');
   });
 
+  test('the window closes with the pass that told the callbacks', () async {
+    final chain = _Chain(depth);
+    final errors = <Object>[];
+    final root = chain.start(observer: ErrorObserver(errors));
+    await chain.bottom.future;
+    try {
+      root.cancel().ignore();
+    } on Object catch (_) {
+      // The cascade running out of stack is the premise of the run.
+    }
+
+    // The cascade is over, and a listener registered now runs on the
+    // spot -- on a stack that is whole again, where a bug of its own is
+    // its own again.
+    root.whenCancelled((_) => _forever(0));
+    expect(errors.single, isA<StackOverflowError>());
+  });
+
+  test('a callback that runs out of stack on its own is still its own',
+      () async {
+    // No cascade and no depth: one job, a listener with a bug of its
+    // own. What the engine lets through while it unwinds its own
+    // overflow it must not let through here.
+    final errors = <Object>[];
+    var second = false;
+    final job = Job<void>(
+      (ctx) async {
+        await null;
+        throw Cancelled.by(
+          reason: const TestCancelReason('probe'),
+          started: true,
+          stackTrace: StackTrace.current,
+        );
+      },
+      observer: ErrorObserver(errors),
+    )
+      ..whenCancelled((_) => _forever(0))
+      ..whenCancelled((_) => second = true);
+
+    expect(await job.done, isA<Cancelled>());
+    expect(second, isTrue, reason: 'the listener after it still runs');
+    expect(errors.single, isA<StackOverflowError>());
+  });
+
+  test('an onCancel that runs out of stack does not take the rest with it',
+      () async {
+    final errors = <Object>[];
+    var second = false;
+    final job = Job<void>(
+      (ctx) async {
+        ctx
+          ..onCancel(() => _forever(0))
+          ..onCancel(() => second = true);
+        await ctx.wait(() => Completer<void>().future);
+      },
+      observer: ErrorObserver(errors),
+    );
+    await delay(1);
+
+    await job.cancel();
+    expect(job.outcome, isA<Cancelled>());
+    expect(second, isTrue, reason: 'the callback after it still runs');
+    expect(errors.single, isA<StackOverflowError>());
+  });
+
   test('a callback that runs out of stack is not a callback that failed',
       () async {
     final chain = _Chain(depth, framesPerCallback: 400);
@@ -196,19 +261,28 @@ final class _Chain {
   /// How many levels the cascade reached before it ran out of stack.
   int get marked => jobs.where((job) => job.isCancelled).length;
 
-  /// The marked levels that were never told to stop.
+  /// Lets the deepest level return, so the chain can drain.
+  void release() => _never.complete();
+
+  /// The marked levels that were never told to stop, apart from a handful
+  /// at the deep end.
   ///
-  /// A callback of this chain only writes a flag, so it needs no stack of
-  /// its own and none is lost: measured at zero, here and at the bottom.
-  /// The four levels of slack are for a machine whose frames fall
-  /// differently -- a callback that does need frames may not get them at
-  /// the very deep end, which is what the last test of this file is
-  /// about. Without the guard on the unwinding the count is not a handful
-  /// but every one of them.
+  /// The handful is real and it moves. A callback of this chain only
+  /// writes a flag, so it asks for almost no stack of its own -- and
+  /// still, between runs of the same file, between none and five of the
+  /// deepest lose theirs: the cascade calls the same method thousands of
+  /// times in a row, the compiler installs optimized code somewhere in
+  /// the middle of the descent, and whether it got there before the
+  /// bottom decides how large the frames down there are. Under
+  /// `--no-background-compilation` the count is zero every time; a run
+  /// that lost five was seen under the plain runner. Sixteen is that
+  /// handful with room over it. Without the guard on the unwinding the
+  /// count is not a handful but every one of them, so the slack costs
+  /// the test nothing.
   List<int> get silent {
     final reached = marked;
     return [
-      for (var index = 0; index < reached - 4; index++)
+      for (var index = 0; index < reached - 16; index++)
         if (!toldToStop[index]) index,
     ];
   }
@@ -238,3 +312,7 @@ final class _Chain {
 
 /// Asks the stack for [frames] frames and gives them back.
 int _burn(int frames) => frames == 0 ? 0 : _burn(frames - 1) + 1;
+
+/// Asks the stack for everything it has, the way a callback with a bug
+/// of its own does.
+int _forever(int depth) => _forever(depth + 1) + 1;

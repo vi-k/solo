@@ -221,9 +221,11 @@
   them, and the one that runs the stack out may be a chain of thousands next to
   a leaf -- and an overflow landing in a cancellation callback at the very
   bottom is not announced as a failure of that callback, which would name it
-  for something it did not do. What lies below the break is still left running:
-  the depth of a tree is bounded by the stack either way, and `doc/children.md`
-  says by how much.
+  for something it did not do -- there and nowhere else, though: a callback
+  that runs out of stack anywhere but under that unwinding did it by itself,
+  and its error goes to `onError` and changes nothing else, as it always has.
+  What lies below the break is still left running: the depth of a tree is
+  bounded by the stack either way, and `doc/children.md` says by how much.
 
 ## 0.2.0
 
