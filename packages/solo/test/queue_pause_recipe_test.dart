@@ -12,7 +12,7 @@ import 'support/test_state.dart';
 
 /// The gate recipe from `doc/jobs.md`, written as the page shows it.
 ///
-/// The page promises four things about it, and each of them is a promise
+/// The page promises six things about it, and each of them is a promise
 /// about the queue rather than about the gate. They are pinned here so a
 /// change to the queue cannot quietly turn the recipe into a lie.
 Completer<void>? _gate;
@@ -21,10 +21,11 @@ void pauseQueue(TestSolo solo) {
   if (_gate != null) return;
   final gate = _gate = Completer<void>();
   solo.add(
-    solo.job<TestState, void>(
-      key: 'gate',
-      (ctx) => ctx.wait(() => gate.future),
-    ),
+    solo.job<TestState, void>(key: 'gate', (ctx) async {
+      ctx.onCancel(() => _gate = null);
+      await ctx.wait(() => gate.future);
+    }),
+    first: true,
   );
 }
 
@@ -62,6 +63,22 @@ void main() {
         '[b] started',
         '[c] started',
       ]);
+    });
+  });
+
+  test('a job already queued waits for a pause added after it', () {
+    runSolo((solo, journal, async) {
+      solo
+        ..add(work(solo, 'a'))
+        ..add(work(solo, 'b'));
+      async.flushMicrotasks();
+      expect(solo.current?.key, 'a', reason: 'a runs, b waits');
+
+      pauseQueue(solo);
+      async.elapse(const Duration(milliseconds: 100));
+
+      expect(solo.current?.key, 'gate', reason: 'the gate went in first');
+      expect(solo.queue.length, 1, reason: 'b is still waiting behind it');
     });
   });
 
@@ -104,11 +121,18 @@ void main() {
       solo.add(work(solo, 'a'));
       async.flushMicrotasks();
 
+      final gate = _gate!;
       solo.cancelAll(force: true);
       async.flushTimers();
 
-      expect(_gate!.isCompleted, isFalse, reason: 'nobody opened the gate');
+      expect(gate.isCompleted, isFalse, reason: 'nobody opened the gate');
       expect(solo.queue.length, 0, reason: 'and the queue ran anyway');
+      expect(_gate, isNull, reason: 'a cancelled gate is not a pause');
+
+      // And the field being clear is what lets the next pause happen.
+      pauseQueue(solo);
+      async.flushMicrotasks();
+      expect(solo.current?.key, 'gate', reason: 'the second gate holds');
     });
   });
 }

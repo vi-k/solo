@@ -177,7 +177,14 @@ Completer<void>? _gate;
 void pause() {
   if (_gate != null) return;
   final gate = _gate = Completer<void>();
-  run<Ready, void>(key: _Op.pause, (ctx) => ctx.wait(() => gate.future));
+  add(
+    job<Ready, void>(key: _Op.pause, (ctx) async {
+      // Cancellation is not a resume, and a cancelled gate is not a pause.
+      ctx.onCancel(() => _gate = null);
+      await ctx.wait(() => gate.future);
+    }),
+    first: true,
+  );
 }
 
 void resume() {
@@ -187,17 +194,20 @@ void resume() {
 ```
 
 There is no pause in the API, and a job waiting on a `Completer` is one. It
-holds the head of the queue; everything submitted behind it waits, and
-completing the `Completer` lets the queue run in the order it was asked for.
-The cases:
+goes in `first`, so what is already queued waits along with everything
+submitted later, and completing the `Completer` lets the queue run in the order
+it was asked for. A gate can also leave without a `resume` — `close`, a forced
+`cancelAll` — and `ctx.onCancel` clears the field when it does, or the
+controller would go on believing it is paused while the queue runs. The cases:
 
 | What you do | What happens |
 | --- | --- |
 | `pause()`, then submit three jobs | The three wait, and no outcome is reached. |
+| `pause()` with three already queued | They wait too: the gate goes in ahead of everything but the running job. |
 | `resume()` | They run, in the order they were submitted. |
 | `queue.clear()` while paused | The queue empties and the pause stands: the gate is the running job, not a queued one. |
 | `close()` while paused | It comes back without a `resume`: the gate is cancellable, and `ctx.wait` hands it the cancellation. |
-| `cancelAll(force: true)` | The gate goes with everything else and the queue moves on, with nobody having opened it. |
+| `cancelAll(force: true)` | The gate goes with everything else and the queue moves on, with nobody having opened it; the field is clear, so `pause()` works again. |
 
 What the gate does not give you is a name. The observer sees an ordinary job
 start, and `pending` answers with the gate rather than with work, so a screen
