@@ -896,6 +896,55 @@ void main() {
     );
   });
 
+  test('a receiver registers through wait, and the next line is too late', () {
+    // The document promises this much: a child that refuses the stop ends
+    // [Done] while its parent is already cancelled, `ctx.run` throws the
+    // parent's own [Cancelled], and a registration written after it never
+    // happens. Taken through `wait`, the same value still reaches a
+    // `discard`.
+    List<String> run({required bool throughWait}) {
+      final closed = <String>[];
+      fakeAsync((async) {
+        final child = Job.deferred<String>(
+          cancellable: false,
+          (ctx) async {
+            await ctx.wait(() => delay(20));
+
+            return ctx.wait(() => 'db', discard: (db) => closed.add('inner'));
+          },
+        );
+        final parent = Job<String>(
+          (ctx) async {
+            if (throughWait) {
+              return ctx.wait(
+                () => ctx.run(child),
+                discard: (db) => closed.add('outer'),
+              );
+            }
+            final db = await ctx.run(child);
+            closed.add('registered');
+            ctx.onDiscard(() => closed.add('outer'));
+
+            return db;
+          },
+        )..ignore();
+        async.elapse(const Duration(milliseconds: 5));
+        parent.cancel().ignore();
+        async.flushTimers();
+      });
+
+      return closed;
+    }
+
+    expect(
+      run(throughWait: false),
+      isEmpty,
+      reason: 'the child handed its value over, and the line that would '
+          'have registered it was never reached',
+    );
+    expect(run(throughWait: true), ['outer']);
+  });
+
   test('a successful job lets go of the registrations it never ran', () {
     late Job<Object> job;
     fakeAsync((async) {

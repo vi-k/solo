@@ -32,27 +32,44 @@ return database;
 Условная регистрация решается исходом того задания, которое её сделало, и ничем
 больше. Задание, кончившееся `Done`, отдало своё значение кому-то, поэтому его
 `discard` отбрасывается вместе со значением, и получателю его не несёт ничто.
-Вот база, которую некому закрыть:
+Здесь `connect` открывает базу, а `ready` отдаёт её уже с миграцией:
 
 ```dart
-final opener = Job.deferred<Database>(
+final connect = Job.deferred<Database>(
   (ctx) => ctx.wait(Database.open, discard: (db) => db.close()),
 );
-final wrapper = Job.deferred<Database>((ctx) => ctx.run(opener));
+
+final ready = Job.deferred<Database>((ctx) async {
+  final database = await ctx.run(connect);
+  await ctx.join(() => database.migrate());
+
+  return database;
+});
 ```
 
-`opener` кончился `Done`, поэтому его `discard` не выполняется; у `wrapper`
-есть база и нет своей регистрации, и при его отказе или отмене соединение
-остаётся открытым. Регистрируйте ресурс там, где он получен, — дальше правило
-действует само:
+`connect` кончился `Done`, поэтому его `discard` не выполняется, — и когда
+миграция падает, у `ready` есть база и нет своей регистрации, так что
+соединение остаётся открытым и закрыть его некому. Регистрируйте ресурс там,
+где он получен, — дальше правило действует само:
 
 ```dart
-final wrapper = Job.deferred<Database>(
-  (ctx) => ctx.wait(() => ctx.run(opener), discard: (db) => db.close()),
-);
+final ready = Job.deferred<Database>((ctx) async {
+  final database = await ctx.wait(
+    () => ctx.run(connect),
+    discard: (db) => db.close(),
+  );
+  await ctx.join(() => database.migrate());
+
+  return database;
+});
 ```
 
-Теперь `wrapper` закрывает базу, когда кончается чем угодно, кроме значения,
+Через `wait`, а не обычным `await` с `onDiscard` следующей строкой: ребёнок,
+отвергающий отмену, кончается `Done`, когда родитель уже отменён, `ctx.run`
+бросает тогда отмену самого родителя, и до регистрации на следующей строке дело
+не доходит. `wait` значение всё равно получает и `discard` выполняет.
+
+Теперь `ready` закрывает базу, когда кончается чем угодно, кроме значения,
 и отдаёт её нетронутой, когда кончается успехом, — получателю, который
 зарегистрирует её так же. Это верно для любой передачи, включая группу: ветка
 `ctx.runAll`, получившая значение от своего ребёнка, регистрирует его

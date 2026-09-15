@@ -31,31 +31,49 @@ that resource on success, because the callback will not run.
 registration is settled by the outcome of the job that made it, and by nothing
 else. A job that ends `Done` handed its value to somebody, so its `discard` is
 dropped together with the value, and nothing carries it to the receiver. Here
-the database ends up with nobody to close it:
+`connect` opens the database and `ready` hands it on migrated:
 
 ```dart
-final opener = Job.deferred<Database>(
+final connect = Job.deferred<Database>(
   (ctx) => ctx.wait(Database.open, discard: (db) => db.close()),
 );
-final wrapper = Job.deferred<Database>((ctx) => ctx.run(opener));
+
+final ready = Job.deferred<Database>((ctx) async {
+  final database = await ctx.run(connect);
+  await ctx.join(() => database.migrate());
+
+  return database;
+});
 ```
 
-`opener` ended `Done`, so its `discard` never runs; `wrapper` has a database
-and no registration of its own, and when it fails or is cancelled the
-connection stays open. Register the resource where it arrives, and the rule
-carries on from there:
+`connect` ended `Done`, so its `discard` never runs — and when the migration
+fails, `ready` has a database and no registration of its own, so the connection
+stays open with nobody left to close it. Register the resource where it
+arrives, and the rule carries on from there:
 
 ```dart
-final wrapper = Job.deferred<Database>(
-  (ctx) => ctx.wait(() => ctx.run(opener), discard: (db) => db.close()),
-);
+final ready = Job.deferred<Database>((ctx) async {
+  final database = await ctx.wait(
+    () => ctx.run(connect),
+    discard: (db) => db.close(),
+  );
+  await ctx.join(() => database.migrate());
+
+  return database;
+});
 ```
 
-Now `wrapper` closes the database when it ends in anything but a value, and
-hands it on untouched when it succeeds — to a receiver that registers it the
-same way. This holds for every hand-over, a group included: a branch of
-`ctx.runAll` that got its value from a child of its own registers it on arrival
-like anyone else.
+Through `wait` and not a plain `await` with an `onDiscard` after it: a child
+that refuses a cancellation ends `Done` while its parent is already cancelled,
+`ctx.run` then throws the parent's own `Cancelled`, and a registration written
+on the next line is never reached. `wait` is handed the value all the same and
+runs the `discard`.
+
+Now `ready` closes the database when it ends in anything but a value, and hands
+it on untouched when it succeeds — to a receiver that registers it the same
+way. This holds for every hand-over, a group included: a branch of `ctx.runAll`
+that got its value from a child of its own registers it on arrival like anyone
+else.
 
 The debug channel names every hand-over, whether or not the receiver registered
 anything, so the places where this rule applies can be read off a run:
