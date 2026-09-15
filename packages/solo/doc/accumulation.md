@@ -226,8 +226,8 @@ after its owner has already picked the dark one.
 
 #### The second attempt
 
-`Policy.restart` cancels the write that is running when the next change
-arrives. Only the method changes:
+`Policy.restart` removes the queued writes with that key and asks the running
+one to stop. Only the method changes:
 
 ```dart
 SoloJob<void> update(SettingsPatch patch) => run<Settings, void>(
@@ -251,8 +251,11 @@ the screen ends up with notifications: false, theme: light, language: ru
 The switch went back off and the theme went back to light. Each job reads the
 state it starts with and writes a whole `Settings`, so a job that replaces
 another does not inherit what that one was going to change — it overwrites it
-from a state where it never happened. Two of the user's three changes are gone,
-from the server and from the screen both, and nothing failed.
+from a state where it never happened. The first of the two writes is the one
+restart asked to stop, and it went out all the same: `ctx.join` waits for the
+call it made, and `_api.save` has no way to hear the request. Two of the user's
+three changes are gone, from the server and from the screen both, and nothing
+failed.
 
 #### The accumulator
 
