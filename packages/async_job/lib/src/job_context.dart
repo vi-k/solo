@@ -265,9 +265,13 @@ abstract interface class JobContext {
   /// The registration goes nowhere with the value. It is settled by the
   /// outcome of the job that made it, so a job that took the value — a
   /// parent awaiting [run], a caller holding [Job.value] — has to register
-  /// its release itself, and `ctx.wait(() => ctx.run(child), discard: ...)`
-  /// is how a parent does that. The debug channel names every job that
-  /// handed a value over and dropped registrations doing so.
+  /// its release itself, and `ctx.run(child, discard: ...)` is how a
+  /// parent does that. On the call and not on the line after it: `run`
+  /// checks the parent once the value is in hand, for cancellation and
+  /// for the rules of its domain, and a checkpoint that throws there takes
+  /// the value with it — the line that would have registered the release
+  /// is never reached. The debug channel names every job that handed a
+  /// value over and dropped registrations doing so.
   ///
   /// A job that returns nothing hands that nothing over all the same: it
   /// ends [Done], and a registration made here never runs. For a resource

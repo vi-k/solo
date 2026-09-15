@@ -1010,6 +1010,44 @@ void main() {
     );
   });
 
+  test('the wrapper around run does not reach that value', () {
+    // The same setup, written the way the recipe used to read. The
+    // registration of the outer `wait` is made against the value that
+    // `run` returns -- and at this checkpoint `run` throws instead of
+    // returning, so there is nothing to register against and nobody
+    // closes the resource. Pinned as the boundary it is: the parameter on
+    // `run` exists because of exactly this.
+    final closed = <String>[];
+    late CheckingJob<String> parent;
+    late CheckingContext rules;
+    fakeAsync((async) {
+      final child = Job.deferred<String>(
+        observer: FinishHook(
+          (_) => rules.rules = () => throw const Cancelled('keepWhile'),
+        ),
+        (ctx) => ctx.wait(() => 'db', discard: (db) => closed.add('child')),
+      );
+      parent = CheckingJob<String>((ctx) {
+        rules = ctx;
+
+        return ctx.wait(
+          () => ctx.run(child),
+          discard: (db) => closed.add('parent'),
+        );
+      })
+        ..launch()
+        ..ignore();
+      async.flushTimers();
+    });
+    expect(parent.outcome, isA<Cancelled>(), reason: 'the rule still rules');
+    expect(
+      closed,
+      isEmpty,
+      reason: 'the value never came back, so the wrapper had nothing to '
+          'register and the resource is left open',
+    );
+  });
+
   test('a dispose of run runs whatever the outcome, a discard only if kept',
       () {
     List<String> run({required bool byDispose, required bool succeed}) {

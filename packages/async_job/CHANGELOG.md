@@ -81,9 +81,12 @@
   with the value and is gone, and the line that would have made the next one is
   never reached: `parent=Cancelled(rules) child=Done(db)` with nothing closed.
   **Migrating.** Nothing breaks at a call site: `ctx.run(child)` is unchanged,
-  and `ctx.wait(() => ctx.run(child), discard: ...)` keeps working and stays
-  correct. A registration written on the line after `await ctx.run(child)` is
-  the one to move into the call. See `doc/cleanup.md`.
+  and `ctx.wait(() => ctx.run(child), discard: ...)` still compiles and still
+  closes what it took on every path it ever did. It does not close this one,
+  and it never could: its registration is made against the value `run` returns,
+  and at this checkpoint `run` throws instead of returning. That wrapper and a
+  registration written on the line after `await ctx.run(child)` are both the
+  ones to move into the call. See `doc/cleanup.md`.
 - **Added:** the debug channel names a job that handed its value over and
   dropped the conditional registrations that went with it --
   `Job(opener) handed its value over: 1 conditional cleanup dropped`. A
