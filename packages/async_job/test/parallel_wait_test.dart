@@ -839,6 +839,61 @@ void main() {
       expect(outcome.reason, isA<HandlerCancelReason>());
     });
 
+    test('eagerError wakes the body early and ends nothing early', () async {
+      // What `doc/children.md` promises about the idiom: the body wakes on
+      // the first error, nothing asks the other branch to stop, and the job
+      // still ends with its last child — by which time a body that caught
+      // the error has already decided the outcome, and a resource the slow
+      // branch returned has gone to a `Future.wait` that is over.
+      final slow = Completer<void>();
+      final errors = <Object>[];
+      final closed = <String>[];
+      var bodyWoke = false;
+      var finished = false;
+      final quick = Job.deferred<String>((ctx) async => throw StateError('q'));
+      final late = Job.deferred<String>((ctx) async {
+        await ctx.wait(() => slow.future);
+
+        return ctx.wait(() => 'db', discard: closed.add);
+      });
+      final job = Job<void>(observer: ErrorObserver(errors), (ctx) async {
+        try {
+          await Future.wait(
+            [ctx.run(quick), ctx.run(late)],
+            eagerError: true,
+          );
+        } on Object {
+          bodyWoke = true;
+        }
+      });
+      unawaited(job.done.then((_) => finished = true));
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(bodyWoke, isTrue, reason: 'the first error reached the body');
+      expect(
+        finished,
+        isFalse,
+        reason: 'and the job is still waiting for the branch nobody stopped',
+      );
+
+      slow.complete();
+      final outcome = await job.done;
+      expect(
+        outcome,
+        isA<Done<void>>(),
+        reason: 'the body caught the error and returned, so a failed branch '
+            'left the job successful',
+      );
+      expect(
+        closed,
+        isEmpty,
+        reason: 'the branch handed its value to a `Future.wait` that had '
+            'already completed, and nobody closed it',
+      );
+      expect(errors, [isA<StateError>()], reason: 'only the branch own error');
+    });
+
     test('an intentional envelope and a nested Failed stay opaque', () async {
       final failure = StateError('intentional failure');
       final envelope = _listEnvelope([AsyncError(failure, StackTrace.current)]);

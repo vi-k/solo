@@ -349,7 +349,9 @@ abstract interface class JobContext {
   /// depend on each other's failure, or when one of them waits for another.
   /// Take this one when a result missing one of its parts is of no use
   /// anyway: it asks the rest to stop, holds every branch until the decision
-  /// is made, and throws the outcome itself.
+  /// is made, and throws the outcome itself. `eagerError: true` is not the
+  /// middle ground it looks like: it wakes the body on the first error and
+  /// asks nobody to stop, so the job still ends with its last child.
   ///
   /// **The stop is cooperative.** A branch that waits through [wait] ends,
   /// and the operation behind it plays on and writes its result; to stop

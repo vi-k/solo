@@ -49,9 +49,22 @@ survives. `.wait` collects every error into one `ParallelWaitError`, and the
 kernel reads that envelope: one carrying cancellations and successes ends the
 parent with that cancellation, exactly as awaiting a single child does, while
 one carrying a real failure stays a failure, with its errors and values
-untouched. `Future.wait` reports the first error to reach it and discards the
-rest -- a cancellation among them included -- where neither the observer nor
-the zone will ever see them.
+untouched. `Future.wait` keeps the first error to reach it and lets the rest
+go: what they were stays out of the parent's outcome, and a cancellation among
+them leaves no trace at all. Each failed child still announces its own failure
+to its observer -- and only there, so a parent whose children have no observer
+loses those errors entirely: the body took their futures, and that counts as
+answering for them.
+
+`eagerError: true` changes neither of those, and buys no early end. The body
+wakes on the first error, but nothing asks the other branches to stop and the
+kernel waits for its children regardless, so the job still ends when the last
+of them does. What the early waking does change is who decides: a body that
+catches the error and returns ends the job `Done` with a branch failed, and a
+branch that opened a resource and returned it hands it to a `Future.wait` that
+has already completed, where nobody closes it. Inside a body, take `ctx.runAll`
+when one failure makes the rest pointless, and `[ctx.run(a), ctx.run(b)].wait`
+when it does not.
 
 Neither of them stops a branch early. `.wait` returns once every branch is
 done, so a sibling of a cancelled child runs to its end; what the parent's
