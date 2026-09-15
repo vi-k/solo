@@ -387,12 +387,21 @@ abstract class JobBase<T> implements Job<T> {
   Outcome<T>? _outcome;
   Cancelled? _pendingCancel;
   bool _bodyEnded = false;
+
+  /// What the body ended with, from that moment until the job has an
+  /// outcome of its own.
+  ///
+  /// A group of [JobContext.runAll] attaches its hold after the branch is
+  /// admitted, and a body that throws before its first `await` has ended
+  /// by then: the early word found nothing to say itself to. This is
+  /// where the group reads what it was not there to hear.
+  Outcome<T>? _bodyOutcome;
   bool _disposing = false;
   int _level = 0;
 
   /// What holds this job while a group of [JobContext.runAll] decides.
   ///
-  /// Set by the group before the branch starts and never again. The
+  /// Set by the group once the branch is admitted and never again. The
   /// branch stands at its barriers in [_execute] and takes the verdict
   /// from there; a job nobody grouped has none of this.
   _GroupHold? _hold;
@@ -1011,6 +1020,7 @@ abstract class JobBase<T> implements Job<T> {
     // The body has ended: from here a value coming out of a call it walked
     // away from can no longer reach it, and no child is started any more.
     _bodyEnded = true;
+    _bodyOutcome = outcome;
     // The early word of a branch to its group: the siblings are asked to
     // stop while this one is still waiting for its own descendants. It
     // decides nothing and hands nothing over — what comes out of a group

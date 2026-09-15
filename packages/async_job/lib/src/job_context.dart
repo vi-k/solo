@@ -1368,8 +1368,9 @@ final class _RunAllGroup<T> {
       // is not cosmetic: a handle already running as a branch of another
       // group is refused here by `StateError`, and touching its hold on
       // the way would take that group's branch out of its hold — the very
-      // hole this member exists to close. Safe after, because the body
-      // cannot reach a seam before this returns: `_execute` awaits it.
+      // hole this member exists to close. The barriers are safe after:
+      // `_execute` awaits the descendants before it reaches one. The early
+      // word is not, and it is read off the branch below.
       final branch = _GroupBranch<T>(child);
       branch.job._hold = _holdFor(branch);
       _branches.add(branch);
@@ -1379,6 +1380,22 @@ final class _RunAllGroup<T> {
       branch.job.done
           .then((outcome) => _branchFinished(branch, outcome))
           .ignore();
+    }
+    // The early word a branch said before it had a hold. A body that
+    // throws before its first `await` runs to its end inside `startChild`,
+    // and the hold attached a line later was not there to hear it. Read
+    // here and not from the loop: until every branch is admitted and on
+    // the list, a stop would go round the siblings the loop has not
+    // started yet. Still the same synchronous step, so none of them has
+    // moved past its first suspension point, and the stop reaches every
+    // one of them before it does any more work.
+    for (final branch in _branches) {
+      if (branch.bodyOutcome != null) {
+        continue;
+      }
+      if (branch.job._bodyOutcome case final outcome?) {
+        _branchBodyEnded(branch, outcome);
+      }
     }
     if (_refusal case final refusal?) {
       if (_branches.isEmpty) {

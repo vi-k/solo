@@ -1,5 +1,16 @@
 ## Unreleased
 
+- **Fix:** `ctx.runAll` stops the siblings when a branch throws before its
+  first `await`. The group attaches its hold once the branch is admitted --
+  before that a handle already running as somebody else's branch would be
+  pulled out of their hold -- and a body that is not `async` has ended inside
+  `startChild`, one line earlier. Its early word found nothing to say itself
+  to, so the group learned of the trouble only at the second barrier: the
+  siblings played out in full, opened what they opened, wrote what they wrote,
+  and were then handed `Cancelled(sibling)`, which says the opposite. The group
+  now reads that early word off the branch itself, in the same synchronous step
+  that started them all, so the stop reaches every sibling before it moves past
+  its first suspension point.
 - **Fix:** a job giving up no longer reaches `JobObserver.onError`. A call the
   body walked away from with `ctx.wait` keeps the context, and after the mark
   every door back into it -- `check`, `join`, `run` -- throws the very

@@ -1939,4 +1939,48 @@ void main() {
       expect(reader.outcome, isA<Done<void>>());
     });
   });
+
+  test('a branch that throws before its first await stops the siblings', () {
+    fakeAsync((async) {
+      final ran = <String>[];
+      Duration? endedAt;
+      Object? caught;
+      final b = Job.deferred<void>(key: 'b', (ctx) async {
+        await ctx.wait(() => delay(300));
+        ran.add('b reached its end');
+      });
+      Job<void>((ctx) async {
+        try {
+          await ctx.runAll([
+            // Not `async`, so it throws inside `startChild` itself: the
+            // body is over before the group has anything attached to it.
+            Job.deferred<void>(key: 'a', (ctx) => throw StateError('boom')),
+            b,
+          ]);
+        } on Object catch (error) {
+          caught = error;
+          endedAt = async.elapsed;
+        }
+      }).ignore();
+      async.flushTimers();
+      expect(caught, isA<StateError>());
+      expect(
+        ran,
+        isEmpty,
+        reason: 'the stop is what this member is for, and a body that throws '
+            'before its first await is still a branch going wrong',
+      );
+      expect(
+        endedAt,
+        Duration.zero,
+        reason: 'nobody waits for the sibling to play its 300 ms out',
+      );
+      expect(b.outcome, isA<Cancelled>());
+      expect(
+        (b.outcome! as Cancelled).reason,
+        isA<SiblingCancelReason>(),
+        reason: 'and the outcome says what actually happened',
+      );
+    });
+  });
 }
