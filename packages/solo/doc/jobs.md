@@ -209,6 +209,12 @@ controller would go on believing it is paused while the queue runs. The cases:
 | `close()` while paused | It comes back without a `resume`: the gate is cancellable, and `ctx.wait` hands it the cancellation. |
 | `cancelAll(force: true)` | The gate goes with everything else and the queue moves on, with nobody having opened it; the field is clear, so `pause()` works again. |
 
+`pause()` returns nothing on purpose. The handle `add` gives back belongs to
+the gate, and it ends when the pause ends rather than when it begins — `Done`
+on a `resume`, `Cancelled(closed)` on a `close`. Returning it invites the habit
+every other method on this page teaches, and an awaited `pause()` waits for the
+`resume` its caller was about to make.
+
 What the gate does not give you is a name. The observer sees an ordinary job
 start, and `pending` answers with the gate rather than with work, so a screen
 showing what runs shows the pause instead. Whether the controller is paused is

@@ -12,7 +12,7 @@ import 'support/test_state.dart';
 
 /// The gate recipe from `doc/jobs.md`, written as the page shows it.
 ///
-/// The page promises six things about it, and each of them is a promise
+/// The page promises seven things about it, and each of them is a promise
 /// about the queue rather than about the gate. They are pinned here so a
 /// change to the queue cannot quietly turn the recipe into a lie.
 Completer<void>? _gate;
@@ -106,12 +106,29 @@ void main() {
       pauseQueue(solo);
       solo.add(work(solo, 'a'));
       async.flushMicrotasks();
+      final gate = solo.current!;
 
       var closed = false;
       unawaited(solo.close().then((_) => closed = true));
       async.flushTimers();
 
       expect(closed, isTrue, reason: 'the gate is cancellable');
+      expect(gate.outcome, isA<Cancelled>(), reason: 'closed, not resumed');
+    });
+  });
+
+  test('the gate handle ends with the pause, not with its start', () {
+    runSolo((solo, journal, async) {
+      pauseQueue(solo);
+      async.flushMicrotasks();
+      final gate = solo.current!;
+
+      expect(gate.outcome, isNull, reason: 'the pause is on; nothing is over');
+
+      resumeQueue();
+      async.flushTimers();
+
+      expect(gate.outcome, isA<Done<void>>(), reason: 'it ends with the pause');
     });
   });
 
