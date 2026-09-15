@@ -19,12 +19,12 @@ Job<void> record() => run<Ready, void>(
 ```
 
 The first type argument of `run<W, T>` is the job's working state type,
-`W extends S`. The body reads `ctx.state` as `W`, so `run<Ready, void>` can
-start only in `Ready`. When another state update sets `paused` to true,
-`keepWhile` cancels the recording; the callback does not need to repeat that
-condition. Here `Ready`, `camera` and `store` belong to the application, and
-`ctx.each` processes the stream — its full lifecycle is explained under
-[Children and streams](children.md).
+`W extends S`. The engine checks it, so `run<Ready, void>` starts only in
+`Ready`; the body reads `ctx.state` as `W` for the same reason. When another
+state update sets `paused` to true, `keepWhile` cancels the recording; the
+callback does not need to repeat that condition. Here `Ready`, `camera` and
+`store` belong to the application, and `ctx.each` processes the stream — its
+full lifecycle is explained under [Children and streams](children.md).
 
 Use separate classes when states allow different operations, and shared base
 types when an operation can span several states.
