@@ -1,5 +1,16 @@
 ## Unreleased
 
+- **Breaking:** `Policy.droppable` compares the result types of the two jobs
+  with each other, instead of matching the one it found against the type
+  argument of the call. `void` is a top type, so the old check said yes to
+  every job there is: a `Job<void>` added under a key a `Job<String>` held was
+  dropped as an ordinary duplicate and `add` handed back the `Job<String>`
+  typed as `SoloJob<void>`, so the work the caller asked for never ran and the
+  handle it holds is somebody else's. A supertype was waved through the same
+  way -- a `Job<Object>` on a key held by a `Job<String>`. Both throw
+  `ArgumentError` now, and, as before, they throw before the new job is taken,
+  so the refused handle is untouched and can still be added.
+
 - **Breaking:** `collect` and `accumulate` default to
   `AccumulationPolicy.join`, not `adjacent`. A job of another kind queued
   between two events is no longer a boundary: the events are one group, where

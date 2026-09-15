@@ -385,9 +385,14 @@ abstract class SoloBase<S extends Object> {
     // hand back. Nothing between here and the branch touches the queue. A
     // closed controller never reaches a policy and keeps its own answer.
     final duplicate = !isClosed && policy == Policy.droppable
-        ? lastJobWhere((other) => other.key == impl.key)
+        ? _lastJobWhere((other) => other.key == impl.key)
         : null;
-    if (duplicate != null && duplicate is! SoloJob<T>) {
+    // The two jobs are compared with each other, not with `T`: the type
+    // argument of this call is whatever the call site wrote down, and a
+    // `SoloJob<void>` accepts any job at all — `void` is a top type, so
+    // `is SoloJob<void>` is true of a `Job<String>` and the caller would
+    // get somebody else's job back while its own work never ran.
+    if (duplicate != null && duplicate._resultType != impl._resultType) {
       throw ArgumentError.value(
         job,
         'job',
@@ -538,7 +543,12 @@ abstract class SoloBase<S extends Object> {
   /// The last queued job matching [test], else the current job if it
   /// matches, else `null`.
   @protected
-  SoloJob<Object?>? lastJobWhere(bool Function(Job<Object?> job) test) {
+  SoloJob<Object?>? lastJobWhere(bool Function(Job<Object?> job) test) =>
+      _lastJobWhere(test);
+
+  _SoloJob<S, S, Object?>? _lastJobWhere(
+    bool Function(Job<Object?> job) test,
+  ) {
     for (final job in _queue._jobs.reversed) {
       if (test(job)) {
         return job;

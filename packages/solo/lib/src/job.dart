@@ -53,6 +53,14 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   @override
   bool get isQueued => _solo._queue._jobs.contains(this);
 
+  /// The result type this job was created with.
+  ///
+  /// Read off the instance rather than matched against a type argument:
+  /// two jobs under one key have to be the same operation, and `is`
+  /// answers yes to a supertype — to every job at all when the type
+  /// asked about is `void`.
+  Type get _resultType => T;
+
   @override
   void adoptedBy(JobContextBase parent) {
     if (parent is! _SoloContext<S, S, Object?> ||

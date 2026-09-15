@@ -177,6 +177,70 @@ void main() {
     });
   });
 
+  test('droppable refuses a void job for a key held by another type', () {
+    runSolo((solo, journal, async) {
+      final first = solo.run<TestState, int>(
+        key: 'shared',
+        policy: Policy.droppable,
+        (ctx) async {
+          await delay(100);
+
+          return 1;
+        },
+      );
+      async.flushMicrotasks();
+      journal.take();
+      // `void` is a top type, so an `is SoloJob<void>` would say yes to
+      // this `Job<int>` and hand it back as the answer to a save that
+      // never ran. The jobs are compared with each other instead.
+      final refused = solo.job<TestState, void>(key: 'shared', (ctx) async {});
+      expect(
+        () => solo.add(refused, policy: Policy.droppable),
+        throwsArgumentError,
+      );
+      expect(
+        journal.lines,
+        isEmpty,
+        reason: 'the refused job is not buried on the way out',
+      );
+
+      // And it is untouched: the same handle still goes into the queue.
+      expect(refused.outcome, isNull);
+      expect(identical(solo.add(refused), refused), isTrue);
+
+      async.flushTimers();
+      expect(first.outcome, isA<Done<int>>());
+      expect(refused.outcome, isA<Done<void>>());
+    });
+  });
+
+  test('droppable refuses a key held by a job of a narrower type', () {
+    runSolo((solo, journal, async) {
+      solo.run<TestState, String>(
+        key: 'shared',
+        policy: Policy.droppable,
+        (ctx) async {
+          await delay(100);
+
+          return 'x';
+        },
+      );
+      async.flushMicrotasks();
+      journal.take();
+      // A `Job<String>` is a `SoloJob<Object>`, so handing it back would
+      // type-check — and the work of this job would be lost all the same.
+      expect(
+        () => solo.run<TestState, Object>(
+          key: 'shared',
+          policy: Policy.droppable,
+          (ctx) async => 1,
+        ),
+        throwsArgumentError,
+      );
+      expect(journal.lines, isEmpty);
+    });
+  });
+
   test('a policy other than sequential requires a key', () {
     runSolo((solo, journal, async) {
       for (final policy in [Policy.droppable, Policy.replace, Policy.restart]) {

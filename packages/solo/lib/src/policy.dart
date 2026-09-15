@@ -10,9 +10,12 @@ enum Policy {
   /// finish the new one with `Cancelled(manual, 'duplicate')`.
   ///
   /// The job found by the key is handed back as the result type of the new
-  /// one, so reusing one key for jobs with different result types throws
-  /// [ArgumentError] — before the new job is touched, so it can be added
-  /// again under a key of its own. Give every result type its own key.
+  /// one, so the two result types have to be the same one: a key held by a
+  /// job of another type throws [ArgumentError], and it throws before the
+  /// new job is touched, which leaves that handle good for another `add`.
+  /// The two jobs are compared with each other rather than matched against
+  /// the type argument of the call, which would let a `SoloJob<void>` take
+  /// any job at all. Give every result type its own key.
   droppable,
 
   /// Remove queued jobs with the same key, then append. The running job is
