@@ -129,12 +129,14 @@ gives the policy the identity of one request rather than of the operation:
 `droppable` drops a second load of the same profile and lets a load of another
 one through, where a bare `_Op.load` would have dropped both.
 
-Use a distinct key for each operation and result type. Reusing a key for both
-`Job<String>` and `Job<void>` makes `droppable` throw `ArgumentError`, before
-the new job is touched, so it can be added again under a key of its own. An
-enum with one key per method is a convenient way to avoid this. A
-non-sequential policy with a null key throws `ArgumentError` too, and both
-checks work in release builds.
+Use a distinct key for each operation and result type. A `Job<int>` handed to
+`droppable` under a key a `Job<String>` already holds throws `ArgumentError`,
+and it throws before the job is taken: nothing was queued and nothing was
+cancelled, so the same handle can still be added — under `Policy.sequential`,
+or later, once that key is free. A key is fixed when the job is made, so the
+collision itself is settled where the two jobs are built; an enum with one key
+per method is a convenient way not to have it. A non-sequential policy with a
+null key throws `ArgumentError` too, and both checks work in release builds.
 
 The queue itself is the controller's own, and a method can work it directly:
 
