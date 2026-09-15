@@ -54,6 +54,7 @@ void main() {
 
   test('a hook that throws changes nothing', () {
     final caught = <Object>[];
+    Outcome<int>? outcome;
     runZonedGuarded(
       () {
         fakeAsync((async) {
@@ -63,15 +64,90 @@ void main() {
             (ctx) async => 42,
           );
           async.flushMicrotasks();
-          expect(job.outcome, isA<Done<int>>());
+          outcome = job.outcome;
         });
       },
       (error, stackTrace) => caught.add(error),
     );
+    // Read out here, and not inside the zone above: an `expect` in there
+    // is an error like any other, the handler swallows it, and the test
+    // goes green on nothing.
+    expect(outcome, isA<Done<int>>());
     expect(
       caught.map((error) => '$error').toList(),
       ['Bad state: onStart', 'Bad state: onFinish'],
       reason: 'each hook is isolated on its own',
+    );
+  });
+
+  test('the hooks of a failing job are isolated too', () {
+    final caught = <Object>[];
+    Outcome<int>? outcome;
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          final job = Job<int>(
+            key: 'job',
+            observer: _ThrowingObserver(),
+            (ctx) async {
+              ctx.log('spoken to a hook that throws');
+              throw StateError('boom');
+            },
+          )..ignore();
+          async.flushMicrotasks();
+          outcome = job.outcome;
+        });
+      },
+      (error, stackTrace) => caught.add(error),
+    );
+    // The two hooks the succeeding job above never reaches. Their
+    // isolation is the one whose loss is worst: an `onError` that took the
+    // job down with it would leave it running for good -- `done` never
+    // completes, the parent waits for ever, `cancel` never returns.
+    expect(outcome, isA<Failed>());
+    expect(caught.map((error) => '$error').toList(), [
+      'Bad state: onStart',
+      'Bad state: onLog',
+      'Bad state: onError',
+      'Bad state: onFinish',
+    ]);
+  });
+
+  test('a throwing onError in the unwinding still lets the job finish', () {
+    final caught = <Object>[];
+    Outcome<void>? outcome;
+    var cancelAnswered = false;
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          final job = Job<void>(
+            key: 'job',
+            observer: _ThrowingObserver(),
+            (ctx) async {
+              ctx.onDispose(() => throw StateError('disposer'));
+              await ctx.wait(() => delay(100));
+            },
+          );
+          async.elapse(const Duration(milliseconds: 10));
+          job.cancel().then((_) => cancelAnswered = true).ignore();
+          async.flushTimers();
+          outcome = job.outcome;
+        });
+      },
+      (error, stackTrace) => caught.add(error),
+    );
+    expect(outcome, isA<Cancelled>());
+    expect(
+      cancelAnswered,
+      isTrue,
+      reason: 'whoever waits for the job gets an answer, even though the '
+          'hook that was told about the disposer threw',
+    );
+    expect(
+      caught.map((error) => '$error').toList(),
+      ['Bad state: onStart', 'Bad state: onError', 'Bad state: onFinish'],
+      reason: 'the disposer failed, the hook failed on hearing it, and both '
+          'went to the zone on their own',
     );
   });
 

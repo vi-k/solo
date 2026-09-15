@@ -88,7 +88,15 @@ void main() {
     );
     expect(
       caught.map((error) => '$error').toList(),
-      containsAll(<String>['Bad state: onCancel', 'Bad state: late action']),
+      const <String>[
+        'Bad state: onCancel',
+        // The abandoned `wait` returned a future nobody awaits, and Dart
+        // reports that one itself. Named here rather than left out of a
+        // `containsAll`: this is the whole of what the zone hears, and a
+        // second copy of any of it would be a defect.
+        'Cancelled(manual)',
+        'Bad state: late action',
+      ],
       // The abandoned `wait` also throws its own Cancelled into the zone:
       // nobody awaits the future it returned.
       reason: 'both errors have nowhere else to go',
@@ -124,10 +132,12 @@ void main() {
     );
     expect(
       journal.take(),
-      containsAll(<String>[
+      const <String>[
+        '[job] started',
         '[job] error Bad state: onCancel',
+        '[job] finished Cancelled(manual)',
         '[job] error Bad state: late action',
-      ]),
+      ],
     );
     expect(caught, isEmpty, reason: 'an observer takes the whole path');
   });
@@ -430,12 +440,12 @@ void main() {
     );
     expect(
       journal.lines.where((line) => line.contains('error')).toList(),
-      containsAll(<String>[
+      const <String>[
         '[job] error Cancelled(handler: onCancel)',
-        '[job] error Cancelled(handler: late action)',
         '[job] error Cancelled(handler: disposer)',
         '[job] error Cancelled(handler: unattended)',
-      ]),
+        '[job] error Cancelled(handler: late action)',
+      ],
       reason: 'held back from the zone, not from whoever listens',
     );
     expect(caught, isEmpty);

@@ -9,6 +9,7 @@ import 'package:test/test.dart';
 
 import 'support/cancel_reason.dart';
 import 'support/delay.dart';
+import 'support/journal.dart';
 import 'support/probe_job.dart';
 
 /// Whether the job behind [ctx] is already marked cancelled.
@@ -574,6 +575,54 @@ void main() {
         reason: 'and the children carry the cancellation the parent actually '
             'ended with, not one it never had',
       );
+    });
+  });
+
+  test('a job that refuses cancellation is still dropped before it starts', () {
+    fakeAsync((async) {
+      final job = Job.deferred<int>(cancellable: false, (ctx) async => 1);
+      var answered = false;
+      job.cancel().then((_) => answered = true).ignore();
+      async.flushTimers();
+      expect(
+        answered,
+        isTrue,
+        reason: 'before the start there is no body to protect, and whoever '
+            'cancels must get an answer -- a refusal here leaves the caller '
+            'waiting for a job that will never run',
+      );
+      final outcome = job.outcome! as Cancelled;
+      expect(outcome.started, isFalse);
+      expect(job.start, throwsStateError);
+    });
+  });
+
+  test('a cancellation of a running job is corrected to started', () {
+    fakeAsync((async) {
+      final journal = JobJournal();
+      final job = ProbeJob<void>(
+        key: 'job',
+        observer: journal,
+        (ctx) async => ctx.wait(() => delay(50)),
+      )..launch();
+      async.elapse(const Duration(milliseconds: 10));
+      // An engine of a domain builds its own cancellation, and it may
+      // build one that says the job never ran. It ran: the journal would
+      // otherwise say `dropped` about a job with a body behind it and a
+      // cleanup stack already unwound.
+      job.cancelBy(
+        Cancelled.by(
+          reason: const TestCancelReason('by the engine'),
+          started: false,
+          stackTrace: StackTrace.current,
+        ),
+      );
+      async.flushTimers();
+      expect((job.outcome! as Cancelled).started, isTrue);
+      expect(journal.take(), [
+        '[job] started',
+        '[job] finished Cancelled(by the engine)',
+      ]);
     });
   });
 }

@@ -869,6 +869,36 @@ void main() {
       expect(parent.isFinished, isTrue);
     });
   });
+
+  test(
+      'a parent already giving up turns a child away without asking the '
+      'rules', () {
+    fakeAsync((async) {
+      Object? caught;
+      final parent = ThrowingRulesJob<int>((ctx) async {
+        try {
+          await ctx.wait(() => delay(50));
+        } on Cancelled {
+          // Marked now, and the rule of this domain throws when asked. It
+          // must not be asked: the mark turns the child away first, or
+          // the parent would end `Failed(StateError)` where it is plainly
+          // cancelled.
+          try {
+            ctx.run(Job.deferred<void>(key: 'child', (c) async {})).ignore();
+          } on Object catch (error) {
+            caught = error;
+          }
+        }
+        return 7;
+      })
+        ..launch();
+      async.elapse(const Duration(milliseconds: 10));
+      parent.cancel().ignore();
+      async.flushTimers();
+      expect(caught, isA<Cancelled>());
+      expect(parent.outcome, isA<Cancelled>());
+    });
+  });
 }
 
 /// A handle that implements [Job] without being a job of this core.

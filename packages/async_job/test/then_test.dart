@@ -21,7 +21,30 @@ class _Observer extends JobObserver {
       this.error?.call(job, error);
 }
 
+/// Continuations that must not run, and did.
+final ran = <String>[];
+
+/// The body of a continuation that must not run.
+///
+/// Not `fail(...)`: a body reached after the mark has whatever it throws
+/// covered by the cancellation -- the outcome stays `Cancelled`, nothing
+/// comes out, and the test passes over a body that ran. Recorded here and
+/// read in `tearDown`, where nothing can cover it.
+Future<T> mustNotRun<T>(String name) async {
+  ran.add(name);
+  throw StateError('$name ran');
+}
+
 void main() {
+  setUp(ran.clear);
+  tearDown(
+    () => expect(
+      ran,
+      isEmpty,
+      reason: 'a continuation whose body must not run, ran',
+    ),
+  );
+
   test('each continuation starts after its predecessor cleanup', () {
     fakeAsync((async) {
       final order = <String>[];
@@ -150,8 +173,8 @@ void main() {
         final a = Job<int>((ctx) async {
           Error.throwWithStackTrace(error, stack);
         });
-        final b = a.then<int>((ctx, value) => fail('b must not run'));
-        c = b.then<int>((ctx, value) => fail('c must not run'));
+        final b = a.then<int>((ctx, value) => mustNotRun('b must not run'));
+        c = b.then<int>((ctx, value) => mustNotRun('c must not run'));
       }, (error, stack) {
         errors.add(error);
         stacks.add(stack);
@@ -172,7 +195,7 @@ void main() {
         (ctx) => ctx.join(() => body.future),
         cancellable: false,
       );
-      final b = a.then<int>((ctx, value) => fail('b must not run'));
+      final b = a.then<int>((ctx, value) => mustNotRun('b must not run'));
       async.flushMicrotasks();
       var cancelled = false;
       unawaited(b.cancel().then((_) => cancelled = true));
@@ -203,7 +226,8 @@ void main() {
 
         return db;
       });
-      final overTaking = taking.then<void>((ctx, value) => fail('no receiver'));
+      final overTaking =
+          taking.then<void>((ctx, value) => mustNotRun('no receiver'));
       async.flushMicrotasks();
       overTaking.cancel().ignore();
       async.flushMicrotasks();
@@ -224,7 +248,7 @@ void main() {
         },
       );
       final overRefusing = refusing.then<void>(
-        (ctx, value) => fail('no receiver'),
+        (ctx, value) => mustNotRun('no receiver'),
       );
       async.flushMicrotasks();
       overRefusing.cancel().ignore();
@@ -282,7 +306,7 @@ void main() {
           );
           final a = Job<int>((ctx) async => throw error, observer: observer);
           b = a.then<int>(
-            (ctx, value) => fail('must not run'),
+            (ctx, value) => mustNotRun('must not run'),
             observer: observer,
           );
         },
@@ -307,7 +331,7 @@ void main() {
             (ctx) => ctx.join(() => body.future),
             cancellable: false,
           );
-          b = a.then<int>((ctx, value) => fail('must not run'))..ignore();
+          b = a.then<int>((ctx, value) => mustNotRun('must not run'))..ignore();
         },
         (error, stack) => errors.add(error),
       );
@@ -328,8 +352,8 @@ void main() {
       runZonedGuarded(
         () {
           final a = Job<int>((ctx) async => throw error);
-          final b = a.then<int>((ctx, value) => fail('must not run'));
-          final c = b.then<int>((ctx, value) => fail('must not run'));
+          final b = a.then<int>((ctx, value) => mustNotRun('must not run'));
+          final c = b.then<int>((ctx, value) => mustNotRun('must not run'));
           unawaited(c.done.then((outcome) => seen = outcome));
         },
         (error, stack) => errors.add(error),
@@ -349,7 +373,8 @@ void main() {
       final b = a.then<int>((ctx, value) {
         Error.throwWithStackTrace(error, stack);
       });
-      final c = b.then<int>((ctx, value) => fail('must not run'))..ignore();
+      final c = b.then<int>((ctx, value) => mustNotRun('must not run'))
+        ..ignore();
       async.flushMicrotasks();
       final failed = c.outcome! as Failed;
       expect(failed.error, same(error));
@@ -362,7 +387,7 @@ void main() {
     fakeAsync((async) {
       final a = Job<int>((ctx) async => 1);
       final b = a.then<int>((ctx, value) => throw const Cancelled('stop'));
-      final c = b.then<int>((ctx, value) => fail('must not run'));
+      final c = b.then<int>((ctx, value) => mustNotRun('must not run'));
       async.flushMicrotasks();
       expect(a.outcome, isA<Done<int>>());
       expect((b.outcome! as Cancelled).reason, isA<HandlerCancelReason>());
@@ -399,7 +424,7 @@ void main() {
       final a = Job<int>((ctx) => ctx.join(() => gate.future));
       async.flushMicrotasks();
       a.cancel().ignore();
-      final b = a.then<int>((ctx, value) => fail('must not run'));
+      final b = a.then<int>((ctx, value) => mustNotRun('must not run'));
       expect(b.isCancelled, isTrue);
       expect(b.isFinished, isFalse);
       final seen = <Cancelled>[];
@@ -408,7 +433,7 @@ void main() {
       gate.complete(1);
       async.flushMicrotasks();
       expect(b.outcome, same(seen.single));
-      final c = b.then<int>((ctx, value) => fail('must not run'));
+      final c = b.then<int>((ctx, value) => mustNotRun('must not run'));
       expect(c.isCancelled, isTrue);
       async.flushMicrotasks();
       expect(c.outcome, isA<Cancelled>());
@@ -419,7 +444,7 @@ void main() {
     fakeAsync((async) {
       final gate = Completer<int>();
       final a = Job<int>((ctx) => ctx.uncancellable(() => gate.future));
-      final b = a.then<int>((ctx, value) => fail('must not run'));
+      final b = a.then<int>((ctx, value) => mustNotRun('must not run'));
       async.flushMicrotasks();
       b.cancel().ignore();
       expect(a.isCancelled, isFalse);
@@ -440,7 +465,7 @@ void main() {
       final b = a.then<int>(
         (ctx, value) => ctx.uncancellable(() => gate.future),
       );
-      final c = b.then<int>((ctx, value) => fail('must not run'));
+      final c = b.then<int>((ctx, value) => mustNotRun('must not run'));
       async.flushMicrotasks();
       b.cancel().ignore();
       expect(b.isCancelled, isFalse);
@@ -511,7 +536,7 @@ void main() {
       );
       final a = Job<int>((ctx) async => 1, observer: observer);
       b = a.then<int>(
-        (ctx, value) => fail('must not run'),
+        (ctx, value) => mustNotRun('must not run'),
         observer: observer,
       );
       async.flushMicrotasks();
@@ -523,8 +548,8 @@ void main() {
     fakeAsync((async) {
       final gate = Completer<int>();
       final a = Job<int>((ctx) => ctx.wait(() => gate.future));
-      final b = a.then<int>((ctx, value) => fail('must not run'));
-      final c = a.then<int>((ctx, value) => fail('must not run'));
+      final b = a.then<int>((ctx, value) => mustNotRun('must not run'));
+      final c = a.then<int>((ctx, value) => mustNotRun('must not run'));
       async.flushMicrotasks();
       b.cancel().ignore();
       async.flushMicrotasks();
@@ -578,7 +603,7 @@ void main() {
               source.cancel().then((_) {
                 expect(errors, isEmpty);
                 continuation = source.then<int>(
-                  (ctx, value) => fail('must not run'),
+                  (ctx, value) => mustNotRun('must not run'),
                 )..ignore();
                 if (cancelContinuation) continuation.cancel().ignore();
               }),
@@ -598,4 +623,28 @@ void main() {
       });
     });
   }
+
+  test('a continuation does not inherit the observer of its source', () {
+    fakeAsync((async) {
+      final started = <Object?>[];
+      final a = Job<int>(
+        key: 'a',
+        observer: _Observer(starting: (job) => started.add(job.key)),
+        (ctx) async => 1,
+      );
+      final b = a.then<int>((ctx, value) async => value + 1);
+      async.flushMicrotasks();
+      expect(b.outcome, isA<Done<int>>());
+      // A continuation is a root job of its own, and the observer of an
+      // engine of a domain answers for the jobs that engine owns. Handed
+      // down, it would hear the hooks of a job the controller never made
+      // and does not hold.
+      expect(
+        started,
+        ['a'],
+        reason: 'the source only; the continuation takes an observer of its '
+            'own or none',
+      );
+    });
+  });
 }
