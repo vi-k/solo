@@ -297,10 +297,10 @@ Job<String> load() => run<ProfileState, String>(
     );
 ```
 
-The device listener calls `externalSetState(const Disconnected())` inside the
-controller. `keepWhile` rejects that state, cancelling the load and disabling
-both final handlers. `Disconnected` therefore remains visible instead of being
-replaced by `Initial` or `Failure`.
+The connection drops while the load is running, and the controller publishes
+`Disconnected` with `externalSetState`. `keepWhile` rejects that state,
+cancelling the load and disabling both final handlers. `Disconnected` therefore
+remains visible instead of being replaced by `Initial` or `Failure`.
 
 If the load is cancelled manually while the state is still compatible,
 `onCancel` can return `Initial`. The handlers need no extra `state is Loading`
