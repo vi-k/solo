@@ -224,7 +224,10 @@ abstract interface class Job<T> {
   ///
   /// Pass a custom [CancelReason] subclass to carry data to [whenCancelled]
   /// and the [Cancelled] outcome. The accepted reason is kept by identity;
-  /// another cancellation does not replace it, even while it is held.
+  /// another cancellation does not replace it, even while it is held. A
+  /// body that gives itself up accepts one the same way, from the moment
+  /// it throws: this call then finds the job already cancelled and waits
+  /// for it, exactly as a second call does.
   ///
   /// A job created with `cancellable: false` refuses this once it has
   /// started; before that there is no body to protect, and a job cancelled
@@ -1040,6 +1043,23 @@ abstract class JobBase<T> implements Job<T> {
     // is a cancellation here, not a failure.
     _hold?.bodyEnded(outcome);
     if (selfCancelled != null) {
+      // Marked before the children are waited for, and only marked. The
+      // body gave itself up, so from here the job is cancelled to anyone
+      // who asks -- `isCancelled`, `check`, a `cancel()` from outside --
+      // and the decision it made is the one that stands: `cancelWith`
+      // turns around at its own early return instead of laying another
+      // reason over this one. Without the mark that whole wait was a
+      // window: `isCancelled` answered `false`, a cancellation arriving
+      // in it won by `??=`, and the children were left carrying a cause
+      // their parent never had.
+      //
+      // Only marked, because what the mark usually brings with it must
+      // not happen here. `_markCancelled` would run the `onCancel`
+      // callbacks and finish the waits the body walked away from with an
+      // error, where today they quietly get their value; and
+      // `_notifyCancelled` waits for the children below, because `solo`
+      // pins the order in which a cancellation is seen.
+      _pendingCancel = selfCancelled;
       cascadeToChildren(selfCancelled);
     }
     await _awaitChildren();
@@ -1049,15 +1069,17 @@ abstract class JobBase<T> implements Job<T> {
       // for, and the stack stays where it is.
       return;
     }
-    // The outcome is decided. The cancellation goes in by a bare
-    // assignment and not through `_markCancelled`: that would run the
-    // `onCancel` callbacks and finish the waits the body walked away from
-    // with an error, where today they quietly get their value. After the
-    // children and not in the `catch`: until then `cancelWith` still has
-    // to cascade onto them, and a filled `_pendingCancel` stops it.
+    // The outcome is decided, and the mark is already on: the body either
+    // caught the one that was there or gave itself up and was marked
+    // above. Asserted rather than assigned, so a path that ever arrives
+    // here unmarked shows up as the defect it is instead of quietly
+    // changing the reason the job ends with.
     if (outcome is Cancelled) {
-      _pendingCancel ??= outcome;
-      _notifyCancelled(_pendingCancel!);
+      assert(
+        identical(_pendingCancel, outcome),
+        'a cancelled body reaches its outcome marked',
+      );
+      _notifyCancelled(outcome);
       // A synchronous subscriber may reach an engine that finishes by hand.
       if (isFinished) return;
     }

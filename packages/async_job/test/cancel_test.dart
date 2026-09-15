@@ -7,6 +7,7 @@ import 'package:async_job/async_job.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart';
 
+import 'support/cancel_reason.dart';
 import 'support/delay.dart';
 import 'support/probe_job.dart';
 
@@ -534,5 +535,45 @@ void main() {
       reason: 'the cancellation was held past the end of the job and then '
           'dropped, and `cancel()` returned saying nothing of it',
     );
+  });
+
+  test('a body that gave up keeps its own cancellation against a later one',
+      () {
+    fakeAsync((async) {
+      late Job<void> child;
+      final job = Job<void>((ctx) async {
+        // A child that outlives the body: the job waits for it once the
+        // body has ended, and that wait is the window.
+        child = Job.deferred<void>((ctx) async {
+          await ctx.join(() => delay(100));
+        });
+        ctx.run(child).ignore();
+        Error.throwWithStackTrace(
+          Cancelled.by(
+            reason: const TestCancelReason('the body gave up'),
+            started: true,
+            stackTrace: StackTrace.current,
+          ),
+          StackTrace.current,
+        );
+      });
+      async.elapse(const Duration(milliseconds: 10));
+      job.cancel().ignore();
+      async.flushTimers();
+      final outcome = job.outcome! as Cancelled;
+      expect(
+        outcome.reason,
+        isA<TestCancelReason>(),
+        reason: 'the body chose first, and a cancellation that arrives while '
+            'the job waits for its children does not replace the accepted one',
+      );
+      final cause = (child.outcome! as Cancelled).reason;
+      expect(
+        (cause as ParentCancelReason).cause,
+        same(outcome),
+        reason: 'and the children carry the cancellation the parent actually '
+            'ended with, not one it never had',
+      );
+    });
   });
 }

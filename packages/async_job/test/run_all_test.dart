@@ -352,7 +352,10 @@ void main() {
               ),
             )
             .ignore();
-        throw const Cancelled('gave up');
+        // A value, and the early seam hears one. A body that gave itself
+        // up would not do here: it is marked the moment it does, and from
+        // then on nothing replaces the reason it chose.
+        return 1;
       });
       Object? thrown;
       Job<void>((ctx) async {
@@ -364,8 +367,8 @@ void main() {
       }).ignore();
       async.elapse(const Duration(milliseconds: 10));
       // The outcome of the branch is replaced while it waits for its own
-      // child: the object the early seam saw is not the object that ends
-      // it, and only the second one may come out.
+      // child: the outcome the early seam saw is not the one that ends it,
+      // and only the second one may come out.
       branch.cancel(reason: const TestCancelReason('outside')).ignore();
       descendant.complete();
       async.flushTimers();

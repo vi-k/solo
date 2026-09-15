@@ -1,5 +1,18 @@
 ## Unreleased
 
+- **Fix:** a body that gives itself up is marked there and then. Until now the
+  mark went on only after the job had waited for its children, so between the
+  `throw Cancelled(...)` and that wait the job answered `isCancelled` with
+  `false`, `ctx.check()` let work through, and a `cancel()` arriving in the
+  window went through in full and put its own reason over the one the body
+  chose -- the description the body wrote disappeared from the diagnosis. The
+  children were cascaded to at once, so they carried a `ParentCancelReason`
+  whose cause their parent then did not end with. What a caller may see
+  differently: cancelling a job whose body has already given up now keeps the
+  body's reason, and `Job.cancel` returns when the job finishes, as a second
+  call always did. What is unchanged is the reason the mark is late at all --
+  the `onCancel` callbacks still do not run on this path, and the waits the
+  body walked away from still get their values quietly.
 - **Fix:** a finished job lets go of its body, of its parent and of the group
   of `ctx.runAll` that held it. The body of a core job ran once and was kept
   for good, so everything it captured -- a controller, a connection, a buffer
