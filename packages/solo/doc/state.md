@@ -235,10 +235,11 @@ costs nothing only while no running job depends on the fact. With
 call, and the jobs in it are the ones that most need to hear that the device is
 gone. `SoloCloseMode.cancel` is not safe from it either — a
 `cancellable: false` job waiting for an answer the device will never give is
-freed by the disconnection, and `close` waits for that job. The guard is what
-lets one order serve both modes. Check it after the last `await` of the handler
-— a suspension between the check and the write lets the engine finish in
-between, and the write then throws.
+freed by the disconnection, and `close` waits for that job. The `isFinished`
+guard is what lets one order serve both modes. The handler above is
+synchronous, so its check and its write are one step; a handler that awaits
+anything checks after its last `await`, because a suspension in between lets
+the engine finish, and the write then throws.
 
 Use job bodies and their state handlers for the controller's own success,
 failure and cancellation. `externalSetState` is an exception for external
