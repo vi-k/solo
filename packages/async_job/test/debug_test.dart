@@ -186,6 +186,44 @@ void main() {
     );
   });
 
+  test('a job finished by hand while unwinding says that instead', () {
+    final traces = <String>[];
+    JobBase.debug = traces.add;
+    final closed = <String>[];
+    late ProbeJob<String> job;
+    fakeAsync((async) {
+      job = ProbeJob<String>(key: 'j', (ctx) async {
+        final db = await ctx.wait(() => 'db', discard: closed.add);
+        // The unwinding is inside this disposer when an engine of a domain
+        // ends the job, so the loop carries on with an outcome that is no
+        // longer the one it is reading.
+        ctx.onDispose(() async {
+          job.drop(const Cancelled('by hand'));
+          await delay(5);
+        });
+
+        return db;
+      })
+        ..launch()
+        ..ignore();
+      async.flushTimers();
+    });
+    expect(job.outcome, isA<Cancelled>());
+    expect(closed, isEmpty, reason: 'nothing unwound the stack');
+    expect(
+      traces.where((line) => line.contains('handed its value over')),
+      isEmpty,
+      reason: 'the value went nowhere, and the line must not claim it did',
+    );
+    expect(
+      traces,
+      contains(
+        'Job(j) was finished as Cancelled(handler: by hand) with '
+        '1 conditional cleanup left aside',
+      ),
+    );
+  });
+
   test('a branch of a group says it too, once the group has committed', () {
     final traces = <String>[];
     JobBase.debug = traces.add;

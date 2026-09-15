@@ -268,6 +268,10 @@ abstract interface class JobContext {
   /// its release itself, and `ctx.wait(() => ctx.run(child), discard: ...)`
   /// is how a parent does that. The debug channel names every job that
   /// handed a value over and dropped registrations doing so.
+  ///
+  /// A job that returns nothing hands that nothing over all the same: it
+  /// ends [Done], and a registration made here never runs. For a resource
+  /// such a job keeps to itself the member is [onDispose].
   void Function() onDiscard(FutureOr<void> Function() disposer);
 
   /// Drops the cleanup registered for [value] by [wait] or [join].
@@ -343,10 +347,12 @@ abstract interface class JobContext {
   ///
   /// **When which.** `[ctx.run(a), ctx.run(b)].wait` and [Future.wait] wait
   /// for every branch and stop none, so a branch whose sibling has already
-  /// failed runs to its end and settles its own registrations on the way,
-  /// and what they throw is a `ParallelWaitError` holding the values and the
-  /// errors of every branch at once. Take them when the branches do not
-  /// depend on each other's failure, or when one of them waits for another.
+  /// failed runs to its end and settles its own registrations on the way.
+  /// They differ in what comes out: `.wait` throws a `ParallelWaitError`
+  /// holding the values and the errors of every branch at once, and
+  /// [Future.wait] throws the first error to reach it and lets the rest go.
+  /// Take either when the branches do not depend on each other's failure,
+  /// or when one of them waits for another.
   /// Take this one when a result missing one of its parts is of no use
   /// anyway: it asks the rest to stop, holds every branch until the decision
   /// is made, and throws the outcome itself. `eagerError: true` is not the
@@ -1549,7 +1555,7 @@ final class _RunAllGroup<T> {
       // of its own unwinding the list is already empty, and the receiver of
       // the values would learn nothing.
       branch.job
-        ..traceDroppedCleanups()
+        .._traceDroppedCleanups()
         .._skipped.clear();
     }
     for (final branch in _branches) {

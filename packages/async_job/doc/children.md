@@ -56,15 +56,18 @@ to its observer -- and only there, so a parent whose children have no observer
 loses those errors entirely: the body took their futures, and that counts as
 answering for them.
 
-`eagerError: true` changes neither of those, and buys no early end. The body
-wakes on the first error, but nothing asks the other branches to stop and the
-kernel waits for its children regardless, so the job still ends when the last
-of them does. What the early waking does change is who decides: a body that
-catches the error and returns ends the job `Done` with a branch failed, and a
-branch that opened a resource and returned it hands it to a `Future.wait` that
-has already completed, where nobody closes it. Inside a body, take `ctx.runAll`
-when one failure makes the rest pointless, and `[ctx.run(a), ctx.run(b)].wait`
-when it does not.
+`eagerError: true` changes one thing only: when the body wakes. It buys no
+early end -- nothing asks the other branches to stop and the kernel waits for
+its children regardless, so the job still ends when the last of them does. What
+the body can then do in between is the whole of the difference, and it is not
+the difference it is usually taken for. Either way, a body that catches the
+error and returns ends the job `Done` with a branch failed, and a value a
+branch returned after the first error is gone: `Future.wait` drops the values
+of the branches that did succeed, so a resource among them is closed by nobody.
+`.wait` is the one that keeps them -- they are in `ParallelWaitError.values`,
+where a body that catches the envelope can still release them. Inside a body,
+take `ctx.runAll` when one failure makes the rest pointless, and
+`[ctx.run(a), ctx.run(b)].wait` when it does not.
 
 Neither of them stops a branch early. `.wait` returns once every branch is
 done, so a sibling of a cancelled child runs to its end; what the parent's
@@ -280,6 +283,14 @@ argument and inherits neither the source's observer nor domain state, rules or
 a queue slot. Cleanup registered by the source has already run when the
 continuation receives its value; a resource closed by the source's `onDispose`
 is therefore already closed at that point.
+
+A `discard` of the source is the other way round: the source ended `Done`, so
+it never ran and never will, and the continuation is the receiver -- it takes
+the value as its argument and registers the release in its own body. One case
+has no receiver at all: a continuation cancelled while it waited finishes
+without ever calling its callback, so there is no body and no moment. The
+resource is then the caller's to close, through the source's handle, exactly as
+for a branch that refuses a group's stop.
 
 ### A chain is not a child
 

@@ -417,6 +417,33 @@ abstract class JobBase<T> implements Job<T> {
         _cancellable = cancellable,
         _observer = observer;
 
+  /// Says what went nowhere when the value of this job went to somebody.
+  ///
+  /// Said out loud because the silence is the whole trouble. A conditional
+  /// registration is settled by the outcome of the job that made it, so a
+  /// value handed over takes none of them with it: from here on the
+  /// resource belongs to whoever received it, and registering its release
+  /// is theirs to do. Forget that, and nothing looks wrong until the
+  /// receiver ends badly — and then the resource is simply lost, with no
+  /// trace anywhere.
+  void _traceDroppedCleanups() {
+    if (_skipped.isEmpty) {
+      return;
+    }
+    final count = '${_skipped.length} conditional '
+        'cleanup${_skipped.length == 1 ? '' : 's'}';
+    // Two ways to leave them behind, and the message must not mix them up.
+    // Normally the job is still deciding and the value went to somebody.
+    // But an engine of a domain may finish a job by hand while it unwinds,
+    // and then the outcome is already something else and the value went
+    // nowhere — saying it was handed over would be a plain lie.
+    _debug(
+      () => isFinished
+          ? '$this was finished as $_outcome with $count left aside'
+          : '$this handed its value over: $count dropped',
+    );
+  }
+
   /// Builds and delivers a diagnostic message, guarded on both halves.
   ///
   /// Guarded because the channel stands between transitions a job cannot be
@@ -745,25 +772,6 @@ abstract class JobBase<T> implements Job<T> {
   /// waits for no children and unwinds no cleanup stack, so everything the
   /// body opened stays open. Cancel with [cancelWith] instead, and let the
   /// body unwind; how many cleanups were left behind is in the debug
-  /// Says what went nowhere when the value of this job went to somebody.
-  ///
-  /// Said out loud because the silence is the whole trouble. A conditional
-  /// registration is settled by the outcome of the job that made it, so a
-  /// value handed over takes none of them with it: from here on the
-  /// resource belongs to whoever received it, and registering its release
-  /// is theirs to do. Forget that, and nothing looks wrong until the
-  /// receiver ends badly — and then the resource is simply lost, with no
-  /// trace anywhere.
-  void traceDroppedCleanups() {
-    if (_skipped.isEmpty) {
-      return;
-    }
-    _debug(
-      () => '$this handed its value over: ${_skipped.length} '
-          'conditional cleanup${_skipped.length == 1 ? '' : 's'} dropped',
-    );
-  }
-
   /// trace.
   @protected
   void finish(Outcome<T> outcome) {
@@ -1043,6 +1051,7 @@ abstract class JobBase<T> implements Job<T> {
         // An engine of a domain ended the branch by hand while it stood
         // there. A bare `return` would leave the phase where it is, and
         // the job would read as disposing for good.
+        _traceDroppedCleanups();
         _disposing = false;
         return;
       }
@@ -1081,6 +1090,7 @@ abstract class JobBase<T> implements Job<T> {
         // to check against, not only the ones with a cleanup stack.
         _committedByGroup = await hold.beforeOutcome();
         if (isFinished) {
+          _traceDroppedCleanups();
           _disposing = false;
           return;
         }
@@ -1112,7 +1122,7 @@ abstract class JobBase<T> implements Job<T> {
       // them there. Left behind, they would hold their values and their
       // closures for as long as anyone holds the handle — the job is over,
       // and the list is a field now, not a local that dies with the call.
-      traceDroppedCleanups();
+      _traceDroppedCleanups();
       _skipped.clear();
       _disposing = false;
     }

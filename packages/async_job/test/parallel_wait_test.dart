@@ -839,59 +839,89 @@ void main() {
       expect(outcome.reason, isA<HandlerCancelReason>());
     });
 
-    test('eagerError wakes the body early and ends nothing early', () async {
-      // What `doc/children.md` promises about the idiom: the body wakes on
-      // the first error, nothing asks the other branch to stop, and the job
-      // still ends with its last child — by which time a body that caught
-      // the error has already decided the outcome, and a resource the slow
-      // branch returned has gone to a `Future.wait` that is over.
-      final slow = Completer<void>();
-      final errors = <Object>[];
-      final closed = <String>[];
-      var bodyWoke = false;
-      var finished = false;
-      final quick = Job.deferred<String>((ctx) async => throw StateError('q'));
-      final late = Job.deferred<String>((ctx) async {
-        await ctx.wait(() => slow.future);
+    test('eagerError moves when the body wakes, and nothing else', () async {
+      // What `doc/children.md` promises about the three forms: only the
+      // moment of waking differs. Either way a body that catches and
+      // returns leaves the job successful with a branch failed, and a value
+      // the slow branch returned is gone -- except under `.wait`, which
+      // keeps it in the envelope for the body to release.
+      Future<
+          ({
+            bool wokeEarly,
+            Outcome<void> outcome,
+            List<String> closed,
+            Object? caught
+          })> form({required bool extension, required bool eager}) async {
+        final slow = Completer<void>();
+        final closed = <String>[];
+        Object? caught;
+        var woke = false;
+        var stillRunning = true;
+        final quick = Job.deferred<String>(
+          (ctx) async => throw StateError('q'),
+        );
+        final late = Job.deferred<String>((ctx) async {
+          await ctx.wait(() => slow.future);
 
-        return ctx.wait(() => 'db', discard: closed.add);
-      });
-      final job = Job<void>(observer: ErrorObserver(errors), (ctx) async {
-        try {
-          await Future.wait(
-            [ctx.run(quick), ctx.run(late)],
-            eagerError: true,
-          );
-        } on Object {
-          bodyWoke = true;
-        }
-      });
-      unawaited(job.done.then((_) => finished = true));
-      await Future<void>.delayed(Duration.zero);
-      await Future<void>.delayed(Duration.zero);
+          return ctx.wait(() => 'db', discard: closed.add);
+        });
+        final job = Job<void>(observer: ErrorObserver(<Object>[]), (ctx) async {
+          final branches = [ctx.run(quick), ctx.run(late)];
+          try {
+            if (extension) {
+              await branches.wait;
+            } else {
+              await Future.wait(branches, eagerError: eager);
+            }
+          } on Object catch (error) {
+            caught = error;
+            woke = stillRunning;
+          }
+        });
+        unawaited(job.done.then((_) => stillRunning = false));
+        await Future<void>.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
+        final wokeEarly = woke;
+        slow.complete();
 
-      expect(bodyWoke, isTrue, reason: 'the first error reached the body');
-      expect(
-        finished,
-        isFalse,
-        reason: 'and the job is still waiting for the branch nobody stopped',
-      );
+        return (
+          wokeEarly: wokeEarly,
+          outcome: await job.done,
+          closed: closed,
+          caught: caught,
+        );
+      }
 
-      slow.complete();
-      final outcome = await job.done;
+      final eagerly = await form(extension: false, eager: true);
+      final plainly = await form(extension: false, eager: false);
+      final enveloped = await form(extension: true, eager: false);
+
       expect(
-        outcome,
-        isA<Done<void>>(),
-        reason: 'the body caught the error and returned, so a failed branch '
-            'left the job successful',
+        [eagerly.wokeEarly, plainly.wokeEarly, enveloped.wokeEarly],
+        [true, false, false],
+        reason: 'only `eagerError` wakes the body before the last branch',
       );
       expect(
-        closed,
-        isEmpty,
-        reason: 'the branch handed its value to a `Future.wait` that had '
-            'already completed, and nobody closed it',
+        [eagerly.outcome, plainly.outcome, enveloped.outcome],
+        everyElement(isA<Done<void>>()),
+        reason: 'the body caught and returned, so every form leaves the job '
+            'successful with a branch failed',
       );
-      expect(errors, [isA<StateError>()], reason: 'only the branch own error');
+      expect(
+        [eagerly.closed, plainly.closed, enveloped.closed],
+        everyElement(isEmpty),
+        reason: 'nobody closed what the slow branch returned',
+      );
+      expect(
+        [eagerly.caught, plainly.caught].map((error) => error.runtimeType),
+        everyElement(isNot(ParallelWaitError)),
+        reason: '`Future.wait` throws the first error, not an envelope',
+      );
+      expect(
+        (enveloped.caught! as _ListEnvelope).values,
+        [null, 'db'],
+        reason: 'and `.wait` is the one that keeps the value for the body',
+      );
     });
 
     test('an intentional envelope and a nested Failed stay opaque', () async {

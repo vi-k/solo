@@ -615,6 +615,42 @@ void main() {
     });
   });
 
+  test('a branch registers on arrival what a child of its own opened', () {
+    // The promise of `doc/children.md`: the branch that did not take the
+    // resource itself is covered by the same recipe as anyone else, and
+    // then everything the group promises holds for it too.
+    final closed = <String>[];
+    late Job<void> group;
+    fakeAsync((async) {
+      final opener = Job.deferred<String>(
+        key: 'opener',
+        (ctx) => ctx.wait(() => 'db', discard: closed.add),
+      );
+      final taker = Job.deferred<String>(
+        key: 'taker',
+        (ctx) => ctx.wait(() => ctx.run(opener), discard: closed.add),
+      );
+      final bad = Job.deferred<String>(key: 'bad', (ctx) async {
+        await ctx.wait(() => delay(10));
+        throw StateError('boom');
+      });
+      group = Job<void>(
+        key: 'group',
+        observer: ErrorObserver(<Object>[]),
+        (ctx) async {
+          await ctx.runAll([taker, bad]);
+        },
+      )..ignore();
+      async.flushTimers();
+    });
+    expect(group.outcome, isA<Failed>());
+    expect(
+      closed,
+      ['db'],
+      reason: 'the branch closed it once, and before the group returned',
+    );
+  });
+
   test('a branch the group stopped never gives the group its outcome', () {
     fakeAsync((async) {
       // The request to stop can lose: a cancellation from elsewhere was

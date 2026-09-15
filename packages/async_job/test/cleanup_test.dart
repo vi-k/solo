@@ -896,6 +896,34 @@ void main() {
     );
   });
 
+  test('a receiver that registered on arrival closes what it was handed', () {
+    // The example of `doc/cleanup.md`: `connect` opens the database and
+    // `ready` hands it on migrated. When the migration fails, what closes
+    // it is the registration `ready` made when the value arrived -- the one
+    // `connect` made is settled by `connect`'s own outcome and is gone.
+    final closed = <String>[];
+    late Job<String> ready;
+    Future<void> migrate() async => throw StateError('migration');
+    fakeAsync((async) {
+      final connect = Job.deferred<String>(
+        (ctx) => ctx.wait(() => 'db', discard: closed.add),
+      );
+      ready = Job<String>((ctx) async {
+        final database = await ctx.wait(
+          () => ctx.run(connect),
+          discard: closed.add,
+        );
+        await ctx.join(migrate);
+
+        return database;
+      })
+        ..ignore();
+      async.flushTimers();
+    });
+    expect(ready.outcome, isA<Failed>());
+    expect(closed, ['db'], reason: 'once, and by the one that received it');
+  });
+
   test('a receiver registers through wait, and the next line is too late', () {
     // The document promises this much: a child that refuses the stop ends
     // [Done] while its parent is already cancelled, `ctx.run` throws the
