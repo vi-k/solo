@@ -156,8 +156,8 @@ SoloJob<void> stop() {
 
 `first` passes what is waiting and nothing else. A zoom that is already running
 is neither removed by `removeWhere` nor interrupted by `first`: the stop starts
-when that zoom finishes. Reaching a running job is cancellation —
-[Cancellation](cancellation.md).
+when that zoom finishes. Only cancellation stops a job that has already
+started; see [Cancellation](cancellation.md).
 
 `queue` exposes `jobs`, `length`, `isEmpty`, `isNotEmpty`, `remove`,
 `removeWhere`, `clear` and `lastWhere`. Removal methods affect queued jobs only
