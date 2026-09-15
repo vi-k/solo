@@ -248,6 +248,48 @@ void main() {
     );
   });
 
+  test('a branch finished by hand at the second barrier says so too', () {
+    final traces = <String>[];
+    JobBase.debug = traces.add;
+    final closed = <String>[];
+    late ProbeJob<String> branch;
+    fakeAsync((async) {
+      branch = ProbeJob<String>(key: 'branch', (ctx) async {
+        final db = await ctx.wait(() => 'db', discard: closed.add);
+        // On top of the stack, so it unwinds first -- while the group
+        // still holds the branch. The conditional registration under it
+        // is put aside, and by the time the second barrier lets go the
+        // job has an outcome of its own.
+        ctx.onDispose(() => branch.drop(const Cancelled('by hand')));
+        return db;
+      });
+      Job<List<String>>(
+        key: 'group',
+        (ctx) => ctx.runAll([
+          branch,
+          Job.deferred<String>(
+            key: 'slow',
+            (ctx) => ctx.wait(() => delay(20).then((_) => 'other')),
+          ),
+        ]),
+      ).ignore();
+      async.flushTimers();
+    });
+    expect(
+      closed,
+      isEmpty,
+      reason: 'the value went to the group, so nothing closed it here',
+    );
+    expect(
+      traces,
+      contains(
+        'Job(branch) was finished as Cancelled(handler: by hand) with '
+        '1 conditional cleanup left aside',
+      ),
+      reason: 'the barrier between the two passes is a way out of its own',
+    );
+  });
+
   test('a debug channel that throws does not break the life of a job', () {
     final caught = <Object>[];
     var doneSeen = false;

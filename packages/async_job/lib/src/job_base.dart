@@ -1050,8 +1050,9 @@ abstract class JobBase<T> implements Job<T> {
       if (isFinished) {
         // An engine of a domain ended the branch by hand while it stood
         // there. A bare `return` would leave the phase where it is, and
-        // the job would read as disposing for good.
-        _traceDroppedCleanups();
+        // the job would read as disposing for good. Nothing is put aside
+        // yet -- the loops below are what fill that list -- so there is
+        // nothing to say on the debug channel either.
         _disposing = false;
         return;
       }
