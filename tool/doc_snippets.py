@@ -545,6 +545,9 @@ Future<void> main() async {
   print('hardware: $trace');
   print('connect ${connect.outcome}  battery ${battery.outcome}');
   print('rename ${rename.outcome}');
+  if (rename.outcome is! Done) {
+    throw StateError('the rename the user asked for must still complete');
+  }
   print('disconnect ${disconnect.outcome}  state ${device.currentState}');
   await device.close();
 
@@ -595,6 +598,22 @@ Future<void> main() async {
     throw StateError('the state rule must refuse only the second connect');
   }
   await second.close();
+
+  // The predicate is not what keeps the rename: `cancellable: false` is. A
+  // caller that sweeps the whole queue skips it all the same.
+  trace.clear();
+  final swept = DeviceController(Ble());
+  await swept.connect().done;
+  final keptRename = swept.rename('hall');
+  final droppedRead = swept.readBattery();
+  await swept.cancelAll();
+  await tick(200);
+  print('swept: $trace, rename ${keptRename.outcome}, '
+      'read ${droppedRead.outcome}');
+  if (keptRename.outcome is! Done || droppedRead.outcome is! Cancelled) {
+    throw StateError('a sweep must leave the rename and take the read');
+  }
+  await swept.close();
 }
 ''')
 
