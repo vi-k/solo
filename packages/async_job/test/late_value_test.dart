@@ -246,4 +246,51 @@ void main() {
       expect('$caught', contains('has already finished'));
     });
   });
+
+  test('an action failing after the body walked away is not swallowed', () {
+    fakeAsync((async) {
+      final errors = <Object>[];
+      final job = Job<String>(
+        observer: ErrorObserver(errors),
+        (ctx) => ctx.wait<String>(() async {
+          await delay(50);
+          throw StateError('the action failed late');
+        }).timeout(
+          const Duration(milliseconds: 10),
+          onTimeout: () => 'fallback',
+        ),
+      );
+      async.flushTimers();
+      expect(job.outcome.toString(), 'Done(fallback)');
+      expect(
+        errors.map((error) => '$error').toList(),
+        ['Bad state: the action failed late'],
+        reason: 'the wrapper the body walked away through swallows what it '
+            'is handed, and an error is never lost silently',
+      );
+    });
+  });
+
+  test('a wait made in the work still reports once, and only once', () {
+    fakeAsync((async) {
+      final journal = JobJournal();
+      Job<void>(key: 'j', observer: journal, (ctx) async {
+        ctx.unattended(() async {
+          await ctx.wait<void>(() async {
+            await delay(50);
+            throw StateError('late');
+          });
+        });
+        // The body ends here; the fork plays on, and the job is over long
+        // before the action fails. The work is still holding that future,
+        // so the fork is what announces -- announcing from the kernel as
+        // well would say one error twice.
+      }).ignore();
+      async.flushTimers();
+      expect(
+        journal.take().where((line) => line.contains('error')).toList(),
+        ['[j] error Bad state: late'],
+      );
+    });
+  });
 }

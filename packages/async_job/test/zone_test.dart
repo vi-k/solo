@@ -8,6 +8,7 @@ import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart';
 
 import 'support/delay.dart';
+import 'support/error_observer.dart';
 import 'support/journal.dart';
 import 'support/probe_job.dart';
 
@@ -591,6 +592,69 @@ void main() {
       isEmpty,
       reason: 'the same microtask of grace an uncovered failure gives',
     );
+  });
+
+  test('a step that failed under a held cancellation is not silenced', () {
+    final caught = <Object>[];
+    Outcome<void>? outcome;
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          final job = Job<void>((ctx) async {
+            await ctx.uncancellable(() async {
+              await delay(20);
+              throw StateError('the step failed');
+            });
+          });
+          async.elapse(const Duration(milliseconds: 5));
+          // Held, not refused: it lands the moment the section closes --
+          // and the section closes on the way out of the failure, before
+          // the error has travelled to the body.
+          job.cancel().ignore();
+          async.flushTimers();
+          outcome = job.outcome;
+        });
+      },
+      (error, stackTrace) => caught.add(error),
+    );
+    expect(outcome, isA<Cancelled>());
+    expect(
+      caught.map((error) => '$error').toList(),
+      ['Bad state: the step failed'],
+      reason: 'the step that cannot be rolled back is the one whose failure '
+          'costs most to lose, and the cancellation arrived after it',
+    );
+  });
+
+  test('a join the body walked away from sends its late error to the zone', () {
+    final caught = <Object>[];
+    final errors = <Object>[];
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          Job<void>(observer: ErrorObserver(errors), (ctx) async {
+            // Not awaited, against the doctrine of the member, and this is
+            // what that costs. `join` has no future of its own to quieten
+            // -- it is the future -- so the error goes where Dart sends an
+            // unawaited one. Pinned as the boundary it is; `wait`, which
+            // holds a completer, announces this case to the observer.
+            unawaited(
+              ctx.join<void>(() async {
+                await delay(50);
+                throw StateError('the step failed');
+              }),
+            );
+            await ctx.wait(() => delay(10));
+          }).ignore();
+          async.flushTimers();
+        });
+      },
+      (error, stackTrace) => caught.add(error),
+    );
+    expect(errors, isEmpty, reason: 'the observer is not on this path');
+    expect(caught.map((error) => '$error').toList(), [
+      'Bad state: the step failed',
+    ]);
   });
 }
 

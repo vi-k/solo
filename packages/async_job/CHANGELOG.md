@@ -1,5 +1,22 @@
 ## Unreleased
 
+- **Fix:** an action failing after the body walked away from it is no longer
+  swallowed. A `ctx.wait` the body left through a `.timeout` or a `Future.any`
+  handed its late error to the future the wrapper was holding, and a wrapper
+  that has already fired drops what it is given: the error reached nobody at
+  all, not the observer and not the zone. It now goes to `onError`, the way the
+  failure of any abandoned action does, and the future is completed as well so
+  that nothing left waiting on it waits for ever. A `wait` made inside work
+  handed over with `unattended` is untouched: the work is still holding that
+  future and the fork announces what it leaves uncaught, so it is announced
+  once, there.
+- **Fix:** a step that failed inside `ctx.uncancellable` while a cancellation
+  was held keeps its diagnosis. The section applies the held cancellation on
+  the way out, which is before the error reaches the body, so the kernel read
+  the order the wrong way round -- it saw a failure thrown after a mark, which
+  belongs to the observer alone, and without an observer that was silence. The
+  section now says which came first, and the failure of the one step that
+  cannot be rolled back goes to the zone as any uncovered one does.
 - **Fix:** a job that has accepted a cancellation no longer ends with a value.
   The protected `finish`, which an engine of a domain uses to end a job by
   hand, took whatever it was handed: after `cancel()` a `finish(Done(42))` left

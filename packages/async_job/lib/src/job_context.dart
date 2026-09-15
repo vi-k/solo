@@ -123,8 +123,13 @@ abstract interface class JobContext {
   /// ```
   ///
   /// An error from [action] is thrown as it is, cancelled or not, and the
-  /// body can catch it like any other. An error from the disposer goes to
-  /// `onError`, and the [Cancelled] is thrown all the same. Throws
+  /// body can catch it like any other — **so await this call.** A body
+  /// that walked on can end while [action] is still in flight, and the
+  /// error then reaches a future nobody awaits: Dart hands that to the
+  /// zone, where [wait] would have handed it to `onError`. The value half
+  /// of the same case is taken care of — it goes quietly to [dispose] or
+  /// [discard]. An error from the disposer goes to `onError`, and the
+  /// [Cancelled] is thrown all the same. Throws
   /// [Cancelled] up front if the job is already cancelled or its rules no
   /// longer hold, the same as [wait] and [uncancellable].
   ///
@@ -818,6 +823,14 @@ abstract class JobContextBase implements JobContext {
     enterUncancellable();
     try {
       return await action();
+    } on Object {
+      // The step failed, and the cancellation this section was holding
+      // lands on the way out -- before the error has reached the body,
+      // where the kernel decides which of the two came first. It was the
+      // failure, and said nowhere else the diagnosis of the one step that
+      // cannot be rolled back is the one the cancellation swallows.
+      _owner._failedBeforeMark = true;
+      rethrow;
     } finally {
       leaveUncancellable();
     }
@@ -961,6 +974,11 @@ abstract class JobContextBase implements JobContext {
     FutureOr<void> Function(T value)? discard,
   ) {
     final completer = Completer<T>();
+    // Whether this call was made from inside work handed over with
+    // `unattended`. A late failure then still has a listener -- the work
+    // itself -- and the fork announces what the work leaves uncaught, so
+    // the kernel announcing it as well would say one error twice.
+    final fromFork = Zone.current[_owner] != null;
     late final void Function() remove;
     void onCancel() {
       if (!completer.isCompleted) {
@@ -999,7 +1017,22 @@ abstract class JobContextBase implements JobContext {
           completer.complete(value);
         }
       } on Object catch (error, stackTrace) {
-        if (completer.isCompleted) {
+        if (!completer.isCompleted && _owner.bodyEnded && !fromFork) {
+          // The body is gone, and it is not the one still holding this
+          // future. Whatever is -- a `.timeout` that fired, a
+          // `Future.any` that took another branch -- walked away from it
+          // and swallows what it is handed, so handing the error over and
+          // saying nothing would lose it for good. Announced here, the
+          // way the failure of any abandoned action is, and the future
+          // completed all the same, so that nothing left waiting on it
+          // waits for ever; `ignore` keeps that copy from being announced
+          // a second time by the zone.
+          if (!_isOwnCancellation(error)) {
+            notifyError(error, stackTrace);
+          }
+          completer.completeError(error, stackTrace);
+          completer.future.ignore();
+        } else if (completer.isCompleted) {
           // Less this job giving up. A call the body walked away from
           // keeps the context, and after the mark every door back into it
           // — `check`, `join`, `run` — throws the very cancellation that

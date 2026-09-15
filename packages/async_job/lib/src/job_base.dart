@@ -391,6 +391,16 @@ abstract class JobBase<T> implements Job<T> {
   Cancelled? _pendingCancel;
   bool _bodyEnded = false;
 
+  /// Whether a failure reached the job before anything marked it, in a
+  /// place where the marking then happened first.
+  ///
+  /// [JobContext.uncancellable] applies the cancellation it was holding on
+  /// its way out, and on the way out of a failure that happens before the
+  /// error has travelled to the body. The kernel reads the order at the
+  /// throw and would see it the wrong way round; this is the section
+  /// saying which came first.
+  bool _failedBeforeMark = false;
+
   /// What the body ended with, from that moment until the job has an
   /// outcome of its own.
   ///
@@ -1053,7 +1063,7 @@ abstract class JobBase<T> implements Job<T> {
         // `onError` that cancels would otherwise make a failure that came
         // first look like it came second. The order is the whole diagnosis,
         // and it is settled at the moment of the throw.
-        failedFirst = _pendingCancel == null;
+        failedFirst = _pendingCancel == null || _failedBeforeMark;
         notifyObserver(error, stackTrace);
         outcome = Failed(error, stackTrace);
       }
