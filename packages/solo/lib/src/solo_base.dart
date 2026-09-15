@@ -362,9 +362,11 @@ abstract class SoloBase<S extends Object> {
   /// [ArgumentError] if [policy] is not [Policy.sequential] and the job has
   /// no key, if [job] was created by another controller, or if
   /// [Policy.droppable] finds that key on a job of another result type.
-  /// Every one of them throws before [job] is taken, so a job refused here
-  /// is untouched and can be added again. After `close` the job finishes at
-  /// once with `Cancelled(closed)`.
+  /// Every [ArgumentError] here is thrown before [job] is taken, so a job
+  /// refused for one of those reasons is untouched and can be added again;
+  /// the [StateError] is about a handle that has been taken once already.
+  /// After `close` the job finishes at once with `Cancelled(closed)`, and a
+  /// key held by another result type is not looked for at all.
   SoloJob<T> add<T>(
     Job<T> job, {
     bool first = false,
@@ -396,7 +398,8 @@ abstract class SoloBase<S extends Object> {
       throw ArgumentError.value(
         job,
         'job',
-        'key ${impl.key} belongs to a job of another result type',
+        'key ${impl.key} is held by a job of result type '
+            '${duplicate._resultType}, not ${impl._resultType}',
       );
     }
     // Set before anything can go wrong below: a job dropped by a closed

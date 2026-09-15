@@ -165,7 +165,15 @@ void main() {
           policy: Policy.droppable,
           (ctx) async => 'x',
         ),
-        throwsArgumentError,
+        throwsA(
+          isA<ArgumentError>().having(
+            (error) => error.message,
+            'message',
+            // Both types, or the reader learns nothing about the job
+            // already holding the key.
+            'key shared is held by a job of result type int, not String',
+          ),
+        ),
       );
       expect(
         journal.lines,
@@ -238,6 +246,53 @@ void main() {
         throwsArgumentError,
       );
       expect(journal.lines, isEmpty);
+    });
+  });
+
+  test("droppable looks at the two jobs, not at the call's type argument", () {
+    runSolo((solo, journal, async) {
+      final held = solo.run<TestState, String>(
+        key: 'shared',
+        policy: Policy.droppable,
+        (ctx) async {
+          await delay(100);
+
+          return 'x';
+        },
+      );
+      async.flushMicrotasks();
+
+      // The call writes `Object`, both jobs are `Job<String>`: the type
+      // argument here is whatever the call site felt like and decides
+      // nothing.
+      final incoming =
+          solo.job<TestState, String>(key: 'shared', (ctx) async => 'y');
+      final answer = solo.add<Object>(incoming, policy: Policy.droppable);
+
+      expect(identical(answer, held), isTrue);
+      async.flushTimers();
+      expect(held.outcome, isA<Done<String>>());
+    });
+  });
+
+  test('droppable compares result types, not the whole job', () {
+    runSolo((solo, journal, async) {
+      final held = solo.run<TestState, void>(
+        key: 'shared',
+        policy: Policy.droppable,
+        (ctx) async => delay(100),
+      );
+      async.flushMicrotasks();
+
+      // A different working state under the same key, and the same result
+      // type: one operation, so the second call gets the first job.
+      final answer = solo.run<Initial, void>(
+        key: 'shared',
+        policy: Policy.droppable,
+        (ctx) async {},
+      );
+
+      expect(identical(answer, held), isTrue);
     });
   });
 

@@ -9,7 +9,20 @@
   handle it holds is somebody else's. A supertype was waved through the same
   way -- a `Job<Object>` on a key held by a `Job<String>`. Both throw
   `ArgumentError` now, and, as before, they throw before the new job is taken,
-  so the refused handle is untouched and can still be added.
+  so the refused handle is untouched and can still be added. A closed
+  controller never reaches the check: there the job finishes with
+  `Cancelled(closed)`, as it did before.
+
+- **The comparison is of the types as written**, so a key shared by two
+  spellings of one thing throws where one direction of it used to pass:
+  `Job<dynamic>`, `Job<Object?>` and `Job<void>` against each other, the same
+  inside an argument -- `List<Object?>` against `List<dynamic>` -- and
+  `Job<int>` against `Job<int?>` or `Job<FutureOr<int>>`. Watch for the pair
+  inference makes on its own: a body that returns nothing gives `Job<Null>`
+  where the call writes no types and `Job<void>` where the method's return
+  type says so, so one operation spelled both ways under one key is a
+  collision now. Writing the arguments out -- `run<Ready, void>` -- is what
+  keeps the answer from depending on how a call was spelled.
 
 - **Breaking:** `collect` and `accumulate` default to
   `AccumulationPolicy.join`, not `adjacent`. A job of another kind queued
