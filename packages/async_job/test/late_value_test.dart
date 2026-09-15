@@ -10,6 +10,7 @@ import 'package:test/test.dart';
 import 'support/delay.dart';
 import 'support/error_observer.dart';
 import 'support/journal.dart';
+import 'support/probe_job.dart';
 
 void main() {
   test('a value returned after cancellation goes to the disposer', () {
@@ -208,6 +209,41 @@ void main() {
         reason: 'and the observer hears nothing: a second completion of an '
             'internal future is not news of the job',
       );
+    });
+  });
+
+  test('a value taken after the job was ended by hand is released', () {
+    fakeAsync((async) {
+      final released = <String>[];
+      Object? caught;
+      final action = Completer<String>();
+      final job = ProbeJob<void>(key: 'job', (ctx) async {
+        try {
+          await ctx.wait<String>(() => action.future, dispose: released.add);
+        } on Object catch (error) {
+          caught = error;
+        }
+      })
+        ..launch();
+      async.flushMicrotasks();
+      // An engine of a domain ending the job by hand, while the body is
+      // still inside a call that has a resource coming.
+      job.drop(const Done<void>(null));
+      action.complete('db');
+      async.flushTimers();
+      expect(
+        released,
+        ['db'],
+        reason: 'there is no stack to register on any more, so the value is '
+            'released on the spot instead of being left to nobody',
+      );
+      expect(
+        caught,
+        isA<StateError>(),
+        reason: 'and the body hears about the job, not about a registration '
+            'it never made',
+      );
+      expect('$caught', contains('has already finished'));
     });
   });
 }

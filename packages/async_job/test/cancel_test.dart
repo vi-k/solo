@@ -625,4 +625,56 @@ void main() {
       ]);
     });
   });
+
+  test('a job finished by hand ends with the cancellation it accepted', () {
+    fakeAsync((async) {
+      final job = ProbeJob<int>(key: 'job', (ctx) async {
+        await ctx.wait(() => delay(100));
+        return 1;
+      })
+        ..launch();
+      async.elapse(const Duration(milliseconds: 10));
+      job.cancel().ignore();
+      // An engine of a domain racing its own body, with a value in hand.
+      // The mark has been answering for this job since the line above:
+      // `isCancelled`, `check` and `whenCancelled` all say cancelled, and
+      // an outcome of `Done(42)` would leave the handle contradicting
+      // itself for good.
+      job.drop(const Done(42));
+      async.flushTimers();
+      expect(job.isCancelled, isTrue);
+      expect(job.outcome, isA<Cancelled>());
+      expect(job.outcome, same(job.outcome));
+    });
+  });
+
+  test('a failure handed in over the mark is not lost', () {
+    final caught = <Object>[];
+    Outcome<int>? outcome;
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          final job = ProbeJob<int>(key: 'job', (ctx) async {
+            await ctx.wait(() => delay(100));
+            return 1;
+          })
+            ..launch();
+          async.elapse(const Duration(milliseconds: 10));
+          job.cancel().ignore();
+          job.drop(Failed(StateError('by hand'), StackTrace.current));
+          async.flushTimers();
+          outcome = job.outcome;
+        });
+      },
+      (error, stackTrace) => caught.add(error),
+    );
+    expect(outcome, isA<Cancelled>());
+    expect(
+      caught.map((error) => '$error').toList(),
+      ['Bad state: by hand'],
+      reason: 'the cancellation decides the outcome, but an error is never '
+          'lost silently: it goes where a failure a cancellation covered '
+          'goes',
+    );
+  });
 }

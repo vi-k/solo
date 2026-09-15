@@ -753,6 +753,18 @@ abstract class JobContextBase implements JobContext {
     if (disposer == null) {
       return;
     }
+    if (_owner.isFinished) {
+      // The job ended while the call was in flight, and an engine of a
+      // domain finishing by hand is the only way in. There is no stack
+      // left to register on: `addCleanup` would throw a complaint about
+      // registering on a finished job, the caller would see that instead
+      // of its value, and the value itself would be left to nobody.
+      // Released on the spot, the way one that came back too late is, and
+      // the caller hears the plain truth about the job instead. With no
+      // disposer there is nothing to lose, so nothing changes there.
+      unawaited(_dispose(disposer, value));
+      throwIfFinished('take the value of a call it made');
+    }
     addCleanup(() => disposer(value), always: dispose != null, value: value);
   }
 

@@ -790,12 +790,32 @@ abstract class JobBase<T> implements Job<T> {
     if (_status == JobStatus.finished) {
       return;
     }
+    // A marked job does not end with a value. `isCancelled`, `check` and
+    // `whenCancelled` have been answering for that cancellation since the
+    // mark went on, and a `Done` or a `Failed` handed in afterwards would
+    // leave the handle contradicting itself for good -- cancelled and
+    // `Done(42)` at the same time. So the mark decides those.
+    //
+    // A [Cancelled] handed in is not that: the handle stays coherent, and
+    // an engine of a domain ending a job from inside the cascade says how
+    // it ended it -- that description is the whole diagnosis it has. The
+    // route of the kernel hands the mark in itself, so nothing here is
+    // about it.
+    final decided =
+        outcome is Cancelled ? outcome : (_pendingCancel ?? outcome);
+    final replaced = identical(decided, outcome) ? null : outcome;
+    if (replaced != null) {
+      _debug(
+        () => '$this was finished as $replaced and ends $decided: '
+            'the cancellation it accepted decides',
+      );
+    }
     if (_cleanups.isNotEmpty) {
       _debug(
         () => '$this finished with ${_cleanups.length} cleanups pending',
       );
     }
-    _outcome = outcome;
+    _outcome = decided;
     _status = JobStatus.finished;
     // The list of children is a waiting list, so it shrinks; the link from
     // an outcome to the child that carried it lives on, in the parent's
@@ -809,8 +829,8 @@ abstract class JobBase<T> implements Job<T> {
     final parent = _parent;
     if (parent != null) {
       parent._children.removeWhere((child) => identical(child, this));
-      if (outcome is Cancelled) {
-        parent._outcomeChild[outcome] = this;
+      if (decided is Cancelled) {
+        parent._outcomeChild[decided] = this;
       }
     }
     // Guarded: the hook belongs to an engine of a domain, and its error
@@ -826,10 +846,10 @@ abstract class JobBase<T> implements Job<T> {
     // They hold whatever the body gave them — a subscription, a buffer, a
     // token — for as long as anyone holds the handle.
     _onCancel.clear();
-    _done.complete(outcome);
+    _done.complete(decided);
     // Notify only after the domain has detached this job and delivered its
     // finish hooks: a synchronous subscriber may immediately add more work.
-    if (outcome is Cancelled) _notifyCancelled(outcome);
+    if (decided is Cancelled) _notifyCancelled(decided);
     _cancelListeners.clear();
     // Let go of the graph. The handle stays -- it is kept precisely to be
     // read later, by a controller holding the last job, by a widget, by a
@@ -842,8 +862,15 @@ abstract class JobBase<T> implements Job<T> {
     _parent = null;
     _hold = null;
     _bodyOutcome = null;
-    if (outcome is Failed && !_observed) {
-      _reportUnobserved(outcome);
+    if (decided is Failed && !_observed) {
+      _reportUnobserved(decided);
+    }
+    // A failure handed in over the mark. The cancellation decides the
+    // outcome, but an error is never lost silently: it goes exactly where
+    // one the body threw before a cancellation goes -- only if nobody
+    // looked at the outcome, and whether or not there is an observer.
+    if (replaced is Failed) {
+      _reportCovered(replaced);
     }
   }
 

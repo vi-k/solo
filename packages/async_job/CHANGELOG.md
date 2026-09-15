@@ -1,5 +1,20 @@
 ## Unreleased
 
+- **Fix:** a job that has accepted a cancellation no longer ends with a value.
+  The protected `finish`, which an engine of a domain uses to end a job by
+  hand, took whatever it was handed: after `cancel()` a `finish(Done(42))` left
+  a handle saying both at once -- `isCancelled` true, `check` throwing,
+  `whenCancelled` fired, and `outcome` a `Done(42)`. The mark now decides a
+  `Done` or a `Failed` handed in over it, and a failure so replaced goes where
+  one a cancellation covered goes, so nothing is lost silently. A `Cancelled`
+  handed in still stands: the handle stays coherent, and an engine ending a job
+  from inside the cascade keeps the description that is its whole diagnosis.
+- **Fix:** a value arriving for a job an engine ended by hand is released
+  instead of leaking. There was no cleanup stack left to register it on, so the
+  registration threw a complaint about a finished job into the body, which saw
+  that instead of its value and had nothing to close. The value is now released
+  on the spot, the way one that came back too late is, and the body hears the
+  plain `StateError` about the job.
 - **Fix:** a value that comes back after the body has ended no longer finishes
   the same wait twice. Putting the late value on the cleanup stack costs a
   microtask even when there is nothing to put there, and a cancellation
