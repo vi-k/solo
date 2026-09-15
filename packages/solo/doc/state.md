@@ -321,7 +321,6 @@ correction.
 These extra checks apply to jobs with their own state handlers. A parent
 without handlers stops checking its rules when its body ends; children then
 remain subject to their own rules and any permission the parent already lost.
-`canStart` is checked only at entry.
 
 Keep these functions limited to computing state. Resource release belongs in
 the [cleanup API](resources.md).
