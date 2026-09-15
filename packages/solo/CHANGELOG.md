@@ -19,10 +19,10 @@
   inside an argument -- `List<Object?>` against `List<dynamic>` -- and
   `Job<int>` against `Job<int?>` or `Job<FutureOr<int>>`. Watch for the pair
   inference makes on its own: a body that returns nothing gives `Job<Null>`
-  where the call writes no types and `Job<void>` where the method's return
-  type says so, so one operation spelled both ways under one key is a
-  collision now. Writing the arguments out -- `run<Ready, void>` -- is what
-  keeps the answer from depending on how a call was spelled.
+  where the call writes no types and `Job<void>` where the method's return type
+  says so, so one operation spelled both ways under one key is a collision now.
+  Writing the arguments out -- `run<Ready, void>` -- is what keeps the answer
+  from depending on how a call was spelled.
 
 - **Breaking:** `collect` and `accumulate` default to
   `AccumulationPolicy.join`, not `adjacent`. A job of another kind queued
