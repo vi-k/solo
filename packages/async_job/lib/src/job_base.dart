@@ -569,6 +569,16 @@ abstract class JobBase<T> implements Job<T> {
       try {
         callback(cancelled);
       } on Object catch (error, stackTrace) {
+        if (error is StackOverflowError) {
+          // Not `onError`, and above all not the zone. At the bottom of a
+          // cascade that has just run out of stack this is that same
+          // overflow, landing in the first callback to ask for a few
+          // frames more; reporting it would name the callback for
+          // something it did not do, and would format a stack trace with
+          // no stack left to do it on. It leaves with the error that is
+          // already unwinding.
+          rethrow;
+        }
         notifyError(error, stackTrace);
       }
     }
@@ -672,10 +682,13 @@ abstract class JobBase<T> implements Job<T> {
           // a second `cancel()` turns around at the early return above.
           // The error still reaches whoever asked.
           //
-          // Skipped only when a callback of a child reached the engine of
-          // a domain and it ended the job by hand: `whenCancelled` was
-          // notified already, and the callbacks would run on a job that is
-          // over.
+          // Skipped when a callback of a child reached the engine of a
+          // domain and it ended the job by hand. A no-op by then rather
+          // than a defect waiting to happen -- `finish` clears the
+          // callbacks and tells the listeners itself -- and kept because
+          // the phase a job is in decides who announces its cancellation,
+          // and reading that off the status is cheaper than trusting the
+          // two to stay in step.
           if (_status != JobStatus.finished) {
             _markCancelled(marked);
           }
@@ -691,8 +704,23 @@ abstract class JobBase<T> implements Job<T> {
   /// stack trace is carried over as well.
   @protected
   void cascadeToChildren(Cancelled cancelled) {
+    (Object, StackTrace)? failure;
     for (final child in _children.reversed.toList()) {
-      _cancelChild(child, cancelled);
+      try {
+        _cancelChild(child, cancelled);
+      } on Object catch (error, stackTrace) {
+        // One child is not the rest of them. A subtree deep enough to run
+        // the stack out, or an engine of a domain whose `cancelWith`
+        // threw, must not take the cancellation away from the siblings
+        // that come after it here -- and those siblings are not deep by
+        // association: the one that overflows may be a chain of thousands
+        // next to a leaf. The first failure is the one that leaves, the
+        // way the first refusal leaves a group.
+        failure ??= (error, stackTrace);
+      }
+    }
+    if (failure case (final error, final stackTrace)) {
+      Error.throwWithStackTrace(error, stackTrace);
     }
   }
 

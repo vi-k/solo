@@ -855,6 +855,12 @@ abstract class JobContextBase implements JobContext {
       try {
         callback();
       } on Object catch (error, stackTrace) {
+        if (error is StackOverflowError) {
+          // Not `onError`, and above all not the zone: see
+          // `JobBase.whenCancelled`, which keeps the same rule for the
+          // same reason.
+          rethrow;
+        }
         notifyError(error, stackTrace);
       }
     }

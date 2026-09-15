@@ -216,9 +216,14 @@
   unwinds, and the error still reaches whoever asked. A body giving itself up
   meets the same descent with nobody to hand a failure to, so there the error
   goes to `onError` and the job still waits for its children and unwinds its
-  cleanup stack instead of stopping where it stood. What lies below the break
-  is still left running: the depth of a tree is bounded by the stack either
-  way, and `doc/children.md` says by how much.
+  cleanup stack instead of stopping where it stood. The siblings of the child
+  that overflowed are no longer skipped either -- one child is not the rest of
+  them, and the one that runs the stack out may be a chain of thousands next to
+  a leaf -- and an overflow landing in a cancellation callback at the very
+  bottom is not announced as a failure of that callback, which would name it
+  for something it did not do. What lies below the break is still left running:
+  the depth of a tree is bounded by the stack either way, and `doc/children.md`
+  says by how much.
 
 ## 0.2.0
 
