@@ -1,5 +1,20 @@
 ## Unreleased
 
+- **Breaking:** `ctx.run` takes `dispose` and `discard`, the way `ctx.wait`
+  does, and makes the registration the moment the child's value comes back. New
+  named parameters on a member of an `abstract interface class`, so an
+  implementation of `JobContext` written by hand no longer compiles;
+  `JobContextBase` gets them once and every engine built on it, `solo`
+  included, gets them for nothing. Why they belong on the call: `run` checks
+  the parent once the value is in hand -- for its own cancellation, and for the
+  rules of its domain -- and a checkpoint that throws there takes the value
+  with it. The child ended `Done`, so its own conditional registration went
+  with the value and is gone, and the line that would have made the next one is
+  never reached: `parent=Cancelled(rules) child=Done(db)` with nothing closed.
+  **Migrating.** Nothing breaks at a call site: `ctx.run(child)` is unchanged,
+  and `ctx.wait(() => ctx.run(child), discard: ...)` keeps working and stays
+  correct. A registration written on the line after `await ctx.run(child)` is
+  the one to move into the call. See `doc/cleanup.md`.
 - **Added:** the debug channel names a job that handed its value over and
   dropped the conditional registrations that went with it --
   `Job(opener) handed its value over: 1 conditional cleanup dropped`. A
