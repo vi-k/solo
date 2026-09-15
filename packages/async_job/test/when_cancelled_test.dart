@@ -262,4 +262,37 @@ void main() {
       expect(errors, [same(error)]);
     });
   });
+
+  test('a listener registered during the cascade waits its turn', () {
+    fakeAsync((async) {
+      final heard = <String>[];
+      late Job<void> parent;
+      parent = Job<void>((ctx) async {
+        ctx
+            .run(
+              Job.deferred<void>(key: 'child', (child) async {
+                child.onCancel(() {
+                  // Inside the cascade: the parent is marked, and the pass
+                  // that tells its listeners has not run yet.
+                  parent.whenCancelled((_) => heard.add('late'));
+                });
+                await child.wait(() => delay(100));
+              }),
+            )
+            .ignore();
+        await ctx.wait(() => delay(100));
+      })
+        ..ignore()
+        ..whenCancelled((_) => heard.add('early'));
+      async.elapse(const Duration(milliseconds: 10));
+      parent.cancel().ignore();
+      async.flushTimers();
+      expect(
+        heard,
+        ['early', 'late'],
+        reason: 'a registration made later never runs before one made '
+            'earlier, whatever window it is made in',
+      );
+    });
+  });
 }

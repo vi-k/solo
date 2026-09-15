@@ -118,8 +118,9 @@ _EnvelopeAnalysis? _analyzeEnvelope(Object error) {
   StackTrace? firstStackTrace;
   var hasRealFailure = false;
   var hasUnparsed = false;
-  // По тождеству: `ParallelWaitError` — не `final`-класс, и подкласс
-  // с переопределённым `==` иначе выдал бы вложенный конверт за цикл.
+  // By identity: `ParallelWaitError` is not a `final` class, and a subclass
+  // with an `==` of its own would otherwise pass a nested envelope off as a
+  // cycle.
   final states = Map<Object, _EnvelopeNodeState>.identity();
   final root = _EnvelopeFrame.tryCreate(error);
   if (root == null) {
@@ -163,6 +164,16 @@ _EnvelopeAnalysis? _analyzeEnvelope(Object error) {
         final state = states[branchError];
         if (state == _EnvelopeNodeState.visiting) {
           hasUnparsed = true;
+          continue;
+        }
+        if (state == _EnvelopeNodeState.visited) {
+          // Walked already, by another path into the same node. Nothing
+          // it holds can change an answer: the counts here are read as
+          // "any at all", and the first cancellation and its trace are
+          // kept by `??=`, so the first walk settled both. Walking it
+          // again costs a path per shape instead of a node per shape,
+          // which on a graph that shares nodes is the difference between
+          // linear and exponential.
           continue;
         }
         final nested = _EnvelopeFrame.tryCreate(branchError);

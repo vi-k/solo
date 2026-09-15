@@ -194,9 +194,14 @@ abstract interface class Job<T> {
   /// runs after the body and its children end, right before cleanup. That
   /// path does not call [JobContext.onCancel].
   ///
-  /// If cancellation has already been accepted, calls [callback] immediately,
-  /// even if the job has finished. A refused or held cancellation does not
-  /// trigger it; a held one triggers it when it is accepted. A job that ends
+  /// If cancellation has already been accepted and its callbacks have run,
+  /// calls [callback] immediately, even if the job has finished. Registering
+  /// in between — while the cancellation cascades onto the children, or
+  /// while a job whose body gave itself up waits for them — puts the
+  /// callback in that pass instead, in its own place: a registration made
+  /// later never runs before one made earlier. A refused or held
+  /// cancellation does not trigger it; a held one triggers it when it is
+  /// accepted. A job that ends
   /// [Done] or [Failed] without cancellation never calls it and releases its
   /// registrations on finish. Registering does not observe a [Failed] outcome.
   ///
@@ -568,9 +573,15 @@ abstract class JobBase<T> implements Job<T> {
       }
     }
 
-    final outcome = _outcome;
-    final cancelled =
-        _cancelled ?? _pendingCancel ?? (outcome is Cancelled ? outcome : null);
+    // `_cancelled` and not `_pendingCancel`: between the mark and the pass
+    // that tells the listeners there is a window -- the cascade onto the
+    // children, and the wait for them when the body gave itself up -- and
+    // a registration made in there belongs in that pass, not ahead of it.
+    // Calling it on the spot would run it before everyone who registered
+    // earlier and is still waiting. Once the pass has run, `_cancelled` is
+    // set and a late registration is called at once, as promised; a job
+    // that finished cancelled set it on the way out.
+    final cancelled = _cancelled;
     if (cancelled != null) {
       guarded(cancelled);
       return () {};

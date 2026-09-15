@@ -46,7 +46,11 @@ abstract interface class JobContext {
   ///
   /// For anything that must actually stop — a device, a download, a write —
   /// hand the cancellation to it through [onCancel] and wait for it to
-  /// finish with [join], instead of walking away from it. For a step that
+  /// finish with [join], instead of walking away from it. Left deliberately
+  /// unawaited, write the type out — `unawaited(ctx.wait<Db>(...))`: without
+  /// it `T` is inferred from `unawaited`, which takes a `Future<void>`, and
+  /// [dispose] then has to be a `void Function(void)`, which is not what the
+  /// call site says and not what the analyzer explains. For a step that
   /// must not be interrupted at all, see [uncancellable].
   ///
   /// [dispose] and [discard] say how the value is cleaned up, and the rule
@@ -175,7 +179,11 @@ abstract interface class JobContext {
   /// on a job that is already over and is dropped — [Job.cancel] returns on
   /// a job whose outcome is [Done], and nothing says otherwise. What
   /// [action] throws has nowhere to go either: nobody awaits this future,
-  /// so its error reaches the zone instead of the observer.
+  /// so its error reaches the zone instead of the observer. And if the job
+  /// is not over yet — its body ended but a child of it is still running —
+  /// the held cancellation lands on a job that is very much alive: it
+  /// becomes the outcome over the value the body returned, and the
+  /// registrations of [JobContext.onDiscard] run.
   ///
   /// This is what separates it from [join], which accepts the
   /// cancellation as it arrives and only keeps waiting: there the job is
@@ -657,7 +665,7 @@ abstract class JobContextBase implements JobContext {
   /// answer for the outer.
   @protected
   void throwIfUnattended(String action) {
-    if (Zone.current[_owner] != null) {
+    if (identical(Zone.current[_owner], _owner)) {
       throw StateError('$_owner cannot $action inside unattended work');
     }
   }
@@ -978,7 +986,7 @@ abstract class JobContextBase implements JobContext {
     // `unattended`. A late failure then still has a listener -- the work
     // itself -- and the fork announces what the work leaves uncaught, so
     // the kernel announcing it as well would say one error twice.
-    final fromFork = Zone.current[_owner] != null;
+    final fromFork = identical(Zone.current[_owner], _owner);
     late final void Function() remove;
     void onCancel() {
       if (!completer.isCompleted) {
@@ -1257,7 +1265,13 @@ abstract class JobContextBase implements JobContext {
       // different jobs nest, and one shared key would let the inner one
       // hide the outer. Under a key of its own each job sees its own work
       // and nobody else's.
-      zoneValues: {_unattendedKey: from, _owner: true},
+      //
+      // The job is the value as well as the key, and the readers compare
+      // it by identity. A zone looks a key up by `==`, and a job of a
+      // domain may well compare itself by a key of its own: two such jobs
+      // are equal, and one would otherwise find itself inside the other's
+      // fork and refuse what is perfectly legal.
+      zoneValues: {_unattendedKey: from, _owner: _owner},
     );
   }
 

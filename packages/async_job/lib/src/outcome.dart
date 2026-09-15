@@ -180,6 +180,13 @@ final class Cancelled extends Outcome<Never> implements Exception {
   /// Domain engines also use it for their own cancellations, such as rules
   /// and closing in `solo`.
   ///
+  /// The reason is kept whoever built it, and a body that lets another
+  /// job's cancellation through — `await other.value` on a job it does not
+  /// own — hands that job's reason to its own outcome, where it reads as
+  /// though somebody cancelled this one. Only a child of this job is
+  /// wrapped in a [HandlerCancelReason] naming its cause; for anything
+  /// else, wrap it by hand or catch it.
+  ///
   /// [started] matters only where the cancellation becomes an outcome as
   /// it is, through `JobBase.finish`: on the way through `cancelWith` the
   /// engine sets it by the status of the job and whatever was passed here

@@ -9,6 +9,7 @@ import 'package:test/test.dart';
 
 import 'support/delay.dart';
 import 'support/journal.dart';
+import 'support/probe_job.dart';
 
 // Named constants rather than adjacent literals inside the list: the
 // analyzer forbids the latter, and the whole journal is what these tests
@@ -257,4 +258,36 @@ void main() {
       expect(a.outcome, isA<Done<void>>());
     },
   );
+
+  test('a job equal to another is not inside the work of that other', () {
+    fakeAsync((async) {
+      Object? thrown;
+      var ranTheStep = false;
+      final outer = KeyedJob<void>(key: 'same', (ctx) async {
+        ctx.unattended(() async {
+          // A job of the same domain, started from inside the work: its
+          // body runs in this fork's zone. The two are equal by key, and a
+          // zone looks its keys up by `==`, so without an identity check
+          // the inner job finds itself inside somebody's unattended work
+          // and refuses a step that is perfectly legal.
+          final inner = KeyedJob<void>(key: 'same', (inner) async {
+            await inner.uncancellable(() async => ranTheStep = true);
+          })
+            ..ignore();
+          try {
+            inner.launch();
+          } on Object catch (error) {
+            thrown = error;
+          }
+        });
+        await ctx.wait(() => delay(10));
+      })
+        ..ignore()
+        ..launch();
+      async.flushTimers();
+      expect(thrown, isNull);
+      expect(ranTheStep, isTrue);
+      expect(outer.outcome, isA<Done<void>>());
+    });
+  });
 }

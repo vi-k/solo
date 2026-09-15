@@ -985,6 +985,37 @@ void main() {
       expect(closed, 1);
     });
   });
+
+  test('an envelope whose branches share a node is walked once per node',
+      () async {
+    // Twenty-six levels, two branches each, both pointing at the same node
+    // below: twenty-seven nodes and sixty-seven million paths through them.
+    var node = _listEnvelope([
+      AsyncError(const Cancelled('leaf'), StackTrace.current),
+    ]);
+    for (var level = 0; level < 26; level++) {
+      final shared = node;
+      node = _listEnvelope([
+        AsyncError(shared, StackTrace.current),
+        AsyncError(shared, StackTrace.current),
+      ]);
+    }
+    final watch = Stopwatch()..start();
+    final outcome = await _run(() async => throw node);
+    watch.stop();
+    expect(outcome, isA<Cancelled>());
+    // A clock, and not a `Timeout`: the walk is synchronous, and no timer
+    // of the test framework interrupts a loop that never yields -- a walk
+    // counting paths runs for about seven seconds here and the timeout
+    // notices nothing. One counting nodes takes no measurable time at all,
+    // so a whole second is a margin of seven, not a wager.
+    expect(
+      watch.elapsedMilliseconds,
+      lessThan(1000),
+      reason: 'a node walked once per path instead of once per node turns '
+          'a graph that shares nodes into an exponential one',
+    );
+  });
 }
 
 /// An envelope that reports every other envelope as equal to itself.

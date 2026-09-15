@@ -1,5 +1,22 @@
 ## Unreleased
 
+- **Fix:** a `whenCancelled` registered while the cancellation is still
+  cascading onto the children now runs in its turn instead of ahead of everyone
+  who registered earlier. Between the mark and the pass that tells the
+  listeners there is a window, and a registration made in there was called on
+  the spot because the cancellation had been accepted -- which is true, and is
+  not the same thing as the pass having run.
+- **Fix:** a job of a domain that compares itself by a key is no longer taken
+  for another one inside unattended work. The fork of `ctx.unattended` carries
+  a zone value under the job as its key, and a zone looks a key up by `==`, so
+  two jobs equal by key were one: the inner one, started from inside the
+  other's fork, refused `uncancellable` and `each` with "cannot ... inside
+  unattended work". The job is now the value as well as the key, and the
+  readers compare it by identity.
+- **Fix:** an envelope whose branches share a node is walked once per node
+  rather than once per path. The walk marked a node visited and never read the
+  mark, so a graph of twenty-seven shared nodes took sixty-seven million steps;
+  only a hand-built envelope can be shaped that way, and now it is linear.
 - **Fix:** an action failing after the body walked away from it is no longer
   swallowed. A `ctx.wait` the body left through a `.timeout` or a `Future.any`
   handed its late error to the future the wrapper was holding, and a wrapper

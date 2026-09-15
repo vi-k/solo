@@ -243,6 +243,9 @@ class KeyedJob<T> extends JobBase<T> {
 
   KeyedJob(this._body, {required Object super.key});
 
+  /// Starts the body the way an engine of a domain would.
+  void launch() => start();
+
   // A job is mutable by nature, and the equality here is the point of the
   // helper: it stands in for a domain that compares its jobs by key.
   @override
