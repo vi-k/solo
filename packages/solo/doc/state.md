@@ -209,10 +209,12 @@ final class Camera extends Solo<CameraState> {
 ```
 
 The method is `@protected` and is called from inside the controller subclass,
-typically by a listener registered there.
+typically from a subscription its constructor opened on the source, as above.
+The listeners of the section before this one are a different thing: they hear a
+change the controller has already made.
 
-Consider what the alternative costs. If the listener queued a separate job to
-publish `Disconnected`, that update would wait behind the current job. Until
+Consider what the alternative costs. If the subscription queued a separate job
+to publish `Disconnected`, that update would wait behind the current job. Until
 then the controller still reports a connected state, the current job's rules
 cannot react to the disconnection, and that job may itself be waiting for a
 response that will never arrive. Calling `externalSetState` updates state
