@@ -35,10 +35,11 @@ types when an operation can span several states.
 | `canStart` | Once, when the job is about to start. |
 | `keepWhile` | Before start, on other state updates while the body runs, and at state checkpoints. |
 
-If a start check fails, the job ends with `Cancelled` and `started: false`. A
-failing `W` or `keepWhile` check during execution cancels the job with
-`RulesCancelReason`. These rules reject unsuitable work; they do not keep it
-queued until the state becomes suitable.
+Any of these rules cancels the job with `RulesCancelReason`; what differs is
+`started`. A refused start ends the job with `started: false`, and a `W` or
+`keepWhile` check that fails while the body runs ends it with `started: true`.
+These rules reject unsuitable work; they do not keep it queued until the state
+becomes suitable.
 
 ### Reading and updating state
 
