@@ -828,6 +828,17 @@ abstract class JobBase<T> implements Job<T> {
     // finish hooks: a synchronous subscriber may immediately add more work.
     if (outcome is Cancelled) _notifyCancelled(outcome);
     _cancelListeners.clear();
+    // Let go of the graph. The handle stays -- it is kept precisely to be
+    // read later, by a controller holding the last job, by a widget, by a
+    // journal -- but nothing it reached through is of any use now: the
+    // parent chain leads to jobs that are over, the group of
+    // [JobContext.runAll] has taken its verdict, and the outcome of the
+    // body has become the outcome. Held on, these turn one handle in a
+    // field into the whole tree it came out of, and every closure that
+    // tree captured.
+    _parent = null;
+    _hold = null;
+    _bodyOutcome = null;
     if (outcome is Failed && !_observed) {
       _reportUnobserved(outcome);
     }
@@ -1294,21 +1305,31 @@ abstract interface class DeferredJob<T> implements Job<T> {
 
 /// The job of the core itself: a body and nothing else.
 class _Job<T> extends JobBase<T> {
-  final Future<T> Function(JobContext ctx) _body;
+  /// Dropped once the job is over, the way [_ThenJob] drops what it
+  /// carried. A body runs once; kept after that, it holds everything it
+  /// captured -- a controller, a connection, a buffer -- for as long as
+  /// anyone holds the handle, and a handle is held exactly to read an
+  /// outcome later.
+  Future<T> Function(JobContext ctx)? _body;
 
   _Job(
-    this._body, {
+    Future<T> Function(JobContext ctx) body, {
     super.key,
     super.describe,
     super.cancellable,
     super.observer,
-  });
+  }) : _body = body;
 
   @override
   JobContextBase createContext() => _CoreContext(this);
 
+  // Non-null while the job runs: `start` refuses a job that has finished,
+  // and only finishing clears this.
   @override
-  Future<T> execute(covariant _CoreContext ctx) => _body(ctx);
+  Future<T> execute(covariant _CoreContext ctx) => _body!(ctx);
+
+  @override
+  void finished() => _body = null;
 }
 
 /// Starts itself on the next microtask.

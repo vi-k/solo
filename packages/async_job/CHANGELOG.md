@@ -1,5 +1,15 @@
 ## Unreleased
 
+- **Fix:** a finished job lets go of its body, of its parent and of the group
+  of `ctx.runAll` that held it. The body of a core job ran once and was kept
+  for good, so everything it captured -- a controller, a connection, a buffer
+  -- stayed alive for as long as anyone kept the handle; the link to the parent
+  turned one child handle into the whole chain it came out of, and the hold of
+  a group turned one branch handle into the coordinator and every sibling in
+  it. A handle is kept precisely to be read later, by a controller holding its
+  last job, by a widget, by a journal, so the retention grew with ordinary use.
+  Nothing an outcome carries is touched: `outcome`, `value` and the key read
+  exactly as they did.
 - **Fix:** `ctx.runAll` stops the siblings when a branch throws before its
   first `await`. The group attaches its hold once the branch is admitted --
   before that a handle already running as somebody else's branch would be
