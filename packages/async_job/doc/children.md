@@ -114,9 +114,8 @@ catches the error, that much is already closed.
 A branch that did not take the resource itself but got it from a child of its
 own registers it on arrival, the way every receiver does: the child ended
 `Done` inside the branch, and a child's registration is settled by the child's
-outcome. `ctx.wait(() => ctx.run(opener), discard: ...)` puts the registration
-on the branch, and everything above then holds for it. See
-[Cleanup](cleanup.md).
+outcome. `ctx.run(opener, discard: ...)` puts the registration on the branch,
+and everything above then holds for it. See [Cleanup](cleanup.md).
 
 One thing stays open, and it follows from a rule written elsewhere. A branch
 created with `cancellable: false` refuses the stop and ends `Done`: it hands
@@ -288,9 +287,12 @@ A `discard` of the source is the other way round: the source ended `Done`, so
 it never ran and never will, and the continuation is the receiver -- it takes
 the value as its argument and registers the release in its own body. One case
 has no receiver at all: a continuation cancelled while it waited finishes
-without ever calling its callback, so there is no body and no moment. The
-resource is then the caller's to close, through the source's handle, exactly as
-for a branch that refuses a group's stop.
+without ever calling its callback, so there is no body and no moment. A source
+that took the cancellation with it closed what it took on the way out; one that
+refused it -- `cancellable: false`, or already finished when the request
+arrived -- ends `Done` all the same, and the resource is then the caller's to
+close, through the source's handle, exactly as for a branch that refuses a
+group's stop.
 
 ### A chain is not a child
 

@@ -53,21 +53,20 @@ arrives, and the rule carries on from there:
 
 ```dart
 final ready = Job.deferred<Database>((ctx) async {
-  final database = await ctx.wait(
-    () => ctx.run(connect),
-    discard: (db) => db.close(),
-  );
+  final database = await ctx.run(connect, discard: (db) => db.close());
   await ctx.join(() => database.migrate());
 
   return database;
 });
 ```
 
-Through `wait` and not a plain `await` with an `onDiscard` after it: a child
-that refuses a cancellation ends `Done` while its parent is already cancelled,
-`ctx.run` then throws the parent's own `Cancelled`, and a registration written
-on the next line is never reached. `wait` is handed the value all the same and
-runs the `discard`.
+On `run` itself and not on a line of its own after it. With the child's value
+in hand `run` checks the parent -- for its own cancellation, and for the rules
+of its domain -- and a checkpoint that throws there takes the value with it:
+the child ended `Done` and dropped its registration on the way, the line that
+would have made the next one is never reached, and nothing closes the database
+at all. Handed to `run`, the registration is made the moment the value comes
+back, before that checkpoint.
 
 A received value then has two ways back to the same resource: the registration
 the receiver made, and the child's own `Job.value`, which carries it for as
@@ -82,8 +81,9 @@ way. This holds for every hand-over, a group included: a branch of `ctx.runAll`
 that got its value from a child of its own registers it on arrival like anyone
 else.
 
-The debug channel names every hand-over, whether or not the receiver registered
-anything, so the places where this rule applies can be read off a run:
+The debug channel names every hand-over that drops a registration, whether or
+not the receiver registered anything, so the places where this rule applies can
+be read off a run:
 
 ```text
 Job(opener) handed its value over: 1 conditional cleanup dropped

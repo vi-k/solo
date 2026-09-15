@@ -10,6 +10,7 @@ import 'package:test/test.dart';
 
 import 'support/delay.dart';
 import 'support/error_observer.dart';
+import 'support/probe_job.dart';
 
 void _byDispose(JobContext ctx, void Function() run) => ctx.onDispose(run);
 
@@ -909,10 +910,7 @@ void main() {
         (ctx) => ctx.wait(() => 'db', discard: closed.add),
       );
       ready = Job<String>((ctx) async {
-        final database = await ctx.wait(
-          () => ctx.run(connect),
-          discard: closed.add,
-        );
+        final database = await ctx.run(connect, discard: closed.add);
         await ctx.join(migrate);
 
         return database;
@@ -978,6 +976,135 @@ void main() {
       reason: 'the handle still carries the value the receiver closed: two '
           'ways to one resource, and only one of them may close it',
     );
+  });
+
+  test('run registers the value before the checkpoint that could take it', () {
+    // The checkpoint `run` makes after the child's value is where a rule of
+    // a domain refuses: `solo` cancels the job there when `keepWhile` no
+    // longer holds. The child ended [Done] and its own registration went
+    // with the value, so the one `run` made is the only one left.
+    final closed = <String>[];
+    late CheckingJob<String> parent;
+    late CheckingContext rules;
+    fakeAsync((async) {
+      final child = Job.deferred<String>(
+        observer: FinishHook(
+          (_) => rules.rules = () => throw const Cancelled('keepWhile'),
+        ),
+        (ctx) => ctx.wait(() => 'db', discard: (db) => closed.add('child')),
+      );
+      parent = CheckingJob<String>((ctx) {
+        rules = ctx;
+
+        return ctx.run(child, discard: (db) => closed.add('parent'));
+      })
+        ..launch()
+        ..ignore();
+      async.flushTimers();
+    });
+    expect(parent.outcome, isA<Cancelled>(), reason: 'the rule still rules');
+    expect(
+      closed,
+      ['parent'],
+      reason: 'the receiver registered it the moment it arrived',
+    );
+  });
+
+  test('a dispose of run runs whatever the outcome, a discard only if kept',
+      () {
+    List<String> run({required bool byDispose, required bool succeed}) {
+      final closed = <String>[];
+      fakeAsync((async) {
+        final child = Job.deferred<String>((ctx) async => 'db');
+        Job<String>((ctx) async {
+          final db = await ctx.run(
+            child,
+            dispose: byDispose ? closed.add : null,
+            discard: byDispose ? null : closed.add,
+          );
+          if (!succeed) {
+            throw StateError('boom');
+          }
+
+          return db;
+        }).ignore();
+        async.flushTimers();
+      });
+
+      return closed;
+    }
+
+    expect(run(byDispose: true, succeed: true), ['db']);
+    expect(run(byDispose: true, succeed: false), ['db']);
+    expect(
+      run(byDispose: false, succeed: true),
+      isEmpty,
+      reason: 'the value went out with the parent, and its cleanup with it',
+    );
+    expect(run(byDispose: false, succeed: false), ['db']);
+  });
+
+  test('a value of run that came back late is cleaned up all the same', () {
+    final closed = <String>[];
+    fakeAsync((async) {
+      final child = Job.deferred<String>((ctx) async {
+        await ctx.wait(() => delay(20));
+
+        return 'db';
+      });
+      Job<void>((ctx) async {
+        // Walked away from: the body ends while the child is still going,
+        // and the value comes back to nobody.
+        ctx.run(child, discard: closed.add).ignore();
+      }).ignore();
+      async.flushTimers();
+    });
+    expect(closed, ['db']);
+  });
+
+  test('passing both to run is an ArgumentError and starts no child', () {
+    var started = false;
+    late Job<String> child;
+    late Job<void> parent;
+    fakeAsync((async) {
+      child = Job.deferred<String>((ctx) async {
+        started = true;
+
+        return 'db';
+      });
+      parent = Job<void>((ctx) async {
+        // Synchronous, and so is the refusal: no future is ever made.
+        unawaited(ctx.run(child, dispose: (db) {}, discard: (db) {}));
+      })
+        ..ignore();
+      async.flushTimers();
+    });
+    expect(parent.outcome, isA<Failed>());
+    expect(
+      (parent.outcome! as Failed).error,
+      isA<ArgumentError>(),
+      reason: 'the same refusal wait gives, and before the child starts',
+    );
+    expect(started, isFalse, reason: 'the refusal left nothing running');
+    expect(child.outcome, isNull, reason: 'and nothing finished either');
+  });
+
+  test('disown drops a registration made by run', () {
+    final closed = <String>[];
+    late Job<String> parent;
+    fakeAsync((async) {
+      final child = Job.deferred<String>((ctx) async => 'db');
+      parent = Job<String>((ctx) async {
+        final db = await ctx.run(child, discard: closed.add);
+        // Handed on to somebody outside, so the registration goes too.
+        ctx.disown(db);
+        throw StateError('boom');
+      })
+        ..ignore();
+      async.flushTimers();
+    });
+    expect(parent.outcome, isA<Failed>());
+    expect(closed, isEmpty);
   });
 
   test('a successful job lets go of the registrations it never ran', () {

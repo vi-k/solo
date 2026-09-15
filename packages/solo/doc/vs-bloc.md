@@ -1131,12 +1131,13 @@ observe that result. Rename stays queued, and disconnect runs after it.
 `removeWhere` works on the queue alone: if the read has already started, it is
 not removed. The device then receives `[connect, battery, disconnect]`.
 
-The predicate says what goes, and `cancellable: false` says what cannot. The
-two are not the same statement: a filter that names the read leaves the rename
-alone today, and says nothing about tomorrow's caller who sweeps the queue
-wholesale. A rename the user asked for has to reach the device either way, so
-the guarantee belongs to the job. `cancelAll()` and `queue.clear()` skip such a
-job rather than remove it; `force: true` is what takes it.
+The rename carries `cancellable: false`, and that is the other half of the
+requirement. The removal in `disconnect` names the read, so the rename survives
+it by not being named -- which says nothing about a caller who later sweeps the
+whole queue with `cancelAll()` or `queue.clear()`. A rename the user asked for
+has to reach the device in that case too, so the guarantee belongs to the job
+rather than to a line that removes somebody else: a sweep skips such a job
+instead of removing it, and `force: true` is what takes it.
 
 The controller is longer than the bloc above it, and the two do not compare
 line for line. The events that version runs on are not in this document: a

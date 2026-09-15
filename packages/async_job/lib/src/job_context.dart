@@ -321,7 +321,28 @@ abstract interface class JobContext {
   /// or one that starts itself; [StateError] for a job that has already been
   /// started; and the parent's own [Cancelled], with the child dropped, if the
   /// parent is already cancelled.
-  Future<T> run<T>(Job<T> child);
+  ///
+  /// [dispose] and [discard] say how the child's value is cleaned up, and
+  /// they work as they do in [wait]: [dispose] runs whatever the outcome,
+  /// [discard] only if the value reaches nobody, and passing both is an
+  /// [ArgumentError] thrown before the child starts. They are how a value
+  /// that travels is registered again on arrival, and the registration is
+  /// made the moment the value comes back — before the checkpoint above,
+  /// because that checkpoint is what takes the value away:
+  ///
+  /// ```dart
+  /// final db = await ctx.run(connect, discard: (db) => db.close());
+  /// ```
+  ///
+  /// Written on the next line instead, the registration is never reached
+  /// when the parent is cancelled or a rule of its domain refuses right
+  /// there — and the child, having ended [Done], has already dropped its
+  /// own. Nothing would close the database at all.
+  Future<T> run<T>(
+    Job<T> child, {
+    FutureOr<void> Function(T value)? dispose,
+    FutureOr<void> Function(T value)? discard,
+  });
 
   /// Runs [children] side by side and stops the rest as soon as one of
   /// them goes wrong.
@@ -976,9 +997,17 @@ abstract class JobContextBase implements JobContext {
   }
 
   @override
-  Future<T> run<T>(Job<T> child) {
+  Future<T> run<T>(
+    Job<T> child, {
+    FutureOr<void> Function(T value)? dispose,
+    FutureOr<void> Function(T value)? discard,
+  }) {
+    // Before the child starts: an admission error must leave nothing
+    // running behind it.
+    _oneCleanupOnly(dispose, discard);
     startChild(child);
-    return _awaitChild(child);
+
+    return _awaitChild(child, dispose: dispose, discard: discard);
   }
 
   @override
@@ -1018,9 +1047,24 @@ abstract class JobContextBase implements JobContext {
     return _RunAllGroup<T>(this, branches).run();
   }
 
-  Future<T> _awaitChild<T>(Job<T> child) async {
+  Future<T> _awaitChild<T>(
+    Job<T> child, {
+    FutureOr<void> Function(T value)? dispose,
+    FutureOr<void> Function(T value)? discard,
+  }) async {
     final value = await child.value;
-    if (!_owner.bodyEnded) check();
+    // Registered before the checkpoint, and that is the whole of it. The
+    // child ended [Done], so its own conditional registration went with
+    // the value and is gone; a checkpoint throwing here -- the parent's
+    // cancellation, or a rule of its domain refusing -- would take the
+    // value with it, and there would be nobody left holding the resource.
+    if (_owner.bodyEnded) {
+      await _keepLate(dispose, discard, value);
+    } else {
+      _keepOnStack(dispose, discard, value);
+      check();
+    }
+
     return value;
   }
 
