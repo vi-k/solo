@@ -43,20 +43,23 @@ queued until the state becomes suitable.
 ### Reading and updating state
 
 ```dart
-(ctx) async {
-  // Reads are checkpoints: cancellation and the rules are checked.
-  final free = ctx.state.free;
-  final ready = ctx.stateAs<Ready>();
-  ctx.check();
+Job<void> zoomIn() => run<Ready, void>(
+      (ctx) async {
+        // Reads are checkpoints: cancellation and the rules are checked.
+        final free = ctx.state.free;
+        ctx.check();
 
-  // The only write, and it is synchronous.
-  ctx.emit(Recording(free: free, zoom: ready.zoom));
-}
+        // The only write, and it is synchronous.
+        ctx.emit(Recording(free: free, zoom: ctx.state.zoom + 1));
+      },
+    );
 ```
 
 `ctx.state`, `ctx.stateAs<T>()` and `ctx.check()` check cancellation and state
-rules. `stateAs<T>()` additionally requires the state to be `T`; a mismatch
-cancels the job. Waiting methods use state checkpoints too.
+rules. The body above is `run<Ready, void>`, so `ctx.state` is a `Ready`
+already; `stateAs<T>()` is for a body whose `W` is wider than the state it
+needs at that moment, and it requires the state to be `T` rather than returning
+null -- a mismatch cancels the job. Waiting methods use state checkpoints too.
 
 `ctx.emit(next)` allows a job to publish a state outside its own working type:
 an initialization job may finish by emitting `Ready`. A later state checkpoint
@@ -202,9 +205,10 @@ final class Camera extends Solo<CameraState> {
 ```
 
 The method is `@protected` and is called from inside the controller subclass,
-typically by a listener registered there.
+typically from a subscription it holds -- the one on the device above, not a
+listener of the controller.
 
-Consider what the alternative costs. If the listener queued a separate job to
+Consider what the alternative costs. If that handler queued a separate job to
 publish `Disconnected`, that update would wait behind the current job. Until
 then the controller still reports a connected state, the current job's rules
 cannot react to the disconnection, and that job may itself be waiting for a
