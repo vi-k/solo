@@ -149,6 +149,19 @@ from another implementation or a job that starts automatically. It throws
 the parent is already cancelled, it cancels the child before start and throws
 the parent's `Cancelled`.
 
+How deep a tree may go is bounded by the stack, and by two different walks of
+it. Starting a child runs the child's body up to its first `await`, so a body
+that makes its own child before it suspends builds the whole chain on one
+stack: about a thousand levels on a desktop VM, and the overflow lands while
+the tree is still being built. A single `await` before `ctx.run` breaks that
+into microtasks and lifts the limit to the other walk -- cancellation, which
+descends the tree recursively and reaches about three thousand. Neither number
+is a promise; both follow from the size of a body's frame. A cascade that runs
+out of stack still tells every job it marked to stop, and the error reaches
+whoever called `cancel`, but everything below the break is left running.
+Recursion measured in thousands of nested jobs wants flattening, not a deeper
+stack.
+
 ## Processing streams
 
 `ctx.each(stream, onData)` subscribes to a stream and processes its events one

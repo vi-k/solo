@@ -661,14 +661,25 @@ abstract class JobBase<T> implements Job<T> {
         // callbacks — still waits for the children, because `solo` pins the
         // order in which a cancellation is seen.
         _pendingCancel = marked;
-        cascadeToChildren(marked);
-        if (_status == JobStatus.finished) {
-          // A callback of a child reached the engine of a domain, and it
-          // ended the job by hand: `whenCancelled` was notified already, and
-          // the callbacks below would run on a job that is over.
-          return;
+        try {
+          cascadeToChildren(marked);
+        } finally {
+          // In a `finally`, because the cascade is recursive and a deep
+          // enough tree overflows the stack inside it. Everything the
+          // cascade reached is marked by then, and without this the
+          // unwinding would leave every one of those jobs marked and
+          // unannounced: no `onCancel` runs, nothing is told to stop, and
+          // a second `cancel()` turns around at the early return above.
+          // The error still reaches whoever asked.
+          //
+          // Skipped only when a callback of a child reached the engine of
+          // a domain and it ended the job by hand: `whenCancelled` was
+          // notified already, and the callbacks would run on a job that is
+          // over.
+          if (_status != JobStatus.finished) {
+            _markCancelled(marked);
+          }
         }
-        _markCancelled(marked);
     }
   }
 
@@ -1113,7 +1124,17 @@ abstract class JobBase<T> implements Job<T> {
       // `_notifyCancelled` waits for the children below, because `solo`
       // pins the order in which a cancellation is seen.
       _pendingCancel = selfCancelled;
-      cascadeToChildren(selfCancelled);
+      try {
+        cascadeToChildren(selfCancelled);
+      } on Object catch (error, stackTrace) {
+        // The cascade is recursive, and a deep enough tree overflows the
+        // stack inside it. Here there is nobody to hand that to: the
+        // outcome is decided, the job still has to wait for its children
+        // and unwind its cleanup stack, and an error thrown out of
+        // `_execute` would leave it running for good. It goes out the one
+        // door for an error with nowhere else to go.
+        notifyError(error, stackTrace);
+      }
     }
     await _awaitChildren();
     if (isFinished) {

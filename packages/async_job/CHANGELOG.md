@@ -207,6 +207,19 @@
   meant to be extended is breaking on its own: a subclass with a member of that
   name stops compiling.
 
+- **Fix:** a cancellation cascade that runs out of stack no longer leaves the
+  tree jammed. The cascade is recursive, and a tree thousands of levels deep
+  overflows inside it; the mark goes on before the descent and the callbacks
+  run after it, so the unwinding left every job the cascade had reached marked
+  and unannounced -- no `onCancel` ran, nothing was told to stop, and a second
+  `cancel()` turned around at the mark. The callbacks now run as the cascade
+  unwinds, and the error still reaches whoever asked. A body giving itself up
+  meets the same descent with nobody to hand a failure to, so there the error
+  goes to `onError` and the job still waits for its children and unwinds its
+  cleanup stack instead of stopping where it stood. What lies below the break
+  is still left running: the depth of a tree is bounded by the stack either
+  way, and `doc/children.md` says by how much.
+
 ## 0.2.0
 
 - **Breaking:** `ctx.run(child)` returns `Future<T>` instead of the child's
