@@ -159,9 +159,23 @@ itself: after the state is written, before the rules of the running jobs are
 re-evaluated, and before the next line of the code that changed the state.
 
 A change made from inside a listener does not get that order. It goes to the
-end of the publication queue rather than ahead of it: the engine re-evaluates
-the running jobs' rules against it at once, the nested writer's next line runs
-after that, and the listeners hear about it last, when the queue reaches it.
+end of the publication queue rather than ahead of it:
+
+```text
+externalSetState(B)
+    listeners of B
+        externalSetState(C)        // a listener writes again
+            rules, against C       // C's own, at once
+        next line of the listener
+    listeners of C                 // the queue reaches C only here
+    rules, against C               // B's, and the state is C by now
+next line of the writer
+```
+
+So the nested change is answered for by the rules before its own writer goes
+on, and heard by the listeners last. The outer change never reaches the rules
+as itself: by the time its re-evaluation runs, the state it asks about is the
+nested one.
 
 `removeListener` matches with `==` rather than identity, the way
 `ChangeNotifier` does, so a widget can subscribe in `initState` and unsubscribe

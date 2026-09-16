@@ -59,6 +59,50 @@ final class Cam extends Solo<CamState> {
       );
 }
 
+// --- Observing state ------------------------------------------------------
+
+/// The controller of the order diagram under "Observing state".
+///
+/// One listener, one running job whose `keepWhile` records what it was
+/// asked about, and a write made from inside the listener.
+final class Order extends Solo<String> {
+  final trace = <String>[];
+
+  var _nested = false;
+  var _inNestedWrite = false;
+
+  Order() : super('A') {
+    addListener(() {
+      final seen = currentState;
+      trace.add('    listeners of $seen');
+      if (!_nested && seen == 'B') {
+        _nested = true;
+        trace.add('        externalSetState(C)');
+        // The flag is the test's own bookkeeping, and it is what turns
+        // the sequence below into the diagram: it says which of the two
+        // re-evaluations ran inside the nested write.
+        _inNestedWrite = true;
+        set('C');
+        _inNestedWrite = false;
+        trace.add('        next line of the listener');
+      }
+    });
+  }
+
+  void set(String next) => externalSetState(next);
+
+  Job<void> watch() => run<String, void>(
+        keepWhile: (state) {
+          final indent = _inNestedWrite ? ' ' * 12 : ' ' * 4;
+          trace.add('${indent}rules, against $state');
+          return true;
+        },
+        (ctx) async => ctx.wait(
+          () => Future<void>.delayed(const Duration(seconds: 1)),
+        ),
+      );
+}
+
 // --- A delivery of your own -----------------------------------------------
 
 final class OwnList extends Solo<int> {
@@ -269,6 +313,36 @@ void main() {
 
       await cam.frames.close();
       await cam.close();
+    });
+  });
+
+  group('the order a nested change gets', () {
+    test('rules at once, the writer next, the listeners last', () async {
+      final order = Order();
+      final job = order.watch();
+      await pump();
+      order.trace.clear();
+
+      order
+        ..trace.add('externalSetState(B)')
+        ..set('B')
+        ..trace.add('next line of the writer');
+
+      // The diagram under "Observing state" in doc/state.md, line for
+      // line, its `//` annotations aside.
+      expect(order.trace, [
+        'externalSetState(B)',
+        '    listeners of B',
+        '        externalSetState(C)',
+        '            rules, against C',
+        '        next line of the listener',
+        '    listeners of C',
+        '    rules, against C',
+        'next line of the writer',
+      ]);
+
+      await job.cancel();
+      await order.close();
     });
   });
 
