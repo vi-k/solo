@@ -1,10 +1,41 @@
 # State
 
+`Solo<S>` stores one immutable state of type `S`, and a job declares which
+states it may start in and which it may keep running in. Five sections below
+open with the version this API's own vocabulary leads to — what you write when
+you reach for `run` and stop there — and say what it does instead of what it
+was meant to do. The version that works follows under its own heading.
+
 ## State and rules
 
-`Solo<S>` stores one immutable state of type `S`. A job declares which states
-it may start in and which it may keep running in, and the engine checks those
-rules for it:
+A recording needs free space before it starts, and it has to stop when the
+camera is paused.
+
+### The first attempt
+
+```dart
+Job<void> record() => run<CamState, void>(
+      key: 'record',
+      (ctx) async {
+        final state = ctx.state;
+        if (state is! Ready || state.paused) return;
+        await for (final frame in device.frames) {
+          store(frame);
+        }
+      },
+    );
+```
+
+The check reads well, and it runs once. Nothing brings it back: by the time
+another update sets `paused`, the body is already inside the loop, and a loop
+is not a state checkpoint. A frame that arrives before the pause and two that
+arrive after it are stored alike.
+
+The job does not end either. `await for` is no checkpoint, so the cancellation
+`close` sends never reaches the body, and closing the controller waits until
+the stream itself ends.
+
+### The rules
 
 ```dart
 Job<void> record() => run<Ready, void>(
@@ -17,6 +48,11 @@ Job<void> record() => run<Ready, void>(
       ).value,
     );
 ```
+
+The rules are parameters, and the engine checks them for the job. The working
+type narrows from `CamState` to `Ready`, so the state the body reads is the one
+it needs, and the condition the first attempt checked by hand is now
+`keepWhile`.
 
 The first type argument of `run<W, T>` is the job's working state type,
 `W extends S`. The engine checks it, so `run<Ready, void>` starts only in
