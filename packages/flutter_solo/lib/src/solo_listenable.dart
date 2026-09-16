@@ -5,10 +5,10 @@ import 'package:solo/solo.dart';
 /// `ValueListenableBuilder` or `ListenableBuilder`.
 ///
 /// The listeners are its only delivery. It is built on the engine
-/// itself, not on [Solo], because a widget has no use for a broadcast
-/// `stream`: a screen rebuilds from [value], and an operation's result is
-/// awaited through its `Job`. So there is no `StreamController` here to
-/// carry, feed on every change and close afterwards.
+/// itself, not on `SoloStream`, because a widget has no use for a
+/// broadcast `stream`: a screen rebuilds from [value], and an operation's
+/// result is awaited through its `Job`. So there is no `StreamController`
+/// here to carry, feed on every change and close afterwards.
 ///
 /// Read-only on purpose: a `ValueNotifier` setter would break the
 /// ownership guarantee. [value] and [currentState] are the same object.

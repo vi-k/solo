@@ -19,7 +19,7 @@ part 'job_context.dart';
 part 'queue.dart';
 
 /// The engine: state, queue, hooks. Subclasses add a delivery channel
-/// through [publish]; see `Solo` for a stream.
+/// through [publish]; see `SoloStream` for a broadcast stream of states.
 ///
 /// The hooks — [onStart], [onFinish], [onError], [onLog], [onChange] and
 /// the [observer]'s — are a cross-cutting channel, so an error thrown by
