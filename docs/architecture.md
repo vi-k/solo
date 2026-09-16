@@ -21,13 +21,15 @@ BLE-устройство, плеер, синхронизация), где сос
   с объединёнными интерфейсами (`Initialized`, `NotFailed`), чтобы задачи могли
   объявлять рабочий тип шире одного класса.
 - **Контроллер** — владелец состояния и очереди. Снаружи это класс с обычными
-  методами; методы создают задачи и ставят их в очередь. Иерархия вилка
-  от базы: `SoloBase<S>` — движок и `currentState`, `Solo<S>` добавляет
-  `stream`, `SoloListenable<S>` в пакете `flutter_solo` добавляет
-  `ValueListenable`. Братья, а не цепочка: виджету broadcast-стрим не нужен
-  (решение владельца 12.09.2026, отчёт —
-  `2026-09-12[4]-listenable-on-base-report.md`). Различаются наследники только
-  доставкой изменений через защищённый `publish`; чтение состояния есть у всех.
+  методами; методы создают задачи и ставят их в очередь. Иерархия — не вилка
+  от базы, а миксин поверх неё: `Solo<S>` — движок, `currentState` и слушатели,
+  `SoloStream<S>` подмешивает `stream`, `SoloListenable<S>` в пакете
+  `flutter_solo` наследует `Solo` и добавляет `ValueListenable`. Комбинация
+  `SoloListenable` с `SoloStream` работает (решение владельца 15.09.2026, спека
+  `2026-09-15[14]-solo-stream-mixin-design.md`) — прежний запрет «братья,
+  а не цепочка» из отчёта `2026-09-12[4]-listenable-on-base-report.md` снят.
+  Различаются наследники только доставкой изменений через защищённый `publish`;
+  чтение состояния есть у всех.
 - **Задача** — единица работы с телом `Future<T> Function(ctx)`, ключом,
   правилами и хэндлом `Job<T>`, по которому можно дождаться исхода или
   отменить.
@@ -121,10 +123,11 @@ BLE-устройство, плеер, синхронизация), где сос
   значения, до контрольной точки: точка, бросившая там, иначе унесла бы
   значение с собой.
 - **Доставка изменений** — `currentState` источник правды и обновляется
-  синхронно, первым действием. Стрим `Solo.stream` асинхронный: событие уходит
-  следующей микротаской и к моменту доставки может быть старее `currentState`.
-  Слушатели `SoloListenable` зовутся синхронно, в порядке подписки; стрима
-  у него нет.
+  синхронно, первым действием. Стрим `SoloStream.stream` асинхронный: событие
+  уходит следующей микротаской и к моменту доставки может быть старее
+  `currentState`. Слушатели `Solo`, включая `SoloListenable`, зовутся
+  синхронно, в порядке подписки; стрима у голого `Solo`/`SoloListenable` нет,
+  пока не подмешан `SoloStream`.
 - **Реентерабельность** — из хука `onChange`, из observer и из слушателя
   `SoloListenable` можно снова звать `externalSetState`: они выполняются
   синхронно внутри текущего изменения. Вложенное изменение встаёт в общую
@@ -292,9 +295,10 @@ BLE-устройство, плеер, синхронизация), где сос
 `packages/solo/lib/solo.dart` реэкспортирует `package:async_job/async_job.dart`
 и экспортирует всё публичное у solo. `packages/solo/lib/src/`:
 
-- `solo_base.dart` — `SoloBase<S>`: состояние, цикл прокачки очереди, хуки,
-  `job`, `add`, `run`, `collect`, `accumulate`, `externalSetState`, `close`,
-  защищённый `publish`, статические `observer` и `debug`, адаптер
+- `solo.dart` — `Solo<S>`: состояние, цикл прокачки очереди, хуки, `job`,
+  `add`, `run`, `collect`, `accumulate`, `externalSetState`, `close`,
+  собственные слушатели (`addListener`, `removeListener`), защищённый
+  `publish`, статические `observer`, `errorHandler` и `debug`, адаптер
   `_SoloJobObserver` к `JobObserver` ядра. Это одна библиотека с частями
   (`part`): `job.dart`, `job_context.dart`, `queue.dart`, `accumulator.dart`,
   `accumulation_timing.dart`. Части нужны потому, что наследники ядра
@@ -328,14 +332,15 @@ BLE-устройство, плеер, синхронизация), где сос
   нулевая означает отсутствие задержки. Таймеры однократные; контроллер хранит
   только активные таймеры и отменяет их при close. Состояние throttle
   принадлежит накопителю, debounce — отдельной группе.
-- `solo.dart` — отдельная библиотека, `Solo<S>`: `stream` поверх `publish`.
+- `solo_stream.dart` — отдельная библиотека, миксин `SoloStream<S> on Solo<S>`:
+  `stream` поверх `publish`.
 - `policy.dart` — отдельная библиотека, `Policy`.
 - `observer.dart` — отдельная библиотека, `SoloObserver`.
 
 `packages/solo/example/` — отдельный пакет с фейковой камерой и своими тестами.
 
 `packages/flutter_solo` —
-`SoloListenable<S> extends SoloBase<S> implements ValueListenable<S>` со своими
+`SoloListenable<S> extends Solo<S> implements ValueListenable<S>` со своими
 тестами.
 
 `Job.whenCancelled(callback)` — внешняя синхронная регистрация отмены
