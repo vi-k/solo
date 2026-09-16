@@ -1,7 +1,7 @@
 # State
 
 `Solo<S>` stores one immutable state of type `S`, and a job declares which
-states it may start in and which it may keep running in. Five sections below
+states it may start in and which it may keep running in. Four sections below
 open with the version this API's own vocabulary leads to — what you write when
 you reach for `run` and stop there — and say what it does instead of what it
 was meant to do. The version that works follows under its own heading.
@@ -360,15 +360,44 @@ does not mark the outcome as handled for error reporting.
 
 ### Preserving an incompatible external state
 
-A final handler must not overwrite a state that makes its job invalid. For
-example, extend the profile states from the quick start with `Disconnected` in
-the same library, and replace the controller's `load` method with this version:
+The handler above returns `Initial` whenever the load is cancelled. Extend the
+profile states from the quick start with `Disconnected` in the same library,
+and the connection can now drop while a load is running.
+
+#### The first attempt
 
 ```dart
 final class Disconnected extends ProfileState {
   const Disconnected();
 }
 
+Job<String> load() => run<ProfileState, String>(
+      key: 'load',
+      policy: Policy.droppable,
+      onError: (state, error, stackTrace) => Failure(error),
+      onCancel: (state, cancelled) => const Initial(),
+      (ctx) async {
+        ctx.emit(const Loading());
+        final name = await ctx.wait(api.fetchName);
+        ctx.emit(Loaded(name));
+        return name;
+      },
+    );
+```
+
+Nothing here says the load has an opinion about `Disconnected`, so it keeps
+running through it. When the load is cancelled after that — by a duplicate, by
+a screen closing, by anything — `onCancel` does what it was written to do and
+returns `Initial`, over the fact the device reported. The controller now shows
+a profile that is merely empty, when what happened is that the connection is
+gone.
+
+A `state is Disconnected` check inside the handler would patch this one case.
+The job would still be running work that the disconnection made pointless.
+
+#### The rules
+
+```dart
 Job<String> load() => run<ProfileState, String>(
       key: 'load',
       policy: Policy.droppable,
