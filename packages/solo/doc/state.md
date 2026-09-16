@@ -158,17 +158,16 @@ any. The listeners run synchronously, in registration order, inside the change
 itself: after the state is written, before the rules of the running jobs are
 re-evaluated, and before the next line of the code that changed the state.
 
-That order belongs to the change that opened the pass. A change made from
-inside a listener joins the publication queue instead of cutting in: the engine
-re-evaluates the running jobs' rules against it at once, the nested writer's
-next line runs after that, and the listeners hear about it last, when the pass
-already running reaches it.
+A change made from inside a listener does not get that order. It goes to the
+end of the publication queue rather than ahead of it: the engine re-evaluates
+the running jobs' rules against it at once, the nested writer's next line runs
+after that, and the listeners hear about it last, when the queue reaches it.
 
 `removeListener` matches with `==` rather than identity, the way
 `ChangeNotifier` does, so a widget can subscribe in `initState` and unsubscribe
-in `dispose` with a method of its own. A listener that throws does not stop the
-pass: its error goes to `onListenerError`, which hands it to the zone unless a
-subclass says otherwise.
+in `dispose` with a method of its own. A listener that throws stops neither the
+listeners after it nor the re-evaluation that follows them: its error goes to
+`onListenerError`, which hands it to the zone unless a subclass says otherwise.
 
 Closing drops them for good — a registration made afterwards is refused rather
 than kept, and the state stops moving with them: `externalSetState` past that
