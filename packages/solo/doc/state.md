@@ -90,7 +90,8 @@ print(camera.currentState);
 camera.addListener(() => print(camera.currentState));
 
 // Every update, in order, on a microtask. The initial state is not
-// replayed, and an equal state still produces an event.
+// replayed, and an equal state still produces an event. Needs
+// `with SoloStream` on the controller -- see below.
 final subscription = camera.stream.listen(print);
 ```
 

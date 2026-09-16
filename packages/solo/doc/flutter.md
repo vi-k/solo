@@ -116,3 +116,24 @@ SoloSelectBuilder<ProfileState, bool>(
 Hold the picking function in a field or a `static` where the parent rebuilds
 often: it is compared by identity, so an inline closure is a new one every
 build, and each of those builds makes a new selection.
+
+## A controller with both deliveries
+
+`SoloListenable` combines with `SoloStream` when a screen needs the widget side
+and a broadcast `stream` at once:
+
+```dart
+final class Session extends SoloListenable<SessionState>
+    with SoloStream<SessionState> {
+  Session(super.initialState);
+}
+```
+
+Both deliveries are live, on their own schedules: the listener behind
+`ValueListenableBuilder` fires synchronously, inside the change, and the
+`stream` event arrives a microtask later. The combination has a cost: a
+listener failure goes to `FlutterError`, a stream failure to the zone -- one
+change, two error routes; a rebuild and a stream event are two separate
+reactions to one change, where a widget reading only `value` had one; and
+`await close()` now waits for the stream's own subscribers too, which a plain
+`SoloListenable` never did.

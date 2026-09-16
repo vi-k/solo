@@ -389,5 +389,5 @@ test, not through `FlutterError.onError`. Either await the outcome or call
 [solo](https://pub.dev/packages/solo) is the controller itself: the queue and
 its policies, the working type of a job, `canStart` and `keepWhile`, children,
 observers, the waiting family and the rest of the API this package inherits
-whole — all but `Solo`'s broadcast `stream`, which a widget has no use for. If
-you are not writing widgets, take it instead — it is pure Dart.
+whole — all but the broadcast `stream` of `SoloStream`, which a widget has no
+use for. If you are not writing widgets, take it instead — it is pure Dart.

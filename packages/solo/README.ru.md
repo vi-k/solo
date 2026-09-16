@@ -138,9 +138,20 @@ Future<void> main() async {
 `profile.currentState` доступен синхронно, и `addListener` тоже зовёт колбэк
 синхронно, внутри самого изменения. `job.value` возвращает загруженное имя или
 бросает ошибку `Job` либо `Cancelled`. Блок `finally` снимает слушателя
-и закрывает контроллер даже при ошибке загрузки. Для broadcast-`stream`,
-доставленного на следующей микрозадаче, подмешайте `SoloStream` — см.
-[Состояние](../../docs/ru/solo/state.md).
+и закрывает контроллер даже при ошибке загрузки.
+
+Для broadcast-`stream`, доставленного на следующей микрозадаче, подмешайте
+`SoloStream`:
+
+```dart
+final class ProfileController extends Solo<ProfileState>
+    with SoloStream<ProfileState> {
+  // ...то же, что и выше...
+}
+```
+
+Полную картину доставки, включая `SoloListenable` из `flutter_solo`, см.
+в [Состоянии](../../docs/ru/solo/state.md).
 
 Для отмены используется тот же объект `Job`. Этот отдельный пример запрашивает
 отмену сразу, поэтому `Job` может ещё находиться в очереди:

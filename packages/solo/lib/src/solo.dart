@@ -18,8 +18,9 @@ part 'job.dart';
 part 'job_context.dart';
 part 'queue.dart';
 
-/// The engine: state, queue, hooks. Subclasses add a delivery channel
-/// through [publish]; see `SoloStream` for a broadcast stream of states.
+/// The engine: state, queue, hooks and its own listeners ([addListener]).
+/// [publish] is the seam for a delivery of another kind; `SoloStream`
+/// adds a broadcast stream through it.
 ///
 /// The hooks — [onStart], [onFinish], [onError], [onLog], [onChange] and
 /// the [observer]'s — are a cross-cutting channel, so an error thrown by
@@ -196,8 +197,9 @@ abstract class Solo<S extends Object> {
     Zone.current.handleUncaughtError(error, stackTrace);
   }
 
-  /// Delivery point for subclasses; empty here. Called after `onChange` and
-  /// before running jobs are re-evaluated.
+  /// Notifies the engine's own listeners, then stands as the seam a
+  /// subclass or mixin adds a delivery of its own through. Called after
+  /// `onChange` and before running jobs are re-evaluated.
   @protected
   @mustCallSuper
   void publish(S previous, S current) {

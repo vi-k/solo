@@ -136,9 +136,20 @@ Future<void> main() async {
 `profile.currentState` is available synchronously, and `addListener` calls back
 synchronously too, inside the change itself. `job.value` returns the loaded
 name, or throws the job's error or `Cancelled`. The `finally` block removes the
-listener and closes the controller even if loading fails. Mix in `SoloStream`
-for a broadcast `stream` instead, delivered on the next microtask — see
-[State](doc/state.md).
+listener and closes the controller even if loading fails.
+
+Mix in `SoloStream` instead for a broadcast `stream`, delivered on the next
+microtask:
+
+```dart
+final class ProfileController extends Solo<ProfileState>
+    with SoloStream<ProfileState> {
+  // ...same as above...
+}
+```
+
+See [State](doc/state.md) for the full delivery picture, including
+`SoloListenable` from `flutter_solo`.
 
 Cancellation uses the same job object. This separate example requests
 cancellation immediately, so the job may still be in the queue:

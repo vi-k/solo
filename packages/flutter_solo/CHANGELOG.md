@@ -75,13 +75,12 @@
   engine's close; the engine now drops it synchronously, right after the hook.
   A change made *inside* the hook still reaches them.
 
-- **Breaking:** `SoloListenable` is built on `Solo`, not on `SoloStream`, and
-  has no `stream`. The listeners are its whole delivery: a widget rebuilds from
-  `value`, and an operation's result is awaited through its `Job`, so the
-  broadcast `StreamController` every controller used to carry — created with
-  it, fed on every change and closed afterwards — is gone. A controller no
-  longer fits where a `SoloStream<S>` is expected; `Solo<S>` is the type that
-  covers both.
+- **Breaking:** `SoloListenable` no longer carries a stream of its own. The
+  listeners are its whole delivery: a widget rebuilds from `value`, and an
+  operation's result is awaited through its `Job`, so the broadcast
+  `StreamController` every controller used to carry — created with it, fed on
+  every change and closed afterwards — is gone. Mix in `SoloStream` (above) for
+  a controller that needs both.
 
 - **Breaking:** the controller's synchronous read is `solo`'s new
   `currentState`, so `SoloListenable.state` is gone. `value` is unchanged and

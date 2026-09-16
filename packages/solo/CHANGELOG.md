@@ -7,10 +7,17 @@
   `extends Solo<...>` declarations never read `.stream` and need no change at
   all; the few that do gain the mixin. `SoloListenable` is unaffected in shape
   -- it already extended the bare engine -- and can now be combined with
-  `SoloStream` for a controller that needs both deliveries. Migration:
+  `SoloStream` for a controller that needs both deliveries. A bare
+  `Solo<T>(value)` -- the former `Solo`, instantiated directly for its engine
+  and its stream together -- no longer compiles: `Solo` is `abstract`, as
+  `SoloBase` always was, and there is no concrete class left that carries a
+  stream on its own. Write a one-line subclass instead:
+  `class C<T> extends Solo<T> with SoloStream<T> {}`. Migration:
   `extends SoloBase<S>` becomes `extends Solo<S>`; a controller that read
-  `.stream` adds `with SoloStream<S>`; `SoloBase.observer`, `.errorHandler` and
-  `.debug` become `Solo.observer`, `.errorHandler` and `.debug`.
+  `.stream` adds `with SoloStream<S>`; a field or parameter typed `Solo<S>`
+  that reads `.stream` becomes `SoloStream<S>`; `SoloBase.observer`,
+  `.errorHandler` and `.debug` become `Solo.observer`, `.errorHandler` and
+  `.debug`.
 
 - **Breaking:** `Policy.droppable` compares the result types of the two jobs
   with each other, instead of matching the one it found against the type
