@@ -153,15 +153,14 @@ checked `ctx.state`.
 | `SoloListenable<S>` | All of `Solo` plus Flutter's `ValueListenable<S>`. |
 
 The listeners belong to the engine. They run synchronously, in registration
-order, inside the change and before the rules of the running jobs are
-re-evaluated, so a listener is called before the next line of the code that
+order, inside the change itself: after the state is written, before the rules
+of the running jobs are re-evaluated, and before the next line of the code that
 changed the state.
 
-Both of those — listeners before the rules, listeners before the writer's next
-line — hold for the change that opened the pass. A change made from inside a
-listener joins the publication queue instead of cutting in: its own rules are
-re-evaluated first, the nested writer's next line runs after that, and its
-listeners are called last, when the pass already running reaches it.
+That order belongs to the change that opened the pass. A change made from
+inside a listener joins the publication queue instead of cutting in: its own
+rules are re-evaluated first, the nested writer's next line runs after that,
+and its listeners are called last, when the pass already running reaches it.
 
 `removeListener` matches with `==` rather than identity, the way
 `ChangeNotifier` does, so a widget can subscribe in `initState` and unsubscribe
