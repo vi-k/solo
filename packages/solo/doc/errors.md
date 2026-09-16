@@ -161,10 +161,9 @@ profile.load().ignore(); // the counterpart of Future.ignore
 
 Errors from cleanup, cancellation callbacks and operations abandoned by `wait`
 go to the reporting hooks. Without an overridden error hook or an installed
-`Solo.errorHandler`, they fall back to the job's creation zone. Such an
-error can arrive after the job has already completed. It does not replace an
-existing cancellation outcome. These reporting paths exclude `Cancelled`
-itself.
+`Solo.errorHandler`, they fall back to the job's creation zone. Such an error
+can arrive after the job has already completed. It does not replace an existing
+cancellation outcome. These reporting paths exclude `Cancelled` itself.
 
 An unhandled error of `job.value` or `ctx.run(child)` is still an unhandled
 Future error under Dart's rules, even if that error is `Cancelled`. Handle
@@ -238,5 +237,5 @@ completion. The background operation does not extend the context's lifetime. A
 bare `unawaited(future)` does not provide the error routing of `unattended`.
 
 `ctx.log(data)` forwards application data to log hooks and observers as it is,
-so a listener that wants a line makes one. `Solo.debug` additionally traces
-the controller's internal queue and lifecycle operations.
+so a listener that wants a line makes one. `Solo.debug` additionally traces the
+controller's internal queue and lifecycle operations.
