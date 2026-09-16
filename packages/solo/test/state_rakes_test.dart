@@ -8,12 +8,13 @@ import 'package:test/test.dart';
 
 /// The first attempts of `doc/state.md`, and what each one costs.
 ///
-/// The page opens five of its sections with the version the vocabulary of
+/// The page opens four of its sections with the version the vocabulary of
 /// the API leads to, and states what that version does instead of what it
 /// was meant to do. Nothing else guards those statements: the page has no
 /// bench, so a trace quoted there rots silently. Every number and every
 /// outcome the page names about a first attempt is pinned here, next to the
-/// version the page then shows.
+/// version the page then shows. A few claims made outside those sections
+/// are pinned here too, where nothing else would catch them.
 
 // --- State and rules ------------------------------------------------------
 
@@ -56,6 +57,35 @@ final class Cam extends Solo<CamState> {
         (ctx) => ctx.each(frames.stream, (child, frame) {
           stored.add(frame);
         }).value,
+      );
+}
+
+// --- Reading and updating state -------------------------------------------
+
+final class Lens extends Solo<CamState> {
+  final calls = <String>[];
+  final moving = Completer<void>();
+  final bool guarded;
+
+  Lens({required this.guarded}) : super(const Ready());
+
+  void pause() => externalSetState(const Ready(paused: true));
+
+  Future<void> _setZoom() {
+    calls.add('setZoom');
+    return moving.future;
+  }
+
+  /// The page's version, with the checkpoint made optional so the test
+  /// can measure what it is worth.
+  Job<void> zoomIn() => run<Ready, void>(
+        keepWhile: (state) => !state.paused,
+        (ctx) async {
+          await ctx.uncancellable(_setZoom);
+          if (guarded) ctx.check();
+          calls.add('start');
+          ctx.emit(const Ready());
+        },
       );
 }
 
@@ -272,6 +302,49 @@ void main() {
     });
   });
 
+  group('a checkpoint before work the engine cannot see', () {
+    test('the rules cancel through an uncancellable section', () async {
+      final lens = Lens(guarded: true);
+      final job = lens.zoomIn();
+      await pump();
+      lens.pause();
+
+      expect(job.isCancelled, isTrue, reason: 'marked while inside');
+
+      lens.moving.complete();
+      final outcome = await job.done;
+
+      expect(lens.calls, ['setZoom'], reason: 'the check stopped the call');
+      expect('$outcome', contains('rules: keepWhile'));
+      expect((lens.currentState as Ready).paused, isTrue);
+
+      await lens.close();
+    });
+
+    test('without it the section returns and the call goes out', () async {
+      final lens = Lens(guarded: false);
+      final job = lens.zoomIn();
+      await pump();
+      lens.pause();
+      lens.moving.complete();
+      final outcome = await job.done;
+
+      expect(
+        lens.calls,
+        ['setZoom', 'start'],
+        reason: 'the device was told for a job that no longer exists',
+      );
+      expect('$outcome', contains('rules: keepWhile'));
+      expect(
+        (lens.currentState as Ready).paused,
+        isTrue,
+        reason: 'the emit still threw, so the state is not wrong',
+      );
+
+      await lens.close();
+    });
+  });
+
   group('a delivery of your own', () {
     test('a list of its own takes the registration away from the engine',
         () async {
@@ -336,7 +409,7 @@ void main() {
   });
 
   group('leaving a temporary state', () {
-    test('a catch does not run when the job is cancelled', () async {
+    test('a catch runs on a cancellation and its emit throws', () async {
       final profile = Profile();
       final job = profile.loadByHand();
       await pump();

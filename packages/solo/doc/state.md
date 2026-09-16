@@ -81,13 +81,23 @@ becomes suitable.
 
 ```dart
 Job<void> zoomIn() => run<Ready, void>(
+      keepWhile: (state) => !state.paused,
       (ctx) async {
-        // Reads are checkpoints: cancellation and the rules are checked.
-        final free = ctx.state.free;
+        // A read is a checkpoint: cancellation and the rules are checked.
+        final target = ctx.state.zoom + 1;
+
+        // The lens must not stop half-way, so the move is not
+        // interrupted. That holds back cancellation, not the rules: a
+        // pause arriving now cancels the job while the section is open.
+        await ctx.uncancellable(() => device.setZoom(target));
+
+        // The section returns without a word about it, and device is
+        // not the engine's — this is what stops the line below.
         ctx.check();
+        device.start();
 
         // The only write, and it is synchronous.
-        ctx.emit(Recording(free: free, zoom: ctx.state.zoom + 1));
+        ctx.emit(Recording(free: ctx.state.free, zoom: target));
       },
     );
 ```
@@ -97,6 +107,13 @@ rules. The body above is `run<Ready, void>`, so `ctx.state` is a `Ready`
 already; `stateAs<T>()` is for a body whose `W` is wider than the state it
 needs at that moment, and it requires the state to be `T` rather than returning
 null -- a mismatch cancels the job. Waiting methods use state checkpoints too.
+
+Most members check on their own; `check()` is for the gap they leave, before
+work the engine cannot see. `uncancellable` is where that gap opens: it holds
+back cancellation but not the rules, and it returns without a check of its own.
+Take the checkpoint out of the body above and the camera is told to start
+recording for a job that no longer exists — the `emit` below still throws, so
+the state never goes wrong, but the device was already called.
 
 `ctx.emit(next)` allows a job to publish a state outside its own working type:
 an initialization job may finish by emitting `Ready`. A later state checkpoint
