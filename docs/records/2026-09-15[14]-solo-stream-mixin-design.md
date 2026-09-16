@@ -345,9 +345,13 @@ must not leave `publish`». Но раньше порядок задавала и
 разделах CHANGELOG всех трёх пакетов, включая `async_job`. Выпущенные разделы
 CHANGELOG не тронуты. Имя `solo_base_test.dart` и имя его теста пересмотрены.
 
-**Формы.** Все четыре формы существуют и проверены: `extends Solo`,
-`extends Solo with SoloStream`, `extends SoloListenable with SoloStream` (тест
-в `flutter_solo`, обе доставки живы), `SoloStream<S>` в позиции типа.
+**Формы.** Все четыре формы существуют и проверены. `Solo` остаётся `abstract`
+(решение владельца 2026-09-16), поэтому первая форма проверяется
+не инстанцированием, а объявлением подкласса — фикстурой
+`PlainSolo<S extends Object> extends Solo<S> {}` в `test/support/`, которая
+заменяет собой прямое создание на всех тридцати местах. Остальные три — как
+были: `extends Solo with SoloStream`, `extends SoloListenable with SoloStream`
+(тест в `flutter_solo`, обе доставки живы), `SoloStream<S>` в позиции типа.
 
 **Механика.** Под тестами в `solo`: стрим закрывается после движка; повторный
 `close` отдаёт ту же future; сосед по `with`, не зовущий `super.publish`,
