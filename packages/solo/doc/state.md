@@ -113,8 +113,10 @@ and nothing brings it back later -- this emit included.
 Other running bodies are checked after a state update. A job's own emit is
 excluded from that rule check, but still checks cancellation before and after
 writing. Both `onChange` (see [Errors](errors.md)) and a listener run
-synchronously inside the write; either one causing another state change can
-therefore cancel the emitting job before `emit` returns.
+synchronously inside the write, and neither has a `ctx`: the only write open to
+either one is [`externalSetState`](#externalsetstate). A hook that corrects a
+state this way -- turning one job's `Preparing` straight into `Working` -- can
+therefore cancel the emitting job before its own `emit` returns.
 
 Rules stop cancelling a job once its body has ended. Manual cancellation,
 controller closing and parent cancellation can still reach it while it waits
