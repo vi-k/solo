@@ -103,9 +103,9 @@ final subscription = camera.stream.listen(print);
 
 | Тип | Что предоставляет |
 | --- | --- |
-| `SoloBase<S>` | Состояние, `Job`, очередь, правила и слушателей. |
-| `Solo<S>` | Всё из `SoloBase` и broadcast-стрим `stream`. |
-| `SoloListenable<S>` | Всё из `SoloBase` и интерфейс Flutter `ValueListenable<S>`. |
+| `Solo<S>` | Состояние, `Job`, очередь, правила и слушателей. |
+| `Solo<S> with SoloStream<S>` | Всё из `Solo` и broadcast-стрим `stream`. |
+| `SoloListenable<S>` | Всё из `Solo` и интерфейс Flutter `ValueListenable<S>`. |
 
 Слушатели принадлежат движку. Их зовут синхронно, в порядке регистрации, внутри
 изменения и раньше, чем движок переоценит правила бегущих задач, — то есть
@@ -128,8 +128,9 @@ final subscription = camera.stream.listen(print);
 за этой чертой бросает `StateError`.
 
 `SoloListenable` добавляет к этому интерфейс Flutter `ValueListenable` и больше
-ничего. Он брат `Solo`, а не наследник: виджет перестраивается по `value`,
-поэтому стрима у контроллера нет вовсе.
+ничего: он наследует `Solo` напрямую, поэтому виджет перестраивается
+по `value`, а своего стрима у него нет — для контроллера с обоими подмешайте
+`SoloStream`.
 
 ### Своя доставка
 
@@ -138,7 +139,7 @@ final subscription = camera.stream.listen(print);
 
 ```dart
 /// Контроллер, записывающий каждое изменение в лог.
-class Logged<S extends Object> extends SoloBase<S> {
+class Logged<S extends Object> extends Solo<S> {
   final void Function(String line) write;
 
   Logged(super.initialState, this.write);
@@ -165,8 +166,8 @@ class Logged<S extends Object> extends SoloBase<S> {
 | `super.publish` идёт первым | Это он зовёт слушателей, поэтому своя доставка идёт после движковой, а не вместо неё. Так сказано аннотацией `@mustCallSuper`, и анализатор за этим следит. |
 | Ошибка не должна выходить из `publish` | Сразу после вызова переоцениваются правила бегущих задач, и выпущенная отсюда ошибка стоила бы задаче отмены, которую ей должно новое состояние. Её место — `Zone.current.handleUncaughtError` из `dart:async`, туда же уходит ошибка упавшего хука. |
 
-`Solo` — это такое переопределение с broadcast-контроллером стрима за ним,
-а `SoloListenable` — движковые слушатели плюс интерфейс Flutter
+`SoloStream` — это такое переопределение с broadcast-контроллером стрима
+за ним, а `SoloListenable` — движковые слушатели плюс интерфейс Flutter
 `ValueListenable`, из-за которого контроллер понимают билдеры
 и `Listenable.merge`.
 
@@ -187,7 +188,7 @@ class Logged<S extends Object> extends SoloBase<S> {
 `externalSetState(next)` отражает изменение, которое там уже произошло:
 
 ```dart
-final class Camera extends Solo<CameraState> {
+final class Camera extends Solo<CameraState> with SoloStream<CameraState> {
   final Device device;
   late final StreamSubscription<bool> _link;
 

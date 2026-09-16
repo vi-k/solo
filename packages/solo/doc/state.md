@@ -102,9 +102,9 @@ checked `ctx.state`.
 
 | Type | Provides |
 | --- | --- |
-| `SoloBase<S>` | State, jobs, queue, rules and listeners. |
-| `Solo<S>` | All of `SoloBase` plus a broadcast `stream`. |
-| `SoloListenable<S>` | All of `SoloBase` plus Flutter's `ValueListenable<S>`. |
+| `Solo<S>` | State, jobs, queue, rules and listeners. |
+| `Solo<S> with SoloStream<S>` | All of `Solo` plus a broadcast `stream`. |
+| `SoloListenable<S>` | All of `Solo` plus Flutter's `ValueListenable<S>`. |
 
 The listeners belong to the engine. They run synchronously, in registration
 order, inside the change and before the rules of the running jobs are
@@ -127,9 +127,9 @@ Closing drops them for good — a registration made afterwards is refused rather
 than kept, and the state stops moving with them: `externalSetState` past that
 point throws a `StateError`.
 
-`SoloListenable` adds Flutter's `ValueListenable` to that and nothing else. It
-is a sibling of `Solo`, not a subclass: a widget rebuilds from `value`, so the
-controller carries no stream at all.
+`SoloListenable` adds Flutter's `ValueListenable` to that and nothing else: it
+extends `Solo` directly, so a widget rebuilds from `value`, and it carries no
+stream of its own — mix in `SoloStream` for a controller that needs both.
 
 ### A delivery of your own
 
@@ -138,7 +138,7 @@ is the seam for delivery of another kind — a stream, a signal, a line in a log
 
 ```dart
 /// A controller that writes every change to a log.
-class Logged<S extends Object> extends SoloBase<S> {
+class Logged<S extends Object> extends Solo<S> {
   final void Function(String line) write;
 
   Logged(super.initialState, this.write);
@@ -165,9 +165,10 @@ Two things such an override owes:
 | `super.publish` comes first | It is what calls the listeners, so a delivery of your own runs after the engine's rather than instead of it. `@mustCallSuper` says so and the analyzer holds you to it. |
 | A failure must not leave `publish` | The rules of the running jobs are re-evaluated right after the call, and an error let out of here costs a job the cancellation the new state owes it. It goes to `Zone.current.handleUncaughtError` from `dart:async`, where a failing hook's error goes. |
 
-`Solo` is this override with a broadcast `StreamController` behind it, and
-`SoloListenable` is the engine's listeners plus Flutter's `ValueListenable`,
-which is what makes builders and `Listenable.merge` understand a controller.
+`SoloStream` is this override with a broadcast `StreamController` behind it,
+and `SoloListenable` is the engine's listeners plus Flutter's
+`ValueListenable`, which is what makes builders and `Listenable.merge`
+understand a controller.
 
 **Coming from a delivery of your own.** A subclass written before the engine
 carried listeners keeps a list of its own and overrides `addListener` and
@@ -187,7 +188,7 @@ controller. `externalSetState(next)` reflects a change that has already
 happened there:
 
 ```dart
-final class Camera extends Solo<CameraState> {
+final class Camera extends Solo<CameraState> with SoloStream<CameraState> {
   final Device device;
   late final StreamSubscription<bool> _link;
 
