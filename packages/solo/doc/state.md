@@ -152,10 +152,11 @@ checked `ctx.state`.
 | `Solo<S> with SoloStream<S>` | All of `Solo` plus a broadcast `stream`. |
 | `SoloListenable<S>` | All of `Solo` plus Flutter's `ValueListenable<S>`. |
 
-The listeners belong to the engine. They run synchronously, in registration
-order, inside the change itself: after the state is written, before the rules
-of the running jobs are re-evaluated, and before the next line of the code that
-changed the state.
+`addListener` is the engine's own member, on `Solo` itself, so what follows
+holds for every controller -- one with a delivery of its own and one without
+any. The listeners run synchronously, in registration order, inside the change
+itself: after the state is written, before the rules of the running jobs are
+re-evaluated, and before the next line of the code that changed the state.
 
 That order belongs to the change that opened the pass. A change made from
 inside a listener joins the publication queue instead of cutting in: the engine
