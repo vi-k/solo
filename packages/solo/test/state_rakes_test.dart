@@ -145,6 +145,11 @@ final class Offline extends ProfileState {
 final class Profile extends Solo<ProfileState> {
   final api = Completer<String>();
 
+  /// How the first attempt's `catch` behaved: entered, and what the
+  /// `emit` inside it did.
+  int caught = 0;
+  Object? emitThrew;
+
   Profile() : super(const Initial());
 
   void goOffline() => externalSetState(const Offline());
@@ -159,7 +164,12 @@ final class Profile extends Solo<ProfileState> {
             ctx.emit(Loaded(name));
             return name;
           } on Object {
-            ctx.emit(const Initial());
+            caught++;
+            try {
+              ctx.emit(const Initial());
+            } on Object catch (error) {
+              emitThrew = error;
+            }
             rethrow;
           }
         },
@@ -341,6 +351,12 @@ void main() {
         reason: 'the temporary state is where the controller stays',
       );
       expect(await job.done, isA<Cancelled>());
+      expect(profile.caught, 1, reason: 'the cancellation reaches the catch');
+      expect(
+        profile.emitThrew,
+        isA<Cancelled>(),
+        reason: 'and the emit inside it is a checkpoint, so it throws',
+      );
 
       await profile.close();
     });

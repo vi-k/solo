@@ -14,13 +14,13 @@ camera is paused.
 ### The first attempt
 
 ```dart
-Job<void> record() => run<CamState, void>(
+Job<void> record() => run<CameraState, void>(
       key: 'record',
       (ctx) async {
         final state = ctx.state;
         if (state is! Ready || state.paused) return;
         await for (final frame in device.frames) {
-          store(frame);
+          await store(frame);
         }
       },
     );
@@ -50,8 +50,8 @@ Job<void> record() => run<Ready, void>(
 ```
 
 The rules are parameters, and the engine checks them for the job. The working
-type narrows from `CamState` to `Ready`, so the state the body reads is the one
-it needs, and the condition the first attempt checked by hand is now
+type narrows from `CameraState` to `Ready`, so the state the body reads is the
+one it needs, and the condition the first attempt checked by hand is now
 `keepWhile`.
 
 The first type argument of `run<W, T>` is the job's working state type,
@@ -229,7 +229,7 @@ Camera(this.device) : super(const Ready()) {
     if (!connected) {
       // The fact goes in like any other work.
       run<Ready, void>(
-        key: _Op.disconnect,
+        key: 'disconnect',
         (ctx) async => ctx.emit(const Disconnected()),
       );
     }
@@ -328,11 +328,11 @@ run<ProfileState, String>(
 );
 ```
 
-The `catch` covers the failure and nothing else. A cancelled job does not
-arrive there — and if it did, the `emit` inside would be a state checkpoint on
-a job that is already cancelled, which throws rather than writes. Cancel the
-load and the controller stays in `Loading` for good: the screen shows a spinner
-for work that is no longer running.
+The `catch` does run on a cancellation — and that is the trouble, because the
+`emit` inside it is a state checkpoint on a job that is already cancelled, so
+it throws instead of writing. Cancel the load and the controller stays in
+`Loading` for good: the screen shows a spinner for work that is no longer
+running.
 
 ### The handlers
 
