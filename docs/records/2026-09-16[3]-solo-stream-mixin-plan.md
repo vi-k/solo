@@ -198,6 +198,16 @@ a `stream`» — после правки уже нет, только «не `Val
 42 страницы через `build_site.py`, `npm run build` — 43 HTML-страницы без
 ошибок.
 
+**После этого советник нашёл разрыв между критериями и тестами.** Четвёртая
+форма из критерия «Формы» спеки — `extends SoloListenable with SoloStream, обе
+доставки живы» — была измерена зондом на этапе спеки (`class Both extends
+SoloListenable<int> with SoloStream<int>`), но зонд не стал тестом: набор
+`flutter_solo` остался на 87, том же числе, что и до всей этой работы. Три
+документа (CHANGELOG, `docs/architecture.md`, README) утверждали комбинацию,
+ни один тест её не проверял. Добавлен `solo_listenable_test.dart`: `value`
+обновляется синхронно через `ValueListenableBuilder`, `stream` — тактом позже.
+`flutter_solo`: 88.
+
 ## Не входит в план
 
 Версии в `pubspec.yaml` не трогаются — обе правки ломающие и лягут под уже
