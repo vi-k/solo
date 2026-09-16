@@ -192,14 +192,14 @@ void main() {
     // is out of the queue, not started and not yet finished, and `add`
     // used to read that state as "never added".
     Object? refused;
-    SoloBase.observer = _Retrier((solo, job) {
+    Solo.observer = _Retrier((solo, job) {
       try {
         solo.add(job);
       } on Object catch (error) {
         refused = error;
       }
     });
-    addTearDown(() => SoloBase.observer = null);
+    addTearDown(() => Solo.observer = null);
     fakeAsync((async) {
       final solo = TestSolo();
       var asked = 0;
@@ -291,7 +291,7 @@ void main() {
       Object? refused;
       var once = true;
       late SoloJob<void> incoming;
-      SoloBase.observer = _Retrier(
+      Solo.observer = _Retrier(
         (solo, job) {
           if (once && job.key == 'old') {
             once = false;
@@ -366,13 +366,13 @@ void main() {
 
 /// Runs [_onError] from the observer's error hook.
 final class _Retrier extends SoloObserver {
-  final void Function(SoloBase<Object> solo, Job<Object?> job) _onError;
+  final void Function(Solo<Object> solo, Job<Object?> job) _onError;
   final bool alsoOnFinish;
 
   _Retrier(this._onError, {this.alsoOnFinish = false});
 
   @override
-  void onFinish(SoloBase<Object> solo, Job<Object?> job) {
+  void onFinish(Solo<Object> solo, Job<Object?> job) {
     if (alsoOnFinish) {
       _onError(solo, job);
     }
@@ -380,7 +380,7 @@ final class _Retrier extends SoloObserver {
 
   @override
   void onError(
-    SoloBase<Object> solo,
+    Solo<Object> solo,
     Job<Object?> job,
     Object error,
     StackTrace stackTrace,

@@ -20,12 +20,12 @@ final class _ObjectController extends SoloListenable<Object> {
 }
 
 final class _ClosingObserver extends SoloObserver {
-  final void Function(SoloBase<Object> solo) onCloseCallback;
+  final void Function(Solo<Object> solo) onCloseCallback;
 
   _ClosingObserver(this.onCloseCallback);
 
   @override
-  void onClose(SoloBase<Object> solo) => onCloseCallback(solo);
+  void onClose(Solo<Object> solo) => onCloseCallback(solo);
 }
 
 void main() {
@@ -258,12 +258,12 @@ void main() {
       final heard = <int>[];
       counter.addListener(() => heard.add(counter.value));
 
-      final previousObserver = SoloBase.observer;
+      final previousObserver = Solo.observer;
       Object? error;
       // Both checks live inside the microtask: taken after it, they would
       // also pass if the drop happened later than the boundary claims.
       bool? retainedInMicrotask;
-      SoloBase.observer = _ClosingObserver((solo) {
+      Solo.observer = _ClosingObserver((solo) {
         if (identical(solo, counter)) {
           scheduleMicrotask(() {
             retainedInMicrotask = counter.hasListeners;
@@ -275,7 +275,7 @@ void main() {
           });
         }
       });
-      addTearDown(() => SoloBase.observer = previousObserver);
+      addTearDown(() => Solo.observer = previousObserver);
 
       await counter.close();
       await Future<void>.delayed(Duration.zero);
@@ -295,13 +295,13 @@ void main() {
       final heard = <int>[];
       counter.addListener(() => heard.add(counter.value));
 
-      final previousObserver = SoloBase.observer;
-      SoloBase.observer = _ClosingObserver((solo) {
+      final previousObserver = Solo.observer;
+      Solo.observer = _ClosingObserver((solo) {
         if (identical(solo, counter)) {
           counter.set(8);
         }
       });
-      addTearDown(() => SoloBase.observer = previousObserver);
+      addTearDown(() => Solo.observer = previousObserver);
 
       await counter.close();
 

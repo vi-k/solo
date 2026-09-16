@@ -13,7 +13,7 @@ import 'support/test_state.dart';
 
 void main() {
   test('close of an idle controller closes the stream after onClose', () {
-    runSolo((solo, journal, async) {
+    runSoloStream((solo, journal, async) {
       solo.stream.listen(
         (_) {},
         onDone: () => journal.lines.add('stream done'),
@@ -148,7 +148,7 @@ void main() {
   test('externalSetState from onChange keeps state fresh after emit', () {
     fakeAsync((async) {
       final journal = JournalObserver();
-      SoloBase.observer = journal;
+      Solo.observer = journal;
       final solo = _Reentrant();
       final seen = <TestState>[];
       solo.stream.listen(seen.add);
@@ -172,13 +172,13 @@ void main() {
       } finally {
         solo.close();
         async.flushTimers();
-        SoloBase.observer = null;
+        Solo.observer = null;
       }
     });
   });
 
   test('externalSetState from a stream listener runs after the job step', () {
-    runSolo((solo, journal, async) {
+    runSoloStream((solo, journal, async) {
       final seen = <TestState>[];
       solo.stream.listen((state) {
         seen.add(state);
@@ -228,13 +228,13 @@ void main() {
       // Closing from the hook that the policy's own removal fires: the
       // incoming job has passed the check at the top of `add` and is not
       // in the queue yet.
-      SoloBase.observer = _ClosingObserver(solo, key: 'x');
+      Solo.observer = _ClosingObserver(solo, key: 'x');
       final incoming = solo.run<TestState, void>(
         key: 'x',
         policy: Policy.replace,
         (ctx) async {},
       );
-      SoloBase.observer = journal;
+      Solo.observer = journal;
       async.flushTimers();
       expect(incoming.isQueued, isFalse, reason: 'not left in a closed queue');
       expect(incoming.outcome, isA<Cancelled>());
@@ -248,7 +248,7 @@ void main() {
 
   test('a debug channel that throws does not hang close', () {
     runSolo((solo, journal, async) {
-      SoloBase.debug = (message) {
+      Solo.debug = (message) {
         if (message.contains('close')) {
           throw StateError('debug boom');
         }
@@ -258,7 +258,7 @@ void main() {
         () => solo.close().then((_) => closed = true).ignore(),
         (error, stackTrace) => journal.lines.add('zone: $error'),
       );
-      SoloBase.debug = null;
+      Solo.debug = null;
       async.flushTimers();
       expect(closed, isTrue, reason: 'close still finishes');
       expect(journal.take(), contains('zone: Bad state: debug boom'));
@@ -278,7 +278,7 @@ final class _CloseOnFinish extends Solo<TestState> {
   }
 }
 
-final class _Reentrant extends Solo<TestState> {
+final class _Reentrant extends Solo<TestState> with SoloStream<TestState> {
   _Reentrant() : super(const Initial());
 
   @override
@@ -289,7 +289,7 @@ final class _Reentrant extends Solo<TestState> {
   }
 }
 
-final class _Recorder extends SoloBase<TestState> {
+final class _Recorder extends Solo<TestState> {
   final List<String> order;
   Job<Object?>? watched;
 
@@ -316,12 +316,12 @@ final class _Recorder extends SoloBase<TestState> {
 final class _ClosingObserver extends SoloObserver {
   _ClosingObserver(this._solo, {required this.key});
 
-  final SoloBase<Object> _solo;
+  final Solo<Object> _solo;
   final Object? key;
   var _fired = false;
 
   @override
-  void onFinish(SoloBase<Object> solo, Job<Object?> job) {
+  void onFinish(Solo<Object> solo, Job<Object?> job) {
     if (job.key == key && !_fired) {
       _fired = true;
       _solo.close().ignore();

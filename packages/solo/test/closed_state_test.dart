@@ -9,7 +9,7 @@ import 'package:test/test.dart';
 import 'support/test_state.dart';
 
 void main() {
-  tearDown(() => SoloBase.observer = null);
+  tearDown(() => Solo.observer = null);
 
   test('external state is accepted before close and rejected after it',
       () async {
@@ -28,7 +28,7 @@ void main() {
   test('rejected external state calls neither change hook', () async {
     final solo = _CountingSolo();
     final observer = _CountingObserver();
-    SoloBase.observer = observer;
+    Solo.observer = observer;
 
     solo.set(const Preparing(progress: 1));
     expect(solo.changes, 1);
@@ -102,7 +102,7 @@ void main() {
     var finishedInHook = true;
     var listenersInMicrotask = true;
     Object? microtaskError;
-    SoloBase.observer = _CloseObserver((base) {
+    Solo.observer = _CloseObserver((base) {
       final controller = base as _ExposedSolo;
       finishedInHook = controller.isFinished;
       controller.addListener(
@@ -162,7 +162,7 @@ void main() {
   test('repeated close returns one future and calls onClose once', () async {
     final solo = _ExposedSolo();
     var closeCalls = 0;
-    SoloBase.observer = _CloseObserver((_) => closeCalls++);
+    Solo.observer = _CloseObserver((_) => closeCalls++);
 
     final first = solo.close();
     final second = solo.close();
@@ -246,7 +246,7 @@ void main() {
   });
 }
 
-class _ExposedSolo extends SoloBase<TestState> {
+class _ExposedSolo extends Solo<TestState> {
   _ExposedSolo([super.initialState = const Initial()]);
 
   @override
@@ -274,7 +274,7 @@ final class _CountingObserver extends SoloObserver {
 
   @override
   void onChange(
-    SoloBase<Object> solo,
+    Solo<Object> solo,
     SoloTransition<Object> transition,
   ) {
     changes++;
@@ -282,15 +282,16 @@ final class _CountingObserver extends SoloObserver {
 }
 
 final class _CloseObserver extends SoloObserver {
-  final void Function(SoloBase<Object> solo) callback;
+  final void Function(Solo<Object> solo) callback;
 
   _CloseObserver(this.callback);
 
   @override
-  void onClose(SoloBase<Object> solo) => callback(solo);
+  void onClose(Solo<Object> solo) => callback(solo);
 }
 
-final class _ExposedStreamSolo extends Solo<TestState> {
+final class _ExposedStreamSolo extends Solo<TestState>
+    with SoloStream<TestState> {
   _ExposedStreamSolo() : super(const Initial());
 
   void set(TestState state) => externalSetState(state);

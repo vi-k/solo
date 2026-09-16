@@ -72,7 +72,7 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
 
   /// Picks [selector] directly from [solo].
   static SoloSelection<S, T> of<S extends Object, T>(
-    SoloBase<S> solo,
+    Solo<S> solo,
     T Function(S state) selector, {
     bool Function(T previous, T current)? compare,
   }) =>
@@ -154,7 +154,7 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
 }
 
 final class _SoloSource<S extends Object> implements ValueListenable<S> {
-  final SoloBase<S> _solo;
+  final Solo<S> _solo;
 
   _SoloSource(this._solo);
 

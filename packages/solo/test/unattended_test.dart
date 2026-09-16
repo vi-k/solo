@@ -63,7 +63,7 @@ void main() {
 
   test('a late failure arrives after the controller has closed', () {
     final lines = <String>[];
-    SoloBase.observer = _Watcher(lines);
+    Solo.observer = _Watcher(lines);
     try {
       fakeAsync((async) {
         final solo = _Watched(lines)
@@ -79,7 +79,7 @@ void main() {
         async.flushTimers();
       });
     } finally {
-      SoloBase.observer = null;
+      Solo.observer = null;
     }
     // The real closing event lives on the observer, not on the
     // controller: a line written after `await super.close()` would fix
@@ -234,7 +234,7 @@ final class _Watcher extends SoloObserver {
   _Watcher(this.lines);
 
   @override
-  void onClose(SoloBase<Object> solo) => lines.add('observer.onClose');
+  void onClose(Solo<Object> solo) => lines.add('observer.onClose');
 }
 
 void _inZone(List<String> errors, void Function() body) {

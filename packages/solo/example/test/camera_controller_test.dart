@@ -20,7 +20,7 @@ void runCamera(
 ) {
   fakeAsync((async) {
     final journal = JournalObserver();
-    SoloBase.observer = journal;
+    Solo.observer = journal;
     final hw = FakeCameraHardware();
     final camera = CameraController(hw);
     try {
@@ -28,7 +28,7 @@ void runCamera(
     } finally {
       camera.close();
       async.flushTimers();
-      SoloBase.observer = null;
+      Solo.observer = null;
     }
   });
 }

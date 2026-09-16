@@ -1803,7 +1803,7 @@ Future<void> main() async {
 # --------------------------------------------------------------- item 2 solo
 FILES['solo/item2'] = (SOLO_IMPORTS + TRACE + RECORDER + '\n' + snips['2/RecorderController'] + '''
 Future<void> main() async {
-  SoloBase.observer = TelemetryObserver(Telemetry());
+  Solo.observer = TelemetryObserver(Telemetry());
   final recorder = Recorder();
   final journal = Journal();
   final controller = RecorderController(recorder, journal);

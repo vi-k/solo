@@ -13,8 +13,8 @@ enum _TimingKind { debounce, throttle }
 
 void main() {
   tearDown(() {
-    SoloBase.observer = null;
-    SoloBase.debug = null;
+    Solo.observer = null;
+    Solo.debug = null;
   });
 
   for (final kind in _TimingKind.values) {
@@ -368,7 +368,7 @@ void main() {
         final solo = TestSolo();
         var handlerCalls = 0;
         late SoloJob<void> first;
-        SoloBase.observer = _Callbacks(
+        Solo.observer = _Callbacks(
           onStart: (job) {
             if (identical(job, first)) solo.close();
           },
@@ -418,7 +418,7 @@ void main() {
       final solo = TestSolo();
       final calls = <String>[];
       late SoloJob<void> first;
-      SoloBase.observer = _Callbacks(
+      Solo.observer = _Callbacks(
         onStart: (job) {
           if (identical(job, first)) job.cancel();
         },
@@ -1024,9 +1024,8 @@ final class _Callbacks extends SoloObserver {
         _onFinish = onFinish;
 
   @override
-  void onStart(SoloBase<Object> solo, Job<Object?> job) => _onStart?.call(job);
+  void onStart(Solo<Object> solo, Job<Object?> job) => _onStart?.call(job);
 
   @override
-  void onFinish(SoloBase<Object> solo, Job<Object?> job) =>
-      _onFinish?.call(job);
+  void onFinish(Solo<Object> solo, Job<Object?> job) => _onFinish?.call(job);
 }

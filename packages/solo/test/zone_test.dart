@@ -53,7 +53,7 @@ void main() {
 
   test('a global observer leaves the default route alone', () {
     final caught = <String>[];
-    SoloBase.observer = _Silent();
+    Solo.observer = _Silent();
     try {
       fakeAsync((async) {
         final solo = TestSolo();
@@ -70,7 +70,7 @@ void main() {
         async.flushTimers();
       });
     } finally {
-      SoloBase.observer = null;
+      Solo.observer = null;
     }
     expect(
       caught,
@@ -82,7 +82,7 @@ void main() {
   test('an error handler takes the default route over', () {
     final caught = <String>[];
     final answered = <String>[];
-    SoloBase.errorHandler =
+    Solo.errorHandler =
         (solo, job, error, stackTrace) => answered.add('${job.key}: $error');
     try {
       fakeAsync((async) {
@@ -100,7 +100,7 @@ void main() {
         async.flushTimers();
       });
     } finally {
-      SoloBase.errorHandler = null;
+      Solo.errorHandler = null;
     }
     expect(answered, ['j: Bad state: abandoned boom']);
     expect(caught, isEmpty, reason: 'the handler answered for it');
@@ -108,7 +108,7 @@ void main() {
 
   test('an error handler that throws reaches the zone', () {
     final caught = <String>[];
-    SoloBase.errorHandler =
+    Solo.errorHandler =
         (solo, job, error, stackTrace) => throw StateError('handler boom');
     try {
       fakeAsync((async) {
@@ -126,7 +126,7 @@ void main() {
         async.flushTimers();
       });
     } finally {
-      SoloBase.errorHandler = null;
+      Solo.errorHandler = null;
     }
     expect(caught, ['Bad state: handler boom']);
   });

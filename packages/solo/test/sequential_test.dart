@@ -104,7 +104,7 @@ void main() {
   });
 
   test('the stream delivers every state in order on the next microtask', () {
-    runSolo((solo, journal, async) {
+    runSoloStream((solo, journal, async) {
       final seen = <TestState>[];
       solo.stream.listen(seen.add);
       // Read inside the body, asserted outside: a failing `expect` in a job

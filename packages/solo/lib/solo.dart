@@ -9,6 +9,6 @@ export 'src/observer.dart';
 export 'src/pending.dart';
 export 'src/policy.dart';
 export 'src/solo.dart';
-export 'src/solo_base.dart';
 export 'src/solo_cancel_reason.dart';
+export 'src/solo_stream.dart';
 export 'src/transition.dart';

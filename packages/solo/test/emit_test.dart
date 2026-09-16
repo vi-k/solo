@@ -13,7 +13,7 @@ void main() {
   test('emit gives up on a cancellation that arrived inside it', () {
     fakeAsync((async) {
       final journal = JournalObserver();
-      SoloBase.observer = journal;
+      Solo.observer = journal;
       final solo = _DisposeOnPreparing();
       var past = false;
       try {
@@ -32,7 +32,7 @@ void main() {
       } finally {
         solo.close();
         async.flushTimers();
-        SoloBase.observer = null;
+        Solo.observer = null;
       }
     });
   });

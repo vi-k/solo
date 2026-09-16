@@ -4,14 +4,16 @@ import 'package:fake_async/fake_async.dart';
 import 'package:solo/solo.dart';
 import 'package:test/test.dart';
 
+import 'support/plain_solo.dart';
+
 void main() {
   tearDown(() {
-    SoloBase.debug = null;
+    Solo.debug = null;
   });
 
   test('debounce restarts the window while ready jobs bypass it', () {
     fakeAsync((async) {
-      final solo = Solo<int>(0);
+      final solo = PlainSolo<int>(0);
       final calls = <String>[];
       final events = solo.collect<int, int, void>(
         (ctx, values) async => calls.add('A:$values'),
@@ -45,7 +47,7 @@ void main() {
 
   test('a successful no-op merge restarts debounce', () {
     fakeAsync((async) {
-      final solo = Solo<int>(0);
+      final solo = PlainSolo<int>(0);
       final calls = <String>[];
       final events = solo.accumulate<int, int, void>(
         (ctx, value) async => calls.add('${async.elapsed}:$value'),
@@ -72,7 +74,7 @@ void main() {
 
   test('a failed merge leaves debounce data and deadline unchanged', () {
     fakeAsync((async) {
-      final solo = Solo<int>(0);
+      final solo = PlainSolo<int>(0);
       final calls = <String>[];
       final error = StateError('merge failed');
       final events = solo.accumulate<int, int, void>(
@@ -103,7 +105,7 @@ void main() {
 
   test('continuous input keeps debounce waiting until silence', () {
     fakeAsync((async) {
-      final solo = Solo<int>(0);
+      final solo = PlainSolo<int>(0);
       final calls = <String>[];
       final events = solo.collect<int, int, void>(
         (ctx, values) async => calls.add('${async.elapsed}:${values.length}'),
@@ -133,7 +135,7 @@ void main() {
 
   test('debounce seals its snapshot while another job owns the slot', () {
     fakeAsync((async) {
-      final solo = Solo<int>(0);
+      final solo = PlainSolo<int>(0);
       final gate = Completer<void>();
       final calls = <String>[];
       solo.run<int, void>((ctx) => ctx.join(() => gate.future));
@@ -168,7 +170,7 @@ void main() {
 
   test('throttle starts the first group and later data at its deadline', () {
     fakeAsync((async) {
-      final solo = Solo<int>(0);
+      final solo = PlainSolo<int>(0);
       final calls = <String>[];
       final events = solo.collect<int, int, void>(
         (ctx, values) async => calls.add('${async.elapsed}:A$values'),
@@ -212,7 +214,7 @@ void main() {
 
   test('a delayed throttle start begins the next interval when it runs', () {
     fakeAsync((async) {
-      final solo = Solo<int>(0);
+      final solo = PlainSolo<int>(0);
       final gate = Completer<void>();
       final calls = <String>[];
       final events = solo.collect<int, int, void>(
@@ -263,7 +265,7 @@ void main() {
 
   test('a shared timing setting keeps accumulator intervals independent', () {
     fakeAsync((async) {
-      final solo = Solo<int>(0);
+      final solo = PlainSolo<int>(0);
       final calls = <String>[];
       final timing = AccumulationTiming.throttle(
         const Duration(milliseconds: 200),
@@ -290,8 +292,8 @@ void main() {
   test('an elapsed throttle interval does not pump an empty queue', () {
     fakeAsync((async) {
       final debug = <String>[];
-      SoloBase.debug = debug.add;
-      final solo = Solo<int>(0);
+      Solo.debug = debug.add;
+      final solo = PlainSolo<int>(0);
       final events = solo.collect<int, int, void>(
         (ctx, values) async {},
         timing: AccumulationTiming.throttle(
@@ -325,7 +327,7 @@ void main() {
   // count of the suite alone.
   test('a throttle burst written in one synchronous pass', () {
     fakeAsync((async) {
-      final solo = Solo<int>(0);
+      final solo = PlainSolo<int>(0);
       final calls = <String>[];
       final events = solo.collect<int, int, void>(
         (ctx, values) async => calls.add('${async.elapsed}:$values'),
@@ -352,7 +354,7 @@ void main() {
 
   test('a throttle burst with a microtask after the first event', () {
     fakeAsync((async) {
-      final solo = Solo<int>(0);
+      final solo = PlainSolo<int>(0);
       final calls = <String>[];
       final events = solo.collect<int, int, void>(
         (ctx, values) async => calls.add('${async.elapsed}:$values'),
@@ -381,7 +383,7 @@ void main() {
 
   test('a throttle burst that arrives while another job runs', () {
     fakeAsync((async) {
-      final solo = Solo<int>(0);
+      final solo = PlainSolo<int>(0);
       final gate = Completer<void>();
       final calls = <String>[];
       solo.run<int, void>((ctx) => ctx.join(() => gate.future));
@@ -417,7 +419,7 @@ void main() {
   // ordinary throttle: drop `startAtOnce: false` and it fails.
   test('a trailing throttle burst with a microtask after the first', () {
     fakeAsync((async) {
-      final solo = Solo<int>(0);
+      final solo = PlainSolo<int>(0);
       final calls = <String>[];
       final events = solo.collect<int, int, void>(
         (ctx, values) async => calls.add('${async.elapsed}:$values'),
@@ -445,7 +447,7 @@ void main() {
 
   test('a trailing throttle with a single event', () {
     fakeAsync((async) {
-      final solo = Solo<int>(0);
+      final solo = PlainSolo<int>(0);
       final calls = <String>[];
       final events = solo.collect<int, int, void>(
         (ctx, values) async => calls.add('${async.elapsed}:$values'),
@@ -470,7 +472,7 @@ void main() {
 
   test('a trailing throttle under input that never stops', () {
     fakeAsync((async) {
-      final solo = Solo<int>(0);
+      final solo = PlainSolo<int>(0);
       final calls = <String>[];
       final events = solo.collect<int, int, void>(
         (ctx, values) async => calls.add('${async.elapsed}:${values.length}'),
@@ -519,7 +521,7 @@ void main() {
       AccumulationTiming.throttle(Duration.zero),
     ]) {
       fakeAsync((async) {
-        final solo = Solo<int>(0);
+        final solo = PlainSolo<int>(0);
         final calls = <String>[];
         final events = solo.collect<int, int, void>(
           (ctx, values) async => calls.add('A$values'),

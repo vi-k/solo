@@ -1,10 +1,10 @@
 import 'package:async_job/async_job.dart';
 
-import 'solo_base.dart';
+import 'solo.dart';
 import 'transition.dart';
 
 /// Cross-cutting hooks for every controller: analytics, error reporting, a
-/// single log. Set [SoloBase.observer] once at startup.
+/// single log. Set [Solo.observer] once at startup.
 ///
 /// The engine calls the observer before the controller's own hook, and
 /// independently of it: a subclass that forgets `super` does not switch the
@@ -13,13 +13,13 @@ import 'transition.dart';
 /// is still called.
 abstract class SoloObserver {
   /// A controller was created.
-  void onCreate(SoloBase<Object> solo) {}
+  void onCreate(Solo<Object> solo) {}
 
   /// A job body is about to run.
-  void onStart(SoloBase<Object> solo, Job<Object?> job) {}
+  void onStart(Solo<Object> solo, Job<Object?> job) {}
 
   /// A job has an outcome, including jobs dropped before start.
-  void onFinish(SoloBase<Object> solo, Job<Object?> job) {}
+  void onFinish(Solo<Object> solo, Job<Object?> job) {}
 
   /// Something a job did threw where there was nowhere else to put it.
   ///
@@ -37,11 +37,11 @@ abstract class SoloObserver {
   /// Watching changes nothing about where the error then goes: an error
   /// with nowhere else to go reaches the zone the job was created in
   /// whether an observer is set or not. To take that route over, set
-  /// [SoloBase.errorHandler] — answering for an error is a job of its own,
+  /// [Solo.errorHandler] — answering for an error is a job of its own,
   /// and setting up a log must not quietly turn reporting off. See
   /// [Failed] for the errors that also reach the zone.
   void onError(
-    SoloBase<Object> solo,
+    Solo<Object> solo,
     Job<Object?> job,
     Object error,
     StackTrace stackTrace,
@@ -51,22 +51,22 @@ abstract class SoloObserver {
   ///
   /// [SoloTransition.job] says whose change it was, and
   /// [SoloTransition.revision] puts two of them in order.
-  void onChange(SoloBase<Object> solo, SoloTransition<Object> transition) {}
+  void onChange(Solo<Object> solo, SoloTransition<Object> transition) {}
 
   /// A job called [JobContext.log].
-  void onLog(SoloBase<Object> solo, Job<Object?> job, Object? message) {}
+  void onLog(Solo<Object> solo, Job<Object?> job, Object? message) {}
 
-  /// The engine is about to finish closing: [SoloBase.isFinished] is still
+  /// The engine is about to finish closing: [Solo.isFinished] is still
   /// false, listeners are still registered, and a synchronous
   /// `externalSetState` still reaches them. Work scheduled after this hook
   /// runs after the engine has crossed that boundary.
-  void onClose(SoloBase<Object> solo) {}
+  void onClose(Solo<Object> solo) {}
 }
 
 /// Answers for an error that has nowhere else to go; see
-/// [SoloBase.errorHandler].
+/// [Solo.errorHandler].
 typedef SoloErrorHandler = void Function(
-  SoloBase<Object> solo,
+  Solo<Object> solo,
   Job<Object?> job,
   Object error,
   StackTrace stackTrace,

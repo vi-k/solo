@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:solo/solo.dart';
 
-/// A [SoloBase] that is also a [ValueListenable]: drop it into
+/// A [Solo] that is also a [ValueListenable]: drop it into
 /// `ValueListenableBuilder` or `ListenableBuilder`.
 ///
 /// The listeners are its only delivery. It is built on the engine
@@ -12,7 +12,7 @@ import 'package:solo/solo.dart';
 ///
 /// Read-only on purpose: a `ValueNotifier` setter would break the
 /// ownership guarantee. [value] and [currentState] are the same object.
-class SoloListenable<S extends Object> extends SoloBase<S>
+class SoloListenable<S extends Object> extends Solo<S>
     implements ValueListenable<S> {
   /// Creates a controller in [initialState].
   SoloListenable(super.initialState);

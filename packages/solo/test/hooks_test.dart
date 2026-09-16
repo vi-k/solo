@@ -8,6 +8,7 @@ import 'package:solo/solo.dart';
 import 'package:test/test.dart';
 
 import 'support/journal.dart';
+import 'support/plain_solo.dart';
 import 'support/run_solo.dart';
 import 'support/test_state.dart';
 
@@ -36,7 +37,7 @@ void main() {
   test('the observer runs before each instance hook, super or not', () {
     fakeAsync((async) {
       final journal = JournalObserver();
-      SoloBase.observer = journal;
+      Solo.observer = journal;
       final solo = _Hooked(journal.lines);
       try {
         solo.run<TestState, void>(key: 'job', (ctx) async {
@@ -61,7 +62,7 @@ void main() {
       } finally {
         solo.close();
         async.flushTimers();
-        SoloBase.observer = null;
+        Solo.observer = null;
       }
     });
   });
@@ -76,7 +77,7 @@ void main() {
     runZonedGuarded(
       () {
         fakeAsync((async) {
-          SoloBase.observer = journal;
+          Solo.observer = journal;
           final solo = _ThrowingFinish();
           try {
             solo
@@ -87,7 +88,7 @@ void main() {
             solo.close().then((_) => closed = true);
             async.flushTimers();
           } finally {
-            SoloBase.observer = null;
+            Solo.observer = null;
           }
         });
       },
@@ -109,13 +110,13 @@ void main() {
     runZonedGuarded(
       () {
         fakeAsync((async) {
-          SoloBase.observer = _ThrowingClose();
-          final solo = Solo<TestState>(const Initial());
+          Solo.observer = _ThrowingClose();
+          final solo = PlainSolo<TestState>(const Initial());
           try {
             solo.close().then((_) => closed = true);
             async.flushTimers();
           } finally {
-            SoloBase.observer = null;
+            Solo.observer = null;
           }
         });
       },
@@ -131,7 +132,7 @@ void main() {
     runZonedGuarded(
       () {
         fakeAsync((async) {
-          SoloBase.observer = journal;
+          Solo.observer = journal;
           final solo = _ThrowingFinish();
           try {
             solo
@@ -141,7 +142,7 @@ void main() {
           } finally {
             solo.close();
             async.flushTimers();
-            SoloBase.observer = null;
+            Solo.observer = null;
           }
         });
       },
@@ -165,7 +166,7 @@ void main() {
     runZonedGuarded(
       () {
         fakeAsync((async) {
-          SoloBase.observer = journal;
+          Solo.observer = journal;
           final solo = _ThrowingFinish();
           try {
             // No pump between the adds and `close`: all three wait in the
@@ -179,7 +180,7 @@ void main() {
             solo.close().then((_) => closed = true);
             async.flushTimers();
           } finally {
-            SoloBase.observer = null;
+            Solo.observer = null;
           }
         });
       },
@@ -203,7 +204,7 @@ void main() {
     runZonedGuarded(
       () {
         fakeAsync((async) {
-          SoloBase.observer = journal;
+          Solo.observer = journal;
           final solo = _ThrowingStart();
           try {
             solo
@@ -220,7 +221,7 @@ void main() {
           } finally {
             solo.close();
             async.flushTimers();
-            SoloBase.observer = null;
+            Solo.observer = null;
           }
         });
       },
@@ -280,7 +281,7 @@ void main() {
     runZonedGuarded(
       () {
         fakeAsync((async) {
-          SoloBase.observer = _ThrowingObserver();
+          Solo.observer = _ThrowingObserver();
           final solo = _Hooked(lines);
           try {
             solo.run<TestState, void>(key: 'job', (ctx) async {});
@@ -288,7 +289,7 @@ void main() {
           } finally {
             solo.close();
             async.flushTimers();
-            SoloBase.observer = null;
+            Solo.observer = null;
           }
         });
       },
@@ -323,7 +324,7 @@ void main() {
   test('the two debug channels each print their own side', () {
     final engine = <String>[];
     final jobs = <String>[];
-    SoloBase.debug = engine.add;
+    Solo.debug = engine.add;
     JobBase.debug = jobs.add;
     try {
       runSolo((solo, journal, async) {
@@ -333,7 +334,7 @@ void main() {
         async.flushMicrotasks();
       });
     } finally {
-      SoloBase.debug = null;
+      Solo.debug = null;
       JobBase.debug = null;
     }
     // The queue, the state and the closing belong to the controller.
@@ -364,7 +365,7 @@ final class _ThrowingStart extends Solo<TestState> {
 }
 
 /// Throws from the instance hook the engine calls on a state change.
-final class _ThrowingChange extends Solo<TestState> {
+final class _ThrowingChange extends Solo<TestState> with SoloStream<TestState> {
   _ThrowingChange() : super(const Initial());
 
   @override
@@ -378,18 +379,18 @@ final class _ThrowingChange extends Solo<TestState> {
 /// Throws from the observer hooks around a job body.
 final class _ThrowingObserver extends SoloObserver {
   @override
-  void onStart(SoloBase<Object> solo, Job<Object?> job) =>
+  void onStart(Solo<Object> solo, Job<Object?> job) =>
       throw StateError('observer onStart');
 
   @override
-  void onFinish(SoloBase<Object> solo, Job<Object?> job) =>
+  void onFinish(Solo<Object> solo, Job<Object?> job) =>
       throw StateError('observer onFinish');
 }
 
 /// Throws from the observer hook the engine calls while closing.
 final class _ThrowingClose extends SoloObserver {
   @override
-  void onClose(SoloBase<Object> solo) => throw StateError('onClose');
+  void onClose(Solo<Object> solo) => throw StateError('onClose');
 }
 
 final class _Hooked extends Solo<TestState> {
