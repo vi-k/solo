@@ -107,8 +107,8 @@ stands beside the waiting methods it goes with.
 `ctx.emit(next)` allows a job to publish a state outside its own working type:
 an initialization job may finish by emitting `Ready`. A later state checkpoint
 will reject that state if it does not match `W`, so such a transition should be
-the body's last state-dependent step. `canStart` is never repeated after an
-emit.
+the body's last state-dependent step. `canStart` is checked once, at the start,
+and nothing brings it back later -- this emit included.
 
 Other running bodies are checked after a state update. A job's own emit is
 excluded from that rule check, but still checks cancellation before and after
