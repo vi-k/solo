@@ -1,5 +1,17 @@
 ## Unreleased
 
+- **Breaking:** `SoloBase` is renamed to `Solo`, and the former `Solo` -- the
+  broadcast stream it carried -- becomes the mixin `SoloStream`. `Solo` stays
+  the class every controller extends; a stream is no longer part of that by
+  default, only of controllers that add `with SoloStream<S>`. Most
+  `extends Solo<...>` declarations never read `.stream` and need no change at
+  all; the few that do gain the mixin. `SoloListenable` is unaffected in shape
+  -- it already extended the bare engine -- and can now be combined with
+  `SoloStream` for a controller that needs both deliveries. Migration:
+  `extends SoloBase<S>` becomes `extends Solo<S>`; a controller that read
+  `.stream` adds `with SoloStream<S>`; `SoloBase.observer`, `.errorHandler` and
+  `.debug` become `Solo.observer`, `.errorHandler` and `.debug`.
+
 - **Breaking:** `Policy.droppable` compares the result types of the two jobs
   with each other, instead of matching the one it found against the type
   argument of the call. `void` is a top type, so the old check said yes to
@@ -79,10 +91,10 @@
   state moved in silence and every reader had to choose for itself between the
   last thing it was told and what the controller holds now.
 
-- **Breaking:** `SoloBase` gains `isFinished`, the guard a subclass checks
-  before feeding an external fact. `isClosed` will not do: it is true from the
-  first line of `close`, so guarding with it starves a `SoloCloseMode.drain` of
-  the very facts the queue it is running still needs. The line is where the
+- **Breaking:** `Solo` gains `isFinished`, the guard a subclass checks before
+  feeding an external fact. `isClosed` will not do: it is true from the first
+  line of `close`, so guarding with it starves a `SoloCloseMode.drain` of the
+  very facts the queue it is running still needs. The line is where the
   listeners are dropped, not where the future `close` returns completes: a
   paused stream subscription holds that future open long after the engine is
   done. Check it after the last `await` -- a suspension between the check and
@@ -129,14 +141,14 @@
   slot is freed when the root job finishes, and the next queued job starts
   while the continuation still has to run.
 
-- **Breaking:** `SoloBase` carries its own listeners: `addListener` and
+- **Breaking:** `Solo` carries its own listeners: `addListener` and
   `removeListener`, and the protected `hasListeners` and `onListenerError`
   beside them. A controller is now observable without a delivery of its own,
-  which is what a widget or another package's binding needs; `Solo` keeps its
-  stream and notifies listeners before it. Adding members to a class meant to
-  be extended is breaking on its own: a subclass with a member of one of those
-  names stops compiling. Notification is synchronous and in subscription order,
-  one call per registration; a listener that throws is reported through
+  which is what a widget or another package's binding needs; `SoloStream` keeps
+  its stream and notifies listeners before it. Adding members to a class meant
+  to be extended is breaking on its own: a subclass with a member of one of
+  those names stops compiling. Notification is synchronous and in subscription
+  order, one call per registration; a listener that throws is reported through
   `onListenerError` -- the zone by default -- and the pass goes on, because an
   error escaping `publish` would cost a running job the cancellation the new
   state owes it. Listeners are dropped when the engine finishes closing, right
@@ -204,18 +216,18 @@
   burst that cancels itself out never becomes jobs to take back, and what to do
   when they are separate jobs after all. A recipes table in the README points
   at this and at nine other situations.
-- **Breaking:** `SoloBase.close` takes a `SoloCloseMode`. Calls are unchanged —
-  the default is `SoloCloseMode.cancel`, which is what `close` always did — but
-  an override of `close` has to take the parameter too. `SoloCloseMode.drain`
+- **Breaking:** `Solo.close` takes a `SoloCloseMode`. Calls are unchanged — the
+  default is `SoloCloseMode.cancel`, which is what `close` always did — but an
+  override of `close` has to take the parameter too. `SoloCloseMode.drain`
   closes by running what is already queued instead of dropping it: no new root
   job is taken from the call onwards, and the ones accepted before it go by the
   usual rules, children, cleanup and accumulation windows included. A plain
-  `close()` over a running drain stops it where it is. `SoloBase.isDraining`
-  says whether one is running. Running the queue is not a promise of delivery:
-  a buffer that keeps events until the sending is confirmed is built on top of
+  `close()` over a running drain stops it where it is. `Solo.isDraining` says
+  whether one is running. Running the queue is not a promise of delivery: a
+  buffer that keeps events until the sending is confirmed is built on top of
   this.
 - **Breaking:** the change hooks take a `SoloTransition<S>` instead of a pair
-  of states: `SoloBase.onChange(transition)` and
+  of states: `Solo.onChange(transition)` and
   `SoloObserver.onChange(solo, transition)`. Beside `previous` and `current` it
   carries `job` — whose `emit` made the change, `null` for an
   `externalSetState`, and a child rather than the root it belongs to — and
@@ -224,20 +236,20 @@
   both and told nobody, and neither can be worked out from outside. Migration:
   `previous` becomes `transition.previous`, `current` becomes
   `transition.current`.
-- Add `SoloBase.pending`: a `SoloPending` snapshot of the job the controller is
+- Add `Solo.pending`: a `SoloPending` snapshot of the job the controller is
   waiting for — its phase (body, children, cleanup, or unknown), the
   cancellation it carries, a `ctx.uncancellable` section holding one back, and
   whether it was created `cancellable: false`. For a `close` that has not come
   back. It reports what the engine knows and says `SoloPhase.unknown` where it
   knows nothing, rather than guessing.
-- **Breaking:** setting `SoloBase.observer` no longer takes an error with
-  nowhere else to go off its default route to the zone. Watching is not
-  answering: an observer set for a log used to switch reporting off for the
-  whole process without saying so. `SoloBase.errorHandler` is the new seam that
-  answers for such an error — one handler for the process, set once at startup
-  — and with nobody set there the error reaches the zone the job was created
-  in, observer or no observer. An observer that used to rely on the old silence
-  now needs `errorHandler` set as well.
+- **Breaking:** setting `Solo.observer` no longer takes an error with nowhere
+  else to go off its default route to the zone. Watching is not answering: an
+  observer set for a log used to switch reporting off for the whole process
+  without saying so. `Solo.errorHandler` is the new seam that answers for such
+  an error — one handler for the process, set once at startup — and with nobody
+  set there the error reaches the zone the job was created in, observer or no
+  observer. An observer that used to rely on the old silence now needs
+  `errorHandler` set as well.
 - **Breaking:** `Policy.droppable` throws `ArgumentError`, not `TypeError`,
   when the key it finds belongs to a job of another result type — and it throws
   before the new job is taken, so a job refused this way is untouched and can
