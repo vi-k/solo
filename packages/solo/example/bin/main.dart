@@ -4,7 +4,7 @@ import 'package:solo/solo.dart';
 import 'package:solo_example/solo_example.dart';
 
 Future<void> main() async {
-  SoloBase.observer = _PrintObserver();
+  Solo.observer = _PrintObserver();
   final camera = CameraController(FakeCameraHardware());
   await camera.init().done;
   camera
@@ -28,11 +28,11 @@ final class _PrintObserver extends SoloObserver {
   }
 
   @override
-  void onStart(SoloBase<Object> solo, Job<Object?> job) =>
+  void onStart(Solo<Object> solo, Job<Object?> job) =>
       print('${_label(job)} started');
 
   @override
-  void onFinish(SoloBase<Object> solo, Job<Object?> job) {
+  void onFinish(Solo<Object> solo, Job<Object?> job) {
     final outcome = job.outcome;
     final verb =
         outcome is Cancelled && !outcome.started ? 'dropped' : 'finished';
@@ -41,7 +41,7 @@ final class _PrintObserver extends SoloObserver {
 
   @override
   void onError(
-    SoloBase<Object> solo,
+    Solo<Object> solo,
     Job<Object?> job,
     Object error,
     StackTrace stackTrace,
@@ -49,13 +49,13 @@ final class _PrintObserver extends SoloObserver {
       print('${_label(job)} error $error');
 
   @override
-  void onLog(SoloBase<Object> solo, Job<Object?> job, Object? message) =>
+  void onLog(Solo<Object> solo, Job<Object?> job, Object? message) =>
       print('${_label(job)} log $message');
 
   @override
-  void onChange(SoloBase<Object> solo, SoloTransition<Object> transition) =>
+  void onChange(Solo<Object> solo, SoloTransition<Object> transition) =>
       print('state: ${transition.current}');
 
   @override
-  void onClose(SoloBase<Object> solo) => print('closed');
+  void onClose(Solo<Object> solo) => print('closed');
 }

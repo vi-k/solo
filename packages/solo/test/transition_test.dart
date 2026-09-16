@@ -24,7 +24,7 @@ void main() {
     runSolo((solo, journal, async) {
       final seen = <SoloTransition<TestState>>[];
       final watcher = _TransitionObserver(seen);
-      SoloBase.observer = watcher;
+      Solo.observer = watcher;
       final job = solo.run<TestState, void>(
         key: 'job',
         (ctx) async => ctx.emit(const Preparing()),
@@ -35,7 +35,7 @@ void main() {
       expect(seen.single.isExternal, isFalse);
       expect(seen.single.previous, const Initial());
       expect(seen.single.current, const Preparing());
-      SoloBase.observer = journal;
+      Solo.observer = journal;
     });
   });
 
@@ -48,7 +48,7 @@ void main() {
   test('a child of the running job is the child, not the root', () {
     runSolo((solo, journal, async) {
       final seen = <SoloTransition<TestState>>[];
-      SoloBase.observer = _TransitionObserver(seen);
+      Solo.observer = _TransitionObserver(seen);
       late final Job<void> child;
       final root = solo.run<TestState, void>(
         key: 'root',
@@ -64,7 +64,7 @@ void main() {
       expect(seen, hasLength(1));
       expect(identical(seen.single.job, child), isTrue);
       expect(identical(seen.single.job, root), isFalse);
-      SoloBase.observer = journal;
+      Solo.observer = journal;
     });
   });
 
@@ -115,6 +115,6 @@ final class _TransitionObserver extends SoloObserver {
   _TransitionObserver(this.seen);
 
   @override
-  void onChange(SoloBase<Object> solo, SoloTransition<Object> transition) =>
+  void onChange(Solo<Object> solo, SoloTransition<Object> transition) =>
       seen.add(transition as SoloTransition<TestState>);
 }

@@ -1,6 +1,6 @@
 import 'package:async_job/async_job.dart';
 
-import 'solo_base.dart';
+import 'solo.dart';
 
 /// The base for reasons added by `solo` and engines built on it.
 abstract class SoloCancelReason extends CancelReason {
@@ -17,7 +17,7 @@ final class RulesCancelReason extends SoloCancelReason {
   String get name => 'rules';
 }
 
-/// [SoloBase.close], or [SoloBase.add] after close.
+/// [Solo.close], or [Solo.add] after close.
 final class ClosedCancelReason extends SoloCancelReason {
   /// Creates a controller closing reason.
   const ClosedCancelReason();

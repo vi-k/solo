@@ -32,23 +32,23 @@ final class Journal extends SoloObserver {
   final lines = <String>[];
 
   @override
-  void onStart(SoloBase<Object> solo, Job<Object?> job) =>
+  void onStart(Solo<Object> solo, Job<Object?> job) =>
       lines.add('${job.key} started');
 
   @override
-  void onFinish(SoloBase<Object> solo, Job<Object?> job) =>
+  void onFinish(Solo<Object> solo, Job<Object?> job) =>
       lines.add('${job.key} ${job.outcome}');
 
   @override
-  void onChange(SoloBase<Object> solo, SoloTransition<Object> transition) =>
+  void onChange(Solo<Object> solo, SoloTransition<Object> transition) =>
       lines.add('state: ${transition.current.runtimeType}');
 }
 
 test('a second load while the first one runs is dropped', () {
   fakeAsync((async) {
     final journal = Journal();
-    SoloBase.observer = journal;
-    addTearDown(() => SoloBase.observer = null);
+    Solo.observer = journal;
+    addTearDown(() => Solo.observer = null);
     final profile = ProfileController(FakeProfileApi());
 
     final first = profile.load();

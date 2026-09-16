@@ -1,4 +1,4 @@
-part of 'solo_base.dart';
+part of 'solo.dart';
 
 enum _AccumulationTimingKind { debounce, throttle }
 

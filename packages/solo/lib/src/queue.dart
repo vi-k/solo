@@ -1,4 +1,4 @@
-part of 'solo_base.dart';
+part of 'solo.dart';
 
 /// The queue of a controller, visible to its subclasses.
 ///

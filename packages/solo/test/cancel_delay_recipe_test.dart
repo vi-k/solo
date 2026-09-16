@@ -19,12 +19,12 @@ final class _SlowCancellations extends SoloObserver {
   final _markedAt = Expando<DateTime>('cancellation');
 
   @override
-  void onStart(SoloBase<Object> solo, Job<Object?> job) {
+  void onStart(Solo<Object> solo, Job<Object?> job) {
     job.whenCancelled((_) => _markedAt[job] = clock.now());
   }
 
   @override
-  void onFinish(SoloBase<Object> solo, Job<Object?> job) {
+  void onFinish(Solo<Object> solo, Job<Object?> job) {
     final markedAt = _markedAt[job];
     if (markedAt == null) return;
     final delay = clock.now().difference(markedAt);
@@ -36,7 +36,7 @@ void main() {
   test('a bare await in the body is reported for its whole length', () {
     final observer = _SlowCancellations();
     runSolo((solo, journal, async) {
-      SoloBase.observer = observer;
+      Solo.observer = observer;
       // No checkpoint: nothing here notices the cancellation.
       solo.run<TestState, void>(key: 'bare', (ctx) async => delay(300));
       async.elapse(const Duration(milliseconds: 10));
@@ -50,7 +50,7 @@ void main() {
   test('the same wait through the context is reported as no delay', () {
     final observer = _SlowCancellations();
     runSolo((solo, journal, async) {
-      SoloBase.observer = observer;
+      Solo.observer = observer;
       solo.run<TestState, void>(key: 'guarded', (ctx) => pause(ctx, 300));
       async.elapse(const Duration(milliseconds: 10));
       solo.cancelAll();
@@ -63,7 +63,7 @@ void main() {
   test('a job dropped from the queue is not reported', () {
     final observer = _SlowCancellations();
     runSolo((solo, journal, async) {
-      SoloBase.observer = observer;
+      Solo.observer = observer;
       solo
         ..run<TestState, void>(key: 'running', (ctx) => pause(ctx, 100))
         ..run<TestState, void>(key: 'queued', (ctx) => pause(ctx, 100));
@@ -81,7 +81,7 @@ void main() {
   test('a step held by uncancellable is not counted as delay', () {
     final observer = _SlowCancellations();
     runSolo((solo, journal, async) {
-      SoloBase.observer = observer;
+      Solo.observer = observer;
       solo.run<TestState, void>(key: 'held', (ctx) async {
         await ctx.uncancellable(() => delay(100));
         await delay(50);

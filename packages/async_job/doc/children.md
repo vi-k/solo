@@ -117,6 +117,27 @@ own registers it on arrival, the way every receiver does: the child ended
 outcome. `ctx.run(opener, discard: ...)` puts the registration on the branch,
 and everything above then holds for it. See [Cleanup](cleanup.md).
 
+The list itself is a value like any other, and unlike `run`, `runAll` takes no
+`dispose` or `discard` of its own to register it with on arrival.
+`ctx.wait(() => value, discard: ...)` is not a substitute: it opens with its
+own checkpoint before the action ever runs, and a value already in hand has no
+action to lose it with, so it is never registered at all -- silently, with
+nothing on the debug channel to show for it. Register the whole list directly,
+with `ctx.onDispose` or `ctx.onDiscard`, on the very next line: neither runs a
+check first, so there is no checkpoint left for a pending cancellation to win.
+
+```dart
+final values = await ctx.runAll(branches);
+ctx.onDispose(() {
+  for (final value in values) {
+    value.close();
+  }
+});
+```
+
+Use `onDiscard` instead when the list is what the body itself returns or hands
+on further -- the same choice as anywhere else in this rule.
+
 One thing stays open, and it follows from a rule written elsewhere. A branch
 created with `cancellable: false` refuses the stop and ends `Done`: it hands
 its value over through its own `Job.value`, so its `discard` does not run and

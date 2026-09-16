@@ -4,7 +4,7 @@ import 'package:solo/solo.dart';
 
 import 'solo_selection.dart';
 
-/// Rebuilds its subtree when one value picked out of a [SoloBase]
+/// Rebuilds its subtree when one value picked out of a [Solo]
 /// changes: a [SoloSelection] built directly over the controller.
 ///
 /// ```dart
@@ -30,7 +30,7 @@ import 'solo_selection.dart';
 /// for equality.
 final class SoloSelectBuilder<S extends Object, T> extends StatefulWidget {
   /// The controller to pick out of.
-  final SoloBase<S> solo;
+  final Solo<S> solo;
 
   /// Picks the value this widget rebuilds for.
   ///
@@ -69,7 +69,7 @@ final class SoloSelectBuilder<S extends Object, T> extends StatefulWidget {
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
     properties.add(
-      DiagnosticsProperty<SoloBase<S>>('solo', solo),
+      DiagnosticsProperty<Solo<S>>('solo', solo),
     );
   }
 }

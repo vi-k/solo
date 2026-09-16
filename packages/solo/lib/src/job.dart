@@ -1,8 +1,8 @@
-part of 'solo_base.dart';
+part of 'solo.dart';
 
 /// A job of a controller: [Job] plus the queue.
 ///
-/// Returned by [SoloBase.job], [SoloBase.add] and [SoloBase.run]. The
+/// Returned by [Solo.job], [Solo.add] and [Solo.run]. The
 /// queue belongs to the controller, so [isQueued] lives here and not on
 /// the handle every job has.
 abstract interface class SoloJob<T> implements Job<T> {
@@ -12,7 +12,7 @@ abstract interface class SoloJob<T> implements Job<T> {
 
 final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     implements SoloJob<T> {
-  final SoloBase<S> _solo;
+  final Solo<S> _solo;
   final Future<T> Function(SoloContext<S, W> ctx) _body;
   final bool Function(W state)? _canStart;
   final bool Function(W state)? _keepWhile;
@@ -85,13 +85,13 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     }
     if (_solo._queue._jobs.contains(this)) {
       if (!cancellable && rejectable) {
-        SoloBase._debug(() => 'remove $this: not cancellable');
+        Solo._debug(() => 'remove $this: not cancellable');
         return;
       }
       _solo._queue._jobs.remove(this);
       // Diagnostics may add another event synchronously. Detach first so
       // the group being cancelled can no longer receive it.
-      SoloBase._debug(() => 'remove $this: $cancelled');
+      Solo._debug(() => 'remove $this: $cancelled');
     }
     super.cancelWith(cancelled, rejectable: rejectable);
   }
@@ -120,7 +120,7 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     return null;
   }
 
-  /// A snapshot of what this job is doing, for [SoloBase.pending].
+  /// A snapshot of what this job is doing, for [Solo.pending].
   SoloPending _pending({required bool closing}) => SoloPending(
         job: this,
         phase: _phase,
@@ -208,7 +208,7 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   }
 
   // The engine reaches a job from the side, and `@protected` holds only
-  // inside a subclass; these wrappers are how `SoloBase` and `_SoloQueue`
+  // inside a subclass; these wrappers are how `Solo` and `_SoloQueue`
   // touch it.
   void _launch() => start();
 
@@ -223,7 +223,7 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   /// Marks the controller while an error with nowhere to go passes
   /// through the hooks.
   ///
-  /// [SoloBase.onError] takes two kinds and cannot tell them apart by
+  /// [Solo.onError] takes two kinds and cannot tell them apart by
   /// itself: the body's failure, which has an outcome carrying it to the
   /// zone already, and this one, which has nothing. Only this one may end
   /// in the zone. Saved and restored, not merely set: the hooks are
@@ -248,7 +248,7 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   /// Not through the observer: the body's failure was announced there
   /// already, where it was caught, and one error is announced once. What
   /// is left is the answer for an error nobody handled, and in a
-  /// controller that is [SoloBase.onError] and the [SoloBase.errorHandler]
+  /// controller that is [Solo.onError] and the [Solo.errorHandler]
   /// behind it. Marked homeless the same way [notifyError] marks it, so
   /// the hook knows this error has nowhere else to go.
   @override
@@ -256,7 +256,7 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     final previous = _solo._homeless;
     _solo._homeless = this;
     try {
-      SoloBase._callHook(() => _solo.onError(this, error, stackTrace));
+      Solo._callHook(() => _solo.onError(this, error, stackTrace));
     } finally {
       _solo._homeless = previous;
     }

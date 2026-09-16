@@ -19,13 +19,19 @@ final class _ObjectController extends SoloListenable<Object> {
   void set(Object value) => externalSetState(value);
 }
 
+final class _Both extends SoloListenable<int> with SoloStream<int> {
+  _Both() : super(0);
+
+  void set(int value) => externalSetState(value);
+}
+
 final class _ClosingObserver extends SoloObserver {
-  final void Function(SoloBase<Object> solo) onCloseCallback;
+  final void Function(Solo<Object> solo) onCloseCallback;
 
   _ClosingObserver(this.onCloseCallback);
 
   @override
-  void onClose(SoloBase<Object> solo) => onCloseCallback(solo);
+  void onClose(Solo<Object> solo) => onCloseCallback(solo);
 }
 
 void main() {
@@ -258,12 +264,12 @@ void main() {
       final heard = <int>[];
       counter.addListener(() => heard.add(counter.value));
 
-      final previousObserver = SoloBase.observer;
+      final previousObserver = Solo.observer;
       Object? error;
       // Both checks live inside the microtask: taken after it, they would
       // also pass if the drop happened later than the boundary claims.
       bool? retainedInMicrotask;
-      SoloBase.observer = _ClosingObserver((solo) {
+      Solo.observer = _ClosingObserver((solo) {
         if (identical(solo, counter)) {
           scheduleMicrotask(() {
             retainedInMicrotask = counter.hasListeners;
@@ -275,7 +281,7 @@ void main() {
           });
         }
       });
-      addTearDown(() => SoloBase.observer = previousObserver);
+      addTearDown(() => Solo.observer = previousObserver);
 
       await counter.close();
       await Future<void>.delayed(Duration.zero);
@@ -295,18 +301,73 @@ void main() {
       final heard = <int>[];
       counter.addListener(() => heard.add(counter.value));
 
-      final previousObserver = SoloBase.observer;
-      SoloBase.observer = _ClosingObserver((solo) {
+      final previousObserver = Solo.observer;
+      Solo.observer = _ClosingObserver((solo) {
         if (identical(solo, counter)) {
           counter.set(8);
         }
       });
-      addTearDown(() => SoloBase.observer = previousObserver);
+      addTearDown(() => Solo.observer = previousObserver);
 
       await counter.close();
 
       expect(counter.value, 8);
       expect(heard, [8]);
+    },
+  );
+
+  testWidgets(
+    'SoloListenable with SoloStream delivers both, on their own schedules',
+    (tester) async {
+      final controller = _Both();
+      addTearDown(controller.close);
+      final built = <int>[];
+      final streamed = <int>[];
+      final subscription = controller.stream.listen(streamed.add);
+      addTearDown(subscription.cancel);
+
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: ValueListenableBuilder<int>(
+            valueListenable: controller,
+            builder: (context, value, _) {
+              built.add(value);
+              return const SizedBox();
+            },
+          ),
+        ),
+      );
+
+      controller.set(1);
+      // The listener behind ValueListenableBuilder fires synchronously;
+      // the stream event is still waiting for a microtask.
+      expect(streamed, isEmpty);
+      await tester.pump();
+
+      expect(built, [0, 1]);
+      expect(streamed, [1]);
+    },
+  );
+
+  test(
+    'a paused stream subscription holds close() open on SoloListenable too',
+    () async {
+      final controller = _Both();
+      final subscription = controller.stream.listen((_) {})..pause();
+      var closeDone = false;
+      final closing = controller.close().then((_) => closeDone = true);
+
+      try {
+        await Future<void>.delayed(Duration.zero);
+        expect(closeDone, isFalse, reason: 'the paused stream holds close');
+      } finally {
+        subscription.resume();
+        await subscription.cancel();
+        await closing;
+      }
+
+      expect(closeDone, isTrue);
     },
   );
 }

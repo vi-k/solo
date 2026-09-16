@@ -4,10 +4,10 @@ import 'package:solo/solo.dart';
 
 import 'solo_select_builder.dart';
 
-/// Rebuilds its subtree whenever a [SoloBase] notifies of a state change.
+/// Rebuilds its subtree whenever a [Solo] notifies of a state change.
 ///
 /// An alternative to [ValueListenableBuilder] for any controller based on
-/// [SoloBase], including those that do not implement [ValueListenable].
+/// [Solo], including those that do not implement [ValueListenable].
 ///
 /// ```dart
 /// SoloBuilder<Profile>(
@@ -20,8 +20,8 @@ import 'solo_select_builder.dart';
 /// subscription in [State.dispose], and rebuilds from the controller's
 /// current state on every notification.
 ///
-/// Once the engine has finished closing — [SoloBase.isFinished], which is
-/// not the same moment as the future of [SoloBase.close] completing — the
+/// Once the engine has finished closing — [Solo.isFinished], which is
+/// not the same moment as the future of [Solo.close] completing — the
 /// listeners are gone and nothing notifies this widget again; connecting an
 /// already closed controller displays its final state.
 ///
@@ -29,7 +29,7 @@ import 'solo_select_builder.dart';
 /// not here: this widget rebuilds on every state transition of [solo].
 final class SoloBuilder<S extends Object> extends StatefulWidget {
   /// The controller whose state transitions trigger rebuilds.
-  final SoloBase<S> solo;
+  final Solo<S> solo;
 
   /// Builds the subtree for the controller's current state.
   final ValueWidgetBuilder<S> builder;
@@ -53,7 +53,7 @@ final class SoloBuilder<S extends Object> extends StatefulWidget {
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
     properties.add(
-      DiagnosticsProperty<SoloBase<S>>('solo', solo),
+      DiagnosticsProperty<Solo<S>>('solo', solo),
     );
   }
 }

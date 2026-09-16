@@ -116,7 +116,8 @@ The caller uses the returned `Job<String>` to await this particular load:
 ```dart
 Future<void> main() async {
   final profile = ProfileController(ProfileApi());
-  final subscription = profile.stream.listen(print);
+  void onChange() => print(profile.currentState);
+  profile.addListener(onChange);
   try {
     final job = profile.load();
     profile.load(); // the existing job is returned
@@ -126,16 +127,29 @@ Future<void> main() async {
       print(name);
     }
   } finally {
-    await subscription.cancel();
+    profile.removeListener(onChange);
     await profile.close();
   }
 }
 ```
 
-`profile.currentState` is available synchronously. `profile.stream` broadcasts
-changes asynchronously. `job.value` returns the loaded name, or throws the
-job's error or `Cancelled`. The `finally` block releases the listener and
-closes the controller even if loading fails.
+`profile.currentState` is available synchronously, and `addListener` calls back
+synchronously too, inside the change itself. `job.value` returns the loaded
+name, or throws the job's error or `Cancelled`. The `finally` block removes the
+listener and closes the controller even if loading fails.
+
+Mix in `SoloStream` instead for a broadcast `stream`, delivered on the next
+microtask:
+
+```dart
+final class ProfileController extends Solo<ProfileState>
+    with SoloStream<ProfileState> {
+  // ...same as above...
+}
+```
+
+See [State](doc/state.md) for the full delivery picture, including
+`SoloListenable` from `flutter_solo`.
 
 Cancellation uses the same job object. This separate example requests
 cancellation immediately, so the job may still be in the queue:
@@ -301,13 +315,13 @@ page named beside it.
 | A later request must not be dropped as a duplicate of an earlier one | a record key, `(Op.load, id)` | [Jobs and the queue](doc/jobs.md) |
 | Queued work is made pointless by what just arrived | `queue.removeWhere` before submitting, or `cancelAll()` if it may be running | [Commands where only the last one counts](doc/accumulation.md) |
 | A last batch has to go out before the screen goes away | `close(mode: SoloCloseMode.drain)` | [Cancellation](doc/cancellation.md) |
-| `close()` does not come back | `SoloBase.pending` | [Errors and observation](doc/errors.md) |
+| `close()` does not come back | `Solo.pending` | [Errors and observation](doc/errors.md) |
 | A journal needs to say which operation changed the state | `SoloTransition` in `onChange` | [Errors and observation](doc/errors.md) |
 | A step must not be interrupted halfway | `ctx.join` for a call, `ctx.uncancellable` for a step | [Cancellation](doc/cancellation.md) |
 | A resource opened by a call nobody waited for still has to close | `dispose` or `discard` on `ctx.wait` and `ctx.join` | [Resources and cleanup](doc/resources.md) |
 | A widget rebuilds for state it does not use | `select` on `SoloListenable` | [Flutter](doc/flutter.md) |
 | The queue has to stand still for a while | a job waiting on a `Completer` at the head of it | [Jobs and the queue](doc/jobs.md) |
-| A stream event arrives a microtask late, and that is too late | `publish` on a `SoloBase` subclass, notifying inside the change | [State](doc/state.md) |
+| A stream event arrives a microtask late, and that is too late | `publish` on a `Solo` subclass, notifying inside the change | [State](doc/state.md) |
 
 ## Coming from bloc
 

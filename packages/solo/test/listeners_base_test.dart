@@ -8,7 +8,7 @@ import 'support/test_solo.dart';
 import 'support/test_state.dart';
 
 void main() {
-  tearDown(() => SoloBase.observer = null);
+  tearDown(() => Solo.observer = null);
 
   test(
     'listeners are called on each change, in subscription order, synchronously',
@@ -227,7 +227,7 @@ void main() {
     () async {
       final log = <String>[];
       final observer = _OnCloseObserver(log);
-      SoloBase.observer = observer;
+      Solo.observer = observer;
 
       final solo = TestSolo();
       solo.addListener(() => log.add('existing:${solo.currentState}'));
@@ -304,7 +304,7 @@ void main() {
   );
 }
 
-final class _ThrowingReporterSolo extends SoloBase<TestState> {
+final class _ThrowingReporterSolo extends Solo<TestState> {
   _ThrowingReporterSolo(super.initialState);
 
   @override
@@ -319,7 +319,7 @@ final class _ThrowingReporterSolo extends SoloBase<TestState> {
   void externalSetState(TestState state) => super.externalSetState(state);
 }
 
-final class _TracedSolo extends SoloBase<int> {
+final class _TracedSolo extends Solo<int> {
   final List<String> log;
 
   _TracedSolo(this.log) : super(0);
@@ -340,7 +340,7 @@ final class _OnCloseObserver extends SoloObserver {
   _OnCloseObserver(this.log);
 
   @override
-  void onClose(SoloBase<Object> solo) {
+  void onClose(Solo<Object> solo) {
     log.add('onClose start');
     solo.addListener(() {
       log.add('subscribed-in-onClose:${solo.currentState}');

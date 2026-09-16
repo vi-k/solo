@@ -46,7 +46,7 @@ The main API correspondences, for a reader who knows bloc:
 | `emit(next)` | `ctx.emit(next)` |
 | `if (emit.isDone) return;` | Cancellation checkpoints such as `ctx.wait` and `ctx.check` |
 | `emit.onEach`, `emit.forEach` | `ctx.each(stream, onData)` |
-| `state`, `stream` | `currentState`, `stream` |
+| `state`, `stream` | `currentState`, `addListener`; `stream` with `SoloStream` mixed in |
 | `BlocObserver` | `SoloObserver` |
 | `BlocBuilder`, `BlocSelector` | `ValueListenableBuilder`; selection is application code |
 | `BlocListener` for an operation's result | Await that operation's `job.done` |
@@ -387,12 +387,12 @@ final class TelemetryObserver extends SoloObserver {
   TelemetryObserver(this._telemetry);
 
   @override
-  void onChange(SoloBase<Object> solo, SoloTransition<Object> transition) =>
+  void onChange(Solo<Object> solo, SoloTransition<Object> transition) =>
       _telemetry.send(transition.current);
 }
 ```
 
-`SoloObserver` receives `SoloBase<Object>` because it observes controllers with
+`SoloObserver` receives `Solo<Object>` because it observes controllers with
 different state types. The controller's own hook uses its specific state type.
 
 With the throwing observer, the run still reaches `Recording`, arms the meter,
@@ -795,7 +795,8 @@ type these player jobs accept:
 ```dart
 enum PlayerKey { play, pause, seek }
 
-final class PlayerController extends Solo<PlayerState> {
+final class PlayerController extends Solo<PlayerState>
+    with SoloStream<PlayerState> {
   final Player _player;
 
   PlayerController(this._player) : super(Ready());
@@ -1484,7 +1485,8 @@ already completed state change. The listener belongs inside the controller
 subclass:
 
 ```dart
-final class ReportController extends Solo<ReportState> {
+final class ReportController extends Solo<ReportState>
+    with SoloStream<ReportState> {
   final Reports _reports;
 
   ReportController(this._reports, Auth auth) : super(const SignedIn()) {

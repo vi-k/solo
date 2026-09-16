@@ -1,4 +1,4 @@
-/// What `SoloBase.close` does with the work the controller already has.
+/// What `Solo.close` does with the work the controller already has.
 enum SoloCloseMode {
   /// Drop every queued job with `Cancelled(closed)` and cancel the running
   /// one. The default, and what a screen going away wants.

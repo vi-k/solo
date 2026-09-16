@@ -118,7 +118,8 @@ final class ProfileController extends Solo<ProfileState> {
 ```dart
 Future<void> main() async {
   final profile = ProfileController(ProfileApi());
-  final subscription = profile.stream.listen(print);
+  void onChange() => print(profile.currentState);
+  profile.addListener(onChange);
   try {
     final job = profile.load();
     profile.load(); // возвращается существующая задача
@@ -128,16 +129,29 @@ Future<void> main() async {
       print(name);
     }
   } finally {
-    await subscription.cancel();
+    profile.removeListener(onChange);
     await profile.close();
   }
 }
 ```
 
-`profile.currentState` доступен синхронно. `profile.stream` асинхронно
-доставляет изменения подписчикам. `job.value` возвращает загруженное имя или
-бросает ошибку `Job` либо `Cancelled`. Блок `finally` снимает подписку
+`profile.currentState` доступен синхронно, и `addListener` тоже зовёт колбэк
+синхронно, внутри самого изменения. `job.value` возвращает загруженное имя или
+бросает ошибку `Job` либо `Cancelled`. Блок `finally` снимает слушателя
 и закрывает контроллер даже при ошибке загрузки.
+
+Для broadcast-`stream`, доставленного на следующей микрозадаче, подмешайте
+`SoloStream`:
+
+```dart
+final class ProfileController extends Solo<ProfileState>
+    with SoloStream<ProfileState> {
+  // ...то же, что и выше...
+}
+```
+
+Полную картину доставки, включая `SoloListenable` из `flutter_solo`, см.
+в [Состоянии](../../docs/ru/solo/state.md).
 
 Для отмены используется тот же объект `Job`. Этот отдельный пример запрашивает
 отмену сразу, поэтому `Job` может ещё находиться в очереди:
@@ -305,13 +319,13 @@ await player.close(mode: SoloCloseMode.drain);
 | Поздний запрос не должен быть отброшен как дубликат раннего | ключ-запись, `(Op.load, id)` | [Задачи и очередь](../../docs/ru/solo/jobs.md) |
 | Ожидающую работу обесценило только что пришедшее | `queue.removeWhere` перед постановкой или `cancelAll()`, если она может уже работать | [Команды, где важна только последняя](../../docs/ru/solo/accumulation.md) |
 | Последняя пачка должна уйти до того, как экран исчезнет | `close(mode: SoloCloseMode.drain)` | [Отмена](../../docs/ru/solo/cancellation.md) |
-| `close()` не возвращается | `SoloBase.pending` | [Ошибки и наблюдение](../../docs/ru/solo/errors.md) |
+| `close()` не возвращается | `Solo.pending` | [Ошибки и наблюдение](../../docs/ru/solo/errors.md) |
 | Журналу нужно сказать, какая операция изменила состояние | `SoloTransition` в `onChange` | [Ошибки и наблюдение](../../docs/ru/solo/errors.md) |
 | Шаг нельзя прервать на половине | `ctx.join` для вызова, `ctx.uncancellable` для шага | [Отмена](../../docs/ru/solo/cancellation.md) |
 | Ресурс, открытый вызовом, которого никто не дождался, всё равно надо закрыть | `dispose` или `discard` у `ctx.wait` и `ctx.join` | [Ресурсы и освобождение](../../docs/ru/solo/resources.md) |
 | Виджет перестраивается из-за состояния, которым не пользуется | `select` на `SoloListenable` | [Flutter](../../docs/ru/solo/flutter.md) |
 | Очередь нужно на время остановить | задача, ждущая `Completer` в её голове | [Задачи и очередь](../../docs/ru/solo/jobs.md) |
-| Событие стрима приходит микротаской позже, и это поздно | `publish` в наследнике `SoloBase`, уведомляющий внутри изменения | [Состояние](../../docs/ru/solo/state.md) |
+| Событие стрима приходит микротаской позже, и это поздно | `publish` в наследнике `Solo`, уведомляющий внутри изменения | [Состояние](../../docs/ru/solo/state.md) |
 
 ## Переход с bloc
 

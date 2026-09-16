@@ -174,7 +174,7 @@ void main() {
   test('a cancellation inside the callback comes back through the wait', () {
     fakeAsync((async) {
       final journal = JournalObserver();
-      SoloBase.observer = journal;
+      Solo.observer = journal;
       final solo = _DisposeOnSecond();
       final events = StreamController<int>();
       var past = false;
@@ -207,7 +207,7 @@ void main() {
         events.close();
         solo.close();
         async.flushTimers();
-        SoloBase.observer = null;
+        Solo.observer = null;
       }
     });
   });

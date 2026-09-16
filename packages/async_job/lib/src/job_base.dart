@@ -320,7 +320,7 @@ abstract class JobBase<T> implements Job<T> {
   /// Tracing of the job lifecycle for debugging; `null` by default.
   ///
   /// An engine built on this one prints its own side elsewhere — `solo`
-  /// puts the queue, the state and the closing into `SoloBase.debug`. To
+  /// puts the queue, the state and the closing into `Solo.debug`. To
   /// follow both sides, set both.
   static void Function(String message)? debug;
 
@@ -1033,7 +1033,7 @@ abstract class JobBase<T> implements Job<T> {
   /// never goes there, as everywhere else.
   ///
   /// An engine of a domain overrides this to reach its own answer for an
-  /// error instead — `solo` sends it to `SoloBase.errorHandler`. It has
+  /// error instead — `solo` sends it to `Solo.errorHandler`. It has
   /// to: an engine that puts an observer of its own on every job makes the
   /// check below true always, and the error would be swallowed.
   @protected

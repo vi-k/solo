@@ -1,4 +1,4 @@
-part of 'solo_base.dart';
+part of 'solo.dart';
 
 /// Chooses which waiting group receives an event and where it runs.
 enum AccumulationPolicy {
@@ -37,7 +37,7 @@ abstract interface class SoloAccumulator<E, T> {
 
 final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
     implements SoloAccumulator<E, T>, _AccumulationOwner {
-  final SoloBase<S> _solo;
+  final Solo<S> _solo;
   final Future<T> Function(SoloContext<S, W>, V) _handler;
   final V Function(E) _seed;
   final V Function(V, E) _merge;
@@ -145,7 +145,7 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
       // hook can re-enter in the middle of the move.
       _solo._queue._jobs.remove(previous);
       _solo._queue._insert(previous, first: false);
-      SoloBase._debug(() => 'move $previous to the tail');
+      Solo._debug(() => 'move $previous to the tail');
     }
     group._accepted();
     return previous;

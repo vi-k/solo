@@ -9,7 +9,7 @@ final class _Screen {
   const _Screen({this.name = ''});
 }
 
-final class _Controller extends SoloBase<_Screen> {
+final class _Controller extends Solo<_Screen> {
   _Controller([super.initial = const _Screen()]);
 
   void set(_Screen next) => externalSetState(next);
@@ -19,7 +19,7 @@ final class _Controller extends SoloBase<_Screen> {
 /// `identical` still tells them apart, and the widget has to agree with
 /// `identical`: handed a new controller, it must let go of the old one even
 /// when the two compare equal.
-final class _EqualController extends SoloBase<_Screen> with _EqualByKind {
+final class _EqualController extends Solo<_Screen> with _EqualByKind {
   _EqualController([super.initial = const _Screen()]);
 
   void set(_Screen next) => externalSetState(next);
@@ -28,7 +28,7 @@ final class _EqualController extends SoloBase<_Screen> with _EqualByKind {
 /// The equality above lives in a mixin because a controller is mutable by
 /// trade, and on the class itself the analyzer refuses the pair:
 /// `avoid_equals_and_hash_code_on_mutable_classes`.
-mixin _EqualByKind on SoloBase<_Screen> {
+mixin _EqualByKind on Solo<_Screen> {
   @override
   bool operator ==(Object other) => other is _EqualByKind;
 
@@ -36,11 +36,10 @@ mixin _EqualByKind on SoloBase<_Screen> {
   int get hashCode => 0;
 }
 
-/// An ordinary `Solo`, the controller this widget exists for: it carries a
-/// `stream` and is no `ValueListenable`, so `ValueListenableBuilder` cannot
-/// take it.
-final class _StreamController extends Solo<_Screen> {
-  _StreamController([super.initial = const _Screen()]);
+/// An ordinary `Solo`, the controller this widget exists for: it is no
+/// `ValueListenable`, so `ValueListenableBuilder` cannot take it.
+final class _PlainController extends Solo<_Screen> {
+  _PlainController([super.initial = const _Screen()]);
 
   void set(_Screen next) => externalSetState(next);
 }
@@ -307,7 +306,7 @@ void main() {
       expect(identical(first, second), isFalse);
 
       final built = <String>[];
-      Widget tree(SoloBase<_Screen> controller) => _wrap(
+      Widget tree(Solo<_Screen> controller) => _wrap(
             SoloBuilder<_Screen>(
               solo: controller,
               builder: (context, state, _) {
@@ -336,7 +335,7 @@ void main() {
   testWidgets(
     'takes a plain Solo, which no ValueListenableBuilder would',
     (tester) async {
-      final controller = _StreamController(const _Screen(name: 'Ada'));
+      final controller = _PlainController(const _Screen(name: 'Ada'));
       addTearDown(controller.close);
 
       await tester.pumpWidget(

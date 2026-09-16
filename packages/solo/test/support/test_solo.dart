@@ -22,3 +22,24 @@ final class TestSolo extends Solo<TestState> {
   @override
   void externalSetState(TestState state) => super.externalSetState(state);
 }
+
+/// [TestSolo] with a stream, for the few tests that read one.
+final class TestSoloStream extends Solo<TestState> with SoloStream<TestState> {
+  TestSoloStream([super.initialState = const Initial()]);
+
+  @override
+  SoloQueue get queue => super.queue;
+
+  @override
+  Job<Object?>? get current => super.current;
+
+  @override
+  SoloJob<Object?>? lastJobWhere(bool Function(Job<Object?> job) test) =>
+      super.lastJobWhere(test);
+
+  @override
+  bool get hasListeners => super.hasListeners;
+
+  @override
+  void externalSetState(TestState state) => super.externalSetState(state);
+}

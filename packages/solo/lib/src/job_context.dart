@@ -1,4 +1,4 @@
-part of 'solo_base.dart';
+part of 'solo.dart';
 
 /// The core context plus the state: what a job body of `solo` sees.
 ///
@@ -55,7 +55,7 @@ final class _SoloContext<S extends Object, W extends S, R>
 
   _SoloContext(this._job) : super(_job);
 
-  SoloBase<S> get _solo => _job._solo;
+  Solo<S> get _solo => _job._solo;
 
   @override
   Job<void> createEachJob(Future<void> Function(JobContext ctx) body) =>
@@ -128,7 +128,7 @@ final class _SoloContext<S extends Object, W extends S, R>
   void emit(S next) {
     throwIfFinished('emit');
     throwIfCancelled();
-    SoloBase._debug(() => '$_job emit: $next');
+    Solo._debug(() => '$_job emit: $next');
     _solo._setState(next, emitter: _job, stackTrace: StackTrace.current);
     // The write is a checkpoint on both sides: hooks, observers and
     // listeners run inside `_setState` and may cancel this job — through a

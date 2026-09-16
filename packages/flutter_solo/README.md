@@ -177,8 +177,8 @@ has listeners, and there is nothing to dispose of.
 ## Builders for any controller
 
 `ValueListenableBuilder` and `SoloSelector` need a `ValueListenable`, and
-`SoloListenable` is one. A controller built on `SoloBase` directly is not — a
-`Solo` with its stream, or the base class of some other package — and for those
+`SoloListenable` is one. A controller built on `Solo` directly is not — one
+`with SoloStream`, or the base class of some other package — and for those
 there are two widgets that take the controller itself:
 
 ```dart
@@ -379,7 +379,7 @@ test, not through `FlutterError.onError`. Either await the outcome or call
 
 | Question | Answer |
 | --- | --- |
-| When do listeners run? | Synchronously, in subscription order, on every state change. `value` and `currentState` are the same object. There is no `stream` on this controller: it is a `SoloBase`, not a `Solo`, because a widget rebuilds from `value`. |
+| When do listeners run? | Synchronously, in subscription order, on every state change. `value` and `currentState` are the same object. There is no `stream` on this controller: it extends `Solo` directly, with no `SoloStream` mixed in, because a widget rebuilds from `value`. |
 | Are equal states filtered? | No. `emit` of a state equal to the current one still notifies, the way `Solo` does. A frame may swallow several of them, a listener will not. `select` filters its own value, which is the one a widget usually cares about. |
 | Several controllers on one screen? | Each with its own builder, as expected. `Listenable.merge([a, b])` in a `ListenableBuilder` covers the case where one widget depends on two. |
 | Can I set `value`? | There is no setter. The state belongs to the jobs; a `ValueNotifier` face with a setter would give it away. |
@@ -389,5 +389,5 @@ test, not through `FlutterError.onError`. Either await the outcome or call
 [solo](https://pub.dev/packages/solo) is the controller itself: the queue and
 its policies, the working type of a job, `canStart` and `keepWhile`, children,
 observers, the waiting family and the rest of the API this package inherits
-whole — all but `Solo`'s broadcast `stream`, which a widget has no use for. If
-you are not writing widgets, take it instead — it is pure Dart.
+whole — all but the broadcast `stream` of `SoloStream`, which a widget has no
+use for. If you are not writing widgets, take it instead — it is pure Dart.

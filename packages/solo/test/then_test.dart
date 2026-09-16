@@ -7,6 +7,8 @@ import 'package:fake_async/fake_async.dart';
 import 'package:solo/solo.dart';
 import 'package:test/test.dart';
 
+import 'support/plain_solo.dart';
+
 void main() {
   test('a continuation cleanup error reaches its zone without an observer', () {
     fakeAsync((async) {
@@ -15,7 +17,7 @@ void main() {
       late Solo<int> solo;
       runZonedGuarded(
         () {
-          solo = Solo<int>(0);
+          solo = PlainSolo<int>(0);
           solo.run<int, int>((ctx) async => 1).then<void>((ctx, value) {
             ctx.onDispose(() => throw error);
           });
@@ -31,7 +33,7 @@ void main() {
 
   test('cancelling the tail removes its queued source', () {
     fakeAsync((async) {
-      final solo = Solo<int>(0);
+      final solo = PlainSolo<int>(0);
       final gate = Completer<void>();
       solo.run<int, void>((ctx) => ctx.wait(() => gate.future));
       final source = solo.run<int, int>((ctx) async {
@@ -55,7 +57,7 @@ void main() {
 
   test('closing the controller cancels continuations of its current job', () {
     fakeAsync((async) {
-      final solo = Solo<int>(0);
+      final solo = PlainSolo<int>(0);
       final body = Completer<int>();
       final cleanup = Completer<void>();
       final source = solo.run<int, int>((ctx) {
@@ -80,7 +82,7 @@ void main() {
 
   test('a running core continuation does not hold the controller queue', () {
     fakeAsync((async) {
-      final solo = Solo<int>(0);
+      final solo = PlainSolo<int>(0);
       final gate = Completer<void>();
       final source = solo.run<int, int>((ctx) async => 1);
       final continuation = source.then<void>((ctx, value) {

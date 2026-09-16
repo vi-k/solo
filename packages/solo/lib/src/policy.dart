@@ -1,4 +1,4 @@
-/// How `SoloBase.add` treats jobs with the same key.
+/// How `Solo.add` treats jobs with the same key.
 ///
 /// Every policy except [sequential] requires a non-null key and throws
 /// [ArgumentError] otherwise.

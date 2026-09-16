@@ -105,7 +105,7 @@ later updates:
 
 ```dart
 final class ScreenController extends Solo<Screen> {
-  final Solo<Session> session;
+  final SoloStream<Session> session;
 
   ScreenController(this.session) : super(const Screen());
 

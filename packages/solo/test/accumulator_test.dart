@@ -5,17 +5,18 @@ import 'package:fake_async/fake_async.dart';
 import 'package:solo/solo.dart';
 import 'package:test/test.dart';
 
+import 'support/plain_solo.dart';
 import 'support/test_solo.dart';
 import 'support/test_state.dart';
 
 void main() {
   tearDown(() {
-    SoloBase.observer = null;
-    SoloBase.debug = null;
+    Solo.observer = null;
+    Solo.debug = null;
   });
   test('synchronous events wait for the queue pump', () {
     fakeAsync((async) {
-      final solo = Solo<int>(0);
+      final solo = PlainSolo<int>(0);
       final calls = <List<int>>[];
       final events = solo.collect<int, int, void>((ctx, values) async {
         calls.add(values);
@@ -42,7 +43,7 @@ void main() {
     for (final collect in [true, false]) {
       test('$policy ${collect ? 'collect' : 'accumulate'} across B', () {
         fakeAsync((async) {
-          final solo = Solo<String>('');
+          final solo = PlainSolo<String>('');
           final calls = <String>[];
           Future<String> handle(
             SoloContext<String, String> ctx,
@@ -100,7 +101,7 @@ void main() {
 
     test('$policy synchronous events and nullable snapshots', () {
       fakeAsync((async) {
-        final solo = Solo<int>(0);
+        final solo = PlainSolo<int>(0);
         final calls = <List<int?>>[];
         final events = solo.collect<int, int?, int>(
           (ctx, values) async {
@@ -133,7 +134,7 @@ void main() {
 
     test('$policy merge throws without losing the waiting value', () {
       fakeAsync((async) {
-        final solo = Solo<int>(0);
+        final solo = PlainSolo<int>(0);
         final calls = <int?>[];
         final merges = <(int?, int?)>[];
         final error = StateError('merge failed');
@@ -177,7 +178,7 @@ void main() {
 
     test('$policy same-accumulator merge reentry and recovery', () {
       fakeAsync((async) {
-        final solo = Solo<int>(0);
+        final solo = PlainSolo<int>(0);
         var reenter = true;
         var catchReentry = false;
         late SoloAccumulator<int, int> events;
@@ -211,7 +212,7 @@ void main() {
     for (final mutation in ['append', 'cancel', 'close']) {
       test('$policy merge changes queue with $mutation', () {
         fakeAsync((async) {
-          final solo = Solo<int>(0);
+          final solo = PlainSolo<int>(0);
           final calls = <int>[];
           late SoloJob<void> first;
           final events = solo.accumulate<int, int, void>(
@@ -321,7 +322,7 @@ void main() {
             next = events.add(2);
           }
 
-          SoloBase.observer = _Callbacks(
+          Solo.observer = _Callbacks(
             onStart: (job) {
               if (boundary == 'onStart') addOnce();
             },
@@ -516,7 +517,7 @@ void main() {
     fakeAsync((async) {
       final solo = TestSolo();
       var called = false;
-      SoloBase.observer = _Callbacks(onStart: (job) => job.cancel());
+      Solo.observer = _Callbacks(onStart: (job) => job.cancel());
       final events = solo.collect<TestState, int, void>((ctx, values) async {
         called = true;
       });
@@ -714,7 +715,7 @@ void main() {
         final calls = <List<int>>[];
         final error = StateError('handler');
         final errors = <Object>[];
-        SoloBase.observer = _Callbacks(onError: errors.add);
+        Solo.observer = _Callbacks(onError: errors.add);
         late SoloJob<void> first;
         final events = solo.collect<TestState, int, void>((ctx, values) async {
           calls.add(values);
@@ -857,7 +858,7 @@ void main() {
       final first = events.add(1);
       SoloJob<void>? next;
       var reentered = false;
-      SoloBase.debug = (message) {
+      Solo.debug = (message) {
         if (!message.startsWith('remove ') || reentered) return;
         reentered = true;
         next = events.add(2);
@@ -877,7 +878,7 @@ void main() {
 
   test('settings merge preserves false and applies only in the handler', () {
     fakeAsync((async) {
-      final solo = Solo<_Settings>(const _Settings(true, 'light', 'en'));
+      final solo = PlainSolo<_Settings>(const _Settings(true, 'light', 'en'));
       solo.accumulate<_Settings, _Patch, void>(
         (ctx, patch) async {
           ctx.emit(
@@ -1018,7 +1019,7 @@ void main() {
       final solo = TestSolo();
       final gate = Completer<void>();
       final journal = <String>[];
-      SoloBase.observer = _Callbacks(
+      Solo.observer = _Callbacks(
         onStart: (job) => journal.add('start ${job.key}'),
         onFinish: (job) => journal.add('finish ${job.key} ${job.outcome}'),
       );
@@ -1405,15 +1406,14 @@ final class _Callbacks extends SoloObserver {
         _onError = onError;
 
   @override
-  void onStart(SoloBase<Object> solo, Job<Object?> job) => _onStart?.call(job);
+  void onStart(Solo<Object> solo, Job<Object?> job) => _onStart?.call(job);
 
   @override
-  void onFinish(SoloBase<Object> solo, Job<Object?> job) =>
-      _onFinish?.call(job);
+  void onFinish(Solo<Object> solo, Job<Object?> job) => _onFinish?.call(job);
 
   @override
   void onError(
-    SoloBase<Object> solo,
+    Solo<Object> solo,
     Job<Object?> job,
     Object error,
     StackTrace stackTrace,
@@ -1471,7 +1471,7 @@ List<String> _rulesTrace(
   final trace = <String>[];
   fakeAsync((async) {
     int now() => async.elapsed.inMilliseconds;
-    final solo = Solo<int>(0);
+    final solo = PlainSolo<int>(0);
     final events = solo.accumulate<int, String, void>(
       (ctx, value) async => trace.add('run[$value]@${now()}'),
       merge: (accumulated, incoming) => '$accumulated+$incoming',
@@ -1520,7 +1520,7 @@ List<String> _defaultTrace({
   final trace = <String>[];
   fakeAsync((async) {
     int now() => async.elapsed.inMilliseconds;
-    final solo = Solo<int>(0);
+    final solo = PlainSolo<int>(0);
     final events = solo.accumulate<int, String, void>(
       (ctx, value) async => trace.add('run[$value]@${now()}'),
       merge: (accumulated, incoming) => '$accumulated+$incoming',

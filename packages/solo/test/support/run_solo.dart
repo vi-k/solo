@@ -14,19 +14,42 @@ void runSolo(
 }) {
   fakeAsync((async) {
     final journal = JournalObserver();
-    SoloBase.observer = journal;
+    Solo.observer = journal;
     // Watching is not answering: without a handler every homeless error
     // would also reach the zone of the test. The journal has already
     // recorded it through `onError`, so answering for it is all this does.
-    SoloBase.errorHandler = journal.answerForErrors;
+    Solo.errorHandler = journal.answerForErrors;
     final solo = TestSolo(initialState);
     try {
       body(solo, journal, async);
     } finally {
       solo.close();
       async.flushTimers();
-      SoloBase.observer = null;
-      SoloBase.errorHandler = null;
+      Solo.observer = null;
+      Solo.errorHandler = null;
+    }
+  });
+}
+
+/// [runSolo] with a [TestSoloStream], for the few tests that read
+/// [TestSoloStream.stream].
+void runSoloStream(
+  void Function(TestSoloStream solo, JournalObserver journal, FakeAsync async)
+      body, {
+  TestState initialState = const Initial(),
+}) {
+  fakeAsync((async) {
+    final journal = JournalObserver();
+    Solo.observer = journal;
+    Solo.errorHandler = journal.answerForErrors;
+    final solo = TestSoloStream(initialState);
+    try {
+      body(solo, journal, async);
+    } finally {
+      solo.close();
+      async.flushTimers();
+      Solo.observer = null;
+      Solo.errorHandler = null;
     }
   });
 }

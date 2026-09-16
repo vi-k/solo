@@ -1,9 +1,9 @@
 # Flutter
 
 Use `SoloListenable<S>` from `flutter_solo` as the controller base class. It
-extends `SoloBase<S>` and implements `ValueListenable<S>`; it has no `stream` —
-a widget rebuilds from `value`, and an operation's result is awaited through
-its `Job`. The profile controller keeps the same states and `load` method:
+extends `Solo<S>` and implements `ValueListenable<S>`; it has no `stream` — a
+widget rebuilds from `value`, and an operation's result is awaited through its
+`Job`. The profile controller keeps the same states and `load` method:
 
 ```dart
 import 'dart:async';
@@ -94,9 +94,9 @@ controller jobs perform updates through their context. `ListenableBuilder` and
 `AnimatedBuilder` also accept the controller when the builder does not need the
 state value itself.
 
-A controller that is not a `ValueListenable` — a `Solo` with its stream, or a
-`SoloBase` of your own — has `SoloBuilder` instead: it takes any `SoloBase` and
-is `ValueListenableBuilder` in every other respect. When the screen watches one
+A controller that is not a `ValueListenable` — a plain `Solo` of your own, or
+one `with SoloStream` — has `SoloBuilder` instead: it takes any `Solo` and is
+`ValueListenableBuilder` in every other respect. When the screen watches one
 value out of a larger state, `SoloSelectBuilder` rebuilds only when that value
 changes and leaves the rest of the state alone:
 
@@ -116,3 +116,24 @@ SoloSelectBuilder<ProfileState, bool>(
 Hold the picking function in a field or a `static` where the parent rebuilds
 often: it is compared by identity, so an inline closure is a new one every
 build, and each of those builds makes a new selection.
+
+## A controller with both deliveries
+
+`SoloListenable` combines with `SoloStream` when a screen needs the widget side
+and a broadcast `stream` at once:
+
+```dart
+final class Session extends SoloListenable<SessionState>
+    with SoloStream<SessionState> {
+  Session(super.initialState);
+}
+```
+
+Both deliveries are live, on their own schedules: the listener behind
+`ValueListenableBuilder` fires synchronously, inside the change, and the
+`stream` event arrives a microtask later. The combination has a cost: a
+listener failure goes to `FlutterError`, a stream failure to the zone -- one
+change, two error routes; a rebuild and a stream event are two separate
+reactions to one change, where a widget reading only `value` had one; and
+`await close()` now waits for the stream's own subscribers too, which a plain
+`SoloListenable` never did.

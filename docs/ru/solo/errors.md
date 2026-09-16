@@ -29,20 +29,20 @@ final class ProfileController extends Solo<ProfileState> {
 ```dart
 final class LoggingObserver extends SoloObserver {
   @override
-  void onStart(SoloBase<Object> solo, Job<Object?> job) =>
+  void onStart(Solo<Object> solo, Job<Object?> job) =>
       print('$job started');
 
   @override
-  void onFinish(SoloBase<Object> solo, Job<Object?> job) =>
+  void onFinish(Solo<Object> solo, Job<Object?> job) =>
       print('$job finished ${job.outcome}');
 
   @override
-  void onChange(SoloBase<Object> solo, SoloTransition<Object> transition) =>
+  void onChange(Solo<Object> solo, SoloTransition<Object> transition) =>
       print('${transition.job ?? 'external'}: ${transition.current}');
 }
 
 void main() {
-  SoloBase.observer = LoggingObserver();
+  Solo.observer = LoggingObserver();
 }
 ```
 
@@ -63,7 +63,7 @@ void main() {
 обработчик:
 
 ```dart
-SoloBase.errorHandler = (solo, job, error, stackTrace) =>
+Solo.errorHandler = (solo, job, error, stackTrace) =>
     Sentry.captureException(error, stackTrace: stackTrace);
 ```
 
@@ -102,14 +102,14 @@ final class SlowCancellations extends SoloObserver {
   final _markedAt = Expando<DateTime>('cancellation');
 
   @override
-  void onStart(SoloBase<Object> solo, Job<Object?> job) {
+  void onStart(Solo<Object> solo, Job<Object?> job) {
     // whenCancelled срабатывает, когда отмена стала действующей, а не
     // когда позвали cancel(): шаг под ctx.uncancellable отработает раньше.
     job.whenCancelled((_) => _markedAt[job] = clock.now());
   }
 
   @override
-  void onFinish(SoloBase<Object> solo, Job<Object?> job) {
+  void onFinish(Solo<Object> solo, Job<Object?> job) {
     final markedAt = _markedAt[job];
     if (markedAt == null) return;
     final delay = clock.now().difference(markedAt);
@@ -158,7 +158,7 @@ profile.load().ignore(); // аналог Future.ignore
 
 Ошибки уборки, колбэков отмены и операций, брошенных через `wait`, передаются
 хукам диагностики. Без переопределённого хука ошибок или установленного
-`SoloBase.errorHandler` они попадают в зону создания `Job`. Такая ошибка может
+`Solo.errorHandler` они попадают в зону создания `Job`. Такая ошибка может
 прийти уже после завершения `Job`. Она не заменяет существующий исход отмены.
 Сам `Cancelled` исключён из этих маршрутов сообщений об ошибках.
 
@@ -205,11 +205,10 @@ canStart: (state) => state.free > 0,
 | Переоценка после обновления состояния | Передаётся для диагностики; работающее тело сама по себе не отменяет. |
 | Проверка, управляющая итоговым обработчиком состояния | Обработчик запрещается. |
 
-Когда за ошибки переоценки не отвечает ни хук ошибок,
-ни `SoloBase.errorHandler`, они попадают в зону создания контроллера.
-В корневой зоне Dart необработанная ошибка может завершить приложение.
-Настройте сообщения об ошибках и наблюдение исходов в соответствии
-с требованиями приложения.
+Когда за ошибки переоценки не отвечает ни хук ошибок, ни `Solo.errorHandler`,
+они попадают в зону создания контроллера. В корневой зоне Dart необработанная
+ошибка может завершить приложение. Настройте сообщения об ошибках и наблюдение
+исходов в соответствии с требованиями приложения.
 
 ## Фоновая работа и логи
 
@@ -222,7 +221,7 @@ ctx.unattended(() => analytics.send('zoom'));
 ctx.log(('zoom', zoom));
 
 // И собственная трасса движка, когда нужно посмотреть на очередь.
-SoloBase.debug = print;
+Solo.debug = print;
 ```
 
 `ctx.unattended(action)` запускает работу, которую `Job` не ждёт и не отменяет.
@@ -235,6 +234,6 @@ SoloBase.debug = print;
 не предоставляет маршрутизацию ошибок, которую даёт `unattended`.
 
 `ctx.log(data)` передаёт данные приложения хукам логирования и наблюдателям как
-есть, поэтому строку делает тот слушатель, которому она нужна. `SoloBase.debug`
+есть, поэтому строку делает тот слушатель, которому она нужна. `Solo.debug`
 дополнительно трассирует внутренние операции очереди и жизненного цикла
 контроллера.
