@@ -387,12 +387,12 @@ final class TelemetryObserver extends SoloObserver {
   TelemetryObserver(this._telemetry);
 
   @override
-  void onChange(SoloBase<Object> solo, SoloTransition<Object> transition) =>
+  void onChange(Solo<Object> solo, SoloTransition<Object> transition) =>
       _telemetry.send(transition.current);
 }
 ```
 
-`SoloObserver` receives `SoloBase<Object>` because it observes controllers with
+`SoloObserver` receives `Solo<Object>` because it observes controllers with
 different state types. The controller's own hook uses its specific state type.
 
 With the throwing observer, the run still reaches `Recording`, arms the meter,
@@ -795,7 +795,8 @@ type these player jobs accept:
 ```dart
 enum PlayerKey { play, pause, seek }
 
-final class PlayerController extends Solo<PlayerState> {
+final class PlayerController extends Solo<PlayerState>
+    with SoloStream<PlayerState> {
   final Player _player;
 
   PlayerController(this._player) : super(Ready());
@@ -1484,7 +1485,8 @@ already completed state change. The listener belongs inside the controller
 subclass:
 
 ```dart
-final class ReportController extends Solo<ReportState> {
+final class ReportController extends Solo<ReportState>
+    with SoloStream<ReportState> {
   final Reports _reports;
 
   ReportController(this._reports, Auth auth) : super(const SignedIn()) {

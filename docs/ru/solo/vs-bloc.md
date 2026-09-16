@@ -389,12 +389,12 @@ final class TelemetryObserver extends SoloObserver {
   TelemetryObserver(this._telemetry);
 
   @override
-  void onChange(SoloBase<Object> solo, SoloTransition<Object> transition) =>
+  void onChange(Solo<Object> solo, SoloTransition<Object> transition) =>
       _telemetry.send(transition.current);
 }
 ```
 
-`SoloObserver` получает `SoloBase<Object>`, поскольку наблюдает контроллеры
+`SoloObserver` получает `Solo<Object>`, поскольку наблюдает контроллеры
 с разными типами состояний. Собственный хук контроллера использует его
 конкретный тип состояния.
 
@@ -804,7 +804,8 @@ class PlayerBloc extends Bloc<PlayerCommand, PlayerState> {
 ```dart
 enum PlayerKey { play, pause, seek }
 
-final class PlayerController extends Solo<PlayerState> {
+final class PlayerController extends Solo<PlayerState>
+    with SoloStream<PlayerState> {
   final Player _player;
 
   PlayerController(this._player) : super(Ready());
@@ -1497,7 +1498,8 @@ class ReportBloc extends Bloc<ReportEvent, ReportState> {
 контроллера:
 
 ```dart
-final class ReportController extends Solo<ReportState> {
+final class ReportController extends Solo<ReportState>
+    with SoloStream<ReportState> {
   final Reports _reports;
 
   ReportController(this._reports, Auth auth) : super(const SignedIn()) {
