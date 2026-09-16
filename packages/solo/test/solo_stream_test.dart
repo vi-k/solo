@@ -2,9 +2,52 @@ import 'package:fake_async/fake_async.dart';
 import 'package:solo/solo.dart';
 import 'package:test/test.dart';
 
+import 'support/run_solo.dart';
 import 'support/test_state.dart';
 
 void main() {
+  test(
+    'close re-entered from a hook returns the same future, with a stream',
+    () {
+      fakeAsync((async) {
+        final solo = _StreamCloseOnFinish()
+          ..run<TestState, void>(key: 'dropped', (ctx) async {});
+        final outer = solo.close();
+        expect(solo.reentered, isNotNull, reason: 'the hook ran');
+        expect(identical(solo.reentered, outer), isTrue);
+        async.flushTimers();
+      });
+    },
+  );
+
+  test(
+    'a plain close over a running drain stops it, sharing the future, '
+    'with a stream',
+    () {
+      runSoloStream((solo, journal, async) {
+        solo
+          ..run<TestState, void>(
+            key: 'running',
+            (ctx) async => pause(ctx, 50),
+          )
+          ..run<TestState, void>(key: 'queued', (ctx) async {});
+        async.flushMicrotasks();
+        final first = solo.close(mode: SoloCloseMode.drain);
+        async.elapse(const Duration(milliseconds: 10));
+        final second = solo.close();
+        expect(identical(first, second), isTrue);
+        expect(solo.isDraining, isFalse);
+        async.flushTimers();
+        expect(journal.take(), [
+          '[running] started',
+          '[queued] dropped Cancelled(closed)',
+          '[running] finished Cancelled(closed)',
+          'closed',
+        ]);
+      });
+    },
+  );
+
   test('a neighbor above SoloStream still lets the stream see the event', () {
     fakeAsync((async) {
       final solo = _BombAboveStream(const Initial());
@@ -56,4 +99,17 @@ final class _BombBelowStream extends Solo<TestState>
   _BombBelowStream(super.initialState);
 
   void set(TestState next) => externalSetState(next);
+}
+
+final class _StreamCloseOnFinish extends Solo<TestState>
+    with SoloStream<TestState> {
+  _StreamCloseOnFinish() : super(const Initial());
+
+  /// The future returned by the `close` called from inside `close`.
+  Future<void>? reentered;
+
+  @override
+  void onFinish(Job<Object?> job) {
+    reentered ??= close();
+  }
 }
