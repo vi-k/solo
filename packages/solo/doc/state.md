@@ -112,7 +112,8 @@ and nothing brings it back later -- this emit included.
 
 Other running bodies are checked after a state update. A job's own emit is
 excluded from that rule check, but still checks cancellation before and after
-writing. A synchronous hook or listener that causes another state change can
+writing. Both `onChange` (see [Errors](errors.md)) and a listener run
+synchronously inside the write; either one causing another state change can
 therefore cancel the emitting job before `emit` returns.
 
 Rules stop cancelling a job once its body has ended. Manual cancellation,
