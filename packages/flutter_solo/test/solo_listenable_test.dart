@@ -19,6 +19,12 @@ final class _ObjectController extends SoloListenable<Object> {
   void set(Object value) => externalSetState(value);
 }
 
+final class _Both extends SoloListenable<int> with SoloStream<int> {
+  _Both() : super(0);
+
+  void set(int value) => externalSetState(value);
+}
+
 final class _ClosingObserver extends SoloObserver {
   final void Function(Solo<Object> solo) onCloseCallback;
 
@@ -307,6 +313,40 @@ void main() {
 
       expect(counter.value, 8);
       expect(heard, [8]);
+    },
+  );
+
+  testWidgets(
+    'SoloListenable with SoloStream delivers both, on their own schedules',
+    (tester) async {
+      final controller = _Both();
+      addTearDown(controller.close);
+      final built = <int>[];
+      final streamed = <int>[];
+      final subscription = controller.stream.listen(streamed.add);
+      addTearDown(subscription.cancel);
+
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: ValueListenableBuilder<int>(
+            valueListenable: controller,
+            builder: (context, value, _) {
+              built.add(value);
+              return const SizedBox();
+            },
+          ),
+        ),
+      );
+
+      controller.set(1);
+      // The listener behind ValueListenableBuilder fires synchronously;
+      // the stream event is still waiting for a microtask.
+      expect(streamed, isEmpty);
+      await tester.pump();
+
+      expect(built, [0, 1]);
+      expect(streamed, [1]);
     },
   );
 }
