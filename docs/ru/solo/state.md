@@ -92,7 +92,7 @@ camera.addListener(() => print(camera.currentState));
 
 // Каждое обновление, по порядку, через микротаску. Начальное состояние
 // не повторяется, а публикация равного состояния тоже даёт событие.
-// Нужен `with SoloStream` у контроллера — см. ниже.
+// Нужен `with SoloStream` у контроллера — см. таблицу ниже.
 final subscription = camera.stream.listen(print);
 ```
 

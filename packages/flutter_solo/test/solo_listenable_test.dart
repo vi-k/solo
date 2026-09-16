@@ -349,4 +349,25 @@ void main() {
       expect(streamed, [1]);
     },
   );
+
+  test(
+    'a paused stream subscription holds close() open on SoloListenable too',
+    () async {
+      final controller = _Both();
+      final subscription = controller.stream.listen((_) {})..pause();
+      var closeDone = false;
+      final closing = controller.close().then((_) => closeDone = true);
+
+      try {
+        await Future<void>.delayed(Duration.zero);
+        expect(closeDone, isFalse, reason: 'the paused stream holds close');
+      } finally {
+        subscription.resume();
+        await subscription.cancel();
+        await closing;
+      }
+
+      expect(closeDone, isTrue);
+    },
+  );
 }
