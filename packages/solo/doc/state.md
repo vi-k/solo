@@ -219,8 +219,32 @@ at that moment.
 ## External state
 
 An independent source — a device, a socket — changes without waiting for the
-controller. `externalSetState(next)` reflects a change that has already
-happened there:
+controller, and the controller has to show what has already happened there.
+
+### The first attempt
+
+```dart
+Camera(this.device) : super(const Ready()) {
+  _link = device.connection.listen((connected) {
+    if (!connected) {
+      // The fact goes in like any other work.
+      run<Ready, void>(
+        key: _Op.disconnect,
+        (ctx) async => ctx.emit(const Disconnected()),
+      );
+    }
+  });
+}
+```
+
+The queue does what a queue does: the update waits behind the job that is
+running. Until it starts, the controller still reports a connected state, and
+the running job's rules are asked on every change — but only ever about the
+state it already knew. Worse, that job may itself be waiting for a response the
+device will never give, so the update that would free it is standing behind the
+job it would free.
+
+### externalSetState
 
 ```dart
 final class Camera extends Solo<CameraState> {
@@ -251,15 +275,11 @@ The method is `@protected` and is called from inside the controller subclass,
 typically from a subscription it holds -- the one on the device above, not a
 listener of the controller.
 
-Consider what the alternative costs. If that handler queued a separate job to
-publish `Disconnected`, that update would wait behind the current job. Until
-then the controller still reports a connected state, the current job's rules
-cannot react to the disconnection, and that job may itself be waiting for a
-response that will never arrive. Calling `externalSetState` updates state
-immediately and re-evaluates running jobs, so a job whose rules require a
-connection is cancelled. Its waiting method determines when its body resumes
-and whether the underlying operation must finish; the queue still waits for the
-job's body and cleanup before starting another root job.
+`externalSetState` updates state immediately and re-evaluates running jobs, so
+a job whose rules require a connection is cancelled by the disconnection
+itself. Its waiting method determines when its body resumes and whether the
+underlying operation must finish; the queue still waits for the job's body and
+cleanup before starting another root job.
 
 The distinction is what the notification represents. If it says that an
 independent entity has already changed, reflect that fact immediately. If it
