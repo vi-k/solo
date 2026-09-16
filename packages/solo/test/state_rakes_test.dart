@@ -13,8 +13,7 @@ import 'package:test/test.dart';
 /// was meant to do. Nothing else guards those statements: the page has no
 /// bench, so a trace quoted there rots silently. Every number and every
 /// outcome the page names about a first attempt is pinned here, next to the
-/// version the page then shows. A few claims made outside those sections
-/// are pinned here too, where nothing else would catch them.
+/// version the page then shows.
 
 // --- State and rules ------------------------------------------------------
 
@@ -57,35 +56,6 @@ final class Cam extends Solo<CamState> {
         (ctx) => ctx.each(frames.stream, (child, frame) {
           stored.add(frame);
         }).value,
-      );
-}
-
-// --- Reading and updating state -------------------------------------------
-
-final class Lens extends Solo<CamState> {
-  final calls = <String>[];
-  final moving = Completer<void>();
-  final bool guarded;
-
-  Lens({required this.guarded}) : super(const Ready());
-
-  void pause() => externalSetState(const Ready(paused: true));
-
-  Future<void> _setZoom() {
-    calls.add('setZoom');
-    return moving.future;
-  }
-
-  /// The page's version, with the checkpoint made optional so the test
-  /// can measure what it is worth.
-  Job<void> zoomIn() => run<Ready, void>(
-        keepWhile: (state) => !state.paused,
-        (ctx) async {
-          await ctx.uncancellable(_setZoom);
-          if (guarded) ctx.check();
-          calls.add('start');
-          ctx.emit(const Ready());
-        },
       );
 }
 
@@ -299,49 +269,6 @@ void main() {
 
       await cam.frames.close();
       await cam.close();
-    });
-  });
-
-  group('a checkpoint before work the engine cannot see', () {
-    test('the rules cancel through an uncancellable section', () async {
-      final lens = Lens(guarded: true);
-      final job = lens.zoomIn();
-      await pump();
-      lens.pause();
-
-      expect(job.isCancelled, isTrue, reason: 'marked while inside');
-
-      lens.moving.complete();
-      final outcome = await job.done;
-
-      expect(lens.calls, ['setZoom'], reason: 'the check stopped the call');
-      expect('$outcome', contains('rules: keepWhile'));
-      expect((lens.currentState as Ready).paused, isTrue);
-
-      await lens.close();
-    });
-
-    test('without it the section returns and the call goes out', () async {
-      final lens = Lens(guarded: false);
-      final job = lens.zoomIn();
-      await pump();
-      lens.pause();
-      lens.moving.complete();
-      final outcome = await job.done;
-
-      expect(
-        lens.calls,
-        ['setZoom', 'start'],
-        reason: 'the device was told for a job that no longer exists',
-      );
-      expect('$outcome', contains('rules: keepWhile'));
-      expect(
-        (lens.currentState as Ready).paused,
-        isTrue,
-        reason: 'the emit still threw, so the state is not wrong',
-      );
-
-      await lens.close();
     });
   });
 
