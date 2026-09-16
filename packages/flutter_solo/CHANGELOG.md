@@ -1,10 +1,18 @@
 ## Unreleased
 
+- **Breaking:** follows `solo`'s rename: `SoloBase` becomes `Solo`, and the
+  stream-carrying `Solo` becomes the mixin `SoloStream`. Nothing in this
+  package changes shape because of it -- `SoloBuilder`, `SoloSelection.of` and
+  the rest already took the widest engine type -- but every mention of
+  `SoloBase` in a signature or a doc comment now reads `Solo`, and a controller
+  that needs `flutter_solo`'s widgets plus a `stream` combines `SoloListenable`
+  with `with SoloStream` instead of choosing one.
+
 - `SoloBuilder` no longer keeps a copy of the state. It subscribes, and every
-  rebuild reads `SoloBase.currentState`; the field, the two reads that filled
-  it and the promise in the dartdoc are gone together. The copy could differ
-  from a fresh read in one place only -- a closed controller whose state moved
-  on with nobody told -- and `solo` no longer lets the state move there.
+  rebuild reads `Solo.currentState`; the field, the two reads that filled it
+  and the promise in the dartdoc are gone together. The copy could differ from
+  a fresh read in one place only -- a closed controller whose state moved on
+  with nobody told -- and `solo` no longer lets the state move there.
 
 - `SoloSelector` and `SoloSelectBuilder` keep the subscription to their
   selection themselves instead of wrapping a `ValueListenableBuilder` around
@@ -16,18 +24,18 @@
   longer find one.
 - Add `SoloBuilder` and `SoloSelectBuilder`: what `ValueListenableBuilder` and
   `SoloSelector` are, for a controller that is not a `ValueListenable`. Both
-  take any `SoloBase` -- a plain `Solo` included -- subscribe in `initState`,
-  read the controller's state on every build, compare controllers by identity
-  when the parent hands over a new one, and pass `child` through untouched.
-  `SoloSelectBuilder` holds its selection across a parent rebuild, so the
-  baseline `compare` answers from survives one; it carries no `buildWhen`,
-  because picking a value is what it does.
+  take any `Solo` -- one `with SoloStream` included -- subscribe in
+  `initState`, read the controller's state on every build, compare controllers
+  by identity when the parent hands over a new one, and pass `child` through
+  untouched. `SoloSelectBuilder` holds its selection across a parent rebuild,
+  so the baseline `compare` answers from survives one; it carries no
+  `buildWhen`, because picking a value is what it does.
 - Add `SoloSelection.of`: a selection straight from a controller, for the
-  controllers that are not `ValueListenable` -- `Solo` and anything else built
-  on `SoloBase`. It is a static method rather than a constructor because a
-  constructor introduces no type parameters of its own, and the class leaves
-  `S` unbounded while `SoloBase` requires `S extends Object`; the existing
-  constructor, nullable sources included, is untouched.
+  controllers that are not `ValueListenable` -- one built with `SoloStream`,
+  and anything else that extends `Solo`. It is a static method rather than a
+  constructor because a constructor introduces no type parameters of its own,
+  and the class leaves `S` unbounded while `Solo` requires `S extends Object`;
+  the existing constructor, nullable sources included, is untouched.
 - **Fix:** the first value of a source that publishes while it is being
   subscribed to reaches the widget. The selection used to subscribe before
   registering the incoming listener, so a value arriving in that window updated
@@ -52,7 +60,7 @@
   hear the change, and the reporter's error goes to the zone.
 
 - `SoloListenable` keeps only the `ValueListenable` face: the listeners, the
-  registration and the pass over them moved into `solo`'s `SoloBase`, and what
+  registration and the pass over them moved into `solo`'s `Solo`, and what
   stays here is `value` and the report of a listener's failure through
   `FlutterError.reportError`. The class behaves as it did, with one exception
   below.
@@ -67,12 +75,12 @@
   engine's close; the engine now drops it synchronously, right after the hook.
   A change made *inside* the hook still reaches them.
 
-- **Breaking:** `SoloListenable` is built on `SoloBase`, not on `Solo`, and has
-  no `stream`. The listeners are its whole delivery: a widget rebuilds from
+- **Breaking:** `SoloListenable` is built on `Solo`, not on `SoloStream`, and
+  has no `stream`. The listeners are its whole delivery: a widget rebuilds from
   `value`, and an operation's result is awaited through its `Job`, so the
   broadcast `StreamController` every controller used to carry — created with
   it, fed on every change and closed afterwards — is gone. A controller no
-  longer fits where a `Solo<S>` is expected; `SoloBase<S>` is the type that
+  longer fits where a `SoloStream<S>` is expected; `Solo<S>` is the type that
   covers both.
 
 - **Breaking:** the controller's synchronous read is `solo`'s new
