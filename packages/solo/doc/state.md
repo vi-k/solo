@@ -158,9 +158,10 @@ of the running jobs are re-evaluated, and before the next line of the code that
 changed the state.
 
 That order belongs to the change that opened the pass. A change made from
-inside a listener joins the publication queue instead of cutting in: its own
-rules are re-evaluated first, the nested writer's next line runs after that,
-and its listeners are called last, when the pass already running reaches it.
+inside a listener joins the publication queue instead of cutting in: the engine
+re-evaluates the running jobs' rules against it at once, the nested writer's
+next line runs after that, and the listeners hear about it last, when the pass
+already running reaches it.
 
 `removeListener` matches with `==` rather than identity, the way
 `ChangeNotifier` does, so a widget can subscribe in `initState` and unsubscribe
