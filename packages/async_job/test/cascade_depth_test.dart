@@ -6,14 +6,15 @@ import 'package:test/test.dart';
 import 'support/cancel_reason.dart';
 import 'support/delay.dart';
 import 'support/error_observer.dart';
+import 'support/probe_job.dart';
 
 void main() {
   // Deep enough that no stack survives the cascade, with room to spare on
   // a machine whose frames are smaller. The point of the run is not the
   // depth itself but what the kernel leaves behind when it runs out: on
-  // the machine these tests were written on the cascade reaches about
-  // 2460 levels, and a run that reached the bottom instead would fail on
-  // the first expectation rather than pass quietly.
+  // the machine these tests were written on the cascade marks about 3100
+  // levels, and a run that reached the bottom instead would fail on the
+  // first expectation rather than pass quietly.
   const depth = 50000;
 
   test('a cascade out of stack still tells what it marked to stop', () async {
@@ -57,7 +58,7 @@ void main() {
     final errors = <Object>[];
     final root = Job<void>(
       (ctx) async {
-        unawaited(ctx.run(chain.deferred()));
+        ctx.run(chain.deferred()).ignore();
         await chain.bottom.future;
         // The body gives itself up, the way one does when it catches a
         // cancellation of somebody else: the children go from inside the
@@ -105,9 +106,9 @@ void main() {
       // The leaf goes first, so the cascade -- which takes the children
       // last started first -- reaches it after the chain, and only if the
       // chain running out of stack did not take the loop with it.
-      unawaited(ctx.run(leaf));
+      ctx.run(leaf).ignore();
       await null;
-      unawaited(ctx.run(chain.deferred()));
+      ctx.run(chain.deferred()).ignore();
       ready.complete();
       await never.future;
     });
@@ -123,6 +124,113 @@ void main() {
     expect(thrown, isA<StackOverflowError>());
     expect(leaf.isCancelled, isTrue, reason: 'the sibling is not deep');
     expect(leafTold, isTrue, reason: 'and it was told to stop');
+  });
+
+  test('the window closes when the engine ends the job by hand', () async {
+    // Three things at once, which is why it is worth a test of its own: a
+    // cascade deep enough to run out of stack, an engine of a domain that
+    // ends the job from a callback of a child, and a listener registered
+    // afterwards with a bug of its own.
+    final chain = _Chain(depth);
+    final errors = <Object>[];
+    final never = Completer<void>();
+    final ready = Completer<void>();
+    var leafTold = false;
+    late final ProbeJob<void> parent;
+    parent = ProbeJob<void>(
+      (ctx) async {
+        final leaf = Job.deferred<void>((ctx) async {
+          ctx.onCancel(() {
+            leafTold = true;
+            parent.drop(
+              Cancelled.by(
+                reason: const TestCancelReason('rules'),
+                started: true,
+                stackTrace: StackTrace.current,
+              ),
+            );
+          });
+          await never.future;
+        });
+        ctx.run(leaf).ignore();
+        await null;
+        ctx.run(chain.deferred()).ignore();
+        ready.complete();
+        await never.future;
+      },
+      observer: ErrorObserver(errors),
+    );
+    parent.launch();
+    await ready.future;
+    await chain.bottom.future;
+
+    try {
+      parent.cancel().ignore();
+    } on Object catch (_) {
+      // The cascade running out of stack is the premise of the run.
+    }
+    expect(leafTold, isTrue, reason: 'the sibling was reached');
+    expect(parent.isFinished, isTrue, reason: 'the engine ended it');
+
+    // The pass that closes the window is the one this path skips, so the
+    // window has to be closed where it is skipped.
+    Object? escaped;
+    try {
+      parent.whenCancelled((_) => _forever(0));
+    } on Object catch (error) {
+      escaped = error;
+    }
+    expect(escaped, isNull, reason: 'the bug belongs to the listener');
+    expect(errors.last, isA<StackOverflowError>());
+  });
+
+  test('the window closes for a body that gave itself up too', () async {
+    final chain = _Chain(depth);
+    final errors = <Object>[];
+    final never = Completer<void>();
+    final head = ProbeJob<void>((ctx) async {
+      ctx.run(chain.deferred()).ignore();
+      await never.future;
+    });
+    var second = false;
+    final root = Job<void>(
+      (ctx) async {
+        ctx.run(head).ignore();
+        await chain.bottom.future;
+        throw Cancelled.by(
+          reason: const TestCancelReason('handler'),
+          started: true,
+          stackTrace: StackTrace.current,
+        );
+      },
+      observer: ErrorObserver(errors),
+    );
+    for (var attempt = 0; errors.isEmpty && attempt < 100; attempt++) {
+      await delay(1);
+    }
+    expect(errors.single, isA<StackOverflowError>());
+
+    // On this path the pass that tells the listeners waits for the
+    // children first, so it runs on a stack that is whole again. The
+    // engine ending the child by hand is what lets it get there without
+    // the depth below the break.
+    root
+      ..whenCancelled((_) => _forever(0))
+      ..whenCancelled((_) => second = true);
+    head.drop(
+      Cancelled.by(
+        reason: const TestCancelReason('rules'),
+        started: true,
+        stackTrace: StackTrace.current,
+      ),
+    );
+
+    expect(
+      await root.done.timeout(const Duration(seconds: 5)),
+      isA<Cancelled>(),
+    );
+    expect(second, isTrue, reason: 'the listener after it still runs');
+    expect(errors.length, 2, reason: 'the bug belongs to the listener');
   });
 
   test('the window closes with the pass that told the callbacks', () async {
@@ -164,7 +272,10 @@ void main() {
       ..whenCancelled((_) => _forever(0))
       ..whenCancelled((_) => second = true);
 
-    expect(await job.done, isA<Cancelled>());
+    expect(
+      await job.done.timeout(const Duration(seconds: 5)),
+      isA<Cancelled>(),
+    );
     expect(second, isTrue, reason: 'the listener after it still runs');
     expect(errors.single, isA<StackOverflowError>());
   });
@@ -184,7 +295,7 @@ void main() {
     );
     await delay(1);
 
-    await job.cancel();
+    await job.cancel().timeout(const Duration(seconds: 5));
     expect(job.outcome, isA<Cancelled>());
     expect(second, isTrue, reason: 'the callback after it still runs');
     expect(errors.single, isA<StackOverflowError>());
@@ -260,9 +371,6 @@ final class _Chain {
 
   /// How many levels the cascade reached before it ran out of stack.
   int get marked => jobs.where((job) => job.isCancelled).length;
-
-  /// Lets the deepest level return, so the chain can drain.
-  void release() => _never.complete();
 
   /// The marked levels that were never told to stop, apart from a handful
   /// at the deep end.

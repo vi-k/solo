@@ -700,9 +700,12 @@ abstract class JobBase<T> implements Job<T> {
           // callbacks and tells the listeners itself -- and kept because
           // the phase a job is in decides who announces its cancellation,
           // and reading that off the status is cheaper than trusting the
-          // two to stay in step.
+          // two to stay in step. The window still has to close: it is
+          // `_markCancelled` that closes it, and that path skips it.
           if (_status != JobStatus.finished) {
             _markCancelled(marked);
+          } else {
+            _outOfStack = false;
           }
         }
     }
