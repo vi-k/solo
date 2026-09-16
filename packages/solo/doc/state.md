@@ -100,9 +100,9 @@ null -- a mismatch cancels the job. Waiting methods use state checkpoints too.
 `check()` is the same check, minus the value to read. The other members of the
 context check themselves; `check()` covers the gaps between them. A plain
 `await` and the return from `ctx.uncancellable` check nothing: a job the rules
-have already cancelled walks on until something asks. Those gaps are covered in
-[Cancellation](cancellation.md), where `check()` stands beside the waiting
-methods it goes with.
+have already cancelled walks on until something inside asks: can it still go
+on? Those gaps are covered in [Cancellation](cancellation.md), where `check()`
+stands beside the waiting methods it goes with.
 
 `ctx.emit(next)` allows a job to publish a state outside its own working type:
 an initialization job may finish by emitting `Ready`. A later state checkpoint
