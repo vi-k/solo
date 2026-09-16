@@ -29,20 +29,20 @@ final class ProfileController extends Solo<ProfileState> {
 ```dart
 final class LoggingObserver extends SoloObserver {
   @override
-  void onStart(SoloBase<Object> solo, Job<Object?> job) =>
+  void onStart(Solo<Object> solo, Job<Object?> job) =>
       print('$job started');
 
   @override
-  void onFinish(SoloBase<Object> solo, Job<Object?> job) =>
+  void onFinish(Solo<Object> solo, Job<Object?> job) =>
       print('$job finished ${job.outcome}');
 
   @override
-  void onChange(SoloBase<Object> solo, SoloTransition<Object> transition) =>
+  void onChange(Solo<Object> solo, SoloTransition<Object> transition) =>
       print('${transition.job ?? 'external'}: ${transition.current}');
 }
 
 void main() {
-  SoloBase.observer = LoggingObserver();
+  Solo.observer = LoggingObserver();
 }
 ```
 
@@ -63,7 +63,7 @@ An observer only watches. Setting one changes nothing about where an error then
 goes. To answer for the errors that have nowhere else to go, set a handler:
 
 ```dart
-SoloBase.errorHandler = (solo, job, error, stackTrace) =>
+Solo.errorHandler = (solo, job, error, stackTrace) =>
     Sentry.captureException(error, stackTrace: stackTrace);
 ```
 
@@ -103,14 +103,14 @@ final class SlowCancellations extends SoloObserver {
   final _markedAt = Expando<DateTime>('cancellation');
 
   @override
-  void onStart(SoloBase<Object> solo, Job<Object?> job) {
+  void onStart(Solo<Object> solo, Job<Object?> job) {
     // whenCancelled fires when the cancellation takes effect, not when
     // cancel() was called: a step held by ctx.uncancellable runs first.
     job.whenCancelled((_) => _markedAt[job] = clock.now());
   }
 
   @override
-  void onFinish(SoloBase<Object> solo, Job<Object?> job) {
+  void onFinish(Solo<Object> solo, Job<Object?> job) {
     final markedAt = _markedAt[job];
     if (markedAt == null) return;
     final delay = clock.now().difference(markedAt);
@@ -161,7 +161,7 @@ profile.load().ignore(); // the counterpart of Future.ignore
 
 Errors from cleanup, cancellation callbacks and operations abandoned by `wait`
 go to the reporting hooks. Without an overridden error hook or an installed
-`SoloBase.errorHandler`, they fall back to the job's creation zone. Such an
+`Solo.errorHandler`, they fall back to the job's creation zone. Such an
 error can arrive after the job has already completed. It does not replace an
 existing cancellation outcome. These reporting paths exclude `Cancelled`
 itself.
@@ -210,7 +210,7 @@ Where a rule throws anyway decides who hears about it:
 | A check that also controls a final state handler | The handler is disabled. |
 
 Re-evaluation errors fall back to the controller's creation zone when no error
-hook and no `SoloBase.errorHandler` answers for them. In the root Dart zone, an
+hook and no `Solo.errorHandler` answers for them. In the root Dart zone, an
 unhandled error can terminate the application. Install error reporting and
 observe job outcomes according to your application's needs.
 
@@ -225,7 +225,7 @@ ctx.unattended(() => analytics.send('zoom'));
 ctx.log(('zoom', zoom));
 
 // And the engine's own trace, when the queue itself needs watching.
-SoloBase.debug = print;
+Solo.debug = print;
 ```
 
 `ctx.unattended(action)` starts work that the job does not wait for or cancel.
@@ -238,5 +238,5 @@ completion. The background operation does not extend the context's lifetime. A
 bare `unawaited(future)` does not provide the error routing of `unattended`.
 
 `ctx.log(data)` forwards application data to log hooks and observers as it is,
-so a listener that wants a line makes one. `SoloBase.debug` additionally traces
+so a listener that wants a line makes one. `Solo.debug` additionally traces
 the controller's internal queue and lifecycle operations.

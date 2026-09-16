@@ -1,9 +1,9 @@
 # Flutter
 
 Use `SoloListenable<S>` from `flutter_solo` as the controller base class. It
-extends `SoloBase<S>` and implements `ValueListenable<S>`; it has no `stream` —
-a widget rebuilds from `value`, and an operation's result is awaited through
-its `Job`. The profile controller keeps the same states and `load` method:
+extends `Solo<S>` and implements `ValueListenable<S>`; it has no `stream` — a
+widget rebuilds from `value`, and an operation's result is awaited through its
+`Job`. The profile controller keeps the same states and `load` method:
 
 ```dart
 import 'dart:async';
@@ -94,9 +94,9 @@ controller jobs perform updates through their context. `ListenableBuilder` and
 `AnimatedBuilder` also accept the controller when the builder does not need the
 state value itself.
 
-A controller that is not a `ValueListenable` — a `Solo` with its stream, or a
-`SoloBase` of your own — has `SoloBuilder` instead: it takes any `SoloBase` and
-is `ValueListenableBuilder` in every other respect. When the screen watches one
+A controller that is not a `ValueListenable` — a plain `Solo` of your own, or
+one `with SoloStream` — has `SoloBuilder` instead: it takes any `Solo` and is
+`ValueListenableBuilder` in every other respect. When the screen watches one
 value out of a larger state, `SoloSelectBuilder` rebuilds only when that value
 changes and leaves the rest of the state alone:
 
