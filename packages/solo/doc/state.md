@@ -307,6 +307,35 @@ finished: the state a controller stops at is the state it keeps.
 
 ## State after failure or cancellation
 
+A load publishes `Loading` before it starts waiting. Something has to take the
+controller out of it when the load does not arrive.
+
+### The first attempt
+
+```dart
+run<ProfileState, String>(
+  (ctx) async {
+    ctx.emit(const Loading());
+    try {
+      final name = await ctx.wait(api.fetchName);
+      ctx.emit(Loaded(name));
+      return name;
+    } on Object {
+      ctx.emit(const Initial());
+      rethrow;
+    }
+  },
+);
+```
+
+The `catch` covers the failure and nothing else. A cancelled job does not
+arrive there — and if it did, the `emit` inside would be a state checkpoint on
+a job that is already cancelled, which throws rather than writes. Cancel the
+load and the controller stays in `Loading` for good: the screen shows a spinner
+for work that is no longer running.
+
+### The handlers
+
 ```dart
 run<ProfileState, String>(
   // Both compute a state and nothing else. They run after the body,
