@@ -165,10 +165,10 @@ end of the publication queue rather than ahead of it:
 externalSetState(B)
     listeners of B
         externalSetState(C)        // a listener writes again
-            rules, against C       // C's own, at once
+            rules, against C       // the write of C runs them at once
         next line of the listener
     listeners of C                 // the queue reaches C only here
-    rules, against C               // B's, and the state is C by now
+    rules, against C               // the write of B runs them last, on C
 next line of the writer
 ```
 

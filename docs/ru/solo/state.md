@@ -166,10 +166,10 @@ final subscription = camera.stream.listen(print);
 externalSetState(B)
     listeners of B
         externalSetState(C)        // слушатель пишет ещё раз
-            rules, against C       // свои, сразу
+            rules, against C       // запись C спрашивает их сразу
         next line of the listener
     listeners of C                 // очередь дошла до C только здесь
-    rules, against C               // это переоценка B, а состояние уже C
+    rules, against C               // запись B спрашивает их последней, о C
 next line of the writer
 ```
 
