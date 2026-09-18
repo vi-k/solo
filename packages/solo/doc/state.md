@@ -183,11 +183,11 @@ a job that the first answer cancelled is not asked again. A `keepWhile` that
 also reads a field of the controller sees what those listeners wrote there only
 in the second.
 
-`removeListener` matches with `==` rather than identity, the way
-`ChangeNotifier` does, so a widget can subscribe in `initState` and unsubscribe
-in `dispose` with a method of its own. A listener that throws stops neither the
-listeners after it nor the re-evaluation that follows them: its error goes to
-`onListenerError`, which hands it to the zone unless a subclass says otherwise.
+Like `ChangeNotifier`, `removeListener` matches with `==` rather than identity,
+so a widget can subscribe in `initState` and unsubscribe in `dispose` with a
+method of its own. A listener that throws stops neither the listeners after it
+nor the re-evaluation that follows them: its error goes to `onListenerError`,
+which hands it to the zone unless a subclass says otherwise.
 
 Closing drops them for good — a registration made afterwards is refused rather
 than kept, and the state stops moving with them: `externalSetState` past that
