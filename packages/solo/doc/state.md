@@ -189,9 +189,11 @@ method of its own. A listener that throws stops neither the listeners after it
 nor the re-evaluation that follows them: its error goes to `onListenerError`,
 which hands it to the zone unless a subclass says otherwise.
 
-Closing drops them for good — a registration made afterwards is refused rather
-than kept, and the state stops moving with them: `externalSetState` past that
-point throws a `StateError`.
+The engine drops the listeners for good when closing finishes, not when
+`close()` is called — the same moment `isFinished` turns true. From then on
+`addListener` does nothing: the listener is neither registered nor kept, and
+nothing is thrown. The state stops at the same line: `externalSetState` past it
+throws a `StateError`.
 
 `SoloListenable` adds Flutter's `ValueListenable` to that and nothing else: it
 extends `Solo` directly, so a widget rebuilds from `value`, and it carries no
