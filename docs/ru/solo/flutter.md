@@ -1,9 +1,9 @@
 # Flutter
 
-Используйте `SoloListenable<S>` из `flutter_solo` как базовый класс
-контроллера. Он наследует `Solo<S>` и реализует `ValueListenable<S>`; стрима
-у него нет — виджет перестраивается по `value`, а результат операции ждут через
-её `Job`. Контроллер профиля сохраняет те же состояния и метод `load`:
+Подмешайте в контроллер `SoloListenable` из `flutter_solo`. Он делает `Solo<S>`
+ещё и `ValueListenable<S>` и стрима не добавляет — виджет перестраивается
+по `value`, а результат операции ждут через её `Job`. Контроллер профиля
+сохраняет те же состояния и метод `load`:
 
 ```dart
 import 'dart:async';
@@ -11,7 +11,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_solo/flutter_solo.dart';
 
-final class ProfileController extends SoloListenable<ProfileState> {
+final class ProfileController extends Solo<ProfileState> with SoloListenable {
   final ProfileApi api;
 
   ProfileController(this.api) : super(const Initial());
@@ -125,7 +125,8 @@ SoloSelectBuilder<ProfileState, bool>(
 виджетная сторона и broadcast-`stream`:
 
 ```dart
-final class Session extends SoloListenable<SessionState> with SoloStream {
+final class Session extends Solo<SessionState>
+    with SoloStream, SoloListenable {
   Session(super.initialState);
 }
 ```
@@ -138,3 +139,32 @@ final class Session extends SoloListenable<SessionState> with SoloStream {
 на одно изменение там, где виджет, читающий только `value`, получал один;
 и `await close()` теперь ждёт ещё и подписчиков стрима, чего у чистого
 `SoloListenable` не было.
+
+## Базовый класс без Flutter
+
+Общий базовый класс контроллеров приложения может жить в пакете без Flutter,
+а `SoloListenable` подмешивает лист:
+
+```dart
+// Свой пакет, без Flutter.
+abstract class AppController<S extends Object> extends Solo<S> {
+  AppController(super.initialState);
+
+  // ...то, что общее у всех контроллеров приложения...
+}
+
+// Приложение.
+final class ProfileController extends AppController<ProfileState>
+    with SoloListenable {
+  ProfileController() : super(const Initial());
+}
+```
+
+Где стоит миксин, решает, чей `onListenerError` сообщит об ошибке слушателя.
+На листе, как здесь, он перекрывает базу: база, переопределившая
+`onListenerError`, уступает отчёту миксина через `FlutterError`, и через
+`super` лист до версии базы тоже не дотянется — `super` приходит в миксин.
+База, которой нужен свой отчёт, держит его в методе под другим именем, а лист
+зовёт этот метод из своего `onListenerError`. База, которая сама подмешивает
+`SoloListenable`, сохраняет своё переопределение: класс, подмешавший миксин,
+стоит под ним.

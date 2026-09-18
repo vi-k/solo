@@ -4,12 +4,17 @@
 > отменено — `2026-09-15[14]-solo-stream-mixin-design.md` сделала
 > стрим миксином `SoloStream`, и комбинация с `SoloListenable`
 > работает. Перенос на бесстримовую базу, которому посвящён этот
-> отчёт, остаётся в силе.
+> отчёт, остаётся в силе. **Пересмотрено 2026-09-18:** `SoloListenable`
+> больше не класс, а миксин `on Solo<S>` —
+> `2026-09-18[1]-solo-listenable-mixin-design.md`; база без стрима,
+> на которую его здесь перенесли, — по-прежнему то, во что он
+> подмешивается.
 > **Что это:** отчёт о переносе `SoloListenable` с `Solo` на `SoloBase`:
 > контроллер Flutter остался без стрима.
 > **Связанные записи:** `2026-09-02[1]-solo-design.md`,
 > `2026-09-12[3]-current-state-rename-report.md`,
-> `2026-09-15[14]-solo-stream-mixin-design.md`.
+> `2026-09-15[14]-solo-stream-mixin-design.md`,
+> `2026-09-18[1]-solo-listenable-mixin-design.md`.
 
 # `SoloListenable` на `SoloBase`: виджету нужен только интерфейс
 

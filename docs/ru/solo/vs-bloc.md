@@ -41,7 +41,7 @@
 
 | bloc | solo |
 | --- | --- |
-| `Bloc<E, S>`, `Cubit<S>` | `Solo<S>`, `SoloListenable<S>` |
+| `Bloc<E, S>`, `Cubit<S>` | `Solo<S>`; `ValueListenable` с подмешанным `SoloListenable` |
 | Класс события, `on<E>`, `add(E())` | Метод, возвращающий `Job<T>` |
 | `EventTransformer` | `Policy` при добавлении `Job` |
 | `emit(next)` | `ctx.emit(next)` |

@@ -105,7 +105,7 @@ checked `ctx.state`.
 | --- | --- |
 | `Solo<S>` | State, jobs, queue, rules and listeners. |
 | `Solo<S> with SoloStream` | All of `Solo` plus a broadcast `stream`. |
-| `SoloListenable<S>` | All of `Solo` plus Flutter's `ValueListenable<S>`. |
+| `Solo<S> with SoloListenable` | All of `Solo` plus Flutter's `ValueListenable<S>`. |
 
 The listeners belong to the engine. They run synchronously, in registration
 order, inside the change and before the rules of the running jobs are
@@ -128,9 +128,9 @@ Closing drops them for good — a registration made afterwards is refused rather
 than kept, and the state stops moving with them: `externalSetState` past that
 point throws a `StateError`.
 
-`SoloListenable` adds Flutter's `ValueListenable` to that and nothing else: it
-extends `Solo` directly, so a widget rebuilds from `value`, and it carries no
-stream of its own — mix in `SoloStream` for a controller that needs both.
+`SoloListenable` adds Flutter's `ValueListenable` to that and nothing else. It
+is a mixin on `Solo`, the way `SoloStream` is: a widget rebuilds from `value`,
+and a controller that needs both deliveries mixes in both.
 
 ### A delivery of your own
 

@@ -40,7 +40,7 @@ The main API correspondences, for a reader who knows bloc:
 
 | bloc | solo |
 | --- | --- |
-| `Bloc<E, S>`, `Cubit<S>` | `Solo<S>`, `SoloListenable<S>` |
+| `Bloc<E, S>`, `Cubit<S>` | `Solo<S>`; `ValueListenable` with `SoloListenable` mixed in |
 | Event class, `on<E>`, `add(E())` | Method returning `Job<T>` |
 | `EventTransformer` | `Policy` on a job submission |
 | `emit(next)` | `ctx.emit(next)` |

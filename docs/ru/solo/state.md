@@ -106,7 +106,7 @@ final subscription = camera.stream.listen(print);
 | --- | --- |
 | `Solo<S>` | Состояние, `Job`, очередь, правила и слушателей. |
 | `Solo<S> with SoloStream` | Всё из `Solo` и broadcast-стрим `stream`. |
-| `SoloListenable<S>` | Всё из `Solo` и интерфейс Flutter `ValueListenable<S>`. |
+| `Solo<S> with SoloListenable` | Всё из `Solo` и интерфейс Flutter `ValueListenable<S>`. |
 
 Слушатели принадлежат движку. Их зовут синхронно, в порядке регистрации, внутри
 изменения и раньше, чем движок переоценит правила бегущих задач, — то есть
@@ -129,9 +129,8 @@ final subscription = camera.stream.listen(print);
 за этой чертой бросает `StateError`.
 
 `SoloListenable` добавляет к этому интерфейс Flutter `ValueListenable` и больше
-ничего: он наследует `Solo` напрямую, поэтому виджет перестраивается
-по `value`, а своего стрима у него нет — для контроллера с обоими подмешайте
-`SoloStream`.
+ничего. Это миксин на `Solo`, как и `SoloStream`: виджет перестраивается
+по `value`, а контроллер, которому нужны обе доставки, подмешивает оба.
 
 ### Своя доставка
 

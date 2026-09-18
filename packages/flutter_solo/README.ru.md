@@ -4,10 +4,10 @@
 состоянием, монопольное владение им, кооперативная отмена и перерисовка через
 `ValueListenable`.
 
-`SoloListenable<S>` — контроллер, который владеет состоянием и гоняет по нему
-задачи по одной за раз, и одновременно он `ValueListenable<S>`, поэтому
-вставляется прямо в `ValueListenableBuilder`, `ListenableBuilder`,
-`AnimatedBuilder` и `Listenable.merge`.
+Контроллер владеет состоянием и гоняет по нему задачи по одной за раз.
+Подмешайте в него `SoloListenable`, и он одновременно станет
+`ValueListenable<S>`, поэтому вставляется прямо в `ValueListenableBuilder`,
+`ListenableBuilder`, `AnimatedBuilder` и `Listenable.merge`.
 
 На [сайте документации](https://docs.yet-another.dev/ru/flutter_solo/) лежат
 эта страница и руководства пакетов под ней.
@@ -85,7 +85,7 @@ final class Loaded extends Profile {
   Loaded(this.name);
 }
 
-final class ProfileController extends SoloListenable<Profile> {
+final class ProfileController extends Solo<Profile> with SoloListenable {
   final ProfileApi api;
 
   ProfileController(this.api) : super(Empty());
@@ -178,9 +178,9 @@ class _SaveButtonState extends State<SaveButton> {
 ## Билдеры для любого контроллера
 
 `ValueListenableBuilder` и `SoloSelector` требуют `ValueListenable`,
-и `SoloListenable` им является. Контроллер, построенный прямо на `Solo`, — нет:
-ни контроллер `with SoloStream`, ни базовый класс какого-нибудь другого пакета.
-Для них есть два виджета, принимающие сам контроллер:
+и контроллер с подмешанным `SoloListenable` им является. Контроллер без него —
+нет: ни голый `Solo`, ни контроллер только `with SoloStream`. Для них есть два
+виджета, принимающие сам контроллер:
 
 ```dart
 SoloBuilder<Profile>(
@@ -373,7 +373,7 @@ await tester.pump(); // кадр, показывающий последнее с
 
 | Вопрос | Ответ |
 | --- | --- |
-| Когда зовут слушателей? | Синхронно, в порядке подписки, на каждое изменение состояния. `value` и `currentState` — один и тот же объект. Стрима у этого контроллера нет: он наследует `Solo` напрямую, без подмешанного `SoloStream`, потому что виджет перестраивается по `value`. |
+| Когда зовут слушателей? | Синхронно, в порядке подписки, на каждое изменение состояния. `value` и `currentState` — один и тот же объект. Стрима нет, пока не подмешан ещё и `SoloStream`: виджет перестраивается по `value`. |
 | Фильтруются ли равные состояния? | Нет. `emit` состояния, равного текущему, всё равно уведомляет — так же, как у `Solo`. Кадр может склеить несколько таких, слушатель — нет. `select` фильтрует своё значение, а виджету обычно важно именно оно. |
 | Несколько контроллеров на одном экране? | Работают как ожидается, каждый со своим билдером, а `Listenable.merge([a, b])` в `ListenableBuilder` закрывает случай, когда один виджет зависит от двух. |
 | Можно ли присвоить `value`? | Сеттера нет. Состояние принадлежит задачам, а лицо `ValueNotifier` с сеттером его бы раздало. |

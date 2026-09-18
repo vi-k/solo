@@ -5,9 +5,9 @@
   the class every controller extends; a stream is no longer part of that by
   default, only of controllers that add `with SoloStream`. Most
   `extends Solo<...>` declarations never read `.stream` and need no change at
-  all; the few that do gain the mixin. `SoloListenable` is unaffected in shape
-  -- it already extended the bare engine -- and can now be combined with
-  `SoloStream` for a controller that needs both deliveries. A bare
+  all; the few that do gain the mixin. `SoloListenable` of `flutter_solo`
+  becomes a mixin of the same kind, and the two combine for a controller that
+  needs both deliveries: `with SoloStream, SoloListenable`. A bare
   `Solo<T>(value)` -- the former `Solo`, instantiated directly for its engine
   and its stream together -- no longer compiles: `Solo` is `abstract`, as
   `SoloBase` always was, and there is no concrete class left that carries a

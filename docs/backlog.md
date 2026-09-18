@@ -5,28 +5,3 @@
 если владелец прямо не попросил.
 
 <!-- Записи ниже. Одна запись — один пункт списка. -->
-
-- `SoloListenable` становится миксином, как `SoloStream`: `mixin
-  SoloListenable<S extends Object> on Solo<S> implements ValueListenable<S>`,
-  и контроллер пишется `extends Solo<Profile> with SoloListenable`. Делать
-  не сейчас. Зачем: одно правило вместо двух — `Solo` движок, доставки
-  примешиваются, — и свободный слот `extends` у листа, чтобы база
-  во Flutter-свободном пакете получала лицо `ValueListenable` на листе,
-  а не переезжала во `flutter_solo`. Расхода, ради которого миксином стал
-  стрим, здесь нет: полей у класса нет и аллокаций тоже, а развилка «стрим XOR
-  `ValueListenable`» снята ещё той работой. Закрывает узкое место:
-  `SoloBuilder`, `SoloSelectBuilder` и `SoloSelection.of` берут `Solo<S>`, так
-  что `SoloListenable` нужен ровно чужим API, которые хотят `Listenable`, —
-  `ValueListenableBuilder`, `ListenableBuilder`, `AnimatedBuilder`. Переезд
-  механический: полей и конструктора у класса нет, `publish` он
-  не переопределяет и вопроса порядка в `with` не заводит, `implements`
-  закрывается членами `on`-ограничения, аргумент типа выводится из суперкласса
-  — второй `<Profile>` в `with` не нужен. `mixin class` не подходит: суперкласс
-  у него обязан быть `Object`. Цена — ломающая правка во `flutter_solo`
-  и удлинившаяся первая строка обоих README и `packages/solo/doc/flutter.md`;
-  ломается при этом в основном проза — таблицы `state.md` и `vs-bloc.md`,
-  абзацы README, зеркала сайта, — а из кода только пример и семь фикстур
-  в тестах. До `0.3.0` правка складывается в одну заметку выпуска со сменой
-  родословной, уже лежащей в `Unreleased`
-  (`2026-09-12[4]-listenable-on-base-report.md`); после выпуска это отдельный
-  ломающий круг.

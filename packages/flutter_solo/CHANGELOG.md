@@ -1,12 +1,25 @@
 ## Unreleased
 
-- **Breaking:** follows `solo`'s rename: `SoloBase` becomes `Solo`, and the
-  stream-carrying `Solo` becomes the mixin `SoloStream`. Nothing in this
-  package changes shape because of it -- `SoloBuilder`, `SoloSelection.of` and
-  the rest already took the widest engine type -- but every mention of
-  `SoloBase` in a signature or a doc comment now reads `Solo`, and a controller
-  that needs `flutter_solo`'s widgets plus a `stream` combines `SoloListenable`
-  with `with SoloStream` instead of choosing one.
+- **Breaking:** `SoloListenable` is a mixin now, the way `solo`'s `SoloStream`
+  is: `mixin SoloListenable<S extends Object> on Solo<S> implements
+  ValueListenable<S>`. `extends SoloListenable<S>` becomes
+  `extends Solo<S> with SoloListenable`, the type argument inferred from the
+  superclass, and a controller that needs a `stream` too writes
+  `with SoloStream, SoloListenable`. `SoloListenable<S>(value)` no longer
+  compiles -- mixins can't be instantiated -- and a one-line class takes its
+  place: `class C<S extends Object> = Solo<S> with SoloListenable;`. In a type
+  position the argument is written out, `SoloListenable<S>`; the analyzer does
+  not ask for it, and a bare `SoloListenable` there is a
+  `SoloListenable<Object>`. The migration keeps who reports a listener's
+  failure: a base that mixes `SoloListenable` in and overrides
+  `onListenerError` still wins. What the mixin opens is a base class without
+  Flutter, with the mixin on the leaf, and there the mixin's report overrides
+  the base's; a base that wants its own keeps it in a method of another name
+  for the leaf's override to call. This rides on `solo`'s rename -- `SoloBase`
+  becomes `Solo`, the stream-carrying `Solo` becomes the mixin `SoloStream` --
+  after which nothing else in this package changes shape: `SoloBuilder`,
+  `SoloSelection.of` and the rest already took the widest engine type, and
+  every mention of `SoloBase` in a signature or a doc comment reads `Solo`.
 
 - `SoloBuilder` no longer keeps a copy of the state. It subscribes, and every
   rebuild reads `Solo.currentState`; the field, the two reads that filled it
@@ -62,8 +75,7 @@
 - `SoloListenable` keeps only the `ValueListenable` face: the listeners, the
   registration and the pass over them moved into `solo`'s `Solo`, and what
   stays here is `value` and the report of a listener's failure through
-  `FlutterError.reportError`. The class behaves as it did, with one exception
-  below.
+  `FlutterError.reportError`. It behaves as it did, with one exception below.
 - **Fix:** a listener registered after the engine had finished closing was kept
   in memory for good. It was never notified -- a flag saw to that -- but it was
   held; now the registration is refused outright and nothing is retained.

@@ -3,7 +3,7 @@ import 'package:flutter_solo/flutter_solo.dart';
 import 'package:flutter_solo/listenable.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-final class _Counter extends SoloListenable<int> {
+final class _Counter extends Solo<int> with SoloListenable {
   _Counter() : super(0);
 
   void set(int value) => externalSetState(value);
@@ -11,7 +11,7 @@ final class _Counter extends SoloListenable<int> {
 
 /// A controller whose `removeListener` refuses, the way a listenable of
 /// somebody's own may.
-final class _Stuck extends SoloListenable<int> {
+final class _Stuck extends Solo<int> with SoloListenable {
   _Stuck() : super(0);
 
   @override

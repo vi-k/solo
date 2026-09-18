@@ -1,9 +1,9 @@
 # Flutter
 
-Use `SoloListenable<S>` from `flutter_solo` as the controller base class. It
-extends `Solo<S>` and implements `ValueListenable<S>`; it has no `stream` — a
-widget rebuilds from `value`, and an operation's result is awaited through its
-`Job`. The profile controller keeps the same states and `load` method:
+Mix `SoloListenable` from `flutter_solo` into the controller. It makes a
+`Solo<S>` a `ValueListenable<S>` as well, and adds no `stream` — a widget
+rebuilds from `value`, and an operation's result is awaited through its `Job`.
+The profile controller keeps the same states and `load` method:
 
 ```dart
 import 'dart:async';
@@ -11,7 +11,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_solo/flutter_solo.dart';
 
-final class ProfileController extends SoloListenable<ProfileState> {
+final class ProfileController extends Solo<ProfileState> with SoloListenable {
   final ProfileApi api;
 
   ProfileController(this.api) : super(const Initial());
@@ -123,7 +123,8 @@ build, and each of those builds makes a new selection.
 and a broadcast `stream` at once:
 
 ```dart
-final class Session extends SoloListenable<SessionState> with SoloStream {
+final class Session extends Solo<SessionState>
+    with SoloStream, SoloListenable {
   Session(super.initialState);
 }
 ```
@@ -136,3 +137,32 @@ change, two error routes; a rebuild and a stream event are two separate
 reactions to one change, where a widget reading only `value` had one; and
 `await close()` now waits for the stream's own subscribers too, which a plain
 `SoloListenable` never did.
+
+## A base class without Flutter
+
+A base class the app's controllers share can live in a package with no Flutter
+in it, and the leaf mixes `SoloListenable` in:
+
+```dart
+// A package of your own, without Flutter.
+abstract class AppController<S extends Object> extends Solo<S> {
+  AppController(super.initialState);
+
+  // ...what every controller of the app shares...
+}
+
+// The app.
+final class ProfileController extends AppController<ProfileState>
+    with SoloListenable {
+  ProfileController() : super(const Initial());
+}
+```
+
+Where the mixin sits decides whose `onListenerError` reports a listener's
+failure. On the leaf, as here, it overrides the base: a base that overrides
+`onListenerError` loses to the mixin's report through `FlutterError`, and the
+leaf cannot reach the base's version through `super` either — that lands in the
+mixin. A base that wants its own report keeps it in a method of another name,
+and the leaf's `onListenerError` calls that. A base that mixes `SoloListenable`
+in itself keeps its own override: the class that mixes the mixin in sits below
+it.

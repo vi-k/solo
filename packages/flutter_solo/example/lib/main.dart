@@ -33,7 +33,7 @@ final class Loaded extends Profile {
 }
 
 /// One state, one job over it, and a policy for the second tap.
-final class ProfileController extends SoloListenable<Profile> {
+final class ProfileController extends Solo<Profile> with SoloListenable {
   final ProfileApi api;
 
   ProfileController(this.api) : super(Empty());

@@ -3,10 +3,10 @@
 State management for Flutter: sequential jobs over one state, exclusive
 ownership, cooperative cancellation, and rebuilds through `ValueListenable`.
 
-`SoloListenable<S>` is a controller that owns a state and runs jobs over it one
-at a time, and it is a `ValueListenable<S>` at the same time — so it drops
-straight into `ValueListenableBuilder`, `ListenableBuilder`, `AnimatedBuilder`
-and `Listenable.merge`.
+A controller owns a state and runs jobs over it one at a time. Mix
+`SoloListenable` into it, and it is a `ValueListenable<S>` at the same time —
+so it drops straight into `ValueListenableBuilder`, `ListenableBuilder`,
+`AnimatedBuilder` and `Listenable.merge`.
 
 The [documentation site](https://docs.yet-another.dev/flutter_solo/) carries
 this page and the guides of the packages below it.
@@ -61,7 +61,7 @@ One dependency is all it takes: `flutter_solo` re-exports the whole of
 import 'package:flutter_solo/flutter_solo.dart';
 ```
 
-`SoloListenable` is the class this package is about; `SoloSelector` and
+`SoloListenable` is the mixin this package is about; `SoloSelector` and
 `SoloSelection` come with it, and a second import next door adds `select` and
 `listen` as methods.
 
@@ -83,7 +83,7 @@ final class Loaded extends Profile {
   Loaded(this.name);
 }
 
-final class ProfileController extends SoloListenable<Profile> {
+final class ProfileController extends Solo<Profile> with SoloListenable {
   final ProfileApi api;
 
   ProfileController(this.api) : super(Empty());
@@ -176,10 +176,10 @@ has listeners, and there is nothing to dispose of.
 
 ## Builders for any controller
 
-`ValueListenableBuilder` and `SoloSelector` need a `ValueListenable`, and
-`SoloListenable` is one. A controller built on `Solo` directly is not — one
-`with SoloStream`, or the base class of some other package — and for those
-there are two widgets that take the controller itself:
+`ValueListenableBuilder` and `SoloSelector` need a `ValueListenable`, and a
+controller with `SoloListenable` mixed in is one. A controller without it is
+not — a plain `Solo`, or one `with SoloStream` only — and for those there are
+two widgets that take the controller itself:
 
 ```dart
 SoloBuilder<Profile>(
@@ -379,7 +379,7 @@ test, not through `FlutterError.onError`. Either await the outcome or call
 
 | Question | Answer |
 | --- | --- |
-| When do listeners run? | Synchronously, in subscription order, on every state change. `value` and `currentState` are the same object. There is no `stream` on this controller: it extends `Solo` directly, with no `SoloStream` mixed in, because a widget rebuilds from `value`. |
+| When do listeners run? | Synchronously, in subscription order, on every state change. `value` and `currentState` are the same object. There is no `stream` unless `SoloStream` is mixed in as well: a widget rebuilds from `value`. |
 | Are equal states filtered? | No. `emit` of a state equal to the current one still notifies, the way `Solo` does. A frame may swallow several of them, a listener will not. `select` filters its own value, which is the one a widget usually cares about. |
 | Several controllers on one screen? | Each with its own builder, as expected. `Listenable.merge([a, b])` in a `ListenableBuilder` covers the case where one widget depends on two. |
 | Can I set `value`? | There is no setter. The state belongs to the jobs; a `ValueNotifier` face with a setter would give it away. |
