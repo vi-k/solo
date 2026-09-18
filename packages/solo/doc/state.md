@@ -1,10 +1,41 @@
 # State
 
+`Solo<S>` stores one immutable state of type `S`, and a job declares which
+states it may start in and which it may keep running in. Four sections below
+open with the version this API's own vocabulary leads to — what you write when
+you reach for `run` and stop there — and say what it does instead of what it
+was meant to do. The version that works follows under its own heading.
+
 ## State and rules
 
-`Solo<S>` stores one immutable state of type `S`. A job declares which states
-it may start in and which it may keep running in, and the engine checks those
-rules for it:
+A recording needs free space before it starts, and it has to stop when the
+camera is paused.
+
+### The first attempt
+
+```dart
+Job<void> record() => run<CameraState, void>(
+      key: 'record',
+      (ctx) async {
+        final state = ctx.state;
+        if (state is! Ready || state.paused) return;
+        await for (final frame in device.frames) {
+          await store(frame);
+        }
+      },
+    );
+```
+
+The check reads well, and it runs once. Nothing brings it back: by the time
+another update sets `paused`, the body is already inside the loop, and a loop
+is not a state checkpoint. A frame that arrives before the pause and two that
+arrive after it are stored alike.
+
+The job does not end either. `await for` is no checkpoint, so the cancellation
+`close` sends never reaches the body, and closing the controller waits until
+the stream itself ends.
+
+### The rules
 
 ```dart
 Job<void> record() => run<Ready, void>(
@@ -17,6 +48,11 @@ Job<void> record() => run<Ready, void>(
       ).value,
     );
 ```
+
+The rules are parameters, and the engine checks them for the job. The working
+type narrows from `CameraState` to `Ready`, so the state the body reads is the
+one it needs, and the condition the first attempt checked by hand is now
+`keepWhile`.
 
 The first type argument of `run<W, T>` is the job's working state type,
 `W extends S`. The engine checks it, so `run<Ready, void>` starts only in
@@ -46,12 +82,11 @@ becomes suitable.
 ```dart
 Job<void> zoomIn() => run<Ready, void>(
       (ctx) async {
-        // Reads are checkpoints: cancellation and the rules are checked.
-        final free = ctx.state.free;
-        ctx.check();
+        // A read is a checkpoint: cancellation and the rules are checked.
+        final state = ctx.state;
 
         // The only write, and it is synchronous.
-        ctx.emit(Recording(free: free, zoom: ctx.state.zoom + 1));
+        ctx.emit(Recording(free: state.free, zoom: state.zoom + 1));
       },
     );
 ```
@@ -62,16 +97,26 @@ already; `stateAs<T>()` is for a body whose `W` is wider than the state it
 needs at that moment, and it requires the state to be `T` rather than returning
 null -- a mismatch cancels the job. Waiting methods use state checkpoints too.
 
+`check()` is the same check, minus the value to read. The other members of the
+context check themselves; `check()` covers the gaps between them. A plain
+`await` and the return from `ctx.uncancellable` check nothing: a job the rules
+have already cancelled walks on until something inside asks: can it still go
+on? Those gaps are covered in [Cancellation](cancellation.md), where `check()`
+stands beside the waiting methods it goes with.
+
 `ctx.emit(next)` allows a job to publish a state outside its own working type:
 an initialization job may finish by emitting `Ready`. A later state checkpoint
 will reject that state if it does not match `W`, so such a transition should be
-the body's last state-dependent step. `canStart` is never repeated after an
-emit.
+the body's last state-dependent step. `canStart` is checked once, at the start,
+and nothing brings it back later -- this emit included.
 
 Other running bodies are checked after a state update. A job's own emit is
 excluded from that rule check, but still checks cancellation before and after
-writing. A synchronous hook or listener that causes another state change can
-therefore cancel the emitting job before `emit` returns.
+writing. Both `onChange` (see [Errors](errors.md)) and a listener run
+synchronously inside the write, and neither has a `ctx`: the only write open to
+either one is [`externalSetState`](#externalsetstate). A hook that corrects a
+state this way -- turning one job's `Preparing` straight into `Working` -- can
+therefore cancel the emitting job before its own `emit` returns.
 
 Rules stop cancelling a job once its body has ended. Manual cancellation,
 controller closing and parent cancellation can still reach it while it waits
@@ -107,26 +152,52 @@ checked `ctx.state`.
 | `Solo<S> with SoloStream` | All of `Solo` plus a broadcast `stream`. |
 | `Solo<S> with SoloListenable` | All of `Solo` plus Flutter's `ValueListenable<S>`. |
 
-The listeners belong to the engine. They run synchronously, in registration
-order, inside the change and before the rules of the running jobs are
-re-evaluated, so a listener is called before the next line of the code that
-changed the state.
+`addListener` is the engine's own member, on `Solo` itself, so what follows
+holds for every controller -- one with a delivery of its own and one without
+any. The listeners run synchronously, in registration order, inside the change
+itself: after the state is written, before the rules of the running jobs are
+re-evaluated, and before the next line of the code that changed the state.
 
-Both of those — listeners before the rules, listeners before the writer's next
-line — hold for the change that opened the pass. A change made from inside a
-listener joins the publication queue instead of cutting in: its own rules are
-re-evaluated first, the nested writer's next line runs after that, and its
-listeners are called last, when the pass already running reaches it.
+A change made from inside a listener does not get that order. It goes to the
+end of the publication queue rather than ahead of it:
 
-`removeListener` matches with `==` rather than identity, the way
-`ChangeNotifier` does, so a widget can subscribe in `initState` and unsubscribe
-in `dispose` with a method of its own. A listener that throws does not stop the
-pass: its error goes to `onListenerError`, which hands it to the zone unless a
-subclass says otherwise.
+```text
+externalSetState(B)
+    listeners of B
+        externalSetState(C)        // a listener writes again
+            rules, against C       // the write of C runs them at once
+        next line of the listener
+    listeners of C                 // the queue reaches C only here
+    rules, against C               // the write of B runs them last, on C
+next line of the writer
+```
 
-Closing drops them for good — a registration made afterwards is refused rather
-than kept, and the state stops moving with them: `externalSetState` past that
-point throws a `StateError`.
+So the nested change is answered for by the rules before its own writer goes
+on, and heard by the listeners last. The outer change never reaches the
+re-evaluation as itself: by the time that runs, the state it asks about is the
+nested one. A job with state handlers of its own is still asked about B — at
+the write itself, before any listener, and not to cancel it but to decide
+whether its handlers may still correct the state. If its rules refuse B, the
+handlers are disabled for good — like any incompatible external update in
+[Handler eligibility and errors](#handler-eligibility-and-errors).
+
+The second question about C is the only one asked after the listeners of C: a
+rule that reads nothing but the state answers it as it answered the first, and
+a job that the first answer cancelled is not asked again. A `keepWhile` that
+also reads a field of the controller sees what those listeners wrote there only
+in the second.
+
+Like `ChangeNotifier`, `removeListener` matches with `==` rather than identity,
+so a widget can subscribe in `initState` and unsubscribe in `dispose` with a
+method of its own. A listener that throws stops neither the listeners after it
+nor the re-evaluation that follows them: its error goes to `onListenerError`,
+which hands it to the zone unless a subclass says otherwise.
+
+The engine drops the listeners for good when closing finishes, not when
+`close()` is called — the same moment `isFinished` turns true. From then on
+`addListener` does nothing: the listener is neither registered nor kept, and
+nothing is thrown. The state stops at the same line: `externalSetState` past it
+throws a `StateError`.
 
 `SoloListenable` adds Flutter's `ValueListenable` to that and nothing else. It
 is a mixin on `Solo`, the way `SoloStream` is: a widget rebuilds from `value`,
@@ -171,22 +242,39 @@ and `SoloListenable` is the engine's listeners plus Flutter's
 `ValueListenable`, which is what makes builders and `Listenable.merge`
 understand a controller.
 
-**Coming from a delivery of your own.** A subclass written before the engine
-carried listeners keeps a list of its own and overrides `addListener` and
-`removeListener` without calling `super`. It still compiles, and it is not
-merely one list too many: those overrides intercept the registration, so a
-builder's listener lands in the subclass's list, where the engine's
-`hasListeners` and `onListenerError` do not serve it. Drop the list and the
-overrides. If you still need them — to log a subscription, to connect a source
-lazily — call `super` first, and do not publish state synchronously from inside
-`addListener`: the listener the connection was made for is not registered yet
-at that moment.
-
 ## External state
 
 An independent source — a device, a socket — changes without waiting for the
-controller. `externalSetState(next)` reflects a change that has already
-happened there:
+controller, and the controller has to show what has already happened there.
+
+### The first attempt
+
+```dart
+Camera(this.device) : super(const Ready()) {
+  _link = device.connection.listen((connected) {
+    if (!connected) {
+      // The fact goes in like any other work, ahead of everything waiting.
+      add(
+        job<Ready, void>(
+          key: 'disconnect',
+          (ctx) async => ctx.emit(const Disconnected()),
+        ),
+        first: true,
+      );
+    }
+  });
+}
+```
+
+`first: true` gets the update ahead of everything that is waiting, not ahead of
+the job that is running: the queue runs one job at a time. Until the update
+starts, the controller still reports a connected state, and the running job's
+rules are asked on every change — but only ever about the state it already
+knew. Worse, that job may itself be waiting for a response the device will
+never give, so the update that would free it is standing behind the job it
+would free.
+
+### externalSetState
 
 ```dart
 final class Camera extends Solo<CameraState> with SoloStream {
@@ -217,21 +305,18 @@ The method is `@protected` and is called from inside the controller subclass,
 typically from a subscription it holds -- the one on the device above, not a
 listener of the controller.
 
-Consider what the alternative costs. If that handler queued a separate job to
-publish `Disconnected`, that update would wait behind the current job. Until
-then the controller still reports a connected state, the current job's rules
-cannot react to the disconnection, and that job may itself be waiting for a
-response that will never arrive. Calling `externalSetState` updates state
-immediately and re-evaluates running jobs, so a job whose rules require a
-connection is cancelled. Its waiting method determines when its body resumes
-and whether the underlying operation must finish; the queue still waits for the
-job's body and cleanup before starting another root job.
+`externalSetState` updates state immediately and re-evaluates running jobs, so
+a job whose rules require a connection is cancelled by the disconnection
+itself. Its waiting method determines when its body resumes and whether the
+underlying operation must finish; the queue still waits for the job's body and
+cleanup before starting another root job.
 
-The distinction is what the notification represents. If it says that an
-independent entity has already changed, reflect that fact immediately. If it
-asks the controller to perform work, such as refresh data or save an incoming
-value, enqueue a normal job. An event being delivered by a stream does not by
-itself justify bypassing the queue.
+What to do with a notification — reflect it with `externalSetState` or queue a
+job for it — depends on what it means. If it says that an independent entity
+has already changed, reflect that fact immediately. If it asks the controller
+to perform work, such as refresh data or save an incoming value, enqueue a
+normal job. An event being delivered by a stream does not by itself justify
+bypassing the queue.
 
 Stopping the source before `super.close()` is the tidier-looking order, and it
 costs nothing only while no running job depends on the fact. With
@@ -240,10 +325,12 @@ call, and the jobs in it are the ones that most need to hear that the device is
 gone. `SoloCloseMode.cancel` is not safe from it either — a
 `cancellable: false` job waiting for an answer the device will never give is
 freed by the disconnection, and `close` waits for that job. The `isFinished`
-guard is what lets one order serve both modes. The handler above is
-synchronous, so its check and its write are one step; a handler that awaits
-anything checks after its last `await`, because a suspension in between lets
-the engine finish, and the write then throws.
+guard is what lets one order serve both modes. The subscription callback above
+is synchronous, so nothing can run between its check of `isFinished` and its
+write. A callback that has to await something before writing must check
+`isFinished` after its last `await`, right before `externalSetState`, because a
+check made earlier can go stale while it waits — the engine may finish in the
+meantime, and the write then throws a `StateError`.
 
 Use job bodies and their state handlers for the controller's own success,
 failure and cancellation. `externalSetState` is an exception for external
@@ -252,6 +339,35 @@ engine does, a drain included, and throws a `StateError` once closing has
 finished: the state a controller stops at is the state it keeps.
 
 ## State after failure or cancellation
+
+A load publishes `Loading` before it starts waiting. Something has to take the
+controller out of it when the load does not arrive.
+
+### The first attempt
+
+```dart
+run<ProfileState, String>(
+  (ctx) async {
+    ctx.emit(const Loading());
+    try {
+      final name = await ctx.wait(api.fetchName);
+      ctx.emit(Loaded(name));
+      return name;
+    } on Object {
+      ctx.emit(const Initial());
+      rethrow;
+    }
+  },
+);
+```
+
+On a failure this works: the `catch` writes `Initial` and passes the error on.
+The `catch` runs on a cancellation too, but there the `emit` inside it is a
+state checkpoint on a job that is already cancelled, so it throws instead of
+writing. Cancel the load and the controller stays in `Loading` for good: the
+screen shows a spinner for work that is no longer running.
+
+### The handlers
 
 ```dart
 run<ProfileState, String>(
@@ -277,15 +393,44 @@ does not mark the outcome as handled for error reporting.
 
 ### Preserving an incompatible external state
 
-A final handler must not overwrite a state that makes its job invalid. For
-example, extend the profile states from the quick start with `Disconnected` in
-the same library, and replace the controller's `load` method with this version:
+The handler above returns `Initial` whenever the load is cancelled. Extend the
+profile states from the quick start with `Disconnected` in the same library,
+and the connection can now drop while a load is running.
+
+#### The first attempt
 
 ```dart
 final class Disconnected extends ProfileState {
   const Disconnected();
 }
 
+Job<String> load() => run<ProfileState, String>(
+      key: 'load',
+      policy: Policy.droppable,
+      onError: (state, error, stackTrace) => Failure(error),
+      onCancel: (state, cancelled) => const Initial(),
+      (ctx) async {
+        ctx.emit(const Loading());
+        final name = await ctx.wait(api.fetchName);
+        ctx.emit(Loaded(name));
+        return name;
+      },
+    );
+```
+
+Nothing here says the load has an opinion about `Disconnected`, so it keeps
+running through it. When the load is cancelled after that — by a duplicate, by
+a screen closing, by anything — `onCancel` does what it was written to do and
+returns `Initial`, over the fact the device reported. The controller now shows
+a profile that is merely empty, when what happened is that the connection is
+gone.
+
+A `state is Disconnected` check inside the handler would patch this one case.
+The job would still be running work that the disconnection made pointless.
+
+#### The rules
+
+```dart
 Job<String> load() => run<ProfileState, String>(
       key: 'load',
       policy: Policy.droppable,
@@ -326,5 +471,9 @@ These extra checks apply to jobs with their own state handlers. A parent
 without handlers stops checking its rules when its body ends; children then
 remain subject to their own rules and any permission the parent already lost.
 
-Keep these functions limited to computing state. Resource release belongs in
-the [cleanup API](resources.md).
+Keep these functions limited to computing state: the value they return is their
+write. A state write made from inside one — `externalSetState`, or a source
+that calls it synchronously — does not combine with that value: if the job's
+rules accept the write, the handler's result lands on top of it, computed from
+the state before it, and the fact is lost; if they refuse it, the handler's
+result is dropped. Resource release belongs in the [cleanup API](resources.md).
