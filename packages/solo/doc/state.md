@@ -173,9 +173,13 @@ next line of the writer
 ```
 
 So the nested change is answered for by the rules before its own writer goes
-on, and heard by the listeners last. The outer change never reaches the rules
-as itself: by the time its re-evaluation runs, the state it asks about is the
-nested one.
+on, and heard by the listeners last. The outer change never reaches the
+re-evaluation as itself: by the time that runs, the state it asks about is the
+nested one. A job with state handlers of its own is still asked about B — at
+the write itself, before any listener, and not to cancel it but to decide
+whether its handlers may still correct the state. If its rules refuse B, the
+handlers are disabled for good — like any incompatible external update in
+[Handler eligibility and errors](#handler-eligibility-and-errors).
 
 The second question about C is the only one asked after the listeners of C: a
 rule that reads nothing but the state answers it as it answered the first, and

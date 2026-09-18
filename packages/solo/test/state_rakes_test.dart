@@ -78,13 +78,18 @@ final class Order extends Solo<String> {
   /// Whether the listener sets [blocked] once it hears C.
   final bool blockOnC;
 
+  /// Whether the job has an `onCancel` that corrects the state to
+  /// `corrected`.
+  final bool corrects;
+
   /// A field of the controller, not of the state.
   bool blocked = false;
 
   var _nested = false;
   var _inNestedWrite = false;
 
-  Order({this.keep = _keepAll, this.blockOnC = false}) : super('A') {
+  Order({this.keep = _keepAll, this.blockOnC = false, this.corrects = false})
+      : super('A') {
     addListener(() {
       final seen = currentState;
       trace.add('    listeners of $seen');
@@ -115,6 +120,7 @@ final class Order extends Solo<String> {
           answers.add('$state: ${kept ? 'keep' : 'reject'}');
           return kept;
         },
+        onCancel: corrects ? (state, cancelled) => 'corrected' : null,
         (ctx) async => ctx.wait(
           () => Future<void>.delayed(const Duration(seconds: 1)),
         ),
@@ -379,6 +385,46 @@ void main() {
 
       expect(order.answers, ['C: keep', 'C: reject']);
       expect('${await job.done}', contains('rules: keepWhile'));
+      await order.close();
+    });
+
+    test('a job with handlers is asked about B, and a refused B disables them',
+        () async {
+      final order = Order(keep: (_, state) => state != 'B', corrects: true);
+      final job = order.watch();
+      await pump();
+      order.answers.clear();
+
+      order.set('B');
+
+      expect(
+        order.answers.first,
+        'B: reject',
+        reason: 'asked about B at the write itself, before any listener',
+      );
+      expect(order.currentState, 'C');
+      expect(job.isCancelled, isFalse, reason: 'the question does not cancel');
+
+      await job.cancel();
+      await job.done;
+      expect(
+        order.currentState,
+        'C',
+        reason: 'the handler no longer corrects, though B was gone at once',
+      );
+      await order.close();
+    });
+
+    test('without B the same handler corrects the state', () async {
+      final order = Order(keep: (_, state) => state != 'B', corrects: true);
+      final job = order.watch();
+      await pump();
+
+      order.set('C');
+      await job.cancel();
+      await job.done;
+
+      expect(order.currentState, 'corrected');
       await order.close();
     });
   });
