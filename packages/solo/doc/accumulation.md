@@ -59,9 +59,9 @@ at 400 ms the screen shows [hits for solo]
 ```
 
 The queue is doing its job, and that is the problem. Each request waits for the
-one before it, so the answer to `solo` arrives 400 ms after the first keystroke
-— four round trips, not one. On the way the screen answers three words the user
-had already typed past.
+one before it, so the answer to `solo` arrives 400 ms after the first
+keystroke — four round trips, not one. On the way the screen answers three
+words the user had already typed past.
 
 #### The second attempt
 

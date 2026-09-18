@@ -63,7 +63,15 @@ GLUED = {
 # and `бы в очередь` at the start of the next, because `бы` had been
 # tied to `в` and the pair moved down without the verb.
 LEANS_BACK = {'же', 'бы', 'ли'}
+# A dash leans back too, in any language: it belongs to the word before it
+# and ends a line, never opens one. `проверкой —` at the end of a line reads
+# on; `— и` at the start of the next reads as a reply in a dialogue. A dash
+# that opens a paragraph has nothing to lean on and stays where it is.
+DASHES = {'—', '–'}
 TRAILING = '.,;:!?)»…'
+# An opening quote or bracket does not change what a short word governs:
+# `«В` and `(и` hang at the end of a line exactly as `в` and `и` do.
+LEADING = '«„“"\'(['
 KEEP_TOGETHER = '\x01'
 
 
@@ -92,11 +100,13 @@ def glue(body, room):
         # on a line by itself either. A link wider than the limit keeps
         # its own line anyway, and the short word is better off there with
         # it than hanging alone on the line above or below.
-        if out and word.lower().rstrip(TRAILING) in LEANS_BACK:
+        bare = word.lower().rstrip(TRAILING)
+        if out and (bare in LEANS_BACK or bare in DASHES):
             if len(out[-1]) + 1 + len(word) <= room or len(out[-1]) > room:
                 out[-1] += KEEP_TOGETHER + word
                 continue
-        if (out and out[-1].split(KEEP_TOGETHER)[-1].lower() in GLUED
+        last = out[-1].split(KEEP_TOGETHER)[-1] if out else ''
+        if (out and last.lower().lstrip(LEADING) in GLUED
                 and (len(out[-1]) + 1 + len(word) <= room
                      or len(word) > room)):
             out[-1] += KEEP_TOGETHER + word
