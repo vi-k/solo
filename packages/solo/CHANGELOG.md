@@ -363,9 +363,9 @@ that followed the package before it went out.
   cancellation and `close()`. Source cleanup from subscription cancellation is
   still not awaited. `each` is now a context method and follows `run`'s
   restrictions on when and where children can start.
-- `JobContext.onCancel` hands a cancellation to something that can really stop
-  — a device's cancel token, an HTTP abort. `wait` ends the waiting, not the
-  work.
+- `JobContext.onCancel` hands a cancellation to something that can really
+  stop — a device's cancel token, an HTTP abort. `wait` ends the waiting, not
+  the work.
 - Child jobs via `ctx.run`; a parent finishes after its children.
 - `SoloQueue` with `remove`, `removeWhere`, `clear`, `lastWhere`; policies
   `sequential`, `droppable`, `replace`, `restart`.

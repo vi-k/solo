@@ -160,8 +160,8 @@ when that zoom finishes. Only cancellation stops a job that has already
 started; see [Cancellation](cancellation.md).
 
 `queue` exposes `jobs`, `length`, `isEmpty`, `isNotEmpty`, `remove`,
-`removeWhere`, `clear` and `lastWhere`. Removal methods affect queued jobs only
-— the running job is not theirs to touch — and they preserve jobs with
+`removeWhere`, `clear` and `lastWhere`. Removal methods affect queued jobs
+only — the running job is not theirs to touch — and they preserve jobs with
 `cancellable: false` unless called with `force: true`.
 
 The order in `jobs` is not the order jobs will run in: a job waiting for an
