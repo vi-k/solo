@@ -83,7 +83,7 @@ Job<void> seek(Duration position) => run<Ready, void>(
       key: 'seek',
       policy: Policy.restart,
       (ctx) async {
-        // Waited out, so the device never has two at once.
+        // Waited out, so the device never runs two seeks at once.
         await ctx.join(() => _player.seek(position));
         ctx.emit(ctx.state.copyWith(position: position));
       },

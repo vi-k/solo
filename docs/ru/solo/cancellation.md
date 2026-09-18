@@ -85,7 +85,7 @@ Job<void> seek(Duration position) => run<Ready, void>(
       key: 'seek',
       policy: Policy.restart,
       (ctx) async {
-        // Дождаться до конца: двух сразу у устройства не будет.
+        // Дождаться конца перемотки: двух перемоток сразу не будет.
         await ctx.join(() => _player.seek(position));
         ctx.emit(ctx.state.copyWith(position: position));
       },
