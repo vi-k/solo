@@ -651,35 +651,41 @@ void main() {
     });
   });
 
-  test('a start rule that throws leaves ctx.run before it returns', () {
-    runSolo((solo, journal, async) {
-      var reachedTheNextLine = false;
-      Object? thrown;
-      solo.run<TestState, void>(key: 'parent', (ctx) async {
-        try {
-          ctx
-              .run(
-                solo.job<TestState, void>(
-                  key: 'child',
-                  canStart: (state) => throw StateError('rule boom'),
-                  (childCtx) async {},
-                ),
-              )
-              .ignore();
-          reachedTheNextLine = true;
-        } on Object catch (error) {
-          thrown = error;
-        }
+  // The two rules that run code of the caller. The third one, the `W` of
+  // the job, is a type test and has nothing to throw with.
+  for (final rule in ['canStart', 'keepWhile']) {
+    test('a $rule that throws leaves ctx.run before it returns', () {
+      runSolo((solo, journal, async) {
+        var reachedTheNextLine = false;
+        Object? thrown;
+        solo.run<TestState, void>(key: 'parent', (ctx) async {
+          bool boom(TestState state) => throw StateError('$rule boom');
+          try {
+            ctx
+                .run(
+                  solo.job<TestState, void>(
+                    key: 'child',
+                    canStart: rule == 'canStart' ? boom : null,
+                    keepWhile: rule == 'keepWhile' ? boom : null,
+                    (childCtx) async {},
+                  ),
+                )
+                .ignore();
+            reachedTheNextLine = true;
+          } on Object catch (error) {
+            thrown = error;
+          }
+        });
+        async.flushTimers();
+        expect(
+          reachedTheNextLine,
+          isFalse,
+          reason: 'the error of the rule leaves run, not the Future it returns',
+        );
+        expect('$thrown', 'Bad state: $rule boom');
       });
-      async.flushTimers();
-      expect(
-        reachedTheNextLine,
-        isFalse,
-        reason: 'the error of the rule leaves run, not the Future it returns',
-      );
-      expect('$thrown', 'Bad state: rule boom');
     });
-  });
+  }
 
   test('the Future of run carries the drop of a child nobody awaits', () {
     runSolo((solo, journal, async) {

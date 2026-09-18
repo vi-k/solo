@@ -54,9 +54,9 @@ how deep under the parent the line belongs, and `child.done` holds the
 cancellation. It joins no waiting list, so the parent waits for nothing; the
 future of `ctx.run` carries that cancellation all the same.
 
-A start rule that throws is the other case: the error is the rule's own, the
-child ends `Failed` with it, and `ctx.run` throws it synchronously -- the line
-after the call never runs.
+The rules `canStart` and `keepWhile`, when they throw themselves, are the other
+case. The error is the rule's own, the child ends `Failed` with it, and
+`ctx.run` throws it synchronously -- the line after the call never runs.
 
 ## Processing a stream
 

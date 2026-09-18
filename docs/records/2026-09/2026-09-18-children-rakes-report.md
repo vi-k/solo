@@ -241,23 +241,27 @@ nobody handles reports the child's failure», три теста и две мут
 контроллера, поэтому из трёх вещей осталось две.
 
 Второе предложение говорило про ошибку правила, а по-русски читалось как отказ
-по правилу. Это разные исходы: отказ — `Cancelled` с `RulesCancelReason` и без
-запуска тела, а брошенная правилом ошибка завершает ребёнка `Failed`,
-и `ctx.run` бросает её синхронно — строка после вызова не выполняется. Зонд
-`probe_start_rules.dart` показал все три исхода; синхронность видна по тому,
-что присваивание сразу за `ctx.run` не произошло.
+по правилу; вдобавок «стартовое правило» — это три разных проверки, и бросить
+может только код вызывающего. Это разные исходы: отказ — `Cancelled`
+с `RulesCancelReason` и без запуска тела, а брошенная правилом ошибка завершает
+ребёнка `Failed`, и `ctx.run` бросает её синхронно — строка после вызова
+не выполняется. Бросить могут `canStart` и `keepWhile`: `W` задачи — проверка
+типа, и путь у неё один, отказ. Зонд `probe_start_rules.dart` показал все
+исходы, у `canStart` и у `keepWhile` одинаково; синхронность видна по тому, что
+присваивание сразу за `ctx.run` не произошло.
 
 Абзац разбит на два и переписан, перевод следом. Сторожа —
 `packages/solo/test/children_test.dart`, рядом с «a start rule of a child that
 throws reaches the observer»:
 
-- «a start rule that throws leaves ctx.run before it returns». Мутация:
-  `rethrow` в `beforeChildStart` заменён на `return null` — строка после
-  `ctx.run` выполняется.
+- «a canStart that throws leaves ctx.run before it returns» и такой же
+  на `keepWhile` — один тест на оба правила в цикле. Мутация: `rethrow`
+  в `beforeChildStart` заменён на `return null` — строка после `ctx.run`
+  выполняется, оба краснеют.
 - «the Future of run carries the drop of a child nobody awaits». Мутация:
   проверка типа в `_rejectStart` возвращает `null` — future приходит `Done`.
 
-Набор `solo` — 625 зелёных.
+Набор `solo` — 626 зелёных.
 
 ## Проверки
 
