@@ -650,4 +650,55 @@ void main() {
       );
     });
   });
+
+  test('a start rule that throws leaves ctx.run before it returns', () {
+    runSolo((solo, journal, async) {
+      var reachedTheNextLine = false;
+      Object? thrown;
+      solo.run<TestState, void>(key: 'parent', (ctx) async {
+        try {
+          ctx
+              .run(
+                solo.job<TestState, void>(
+                  key: 'child',
+                  canStart: (state) => throw StateError('rule boom'),
+                  (childCtx) async {},
+                ),
+              )
+              .ignore();
+          reachedTheNextLine = true;
+        } on Object catch (error) {
+          thrown = error;
+        }
+      });
+      async.flushTimers();
+      expect(
+        reachedTheNextLine,
+        isFalse,
+        reason: 'the error of the rule leaves run, not the Future it returns',
+      );
+      expect('$thrown', 'Bad state: rule boom');
+    });
+  });
+
+  test('the Future of run carries the drop of a child nobody awaits', () {
+    runSolo((solo, journal, async) {
+      Object? fromTheFuture;
+      solo.run<TestState, void>(key: 'parent', (ctx) async {
+        final child = solo.job<Working, void>(
+          key: 'child',
+          (childCtx) async {},
+        );
+        unawaited(
+          ctx.run(child).then<void>(
+                (_) => fromTheFuture = 'done',
+                onError: (Object error) => fromTheFuture = error,
+              ),
+        );
+      });
+      async.flushTimers();
+      expect(fromTheFuture, isA<Cancelled>());
+      expect('$fromTheFuture', 'Cancelled(rules: is not Working)');
+    });
+  });
 }

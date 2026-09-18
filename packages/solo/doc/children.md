@@ -47,9 +47,15 @@ parent throws `Cancelled`, including an uncaught cancellation from
 finish and waits for them. A child can refuse cancellation; `ctx.run` still
 waits for it and checks the parent after child success.
 
-A child rejected by its start rules still receives its parent, level and
-observer, but requires no further waiting. A throwing start rule fails the
-child and propagates that error through `ctx.run`.
+A child the start rules turn away never runs. It is adopted first -- parent and
+level -- and only then finished `Cancelled` with a `RulesCancelReason`: that is
+how the observer hears the drop nested under the parent and `child.done` holds
+it. It joins no waiting list, so the parent waits for nothing; the future of
+`ctx.run` carries that cancellation all the same.
+
+A start rule that throws is the other case: the error is the rule's own, the
+child ends `Failed` with it, and `ctx.run` throws it synchronously -- the line
+after the call never runs.
 
 ## Processing a stream
 
