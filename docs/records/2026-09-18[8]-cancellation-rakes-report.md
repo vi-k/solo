@@ -205,3 +205,12 @@ over».
 и `cancelAll()`: без `force` они неотменяемую `Job` в очереди оставляют, с ним
 убирают; `close()` убирает её тоже. Это держат прежние тесты `queue_test.dart`
 и `queue_pause_recipe_test.dart`, новый сторож не нужен.
+
+Абзац про `SoloCloseMode.drain` начинался с «for the screen above that is the
+whole fix» и кончался «the future completes after the third». Владелец спросил
+об обоих: экран это или пример и что за future. Экран — из требования,
+а исправляется код первой попытки, поэтому теперь «that is the whole fix the
+first attempt needs». Future там одна — та, которую вернул `close()`; она
+и названа, в обоих предложениях абзаца. Заодно в переводе выправлен род: в этом
+файле `future` женского рода, а во второй фразе стояло «тот же future, который
+все держат».
