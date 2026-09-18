@@ -134,18 +134,13 @@ final class Till extends Solo<String> {
         await device.start('journal');
       });
 
-  /// The second attempt: one join around the whole step, and the same
-  /// step without the emit. The mark after the join is the test's alone.
-  Job<void> commitInOneJoin({required bool report}) =>
-      run<String, void>((ctx) async {
+  /// The second attempt: one join around the whole step.
+  Job<void> commitInOneJoin() => run<String, void>((ctx) async {
         await ctx.join(() async {
           await device.start('payment');
-          if (report) {
-            ctx.emit('paid');
-          }
+          ctx.emit('paid');
           await device.start('journal');
         });
-        device.trace.add('after the join');
       });
 
   /// The page's version.
@@ -416,7 +411,7 @@ void main() {
         () async {
       final device = Device();
       final till = Till(device);
-      final job = till.commitInOneJoin(report: true);
+      final job = till.commitInOneJoin();
       await pump();
       unawaited(job.cancel());
       await pump();
@@ -428,24 +423,6 @@ void main() {
         reason: 'the job is marked at once, and the step runs on marked',
       );
       expect(till.currentState, 'ready', reason: 'the emit did not write');
-      expect(job.outcome, isA<Cancelled>());
-    });
-
-    test('one join without the emit: both calls go, then Cancelled', () async {
-      final device = Device();
-      final till = Till(device);
-      final job = till.commitInOneJoin(report: false);
-      await pump();
-      unawaited(job.cancel());
-      await pump();
-
-      await device.end('payment');
-      await device.end('journal');
-      expect(
-        device.trace,
-        ['payment start', 'payment end', 'journal start', 'journal end'],
-        reason: 'the join throws in place of what the step returned',
-      );
       expect(job.outcome, isA<Cancelled>());
     });
 

@@ -164,11 +164,9 @@ SoloJob<void> commit(String entry) => run<Ready, void>((ctx) async {
 ```
 
 Both calls are now inside what `join` waits out, but the job is marked the
-moment the cancellation arrives, not when `join` returns. The step goes on as
+moment the cancellation arrives, not when the step is over. The step goes on as
 the code of a cancelled job: the `emit` inside it is a checkpoint and throws,
-and the entry is lost once more. Without the `emit`, both calls would go
-through, and `join` would still throw `Cancelled` in place of what the step
-returned.
+and the entry is lost once more.
 
 ### One section for the step
 
@@ -188,11 +186,11 @@ checkpoint inside the section does not throw on them — the receipt reaches the
 state — and its cancellation callbacks and child cancellation cascade are
 delayed as well.
 
-When the outermost section finishes, a held request is applied. The section
-returns what the step returned; the next checkpoint throws `Cancelled`, and
-ordinary code immediately after the call can still execute. Keep all required
-work inside the section and always await it. An unawaited section can outlive
-the job and lose a held request. Sections can nest.
+When the outermost section finishes, a held request is applied. The next
+checkpoint throws `Cancelled`; ordinary code immediately after the call can
+still execute. Keep all required work inside the section and always await it.
+An unawaited section can outlive the job and lose a held request. Sections can
+nest.
 
 ### A whole job
 
