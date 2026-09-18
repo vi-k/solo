@@ -177,6 +177,7 @@ SoloJob<void> commit(String entry) => run<Ready, void>((ctx) async {
         ctx.emit(ctx.state.copyWith(receipt: receipt));
         await journal.write(entry);
       });
+      // ...the rest of the job, which cancellation can still stop.
     });
 ```
 

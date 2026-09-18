@@ -179,6 +179,7 @@ SoloJob<void> commit(String entry) => run<Ready, void>((ctx) async {
         ctx.emit(ctx.state.copyWith(receipt: receipt));
         await journal.write(entry);
       });
+      // ...остальная работа Job, которую отмена по-прежнему может остановить.
     });
 ```
 
