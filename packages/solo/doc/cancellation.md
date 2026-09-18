@@ -117,7 +117,9 @@ cancellation mechanism; the callback runs synchronously when the job is marked
 cancelled. The token asks the player to stop seeking, and `join` waits for it
 to stop, so a replacement seek starts right after the one it replaces has
 stopped, not at the end of it. This depends on the player's API actually
-responding to the token.
+responding to the token. One that ignores it puts you back at the second
+attempt: the seek dragged past runs to its end, and only then does the next one
+start.
 
 `ctx.onCancel` returns a function that unregisters the callback. It is a
 cancellation signal for the operation, whereas the `onCancel` parameter of

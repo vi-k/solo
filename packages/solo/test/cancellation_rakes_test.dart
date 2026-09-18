@@ -20,13 +20,19 @@ import 'package:test/test.dart';
 /// The trace is the device's side of the story: which calls started,
 /// which ran to their end, and which a token stopped.
 final class Device {
+  /// Whether a token passed to [start] can stop the call.
+  final bool hearsTokens;
   final trace = <String>[];
   final _running = <String, Completer<void>>{};
+
+  Device({this.hearsTokens = true});
 
   Future<void> start(String call, [CancelToken? token]) {
     trace.add('$call start');
     final done = _running[call] = Completer<void>();
-    token?.onCancel = () => _finish(call, 'stopped');
+    if (hearsTokens) {
+      token?.onCancel = () => _finish(call, 'stopped');
+    }
     return done.future;
   }
 
@@ -334,6 +340,33 @@ void main() {
       await device.end('seek 3');
       expect(last.outcome, isA<Done<void>>());
       expect(player.currentState, 3);
+    });
+
+    test('a token the device ignores leaves the second attempt', () async {
+      final device = Device(hearsTokens: false);
+      final player = Player(device);
+      final first = player.seekWithToken(1);
+      await pump();
+      player.seekWithToken(2);
+      await pump();
+      final last = player.seekWithToken(3);
+      await pump();
+
+      expect(
+        device.trace,
+        ['seek 1 start'],
+        reason: 'the token reached nothing',
+      );
+      await device.end('seek 1');
+      expect(
+        device.trace,
+        ['seek 1 start', 'seek 1 end', 'seek 3 start'],
+        reason: 'the same order as the join without a token',
+      );
+      expect(first.outcome, isA<Cancelled>());
+
+      await device.end('seek 3');
+      expect(last.outcome, isA<Done<void>>());
     });
   });
 
