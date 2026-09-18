@@ -748,6 +748,29 @@ void main() {
       expect(sync.outcome, isA<Done<void>>());
     });
 
+    test('the second attempt runs what stood in the queue too', () async {
+      final device = Device();
+      final session = Session(device);
+      final sync = session.sync();
+      var done = false;
+      unawaited(session.logout().then((_) => done = true));
+      await pump();
+      await device.end('sync');
+      await pump();
+      expect(done, isFalse);
+      await device.end('logout');
+      await pump();
+
+      expect(done, isTrue);
+      expect(device.trace, [
+        'sync start',
+        'sync end',
+        'logout start',
+        'logout end',
+      ]);
+      expect(sync.outcome, isA<Done<void>>());
+    });
+
     test('a drain turns down work submitted while it runs', () async {
       final device = Device();
       final session = Session(device);

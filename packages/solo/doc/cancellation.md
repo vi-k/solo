@@ -405,7 +405,8 @@ SoloJob<void> logout() => run<Ready, void>((ctx) async {
 This never comes back. `close()` waits for the running job, including its
 children and cleanup, and the running job is this one, waiting for `close()`.
 `cancelAll()` waits the same way, and so does either of them awaited from the
-job's cleanup.
+job's cleanup. A body that only has to end itself needs no controller call at
+all: it returns, or cancels itself by throwing `Cancelled('reason')`.
 
 #### The second attempt
 
@@ -421,7 +422,7 @@ over. This one comes back, and it leaves a window open: the controller takes
 work until the `close()` line. A job submitted while the call to the server is
 in flight is accepted, starts once the logout is over and is cancelled on the
 way, so the API hears a call nobody wanted. The [camera example](camera.md)
-keeps the same order with its `dispose()`, and there the window stays empty:
+keeps the same order with its `dispose()`, but there the window stays empty:
 the only place that submits work is the caller, waiting on that very line.
 
 #### Queue the job and drain
@@ -434,8 +435,7 @@ Future<void> logout() async {
 ```
 
 Draining waits for the job the same way, and the door is shut from the `close`
-line onwards: the same submission comes back `Cancelled(closed)` without
-reaching the API at all. What it costs is the rest of the queue — a drain waits
-for every job already in it, where the plain `close()` above drops them. A body
-that only has to end itself needs no controller call at all: it returns, or
-cancels itself by throwing `Cancelled('reason')`.
+line onwards: a job submitted while the call is in flight comes back
+`Cancelled(closed)` without reaching the API at all. Whatever stood in the
+queue before runs in either version — the logout job is queued behind it, and
+the method waits its turn.
