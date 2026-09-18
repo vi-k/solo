@@ -95,10 +95,15 @@ controller jobs perform updates through their context. `ListenableBuilder` and
 state value itself.
 
 A controller that is not a `ValueListenable` — a plain `Solo` of your own, or
-one `with SoloStream` — has `SoloBuilder` instead: it takes any `Solo` and is
-`ValueListenableBuilder` in every other respect. When the screen watches one
-value out of a larger state, `SoloSelectBuilder` rebuilds only when that value
-changes and leaves the rest of the state alone:
+one `with SoloStream` — has `SoloBuilder` instead: it takes any `Solo` and
+builds the same subtree from the same state. Two things differ, and both are
+about where that state comes from. It reads `currentState` in `build`, where
+`ValueListenableBuilder` builds from a copy that every notification refreshes.
+And it compares controllers by identity: handed a new controller whose `==`
+says it is the old one, `SoloBuilder` moves to it and `ValueListenableBuilder`
+stays with the old. When the screen watches one value out of a larger state,
+`SoloSelectBuilder` rebuilds only when that value changes and leaves the rest
+of the state alone:
 
 ```dart
 SoloSelectBuilder<ProfileState, bool>(
@@ -123,8 +128,25 @@ build, and each of those builds makes a new selection.
 and a broadcast `stream` at once:
 
 ```dart
+sealed class SessionState {
+  const SessionState();
+}
+
+final class SignedOut extends SessionState {
+  const SignedOut();
+}
+
+final class SignedIn extends SessionState {
+  final String name;
+
+  const SignedIn(this.name);
+}
+
 final class Session extends Solo<SessionState> with SoloStream, SoloListenable {
   Session(super.initialState);
+
+  Job<void> signIn(String name) =>
+      run<SessionState, void>((ctx) async => ctx.emit(SignedIn(name)));
 }
 ```
 
@@ -136,6 +158,108 @@ change, two error routes; a rebuild and a stream event are two separate
 reactions to one change, where a widget reading only `value` had one; and
 `await close()` now waits for the stream's own subscribers too, which a plain
 `SoloListenable` never did.
+
+## A screen built on the stream
+
+The requirement is the ordinary one: from its first frame, the screen shows the
+state the controller is in. `Session` above has a `stream`, and the framework
+has a widget that takes one.
+
+### The first attempt
+
+```dart
+class SessionBadge extends StatelessWidget {
+  final Session session;
+
+  const SessionBadge(this.session, {super.key});
+
+  @override
+  Widget build(BuildContext context) => StreamBuilder<SessionState>(
+        stream: session.stream,
+        builder: (context, snapshot) => Text(
+          switch (snapshot.data) {
+            SignedIn(:final name) => 'signed in as $name',
+            SignedOut() => 'signed out',
+            null => 'nothing yet',
+          },
+        ),
+      );
+}
+```
+
+The `null` case is there because the type has one, and it is the case the
+screen opens with:
+
+```text
+mounted over a session signed in as Ada: nothing yet
+after Bob signs in: signed in as Bob
+```
+
+A broadcast stream replays nothing. A subscriber hears the changes that come
+after it subscribed, and the state the controller was already in is not one of
+them, so the badge waits for a change to show what was true before it was
+built. The session is not what is wrong here: `currentState` holds `SignedIn`
+all along, in the same builder that renders `nothing yet`.
+
+A screen sees this every time it is built anew — a push and a pop, a tab
+switched away and back — and the wait is as long as the next change, which for
+a session can be the rest of the day. Closing takes the state away for good:
+after `close()` the stream is done and no event is ever coming.
+
+```text
+mounted over a session signed in as Ada: nothing yet
+after close(): nothing yet
+```
+
+### The state a screen needs is `currentState`
+
+```dart
+StreamBuilder<SessionState>(
+  stream: session.stream,
+  initialData: session.currentState,
+  builder: (context, snapshot) => Text(
+    switch (snapshot.data) {
+      SignedIn(:final name) => 'signed in as $name',
+      SignedOut() => 'signed out',
+      null => 'nothing yet',
+    },
+  ),
+)
+```
+
+```text
+mounted over a session signed in as Ada: signed in as Ada
+after Bob signs in: signed in as Bob
+```
+
+`snapshot.data` and `currentState` differ in where they come from.
+`snapshot.data` is what the stream delivered to this subscriber; `currentState`
+is the state the controller is in now, and `initialData` is what hands the
+subscriber that state at the moment it subscribes.
+
+A builder of this package takes the controller rather than a delivery, so the
+gap never opens and there is nothing to pass for the first frame:
+
+```dart
+SoloBuilder<SessionState>(
+  solo: session,
+  builder: (context, state, _) => Text(
+    switch (state) {
+      SignedIn(:final name) => 'signed in as $name',
+      SignedOut() => 'signed out',
+    },
+  ),
+)
+```
+
+```text
+mounted over a session signed in as Ada: signed in as Ada
+after Bob signs in: signed in as Bob
+```
+
+The state has no `null` case now, because a controller always has a state. The
+`stream` is for what is not a widget: a log, a bridge into code that takes a
+`Stream`, a test that wants the whole sequence of changes.
 
 ## A base class without Flutter
 

@@ -21,8 +21,9 @@ name: gate
 # installs Flutter: that is what keeps `solo` and `async_job` the pure Dart
 # they promise to be, because a stray `package:flutter` import would stop
 # resolving there and nowhere else. `flutter` covers the package that needs
-# it. `docs` needs no SDK at all. `snippets` builds the code of
-# `packages/solo/doc/vs-bloc.md` and runs it.
+# it, and the bench of `packages/solo/doc/flutter.md` along with it, whose
+# drivers are widget tests. `docs` needs no SDK at all. `snippets` builds
+# the code of `packages/solo/doc/vs-bloc.md` and runs it.
 #
 # What `snippets` proves is narrow and worth stating: that every fragment
 # of that document still compiles against the tree and still runs to the
@@ -180,6 +181,37 @@ jobs:
 
       - name: Tests
         run: cd packages/flutter_solo && flutter test
+
+      # The bench of `packages/solo/doc/flutter.md` runs here rather than in
+      # `snippets`, which has no Flutter: what that document shows are
+      # widgets, and a widget needs a binding to be built and read back.
+      # Outside the checkout, like the other benches, which is what lets the
+      # last step of this job mean anything.
+      - name: Build the screens out of the document
+        run: python3 tool/flutter_snippets.py "$RUNNER_TEMP/doc-check"
+
+      - name: Dependencies of the bench
+        run: cd "$RUNNER_TEMP/doc-check/flutter_check" && flutter pub get
+
+      # Under the package's own rules, copied there by the generator: a
+      # fragment that passes here is a fragment that would pass inside
+      # `packages/flutter_solo`.
+      - name: Analyze the bench
+        run: cd "$RUNNER_TEMP/doc-check/flutter_check" && flutter analyze
+
+      # One file at a time, and unsilenced. The order of the log is what the
+      # step below reads, and a reader of a red run compares the traces by
+      # eye in the same place.
+      - name: Every screen runs
+        run: |
+          set -eo pipefail
+          cd "$RUNNER_TEMP/doc-check/flutter_check"
+          flutter test --concurrency=1 | tee "$RUNNER_TEMP/flutter.out"
+
+      - name: The quoted traces are the printed ones
+        run: |
+          python3 tool/check_traces.py \
+            packages/solo/doc/flutter.md "$RUNNER_TEMP/flutter.out"
 
       - name: Nothing drifted
         run: |
