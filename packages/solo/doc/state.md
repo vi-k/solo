@@ -307,11 +307,12 @@ itself. Its waiting method determines when its body resumes and whether the
 underlying operation must finish; the queue still waits for the job's body and
 cleanup before starting another root job.
 
-The distinction is what the notification represents. If it says that an
-independent entity has already changed, reflect that fact immediately. If it
-asks the controller to perform work, such as refresh data or save an incoming
-value, enqueue a normal job. An event being delivered by a stream does not by
-itself justify bypassing the queue.
+What to do with a notification — reflect it with `externalSetState` or queue a
+job for it — depends on what it means. If it says that an independent entity
+has already changed, reflect that fact immediately. If it asks the controller
+to perform work, such as refresh data or save an incoming value, enqueue a
+normal job. An event being delivered by a stream does not by itself justify
+bypassing the queue.
 
 Stopping the source before `super.close()` is the tidier-looking order, and it
 costs nothing only while no running job depends on the fact. With
