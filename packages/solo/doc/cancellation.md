@@ -71,8 +71,10 @@ Job<void> seek(Duration position) => run<Ready, void>(
 `restart` cancels the running job, and `wait` lets go of the call at that
 moment: the job ends and the next one starts. The seek it let go of is still
 running on the device. Drag through three positions and all three seeks are on
-the device at once — three starts, then three ends. The state ends on the right
-position, which is why nothing on the screen gives this away.
+the device at once — three starts, then three ends. What the device makes of
+that is up to the device. The state says the last position all the same: only
+the last job gets as far as `emit`, so the screen shows the position the user
+asked for, whatever the device actually did.
 
 ### The second attempt
 

@@ -260,11 +260,17 @@ void main() {
         reason: 'the job is over while its seek still runs',
       );
 
-      await device.end('seek 1');
-      await device.end('seek 2');
+      // The device may finish them in any order; here the last seek
+      // comes back first.
       await device.end('seek 3');
+      await device.end('seek 2');
+      await device.end('seek 1');
       expect(last.outcome, isA<Done<void>>());
-      expect(player.currentState, 3, reason: 'the state alone looks right');
+      expect(
+        player.currentState,
+        3,
+        reason: 'only the last job reaches emit, whatever the device did',
+      );
     });
 
     test('by join, the seek dragged past runs to its end first', () async {
