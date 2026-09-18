@@ -323,9 +323,9 @@ gone. `SoloCloseMode.cancel` is not safe from it either — a
 freed by the disconnection, and `close` waits for that job. The `isFinished`
 guard is what lets one order serve both modes. The subscription callback above
 is synchronous, so nothing can run between its check of `isFinished` and its
-write. A callback that has to await something before writing checks
-`isFinished` after its last `await`, right before `externalSetState`: a check
-made earlier can go stale while it waits — the engine may finish in the
+write. A callback that has to await something before writing must check
+`isFinished` after its last `await`, right before `externalSetState`, because a
+check made earlier can go stale while it waits — the engine may finish in the
 meantime, and the write then throws a `StateError`.
 
 Use job bodies and their state handlers for the controller's own success,
