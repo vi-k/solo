@@ -125,8 +125,7 @@ SoloSelectBuilder<ProfileState, bool>(
 виджетная сторона и broadcast-`stream`:
 
 ```dart
-final class Session extends Solo<SessionState>
-    with SoloStream, SoloListenable {
+final class Session extends Solo<SessionState> with SoloStream, SoloListenable {
   Session(super.initialState);
 }
 ```
@@ -143,7 +142,7 @@ final class Session extends Solo<SessionState>
 ## Базовый класс без Flutter
 
 Общий базовый класс контроллеров приложения может жить в пакете без Flutter,
-а `SoloListenable` подмешивает лист:
+а лист подмешивает `SoloListenable`:
 
 ```dart
 // Свой пакет, без Flutter.
@@ -166,5 +165,7 @@ final class ProfileController extends AppController<ProfileState>
 `super` лист до версии базы тоже не дотянется — `super` приходит в миксин.
 База, которой нужен свой отчёт, держит его в методе под другим именем, а лист
 зовёт этот метод из своего `onListenerError`. База, которая сама подмешивает
-`SoloListenable`, сохраняет своё переопределение: класс, подмешавший миксин,
-стоит под ним.
+`SoloListenable`, сохраняет своё переопределение: класс стоит над миксинами,
+которые подмешивает. Только подмешивайте его один раз — в базу или в лист:
+подмешанный ещё раз на листе над такой базой, он встаёт над её переопределением
+и так же его глушит.

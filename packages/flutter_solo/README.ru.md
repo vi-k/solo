@@ -5,8 +5,8 @@
 `ValueListenable`.
 
 Контроллер владеет состоянием и гоняет по нему задачи по одной за раз.
-Подмешайте в него `SoloListenable`, и он одновременно станет
-`ValueListenable<S>`, поэтому вставляется прямо в `ValueListenableBuilder`,
+Подмешайте в него `SoloListenable`, и он одновременно станет `ValueListenable`
+своего состояния, поэтому вставляется прямо в `ValueListenableBuilder`,
 `ListenableBuilder`, `AnimatedBuilder` и `Listenable.merge`.
 
 На [сайте документации](https://docs.yet-another.dev/ru/flutter_solo/) лежат

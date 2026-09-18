@@ -123,8 +123,7 @@ build, and each of those builds makes a new selection.
 and a broadcast `stream` at once:
 
 ```dart
-final class Session extends Solo<SessionState>
-    with SoloStream, SoloListenable {
+final class Session extends Solo<SessionState> with SoloStream, SoloListenable {
   Session(super.initialState);
 }
 ```
@@ -164,5 +163,7 @@ failure. On the leaf, as here, it overrides the base: a base that overrides
 leaf cannot reach the base's version through `super` either — that lands in the
 mixin. A base that wants its own report keeps it in a method of another name,
 and the leaf's `onListenerError` calls that. A base that mixes `SoloListenable`
-in itself keeps its own override: the class that mixes the mixin in sits below
-it.
+in itself keeps its own override: a class sits above the mixins it mixes in.
+Mix it in once, though, in the base or in the leaf: mixed in again on a leaf
+over such a base, it sits above the base's override and silences it the same
+way.

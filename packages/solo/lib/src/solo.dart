@@ -191,10 +191,10 @@ abstract class Solo<S extends Object> {
   ///
   /// By default forwards the error to [Zone.handleUncaughtError].
   /// Subclasses may override this to integrate with framework error
-  /// reporting (such as Flutter error reporting). A mixin applied further
-  /// down the chain overrides a base class in turn: `SoloListenable` of
-  /// `flutter_solo`, mixed into a leaf, reports through Flutter whatever
-  /// the leaf's base class says here.
+  /// reporting (such as Flutter error reporting). A mixin applied above a
+  /// base class overrides it in turn: `SoloListenable` of `flutter_solo`,
+  /// mixed into a leaf, reports through Flutter whatever the leaf's base
+  /// class says here.
   @protected
   void onListenerError(Object error, StackTrace stackTrace) {
     Zone.current.handleUncaughtError(error, stackTrace);

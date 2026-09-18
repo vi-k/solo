@@ -4,9 +4,9 @@ State management for Flutter: sequential jobs over one state, exclusive
 ownership, cooperative cancellation, and rebuilds through `ValueListenable`.
 
 A controller owns a state and runs jobs over it one at a time. Mix
-`SoloListenable` into it, and it is a `ValueListenable<S>` at the same time —
-so it drops straight into `ValueListenableBuilder`, `ListenableBuilder`,
-`AnimatedBuilder` and `Listenable.merge`.
+`SoloListenable` into it, and it is a `ValueListenable` of its state at the
+same time — so it drops straight into `ValueListenableBuilder`,
+`ListenableBuilder`, `AnimatedBuilder` and `Listenable.merge`.
 
 The [documentation site](https://docs.yet-another.dev/flutter_solo/) carries
 this page and the guides of the packages below it.

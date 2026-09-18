@@ -3,7 +3,15 @@
 > a mixin` следом за ним; не запушено. Вторая редакция прошла после круга
 > ревью (два ревьюера Opus, оба — «годится с правками», все находки приняты,
 > две — частично). При работе поправлены однострочник миграции в `CHANGELOG`
-> ядра и раздел «План», который склеил `reflow.py`. Идёт круг ревью работы.
+> ядра и раздел «План», который склеил `reflow.py`; критерий «Вывод» смягчён:
+> единственное совпадение `grep` — проза `CHANGELOG`, где перенос свёл
+> на одну строку два код-спана, а не позиция типа; тест 3 назван
+> `'…reports over an onListenerError of the base'` — без апострофа, ради
+> одинарных кавычек. Круг ревью работы пройден: два ревьюера Opus, оба —
+> «годится с правками», записи
+> `2026-09-18[4]-solo-listenable-mixin-work-review.md`
+> и `2026-09-18[5]-solo-listenable-mixin-work-review-2.md`; находки закрыты
+> коммитом `fix: close the SoloListenable mixin work review`.
 > **Что это:** `SoloListenable` из класса становится миксином
 > `on Solo<S>`, как `SoloStream`; заодно аргумент типа у обоих миксинов
 > в `with` пишется выводом.
@@ -163,8 +171,9 @@ Migrated: base=[base: Bad state: boom] flutter=[]
   (`extends Solo<Profile> with SoloListenable`); что стрима нет, пока
   не подмешан `SoloStream`, и порядок с ним не важен, хотя документы пишут
   `with SoloStream, SoloListenable`; правило `onListenerError` — побеждает
-  переопределение ниже по цепочке, миксин на листе перекрывает базу, база под
-  ним недостижима через `super`, и база, которой нужен свой отчёт, держит его
+  переопределение выше по цепочке (выше — более производный класс, как
+  в правиле `SoloStream`), миксин на листе перекрывает базу, база под ним
+  недостижима через `super`, и база, которой нужен свой отчёт, держит его
   в методе под другим именем, а лист зовёт его из своего переопределения; что
   в позиции типа аргумент пишется явно.
 - `packages/flutter_solo/lib/src/solo_selection.dart:180–185` — абзац
@@ -172,7 +181,7 @@ Migrated: base=[base: Bad state: boom] flutter=[]
   у миксина нет — контроллер его подмешивает. Строки `:44` и `:48` остаются
   верными.
 - `packages/solo/lib/src/solo.dart:190–194`, дартдок `onListenerError` — одна
-  фраза: подмешанный ниже по цепочке миксин (`SoloListenable` пакета
+  фраза: подмешанный выше по цепочке миксин (`SoloListenable` пакета
   `flutter_solo`) перекрывает переопределение базы.
 - Фикстуры, **восемь, а не семь**, как считала запись бэклога:
   `solo_selector_test.dart:13`; `solo_listenable_test.dart:7`, `:16`, `:22`
@@ -202,7 +211,11 @@ Migrated: base=[base: Bad state: boom] flutter=[]
 раздела `flutter.md`, `ReportingBase<S>` переопределяет `onListenerError`
 и пишет в журнал.
 
-В `packages/flutter_solo/test/solo_listenable_test.dart`, 89 → 93:
+В `packages/flutter_solo/test/solo_listenable_test.dart`, 89 → 93, а после
+круга ревью работы 94: тесты 3 и 4 получили контроль своей предпосылки,
+и добавлен страж импорта —
+`'the bases of these tests import nothing of Flutter'` (вердикт первой находки
+`2026-09-18[4]-solo-listenable-mixin-work-review.md`):
 
 1. `'SoloListenable ahead of SoloStream in with delivers both too'` — обратный
    порядок, фикстура `with SoloListenable, SoloStream`. Демонстрация
@@ -213,7 +226,7 @@ Migrated: base=[base: Bad state: boom] flutter=[]
 2. `'a leaf over a base without Flutter drives ValueListenableBuilder and
    Listenable.merge'` — лист над `AppController` ведёт `ValueListenableBuilder`
    и `Listenable.merge`. Держит правду фрагмента `flutter.md`.
-3. `'SoloListenable on the leaf reports over the base's onListenerError'` —
+3. `'SoloListenable on the leaf reports over an onListenerError of the base'` —
    лист над `ReportingBase`: отчёт уходит в `FlutterError`, журнал базы пуст.
    Мутации «миксин зовёт `super.onListenerError`» и «миксин без
    `onListenerError`» краснят его вместе с тремя существующими тестами
@@ -447,10 +460,10 @@ Solo<S> implements ValueListenable<S>`, без конструктора; тел�
 не встречается в `lib/`, `test/`, `example/` и во фрагментах кода документов.
 Запись миграции в `CHANGELOG`, записи и handoff этим критерием не охватываются.
 
-**Тесты.** Пять новых тестов из раздела «Новые тесты», по одному на сценарий,
-с теми именами и фикстурами; база тестов 2–3 живёт в библиотеке без импорта
-Flutter. Мутации у тестов 1 и 3 ведут себя, как там написано; «только ими»
-не утверждается.
+**Тесты.** Пять новых тестов из раздела «Новые тесты» и страж импорта,
+добавленный кругом ревью работы, по одному на сценарий, с теми именами
+и фикстурами; база тестов 2–3 живёт в библиотеке без импорта Flutter. Мутации
+у тестов 1 и 3 ведут себя, как там написано; «только ими» не утверждается.
 
 **Проза и дартдок.** Утверждения из разделов «Код» и «Документы» переписаны
 по смыслу в обоих языках, включая три места, которые не видит `grep`
@@ -469,7 +482,7 @@ shape» из `CHANGELOG` ядра ушла, однострочник компи�
 `solo/example`; `flutter analyze` в `flutter_solo` и его примере;
 `dart format --set-exit-if-changed` во всех пакетах, как в `gate.yml`;
 `dart test` — `solo` 582, `async_job` 430, пример 9; `flutter test` —
-`flutter_solo` 93; `dart doc` без предупреждений в `solo` и `flutter_solo`; оба
+`flutter_solo` 94; `dart doc` без предупреждений в `solo` и `flutter_solo`; оба
 стенда с `check_traces.py`; `check_translations.py`, `check_line_width.py`,
 `check_doc_shape.py`, `reflow.py --check`, сборка сайта; `merge-file` против
 `docs/state-rakes` — 0 конфликтов перед каждым коммитом, иначе `state.md`

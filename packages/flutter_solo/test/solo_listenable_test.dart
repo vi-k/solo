@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_solo/flutter_solo.dart';
@@ -41,6 +42,14 @@ final class _Leaf extends AppController<int> with SoloListenable {
 
 final class _ReportingLeaf extends ReportingBase<int> with SoloListenable {
   _ReportingLeaf() : super(0);
+
+  void set(int value) => externalSetState(value);
+}
+
+/// [ReportingBase] with nothing mixed in: its own report is what the leaf
+/// above overrides.
+final class _PlainReportingLeaf extends ReportingBase<int> {
+  _PlainReportingLeaf() : super(0);
 
   void set(int value) => externalSetState(value);
 }
@@ -479,12 +488,19 @@ void main() {
       FlutterError.onError = reports.add;
       addTearDown(() => FlutterError.onError = previous);
 
+      final plain = _PlainReportingLeaf()
+        ..addListener(() => throw StateError('the listener blew up'))
+        ..set(1);
+      expect(plain.reported.single, isA<StateError>());
+      expect(reports, isEmpty, reason: 'the base reports on its own');
+
       leaf
         ..addListener(() => throw StateError('the listener blew up'))
         ..set(1);
 
       expect(reports.single.exception, isA<StateError>());
       expect(leaf.reported, isEmpty);
+      await plain.close();
       await leaf.close();
     },
   );
@@ -501,8 +517,18 @@ void main() {
       ..addListener(() => throw StateError('the listener blew up'))
       ..set(1);
 
+    expect(leaf, isA<ValueListenable<int>>(), reason: 'the base mixes it in');
     expect(leaf.reported.single, isA<StateError>());
     expect(reports, isEmpty);
     await leaf.close();
+  });
+
+  test('the bases of these tests import nothing of Flutter', () {
+    final source = File('test/support/plain_base.dart').readAsStringSync();
+    final imports = RegExp("^import '([^']+)';", multiLine: true)
+        .allMatches(source)
+        .map((match) => match[1])
+        .toList();
+    expect(imports, ['package:solo/solo.dart']);
   });
 }
