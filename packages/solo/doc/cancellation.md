@@ -368,15 +368,16 @@ cancelled jobs rather than throwing, so callers do not need an `isClosed` check
 before submitting.
 
 `SoloCloseMode.drain` closes by running the queue instead of dropping it, and
-for the screen above that is the whole fix: the three batches go out in order,
-each ends `Done`, and the future completes after the third. No new root job is
-taken from the call onwards, and the ones already in the queue run by the usual
-rules: in order, with their children, their cleanup, and an accumulation window
-waited out where there is one. A plain `close()` over a running drain stops it
-where it is, and the same future everybody holds completes after that. Running
-the queue is not a promise of delivery: a drained job can still fail or be
-turned down by its rules, and a buffer that keeps events until the sending is
-confirmed is built on top of this, not inside it.
+that is the whole fix the first attempt needs: the three batches go out in
+order, each ends `Done`, and the future `close()` returned completes after the
+third. No new root job is taken from the call onwards, and the ones already in
+the queue run by the usual rules: in order, with their children, their cleanup,
+and an accumulation window waited out where there is one. A plain `close()`
+over a running drain stops it where it is, and the future that every `close()`
+call returned completes after that. Running the queue is not a promise of
+delivery: a drained job can still fail or be turned down by its rules, and a
+buffer that keeps events until the sending is confirmed is built on top of
+this, not inside it.
 
 Closing does not itself release resources owned by your application or select a
 final application state. Put that work in a controller method and await it
