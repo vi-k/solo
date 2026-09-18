@@ -437,5 +437,5 @@ Future<void> logout() async {
 Draining waits for the job the same way, and the door is shut from the `close`
 line onwards: a job submitted while the call is in flight comes back
 `Cancelled(closed)` without reaching the API at all. Whatever stood in the
-queue before runs in either version — the logout job is queued behind it, and
+queue before runs in either version — the logout job goes to the end of it, and
 the method waits its turn.
