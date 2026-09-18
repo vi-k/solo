@@ -724,6 +724,11 @@ void main() {
 
       expect(done, isTrue);
       expect(session.isClosed, isTrue);
+      expect(
+        session.currentState,
+        'signed in',
+        reason: 'closing publishes no state of its own',
+      );
     });
   });
 }

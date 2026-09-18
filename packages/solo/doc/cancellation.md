@@ -379,10 +379,13 @@ queue is not a promise of delivery: a drained job can still fail or be turned
 down by its rules, and a buffer that keeps events until the sending is
 confirmed is built on top of this, not inside it.
 
-Closing does not itself release resources owned by your application or select a
-final application state. Put that work in a controller method and await it
-before `close()`, as in the [camera example](camera.md). A state handler of the
-cancelled job may still update state while closing.
+Closing publishes no state of its own: the controller stays on the state
+published last, and once closing has finished that state can no longer change.
+Resources owned by your application are not released either. Put the teardown
+and the state the screen ends on in a controller method and await it before
+`close()`, as in the [camera example](camera.md), where `dispose()` closes the
+hardware and emits `Disposed`. A state handler of the cancelled job may still
+update state while closing.
 
 ### Closing from a job
 
