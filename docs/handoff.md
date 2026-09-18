@@ -5,10 +5,10 @@
 записью; следующую работу выбирает владелец.
 
 **В работе.** Ничего. Законченное за день — две работы, обе записаны. Вычитка
-`state.md` — раздел «Вычитка `state.md`: грабли и чтение владельца» ниже,
-слияние `28d2848`, запись `2026-09-16[2]-state-rakes-report.md`. Скиллы `end`
-и `handoff` и правило тире в `tool/reflow.py` — раздел «Прежний верх,
-2026-09-18: скиллы `end` и `handoff`» ниже.
+`state.md` — слияние `28d2848`, записи `2026-09-16[2]-state-rakes-report.md`
+и `2026-09-18[7]-handoff-archive.md`. Скиллы `end` и `handoff` и правило тире
+в `tool/reflow.py` — тот же `2026-09-18[7]-handoff-archive.md`, раздел «Прежний
+верх».
 
 **Что дальше.** Очередь пуста: бэклог владельца пуст, следующую работу выбирает
 владелец. Кандидаты, которые записали сессии, решения по ним нет:
@@ -148,9 +148,11 @@
 
 Начата сквозная вычитка страниц, которых она ещё не касалась: вычитаны
 `packages/async_job/README.md`, `packages/solo/doc/vs-bloc.md`,
-`packages/solo/doc/accumulation.md`, `packages/solo/doc/jobs.md` и прозой
-`packages/solo/doc/state.md`; разборы двух последних —
-в `2026-09-18[6]-handoff-archive.md`. Порядок — карта
+`packages/solo/doc/accumulation.md`, `packages/solo/doc/jobs.md`
+и `packages/solo/doc/state.md` — прозой, граблями и чтением владельца. Разбор
+`jobs.md` и прозы `state.md` — в `2026-09-18[6]-handoff-archive.md`, граблей
+и чтения — в `2026-09-16[2]-state-rakes-report.md`
+и `2026-09-18[7]-handoff-archive.md`. Порядок — карта
 из `2026-09-11[16]-docs-structure-design.md`: `jobs.md`, `state.md`,
 `cancellation.md`, `resources.md`, `children.md`, `errors.md`, `testing.md`,
 `camera.md`, `flutter.md`, затем шесть страниц `async_job` и три README.
