@@ -251,7 +251,12 @@ abstract class Solo<S extends Object> {
   /// [canStart] is not repeated, and the job's own emit is exempt.
   ///
   /// Handlers receive `S`, which may differ from the body's working `W`,
-  /// and should only compute the next state. Cleanup belongs in
+  /// and should only compute the next state: the value they return is
+  /// their write. A write made from inside one — [externalSetState], or a
+  /// source that calls it synchronously — does not combine with that
+  /// value: if the job's rules accept it, the handler's result lands on
+  /// top of it, computed from the state before it; if they refuse it,
+  /// the handler's result is dropped. Cleanup belongs in
   /// [JobContext.onDispose] or [JobContext.onDiscard]. The [onCancel]
   /// parameter runs at completion; [JobContext.onCancel] instead delivers
   /// the cancellation signal immediately to the operation being stopped.

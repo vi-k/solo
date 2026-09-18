@@ -270,6 +270,21 @@ final class Profile extends Solo<ProfileState> {
           return name;
         },
       );
+
+  /// A handler that writes a fact itself before returning its result.
+  Job<String> loadWritingFromHandler({required bool rulesRefuseOffline}) =>
+      run<ProfileState, String>(
+        key: 'load',
+        keepWhile: rulesRefuseOffline ? (state) => state is! Offline : null,
+        onCancel: (state, cancelled) {
+          externalSetState(const Offline());
+          return const Initial();
+        },
+        (ctx) async {
+          ctx.emit(const Loading());
+          return ctx.wait(() => api.future);
+        },
+      );
 }
 
 void main() {
@@ -577,6 +592,41 @@ void main() {
       );
       final outcome = await job.done;
       expect('$outcome', contains('rules: keepWhile'));
+
+      await profile.close();
+    });
+  });
+
+  group('a write from inside a handler', () {
+    test('accepted by the rules, the handler result lands on top of it',
+        () async {
+      final profile = Profile();
+      final job = profile.loadWritingFromHandler(rulesRefuseOffline: false);
+      await pump();
+      final heard = <ProfileState>[];
+      profile.addListener(() => heard.add(profile.currentState));
+
+      await job.cancel();
+      await job.done;
+
+      expect(heard, [isA<Offline>(), isA<Initial>()]);
+      expect(profile.currentState, isA<Initial>(), reason: 'the fact is lost');
+
+      await profile.close();
+    });
+
+    test('refused by the rules, it drops the handler result', () async {
+      final profile = Profile();
+      final job = profile.loadWritingFromHandler(rulesRefuseOffline: true);
+      await pump();
+      final heard = <ProfileState>[];
+      profile.addListener(() => heard.add(profile.currentState));
+
+      await job.cancel();
+      await job.done;
+
+      expect(heard, [isA<Offline>()]);
+      expect(profile.currentState, isA<Offline>());
 
       await profile.close();
     });

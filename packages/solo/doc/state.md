@@ -471,5 +471,9 @@ These extra checks apply to jobs with their own state handlers. A parent
 without handlers stops checking its rules when its body ends; children then
 remain subject to their own rules and any permission the parent already lost.
 
-Keep these functions limited to computing state. Resource release belongs in
-the [cleanup API](resources.md).
+Keep these functions limited to computing state: the value they return is their
+write. A state write made from inside one — `externalSetState`, or a source
+that calls it synchronously — does not combine with that value: if the job's
+rules accept the write, the handler's result lands on top of it, computed from
+the state before it, and the fact is lost; if they refuse it, the handler's
+result is dropped. Resource release belongs in the [cleanup API](resources.md).
