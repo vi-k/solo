@@ -101,8 +101,9 @@
 - В `~/.claude/skills` неотслеживаемые `.trash/` и `synced/` — не этой сессии.
 
 **Дерево и проверки.** Ветка `main`, основная копия, дерево чистое.
-Не отправлено `origin/main..HEAD`: `5512b5a` (handoff), `a4610a8` (правило
-заливки) и коммит с этой записью поверх `a4610a8`; `origin` на момент записи —
+Не отправлено `origin/main..HEAD`: от `5512b5a` (handoff перед рестартом)
+и `a4610a8` (правило заливки) до коммита с этой записью — между ними уборка
+handoff, `32f983e`, `8d617cf` и `c1e0101`; `origin` на момент записи —
 `c9d4997`, CI на нём зелёный (`gate` и `site`). Код пакетов с `9bd7b6c`
 не менялся; наборы на нём — `solo` 582, `flutter_solo` 94, `async_job` 430,
 пример 9, в этой сессии не гонялись. Документные проверки на коммите с этой
@@ -113,8 +114,8 @@
 ## На следующий релиз собрано у всех трёх
 
 Ломающие правки есть в каждом пакете, поэтому все трое идут на `0.3.0`.
-Развёрнуто — в разделах `## Unreleased` их `CHANGELOG.md`; коротко (счёт
-на 2026-09-16): у `async_job` пять ломающих, громкие из них — протектед
+Развёрнуто — в разделах `## Unreleased` их `CHANGELOG.md`; коротко (счёт сверен
+2026-09-18): у `async_job` пять ломающих, громкие из них — протектед
 `JobBase.inUncancellableSection` и починенный `ctx.join`; у `solo` двенадцать
 (`SoloBase` → `Solo` вместе с переездом стрима в `SoloStream`, `currentState`,
 `SoloCloseMode`, `SoloTransition`, `errorHandler`, свои слушатели,
@@ -139,9 +140,11 @@
 
 ## Документация: вычитка страниц doc/
 
-Начата сквозная вычитка страниц, которых она ещё не касалась: до сих пор
-вычитаны только `packages/async_job/README.md`, `packages/solo/doc/vs-bloc.md`
-и `packages/solo/doc/accumulation.md`. Порядок — карта
+Начата сквозная вычитка страниц, которых она ещё не касалась: вычитаны
+`packages/async_job/README.md`, `packages/solo/doc/vs-bloc.md`,
+`packages/solo/doc/accumulation.md`, `packages/solo/doc/jobs.md` и прозой
+`packages/solo/doc/state.md`; разборы двух последних —
+в `2026-09-18[6]-handoff-archive.md`. Порядок — карта
 из `2026-09-11[16]-docs-structure-design.md`: `jobs.md`, `state.md`,
 `cancellation.md`, `resources.md`, `children.md`, `errors.md`, `testing.md`,
 `camera.md`, `flutter.md`, затем шесть страниц `async_job` и три README.
@@ -155,7 +158,7 @@
 у остальных страниц фрагменты не компилируются ни в гейте, ни перед коммитом.
 Фрагменты `jobs.md` собраны отдельным проектом вручную — компилируются все, —
 но на дереве такой проверки нет. Рецепт паузы при этом сторожит
-`packages/solo/test/queue_pause_recipe_test.dart`: четыре строки его таблицы.
+`packages/solo/test/queue_pause_recipe_test.dart`, семь сторожей.
 
 ## Требования к README, которые нужно сохранить
 
