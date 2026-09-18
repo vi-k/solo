@@ -477,6 +477,20 @@ void main() {
   });
 
   group('leaving a temporary state', () {
+    test('on a failure the catch writes the state back', () async {
+      final profile = Profile();
+      final job = profile.loadByHand();
+      await pump();
+      profile.api.completeError(StateError('offline'));
+
+      expect(await job.done, isA<Failed>());
+      expect(profile.caught, 1);
+      expect(profile.emitThrew, isNull, reason: 'the emit wrote');
+      expect(profile.currentState, isA<Initial>());
+
+      await profile.close();
+    });
+
     test('a catch runs on a cancellation and its emit throws', () async {
       final profile = Profile();
       final job = profile.loadByHand();

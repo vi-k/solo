@@ -361,11 +361,11 @@ run<ProfileState, String>(
 );
 ```
 
-The `catch` does run on a cancellation — and that is the trouble, because the
-`emit` inside it is a state checkpoint on a job that is already cancelled, so
-it throws instead of writing. Cancel the load and the controller stays in
-`Loading` for good: the screen shows a spinner for work that is no longer
-running.
+On a failure this works: the `catch` writes `Initial` and passes the error on.
+The `catch` runs on a cancellation too, but there the `emit` inside it is a
+state checkpoint on a job that is already cancelled, so it throws instead of
+writing. Cancel the load and the controller stays in `Loading` for good: the
+screen shows a spinner for work that is no longer running.
 
 ### The handlers
 
