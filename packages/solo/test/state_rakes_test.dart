@@ -151,10 +151,20 @@ final class Link extends Solo<LinkState> {
         (ctx) => ctx.wait(() => answer.future),
       );
 
-  /// The first attempt: the fact is queued like work.
-  Job<void> reportByJob() => run<LinkState, void>(
-        key: 'report',
-        (ctx) async => ctx.emit(const Lost()),
+  /// Work that is waiting its turn.
+  Job<void> queueLater() => run<LinkState, void>(key: 'later', (ctx) async {});
+
+  /// What is waiting in the queue, in order.
+  Iterable<Job<Object?>> get queued => queue.jobs;
+
+  /// The first attempt: the fact is queued like work, ahead of everything
+  /// waiting.
+  Job<void> reportByJob() => add(
+        job<LinkState, void>(
+          key: 'report',
+          (ctx) async => ctx.emit(const Lost()),
+        ),
+        first: true,
       );
 
   /// The page's version: the fact is reflected at once.
@@ -374,13 +384,20 @@ void main() {
   });
 
   group('an external fact', () {
-    test('queued as a job, it waits behind the job that needs it', () async {
+    test('queued as a job, even first, it waits behind the job that needs it',
+        () async {
       final link = Link();
       final waiting = link.waitForAnswer();
       await pump();
+      final later = link.queueLater();
       final report = link.reportByJob();
       await pump();
 
+      expect(
+        link.queued,
+        [report, later],
+        reason: 'first: true puts the fact ahead of everything waiting',
+      );
       expect(
         link.currentState,
         isA<Connected>(),

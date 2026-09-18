@@ -249,22 +249,26 @@ controller, and the controller has to show what has already happened there.
 Camera(this.device) : super(const Ready()) {
   _link = device.connection.listen((connected) {
     if (!connected) {
-      // The fact goes in like any other work.
-      run<Ready, void>(
-        key: 'disconnect',
-        (ctx) async => ctx.emit(const Disconnected()),
+      // The fact goes in like any other work, ahead of everything waiting.
+      add(
+        job<Ready, void>(
+          key: 'disconnect',
+          (ctx) async => ctx.emit(const Disconnected()),
+        ),
+        first: true,
       );
     }
   });
 }
 ```
 
-The queue does what a queue does: the update waits behind the job that is
-running. Until it starts, the controller still reports a connected state, and
-the running job's rules are asked on every change — but only ever about the
-state it already knew. Worse, that job may itself be waiting for a response the
-device will never give, so the update that would free it is standing behind the
-job it would free.
+`first: true` gets the update ahead of everything that is waiting, not ahead of
+the job that is running: the queue runs one job at a time. Until the update
+starts, the controller still reports a connected state, and the running job's
+rules are asked on every change — but only ever about the state it already
+knew. Worse, that job may itself be waiting for a response the device will
+never give, so the update that would free it is standing behind the job it
+would free.
 
 ### externalSetState
 
