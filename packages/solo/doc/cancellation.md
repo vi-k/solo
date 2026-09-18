@@ -419,3 +419,21 @@ The job makes the call, and the method closes the controller once that job is
 over: the order the [camera example](camera.md) keeps with its `dispose()`. A
 body that only has to end itself needs no controller call at all: it returns,
 or cancels itself by throwing `Cancelled('reason')`.
+
+#### Queue the job and drain
+
+```dart
+Future<void> logout() async {
+  run<Ready, void>((ctx) => ctx.join(api.logout));
+  await close(mode: SoloCloseMode.drain);
+}
+```
+
+Draining waits for the job the same way, and it shuts the door one step
+earlier. The version above stays open while the server call is in flight, so a
+job submitted meanwhile is accepted, starts once the logout is over and is
+cancelled on the way: the API hears a call nobody wanted. Here the controller
+refuses new root jobs from the `close` line onwards, and that submission comes
+back `Cancelled(closed)` without reaching the API at all. What it costs is the
+rest of the queue: a drain waits for every job already in it, where the plain
+`close()` above drops them.

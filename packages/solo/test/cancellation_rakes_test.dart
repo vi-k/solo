@@ -245,6 +245,16 @@ final class Session extends Solo<String> {
         .done;
     await close();
   }
+
+  /// A probe: the job queued, the closing draining the queue behind it.
+  Future<void> logoutByDraining() async {
+    run<String, void>((ctx) => ctx.join(() => device.start('logout')));
+    await close(mode: SoloCloseMode.drain);
+  }
+
+  /// A probe: work queued before the logout.
+  Job<void> sync() =>
+      run<String, void>((ctx) => ctx.join(() => device.start('sync')));
 }
 
 void main() {
@@ -712,6 +722,59 @@ void main() {
       }
 
       expect(job.outcome, isNull, reason: 'the cleanup is still waiting');
+    });
+
+    test('a drain closes once the queued logout is over', () async {
+      final device = Device();
+      final session = Session(device);
+      final sync = session.sync();
+      var done = false;
+      unawaited(session.logoutByDraining().then((_) => done = true));
+      await pump();
+      await device.end('sync');
+      await pump();
+      expect(done, isFalse);
+      await device.end('logout');
+
+      expect(done, isTrue);
+      expect(session.isClosed, isTrue);
+      expect(session.currentState, 'signed in');
+      expect(device.trace, [
+        'sync start',
+        'sync end',
+        'logout start',
+        'logout end',
+      ]);
+      expect(sync.outcome, isA<Done<void>>());
+    });
+
+    test('a drain turns down work submitted while it runs', () async {
+      final device = Device();
+      final session = Session(device);
+      unawaited(session.logoutByDraining());
+      await pump();
+      final submitted = session.sync();
+      await device.end('logout');
+      await pump();
+
+      expect(submitted.outcome, isA<Cancelled>());
+      expect(device.trace, ['logout start', 'logout end']);
+    });
+
+    test('the page version starts it and cancels it in flight', () async {
+      final device = Device();
+      final session = Session(device);
+      unawaited(session.logout());
+      await pump();
+      final submitted = session.sync();
+      await device.end('logout');
+      await pump();
+
+      expect(device.trace, ['logout start', 'logout end', 'sync start']);
+      expect(submitted.outcome, isNull, reason: 'the call is in flight');
+      await device.end('sync');
+      await pump();
+      expect(submitted.outcome, isA<Cancelled>());
     });
 
     test('the page version logs out and closes', () async {
