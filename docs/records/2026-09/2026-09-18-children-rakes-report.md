@@ -182,10 +182,47 @@ continuation starts itself after its source finishes`. Текст ошибки
 и зонды — `packages/async_job/.artifacts/children/`. И то и другое вне гита
 и снимается в конце работы.
 
+## Правка по чтению владельца
+
+Первый вопрос владельца по странице — про фразу в разделе «Children»:
+
+> Ignoring the handle with `child.ignore()` alone does not handle errors of
+> the `run` future; an unhandled future error, including cancellation,
+> follows Dart's rules.
+
+Причины в ней нет, а «недостаточно одного» ещё и мягче правды: рядом
+с `ctx.run` вызов `child.ignore()` не делает ничего. Метод ставит флаг
+`_observed` (`lib/src/job_base.dart`), по которому движок решает, слать ли
+неувиденный `Failed` в зону создания задачи; но `run` внутри ждёт
+`child.value`, а этот геттер ставит тот же флаг сам. Ошибка приходит не оттуда:
+её несёт future, которую вернул `_awaitChild`, и погасить её может только
+`ignore()` на ней самой. Зонд `probe_ignore.dart`:
+
+| Сценарий | В зону ушло |
+| --- | --- |
+| `child.ignore(); ctx.run(child);`, ребёнок падает | `StateError` |
+| `ctx.run(child);` без всякого `ignore` | `StateError` — ровно то же |
+| `child.ignore(); ctx.run(child);`, ребёнка отменили | `Cancelled` |
+| `ctx.run(child).ignore();` — оба случая | ничего |
+
+Вторая строка и решает вопрос: с `child.ignore()` и без него в зоне одно
+и то же. Фраза заменена на ту, что называет две разные ошибки: отчёт движка
+об исходе, на который никто не посмотрел, и ошибку обычной future Dart.
+
+Сторожа встали в `packages/async_job/test/zone_test.dart` рядом с «a run Future
+nobody handles reports the child's failure», три теста и две мутации:
+
+- `child.ignore()` не гасит future от `run`, и в зоне ровно одна ошибка.
+  Мутация: убрать `_observed = true;` из геттера `value` — в зоне две.
+- `ctx.run(child).ignore()` гасит её, и зона молчит. Та же мутация — в зоне
+  появляется `StateError`.
+- отмена ребёнка тоже уходит в зону через ту future. Мутация: ветка `Cancelled`
+  в `value` бросает `StateError` — в зоне не отмена.
+
 ## Проверки
 
 В копии `~/development/my/solo-children` на ветке `docs/children`:
-`dart analyze` в `packages/async_job` без замечаний, `dart test` — 443 зелёных,
+`dart analyze` в `packages/async_job` без замечаний, `dart test` — 446 зелёных,
 `lib/` после мутаций побайтово совпадает с копией. Из корня копии:
 `reflow.py --check`, `check_line_width.py`, `check_translations.py` (семнадцать
 блоков и шестнадцать заголовков сходятся с переводом), `check_doc_shape.py` —
