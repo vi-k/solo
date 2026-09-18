@@ -127,35 +127,56 @@ cancellation signal for the operation, whereas the `onCancel` parameter of
 
 ## Protecting a step or a whole job
 
-A payment and its journal entry go together: once the payment has gone through,
-the entry has to be written, whatever the job is asked in the meantime.
+A payment, its receipt on the screen and its journal entry go together: once
+the payment has gone through, the receipt has to be shown and the entry
+written, whatever the job is asked in the meantime.
 
 ### The first attempt
 
 ```dart
 SoloJob<void> commit(String entry) => run<Ready, void>((ctx) async {
       // Each call waited out, whatever happens.
-      await ctx.join(() => payment.commit());
+      final receipt = await ctx.join(() => payment.commit());
+      ctx.emit(ctx.state.copyWith(receipt: receipt));
       await ctx.join(() => journal.write(entry));
     });
 ```
 
 `join` does wait the payment out, and then, as the table above says, throws
 `Cancelled` in place of the result. Cancel the job during the payment: the
-payment goes through, the second `join` is never reached, and the money is
-taken with no entry in the journal.
+payment goes through, and neither the receipt nor the entry follows. The money
+is taken with nothing to show for it.
 
-Plain `await` on both calls would carry them through, because nothing between
-them asks about the cancellation. That lasts until the first checkpoint goes in
-between: an `emit` reporting the payment throws on the cancelled job, and the
-entry is lost the same way.
+Plain `await` on the calls fares no better: the `emit` between them is a
+checkpoint, and on the cancelled job it throws.
+
+### The second attempt
+
+```dart
+SoloJob<void> commit(String entry) => run<Ready, void>((ctx) async {
+      // The whole step waited out as one call.
+      await ctx.join(() async {
+        final receipt = await payment.commit();
+        ctx.emit(ctx.state.copyWith(receipt: receipt));
+        await journal.write(entry);
+      });
+    });
+```
+
+Both calls are now inside what `join` waits out, but the job is marked the
+moment the cancellation arrives, not when `join` returns. The step goes on as
+the code of a cancelled job: the `emit` inside it is a checkpoint and throws,
+and the entry is lost once more. Without the `emit`, both calls would go
+through, and `join` would still throw `Cancelled` in place of what the step
+returned.
 
 ### One section for the step
 
 ```dart
 SoloJob<void> commit(String entry) => run<Ready, void>((ctx) async {
       await ctx.uncancellable(() async {
-        await payment.commit();
+        final receipt = await payment.commit();
+        ctx.emit(ctx.state.copyWith(receipt: receipt));
         await journal.write(entry);
       });
     });
@@ -163,15 +184,15 @@ SoloJob<void> commit(String entry) => run<Ready, void>((ctx) async {
 
 Manual cancellation, parent cancellation and closing are held while an
 `uncancellable` action runs. The job is not marked by those requests yet, so a
-checkpoint inside the section does not throw on them — an `emit` reporting the
-payment goes through — and its cancellation callbacks and child cancellation
-cascade are delayed as well.
+checkpoint inside the section does not throw on them — the receipt reaches the
+state — and its cancellation callbacks and child cancellation cascade are
+delayed as well.
 
-When the outermost section finishes, a held request is applied. The next
-checkpoint throws `Cancelled`; ordinary code immediately after the call can
-still execute. Keep all required work inside the section and always await it.
-An unawaited section can outlive the job and lose a held request. Sections can
-nest.
+When the outermost section finishes, a held request is applied. The section
+returns what the step returned; the next checkpoint throws `Cancelled`, and
+ordinary code immediately after the call can still execute. Keep all required
+work inside the section and always await it. An unawaited section can outlive
+the job and lose a held request. Sections can nest.
 
 ### A whole job
 

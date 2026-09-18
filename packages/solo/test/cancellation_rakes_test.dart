@@ -123,28 +123,37 @@ final class Till extends Solo<String> {
   Job<void> commitByJoins() => run<String, void>((ctx) async {
         await ctx.join(() => device.start('payment'));
         device.trace.add('between');
+        ctx.emit('paid');
         await ctx.join(() => device.start('journal'));
       });
 
-  /// Plain awaits, with or without a report between the two calls.
-  Job<void> commitByAwaits({required bool report}) =>
-      run<String, void>((ctx) async {
+  /// Plain awaits around the same emit.
+  Job<void> commitByAwaits() => run<String, void>((ctx) async {
         await device.start('payment');
-        if (report) {
-          ctx.emit('paid');
-        }
+        ctx.emit('paid');
         await device.start('journal');
       });
 
-  /// The page's version, with or without the same report inside.
-  Job<void> commitInSection({required bool report}) =>
+  /// The second attempt: one join around the whole step, and the same
+  /// step without the emit. The mark after the join is the test's alone.
+  Job<void> commitInOneJoin({required bool report}) =>
       run<String, void>((ctx) async {
-        ctx.onCancel(() => device.trace.add('onCancel'));
-        await ctx.uncancellable(() async {
+        await ctx.join(() async {
           await device.start('payment');
           if (report) {
             ctx.emit('paid');
           }
+          await device.start('journal');
+        });
+        device.trace.add('after the join');
+      });
+
+  /// The page's version.
+  Job<void> commitInSection() => run<String, void>((ctx) async {
+        ctx.onCancel(() => device.trace.add('onCancel'));
+        await ctx.uncancellable(() async {
+          await device.start('payment');
+          ctx.emit('paid');
           await device.start('journal');
         });
       });
@@ -385,30 +394,14 @@ void main() {
         ['payment start', 'payment end'],
         reason: 'the first join throws after the payment it waited for',
       );
-      expect(job.outcome, isA<Cancelled>());
-    });
-
-    test('plain awaits carry both calls through', () async {
-      final device = Device();
-      final till = Till(device);
-      final job = till.commitByAwaits(report: false);
-      await pump();
-      unawaited(job.cancel());
-      await pump();
-
-      await device.end('payment');
-      await device.end('journal');
-      expect(
-        device.trace,
-        ['payment start', 'payment end', 'journal start', 'journal end'],
-      );
+      expect(till.currentState, 'ready', reason: 'no receipt either');
       expect(job.outcome, isA<Cancelled>());
     });
 
     test('an emit between plain awaits throws and loses the entry', () async {
       final device = Device();
       final till = Till(device);
-      final job = till.commitByAwaits(report: true);
+      final job = till.commitByAwaits();
       await pump();
       unawaited(job.cancel());
       await pump();
@@ -419,11 +412,48 @@ void main() {
       expect(job.outcome, isA<Cancelled>());
     });
 
+    test('one join around the step: the emit inside throws, no entry',
+        () async {
+      final device = Device();
+      final till = Till(device);
+      final job = till.commitInOneJoin(report: true);
+      await pump();
+      unawaited(job.cancel());
+      await pump();
+
+      await device.end('payment');
+      expect(
+        device.trace,
+        ['payment start', 'payment end'],
+        reason: 'the job is marked at once, and the step runs on marked',
+      );
+      expect(till.currentState, 'ready', reason: 'the emit did not write');
+      expect(job.outcome, isA<Cancelled>());
+    });
+
+    test('one join without the emit: both calls go, then Cancelled', () async {
+      final device = Device();
+      final till = Till(device);
+      final job = till.commitInOneJoin(report: false);
+      await pump();
+      unawaited(job.cancel());
+      await pump();
+
+      await device.end('payment');
+      await device.end('journal');
+      expect(
+        device.trace,
+        ['payment start', 'payment end', 'journal start', 'journal end'],
+        reason: 'the join throws in place of what the step returned',
+      );
+      expect(job.outcome, isA<Cancelled>());
+    });
+
     test('a section writes the entry, and an emit inside goes through',
         () async {
       final device = Device();
       final till = Till(device);
-      final job = till.commitInSection(report: true);
+      final job = till.commitInSection();
       await pump();
       unawaited(job.cancel());
       await pump();
