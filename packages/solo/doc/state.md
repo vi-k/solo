@@ -178,10 +178,10 @@ as itself: by the time its re-evaluation runs, the state it asks about is the
 nested one.
 
 The second question about C is the only one asked after the listeners of C: a
-rule that reads the state alone answers it as it answered the first, and a job
-that the first answer cancelled is not asked again. A `keepWhile` that also
-reads a field of the controller sees what those listeners wrote there only in
-the second.
+rule that reads nothing but the state answers it as it answered the first, and
+a job that the first answer cancelled is not asked again. A `keepWhile` that
+also reads a field of the controller sees what those listeners wrote there only
+in the second.
 
 `removeListener` matches with `==` rather than identity, the way
 `ChangeNotifier` does, so a widget can subscribe in `initState` and unsubscribe
