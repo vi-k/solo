@@ -24,7 +24,7 @@ final class TestSolo extends Solo<TestState> {
 }
 
 /// [TestSolo] with a stream, for the few tests that read one.
-final class TestSoloStream extends Solo<TestState> with SoloStream<TestState> {
+final class TestSoloStream extends Solo<TestState> with SoloStream {
   TestSoloStream([super.initialState = const Initial()]);
 
   @override

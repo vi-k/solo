@@ -10,7 +10,7 @@ final class _Screen {
   const _Screen({this.name = '', this.progress = 0});
 }
 
-final class _Controller extends SoloListenable<_Screen> {
+final class _Controller extends Solo<_Screen> with SoloListenable {
   _Controller() : super(const _Screen());
 
   void set(_Screen next) => externalSetState(next);

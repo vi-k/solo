@@ -149,8 +149,8 @@ checked `ctx.state`.
 | Type | Provides |
 | --- | --- |
 | `Solo<S>` | State, jobs, queue, rules and listeners. |
-| `Solo<S> with SoloStream<S>` | All of `Solo` plus a broadcast `stream`. |
-| `SoloListenable<S>` | All of `Solo` plus Flutter's `ValueListenable<S>`. |
+| `Solo<S> with SoloStream` | All of `Solo` plus a broadcast `stream`. |
+| `Solo<S> with SoloListenable` | All of `Solo` plus Flutter's `ValueListenable<S>`. |
 
 `addListener` is the engine's own member, on `Solo` itself, so what follows
 holds for every controller -- one with a delivery of its own and one without
@@ -195,9 +195,9 @@ The engine drops the listeners for good when closing finishes, not when
 nothing is thrown. The state stops at the same line: `externalSetState` past it
 throws a `StateError`.
 
-`SoloListenable` adds Flutter's `ValueListenable` to that and nothing else: it
-extends `Solo` directly, so a widget rebuilds from `value`, and it carries no
-stream of its own — mix in `SoloStream` for a controller that needs both.
+`SoloListenable` adds Flutter's `ValueListenable` to that and nothing else. It
+is a mixin on `Solo`, the way `SoloStream` is: a widget rebuilds from `value`,
+and a controller that needs both deliveries mixes in both.
 
 ### A delivery of your own
 
@@ -280,7 +280,7 @@ job it would free.
 ### externalSetState
 
 ```dart
-final class Camera extends Solo<CameraState> with SoloStream<CameraState> {
+final class Camera extends Solo<CameraState> with SoloStream {
   final Device device;
   late final StreamSubscription<bool> _link;
 

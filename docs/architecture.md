@@ -22,14 +22,19 @@ BLE-устройство, плеер, синхронизация), где сос
   объявлять рабочий тип шире одного класса.
 - **Контроллер** — владелец состояния и очереди. Снаружи это класс с обычными
   методами; методы создают задачи и ставят их в очередь. Иерархия — не вилка
-  от базы, а миксин поверх неё: `Solo<S>` — движок, `currentState` и слушатели,
-  `SoloStream<S>` подмешивает `stream`, `SoloListenable<S>` в пакете
-  `flutter_solo` наследует `Solo` и добавляет `ValueListenable`. Комбинация
-  `SoloListenable` с `SoloStream` работает (решение владельца 15.09.2026, спека
-  `2026-09-15[14]-solo-stream-mixin-design.md`) — прежний запрет «братья,
-  а не цепочка» из отчёта `2026-09-12[4]-listenable-on-base-report.md` снят.
-  Различаются наследники только доставкой изменений через защищённый `publish`;
-  чтение состояния есть у всех.
+  от базы, а миксины поверх неё: `Solo<S>` — движок, `currentState`
+  и слушатели, `SoloStream<S>` подмешивает `stream`, `SoloListenable<S>`
+  в пакете `flutter_solo` подмешивает `ValueListenable`. Оба —
+  `mixin … on Solo<S>`, аргумент типа в `with` выводится из суперкласса,
+  и контроллер с обеими доставками пишется
+  `extends Solo<S> with SoloStream, SoloListenable` (решения владельца
+  15.09.2026 и 18.09.2026, спеки `2026-09-15[14]-solo-stream-mixin-design.md`
+  и `2026-09-18[1]-solo-listenable-mixin-design.md`). Лицо `ValueListenable`
+  вешается на лист, поэтому общая база контроллеров может жить в пакете без
+  Flutter. Миксины различаются тем, что добавляют к движку: `SoloStream` —
+  доставку через защищённый `publish`, `SoloListenable` — лицо
+  `ValueListenable` поверх слушателей самого движка; чтение состояния есть
+  у всех.
 - **Задача** — единица работы с телом `Future<T> Function(ctx)`, ключом,
   правилами и хэндлом `Job<T>`, по которому можно дождаться исхода или
   отменить.
@@ -339,9 +344,8 @@ BLE-устройство, плеер, синхронизация), где сос
 
 `packages/solo/example/` — отдельный пакет с фейковой камерой и своими тестами.
 
-`packages/flutter_solo` —
-`SoloListenable<S> extends Solo<S> implements ValueListenable<S>` со своими
-тестами.
+`packages/flutter_solo` — `mixin SoloListenable<S extends Object> on Solo<S>
+implements ValueListenable<S>` со своими тестами.
 
 `Job.whenCancelled(callback)` — внешняя синхронная регистрация отмены
 с передачей `Cancelled` и функцией снятия. Поздняя регистрация вызывается

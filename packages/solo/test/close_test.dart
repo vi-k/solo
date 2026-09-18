@@ -278,7 +278,7 @@ final class _CloseOnFinish extends Solo<TestState> {
   }
 }
 
-final class _Reentrant extends Solo<TestState> with SoloStream<TestState> {
+final class _Reentrant extends Solo<TestState> with SoloStream {
   _Reentrant() : super(const Initial());
 
   @override

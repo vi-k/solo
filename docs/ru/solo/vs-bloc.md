@@ -41,7 +41,7 @@
 
 | bloc | solo |
 | --- | --- |
-| `Bloc<E, S>`, `Cubit<S>` | `Solo<S>`, `SoloListenable<S>` |
+| `Bloc<E, S>`, `Cubit<S>` | `Solo<S>`; `ValueListenable` с подмешанным `SoloListenable` |
 | Класс события, `on<E>`, `add(E())` | Метод, возвращающий `Job<T>` |
 | `EventTransformer` | `Policy` при добавлении `Job` |
 | `emit(next)` | `ctx.emit(next)` |
@@ -804,8 +804,7 @@ class PlayerBloc extends Bloc<PlayerCommand, PlayerState> {
 ```dart
 enum PlayerKey { play, pause, seek }
 
-final class PlayerController extends Solo<PlayerState>
-    with SoloStream<PlayerState> {
+final class PlayerController extends Solo<PlayerState> with SoloStream {
   final Player _player;
 
   PlayerController(this._player) : super(Ready());
@@ -1498,8 +1497,7 @@ class ReportBloc extends Bloc<ReportEvent, ReportState> {
 контроллера:
 
 ```dart
-final class ReportController extends Solo<ReportState>
-    with SoloStream<ReportState> {
+final class ReportController extends Solo<ReportState> with SoloStream {
   final Reports _reports;
 
   ReportController(this._reports, Auth auth) : super(const SignedIn()) {

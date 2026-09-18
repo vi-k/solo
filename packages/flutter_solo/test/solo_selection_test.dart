@@ -19,7 +19,7 @@ final class _Screen {
       );
 }
 
-final class _Controller extends SoloListenable<_Screen> {
+final class _Controller extends Solo<_Screen> with SoloListenable {
   _Controller() : super(const _Screen());
 
   void set(_Screen next) => externalSetState(next);
@@ -124,7 +124,7 @@ final class _ThrowingSource implements ValueListenable<int> {
 
 /// A controller with a `select` of its own: the extension must step aside
 /// and leave this member the winner.
-final class _ListController extends SoloListenable<String> {
+final class _ListController extends Solo<String> with SoloListenable {
   _ListController() : super('');
 
   void select(String id) => externalSetState(id);

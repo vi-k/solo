@@ -150,8 +150,8 @@ final subscription = camera.stream.listen(print);
 | Тип | Что предоставляет |
 | --- | --- |
 | `Solo<S>` | Состояние, `Job`, очередь, правила и слушателей. |
-| `Solo<S> with SoloStream<S>` | Всё из `Solo` и broadcast-стрим `stream`. |
-| `SoloListenable<S>` | Всё из `Solo` и интерфейс Flutter `ValueListenable<S>`. |
+| `Solo<S> with SoloStream` | Всё из `Solo` и broadcast-стрим `stream`. |
+| `Solo<S> with SoloListenable` | Всё из `Solo` и интерфейс Flutter `ValueListenable<S>`. |
 
 `addListener` — собственный член движка, он на самом `Solo`, поэтому сказанное
 ниже верно для любого контроллера: и со своей доставкой, и без всякой.
@@ -197,9 +197,8 @@ next line of the writer
 `externalSetState` за ней бросает `StateError`.
 
 `SoloListenable` добавляет к этому интерфейс Flutter `ValueListenable` и больше
-ничего: он наследует `Solo` напрямую, поэтому виджет перестраивается
-по `value`, а своего стрима у него нет — для контроллера с обоими подмешайте
-`SoloStream`.
+ничего. Это миксин на `Solo`, как и `SoloStream`: виджет перестраивается
+по `value`, а контроллер, которому нужны обе доставки, подмешивает оба.
 
 ### Своя доставка
 
@@ -282,7 +281,7 @@ Camera(this.device) : super(const Ready()) {
 ### externalSetState
 
 ```dart
-final class Camera extends Solo<CameraState> with SoloStream<CameraState> {
+final class Camera extends Solo<CameraState> with SoloStream {
   final Device device;
   late final StreamSubscription<bool> _link;
 

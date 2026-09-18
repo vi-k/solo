@@ -7,8 +7,8 @@ request cancellation.
 
 Use it for screens, sessions and devices where operations share state and need
 an explicit order. The package has no Flutter dependency.
-[`flutter_solo`](https://pub.dev/packages/flutter_solo) adds a controller that
-implements `ValueListenable` for Flutter widgets.
+[`flutter_solo`](https://pub.dev/packages/flutter_solo) adds `SoloListenable`,
+a mixin that makes a controller a `ValueListenable` for Flutter widgets.
 
 ## Install
 
@@ -142,8 +142,7 @@ Mix in `SoloStream` instead for a broadcast `stream`, delivered on the next
 microtask:
 
 ```dart
-final class ProfileController extends Solo<ProfileState>
-    with SoloStream<ProfileState> {
+final class ProfileController extends Solo<ProfileState> with SoloStream {
   // ...same as above...
 }
 ```

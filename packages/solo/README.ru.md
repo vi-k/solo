@@ -8,7 +8,8 @@
 Пакет подходит для экранов, сессий и устройств, операции которых работают
 с общим состоянием и должны выполняться в определённом порядке. Зависимости
 от Flutter нет. [`flutter_solo`](https://pub.dev/packages/flutter_solo)
-добавляет контроллер с интерфейсом `ValueListenable` для виджетов Flutter.
+добавляет `SoloListenable` — миксин, который даёт контроллеру интерфейс
+`ValueListenable` для виджетов Flutter.
 
 ## Установка
 
@@ -144,8 +145,7 @@ Future<void> main() async {
 `SoloStream`:
 
 ```dart
-final class ProfileController extends Solo<ProfileState>
-    with SoloStream<ProfileState> {
+final class ProfileController extends Solo<ProfileState> with SoloStream {
   // ...то же, что и выше...
 }
 ```

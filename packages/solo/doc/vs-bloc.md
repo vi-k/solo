@@ -40,7 +40,7 @@ The main API correspondences, for a reader who knows bloc:
 
 | bloc | solo |
 | --- | --- |
-| `Bloc<E, S>`, `Cubit<S>` | `Solo<S>`, `SoloListenable<S>` |
+| `Bloc<E, S>`, `Cubit<S>` | `Solo<S>`; `ValueListenable` with `SoloListenable` mixed in |
 | Event class, `on<E>`, `add(E())` | Method returning `Job<T>` |
 | `EventTransformer` | `Policy` on a job submission |
 | `emit(next)` | `ctx.emit(next)` |
@@ -795,8 +795,7 @@ type these player jobs accept:
 ```dart
 enum PlayerKey { play, pause, seek }
 
-final class PlayerController extends Solo<PlayerState>
-    with SoloStream<PlayerState> {
+final class PlayerController extends Solo<PlayerState> with SoloStream {
   final Player _player;
 
   PlayerController(this._player) : super(Ready());
@@ -1485,8 +1484,7 @@ already completed state change. The listener belongs inside the controller
 subclass:
 
 ```dart
-final class ReportController extends Solo<ReportState>
-    with SoloStream<ReportState> {
+final class ReportController extends Solo<ReportState> with SoloStream {
   final Reports _reports;
 
   ReportController(this._reports, Auth auth) : super(const SignedIn()) {

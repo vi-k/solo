@@ -178,11 +178,11 @@ final class _SoloSource<S extends Object> implements ValueListenable<S> {
 /// directly, `SoloSelection(controller, (state) => state.canSave)`.
 ///
 /// An extension and not a member of [SoloListenable] for a second reason:
-/// a controller of a domain is a subclass of it, and `select` is a name
-/// such a subclass may well want for itself — a list controller with
-/// `select(id)`, say. A member would collide with it and stop the
-/// subclass from compiling; an extension steps aside, and the subclass's
-/// own `select` wins.
+/// a controller of a domain mixes it in, and `select` is a name such a
+/// controller may well want for itself — a list controller with
+/// `select(id)`, say. A member of the mixin would collide with it and stop
+/// the controller from compiling; an extension steps aside, and the
+/// controller's own `select` wins.
 extension SoloSelect<S> on ValueListenable<S> {
   /// A [SoloSelection] of [selector] over this listenable.
   ///

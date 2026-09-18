@@ -365,7 +365,7 @@ final class _ThrowingStart extends Solo<TestState> {
 }
 
 /// Throws from the instance hook the engine calls on a state change.
-final class _ThrowingChange extends Solo<TestState> with SoloStream<TestState> {
+final class _ThrowingChange extends Solo<TestState> with SoloStream {
   _ThrowingChange() : super(const Initial());
 
   @override

@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_solo/flutter_solo.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-final class _Counter extends SoloListenable<int> {
+import 'support/plain_base.dart';
+
+final class _Counter extends Solo<int> with SoloListenable {
   _Counter() : super(0);
 
   @override
@@ -13,14 +16,59 @@ final class _Counter extends SoloListenable<int> {
   void set(int value) => externalSetState(value);
 }
 
-final class _ObjectController extends SoloListenable<Object> {
+final class _ObjectController extends Solo<Object> with SoloListenable {
   _ObjectController(super.initialState);
 
   void set(Object value) => externalSetState(value);
 }
 
-final class _Both extends SoloListenable<int> with SoloStream<int> {
+final class _Both extends Solo<int> with SoloStream, SoloListenable {
   _Both() : super(0);
+
+  void set(int value) => externalSetState(value);
+}
+
+final class _BothReversed extends Solo<int> with SoloListenable, SoloStream {
+  _BothReversed() : super(0);
+
+  void set(int value) => externalSetState(value);
+}
+
+final class _Leaf extends AppController<int> with SoloListenable {
+  _Leaf() : super(0);
+
+  void set(int value) => externalSetState(value);
+}
+
+final class _ReportingLeaf extends ReportingBase<int> with SoloListenable {
+  _ReportingLeaf() : super(0);
+
+  void set(int value) => externalSetState(value);
+}
+
+/// [ReportingBase] with nothing mixed in: its own report is what the leaf
+/// above overrides.
+final class _PlainReportingLeaf extends ReportingBase<int> {
+  _PlainReportingLeaf() : super(0);
+
+  void set(int value) => externalSetState(value);
+}
+
+/// What a class extending the old `SoloListenable` class, with an override
+/// of its own, becomes: the base mixes the face in itself.
+abstract class _FlutterBase<S extends Object> extends Solo<S>
+    with SoloListenable {
+  final reported = <Object>[];
+
+  _FlutterBase(super.initialState);
+
+  @override
+  void onListenerError(Object error, StackTrace stackTrace) =>
+      reported.add(error);
+}
+
+final class _MigratedLeaf extends _FlutterBase<int> {
+  _MigratedLeaf() : super(0);
 
   void set(int value) => externalSetState(value);
 }
@@ -350,6 +398,38 @@ void main() {
     },
   );
 
+  testWidgets(
+    'SoloListenable ahead of SoloStream in with delivers both too',
+    (tester) async {
+      final controller = _BothReversed();
+      addTearDown(controller.close);
+      final built = <int>[];
+      final streamed = <int>[];
+      final subscription = controller.stream.listen(streamed.add);
+      addTearDown(subscription.cancel);
+
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: ValueListenableBuilder<int>(
+            valueListenable: controller,
+            builder: (context, value, _) {
+              built.add(value);
+              return const SizedBox();
+            },
+          ),
+        ),
+      );
+
+      controller.set(1);
+      expect(streamed, isEmpty);
+      await tester.pump();
+
+      expect(built, [0, 1]);
+      expect(streamed, [1]);
+    },
+  );
+
   test(
     'a paused stream subscription holds close() open on SoloListenable too',
     () async {
@@ -370,4 +450,85 @@ void main() {
       expect(closeDone, isTrue);
     },
   );
+
+  testWidgets(
+    'a leaf over a base without Flutter drives ValueListenableBuilder and '
+    'Listenable.merge',
+    (tester) async {
+      final leaf = _Leaf();
+      addTearDown(leaf.close);
+      var merged = 0;
+      void onMerged() => merged++;
+      final merge = Listenable.merge([leaf])..addListener(onMerged);
+      addTearDown(() => merge.removeListener(onMerged));
+
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: ValueListenableBuilder<int>(
+            valueListenable: leaf,
+            builder: (context, value, _) => Text('$value'),
+          ),
+        ),
+      );
+      leaf.set(7);
+      await tester.pump();
+
+      expect(find.text('7'), findsOneWidget);
+      expect(merged, 1);
+    },
+  );
+
+  test(
+    'SoloListenable on the leaf reports over an onListenerError of the base',
+    () async {
+      final leaf = _ReportingLeaf();
+      final reports = <FlutterErrorDetails>[];
+      final previous = FlutterError.onError;
+      FlutterError.onError = reports.add;
+      addTearDown(() => FlutterError.onError = previous);
+
+      final plain = _PlainReportingLeaf()
+        ..addListener(() => throw StateError('the listener blew up'))
+        ..set(1);
+      expect(plain.reported.single, isA<StateError>());
+      expect(reports, isEmpty, reason: 'the base reports on its own');
+
+      leaf
+        ..addListener(() => throw StateError('the listener blew up'))
+        ..set(1);
+
+      expect(reports.single.exception, isA<StateError>());
+      expect(leaf.reported, isEmpty);
+      await plain.close();
+      await leaf.close();
+    },
+  );
+
+  test('a base that mixes SoloListenable in keeps its own onListenerError',
+      () async {
+    final leaf = _MigratedLeaf();
+    final reports = <FlutterErrorDetails>[];
+    final previous = FlutterError.onError;
+    FlutterError.onError = reports.add;
+    addTearDown(() => FlutterError.onError = previous);
+
+    leaf
+      ..addListener(() => throw StateError('the listener blew up'))
+      ..set(1);
+
+    expect(leaf, isA<ValueListenable<int>>(), reason: 'the base mixes it in');
+    expect(leaf.reported.single, isA<StateError>());
+    expect(reports, isEmpty);
+    await leaf.close();
+  });
+
+  test('the bases of these tests import nothing of Flutter', () {
+    final source = File('test/support/plain_base.dart').readAsStringSync();
+    final imports = RegExp("^import '([^']+)';", multiLine: true)
+        .allMatches(source)
+        .map((match) => match[1])
+        .toList();
+    expect(imports, ['package:solo/solo.dart']);
+  });
 }

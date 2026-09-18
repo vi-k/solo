@@ -48,10 +48,11 @@
   наследниками. Причины отмены: открытые абстрактные `CancelReason`
   и `SoloCancelReason`, встроенные наследники `final`; свои причины могут нести
   любые данные. Проверка по типу, `name` — только для журнала, равенства
-  по имени нет. Базовые классы, которые пользователь наследует (`Solo`,
-  `SoloStream`, `SoloObserver`, `JobObserver`, а также основы ядра `JobBase`
-  и `JobContextBase`), — без `base` и `final`: иначе наследники обязаны ставить
-  `base`/`final`, а `Mock implements MyController` перестаёт компилироваться.
+  по имени нет. Базовые классы и миксины, которые пользователь наследует или
+  подмешивает (`Solo`, `SoloStream`, `SoloListenable`, `SoloObserver`,
+  `JobObserver`, а также основы ядра `JobBase` и `JobContextBase`), — без
+  `base` и `final`: иначе наследники обязаны ставить `base`/`final`,
+  а `Mock implements MyController` перестаёт компилироваться.
 - Именование: задача — `job`, хэндл — `Job<T>`, контекст — `ctx`, контроллер —
   `Solo<S>`. Фабрики задач внутри контроллера — приватные методы с суффиксом
   `Job`: `_closeCameraJob()`.
