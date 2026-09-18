@@ -173,11 +173,9 @@
   `removeListener` matches on, the error that goes to `onListenerError` without
   stopping the pass, and the drop at close. "A delivery of your own" is about
   the other kind of delivery — a stream, a signal, a line in a log — and what
-  such an override owes; a subclass that used to keep a list of its own is told
-  to drop it, because overriding `addListener` without `super` intercepts the
-  registration rather than adding to it. `doc/flutter.md` names `SoloBuilder`
-  and `SoloSelectBuilder` from `flutter_solo`, the builders for a controller
-  that is not a `ValueListenable`.
+  such an override owes. `doc/flutter.md` names `SoloBuilder` and
+  `SoloSelectBuilder` from `flutter_solo`, the builders for a controller that
+  is not a `ValueListenable`.
 
 - **Breaking:** the controller's synchronous read is `currentState`, not
   `state`. A job body is a closure inside a method of the controller, so every

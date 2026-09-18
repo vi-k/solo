@@ -238,17 +238,6 @@ and `SoloListenable` is the engine's listeners plus Flutter's
 `ValueListenable`, which is what makes builders and `Listenable.merge`
 understand a controller.
 
-**Coming from a delivery of your own.** A subclass written before the engine
-carried listeners keeps a list of its own and overrides `addListener` and
-`removeListener` without calling `super`. It still compiles, and it is not
-merely one list too many: those overrides intercept the registration, so a
-builder's listener lands in the subclass's list, where the engine's
-`hasListeners` and `onListenerError` do not serve it. Drop the list and the
-overrides. If you still need them — to log a subscription, to connect a source
-lazily — call `super` first, and do not publish state synchronously from inside
-`addListener`: the listener the connection was made for is not registered yet
-at that moment.
-
 ## External state
 
 An independent source — a device, a socket — changes without waiting for the

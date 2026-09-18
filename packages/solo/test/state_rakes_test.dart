@@ -121,25 +121,6 @@ final class Order extends Solo<String> {
       );
 }
 
-// --- A delivery of your own -----------------------------------------------
-
-final class OwnList extends Solo<int> {
-  final own = <void Function()>[];
-
-  OwnList() : super(0);
-
-  bool get engineSeesListeners => hasListeners;
-
-  void set(int next) => externalSetState(next);
-
-  /// The first attempt: a list of its own, and no `super`.
-  @override
-  void addListener(void Function() listener) => own.add(listener);
-
-  @override
-  void removeListener(void Function() listener) => own.remove(listener);
-}
-
 // --- External state -------------------------------------------------------
 
 sealed class LinkState {
@@ -389,29 +370,6 @@ void main() {
       expect(order.answers, ['C: keep', 'C: reject']);
       expect('${await job.done}', contains('rules: keepWhile'));
       await order.close();
-    });
-  });
-
-  group('a delivery of your own', () {
-    test('a list of its own takes the registration away from the engine',
-        () async {
-      final solo = OwnList();
-      var called = 0;
-      solo.addListener(() => called++);
-
-      expect(solo.own, hasLength(1), reason: 'it landed in the subclass');
-      expect(
-        solo.engineSeesListeners,
-        isFalse,
-        reason: 'and the engine does not know it exists',
-      );
-
-      solo.set(1);
-      await pump();
-
-      expect(called, 0, reason: 'so the change never reaches it');
-
-      await solo.close();
     });
   });
 
