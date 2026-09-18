@@ -203,9 +203,10 @@ SoloJob<void> flush() => run<Ready, void>(
     );
 ```
 
-`cancellable: false` on a job refuses these requests altogether. Queue removal
-normally preserves such jobs, but `force: true` and `close()` can discard them
-before they start. `close()` waits for a running non-cancellable job.
+`cancellable: false` on a job refuses these requests altogether. While such a
+job waits in the queue, `queue.remove`, `queue.removeWhere`, `queue.clear` and
+`cancelAll()` leave it in place; called with `force: true`, they take it out.
+`close()` drops it from the queue too, and waits for it once it is running.
 
 Neither mechanism disables state rules. A job whose `W` or `keepWhile` no
 longer matches is still cancelled. A job that must work in every state needs
