@@ -37,10 +37,11 @@ after the job has finished and the next job has started. `join` suits work that
 must finish before the queue proceeds, such as a device command or opening a
 device. Neither method stops the operation itself.
 
-If an operation awaited by `join` fails, its error is thrown into the body even
-if the job has accepted cancellation. The job's final outcome still remains
-`Cancelled`. The cancellation check after `join` applies to successful
-operation results.
+After a cancellation, a successful result of `join` turns into `Cancelled`, as
+the table says; a failure does not. If the operation fails, `join` throws the
+operation's own error, even after the job has accepted cancellation, so the
+cancellation does not hide the failure. The job's final outcome is still
+`Cancelled`.
 
 Four sections below open with the version this vocabulary leads to — the method
 whose name sounds like the requirement, or a plain `await` — and say what it

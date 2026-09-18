@@ -36,6 +36,14 @@ final class Device {
     await pump();
   }
 
+  /// Fails [call] with [error].
+  Future<void> fail(String call, Object error) async {
+    final done = _running.remove(call)!;
+    trace.add('$call failed');
+    done.completeError(error);
+    await pump();
+  }
+
   bool isRunning(String call) => _running.containsKey(call);
 
   void _finish(String call, String how) {
@@ -401,6 +409,30 @@ void main() {
         reason: 'the held request lands when the section closes',
       );
       expect(job.outcome, isA<Cancelled>());
+    });
+  });
+
+  group('a join whose call fails', () {
+    test('throws the error of its call after a cancellation, not Cancelled',
+        () async {
+      final device = Device();
+      final uploader = Uploader(device);
+      Object? seen;
+      final job = uploader.run<String, void>((ctx) async {
+        try {
+          await ctx.join(() => device.start('write'));
+        } on Object catch (error) {
+          seen = error;
+          rethrow;
+        }
+      });
+      await pump();
+      unawaited(job.cancel());
+      await pump();
+
+      await device.fail('write', StateError('the device said no'));
+      expect(seen, isA<StateError>(), reason: 'the failure is not hidden');
+      expect(job.outcome, isA<Cancelled>(), reason: 'the outcome still is');
     });
   });
 
