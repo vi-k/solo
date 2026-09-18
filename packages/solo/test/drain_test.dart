@@ -125,11 +125,16 @@ void main() {
       step(solo, 'running');
       step(solo, 'queued');
       async.flushMicrotasks();
-      solo.close(mode: SoloCloseMode.drain).ignore();
+      var drained = false;
+      final drain = solo.close(mode: SoloCloseMode.drain)
+        ..then((_) => drained = true).ignore();
       async.elapse(const Duration(milliseconds: 10));
-      solo.close().ignore();
+      final plain = solo.close()..ignore();
+      expect(identical(drain, plain), isTrue);
       expect(solo.isDraining, isFalse);
+      expect(drained, isFalse);
       async.flushTimers();
+      expect(drained, isTrue);
       expect(journal.take(), [
         '[running] started',
         '[queued] dropped Cancelled(closed)',
