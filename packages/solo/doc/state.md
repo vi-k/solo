@@ -177,6 +177,12 @@ on, and heard by the listeners last. The outer change never reaches the rules
 as itself: by the time its re-evaluation runs, the state it asks about is the
 nested one.
 
+The second question about C is the only one asked after the listeners of C: a
+rule that reads the state alone answers it as it answered the first, and a job
+that the first answer cancelled is not asked again. A `keepWhile` that also
+reads a field of the controller sees what those listeners wrote there only in
+the second.
+
 `removeListener` matches with `==` rather than identity, the way
 `ChangeNotifier` does, so a widget can subscribe in `initState` and unsubscribe
 in `dispose` with a method of its own. A listener that throws stops neither the

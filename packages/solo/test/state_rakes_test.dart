@@ -68,10 +68,23 @@ final class Cam extends Solo<CamState> {
 final class Order extends Solo<String> {
   final trace = <String>[];
 
+  /// What the job's `keepWhile` answered, in order, next to the state it
+  /// was asked about.
+  final answers = <String>[];
+
+  /// The job's rule. The diagram's job keeps on every state.
+  final bool Function(Order order, String state) keep;
+
+  /// Whether the listener sets [blocked] once it hears C.
+  final bool blockOnC;
+
+  /// A field of the controller, not of the state.
+  bool blocked = false;
+
   var _nested = false;
   var _inNestedWrite = false;
 
-  Order() : super('A') {
+  Order({this.keep = _keepAll, this.blockOnC = false}) : super('A') {
     addListener(() {
       final seen = currentState;
       trace.add('    listeners of $seen');
@@ -86,8 +99,11 @@ final class Order extends Solo<String> {
         _inNestedWrite = false;
         trace.add('        next line of the listener');
       }
+      if (blockOnC && seen == 'C') blocked = true;
     });
   }
+
+  static bool _keepAll(Order order, String state) => true;
 
   void set(String next) => externalSetState(next);
 
@@ -95,7 +111,9 @@ final class Order extends Solo<String> {
         keepWhile: (state) {
           final indent = _inNestedWrite ? ' ' * 12 : ' ' * 4;
           trace.add('${indent}rules, against $state');
-          return true;
+          final kept = keep(this, state);
+          answers.add('$state: ${kept ? 'keep' : 'reject'}');
+          return kept;
         },
         (ctx) async => ctx.wait(
           () => Future<void>.delayed(const Duration(seconds: 1)),
@@ -342,6 +360,34 @@ void main() {
       ]);
 
       await job.cancel();
+      await order.close();
+    });
+
+    test('a rule of the state alone is not asked again once it has refused',
+        () async {
+      final order = Order(keep: (_, state) => state != 'C');
+      final job = order.watch();
+      await pump();
+      order.answers.clear();
+
+      order.set('B');
+
+      expect(order.answers, ['C: reject']);
+      expect('${await job.done}', contains('rules: keepWhile'));
+      await order.close();
+    });
+
+    test('only the second question hears what the listeners of C set',
+        () async {
+      final order = Order(keep: (order, _) => !order.blocked, blockOnC: true);
+      final job = order.watch();
+      await pump();
+      order.answers.clear();
+
+      order.set('B');
+
+      expect(order.answers, ['C: keep', 'C: reject']);
+      expect('${await job.done}', contains('rules: keepWhile'));
       await order.close();
     });
   });
