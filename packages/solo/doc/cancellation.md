@@ -28,7 +28,7 @@ operation behind it:
 | Method | If the job accepts cancellation while waiting |
 | --- | --- |
 | `ctx.wait(action)` | Throws `Cancelled` without waiting for the operation to finish. |
-| `ctx.join(action)` | Waits for the operation; checks cancellation before returning a successful result. |
+| `ctx.join(action)` | Waits for the operation to finish, then throws `Cancelled` in place of a successful result. |
 | `ctx.uncancellable(action)` | Holds ordinary cancellation until the action finishes; the next checkpoint throws it. |
 | `ctx.check()` | Throws `Cancelled` when the job is already cancelled or its rules no longer hold. |
 
@@ -135,10 +135,10 @@ SoloJob<void> commit(String entry) => run<Ready, void>((ctx) async {
     });
 ```
 
-`join` does wait the payment out. Then, before handing back the result, it
-checks the cancellation, as the table above says it does. Cancel the job during
-the payment: the payment goes through, the first `join` throws `Cancelled`, and
-the second is never reached. The money is taken and the journal has no entry.
+`join` does wait the payment out, and then, as the table above says, throws
+`Cancelled` in place of the result. Cancel the job during the payment: the
+payment goes through, the second `join` is never reached, and the money is
+taken with no entry in the journal.
 
 Plain `await` on both calls would carry them through, because nothing between
 them asks about the cancellation. That lasts until the first checkpoint goes in
