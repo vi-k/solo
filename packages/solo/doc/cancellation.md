@@ -34,17 +34,66 @@ operation behind it:
 
 `wait` suits a request whose result can be abandoned. The request can continue
 after the job has finished and the next job has started. `join` suits work that
-must finish before the queue proceeds, such as a device command or resource
-release. Neither method stops the operation itself.
+must finish before the queue proceeds, such as a device command or opening a
+device. Neither method stops the operation itself.
 
 If an operation awaited by `join` fails, its error is thrown into the body even
 if the job has accepted cancellation. The job's final outcome still remains
 `Cancelled`. The cancellation check after `join` applies to successful
 operation results.
 
+Four sections below open with the version this vocabulary leads to — the method
+whose name sounds like the requirement, or a plain `await` — and say what it
+does instead of what it was meant to do. The version that works follows under
+its own heading.
+
 ## Stopping the underlying operation
 
-For a player whose API accepts a cancellation token:
+A player seeks while the user drags the slider, and every new position replaces
+the last. The device has to be done with one seek before the next starts, and
+the position the user lands on must not wait for the ones dragged past.
+
+### The first attempt
+
+```dart
+Job<void> seek(Duration position) => run<Ready, void>(
+      key: 'seek',
+      policy: Policy.restart,
+      (ctx) async {
+        // Ends the moment the next seek cancels this one.
+        await ctx.wait(() => _player.seek(position));
+        ctx.emit(ctx.state.copyWith(position: position));
+      },
+    );
+```
+
+`restart` cancels the running job, and `wait` lets go of the call at that
+moment: the job ends and the next one starts. The seek it let go of is still
+running on the device. Drag through three positions and all three seeks are on
+the device at once — three starts, then three ends. The state ends on the right
+position, which is why nothing on the screen gives this away.
+
+### The second attempt
+
+```dart
+Job<void> seek(Duration position) => run<Ready, void>(
+      key: 'seek',
+      policy: Policy.restart,
+      (ctx) async {
+        // Waited out, so the device never has two at once.
+        await ctx.join(() => _player.seek(position));
+        ctx.emit(ctx.state.copyWith(position: position));
+      },
+    );
+```
+
+The device no longer gets two seeks at once, but nothing tells it that a seek
+is obsolete. The seek the user dragged past runs to its end; the job queued
+behind it is removed by `restart` before it starts; only then does the last
+seek begin. The job that waited the first seek out still ends `Cancelled`:
+waiting the call out does not make its result count.
+
+### The token
 
 ```dart
 Job<void> seek(Duration position) => run<Ready, void>(
@@ -62,9 +111,10 @@ Job<void> seek(Duration position) => run<Ready, void>(
 
 `ctx.onCancel(callback)` connects job cancellation to an operation's own
 cancellation mechanism; the callback runs synchronously when the job is marked
-cancelled. The token requests that the player stop seeking, and `join` waits
-for that request to finish, so a replacement seek starts only afterwards. This
-depends on the player's API actually responding to the token.
+cancelled. The token asks the player to stop seeking, and `join` waits for it
+to stop, so a replacement seek starts right after the one it replaces has
+stopped, not at the end of it. This depends on the player's API actually
+responding to the token.
 
 `ctx.onCancel` returns a function that unregisters the callback. It is a
 cancellation signal for the operation, whereas the `onCancel` parameter of
@@ -72,31 +122,61 @@ cancellation signal for the operation, whereas the `onCancel` parameter of
 
 ## Protecting a step or a whole job
 
+A payment and its journal entry go together: once the payment has gone through,
+the entry has to be written, whatever the job is asked in the meantime.
+
+### The first attempt
+
 ```dart
-// A step that must complete once started.
+SoloJob<void> commit(String entry) => run<Ready, void>((ctx) async {
+      // Each call waited out, whatever happens.
+      await ctx.join(() => payment.commit());
+      await ctx.join(() => journal.write(entry));
+    });
+```
+
+`join` does wait the payment out. Then, before handing back the result, it
+checks the cancellation, as the table above says it does. Cancel the job during
+the payment: the payment goes through, the first `join` throws `Cancelled`, and
+the second is never reached. The money is taken and the journal has no entry.
+
+Plain `await` on both calls would carry them through, because nothing between
+them asks about the cancellation. That lasts until the first checkpoint goes in
+between: an `emit` reporting the payment throws on the cancelled job, and the
+entry is lost the same way.
+
+### One section for the step
+
+```dart
 SoloJob<void> commit(String entry) => run<Ready, void>((ctx) async {
       await ctx.uncancellable(() async {
         await payment.commit();
         await journal.write(entry);
       });
     });
-
-// A job that turns down every request it is allowed to turn down.
-SoloJob<void> flush() => run<Ready, void>(
-      cancellable: false,
-      (ctx) => device.flush(),
-    );
 ```
 
 Manual cancellation, parent cancellation and closing are held while an
-`uncancellable` action runs. The job is not marked by those requests yet, so
-its cancellation callbacks and child cancellation cascade are also delayed.
+`uncancellable` action runs. The job is not marked by those requests yet, so a
+checkpoint inside the section does not throw on them — an `emit` reporting the
+payment goes through — and its cancellation callbacks and child cancellation
+cascade are delayed as well.
 
 When the outermost section finishes, a held request is applied. The next
 checkpoint throws `Cancelled`; ordinary code immediately after the call can
 still execute. Keep all required work inside the section and always await it.
 An unawaited section can outlive the job and lose a held request. Sections can
 nest.
+
+### A whole job
+
+```dart
+// A job that turns down every request it is allowed to turn down.
+SoloJob<void> flush() => run<Ready, void>(
+      cancellable: false,
+      (ctx) => device.flush(),
+    );
+```
 
 `cancellable: false` on a job refuses these requests altogether. Queue removal
 normally preserves such jobs, but `force: true` and `close()` can discard them
@@ -108,27 +188,58 @@ the base type `S` and no `keepWhile` restriction.
 
 ## Ordinary await and context lifetime
 
+An upload writes its chunks one at a time. Cancelled, it should stop after the
+chunk in flight, and however it ends, the device buffer has to be flushed.
+
+### The first attempt
+
 ```dart
 SoloJob<void> upload(List<int> chunks) => run<Ready, void>((ctx) async {
       ctx.onDispose(() async {
-        // Cleanup waits through cancellation, so a plain await belongs
-        // here: a cancellation-aware method would refuse the job.
+        // The flush must finish before the queue moves on.
+        await ctx.join(() => device.flush());
+      });
+      for (final chunk in chunks) {
+        await device.write(chunk);
+      }
+    });
+```
+
+Each half uses the wait the other half needed. The loop waits with a plain
+`await`, which answers to nothing: `close()` during the second chunk waits for
+the third and the fourth as well. The cleanup waits with `join`, which belongs
+to the body, and the body is over by the time cleanup runs: `join` throws
+`StateError`, the error reaches the controller's `onError` hook, and the flush
+never happens. That does not depend on how the job ended — an upload that
+finished `Done` leaves the buffer unflushed as well.
+
+### Each wait in its place
+
+```dart
+SoloJob<void> upload(List<int> chunks) => run<Ready, void>((ctx) async {
+      ctx.onDispose(() async {
+        // Cleanup runs after the body, where the waiting methods are
+        // gone: a plain await is the wait that works here.
         await device.flush();
       });
       for (final chunk in chunks) {
-        // Nothing to wrap between the steps, so the checkpoint stands
-        // on its own. A plain await here would answer to nothing.
-        ctx.check();
+        // Checks before the write and after it.
         await ctx.join(() => device.write(chunk));
       }
     });
 ```
 
 A plain `await` does not respond to job cancellation and can delay completion
-and `close()` indefinitely. It is appropriate when intentionally waiting
-through cancellation, including inside cleanup or inside an `uncancellable`
-section. Cancellation-aware waiting methods reject a job that is already
-cancelled, so they cannot perform its cleanup.
+and `close()` indefinitely. It is the right wait where waiting through
+cancellation is the point: inside cleanup and inside an `uncancellable`
+section. Cleanup runs after the body has ended, whatever the outcome, and the
+waiting methods belong to the body: in a disposer they throw `StateError` even
+for a job that ended `Done`.
+
+`join` checks the cancellation before its operation as well as after it, so two
+of them in a row leave no gap. `ctx.check()` is for the gaps nothing else
+checks: after a plain `await` or an `uncancellable` section, when what follows
+is not another checkpoint.
 
 Do not retain a context to start work after its job ends. Methods such as
 `emit`, `run`, `each`, `wait`, `join` and `uncancellable` then throw
@@ -185,15 +296,37 @@ use the same reporting path as `ctx.onCancel` errors.
 
 ## Cancelling and closing a controller
 
+A screen sends a batch of log lines per event. When the screen goes away, the
+batches already queued still have to go out.
+
+### The first attempt
+
+```dart
+logs.send(first);
+logs.send(second);
+logs.send(third);
+
+// The screen goes away.
+await logs.close();
+```
+
+`close()` cancels every queued job with `Cancelled(closed)` and requests
+cancellation of the running one. The second and third batches never go out. The
+first does, because it was already in flight, but its outcome is
+`Cancelled(closed)` all the same: the job accepted the cancellation before the
+batch arrived, and the outcome records that, not the delivery.
+
+### Three ways to stop
+
 ```dart
 // Clear the queue and stop the running job; the controller stays open.
-await controller.cancelAll();
+await logs.cancelAll();
 
 // The same, and nothing new is accepted afterwards.
-await controller.close();
+await logs.close();
 
 // Or run what is already queued first, and close after it.
-await controller.close(mode: SoloCloseMode.drain);
+await logs.close(mode: SoloCloseMode.drain);
 ```
 
 `cancelAll()` clears cancellable queued jobs, requests cancellation of the
@@ -208,20 +341,51 @@ Repeated calls return the same future. Later submissions return already
 cancelled jobs rather than throwing, so callers do not need an `isClosed` check
 before submitting.
 
-`SoloCloseMode.drain` closes by running the queue instead of dropping it. No
-new root job is taken from the call onwards, and the ones already in the queue
-run by the usual rules: in order, with their children, their cleanup, and an
-accumulation window waited out where there is one. A plain `close()` over a
-running drain stops it where it is, and the same future everybody holds
-completes after that. Running the queue is not a promise of delivery: a drained
-job can still fail or be turned down by its rules, and a buffer that keeps
-events until the sending is confirmed is built on top of this, not inside it.
+`SoloCloseMode.drain` closes by running the queue instead of dropping it, and
+for the screen above that is the whole fix: the three batches go out in order,
+each ends `Done`, and the future completes after the third. No new root job is
+taken from the call onwards, and the ones already in the queue run by the usual
+rules: in order, with their children, their cleanup, and an accumulation window
+waited out where there is one. A plain `close()` over a running drain stops it
+where it is, and the same future everybody holds completes after that. Running
+the queue is not a promise of delivery: a drained job can still fail or be
+turned down by its rules, and a buffer that keeps events until the sending is
+confirmed is built on top of this, not inside it.
 
 Closing does not itself release resources owned by your application or select a
 final application state. Put that work in a controller method and await it
 before `close()`, as in the [camera example](camera.md). A state handler of the
 cancelled job may still update state while closing.
 
-Do not await `close()` or `cancelAll()` from the current job's body or cleanup:
-either would wait for the very job making the call. A body can finish by
-returning or cancel itself by throwing `Cancelled('reason')`.
+### Closing from a job
+
+Signing out ends the session: a call to the server, and then the controller
+closes.
+
+#### The first attempt
+
+```dart
+SoloJob<void> logout() => run<Ready, void>((ctx) async {
+      await ctx.join(api.logout);
+      await close();
+    });
+```
+
+This never comes back. `close()` waits for the running job, including its
+children and cleanup, and the running job is this one, waiting for `close()`.
+`cancelAll()` waits the same way, and so does either of them awaited from the
+job's cleanup.
+
+#### A controller method
+
+```dart
+Future<void> logout() async {
+  await run<Ready, void>((ctx) => ctx.join(api.logout)).done;
+  await close();
+}
+```
+
+The job makes the call, and the method closes the controller once that job is
+over: the order the [camera example](camera.md) keeps with its `dispose()`. A
+body that only has to end itself needs no controller call at all: it returns,
+or cancels itself by throwing `Cancelled('reason')`.

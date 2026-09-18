@@ -1,0 +1,622 @@
+@Timeout(Duration(seconds: 5))
+library;
+
+import 'dart:async';
+
+import 'package:solo/solo.dart';
+import 'package:test/test.dart';
+
+/// The first attempts of `doc/cancellation.md`, and what each one costs.
+///
+/// The page opens four of its sections with the version the vocabulary of
+/// the API leads to, and states what that version does instead of what it
+/// was meant to do. Nothing else guards those statements: the page has no
+/// bench, so an outcome quoted there rots silently. Every order and every
+/// outcome the page names about a first attempt is pinned here, next to
+/// the version the page then shows.
+
+/// A device whose every call runs until the test ends it.
+///
+/// The trace is the device's side of the story: which calls started,
+/// which ran to their end, and which a token stopped.
+final class Device {
+  final trace = <String>[];
+  final _running = <String, Completer<void>>{};
+
+  Future<void> start(String call, [CancelToken? token]) {
+    trace.add('$call start');
+    final done = _running[call] = Completer<void>();
+    token?.onCancel = () => _finish(call, 'stopped');
+    return done.future;
+  }
+
+  /// Ends [call] the way the device would on its own.
+  Future<void> end(String call) async {
+    _finish(call, 'end');
+    await pump();
+  }
+
+  bool isRunning(String call) => _running.containsKey(call);
+
+  void _finish(String call, String how) {
+    final done = _running.remove(call);
+    if (done == null) {
+      return;
+    }
+    trace.add('$call $how');
+    done.complete();
+  }
+}
+
+/// The player API's own cancellation, the way the page's player takes it.
+final class CancelToken {
+  void Function()? onCancel;
+
+  void cancel() => onCancel?.call();
+}
+
+// --- Stopping the underlying operation ------------------------------------
+
+final class Player extends Solo<int> {
+  final Device device;
+
+  Player(this.device) : super(0);
+
+  /// The first attempt: the waiting method that ends at once.
+  Job<void> seekByWait(int position) => run<int, void>(
+        key: 'seek',
+        policy: Policy.restart,
+        (ctx) async {
+          await ctx.wait(() => device.start('seek $position'));
+          ctx.emit(position);
+        },
+      );
+
+  /// The second attempt: the waiting method that waits the call out.
+  Job<void> seekByJoin(int position) => run<int, void>(
+        key: 'seek',
+        policy: Policy.restart,
+        (ctx) async {
+          await ctx.join(() => device.start('seek $position'));
+          ctx.emit(position);
+        },
+      );
+
+  /// The page's version: the cancellation reaches the call.
+  Job<void> seekWithToken(int position) => run<int, void>(
+        key: 'seek',
+        policy: Policy.restart,
+        (ctx) async {
+          final token = CancelToken();
+          ctx.onCancel(token.cancel);
+          await ctx.join(() => device.start('seek $position', token));
+          ctx.emit(position);
+        },
+      );
+}
+
+// --- Protecting a step or a whole job -------------------------------------
+
+final class Till extends Solo<String> {
+  final Device device;
+
+  Till(this.device) : super('ready');
+
+  /// The first attempt: each call waited out on its own.
+  ///
+  /// The mark between the calls is the test's alone: the second join would
+  /// refuse the job as well, and only the mark tells which of the two threw.
+  Job<void> commitByJoins() => run<String, void>((ctx) async {
+        await ctx.join(() => device.start('payment'));
+        device.trace.add('between');
+        await ctx.join(() => device.start('journal'));
+      });
+
+  /// Plain awaits, with or without a report between the two calls.
+  Job<void> commitByAwaits({required bool report}) =>
+      run<String, void>((ctx) async {
+        await device.start('payment');
+        if (report) {
+          ctx.emit('paid');
+        }
+        await device.start('journal');
+      });
+
+  /// The page's version, with or without the same report inside.
+  Job<void> commitInSection({required bool report}) =>
+      run<String, void>((ctx) async {
+        ctx.onCancel(() => device.trace.add('onCancel'));
+        await ctx.uncancellable(() async {
+          await device.start('payment');
+          if (report) {
+            ctx.emit('paid');
+          }
+          await device.start('journal');
+        });
+      });
+}
+
+// --- Ordinary await and context lifetime ----------------------------------
+
+final class Uploader extends Solo<String> {
+  final Device device;
+  final errors = <Object>[];
+
+  Uploader(this.device) : super('ready');
+
+  @override
+  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      errors.add(error);
+
+  /// The first attempt: each wait is the one the other place needed.
+  Job<void> uploadInverted(int chunks) => run<String, void>((ctx) async {
+        ctx.onDispose(() async {
+          await ctx.join(() => device.start('flush'));
+        });
+        for (var chunk = 1; chunk <= chunks; chunk++) {
+          await device.start('write $chunk');
+        }
+      });
+
+  /// The page's version.
+  Job<void> upload(int chunks) => run<String, void>((ctx) async {
+        ctx.onDispose(() async {
+          await device.start('flush');
+        });
+        for (var chunk = 1; chunk <= chunks; chunk++) {
+          await ctx.join(() => device.start('write $chunk'));
+        }
+      });
+
+  /// A plain await, then a waiting method with nothing between them.
+  Job<void> writeAfterAPlainAwait() => run<String, void>((ctx) async {
+        await device.start('warm up');
+        await ctx.join(() => device.start('write'));
+      });
+}
+
+// --- Cancelling and closing a controller ----------------------------------
+
+final class Outbox extends Solo<String> {
+  final Device device;
+
+  Outbox(this.device) : super('open');
+
+  Job<void> send(int batch) =>
+      run<String, void>((ctx) => ctx.join(() => device.start('send $batch')));
+}
+
+final class Session extends Solo<String> {
+  final Device device;
+
+  Session(this.device) : super('signed in');
+
+  /// The first attempt: the job closes its own controller.
+  Job<void> logoutFromTheJob() => run<String, void>((ctx) async {
+        await ctx.join(() => device.start('logout'));
+        await close();
+      });
+
+  /// The same, clearing the controller instead of closing it.
+  Job<void> logoutCancellingAll() => run<String, void>((ctx) async {
+        await ctx.join(() => device.start('logout'));
+        await cancelAll();
+      });
+
+  /// The same, with the closing moved into the job's cleanup.
+  Job<void> logoutClosingInCleanup() => run<String, void>((ctx) async {
+        ctx.onDispose(close);
+        await ctx.join(() => device.start('logout'));
+      });
+
+  /// The page's version: the job first, the closing after it.
+  Future<void> logout() async {
+    await run<String, void>((ctx) => ctx.join(() => device.start('logout')))
+        .done;
+    await close();
+  }
+}
+
+void main() {
+  group('a seek that the next one replaces', () {
+    test('by wait, every seek runs on the device at once', () async {
+      final device = Device();
+      final player = Player(device);
+      final first = player.seekByWait(1);
+      await pump();
+      player.seekByWait(2);
+      await pump();
+      final last = player.seekByWait(3);
+      await pump();
+
+      expect(
+        device.trace,
+        ['seek 1 start', 'seek 2 start', 'seek 3 start'],
+        reason: 'the wait ends at the cancellation and the call goes on',
+      );
+      expect(
+        first.outcome,
+        isA<Cancelled>(),
+        reason: 'the job is over while its seek still runs',
+      );
+
+      await device.end('seek 1');
+      await device.end('seek 2');
+      await device.end('seek 3');
+      expect(last.outcome, isA<Done<void>>());
+      expect(player.currentState, 3, reason: 'the state alone looks right');
+    });
+
+    test('by join, the seek dragged past runs to its end first', () async {
+      final device = Device();
+      final player = Player(device);
+      final first = player.seekByJoin(1);
+      await pump();
+      final second = player.seekByJoin(2);
+      await pump();
+      final last = player.seekByJoin(3);
+      await pump();
+
+      expect(device.trace, ['seek 1 start']);
+      expect(
+        device.isRunning('seek 1'),
+        isTrue,
+        reason: 'nothing tells the device the seek is obsolete',
+      );
+      expect(
+        second.outcome,
+        isA<Cancelled>().having((c) => c.started, 'started', isFalse),
+        reason: 'the policy took the queued one out',
+      );
+
+      await device.end('seek 1');
+      expect(
+        device.trace,
+        ['seek 1 start', 'seek 1 end', 'seek 3 start'],
+        reason: 'the last seek starts only when the first is over',
+      );
+      expect(
+        first.outcome,
+        isA<Cancelled>(),
+        reason: 'and the one that ran to its end is cancelled all the same',
+      );
+
+      await device.end('seek 3');
+      expect(last.outcome, isA<Done<void>>());
+      expect(player.currentState, 3);
+    });
+
+    test('with a token, each seek stops before the next one starts', () async {
+      final device = Device();
+      final player = Player(device);
+      final first = player.seekWithToken(1);
+      await pump();
+      player.seekWithToken(2);
+      await pump();
+      final last = player.seekWithToken(3);
+      await pump();
+
+      expect(device.trace, [
+        'seek 1 start',
+        'seek 1 stopped',
+        'seek 2 start',
+        'seek 2 stopped',
+        'seek 3 start',
+      ]);
+      expect(first.outcome, isA<Cancelled>());
+
+      await device.end('seek 3');
+      expect(last.outcome, isA<Done<void>>());
+      expect(player.currentState, 3);
+    });
+  });
+
+  group('a payment and its journal entry', () {
+    test('two joins take the payment and never write the entry', () async {
+      final device = Device();
+      final till = Till(device);
+      final job = till.commitByJoins();
+      await pump();
+      unawaited(job.cancel());
+      await pump();
+
+      await device.end('payment');
+      expect(
+        device.trace,
+        ['payment start', 'payment end'],
+        reason: 'the first join throws after the payment it waited for',
+      );
+      expect(job.outcome, isA<Cancelled>());
+    });
+
+    test('plain awaits carry both calls through', () async {
+      final device = Device();
+      final till = Till(device);
+      final job = till.commitByAwaits(report: false);
+      await pump();
+      unawaited(job.cancel());
+      await pump();
+
+      await device.end('payment');
+      await device.end('journal');
+      expect(
+        device.trace,
+        ['payment start', 'payment end', 'journal start', 'journal end'],
+      );
+      expect(job.outcome, isA<Cancelled>());
+    });
+
+    test('an emit between plain awaits throws and loses the entry', () async {
+      final device = Device();
+      final till = Till(device);
+      final job = till.commitByAwaits(report: true);
+      await pump();
+      unawaited(job.cancel());
+      await pump();
+
+      await device.end('payment');
+      expect(device.trace, ['payment start', 'payment end']);
+      expect(till.currentState, 'ready', reason: 'the emit did not write');
+      expect(job.outcome, isA<Cancelled>());
+    });
+
+    test('a section writes the entry, and an emit inside goes through',
+        () async {
+      final device = Device();
+      final till = Till(device);
+      final job = till.commitInSection(report: true);
+      await pump();
+      unawaited(job.cancel());
+      await pump();
+      expect(
+        device.trace,
+        ['payment start'],
+        reason: 'the request is held: no callback yet',
+      );
+
+      await device.end('payment');
+      expect(till.currentState, 'paid');
+      await device.end('journal');
+      expect(
+        device.trace,
+        [
+          'payment start',
+          'payment end',
+          'journal start',
+          'journal end',
+          'onCancel',
+        ],
+        reason: 'the held request lands when the section closes',
+      );
+      expect(job.outcome, isA<Cancelled>());
+    });
+  });
+
+  group('an upload and its flush', () {
+    test('the first attempt writes every chunk and never flushes', () async {
+      final device = Device();
+      final uploader = Uploader(device);
+      final job = uploader.uploadInverted(4);
+      await pump();
+      await device.end('write 1');
+
+      var closed = false;
+      unawaited(uploader.close().then((_) => closed = true));
+      await pump();
+      await device.end('write 2');
+      await device.end('write 3');
+      expect(closed, isFalse, reason: 'close waits for every chunk left');
+      await device.end('write 4');
+
+      expect(device.trace, [
+        'write 1 start',
+        'write 1 end',
+        'write 2 start',
+        'write 2 end',
+        'write 3 start',
+        'write 3 end',
+        'write 4 start',
+        'write 4 end',
+      ]);
+      expect(closed, isTrue);
+      expect(job.outcome, isA<Cancelled>());
+      expect(
+        uploader.errors,
+        [
+          isA<StateError>().having(
+            (e) => e.message,
+            'message',
+            contains('disposing, cannot join'),
+          ),
+        ],
+        reason: 'the join in the cleanup throws, and the flush never starts',
+      );
+    });
+
+    test('a join in cleanup throws on a job that ended Done too', () async {
+      final device = Device();
+      final uploader = Uploader(device);
+      final job = uploader.uploadInverted(1);
+      await pump();
+      await device.end('write 1');
+
+      expect(job.outcome, isA<Done<void>>());
+      expect(device.trace, ['write 1 start', 'write 1 end']);
+      expect(uploader.errors, [isA<StateError>()]);
+    });
+
+    test('the page version stops after the chunk in flight and flushes',
+        () async {
+      final device = Device();
+      final uploader = Uploader(device);
+      final job = uploader.upload(4);
+      await pump();
+      await device.end('write 1');
+
+      var closed = false;
+      unawaited(uploader.close().then((_) => closed = true));
+      await pump();
+      await device.end('write 2');
+      expect(closed, isFalse, reason: 'the cleanup is still flushing');
+      await device.end('flush');
+
+      expect(device.trace, [
+        'write 1 start',
+        'write 1 end',
+        'write 2 start',
+        'write 2 end',
+        'flush start',
+        'flush end',
+      ]);
+      expect(closed, isTrue);
+      expect(job.outcome, isA<Cancelled>());
+      expect(uploader.errors, isEmpty);
+    });
+
+    test('a join checks before its call as well as after it', () async {
+      final device = Device();
+      final uploader = Uploader(device);
+      final job = uploader.writeAfterAPlainAwait();
+      await pump();
+      unawaited(job.cancel());
+      await pump();
+
+      await device.end('warm up');
+      expect(
+        device.trace,
+        ['warm up start', 'warm up end'],
+        reason: 'the gap after a plain await is covered by the next join',
+      );
+      expect(job.outcome, isA<Cancelled>());
+    });
+  });
+
+  group('closing with work in the queue', () {
+    test('close drops the queue, and the send in flight says Cancelled',
+        () async {
+      final device = Device();
+      final outbox = Outbox(device);
+      final sends = [outbox.send(1), outbox.send(2), outbox.send(3)];
+      await pump();
+
+      var closed = false;
+      unawaited(outbox.close().then((_) => closed = true));
+      await pump();
+      expect(
+        sends[1].outcome,
+        isA<Cancelled>().having((c) => c.started, 'started', isFalse),
+      );
+      expect(
+        sends[2].outcome,
+        isA<Cancelled>().having((c) => c.started, 'started', isFalse),
+      );
+
+      await device.end('send 1');
+      expect(closed, isTrue);
+      expect(
+        device.trace,
+        ['send 1 start', 'send 1 end'],
+        reason: 'the first batch did go out',
+      );
+      expect(
+        sends[0].outcome,
+        isA<Cancelled>().having(
+          (c) => c.reason,
+          'reason',
+          isA<ClosedCancelReason>(),
+        ),
+        reason: 'and its outcome says it was cancelled',
+      );
+    });
+
+    test('a drain sends every batch already queued', () async {
+      final device = Device();
+      final outbox = Outbox(device);
+      final sends = [outbox.send(1), outbox.send(2), outbox.send(3)];
+      await pump();
+
+      var closed = false;
+      unawaited(
+        outbox.close(mode: SoloCloseMode.drain).then((_) => closed = true),
+      );
+      await pump();
+      await device.end('send 1');
+      await device.end('send 2');
+      expect(closed, isFalse);
+      await device.end('send 3');
+
+      expect(closed, isTrue);
+      expect(device.trace, [
+        'send 1 start',
+        'send 1 end',
+        'send 2 start',
+        'send 2 end',
+        'send 3 start',
+        'send 3 end',
+      ]);
+      for (final send in sends) {
+        expect(send.outcome, isA<Done<void>>());
+      }
+    });
+  });
+
+  group('closing from inside a job', () {
+    test('the first attempt never comes back', () async {
+      final device = Device();
+      final session = Session(device);
+      final job = session.logoutFromTheJob();
+      await pump();
+      await device.end('logout');
+      for (var i = 0; i < 10; i++) {
+        await pump();
+      }
+
+      expect(device.trace, ['logout start', 'logout end']);
+      expect(
+        job.isFinished,
+        isFalse,
+        reason: 'close waits for this job, and this job waits for close',
+      );
+    });
+
+    test('cancelAll from the body never comes back either', () async {
+      final device = Device();
+      final session = Session(device);
+      final job = session.logoutCancellingAll();
+      await pump();
+      await device.end('logout');
+      for (var i = 0; i < 10; i++) {
+        await pump();
+      }
+
+      expect(job.isFinished, isFalse);
+    });
+
+    test('close awaited from the cleanup never comes back either', () async {
+      final device = Device();
+      final session = Session(device);
+      final job = session.logoutClosingInCleanup();
+      await pump();
+      await device.end('logout');
+      for (var i = 0; i < 10; i++) {
+        await pump();
+      }
+
+      expect(job.outcome, isNull, reason: 'the cleanup is still waiting');
+    });
+
+    test('the page version logs out and closes', () async {
+      final device = Device();
+      final session = Session(device);
+      var done = false;
+      unawaited(session.logout().then((_) => done = true));
+      await pump();
+      await device.end('logout');
+
+      expect(done, isTrue);
+      expect(session.isClosed, isTrue);
+    });
+  });
+}
+
+Future<void> pump() => Future<void>.delayed(Duration.zero);
