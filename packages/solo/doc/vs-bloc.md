@@ -678,8 +678,8 @@ another with nothing awaited in between.
 
 The device trace is `[play start, seek 1 start, seek 2 start, pause start,
 seek 3 start, play end, pause end, seek 1 end, seek 2 end, seek 3 end]`, and
-the final state is `PlayerState(3ms)` — the position the user asked for. The
-state is right and the device is not.
+the final state is `PlayerState(3ms)` — the position the user asked for. What
+the device made of five commands running at once, the state does not say.
 
 Two things went wrong at once. A transformer orders the events of one
 registration and nothing beyond it, and there are three registrations here: a
