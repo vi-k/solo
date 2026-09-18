@@ -290,8 +290,7 @@ final class _CloseObserver extends SoloObserver {
   void onClose(Solo<Object> solo) => callback(solo);
 }
 
-final class _ExposedStreamSolo extends Solo<TestState>
-    with SoloStream<TestState> {
+final class _ExposedStreamSolo extends Solo<TestState> with SoloStream {
   _ExposedStreamSolo() : super(const Initial());
 
   void set(TestState state) => externalSetState(state);

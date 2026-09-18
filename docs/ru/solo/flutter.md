@@ -125,8 +125,7 @@ SoloSelectBuilder<ProfileState, bool>(
 виджетная сторона и broadcast-`stream`:
 
 ```dart
-final class Session extends SoloListenable<SessionState>
-    with SoloStream<SessionState> {
+final class Session extends SoloListenable<SessionState> with SoloStream {
   Session(super.initialState);
 }
 ```

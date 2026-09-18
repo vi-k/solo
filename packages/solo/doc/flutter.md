@@ -123,8 +123,7 @@ build, and each of those builds makes a new selection.
 and a broadcast `stream` at once:
 
 ```dart
-final class Session extends SoloListenable<SessionState>
-    with SoloStream<SessionState> {
+final class Session extends SoloListenable<SessionState> with SoloStream {
   Session(super.initialState);
 }
 ```

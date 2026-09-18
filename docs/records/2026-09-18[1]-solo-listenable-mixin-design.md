@@ -229,10 +229,10 @@ Migrated: base=[base: Bad state: boom] flutter=[]
 
 В `packages/solo/test/solo_stream_test.dart`, 581 → 582:
 
-5. `'a generic controller takes SoloStream by inference'` —
-   `class _Generic<T extends Object> extends Solo<T> with SoloStream`, стрим
-   читается через поле `SoloStream<int>`. Держит однострочник миграции
-   из `CHANGELOG` ядра.
+5. `'a generic controller takes SoloStream by inference'` — фикстура и есть
+   однострочник миграции из `CHANGELOG` ядра,
+   `final class _Generic<T extends Object> = Solo<T> with SoloStream;`; стрим
+   читается через поле `SoloStream<int>`, состояние меняет задача.
 
 ### Документы — по утверждениям
 
@@ -305,9 +305,14 @@ Migrated: base=[base: Bad state: boom] flutter=[]
   -- it already extended the bare engine» — неправда, становится «в
   `flutter_solo` он стал миксином того же рода, и они комбинируются»; три
   `with SoloStream<S>`/`<T>` — вывод; однострочник `:15` →
-  `class C<T extends Object> extends Solo<T> with SoloStream {}` — нынешний
-  не компилируется ни до правки, ни после; миграция «a field or parameter typed
-  `Solo<S>` … becomes `SoloStream<S>`» — позиция типа, остаётся явной.
+  `class C<T extends Object> = Solo<T> with SoloStream;` — нынешний
+  не компилируется ни до правки, ни после. **Поправка при работе, 2026-09-18:**
+  форма `class C<T extends Object> extends Solo<T> with SoloStream {}`, которую
+  предложили оба ревью и первая версия второй редакции, не компилируется тоже —
+  у `Solo` нет конструктора без аргументов, «The superclass 'Solo<T>' doesn't
+  have a zero argument constructor». Применение миксина пробрасывает
+  конструктор `Solo` и остаётся одной строкой; миграция «a field or parameter
+  typed `Solo<S>` … becomes `SoloStream<S>`» — позиция типа, остаётся явной.
 
 ### Записи и документы проекта
 
@@ -380,34 +385,43 @@ done
 
 Два коммита, каждый зелёный сам по себе.
 
-1. `refactor: infer the type argument of SoloStream in with`. - Тесты `solo`:
-   семь объявлений в пяти файлах, затем `dart format`. - Тест 5
-   в `solo_stream_test.dart`. -
-   `packages/flutter_solo/test/solo_listenable_test.dart:22`:
-   `_Both extends SoloListenable<int> with SoloStream` — класс ещё класс, вывод
-   из суперкласса работает; заголовок коммита держит слово «все». - Фрагменты:
-   `packages/solo/README.md:145–146`, `doc/state.md:192` и строка таблицы
-   `:107`, `doc/flutter.md:126–127`
-   (`extends SoloListenable<SessionState> with SoloStream`),
-   `doc/vs-bloc.md:798–799`, `:1488–1489`; переводы. -
-   `packages/solo/CHANGELOG.md`: три формы — вывод, однострочник —
-   `<T extends Object>`; фраза про `SoloListenable` не трогается — её
-   переписывает коммит 2. - Проверки: `dart analyze`
-   и `dart format --set-exit-if-changed` в `solo` и `flutter_solo`; `dart test`
-   в `solo` (582); `flutter test` в `flutter_solo` (89); оба стенда
-   и `check_traces.py`; `check_translations.py`, `check_doc_shape.py`,
-   `check_line_width.py`, `reflow.py --check`; `merge-file` против
-   `docs/state-rakes`.
-2. `feat(flutter_solo)!: SoloListenable becomes a mixin`. - Миксин, дартдок;
-   `solo_selection.dart:180–185`; фраза в дартдоке `Solo.onListenerError`. -
-   Восемь фикстур, пример; `test/support/plain_base.dart`; тесты 1–4. -
-   Документы и переводы из раздела «Документы», включая новый раздел
-   `flutter.md`; `CHANGELOG` обоих пакетов. - `docs/architecture.md`,
-   `docs/conventions.md`, шапка `2026-09-12[4]-listenable-on-base-report.md`,
-   удаление записи из `docs/backlog.md`, `docs/handoff.md`. - Проверки: все
-   проверки коммита 1, плюс `flutter analyze` примера `flutter_solo`,
-   `dart analyze`/`dart test` в `async_job` и примере `solo`, `dart doc`
-   в `solo` и `flutter_solo`, сборка сайта, сквозной `grep` из «Рисков».
+### Коммит 1: `refactor: infer the type argument of SoloStream in with`
+
+- Тесты `solo`: семь объявлений в пяти файлах, затем `dart format`.
+- Тест 5 в `solo_stream_test.dart`.
+- `packages/flutter_solo/test/solo_listenable_test.dart:22`:
+  `_Both extends SoloListenable<int> with SoloStream` — класс ещё класс, вывод
+  из суперкласса работает, и заголовок коммита держит слово «все».
+- Фрагменты: `packages/solo/README.md:145–146`, `doc/state.md:192` и строка
+  таблицы `:107`, `doc/flutter.md:126–127`
+  (`extends SoloListenable<SessionState> with SoloStream`),
+  `doc/vs-bloc.md:798–799`, `:1488–1489`; переводы.
+- `packages/solo/CHANGELOG.md`: две формы `with SoloStream<S>` — вывод,
+  однострочник — применение миксина, позиция типа — явный аргумент с оговоркой
+  про анализатор; фраза про `SoloListenable` не трогается — её переписывает
+  коммит 2.
+- Проверки: `dart analyze` и `dart format --set-exit-if-changed` в `solo`
+  и `flutter_solo`; `dart test` в `solo` (582); `flutter test` в `flutter_solo`
+  (89); оба стенда и `check_traces.py`; `check_translations.py`,
+  `check_doc_shape.py`, `check_line_width.py`, `reflow.py --check`;
+  `merge-file` против `docs/state-rakes`.
+
+### Коммит 2: `feat(flutter_solo)!: SoloListenable becomes a mixin`
+
+- Миксин и его дартдок; `solo_selection.dart:180–185`; фраза в дартдоке
+  `Solo.onListenerError`.
+- Восемь фикстур, пример; `test/support/plain_base.dart`; тесты 1–4.
+- Документы и переводы из раздела «Документы», включая новый раздел
+  `flutter.md`; `CHANGELOG` обоих пакетов.
+- `docs/architecture.md`, `docs/conventions.md`, шапка
+  `2026-09-12[4]-listenable-on-base-report.md`, удаление записи
+  из `docs/backlog.md`, `docs/handoff.md`.
+- Проверки: все проверки коммита 1, плюс `flutter analyze` примера
+  `flutter_solo`, `dart analyze`/`dart test` в `async_job` и примере `solo`,
+  `dart doc` в `solo` и `flutter_solo`, сборка сайта, сквозной `grep`
+  из «Рисков».
+
+### Для обоих
 
 Мутации — те, что названы у тестов 1 и 3; каждая вносится копией файла
 и откатывается копией, не `git checkout`. Гейт каждого коммита прогоняется

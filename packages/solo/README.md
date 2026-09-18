@@ -142,8 +142,7 @@ Mix in `SoloStream` instead for a broadcast `stream`, delivered on the next
 microtask:
 
 ```dart
-final class ProfileController extends Solo<ProfileState>
-    with SoloStream<ProfileState> {
+final class ProfileController extends Solo<ProfileState> with SoloStream {
   // ...same as above...
 }
 ```

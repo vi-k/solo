@@ -104,7 +104,7 @@ checked `ctx.state`.
 | Type | Provides |
 | --- | --- |
 | `Solo<S>` | State, jobs, queue, rules and listeners. |
-| `Solo<S> with SoloStream<S>` | All of `Solo` plus a broadcast `stream`. |
+| `Solo<S> with SoloStream` | All of `Solo` plus a broadcast `stream`. |
 | `SoloListenable<S>` | All of `Solo` plus Flutter's `ValueListenable<S>`. |
 
 The listeners belong to the engine. They run synchronously, in registration
@@ -189,7 +189,7 @@ controller. `externalSetState(next)` reflects a change that has already
 happened there:
 
 ```dart
-final class Camera extends Solo<CameraState> with SoloStream<CameraState> {
+final class Camera extends Solo<CameraState> with SoloStream {
   final Device device;
   late final StreamSubscription<bool> _link;
 

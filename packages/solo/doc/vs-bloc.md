@@ -795,8 +795,7 @@ type these player jobs accept:
 ```dart
 enum PlayerKey { play, pause, seek }
 
-final class PlayerController extends Solo<PlayerState>
-    with SoloStream<PlayerState> {
+final class PlayerController extends Solo<PlayerState> with SoloStream {
   final Player _player;
 
   PlayerController(this._player) : super(Ready());
@@ -1485,8 +1484,7 @@ already completed state change. The listener belongs inside the controller
 subclass:
 
 ```dart
-final class ReportController extends Solo<ReportState>
-    with SoloStream<ReportState> {
+final class ReportController extends Solo<ReportState> with SoloStream {
   final Reports _reports;
 
   ReportController(this._reports, Auth auth) : super(const SignedIn()) {

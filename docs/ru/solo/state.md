@@ -105,7 +105,7 @@ final subscription = camera.stream.listen(print);
 | Тип | Что предоставляет |
 | --- | --- |
 | `Solo<S>` | Состояние, `Job`, очередь, правила и слушателей. |
-| `Solo<S> with SoloStream<S>` | Всё из `Solo` и broadcast-стрим `stream`. |
+| `Solo<S> with SoloStream` | Всё из `Solo` и broadcast-стрим `stream`. |
 | `SoloListenable<S>` | Всё из `Solo` и интерфейс Flutter `ValueListenable<S>`. |
 
 Слушатели принадлежат движку. Их зовут синхронно, в порядке регистрации, внутри
@@ -189,7 +189,7 @@ class Logged<S extends Object> extends Solo<S> {
 `externalSetState(next)` отражает изменение, которое там уже произошло:
 
 ```dart
-final class Camera extends Solo<CameraState> with SoloStream<CameraState> {
+final class Camera extends Solo<CameraState> with SoloStream {
   final Device device;
   late final StreamSubscription<bool> _link;
 

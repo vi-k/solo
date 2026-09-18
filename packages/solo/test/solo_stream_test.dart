@@ -69,6 +69,18 @@ void main() {
       expect(seen, isEmpty);
     });
   });
+
+  test('a generic controller takes SoloStream by inference', () {
+    fakeAsync((async) {
+      final solo = _Generic<int>(0);
+      final SoloStream<int> typed = solo;
+      final seen = <int>[];
+      typed.stream.listen(seen.add);
+      solo.run<int, void>((ctx) async => ctx.emit(3));
+      async.flushMicrotasks();
+      expect(seen, [3]);
+    });
+  });
 }
 
 /// A neighbor that delivers, then gives up: calls `super.publish` before
@@ -84,8 +96,7 @@ mixin _Bomb<S extends Object> on Solo<S> {
 /// `_Bomb` is the topmost override here, so it reaches `SoloStream.publish`
 /// through `super` before throwing: the stream is fed, then the throw
 /// escapes `externalSetState`.
-final class _BombAboveStream extends Solo<TestState>
-    with SoloStream<TestState>, _Bomb<TestState> {
+final class _BombAboveStream extends Solo<TestState> with SoloStream, _Bomb {
   _BombAboveStream(super.initialState);
 
   void set(TestState next) => externalSetState(next);
@@ -94,15 +105,13 @@ final class _BombAboveStream extends Solo<TestState>
 /// `SoloStream` is the topmost override here: it calls `_Bomb.publish`
 /// through `super` first, and the throw from inside that call happens
 /// before `SoloStream` reaches its own line that feeds the stream.
-final class _BombBelowStream extends Solo<TestState>
-    with _Bomb<TestState>, SoloStream<TestState> {
+final class _BombBelowStream extends Solo<TestState> with _Bomb, SoloStream {
   _BombBelowStream(super.initialState);
 
   void set(TestState next) => externalSetState(next);
 }
 
-final class _StreamCloseOnFinish extends Solo<TestState>
-    with SoloStream<TestState> {
+final class _StreamCloseOnFinish extends Solo<TestState> with SoloStream {
   _StreamCloseOnFinish() : super(const Initial());
 
   /// The future returned by the `close` called from inside `close`.
@@ -113,3 +122,9 @@ final class _StreamCloseOnFinish extends Solo<TestState>
     reentered ??= close();
   }
 }
+
+/// The one-line class `CHANGELOG` gives for a controller that used to be
+/// created directly for its stream: the argument of `SoloStream` comes from
+/// the superclass, a type parameter included, and the constructor of `Solo`
+/// is taken as it is.
+final class _Generic<T extends Object> = Solo<T> with SoloStream;

@@ -19,7 +19,7 @@ final class _ObjectController extends SoloListenable<Object> {
   void set(Object value) => externalSetState(value);
 }
 
-final class _Both extends SoloListenable<int> with SoloStream<int> {
+final class _Both extends SoloListenable<int> with SoloStream {
   _Both() : super(0);
 
   void set(int value) => externalSetState(value);

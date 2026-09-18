@@ -144,8 +144,7 @@ Future<void> main() async {
 `SoloStream`:
 
 ```dart
-final class ProfileController extends Solo<ProfileState>
-    with SoloStream<ProfileState> {
+final class ProfileController extends Solo<ProfileState> with SoloStream {
   // ...то же, что и выше...
 }
 ```

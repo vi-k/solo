@@ -3,7 +3,7 @@
 - **Breaking:** `SoloBase` is renamed to `Solo`, and the former `Solo` -- the
   broadcast stream it carried -- becomes the mixin `SoloStream`. `Solo` stays
   the class every controller extends; a stream is no longer part of that by
-  default, only of controllers that add `with SoloStream<S>`. Most
+  default, only of controllers that add `with SoloStream`. Most
   `extends Solo<...>` declarations never read `.stream` and need no change at
   all; the few that do gain the mixin. `SoloListenable` is unaffected in shape
   -- it already extended the bare engine -- and can now be combined with
@@ -11,13 +11,16 @@
   `Solo<T>(value)` -- the former `Solo`, instantiated directly for its engine
   and its stream together -- no longer compiles: `Solo` is `abstract`, as
   `SoloBase` always was, and there is no concrete class left that carries a
-  stream on its own. Write a one-line subclass instead:
-  `class C<T> extends Solo<T> with SoloStream<T> {}`. Migration:
+  stream on its own. Write a one-line class instead, which takes the
+  constructor of `Solo` as it is:
+  `class C<T extends Object> = Solo<T> with SoloStream;`. Migration:
   `extends SoloBase<S>` becomes `extends Solo<S>`; a controller that read
-  `.stream` adds `with SoloStream<S>`; a field or parameter typed `Solo<S>`
-  that reads `.stream` becomes `SoloStream<S>`; `SoloBase.observer`,
-  `.errorHandler` and `.debug` become `Solo.observer`, `.errorHandler` and
-  `.debug`.
+  `.stream` adds `with SoloStream`, the type argument inferred from the
+  superclass; a field or parameter typed `Solo<S>` that reads `.stream` becomes
+  `SoloStream<S>`, and there the argument is written out -- the analyzer does
+  not ask for it, and a bare `SoloStream` is a `SoloStream<Object>`;
+  `SoloBase.observer`, `.errorHandler` and `.debug` become `Solo.observer`,
+  `.errorHandler` and `.debug`.
 
 - **Breaking:** `Policy.droppable` compares the result types of the two jobs
   with each other, instead of matching the one it found against the type
