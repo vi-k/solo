@@ -1,8 +1,9 @@
-> **Состояние на 2026-09-18:** план принят владельцем, работа начата в ветке
-> `docs/children`, копия `~/development/my/solo-children`.
+> **Состояние на 2026-09-18:** план выполнен, коммит `1e433af` в ветке
+> `docs/children`; итог — `2026-09-18-children-rakes-report.md`.
 > **Что это:** план вычитки `packages/async_job/doc/children.md` — грабли,
 > сторожа и проза.
-> **Связанные записи:** `2026-09-15[17]-async-job-project-review.md`,
+> **Связанные записи:** `2026-09-18-children-rakes-report.md`,
+> `2026-09-15[17]-async-job-project-review.md`,
 > `2026-09-18[8]-cancellation-rakes-report.md`,
 > `2026-09-16[2]-state-rakes-report.md`.
 
