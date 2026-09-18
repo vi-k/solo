@@ -239,20 +239,20 @@ final class Session extends Solo<String> {
         await ctx.join(() => device.start('logout'));
       });
 
-  /// The page's version: the job first, the closing after it.
+  /// The second attempt: the job first, the closing after it.
   Future<void> logout() async {
     await run<String, void>((ctx) => ctx.join(() => device.start('logout')))
         .done;
     await close();
   }
 
-  /// A probe: the job queued, the closing draining the queue behind it.
+  /// The page's version: the job queued, the closing draining the queue.
   Future<void> logoutByDraining() async {
     run<String, void>((ctx) => ctx.join(() => device.start('logout')));
     await close(mode: SoloCloseMode.drain);
   }
 
-  /// A probe: work queued before the logout.
+  /// Work submitted while the logout is in flight.
   Job<void> sync() =>
       run<String, void>((ctx) => ctx.join(() => device.start('sync')));
 }
@@ -761,7 +761,7 @@ void main() {
       expect(device.trace, ['logout start', 'logout end']);
     });
 
-    test('the page version starts it and cancels it in flight', () async {
+    test('the second attempt starts it and cancels it in flight', () async {
       final device = Device();
       final session = Session(device);
       unawaited(session.logout());
@@ -777,7 +777,7 @@ void main() {
       expect(submitted.outcome, isA<Cancelled>());
     });
 
-    test('the page version logs out and closes', () async {
+    test('the second attempt logs out and closes', () async {
       final device = Device();
       final session = Session(device);
       var done = false;

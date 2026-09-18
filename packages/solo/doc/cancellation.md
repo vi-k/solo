@@ -45,8 +45,9 @@ cancellation does not hide the failure. The job's final outcome is still
 
 Four sections below open with the version this vocabulary leads to — the method
 whose name sounds like the requirement, or a plain `await` — and say what it
-does instead of what it was meant to do. The version that works follows under
-its own heading.
+does instead of what it was meant to do. Where the next version repairs that
+and brings a fault of its own, it stands as a second attempt. The version that
+works follows under its own heading.
 
 ## Stopping the underlying operation
 
@@ -406,7 +407,7 @@ children and cleanup, and the running job is this one, waiting for `close()`.
 `cancelAll()` waits the same way, and so does either of them awaited from the
 job's cleanup.
 
-#### A controller method
+#### The second attempt
 
 ```dart
 Future<void> logout() async {
@@ -416,9 +417,12 @@ Future<void> logout() async {
 ```
 
 The job makes the call, and the method closes the controller once that job is
-over: the order the [camera example](camera.md) keeps with its `dispose()`. A
-body that only has to end itself needs no controller call at all: it returns,
-or cancels itself by throwing `Cancelled('reason')`.
+over. This one comes back, and it leaves a window open: the controller takes
+work until the `close()` line. A job submitted while the call to the server is
+in flight is accepted, starts once the logout is over and is cancelled on the
+way, so the API hears a call nobody wanted. The [camera example](camera.md)
+keeps the same order with its `dispose()`, and there the window stays empty:
+the only place that submits work is the caller, waiting on that very line.
 
 #### Queue the job and drain
 
@@ -429,11 +433,9 @@ Future<void> logout() async {
 }
 ```
 
-Draining waits for the job the same way, and it shuts the door one step
-earlier. The version above stays open while the server call is in flight, so a
-job submitted meanwhile is accepted, starts once the logout is over and is
-cancelled on the way: the API hears a call nobody wanted. Here the controller
-refuses new root jobs from the `close` line onwards, and that submission comes
-back `Cancelled(closed)` without reaching the API at all. What it costs is the
-rest of the queue: a drain waits for every job already in it, where the plain
-`close()` above drops them.
+Draining waits for the job the same way, and the door is shut from the `close`
+line onwards: the same submission comes back `Cancelled(closed)` without
+reaching the API at all. What it costs is the rest of the queue — a drain waits
+for every job already in it, where the plain `close()` above drops them. A body
+that only has to end itself needs no controller call at all: it returns, or
+cancels itself by throwing `Cancelled('reason')`.
