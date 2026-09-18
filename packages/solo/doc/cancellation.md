@@ -29,7 +29,7 @@ operation behind it:
 | --- | --- |
 | `ctx.wait(action)` | Throws `Cancelled` without waiting for the operation to finish. |
 | `ctx.join(action)` | Waits for the operation to finish, then throws `Cancelled` in place of a successful result. |
-| `ctx.uncancellable(action)` | Holds ordinary cancellation until the action finishes; the next checkpoint throws it. |
+| `ctx.uncancellable(action)` | Holds ordinary cancellation until the action finishes, then returns its result without throwing `Cancelled`; code after it runs until the next checkpoint, which throws it. |
 | `ctx.check()` | Throws `Cancelled` when the job is already cancelled or its rules no longer hold. |
 
 `wait` suits a request whose result can be abandoned. The request can continue

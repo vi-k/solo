@@ -134,6 +134,18 @@ final class Till extends Solo<String> {
           await device.start('journal');
         });
       });
+
+  /// A section, then ordinary code, then a checkpoint, each marked.
+  Job<String> commitThenCheck() => run<String, String>((ctx) async {
+        final receipt = await ctx.uncancellable(() async {
+          await device.start('payment');
+          return 'receipt';
+        });
+        device.trace.add('after the section: $receipt');
+        ctx.check();
+        device.trace.add('after the check');
+        return receipt;
+      });
 }
 
 // --- Ordinary await and context lifetime ----------------------------------
@@ -389,6 +401,25 @@ void main() {
         reason: 'the held request lands when the section closes',
       );
       expect(job.outcome, isA<Cancelled>());
+    });
+  });
+
+  group('the end of a section', () {
+    test('returns the result, and the next checkpoint throws', () async {
+      final device = Device();
+      final till = Till(device);
+      final job = till.commitThenCheck();
+      await pump();
+      unawaited(job.cancel());
+      await pump();
+
+      await device.end('payment');
+      expect(
+        device.trace,
+        ['payment start', 'payment end', 'after the section: receipt'],
+        reason: 'the section hands back its value, and the code after it runs',
+      );
+      expect(job.outcome, isA<Cancelled>(), reason: 'the check threw');
     });
   });
 
