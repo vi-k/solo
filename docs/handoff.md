@@ -58,8 +58,6 @@
   раздел `0.14.0` в его `CHANGELOG.md` говорит, что `ScopeInitState`,
   `ScopeProgress` и `ScopeReady` удалены, а в дереве тега `v0.14.0` все три
   определены в `lib/src/scope/full_scope/scope_init_state.dart`.
-- Снять копию `~/development/my/solo-state` и ветку `docs/state-rakes`: ветка
-  влита целиком, своих коммитов у неё нет. Спрошено 2026-09-18, ответа не было.
 - Где вести вычитку `children.md` — в `main` или новой веткой. Спрошено
   2026-09-18 вместе с `cancellation.md`; про неё владелец ответил новой веткой,
   про `children.md` — нет.
@@ -109,13 +107,9 @@
 - Что в `async_job` держится и чего не трогать — раздел «Positive findings»
   в `2026-09-15[17]-async-job-project-review.md`.
 
-**Не трогать.**
-
-- Копия `~/development/my/solo-state` на ветке `docs/state-rakes`: ветка влита
-  в `main` целиком (`28d2848`), своих коммитов вне `main` у неё нет. Снимать
-  копию и ветку — по слову владельца.
-- Локальная ветка `worktree-agent-ae5d2ff3484afdc2b` — не этой сессии, чья —
-  не записано.
+**Не трогать.** Чужих копий и веток нет: копию `~/development/my/solo-state`
+с веткой `docs/state-rakes` и ветку `worktree-agent-ae5d2ff3484afdc2b`, обе
+влитые, владелец велел снять 2026-09-18 — сняты.
 
 **Дерево и проверки.** Ветка `main`, основная копия, дерево чистое. Копия
 `~/development/my/solo-cancellation` на ветке `docs/cancellation`: `c796b92`
