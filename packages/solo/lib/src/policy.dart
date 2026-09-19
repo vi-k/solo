@@ -9,6 +9,11 @@ enum Policy {
   /// If a job with the same key is queued or running, return that job and
   /// finish the new one with `Cancelled(manual, 'duplicate')`.
   ///
+  /// The running job counts only while it is still going to do the work.
+  /// One that has been cancelled and is unwinding is not a duplicate —
+  /// it will never do what the new call is asking for — and the new job
+  /// is added as usual.
+  ///
   /// The job found by the key is handed back as the result type of the new
   /// one, so the two result types have to be the same one: a key held by a
   /// job of another type throws [ArgumentError], and it throws before the

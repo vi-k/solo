@@ -555,6 +555,14 @@ abstract class Solo<S extends Object> {
 
   /// The last queued job matching [test], else the current job if it
   /// matches, else `null`.
+  ///
+  /// Only a job that is still going to do the work answers. A queued one
+  /// always is — cancelling it takes it off the queue — but the current
+  /// job stays in [current] for the whole of its unwinding and for the
+  /// state handlers after that, and in there it will never do anything
+  /// again. `cancelAll()` and a fresh request a line later are two
+  /// ordinary calls of one frame, and the second must not be answered
+  /// with the job the first one has just stopped.
   @protected
   SoloJob<Object?>? lastJobWhere(bool Function(Job<Object?> job) test) =>
       _lastJobWhere(test);
@@ -568,7 +576,12 @@ abstract class Solo<S extends Object> {
       }
     }
     final current = _current;
-    return current != null && test(current) ? current : null;
+    return current != null &&
+            !current.isCancelled &&
+            !current.isFinished &&
+            test(current)
+        ? current
+        : null;
   }
 
   /// Reflects state already changed by an external source, such as a
@@ -882,7 +895,13 @@ abstract class Solo<S extends Object> {
       _current = null;
     }
     _running.remove(job);
-    if (wasCurrent) {
+    // A drain ends in the pump, so whatever empties the queue has to bring
+    // the pump back. Finishing the current job is one way; taking the last
+    // queued job off the queue is the other, and it woke nothing. A group
+    // waiting for its window keeps `_current` empty and takes its timer
+    // away with it when it goes, so a drain left with one of those and a
+    // `cancelAll` had nothing left to finish it.
+    if (wasCurrent || _draining) {
       _schedulePump();
     }
   }

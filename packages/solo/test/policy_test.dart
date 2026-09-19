@@ -146,6 +146,70 @@ void main() {
     });
   });
 
+  test('droppable does not hand back the cancelled current job', () {
+    runSolo(initialState: const Special(), (solo, journal, async) {
+      final first = droppable(solo, 1);
+      async.elapse(const Duration(milliseconds: 50));
+      solo.cancelAll();
+      // `_current` stays filled for the whole unwinding, and the job in it
+      // will never do the work: the caller of the second `droppable` would
+      // get a handle that ends `Cancelled` for a request just made.
+      expect(first.isCancelled, isTrue);
+      expect(first.isFinished, isFalse);
+
+      final second = droppable(solo, 2);
+      expect(identical(first, second), isFalse);
+      expect(
+        solo.lastJobWhere((job) => identical(job, first)),
+        isNull,
+        reason: 'the same rule answers a subclass',
+      );
+
+      async.flushTimers();
+      expect(first.outcome, isA<Cancelled>());
+      expect(second.outcome, isA<Done<void>>());
+      expect(journal.take(), [
+        '[droppable: 1] started',
+        '[droppable: 1] finished Cancelled(manual)',
+        '[droppable: 2] started',
+        'state: Special(droppable: 1)',
+        '[droppable: 2] finished Done(null)',
+      ]);
+    });
+  });
+
+  test('droppable does not hand back the job a handler is finishing', () {
+    runSolo(initialState: const Special(), (solo, journal, async) {
+      SoloJob<void>? second;
+      // The outcome is set before the state handlers run, and the job is
+      // let go of only after them: in here it is finished and still
+      // current. A retry from a handler is a new request, not this one
+      // handed back with its failure already in it.
+      final first = solo.run<Special, void>(
+        key: 'droppable',
+        describe: () => '1',
+        policy: Policy.droppable,
+        onError: (state, error, stackTrace) {
+          second = droppable(solo, 2);
+
+          return state;
+        },
+        (ctx) async {
+          await delay(50);
+          throw StateError('boom');
+        },
+      );
+      // Nobody is waiting for a job that exists to fail, and an
+      // unobserved failure reaches the zone of the test.
+      first.value.then<void>((_) {}, onError: (Object _) {});
+      async.flushTimers();
+
+      expect(first.outcome, isA<Failed>());
+      expect(identical(first, second), isFalse);
+      expect(second!.outcome, isA<Done<void>>());
+    });
+  });
+
   test('droppable refuses a key held by another result type', () {
     runSolo((solo, journal, async) {
       final first = solo.run<TestState, int>(

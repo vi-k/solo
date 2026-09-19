@@ -99,42 +99,38 @@ final class SoloSubscriptions {
   ///
   /// One that cannot let go is no reason to walk away from the ones behind
   /// it, which are still listening — that is the leak this class exists to
-  /// prevent. So every member is cancelled, the first error is thrown when
-  /// the pass is over, and the ones after it go to
-  /// [FlutterError.reportError]: a throw carries one failure and the first
-  /// has claimed it.
+  /// prevent. So every member is cancelled and every failure goes to
+  /// [FlutterError.reportError].
+  ///
+  /// This never throws, whatever a member does. The place for the call is
+  /// `State.dispose()`, and an exception out of `dispose()` stops the
+  /// framework unmounting the rest of that frame: the elements queued
+  /// behind this one lose their `dispose()` altogether, and their
+  /// listeners stay registered — the leak again, one widget further along.
+  /// There is nobody to catch a throw from here, and a frame is what it
+  /// costs.
   void cancel() {
     if (_cancelled) {
       return;
     }
     _cancelled = true;
-    Object? failure;
-    StackTrace? failureTrace;
     for (final subscription in _subscriptions) {
       try {
         subscription.cancel();
       } on Object catch (error, stackTrace) {
-        if (failure == null) {
-          failure = error;
-          failureTrace = stackTrace;
-        } else {
-          FlutterError.reportError(
-            FlutterErrorDetails(
-              exception: error,
-              stack: stackTrace,
-              library: 'flutter_solo',
-              context: ErrorDescription(
-                'while cancelling a $SoloSubscriptions',
-              ),
+        FlutterError.reportError(
+          FlutterErrorDetails(
+            exception: error,
+            stack: stackTrace,
+            library: 'flutter_solo',
+            context: ErrorDescription(
+              'while cancelling a $SoloSubscriptions',
             ),
-          );
-        }
+          ),
+        );
       }
     }
     _subscriptions.clear();
-    if (failure != null) {
-      Error.throwWithStackTrace(failure, failureTrace!);
-    }
   }
 }
 

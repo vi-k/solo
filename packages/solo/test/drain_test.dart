@@ -174,6 +174,64 @@ void main() {
     });
   });
 
+  test('a drain ends when its last waiting group is cancelled', () {
+    runSolo((solo, journal, async) {
+      final metrics = solo.collect<TestState, int, void>(
+        key: 'metrics',
+        timing: AccumulationTiming.debounce(const Duration(milliseconds: 40)),
+        (ctx, events) async => ctx.log('sent $events'),
+      );
+      metrics.add(1).ignore();
+      async.flushMicrotasks();
+      expect(solo.queue.length, 1, reason: 'waiting for its window');
+      expect(solo.current, isNull, reason: 'and nothing is running');
+
+      var closed = false;
+      solo.close(mode: SoloCloseMode.drain).then((_) => closed = true).ignore();
+      // The pump the drain schedules has to be spent before the queue is
+      // emptied, or that pump is what ends this drain and the hole never
+      // opens. After it nothing is running, so no `_onJobFinished` of a
+      // current job can end the drain either, and the window timer goes
+      // away with the group.
+      async.flushMicrotasks();
+      solo.cancelAll();
+      async.flushTimers();
+
+      expect(closed, isTrue, reason: 'the drain has nothing left to drain');
+      expect(solo.isDraining, isFalse);
+      expect(journal.take(), [
+        '[metrics] dropped Cancelled(manual)',
+        'closed',
+      ]);
+    });
+  });
+
+  test('a drain ends when the waiting group cancels itself', () {
+    runSolo((solo, journal, async) {
+      final metrics = solo.collect<TestState, int, void>(
+        key: 'metrics',
+        timing: AccumulationTiming.debounce(const Duration(milliseconds: 40)),
+        (ctx, events) async => ctx.log('sent $events'),
+      );
+      final group = metrics.add(1)..ignore();
+      async.flushMicrotasks();
+
+      var closed = false;
+      solo.close(mode: SoloCloseMode.drain).then((_) => closed = true).ignore();
+      async.flushMicrotasks();
+      // The same hole through the handle rather than through the
+      // controller: the queue loses its last job either way.
+      group.cancel().ignore();
+      async.flushTimers();
+
+      expect(closed, isTrue);
+      expect(journal.take(), [
+        '[metrics] dropped Cancelled(manual)',
+        'closed',
+      ]);
+    });
+  });
+
   test('cancelAll ends a drain by emptying the queue', () {
     runSolo((solo, journal, async) {
       step(solo, 'running');

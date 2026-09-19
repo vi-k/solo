@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_solo/flutter_solo.dart';
 import 'package:flutter_solo/listenable.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -17,6 +17,61 @@ final class _Stuck extends Solo<int> with SoloListenable {
   @override
   void removeListener(VoidCallback listener) =>
       throw StateError('this one does not let go');
+}
+
+/// Records its own `dispose`, so a frame that stopped halfway shows up as
+/// a name missing from the list.
+final class _Marker extends StatefulWidget {
+  const _Marker(this.name, this.disposed);
+
+  final String name;
+  final List<String> disposed;
+
+  @override
+  State<_Marker> createState() => _MarkerState();
+}
+
+final class _MarkerState extends State<_Marker> {
+  @override
+  void dispose() {
+    widget.disposed.add(widget.name);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => const SizedBox.shrink();
+}
+
+/// The recipe of the README: a group of subscriptions cancelled in
+/// `dispose()`.
+final class _Listening extends StatefulWidget {
+  const _Listening(this.listenable, this.disposed);
+
+  final Listenable listenable;
+  final List<String> disposed;
+
+  @override
+  State<_Listening> createState() => _ListeningState();
+}
+
+final class _ListeningState extends State<_Listening> {
+  final _listening = SoloSubscriptions();
+
+  @override
+  void initState() {
+    super.initState();
+    widget.listenable.listen(() {}).addTo(_listening);
+  }
+
+  @override
+  void dispose() {
+    widget.disposed.add('listening');
+    _listening.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => const SizedBox.shrink();
 }
 
 void main() {
@@ -123,12 +178,46 @@ void main() {
     stuck.listen(() {}).addTo(listening);
     final last = counter.listen(() => calls++)..addTo(listening);
 
-    expect(listening.cancel, throwsStateError);
-    expect(errors, [isStateError], reason: 'the first throw claimed the throw');
+    listening.cancel();
+    expect(
+      errors,
+      [isStateError, isStateError],
+      reason: 'every refusal is reported, none is thrown',
+    );
     expect(last.isCancelled, isTrue, reason: 'the pass went on to the end');
 
     counter.set(1);
     expect(calls, 0);
+  });
+
+  testWidgets('a member that cannot let go does not stop the frame',
+      (tester) async {
+    final stuck = _Stuck();
+    final errors = <Object>[];
+    final previous = FlutterError.onError;
+    FlutterError.onError = (details) => errors.add(details.exception);
+    addTearDown(() => FlutterError.onError = previous);
+    final disposed = <String>[];
+
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: Column(
+          children: [
+            _Marker('before', disposed),
+            _Listening(stuck, disposed),
+            _Marker('after', disposed),
+          ],
+        ),
+      ),
+    );
+    // The whole tree goes at once, so all three elements are unmounted in
+    // one pass. A throw out of the middle `dispose()` used to stop it,
+    // and `after` kept its listeners with nobody left to take them back.
+    await tester.pumpWidget(const SizedBox.shrink());
+
+    expect(disposed, ['before', 'listening', 'after']);
+    expect(errors, [isStateError]);
   });
 
   test('a group cancelled twice does nothing the second time', () {

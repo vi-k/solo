@@ -234,8 +234,9 @@ void dispose() {
 `ScrollController` of the framework's own. Cancelling twice does nothing the
 second time, and a group that has been cancelled cancels what it is handed
 rather than keeping it. If one member refuses to let go, the others are
-cancelled all the same: the first error is thrown once the pass is over and the
-rest are reported.
+cancelled all the same and every failure goes to `FlutterError.reportError`.
+Cancelling a group never throws: its place is `dispose()`, and an exception out
+of there leaves the rest of that frame's elements unmounted, listeners and all.
 
 ## Methods from a second import
 

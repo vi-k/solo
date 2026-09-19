@@ -131,6 +131,16 @@
   but the shorthand — `SoloSelection(...)` builds the same selection, and
   `SoloSelector` needs no method at all.
 
+- **Fix:** `SoloSubscriptions.cancel()` never throws. A member that refused to
+  let go had its error thrown once the pass was over, and the place for this
+  call is `State.dispose()`: an exception out of `dispose()` stops the
+  framework unmounting the rest of that frame, so the elements queued behind
+  this one never get a `dispose()` at all and their listeners stay registered
+  -- the very leak this class exists to prevent, one widget further along.
+  Every failure goes to `FlutterError.reportError` now, the first one included.
+  A caller that wrapped the call in a `try` to keep its frame can drop the
+  wrapper.
+
 ## 0.2.0
 
 The first published release. 0.1.0 never left the tree.

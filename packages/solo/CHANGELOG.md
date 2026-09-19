@@ -265,6 +265,26 @@
   duplicate first and then refuse to hand anything back, leaving the caller
   with an error and no job at all.
 
+- **Fix:** `close(mode: drain)` finishes when the last job is taken off the
+  queue, not only when one is run off it. A group waiting for its accumulation
+  window keeps the queue full with nothing running, and taking it away --
+  `cancelAll`, `queue.remove`, `queue.clear`, or `cancel()` on the group's own
+  handle -- left a controller closed, draining and never finished: the pump
+  that ends a drain is woken by a job finishing, and the job that emptied the
+  queue had never started. In Flutter that is a `dispose()` that does not
+  return, with `pending` empty and no error anywhere; a second, plain `close()`
+  was the only way out.
+
+- **Fix:** `Policy.droppable` no longer hands back a job that is not going to
+  do the work. The current job stays current for the whole of its unwinding and
+  for the state handlers after that, so `cancelAll()` and a fresh request a
+  line later -- a screen left and opened again, a pull-to-refresh -- answered
+  the second call with the handle the first had just cancelled: a `Cancelled`
+  outcome for a request made a moment ago, and the operation never ran.
+  `lastJobWhere`, the protected form of the same search, answers by the same
+  rule, so a subclass that used it to find "the job already doing this" gets
+  `null` in that window instead of a job that will not.
+
 ## 0.2.0
 
 The first published release. 0.1.0 never left the tree, so nothing below is a
