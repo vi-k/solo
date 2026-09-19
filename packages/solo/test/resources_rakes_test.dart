@@ -220,6 +220,38 @@ final class Files extends Solo<Screen> {
         },
       );
 
+  /// A child that refuses the cascade, so it ends its own way.
+  SoloJob<Database> _stubbornChild() => job<Idle, Database>(
+        cancellable: false,
+        (ctx) async {
+          final db = await ctx.wait(
+            opener.open,
+            discard: (db) => db.close(),
+          );
+          await ctx.join(gate.wait);
+          return db;
+        },
+      );
+
+  /// The registration written under `ctx.run`.
+  SoloJob<void> takeChildRegisteringUnder() => run<Idle, void>(
+        key: 'take',
+        (ctx) async {
+          final db = await ctx.run(_stubbornChild());
+          ctx.onDiscard(db.close);
+          trace.add('parent registered the database');
+        },
+      );
+
+  /// The registration handed to `ctx.run`.
+  SoloJob<void> takeChildRegisteringOnCall() => run<Idle, void>(
+        key: 'take',
+        (ctx) async {
+          await ctx.run(_stubbornChild(), discard: (db) => db.close());
+          trace.add('parent registered the database');
+        },
+      );
+
   /// The result handed over while a child keeps the job running.
   SoloJob<Database> openWithDiscardAndChild() => run<Idle, Database>(
         key: 'open',
@@ -537,6 +569,31 @@ void main() {
       await job.done;
 
       expect(trace, isNot(contains('body returns the database')));
+      expect(job.outcome, isA<Cancelled>());
+      expect(db.closed, isTrue);
+    });
+
+    test('the registration under run is never reached', () async {
+      final job = files.takeChildRegisteringUnder();
+      await pump();
+      final db = await opener.finish();
+      unawaited(job.cancel());
+      await gate.release();
+      await job.done;
+
+      expect(job.outcome, isA<Cancelled>());
+      expect(trace, isNot(contains('parent registered the database')));
+      expect(db.closed, isFalse);
+    });
+
+    test('the registration handed to run closes it', () async {
+      final job = files.takeChildRegisteringOnCall();
+      await pump();
+      final db = await opener.finish();
+      unawaited(job.cancel());
+      await gate.release();
+      await job.done;
+
       expect(job.outcome, isA<Cancelled>());
       expect(db.closed, isTrue);
     });

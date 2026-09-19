@@ -183,8 +183,10 @@ value leaves — the caller receives `Cancelled` instead of the database, and
 A registration is settled by the outcome of the job that made it, and it does
 not travel with the value. Whoever takes the database owns it from that moment
 and registers its release themselves — a parent that takes it through
-`ctx.run(child, discard: ...)` registers on the call, and `doc/children.md`
-says why that cannot wait for the line below.
+`ctx.run(child, discard: ...)` registers on the call. A line below would be too
+late: `run` checks the parent once the child's value is in hand, and a
+checkpoint that throws there takes the value with it, so the line that would
+have registered the release is never reached.
 
 ## Handing a resource to the state
 
