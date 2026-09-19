@@ -96,9 +96,10 @@ final class Files extends Solo<Screen> {
   final Opener opener;
   final Gate gate;
   final List<String> trace;
+  final StreamController<int> events;
   late final Archive archive = Archive(trace);
 
-  Files(this.opener, this.gate, this.trace) : super(Idle());
+  Files(this.opener, this.gate, this.trace, this.events) : super(Idle());
 
   // --- Taking a resource from a call -------------------------------------
 
@@ -147,6 +148,34 @@ final class Files extends Solo<Screen> {
   SoloJob<void> next() => run<Idle, void>(
         key: 'next',
         (ctx) async => trace.add('next job started'),
+      );
+
+  /// A subscription made on the spot, with the release under it.
+  SoloJob<void> watchByPair(Gate held) => run<Idle, void>(
+        key: 'watch',
+        (ctx) async {
+          await ctx.uncancellable(held.wait);
+          final sub = events.stream.listen((_) {});
+          ctx.onDispose(sub.cancel);
+          trace.add('subscription made');
+          ctx.check();
+        },
+      );
+
+  /// The same creation, riding on a call of its own.
+  SoloJob<void> watchByJoin(Gate held) => run<Idle, void>(
+        key: 'watch',
+        (ctx) async {
+          await ctx.uncancellable(held.wait);
+          await ctx.join(
+            () {
+              trace.add('subscription made');
+              return events.stream.listen((_) {});
+            },
+            dispose: (sub) => sub.cancel(),
+          );
+          ctx.check();
+        },
       );
 
   // --- Returning a resource to the caller --------------------------------
@@ -362,17 +391,20 @@ void main() {
   late Opener opener;
   late Gate gate;
   late Files files;
+  late StreamController<int> events;
 
   setUp(() {
     trace = <String>[];
     opener = Opener(trace);
     gate = Gate();
-    files = Files(opener, gate, trace);
+    events = StreamController<int>.broadcast();
+    files = Files(opener, gate, trace, events);
   });
 
-  tearDown(() {
+  tearDown(() async {
     Solo.errorHandler = null;
     Solo.observer = null;
+    await events.close();
   });
 
   group('Taking a resource from a call', () {
@@ -427,6 +459,27 @@ void main() {
         trace,
         containsAllInOrder(<String>['db closed', 'next job started']),
       );
+    });
+
+    test('a call makes nothing under a standing cancellation', () async {
+      final held = Gate();
+      final pair = files.watchByPair(held);
+      await pump();
+      unawaited(pair.cancel());
+      await held.release();
+      await pair.done;
+      final afterPair = List<String>.of(trace);
+
+      trace.clear();
+      final second = Gate();
+      final wrapped = files.watchByJoin(second);
+      await pump();
+      unawaited(wrapped.cancel());
+      await second.release();
+      await wrapped.done;
+
+      expect(afterPair, <String>['subscription made']);
+      expect(trace, isEmpty);
     });
 
     test('a release registered twice runs twice', () async {

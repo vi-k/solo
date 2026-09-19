@@ -105,6 +105,21 @@ between making it and registering its release — `ctx.onDispose(sub.cancel)`
 stands right under `listen`. That registration returns a function you can keep
 as `removeDisposer` to unregister the callback without running it.
 
+Nothing stops such a creation from riding on a call all the same:
+
+```dart
+final sub = await ctx.join(
+  () => device.events.listen(onEvent),
+  dispose: (sub) => sub.cancel(),
+);
+```
+
+`wait` and `join` take an action that returns without waiting, so a synchronous
+creation registers on the call like any other. What it buys over the pair is
+the checkpoint the call makes before the action: with a cancellation already
+standing, the subscription is never made at all, where the pair makes it and
+cancels it during cleanup.
+
 ## Returning a resource to the caller
 
 Now the database is the result rather than a means: the job opens it, and the
