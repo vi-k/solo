@@ -163,9 +163,9 @@ A `then` job does not inherit the controller's state context, rules, observer
 or queue position. It has its own optional observer. Its callback gets a plain
 core `JobContext`, with no `emit` on it and no state behind it, so a `then`
 cannot write controller state itself: it asks the controller for another job,
-and that job takes its turn at the back of the queue. The source freed its slot
-when it finished, and that same event is what started the `then`, so anything
-queued meanwhile is already ahead of it.
+and that job takes its turn at the back of the queue. The end of the source
+does two things at once: it frees the slot and it starts the `then`. So
+whatever was queued while the source ran stands ahead of the new job.
 
 ```dart
 // The callback has no state to write, so it asks for a job:
