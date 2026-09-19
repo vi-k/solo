@@ -109,6 +109,11 @@ class WhatIsLeftAlone(LinkCase):
         )
         self.assertEqual(self.problems(page), [])
 
+    def test_a_link_inside_a_code_span(self):
+        # `docs/conventions.md` shows the syntax this way.
+        page = self.write('a.md', 'Ссылка `[текст](адрес)` — одно слово.\n')
+        self.assertEqual(self.problems(page), [])
+
     def test_a_heading_inside_a_fenced_block(self):
         # It is a comment of a shell fragment, not a section of the page.
         self.write('b.md', '# B\n\n```sh\n# Chains\n```\n')

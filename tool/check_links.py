@@ -25,8 +25,8 @@ to the second of them is ordinary.
 A link to a section of the page it stands on is checked the same way, so
 `[the chains](#chains)` fails when that heading is reworded. External links
 are not checked: a network call is not a gate's business. Links inside
-fenced code blocks are not checked either, because a fragment showing
-Markdown is code, not a link.
+fenced code blocks and inside backticks are not checked either, because a
+fragment showing Markdown is code, not a link.
 
 `docs/records/` is not checked: a record is history, written on its day and
 kept as it was, and a link that pointed somewhere then is not a defect now.
@@ -38,6 +38,9 @@ import sys
 
 ROOTS = ('packages', 'docs')
 LINK = re.compile(r'\[[^\]]*\]\(([^)\s]+)\)')
+# `[текст](адрес)` inside backticks is a fragment showing the syntax,
+# the way a fenced block is. Markdown renders it as text, not a link.
+SPAN = re.compile(r'`[^`]+`')
 HEADING = re.compile(r'^#{1,6}\s+(.*)$')
 EXTERNAL = re.compile(r'^(https?:|mailto:)')
 
@@ -76,7 +79,7 @@ def offenders(path):
             continue
         if fenced:
             continue
-        for target in LINK.findall(line):
+        for target in LINK.findall(SPAN.sub('', line)):
             if EXTERNAL.match(target):
                 continue
             file, _, anchor = target.partition('#')
