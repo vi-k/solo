@@ -290,11 +290,35 @@ future. Зонд `probe_each_wait.dart` на отмене родителя по�
 
 Набор `solo` — 628 зелёных.
 
+## Четвёртая правка по чтению: причина и следствие у открытого стрима
+
+«The parent waits for this child even without an explicit await, so an open
+stream with no events still keeps the parent running» — владелец спросил,
+не наоборот ли. Наоборот: ждёт родитель детей всегда, а работающим ребёнка
+держит именно открытый источник. В одну фразу были сведены две разные вещи,
+и «поэтому» стояло между ними неверно.
+
+Теперь звенья названы по порядку: ребёнок `each` завершается, когда источник
+пришлёт `onDone`, — значит, открытый стрим без событий это работающий ребёнок;
+а детей родитель ждёт и без явного `await`, поэтому работает и он. Фраза про
+`onDone` из последнего абзаца раздела при этом убрана: она теперь стоит там,
+где объясняет.
+
+Сторож — «a stream with no events at all still holds the parent»
+в `packages/solo/test/each_child_test.dart`: тело родителя возвращается сразу,
+событий нет вовсе, десять секунд спустя родитель всё ещё работает, а после
+`source.close()` завершается `Done`. Обе мутации его красят, каждая со своей
+стороны: `await _awaitChildren();` в `job_base.dart` закомментирован — родитель
+перестаёт ждать; `onDone` в `job_stream.dart` возвращается сразу — ребёнок
+не заканчивается и после закрытия источника.
+
+Набор `solo` — 629 зелёных.
+
 ## Проверки
 
 В копии `~/development/my/solo-children` на ветке `docs/children`:
 `dart analyze` в `packages/async_job` без замечаний и `dart analyze lib test`
-в `packages/solo` тоже, `dart test` — 446 в `async_job` и 628 в `solo`, `lib/`
+в `packages/solo` тоже, `dart test` — 446 в `async_job` и 629 в `solo`, `lib/`
 после мутаций побайтово совпадает с копией. Из корня копии:
 `reflow.py --check`, `check_line_width.py`, `check_translations.py` (семнадцать
 блоков и шестнадцать заголовков сходятся с переводом), `check_doc_shape.py` —
