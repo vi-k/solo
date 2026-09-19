@@ -174,10 +174,11 @@ A waiting call accepts either `dispose` or `discard`, never both. Everything
 the job keeps to itself — a lock, a temporary file, a subscription — stays with
 `dispose`, or it leaks on the path where no cancellation test looks.
 
-The child above is why the distinction earns its keep: the body has returned
-the database, but the job is not complete. If cancellation arrives during that
-wait, the caller receives `Cancelled` instead of the resource, and `discard`
-closes it.
+The child above is why the distinction earns its keep: `ctx.run` stands between
+the database and the `return`, so the value is in hand while the job can still
+be cancelled. A cancellation arriving during that wait ends the job before the
+value leaves — the caller receives `Cancelled` instead of the database, and
+`discard` closes it.
 
 A registration is settled by the outcome of the job that made it, and it does
 not travel with the value. Whoever takes the database owns it from that moment

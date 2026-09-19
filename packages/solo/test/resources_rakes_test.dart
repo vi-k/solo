@@ -206,6 +206,20 @@ final class Files extends Solo<Screen> {
         },
       );
 
+  /// The page's shape: the child stands between the value and the return.
+  SoloJob<Database> openAwaitingChild() => run<Idle, Database>(
+        key: 'open',
+        (ctx) async {
+          final db = await ctx.join(
+            opener.open,
+            discard: (db) => db.close(),
+          );
+          await ctx.run(job<Idle, void>((child) => child.join(gate.wait)));
+          trace.add('body returns the database');
+          return db;
+        },
+      );
+
   /// The result handed over while a child keeps the job running.
   SoloJob<Database> openWithDiscardAndChild() => run<Idle, Database>(
         key: 'open',
@@ -510,6 +524,21 @@ void main() {
 
       expect(db.closed, isFalse);
       expect(job.outcome, isA<Done<Database>>());
+    });
+
+    test('a cancellation during the child wait keeps the value in', () async {
+      final job = files.openAwaitingChild();
+      unawaited(job.value.onError((_, __) => Database('none', trace)));
+      await pump();
+      final db = await opener.finish();
+      await pump();
+      unawaited(job.cancel());
+      await gate.release();
+      await job.done;
+
+      expect(trace, isNot(contains('body returns the database')));
+      expect(job.outcome, isA<Cancelled>());
+      expect(db.closed, isTrue);
     });
 
     test('discard closes the result the caller never got', () async {
