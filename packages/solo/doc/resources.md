@@ -276,10 +276,10 @@ the queue must not find it, and neither must `close()` when it returns.
 await ctx.wait(openTemp, dispose: (file) => file.delete());
 ```
 
-The waiting method decides when the release happens, not whether it happens.
-`wait` lets go of the call the moment cancellation is accepted: the job ends,
-the queue moves on, and the next job starts while `openTemp` is still running.
-The file appears after that, and the deletion follows it — late and alone, with
+The release happens either way; the waiting method decides only when. `wait`
+lets go of the call the moment cancellation is accepted: the job ends, the
+queue moves on, and the next job starts while `openTemp` is still running. The
+file appears after that, and the deletion follows it — late and alone, with
 nobody waiting for either. A late error from the call or from the disposer goes
 to the controller's error hook.
 
