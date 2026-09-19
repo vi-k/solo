@@ -141,6 +141,12 @@
   A caller that wrapped the call in a `try` to keep its frame can drop the
   wrapper.
 
+- **Fix:** `SoloListenable.onListenerError` carries `@protected` again. Dart
+  does not inherit the annotation and the override left it off, so a hook of
+  the engine was an ordinary public member of every controller with this mixin,
+  and would have gone into `dart doc` as one. Taking it back after a release is
+  a breaking change; taking it back now is not.
+
 ## 0.2.0
 
 The first published release. 0.1.0 never left the tree.

@@ -13,11 +13,24 @@ abstract interface class SoloJob<T> implements Job<T> {
 final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     implements SoloJob<T> {
   final Solo<S> _solo;
-  final Future<T> Function(SoloContext<S, W> ctx) _body;
+
+  /// Let go of when the job is over, the way the core lets go of its own
+  /// body and of the parent chain. A body runs once, and the handlers of
+  /// a job that has an outcome have had their turn; kept after that, they
+  /// hold everything they captured -- a controller, a connection, a
+  /// buffer -- and `_parentJob` holds a whole tree of jobs that are over,
+  /// for as long as anyone holds this handle. A handle is held exactly to
+  /// be read later.
+  Future<T> Function(SoloContext<S, W> ctx)? _body;
+  S Function(S, Object, StackTrace)? _onError;
+  S Function(S, Cancelled)? _onCancel;
+
+  /// The rules outlive the job on purpose: a context that leaked out of a
+  /// body reads the state through them long after the outcome, and the
+  /// cancellation it builds from a rejection is the whole diagnosis it
+  /// has to offer.
   final bool Function(W state)? _canStart;
   final bool Function(W state)? _keepWhile;
-  final S Function(S, Object, StackTrace)? _onError;
-  final S Function(S, Cancelled)? _onCancel;
   _AccumulationGroup<Object?>? _accumulation;
   _SoloJob<S, S, Object?>? _parentJob;
   final bool _hasStateHandlers;
@@ -35,7 +48,7 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
 
   _SoloJob(
     this._solo,
-    this._body, {
+    Future<T> Function(SoloContext<S, W> ctx) body, {
     required super.key,
     required bool Function(W state)? canStart,
     required bool Function(W state)? keepWhile,
@@ -44,7 +57,8 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     required super.observer,
     S Function(S, Object, StackTrace)? onError,
     S Function(S, Cancelled)? onCancel,
-  })  : _canStart = canStart,
+  })  : _body = body,
+        _canStart = canStart,
         _keepWhile = keepWhile,
         _onError = onError,
         _onCancel = onCancel,
@@ -156,6 +170,14 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
       _accumulation?._release();
       _accumulation = null;
       _solo._onJobFinished(this);
+      // After the controller has let go of this job, not before: the
+      // state correction above calls these very handlers and reads the
+      // parent through `_mayCorrectState`, and the line above takes this
+      // job out of `_running` and out of `_current`.
+      _body = null;
+      _onError = null;
+      _onCancel = null;
+      _parentJob = null;
     }
   }
 
@@ -204,7 +226,9 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   @override
   Future<T> execute(covariant _SoloContext<S, W, T> ctx) {
     _bodyEntered = true;
-    return _body(ctx);
+    // Non-null while the job runs: a finished job is never started again,
+    // and only finishing clears this.
+    return _body!(ctx);
   }
 
   // The engine reaches a job from the side, and `@protected` holds only

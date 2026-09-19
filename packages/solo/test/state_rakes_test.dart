@@ -631,6 +631,86 @@ void main() {
       await profile.close();
     });
   });
+
+  group('a delivery that throws', () {
+    test('the changes behind the failed one are published all the same',
+        () async {
+      // The page forbids a throw out of `publish`, and a mixin of
+      // somebody else in the same `with` can throw anyway. What must not
+      // happen then is a change that nothing ever publishes: the failed
+      // one is gone, but the ones behind it are the state the controller
+      // now holds.
+      final delivery = Delivery()
+        ..writeFromFirst = ['c', 'd']
+        ..bombAt = {'c'};
+
+      expect(() => delivery.set('b'), throwsStateError);
+
+      expect(delivery.currentState, 'd');
+      expect(delivery.seen, ['b', 'd']);
+
+      await delivery.close();
+    });
+
+    test('the first failure leaves, the ones after it go to the zone',
+        () async {
+      final delivery = Delivery()
+        ..writeFromFirst = ['c', 'd']
+        ..bombAt = {'c', 'd'};
+      final fromTheZone = <Object>[];
+      Object? escaped;
+
+      runZonedGuarded(
+        () {
+          try {
+            delivery.set('b');
+          } on Object catch (error) {
+            escaped = error;
+          }
+        },
+        (error, stackTrace) => fromTheZone.add(error),
+      );
+
+      expect((escaped! as StateError).message, 'delivery boom on c');
+      expect(
+        fromTheZone.map((error) => (error as StateError).message),
+        ['delivery boom on d'],
+        reason: 'a throw carries one failure and the first has claimed it',
+      );
+
+      await delivery.close();
+    });
+  });
+}
+
+/// A delivery that gives up on the states named in [bombAt], and writes
+/// [writeFromFirst] from inside the first publish it is asked for.
+///
+/// Two states written from inside one publish are the shape the queue is
+/// there for: they join it instead of being published ahead of the change
+/// their writer is nested in.
+final class Delivery extends Solo<String> {
+  Delivery() : super('a');
+
+  /// Every state this delivery got all the way through.
+  final seen = <String>[];
+
+  Set<String> bombAt = const {};
+  List<String> writeFromFirst = const [];
+
+  void set(String next) => externalSetState(next);
+
+  @override
+  void publish(String previous, String current) {
+    super.publish(previous, current);
+    final more = writeFromFirst;
+    writeFromFirst = const [];
+    more.forEach(externalSetState);
+    if (bombAt.contains(current)) {
+      throw StateError('delivery boom on $current');
+    }
+    seen.add(current);
+  }
 }
 
 /// One turn of the microtask queue.

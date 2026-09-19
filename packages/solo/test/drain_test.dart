@@ -232,6 +232,38 @@ void main() {
     });
   });
 
+  test('a drain takes the accumulation timers down with it', () {
+    runSolo((solo, journal, async) {
+      final metrics = solo.collect<TestState, int, void>(
+        key: 'metrics',
+        timing: AccumulationTiming.throttle(const Duration(seconds: 10)),
+        (ctx, events) async => ctx.log('sent $events'),
+      );
+      metrics.add(1).ignore();
+
+      var closed = false;
+      solo.close(mode: SoloCloseMode.drain).then((_) => closed = true).ignore();
+      // Far short of the interval: the point is the timer still standing
+      // when the drain is over, not one that has had time to fire.
+      async.elapse(const Duration(milliseconds: 1));
+
+      expect(closed, isTrue);
+      expect(solo.isFinished, isTrue);
+      expect(
+        async.pendingTimers,
+        isEmpty,
+        reason: 'an interval timer outliving the controller holds the '
+            'accumulator, and the accumulator holds the controller',
+      );
+      expect(journal.take(), [
+        '[metrics] started',
+        '[metrics] log sent [1]',
+        '[metrics] finished Done(null)',
+        'closed',
+      ]);
+    });
+  });
+
   test('cancelAll ends a drain by emptying the queue', () {
     runSolo((solo, journal, async) {
       step(solo, 'running');

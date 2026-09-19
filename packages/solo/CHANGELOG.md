@@ -285,6 +285,31 @@
   rule, so a subclass that used it to find "the job already doing this" gets
   `null` in that window instead of a job that will not.
 
+- **Fix:** a drain takes the accumulation timers down with it. `close()`
+  cancelled every timing timer where `close(mode: drain)` cancelled none: an
+  interval timer outliving the controller holds its accumulator, and the
+  accumulator holds the controller. In a widget test that is "A Timer is still
+  pending even after the widget tree was disposed" for somebody who only closed
+  a controller. Both ways of closing end in one place now, and the timers go
+  down there.
+
+- **Fix:** a `publish` that throws no longer loses the changes queued behind
+  it. The change it failed on is gone either way -- it left the queue before
+  the call, and nothing publishes a change twice -- but the ones behind it are
+  the state `currentState` already holds, and they stayed in the queue for
+  good: no listener and no stream saw them, then or after closing. The queue is
+  drained to the end now, the first failure leaves once it is, and the ones
+  after it go where a failing hook's error goes.
+
+- **Fix:** a finished job lets go of its body, of its state handlers and of the
+  job that ran it, the way the core lets go of its own. Held on, one handle
+  kept in a field -- what `ctx.each` hands back, what `Policy.droppable` hands
+  back, what a widget keeps to read an outcome later -- held the whole tree of
+  finished jobs it came out of and everything that tree had captured. The rules
+  stay: a context that leaked out of a body reads the state through `keepWhile`
+  long after the outcome, and the cancellation it builds out of a rejection is
+  the whole diagnosis it has to offer.
+
 ## 0.2.0
 
 The first published release. 0.1.0 never left the tree, so nothing below is a

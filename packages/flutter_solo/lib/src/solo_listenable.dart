@@ -51,6 +51,11 @@ mixin SoloListenable<S extends Object> on Solo<S>
   /// The engine publishes from inside a state change and re-evaluates rules
   /// right after: a subscriber's failure is its own, and letting it out of
   /// here would cost a job the cancellation the new state owes it.
+  ///
+  /// `@protected` is repeated because Dart does not inherit it. Left off,
+  /// this override makes a hook of the engine a public member of every
+  /// controller that mixes this in, and of `dart doc` along with it.
+  @protected
   @override
   void onListenerError(Object error, StackTrace stackTrace) {
     FlutterError.reportError(

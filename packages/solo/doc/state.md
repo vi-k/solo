@@ -230,12 +230,13 @@ class Logged<S extends Object> extends Solo<S> {
 }
 ```
 
-Two things such an override owes:
+What such an override owes, and what the engine owes it back:
 
 | What it owes | Why |
 | --- | --- |
 | `super.publish` comes first | It is what calls the listeners, so a delivery of your own runs after the engine's rather than instead of it. `@mustCallSuper` says so and the analyzer holds you to it. |
-| A failure must not leave `publish` | The rules of the running jobs are re-evaluated right after the call, and an error let out of here costs a job the cancellation the new state owes it. It goes to `Zone.current.handleUncaughtError` from `dart:async`, where a failing hook's error goes. |
+| A failure must not leave `publish` | The rules of the running jobs are re-evaluated right after the call, and an error let out of here costs a job the cancellation the new state owes it. It goes back the way the write came: into the body that called `ctx.emit`, out of `externalSetState` to whoever called it, and to `Zone.current.handleUncaughtError` from `dart:async` when that caller is a hook of the engine, where a failing hook's error goes anyway. |
+| The changes behind it are published all the same | The failed change is gone -- it left the queue before the call and nothing publishes a change twice -- but the ones queued behind it are the state the controller now holds, and they go out before the failure leaves. Only the first failure of a pass is thrown; the rest go to the zone. |
 
 `SoloStream` is this override with a broadcast `StreamController` behind it,
 and `SoloListenable` is the engine's listeners plus Flutter's

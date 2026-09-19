@@ -660,10 +660,7 @@ abstract class Solo<S extends Object> {
   /// Drops the queue, cancels the current job and finishes [completer]
   /// once it is over: what [SoloCloseMode.cancel] means.
   void _stopWork(Completer<void> completer, StackTrace stackTrace) {
-    for (final timer in _timers.toList()) {
-      timer.cancel();
-    }
-    _timers.clear();
+    _cancelTimers();
     for (final job in _queue._drain()) {
       job._drop(
         Cancelled.by(
@@ -700,6 +697,13 @@ abstract class Solo<S extends Object> {
     if (completer.isCompleted) {
       return;
     }
+    // Both ways of closing end here, and a drain arrives with its timers
+    // still running: `_stopWork` takes them down at the call, the pump
+    // does not. An interval timer that outlives the controller holds its
+    // accumulator and the accumulator holds this -- in a widget test that
+    // is "A Timer is still pending even after the widget tree was
+    // disposed" for somebody who only closed a controller.
+    _cancelTimers();
     _draining = false;
     _debug(() => 'closed');
     _callHook(() => observer?.onClose(this));
@@ -829,18 +833,41 @@ abstract class Solo<S extends Object> {
   /// A hook, an observer or a listener may set the state again from inside
   /// this call: the nested change joins the same queue instead of being
   /// published ahead of the older one it is nested in.
+  ///
+  /// A `publish` that throws does not take the rest of the queue with it.
+  /// The change it failed on is gone either way -- it was taken off the
+  /// queue before the call, and nothing publishes it a second time -- but
+  /// the ones behind it are changes of their own, and `currentState`
+  /// already holds what they say. Dropped here, they would never be
+  /// published at all, by this call or by any later one. So the queue is
+  /// drained to the end, the first failure leaves this method once it is,
+  /// and the ones after it go where a failing hook's error goes.
   void _publishPending() {
     if (_publishing) {
       return;
     }
     _publishing = true;
+    Object? failure;
+    StackTrace? failureTrace;
     try {
       while (_unpublished.isNotEmpty) {
         final change = _unpublished.removeAt(0);
-        publish(change.$1, change.$2);
+        try {
+          publish(change.$1, change.$2);
+        } on Object catch (error, stackTrace) {
+          if (failure == null) {
+            failure = error;
+            failureTrace = stackTrace;
+          } else {
+            Zone.current.handleUncaughtError(error, stackTrace);
+          }
+        }
       }
     } finally {
       _publishing = false;
+    }
+    if (failure != null) {
+      Error.throwWithStackTrace(failure, failureTrace!);
     }
   }
 
@@ -919,6 +946,13 @@ abstract class Solo<S extends Object> {
   void _cancelTimer(Timer timer) {
     timer.cancel();
     _timers.remove(timer);
+  }
+
+  void _cancelTimers() {
+    for (final timer in _timers.toList()) {
+      timer.cancel();
+    }
+    _timers.clear();
   }
 
   /// Schedules a pump so the caller finishes its synchronous part first:

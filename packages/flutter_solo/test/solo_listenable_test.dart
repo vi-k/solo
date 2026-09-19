@@ -523,6 +523,18 @@ void main() {
     await leaf.close();
   });
 
+  test('the mixin repeats @protected on the engine hook', () {
+    // Dart does not inherit `@protected`, and an override that leaves it
+    // off makes a hook of the engine a public member of every controller
+    // with this mixin. The analyzer is the only place this shows, so the
+    // guard reads the source: a runtime call cannot tell the two apart.
+    final source = File('lib/src/solo_listenable.dart').readAsStringSync();
+    expect(
+      source,
+      contains(RegExp(r'@protected\s+@override\s+void onListenerError\(')),
+    );
+  });
+
   test('the bases of these tests import nothing of Flutter', () {
     final source = File('test/support/plain_base.dart').readAsStringSync();
     final imports = RegExp("^import '([^']+)';", multiLine: true)
