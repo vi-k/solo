@@ -35,6 +35,19 @@
 зонды и эталонные копии `lib/` ушли вместе с копией — на диске их больше нет.
 Что они показывали, записано в `2026-09-18-children-rakes-report.md`.
 
+**Ветка `docs/resources` ждёт слияния.** На ней вычитка
+`packages/solo/doc/resources.md` и `packages/async_job/doc/cleanup.md` —
+семнадцать коммитов, отправлены в `origin`, верхний `4f38faf`. Владелец
+прочитал `resources.md`, все тринадцать его правок внесены; `cleanup.md` он ещё
+не читал. Проверки на ветке зелёные: `packages/solo` — `dart test` 661,
+`packages/async_job` — 468, из корня `reflow.py --check`,
+`check_line_width.py`, `check_translations.py` и `check_doc_shape.py`. Слить —
+`git merge docs/resources` из чистого дерева; конфликт будет
+в `docs/handoff.md`, где верх ветки описывает ту же работу. Записи о ней —
+на ветке: `2026-09-19-resources-rakes-plan.md`,
+`2026-09-19-resources-rakes-report.md` и `2026-09-19-cleanup-rakes-report.md`;
+в `main` их пока нет.
+
 **Что дальше.** Бэклог владельца пуст; следующую работу выбирает он. Кандидаты,
 которые записали сессии, решения по ним нет:
 
@@ -47,8 +60,9 @@
   ревьюеру — проверка дерева до работы: `git log -1` плюс `grep`
   на `mixin SoloListenable`;
 - порядок дальнейшей вычитки — раздел «Документация: вычитка страниц doc/»:
-  после `children.md` по карте идут `resources.md`, `errors.md`, `testing.md`,
-  `camera.md` и шесть страниц `async_job`.
+  `resources.md` и `cleanup.md` вычитаны на ветке `docs/resources`, дальше
+  по карте идут `errors.md`, `testing.md`, `camera.md`, `flutter.md`, четыре
+  оставшихся страницы `async_job` и README `solo` и `flutter_solo`.
 
 **Открытые вопросы владельцу.** Один, предложен 2026-09-19, ответа не было:
 пятый круг ревью скиллов. Четвёртый внёс 37 находок за заход, и его
