@@ -202,12 +202,12 @@ SoloJob<void> syncAndRecordTogether(int item) => run<Ready, void>(
     );
 ```
 
-A method that queues cannot be called from inside another job -- that is one
-more root job, the thing being avoided. A step written as `job(...)` has both
-ways open: `add` gives it a queue slot of its own, `ctx.run` makes it a child
-of a job that already holds one. Use children within one parent when the whole
-sequence must occupy the queue without another root job running between its
-steps.
+A method that queues can be called from inside another job, and what it queues
+is still a root job: it waits for the slot the caller is holding, and anything
+queued before it goes first. A step written as `job(...)` has both ways open:
+`add` gives it a queue slot of its own, `ctx.run` makes it a child of a job
+that already holds one. Use children within one parent when the whole sequence
+must occupy the queue without another root job running between its steps.
 
 Cancellation propagates forward to `then` jobs and backward to unfinished
 sources, subject to each job's cancellation rules. Cancelling the tail waits

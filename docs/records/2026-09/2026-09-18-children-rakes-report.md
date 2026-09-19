@@ -422,9 +422,13 @@ returns», «close waits for the active handler before releasing resources»
 этого объединённая форма стала двумя строками — `ctx.run(_sync(item))`
 и `ctx.run(_recordPath(path))`, — а развёрнутая копия загрузки из неё ушла. Под
 первым блоком добавлена фраза о том, что `job(...)` ничего не запускает,
-а путей два: `add` и `ctx.run`. Проза следом объясняет, почему метод, который
-ставит в очередь, изнутри другой задачи звать нельзя: это ещё одна корневая
-`Job`.
+а путей два: `add` и `ctx.run`. Проза следом сперва запрещала звать такой метод
+изнутри другой задачи; владелец поправил: позвать можно, только результат
+другой. Теперь там сказано, что поставленная `Job` остаётся корневой и ждёт
+место, которое держит сам вызвавший. Это и без того сторожит
+`add from inside a body runs after the current job`
+в `packages/solo/test/queue_test.dart`: `later`, поставленная из тела `outer`
+с `first: true`, стартует после него.
 
 Сторож — «a job a then asks for goes behind what is already queued»
 в `packages/solo/test/children_test.dart`: порядок ровно как в зонде, и просит
