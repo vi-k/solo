@@ -30,7 +30,7 @@ member you pick decides who releases the resource and when:
 | `dispose:` on `wait` or `join` | that call's value, whatever the outcome |
 | `discard:` on `wait` or `join` | that call's value, and only if it reaches nobody |
 | `ctx.onDispose(callback)` | whatever the callback closes, whatever the outcome |
-| `ctx.onDiscard(callback)` | the same, and only if the job hands nothing over |
+| `ctx.onDiscard(callback)` | whatever the callback closes, if the job hands nothing over |
 | `ctx.disown(value)` | nothing — it drops the registration a `wait` or `join` made |
 
 Four sections below open with the version this vocabulary leads to — the member
