@@ -23,6 +23,13 @@ final class _Controller extends Solo<_Screen> with SoloListenable {
   _Controller() : super(const _Screen());
 
   void set(_Screen next) => externalSetState(next);
+
+  /// Runs [body] as a job of this controller.
+  SoloJob<void> perform(
+    Future<void> Function(SoloContext<_Screen, _Screen> ctx) body, {
+    bool Function(_Screen state)? keepWhile,
+  }) =>
+      run<_Screen, void>(body, keepWhile: keepWhile);
 }
 
 final class _PlainController extends Solo<_Screen> {
@@ -412,7 +419,7 @@ void main() {
     })
       ..addListener(() {});
 
-    final job = controller.run<_Screen, void>(
+    final job = controller.perform(
       keepWhile: (state) => state.progress < 10,
       (ctx) => ctx.wait(() => Future<void>.delayed(const Duration(days: 1))),
     )..ignore();

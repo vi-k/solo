@@ -16,7 +16,7 @@ import 'support/test_state.dart';
 /// Declared here and not taken from `support/`: `TestSolo` is a `final
 /// class`, and these tests need two controllers whose `onError` can be
 /// told apart by name.
-final class _Recorder extends Solo<TestState> {
+final class _Recorder extends Solo<TestState> with OpenSolo<TestState> {
   final String name;
   final List<String> lines;
 
@@ -214,7 +214,7 @@ void main() {
   });
 }
 
-final class _Watched extends Solo<TestState> {
+final class _Watched extends Solo<TestState> with OpenSolo<TestState> {
   final List<String> lines;
 
   _Watched(this.lines) : super(const Initial());

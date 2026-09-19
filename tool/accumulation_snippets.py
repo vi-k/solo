@@ -494,6 +494,34 @@ final class Transport extends Solo<Playback> {
 }
 '''
 
+# Two ordinary jobs of other kinds for the driver to put between two commands.
+# `run` is protected, so they are operations of a controller: a subclass of
+# the document's `Player`, allowed because the bench is one library.
+BUSY_PLAYER = '''
+/// [Player] with two ordinary jobs of other kinds, for the driver to put
+/// between its commands. The bench's, not the document's.
+final class BusyPlayer extends Player {
+  final RecordingDevice recorder;
+
+  BusyPlayer(this.recorder) : super(recorder);
+
+  /// Holds the queue for 50 ms, long enough for what follows to be queued
+  /// together.
+  SoloJob<void> busy() => run<Playback, void>(
+        key: 'busy',
+        (ctx) => ctx.wait(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)),
+        ),
+      );
+
+  /// Marks its place in what the device heard.
+  SoloJob<void> chime() => run<Playback, void>(
+        key: 'chime',
+        (ctx) async => recorder.note('chime'),
+      );
+}
+'''
+
 PLAYER_DRIVE = '''
 /// Three taps in a row: resume, pause, resume. One scenario for both
 /// versions of the button.
@@ -538,6 +566,7 @@ FILES['commands'] = (
     + snips['recipes/Player']
     + PLAYER_FAKE
     + TRANSPORT
+    + BUSY_PLAYER
     + REQUIRE
     + PLAYER_DRIVE
     + '''
@@ -582,20 +611,12 @@ void main() {
   // the order to show.
   fakeAsync((clock) {
     final device = RecordingDevice();
-    final player = Player(device);
+    final player = BusyPlayer(device);
     device.now = () => clock.elapsed.inMilliseconds;
     player
-      ..run<Playback, void>(
-        key: 'busy',
-        (ctx) => ctx.wait(
-          () => Future<void>.delayed(const Duration(milliseconds: 50)),
-        ),
-      )
+      ..busy()
       ..resume()
-      ..run<Playback, void>(
-        key: 'chime',
-        (ctx) async => device.note('chime'),
-      )
+      ..chime()
       ..pause();
     clock.elapse(const Duration(seconds: 1));
 

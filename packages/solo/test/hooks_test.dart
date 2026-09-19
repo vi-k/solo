@@ -11,6 +11,7 @@ import 'package:test/test.dart';
 import 'support/journal.dart';
 import 'support/plain_solo.dart';
 import 'support/run_solo.dart';
+import 'support/test_solo.dart';
 import 'support/test_state.dart';
 
 void main() {
@@ -433,7 +434,7 @@ void main() {
 }
 
 /// Throws from the instance hook the engine calls while finishing a job.
-final class _ThrowingFinish extends Solo<TestState> {
+final class _ThrowingFinish extends Solo<TestState> with OpenSolo<TestState> {
   _ThrowingFinish() : super(const Initial());
 
   @override
@@ -441,7 +442,7 @@ final class _ThrowingFinish extends Solo<TestState> {
 }
 
 /// Throws from the instance hook the engine calls before a job body.
-final class _ThrowingStart extends Solo<TestState> {
+final class _ThrowingStart extends Solo<TestState> with OpenSolo<TestState> {
   _ThrowingStart() : super(const Initial());
 
   @override
@@ -449,11 +450,9 @@ final class _ThrowingStart extends Solo<TestState> {
 }
 
 /// Throws from the instance hook the engine calls on a state change.
-final class _ThrowingChange extends Solo<TestState> with SoloStream {
+final class _ThrowingChange extends Solo<TestState>
+    with SoloStream, OpenSolo<TestState> {
   _ThrowingChange() : super(const Initial());
-
-  @override
-  void externalSetState(TestState state) => super.externalSetState(state);
 
   @override
   void onChange(SoloTransition<TestState> transition) =>
@@ -481,7 +480,7 @@ final class _ThrowingCloseHook extends Solo<TestState> {
 
 /// Writes down its `onClose`, and can close again or write the state
 /// from inside it.
-final class _Closing extends Solo<TestState> {
+final class _Closing extends Solo<TestState> with OpenSolo<TestState> {
   final List<String> lines;
   final bool closeAgain;
   final TestState? writeOnClose;
@@ -509,7 +508,7 @@ final class _ThrowingClose extends SoloObserver {
   void onClose(Solo<Object> solo) => throw StateError('onClose');
 }
 
-final class _Hooked extends Solo<TestState> {
+final class _Hooked extends Solo<TestState> with OpenSolo<TestState> {
   final List<String> lines;
 
   _Hooked(this.lines) : super(const Initial());

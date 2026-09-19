@@ -304,22 +304,17 @@ void main() {
   );
 }
 
-final class _ThrowingReporterSolo extends Solo<TestState> {
+final class _ThrowingReporterSolo extends Solo<TestState>
+    with OpenSolo<TestState> {
   _ThrowingReporterSolo(super.initialState);
-
-  @override
-  bool get hasListeners => super.hasListeners;
 
   @override
   void onListenerError(Object error, StackTrace stackTrace) {
     throw StateError('reporter failed');
   }
-
-  @override
-  void externalSetState(TestState state) => super.externalSetState(state);
 }
 
-final class _TracedSolo extends Solo<int> {
+final class _TracedSolo extends Solo<int> with OpenSolo<int> {
   final List<String> log;
 
   _TracedSolo(this.log) : super(0);
@@ -329,9 +324,6 @@ final class _TracedSolo extends Solo<int> {
     log.add('publish:$current');
     super.publish(previous, current);
   }
-
-  @override
-  void externalSetState(int state) => super.externalSetState(state);
 }
 
 final class _OnCloseObserver extends SoloObserver {

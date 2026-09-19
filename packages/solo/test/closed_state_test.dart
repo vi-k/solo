@@ -6,6 +6,7 @@ import 'dart:async';
 import 'package:solo/solo.dart';
 import 'package:test/test.dart';
 
+import 'support/test_solo.dart';
 import 'support/test_state.dart';
 
 void main() {
@@ -246,11 +247,8 @@ void main() {
   });
 }
 
-class _ExposedSolo extends Solo<TestState> {
+class _ExposedSolo extends Solo<TestState> with OpenSolo<TestState> {
   _ExposedSolo([super.initialState = const Initial()]);
-
-  @override
-  bool get hasListeners => super.hasListeners;
 
   void set(TestState state) => externalSetState(state);
 }
@@ -290,7 +288,8 @@ final class _CloseObserver extends SoloObserver {
   void onClose(Solo<Object> solo) => callback(solo);
 }
 
-final class _ExposedStreamSolo extends Solo<TestState> with SoloStream {
+final class _ExposedStreamSolo extends Solo<TestState>
+    with SoloStream, OpenSolo<TestState> {
   _ExposedStreamSolo() : super(const Initial());
 
   void set(TestState state) => externalSetState(state);

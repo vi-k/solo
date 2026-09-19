@@ -309,12 +309,12 @@ BLE-устройство, плеер, синхронизация), где сос
 `packages/solo/lib/solo.dart` реэкспортирует `package:async_job/async_job.dart`
 и экспортирует всё публичное у solo. `packages/solo/lib/src/`:
 
-- `solo.dart` — `Solo<S>`: состояние, цикл прокачки очереди, хуки, `job`,
-  `add`, `run`, `collect`, `accumulate`, `externalSetState`, `close`,
-  собственные слушатели (`addListener`, `removeListener`), защищённый
-  `publish`, статические `observer`, `errorHandler` и `debug`, адаптер
-  `_SoloJobObserver` к `JobObserver` ядра. Это одна библиотека с частями
-  (`part`): `job.dart`, `job_context.dart`, `queue.dart`, `accumulator.dart`,
+- `solo.dart` — `Solo<S>`: состояние, цикл прокачки очереди, хуки, защищённые
+  `job`, `add`, `run`, `collect`, `accumulate`, `externalSetState` и `publish`,
+  `close`, собственные слушатели (`addListener`, `removeListener`), статические
+  `observer`, `errorHandler` и `debug`, адаптер `_SoloJobObserver`
+  к `JobObserver` ядра. Это одна библиотека с частями (`part`): `job.dart`,
+  `job_context.dart`, `queue.dart`, `accumulator.dart`,
   `accumulation_timing.dart`. Части нужны потому, что наследники ядра
   (`_SoloJob`, `_SoloContext`) и очередь связаны с движком в обе стороны: он
   зовёт их приватные члены, а они — его.

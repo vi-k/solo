@@ -293,7 +293,7 @@ void main() {
 
 final class _Silent extends SoloObserver {}
 
-final class _Quiet extends Solo<TestState> {
+final class _Quiet extends Solo<TestState> with OpenSolo<TestState> {
   final errors = <String>[];
 
   _Quiet() : super(const Initial());
@@ -303,7 +303,7 @@ final class _Quiet extends Solo<TestState> {
       errors.add('$error');
 }
 
-final class _Loud extends Solo<TestState> {
+final class _Loud extends Solo<TestState> with OpenSolo<TestState> {
   final errors = <String>[];
 
   _Loud() : super(const Initial());
@@ -317,7 +317,7 @@ final class _Loud extends Solo<TestState> {
   }
 }
 
-final class _Reentrant extends Solo<TestState> {
+final class _Reentrant extends Solo<TestState> with OpenSolo<TestState> {
   bool _nested = false;
 
   _Reentrant() : super(const Initial());

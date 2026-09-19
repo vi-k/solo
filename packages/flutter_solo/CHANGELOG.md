@@ -2,18 +2,20 @@
 
 - **Breaking, inherited from `solo` and `async_job`:** this package re-exports
   both, so their breaking changes are its own. From `solo`: `SoloBase` becomes
-  `Solo` and the stream moves to the mixin `SoloStream`; the synchronous read
-  is `currentState`; `close` takes a `SoloCloseMode`; the change hooks take a
-  `SoloTransition`; the state of a closed controller is final, and `isFinished`
-  is the guard before an external fact; `Solo` carries its own listeners; an
-  observer no longer answers for an error, `Solo.errorHandler` does; `collect`
-  and `accumulate` default to `AccumulationPolicy.join`, and `replace` moves
-  the waiting group's job instead of cancelling it; `Policy.droppable` compares
-  the result types of the two jobs and throws `ArgumentError` when they differ.
-  From `async_job`, through `solo`: a cancellation inside a `ParallelWaitError`
-  is a cancellation again, so the job's `onCancel` handler takes the outcome
-  where `onError` used to; `JobContext` gains `runAll`; `ctx.run` takes
-  `dispose` and `discard`; `JobBase`, `JobContextBase` and `JobStatus` move to
+  `Solo` and the stream moves to the mixin `SoloStream`; `job`, `add`, `run`,
+  `collect` and `accumulate` are protected, so a controller's operations are
+  its own methods; the synchronous read is `currentState`; `close` takes a
+  `SoloCloseMode`; the change hooks take a `SoloTransition`; the state of a
+  closed controller is final, and `isFinished` is the guard before an external
+  fact; `Solo` carries its own listeners; an observer no longer answers for an
+  error, `Solo.errorHandler` does; `collect` and `accumulate` default to
+  `AccumulationPolicy.join`, and `replace` moves the waiting group's job
+  instead of cancelling it; `Policy.droppable` compares the result types of the
+  two jobs and throws `ArgumentError` when they differ. From `async_job`,
+  through `solo`: a cancellation inside a `ParallelWaitError` is a cancellation
+  again, so the job's `onCancel` handler takes the outcome where `onError` used
+  to; `JobContext` gains `runAll`; `ctx.run` takes `dispose` and `discard`;
+  `JobBase`, `JobContextBase` and `JobStatus` move to
   `package:async_job/engine.dart` and are no longer visible through this
   package. Migrate with the entries of both:
   [the `solo` changelog](https://github.com/vi-k/solo/blob/main/packages/solo/CHANGELOG.md)
@@ -27,19 +29,21 @@
   superclass, and a controller that needs a `stream` too writes
   `with SoloStream, SoloListenable`. `SoloListenable<S>(value)` no longer
   compiles -- mixins can't be instantiated -- and a one-line class takes its
-  place: `class C<S extends Object> = Solo<S> with SoloListenable;`. In a type
-  position the argument is written out, `SoloListenable<S>`; the analyzer does
-  not ask for it, and a bare `SoloListenable` there is a
-  `SoloListenable<Object>`. The migration keeps who reports a listener's
-  failure: a base that mixes `SoloListenable` in and overrides
-  `onListenerError` still wins. What the mixin opens is a base class without
-  Flutter, with the mixin on the leaf, and there the mixin's report overrides
-  the base's; a base that wants its own keeps it in a method of another name
-  for the leaf's override to call. This rides on `solo`'s rename -- `SoloBase`
-  becomes `Solo`, the stream-carrying `Solo` becomes the mixin `SoloStream` --
-  after which nothing else in this package changes shape: `SoloBuilder`,
-  `SoloSelection.from` and the rest already took the widest engine type, and
-  every mention of `SoloBase` in a signature or a doc comment reads `Solo`.
+  place: `class C<S extends Object> = Solo<S> with SoloListenable;`. Code that
+  calls `run` on it from outside needs a method of its own instead, `run` being
+  protected now, as the entry above says. In a type position the argument is
+  written out, `SoloListenable<S>`; the analyzer does not ask for it, and a
+  bare `SoloListenable` there is a `SoloListenable<Object>`. The migration
+  keeps who reports a listener's failure: a base that mixes `SoloListenable` in
+  and overrides `onListenerError` still wins. What the mixin opens is a base
+  class without Flutter, with the mixin on the leaf, and there the mixin's
+  report overrides the base's; a base that wants its own keeps it in a method
+  of another name for the leaf's override to call. This rides on `solo`'s
+  rename -- `SoloBase` becomes `Solo`, the stream-carrying `Solo` becomes the
+  mixin `SoloStream` -- after which nothing else in this package changes shape:
+  `SoloBuilder`, `SoloSelection.from` and the rest already took the widest
+  engine type, and every mention of `SoloBase` in a signature or a doc comment
+  reads `Solo`.
 
 - **Breaking:** `ValueListenable` is no longer re-exported.
   `package:flutter/widgets.dart` does not export it either, so a file that

@@ -17,13 +17,14 @@ import 'package:solo/solo.dart';
 import 'package:test/test.dart';
 
 import 'support/reachability.dart';
+import 'support/test_solo.dart';
 
 /// What a body captures. Big enough that holding it is worth noticing.
 final class Payload {
   final List<int> bytes = List<int>.filled(1024, 7);
 }
 
-final class Counter extends Solo<int> {
+final class Counter extends Solo<int> with OpenSolo<int> {
   Counter() : super(0);
 
   void set(int state) => externalSetState(state);

@@ -3,6 +3,7 @@ import 'package:solo/solo.dart';
 import 'package:test/test.dart';
 
 import 'support/run_solo.dart';
+import 'support/test_solo.dart';
 import 'support/test_state.dart';
 
 void main() {
@@ -72,7 +73,7 @@ void main() {
 
   test('a generic controller takes SoloStream by inference', () {
     fakeAsync((async) {
-      final solo = _Generic<int>(0);
+      final solo = _OpenGeneric<int>(0);
       final SoloStream<int> typed = solo;
       final seen = <int>[];
       typed.stream.listen(seen.add);
@@ -111,7 +112,8 @@ final class _BombBelowStream extends Solo<TestState> with _Bomb, SoloStream {
   void set(TestState next) => externalSetState(next);
 }
 
-final class _StreamCloseOnFinish extends Solo<TestState> with SoloStream {
+final class _StreamCloseOnFinish extends Solo<TestState>
+    with SoloStream, OpenSolo<TestState> {
   _StreamCloseOnFinish() : super(const Initial());
 
   /// The future returned by the `close` called from inside `close`.
@@ -128,3 +130,6 @@ final class _StreamCloseOnFinish extends Solo<TestState> with SoloStream {
 /// the superclass, a type parameter included, and the constructor of `Solo`
 /// is taken as it is.
 final class _Generic<T extends Object> = Solo<T> with SoloStream;
+
+/// [_Generic] as it is, with its protected surface open for the test.
+final class _OpenGeneric<T extends Object> = _Generic<T> with OpenSolo<T>;

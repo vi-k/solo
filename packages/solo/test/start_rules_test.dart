@@ -194,7 +194,7 @@ void main() {
     Object? refused;
     Solo.observer = _Retrier((solo, job) {
       try {
-        solo.add(job);
+        (solo as TestSolo).add(job);
       } on Object catch (error) {
         refused = error;
       }
@@ -296,7 +296,7 @@ void main() {
           if (once && job.key == 'old') {
             once = false;
             try {
-              solo.add(incoming);
+              (solo as TestSolo).add(incoming);
             } on Object catch (error) {
               refused = error;
             }

@@ -7,6 +7,7 @@ import 'package:test/test.dart';
 
 import 'support/journal.dart';
 import 'support/run_solo.dart';
+import 'support/test_solo.dart';
 import 'support/test_state.dart';
 
 void main() {
@@ -79,7 +80,8 @@ void main() {
 }
 
 /// Pushes the state out of `NotDisposed` from inside the change itself.
-final class _DisposeOnPreparing extends Solo<TestState> {
+final class _DisposeOnPreparing extends Solo<TestState>
+    with OpenSolo<TestState> {
   _DisposeOnPreparing() : super(const Initial());
 
   @override

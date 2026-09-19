@@ -14,7 +14,7 @@ void main() {
     fakeAsync((async) {
       final errors = <Object>[];
       final error = StateError('continuation cleanup');
-      late Solo<int> solo;
+      late PlainSolo<int> solo;
       runZonedGuarded(
         () {
           solo = PlainSolo<int>(0);

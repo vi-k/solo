@@ -57,9 +57,10 @@ SoloJob<void> setZoom(double zoom) => run<Ready, void>(
     );
 ```
 
-All three return `SoloJob<T>`, which implements `Job<T>` and adds `isQueued`. A
-controller normally exposes domain methods such as `load()` or `setZoom()` so
-callers do not need to assemble jobs themselves.
+All three return `SoloJob<T>`, which implements `Job<T>` and adds `isQueued`.
+All three are protected, as are `collect` and `accumulate`: a controller
+exposes domain methods such as `load()` or `setZoom()`, and callers see those,
+not the jobs they are assembled from.
 
 A `key` is what queue policies match on, and `describe` supplies the label used
 by logs, observers and `toString()`: `Job(key: label)`. Without a description

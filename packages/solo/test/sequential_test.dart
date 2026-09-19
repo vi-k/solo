@@ -6,6 +6,7 @@ import 'package:solo/solo.dart';
 import 'package:test/test.dart';
 
 import 'support/run_solo.dart';
+import 'support/test_solo.dart';
 import 'support/test_state.dart';
 
 void main() {
@@ -153,7 +154,7 @@ void main() {
 }
 
 /// Records whether the controller was already idle when `onFinish` ran.
-final class _CurrentProbe extends Solo<TestState> {
+final class _CurrentProbe extends Solo<TestState> with OpenSolo<TestState> {
   _CurrentProbe() : super(const Initial());
 
   final idleInOnFinish = <bool>[];

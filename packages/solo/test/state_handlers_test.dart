@@ -7,7 +7,9 @@ import 'package:fake_async/fake_async.dart';
 import 'package:solo/solo.dart';
 import 'package:test/test.dart';
 
-final class _Controller<S extends Object> extends Solo<S> {
+import 'support/test_solo.dart';
+
+final class _Controller<S extends Object> extends Solo<S> with OpenSolo<S> {
   final log = <String>[];
   final errors = <Object>[];
   void Function(S state)? changed;

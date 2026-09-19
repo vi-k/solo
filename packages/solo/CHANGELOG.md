@@ -32,7 +32,8 @@
   `SoloBase` always was, and there is no concrete class left that carries a
   stream on its own. Write a one-line class instead, which takes the
   constructor of `Solo` as it is:
-  `class C<T extends Object> = Solo<T> with SoloStream;`. Migration:
+  `class C<T extends Object> = Solo<T> with SoloStream;`. Code that goes on to
+  call `run` on it from outside needs the next entry as well. Migration:
   `extends SoloBase<S>` becomes `extends Solo<S>`; a controller that read
   `.stream` adds `with SoloStream`, the type argument inferred from the
   superclass; a field or parameter typed `Solo<S>` that reads `.stream` becomes
@@ -40,6 +41,18 @@
   not ask for it, and a bare `SoloStream` is a `SoloStream<Object>`;
   `SoloBase.observer`, `.errorHandler` and `.debug` become `Solo.observer`,
   `.errorHandler` and `.debug`.
+
+- **Breaking:** `job`, `add`, `run`, `collect` and `accumulate` are
+  `@protected`. A controller's operations are its own methods, such as `load()`
+  or `setZoom()`, and those are what a caller sees; the five members they are
+  built from belong to the controller, as `externalSetState` and `queue`
+  already did. The analyzer reports a call from outside the class as
+  `invalid_use_of_protected_member`; the code still compiles and runs as
+  before. Migration: give the controller a method for each operation called
+  from outside, and call that. A controller that is a queue for jobs somebody
+  else writes reopens what that code calls with an override that forwards to
+  `super` and leaves the annotation off: `@protected` does not carry over to an
+  override.
 
 - **Breaking:** `Policy.droppable` compares the result types of the two jobs
   with each other, instead of matching the one it found against the type

@@ -9,6 +9,7 @@ import 'package:test/test.dart';
 
 import 'support/journal.dart';
 import 'support/run_solo.dart';
+import 'support/test_solo.dart';
 import 'support/test_state.dart';
 
 void main() {
@@ -266,7 +267,7 @@ void main() {
   });
 }
 
-final class _CloseOnFinish extends Solo<TestState> {
+final class _CloseOnFinish extends Solo<TestState> with OpenSolo<TestState> {
   _CloseOnFinish() : super(const Initial());
 
   /// The future returned by the `close` called from inside `close`.
@@ -278,7 +279,8 @@ final class _CloseOnFinish extends Solo<TestState> {
   }
 }
 
-final class _Reentrant extends Solo<TestState> with SoloStream {
+final class _Reentrant extends Solo<TestState>
+    with SoloStream, OpenSolo<TestState> {
   _Reentrant() : super(const Initial());
 
   @override
@@ -289,7 +291,7 @@ final class _Reentrant extends Solo<TestState> with SoloStream {
   }
 }
 
-final class _Recorder extends Solo<TestState> {
+final class _Recorder extends Solo<TestState> with OpenSolo<TestState> {
   final List<String> order;
   Job<Object?>? watched;
 

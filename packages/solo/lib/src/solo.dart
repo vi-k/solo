@@ -22,6 +22,11 @@ part 'queue.dart';
 /// [publish] is the seam for a delivery of another kind; `SoloStream`
 /// adds a broadcast stream through it.
 ///
+/// A controller's operations are methods of its own, such as `load()`,
+/// built from [run], or from [job] and [add], and from [collect] and
+/// [accumulate] where several events share one job. The five are
+/// protected: a caller sees the operations, not how they are queued.
+///
 /// The hooks — [onStart], [onFinish], [onError], [onLog], [onChange],
 /// [onClose] and the [observer]'s — are a cross-cutting channel, so an
 /// error thrown by one goes to the current zone and changes nothing else:
@@ -282,6 +287,7 @@ abstract class Solo<S extends Object> {
   /// [JobContext.onDispose] or [JobContext.onDiscard]. The [onCancel]
   /// parameter runs at completion; [JobContext.onCancel] instead delivers
   /// the cancellation signal immediately to the operation being stopped.
+  @protected
   SoloJob<T> job<W extends S, T>(
     Future<T> Function(SoloContext<S, W> ctx) body, {
     Object? key,
@@ -319,6 +325,7 @@ abstract class Solo<S extends Object> {
   /// [timing]
   /// can debounce each group or throttle starts across this accumulator;
   /// ready jobs later in the queue can bypass a group waiting for its window.
+  @protected
   SoloAccumulator<E, T> collect<W extends S, E, T>(
     Future<T> Function(SoloContext<S, W> ctx, List<E> events) handler, {
     Object? key,
@@ -354,6 +361,7 @@ abstract class Solo<S extends Object> {
   /// The handler, rules, key and policy follow [collect]. No job is created
   /// until the first event, and no state changes before the handler runs.
   /// [timing] has the same group readiness behavior as it does for [collect].
+  @protected
   SoloAccumulator<E, T> accumulate<W extends S, E, T>(
     Future<T> Function(SoloContext<S, W> ctx, E value) handler, {
     required E Function(E accumulated, E incoming) merge,
@@ -399,6 +407,7 @@ abstract class Solo<S extends Object> {
   /// the [StateError] is about a handle that has been taken once already.
   /// After `close` the job finishes at once with `Cancelled(closed)`, and a
   /// key held by another result type is not looked for at all.
+  @protected
   SoloJob<T> add<T>(
     Job<T> job, {
     bool first = false,
@@ -522,6 +531,7 @@ abstract class Solo<S extends Object> {
   ///       },
   ///     );
   /// ```
+  @protected
   SoloJob<T> run<W extends S, T>(
     Future<T> Function(SoloContext<S, W> ctx) body, {
     Object? key,

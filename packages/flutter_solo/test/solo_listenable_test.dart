@@ -15,6 +15,13 @@ final class _Counter extends Solo<int> with SoloListenable {
   bool get hasListeners => super.hasListeners;
 
   void set(int value) => externalSetState(value);
+
+  /// Runs [body] as a job of this controller.
+  SoloJob<void> perform(
+    Future<void> Function(SoloContext<int, int> ctx) body, {
+    bool Function(int state)? keepWhile,
+  }) =>
+      run<int, void>(body, keepWhile: keepWhile);
 }
 
 final class _ObjectController extends Solo<Object> with SoloListenable {
@@ -240,7 +247,7 @@ void main() {
     FlutterError.onError = (_) {};
     addTearDown(() => FlutterError.onError = previous);
 
-    final job = counter.run<int, void>(
+    final job = counter.perform(
       keepWhile: (state) => state < 10,
       (ctx) => ctx.wait(() => Future<void>.delayed(const Duration(days: 1))),
     )..ignore();
@@ -272,7 +279,7 @@ void main() {
     final counter = _Counter();
     final seen = <int>[];
     counter.addListener(() => seen.add(counter.value));
-    await counter.run<int, void>((ctx) async {
+    await counter.perform((ctx) async {
       ctx
         ..emit(5)
         ..emit(6);

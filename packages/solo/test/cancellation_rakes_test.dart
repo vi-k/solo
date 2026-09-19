@@ -6,6 +6,8 @@ import 'dart:async';
 import 'package:solo/solo.dart';
 import 'package:test/test.dart';
 
+import 'support/test_solo.dart';
+
 /// The first attempts of `doc/cancellation.md`, and what each one costs.
 ///
 /// The page opens four of its sections with the version the vocabulary of
@@ -205,7 +207,7 @@ final class Till extends Solo<String> {
 
 // --- Ordinary await and context lifetime ----------------------------------
 
-final class Uploader extends Solo<String> {
+final class Uploader extends Solo<String> with OpenSolo<String> {
   final Device device;
   final errors = <Object>[];
 
