@@ -2,7 +2,7 @@
 
 A body can hand work to another job. A child is started by the body and waited
 for by it; a stream is processed one event at a time in a child that owns the
-subscription; a continuation starts when the job it follows finishes, and
+subscription; a `then` job starts when the job it follows finishes, and
 outlives it. The words for the three are close, and the wrong one compiles:
 
 ```dart
@@ -455,44 +455,44 @@ await saved.value;
 
 Cancelling `saved` also asks unfinished `parsed` and `loaded` to cancel.
 Cancelling `parsed` asks unfinished `loaded` to cancel and cancels `saved`.
-Cancelling `loaded` passes cancellation forward through both continuations.
-Each forwarded request carries `ChainCancelReason` with the adjacent job's
+Cancelling `loaded` passes cancellation forward through both `then` jobs. Each
+forwarded request carries `ChainCancelReason` with the adjacent job's
 `Cancelled` in `cause`. Completed jobs keep their outcomes. If you attach
-several continuations to one job, cancelling one can cancel their shared source
-and the other continuations too.
+several `then` jobs to one job, cancelling one can cancel their shared source
+and the others too.
 
 `await saved.cancel()` waits for the unfinished predecessors, their children
 and cleanup, and any work and cleanup already started by `saved`. Sources
 retain their normal cancellation rules: `cancellable: false` refuses a request,
-and `uncancellable` holds it. A cancelled continuation still waits for that
+and `uncancellable` holds it. A cancelled `then` job still waits for that
 source, then finishes without calling its callback. While waiting, it can be
 `isCancelled` without being `isFinished`; its outcome has `started: false` if
 it was cancelled while waiting for its source.
 
 A failed predecessor forwards its error and stack without calling the callback.
 Observe the tail through `value`, `done` or `ignore` to handle that failure. If
-a cancelled continuation cannot forward a source failure, it does not observe
-it either: for example, a source that refuses cancellation and later fails
-still needs its own error handling.
+a cancelled `then` job cannot forward a source failure, it does not observe it
+either: for example, a source that refuses cancellation and later fails still
+needs its own error handling.
 
 The callback accepts a value or future. Returning another `Job` does not wait
 for it; return `ctx.run(child)` for a deferred child. `then` does not start a
-deferred source, and a continuation cannot be adopted through `ctx.run`. Do not
-await a continuation from its source's body or cleanup: the continuation is
-waiting for that source to finish.
+deferred source, and a `then` job cannot be adopted through `ctx.run`. Do not
+await a `then` job from its source's body or cleanup: it is waiting for that
+source to finish.
 
-Each continuation is a root job of the core. It has an optional `observer`
+Each `then` job is a root job of the core. It has an optional `observer`
 argument and inherits neither the source's observer nor domain state, rules or
-a queue slot. Cleanup registered by the source has already run when the
-continuation receives its value; a resource closed by the source's `onDispose`
-is therefore already closed at that point.
+a queue slot. Cleanup registered by the source has already run when the `then`
+job receives its value; a resource closed by the source's `onDispose` is
+therefore already closed at that point.
 
 A `discard` of the source is the other way round: the source ended `Done`, so
-it never ran and never will, and the continuation is the receiver -- it takes
-the value as its argument and registers the release in its own body. One case
-has no receiver at all: a continuation cancelled while it waited finishes
-without ever calling its callback, so there is no body and no moment. A source
-that took the cancellation with it closed what it took on the way out; one that
+it never ran and never will, and the `then` job is the receiver -- it takes the
+value as its argument and registers the release in its own body. One case has
+no receiver at all: a `then` job cancelled while it waited finishes without
+ever calling its callback, so there is no body and no moment. A source that
+took the cancellation with it closed what it took on the way out; one that
 refused it -- `cancellable: false`, or already finished when the request
 arrived -- ends `Done` all the same, and the resource is then the caller's to
 close, through the source's handle, exactly as for a branch that refuses a
@@ -500,7 +500,7 @@ group's stop.
 
 ### The first attempt
 
-A job loads the rows, a continuation reports them, and the body wants both done
+A job loads the rows, a `then` job reports them, and the body wants both done
 before it ends -- so it adopts them both:
 
 ```dart
@@ -514,10 +514,11 @@ final parent = Job<void>((ctx) async {
 ```
 
 The second `ctx.run` throws `ArgumentError`: `Invalid argument (child): A
-continuation starts itself after its source finishes`. `ctx.run` takes a job
-nobody starts by itself, and a continuation is not one of those. The length of
-the chain changes nothing -- `child.then(...).then(...)` is a continuation of a
-continuation, and every link refuses adoption the same way.
+continuation starts itself after its source finishes` -- `continuation` is the
+engine's own word for it. `ctx.run` takes a job nobody starts by itself, and a
+`then` job is not one of those. The length of the chain changes nothing:
+`child.then(...).then(...)` hangs one `then` job off another, and every link
+refuses adoption the same way.
 
 ### The head is the only child
 

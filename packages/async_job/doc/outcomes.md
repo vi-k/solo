@@ -18,7 +18,7 @@ value on success and throws on failure or cancellation. If you do not need the
 result at all, call `job.ignore()` to acknowledge that choice.
 
 Accessing `done` or `value`, or calling `ignore()`, counts as observing a
-failure. Forwarding a failure through `then` observes it too; the continuation
+failure. Forwarding a failure through `then` observes it too; the `then` job
 takes responsibility for it. Reading `job.outcome`, receiving the observer's
 `onFinish` callback or awaiting `job.cancel()` does not. An unobserved failure
 reaches the job's creation zone on the microtask after the job finishes. This
