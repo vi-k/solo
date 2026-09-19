@@ -308,6 +308,11 @@ jobs:
       - name: Line width
         run: python3 tool/check_line_width.py
 
+      # And this says which wide line is an offence: one a fill could
+      # still narrow, not one holding a link or a span it cannot split.
+      - name: The width check knows an unbreakable token
+        run: python3 -m unittest tool/check_line_width_test.py
+
       # The width check says no line is too long; this one says no line is
       # too short. A paragraph is filled greedily, so where the break falls
       # is not a decision anyone has to make or review.

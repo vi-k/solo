@@ -210,9 +210,9 @@
 (два стенда, `tool/doc_snippets.py` и `tool/accumulation_snippets.py`: собирают
 код `packages/solo/doc/vs-bloc.md` и `packages/solo/doc/accumulation.md` в три
 пакета и прогоняют все драйверы) и `docs` (пять питоновских проверок, сторожа
-`tool/reflow.py` и `tool/check_links.py` и сборка сайта). Триггеры: push
-в `main`, pull request и ручной запуск. Прогон перед коммитом это не отменяет:
-CI говорит уже после того, как правка в `main`.
+трёх из них — `reflow.py`, `check_line_width.py` и `check_links.py` — и сборка
+сайта). Триггеры: push в `main`, pull request и ручной запуск. Прогон перед
+коммитом это не отменяет: CI говорит уже после того, как правка в `main`.
 
 Адресация блоков у обоих стендов общая — `tool/doc_blocks.py`: фрагмент берётся
 по разделу и по имени, которое объявляет, а не по номеру. Копия этого скрипта
