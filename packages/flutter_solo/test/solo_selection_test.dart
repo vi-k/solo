@@ -131,13 +131,13 @@ final class _ListController extends Solo<String> with SoloListenable {
 }
 
 void main() {
-  test('of selects from a Solo controller and respects compare', () async {
+  test('from selects from a Solo controller and respects changed', () async {
     final controller = _PlainController();
     addTearDown(controller.close);
-    final name = SoloSelection.of(
+    final name = SoloSelection.from(
       controller,
       (state) => state.name,
-      compare: (previous, current) =>
+      changed: (previous, current) =>
           previous.toLowerCase() != current.toLowerCase(),
     );
     var calls = 0;
@@ -152,10 +152,10 @@ void main() {
     expect(calls, 2);
   });
 
-  test('of selects from a SoloListenable controller', () async {
+  test('from selects from a SoloListenable controller', () async {
     final controller = _Controller();
     addTearDown(controller.close);
-    final progress = SoloSelection.of(controller, (state) => state.progress);
+    final progress = SoloSelection.from(controller, (state) => state.progress);
     final values = <int>[];
     progress.addListener(() => values.add(progress.value));
 
@@ -362,11 +362,11 @@ void main() {
     expect(name.value, 'Ada');
   });
 
-  test('compare replaces the answer about a change', () {
+  test('changed replaces the answer about a change', () {
     final controller = _Controller();
     final name = controller.select(
       (state) => state.name,
-      compare: (previous, current) =>
+      changed: (previous, current) =>
           previous.toLowerCase() != current.toLowerCase(),
     );
     var calls = 0;
@@ -466,14 +466,13 @@ void main() {
 
   test('a selection of a closed controller answers from the state', () async {
     final controller = _Controller();
-    // A `compare` that ignores case lets the source move without an
+    // A `changed` that ignores case lets the source move without an
     // announcement. That is the only way to tell a read of the source from
     // a replay of the last announced pick: after the second change the two
     // differ, and only one of them is the state the controller holds.
     final name = controller.select(
       (state) => state.name,
-      // `compare` answers whether the pick CHANGED, the way `!=` does.
-      compare: (previous, current) =>
+      changed: (previous, current) =>
           previous.toLowerCase() != current.toLowerCase(),
     );
     var calls = 0;
@@ -483,7 +482,7 @@ void main() {
     expect(calls, 1, reason: 'an open controller does announce a pick');
 
     controller.set(const _Screen(name: 'ADA'));
-    expect(calls, 1, reason: 'the same pick by `compare`, nothing announced');
+    expect(calls, 1, reason: 'the same pick by `changed`, nothing announced');
 
     await controller.close();
 

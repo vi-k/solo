@@ -303,7 +303,7 @@ await player.close(mode: SoloCloseMode.drain);
 | [Накопление событий](../../docs/ru/solo/accumulation.md) | `collect`, `accumulate`, debounce и throttle |
 | [Ошибки и наблюдение](../../docs/ru/solo/errors.md) | `SoloObserver`, `errorHandler`, `pending`, логи |
 | [Тестирование](../../docs/ru/solo/testing.md) | Ожидание исходов, фейковое время, таймауты |
-| [Flutter](../../docs/ru/solo/flutter.md) | `SoloListenable`, владение контроллером, перестроение экрана |
+| [Flutter](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.ru.md) | Пакет `flutter_solo`: `SoloListenable`, владение контроллером, перестроение экрана |
 | [Пример камеры](../../docs/ru/solo/camera.md) | Один контроллер с правилами, уборкой и устройством |
 | [solo и bloc рядом](../../docs/ru/solo/vs-bloc.md) | Одиннадцать сценариев на обоих пакетах |
 
@@ -323,7 +323,7 @@ await player.close(mode: SoloCloseMode.drain);
 | Журналу нужно сказать, какая операция изменила состояние | `SoloTransition` в `onChange` | [Ошибки и наблюдение](../../docs/ru/solo/errors.md) |
 | Шаг нельзя прервать на половине | `ctx.join` для вызова, `ctx.uncancellable` для шага | [Отмена](../../docs/ru/solo/cancellation.md) |
 | Ресурс, открытый вызовом, которого никто не дождался, всё равно надо закрыть | `dispose` или `discard` у `ctx.wait` и `ctx.join` | [Ресурсы и освобождение](../../docs/ru/solo/resources.md) |
-| Виджет перестраивается из-за состояния, которым не пользуется | `select` на `SoloListenable` | [Flutter](../../docs/ru/solo/flutter.md) |
+| Виджет перестраивается из-за состояния, которым не пользуется | `SoloSelector` из `flutter_solo` | [Flutter](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.ru.md#выбор-одного-значения) |
 | Очередь нужно на время остановить | задача, ждущая `Completer` в её голове | [Задачи и очередь](../../docs/ru/solo/jobs.md) |
 | Событие стрима приходит микротаской позже, и это поздно | `publish` в наследнике `Solo`, уведомляющий внутри изменения | [Состояние](../../docs/ru/solo/state.md) |
 

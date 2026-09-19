@@ -21,7 +21,7 @@ name: gate
 # installs Flutter: that is what keeps `solo` and `async_job` the pure Dart
 # they promise to be, because a stray `package:flutter` import would stop
 # resolving there and nowhere else. `flutter` covers the package that needs
-# it, and the bench of `packages/solo/doc/flutter.md` along with it, whose
+# it, and the bench of its README and `doc/mixins.md` along with it, whose
 # drivers are widget tests. `docs` needs no SDK at all. `snippets` builds
 # the code of `packages/solo/doc/vs-bloc.md` and runs it.
 #
@@ -186,10 +186,10 @@ jobs:
           (cd packages/flutter_solo && flutter test)
           (cd packages/flutter_solo/example && flutter test)
 
-      # The bench of `packages/solo/doc/flutter.md` and of the README of
-      # `flutter_solo` runs here rather than in `snippets`, which has no
-      # Flutter: what those documents show are widgets, and a widget needs
-      # a binding to be built and read back.
+      # The bench of the README of `flutter_solo` and of its `doc/mixins.md`
+      # runs here rather than in `snippets`, which has no Flutter: what those
+      # documents show are widgets, and a widget needs a binding to be built
+      # and read back.
       # Outside the checkout, like the other benches, which is what lets the
       # last step of this job mean anything.
       - name: Build the screens out of the document
@@ -216,7 +216,7 @@ jobs:
       - name: The quoted traces are the printed ones
         run: |
           python3 tool/check_traces.py \
-            packages/solo/doc/flutter.md "$RUNNER_TEMP/flutter.out"
+            packages/flutter_solo/doc/mixins.md "$RUNNER_TEMP/flutter.out"
 
       - name: Nothing drifted
         run: |

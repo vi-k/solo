@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:solo/solo.dart';
 
-import 'solo_select_builder.dart';
+import 'solo_selector.dart';
 
 /// Rebuilds its subtree whenever a [Solo] notifies of a state change.
 ///
@@ -25,8 +25,8 @@ import 'solo_select_builder.dart';
 /// listeners are gone and nothing notifies this widget again; connecting an
 /// already closed controller displays its final state.
 ///
-/// Selective rebuilds for a sub-state belong in [SoloSelectBuilder],
-/// not here: this widget rebuilds on every state transition of [solo].
+/// Selective rebuilds for a sub-state belong in [SoloSelector], not
+/// here: this widget rebuilds on every state transition of [solo].
 final class SoloBuilder<S extends Object> extends StatefulWidget {
   /// The controller whose state transitions trigger rebuilds.
   final Solo<S> solo;

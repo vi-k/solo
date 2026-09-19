@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Builds runnable screens from packages/solo/doc/flutter.md and from the
-README of flutter_solo.
+"""Builds runnable screens from the README of flutter_solo and from its
+doc/mixins.md.
 
 Every snippet is copied out of the markdown and wrapped in a file that
 runs: fakes above it, a driver below it. That is what keeps the document
@@ -22,22 +22,23 @@ The drivers are widget tests rather than programs under bin/, because
 what this document shows are widgets: a screen needs a binding to be
 built, pumped and read back. `flutter test` is what provides one.
 
-Two liberties are taken with the snippets, and they are the only ones.
-Import lines are hoisted to the head of the driver, verbatim, because a
-file takes its directives before its declarations. And the controller of
-the opening section carries a comment where its jobs belong -- `// ...the
-jobs from the quick start...` -- which is replaced here by that very
-method, taken out of packages/solo/README.md. Everything between the
+One liberty is taken with the snippets, and it is the only one. Import
+lines are hoisted to the head of the driver, verbatim, because a file
+takes its directives before its declarations. Everything between the
 imports is byte-identical to the document.
 
-So this bench guards three documents at once: the quick start of solo's
-README is built here as well, as the code flutter.md points at rather
-than a copy of it; and so is every Dart block of the README of
-flutter_solo but the lone import line under Install, which Usage repeats
--- the first page a user of the package copies from. That
-README went without a bench until 2026-09-19 and did not compile: the
-model it declared had neither the `canSave` nor the `save` the rest of
-the page used.
+Every Dart block of the README of flutter_solo is built, but the lone
+import line under Install, which Usage repeats -- the first page a user
+of the package copies from. That README went without a bench until
+2026-09-19 and did not compile: the model it declared had neither the
+`canSave` nor the `save` the rest of the page used. doc/mixins.md takes
+the model of that README, the states of `Profile`, and is built against
+them.
+
+The quick start of solo's README is built here as well. It is pure Dart
+and belongs to no widget, but no other bench builds it, and a Dart file
+compiles in a Flutter package the same as anywhere -- with its import of
+`solo` read as one of flutter_solo, which re-exports it.
 
 What the drivers print is quoted by the document in `text` blocks, and
 `tool/check_traces.py` holds the two together. The guards in them are
@@ -52,7 +53,7 @@ import doc_blocks
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ROOT = sys.argv[1] if len(sys.argv) > 1 else '/tmp/solo-flutter-check'
-DOC = os.path.join(REPO, 'packages', 'solo', 'doc', 'flutter.md')
+DOC = os.path.join(REPO, 'packages', 'flutter_solo', 'doc', 'mixins.md')
 README = os.path.join(REPO, 'packages', 'solo', 'README.md')
 FLUTTER_README = os.path.join(REPO, 'packages', 'flutter_solo', 'README.md')
 
@@ -103,15 +104,11 @@ linter:
 """
 
 snips = doc_blocks.blocks(
-    # A synthetic heading for the part of the page above its first `##`:
-    # sections are keyed by the heading they sit under, and the opening
-    # tour of this document sits under none.
-    'x\n## quick start\n' + open(DOC).read(),
-    'dart',
-    doc_blocks.DECLARES['dart'],
-)
+    open(DOC).read(), 'dart', doc_blocks.DECLARES['dart'])
 readme = doc_blocks.blocks(
     open(README).read(), 'dart', doc_blocks.DECLARES['dart'])
+_fr = doc_blocks.blocks(
+    open(FLUTTER_README).read(), 'dart', doc_blocks.DECLARES['dart'])
 
 
 def split_imports(block):
@@ -127,22 +124,12 @@ def wrap(name, block, parameter='Session session'):
     return f'Widget {name}({parameter}) =>\n    {block.strip()};\n'
 
 
-# The quick start's states and API client, and the load job the opening
-# controller of flutter.md leaves as a comment.
-STATES = readme['quick-start/ProfileState']
-_api_block = readme['quick-start/ProfileApi']
-_head, _, _tail = _api_block.partition('final class ProfileController')
-API = _head.strip('\n') + '\n'
-LOAD = _tail[_tail.index('  Job<String> load()'):].rsplit('}', 1)[0].rstrip()
-
-PROFILE_PAGE = """
-class ProfilePage extends StatelessWidget {
-  const ProfilePage({super.key});
-
-  @override
-  Widget build(BuildContext context) => const Text('profile page');
-}
-"""
+# The states the README of flutter_solo declares under Usage, which the
+# page takes as its model: the head of that block, up to the controller.
+_usage = _fr['usage/ProfileController']
+PROFILE_STATES = _usage[_usage.index('sealed class Profile'):
+                        _usage.index('final class ProfileController')]
+PROFILE_STATES = PROFILE_STATES.strip('\n') + '\n'
 
 WRAP = """
 Widget wrap(Widget child) => Directionality(
@@ -159,74 +146,30 @@ void show(WidgetTester tester, String label) =>
 
 FILES = {}
 
-# --------------------------------------------------------------- the screen
-_controller = snips['quick-start/ProfileController'].replace(
-    '  // ...the jobs from the quick start...', LOAD)
-_controller_imports, _controller_body = split_imports(_controller)
-_screen_imports, _screen_body = split_imports(snips['quick-start/ProfileScreen'])
+# ------------------------------------------------- the quick start of solo
+# The import of `solo` is the one line not taken over: this package depends
+# on flutter_solo, which re-exports it.
+_states_imports, _states_body = split_imports(
+    readme['quick-start/ProfileState'])
+assert _states_imports == ["import 'package:solo/solo.dart';"], _states_imports
 
-FILES['screen_test'] = '\n'.join([
-    *sorted(set(_controller_imports + _screen_imports
-                + ["import 'package:flutter_test/flutter_test.dart';"])),
+FILES['quick_start_test'] = '\n'.join([
+    "import 'package:flutter_solo/flutter_solo.dart';",
+    "import 'package:flutter_test/flutter_test.dart';",
     '',
-    STATES.split("import 'package:solo/solo.dart';")[-1].strip('\n'),
-    '',
-    API,
-    _controller_body,
-    PROFILE_PAGE,
-    _screen_body,
-    # The selector of the same section, which the document shows as the
-    # body of a build method: `profile` is the screen's controller and
-    # `_open` its method, so the wrapper supplies both. A variable rather
-    # than a function, because a tear-off of a top-level function would
-    # make the button const and the document's is not.
-    'void Function()? _open;',
-    WRAP,
-    wrap('selector', snips['quick-start/soloselectbuilder-profilestate'],
-         'ProfileController profile'),
+    _states_body,
+    readme['quick-start/ProfileApi'],
     '''
 void main() {
-  testWidgets('the screen loads, then navigates', (tester) async {
-    await tester.pumpWidget(const MaterialApp(home: ProfileScreen()));
-    expect(find.text('Open profile'), findsOne);
-
-    await tester.tap(find.text('Open profile'));
-    await tester.pump();
-    expect(
-      find.byType(CircularProgressIndicator),
-      findsOne,
-      reason: 'the state is Loading while the API is answering',
-    );
-
-    await tester.pumpAndSettle();
-    expect(
-      find.text('profile page'),
-      findsOne,
-      reason: 'the outcome of the job is what navigates, not the state',
-    );
-    debugPrint('the screen: load, then the profile page');
-  });
-
-  testWidgets('the selector rebuilds on the value it picks', (tester) async {
+  test('the quick start loads, and a second call gets the same job',
+      () async {
     final profile = ProfileController(ProfileApi());
     addTearDown(profile.close);
 
-    await tester.pumpWidget(wrap(selector(profile)));
-    expect(find.text('Open profile'), findsOne);
-
-    profile.load();
-    // The first pump lets the job start and emit Loading; the frame that
-    // shows it is the next one.
-    await tester.pump();
-    await tester.pump();
-    expect(
-      find.byType(CircularProgressIndicator),
-      findsOne,
-      reason: 'Loading is what the picking function turns into true',
-    );
-    debugPrint('the selector: button, then spinner');
-
-    await tester.pumpAndSettle();
+    final job = profile.load();
+    expect(identical(profile.load(), job), isTrue);
+    expect(await job.value, 'Ada Lovelace');
+    expect(profile.currentState, isA<Loaded>());
   });
 }
 ''',
@@ -385,12 +328,12 @@ _base_imports, _base_body = split_imports(
     snips['a-base-class-without-flutter/AppController'])
 
 FILES['base_class_test'] = '\n'.join([
+    "import 'package:flutter/foundation.dart';",
     "import 'package:flutter/widgets.dart';",
     "import 'package:flutter_solo/flutter_solo.dart';",
     "import 'package:flutter_test/flutter_test.dart';",
     '',
-    STATES.split("import 'package:solo/solo.dart';")[-1].strip('\n'),
-    '',
+    PROFILE_STATES,
     _base_body,
     WRAP,
     '''
@@ -400,18 +343,18 @@ void main() {
     final profile = ProfileController();
     addTearDown(profile.close);
 
-    expect(profile, isA<ValueListenable<ProfileState>>());
-    expect(profile, isA<AppController<ProfileState>>());
+    expect(profile, isA<ValueListenable<Profile>>());
+    expect(profile, isA<AppController<Profile>>());
 
     await tester.pumpWidget(
       wrap(
-        SoloBuilder<ProfileState>(
+        SoloBuilder<Profile>(
           solo: profile,
           builder: (context, state, _) => Text('${state.runtimeType}'),
         ),
       ),
     );
-    expect(onScreen(tester), 'Initial');
+    expect(onScreen(tester), 'Empty');
     show(tester, 'the base class, through a leaf that is listenable');
   });
 }
@@ -425,17 +368,11 @@ void main() {
 # it; what the page takes as the reader's own -- the API behind the
 # controller, the widgets a `State` belongs to, a toast -- is supplied here,
 # and nothing the page itself names is.
-_fr = doc_blocks.blocks(
-    open(FLUTTER_README).read(), 'dart', doc_blocks.DECLARES['dart'])
-_usage_imports, _usage_body = split_imports(_fr['usage/ProfileController'])
+_usage_imports, _usage_body = split_imports(_usage)
 _listening_imports, _listening_body = split_imports(
     _fr['listening-without-keeping-the-/initState'])
 _second_imports, _second_body = split_imports(
     _fr['methods-from-a-second-import/import-package-flutter_solo-fl'])
-# Two widget expressions in one block, one blank line between them.
-_builders = _fr['builders-for-any-controller/solobuilder-profile'].strip()
-_builders = _builders.split('\n\n')
-assert len(_builders) == 2, 'the builders block holds two expressions'
 
 FILES['readme_test'] = '\n'.join([
     *sorted(set(_usage_imports + _listening_imports + _second_imports + [
@@ -479,8 +416,8 @@ class SaveButton extends StatefulWidget {
 }
 ''',
     _fr['selecting-one-value/_SaveButtonState'],
-    wrap('anyBuilder', _builders[0], 'ProfileController controller'),
-    wrap('anySelectBuilder', _builders[1], 'ProfileController controller'),
+    wrap('anyBuilder', _fr['builders-for-any-controller/solobuilder-profile'],
+         'Solo<Profile> controller'),
     '''
 class Listening extends StatefulWidget {
   final ProfileController controller;
@@ -653,23 +590,15 @@ void main() {
     debugPrint('the field: follows the controller it is handed');
   });
 
-  testWidgets('the builders take the controller itself', (tester) async {
+  testWidgets('the builder takes the controller itself', (tester) async {
     final controller = ProfileController(ProfileApi());
     addTearDown(controller.close);
-    await tester.pumpWidget(
-      app(
-        Column(
-          children: [anyBuilder(controller), anySelectBuilder(controller)],
-        ),
-      ),
-    );
+    await tester.pumpWidget(app(anyBuilder(controller)));
     expect(find.textContaining('Empty'), findsOne);
-    expect(pressable(tester), isNull);
 
     controller.load().ignore();
     await tester.pumpAndSettle();
     expect(find.textContaining('Loaded'), findsOne);
-    expect(pressable(tester), isNotNull);
   });
 
   testWidgets('a group of subscriptions goes with the State', (tester) async {

@@ -2,7 +2,7 @@
 // Flutter holds, with `SoloListenable` mixed in at the leaf.
 import 'package:solo/solo.dart';
 
-/// The base of "A base class without Flutter" in `doc/flutter.md`, as the
+/// The base of "A base class without Flutter" in `doc/mixins.md`, as the
 /// page writes it.
 abstract class AppController<S extends Object> extends Solo<S> {
   /// Creates a controller in [initialState].

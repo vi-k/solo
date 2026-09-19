@@ -55,7 +55,7 @@ flutter pub add flutter_solo
 One dependency is all it takes: `flutter_solo` re-exports the whole of
 [solo](https://pub.dev/packages/solo), which re-exports the whole of
 [async_job](https://pub.dev/packages/async_job). `Solo`, `SoloContext`, `Job`,
-`Outcome`, `Policy` and `ValueListenable` all arrive with
+`Outcome` and `Policy` all arrive with
 
 ```dart
 import 'package:flutter_solo/flutter_solo.dart';
@@ -145,7 +145,7 @@ A widget that needs one field does not have to rebuild for the rest.
 
 ```dart
 SoloSelector<Profile, bool>(
-  listenable: controller,
+  solo: controller,
   selector: (state) => state.canSave,
   builder: (context, canSave, _) => ElevatedButton(
     onPressed: canSave ? controller.save : null,
@@ -154,11 +154,13 @@ SoloSelector<Profile, bool>(
 )
 ```
 
-Picks count as changed when they are `!=`, unless `compare:` answers that
-question itself — `true` means changed. The pick is made from the state as it
-is now, so it is never behind; keep the selector a cheap pick that gives the
-same answer for the same state. The `listenable` is any `ValueListenable`, a
-controller being the usual one.
+Picks count as changed when they are `!=`, unless `changed:` answers that
+question itself. The pick is made from the state as it is now, so it is never
+behind; keep the selector a cheap pick that gives the same answer for the same
+state. `solo` is any controller, a `ValueListenable` or not. The selector is
+compared by identity when the parent rebuilds, so an inline closure is a new
+one on every such build and makes a new selection each time: hold it in a field
+or a `static` where the parent rebuilds often.
 
 What the widget holds for you is a `SoloSelection` — a `ValueListenable` of the
 picked value — and it is an object like any other where a listenable is what
@@ -201,34 +203,34 @@ has listeners, and there is nothing to dispose of.
 
 ## Builders for any controller
 
-`ValueListenableBuilder` and `SoloSelector` need a `ValueListenable`, and a
-controller with `SoloListenable` mixed in is one. A controller without it is
-not — a plain `Solo`, or one `with SoloStream` only — and for those there are
-two widgets that take the controller itself:
+`ValueListenableBuilder` needs a `ValueListenable`, and a controller with
+`SoloListenable` mixed in is one. A controller without it is not — a plain
+`Solo`, or one `with SoloStream` only — and for those `SoloBuilder` takes the
+controller itself:
 
 ```dart
 SoloBuilder<Profile>(
   solo: controller,
   builder: (context, state, _) => Text('$state'),
 )
-
-SoloSelectBuilder<Profile, bool>(
-  solo: controller,
-  selector: (state) => state.canSave,
-  builder: (context, canSave, _) => ElevatedButton(
-    onPressed: canSave ? controller.save : null,
-    child: const Text('Save'),
-  ),
-)
 ```
 
-`SoloBuilder` rebuilds on every change of the state; `SoloSelectBuilder` only
-when the pick changes, and it keeps its selection across a parent rebuild, so
-the value the comparison answers from survives one. Both read the state after
-subscribing and hand `child` through untouched, and both compare controllers by
-identity when the parent gives them a new one.
-`SoloSelection.of(controller, selector)` is that selection without a widget
-around it, for a `State` field.
+It rebuilds on every change of the state and hands `child` through untouched.
+Two things set it apart from `ValueListenableBuilder`, and both are about where
+the state comes from. It reads `currentState` in `build`, where
+`ValueListenableBuilder` builds from a copy that every notification refreshes.
+And it compares controllers by identity: handed a new controller whose `==`
+says it is the old one, `SoloBuilder` moves to it and `ValueListenableBuilder`
+stays with the old.
+
+`SoloSelector` takes any controller already, and it keeps its selection across
+a parent rebuild, so the value the comparison answers from survives one.
+`SoloSelection.from(controller, selector)` is that selection without a widget
+around it, for a `State` field of a controller that is not a `ValueListenable`.
+
+A controller with both a `stream` and `SoloListenable`, a screen built on that
+stream, and a base class of controllers with no Flutter in it are on
+[a page of their own](doc/mixins.md).
 
 ## Listening without keeping the callback
 

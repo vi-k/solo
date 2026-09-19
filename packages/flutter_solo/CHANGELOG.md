@@ -38,8 +38,13 @@
   for the leaf's override to call. This rides on `solo`'s rename -- `SoloBase`
   becomes `Solo`, the stream-carrying `Solo` becomes the mixin `SoloStream` --
   after which nothing else in this package changes shape: `SoloBuilder`,
-  `SoloSelection.of` and the rest already took the widest engine type, and
+  `SoloSelection.from` and the rest already took the widest engine type, and
   every mention of `SoloBase` in a signature or a doc comment reads `Solo`.
+
+- **Breaking:** `ValueListenable` is no longer re-exported.
+  `package:flutter/widgets.dart` does not export it either, so a file that
+  names the type imports `package:flutter/foundation.dart`; a file that only
+  hands a controller to `ValueListenableBuilder` needs nothing new.
 
 - `SoloBuilder` no longer keeps a copy of the state. It subscribes, and every
   rebuild reads `Solo.currentState`; the field, the two reads that filled it
@@ -47,23 +52,19 @@
   a fresh read in one place only -- a closed controller whose state moved on
   with nobody told -- and `solo` no longer lets the state move there.
 
-- `SoloSelector` and `SoloSelectBuilder` keep the subscription to their
-  selection themselves instead of wrapping a `ValueListenableBuilder` around
-  it. Behaviour is unchanged -- the value is read after subscribing, kept until
-  the next notification, moved across when the selection is rebuilt, and let go
-  in `dispose` -- but the widget tree is one element shorter under each of
-  them, and the lifecycle now lives in one place rather than in two nested
-  states. A test that looked for a `ValueListenableBuilder` under them will no
-  longer find one.
-- Add `SoloBuilder` and `SoloSelectBuilder`: what `ValueListenableBuilder` and
-  `SoloSelector` are, for a controller that is not a `ValueListenable`. Both
-  take any `Solo` -- one `with SoloStream` included -- subscribe in
-  `initState`, read the controller's state on every build, compare controllers
-  by identity when the parent hands over a new one, and pass `child` through
-  untouched. `SoloSelectBuilder` holds its selection across a parent rebuild,
-  so the baseline `compare` answers from survives one; it carries no
-  `buildWhen`, because picking a value is what it does.
-- Add `SoloSelection.of`: a selection straight from a controller, for the
+- `SoloSelector` keeps the subscription to its selection itself instead of
+  wrapping a `ValueListenableBuilder` around it. Behaviour is unchanged -- the
+  value is read after subscribing, kept until the next notification, moved
+  across when the selection is rebuilt, and let go in `dispose` -- but the
+  widget tree is one element shorter under it, and the lifecycle now lives in
+  one place rather than in two nested states. A test that looked for a
+  `ValueListenableBuilder` under it will no longer find one.
+- Add `SoloBuilder`: what `ValueListenableBuilder` is, for a controller that is
+  not a `ValueListenable`. It takes any `Solo` -- one `with SoloStream`
+  included -- subscribes in `initState`, reads the controller's state on every
+  build, compares controllers by identity when the parent hands over a new one,
+  and passes `child` through untouched.
+- Add `SoloSelection.from`: a selection straight from a controller, for the
   controllers that are not `ValueListenable` -- one built with `SoloStream`,
   and anything else that extends `Solo`. It is a static method rather than a
   constructor because a constructor introduces no type parameters of its own,
@@ -133,14 +134,18 @@
 - Notifying no longer looks each listener up in the list of all of them, so one
   pass is linear in their number rather than quadratic.
 - Add `SoloSelection<S, T>`: a `ValueListenable` of one value picked out of
-  another, notifying only when that value changes — by `!=`, or by a `compare`
+  another, notifying only when that value changes — by `!=`, or by a `changed`
   of your own answering whether it did. It subscribes to its source only while
   it has listeners and needs no disposal. The source is any `ValueListenable`,
   so a selection picks out of a controller, a `ValueNotifier` or another
   selection alike.
-- Add `SoloSelector`, the widget that holds a selection for you: a
-  `listenable`, a `selector` and a `builder`, and no `State` field to keep the
-  selection in — a widget that picks can be a `StatelessWidget`.
+- Add `SoloSelector`, the widget that holds a selection for you: a controller,
+  a `selector` and a `builder`, and no `State` field to keep the selection in —
+  a widget that picks can be a `StatelessWidget`. It is to `SoloBuilder` what a
+  pick is to the whole state: it takes any `Solo`, `SoloListenable` or not, and
+  holds its selection across a parent rebuild, so the value `changed` answers
+  from survives one. A `ValueListenable` that is not a controller is picked
+  from with a `SoloSelection` and a `ValueListenableBuilder`.
 - Add `select` and `listen` as methods, with `SoloSubscription` and
   `SoloSubscriptions`, in an import of their own,
   `package:flutter_solo/listenable.dart`. Both methods are extensions on the
@@ -167,21 +172,21 @@
   and would have gone into `dart doc` as one. Taking it back after a release is
   a breaking change; taking it back now is not.
 
-- **Fix:** `SoloSelector` and `SoloSelectBuilder` pick once per occasion, which
-  is what the dartdoc of `SoloSelector` promised: once on mounting, once when
-  the parent hands over a new selector, once per change of the state. They
-  picked four times and twice. The constructor of `SoloSelection` made a pick
-  the first subscription always replaced, the pick was taken again after
-  subscribing whether or not the source had moved, and the widget read `value`
-  back, which picked once more. A subscribed selection keeps its last pick
-  together with the source value it came from and answers `value` from it while
-  that value stands, so a selector is expected to give the same answer for the
-  same value -- which a pick does. A source that changes its value in place and
-  says so is still picked afresh on its notification, and a selection nobody
-  listens to picks on every read, as before. Two things move: a selector that
-  throws does so on the first read or subscription rather than in the
-  constructor, and a selector that returns a new object every time no longer
-  gets a notification on subscribing to a source that did not move.
+- **Fix:** `SoloSelector` picks once per occasion, which is what its dartdoc
+  promised: once on mounting, once when the parent hands over a new selector,
+  once per change of the state. It picked four times and twice. The constructor
+  of `SoloSelection` made a pick the first subscription always replaced, the
+  pick was taken again after subscribing whether or not the source had moved,
+  and the widget read `value` back, which picked once more. A subscribed
+  selection keeps its last pick together with the source value it came from and
+  answers `value` from it while that value stands, so a selector is expected to
+  give the same answer for the same value -- which a pick does. A source that
+  changes its value in place and says so is still picked afresh on its
+  notification, and a selection nobody listens to picks on every read, as
+  before. Two things move: a selector that throws does so on the first read or
+  subscription rather than in the constructor, and a selector that returns a
+  new object every time no longer gets a notification on subscribing to a
+  source that did not move.
 
 - The example no longer sticks on a failed load. Its job left the state on
   `Loading` whatever the outcome, so the third load -- the one the fake service
@@ -204,6 +209,14 @@
   the controller the `State` was first given, while the button saved to the one
   the parent handed over later. The dartdoc of `SoloSelection` says the same,
   and the section on `listen` says it about subscriptions taken in `initState`.
+
+- The package has a guide of its own, `doc/mixins.md`, with what the README
+  leaves out: a controller with both `SoloListenable` and `SoloStream`, a
+  screen built on that stream, and a base class of controllers without Flutter,
+  with the mixin on the leaf. The page came from `solo`'s documentation, where
+  it opened with a tour that repeated this README and advised the other widget;
+  the README keeps the tour, and now says what sets `SoloBuilder` apart from
+  `ValueListenableBuilder`.
 
 - The README no longer says that a `SoloObserver` takes a failure of work
   handed to `ctx.unattended`. An observer watches; `Solo.errorHandler` or an

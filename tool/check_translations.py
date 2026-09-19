@@ -9,6 +9,7 @@ Pairs checked:
   * packages/solo/doc/accumulation.md <-> docs/ru/solo/accumulation.md
   * packages/solo/doc/<page>.md    <-> docs/ru/solo/<page>.md
   * packages/async_job/doc/<page>.md <-> docs/ru/async_job/<page>.md
+  * packages/flutter_solo/doc/<page>.md <-> docs/ru/flutter_solo/<page>.md
 
 Compares:
   * the sequence of heading levels (count and order),
@@ -80,8 +81,8 @@ PAIRS = [
         REPO / "docs" / "ru" / "solo" / "camera.md",
     ),
     (
-        REPO / "packages" / "solo" / "doc" / "flutter.md",
-        REPO / "docs" / "ru" / "solo" / "flutter.md",
+        REPO / "packages" / "flutter_solo" / "doc" / "mixins.md",
+        REPO / "docs" / "ru" / "flutter_solo" / "mixins.md",
     ),
     (
         REPO / "packages" / "async_job" / "doc" / "outcomes.md",

@@ -18,7 +18,7 @@ import 'solo_selector.dart';
 /// decide whether to notify is the one a listener reads back from [value].
 /// What the selection keeps besides is the last value it announced, and it
 /// keeps it to hold notifications back: listeners hear only a pick that
-/// `compare` calls changed — `!=` unless another answer is given — so a
+/// `changed` calls changed — `!=` unless another answer is given — so a
 /// change of the source that leaves the pick alone reaches nobody here.
 /// With nobody listening the source is not subscribed to at all.
 ///
@@ -43,9 +43,9 @@ import 'solo_selector.dart';
 /// exists for is thrown away with it. A field is built from the first
 /// widget only, though: a `State` whose widget can be handed another
 /// source builds the selection again in `didUpdateWidget`, or it goes on
-/// picking from the old one. [SoloSelector] is the same pick with nowhere
-/// to hold it — the widget keeps the selection itself and follows a new
-/// source on its own.
+/// picking from the old one. [SoloSelector] is the same pick over a
+/// controller, with nowhere to hold it — the widget keeps the selection
+/// itself and follows a new controller on its own.
 /// Nothing has to be disposed of — the last listener to go takes the
 /// subscription with it — and a selection outlives its source harmlessly:
 /// a closed [SoloListenable] no longer changes state, while [value] keeps
@@ -58,7 +58,7 @@ import 'solo_selector.dart';
 final class SoloSelection<S, T> implements ValueListenable<T> {
   final ValueListenable<S> _source;
   final T Function(S value) _selector;
-  final bool Function(T previous, T current) _compare;
+  final bool Function(T previous, T current) _changed;
   final _listeners = Listeners();
 
   /// The last value announced to the listeners, kept to tell a change
@@ -80,30 +80,35 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
 
   static const _none = Object();
 
-  /// Picks [selector] out of [source]; [compare] answers whether the pick
+  /// Picks [selector] out of [source]; [changed] answers whether the pick
   /// changed, `!=` when it is omitted.
   SoloSelection(
     ValueListenable<S> source,
     T Function(S value) selector, {
-    bool Function(T previous, T current)? compare,
+    bool Function(T previous, T current)? changed,
   })  : _source = source,
         _selector = selector,
-        _compare = compare ?? _changed;
+        _changed = changed ?? _differ;
 
-  /// Picks [selector] directly from [solo].
-  static SoloSelection<S, T> of<S extends Object, T>(
+  /// Picks [selector] out of [solo], a controller that need not be a
+  /// [ValueListenable]: a plain [Solo], or one with `SoloStream`.
+  ///
+  /// A static method rather than a constructor: a constructor takes the
+  /// type parameters of its class, and this class leaves `S` unbounded
+  /// where [Solo] requires `S extends Object`.
+  static SoloSelection<S, T> from<S extends Object, T>(
     Solo<S> solo,
     T Function(S state) selector, {
-    bool Function(T previous, T current)? compare,
+    bool Function(T previous, T current)? changed,
   }) =>
       SoloSelection<S, T>(
         _SoloSource(solo),
         selector,
-        compare: compare,
+        changed: changed,
       );
 
-  /// `true` means the pick changed, the same way `compare` answers.
-  static bool _changed<T>(T previous, T current) => previous != current;
+  /// The default answer of `changed`.
+  static bool _differ<T>(T previous, T current) => previous != current;
 
   /// The picked value, as the source has it right now.
   @override
@@ -152,7 +157,7 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
         final after = _source.value;
         if (_heardWhileSubscribing || !identical(before, after)) {
           final next = _pick(after);
-          if (_compare(_selected, next)) {
+          if (_changed(_selected, next)) {
             _selected = next;
             scheduleMicrotask(() => _listeners.notify(this));
           }
@@ -191,7 +196,7 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
     final source = _source.value;
     _pickedFrom = _none;
     final next = _pick(source);
-    if (!_compare(_selected, next)) {
+    if (!_changed(_selected, next)) {
       return;
     }
     // Written before the listeners run: one of them is free to change the
@@ -237,11 +242,11 @@ final class _SoloSource<S extends Object> implements ValueListenable<S> {
 extension SoloSelect<S> on ValueListenable<S> {
   /// A [SoloSelection] of [selector] over this listenable.
   ///
-  /// Hold the result rather than calling this in `build`, or let
-  /// [SoloSelector] hold it; see [SoloSelection].
+  /// Hold the result rather than calling this in `build`; see
+  /// [SoloSelection].
   SoloSelection<S, T> select<T>(
     T Function(S value) selector, {
-    bool Function(T previous, T current)? compare,
+    bool Function(T previous, T current)? changed,
   }) =>
-      SoloSelection<S, T>(this, selector, compare: compare);
+      SoloSelection<S, T>(this, selector, changed: changed);
 }

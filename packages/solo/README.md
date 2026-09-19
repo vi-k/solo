@@ -298,7 +298,7 @@ search.
 | [Event accumulation](doc/accumulation.md) | `collect`, `accumulate`, debounce and throttle |
 | [Errors and observation](doc/errors.md) | `SoloObserver`, `errorHandler`, `pending`, logs |
 | [Testing](doc/testing.md) | Awaiting outcomes, fake time, timeouts |
-| [Flutter](doc/flutter.md) | `SoloListenable`, owning a controller, rebuilding a screen |
+| [Flutter](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.md) | The `flutter_solo` package: `SoloListenable`, owning a controller, rebuilding a screen |
 | [Camera example](doc/camera.md) | One controller with rules, cleanup and a device |
 | [solo and bloc, side by side](doc/vs-bloc.md) | Eleven scenarios in both packages |
 
@@ -318,7 +318,7 @@ page named beside it.
 | A journal needs to say which operation changed the state | `SoloTransition` in `onChange` | [Errors and observation](doc/errors.md) |
 | A step must not be interrupted halfway | `ctx.join` for a call, `ctx.uncancellable` for a step | [Cancellation](doc/cancellation.md) |
 | A resource opened by a call nobody waited for still has to close | `dispose` or `discard` on `ctx.wait` and `ctx.join` | [Resources and cleanup](doc/resources.md) |
-| A widget rebuilds for state it does not use | `select` on `SoloListenable` | [Flutter](doc/flutter.md) |
+| A widget rebuilds for state it does not use | `SoloSelector` from `flutter_solo` | [Flutter](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.md#selecting-one-value) |
 | The queue has to stand still for a while | a job waiting on a `Completer` at the head of it | [Jobs and the queue](doc/jobs.md) |
 | A stream event arrives a microtask late, and that is too late | `publish` on a `Solo` subclass, notifying inside the change | [State](doc/state.md) |
 

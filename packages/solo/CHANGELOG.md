@@ -192,9 +192,7 @@
   `removeListener` matches on, the error that goes to `onListenerError` without
   stopping the pass, and the drop at close. "A delivery of your own" is about
   the other kind of delivery — a stream, a signal, a line in a log — and what
-  such an override owes. `doc/flutter.md` names `SoloBuilder` and
-  `SoloSelectBuilder` from `flutter_solo`, the builders for a controller that
-  is not a `ValueListenable`.
+  such an override owes.
 
 - **Breaking:** the controller's synchronous read is `currentState`, not
   `state`. A job body is a closure inside a method of the controller, so every
@@ -223,9 +221,10 @@
   for day to day — and a map of the guides. The reference material it grew over
   the releases moved to `doc/`, one page per subject: `jobs.md`, `state.md`,
   `cancellation.md`, `resources.md`, `children.md`, `errors.md`, `testing.md`,
-  `flutter.md`, `camera.md`. Nothing was dropped; the bloc correspondence table
-  now opens `doc/vs-bloc.md` and the accumulation API opens
-  `doc/accumulation.md`.
+  `camera.md`. The Flutter section went to the package it is about: the README
+  of `flutter_solo` and its `doc/mixins.md`. Nothing was dropped; the bloc
+  correspondence table now opens `doc/vs-bloc.md` and the accumulation API
+  opens `doc/accumulation.md`.
 - Every page in `doc/` starts with the code it is about, and the rules that
   lived only in prose became tables: handler eligibility, where a throwing
   state rule is heard, what each waiting method does to the operation behind

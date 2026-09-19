@@ -7,7 +7,7 @@
 владельцем. Полное независимое ревью `solo` и `flutter_solo` проведено;
 по слову владельца починены три его находки High и тринадцать Medium, среди них
 хук `Solo.onClose`, стенд README `flutter_solo` и тесты его примера.
-По остальному владелец принял решения, первая из четырёх волн сделана. В работе
+По остальному владелец принял решения, две из четырёх волн сделаны. В работе
 ничего.
 
 **В работе.** Ничего.
@@ -161,24 +161,24 @@ Edit'ами на время коммита, а сверка требует, чт
 **Что дальше.** Бэклог владельца пуст; следующую работу выбирает он. Кандидаты:
 
 - решения по ревью, принятые 2026-09-19, — список в конце
-  `2026-09-19-solo-project-review.md`. Волна A — ядро и `solo` — сделана
-  по слову владельца, отчёт — `2026-09-19-review-decisions-a-report.md`. Дальше
-  по предложенному порядку: волна B — `flutter_solo`: M9 (`changed:`), M14
-  (`SoloSelection.from`), один `SoloSelector` над `Solo`, реэкспорт
-  `ValueListenable`, L9 (`doc/flutter.md` в `packages/flutter_solo/doc/`);
+  `2026-09-19-solo-project-review.md`. Волна A — ядро и `solo` — и волна B —
+  `flutter_solo` — сделаны по слову владельца, отчёты —
+  `2026-09-19-review-decisions-a-report.md`
+  и `2026-09-19-review-decisions-b-report.md`. Дальше по предложенному порядку:
   волна C — `job`, `add`, `run`, `collect`, `accumulate` защищёнными, самая
   большая: трогает тесты, примеры и стенды; волна D — Low без решений (L1, L2,
   L4, L5, L10–L13), пробел модели Usage в README `flutter_solo` и предложения
   сверх находок;
 - порядок дальнейшей вычитки — раздел «Документация: вычитка страниц doc/»:
   `resources.md` и `cleanup.md` вычитаны и влиты, дальше по карте идут
-  `errors.md`, `testing.md`, `camera.md`, `flutter.md`, четыре оставшихся
-  страницы `async_job` и README `solo` и `flutter_solo`. Документных находок
-  ревью для этой работы не осталось: M1 решён и идёт волной правок, README
-  `flutter_solo` собирается стендом, а `flutter.md` по решению L9 переезжает
-  в `packages/flutter_solo/doc/`.
+  `errors.md`, `testing.md`, `camera.md`,
+  `packages/flutter_solo/doc/mixins.md`, четыре оставшихся страницы `async_job`
+  и README `solo` и `flutter_solo`. Документных находок ревью для этой работы
+  не осталось: M1 решён волной A, README `flutter_solo` собирается стендом,
+  а страница о Flutter по решению L9 переехала
+  в `packages/flutter_solo/doc/mixins.md` и сведена с README.
 
-**Открытые вопросы владельцу.** Один, от 2026-09-19: брать ли волну B.
+**Открытые вопросы владельцу.** Один, от 2026-09-19: брать ли волну C.
 
 Пятый круг ревью скиллов владелец взял в работу 2026-09-19, тем же ответом
 велев убрать скретчпад прошлого круга. Два вопроса до него взяты в работу
@@ -345,6 +345,16 @@ Fable. Дерево того репозитория чисто, неотправ
 моменту стоят `f18efc6`, `9222489`, `9ca9070`, `dde5df9`, `576687b`, `1f26851`
 и коммит волны A.
 
+Волна B сделана тем же вечером, проверки после неё: `flutter_solo` —
+`dart format` без изменений, `flutter analyze` и `dart doc --dry-run` чисто,
+`flutter test` 97; пример — анализ чисто и 4 теста; стенд Flutter — анализ
+чисто, 19 тестов, четыре трассы на месте; пять документных проверок зелёные;
+сайт собран, 43 страницы. Код `solo` и `async_job` не менялся, их наборы
+и стенды `vs-bloc.md` и `accumulation.md` не гонялись. Девять мутаций — копией
+файла, все пойманы, файлы восстановлены и сверены. Неотправленными стоят
+`f18efc6`, `9222489`, `9ca9070`, `dde5df9`, `576687b`, `1f26851`, `7adc0e1`
+и коммит волны B — push только отдельным поручением.
+
 В `kokjai` мой коммит `ea18852` — заливка его документов — лежит среди
 неотправленных: владелец отправку того репозитория не разрешал.
 
@@ -358,9 +368,10 @@ Fable. Дерево того репозитория чисто, неотправ
 `SoloCloseMode`, `SoloTransition`, `errorHandler`, свои слушатели,
 `isFinished`, финальное состояние закрытого, умолчание накопителя `join`,
 перенос вместо отмены у `AccumulationPolicy.replace` и две про `droppable`)
-плюс `Solo.pending`; у `flutter_solo` пять ломающих и новые `SoloSelection`,
-`SoloSelector`, `select`/`listen`, `SoloSelection.of`, `SoloBuilder`
-и `SoloSelectBuilder`.
+плюс `Solo.pending`; у `flutter_solo` шесть своих ломающих — шестая, снятый
+реэкспорт `ValueListenable`, из волны B — плюс раздел унаследованных, и новые
+`SoloSelection`, `SoloSelection.from`, `SoloSelector`, `SoloBuilder`
+и `select`/`listen`.
 
 Порядок связки задан зависимостями: `solo` уже пользуется новым
 `inUncancellableSection`, поэтому в дереве и живут четыре
@@ -389,7 +400,8 @@ Fable. Дерево того репозитория чисто, неотправ
 в `2026-09-16[2]-state-rakes-report.md` и `2026-09-18[7]-handoff-archive.md`.
 Порядок — карта из `2026-09-11[16]-docs-structure-design.md`: `jobs.md`,
 `state.md`, `cancellation.md`, `resources.md`, `children.md`, `errors.md`,
-`testing.md`, `camera.md`, `flutter.md`, затем шесть страниц `async_job` и три
+`testing.md`, `camera.md`, `flutter.md` (теперь
+`packages/flutter_solo/doc/mixins.md`), затем шесть страниц `async_job` и три
 README.
 
 `cleanup.md` пакета `async_job` вычитана на той же ветке, влита тем же слиянием
@@ -422,11 +434,12 @@ README.
 
 **Код `jobs.md` не собирается ничем.** Стенды есть только у `vs-bloc.md`
 (`tool/doc_snippets.py`), `accumulation.md` (`tool/accumulation_snippets.py`),
-`flutter.md` и README `flutter_solo` (`tool/flutter_snippets.py`); у остальных
-страниц фрагменты не компилируются ни в гейте, ни перед коммитом. Фрагменты
-`jobs.md` собраны отдельным проектом вручную — компилируются все, —
-но на дереве такой проверки нет. Рецепт паузы при этом сторожит
-`packages/solo/test/queue_pause_recipe_test.dart`, семь сторожей.
+README `flutter_solo` с его `doc/mixins.md` и быстрого старта README `solo`
+(`tool/flutter_snippets.py`); у остальных страниц фрагменты не компилируются
+ни в гейте, ни перед коммитом. Фрагменты `jobs.md` собраны отдельным проектом
+вручную — компилируются все, — но на дереве такой проверки нет. Рецепт паузы
+при этом сторожит `packages/solo/test/queue_pause_recipe_test.dart`, семь
+сторожей.
 
 **Стенда у `state.md` тоже нет, сторожа — тестом.** Каждую первую попытку
 страницы и каждое утверждение, добавленное чтением владельца, держит

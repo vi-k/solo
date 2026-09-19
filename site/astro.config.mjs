@@ -101,7 +101,6 @@ export default defineConfig({
               'Ошибки и наблюдение',
             ),
             page('solo/testing', 'Testing', 'Тестирование'),
-            page('solo/flutter', 'Flutter', 'Flutter'),
             page('solo/camera', 'Camera example', 'Пример камеры'),
             page(
               'solo/vs-bloc',
@@ -136,7 +135,10 @@ export default defineConfig({
         },
         {
           label: 'flutter_solo',
-          items: [page('flutter_solo', 'Overview', 'Обзор')],
+          items: [
+            page('flutter_solo', 'Overview', 'Обзор'),
+            page('flutter_solo/mixins', 'Mixins', 'Миксины'),
+          ],
         },
       ],
     }),

@@ -22,7 +22,7 @@ import 'package:solo/solo.dart';
 /// in too, `with SoloStream, SoloListenable`. The order makes no difference
 /// here -- this mixin overrides nothing `SoloStream` does -- and
 /// `SoloStream` goes first by its own rule; see "A controller with both
-/// deliveries" in `doc/flutter.md` for what the combination costs.
+/// deliveries" in `doc/mixins.md` for what the combination costs.
 ///
 /// A listener's failure is reported through [FlutterError] by
 /// [onListenerError], and which report wins follows the chain, where a

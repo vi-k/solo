@@ -57,7 +57,7 @@ flutter pub add flutter_solo
 Одной зависимости достаточно: `flutter_solo` реэкспортирует целиком
 [solo](https://pub.dev/packages/solo), а тот — целиком
 [async_job](https://pub.dev/packages/async_job). `Solo`, `SoloContext`, `Job`,
-`Outcome`, `Policy` и `ValueListenable` приходят вместе с
+`Outcome` и `Policy` приходят вместе с
 
 ```dart
 import 'package:flutter_solo/flutter_solo.dart';
@@ -147,7 +147,7 @@ class ProfileView extends StatelessWidget {
 
 ```dart
 SoloSelector<Profile, bool>(
-  listenable: controller,
+  solo: controller,
   selector: (state) => state.canSave,
   builder: (context, canSave, _) => ElevatedButton(
     onPressed: canSave ? controller.save : null,
@@ -157,10 +157,13 @@ SoloSelector<Profile, bool>(
 ```
 
 Выборка считается изменившейся при `!=`, если на этот вопрос не отвечает сам
-`compare:` — `true` значит изменилась. Выбранное берётся из состояния, каким
-оно есть сейчас, поэтому никогда не отстаёт; держите селектор дешёвой выборкой,
-которая на одно и то же состояние отвечает одинаково. `listenable` — любой
-`ValueListenable`, обычно это контроллер.
+`changed:`. Выбранное берётся из состояния, каким оно есть сейчас, поэтому
+никогда не отстаёт; держите селектор дешёвой выборкой, которая на одно и то же
+состояние отвечает одинаково. `solo` — любой контроллер, `ValueListenable` он
+или нет. Селектор сравнивается по идентичности, когда родитель перестраивается,
+поэтому замыкание, написанное на месте, на каждом таком перестроении новое
+и каждый раз создаёт новую проекцию: где родитель перестраивается часто,
+держите функцию в поле или в `static`.
 
 За вас виджет держит `SoloSelection` — `ValueListenable` выбранного значения, —
 и это обычный объект там, где нужен именно listenable:
@@ -202,34 +205,34 @@ class _SaveButtonState extends State<SaveButton> {
 
 ## Билдеры для любого контроллера
 
-`ValueListenableBuilder` и `SoloSelector` требуют `ValueListenable`,
-и контроллер с подмешанным `SoloListenable` им является. Контроллер без него —
-нет: ни голый `Solo`, ни контроллер только `with SoloStream`. Для них есть два
-виджета, принимающие сам контроллер:
+`ValueListenableBuilder` требует `ValueListenable`, и контроллер с подмешанным
+`SoloListenable` им является. Контроллер без него — нет: ни голый `Solo`,
+ни контроллер только `with SoloStream`. Для них `SoloBuilder` принимает сам
+контроллер:
 
 ```dart
 SoloBuilder<Profile>(
   solo: controller,
   builder: (context, state, _) => Text('$state'),
 )
-
-SoloSelectBuilder<Profile, bool>(
-  solo: controller,
-  selector: (state) => state.canSave,
-  builder: (context, canSave, _) => ElevatedButton(
-    onPressed: canSave ? controller.save : null,
-    child: const Text('Save'),
-  ),
-)
 ```
 
-`SoloBuilder` перестраивается на каждое изменение состояния,
-`SoloSelectBuilder` — только когда изменилась выборка, и проекцию он держит
-через перестроение родителя, поэтому значение, с которым идёт сравнение,
-перестроение переживает. Оба читают состояние после подписки и передают `child`
-нетронутым, и оба сравнивают контроллеры по идентичности, когда родитель даёт
-им новый. `SoloSelection.of(controller, selector)` — та же проекция без виджета
-вокруг, для поля в `State`.
+Он перестраивается на каждое изменение состояния и передаёт `child` нетронутым.
+От `ValueListenableBuilder` его отличают две вещи, и обе — о том, откуда
+берётся состояние. Он читает `currentState` в `build`,
+а `ValueListenableBuilder` строит по копии, которую обновляет каждое
+уведомление. И контроллеры он сравнивает по идентичности: получив новый
+контроллер, который по `==` равен старому, `SoloBuilder` переходит на него,
+а `ValueListenableBuilder` остаётся со старым.
+
+`SoloSelector` и так принимает любой контроллер, а проекцию держит через
+перестроение родителя, поэтому значение, с которым идёт сравнение, перестроение
+переживает. `SoloSelection.from(controller, selector)` — та же проекция без
+виджета вокруг, для поля в `State`, когда контроллер не `ValueListenable`.
+
+Контроллер, у которого есть и `stream`, и `SoloListenable`, экран на этом
+стриме и базовый класс контроллеров без Flutter описаны
+на [отдельной странице](../../docs/ru/flutter_solo/mixins.md).
 
 ## Подписка без хранения колбэка
 
