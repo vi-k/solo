@@ -138,8 +138,8 @@ Handed to `run`, the registration is made the moment the value comes back,
 before that checkpoint. Now `ready` closes the database when it ends in
 anything but a value, and hands it on untouched when it succeeds — to a
 receiver that registers it the same way. This holds for every hand-over, a
-group included: a branch of `ctx.runAll` that got its value from a child of its
-own registers it on arrival like anyone else.
+group included: a branch of `ctx.runAll` registers on arrival each value its
+own children hand it, like anyone else.
 
 A received value then has two ways back to the same resource: the registration
 the receiver made, and the child's own `Job.value`, which carries it for as
