@@ -255,11 +255,13 @@ await ctx.uncancellable(() async {
 });
 ```
 
-The transfer is a plain `await` on purpose. Write it as
-`ctx.join(() => archive.take(file))` instead, and the checkpoint that call
-makes after its action throws between the two lines of the section: ownership
-has changed, the registration has not been dropped, and cleanup deletes a file
-the archive is holding.
+The transfer is awaited plainly, and both lines stay inside the section: it
+holds an ordinary cancellation back, and a rule of the controller that stops
+holding throws before the transfer starts rather than between it and `disown`.
+Split the pair — `await ctx.join(() => archive.take(file))` ahead of the
+section and `ctx.disown(file)` after it — and the checkpoint that call makes
+after its action throws with the file already in the archive and its
+registration still standing, so cleanup deletes what the archive is holding.
 
 ## When the release happens
 

@@ -101,6 +101,9 @@ final class Files extends Solo<Screen> {
 
   Files(this.opener, this.gate, this.trace, this.events) : super(Idle());
 
+  /// Writes a state the jobs of this file do not work on.
+  void loseTheScreen() => externalSetState(Loaded(const <String>[]));
+
   // --- Taking a resource from a call -------------------------------------
 
   /// The first attempt: the registration on the line under the call.
@@ -346,6 +349,23 @@ final class Files extends Solo<Screen> {
             await archive.take(db);
           });
           ctx.disown(db);
+          trace.add('registration dropped');
+        },
+      );
+
+  /// The protected section with a waiting method inside it.
+  SoloJob<void> archiveProtectedByJoin() => run<Idle, void>(
+        key: 'archive',
+        (ctx) async {
+          final db = await ctx.join(
+            opener.open,
+            dispose: (db) => db.close(),
+          );
+          await ctx.uncancellable(() async {
+            await gate.wait();
+            await ctx.join(() => archive.take(db));
+            ctx.disown(db);
+          });
           trace.add('registration dropped');
         },
       );
@@ -685,6 +705,20 @@ void main() {
         trace,
         containsAllInOrder(<String>['archive took db', 'db closed']),
       );
+    });
+
+    test('a rule that stops holding throws before the transfer', () async {
+      final job = files.archiveProtectedByJoin();
+      await pump();
+      final db = await opener.finish();
+      files.loseTheScreen();
+      await gate.release();
+      await job.done;
+
+      expect(job.outcome, isA<Cancelled>());
+      expect(trace, isNot(contains('archive took db')));
+      expect(trace, isNot(contains('registration dropped')));
+      expect(db.closed, isTrue);
     });
 
     test('the protected section hands it over whole', () async {
