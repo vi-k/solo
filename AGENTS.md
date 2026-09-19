@@ -188,10 +188,12 @@
 ## Проверки
 
 Репозиторий — монорепозиторий: пакеты лежат в `packages/`. Перед коммитом кода
-в каждом затронутом пакете из его папки: `dart analyze` без предупреждений
-и `dart test` зелёный (`flutter test` для `packages/flutter_solo`). Пример
-`packages/solo/example/` со своим `pubspec.yaml` проверяется отдельно из его
-папки. Подробности в `docs/conventions.md`.
+в каждом затронутом пакете из его папки: `dart format` (гейт гоняет его
+с `--output=none --set-exit-if-changed` и краснеет на неформатированном файле),
+`dart analyze` без предупреждений и `dart test` зелёный (`flutter test` для
+`packages/flutter_solo`). Пример `packages/solo/example/` со своим
+`pubspec.yaml` проверяется отдельно из его папки. Подробности
+в `docs/conventions.md`.
 
 Те же команды гоняет CI — `.github/workflows/gate.yml`, четыре задания: `dart`
 (ядро и его пример, без Flutter в PATH — так проверяется заодно и обещание
