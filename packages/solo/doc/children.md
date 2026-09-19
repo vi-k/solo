@@ -82,9 +82,11 @@ the returned job and call its `cancel()` to stop only this subscription.
 Events are processed in order. An asynchronous callback finishes before the
 next callback starts; the first stream or callback error stops processing.
 Cancellation removes the subscription immediately, prevents further delivery,
-and waits for the current callback before completing the child. Use the
-callback's context for waits; a plain `await` can keep the child and parent
-alive indefinitely.
+and waits for the current callback before completing the child. That last part
+is why waits belong to the callback's context: `child.wait` ends with the
+cancellation the moment it arrives and leaves the action running alone, while a
+plain `await` ends only when its own future does -- and until the callback
+returns, the child and the parent are still running.
 
 The parent waits for this child even without an explicit await, so an open
 stream with no events still keeps the parent running. Accepted parent

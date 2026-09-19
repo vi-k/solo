@@ -171,6 +171,60 @@ void main() {
     });
   });
 
+  // The page tells the reader to wait with the callback's own context; the
+  // two below are what that buys. The action runs on either way -- what
+  // differs is when the job is free to end.
+  test('a plain await in the callback holds the parent until it returns', () {
+    runSolo((solo, journal, async) {
+      final events = StreamController<int>();
+      final parent = solo.run<TestState, void>(key: 'parent', (ctx) async {
+        await ctx
+            .each<int>(events.stream, (child, event) async {
+              await delay(1000);
+            })
+            .value;
+      });
+      async.elapse(const Duration(milliseconds: 10));
+      events.add(1);
+      async.elapse(const Duration(milliseconds: 40));
+      parent.cancel().ignore();
+      async.elapse(const Duration(milliseconds: 959));
+      expect(
+        parent.outcome,
+        isNull,
+        reason: 'nothing in the callback has a checkpoint to stop at',
+      );
+      async.elapse(const Duration(milliseconds: 2));
+      expect(parent.outcome, isA<Cancelled>());
+      events.close();
+    });
+  });
+
+  test('child.wait in the callback ends the parent with the cancellation', () {
+    runSolo((solo, journal, async) {
+      final events = StreamController<int>();
+      final parent = solo.run<TestState, void>(key: 'parent', (ctx) async {
+        await ctx
+            .each<int>(events.stream, (child, event) async {
+              await child.wait(() => delay(1000));
+            })
+            .value;
+      });
+      async.elapse(const Duration(milliseconds: 10));
+      events.add(1);
+      async.elapse(const Duration(milliseconds: 40));
+      parent.cancel().ignore();
+      async.elapse(const Duration(milliseconds: 5));
+      expect(
+        parent.outcome,
+        isA<Cancelled>(),
+        reason: 'the wait ends with the cancellation, the delay runs on',
+      );
+      async.flushTimers();
+      events.close();
+    });
+  });
+
   test('a cancellation inside the callback comes back through the wait', () {
     fakeAsync((async) {
       final journal = JournalObserver();

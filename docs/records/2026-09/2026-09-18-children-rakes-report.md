@@ -263,11 +263,39 @@ throws reaches the observer»:
 
 Набор `solo` — 626 зелёных.
 
+## Третья правка по чтению: почему ожидания контекстом колбэка
+
+Страница говорила «Use the callback's context for waits; a plain `await` can
+keep the child and parent alive indefinitely» — правило без причины, а причина
+стоит строкой выше: отмена ждёт текущий колбэк, прежде чем завершить ребёнка.
+Значит, длина колбэка и есть длина жизни ребёнка, а с ним и родителя.
+`child.wait` заканчивается отменой в тот же миг, когда она пришла, и оставляет
+действие доигрывать само; обычный `await` кончается только вместе со своей
+future. Зонд `probe_each_wait.dart` на отмене родителя посреди колбэка
+с задержкой в 1000 мс:
+
+| Колбэк | Отмена пришла | Родитель завершился |
+| --- | --- | --- |
+| `await delay(1000)` | 50 мс | 1011 мс |
+| `await child.wait(() => delay(1000))` | 50 мс | 55 мс |
+
+Сторожа — два теста в `packages/solo/test/each_test.dart`, оба с мутациями:
+
+- «a plain await in the callback holds the parent until it returns». Мутация:
+  `await active;` в `job_stream.dart` закомментирован — родитель завершается
+  раньше колбэка, и только этот тест краснеет.
+- «child.wait in the callback ends the parent with the cancellation». Мутация:
+  `onCancel` в `_race` больше не завершает completer — ожидание перестаёт
+  кончаться отменой; краснеет и этот тест, и четыре соседних.
+
+Набор `solo` — 628 зелёных.
+
 ## Проверки
 
 В копии `~/development/my/solo-children` на ветке `docs/children`:
-`dart analyze` в `packages/async_job` без замечаний, `dart test` — 446 зелёных,
-`lib/` после мутаций побайтово совпадает с копией. Из корня копии:
+`dart analyze` в `packages/async_job` без замечаний и `dart analyze lib test`
+в `packages/solo` тоже, `dart test` — 446 в `async_job` и 628 в `solo`, `lib/`
+после мутаций побайтово совпадает с копией. Из корня копии:
 `reflow.py --check`, `check_line_width.py`, `check_translations.py` (семнадцать
 блоков и шестнадцать заголовков сходятся с переводом), `check_doc_shape.py` —
 все зелёные.
