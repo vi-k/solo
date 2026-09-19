@@ -277,7 +277,8 @@ void main() {
               // Quenching the job says nothing about the Future below: it
               // is the report of an unobserved outcome that this turns
               // off, and run observes the child anyway.
-            })..ignore();
+            })
+              ..ignore();
             // ignore: unawaited_futures
             ctx.run(child);
             await ctx.wait(() => delay(10));
@@ -326,7 +327,8 @@ void main() {
           Job<void>((ctx) async {
             final child = Job.deferred<void>(key: 'child', (child) async {
               await child.wait(() => delay(20));
-            })..ignore();
+            })
+              ..ignore();
             // ignore: unawaited_futures
             ctx.run(child);
             await ctx.wait(() => delay(5));

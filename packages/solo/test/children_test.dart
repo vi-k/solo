@@ -585,17 +585,15 @@ void main() {
       final refusals = <String>[];
       final source = solo.job<TestState, void>(key: 'source', (ctx) async {});
       final tail = source.then<void>((ctx, value) async {});
-      solo
-          .run<TestState, void>(key: 'parent', (ctx) async {
-            for (final job in [tail, ForeignJob<void>((_) async {})]) {
-              try {
-                ctx.run(job).ignore();
-              } on Object catch (error) {
-                refusals.add((error as ArgumentError).message.toString());
-              }
-            }
-          })
-          .ignore();
+      solo.run<TestState, void>(key: 'parent', (ctx) async {
+        for (final job in [tail, ForeignJob<void>((_) async {})]) {
+          try {
+            ctx.run(job).ignore();
+          } on Object catch (error) {
+            refusals.add((error as ArgumentError).message.toString());
+          }
+        }
+      }).ignore();
       async.flushTimers();
       expect(refusals, [
         'was not created by this Solo',
@@ -720,21 +718,19 @@ void main() {
         order.add('sync');
         await ctx.wait(() => delay(10));
       });
-      source
-          .then<void>((ctx, _) async {
-            order.add('then');
-            // The shape of the page: a job of the controller, queued by
-            // `add` from the callback.
-            await solo
-                .add(
-                  solo.job<TestState, void>(
-                    key: 'record',
-                    (recording) async => order.add('record'),
-                  ),
-                )
-                .value;
-          })
-          .ignore();
+      source.then<void>((ctx, _) async {
+        order.add('then');
+        // The shape of the page: a job of the controller, queued by
+        // `add` from the callback.
+        await solo
+            .add(
+              solo.job<TestState, void>(
+                key: 'record',
+                (recording) async => order.add('record'),
+              ),
+            )
+            .value;
+      }).ignore();
       solo
           .run<TestState, void>(key: 'save', (ctx) async => order.add('save'))
           .ignore();

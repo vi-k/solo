@@ -176,12 +176,10 @@ void main() {
       final events = StreamController<int>();
       var callbackReturned = false;
       final parent = solo.run<TestState, void>(key: 'parent', (ctx) async {
-        await ctx
-            .each<int>(events.stream, (child, event) async {
-              await child.job.done;
-              callbackReturned = true;
-            })
-            .value;
+        await ctx.each<int>(events.stream, (child, event) async {
+          await child.job.done;
+          callbackReturned = true;
+        }).value;
       });
       async.flushMicrotasks();
       events.add(1);
@@ -225,12 +223,10 @@ void main() {
       final events = StreamController<int>();
       final seen = <int>[];
       final parent = solo.run<TestState, void>(key: 'parent', (ctx) async {
-        await ctx
-            .each<int>(events.stream, (child, event) async {
-              seen.add(event);
-              child.job.cancel().ignore();
-            })
-            .value;
+        await ctx.each<int>(events.stream, (child, event) async {
+          seen.add(event);
+          child.job.cancel().ignore();
+        }).value;
       });
       async.flushMicrotasks();
       events.add(1);
@@ -250,11 +246,9 @@ void main() {
     runSolo((solo, journal, async) {
       final events = StreamController<int>();
       final parent = solo.run<TestState, void>(key: 'parent', (ctx) async {
-        await ctx
-            .each<int>(events.stream, (child, event) async {
-              await delay(1000);
-            })
-            .value;
+        await ctx.each<int>(events.stream, (child, event) async {
+          await delay(1000);
+        }).value;
       });
       async.elapse(const Duration(milliseconds: 10));
       events.add(1);
@@ -276,11 +270,9 @@ void main() {
     runSolo((solo, journal, async) {
       final events = StreamController<int>();
       final parent = solo.run<TestState, void>(key: 'parent', (ctx) async {
-        await ctx
-            .each<int>(events.stream, (child, event) async {
-              await child.wait(() => delay(1000));
-            })
-            .value;
+        await ctx.each<int>(events.stream, (child, event) async {
+          await child.wait(() => delay(1000));
+        }).value;
       });
       async.elapse(const Duration(milliseconds: 10));
       events.add(1);
