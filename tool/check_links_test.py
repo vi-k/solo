@@ -57,7 +57,9 @@ class AnAnchorThatIsNotThere(LinkCase):
     def test_a_russian_heading(self):
         # The translations link this way: `state.md#внешнее-состояние`.
         self.write('b.md', '# Б\n\n## Что группа отдаёт обратно\n')
-        page = self.write('a.md', 'См. [это](b.md#что-группа-отдаёт-обратно).\n')
+        page = self.write(
+            'a.md', 'См. [это](b.md#что-группа-отдаёт-обратно).\n'
+        )
         self.assertEqual(self.problems(page), [])
 
     def test_a_heading_with_code_in_it(self):
