@@ -159,27 +159,27 @@ succeeds, including children and cleanup. Its callback receives the result and
 a new core `JobContext`, and may return a value or future. A source failure
 propagates without calling the callback.
 
-The continuation does not inherit the controller's state context, rules,
-observer or queue position. It has its own optional observer. To change
-controller state, call a method that enqueues another job; other queued jobs
-may run between the two operations. Use children within one parent when the
-whole sequence must occupy the queue without another root job running between
-its steps.
+A `then` job does not inherit the controller's state context, rules, observer
+or queue position. It has its own optional observer. To change controller
+state, call a method that enqueues another job; other queued jobs may run
+between the two operations. Use children within one parent when the whole
+sequence must occupy the queue without another root job running between its
+steps.
 
-Cancellation propagates forward to continuations and backward to unfinished
+Cancellation propagates forward to `then` jobs and backward to unfinished
 sources, subject to each job's cancellation rules. Cancelling the tail waits
 for those sources and their cleanup, including a source that refuses
-cancellation. `close()` reaches a continuation through an unfinished source,
-but does not own a continuation already running after the source finished.
+cancellation. `close()` reaches a `then` job through an unfinished source, but
+does not own one already running after the source finished.
 
 Inside a controller's body `ctx.run` is narrower still: it takes jobs of that
-controller, the ones `job(...)` makes and nobody has queued. A continuation is
-a root job of the core, so it is turned away there as well, with the
-controller's own complaint — that the job was not created by this `Solo`, which
-is what a bare core job gets too.
+controller, the ones `job(...)` makes and nobody has queued. A `then` job is a
+root job of the core, so it is turned away there as well, with the controller's
+own complaint — that the job was not created by this `Solo`, which is what a
+bare core job gets too.
 
 The queue does not wait for a tail. The slot is freed when the root job
-finishes, and the next queued job starts while the continuation still has to
-run: a `then` hung off `load()` can be working after `save()` has taken the
-queue. Where that would be wrong, keep the sequence inside one job and make its
-steps children.
+finishes, and the next queued job starts while the `then` job still has to run:
+one hung off `load()` can be working after `save()` has taken the queue. Where
+that would be wrong, keep the sequence inside one job and make its steps
+children.
