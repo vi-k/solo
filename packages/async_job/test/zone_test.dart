@@ -265,6 +265,86 @@ void main() {
     );
   });
 
+  test('ignoring the child does not silence the Future run returned', () {
+    final caught = <Object>[];
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          Job<void>((ctx) async {
+            final child = Job.deferred<void>(key: 'child', (child) async {
+              await child.wait(() => delay(20));
+              throw StateError('child boom');
+              // Quenching the job says nothing about the Future below: it
+              // is the report of an unobserved outcome that this turns
+              // off, and run observes the child anyway.
+            })..ignore();
+            // ignore: unawaited_futures
+            ctx.run(child);
+            await ctx.wait(() => delay(10));
+          }).ignore();
+          async.elapse(const Duration(milliseconds: 50));
+        });
+      },
+      (error, stackTrace) => caught.add(error),
+    );
+    expect(
+      caught.map((error) => '$error').toList(),
+      ['Bad state: child boom'],
+      reason: 'the same failure arrives as with no ignore at all',
+    );
+  });
+
+  test('ignoring that Future is what silences the failure of the child', () {
+    final caught = <Object>[];
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          Job<void>((ctx) async {
+            ctx
+                .run(
+                  Job.deferred<void>(key: 'child', (child) async {
+                    await child.wait(() => delay(20));
+                    throw StateError('child boom');
+                  }),
+                )
+                .ignore();
+            await ctx.wait(() => delay(10));
+          }).ignore();
+          async.elapse(const Duration(milliseconds: 50));
+        });
+      },
+      (error, stackTrace) => caught.add(error),
+    );
+    expect(caught, isEmpty, reason: 'the error is handled where it arrives');
+  });
+
+  test('a run Future nobody handles reports a cancelled child too', () {
+    final caught = <Object>[];
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          Job<void>((ctx) async {
+            final child = Job.deferred<void>(key: 'child', (child) async {
+              await child.wait(() => delay(20));
+            })..ignore();
+            // ignore: unawaited_futures
+            ctx.run(child);
+            await ctx.wait(() => delay(5));
+            child.cancel().ignore();
+            await ctx.wait(() => delay(10));
+          }).ignore();
+          async.elapse(const Duration(milliseconds: 50));
+        });
+      },
+      (error, stackTrace) => caught.add(error),
+    );
+    expect(
+      caught,
+      [isA<Cancelled>()],
+      reason: 'ignore has no effect on a cancellation, the Future carries it',
+    );
+  });
+
   test('cancelling a job does not silence the failure it ends with', () {
     final caught = <Object>[];
     runZonedGuarded(

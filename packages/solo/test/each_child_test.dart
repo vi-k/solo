@@ -43,6 +43,27 @@ void main() {
     });
   });
 
+  test('a stream with no events at all still holds the parent', () {
+    runSolo((solo, journal, async) {
+      final source = StreamController<int>();
+      final parent = solo.run<NotDisposed, void>(
+        key: 'parent',
+        (ctx) async {
+          ctx.each(source.stream, (child, event) {});
+        },
+      );
+      async.elapse(const Duration(seconds: 10));
+      expect(
+        parent.isFinished,
+        isFalse,
+        reason: 'the source has sent no onDone, so the child is running',
+      );
+      source.close().ignore();
+      async.flushMicrotasks();
+      expect(parent.outcome, isA<Done<void>>());
+    });
+  });
+
   test('the working type changes after the parent body returned', () {
     runSolo((solo, journal, async) {
       final source = StreamController<int>();

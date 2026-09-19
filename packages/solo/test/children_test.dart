@@ -580,6 +580,30 @@ void main() {
     });
   });
 
+  test('a then job and a core job are refused in the same words', () {
+    runSolo((solo, journal, async) {
+      final refusals = <String>[];
+      final source = solo.job<TestState, void>(key: 'source', (ctx) async {});
+      final tail = source.then<void>((ctx, value) async {});
+      solo
+          .run<TestState, void>(key: 'parent', (ctx) async {
+            for (final job in [tail, ForeignJob<void>((_) async {})]) {
+              try {
+                ctx.run(job).ignore();
+              } on Object catch (error) {
+                refusals.add((error as ArgumentError).message.toString());
+              }
+            }
+          })
+          .ignore();
+      async.flushTimers();
+      expect(refusals, [
+        'was not created by this Solo',
+        'was not created by this Solo',
+      ]);
+    });
+  });
+
   test('the waiting list of a parent shrinks as children finish', () {
     fakeAsync((async) {
       // The list of children is protected; the double of the core reads it,
@@ -648,6 +672,99 @@ void main() {
           '> [child] finished Failed(Bad state: rule boom)',
         ]),
       );
+    });
+  });
+
+  // The two rules that run code of the caller. The third one, the `W` of
+  // the job, is a type test and has nothing to throw with.
+  for (final rule in ['canStart', 'keepWhile']) {
+    test('a $rule that throws leaves ctx.run before it returns', () {
+      runSolo((solo, journal, async) {
+        var reachedTheNextLine = false;
+        Object? thrown;
+        solo.run<TestState, void>(key: 'parent', (ctx) async {
+          bool boom(TestState state) => throw StateError('$rule boom');
+          try {
+            ctx
+                .run(
+                  solo.job<TestState, void>(
+                    key: 'child',
+                    canStart: rule == 'canStart' ? boom : null,
+                    keepWhile: rule == 'keepWhile' ? boom : null,
+                    (childCtx) async {},
+                  ),
+                )
+                .ignore();
+            reachedTheNextLine = true;
+          } on Object catch (error) {
+            thrown = error;
+          }
+        });
+        async.flushTimers();
+        expect(
+          reachedTheNextLine,
+          isFalse,
+          reason: 'the error of the rule leaves run, not the Future it returns',
+        );
+        expect('$thrown', 'Bad state: $rule boom');
+      });
+    });
+  }
+
+  // The chaining example of the page: a `then` cannot write state, so it
+  // asks the controller for a job, and that job waits its turn.
+  test('a job a then asks for goes behind what is already queued', () {
+    runSolo((solo, journal, async) {
+      final order = <String>[];
+      final source = solo.run<TestState, void>(key: 'sync', (ctx) async {
+        order.add('sync');
+        await ctx.wait(() => delay(10));
+      });
+      source
+          .then<void>((ctx, _) async {
+            order.add('then');
+            // The shape of the page: a job of the controller, queued by
+            // `add` from the callback.
+            await solo
+                .add(
+                  solo.job<TestState, void>(
+                    key: 'record',
+                    (recording) async => order.add('record'),
+                  ),
+                )
+                .value;
+          })
+          .ignore();
+      solo
+          .run<TestState, void>(key: 'save', (ctx) async => order.add('save'))
+          .ignore();
+      async.flushTimers();
+      expect(
+        order,
+        ['sync', 'save', 'then', 'record'],
+        reason: 'the source freed the slot, and save was already waiting',
+      );
+    });
+  });
+
+  test('the Future of run carries the drop of a child nobody awaits', () {
+    runSolo((solo, journal, async) {
+      Object? fromTheFuture;
+      solo.run<TestState, void>(key: 'parent', (ctx) async {
+        final child = solo.job<Working, void>(
+          key: 'child',
+          (childCtx) async {},
+        );
+        unawaited(
+          ctx.run(child).then<void>(
+                (_) => fromTheFuture = 'done',
+                onError: (Object error) => fromTheFuture = error,
+              ),
+        );
+      });
+      async.flushTimers();
+      expect(fromTheFuture, isA<Cancelled>());
+      expect('$fromTheFuture', 'Cancelled(rules: is not Working)');
     });
   });
 }

@@ -171,6 +171,132 @@ void main() {
     });
   });
 
+  test('awaiting the child from inside its own callback is a deadlock', () {
+    runSolo((solo, journal, async) {
+      final events = StreamController<int>();
+      var callbackReturned = false;
+      final parent = solo.run<TestState, void>(key: 'parent', (ctx) async {
+        await ctx
+            .each<int>(events.stream, (child, event) async {
+              await child.job.done;
+              callbackReturned = true;
+            })
+            .value;
+      });
+      async.flushMicrotasks();
+      events.add(1);
+      async.flushMicrotasks();
+      // Cancelled, so the body of the child is unwinding and the only
+      // thing left to wait for is the callback in flight -- which is
+      // waiting for the child.
+      parent.cancel().ignore();
+      async.elapse(const Duration(seconds: 100));
+      expect(callbackReturned, isFalse);
+      expect(
+        parent.outcome,
+        isNull,
+        reason: 'the child waits for the callback that waits for the child',
+      );
+      events.close().ignore();
+    });
+  });
+
+  test('a source that never finishes its cleanup does not hold the child', () {
+    runSolo((solo, journal, async) {
+      final never = Completer<void>();
+      final events = StreamController<int>(onCancel: () => never.future);
+      final parent = solo.run<TestState, void>(key: 'parent', (ctx) async {
+        await ctx.each<int>(events.stream, (child, event) {}).value;
+      });
+      async.flushMicrotasks();
+      parent.cancel().ignore();
+      async.elapse(const Duration(seconds: 10));
+      expect(
+        parent.outcome,
+        isA<Cancelled>(),
+        reason: 'the cleanup of the source is not this job to wait for',
+      );
+      events.close().ignore();
+    });
+  });
+
+  test('a callback stops its own subscription with an unawaited cancel', () {
+    runSolo((solo, journal, async) {
+      final events = StreamController<int>();
+      final seen = <int>[];
+      final parent = solo.run<TestState, void>(key: 'parent', (ctx) async {
+        await ctx
+            .each<int>(events.stream, (child, event) async {
+              seen.add(event);
+              child.job.cancel().ignore();
+            })
+            .value;
+      });
+      async.flushMicrotasks();
+      events.add(1);
+      async.flushMicrotasks();
+      events.add(2);
+      async.flushTimers();
+      expect(seen, [1], reason: 'the subscription is gone with the child');
+      expect(parent.outcome, isA<Cancelled>());
+      events.close();
+    });
+  });
+
+  // The page tells the reader to wait with the callback's own context; the
+  // two below are what that buys. The action runs on either way -- what
+  // differs is when the job is free to end.
+  test('a plain await in the callback holds the parent until it returns', () {
+    runSolo((solo, journal, async) {
+      final events = StreamController<int>();
+      final parent = solo.run<TestState, void>(key: 'parent', (ctx) async {
+        await ctx
+            .each<int>(events.stream, (child, event) async {
+              await delay(1000);
+            })
+            .value;
+      });
+      async.elapse(const Duration(milliseconds: 10));
+      events.add(1);
+      async.elapse(const Duration(milliseconds: 40));
+      parent.cancel().ignore();
+      async.elapse(const Duration(milliseconds: 959));
+      expect(
+        parent.outcome,
+        isNull,
+        reason: 'nothing in the callback has a checkpoint to stop at',
+      );
+      async.elapse(const Duration(milliseconds: 2));
+      expect(parent.outcome, isA<Cancelled>());
+      events.close();
+    });
+  });
+
+  test('child.wait in the callback ends the parent with the cancellation', () {
+    runSolo((solo, journal, async) {
+      final events = StreamController<int>();
+      final parent = solo.run<TestState, void>(key: 'parent', (ctx) async {
+        await ctx
+            .each<int>(events.stream, (child, event) async {
+              await child.wait(() => delay(1000));
+            })
+            .value;
+      });
+      async.elapse(const Duration(milliseconds: 10));
+      events.add(1);
+      async.elapse(const Duration(milliseconds: 40));
+      parent.cancel().ignore();
+      async.elapse(const Duration(milliseconds: 5));
+      expect(
+        parent.outcome,
+        isA<Cancelled>(),
+        reason: 'the wait ends with the cancellation, the delay runs on',
+      );
+      async.flushTimers();
+      events.close();
+    });
+  });
+
   test('a cancellation inside the callback comes back through the wait', () {
     fakeAsync((async) {
       final journal = JournalObserver();

@@ -3,7 +3,9 @@
 A root job can split its work into child jobs:
 
 ```dart
-SoloJob<String> sync(int item) => run<Ready, String>(
+// Made by the controller and started by nobody yet: the queue takes it
+// through `sync` below, a parent takes it through `ctx.run`.
+SoloJob<String> _sync(int item) => job<Ready, String>(
       key: _Op.sync,
       (ctx) async {
         // Created by the controller, started by the parent and outside
@@ -24,7 +26,13 @@ SoloJob<String> sync(int item) => run<Ready, String>(
         return path;
       },
     );
+
+SoloJob<String> sync(int item) => add(_sync(item));
 ```
+
+`job(...)` makes a job and starts nothing. `add` gives it a place in the queue,
+and `ctx.run` inside a body makes it a child; `_sync` is written once and goes
+both ways later on this page.
 
 A child starts immediately, bypassing the queue, subject to its own start
 rules. The parent keeps the queue occupied until all its children finish, even
@@ -47,9 +55,16 @@ parent throws `Cancelled`, including an uncaught cancellation from
 finish and waits for them. A child can refuse cancellation; `ctx.run` still
 waits for it and checks the parent after child success.
 
-A child rejected by its start rules still receives its parent, level and
-observer, but requires no further waiting. A throwing start rule fails the
-child and propagates that error through `ctx.run`.
+A child the start rules turn away never runs. It is adopted first -- parent and
+level -- and only then finished `Cancelled` with a `RulesCancelReason`: the
+observer hears the drop as an outcome of this tree, with `job.level` telling it
+how deep under the parent the line belongs, and `child.done` holds the
+cancellation. It joins no waiting list, so the parent waits for nothing; the
+future of `ctx.run` carries that cancellation all the same.
+
+The rules `canStart` and `keepWhile`, when they throw themselves, are the other
+case. The error is the rule's own, the child ends `Failed` with it, and
+`ctx.run` throws it synchronously -- the line after the call never runs.
 
 ## Processing a stream
 
@@ -75,27 +90,37 @@ the returned job and call its `cancel()` to stop only this subscription.
 Events are processed in order. An asynchronous callback finishes before the
 next callback starts; the first stream or callback error stops processing.
 Cancellation removes the subscription immediately, prevents further delivery,
-and waits for the current callback before completing the child. Use the
-callback's context for waits; a plain `await` can keep the child and parent
-alive indefinitely.
+and waits for the current callback before completing the child. That last part
+is why waits belong to the callback's context: `child.wait` ends with the
+cancellation the moment it arrives and leaves the action running alone, while a
+plain `await` ends only when its own future does -- and until the callback
+returns, the child and the parent are still running.
 
-The parent waits for this child even without an explicit await, so an open
-stream with no events still keeps the parent running. Accepted parent
-cancellation, including during `close()`, cancels the child. The child is
-cancellable even if the parent is not. It retains the parent's `W` and
-`keepWhile` after the parent body returns, but does not repeat `canStart`.
-Observers see it as a separate job.
+The child ends when the source sends `onDone`, so an open stream with no events
+is a child still running; and the parent waits for its children with or without
+an explicit await, so it keeps running too. Accepted parent cancellation,
+including during `close()`, cancels the child. The child is cancellable even if
+the parent is not. It retains the parent's `W` and `keepWhile` after the parent
+body returns, but does not repeat `canStart`. Observers see it as a separate
+job.
 
 Cancelling only the child does not directly cancel the parent. An uncaught
 `Cancelled` from the child's `.value` does cancel the parent through its body.
-Do not await the child's own completion or `cancel()` inside its event
-callback, because the child is already waiting for that callback.
+Do not await the child's own completion or its `cancel()` inside an event
+callback: that is a deadlock. The child waits for the callback to return, the
+callback waits for the child, and the parent waits for the child -- nothing
+moves again. To stop the subscription from inside a callback, call `cancel()`
+and do not await it.
 
-The future returned by the underlying stream subscription's `cancel()` is not
-awaited. Await asynchronous source cleanup separately if needed. Normal
-completion requires the source to send `onDone`. Like `ctx.run`, `each` cannot
-start a child after the parent body ends, during cleanup, or from `unattended`
-work.
+The child waits for the callback in flight, but not for the source: the engine
+does not await the future that the subscription's `cancel()` returns, and
+quenches its error instead of letting it reach the zone. Delivery stops at
+once, and what that future carries is the cleanup of the source, which this job
+does not own -- waiting for it would hold the child on a source free to take
+its time or never come back, and a cleanup that failed is the source's business
+too. If your source has asynchronous cleanup to wait for, wait for it yourself.
+Like `ctx.run`, `each` cannot start a child after the parent body ends, during
+cleanup, or from `unattended` work.
 
 ## Following another controller
 
@@ -142,27 +167,63 @@ succeeds, including children and cleanup. Its callback receives the result and
 a new core `JobContext`, and may return a value or future. A source failure
 propagates without calling the callback.
 
-The continuation does not inherit the controller's state context, rules,
-observer or queue position. It has its own optional observer. To change
-controller state, call a method that enqueues another job; other queued jobs
-may run between the two operations. Use children within one parent when the
-whole sequence must occupy the queue without another root job running between
-its steps.
+A `then` job does not inherit the controller's state context, rules, observer
+or queue position. It has its own optional observer. Its callback gets a plain
+core `JobContext`, with no `emit` on it and no state behind it, so a `then`
+cannot write controller state itself: it asks the controller for another job,
+and that job takes its turn at the back of the queue. The end of the source
+does two things at once: it frees the slot and it starts the `then`. So
+whatever was queued while the source ran stands ahead of the new job.
 
-Cancellation propagates forward to continuations and backward to unfinished
-sources, subject to each job's cancellation rules. Cancelling the tail waits
-for those sources and their cleanup, including a source that refuses
-cancellation. `close()` reaches a continuation through an unfinished source,
-but does not own a continuation already running after the source finished.
+```dart
+// The same split as `sync`: the step itself, and the queue's way in.
+SoloJob<void> _recordPath(String path) => job<Ready, void>(
+      key: _Op.record,
+      (ctx) async => ctx.emit(ctx.state.copyWith(path: path)),
+    );
+
+SoloJob<void> recordPath(String path) => add(_recordPath(path));
+
+// The callback has no state to write, so it asks for the queued one. A
+// `save()` queued while `sync` was still running goes ahead of it:
+// sync, save, recordPath.
+Job<void> syncAndRecord(int item) =>
+    sync(item).then((ctx, path) => recordPath(path).value);
+
+// The same two steps as one job: `_sync` and `_recordPath` again, now
+// children. The parent holds the queue until its children are done, so
+// that `save()` waits for both steps.
+SoloJob<void> syncAndRecordTogether(int item) => run<Ready, void>(
+      key: _Op.syncAndRecord,
+      (ctx) async {
+        final path = await ctx.run(_sync(item));
+        await ctx.run(_recordPath(path));
+      },
+    );
+```
+
+A method that queues can be called from inside another job, and what it queues
+is still a root job: it waits for the slot the caller is holding, and anything
+queued before it goes first. A step written as `job(...)` has both ways open:
+`add` gives it a queue slot of its own, `ctx.run` makes it a child of a job
+that already holds one. Use children within one parent when the whole sequence
+must occupy the queue without another root job running between its steps.
+
+Cancellation propagates forward to `then` jobs and backward to unfinished
+sources, subject to each job's cancellation rules. Cancelling the last job of a
+chain waits for those sources and their cleanup, including a source that
+refuses cancellation. `close()` reaches a `then` job through an unfinished
+source, but does not own one already running after the source finished.
 
 Inside a controller's body `ctx.run` is narrower still: it takes jobs of that
-controller, the ones `job(...)` makes and nobody has queued. A continuation is
-a root job of the core, so it is turned away there as well, with the
-controller's own complaint — that the job was not created by this `Solo`, which
-is what a bare core job gets too.
+controller, the ones `job(...)` makes and nobody has queued. A `then` job is
+none of those -- it is a root job of the core -- and the core would refuse to
+adopt it anyway. Here the refusal comes from the controller first and for its
+own reason: `ArgumentError`, `was not created by this Solo`. A job of the core
+made by hand is refused in the same words.
 
-The queue does not wait for a tail. The slot is freed when the root job
-finishes, and the next queued job starts while the continuation still has to
-run: a `then` hung off `load()` can be working after `save()` has taken the
-queue. Where that would be wrong, keep the sequence inside one job and make its
-steps children.
+The queue does not wait for what comes after a job: the slot is freed when the
+root job finishes, and the next queued job starts while the `then` job still
+has to run. A `then` hung off `load()` can be working after `save()` has taken
+the queue. Where that would be wrong, keep the sequence inside one job and make
+its steps children.
