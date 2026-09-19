@@ -3,7 +3,9 @@
 A root job can split its work into child jobs:
 
 ```dart
-SoloJob<String> sync(int item) => run<Ready, String>(
+// Made by the controller and started by nobody yet: the queue takes it
+// through `sync` below, a parent takes it through `ctx.run`.
+SoloJob<String> _sync(int item) => job<Ready, String>(
       key: _Op.sync,
       (ctx) async {
         // Created by the controller, started by the parent and outside
@@ -24,7 +26,13 @@ SoloJob<String> sync(int item) => run<Ready, String>(
         return path;
       },
     );
+
+SoloJob<String> sync(int item) => add(_sync(item));
 ```
+
+`job(...)` makes a job and starts nothing. `add` gives it a place in the queue,
+and `ctx.run` inside a body makes it a child; `_sync` is written once and goes
+both ways later on this page.
 
 A child starts immediately, bypassing the queue, subject to its own start
 rules. The parent keeps the queue occupied until all its children finish, even
@@ -168,8 +176,7 @@ does two things at once: it frees the slot and it starts the `then`. So
 whatever was queued while the source ran stands ahead of the new job.
 
 ```dart
-// The step as a job nobody has started: a child when a parent runs it,
-// a root job when the controller queues it with `add`.
+// The same split as `sync`: the step itself, and the queue's way in.
 SoloJob<void> _recordPath(String path) => job<Ready, void>(
       key: _Op.record,
       (ctx) async => ctx.emit(ctx.state.copyWith(path: path)),
@@ -183,18 +190,13 @@ SoloJob<void> recordPath(String path) => add(_recordPath(path));
 Job<void> syncAndRecord(int item) =>
     sync(item).then((ctx, path) => recordPath(path).value);
 
-// The same two steps as one job: the upload `sync` runs, then the very
-// same `_recordPath`, now a child. The parent holds the queue until its
-// children are done, so that `save()` waits for both steps.
+// The same two steps as one job: `_sync` and `_recordPath` again, now
+// children. The parent holds the queue until its children are done, so
+// that `save()` waits for both steps.
 SoloJob<void> syncAndRecordTogether(int item) => run<Ready, void>(
-      key: _Op.sync,
+      key: _Op.syncAndRecord,
       (ctx) async {
-        final path = await ctx.run(
-          job<Ready, String>(
-            key: _Op.upload,
-            (child) => child.join(() => api.push(item)),
-          ),
-        );
+        final path = await ctx.run(_sync(item));
         await ctx.run(_recordPath(path));
       },
     );

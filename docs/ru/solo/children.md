@@ -3,7 +3,9 @@
 Корневая `Job` может разделить работу на дочерние:
 
 ```dart
-SoloJob<String> sync(int item) => run<Ready, String>(
+// Создан контроллером, но ещё никем не запущен: очередь возьмёт его
+// через `sync` ниже, родитель — через `ctx.run`.
+SoloJob<String> _sync(int item) => job<Ready, String>(
       key: _Op.sync,
       (ctx) async {
         // Создан контроллером, запущен родителем и минует очередь:
@@ -24,7 +26,13 @@ SoloJob<String> sync(int item) => run<Ready, String>(
         return path;
       },
     );
+
+SoloJob<String> sync(int item) => add(_sync(item));
 ```
+
+`job(...)` создаёт задачу и ничего не запускает. `add` даёт ей место в очереди,
+а `ctx.run` внутри тела делает её ребёнком; `_sync` написан один раз и дальше
+на этой странице идёт обоими путями.
 
 Ребёнок запускается сразу, минуя очередь, с проверкой собственных стартовых
 правил. Родитель удерживает очередь до завершения всех детей, даже если его
@@ -166,9 +174,7 @@ Job<void> syncAndReport(int item) =>
 всё, что поставили в очередь, пока работал источник, стоит впереди новой `Job`.
 
 ```dart
-// Шаг как задача, которую никто не запустил: ребёнок, если её
-// запустит родитель, и корневая `Job`, если контроллер поставит её
-// в очередь через `add`.
+// То же разделение, что у `sync`: сам шаг и вход через очередь.
 SoloJob<void> _recordPath(String path) => job<Ready, void>(
       key: _Op.record,
       (ctx) async => ctx.emit(ctx.state.copyWith(path: path)),
@@ -182,18 +188,13 @@ SoloJob<void> recordPath(String path) => add(_recordPath(path));
 Job<void> syncAndRecord(int item) =>
     sync(item).then((ctx, path) => recordPath(path).value);
 
-// Те же два шага одной задачей: загрузка, которую делает `sync`,
-// и тот же самый `_recordPath`, теперь ребёнком. Родитель держит
-// очередь, пока не закончат дети, поэтому `save()` ждёт обоих шагов.
+// Те же два шага одной задачей: снова `_sync` и `_recordPath`, теперь
+// детьми. Родитель держит очередь, пока не закончат дети, поэтому
+// `save()` ждёт обоих шагов.
 SoloJob<void> syncAndRecordTogether(int item) => run<Ready, void>(
-      key: _Op.sync,
+      key: _Op.syncAndRecord,
       (ctx) async {
-        final path = await ctx.run(
-          job<Ready, String>(
-            key: _Op.upload,
-            (child) => child.join(() => api.push(item)),
-          ),
-        );
+        final path = await ctx.run(_sync(item));
         await ctx.run(_recordPath(path));
       },
     );
