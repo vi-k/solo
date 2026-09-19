@@ -314,11 +314,52 @@ stream with no events still keeps the parent running» — владелец сп
 
 Набор `solo` — 629 зелёных.
 
+## Пятая и шестая правки: взаимная блокировка и future от `cancel()`
+
+Два соседних вопроса владельца по тому же разделу. Первый — про «ребёнок уже
+ждёт этот колбэк»: звучит странно и не называет последствия. Последствие —
+взаимная блокировка, и она полная: ребёнок ждёт возврата из колбэка
+(`await active;` в `job_stream.dart`), колбэк ждёт ребёнка, родитель ждёт
+ребёнка. Зонд `probe_each_deadlock.dart` подождал сто секунд фейкового времени:
+
+| В колбэке | Колбэк вернулся | Родитель |
+| --- | --- | --- |
+| `await child.job.done` | нет | без исхода |
+| `await child.job.cancel()` | нет | без исхода |
+| `child.job.cancel()` без `await` | да | `Cancelled(handler: …)` |
+
+Третья строка стала и советом на странице: остановить подписку изнутри колбэка
+можно, если не ждать `cancel()`.
+
+Второй вопрос — про «Никто не ждёт future, которую возвращает `cancel()` самой
+подписки»: не ждут — или не надо ждать? Не ждёт движок, и он её не просто
+не ждёт, а бросает (`sub.cancel().ignore()`): доставка прекращается сразу,
+а в future — уборка самого источника, которой задача не владеет. Источник волен
+не торопиться или не вернуться вовсе, и ожидание держало бы на нём ребёнка.
+Причина в прозе была, но читалась как запрет читателю.
+
+Сторожа — три теста в `packages/solo/test/each_test.dart`:
+
+- «awaiting the child from inside its own callback is a deadlock»: колбэк ждёт
+  `child.job.done`, родителя отменяют, сто секунд спустя колбэк не вернулся
+  и исхода нет. Мутация: `await active;` закомментирован — ребёнок
+  заканчивается без колбэка, и блокировки нет.
+- «a callback stops its own subscription with an unawaited cancel»: колбэк
+  зовёт `cancel()` без `await`, второе событие не приходит. Мутация:
+  `wait(() => done.future)` заменён на `done.future` — тело перестаёт слышать
+  отмену.
+- «a source that never finishes its cleanup does not hold the child»:
+  `onCancel` источника возвращает future, которая не завершится никогда,
+  а ребёнок всё равно заканчивается. Мутация: `sub.cancel().ignore()` заменён
+  на `active = sub.cancel()` — движок начинает ждать уборку источника.
+
+Набор `solo` — 632 зелёных.
+
 ## Проверки
 
 В копии `~/development/my/solo-children` на ветке `docs/children`:
 `dart analyze` в `packages/async_job` без замечаний и `dart analyze lib test`
-в `packages/solo` тоже, `dart test` — 446 в `async_job` и 629 в `solo`, `lib/`
+в `packages/solo` тоже, `dart test` — 446 в `async_job` и 632 в `solo`, `lib/`
 после мутаций побайтово совпадает с копией. Из корня копии:
 `reflow.py --check`, `check_line_width.py`, `check_translations.py` (семнадцать
 блоков и шестнадцать заголовков сходятся с переводом), `check_doc_shape.py` —

@@ -98,13 +98,19 @@ job.
 
 Cancelling only the child does not directly cancel the parent. An uncaught
 `Cancelled` from the child's `.value` does cancel the parent through its body.
-Do not await the child's own completion or `cancel()` inside its event
-callback, because the child is already waiting for that callback.
+Do not await the child's own completion or its `cancel()` inside an event
+callback: that is a deadlock. The child waits for the callback to return, the
+callback waits for the child, and the parent waits for the child -- nothing
+moves again. To stop the subscription from inside a callback, call `cancel()`
+and do not await it.
 
-The future returned by the underlying stream subscription's `cancel()` is not
-awaited. Await asynchronous source cleanup separately if needed. Like
-`ctx.run`, `each` cannot start a child after the parent body ends, during
-cleanup, or from `unattended` work.
+The engine drops the future that the subscription's `cancel()` returns:
+delivery stops at once, and what that future carries is the cleanup of the
+source, which this job does not own -- waiting for it would hold the child on a
+source free to take its time or never come back. If your source has
+asynchronous cleanup to wait for, wait for it yourself. Like `ctx.run`, `each`
+cannot start a child after the parent body ends, during cleanup, or from
+`unattended` work.
 
 ## Following another controller
 
