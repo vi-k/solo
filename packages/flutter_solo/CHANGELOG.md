@@ -1,5 +1,23 @@
 ## Unreleased
 
+- **Breaking, inherited from `solo` and `async_job`:** this package re-exports
+  both, so their breaking changes are its own. From `solo`: `SoloBase` becomes
+  `Solo` and the stream moves to the mixin `SoloStream`; the synchronous read
+  is `currentState`; `close` takes a `SoloCloseMode`; the change hooks take a
+  `SoloTransition`; the state of a closed controller is final, and `isFinished`
+  is the guard before an external fact; `Solo` carries its own listeners; an
+  observer no longer answers for an error, `Solo.errorHandler` does; `collect`
+  and `accumulate` default to `AccumulationPolicy.join`, and `replace` moves
+  the waiting group's job instead of cancelling it; `Policy.droppable` compares
+  the result types of the two jobs and throws `ArgumentError` when they differ.
+  From `async_job`, through `solo`: a cancellation inside a `ParallelWaitError`
+  is a cancellation again, so the job's `onCancel` handler takes the outcome
+  where `onError` used to; `JobContext` gains `runAll`; `ctx.run` takes
+  `dispose` and `discard`. Migrate with the entries of both:
+  [the `solo` changelog](https://github.com/vi-k/solo/blob/main/packages/solo/CHANGELOG.md)
+  and
+  [the `async_job` changelog](https://github.com/vi-k/solo/blob/main/packages/async_job/CHANGELOG.md).
+
 - **Breaking:** `SoloListenable` is a mixin now, the way `solo`'s `SoloStream`
   is: `mixin SoloListenable<S extends Object> on Solo<S> implements
   ValueListenable<S>`. `extends SoloListenable<S>` becomes
@@ -55,10 +73,10 @@
   the pick when there was nobody to notify, and `ValueListenableBuilder` --
   which reads the value before subscribing -- stayed on the old one. The
   listener is registered first now, the pick is read again after the
-  subscription, and a change found there is announced on a microtask:
-  announcing it synchronously would land in the caller's `initState`, where
-  `setState` throws. A subscription that throws leaves neither the registration
-  nor the source listener behind.
+  subscription when the source moved during it, and a change found there is
+  announced on a microtask: announcing it synchronously would land in the
+  caller's `initState`, where `setState` throws. A subscription that throws
+  leaves neither the registration nor the source listener behind.
 
 - **Fix:** a selection counts registrations, not callbacks. The same callback
   registered twice is called twice and removed one registration at a time, and
@@ -146,6 +164,30 @@
   the engine was an ordinary public member of every controller with this mixin,
   and would have gone into `dart doc` as one. Taking it back after a release is
   a breaking change; taking it back now is not.
+
+- **Fix:** `SoloSelector` and `SoloSelectBuilder` pick once per occasion, which
+  is what the dartdoc of `SoloSelector` promised: once on mounting, once when
+  the parent hands over a new selector, once per change of the state. They
+  picked four times and twice. The constructor of `SoloSelection` made a pick
+  the first subscription always replaced, the pick was taken again after
+  subscribing whether or not the source had moved, and the widget read `value`
+  back, which picked once more. A subscribed selection keeps its last pick
+  together with the source value it came from and answers `value` from it while
+  that value stands, so a selector is expected to give the same answer for the
+  same value -- which a pick does. A source that changes its value in place and
+  says so is still picked afresh on its notification, and a selection nobody
+  listens to picks on every read, as before. Two things move: a selector that
+  throws does so on the first read or subscription rather than in the
+  constructor, and a selector that returns a new object every time no longer
+  gets a notification on subscribing to a source that did not move.
+
+- The example no longer sticks on a failed load. Its job left the state on
+  `Loading` whatever the outcome, so the third load -- the one the fake service
+  fails -- left a spinner with nothing to tap, for good. The job falls back to
+  `Empty` when it fails or is cancelled, the screen offers `Cancel` while a
+  load runs and a reload in every state, and the example has widget tests of
+  its own, run in the repository's CI: a load, a failed load and the one after
+  it, a cancel, and a tap that `Policy.droppable` hands the running job.
 
 - The README's examples compile, and every Dart block of the page is built and
   run in the repository's CI now. The model under Usage declares the `canSave`

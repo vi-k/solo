@@ -155,9 +155,10 @@ SoloSelector<Profile, bool>(
 ```
 
 Picks count as changed when they are `!=`, unless `compare:` answers that
-question itself — `true` means changed. The pick is read out of the state every
-time, so it is never behind; keep the selector a cheap pick. The `listenable`
-is any `ValueListenable`, a controller being the usual one.
+question itself — `true` means changed. The pick is made from the state as it
+is now, so it is never behind; keep the selector a cheap pick that gives the
+same answer for the same state. The `listenable` is any `ValueListenable`, a
+controller being the usual one.
 
 What the widget holds for you is a `SoloSelection` — a `ValueListenable` of the
 picked value — and it is an object like any other where a listenable is what

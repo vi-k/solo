@@ -26,6 +26,11 @@ mixin SoloStream<S extends Object> on Solo<S> {
 
   /// Closes the engine, then the stream. Repeated calls return the same
   /// future, so the chain is built once and kept.
+  ///
+  /// The stream closes once every subscription has taken its done event,
+  /// so one left paused holds the returned future until it is resumed or
+  /// cancelled. The engine is closed by then: [isFinished] is true and
+  /// [pending] is `null`, and a close held with both is held here.
   @override
   Future<void> close({SoloCloseMode mode = SoloCloseMode.cancel}) {
     final closed = _closed;

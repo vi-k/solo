@@ -64,7 +64,8 @@
 
 - `dart test` из `packages/async_job` и из `packages/solo`. Тесты примера —
   `dart test` из `packages/solo/example/`. Тесты Flutter-пакета —
-  `flutter test` из `packages/flutter_solo`.
+  `flutter test` из `packages/flutter_solo`, его примера — `flutter test`
+  из `packages/flutter_solo/example/`.
 - Асинхронность тестируется через `FakeAsync` (`package:fake_async`), время
   сдвигается явно. Реального времени в тестах нет.
 - Порядок событий проверяется по журналу: тестовый контроллер собирает через

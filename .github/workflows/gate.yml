@@ -179,8 +179,12 @@ jobs:
       - name: Dartdoc
         run: cd packages/flutter_solo && dart doc --dry-run
 
+      # The example has tests of its own: analysis alone passed it while
+      # a failed load left it on a spinner for good.
       - name: Tests
-        run: cd packages/flutter_solo && flutter test
+        run: |
+          (cd packages/flutter_solo && flutter test)
+          (cd packages/flutter_solo/example && flutter test)
 
       # The bench of `packages/solo/doc/flutter.md` and of the README of
       # `flutter_solo` runs here rather than in `snippets`, which has no

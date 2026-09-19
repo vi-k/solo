@@ -1,6 +1,8 @@
 @Timeout(Duration(seconds: 5))
 library;
 
+import 'dart:async';
+
 import 'package:solo/solo.dart';
 import 'package:test/test.dart';
 
@@ -128,5 +130,53 @@ void main() {
       expect(solo.pending!.phase, SoloPhase.body);
       async.flushTimers();
     });
+  });
+
+  group('a close held with nothing pending', () {
+    test('a drain waits out a group still in the queue', () {
+      runSolo((solo, journal, async) {
+        solo
+            .collect<TestState, int, void>(
+              (ctx, values) async {},
+              timing: AccumulationTiming.debounce(const Duration(seconds: 1)),
+            )
+            .add(1);
+        async.flushMicrotasks();
+        var returned = false;
+        solo.close(mode: SoloCloseMode.drain).then((_) => returned = true);
+        async.elapse(const Duration(milliseconds: 500));
+
+        expect(returned, isFalse);
+        expect(solo.pending, isNull, reason: 'no job is running');
+        expect(solo.isDraining, isTrue, reason: 'the queue still holds one');
+
+        async.elapse(const Duration(milliseconds: 500));
+        expect(returned, isTrue);
+      });
+    });
+
+    for (final release in ['resumed', 'cancelled']) {
+      test('a paused subscription holds the stream until $release', () {
+        runSoloStream((solo, journal, async) {
+          final subscription = solo.stream.listen((_) {})..pause();
+          var returned = false;
+          solo.close().then((_) => returned = true);
+          async.flushTimers();
+
+          expect(returned, isFalse);
+          expect(solo.isFinished, isTrue, reason: 'the engine has closed');
+          expect(solo.pending, isNull);
+
+          if (release == 'resumed') {
+            subscription.resume();
+            async.flushMicrotasks();
+            expect(returned, isTrue);
+          }
+          unawaited(subscription.cancel());
+          async.flushMicrotasks();
+          expect(returned, isTrue);
+        });
+      });
+    }
   });
 }

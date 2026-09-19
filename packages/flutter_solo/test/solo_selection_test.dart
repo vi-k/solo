@@ -273,7 +273,7 @@ void main() {
     });
 
     controller.set(const _Screen(progress: 1));
-    expect(picks, 1, reason: 'the constructor picked once, the change did not');
+    expect(picks, 0, reason: 'neither the constructor nor the change picked');
 
     void listener() {}
     name.addListener(listener);
@@ -285,6 +285,68 @@ void main() {
     picks = 0;
     controller.set(const _Screen(progress: 3));
     expect(picks, 0, reason: 'the last listener took the subscription away');
+  });
+
+  test('a listener reads back the pick its notification was decided on', () {
+    final controller = _Controller();
+    var picks = 0;
+    final name = controller.select((state) {
+      picks++;
+
+      return state.name;
+    });
+    final heard = <String>[];
+    name.addListener(() => heard.add(name.value));
+    expect(picks, 1, reason: 'subscribing picks once');
+
+    picks = 0;
+    controller.set(const _Screen(name: 'Ada'));
+    expect(heard, ['Ada']);
+    expect(picks, 1, reason: 'the change is picked once, not again on read');
+  });
+
+  test('a source that changes its value in place is picked again', () {
+    final source = _InPlaceSource();
+    final length = SoloSelection<List<int>, int>(source, (list) => list.length);
+    final heard = <int>[];
+    length.addListener(() => heard.add(length.value));
+
+    source.grow();
+    expect(heard, [1], reason: 'the notification is the sign, not identity');
+    expect(length.value, 1);
+  });
+
+  test('a source changed in place while subscribing is picked again', () async {
+    final source = _InPlaceSource(growOnFirstListener: true);
+    final length = SoloSelection<List<int>, int>(source, (list) => list.length);
+    final heard = <int>[];
+    length.addListener(() => heard.add(length.value));
+    await Future<void>.delayed(Duration.zero);
+
+    expect(heard, [1], reason: 'the notification was held back, not lost');
+  });
+
+  test('a selection nobody listens to any more picks every time', () {
+    final source = _InPlaceSource();
+    final length = SoloSelection<List<int>, int>(source, (list) => list.length);
+    void listener() {}
+    length
+      ..addListener(listener)
+      ..removeListener(listener);
+
+    source.grow();
+    expect(length.value, 1, reason: 'no subscription, so nothing kept');
+  });
+
+  test('subscribing to a source that stays put announces nothing', () async {
+    final controller = _Controller();
+    // A new list on every pick is never `==` to the last one.
+    final names = controller.select((state) => [state.name]);
+    var calls = 0;
+    names.addListener(() => calls++);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(calls, 0, reason: 'nothing moved while it was subscribed to');
   });
 
   test('a pick made before the first listener is refreshed on subscribing', () {
@@ -509,6 +571,31 @@ void main() {
     inside = false;
     expect(calls, 0, reason: 'nothing may arrive before addListener returns');
   });
+}
+
+/// Holds one list and grows it in place, telling its listeners: the value
+/// changes while the object stays the same.
+final class _InPlaceSource extends ChangeNotifier
+    implements ValueListenable<List<int>> {
+  _InPlaceSource({this.growOnFirstListener = false});
+
+  final bool growOnFirstListener;
+
+  @override
+  final List<int> value = [];
+
+  void grow() {
+    value.add(value.length);
+    notifyListeners();
+  }
+
+  @override
+  void addListener(VoidCallback listener) {
+    super.addListener(listener);
+    if (growOnFirstListener && value.isEmpty) {
+      grow();
+    }
+  }
 }
 
 /// Publishes a new value from inside `addListener`, the way a lazy source

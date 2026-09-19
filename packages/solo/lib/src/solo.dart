@@ -543,6 +543,13 @@ abstract class Solo<S extends Object> {
   /// ));
   /// ```
   ///
+  /// `null` says that no job is running, not that nothing holds a close.
+  /// A drain waits for the queue too, and a group of `collect` or
+  /// `accumulate` stays queued until its timing lets it go — [isDraining]
+  /// is still true then. With `SoloStream` the stream closes after the
+  /// engine and waits for every subscription to take its done event, so
+  /// one left paused holds `close` with [isFinished] already true.
+  ///
   /// It reports and does not diagnose. A job that holds on for reasons of
   /// its own — a bare `await` on a slow call, an external operation the
   /// body is inside — shows up as [SoloPhase.unknown], because that is

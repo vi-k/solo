@@ -763,4 +763,37 @@ void main() {
       expect('$fromTheFuture', 'Cancelled(rules: is not Working)');
     });
   });
+
+  // Inherited from `async_job` and named in this package's changelog: a
+  // controller's job reads the envelope the way the core does.
+  test('a child cancelled under [...].wait takes the parent to onCancel', () {
+    runSolo((solo, journal, async) {
+      final handled = <String>[];
+      final a = solo.job<TestState, void>(key: 'a', (ctx) => pause(ctx, 100));
+      final b = solo.job<TestState, void>(key: 'b', (ctx) => pause(ctx, 100));
+      solo.run<TestState, void>(
+        key: 'parent',
+        (ctx) async => [ctx.run(a), ctx.run(b)].wait,
+        onError: (state, error, stackTrace) {
+          handled.add('onError ${error.runtimeType}');
+          return state;
+        },
+        onCancel: (state, cancelled) {
+          handled.add('onCancel $cancelled');
+          return state;
+        },
+      );
+      async.flushMicrotasks();
+      a.cancel();
+      async.flushTimers();
+
+      expect(handled, [
+        'onCancel Cancelled(handler: child a: Cancelled(manual))',
+      ]);
+      expect(
+        journal.take(),
+        anyElement(startsWith('[parent] finished Cancelled')),
+      );
+    });
+  });
 }

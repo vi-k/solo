@@ -89,6 +89,13 @@ cancellation it carries, whether a `ctx.uncancellable` section is holding one
 back, and whether the job was created with `cancellable: false` and turns them
 down.
 
+`null` says that no job is running, not that nothing holds the close. A drain
+waits for the queue too, and a group of `collect` or `accumulate` stays queued
+until its timing lets it go — `isDraining` is still true then. With
+`SoloStream` the stream closes after the engine and waits for every
+subscription to take its done event: one left paused holds `close()` with
+`isFinished` already true.
+
 It reports and does not diagnose. A long wait does not prove a forgotten
 `ctx.wait`: a body inside an external call looks the same, and so does a
 resource that takes its time to release. What the engine cannot see is

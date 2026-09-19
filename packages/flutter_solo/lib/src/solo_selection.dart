@@ -11,9 +11,12 @@ import 'solo_selector.dart';
 /// its own: a widget that needs the name rebuilds when the name changes
 /// and not when the progress does.
 ///
-/// [value] answers from the source every time, with or without listeners,
-/// so it is never behind — a selector is a pick and is expected to be
-/// cheap. What the selection keeps is the last value it announced, and it
+/// [value] answers from the value the source has now, with or without
+/// listeners, so it is never behind — a selector is a pick and is expected
+/// to be cheap, and to answer the same for the same value of the source.
+/// That lets a subscribed selection pick once per change: the pick made to
+/// decide whether to notify is the one a listener reads back from [value].
+/// What the selection keeps besides is the last value it announced, and it
 /// keeps it to hold notifications back: listeners hear only a pick that
 /// `compare` calls changed — `!=` unless another answer is given — so a
 /// change of the source that leaves the pick alone reaches nobody here.
@@ -60,8 +63,22 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
 
   /// The last value announced to the listeners, kept to tell a change
   /// from a change of the source that left the pick alone.
-  T _selected;
+  late T _selected;
   var _subscribing = false;
+
+  /// The source value the last pick was made from, while the selection is
+  /// subscribed. A notification is what says the value may have changed,
+  /// so a read of [value] against the same object is answered with
+  /// [_picked] rather than picked again. Without a subscription nothing
+  /// says so, and [value] picks every time; the field is cleared then only
+  /// so an idle selection does not hold on to an old value of the source.
+  Object? _pickedFrom = _none;
+  late T _picked;
+
+  /// Set when the source notifies while it is being subscribed to.
+  var _heardWhileSubscribing = false;
+
+  static const _none = Object();
 
   /// Picks [selector] out of [source]; [compare] answers whether the pick
   /// changed, `!=` when it is omitted.
@@ -71,8 +88,7 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
     bool Function(T previous, T current)? compare,
   })  : _source = source,
         _selector = selector,
-        _compare = compare ?? _changed,
-        _selected = selector(source.value);
+        _compare = compare ?? _changed;
 
   /// Picks [selector] directly from [solo].
   static SoloSelection<S, T> of<S extends Object, T>(
@@ -91,7 +107,23 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
 
   /// The picked value, as the source has it right now.
   @override
-  T get value => _selector(_source.value);
+  T get value {
+    final source = _source.value;
+    if (!_listeners.isEmpty && identical(source, _pickedFrom)) {
+      return _picked;
+    }
+    return _pick(source);
+  }
+
+  /// Picks [source], kept for [value] while somebody listens.
+  T _pick(S source) {
+    final picked = _selector(source);
+    if (!_listeners.isEmpty) {
+      _pickedFrom = source;
+      _picked = picked;
+    }
+    return picked;
+  }
 
   /// Adds [listener], called when the picked value changes.
   ///
@@ -102,21 +134,28 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
     final first = _listeners.isEmpty;
     _listeners.add(listener);
     if (first) {
-      // Before the subscription, not after: the pick kept from now on must
-      // be the one the source has at this moment, or the first change would
-      // be compared against a value from whenever this object was made.
+      // Before the subscription, not after: a source may publish while it
+      // is being subscribed to, and that change is found by comparing
+      // against the pick it had before.
       var subscriptionAttempted = false;
       try {
-        _selected = _selector(_source.value);
+        final before = _source.value;
+        _selected = _pick(before);
         _subscribing = true;
+        _heardWhileSubscribing = false;
         subscriptionAttempted = true;
         _source.addListener(_onSourceChanged);
         _subscribing = false;
 
-        final next = _selector(_source.value);
-        if (_compare(_selected, next)) {
-          _selected = next;
-          scheduleMicrotask(() => _listeners.notify(this));
+        // Picked again only when the source moved while it was being
+        // subscribed to, the way a lazy source does on its first listener.
+        final after = _source.value;
+        if (_heardWhileSubscribing || !identical(before, after)) {
+          final next = _pick(after);
+          if (_compare(_selected, next)) {
+            _selected = next;
+            scheduleMicrotask(() => _listeners.notify(this));
+          }
         }
       } on Object catch (_) {
         _subscribing = false;
@@ -124,6 +163,7 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
           _source.removeListener(_onSourceChanged);
         }
         _listeners.remove(listener);
+        _pickedFrom = _none;
         rethrow;
       }
     }
@@ -137,13 +177,20 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
       return;
     }
     _source.removeListener(_onSourceChanged);
+    _pickedFrom = _none;
   }
 
   void _onSourceChanged() {
     if (_subscribing) {
+      _heardWhileSubscribing = true;
       return;
     }
-    final next = _selector(_source.value);
+    // Picked afresh, not looked up: a source may change its value in place
+    // and say so, and the notification is the only sign of it. The kept
+    // pick goes first, so a selector that throws here leaves none behind.
+    final source = _source.value;
+    _pickedFrom = _none;
+    final next = _pick(source);
     if (!_compare(_selected, next)) {
       return;
     }

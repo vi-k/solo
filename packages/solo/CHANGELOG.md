@@ -1,5 +1,21 @@
 ## Unreleased
 
+- **Breaking, inherited from `async_job`:** `solo` re-exports the core whole,
+  so the core's breaking changes are this package's too, and three of them
+  reach an ordinary job body. A cancellation that travels inside a
+  `ParallelWaitError` is a cancellation again: a child cancelled under
+  `[ctx.run(a), ctx.run(b)].wait` ends the job `Cancelled` where it used to end
+  it `Failed`, so the job's `onCancel` handler takes the outcome instead of
+  `onError`, `job.value` throws the `Cancelled`, and a
+  `catch (ParallelWaitError)` around it no longer runs. `JobContext` gains
+  `runAll`, and an extension of that name on `JobContext` is shadowed by it.
+  `ctx.run` takes `dispose` and `discard`: no call site breaks, but a
+  registration written on the line after `await ctx.run(child)` belongs in the
+  call now. The other two, the protected `JobBase.handleUnanswered` and
+  `JobBase.inUncancellableSection`, concern a subclass of `JobBase` only. Read
+  the core's own entries before migrating:
+  [the `async_job` changelog](https://github.com/vi-k/solo/blob/main/packages/async_job/CHANGELOG.md).
+
 - **Breaking:** `SoloBase` is renamed to `Solo`, and the former `Solo` -- the
   broadcast stream it carried -- becomes the mixin `SoloStream`. `Solo` stays
   the class every controller extends; a stream is no longer part of that by
@@ -327,6 +343,14 @@
   `join` throws in place of the value, and the body never reaches that line.
   `doc/resources.md` takes the same line apart as a first attempt; the
   introduction no longer teaches it.
+
+- `Solo.pending`, `SoloStream.close`, `doc/errors.md` and `doc/state.md` say
+  when a close waits with nothing pending. `null` means that no job is running,
+  and a close can wait without one: a drain waits for a group of `collect` or
+  `accumulate` its timing still holds in the queue, and the stream of
+  `SoloStream` closes after the engine and waits for a subscription left
+  paused, with `isFinished` already true. The recipe that logs `pending` on a
+  slow close printed `null` for both and said nothing of why.
 
 ## 0.2.0
 

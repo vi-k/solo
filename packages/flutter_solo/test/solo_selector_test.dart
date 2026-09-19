@@ -161,6 +161,40 @@ void main() {
     expect(find.text('progress 7'), findsOneWidget);
   });
 
+  testWidgets('a mount, a parent rebuild and a change pick once each', (
+    tester,
+  ) async {
+    final controller = _Controller();
+    addTearDown(controller.close);
+    var picks = 0;
+
+    // A new closure on every call, so the rebuild makes a new selection.
+    Widget tree() => _wrap(
+          SoloSelector<_Screen, String>(
+            listenable: controller,
+            selector: (state) {
+              picks++;
+
+              return state.name;
+            },
+            builder: (context, name, _) => Text(name),
+          ),
+        );
+
+    await tester.pumpWidget(tree());
+    expect(picks, 1, reason: 'mount');
+
+    picks = 0;
+    await tester.pumpWidget(tree());
+    expect(picks, 1, reason: 'parent rebuild');
+
+    picks = 0;
+    controller.set(const _Screen(name: 'Ada'));
+    await tester.pump();
+    expect(picks, 1, reason: 'one change of the state');
+    expect(find.text('Ada'), findsOneWidget);
+  });
+
   testWidgets('the listenable is let go when the widget goes', (tester) async {
     final controller = _Controller();
     addTearDown(controller.close);
