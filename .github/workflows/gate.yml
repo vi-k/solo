@@ -314,6 +314,12 @@ jobs:
       - name: Paragraphs are filled
         run: python3 tool/reflow.py --check
 
+      # The check above trusts the filler. These say what a fill must never
+      # reshape: a nested list glued into one line, a paragraph pulled out
+      # of its item to column 0.
+      - name: The filler keeps lists
+        run: python3 -m unittest tool/reflow_test.py
+
       - name: A section starts with code
         run: python3 tool/check_doc_shape.py
 

@@ -13,8 +13,9 @@ lines. A long word -- a URL, a code span -- is never broken, so a link too
 wide for the limit keeps its own line, and the words before it stop early.
 
 A list item keeps its marker and hangs its continuation under the text:
-`- ` at two spaces, `1. ` at three. Nested lists are not handled; there
-are none, and a file that grows one is reported rather than reshaped.
+`- ` at two spaces, `1. ` at three. A nested item keeps its indent too, and
+so does a paragraph inside an item. A block that opens four spaces in may
+be indented code: it is reported and left as it was, never reshaped.
 
 `docs/records/` is not filled. A record is written on its day and kept as
 it was; a new one can still be filled by naming it as an argument.
@@ -35,7 +36,11 @@ WIDTH = 79
 ROOTS = ('packages', 'docs')
 EXTRA = ('AGENTS.md',)
 
-MARKER = re.compile(r'^([-*+] |\d+\. )')
+# A marker at any indent: a nested item is an item, not a continuation of
+# the one above -- read as a continuation, it was filled into it,
+# `* ошибки; * скрытые edge cases;` on one line.
+MARKER = re.compile(r'^ *([-*+] |\d+\. )')
+INDENT = re.compile(r'^ *')
 UNTOUCHED = re.compile(r'^\s*(\||#{1,6} |>)')
 # A wrapped line must not open a construct the original did not.
 HAZARD = re.compile(r'^\s*([-*+] |\d+\. |#{1,6} |>|\||```)')
@@ -167,21 +172,28 @@ def fill(body, first_indent, next_indent):
 
 def wrap_block(block):
     """One run of paragraph lines, filled. Returns None if it is not ours."""
-    items = []  # (marker, [lines])
+    # Four spaces after a blank line may open an indented code block, and a
+    # fill would run its lines together.
+    if len(INDENT.match(block[0]).group(0)) >= 4:
+        return None
+    # Each item keeps what stands before its text: its indent and marker,
+    # or, for a paragraph inside an item, its indent alone. Moved to column
+    # 0, that paragraph ends the list, and a `9.` under it becomes its last
+    # sentence: an item numbered other than 1 cannot interrupt a paragraph.
+    items = []  # (lead, [lines])
     for line in block:
-        match = MARKER.match(line)
-        if match or not items:
-            items.append((match.group(1) if match else '', [line[
-                len(match.group(1)):] if match else line.strip()]))
+        match = MARKER.match(line) or (None if items else INDENT.match(line))
+        if match:
+            items.append((match.group(0), [line[match.end():]]))
         else:
             items[-1][1].append(line.strip())
 
     out = []
-    for marker, parts in items:
+    for lead, parts in items:
         body = ' '.join(part.strip() for part in parts if part.strip())
         if not body:
             return None
-        filled = fill(body, marker, ' ' * len(marker))
+        filled = fill(body, lead, ' ' * len(lead))
         if any(HAZARD.match(line) for line in filled[1:]):
             return None
         out.extend(filled)
