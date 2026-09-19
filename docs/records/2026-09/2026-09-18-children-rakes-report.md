@@ -384,11 +384,42 @@ returns», «close waits for the active handler before releasing resources»
 Та же замена напрашивается в `packages/async_job/doc/children.md`, где
 «continuation» встречается чаще десятка раз; решения по ней пока нет.
 
+## Восьмая правка: у `then` появился пример
+
+Два предложения про изменение состояния из `then` владелец попросил объяснить
+или показать. Объяснения не хватало вот какого: колбэк получает обычный
+`JobContext` ядра — зонд `probe_then_queue.dart` печатает `_CoreContext`, —
+и `emit` на нём нет вовсе. Значит, `then` не «может, но не должна» менять
+состояние, а не может: ей нечем. Остаётся попросить `Job` у контроллера, а та
+встаёт в конец очереди, потому что место источник освободил, когда завершился,
+и этим же событием запустилась `then`.
+
+Зонд на очередь, `sync` с `then` и `save`, поставленная, пока шла `sync`:
+
+| Форма | Порядок |
+| --- | --- |
+| `then`, из него `run` контроллера | sync, save, then, record |
+| те же шаги детьми одного родителя | sync, record, sync ends, save |
+
+Раздел получил второй блок кода с обеими формами. Он не в стенде — `snippets`
+собирает только `vs-bloc.md` и `accumulation.md`, — поэтому проверен отдельно:
+`.artifacts/children/compile_then_block.dart` повторяет блок целиком
+и анализируется чисто. На этом проверка и пригодилась: первое имя метода было
+`publish`, а `Solo.publish` уже есть, и пример молча переопределял член
+базового класса. Метод переименован в `recordPath`.
+
+Сторож — «a job a then asks for goes behind what is already queued»
+в `packages/solo/test/children_test.dart`: порядок ровно как в зонде. Мутация:
+`start();` в ветке `Done` у `_sourceFinished` закомментирован — `then`
+не стартует, и последних двух шагов в списке нет.
+
+Набор `solo` — 633 зелёных.
+
 ## Проверки
 
 В копии `~/development/my/solo-children` на ветке `docs/children`:
 `dart analyze` в `packages/async_job` без замечаний и `dart analyze lib test`
-в `packages/solo` тоже, `dart test` — 446 в `async_job` и 632 в `solo`, `lib/`
+в `packages/solo` тоже, `dart test` — 446 в `async_job` и 633 в `solo`, `lib/`
 после мутаций побайтово совпадает с копией. Из корня копии:
 `reflow.py --check`, `check_line_width.py`, `check_translations.py` (семнадцать
 блоков и шестнадцать заголовков сходятся с переводом), `check_doc_shape.py` —

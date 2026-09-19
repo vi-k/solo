@@ -687,6 +687,38 @@ void main() {
     });
   }
 
+  // The chaining example of the page: a `then` cannot write state, so it
+  // asks the controller for a job, and that job waits its turn.
+  test('a job a then asks for goes behind what is already queued', () {
+    runSolo((solo, journal, async) {
+      final order = <String>[];
+      final source = solo.run<TestState, void>(key: 'sync', (ctx) async {
+        order.add('sync');
+        await ctx.wait(() => delay(10));
+      });
+      source
+          .then<void>((ctx, _) async {
+            order.add('then');
+            await solo
+                .run<TestState, void>(
+                  key: 'record',
+                  (recording) async => order.add('record'),
+                )
+                .value;
+          })
+          .ignore();
+      solo
+          .run<TestState, void>(key: 'save', (ctx) async => order.add('save'))
+          .ignore();
+      async.flushTimers();
+      expect(
+        order,
+        ['sync', 'save', 'then', 'record'],
+        reason: 'the source freed the slot, and save was already waiting',
+      );
+    });
+  });
+
   test('the Future of run carries the drop of a child nobody awaits', () {
     runSolo((solo, journal, async) {
       Object? fromTheFuture;

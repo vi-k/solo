@@ -160,11 +160,39 @@ a new core `JobContext`, and may return a value or future. A source failure
 propagates without calling the callback.
 
 A `then` job does not inherit the controller's state context, rules, observer
-or queue position. It has its own optional observer. To change controller
-state, call a method that enqueues another job; other queued jobs may run
-between the two operations. Use children within one parent when the whole
-sequence must occupy the queue without another root job running between its
-steps.
+or queue position. It has its own optional observer. Its callback gets a plain
+core `JobContext`, with no `emit` on it and no state behind it, so a `then`
+cannot write controller state itself: it asks the controller for another job,
+and that job takes its turn at the back of the queue. The source freed its slot
+when it finished, and that same event is what started the `then`, so anything
+queued meanwhile is already ahead of it.
+
+```dart
+// The callback has no state to write, so it asks for a job:
+// `recordPath` is a method of the controller with a `run` of its own.
+// A `save()` queued while `sync` was still running goes ahead of it:
+// sync, save, recordPath.
+Job<void> syncAndRecord(int item) =>
+    sync(item).then((ctx, path) => recordPath(path).value);
+
+// The same two steps as one job. The parent holds the queue until its
+// child is done, so that `save()` waits for both of them.
+SoloJob<void> syncAndRecordTogether(int item) => run<Ready, void>(
+      key: _Op.sync,
+      (ctx) async {
+        final path = await ctx.run(
+          job<Ready, String>(
+            key: _Op.upload,
+            (child) => child.join(() => api.push(item)),
+          ),
+        );
+        ctx.emit(ctx.state.copyWith(path: path));
+      },
+    );
+```
+
+Use children within one parent when the whole sequence must occupy the queue
+without another root job running between its steps.
 
 Cancellation propagates forward to `then` jobs and backward to unfinished
 sources, subject to each job's cancellation rules. Cancelling the tail waits
