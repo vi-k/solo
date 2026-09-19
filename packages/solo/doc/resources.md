@@ -63,7 +63,7 @@ Job<void> load() => run<Idle, void>(
 
 `onDispose` is the member for a resource the job releases whatever happens, and
 the line under the acquisition is where it reads best. Those two lines are one
-step for the reader and two for the engine, and a cancellation fits between
+step for the reader but two for the engine, and a cancellation fits between
 them.
 
 Cancel this job while `Database.open` is in flight. `join` stays with the call,
