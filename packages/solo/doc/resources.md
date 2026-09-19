@@ -115,10 +115,10 @@ final sub = await ctx.join(
 ```
 
 `wait` and `join` take an action that returns without waiting, so a synchronous
-creation registers on the call like any other. What it buys over the pair is
-the checkpoint the call makes before the action: with a cancellation already
-standing, the subscription is never made at all, where the pair makes it and
-cancels it during cleanup.
+creation registers on the call like any other. What it buys over `listen` with
+`onDispose` under it is the checkpoint the call makes before the action: with a
+cancellation already standing, the subscription is never made at all, where
+that pair makes it and cancels it during cleanup.
 
 ## Returning a resource to the caller
 
