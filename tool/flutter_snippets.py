@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Builds runnable screens from packages/solo/doc/flutter.md.
+"""Builds runnable screens from packages/solo/doc/flutter.md and from the
+README of flutter_solo.
 
 Every snippet is copied out of the markdown and wrapped in a file that
 runs: fakes above it, a driver below it. That is what keeps the document
@@ -29,9 +30,14 @@ jobs from the quick start...` -- which is replaced here by that very
 method, taken out of packages/solo/README.md. Everything between the
 imports is byte-identical to the document.
 
-So this bench guards two documents at once: the README's quick start is
-built here as well, as the code flutter.md points at rather than a copy
-of it.
+So this bench guards three documents at once: the quick start of solo's
+README is built here as well, as the code flutter.md points at rather
+than a copy of it; and so is every Dart block of the README of
+flutter_solo but the lone import line under Install, which Usage repeats
+-- the first page a user of the package copies from. That
+README went without a bench until 2026-09-19 and did not compile: the
+model it declared had neither the `canSave` nor the `save` the rest of
+the page used.
 
 What the drivers print is quoted by the document in `text` blocks, and
 `tool/check_traces.py` holds the two together. The guards in them are
@@ -48,6 +54,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ROOT = sys.argv[1] if len(sys.argv) > 1 else '/tmp/solo-flutter-check'
 DOC = os.path.join(REPO, 'packages', 'solo', 'doc', 'flutter.md')
 README = os.path.join(REPO, 'packages', 'solo', 'README.md')
+FLUTTER_README = os.path.join(REPO, 'packages', 'flutter_solo', 'README.md')
 
 PUBSPEC = """name: flutter_check
 publish_to: none
@@ -406,6 +413,347 @@ void main() {
     );
     expect(onScreen(tester), 'Initial');
     show(tester, 'the base class, through a leaf that is listenable');
+  });
+}
+''',
+])
+
+# ------------------------------------------------- the README of flutter_solo
+# Every Dart block of the package's README but the import line under
+# Install, which Usage repeats, built into one file. The README
+# declares the model once, under Usage, and the rest of the page leans on
+# it; what the page takes as the reader's own -- the API behind the
+# controller, the widgets a `State` belongs to, a toast -- is supplied here,
+# and nothing the page itself names is.
+_fr = doc_blocks.blocks(
+    open(FLUTTER_README).read(), 'dart', doc_blocks.DECLARES['dart'])
+_usage_imports, _usage_body = split_imports(_fr['usage/ProfileController'])
+_listening_imports, _listening_body = split_imports(
+    _fr['listening-without-keeping-the-/initState'])
+_second_imports, _second_body = split_imports(
+    _fr['methods-from-a-second-import/import-package-flutter_solo-fl'])
+# Two widget expressions in one block, one blank line between them.
+_builders = _fr['builders-for-any-controller/solobuilder-profile'].strip()
+_builders = _builders.split('\n\n')
+assert len(_builders) == 2, 'the builders block holds two expressions'
+
+FILES['readme_test'] = '\n'.join([
+    *sorted(set(_usage_imports + _listening_imports + _second_imports + [
+        "import 'dart:async';",
+        "import 'package:flutter_test/flutter_test.dart';",
+    ])),
+    '',
+    _usage_body,
+    '''
+/// The API the README takes as the application's own.
+class ProfileApi {
+  final saved = <String>[];
+
+  Future<String> fetchName() => Future<String>.delayed(
+        const Duration(milliseconds: 10),
+        () => 'Ada Lovelace',
+      );
+
+  Future<void> saveName(String name) async {
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    saved.add(name);
+  }
+}
+
+/// The API of the testing section, standing in for the real one.
+class FakeApi extends ProfileApi {}
+''',
+    # Why: the fragment is the body of a function that has a controller.
+    'Future<void> why(ProfileController profile) async {\n'
+    + _fr['why/final-job-profile-load'] + '}\n',
+    wrap('saveSelector', _fr['selecting-one-value/soloselector-profile-bool'],
+         'ProfileController controller'),
+    '''
+class SaveButton extends StatefulWidget {
+  final ProfileController controller;
+
+  const SaveButton({required this.controller, super.key});
+
+  @override
+  State<SaveButton> createState() => _SaveButtonState();
+}
+''',
+    _fr['selecting-one-value/_SaveButtonState'],
+    wrap('anyBuilder', _builders[0], 'ProfileController controller'),
+    wrap('anySelectBuilder', _builders[1], 'ProfileController controller'),
+    '''
+class Listening extends StatefulWidget {
+  final ProfileController controller;
+  final List<String> heard;
+
+  const Listening({required this.controller, required this.heard, super.key});
+
+  @override
+  State<Listening> createState() => _ListeningState();
+}
+
+class _ListeningState extends State<Listening> {
+  late final canSave =
+      SoloSelection(widget.controller, (state) => state.canSave);
+''',
+    _listening_body,
+    '''
+  void _onState() =>
+      widget.heard.add('state ${widget.controller.value.runtimeType}');
+
+  void _onCanSave() => widget.heard.add('canSave ${canSave.value}');
+
+  @override
+  Widget build(BuildContext context) => const SizedBox();
+}
+
+var _heardBySecondImport = 0;
+
+void _onCanSave() => _heardBySecondImport++;
+
+(SoloSelection<Profile, bool>, SoloSubscription) secondImport(
+  ProfileController controller,
+) {''',
+    _second_body,
+    '''  return (canSave, subscription);
+}
+
+class ProfileScreen extends StatefulWidget {
+  const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+''',
+    _fr['the-controller-s-life/_ProfileScreenState'],
+    '''
+class LoadButton extends StatefulWidget {
+  final ProfileController controller;
+  final List<String> toasts;
+
+  const LoadButton({
+    required this.controller,
+    required this.toasts,
+    super.key,
+  });
+
+  @override
+  State<LoadButton> createState() => _LoadButtonState();
+}
+
+class _LoadButtonState extends State<LoadButton> {
+  ProfileController get controller => widget.controller;
+
+  void _toast(String message) => widget.toasts.add(message);
+''',
+    _fr['outcomes/_load'],
+    '''
+  @override
+  Widget build(BuildContext context) =>
+      TextButton(onPressed: _load, child: const Text('Load'));
+}
+
+Widget app(Widget child) => MaterialApp(home: Scaffold(body: child));
+
+VoidCallback? pressable(WidgetTester tester) =>
+    tester.widget<ElevatedButton>(find.byType(ElevatedButton)).onPressed;
+
+Future<ProfileController> loaded(WidgetTester tester) async {
+  final controller = ProfileController(ProfileApi());
+  addTearDown(controller.close);
+  controller.load().ignore();
+  await tester.pump(const Duration(milliseconds: 20));
+
+  return controller;
+}
+
+void main() {
+  testWidgets('a handle stops the job it stands for', (tester) async {
+    final profile = ProfileController(ProfileApi());
+    addTearDown(profile.close);
+    final printed = <String>[];
+    await runZoned(
+      () => why(profile),
+      zoneSpecification: ZoneSpecification(
+        print: (self, parent, zone, line) => printed.add(line),
+      ),
+    );
+
+    expect(
+      printed,
+      ['Cancelled(manual)'],
+      reason: 'the comment the Why section prints next to the call',
+    );
+    debugPrint('the handle: ${printed.single}');
+  });
+''',
+    _fr['testing/testwidgets-the-profile-appear'],
+    '''
+  testWidgets('the handle waits for the end of the work', (tester) async {
+    final controller = ProfileController(FakeApi());
+    addTearDown(controller.close);
+    await tester.pumpWidget(
+      MaterialApp(home: ProfileView(controller: controller)),
+    );
+''',
+    _fr['testing/final-job-controller-load'],
+    '''
+    expect(job.outcome, isA<Done<String>>());
+    expect(find.text('Ada Lovelace'), findsOneWidget);
+  });
+
+  testWidgets('save starts on a loaded profile and nowhere else',
+      (tester) async {
+    final api = ProfileApi();
+    final controller = ProfileController(api);
+    addTearDown(controller.close);
+
+    final early = controller.save();
+    await tester.pump(const Duration(milliseconds: 20));
+    expect(early.outcome, isA<Cancelled>(), reason: 'Empty is no Loaded');
+    expect(api.saved, isEmpty);
+
+    controller.load().ignore();
+    await tester.pump(const Duration(milliseconds: 20));
+    final save = controller.save();
+    await tester.pump(const Duration(milliseconds: 20));
+    expect(save.outcome, isA<Done<void>>());
+    expect(api.saved, ['Ada Lovelace']);
+    debugPrint('save: refused on ${early.outcome}, then saved');
+  });
+
+  testWidgets('the selector lets Save be pressed once there is a profile',
+      (tester) async {
+    final controller = ProfileController(ProfileApi());
+    addTearDown(controller.close);
+    await tester.pumpWidget(app(saveSelector(controller)));
+    expect(pressable(tester), isNull);
+
+    controller.load().ignore();
+    await tester.pumpAndSettle();
+    expect(pressable(tester), isNotNull);
+  });
+
+  testWidgets('the selection in a field follows a new controller',
+      (tester) async {
+    final first = await loaded(tester);
+    final second = ProfileController(ProfileApi());
+    addTearDown(second.close);
+
+    await tester.pumpWidget(app(SaveButton(controller: first)));
+    expect(pressable(tester), isNotNull);
+
+    await tester.pumpWidget(app(SaveButton(controller: second)));
+    expect(
+      pressable(tester),
+      isNull,
+      reason: 'the new controller has nothing to save; a selection left on '
+          'the old one would say otherwise and save to the new one',
+    );
+    debugPrint('the field: follows the controller it is handed');
+  });
+
+  testWidgets('the builders take the controller itself', (tester) async {
+    final controller = ProfileController(ProfileApi());
+    addTearDown(controller.close);
+    await tester.pumpWidget(
+      app(
+        Column(
+          children: [anyBuilder(controller), anySelectBuilder(controller)],
+        ),
+      ),
+    );
+    expect(find.textContaining('Empty'), findsOne);
+    expect(pressable(tester), isNull);
+
+    controller.load().ignore();
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Loaded'), findsOne);
+    expect(pressable(tester), isNotNull);
+  });
+
+  testWidgets('a group of subscriptions goes with the State', (tester) async {
+    final controller = ProfileController(ProfileApi());
+    addTearDown(controller.close);
+    final heard = <String>[];
+    await tester.pumpWidget(Listening(controller: controller, heard: heard));
+
+    controller.load().ignore();
+    await tester.pumpAndSettle();
+    expect(heard, ['state Loading', 'state Loaded', 'canSave true']);
+
+    await tester.pumpWidget(const SizedBox());
+    controller.load().ignore();
+    await tester.pumpAndSettle();
+    expect(
+      heard,
+      hasLength(3),
+      reason: 'dispose cancelled the group, so nothing is heard after it',
+    );
+  });
+
+  testWidgets('the second import brings select and listen', (tester) async {
+    final controller = ProfileController(ProfileApi());
+    addTearDown(controller.close);
+    final (canSave, subscription) = secondImport(controller);
+
+    controller.load().ignore();
+    await tester.pumpAndSettle();
+    expect(canSave.value, isTrue);
+    expect(_heardBySecondImport, 1);
+    subscription.cancel();
+  });
+
+  testWidgets('the screen owns its controller and closes it', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: ProfileScreen()));
+    final controller = tester
+        .state<_ProfileScreenState>(find.byType(ProfileScreen))
+        .controller;
+    await tester.pumpAndSettle();
+    expect(find.text('Ada Lovelace'), findsOne);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpAndSettle();
+    expect(controller.isClosed, isTrue);
+  });
+
+  testWidgets('the outcome of a tap is what the toast says', (tester) async {
+    final controller = ProfileController(ProfileApi());
+    addTearDown(controller.close);
+    final toasts = <String>[];
+    await tester.pumpWidget(
+      app(LoadButton(controller: controller, toasts: toasts)),
+    );
+
+    await tester.tap(find.text('Load'));
+    await tester.pump();
+    await tester.tap(find.text('Load'));
+    await tester.pumpAndSettle();
+    expect(
+      toasts,
+      ['hello Ada Lovelace', 'hello Ada Lovelace'],
+      reason: 'droppable hands the second tap the first job, so both taps '
+          'wait for the same outcome',
+    );
+    debugPrint('the outcome: ${toasts.join(', ')}');
+  });
+
+  testWidgets('a closed controller leaves nothing to say', (tester) async {
+    final controller = ProfileController(ProfileApi());
+    final toasts = <String>[];
+    await tester.pumpWidget(
+      app(LoadButton(controller: controller, toasts: toasts)),
+    );
+
+    await tester.tap(find.text('Load'));
+    await tester.pump();
+    await controller.close();
+    await tester.pumpAndSettle();
+    expect(
+      toasts,
+      isEmpty,
+      reason: 'the job ends Cancelled, and that branch says nothing',
+    );
   });
 }
 ''',

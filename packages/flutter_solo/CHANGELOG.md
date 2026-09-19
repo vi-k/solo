@@ -147,6 +147,25 @@
   and would have gone into `dart doc` as one. Taking it back after a release is
   a breaking change; taking it back now is not.
 
+- The README's examples compile, and every Dart block of the page is built and
+  run in the repository's CI now. The model under Usage declares the `canSave`
+  and the `save` the rest of the page relied on -- `save` works with `Loaded`
+  only, so it does not start before there is a profile. Running the page turned
+  up one more thing it said wrongly: a second tap is not what a `Cancelled`
+  from `load()` means, because `Policy.droppable` hands the second tap the
+  first job.
+
+- The README's selection held in a `State` field follows a new controller: the
+  recipe builds it again in `didUpdateWidget`. As written it kept picking from
+  the controller the `State` was first given, while the button saved to the one
+  the parent handed over later. The dartdoc of `SoloSelection` says the same,
+  and the section on `listen` says it about subscriptions taken in `initState`.
+
+- The README no longer says that a `SoloObserver` takes a failure of work
+  handed to `ctx.unattended`. An observer watches; `Solo.errorHandler` or an
+  override of `onError` is what answers for such a failure, and without either
+  it goes to the zone.
+
 ## 0.2.0
 
 The first published release. 0.1.0 never left the tree.

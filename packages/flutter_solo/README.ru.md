@@ -73,7 +73,10 @@ import 'package:flutter_solo/flutter_solo.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_solo/flutter_solo.dart';
 
-sealed class Profile {}
+sealed class Profile {
+  // Что спрашивает кнопка Save; сохранять есть что только у загруженного.
+  bool get canSave => this is Loaded;
+}
 
 final class Empty extends Profile {}
 
@@ -101,6 +104,11 @@ final class ProfileController extends Solo<Profile> with SoloListenable {
           return name;
         },
       );
+
+  Job<void> save() => run<Loaded, void>(
+        key: 'save',
+        (ctx) => ctx.join(() => api.saveName(ctx.state.name)),
+      );
 }
 
 class ProfileView extends StatelessWidget {
@@ -124,10 +132,13 @@ class ProfileView extends StatelessWidget {
 ```
 
 `run<Profile, String>` говорит, что задача работает с состояниями `Profile`
-и возвращает `String`; внутри тела `ctx.emit` — единственный способ записать
-состояние, а `ctx.wait` ждёт так же, как `await`, но сдаётся в тот момент,
-когда задачу отменяют. Всё API целиком — правила, очередь, дети, наблюдатели —
-описано в [solo](https://pub.dev/packages/solo).
+и возвращает `String`; `save` сужает это до `Loaded`, поэтому ни в каком другом
+состоянии не стартует, а её тело читает `Loaded` с `name` внутри. Внутри тела
+`ctx.emit` — единственный способ записать состояние, `ctx.wait` ждёт так же,
+как `await`, но сдаётся в тот момент, когда задачу отменяют, а `ctx.join`
+дожидается своего вызова в любом случае — сохранение не рвётся пополам. Всё API
+целиком — правила, очередь, дети, наблюдатели — описано
+в [solo](https://pub.dev/packages/solo).
 
 ## Выбор одного значения
 
@@ -155,8 +166,18 @@ SoloSelector<Profile, bool>(
 
 ```dart
 class _SaveButtonState extends State<SaveButton> {
-  late final canSave =
+  late SoloSelection<Profile, bool> canSave = _select();
+
+  SoloSelection<Profile, bool> _select() =>
       SoloSelection(widget.controller, (state) => state.canSave);
+
+  @override
+  void didUpdateWidget(SaveButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.controller != oldWidget.controller) {
+      canSave = _select();
+    }
+  }
 
   @override
   Widget build(BuildContext context) => ValueListenableBuilder<bool>(
@@ -171,9 +192,12 @@ class _SaveButtonState extends State<SaveButton> {
 
 Держите проекцию в поле, как `canSave` выше: созданная внутри `build`
 подписывалась бы и отписывалась каждый кадр, а вместе с ней пропадало бы
-и запомненное значение, которым она придерживает уведомления, — то самое поле,
-от которого избавляет `SoloSelector`. На источник проекция подписана, только
-пока у неё есть слушатели, и освобождать её не нужно.
+и запомненное значение, которым она придерживает уведомления. Только поле
+создаётся по первому виджету, а родитель может передать `State` другой
+контроллер: без `didUpdateWidget` кнопка брала бы разрешение у старого
+контроллера, а сохраняла бы в новый. Обе беды идут с полем, от которого
+избавляет `SoloSelector`. На источник проекция подписана, только пока у неё
+есть слушатели, и освобождать её не нужно.
 
 ## Билдеры для любого контроллера
 
@@ -238,6 +262,11 @@ void dispose() {
 уходит в `FlutterError.reportError`. Отмена группы не бросает вовсе: её место —
 `dispose()`, а исключение оттуда оставляет остальные элементы того же кадра
 неразмонтированными, вместе с их слушателями.
+
+На что подписался `initState`, на том подписка и остаётся, когда виджету
+передают другой контроллер. `State`, у которого источник может смениться, берёт
+подписки заново в `didUpdateWidget`, в новую группу: отменённая отменила бы их
+сразу.
 
 ## Методы из второго импорта
 
@@ -313,7 +342,7 @@ Future<void> _load() async {
     case Failed(:final error):
       if (mounted) _toast('$error');
     case Cancelled():
-      break; // ушли с экрана или нажали второй раз, пока шла первая
+      break; // ушли с экрана, и close() отменил задачу
   }
 }
 ```
@@ -324,7 +353,9 @@ Future<void> _load() async {
 в зону, создавшую задачу, поэтому «запустил и забыл» — это
 `controller.load().ignore()`, где `ignore()` и говорит, что исход никого
 не интересует. По той же дороге идёт провал работы, отданной `ctx.unattended`,
-если его не взял ни `onError`, ни `SoloObserver`.
+если контроллер не переопределяет `onError` и за него не отвечает
+`Solo.errorHandler`. `SoloObserver` такой провал видит, но не забирает:
+смотреть не значит отвечать.
 
 Что значит «в зону» во Flutter: ошибка идёт по зонам наружу, так что своя
 error-зона вокруг `runApp` увидит её первой; дальше она доходит

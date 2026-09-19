@@ -71,7 +71,10 @@ import 'package:flutter_solo/flutter_solo.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_solo/flutter_solo.dart';
 
-sealed class Profile {}
+sealed class Profile {
+  // What a Save button asks; only a loaded profile has anything to save.
+  bool get canSave => this is Loaded;
+}
 
 final class Empty extends Profile {}
 
@@ -99,6 +102,11 @@ final class ProfileController extends Solo<Profile> with SoloListenable {
           return name;
         },
       );
+
+  Job<void> save() => run<Loaded, void>(
+        key: 'save',
+        (ctx) => ctx.join(() => api.saveName(ctx.state.name)),
+      );
 }
 
 class ProfileView extends StatelessWidget {
@@ -122,10 +130,13 @@ class ProfileView extends StatelessWidget {
 ```
 
 `run<Profile, String>` says the job works with `Profile` states and returns a
-`String`; inside the body `ctx.emit` is the only way to write the state, and
-`ctx.wait` awaits like `await` except that it gives up the moment the job is
-cancelled. The full API — rules, the queue, children, observers — is documented
-in [solo](https://pub.dev/packages/solo).
+`String`; `save` narrows that to `Loaded`, so it does not start in any other
+state, and its body reads a `Loaded` with a `name` in it. Inside a body
+`ctx.emit` is the only way to write the state, `ctx.wait` awaits like `await`
+except that it gives up the moment the job is cancelled, and `ctx.join` waits
+its call out either way — a save is not cut in half. The full API — rules, the
+queue, children, observers — is documented in
+[solo](https://pub.dev/packages/solo).
 
 ## Selecting one value
 
@@ -154,8 +165,18 @@ you need:
 
 ```dart
 class _SaveButtonState extends State<SaveButton> {
-  late final canSave =
+  late SoloSelection<Profile, bool> canSave = _select();
+
+  SoloSelection<Profile, bool> _select() =>
       SoloSelection(widget.controller, (state) => state.canSave);
+
+  @override
+  void didUpdateWidget(SaveButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.controller != oldWidget.controller) {
+      canSave = _select();
+    }
+  }
 
   @override
   Widget build(BuildContext context) => ValueListenableBuilder<bool>(
@@ -170,7 +191,10 @@ class _SaveButtonState extends State<SaveButton> {
 
 Hold the selection in a field, the way `canSave` is held above: one built
 inside `build` would subscribe and unsubscribe every frame, and the value it
-holds notifications back with would go with it — which is the field
+holds notifications back with would go with it. A field is built from the first
+widget only, though, and a parent can hand the `State` another controller:
+without `didUpdateWidget` the button would take its permission from the old
+controller and save to the new one. Both come with the field that
 `SoloSelector` spares you. The source is subscribed to only while the selection
 has listeners, and there is nothing to dispose of.
 
@@ -237,6 +261,11 @@ rather than keeping it. If one member refuses to let go, the others are
 cancelled all the same and every failure goes to `FlutterError.reportError`.
 Cancelling a group never throws: its place is `dispose()`, and an exception out
 of there leaves the rest of that frame's elements unmounted, listeners and all.
+
+What `initState` subscribes to stays subscribed when the widget is handed
+another controller. A `State` whose source can be replaced takes its
+subscriptions again in `didUpdateWidget`, into a new group: a cancelled one
+would cancel them on the spot.
 
 ## Methods from a second import
 
@@ -313,7 +342,7 @@ Future<void> _load() async {
     case Failed(:final error):
       if (mounted) _toast('$error');
     case Cancelled():
-      break; // left the screen, or a second tap while the first ran
+      break; // left the screen, and close() cancelled the job
   }
 }
 ```
@@ -323,8 +352,10 @@ Future<void> _load() async {
 job nobody looks at is not silent: an unobserved `Failed` reaches the zone that
 created the job, so a fire-and-forget call is `controller.load().ignore()` —
 the `ignore()` is what says the outcome is nobody's business. The same road
-carries a failure of work handed to `ctx.unattended` when neither `onError` nor
-a `SoloObserver` took it.
+carries a failure of work handed to `ctx.unattended` when the controller
+neither overrides `onError` nor has a `Solo.errorHandler` to answer for it. A
+`SoloObserver` sees that failure and does not take it: watching is not
+answering.
 
 What "to the zone" means in a Flutter app: the error travels the zones
 outwards, so an error zone of your own around `runApp` sees it first; past that

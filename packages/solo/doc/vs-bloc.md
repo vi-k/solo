@@ -1517,10 +1517,11 @@ queue.
 Stop the auth listener deliberately in both implementations, but not in the
 same order. The bloc is closed after the listener. The controller is the other
 way round: the write is guarded with `isFinished` and the listener is stopped
-after `super.close()`, so that a `SoloCloseMode.drain` still hears the
-revocation while its queue runs, and a revocation arriving after the end is
-dropped by the guard instead of throwing. How the listener is stopped is up to
-the application; the snippets show registration only.
+in `onClose`, which comes once every job is over, so that a
+`SoloCloseMode.drain` still hears the revocation while its queue runs, and a
+revocation arriving after the end is dropped by the guard instead of throwing.
+How the listener is stopped is up to the application; the snippets show
+registration only.
 
 On the success path, the job may finish by emitting `Ready`, even though that
 state is outside `SignedIn`. Its own `emit` is excluded from the rule check; a

@@ -5,8 +5,8 @@
 `onError` и `SoloObserver.onError` получают ошибки для логирования или
 отправки, включая ошибки уборки и брошенных операций.
 
-Контроллер может переопределить `onStart`, `onFinish`, `onError`, `onLog`
-и `onChange`. Например, добавьте хук ошибок в контроллер профиля:
+Контроллер может переопределить `onStart`, `onFinish`, `onError`, `onLog`,
+`onChange` и `onClose`. Например, добавьте хук ошибок в контроллер профиля:
 
 ```dart
 final class ProfileController extends Solo<ProfileState> {
@@ -23,8 +23,8 @@ final class ProfileController extends Solo<ProfileState> {
 }
 ```
 
-`SoloObserver` получает те же события от всех контроллеров, а также `onCreate`
-и `onClose`. Установите его при запуске приложения:
+`SoloObserver` получает те же события от всех контроллеров, а также `onCreate`.
+Установите его при запуске приложения:
 
 ```dart
 final class LoggingObserver extends SoloObserver {

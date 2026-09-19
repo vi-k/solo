@@ -310,6 +310,24 @@
   long after the outcome, and the cancellation it builds out of a rejection is
   the whole diagnosis it has to offer.
 
+- Add `Solo.onClose`, the twin the observer's `onClose` did not have. The
+  engine calls it once -- whatever mode closed the controller and however many
+  times `close` was called -- after the observer's `onClose` and after the last
+  job, while `isFinished` is still false. It is where a controller stops what
+  it holds beside its jobs, a subscription to a source it reflects above all,
+  and the `Camera` of `doc/state.md` stops its link there now. The page used to
+  do that in an `async` override of `close`, after `super.close()`: the moment
+  was right, but every call ran the override again and handed back a future of
+  its own, where `close` promises the same one. `doc/vs-bloc.md` points its
+  controller at the hook too.
+
+- `doc/cancellation.md` opens with a `join` that hands the device it opens to
+  `dispose`. The opening example registered the release on the line after the
+  call, and a cancellation accepted while the device was opening left it open:
+  `join` throws in place of the value, and the body never reaches that line.
+  `doc/resources.md` takes the same line apart as a first attempt; the
+  introduction no longer teaches it.
+
 ## 0.2.0
 
 The first published release. 0.1.0 never left the tree, so nothing below is a

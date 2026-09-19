@@ -182,9 +182,10 @@ jobs:
       - name: Tests
         run: cd packages/flutter_solo && flutter test
 
-      # The bench of `packages/solo/doc/flutter.md` runs here rather than in
-      # `snippets`, which has no Flutter: what that document shows are
-      # widgets, and a widget needs a binding to be built and read back.
+      # The bench of `packages/solo/doc/flutter.md` and of the README of
+      # `flutter_solo` runs here rather than in `snippets`, which has no
+      # Flutter: what those documents show are widgets, and a widget needs
+      # a binding to be built and read back.
       # Outside the checkout, like the other benches, which is what lets the
       # last step of this job mean anything.
       - name: Build the screens out of the document

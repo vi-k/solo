@@ -126,6 +126,89 @@ void main() {
     expect(errors, ['Bad state: onClose']);
   });
 
+  test('onClose comes once, after the observer and after the last job', () {
+    fakeAsync((async) {
+      final journal = JournalObserver();
+      Solo.observer = journal;
+      final solo = _Closing(journal.lines);
+      try {
+        solo.run<TestState, void>(key: 'job', (ctx) async {
+          await ctx
+              .wait(() => Future<void>.delayed(const Duration(seconds: 1)));
+        });
+        async.flushMicrotasks();
+        solo
+          ..close(mode: SoloCloseMode.drain)
+          ..close(mode: SoloCloseMode.drain);
+        async.flushTimers();
+        solo.close();
+        async.flushTimers();
+
+        expect(
+          journal.take(),
+          [
+            '[job] started',
+            '[job] finished Done(null)',
+            'closed',
+            'hook: close, finished false',
+          ],
+          reason: 'the drain ran its job first, and three calls are one close',
+        );
+      } finally {
+        Solo.observer = null;
+      }
+    });
+  });
+
+  test('a close from inside onClose is the same close', () {
+    fakeAsync((async) {
+      final lines = <String>[];
+      final solo = _Closing(lines, closeAgain: true);
+      final closing = solo.close();
+      async.flushTimers();
+
+      expect(lines, ['hook: close, finished false']);
+      expect(identical(solo.again, closing), isTrue);
+    });
+  });
+
+  test('a state written from onClose is the state the controller keeps', () {
+    fakeAsync((async) {
+      final lines = <String>[];
+      final solo = _Closing(lines, writeOnClose: const Preparing());
+      final heard = <String>[];
+      solo.addListener(() => heard.add('${solo.currentState}'));
+      solo.close();
+      async.flushTimers();
+
+      expect(solo.isFinished, isTrue);
+      expect(solo.currentState, const Preparing());
+      expect(
+        heard,
+        ['Preparing(progress: 0)'],
+        reason: 'the listeners are still there when the hook runs',
+      );
+    });
+  });
+
+  test('a throwing onClose hook still completes close', () {
+    final errors = <String>[];
+    var closed = false;
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          final solo = _ThrowingCloseHook();
+          solo.close().then((_) => closed = true);
+          async.flushTimers();
+          expect(solo.isFinished, isTrue);
+        });
+      },
+      (error, stackTrace) => errors.add('$error'),
+    );
+    expect(closed, isTrue);
+    expect(errors, ['Bad state: onClose hook']);
+  });
+
   test('a throwing onFinish does not stall the queue', () {
     final journal = JournalObserver();
     final errors = <String>[];
@@ -385,6 +468,38 @@ final class _ThrowingObserver extends SoloObserver {
   @override
   void onFinish(Solo<Object> solo, Job<Object?> job) =>
       throw StateError('observer onFinish');
+}
+
+/// Throws from the instance hook the engine calls while closing.
+final class _ThrowingCloseHook extends Solo<TestState> {
+  _ThrowingCloseHook() : super(const Initial());
+
+  @override
+  void onClose() => throw StateError('onClose hook');
+}
+
+/// Writes down its `onClose`, and can close again or write the state
+/// from inside it.
+final class _Closing extends Solo<TestState> {
+  final List<String> lines;
+  final bool closeAgain;
+  final TestState? writeOnClose;
+  Future<void>? again;
+
+  _Closing(this.lines, {this.closeAgain = false, this.writeOnClose})
+      : super(const Initial());
+
+  @override
+  void onClose() {
+    lines.add('hook: close, finished $isFinished');
+    if (closeAgain) {
+      again = close();
+    }
+    final state = writeOnClose;
+    if (state != null) {
+      externalSetState(state);
+    }
+  }
 }
 
 /// Throws from the observer hook the engine calls while closing.

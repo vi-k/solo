@@ -12,9 +12,12 @@ operation behind it:
   final name = await ctx.wait(() => api.load(id));
 
   // Waited out whatever happens, and only afterwards does the
-  // cancellation come out in place of the value.
-  final handle = await ctx.join(() => device.open());
-  ctx.onDispose(handle.close);
+  // cancellation come out in place of the value. The handle goes to
+  // dispose all the same, so it is closed whatever the outcome.
+  final handle = await ctx.join(
+    device.open,
+    dispose: (handle) => handle.close(),
+  );
 
   // Nothing marks the job at all while this runs.
   await ctx.uncancellable(() => payment.commit());
@@ -36,6 +39,13 @@ operation behind it:
 after the job has finished and the next job has started. `join` suits work that
 must finish before the queue proceeds, such as a device command or opening a
 device. Neither method stops the operation itself.
+
+What `join` hands over to own goes to its `dispose`, not to a line after the
+call. A cancellation accepted while the device is opening comes out of `join`
+in place of the handle, and the body never reaches the next line; `dispose`
+receives the handle either way.
+[Resources](resources.md#taking-a-resource-from-a-call) takes that first
+attempt apart.
 
 After a cancellation, a successful result of `join` turns into `Cancelled`, as
 the table says; a failure does not. If the operation fails, `join` throws the

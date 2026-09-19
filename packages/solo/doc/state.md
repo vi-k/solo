@@ -294,11 +294,10 @@ final class Camera extends Solo<CameraState> with SoloStream {
     });
   }
 
+  // Called once, when the last job is over: nothing in the queue needs
+  // to hear the device any more.
   @override
-  Future<void> close({SoloCloseMode mode = SoloCloseMode.cancel}) async {
-    await super.close(mode: mode);
-    await _link.cancel();
-  }
+  void onClose() => unawaited(_link.cancel());
 }
 ```
 
@@ -319,19 +318,21 @@ to perform work, such as refresh data or save an incoming value, enqueue a
 normal job. An event being delivered by a stream does not by itself justify
 bypassing the queue.
 
-Stopping the source before `super.close()` is the tidier-looking order, and it
+The subscription goes in `onClose`, which the engine calls once, when every job
+is over and the state is not final yet, whichever mode closed the controller.
+Stopping the source when `close` is called is the tidier-looking moment, and it
 costs nothing only while no running job depends on the fact. With
 `SoloCloseMode.drain` it costs the drain: the queue goes on running after the
 call, and the jobs in it are the ones that most need to hear that the device is
 gone. `SoloCloseMode.cancel` is not safe from it either — a
 `cancellable: false` job waiting for an answer the device will never give is
-freed by the disconnection, and `close` waits for that job. The `isFinished`
-guard is what lets one order serve both modes. The subscription callback above
-is synchronous, so nothing can run between its check of `isFinished` and its
-write. A callback that has to await something before writing must check
-`isFinished` after its last `await`, right before `externalSetState`, because a
-check made earlier can go stale while it waits — the engine may finish in the
-meantime, and the write then throws a `StateError`.
+freed by the disconnection, and `close` waits for that job. The subscription
+callback above is synchronous, so nothing can run between its check of
+`isFinished` and its write, and once `onClose` has run it is not called at all.
+A callback that has to await something before writing must check `isFinished`
+after its last `await`, right before `externalSetState`, because a check made
+earlier can go stale while it waits — the engine may finish in the meantime,
+and the write then throws a `StateError`.
 
 Use job bodies and their state handlers for the controller's own success,
 failure and cancellation. `externalSetState` is an exception for external

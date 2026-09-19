@@ -37,8 +37,12 @@ import 'solo_selector.dart';
 ///
 /// Hold the selection, do not build one in `build`: a new object every
 /// frame subscribes and unsubscribes every frame, and the kept value it
-/// exists for is thrown away with it. [SoloSelector] is the same pick
-/// with nowhere to hold it — the widget keeps the selection itself.
+/// exists for is thrown away with it. A field is built from the first
+/// widget only, though: a `State` whose widget can be handed another
+/// source builds the selection again in `didUpdateWidget`, or it goes on
+/// picking from the old one. [SoloSelector] is the same pick with nowhere
+/// to hold it — the widget keeps the selection itself and follows a new
+/// source on its own.
 /// Nothing has to be disposed of — the last listener to go takes the
 /// subscription with it — and a selection outlives its source harmlessly:
 /// a closed [SoloListenable] no longer changes state, while [value] keeps

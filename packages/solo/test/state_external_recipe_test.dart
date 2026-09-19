@@ -10,12 +10,18 @@ import 'package:test/test.dart';
 ///
 /// The page makes two promises about it that nothing else here guards. One
 /// is the guard itself: `isFinished` lets the source keep publishing for as
-/// long as the engine runs, a drain included. The other is the order —
-/// `super.close()` first and the subscription after it — and the page names
-/// its price, so the price is pinned here too: the tidier-looking order
-/// leaves `close` waiting for a job the device could have freed.
+/// long as the engine runs, a drain included. The other is the moment —
+/// the subscription goes in `onClose`, once every job is over — and the
+/// page names the price of the tidier-looking one, so the price is pinned
+/// here too: stopping the source at the call leaves `close` waiting for a
+/// job the device could have freed.
 ///
-/// Real time rather than `fakeAsync`: the recipe ends with
+/// The recipe once stopped the subscription in an `async` override of
+/// `close`, after `super.close()`. The moment was right and the promise of
+/// `close` was not: every call ran the override again and handed back a
+/// future of its own. The first test holds the hook to that promise.
+///
+/// Real time rather than `fakeAsync`: the tidier order awaits
 /// `subscription.cancel()`, and the future that returns completes in the
 /// root zone, where a fake clock cannot reach it. The waits here are the
 /// short ones a disconnection needs, not timers of a domain.
@@ -39,6 +45,8 @@ final class Device {
   final answer = Completer<void>();
 
   Stream<bool> get connection => _connection.stream;
+
+  bool get isListened => _connection.hasListener;
 
   void drop() => _connection.add(false);
 
@@ -72,10 +80,7 @@ final class Camera extends Solo<CameraState> {
       );
 
   @override
-  Future<void> close({SoloCloseMode mode = SoloCloseMode.cancel}) async {
-    await super.close(mode: mode);
-    await _link.cancel();
-  }
+  void onClose() => unawaited(_link.cancel());
 }
 
 /// The same controller with the tidier-looking order.
@@ -90,6 +95,23 @@ final class TidyCamera extends Camera {
 }
 
 void main() {
+  test('every close is the one close, and the link goes once', () async {
+    final device = Device();
+    final camera = Camera(device);
+    final first = camera.close();
+    final second = camera.close(mode: SoloCloseMode.drain);
+
+    expect(
+      identical(first, second),
+      isTrue,
+      reason: 'repeated calls return the same future, as close promises',
+    );
+    expect(device.isListened, isTrue, reason: 'no job is over yet');
+    await first;
+    expect(device.isListened, isFalse);
+    await device.dispose();
+  });
+
   test('a drain hears the device, and the job it frees lets close finish',
       () async {
     final device = Device();

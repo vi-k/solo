@@ -22,16 +22,16 @@ part 'queue.dart';
 /// [publish] is the seam for a delivery of another kind; `SoloStream`
 /// adds a broadcast stream through it.
 ///
-/// The hooks — [onStart], [onFinish], [onError], [onLog], [onChange] and
-/// the [observer]'s — are a cross-cutting channel, so an error thrown by
-/// one goes to the current zone and changes nothing else: the job's outcome,
-/// the queue and [close] carry on as if the hook had returned. [onError] is
-/// the one with a body of its own: what reaches it and has nowhere else to
-/// go — a disposer, an `onCancel` callback, a late failure of an abandoned
-/// call or of work handed to `JobContext.unattended`, a rule that threw —
-/// goes on to the zone when nobody is listening. [publish] is
-/// not one of them: it is how a subclass delivers the state, and an error
-/// there is the subclass's own business.
+/// The hooks — [onStart], [onFinish], [onError], [onLog], [onChange],
+/// [onClose] and the [observer]'s — are a cross-cutting channel, so an
+/// error thrown by one goes to the current zone and changes nothing else:
+/// the job's outcome, the queue and [close] carry on as if the hook had
+/// returned. [onError] is the one with a body of its own: what reaches it
+/// and has nowhere else to go — a disposer, an `onCancel` callback, a late
+/// failure of an abandoned call or of work handed to
+/// `JobContext.unattended`, a rule that threw — goes on to the zone when
+/// nobody is listening. [publish] is not one of them: it is how a subclass
+/// delivers the state, and an error there is the subclass's own business.
 abstract class Solo<S extends Object> {
   /// A global observer for all controllers; `null` by default.
   ///
@@ -132,8 +132,8 @@ abstract class Solo<S extends Object> {
   bool get isDraining => _draining;
 
   /// Whether the engine has finished closing: the queue is empty, the
-  /// observer's `onClose` has run, the listeners are gone, and the state
-  /// can no longer change.
+  /// observer's `onClose` and [onClose] have run, the listeners are gone,
+  /// and the state can no longer change.
   ///
   /// [isClosed] says that `close` was asked for, [isDraining] that the
   /// queue it left is still running; this says the engine is done. A
@@ -607,9 +607,9 @@ abstract class Solo<S extends Object> {
     _setState(state, emitter: null, stackTrace: StackTrace.current);
   }
 
-  /// Closes the controller, then calls the observer's `onClose`. Repeated
-  /// calls return the same future. Once closing finishes, the state is final
-  /// and cannot change.
+  /// Closes the controller, then calls the observer's `onClose` and
+  /// [onClose]. Repeated calls return the same future. Once closing
+  /// finishes, the state is final and cannot change.
   ///
   /// [SoloCloseMode.cancel], the default, drops every queued job with
   /// `Cancelled(closed)` and cancels the current one — a
@@ -707,6 +707,7 @@ abstract class Solo<S extends Object> {
     _draining = false;
     _debug(() => 'closed');
     _callHook(() => observer?.onClose(this));
+    _callHook(onClose);
     final listeners = _listeners;
     _listeners = _closedListeners;
     if (listeners is Listeners) {
@@ -785,6 +786,27 @@ abstract class Solo<S extends Object> {
   /// controller, a child of one, or nobody for an external change — and
   /// [SoloTransition.revision] puts two of them in order.
   void onChange(SoloTransition<S> transition) {}
+
+  /// The engine is about to finish closing.
+  ///
+  /// Called once, whatever mode closed the controller and however many
+  /// times [close] was called, after the observer's `onClose`: every job
+  /// is over by then, while [isFinished] is still false and a synchronous
+  /// [externalSetState] still goes through. It is the place for what the
+  /// controller holds beside its jobs — a subscription to a source it
+  /// reflects, a resource of its domain:
+  ///
+  /// ```dart
+  /// @override
+  /// void onClose() => unawaited(_link.cancel());
+  /// ```
+  ///
+  /// An override of [close] is the wrong place for the same line. It runs
+  /// at the call, while a drain or a job that refuses the close still
+  /// depends on the source, and it runs on every call, where this runs
+  /// once. A future started here is not waited for: [close] completes
+  /// without it.
+  void onClose() {}
 
   _SoloJob<S, S, T> _own<T>(Job<T> job) {
     if (job is _SoloJob<S, S, T> && identical(job._solo, this)) {

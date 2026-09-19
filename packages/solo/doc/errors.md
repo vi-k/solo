@@ -5,8 +5,8 @@ State handlers and reporting hooks have different responsibilities.
 `onError` method and `SoloObserver.onError` receive errors for logging or
 reporting, including errors from cleanup and abandoned operations.
 
-A controller can override `onStart`, `onFinish`, `onError`, `onLog` and
-`onChange`. For example, add an error hook to the profile controller:
+A controller can override `onStart`, `onFinish`, `onError`, `onLog`, `onChange`
+and `onClose`. For example, add an error hook to the profile controller:
 
 ```dart
 final class ProfileController extends Solo<ProfileState> {
@@ -23,8 +23,8 @@ final class ProfileController extends Solo<ProfileState> {
 }
 ```
 
-`SoloObserver` receives the same events across controllers, plus `onCreate` and
-`onClose`. Install one at application startup:
+`SoloObserver` receives the same events across controllers, plus `onCreate`.
+Install one at application startup:
 
 ```dart
 final class LoggingObserver extends SoloObserver {

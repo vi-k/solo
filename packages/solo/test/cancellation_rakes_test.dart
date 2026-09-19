@@ -14,6 +14,11 @@ import 'package:test/test.dart';
 /// bench, so an outcome quoted there rots silently. Every order and every
 /// outcome the page names about a first attempt is pinned here, next to
 /// the version the page then shows.
+///
+/// The opening example of the page is pinned here too, though it is no
+/// first attempt: it once took its handle the way the first attempt of
+/// `doc/resources.md` does, and an introduction is the last place to learn
+/// that from.
 
 /// A device whose every call runs until the test ends it.
 ///
@@ -52,6 +57,12 @@ final class Device {
 
   bool isRunning(String call) => _running.containsKey(call);
 
+  /// Opens the device, handing over a [Handle] to own.
+  Future<Handle> open() async {
+    await start('open');
+    return Handle(this);
+  }
+
   void _finish(String call, String how) {
     final done = _running.remove(call);
     if (done == null) {
@@ -62,11 +73,37 @@ final class Device {
   }
 }
 
+/// What [Device.open] hands over. Closing it is the device's to record.
+final class Handle {
+  final Device device;
+
+  Handle(this.device);
+
+  void close() => device.trace.add('handle closed');
+}
+
 /// The player API's own cancellation, the way the page's player takes it.
 final class CancelToken {
   void Function()? onCancel;
 
   void cancel() => onCancel?.call();
+}
+
+// --- The opening example -------------------------------------------------
+
+final class Opener extends Solo<String> {
+  final Device device;
+
+  Opener(this.device) : super('closed');
+
+  /// The line of the opening example that takes a resource.
+  Job<void> open() => run<String, void>((ctx) async {
+        await ctx.join(
+          device.open,
+          dispose: (handle) => handle.close(),
+        );
+        ctx.emit('open');
+      });
 }
 
 // --- Stopping the underlying operation ------------------------------------
@@ -258,6 +295,46 @@ final class Session extends Solo<String> {
 }
 
 void main() {
+  group('the opening example', () {
+    test('a handle opened under a cancellation is closed all the same',
+        () async {
+      final device = Device();
+      final opener = Opener(device);
+      final job = opener.open();
+      await pump();
+      job.cancel().ignore();
+      await pump();
+      await device.end('open');
+
+      expect(job.outcome, isA<Cancelled>());
+      expect(
+        device.trace,
+        ['open start', 'open end', 'handle closed'],
+        reason: 'the cancellation comes out of join in place of the handle, '
+            'and dispose is the only thing left that holds it',
+      );
+      expect(opener.currentState, 'closed');
+    });
+
+    test('a handle that reached the body is closed when the job ends',
+        () async {
+      final device = Device();
+      final opener = Opener(device);
+      final job = opener.open();
+      await pump();
+      await device.end('open');
+
+      expect(job.outcome, isA<Done<void>>());
+      expect(
+        device.trace,
+        ['open start', 'open end', 'handle closed'],
+        reason: 'dispose runs whatever the outcome; discard would leave '
+            'the handle open on a job that finished',
+      );
+      expect(opener.currentState, 'open');
+    });
+  });
+
   group('a seek that the next one replaces', () {
     test('by wait, every seek runs on the device at once', () async {
       final device = Device();
