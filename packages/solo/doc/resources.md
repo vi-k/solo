@@ -304,6 +304,13 @@ release must precede the next job or controller closure.
 | Second pass | runs a `discard` that cancellation has since made necessary |
 | End | final state handler, outcome delivery, release of the queue |
 
+The first three steps are the engine's, and so are the late results they can
+bring:
+[Cleanup](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cleanup.md)
+in `async_job` is where that order is described and kept. A controller adds the
+last row — the final state handler runs, the outcome is delivered, and the
+queue is released for the next job.
+
 An ordinary `try`/`finally` is for what does not outlive the body: a lock held
 for one step and released before the body goes on, a temporary of one turn of a
 loop. A checkpoint throwing inside the `try` runs the `finally` like any other
@@ -311,11 +318,6 @@ throw, and registering those releases instead would hold them to the end of the
 job and pile up one registration per turn. Registered cleanup is for what must
 live that long, and it alone covers the time after the body returns and while
 its children finish.
-
-Cancellation can arrive after the body returns, including during cleanup. A
-`discard` registration skipped on the success path then runs in a second pass,
-after the disposers processed before it rather than in the strict reverse order
-of registration.
 
 Cleanup errors go to the controller's error hook and to observers, and with no
 handler installed the error reaches the zone. A `Cancelled` thrown by cleanup
