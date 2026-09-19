@@ -344,6 +344,18 @@ stream with no events still keeps the parent running» — владелец сп
 не вернуться вовсе, и ожидание держало бы на нём ребёнка. Причина в прозе была,
 но читалась как запрет читателю.
 
+Следом владелец спросил, ждут ли тогда обработку последнего события. Ждут,
+и это второе ожидание: пока асинхронный колбэк в работе, подписка стоит
+на паузе (`sub!.pause(handling)`), поэтому ни следующее событие, ни `onDone`
+до тела не доходят; а при отмене, когда подписки уже нет, ребёнка держит
+`await active;` в `finally`. Граница проходит по владению: колбэк — код задачи
+и может держать её ресурсы, уборка источника — код источника. Два ожидания
+стояли в разных абзацах, и теперь абзац про `cancel()` подписки открывается их
+парой: «The child waits for the callback in flight, but not for the source».
+Сторожа те же: «a plain await in the callback holds the parent until it
+returns», «close waits for the active handler before releasing resources»
+и «awaiting the child from inside its own callback is a deadlock».
+
 Сторожа — три теста в `packages/solo/test/each_test.dart`:
 
 - «awaiting the child from inside its own callback is a deadlock»: колбэк ждёт
