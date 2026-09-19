@@ -409,6 +409,13 @@ returns», «close waits for the active handler before releasing resources»
 `publish`, а `Solo.publish` уже есть, и пример молча переопределял член
 базового класса. Метод переименован в `recordPath`.
 
+Первая версия блока показывала только две функции, и владелец не нашёл
+в `syncAndRecordTogether` ни `sync`, ни `recordPath`: их работа там развёрнута,
+а не вызвана. Блок дополнен определением `recordPath`, а в комментарии над
+объединённой формой названы обе половины — загрузка от `sync` и запись
+состояния от `recordPath`. Рядом сказано и почему методы нельзя просто позвать:
+каждый ставит корневую `Job` в очередь, а от этого и уходим.
+
 Сторож — «a job a then asks for goes behind what is already queued»
 в `packages/solo/test/children_test.dart`: порядок ровно как в зонде. Мутация:
 `start();` в ветке `Done` у `_sourceFinished` закомментирован — `then`

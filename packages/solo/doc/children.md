@@ -168,15 +168,22 @@ does two things at once: it frees the slot and it starts the `then`. So
 whatever was queued while the source ran stands ahead of the new job.
 
 ```dart
-// The callback has no state to write, so it asks for a job:
-// `recordPath` is a method of the controller with a `run` of its own.
-// A `save()` queued while `sync` was still running goes ahead of it:
-// sync, save, recordPath.
+// The callback has no state to write, so it asks for a job, and
+// `recordPath` is an ordinary method of the controller:
+SoloJob<void> recordPath(String path) => run<Ready, void>(
+      key: _Op.record,
+      (ctx) async => ctx.emit(ctx.state.copyWith(path: path)),
+    );
+
+// A `save()` queued while `sync` was still running goes ahead of the
+// job this one asks for: sync, save, recordPath.
 Job<void> syncAndRecord(int item) =>
     sync(item).then((ctx, path) => recordPath(path).value);
 
-// The same two steps as one job. The parent holds the queue until its
-// child is done, so that `save()` waits for both of them.
+// The same two steps as one job: the upload `sync` runs and the emit
+// `recordPath` makes, here a child and a line of one body. The parent
+// holds the queue until the child is done, so that `save()` waits for
+// both of them.
 SoloJob<void> syncAndRecordTogether(int item) => run<Ready, void>(
       key: _Op.sync,
       (ctx) async {
@@ -191,8 +198,11 @@ SoloJob<void> syncAndRecordTogether(int item) => run<Ready, void>(
     );
 ```
 
-Use children within one parent when the whole sequence must occupy the queue
-without another root job running between its steps.
+The second shape cannot call the two methods: each of them queues a root job,
+which is the thing being avoided. Their work moves inside instead -- the upload
+becomes a child, the emit a line of the body. Use children within one parent
+when the whole sequence must occupy the queue without another root job running
+between its steps.
 
 Cancellation propagates forward to `then` jobs and backward to unfinished
 sources, subject to each job's cancellation rules. Cancelling the tail waits
