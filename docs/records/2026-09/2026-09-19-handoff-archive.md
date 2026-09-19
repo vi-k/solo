@@ -3,7 +3,8 @@
 > **Что это:** законченное, дословно и в прежнем порядке — верх handoff
 > о вычитке `children.md` в ветке и о дереве, отправках и прежних работах.
 > **Связанные записи:** `2026-09-18-children-rakes-report.md`,
-> `2026-09-18-children-rakes-plan.md`, `2026-09-18[8]-cancellation-rakes-report.md`,
+> `2026-09-18-children-rakes-plan.md`,
+> `2026-09-18[8]-cancellation-rakes-report.md`,
 > `2026-09-18[7]-handoff-archive.md`.
 
 # Архив handoff, 2026-09-19
