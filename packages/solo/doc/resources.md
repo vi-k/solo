@@ -122,8 +122,9 @@ that pair makes it and cancels it during cleanup.
 
 ## Returning a resource to the caller
 
-Now the database is the result rather than a means: the job opens it, and the
-caller owns it from `final db = await files.open().value`.
+Now the database is the result rather than a means: `open` below opens it and
+returns it, and whoever takes that value — `await open().value` — owns it from
+then on.
 
 ### The first attempt
 
