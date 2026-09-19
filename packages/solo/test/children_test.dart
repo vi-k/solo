@@ -699,10 +699,14 @@ void main() {
       source
           .then<void>((ctx, _) async {
             order.add('then');
+            // The shape of the page: a job of the controller, queued by
+            // `add` from the callback.
             await solo
-                .run<TestState, void>(
-                  key: 'record',
-                  (recording) async => order.add('record'),
+                .add(
+                  solo.job<TestState, void>(
+                    key: 'record',
+                    (recording) async => order.add('record'),
+                  ),
                 )
                 .value;
           })

@@ -168,22 +168,24 @@ does two things at once: it frees the slot and it starts the `then`. So
 whatever was queued while the source ran stands ahead of the new job.
 
 ```dart
-// The callback has no state to write, so it asks for a job, and
-// `recordPath` is an ordinary method of the controller:
-SoloJob<void> recordPath(String path) => run<Ready, void>(
+// The step as a job nobody has started: a child when a parent runs it,
+// a root job when the controller queues it with `add`.
+SoloJob<void> _recordPath(String path) => job<Ready, void>(
       key: _Op.record,
       (ctx) async => ctx.emit(ctx.state.copyWith(path: path)),
     );
 
-// A `save()` queued while `sync` was still running goes ahead of the
-// job this one asks for: sync, save, recordPath.
+SoloJob<void> recordPath(String path) => add(_recordPath(path));
+
+// The callback has no state to write, so it asks for the queued one. A
+// `save()` queued while `sync` was still running goes ahead of it:
+// sync, save, recordPath.
 Job<void> syncAndRecord(int item) =>
     sync(item).then((ctx, path) => recordPath(path).value);
 
-// The same two steps as one job: the upload `sync` runs and the emit
-// `recordPath` makes, here a child and a line of one body. The parent
-// holds the queue until the child is done, so that `save()` waits for
-// both of them.
+// The same two steps as one job: the upload `sync` runs, then the very
+// same `_recordPath`, now a child. The parent holds the queue until its
+// children are done, so that `save()` waits for both steps.
 SoloJob<void> syncAndRecordTogether(int item) => run<Ready, void>(
       key: _Op.sync,
       (ctx) async {
@@ -193,16 +195,17 @@ SoloJob<void> syncAndRecordTogether(int item) => run<Ready, void>(
             (child) => child.join(() => api.push(item)),
           ),
         );
-        ctx.emit(ctx.state.copyWith(path: path));
+        await ctx.run(_recordPath(path));
       },
     );
 ```
 
-The second shape cannot call the two methods: each of them queues a root job,
-which is the thing being avoided. Their work moves inside instead -- the upload
-becomes a child, the emit a line of the body. Use children within one parent
-when the whole sequence must occupy the queue without another root job running
-between its steps.
+A method that queues cannot be called from inside another job -- that is one
+more root job, the thing being avoided. A step written as `job(...)` has both
+ways open: `add` gives it a queue slot of its own, `ctx.run` makes it a child
+of a job that already holds one. Use children within one parent when the whole
+sequence must occupy the queue without another root job running between its
+steps.
 
 Cancellation propagates forward to `then` jobs and backward to unfinished
 sources, subject to each job's cancellation rules. Cancelling the tail waits
