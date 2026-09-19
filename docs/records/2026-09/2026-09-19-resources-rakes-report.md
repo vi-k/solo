@@ -76,7 +76,7 @@
 
 ## Сторожа
 
-Новый файл `packages/solo/test/resources_rakes_test.dart`, 25 тестов, все
+Новый файл `packages/solo/test/resources_rakes_test.dart`, 27 тестов, все
 зелёные. Каждый сторожит утверждение страницы, а не поведение вообще: кто
 владеет ресурсом в конце и в каком порядке случается освобождение.
 
@@ -110,7 +110,7 @@
 
 В копии `~/development/my/solo-resources`, ветка `docs/resources`.
 `packages/solo`: `dart format` без изменений, `dart analyze lib test` чисто,
-`dart test` — 659. `packages/async_job` не тронут, его набор — 446. Из корня
+`dart test` — 661. `packages/async_job` не тронут, его набор — 446. Из корня
 копии зелены `reflow.py --check`, `check_line_width.py`,
 `check_translations.py` (пара `resources` — пятнадцать заголовков и одиннадцать
 блоков с обеих сторон) и `check_doc_shape.py`. Скрипты скилла `doc-reader`:
@@ -205,3 +205,15 @@ loses the file» и «the protected section hands it over whole».
 на него само: «Освобождение случится в любом случае — ожидающий метод решает
 только когда». В оригинале то же — «The release happens either way; the waiting
 method decides only when».
+
+**«Полезен для локальной работы» — а в каких случаях?** Фраза про
+`try`/`finally` досталась странице от README и предмета не называла. Прогон дал
+три случая, и два из них стали текстом: блокировка, взятая на один шаг
+и отпущенная раньше, чем тело пойдёт дальше, и временный файл одного витка
+цикла — регистрация держала бы их до конца `Job` и копила бы по одной на виток.
+Третий факт из того же прогона тоже в тексте: контрольная точка, бросившая
+внутри `try`, выполняет `finally` так же, как любой другой бросок, — отмена
+освобождение не отменяет. Сторожа — «a finally releases before the body goes
+on» и «a checkpoint throwing inside the try runs the finally»; их убивают
+мутации «уборка не выполняется вовсе» и «`join` отдаёт значение мимо
+контрольной точки».

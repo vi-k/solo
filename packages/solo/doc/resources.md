@@ -304,8 +304,13 @@ release must precede the next job or controller closure.
 | Second pass | runs a `discard` that cancellation has since made necessary |
 | End | final state handler, outcome delivery, release of the queue |
 
-An ordinary `try`/`finally` remains useful for local work; registered cleanup
-also covers the period after the body returns and while its children finish.
+An ordinary `try`/`finally` is for what does not outlive the body: a lock held
+for one step and released before the body goes on, a temporary of one turn of a
+loop. A checkpoint throwing inside the `try` runs the `finally` like any other
+throw, and registering those releases instead would hold them to the end of the
+job and pile up one registration per turn. Registered cleanup is for what must
+live that long, and it alone covers the time after the body returns and while
+its children finish.
 
 Cancellation can arrive after the body returns, including during cleanup. A
 `discard` registration skipped on the success path then runs in a second pass,

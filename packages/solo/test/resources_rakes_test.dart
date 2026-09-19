@@ -414,6 +414,22 @@ final class Files extends Solo<Screen> {
         },
       );
 
+  /// A lock held for one step, released before the body goes on.
+  SoloJob<void> stepUnderLock() => run<Idle, void>(
+        key: 'step',
+        (ctx) async {
+          ctx.onDispose(() async => trace.add('registered cleanup'));
+          trace.add('lock taken');
+          try {
+            await ctx.join(gate.wait);
+            trace.add('step done');
+          } finally {
+            trace.add('lock released');
+          }
+          trace.add('body went on without the lock');
+        },
+      );
+
   // --- Cleanup order and late results ------------------------------------
 
   /// A discard on top of the stack, needed only after the body returned.
@@ -769,6 +785,36 @@ void main() {
   });
 
   group('Cleanup order and late results', () {
+    test('a finally releases before the body goes on', () async {
+      final job = files.stepUnderLock();
+      await pump();
+      await gate.release();
+      await job.done;
+
+      expect(trace, <String>[
+        'lock taken',
+        'step done',
+        'lock released',
+        'body went on without the lock',
+        'registered cleanup',
+      ]);
+    });
+
+    test('a checkpoint throwing inside the try runs the finally', () async {
+      final job = files.stepUnderLock();
+      await pump();
+      unawaited(job.cancel());
+      await gate.release();
+      await job.done;
+
+      expect(job.outcome, isA<Cancelled>());
+      expect(trace, <String>[
+        'lock taken',
+        'lock released',
+        'registered cleanup',
+      ]);
+    });
+
     test('a discard needed mid-cleanup runs after the disposers', () async {
       final job = files.discardOnTop();
       unawaited(job.value.onError((_, __) => Database('none', trace)));
