@@ -326,6 +326,17 @@ jobs:
       - name: Translations answer their originals
         run: python3 tool/check_translations.py
 
+      # A link is a promise that a file and a section exist. Renaming
+      # either of them stayed green until a reader clicked.
+      - name: Links resolve
+        run: python3 tool/check_links.py
+
+      # And this says the check above knows a broken link when it sees
+      # one: a missing file, a reworded heading, a repetition that is
+      # not there.
+      - name: The link check knows a broken link
+        run: python3 -m unittest tool/check_links_test.py
+
       # Not a duplicate of `site.yml`: that one runs after a merge and only
       # for the paths it watches. Here the assembly is a smoke test — a page
       # that cannot be assembled fails before the merge, not after it.
