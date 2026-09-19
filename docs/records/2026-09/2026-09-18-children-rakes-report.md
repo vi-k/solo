@@ -438,11 +438,39 @@ returns», «close waits for the active handler before releasing resources»
 
 Набор `solo` — 633 зелёных.
 
+## Девятая правка: отказ `ctx.run` контроллера
+
+Абзац про `ctx.run` внутри тела контроллера был переводом ради перевода: «её
+разворачивают, но уже с претензией самого контроллера», и «то же самое услышит
+и обычная `Job` ядра» — что услышит, не сказано. Владелец спросил про каждое
+из трёх мест.
+
+Зонд `probe_run_refusals.dart` печатает то, что там на самом деле:
+
+```
+a then job:      Invalid argument (job): was not created by this Solo: …
+a bare core job: Invalid argument (job): was not created by this Solo: …
+```
+
+Абзац переписан на это: задача `then` — не `Job` контроллера, усыновить её
+не дало бы и ядро, но здесь отказ приходит раньше и по своей причине —
+`ArgumentError` с текстом `was not created by this Solo`, и ровно тот же текст
+слышит `Job` ядра, созданная вручную.
+
+Сторож — «a then job and a core job are refused in the same words»
+в `packages/solo/test/children_test.dart`: обе формы, обе строки сообщения.
+Мутация: `_solo._own(child)` в `startChild` контроллера закомментирован —
+отказов нет вовсе. Мутация же одной только проверки
+`identical(job._solo, this)` сторожа не красит, и правильно: ни `_ThenJob`,
+ни чужая `Job` ядра всё равно не `_SoloJob`.
+
+Набор `solo` — 634 зелёных.
+
 ## Проверки
 
 В копии `~/development/my/solo-children` на ветке `docs/children`:
 `dart analyze` в `packages/async_job` без замечаний и `dart analyze lib test`
-в `packages/solo` тоже, `dart test` — 446 в `async_job` и 633 в `solo`, `lib/`
+в `packages/solo` тоже, `dart test` — 446 в `async_job` и 634 в `solo`, `lib/`
 после мутаций побайтово совпадает с копией. Из корня копии:
 `reflow.py --check`, `check_line_width.py`, `check_translations.py` (семнадцать
 блоков и шестнадцать заголовков сходятся с переводом), `check_doc_shape.py` —

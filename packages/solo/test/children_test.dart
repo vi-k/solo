@@ -580,6 +580,30 @@ void main() {
     });
   });
 
+  test('a then job and a core job are refused in the same words', () {
+    runSolo((solo, journal, async) {
+      final refusals = <String>[];
+      final source = solo.job<TestState, void>(key: 'source', (ctx) async {});
+      final tail = source.then<void>((ctx, value) async {});
+      solo
+          .run<TestState, void>(key: 'parent', (ctx) async {
+            for (final job in [tail, ForeignJob<void>((_) async {})]) {
+              try {
+                ctx.run(job).ignore();
+              } on Object catch (error) {
+                refusals.add((error as ArgumentError).message.toString());
+              }
+            }
+          })
+          .ignore();
+      async.flushTimers();
+      expect(refusals, [
+        'was not created by this Solo',
+        'was not created by this Solo',
+      ]);
+    });
+  });
+
   test('the waiting list of a parent shrinks as children finish', () {
     fakeAsync((async) {
       // The list of children is protected; the double of the core reads it,
