@@ -360,6 +360,27 @@ void main() {
       expect(job.outcome, isA<Done<void>>());
     });
 
+    test('a cancellation into the unwinding stops no callback', () async {
+      final gate = Gate();
+      final job = Job<void>(key: 'unwind', (ctx) async {
+        ctx
+          ..onDispose(() async => trace.add('under it'))
+          ..onDispose(() async {
+            trace.add('waiting');
+            await gate.wait();
+            trace.add('released');
+          });
+      })
+        ..ignore();
+      await pump();
+      // It lands while the first callback is awaiting its resource.
+      job.cancel().ignore();
+      await gate.release();
+      await job.done;
+
+      expect(trace, <String>['waiting', 'released', 'under it']);
+    });
+
     test('waiting methods throw StateError inside a callback', () async {
       final caught = <Object>[];
       final job = Job<void>(key: 'late', (ctx) async {

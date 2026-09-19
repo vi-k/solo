@@ -217,12 +217,13 @@ belongs where ownership changes, not on the line after it.
 Awaiting each callback is what lets a library built on the core wait for
 resource release while closing.
 
-Cleanup callbacks run after the body ends and are not cancelled. `ctx.wait` and
-`ctx.join` are the body's and throw `StateError` here, so a callback awaits its
-resource directly. It must not await its own job: `done`, `value` and
-`cancel()` all complete after the cleanup that would be waiting for them. Keep
-callbacks short and unconditional. An error from one goes to `onError` and the
-remaining callbacks still run.
+Cleanup callbacks run after the body ends, and cancellation does not interrupt
+them: neither one already accepted nor one arriving into the unwinding itself.
+`ctx.wait` and `ctx.join` are the body's and throw `StateError` here, so a
+callback awaits its resource directly. It must not await its own job: `done`,
+`value` and `cancel()` all complete after the cleanup that would be waiting for
+them. Keep callbacks short and unconditional. An error from one goes to
+`onError` and the remaining callbacks still run.
 
 **Cancellation after the body returns.** A job may still be waiting for
 children or running cleanup after `return`. Cancellation during that time can
