@@ -38,10 +38,6 @@ final class SoloTransition<S extends Object> {
     required this.revision,
   });
 
-  /// Whether the change came from outside the jobs, through
-  /// `externalSetState`.
-  bool get isExternal => job == null;
-
   @override
   String toString() {
     final source = job == null ? 'external' : '$job';

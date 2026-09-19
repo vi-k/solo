@@ -11,10 +11,16 @@
 не ответил: движку, который вешает своего наблюдателя на каждую задачу, это
 обязательно, иначе ядро примет наблюдателя за ответ и ошибка остановится там.
 
+Все три живут в `package:async_job/engine.dart`, а не в основном импорте:
+приложению, которое только запускает задачи, они не нужны. Движок импортирует
+эту библиотеку вместо `async_job.dart` — она экспортирует и её.
+
 Например, собственный класс задачи может создавать свой тип контекста
 и предоставлять координатору метод запуска:
 
 ```dart
+import 'package:async_job/engine.dart';
+
 final class MyJob<T> extends JobBase<T> {
   final Future<T> Function(MyContext ctx) _body;
 
@@ -51,7 +57,7 @@ final job = MyJob<int>((ctx) => ctx.wait(load))..launch();
 
 `solo` использует эти возможности расширения. Полный защищённый API описан
 в справке
-[JobBase](https://pub.dev/documentation/async_job/latest/async_job/JobBase-class.html).
+[JobBase](https://pub.dev/documentation/async_job/latest/engine/JobBase-class.html).
 
 ## Отложенный старт
 

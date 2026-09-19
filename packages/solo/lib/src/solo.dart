@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
 
-import 'package:async_job/async_job.dart';
+import 'package:async_job/engine.dart';
 import 'package:meta/meta.dart';
 
 import 'close_mode.dart';
@@ -62,6 +62,28 @@ abstract class Solo<S extends Object> {
 
   /// Engine tracing for debugging the engine itself; `null` by default.
   static void Function(String message)? debug;
+
+  /// Whether a change of state records where it was made.
+  ///
+  /// The record is the stack trace of a job its rules cancel: the `emit`
+  /// or `externalSetState` whose state they turned down. Taking it costs
+  /// most of what a change costs, so by default it is taken only where
+  /// assertions are on — in development and in tests — and not in a
+  /// release or profile build. Set it to `true` to have it there too, or to
+  /// `false` to go without it everywhere.
+  ///
+  /// Without the record a cancellation by the rules still has a trace:
+  /// the one of the place that noticed. When a change is what cancels a
+  /// running job, that place is inside the change itself, and the trace
+  /// leads back to it through a few frames of the engine; a job that finds
+  /// its rules broken at a checkpoint of its own gets the checkpoint.
+  static bool traceStateChanges = _assertionsOn();
+
+  static bool _assertionsOn() {
+    var on = false;
+    assert(on = true, 'only evaluated where assertions are on');
+    return on;
+  }
 
   S _state;
   int _stateRevision = 0;
@@ -550,10 +572,10 @@ abstract class Solo<S extends Object> {
   /// engine and waits for every subscription to take its done event, so
   /// one left paused holds `close` with [isFinished] already true.
   ///
-  /// It reports and does not diagnose. A job that holds on for reasons of
-  /// its own — a bare `await` on a slow call, an external operation the
-  /// body is inside — shows up as [SoloPhase.unknown], because that is
-  /// what the engine knows about it.
+  /// It reports and does not diagnose. A body that holds on for reasons of
+  /// its own — a bare `await` on a slow call, an external operation it is
+  /// inside — shows up as [SoloPhase.body]: the engine knows the body has
+  /// not come back, and not what it waits for.
   SoloPending? get pending => _current?._pending(closing: isClosed);
 
   /// The running root job, or `null` when idle.
@@ -611,7 +633,11 @@ abstract class Solo<S extends Object> {
       );
     }
     _debug(() => 'externalSetState: $state');
-    _setState(state, emitter: null, stackTrace: StackTrace.current);
+    _setState(
+      state,
+      emitter: null,
+      stackTrace: traceStateChanges ? StackTrace.current : null,
+    );
   }
 
   /// Closes the controller, then calls the observer's `onClose` and
@@ -726,12 +752,21 @@ abstract class Solo<S extends Object> {
   /// Clears the queue and cancels the current job; `force` affects only the
   /// queue. Completes when the current job has actually finished.
   ///
+  /// Every job it ends carries [reason], a [ManualCancelReason] unless the
+  /// caller names one: a policy of the domain that clears the controller
+  /// can tell its own cancellations from a user's.
+  ///
   /// Awaiting the returned future from inside the current job's body never
   /// completes: it waits for that very body.
-  Future<void> cancelAll({bool force = false}) {
-    _queue.clear(force: force);
+  Future<void> cancelAll({
+    bool force = false,
+    CancelReason reason = const ManualCancelReason(),
+  }) {
+    _queue.clear(force: force, reason: reason);
     final current = _current;
-    return current == null ? Future<void>.value() : current.cancel();
+    return current == null
+        ? Future<void>.value()
+        : current.cancel(reason: reason);
   }
 
   /// A job body is about to run.
@@ -825,7 +860,7 @@ abstract class Solo<S extends Object> {
   void _setState(
     S next, {
     required _SoloJob<S, S, Object?>? emitter,
-    required StackTrace stackTrace,
+    required StackTrace? stackTrace,
   }) {
     final previous = _state;
     _state = next;
@@ -904,7 +939,7 @@ abstract class Solo<S extends Object> {
   /// the current state, children before parents.
   void _reevaluate({
     required _SoloJob<S, S, Object?>? except,
-    required StackTrace stackTrace,
+    required StackTrace? stackTrace,
     required Set<_SoloJob<S, S, Object?>> ruleErrors,
     required int revision,
   }) {
@@ -937,7 +972,9 @@ abstract class Solo<S extends Object> {
             reason: const RulesCancelReason(),
             started: true,
             description: rejection,
-            stackTrace: stackTrace,
+            // Taken here when the change took none: this is still inside
+            // the change, so the trace leads back to whoever made it.
+            stackTrace: stackTrace ?? StackTrace.current,
           ),
           rejectable: false,
         );

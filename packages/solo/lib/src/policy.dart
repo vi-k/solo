@@ -6,8 +6,12 @@ enum Policy {
   /// Append to the queue; keys are ignored.
   sequential,
 
-  /// If a job with the same key is queued or running, return that job and
-  /// finish the new one with `Cancelled(manual, 'duplicate')`.
+  /// If a job with the same key is queued or is the root job the
+  /// controller is running, return that job and finish the new one with
+  /// `Cancelled(manual, 'duplicate')`.
+  ///
+  /// A child is not looked at, running or not: it runs inside another job
+  /// and never went through the queue, which is all a policy rules.
   ///
   /// The running job counts only while it is still going to do the work.
   /// One that has been cancelled and is unwinding is not a duplicate —
@@ -23,14 +27,14 @@ enum Policy {
   /// any job at all. Give every result type its own key.
   droppable,
 
-  /// Remove queued jobs with the same key, then append. The running job is
-  /// left alone, and so is a queued job created with `cancellable: false`
-  /// — the removal is the one `SoloQueue.removeWhere` does without
-  /// `force`.
+  /// Remove queued jobs with the same key, then append. The running root
+  /// job is left alone, and so is a queued job created with
+  /// `cancellable: false` — the removal is the one `SoloQueue.removeWhere`
+  /// does without `force`.
   replace,
 
-  /// Like [replace], and also cancel the running job with the same key
-  /// without waiting for it — unless that one was created with
+  /// Like [replace], and also cancel the running root job with the same
+  /// key without waiting for it — unless that one was created with
   /// `cancellable: false`, which refuses.
   restart,
 }

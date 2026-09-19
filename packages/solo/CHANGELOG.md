@@ -11,9 +11,12 @@
   `runAll`, and an extension of that name on `JobContext` is shadowed by it.
   `ctx.run` takes `dispose` and `discard`: no call site breaks, but a
   registration written on the line after `await ctx.run(child)` belongs in the
-  call now. The other two, the protected `JobBase.handleUnanswered` and
-  `JobBase.inUncancellableSection`, concern a subclass of `JobBase` only. Read
-  the core's own entries before migrating:
+  call now. The rest concern an engine built on the kernel only: the protected
+  `JobBase.handleUnanswered`, `JobBase.inUncancellableSection` and
+  `JobBase.heldCancel`, and the move of `JobBase`, `JobContextBase` and
+  `JobStatus` to `package:async_job/engine.dart` -- which also takes them out
+  of what an app sees through this package. Read the core's own entries before
+  migrating:
   [the `async_job` changelog](https://github.com/vi-k/solo/blob/main/packages/async_job/CHANGELOG.md).
 
 - **Breaking:** `SoloBase` is renamed to `Solo`, and the former `Solo` -- the
@@ -261,11 +264,12 @@
   `previous` becomes `transition.previous`, `current` becomes
   `transition.current`.
 - Add `Solo.pending`: a `SoloPending` snapshot of the job the controller is
-  waiting for — its phase (body, children, cleanup, or unknown), the
-  cancellation it carries, a `ctx.uncancellable` section holding one back, and
-  whether it was created `cancellable: false`. For a `close` that has not come
-  back. It reports what the engine knows and says `SoloPhase.unknown` where it
-  knows nothing, rather than guessing.
+  waiting for — its phase (body, children or cleanup), the cancellation it
+  carries, the one a `ctx.uncancellable` section is holding back, whether such
+  a section is open, and whether it was created `cancellable: false`. For a
+  `close` that has not come back. It reports what the engine knows: a body
+  waiting on a bare `await` is in its body, an open section is an open section
+  until somebody asks, and the snapshot does not guess at why.
 - **Breaking:** setting `Solo.observer` no longer takes an error with nowhere
   else to go off its default route to the zone. Watching is not answering: an
   observer set for a log used to switch reporting off for the whole process
@@ -351,6 +355,31 @@
   `SoloStream` closes after the engine and waits for a subscription left
   paused, with `isFinished` already true. The recipe that logs `pending` on a
   slow close printed `null` for both and said nothing of why.
+
+- **Breaking:** `SoloQueue.lastWhere` is gone. `Solo.lastJobWhere` finds the
+  same job and looks at the running one as well, so the queue had a second way
+  to ask one question. Migration: `queue.lastWhere(test)` becomes
+  `lastJobWhere(test)`, or `queue.jobs.lastWhere` where only the queue should
+  answer.
+
+- `cancelAll`, `SoloQueue.remove`, `removeWhere` and `clear` take a `reason`.
+  Every job they end carries it, so a policy of the domain that clears the
+  controller can tell its cancellations from a user's; without one it is
+  `ManualCancelReason`, as before. An implementation of `SoloQueue` of its own
+  has to take the parameter too.
+
+- Add `Solo.traceStateChanges`. A change of state recorded its stack trace
+  every time, which cost most of what the change costs, for one reader: the
+  trace of a job its rules cancel. The record is now taken where assertions are
+  on -- in development and in tests -- and the flag turns it on in a release
+  build or off everywhere. Without it that trace is taken where the rules
+  noticed; for a change that cancels a running job that place is inside the
+  change, so the trace still leads back to it.
+
+- `Policy` and `doc/jobs.md` say what a policy looks at: the queue and the root
+  job the controller is running. They promised "queued or running", and a child
+  running under the same key is running without being seen -- it runs inside
+  another job and never went through the queue.
 
 ## 0.2.0
 

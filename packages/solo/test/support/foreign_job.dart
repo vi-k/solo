@@ -1,4 +1,4 @@
-import 'package:solo/solo.dart';
+import 'package:async_job/engine.dart';
 
 /// A job of the core alone: no state, no queue, no rules.
 ///

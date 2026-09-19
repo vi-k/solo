@@ -81,13 +81,12 @@ void main() {
     });
   });
 
-  test('lastWhere and lastJobWhere search from the end, then current', () {
+  test('lastJobWhere searches the queue from the end, then current', () {
     runSolo((solo, journal, async) {
       solo.add(slow(solo, 'a'));
       async.flushMicrotasks();
       final b1 = solo.add(slow(solo, 'b'));
       final b2 = solo.add(slow(solo, 'b'));
-      expect(identical(solo.queue.lastWhere((j) => j.key == 'b'), b2), isTrue);
       expect(identical(solo.lastJobWhere((j) => j.key == 'b'), b2), isTrue);
       expect(solo.lastJobWhere((j) => j.key == 'a')?.key, 'a');
       expect(solo.lastJobWhere((j) => j.key == 'z'), isNull);

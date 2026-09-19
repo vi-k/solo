@@ -4,7 +4,7 @@ library;
 import 'dart:async';
 import 'dart:mirrors';
 
-import 'package:async_job/async_job.dart';
+import 'package:async_job/engine.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart';
 

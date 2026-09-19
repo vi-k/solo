@@ -372,4 +372,36 @@ void main() {
       expect(journal.lines, isEmpty);
     });
   });
+
+  test('Policy has four values in spec order', () {
+    expect(Policy.values, [
+      Policy.sequential,
+      Policy.droppable,
+      Policy.replace,
+      Policy.restart,
+    ]);
+  });
+
+  test('droppable does not see a child running under the same key', () {
+    runSolo((solo, journal, async) {
+      final child = solo.job<TestState, void>(
+        key: 'shared',
+        (ctx) => pause(ctx, 100),
+      );
+      solo.run<TestState, void>(key: 'parent', (ctx) => ctx.run(child));
+      async.flushMicrotasks();
+      expect(child.isRunning, isTrue);
+
+      // The parent holds the queue, so the new root job waits there
+      // rather than being handed the child.
+      final root = solo.run<TestState, void>(
+        key: 'shared',
+        policy: Policy.droppable,
+        (ctx) async {},
+      );
+      expect(identical(root, child), isFalse);
+      async.flushTimers();
+      expect(root.outcome, isA<Done<void>>());
+    });
+  });
 }

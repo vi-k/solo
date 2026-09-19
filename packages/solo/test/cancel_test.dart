@@ -246,4 +246,62 @@ void main() {
       expect(trace, contains('cancel'));
     });
   });
+
+  test('a mass cancellation carries the reason it is given', () {
+    runSolo((solo, journal, async) {
+      final running = solo.run<TestState, void>(
+        key: 'running',
+        (ctx) => pause(ctx, 100),
+      );
+      final queued = solo.run<TestState, void>(key: 'queued', (ctx) async {});
+      async.flushMicrotasks();
+      solo.cancelAll(reason: const _Reset());
+      async.flushTimers();
+
+      for (final job in [running, queued]) {
+        expect((job.outcome! as Cancelled).reason, isA<_Reset>());
+      }
+    });
+  });
+
+  test('the queue removes with the reason it is given', () {
+    runSolo((solo, journal, async) {
+      solo.run<TestState, void>(key: 'running', (ctx) => pause(ctx, 100));
+      final removed = [
+        for (final key in ['one', 'two', 'three'])
+          solo.run<TestState, void>(key: key, (ctx) async {}),
+      ];
+      async.flushMicrotasks();
+      solo.queue
+        ..remove(removed[0], reason: const _Reset())
+        ..removeWhere((job) => job.key == 'two', reason: const _Reset())
+        ..clear(reason: const _Reset());
+      async.flushTimers();
+
+      for (final job in removed) {
+        expect((job.outcome! as Cancelled).reason, isA<_Reset>());
+      }
+    });
+  });
+
+  test('without a reason the cancellation is manual, as before', () {
+    runSolo((solo, journal, async) {
+      final running = solo.run<TestState, void>(
+        key: 'running',
+        (ctx) => pause(ctx, 100),
+      );
+      async.flushMicrotasks();
+      solo.cancelAll();
+      async.flushTimers();
+      expect((running.outcome! as Cancelled).reason, isA<ManualCancelReason>());
+    });
+  });
+}
+
+/// A reason of the domain's own: a reset that clears the controller.
+final class _Reset extends CancelReason {
+  const _Reset();
+
+  @override
+  String get name => 'reset';
 }

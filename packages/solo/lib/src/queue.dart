@@ -4,7 +4,9 @@ part of 'solo.dart';
 ///
 /// Jobs with `cancellable: false` are skipped silently unless `force` is
 /// given. `force` affects only queued jobs: a running job is never touched
-/// by the queue.
+/// by the queue. A removed job ends `Cancelled` with `reason`, a
+/// [ManualCancelReason] unless the caller names one of its own — a
+/// policy of the domain that clears the queue can say so.
 abstract interface class SoloQueue {
   /// An unmodifiable view of queued jobs in their current order.
   ///
@@ -21,17 +23,26 @@ abstract interface class SoloQueue {
   /// Whether the queue has jobs.
   bool get isNotEmpty;
 
-  /// Removes [job] with `Cancelled(manual)`; returns whether it was removed.
-  bool remove(Job<Object?> job, {bool force = false});
+  /// Removes [job] with a cancellation for [reason]; returns whether it was
+  /// removed.
+  bool remove(
+    Job<Object?> job, {
+    bool force = false,
+    CancelReason reason = const ManualCancelReason(),
+  });
 
   /// Removes every job matching [test]; returns the number removed.
-  int removeWhere(bool Function(Job<Object?> job) test, {bool force = false});
+  int removeWhere(
+    bool Function(Job<Object?> job) test, {
+    bool force = false,
+    CancelReason reason = const ManualCancelReason(),
+  });
 
   /// Removes every job; returns the number removed.
-  int clear({bool force = false});
-
-  /// The last queued job matching [test], or `null`.
-  Job<Object?>? lastWhere(bool Function(Job<Object?> job) test);
+  int clear({
+    bool force = false,
+    CancelReason reason = const ManualCancelReason(),
+  });
 }
 
 final class _SoloQueue<S extends Object> implements SoloQueue {
@@ -50,13 +61,17 @@ final class _SoloQueue<S extends Object> implements SoloQueue {
   bool get isNotEmpty => _jobs.isNotEmpty;
 
   @override
-  bool remove(Job<Object?> job, {bool force = false}) {
+  bool remove(
+    Job<Object?> job, {
+    bool force = false,
+    CancelReason reason = const ManualCancelReason(),
+  }) {
     if (job is! _SoloJob<S, S, Object?> || !_jobs.contains(job)) {
       return false;
     }
     job._cancelWith(
       Cancelled.by(
-        reason: const ManualCancelReason(),
+        reason: reason,
         started: false,
         stackTrace: StackTrace.current,
       ),
@@ -71,10 +86,11 @@ final class _SoloQueue<S extends Object> implements SoloQueue {
   int removeWhere(
     bool Function(Job<Object?> job) test, {
     bool force = false,
+    CancelReason reason = const ManualCancelReason(),
   }) {
     var count = 0;
     for (final job in _jobs.where(test).toList()) {
-      if (remove(job, force: force)) {
+      if (remove(job, force: force, reason: reason)) {
         count++;
       }
     }
@@ -82,17 +98,11 @@ final class _SoloQueue<S extends Object> implements SoloQueue {
   }
 
   @override
-  int clear({bool force = false}) => removeWhere((_) => true, force: force);
-
-  @override
-  Job<Object?>? lastWhere(bool Function(Job<Object?> job) test) {
-    for (final job in _jobs.reversed) {
-      if (test(job)) {
-        return job;
-      }
-    }
-    return null;
-  }
+  int clear({
+    bool force = false,
+    CancelReason reason = const ManualCancelReason(),
+  }) =>
+      removeWhere((_) => true, force: force, reason: reason);
 
   void _insert(_SoloJob<S, S, Object?> job, {required bool first}) {
     if (first) {

@@ -4,20 +4,17 @@ import 'package:meta/meta.dart';
 /// What a job the controller is waiting for is doing, as far as the
 /// engine knows.
 enum SoloPhase {
-  /// The body has not come back yet.
+  /// The body has not come back yet, whatever it is waiting on: a
+  /// checkpoint of its context, a bare `await`, an external call. The
+  /// engine knows the body is still out, not what holds it.
   body,
 
   /// The body is over and the job is waiting for its children.
   children,
 
-  /// The job is releasing what the body opened.
+  /// The body and its children are over: the job is releasing what the
+  /// body opened, and then it ends.
   cleanup,
-
-  /// The engine has nothing to say. A job holds on for reasons of its own
-  /// as well — a bare `await` on something that takes its time, an
-  /// external call the body is inside — and those are not the engine's to
-  /// see. Not a guess dressed as an answer.
-  unknown,
 }
 
 /// What is holding the controller right now: a snapshot for whoever is
@@ -37,14 +34,21 @@ final class SoloPending {
   final SoloPhase phase;
 
   /// The cancellation the job is marked with, or `null` — either nobody
-  /// asked, or the job is holding one back; see [inUncancellableSection].
+  /// asked, or an open section is holding one back; see
+  /// [heldCancellation].
   final Cancelled? cancellation;
+
+  /// The cancellation an open `JobContext.uncancellable` section is holding
+  /// back, or `null`. The job is not marked with it until the section
+  /// closes, so [cancellation] is `null` meanwhile.
+  final Cancelled? heldCancellation;
 
   /// How many children the job is still waiting for.
   final int children;
 
-  /// Whether a `JobContext.uncancellable` section is open: a cancellation
-  /// that arrived is held until it closes.
+  /// Whether a `JobContext.uncancellable` section is open. A cancellation
+  /// that arrives now is held until it closes; an open section alone does
+  /// not mean one has, and [heldCancellation] is what says so.
   final bool inUncancellableSection;
 
   /// Whether the job was created with `cancellable: false` and turns down
@@ -59,6 +63,7 @@ final class SoloPending {
     required this.job,
     required this.phase,
     required this.cancellation,
+    required this.heldCancellation,
     required this.children,
     required this.inUncancellableSection,
     required this.refusesCancellation,
@@ -66,7 +71,8 @@ final class SoloPending {
   });
 
   /// Whether a cancellation is on this job and waiting to land: it is
-  /// marked with [cancellation], or an open section is holding one back.
+  /// marked with [cancellation], or an open section holds
+  /// [heldCancellation].
   ///
   /// Not the same as "somebody asked". A job created with
   /// `cancellable: false` turns a rejectable cancellation down instead of
@@ -74,7 +80,7 @@ final class SoloPending {
   /// asked — [refusesCancellation] is the half of that story the engine
   /// can tell.
   bool get cancellationPending =>
-      cancellation != null || inUncancellableSection;
+      cancellation != null || heldCancellation != null;
 
   @override
   String toString() {
@@ -85,12 +91,14 @@ final class SoloPending {
       SoloPhase.body => 'in its body',
       SoloPhase.children => 'waiting for $children children',
       SoloPhase.cleanup => 'in its cleanup',
-      SoloPhase.unknown => 'in a phase the engine cannot name',
     };
     final notes = [
       if (closing) 'closing',
       if (cancellation != null) 'cancelled by $cancellation',
-      if (inUncancellableSection) 'holding a cancellation back',
+      if (heldCancellation != null)
+        'holding $heldCancellation back'
+      else if (inUncancellableSection)
+        'in an uncancellable section',
       if (refusesCancellation) 'created cancellable: false',
     ];
 

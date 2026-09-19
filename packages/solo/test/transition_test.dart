@@ -32,7 +32,6 @@ void main() {
       async.flushMicrotasks();
       expect(seen, hasLength(1));
       expect(identical(seen.single.job, job), isTrue);
-      expect(seen.single.isExternal, isFalse);
       expect(seen.single.previous, const Initial());
       expect(seen.single.current, const Preparing());
       Solo.observer = journal;
@@ -42,7 +41,6 @@ void main() {
   test('an external change belongs to no job', () {
     final solo = _Watched()..set(const Preparing());
     expect(solo.seen.single.job, isNull);
-    expect(solo.seen.single.isExternal, isTrue);
   });
 
   test('a child of the running job is the child, not the root', () {

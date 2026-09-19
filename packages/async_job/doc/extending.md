@@ -11,10 +11,16 @@ error nobody answered for an answer of your own — an engine that puts an
 observer of its own on every job has to, or the kernel takes the observer for
 the answer and the error stops there.
 
+The three live in `package:async_job/engine.dart`, not in the main import: an
+app that only runs jobs never needs them. An engine imports that library in
+place of `async_job.dart`, which it exports too.
+
 For example, a custom job can create its own context type and expose a method
 for its coordinator to start it:
 
 ```dart
+import 'package:async_job/engine.dart';
+
 final class MyJob<T> extends JobBase<T> {
   final Future<T> Function(MyContext ctx) _body;
 
@@ -49,7 +55,7 @@ must not be called from unattended work, use `throwIfUnattended` to enforce
 that restriction.
 
 `solo` uses these extension points. The full protected API is documented in the
-[JobBase](https://pub.dev/documentation/async_job/latest/async_job/JobBase-class.html)
+[JobBase](https://pub.dev/documentation/async_job/latest/engine/JobBase-class.html)
 reference.
 
 ## Deferred start

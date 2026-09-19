@@ -807,10 +807,20 @@ abstract class JobBase<T> implements Job<T> {
   /// Whether a section opened by [enterUncancellable] is open right now.
   ///
   /// For diagnostics: an engine that is waiting for this job and wants to
-  /// say why. A held cancellation is one of the answers, and this is the
-  /// only thing that knows it.
+  /// say why. An open section is not a held cancellation — nobody may have
+  /// asked; [heldCancel] is the one that says whether somebody did.
   @protected
   bool get inUncancellableSection => _uncancellableDepth > 0;
+
+  /// The cancellation an open section is holding back, or `null`.
+  ///
+  /// Set when a cancellation the job may refuse arrives inside a section
+  /// opened by [enterUncancellable], and cleared when the outermost section
+  /// closes and lets it through. The job is not marked meanwhile —
+  /// [pendingCancel] stays `null` — so this is the only place such a
+  /// request shows.
+  @protected
+  Cancelled? get heldCancel => _heldCancel;
 
   /// Opens an uncancellable section: a rejectable cancellation arriving
   /// now is held, and the job is not marked until the section closes.

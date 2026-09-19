@@ -262,7 +262,10 @@ BLE-устройство, плеер, синхронизация), где сос
 
 ## Карта модулей
 
-`packages/async_job/lib/async_job.dart` экспортирует всё публичное у ядра.
+`packages/async_job/lib/async_job.dart` экспортирует всё публичное у ядра,
+кроме протокола движка: `JobBase`, `JobContextBase` и `JobStatus` лежат
+в `packages/async_job/lib/engine.dart`, который экспортирует и остальное.
+Движок — `solo` и чужие — импортирует `engine.dart`, приложение его не видит.
 `packages/async_job/lib/src/`:
 
 - `job_base.dart` — библиотека с частями (`part`): `outcome.dart`,

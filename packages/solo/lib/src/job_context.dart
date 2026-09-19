@@ -92,7 +92,7 @@ final class _SoloContext<S extends Object, W extends S, R>
         reason: const RulesCancelReason(),
         started: true,
         description: rejection,
-        stackTrace: _solo._lastChange,
+        stackTrace: _solo._lastChange ?? StackTrace.current,
       );
       cancelOwnJob(cancelled);
       throw pendingCancel ?? cancelled;
@@ -129,7 +129,11 @@ final class _SoloContext<S extends Object, W extends S, R>
     throwIfFinished('emit');
     throwIfCancelled();
     Solo._debug(() => '$_job emit: $next');
-    _solo._setState(next, emitter: _job, stackTrace: StackTrace.current);
+    _solo._setState(
+      next,
+      emitter: _job,
+      stackTrace: Solo.traceStateChanges ? StackTrace.current : null,
+    );
     // The write is a checkpoint on both sides: hooks, observers and
     // listeners run inside `_setState` and may cancel this job — through a
     // reentrant `externalSetState` or through a parent going down with it.

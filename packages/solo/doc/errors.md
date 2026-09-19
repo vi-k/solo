@@ -85,9 +85,9 @@ unawaited(controller.close().timeout(
 ```
 
 `SoloPending` names the job, its `phase` — body, children, cleanup — the
-cancellation it carries, whether a `ctx.uncancellable` section is holding one
-back, and whether the job was created with `cancellable: false` and turns them
-down.
+cancellation it carries, one a `ctx.uncancellable` section is holding back,
+whether such a section is open, and whether the job was created with
+`cancellable: false` and turns them down.
 
 `null` says that no job is running, not that nothing holds the close. A drain
 waits for the queue too, and a group of `collect` or `accumulate` stays queued
@@ -98,8 +98,8 @@ subscription to take its done event: one left paused holds `close()` with
 
 It reports and does not diagnose. A long wait does not prove a forgotten
 `ctx.wait`: a body inside an external call looks the same, and so does a
-resource that takes its time to release. What the engine cannot see is
-`SoloPhase.unknown`, not a guess.
+resource that takes its time to release. The phase says where the job is, not
+why: a body is `body` whatever it waits on, and the engine does not guess.
 
 ## Why cancellation was slow
 

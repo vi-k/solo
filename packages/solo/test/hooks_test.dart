@@ -3,6 +3,7 @@ library;
 
 import 'dart:async';
 
+import 'package:async_job/engine.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:solo/solo.dart';
 import 'package:test/test.dart';

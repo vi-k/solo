@@ -74,10 +74,34 @@ void main() {
         isNull,
         reason: 'the job is not marked while the section holds it',
       );
+      expect(pending.heldCancellation, isA<Cancelled>());
       expect(pending.cancellationPending, isTrue);
       expect(
         '$pending',
-        'SoloPending([job] in its body, holding a cancellation back)',
+        'SoloPending([job] in its body, holding Cancelled(manual) back)',
+      );
+      async.flushTimers();
+    });
+  });
+
+  test('an open section nobody asked to leave is only an open section', () {
+    runSolo((solo, journal, async) {
+      solo.run<TestState, void>(
+        key: 'job',
+        (ctx) => ctx.uncancellable(() => delay(100)),
+      );
+      async.flushMicrotasks();
+      final pending = solo.pending!;
+      expect(pending.inUncancellableSection, isTrue);
+      expect(pending.heldCancellation, isNull);
+      expect(
+        pending.cancellationPending,
+        isFalse,
+        reason: 'neither close nor cancel was called',
+      );
+      expect(
+        '$pending',
+        'SoloPending([job] in its body, in an uncancellable section)',
       );
       async.flushTimers();
     });
@@ -119,11 +143,27 @@ void main() {
     });
   });
 
-  test('a body waiting on something the engine cannot see says so', () {
+  test('a job past its body and children reads as its cleanup', () {
+    runSolo((solo, journal, async) {
+      final phases = <SoloPhase?>[];
+      solo.run<TestState, void>(
+        key: 'job',
+        (ctx) async => throw StateError('gone'),
+        onError: (state, error, stackTrace) {
+          phases.add(solo.pending?.phase);
+          return state;
+        },
+      ).ignore();
+      async.flushTimers();
+      expect(phases, [SoloPhase.cleanup]);
+    });
+  });
+
+  test('a body on a bare await is in its body, and no more is said', () {
     runSolo((solo, journal, async) {
       solo.run<TestState, void>(key: 'job', (ctx) async {
-        // A bare await, past every checkpoint: this is the case the
-        // engine has nothing to say about, and it must not pretend.
+        // A bare await, past every checkpoint: the engine knows the body
+        // is still out and nothing about what holds it.
         await delay(100);
       });
       async.flushMicrotasks();

@@ -1,16 +1,16 @@
 // The protected surface an engine of a domain stands on.
 //
-// Four of its members are held by `solo` alone and by nothing in here, so
+// Five of its members are held by `solo` alone and by nothing in here, so
 // a change to their contract would leave this package green and redden the
-// neighbour: `handleUnanswered`, `createEachJob`, `whenDone` and
-// `inUncancellableSection`. Each of them is exercised below by a small
-// engine of its own, the way `solo` does it.
+// neighbour: `handleUnanswered`, `createEachJob`, `whenDone`,
+// `inUncancellableSection` and `heldCancel`. Each of them is exercised
+// below by a small engine of its own, the way `solo` does it.
 @Timeout(Duration(seconds: 5))
 library;
 
 import 'dart:async';
 
-import 'package:async_job/async_job.dart';
+import 'package:async_job/engine.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart';
 
@@ -65,6 +65,8 @@ final class SectionJob<T> extends JobBase<T> {
   final Future<T> Function(JobContext ctx) _body;
 
   bool get inSection => inUncancellableSection;
+
+  Cancelled? get held => heldCancel;
 
   void launch() => start();
 
@@ -267,10 +269,40 @@ void main() {
       expect(
         inside,
         [false, true, false],
-        reason: 'an engine waiting for this job says why: a cancellation it '
-            'is holding is one of the answers, and nothing else knows',
+        reason: 'an engine waiting for this job says why, and an open '
+            'section is one of the answers',
       );
       expect(job.outcome, isA<Done<void>>());
+    });
+  });
+
+  test('heldCancel names the cancellation a section holds, and no other', () {
+    fakeAsync((async) {
+      final seen = <String>[];
+      late SectionJob<void> job;
+      job = SectionJob<void>((ctx) async {
+        await ctx.uncancellable(() async {
+          await delay(10);
+          seen.add('asked nothing: ${job.held}');
+          await delay(10);
+          seen.add('asked: ${job.held}');
+          await delay(10);
+        });
+      });
+      job.launch();
+      async.elapse(const Duration(milliseconds: 15));
+      unawaited(job.cancel());
+      async.elapse(const Duration(milliseconds: 10));
+      seen.add('let through: ${job.held}');
+      async.flushTimers();
+
+      expect(seen, [
+        'asked nothing: null',
+        'asked: Cancelled(manual)',
+        'let through: Cancelled(manual)',
+      ]);
+      expect(job.held, isNull, reason: 'the section closed and let it go');
+      expect(job.outcome, isA<Cancelled>());
     });
   });
 }

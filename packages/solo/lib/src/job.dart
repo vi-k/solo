@@ -139,6 +139,7 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
         job: this,
         phase: _phase,
         cancellation: pendingCancel,
+        heldCancellation: heldCancel,
         children: children.length,
         inUncancellableSection: inUncancellableSection,
         refusesCancellation: !cancellable,
@@ -153,7 +154,9 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
       return SoloPhase.body;
     }
 
-    return children.isEmpty ? SoloPhase.unknown : SoloPhase.children;
+    // Past the body with no child left, what remains is the job's own
+    // ending: its cleanup stack if it has one, then the outcome.
+    return children.isEmpty ? SoloPhase.cleanup : SoloPhase.children;
   }
 
   @override
@@ -217,7 +220,11 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     // A handler can synchronously notify an external state source. Such
     // a transition may revoke permission before the result is applied.
     if (!_mayCorrectState) return;
-    _solo._setState(next, emitter: this, stackTrace: StackTrace.current);
+    _solo._setState(
+      next,
+      emitter: this,
+      stackTrace: Solo.traceStateChanges ? StackTrace.current : null,
+    );
   }
 
   @override

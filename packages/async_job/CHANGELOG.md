@@ -1,5 +1,14 @@
 ## Unreleased
 
+- **Breaking:** `JobBase`, `JobContextBase` and `JobStatus` moved to
+  `package:async_job/engine.dart`. They are the protocol for building an engine
+  on the kernel, and the main import handed them to every file that merely runs
+  a job -- and, through `solo` and `flutter_solo`, to every file of an app.
+  `engine.dart` exports the rest of the package as well, so an engine swaps one
+  import for the other: `import 'package:async_job/engine.dart';` in place of
+  `async_job.dart`. Code that only runs jobs is untouched. See
+  `doc/extending.md`.
+
 - **Fix:** a `whenCancelled` registered while the cancellation is still
   cascading onto the children now runs in its turn instead of ahead of everyone
   who registered earlier. Between the mark and the pass that tells the
@@ -202,10 +211,13 @@
   check for an observer true always, and the error would stop there. Adding a
   member to a class meant to be extended is breaking on its own: a subclass
   with a member of that name stops compiling. See `doc/extending.md`.
-- **Breaking:** add the protected `JobBase.inUncancellableSection`, for an
-  engine that waits for a job and wants to say why. Adding a member to a class
-  meant to be extended is breaking on its own: a subclass with a member of that
-  name stops compiling.
+- **Breaking:** add the protected `JobBase.inUncancellableSection` and
+  `JobBase.heldCancel`, for an engine that waits for a job and wants to say
+  why. The first says a section is open; the second is the cancellation such a
+  section holds back, which marks nothing until the section closes and so shows
+  nowhere else. An open section alone does not mean anybody asked. Adding a
+  member to a class meant to be extended is breaking on its own: a subclass
+  with a member of that name stops compiling.
 
 - **Fix:** a cancellation cascade that runs out of stack no longer leaves the
   tree jammed. The cascade is recursive, and a tree thousands of levels deep

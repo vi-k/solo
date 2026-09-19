@@ -107,13 +107,15 @@ SoloJob<void> seek(Duration position) => run<Ready, void>(
 | Policy | When a job with the same key already exists |
 | --- | --- |
 | `Policy.sequential` | Add the new job to the queue. |
-| `Policy.droppable` | Return the existing queued or running job; discard the new one. |
+| `Policy.droppable` | Return the existing job, queued or the running root job; discard the new one. |
 | `Policy.replace` | Remove cancellable queued jobs with that key, then enqueue the new job. |
-| `Policy.restart` | Do the same as `replace` and request cancellation of the running job with that key. |
+| `Policy.restart` | Do the same as `replace` and request cancellation of the running root job with that key. |
 
 A root job holds the queue until its body, children, cleanup and final state
 handler finish. Child jobs can run within that interval; they are described in
-[Children and streams](children.md).
+[Children and streams](children.md). A policy does not see them: a child with
+the same key runs inside another job and never went through the queue, and the
+queue with its running root job is all a policy looks at.
 
 `restart` requests cancellation when the new job is submitted. The new job
 still waits for the current job to finish; their bodies do not overlap. A job
@@ -160,9 +162,12 @@ when that zoom finishes. Only cancellation stops a job that has already
 started; see [Cancellation](cancellation.md).
 
 `queue` exposes `jobs`, `length`, `isEmpty`, `isNotEmpty`, `remove`,
-`removeWhere`, `clear` and `lastWhere`. Removal methods affect queued jobs
-only — the running job is not theirs to touch — and they preserve jobs with
-`cancellable: false` unless called with `force: true`.
+`removeWhere` and `clear`; the last job with a key is `lastJobWhere` on the
+controller, which looks at the running job too. Removal methods affect queued
+jobs only — the running job is not theirs to touch — and they preserve jobs
+with `cancellable: false` unless called with `force: true`. What they remove
+ends `Cancelled(manual)`, or with the `reason:` the caller passes; `cancelAll`
+takes one as well.
 
 The order in `jobs` is not the order jobs will run in: a job waiting for an
 accumulation window can be passed by a ready one standing behind it, so the
