@@ -210,19 +210,20 @@ that already holds one. Use children within one parent when the whole sequence
 must occupy the queue without another root job running between its steps.
 
 Cancellation propagates forward to `then` jobs and backward to unfinished
-sources, subject to each job's cancellation rules. Cancelling the tail waits
-for those sources and their cleanup, including a source that refuses
-cancellation. `close()` reaches a `then` job through an unfinished source, but
-does not own one already running after the source finished.
+sources, subject to each job's cancellation rules. Cancelling the last job of a
+chain waits for those sources and their cleanup, including a source that
+refuses cancellation. `close()` reaches a `then` job through an unfinished
+source, but does not own one already running after the source finished.
 
 Inside a controller's body `ctx.run` is narrower still: it takes jobs of that
-controller, the ones `job(...)` makes and nobody has queued. A `then` job is a
-root job of the core, so it is turned away there as well, with the controller's
-own complaint — that the job was not created by this `Solo`, which is what a
-bare core job gets too.
+controller, the ones `job(...)` makes and nobody has queued. A `then` job is
+none of those -- it is a root job of the core -- and the core would refuse to
+adopt it anyway. Here the refusal comes from the controller first and for its
+own reason: `ArgumentError`, `was not created by this Solo`. A job of the core
+made by hand is refused in the same words.
 
-The queue does not wait for a tail. The slot is freed when the root job
-finishes, and the next queued job starts while the `then` job still has to run:
-one hung off `load()` can be working after `save()` has taken the queue. Where
-that would be wrong, keep the sequence inside one job and make its steps
-children.
+The queue does not wait for what comes after a job: the slot is freed when the
+root job finishes, and the next queued job starts while the `then` job still
+has to run. A `then` hung off `load()` can be working after `save()` has taken
+the queue. Where that would be wrong, keep the sequence inside one job and make
+its steps children.
