@@ -50,6 +50,12 @@ final class SoloSubscription {
 /// A group of subscriptions cancelled together, for a screen or an object
 /// that listens to several things at once.
 ///
+/// The group holds what it would cancel and nothing else: a member
+/// cancelled on its own is forgotten, so a long-lived group — a screen
+/// that resubscribes on every update, a service that listens to whatever
+/// it is handed — does not grow one dead entry per subscription that
+/// ended by itself.
+///
 /// ```dart
 /// final _listening = SoloSubscriptions();
 ///
@@ -75,8 +81,15 @@ final class SoloSubscriptions {
   /// Whether [cancel] has been called.
   bool get isCancelled => _cancelled;
 
-  /// How many subscriptions are held, cancelled ones included.
-  int get length => _subscriptions.length;
+  /// How many live subscriptions the group holds.
+  ///
+  /// A cancelled one is not held, whether the group cancelled it or
+  /// somebody cancelled that one alone.
+  int get length {
+    _forgetCancelled();
+
+    return _subscriptions.length;
+  }
 
   /// Takes [subscription] into the group.
   ///
@@ -92,7 +105,20 @@ final class SoloSubscriptions {
       return;
     }
     _subscriptions.add(subscription);
+    // Takes out this one, if it was cancelled before it got here, and the
+    // members somebody cancelled one at a time: what is left is what the
+    // group would cancel.
+    _forgetCancelled();
   }
+
+  /// Drops the members somebody cancelled one at a time.
+  ///
+  /// A cancelled subscription has nothing left for the group to do, and
+  /// held on to it keeps the listener and whatever the closure closed over
+  /// alive — the leak this class exists to prevent, one object further
+  /// along.
+  void _forgetCancelled() =>
+      _subscriptions.removeWhere((subscription) => subscription.isCancelled);
 
   /// Cancels every subscription in the group and empties it; calling it
   /// again does nothing.

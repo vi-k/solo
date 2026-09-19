@@ -96,12 +96,15 @@ final outcome = await job.done;
 unregister();
 ```
 
-Registering after cancellation calls the listener immediately, even if the job
-has finished. A refused cancellation does not notify listeners. An
-`uncancellable` section delays notification until cancellation is accepted. A
-job that finishes as `Done` or `Failed` without cancellation releases its
-listeners without calling them. Registering a listener does not count as
-observing a failure.
+Registering once the cancellation has been announced calls the listener
+immediately, even if the job has finished. A registration made in between —
+while the cancellation cascades onto the children, or while a job whose body
+gave itself up waits for them — joins that announcement instead, in its own
+place: one made later never runs before one made earlier. A refused
+cancellation does not notify listeners. An `uncancellable` section delays
+notification until cancellation is accepted. A job that finishes as `Done` or
+`Failed` without cancellation releases its listeners without calling them.
+Registering a listener does not count as observing a failure.
 
 Each registration runs once. Listeners run in registration order, using a
 snapshot of the list: removing a listener during notification does not remove

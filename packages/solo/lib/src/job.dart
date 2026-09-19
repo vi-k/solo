@@ -97,15 +97,23 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     if (cancelled.reason is RulesCancelReason) {
       _stateCorrectionRevoked = true;
     }
-    if (_solo._queue._jobs.contains(this)) {
+    final queued = _solo._queue._jobs.contains(this);
+    // A job the pump holds between the queue and the start is queued work
+    // too: it has not run a line, and a `cancellable: false` one turns
+    // down a rejectable cancellation the same way. Left to the kernel it
+    // would not: a job that has not started is `created`, and `created` is
+    // finished without asking.
+    if (queued || identical(this, _solo._inTransition)) {
       if (!cancellable && rejectable) {
         Solo._debug(() => 'remove $this: not cancellable');
         return;
       }
-      _solo._queue._jobs.remove(this);
-      // Diagnostics may add another event synchronously. Detach first so
-      // the group being cancelled can no longer receive it.
-      Solo._debug(() => 'remove $this: $cancelled');
+      if (queued) {
+        _solo._queue._jobs.remove(this);
+        // Diagnostics may add another event synchronously. Detach first so
+        // the group being cancelled can no longer receive it.
+        Solo._debug(() => 'remove $this: $cancelled');
+      }
     }
     super.cancelWith(cancelled, rejectable: rejectable);
   }

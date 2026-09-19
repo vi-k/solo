@@ -18,9 +18,12 @@ final class SoloTransition<S extends Object> {
   /// The state after it.
   final S current;
 
-  /// The job whose `emit` made the change, or `null` for an
-  /// `externalSetState`. A child of the running job is that child, not the
-  /// root it belongs to.
+  /// The job the change belongs to, or `null` for an `externalSetState`.
+  /// A child of the running job is that child, not the root it belongs to.
+  ///
+  /// Usually the job whose `emit` made the change. A state returned by the
+  /// job's `onError` or `onCancel` handler is its change as well, although
+  /// by then its body has ended and emitted nothing itself.
   final Job<Object?>? job;
 
   /// How many changes this controller has made, this one included.

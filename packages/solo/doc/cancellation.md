@@ -326,10 +326,12 @@ original cancellation in the reason's `cause`.
 `job.whenCancelled(callback)` registers a synchronous listener and returns a
 function to unregister it. It fires when a running job accepts cancellation or
 a job is dropped before starting. If a body cancels itself, it fires after the
-body and children finish, before cleanup. Registration after cancellation calls
-the listener immediately. Successful and failed jobs release these listeners
-without calling them. An asynchronous callback is not awaited; callback errors
-use the same reporting path as `ctx.onCancel` errors.
+body and children finish, before cleanup. Registration made once the
+cancellation has been announced calls the listener immediately; one made while
+it is still cascading onto the children joins that announcement in its own
+place. Successful and failed jobs release these listeners without calling them.
+An asynchronous callback is not awaited; callback errors use the same reporting
+path as `ctx.onCancel` errors.
 
 ## Cancelling and closing a controller
 

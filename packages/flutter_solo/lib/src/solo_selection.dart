@@ -1,9 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:solo/listeners.dart';
 import 'package:solo/solo.dart';
 
-import 'listeners.dart';
 import 'solo_listenable.dart';
 import 'solo_selector.dart';
 
@@ -159,7 +159,7 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
           final next = _pick(after);
           if (_changed(_selected, next)) {
             _selected = next;
-            scheduleMicrotask(() => _listeners.notify(this));
+            scheduleMicrotask(() => _listeners.notify(_report));
           }
         }
       } on Object catch (_) {
@@ -185,6 +185,30 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
     _pickedFrom = _none;
   }
 
+  /// Reports a listener's failure through [FlutterError], naming this
+  /// selection, the way [SoloListenable] reports a controller's.
+  ///
+  /// A reporter that throws does not take the listener's failure with it:
+  /// both go to the zone, the listener's first.
+  void _report(Object error, StackTrace stackTrace) {
+    try {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'flutter_solo',
+          context: ErrorDescription(
+            'notifying a listener of ${describeIdentity(this)}',
+          ),
+        ),
+      );
+    } on Object catch (reporterError, reporterStackTrace) {
+      Zone.current
+        ..handleUncaughtError(error, stackTrace)
+        ..handleUncaughtError(reporterError, reporterStackTrace);
+    }
+  }
+
   void _onSourceChanged() {
     if (_subscribing) {
       _heardWhileSubscribing = true;
@@ -205,7 +229,7 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
     // either — [value] reads the source rather than this, so a listener that
     // missed a notification is a rebuild missed, not a value stuck.
     _selected = next;
-    _listeners.notify(this);
+    _listeners.notify(_report);
   }
 }
 

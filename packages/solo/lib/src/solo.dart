@@ -105,10 +105,24 @@ abstract class Solo<S extends Object> {
   /// right now, set by `_SoloJob.notifyError`.
   _SoloJob<S, S, Object?>? _homeless;
   _SoloJob<S, S, Object?>? _current;
+
+  /// The job the pump holds while it asks its start rules: taken off the
+  /// queue, not started, not yet [_current].
+  ///
+  /// The rules are the caller's code and may cancel everything or close
+  /// the controller, and in that window neither the queue nor [_current]
+  /// leads to this job. It is queued work until it is launched, and this
+  /// is what says so.
+  _SoloJob<S, S, Object?>? _inTransition;
   final _running = <_SoloJob<S, S, Object?>>[];
   StackTrace? _lastChange;
   bool _pumpScheduled = false;
-  final _unpublished = <(S, S)>[];
+
+  /// The changes waiting to be published, oldest first.
+  ///
+  /// A queue rather than a list: publishing takes them from the head, and
+  /// a list moves everything behind the head down on every one.
+  final _unpublished = Queue<(S, S)>();
   bool _publishing = false;
   static const Object _closedListeners = Object();
   Object? _listeners;
@@ -239,8 +253,21 @@ abstract class Solo<S extends Object> {
     }
   }
 
+  /// Hands a listener's failure to [onListenerError], isolated.
+  ///
+  /// A hook that throws instead of reporting does not take with it the
+  /// failure it was called about: both errors reach the zone, the
+  /// listener's first. The hook is the channel here, not the fact, and a
+  /// broken channel is a second problem rather than a reason to lose the
+  /// first.
   void _reportListenerError(Object error, StackTrace stackTrace) {
-    _callHook(() => onListenerError(error, stackTrace));
+    try {
+      onListenerError(error, stackTrace);
+    } on Object catch (hookError, hookStackTrace) {
+      Zone.current
+        ..handleUncaughtError(error, stackTrace)
+        ..handleUncaughtError(hookError, hookStackTrace);
+    }
   }
 
   /// Creates a job without queueing it. Use for job factories such as
@@ -609,7 +636,9 @@ abstract class Solo<S extends Object> {
   _SoloJob<S, S, Object?>? _lastJobWhere(
     bool Function(Job<Object?> job) test,
   ) {
-    for (final job in _queue._jobs.reversed) {
+    // A snapshot for the same reason as in `removeWhere`: the predicate is
+    // the caller's code, and it may touch the queue while it answers.
+    for (final job in _queue._jobs.reversed.toList()) {
       if (test(job)) {
         return job;
       }
@@ -713,6 +742,18 @@ abstract class Solo<S extends Object> {
         ),
       );
     }
+    final transition = _inTransition;
+    if (transition != null && !transition.isFinished) {
+      // Held by the pump, which is about to launch it: closing takes this
+      // one the way it takes the queue, without asking.
+      transition._drop(
+        Cancelled.by(
+          reason: const ClosedCancelReason(),
+          started: false,
+          stackTrace: stackTrace,
+        ),
+      );
+    }
     final current = _current;
     if (current == null) {
       // Nothing to wait for, but still finish on a microtask: `onClose`
@@ -773,6 +814,16 @@ abstract class Solo<S extends Object> {
     CancelReason reason = const ManualCancelReason(),
   }) {
     _queue.clear(force: force, reason: reason);
+    // The pump may be holding one between the queue and the start, and a
+    // call from inside its rules is exactly when that happens.
+    _inTransition?._cancelWith(
+      Cancelled.by(
+        reason: reason,
+        started: false,
+        stackTrace: StackTrace.current,
+      ),
+      rejectable: !force,
+    );
     final current = _current;
     return current == null
         ? Future<void>.value()
@@ -925,7 +976,7 @@ abstract class Solo<S extends Object> {
     StackTrace? failureTrace;
     try {
       while (_unpublished.isNotEmpty) {
-        final change = _unpublished.removeAt(0);
+        final change = _unpublished.removeFirst();
         try {
           publish(change.$1, change.$2);
         } on Object catch (error, stackTrace) {
@@ -1064,57 +1115,57 @@ abstract class Solo<S extends Object> {
 
         return;
       }
-      final String? rejection;
+      // Off the queue, not started, and not yet `_current`: while the
+      // rules are asked — the caller's code — this job belongs to nobody,
+      // and only `_inTransition` can hand it to a `cancelAll` or a
+      // `close` made from in there.
+      _inTransition = job;
       try {
-        rejection = job._rejectStart(_state);
-      } on Object catch (error, stackTrace) {
-        // The rules are the caller's code, and this one threw. The job is
-        // already out of the queue: left as it is, it would never finish,
-        // and the pump would never come back for the ones behind it.
-        _debug(() => 'rule of $job threw: $error');
-        job
-          .._notifyObserver(error, stackTrace)
-          .._drop(Failed(error, stackTrace));
-        continue;
+        final String? rejection;
+        try {
+          rejection = job._rejectStart(_state);
+        } on Object catch (error, stackTrace) {
+          // The rules are the caller's code, and this one threw. The job is
+          // already out of the queue: left as it is, it would never finish,
+          // and the pump would never come back for the ones behind it.
+          _debug(() => 'rule of $job threw: $error');
+          job
+            .._notifyObserver(error, stackTrace)
+            .._drop(Failed(error, stackTrace));
+          continue;
+        }
+        if (rejection != null) {
+          job._drop(
+            Cancelled.by(
+              reason: const RulesCancelReason(),
+              started: false,
+              description: rejection,
+              stackTrace: StackTrace.current,
+            ),
+          );
+          continue;
+        }
+        if (job.isFinished) {
+          // The rules are the caller's code, and one of them ended this
+          // job while answering: `cancel()` on a job that has not started
+          // finishes it where it stands, and a `cancelAll` or a `close`
+          // from in there reaches it through `_inTransition`. Launching it
+          // now would throw `has already finished` from the kernel and
+          // leave the pump holding a finished `_current` — the queue would
+          // never move again.
+          _debug(() => 'start $job: ended while the rules were asked');
+          continue;
+        }
+        _current = job;
+        // The window closes here, not at the end of the launch: from now
+        // on the job is the current one, and that is where a `cancelAll`
+        // or a `close` from inside its body finds it.
+        _inTransition = null;
+        job._launch();
+        return;
+      } finally {
+        _inTransition = null;
       }
-      if (rejection != null) {
-        job._drop(
-          Cancelled.by(
-            reason: const RulesCancelReason(),
-            started: false,
-            description: rejection,
-            stackTrace: StackTrace.current,
-          ),
-        );
-        continue;
-      }
-      if (isClosed && !_draining) {
-        // The rules are the caller's code, and one of them closed the
-        // controller while it was being asked. Nothing starts after that
-        // — unless the closing is a drain, whose whole point is to start
-        // what is already in the queue.
-        _debug(() => 'start $job: closed while the rules were asked');
-        job._drop(
-          Cancelled.by(
-            reason: const ClosedCancelReason(),
-            started: false,
-            stackTrace: _closeStackTrace,
-          ),
-        );
-        continue;
-      }
-      if (job.isFinished) {
-        // The rules are the caller's code, and one of them gave this job
-        // up while answering: `cancel()` on a job that has not started
-        // finishes it where it stands. Launching it now would throw
-        // `has already finished` from the kernel and leave the pump
-        // holding a finished `_current` — the queue would never move again.
-        _debug(() => 'start $job: given up while the rules were asked');
-        continue;
-      }
-      _current = job;
-      job._launch();
-      return;
     }
   }
 

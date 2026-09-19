@@ -47,6 +47,44 @@ void main() {
     });
   });
 
+  test('removeWhere survives a predicate that touches the queue', () {
+    runSolo((solo, journal, async) {
+      // The predicate is the caller's code, and this one takes a job out
+      // while it answers about another: the walk used to be over the very
+      // list it was changing.
+      solo.add(slow(solo, 'a'));
+      solo.add(slow(solo, 'b'));
+      final c = solo.add(slow(solo, 'c'));
+      final removed = solo.queue.removeWhere((job) {
+        if (job.key == 'a') {
+          solo.queue.remove(c);
+        }
+
+        return job.key != 'b';
+      });
+      expect(removed, 1, reason: 'c was already gone when its turn came');
+      expect(solo.queue.jobs.map((job) => job.key), ['b']);
+      async.flushTimers();
+    });
+  });
+
+  test('lastJobWhere survives a predicate that touches the queue', () {
+    runSolo((solo, journal, async) {
+      // The same walk with the same caller's code in it, one method over.
+      solo.add(slow(solo, 'a'));
+      final b = solo.add(slow(solo, 'b'));
+      final found = solo.lastJobWhere((job) {
+        if (job.key == 'b') {
+          solo.queue.remove(b);
+        }
+
+        return job.key == 'a';
+      });
+      expect(found?.key, 'a');
+      async.flushTimers();
+    });
+  });
+
   test('remove skips a cancellable: false job unless forced', () {
     runSolo((solo, journal, async) {
       solo.add(slow(solo, 'a'));

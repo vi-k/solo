@@ -393,6 +393,42 @@
   running under the same key is running without being seen -- it runs inside
   another job and never went through the queue.
 
+- **Fix:** `cancelAll` and `close` reach the job the engine is about to start.
+  Between taking a job off the queue and launching it the engine asks that
+  job's start rules, which are the caller's code, and a rule that cancelled
+  everything or closed the controller was answered with the very job it had
+  just stopped: the queue no longer held it and nothing else did yet, so it
+  started anyway. It is queued work until it is launched, and a
+  `cancellable: false` one turns down a `cancelAll` without `force` exactly as
+  it does in the queue.
+
+- **Fix:** a listener's failure survives an `onListenerError` that throws. The
+  hook is where a listener's error is reported, and one that threw instead took
+  that error with it -- the zone heard about the broken reporter and never
+  about the listener. Both now reach the zone, the listener's first.
+
+- **Fix:** `SoloQueue.removeWhere` and `Solo.lastJobWhere` take their snapshot
+  of the queue before asking the predicate rather than while asking it. The
+  predicate is the caller's code, and one that removed a job walked into a
+  `ConcurrentModificationError` on the list it had just changed.
+
+- Add `package:solo/listeners.dart`: `Listeners`, the list of listeners a
+  notifier walks, for a package that builds a delivery of its own on top of
+  `solo`. An application does not need it -- a controller's listeners are
+  behind `addListener` -- and `flutter_solo` no longer keeps a copy of the
+  mechanics to serve `SoloSelection`.
+
+- `SoloTransition.job` says what it holds: the job the change belongs to. It is
+  usually the job whose `emit` made the change, and a state returned by that
+  job's `onError` or `onCancel` handler is its change as well, although by then
+  its body has ended and emitted nothing itself.
+
+- `doc/cancellation.md` no longer promises that a `whenCancelled` registered
+  after a cancellation always fires on the spot. It does once the cancellation
+  has been announced; one made while the cancellation is still cascading onto
+  the children joins that announcement in its own place, which is what the
+  dartdoc of `whenCancelled` has been saying.
+
 ## 0.2.0
 
 The first published release. 0.1.0 never left the tree, so nothing below is a

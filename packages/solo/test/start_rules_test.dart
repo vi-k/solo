@@ -187,6 +187,63 @@ void main() {
       );
     });
   });
+  test('cancelAll from a start rule reaches the job the pump holds', () {
+    runSolo((solo, journal, async) {
+      // The window between the queue and the start: the job is in the
+      // pump's hands, in no list of the controller, and about to run.
+      final held = solo.job<Initial, void>(
+        key: 'held',
+        canStart: (state) {
+          solo.cancelAll().ignore();
+
+          return true;
+        },
+        (ctx) async {},
+      );
+      final next = solo.job<Initial, void>(key: 'next', (ctx) async {});
+      solo
+        ..add(held)
+        ..add(next);
+      async.flushTimers();
+      expect(held.outcome, isA<Cancelled>());
+      expect(
+        (held.outcome! as Cancelled).started,
+        isFalse,
+        reason: 'it was stopped before it ran a line',
+      );
+      expect(next.outcome, isA<Cancelled>());
+      expect(
+        journal.take().where((line) => line.contains('started')),
+        isEmpty,
+        reason: 'the cancelled everything included what was about to start',
+      );
+    });
+  });
+
+  test('a cancellable: false job the pump holds turns cancelAll down', () {
+    runSolo((solo, journal, async) {
+      // Queued work until it is launched, so the refusal a queued one
+      // makes is the refusal this one makes.
+      final stubborn = solo.job<Initial, void>(
+        key: 'stubborn',
+        cancellable: false,
+        canStart: (state) {
+          solo.cancelAll().ignore();
+
+          return true;
+        },
+        (ctx) async {},
+      );
+      solo.add(stubborn);
+      async.flushTimers();
+      expect(stubborn.outcome, isA<Done<void>>());
+      expect(journal.take(), [
+        '[stubborn] started',
+        '[stubborn] finished Done(null)',
+      ]);
+    });
+  });
+
   test('a job put back from a hook is refused, and the queue goes on', () {
     // The first thing anyone writes in a retry hook. The job the hook sees
     // is out of the queue, not started and not yet finished, and `add`

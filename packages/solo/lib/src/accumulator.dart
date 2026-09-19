@@ -201,6 +201,7 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
         timing.duration == Duration.zero) {
       return;
     }
+    _stopThrottle();
     late final Timer timer;
     timer = _startTimer(timing.duration, (elapsed) {
       if (!identical(_throttleTimer, elapsed)) return;
@@ -208,6 +209,21 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
       if (_solo._current == null && _hasQueuedGroup) _schedulePump();
     });
     _throttleTimer = timer;
+  }
+
+  /// Takes the interval timer down, the way `_stopDebounce` takes its own.
+  ///
+  /// Nothing arms an interval that is already running today: a group is
+  /// not ready while one is, and `_armCooldown` turns around at the door.
+  /// That is a fact about the callers, though, and the one a replaced
+  /// timer would cost is the controller's: an engine timer lives in a list
+  /// until it fires or is cancelled, and a replaced one would sit there
+  /// holding this accumulator until the controller closed.
+  void _stopThrottle() {
+    final timer = _throttleTimer;
+    if (timer == null) return;
+    _throttleTimer = null;
+    _cancelTimer(timer);
   }
 }
 

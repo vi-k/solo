@@ -440,9 +440,9 @@ void main() {
 
   test('a listener that throws misses a rebuild, not the value', () {
     final controller = _Controller();
-    final errors = <Object>[];
+    final reported = <FlutterErrorDetails>[];
     final previous = FlutterError.onError;
-    FlutterError.onError = (details) => errors.add(details.exception);
+    FlutterError.onError = reported.add;
     addTearDown(() => FlutterError.onError = previous);
 
     final name = controller.select((state) => state.name);
@@ -458,7 +458,12 @@ void main() {
     });
 
     controller.set(const _Screen(name: 'Ada'));
-    expect(errors, [isStateError]);
+    expect(reported.map((details) => details.exception), [isStateError]);
+    expect(
+      '${reported.single.context}',
+      matches(RegExp('SoloSelection<[^>]*>#')),
+      reason: 'the report names this selection, not just its type',
+    );
     expect(seen, isEmpty, reason: 'this notification was lost to the throw');
     expect(name.value, 'Ada', reason: 'value reads the state, not the pick');
 
@@ -556,10 +561,11 @@ void main() {
       isTrue,
       reason: 'the second listener of the selection still receives the event',
     );
-    expect(zoneErrors, hasLength(1));
     expect(
-      (zoneErrors.first as StateError).message,
-      'the reporter blew up',
+      zoneErrors.map((error) => (error as StateError).message).toList(),
+      ['the listener blew up', 'the reporter blew up'],
+      reason: 'a reporter that throws does not take with it the failure it '
+          'was called about',
     );
   });
 

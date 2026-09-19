@@ -152,6 +152,41 @@ void main() {
     expect(listening.length, 0);
   });
 
+  test('a member cancelled on its own leaves the group', () {
+    final counter = _Counter();
+    final listening = SoloSubscriptions();
+    var first = 0;
+    var second = 0;
+    final one = counter.listen(() => first++)..addTo(listening);
+    counter.listen(() => second++).addTo(listening);
+    expect(listening.length, 2);
+
+    one.cancel();
+    expect(
+      listening.length,
+      1,
+      reason: 'the group holds what it would cancel, and nothing else',
+    );
+
+    counter.set(1);
+    expect([first, second], [0, 1]);
+
+    listening.cancel();
+    counter.set(2);
+    expect([first, second], [0, 1]);
+    expect(listening.length, 0);
+  });
+
+  test('a group takes no notice of a subscription already cancelled', () {
+    final counter = _Counter();
+    final listening = SoloSubscriptions();
+    counter.listen(() {})
+      ..cancel()
+      ..addTo(listening);
+
+    expect(listening.length, 0, reason: 'there is nothing left to take back');
+  });
+
   test('a group that was cancelled cancels what it is handed', () {
     final counter = _Counter();
     final listening = SoloSubscriptions()..cancel();

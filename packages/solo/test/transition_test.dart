@@ -66,6 +66,29 @@ void main() {
     });
   });
 
+  test('a state from a handler belongs to the job whose body has ended', () {
+    runSolo((solo, journal, async) {
+      final seen = <SoloTransition<TestState>>[];
+      Solo.observer = _TransitionObserver(seen);
+      final job = solo.run<TestState, void>(
+        key: 'job',
+        onCancel: (state, cancelled) => const Disposed(),
+        (ctx) async => pause(ctx, 100),
+      );
+      async.elapse(const Duration(milliseconds: 10));
+      job.cancel().ignore();
+      async.flushTimers();
+      expect(seen.map((transition) => transition.current), [const Disposed()]);
+      expect(
+        identical(seen.single.job, job),
+        isTrue,
+        reason: 'the body emitted nothing and had ended; the change is '
+            "still the job's own",
+      );
+      Solo.observer = journal;
+    });
+  });
+
   test('revisions grow by one, nested change included', () {
     final solo = _Nested()..set(const Preparing());
     expect(

@@ -117,9 +117,12 @@ void main() {
       });
 
       expect(secondCalled, isTrue);
-      expect(zoneErrors, hasLength(1));
-      expect(zoneErrors.first, isA<StateError>());
-      expect((zoneErrors.first as StateError).message, 'reporter failed');
+      expect(
+        zoneErrors.map((error) => (error as StateError).message).toList(),
+        ['listener failed', 'reporter failed'],
+        reason: 'a hook that throws instead of reporting does not take the '
+            'failure it was called about with it',
+      );
 
       expect(job.isCancelled, isTrue);
       parked.complete();

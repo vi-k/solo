@@ -1,7 +1,9 @@
-/// The listeners of one controller, in subscription order.
+/// The listeners of one notifier, in subscription order.
 ///
-/// Plain Dart, no Flutter dependencies. Duplicated in `flutter_solo`
-/// because the core cannot import Flutter.
+/// Plain Dart, no Flutter dependencies: what the core notifies through,
+/// and what `flutter_solo` notifies through as well, from
+/// `package:solo/listeners.dart`. Reporting a listener's failure is the
+/// caller's, so the Flutter side of it stays in the Flutter package.
 final class Listeners {
   final _entries = <_ListenerEntry>[];
 
@@ -20,7 +22,10 @@ final class Listeners {
   bool remove(void Function() listener) {
     for (var i = 0; i < _entries.length; i++) {
       final entry = _entries[i];
-      if (entry.alive && entry.listener == listener) {
+      // No test of `alive` here: a deactivated entry is taken out of the
+      // list in the same breath, so the list holds live ones only. The
+      // flag is for the snapshot `notify` walks, which is not this list.
+      if (entry.listener == listener) {
         entry.alive = false;
         _entries.removeAt(i);
         return true;
@@ -44,6 +49,9 @@ final class Listeners {
   /// is isolated: an error thrown by a listener is handed to [report], and
   /// the pass continues.
   void notify(void Function(Object error, StackTrace stackTrace) report) {
+    if (_entries.isEmpty) {
+      return;
+    }
     final snapshot = _entries.toList();
     for (final entry in snapshot) {
       if (!entry.alive) {

@@ -239,6 +239,14 @@
   What lies below the break is still left running: the depth of a tree is
   bounded by the stack either way, and `doc/children.md` says by how much.
 
+- `doc/outcomes.md` no longer promises that a `whenCancelled` registered after
+  a cancellation always fires on the spot. It does once the cancellation has
+  been announced; one made in between -- while the cancellation cascades onto
+  the children, or while a job whose body gave itself up waits for them --
+  joins that announcement in its own place, and a registration made later never
+  runs before one made earlier. The dartdoc of `whenCancelled` has been saying
+  so; the page had the short version.
+
 ## 0.2.0
 
 - **Breaking:** `ctx.run(child)` returns `Future<T>` instead of the child's

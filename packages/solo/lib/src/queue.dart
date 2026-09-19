@@ -89,7 +89,14 @@ final class _SoloQueue<S extends Object> implements SoloQueue {
     CancelReason reason = const ManualCancelReason(),
   }) {
     var count = 0;
-    for (final job in _jobs.where(test).toList()) {
+    // The snapshot is taken before the predicate is asked, not while it is
+    // being asked: `test` is the caller's code, and `where` is lazy, so one
+    // that touches the queue used to walk into a
+    // `ConcurrentModificationError` on the list it had just changed.
+    for (final job in _jobs.toList()) {
+      if (!test(job)) {
+        continue;
+      }
       if (remove(job, force: force, reason: reason)) {
         count++;
       }

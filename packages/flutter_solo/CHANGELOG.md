@@ -227,6 +227,31 @@
   override of `onError` is what answers for such a failure, and without either
   it goes to the zone.
 
+- **Breaking:** `SoloSubscriptions.length` counts the subscriptions the group
+  would cancel. A member cancelled on its own leaves the group now, where the
+  group used to hold it for good: `length` counted it, and the listener and
+  whatever its closure held stayed alive for as long as the group did -- the
+  leak the class exists to prevent, one object further along. A group handed a
+  subscription that is already cancelled keeps nothing either. Migration: code
+  that read `length` as "how many have ever been added" needs a counter of its
+  own.
+
+- **Fix:** a listener of a `SoloSelection` that throws is reported with the
+  selection named, `SoloSelection<Profile, String>#a1b2c` rather than the bare
+  type, the way `SoloListenable` names a controller. If
+  `FlutterError.reportError` itself throws, the listener's failure is no longer
+  lost with it: both go to the zone, the listener's first.
+
+- The README's `load` falls back to `Empty` when it fails or is cancelled. As
+  written it left the state on `Loading` -- a spinner, and nothing on the
+  screen to tap -- which is the gap the package's example closed earlier;
+  `onError` and `onCancel` are what close it here.
+
+- The listener list behind `SoloSelection` is `solo`'s: this package no longer
+  keeps a copy of the mechanics, and takes `Listeners` from
+  `package:solo/listeners.dart`. Reporting a listener's failure through
+  `FlutterError` stays here, where Flutter is.
+
 ## 0.2.0
 
 The first published release. 0.1.0 never left the tree.
