@@ -174,3 +174,12 @@ keeps the value in».
 значение с собой. Прогон в `solo` это подтвердил на обеих формах — под вызовом
 и на вызове, — и обе стали сторожами: «the registration under run is never
 reached» и «the registration handed to run closes it».
+
+**Предупреждение про `ctx.join` висело в воздухе.** В блоке стоит обычный
+`await`, а проза предупреждала о контрольной точке «между передачей
+и `disown`», называя форму, которой в примере нет: читателю приходилось
+достраивать её самому. Стало прямой подстановкой — «напишите вместо него
+`ctx.join(() => archive.take(file))`, и контрольная точка бросит между двумя
+строками секции», — то есть обе формы названы и связаны с тем, что в блоке
+видно. Сторожа на обе уже стояли: «a checkpoint between the transfer and disown
+loses the file» и «the protected section hands it over whole».

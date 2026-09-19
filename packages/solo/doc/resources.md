@@ -255,10 +255,11 @@ await ctx.uncancellable(() async {
 });
 ```
 
-Use a plain `await` for the transfer inside that section. A context checkpoint
-between the transfer and `disown` — `ctx.join(() => archive.take(file))` is
-one — throws after ownership has changed and before the registration is
-dropped, and cleanup then deletes a file the archive is holding.
+The transfer is a plain `await` on purpose. Write it as
+`ctx.join(() => archive.take(file))` instead, and the checkpoint that call
+makes after its action throws between the two lines of the section: ownership
+has changed, the registration has not been dropped, and cleanup deletes a file
+the archive is holding.
 
 ## When the release happens
 
