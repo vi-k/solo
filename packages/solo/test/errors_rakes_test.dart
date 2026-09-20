@@ -8,11 +8,18 @@ import 'package:fake_async/fake_async.dart';
 import 'package:solo/solo.dart';
 import 'package:test/test.dart';
 
-/// What `doc/errors.md` states, pinned next to the page.
+/// The first attempts of `doc/errors.md`, and what each one costs.
+///
+/// Six sections of the page open with the version its vocabulary leads to,
+/// and each one is run here: the hook that reports and returns, the
+/// observer that times a job instead of its cancellation, the observer that
+/// reports a failure nobody answered for, the broad catch that takes the
+/// cancellation along with the device failures, the rule that throws to
+/// refuse, and the bare `unawaited`.
 ///
 /// The page has no bench: it shows fragments of an application, not a
 /// program that runs. So every claim it makes about where an error goes —
-/// the hook, the handler, the zone, the outcome — is guarded here instead,
+/// the hook, the handler, the zone, the outcome — is guarded here as well,
 /// and so are the two numbers of its delay table. The observer recipe is
 /// copied from the page as it stands, with `log` collecting lines instead
 /// of printing them.
@@ -182,6 +189,77 @@ final class Cam extends Solo<Value> {
         },
       );
 
+  /// The first attempt of "Catching errors inside a body": one catch for
+  /// everything that comes out of the device.
+  Job<void> broadCatch(Completer<void> gate, Hw hw, List<Object> broken) =>
+      run<Value, void>(
+        key: 'broad',
+        (ctx) async {
+          try {
+            await ctx.wait(() => gate.future);
+            await ctx.join(hw.open);
+          } on Object catch (error) {
+            await hw.reset();
+            // ctx.emit(Broken(error)) on the page.
+            broken.add(error);
+            ctx.emit(const Value(-1));
+            rethrow;
+          }
+        },
+      );
+
+  /// The same body with cancellation let through first.
+  Job<void> guardedCatch(Completer<void> gate, Hw hw, List<Object> broken) =>
+      run<Value, void>(
+        key: 'guarded',
+        (ctx) async {
+          try {
+            await ctx.wait(() => gate.future);
+            await ctx.join(hw.open);
+          } on Cancelled {
+            rethrow;
+          } on Object catch (error) {
+            await hw.reset();
+            broken.add(error);
+            ctx.emit(const Value(-1));
+            rethrow;
+          }
+        },
+      );
+
+  /// The first attempt of "Errors in state rules": a rule that throws to
+  /// refuse, on a job that also carries a final state handler.
+  Job<void> refusesByThrow() => run<Value, void>(
+        key: 'refuses',
+        canStart: (state) {
+          if (state.n == 0) throw StateError('no free slot');
+
+          return true;
+        },
+        onError: (state, error, stackTrace) => const Value(-1),
+        (ctx) async {},
+      );
+
+  /// The same refusal as an answer.
+  Job<void> refusesByAnswer() => run<Value, void>(
+        key: 'answers',
+        canStart: (state) => state.n != 0,
+        onCancel: (state, cancelled) => const Value(-2),
+        (ctx) async {},
+      );
+
+  /// The first attempt of "Background work and logs": a future the caller
+  /// does not wait for.
+  Job<void> bareUnawaited(Completer<void> gate) => run<Value, void>(
+        key: 'unawaited',
+        (ctx) async {
+          unawaited(() async {
+            await gate.future;
+            throw StateError('analytics');
+          }());
+        },
+      );
+
   /// A start rule that throws instead of answering.
   Job<void> refusedByStart() => run<Value, void>(
         key: 'start',
@@ -236,11 +314,65 @@ final class Cam extends Solo<Value> {
   }
 }
 
-/// The page's opening example: a reporting hook that omits `super`.
+/// The first attempt of "Reporting an error": a hook that reports and
+/// returns.
 final class Silent extends Cam {
   @override
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
       errors.add(error);
+}
+
+/// The first attempt of "Why cancellation was slow": the two ends of a job,
+/// and the lifetime between them.
+final class SlowJobs extends SoloObserver {
+  SlowJobs(this.lines);
+
+  final List<String> lines;
+
+  final _startedAt = Expando<DateTime>('start');
+
+  @override
+  void onStart(Solo<Object> solo, Job<Object?> job) =>
+      _startedAt[job] = clock.now();
+
+  @override
+  void onFinish(Solo<Object> solo, Job<Object?> job) {
+    final startedAt = _startedAt[job];
+    if (startedAt == null) return;
+    final ran = clock.now().difference(startedAt);
+    if (ran > const Duration(milliseconds: 50)) {
+      lines.add('${job.key} ran ${ran.inMilliseconds} ms');
+    }
+  }
+}
+
+/// The first attempt of "Handled and unhandled failures": an observer that
+/// reports every failure it sees.
+final class Failures extends SoloObserver {
+  Failures(this.lines);
+
+  final List<String> lines;
+
+  @override
+  void onFinish(Solo<Object> solo, Job<Object?> job) {
+    final outcome = job.outcome;
+    if (outcome is Failed) lines.add('reported ${outcome.error}');
+  }
+}
+
+/// The camera of "Catching errors inside a body".
+final class Hw {
+  Hw(this.calls, {this.broken = false});
+
+  final List<String> calls;
+  final bool broken;
+
+  Future<void> open() async {
+    calls.add('open');
+    if (broken) throw StateError('camera');
+  }
+
+  Future<void> reset() async => calls.add('reset');
 }
 
 /// A hook that changes the state again from inside the first.
@@ -330,7 +462,9 @@ void main() {
       expect(zoneErrors, isEmpty);
     });
 
-    test('an onError that omits super takes the error nowhere', () async {
+    test(
+        'the first attempt: a hook that reports and returns takes the error '
+        'nowhere', () async {
       final taken = <Object>[];
       final zoneErrors = <Object>[];
       final controller = Silent();
@@ -411,6 +545,40 @@ void main() {
       ]);
     });
 
+    test('the first attempt times the job, not its cancellation', () {
+      fakeAsync((async) {
+        final lines = <String>[];
+        Solo.observer = SlowJobs(lines);
+        final controller = Cam();
+
+        controller.waited().ignore();
+        async.elapse(const Duration(seconds: 1));
+
+        final cancelled = controller.bare();
+        async.elapse(const Duration(milliseconds: 10));
+        cancelled.cancel().ignore();
+        async.elapse(const Duration(seconds: 1));
+
+        expect(
+          lines,
+          ['waited ran 300 ms', 'bare ran 300 ms'],
+          reason: 'the job nobody cancelled reads the same',
+        );
+      });
+    });
+
+    test('the recipe says nothing about a job nobody cancelled', () {
+      fakeAsync((async) {
+        final lines = <String>[];
+        Solo.observer = SlowCancellations(lines);
+
+        Cam().waited().ignore();
+        async.elapse(const Duration(seconds: 1));
+
+        expect(lines, isEmpty);
+      });
+    });
+
     test('a bare await reports 290 ms of a 300 ms wait', () {
       fakeAsync((async) {
         final lines = <String>[];
@@ -457,6 +625,33 @@ void main() {
   // --- Handled and unhandled failures -------------------------------------
 
   group('handled and unhandled failures', () {
+    test('the first attempt reports the failure, and the zone gets it too',
+        () async {
+      final lines = <String>[];
+      final zoneErrors = <Object>[];
+      final controller = Cam();
+      Solo.observer = Failures(lines);
+
+      await runZonedGuarded(
+        () async {
+          controller.fails();
+          await pumpEventQueue();
+        },
+        (error, stackTrace) => zoneErrors.add(error),
+      );
+
+      expect(
+        lines,
+        ['reported Bad state: body'],
+        reason: 'the reporter has it',
+      );
+      expect(
+        zoneErrors,
+        [isA<StateError>()],
+        reason: 'and nobody observed the outcome',
+      );
+    });
+
     test('value marks the outcome as observed', () async {
       final zoneErrors = <Object>[];
       final controller = Cam();
@@ -592,6 +787,75 @@ void main() {
   // --- Catching errors inside a body --------------------------------------
 
   group('catching errors inside a body', () {
+    test('the first attempt resets a camera the job never opened', () async {
+      final controller = Cam();
+      final calls = <String>[];
+      final broken = <Object>[];
+      final zoneErrors = <Object>[];
+      late final Job<void> job;
+
+      await runZonedGuarded(
+        () async {
+          job = controller.broadCatch(
+            Completer<void>(),
+            Hw(calls),
+            broken,
+          )..ignore();
+          await pumpEventQueue();
+          await job.cancel();
+        },
+        (error, stackTrace) => zoneErrors.add(error),
+      );
+
+      expect(calls, ['reset'], reason: 'open never ran');
+      expect(broken, [isA<Cancelled>()], reason: 'read as a device failure');
+      expect(job.outcome, isA<Cancelled>());
+      expect(
+        controller.currentState.n,
+        0,
+        reason: 'emit on a cancelled job throws, so Broken never publishes',
+      );
+      expect(controller.errors, isEmpty);
+      expect(zoneErrors, isEmpty);
+    });
+
+    test('cancellation let through first leaves the camera alone', () async {
+      final controller = Cam();
+      final calls = <String>[];
+      final broken = <Object>[];
+      final job = controller.guardedCatch(
+        Completer<void>(),
+        Hw(calls),
+        broken,
+      )..ignore();
+
+      await pumpEventQueue();
+      await job.cancel();
+
+      expect(calls, isEmpty);
+      expect(broken, isEmpty);
+      expect(job.outcome, isA<Cancelled>());
+    });
+
+    test('and still handles a failure of the device', () async {
+      final controller = Cam();
+      final calls = <String>[];
+      final broken = <Object>[];
+      final gate = Completer<void>()..complete();
+      final job = controller.guardedCatch(
+        gate,
+        Hw(calls, broken: true),
+        broken,
+      )..ignore();
+
+      await job.done;
+
+      expect(calls, ['open', 'reset']);
+      expect(broken, [isA<StateError>()]);
+      expect(job.outcome, isA<Failed>());
+      expect(controller.currentState.n, -1, reason: 'Broken is published');
+    });
+
     test('Cancelled implements Exception', () async {
       final controller = Cam();
       final job = controller.swallows(Completer<void>());
@@ -617,6 +881,53 @@ void main() {
   // --- Errors in state rules ----------------------------------------------
 
   group('errors in state rules', () {
+    test('the first attempt turns a refusal into a reported failure', () async {
+      final controller = Cam();
+      final zoneErrors = <Object>[];
+      late final Job<void> job;
+
+      await runZonedGuarded(
+        () async {
+          job = controller.refusesByThrow();
+          await pumpEventQueue();
+        },
+        (error, stackTrace) => zoneErrors.add(error),
+      );
+
+      expect(job.outcome, isA<Failed>());
+      expect(controller.errors, [isA<StateError>()], reason: 'the hooks hear');
+      expect(
+        zoneErrors,
+        [isA<StateError>()],
+        reason: 'and the outcome nobody observed reaches the zone',
+      );
+      expect(
+        controller.currentState.n,
+        0,
+        reason: 'the onError of that run corrects nothing: it never started',
+      );
+    });
+
+    test('a rule that answers false cancels the job and reports nothing',
+        () async {
+      final controller = Cam();
+      final zoneErrors = <Object>[];
+      late final Job<void> job;
+
+      await runZonedGuarded(
+        () async {
+          job = controller.refusesByAnswer()..ignore();
+          await pumpEventQueue();
+        },
+        (error, stackTrace) => zoneErrors.add(error),
+      );
+
+      expect(job.outcome, isA<Cancelled>());
+      expect(controller.errors, isEmpty);
+      expect(zoneErrors, isEmpty);
+      expect(controller.currentState.n, 0);
+    });
+
     test('a start rule that throws fails the job, the queue continues',
         () async {
       final controller = Cam();
@@ -688,6 +999,24 @@ void main() {
   // --- Background work and logs -------------------------------------------
 
   group('background work and logs', () {
+    test('the first attempt keeps the error away from the hooks', () async {
+      final controller = Cam();
+      final gate = Completer<void>();
+      final zoneErrors = <Object>[];
+
+      await runZonedGuarded(
+        () async {
+          await controller.bareUnawaited(gate).value;
+          gate.complete();
+          await pumpEventQueue();
+        },
+        (error, stackTrace) => zoneErrors.add(error),
+      );
+
+      expect(controller.errors, isEmpty, reason: 'no hook is asked');
+      expect(zoneErrors, [isA<StateError>()], reason: 'the zone takes it');
+    });
+
     test('unattended reports after the job, and refuses children', () async {
       final controller = Cam();
       final gate = Completer<void>();

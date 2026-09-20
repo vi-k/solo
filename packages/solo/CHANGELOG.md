@@ -442,6 +442,17 @@
   implies that `package:clock` comes for free with `fake_async` in an
   application that ships the observer.
 
+- `doc/errors.md` opens six of its sections with the version its own vocabulary
+  leads to, and puts the one that works under the next heading: the hook that
+  reports and returns, an observer that times a job instead of its
+  cancellation, an observer that reports a failure nobody answered for, a broad
+  `catch` that takes the cancellation along with the device failures, a rule
+  that throws to refuse, and a bare `unawaited`. Reporting and the observer get
+  a section each, where they used to share the page's introduction. The section
+  on rules now says what a throw costs: the error goes to the reporting hooks
+  and, unless somebody observes the outcome, to the creation zone, and the
+  `onError` of that same `run` corrects nothing, because the job never started.
+
 ## 0.2.0
 
 The first published release. 0.1.0 never left the tree, so nothing below is a
