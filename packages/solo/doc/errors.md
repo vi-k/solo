@@ -6,7 +6,8 @@ State handlers and reporting hooks have different responsibilities.
 reporting, including errors from cleanup and abandoned operations.
 
 A controller can override `onStart`, `onFinish`, `onError`, `onLog`, `onChange`
-and `onClose`. For example, add an error hook to the profile controller:
+and `onClose`, and `onListenerError` for a listener that throws while being
+notified. For example, add an error hook to the profile controller:
 
 ```dart
 final class ProfileController extends Solo<ProfileState> {
@@ -19,6 +20,8 @@ final class ProfileController extends Solo<ProfileState> {
   @override
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
     reportCrash(error, stackTrace);
+    // Reporting is not answering: super keeps the default route below.
+    super.onError(job, error, stackTrace);
   }
 }
 ```
@@ -71,6 +74,13 @@ One handler for the process, set once at startup. With it set, those errors go
 to it instead of the zone; with nobody set, they go to the zone. Separating the
 two is deliberate: answering for an error is a responsibility somebody takes,
 not a side effect of switching a log on.
+
+That route — the handler, else the zone — is what the controller's own
+`onError` does by default, so an override replaces it. A hook that reports and
+returns takes those errors nowhere else: the handler is never asked and the
+zone never hears them. Call `super.onError(job, error, stackTrace)` to report
+and keep the route. The observer is not affected either way, and neither are
+the other hooks: each stands on its own call.
 
 ## What is holding the controller
 
@@ -151,16 +161,18 @@ the queue.
 
 `clock.now()` rather than `DateTime.now()`: under `fake_async` the first moves
 with the fake time and the second stands still, so the same observer can be
-checked by a test. `package:clock` is a leaf package and already sits in the
-graph of anything that uses `fake_async`.
+checked by a test. The observer runs in the application, so `package:clock`
+goes in its dependencies and not its dev ones; it is a leaf package, and
+`fake_async` depends on it anyway wherever the tests run.
 
 ## Handled and unhandled failures
 
 Accessing `job.done` or `job.value`, or calling `job.ignore()`, marks the
-outcome as observed. A `Failed` outcome that nobody observes goes to the job's
-creation zone through `Zone.handleUncaughtError`, in addition to the error
-hooks. An installed observer alone does not mark outcomes as observed. If
-reporting is handled elsewhere and the caller needs no result:
+outcome as observed. Reading `job.outcome` does not: it answers what happened
+without taking responsibility for it. A `Failed` outcome that nobody observes
+goes to the job's creation zone through `Zone.handleUncaughtError`, in addition
+to the error hooks. An installed observer alone does not mark outcomes as
+observed. If reporting is handled elsewhere and the caller needs no result:
 
 ```dart
 profile.load().ignore(); // the counterpart of Future.ignore
@@ -170,7 +182,9 @@ Errors from cleanup, cancellation callbacks and operations abandoned by `wait`
 go to the reporting hooks. Without an overridden error hook or an installed
 `Solo.errorHandler`, they fall back to the job's creation zone. Such an error
 can arrive after the job has already completed. It does not replace an existing
-cancellation outcome. These reporting paths exclude `Cancelled` itself.
+cancellation outcome. A `Cancelled` that arrives this way — an abandoned action
+that ended in one — is a late failure like any other to the hooks, and they see
+it; the zone never does, whatever route leads there.
 
 An unhandled error of `job.value` or `ctx.run(child)` is still an unhandled
 Future error under Dart's rules, even if that error is `Cancelled`. Handle
@@ -214,6 +228,14 @@ Where a rule throws anyway decides who hears about it:
 | A rule at a context checkpoint | The body receives the error. |
 | Re-evaluation after a state update | Reported; it does not itself cancel the running body. |
 | A check that also controls a final state handler | The handler is disabled. |
+
+A rule that answers `false` is not an error: it cancels the job, and the
+`Cancelled` carries the trace of the change it turned down — the `emit` or the
+`externalSetState` whose state broke the rule. Taking that trace costs most of
+what a change costs, so it is taken where assertions are on and left out of a
+release build. `Solo.traceStateChanges = true` keeps it everywhere and `false`
+drops it everywhere; without it the cancellation still carries the trace of the
+place that noticed.
 
 Re-evaluation errors fall back to the controller's creation zone when no error
 hook and no `Solo.errorHandler` answers for them. In the root Dart zone, an

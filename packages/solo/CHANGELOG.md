@@ -429,6 +429,19 @@
   the children joins that announcement in its own place, which is what the
   dartdoc of `whenCancelled` has been saying.
 
+- `doc/errors.md` says what an overridden error hook replaces. The default body
+  of `Solo.onError` is the route to `Solo.errorHandler`, and to the job's
+  creation zone when no handler is set, so a hook that reports and returns
+  takes those errors nowhere else -- the page's own example now calls `super`.
+  The page also corrects what it said about `Cancelled`: one that arrives as a
+  late failure from an abandoned action does reach the reporting hooks, and it
+  is the zone that never sees it. It adds `Solo.traceStateChanges`, which was
+  documented nowhere in prose, notes that reading `job.outcome` does not mark
+  an outcome observed where `done`, `value` and `ignore()` do, names
+  `onListenerError` among the hooks a controller can override, and no longer
+  implies that `package:clock` comes for free with `fake_async` in an
+  application that ships the observer.
+
 ## 0.2.0
 
 The first published release. 0.1.0 never left the tree, so nothing below is a
