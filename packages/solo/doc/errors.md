@@ -33,14 +33,15 @@ final class ProfileController extends Solo<ProfileState> {
 ```
 
 The hook is named for the errors it receives, and the override does what it was
-added for: every error the controller hears about reaches the reporter. The
-hook is also the route itself. Its default body is what takes an error that has
-nowhere else to go — a failure nobody observed, an error from cleanup or from
-an abandoned operation — to `Solo.errorHandler`, and to the job's creation zone
-when no handler is set. An override replaces that body: the handler is never
-asked and the zone never hears, so those errors end in the reporter and nowhere
-else. That is where you would look for them, which is what makes the loss
-quiet: the line is there, the fallback is gone.
+added for: every error the controller hears about reaches the reporter. But the
+hook does not describe a route — it is the route: its own body is what carries
+the error onward. By default that body takes an error that has nowhere else to
+go — a failure nobody observed, an error from cleanup or from an abandoned
+operation — to `Solo.errorHandler`, and to the job's creation zone when no
+handler is set. An override replaces that body: the handler is never asked and
+the zone never hears, so those errors end in the reporter and nowhere else.
+That is where you would look for them, which is what makes the loss quiet: the
+line is there, the fallback is gone.
 
 ### Reporting and keeping the route
 
@@ -48,7 +49,7 @@ quiet: the line is there, the fallback is gone.
   @override
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
     reportCrash(error, stackTrace);
-    // Reporting is not answering: super keeps the default route below.
+    // Keeping the route: the handler, else the job's creation zone.
     super.onError(job, error, stackTrace);
   }
 ```
