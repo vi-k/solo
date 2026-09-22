@@ -149,12 +149,12 @@ the marked one or the held one. A job with `refusesCancellation` turns down the
 ones it may turn down, so nothing is pending on it however often it was asked
 to stop.
 
-`null` says that no job is running, not that nothing holds the close. A drain
-waits for the queue too, and a group of `collect` or `accumulate` stays queued
-until its timing lets it go — `isDraining` is still true then. With
-`SoloStream` the stream closes after the engine and waits for every
-subscription to take its done event: one left paused holds `close()` with
-`isFinished` already true.
+`null` says that no job is running, not that nothing holds the close.
+`close(mode: SoloCloseMode.drain)` waits for the queue as well, and a group of
+`collect` or `accumulate` stays queued until its timing lets it go —
+`isDraining` is still true then. With `SoloStream` the stream closes after the
+engine and waits for every subscription to take its done event: one left paused
+holds `close()` with `isFinished` already true.
 
 It reports and does not diagnose. A long wait does not prove a forgotten
 `ctx.wait`: a body inside an external call looks the same, and so does a
