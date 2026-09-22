@@ -44,14 +44,14 @@ Solo.errorHandler = (solo, job, error, stackTrace) =>
     Sentry.captureException(error, stackTrace: stackTrace);
 ```
 
-Most errors have an address of their own. The failure of a body becomes
-`Failed`, where `run(onError: ...)` computes a state from it, and an outcome
-nobody observes reaches the job's creation zone by itself. What no outcome
-carries is the rest: an operation abandoned by `wait` that fails later, a
-disposer, an `onCancel` callback, work handed to `ctx.unattended`. Somebody has
-to answer for those, and by default that somebody is the handler above — one
-for the process, set once at startup. With nobody set, they go to the zone the
-job was created in.
+Most errors are carried by an outcome. The failure of a body becomes `Failed`,
+where `run(onError: ...)` computes a state from it, and an outcome nobody
+observes reaches the job's creation zone by itself. What no outcome carries is
+the rest: an operation abandoned by `wait` that fails later, a disposer, an
+`onCancel` callback, work handed to `ctx.unattended`. Somebody has to answer
+for those, and by default that somebody is the handler above — one for the
+process, set once at startup. With nobody set, they go to the zone the job was
+created in.
 
 Separating the two is deliberate: answering for an error is a responsibility
 somebody takes, not a side effect of switching a log on. Setting a
