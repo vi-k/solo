@@ -692,6 +692,65 @@ void main() {
 
       expect(closed, isTrue);
     });
+
+    test('a timer armed on start catches the job that never ends', () {
+      fakeAsync((async) {
+        final lines = <String>[];
+        Solo.observer = Hangs(lines);
+
+        Cam().stuck(Completer<void>()).ignore();
+        async.elapse(const Duration(seconds: 6));
+
+        expect(lines, [
+          'stuck is still running: SoloPending([stuck] in its body)',
+        ]);
+      });
+    });
+
+    test('the line carries the held cancellation as well', () {
+      fakeAsync((async) {
+        final lines = <String>[];
+        Solo.observer = Hangs(lines);
+        final job = Cam().held(Completer<void>(), <String>[])..ignore();
+
+        async.elapse(const Duration(seconds: 1));
+        job.cancel().ignore();
+        async.elapse(const Duration(seconds: 6));
+
+        const line = 'held is still running: SoloPending([held] in its '
+            'body, holding Cancelled(manual) back)';
+
+        expect(lines, [line]);
+      });
+    });
+
+    test('a job that ends in time disarms its own timer', () {
+      fakeAsync((async) {
+        final lines = <String>[];
+        Solo.observer = Hangs(lines);
+
+        Cam().waited().ignore();
+        async.elapse(const Duration(seconds: 6));
+
+        expect(lines, isEmpty);
+      });
+    });
+
+    test('the two ends of a job say nothing about a hang', () {
+      fakeAsync((async) {
+        final lines = <String>[];
+        Solo.observer = SlowJobs(lines);
+
+        Cam().stuck(Completer<void>()).ignore();
+        async.elapse(const Duration(seconds: 6));
+
+        expect(
+          lines,
+          isEmpty,
+          reason: 'onFinish never comes for a job that never finishes',
+        );
+      });
+    });
   });
 
   // --- Why cancellation was slow ------------------------------------------
@@ -793,65 +852,6 @@ void main() {
       await running.value;
 
       expect(controller.started, ['swallows'], reason: 'onStart ran once');
-    });
-
-    test('a timer armed on start catches the job that never ends', () {
-      fakeAsync((async) {
-        final lines = <String>[];
-        Solo.observer = Hangs(lines);
-
-        Cam().stuck(Completer<void>()).ignore();
-        async.elapse(const Duration(seconds: 6));
-
-        expect(lines, [
-          'stuck is still running: SoloPending([stuck] in its body)',
-        ]);
-      });
-    });
-
-    test('the line carries the held cancellation as well', () {
-      fakeAsync((async) {
-        final lines = <String>[];
-        Solo.observer = Hangs(lines);
-        final job = Cam().held(Completer<void>(), <String>[])..ignore();
-
-        async.elapse(const Duration(seconds: 1));
-        job.cancel().ignore();
-        async.elapse(const Duration(seconds: 6));
-
-        const line = 'held is still running: SoloPending([held] in its '
-            'body, holding Cancelled(manual) back)';
-
-        expect(lines, [line]);
-      });
-    });
-
-    test('a job that ends in time disarms its own timer', () {
-      fakeAsync((async) {
-        final lines = <String>[];
-        Solo.observer = Hangs(lines);
-
-        Cam().waited().ignore();
-        async.elapse(const Duration(seconds: 6));
-
-        expect(lines, isEmpty);
-      });
-    });
-
-    test('the two ends of a job say nothing about a hang', () {
-      fakeAsync((async) {
-        final lines = <String>[];
-        Solo.observer = SlowJobs(lines);
-
-        Cam().stuck(Completer<void>()).ignore();
-        async.elapse(const Duration(seconds: 6));
-
-        expect(
-          lines,
-          isEmpty,
-          reason: 'onFinish never comes for a job that never finishes',
-        );
-      });
     });
   });
 
