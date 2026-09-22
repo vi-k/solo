@@ -419,10 +419,28 @@ try {
 }
 ```
 
-Cancellation leaves first, and what follows handles device failures only. Once
-a job has accepted cancellation, its outcome remains `Cancelled` even if the
-body catches it. For a final failure state, prefer the `onError` parameter of
-`run` rather than writing that correction inside a broad catch.
+Cancellation leaves first, and what follows handles device failures only. The
+same separation fits inside a single clause when the catch has to stay one:
+
+```dart
+try {
+  await ctx.join(hw.open);
+  await ctx.join(() => hw.setZoom(zoom));
+} on Object catch (error) {
+  if (error is Cancelled) rethrow;
+  await hw.reset();
+  ctx.emit(Broken(error));
+  rethrow;
+}
+```
+
+The check is the first line of the catch. Written under the reset, it would
+rethrow a cancellation that has already reset the camera, and the cost of the
+first attempt would stay exactly where it was.
+
+Once a job has accepted cancellation, its outcome remains `Cancelled` even if
+the body catches it. For a final failure state, prefer the `onError` parameter
+of `run` rather than writing that correction inside a broad catch.
 
 ## Errors in state rules
 

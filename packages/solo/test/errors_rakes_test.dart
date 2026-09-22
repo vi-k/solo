@@ -275,6 +275,24 @@ final class Cam extends Solo<Value> {
         },
       );
 
+  /// The same separation written inside a single catch clause.
+  Job<void> checkedCatch(Completer<void> gate, Hw hw, List<Object> broken) =>
+      run<Value, void>(
+        key: 'checked',
+        (ctx) async {
+          try {
+            await ctx.wait(() => gate.future);
+            await ctx.join(hw.open);
+          } on Object catch (error) {
+            if (error is Cancelled) rethrow;
+            await hw.reset();
+            broken.add(error);
+            ctx.emit(const Value(-1));
+            rethrow;
+          }
+        },
+      );
+
   /// The first attempt of "Errors in state rules": a rule that throws to
   /// refuse, on a job that also carries a final state handler.
   Job<void> refusesByThrow() => run<Value, void>(
@@ -1184,6 +1202,43 @@ void main() {
       final broken = <Object>[];
       final gate = Completer<void>()..complete();
       final job = controller.guardedCatch(
+        gate,
+        Hw(calls, broken: true),
+        broken,
+      )..ignore();
+
+      await job.done;
+
+      expect(calls, ['open', 'reset']);
+      expect(broken, [isA<StateError>()]);
+      expect(job.outcome, isA<Failed>());
+      expect(controller.currentState.n, -1, reason: 'Broken is published');
+    });
+
+    test('the type check leaves the camera alone as well', () async {
+      final controller = Cam();
+      final calls = <String>[];
+      final broken = <Object>[];
+      final job = controller.checkedCatch(
+        Completer<void>(),
+        Hw(calls),
+        broken,
+      )..ignore();
+
+      await pumpEventQueue();
+      await job.cancel();
+
+      expect(calls, isEmpty);
+      expect(broken, isEmpty);
+      expect(job.outcome, isA<Cancelled>());
+    });
+
+    test('and handles a failure of the device the same way', () async {
+      final controller = Cam();
+      final calls = <String>[];
+      final broken = <Object>[];
+      final gate = Completer<void>()..complete();
+      final job = controller.checkedCatch(
         gate,
         Hw(calls, broken: true),
         broken,
