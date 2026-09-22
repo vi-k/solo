@@ -49,9 +49,10 @@ where `run(onError: ...)` computes a state from it, and an outcome nobody
 observes reaches the job's creation zone by itself. What no outcome carries is
 the rest: an operation abandoned by `wait` that fails later, a disposer, an
 `onCancel` callback, work handed to `ctx.unattended`. Somebody has to answer
-for those, and by default that somebody is the handler above — one for the
-process, set once at startup. With nobody set, they go to the zone the job was
-created in.
+for those, and the one asked is always the same: `onUnanswered`, on the
+controller whose job it was. Its default body is the handler above — one for
+the process, set once at startup — and the zone the job was created in when no
+handler is set.
 
 Separating the two is deliberate: answering for an error is a responsibility
 somebody takes, not a side effect of switching a log on. Setting a
@@ -66,10 +67,12 @@ A controller that owns what its jobs failed at can answer for them itself:
 ```
 
 That override replaces the default route, so these errors reach neither the
-handler nor the zone: this controller has said they are its own. Call
-`super.onUnanswered(job, error, stackTrace)` to keep the route as well. Every
-other hook stands on its own call, and `super` in one says nothing about the
-rest.
+handler nor the zone: this controller has said they are its own. The hook is
+where the error arrives and the handler is what the hook calls, so each
+controller decides for its own jobs whether the process-wide handler hears them
+at all. Call `super.onUnanswered(job, error, stackTrace)` to keep the route as
+well. Every other hook stands on its own call, and `super` in one says nothing
+about the rest.
 
 ## Watching every controller
 
