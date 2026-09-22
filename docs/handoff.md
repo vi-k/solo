@@ -13,10 +13,11 @@
 
 **В работе.** Чтение владельцем `packages/solo/doc/errors.md` и её русской
 версии `docs/ru/solo/errors.md`. Пройдены вступление, `Reporting an error`,
-`Answering for an error` и `What is holding the controller`; каждый вопрос
-владельца по тексту правился в обеих версиях, список правок — в конце
-`2026-09-20-errors-rakes-report.md`. Дальше по странице —
-`Why cancellation was slow`.
+`Answering for an error`, `What is holding the controller` и часть
+`Handled and unhandled failures`; каждый вопрос владельца по тексту правился
+в обеих версиях, список правок — в конце `2026-09-20-errors-rakes-report.md`.
+Читает владелец не подряд; из непройденного остались
+`Watching every controller` и `Why cancellation was slow`.
 
 Разделение хука ошибки влито владельцем в `main` 2026-09-22, коммит `eb94a2a`:
 `Solo.onError` — оповещение, ответ за ошибку — новый `Solo.onUnanswered`,

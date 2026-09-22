@@ -329,11 +329,13 @@ through `onUnanswered`. Without an override of it or an installed
 can arrive after the job has already completed. It does not replace an existing
 cancellation outcome. A `Cancelled` that arrives this way — an abandoned action
 that ended in one — is a late failure like any other to the hooks, and they see
-it; the zone never does, whatever route leads there.
+it. The engine never hands a `Cancelled` to the zone, by this route or any
+other of its own.
 
 An unhandled error of `job.value` or `ctx.run(child)` is still an unhandled
-Future error under Dart's rules, even if that error is `Cancelled`. Handle
-those futures with `await`, `catchError` or `ignore()` as appropriate.
+Future error under Dart's rules, even if that error is `Cancelled` — Dart's own
+route to the zone, and the one way a `Cancelled` gets there. Handle those
+futures with `await`, `catchError` or `ignore()` as appropriate.
 
 ## Catching errors inside a body
 

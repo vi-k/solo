@@ -1015,6 +1015,29 @@ void main() {
       expect(controller.errors, [isA<Cancelled>()]);
       expect(zoneErrors, isEmpty);
     });
+
+    test('an unhandled value takes a Cancelled to the zone after all',
+        () async {
+      final zoneErrors = <Object>[];
+
+      await runZonedGuarded(
+        () async {
+          final controller = Cam();
+          final job = controller.abandons(Completer<String>());
+          // The future is taken and its error is not handled: Dart's own
+          // route, not the engine's.
+          unawaited(job.value.then((_) {}));
+          await pumpEventQueue();
+          await job.cancel();
+          await pumpEventQueue();
+        },
+        (error, stackTrace) => zoneErrors.add(error),
+      );
+
+      await pumpEventQueue();
+
+      expect(zoneErrors, [isA<Cancelled>()]);
+    });
   });
 
   // --- Catching errors inside a body --------------------------------------
