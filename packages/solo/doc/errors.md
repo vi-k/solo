@@ -68,11 +68,11 @@ Solo.errorHandler = (solo, job, error, stackTrace) =>
 
 One handler for the whole process, set once at startup; it takes `solo` because
 it serves every controller. With none set, these errors go to the zone the job
-was created in. The hook is where the error arrives and the handler is what the
-hook calls, so each controller decides for its own jobs whether the
-process-wide handler hears them at all. An override keeps that route as well by
-calling `super.onUnanswered(job, error, stackTrace)`; every other hook stands
-on its own call, and `super` in one says nothing about the rest.
+was created in. The error arrives at the hook, and the hook calls the handler,
+so each controller decides for its own jobs whether the process-wide handler
+hears them at all. An override keeps that route as well by calling
+`super.onUnanswered(job, error, stackTrace)`; every other hook stands on its
+own call, and `super` in one says nothing about the rest.
 
 Answering for an error is a responsibility somebody takes, not a side effect of
 switching a log on. Setting a `SoloObserver` is not it either — watching is not
