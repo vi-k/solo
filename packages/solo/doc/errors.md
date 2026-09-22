@@ -159,7 +159,8 @@ subscription to take its done event: one left paused holds `close()` with
 It reports and does not diagnose. A long wait does not prove a forgotten
 `ctx.wait`: a body inside an external call looks the same, and so does a
 resource that takes its time to release. The phase says where the job is, not
-why: a body is `body` whatever it waits on, and the engine does not guess.
+why: while the body runs the phase is `body`, whatever it waits on, and the
+engine does not guess.
 
 ## Why cancellation was slow
 
