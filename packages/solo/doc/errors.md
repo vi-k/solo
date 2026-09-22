@@ -395,10 +395,14 @@ try {
 `Cancelled` implements `Exception`, so a broad `catch` takes it along with the
 device failures. Cancel this job while `hw.open` is in flight: `join` throws
 `Cancelled`, the catch reads it as a failure of the camera and resets a camera
-this job never opened. `ctx.emit` on a cancelled job throws `Cancelled` in
-turn, so `Broken` is never published and the `rethrow` under it never runs. The
-outcome is the `Cancelled` it would have been anyway, and nothing in the hooks
-or the zone mentions the reset.
+this job never opened.
+
+The two lines under the reset change nothing. `ctx.emit` on a cancelled job
+throws `Cancelled` in turn, so `Broken` never reaches the screen and the
+`rethrow` under it never runs — and the outcome is the same `Cancelled` that
+`rethrow` would have given. That is what makes the reset hard to notice: the
+job ends exactly as a cancelled job should, neither the hooks nor the zone
+mention anything, and the only trace is on the device.
 
 ### Letting cancellation through
 

@@ -13,8 +13,9 @@
 
 **В работе.** Чтение владельцем `packages/solo/doc/errors.md` и её русской
 версии `docs/ru/solo/errors.md`. Пройдены вступление, `Reporting an error`,
-`Answering for an error`, `What is holding the controller` и часть
-`Handled and unhandled failures`; каждый вопрос владельца по тексту правился
+`Answering for an error`, `What is holding the controller`, часть
+`Handled and unhandled failures` и первая попытка
+`Catching errors inside a body`; каждый вопрос владельца по тексту правился
 в обеих версиях, список правок — в конце `2026-09-20-errors-rakes-report.md`.
 Читает владелец не подряд: `Watching every controller` ещё не трогали,
 `Why cancellation was slow` начат.
