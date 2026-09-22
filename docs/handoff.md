@@ -16,8 +16,8 @@
 `Answering for an error`, `What is holding the controller` и часть
 `Handled and unhandled failures`; каждый вопрос владельца по тексту правился
 в обеих версиях, список правок — в конце `2026-09-20-errors-rakes-report.md`.
-Читает владелец не подряд; из непройденного остались
-`Watching every controller` и `Why cancellation was slow`.
+Читает владелец не подряд: `Watching every controller` ещё не трогали,
+`Why cancellation was slow` начат.
 
 Разделение хука ошибки влито владельцем в `main` 2026-09-22, коммит `eb94a2a`:
 `Solo.onError` — оповещение, ответ за ошибку — новый `Solo.onUnanswered`,

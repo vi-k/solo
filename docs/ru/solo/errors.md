@@ -155,42 +155,6 @@ unawaited(controller.close().timeout(
 движка и ждёт, пока каждая подписка получит событие завершения: подписка,
 оставленная на паузе, держит `close()`, хотя `isFinished` уже истинно.
 
-Снимок отвечает тому, кто спросил, а пример выше спрашивает на `close()`.
-О `Job`, которая зависла раньше — экран ещё открыт, и никто ничего
-не закрывает, — не спрашивает никто. Спросить, когда никто не просит, может
-наблюдатель — завести таймер, когда `Job` начинается, и снять его, когда она
-кончилась:
-
-```dart
-final class Hangs extends SoloObserver {
-  // An Expando holds its key weakly, so a job takes its timer with it.
-  final _timers = Expando<Timer>('hang');
-
-  @override
-  void onStart(Solo<Object> solo, Job<Object?> job) => _timers[job] = Timer(
-        const Duration(seconds: 5),
-        () => log('${job.key} is still running: ${solo.pending}'),
-      );
-
-  @override
-  void onFinish(Solo<Object> solo, Job<Object?> job) => _timers[job]?.cancel();
-}
-```
-
-`Job`, которая успела кончиться, снимает свой таймер сама и молчит. Та, что
-не успела, — всё ещё та самая, на которой стоит контроллер, поэтому снимок
-в строке о ней:
-
-```text
-stuck is still running: SoloPending([stuck] in its body)
-held is still running: SoloPending([held] in its body, holding Cancelled(manual) back)
-```
-
-Таймер заводится на старте, потому что другого конца у зависания нет.
-`onFinish` для `Job`, которая не кончается, не придёт никогда, а наблюдатель,
-который сообщает из `onFinish` — такой в следующем разделе, — молчит всё
-зависание.
-
 Он сообщает, а не ставит диагноз. Долгое ожидание не доказывает забытый
 `ctx.wait`: тело внутри внешнего вызова выглядит так же, и неторопливое
 освобождение ресурса тоже. Фаза говорит, где `Job`, а не почему: пока работает
@@ -198,9 +162,10 @@ held is still running: SoloPending([held] in its body, holding Cancelled(manual)
 
 ## Почему отмена была долгой
 
-`SoloPending` отвечает, пока `Job` ещё работает. Вторая половина вопроса
-приходит потом и там, где никто не смотрит: какие задачи работали дальше,
-несмотря на отмену, которая должна была их остановить, и сколько.
+`SoloPending` отвечает, пока ожидание идёт, и для этого надо, чтобы кто-то
+стоял рядом и спрашивал. Вторая половина вопроса приходит потом и там, где
+никто не смотрит: какие задачи работали дальше, несмотря на отмену, которая
+должна была их остановить, и сколько.
 
 ### Первая попытка
 
@@ -280,6 +245,42 @@ final class SlowCancellations extends SoloObserver {
 `package:clock` идёт в его зависимости, а не в зависимости разработки; пакет
 этот без своих зависимостей, и `fake_async` и так от него зависит везде, где
 идут тесты.
+
+### `Job`, которая не кончается
+
+```dart
+final class Hangs extends SoloObserver {
+  // An Expando holds its key weakly, so a job takes its timer with it.
+  final _timers = Expando<Timer>('hang');
+
+  @override
+  void onStart(Solo<Object> solo, Job<Object?> job) => _timers[job] = Timer(
+        const Duration(seconds: 5),
+        () => log('${job.key} is still running: ${solo.pending}'),
+      );
+
+  @override
+  void onFinish(Solo<Object> solo, Job<Object?> job) => _timers[job]?.cancel();
+}
+```
+
+Отметку выше читают, когда `Job` кончается, а зависшая не доходит туда никогда:
+`onFinish` не приходит, задержку никто не считает, и самая долгая отмена
+из всех — та, о которой не сказано ничего. Этот таймер заводится с другого
+конца — на `onStart` — и срабатывает, вернулась `Job` или нет.
+
+`Job`, которая успела кончиться, снимает свой таймер сама и молчит. Та, что
+не успела, — всё ещё та самая, на которой стоит контроллер, поэтому
+`solo.pending` — снимок именно её:
+
+```text
+stuck is still running: SoloPending([stuck] in its body)
+held is still running: SoloPending([held] in its body, holding Cancelled(manual) back)
+```
+
+Пять секунд — утверждение о предметной области, а не о движке: `Job`, которая
+открывает камеру, вполне может идти дольше, и число здесь то, с которого это
+приложение считает ожидание долгим.
 
 ## Обработанные и необработанные ошибки
 
