@@ -163,7 +163,7 @@ unawaited(controller.close().timeout(
 
 ```dart
 final class Hangs extends SoloObserver {
-  // An Expando holds its key weakly, so a job takes its timer with it.
+  // Expando держит ключ слабо: таймер уходит вместе с задачей.
   final _timers = Expando<Timer>('hang');
 
   @override
