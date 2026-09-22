@@ -8,8 +8,7 @@ reporting, including errors from cleanup and abandoned operations.
 Six sections below open with the version the vocabulary of this API leads to —
 the hook named for the errors you want, the member named for the question you
 are asking — and say what that version does instead of what it was meant to do.
-The first attempt is not a strawman: it is the code these names ask for. The
-version that works follows under its own heading.
+The version that works follows under its own heading.
 
 ## Reporting an error
 
