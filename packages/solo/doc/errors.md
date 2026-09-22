@@ -31,7 +31,7 @@ final class ProfileController extends Solo<ProfileState> {
 }
 ```
 
-The hook is told about every error of this controller — the failure of a body,
+The hook is told about every error its jobs run into — the failure of a body,
 an error from cleanup or from an operation abandoned by `wait`, a rule that
 threw instead of answering — and it is told once. It reports and returns, which
 is all it is for: the hook answers for nothing, and overriding it moves no
@@ -62,7 +62,7 @@ A controller that owns what its jobs failed at can answer for them itself:
 ```dart
   @override
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
-      _deviceFailures.add(error);
+      _apiFailures.add(error);
 ```
 
 That override replaces the default route, so these errors reach neither the
@@ -371,10 +371,10 @@ Where a rule throws anyway decides who hears about it:
 | Re-evaluation after a state update | Reported; it does not itself cancel the running body. |
 | A check that also controls a final state handler | The handler is disabled. |
 
-Re-evaluation errors fall back to the controller's creation zone when neither
-an override of `onUnanswered` nor a `Solo.errorHandler` answers for them. In
-the root Dart zone, an unhandled error can terminate the application. Install
-error reporting and observe job outcomes according to your application's needs.
+Re-evaluation errors fall back to the job's creation zone when neither an
+override of `onUnanswered` nor a `Solo.errorHandler` answers for them. In the
+root Dart zone, an unhandled error can terminate the application. Install error
+reporting and observe job outcomes according to your application's needs.
 
 ## Background work and logs
 

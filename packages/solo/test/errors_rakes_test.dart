@@ -1102,6 +1102,46 @@ void main() {
       expect(controller.currentState.n, 1, reason: 'no correction to 99');
       expect(zoneErrors, isNotEmpty, reason: 'reported, and nobody answers');
     });
+
+    test('the zone of last resort is the one the job was created in', () async {
+      final gate = Completer<void>();
+      final caught = <Object>[];
+      final controllerZone = <Object>[];
+      final creationZone = <Object>[];
+      final currentZone = <Object>[];
+      late final Cam controller;
+      late final Job<void> job;
+
+      runZonedGuarded(
+        () => controller = Cam(),
+        (error, stackTrace) => controllerZone.add(error),
+      );
+      runZonedGuarded(
+        () => job = controller.refusedAtCheckpoint(gate, caught),
+        (error, stackTrace) => creationZone.add(error),
+      );
+      await runZonedGuarded(
+        () async {
+          await pumpEventQueue();
+          controller.set(1);
+          gate.complete();
+          await job.done;
+        },
+        (error, stackTrace) => currentZone.add(error),
+      );
+
+      expect(creationZone, [isA<StateError>()]);
+      expect(
+        controllerZone,
+        isEmpty,
+        reason: 'the controller was created somewhere else',
+      );
+      expect(
+        currentZone,
+        isEmpty,
+        reason: 'the state changed somewhere else again',
+      );
+    });
   });
 
   // --- Background work and logs -------------------------------------------
