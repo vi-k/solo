@@ -71,8 +71,7 @@ it serves every controller. With none set, these errors go to the zone the job
 was created in. The error arrives at the hook, and the hook calls the handler,
 so each controller decides for its own jobs whether the process-wide handler
 hears them at all. An override keeps that route as well by calling
-`super.onUnanswered(job, error, stackTrace)`; every other hook stands on its
-own call, and `super` in one says nothing about the rest.
+`super.onUnanswered(job, error, stackTrace)`.
 
 Answering for an error is a responsibility somebody takes, not a side effect of
 switching a log on. Setting a `SoloObserver` is not it either — watching is not
