@@ -143,7 +143,8 @@ unawaited(controller.close().timeout(
 | `refusesCancellation` | whether it was created with `cancellable: false` |
 | `closing` | whether `close()` was called on the controller |
 
-`cancellationPending` is true when either of the two cancellations is there,
+Next to those fields the snapshot computes one answer of its own:
+`pending.cancellationPending` is true when either cancellation above is there,
 the marked one or the held one. A job with `refusesCancellation` turns down the
 ones it may turn down, so nothing is pending on it however often it was asked
 to stop.
