@@ -187,9 +187,9 @@ held is still running: SoloPending([held] in its body, holding Cancelled(manual)
 ```
 
 The timer is armed at the start because that is the only end a hang has.
-`onFinish` never comes for a job that never finishes, and the recipe of
-[Why cancellation was slow](#why-cancellation-was-slow), which reports from
-there, stays quiet through the whole hang.
+`onFinish` never comes for a job that never finishes, so a delay worked out
+there — the stamp of [Why cancellation was slow](#why-cancellation-was-slow) —
+is never worked out at all.
 
 Five seconds is a statement about the domain, not about the engine: a job that
 opens a camera may fairly take longer, and the number is the one this
@@ -288,10 +288,38 @@ checked by a test. The observer runs in the application, so `package:clock`
 goes in its dependencies and not its dev ones; it is a leaf package, and
 `fake_async` depends on it anyway wherever the tests run.
 
-A job that never ends is the longest cancellation of all, and this recipe is
-the one that misses it: the delay is worked out on `onFinish`, which never
-comes for such a job. It is caught from the other end instead, by the timer of
-[What is holding the controller](#what-is-holding-the-controller).
+### A cancellation that never lands
+
+```dart
+final class StuckCancellations extends SoloObserver {
+  final _timers = Expando<Timer>('cancellation');
+
+  @override
+  void onStart(Solo<Object> solo, Job<Object?> job) => job.whenCancelled(
+        (_) => _timers[job] = Timer(
+          const Duration(seconds: 5),
+          () => log('${job.key} has not stopped: ${solo.pending}'),
+        ),
+      );
+
+  @override
+  void onFinish(Solo<Object> solo, Job<Object?> job) => _timers[job]?.cancel();
+}
+```
+
+The stamp above is read when the job ends, so the longest cancellation of all —
+the one that never ends — is the one it says nothing about. Here the stamp
+becomes a timer: `whenCancelled` arms it, the end of the job disarms it, and
+what is left is the job that was asked to stop and did not:
+
+```text
+ignores has not stopped: SoloPending([ignores] in its body, cancelled by Cancelled(manual))
+```
+
+A job nobody cancelled arms nothing here, however long it runs: this observer
+is about a cancellation that has not landed, not about slow work. Nor does it
+see a job inside an open `ctx.uncancellable` section — that cancellation is
+still held back, and `whenCancelled` has not fired.
 
 ## Handled and unhandled failures
 

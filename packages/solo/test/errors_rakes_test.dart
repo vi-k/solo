@@ -173,6 +173,10 @@ final class Cam extends Solo<Value> {
         (ctx) => ctx.wait(() => gate.future),
       );
 
+  /// A body that never comes back and never looks at its cancellation.
+  Job<void> ignores(Completer<void> gate) =>
+      run<Value, void>(key: 'ignores', (ctx) => gate.future);
+
   /// A body that holds cancellation in an uncancellable section.
   Job<void> held(Completer<void> gate, List<String> marks) => run<Value, void>(
         key: 'held',
@@ -363,6 +367,26 @@ final class Cam extends Solo<Value> {
 final class Silent extends Cam {
   @override
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {}
+}
+
+/// The page's recipe for a cancellation that never lands, verbatim.
+final class StuckCancellations extends SoloObserver {
+  StuckCancellations(this.lines);
+
+  final List<String> lines;
+
+  final _timers = Expando<Timer>('cancellation');
+
+  @override
+  void onStart(Solo<Object> solo, Job<Object?> job) => job.whenCancelled(
+        (_) => _timers[job] = Timer(
+          const Duration(seconds: 5),
+          () => lines.add('${job.key} has not stopped: ${solo.pending}'),
+        ),
+      );
+
+  @override
+  void onFinish(Solo<Object> solo, Job<Object?> job) => _timers[job]?.cancel();
 }
 
 /// The page's recipe for a job that never ends, verbatim.
@@ -852,6 +876,67 @@ void main() {
       await running.value;
 
       expect(controller.started, ['swallows'], reason: 'onStart ran once');
+    });
+
+    test('a cancellation that never lands is reported while it is on', () {
+      fakeAsync((async) {
+        final lines = <String>[];
+        Solo.observer = StuckCancellations(lines);
+        final job = Cam().ignores(Completer<void>())..ignore();
+
+        async.elapse(const Duration(seconds: 1));
+        job.cancel().ignore();
+        async.elapse(const Duration(seconds: 6));
+
+        const line = 'ignores has not stopped: SoloPending([ignores] in its '
+            'body, cancelled by Cancelled(manual))';
+
+        expect(lines, [line]);
+      });
+    });
+
+    test('a job nobody cancelled arms nothing', () {
+      fakeAsync((async) {
+        final lines = <String>[];
+        Solo.observer = StuckCancellations(lines);
+
+        Cam().ignores(Completer<void>()).ignore();
+        async.elapse(const Duration(seconds: 20));
+
+        expect(lines, isEmpty);
+      });
+    });
+
+    test('a job that stops when asked disarms its timer', () {
+      fakeAsync((async) {
+        final lines = <String>[];
+        Solo.observer = StuckCancellations(lines);
+        final job = Cam().waited()..ignore();
+
+        async.elapse(const Duration(milliseconds: 10));
+        job.cancel().ignore();
+        async.elapse(const Duration(seconds: 6));
+
+        expect(lines, isEmpty);
+      });
+    });
+
+    test('a held cancellation has not fired, so nothing is armed', () {
+      fakeAsync((async) {
+        final lines = <String>[];
+        Solo.observer = StuckCancellations(lines);
+        final job = Cam().held(Completer<void>(), <String>[])..ignore();
+
+        async.elapse(const Duration(seconds: 1));
+        job.cancel().ignore();
+        async.elapse(const Duration(seconds: 6));
+
+        expect(
+          lines,
+          isEmpty,
+          reason: 'whenCancelled waits for the section to close',
+        );
+      });
     });
   });
 

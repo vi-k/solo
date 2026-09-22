@@ -285,10 +285,39 @@ final class SlowCancellations extends SoloObserver {
 этот без своих зависимостей, и `fake_async` и так от него зависит везде, где
 идут тесты.
 
-Зависшая `Job` — самая долгая отмена из всех, и именно её этот рецепт не видит:
-задержка считается на `onFinish`, а для такой `Job` он не придёт никогда. Её
-ловят с другого конца — таймером из раздела
-[Что удерживает контроллер](#что-удерживает-контроллер).
+### Отмена, которая не доходит
+
+```dart
+final class StuckCancellations extends SoloObserver {
+  final _timers = Expando<Timer>('cancellation');
+
+  @override
+  void onStart(Solo<Object> solo, Job<Object?> job) => job.whenCancelled(
+        (_) => _timers[job] = Timer(
+          const Duration(seconds: 5),
+          () => log('${job.key} has not stopped: ${solo.pending}'),
+        ),
+      );
+
+  @override
+  void onFinish(Solo<Object> solo, Job<Object?> job) => _timers[job]?.cancel();
+}
+```
+
+Отметку выше читают, когда `Job` кончается, и потому самая долгая отмена
+из всех — та, что не кончается, — единственная, о которой она молчит. Здесь
+отметка становится таймером: `whenCancelled` его заводит, конец `Job` снимает,
+и остаётся ровно та `Job`, которую попросили остановиться, а она
+не остановилась:
+
+```text
+ignores has not stopped: SoloPending([ignores] in its body, cancelled by Cancelled(manual))
+```
+
+`Job`, которую никто не отменял, здесь не заводит таймера, сколько бы
+ни работала: этот наблюдатель о неисполненной отмене, а не о долгой работе.
+Не видит он и `Job` внутри открытой секции `ctx.uncancellable`: её отмена ещё
+придержана, и `whenCancelled` не сработал.
 
 ## Обработанные и необработанные ошибки
 
