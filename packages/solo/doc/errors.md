@@ -156,6 +156,41 @@ queued until its timing lets it go — `isDraining` is still true then. With
 subscription to take its done event: one left paused holds `close()` with
 `isFinished` already true.
 
+The snapshot answers whoever asks, and the example above asks at `close()`. A
+job that hangs earlier — while the screen is still open and nothing is
+closing — is asked about by nobody. An observer can ask without being asked —
+arm a timer when a job starts and disarm it when the job ends:
+
+```dart
+final class Hangs extends SoloObserver {
+  // An Expando holds its key weakly, so a job takes its timer with it.
+  final _timers = Expando<Timer>('hang');
+
+  @override
+  void onStart(Solo<Object> solo, Job<Object?> job) => _timers[job] = Timer(
+        const Duration(seconds: 5),
+        () => log('${job.key} is still running: ${solo.pending}'),
+      );
+
+  @override
+  void onFinish(Solo<Object> solo, Job<Object?> job) => _timers[job]?.cancel();
+}
+```
+
+A job that ends in time disarms its own timer and says nothing. One that does
+not is still the job the controller is on, so the snapshot in the line is about
+it:
+
+```text
+stuck is still running: SoloPending([stuck] in its body)
+held is still running: SoloPending([held] in its body, holding Cancelled(manual) back)
+```
+
+The timer is armed at the start because that is the only end a hang has.
+`onFinish` never comes for a job that never finishes, and an observer that
+reports from `onFinish` — the one in the next section — stays quiet through the
+whole hang.
+
 It reports and does not diagnose. A long wait does not prove a forgotten
 `ctx.wait`: a body inside an external call looks the same, and so does a
 resource that takes its time to release. The phase says where the job is, not
@@ -164,10 +199,9 @@ engine does not guess.
 
 ## Why cancellation was slow
 
-`SoloPending` answers while the wait is on, and somebody has to be there to
-ask. The other half of the question comes afterwards, and in a place where
-nobody is watching: which jobs ran on past the cancellation that was meant to
-stop them, and for how long.
+`SoloPending` answers while the job is still running. The other half of the
+question comes afterwards, and in a place where nobody is watching: which jobs
+ran on past the cancellation that was meant to stop them, and for how long.
 
 ### The first attempt
 
