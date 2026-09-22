@@ -482,6 +482,29 @@ void main() {
       expect(taken, isEmpty, reason: 'the handler is never asked');
       expect(zoneErrors, isEmpty, reason: 'and neither is the zone');
     });
+
+    test('the handler is not asked for a failure of the body', () async {
+      final taken = <Object>[];
+      final zoneErrors = <Object>[];
+      final controller = Cam();
+      Solo.errorHandler = (solo, job, error, stackTrace) => taken.add(error);
+
+      await runZonedGuarded(
+        () async {
+          controller.fails();
+          await pumpEventQueue();
+        },
+        (error, stackTrace) => zoneErrors.add(error),
+      );
+
+      expect(controller.errors, [isA<StateError>()], reason: 'the hook hears');
+      expect(taken, isEmpty, reason: 'that error has an address of its own');
+      expect(
+        zoneErrors,
+        [isA<StateError>()],
+        reason: 'the unobserved outcome takes it to the zone by itself',
+      );
+    });
   });
 
   // --- What is holding the controller -------------------------------------

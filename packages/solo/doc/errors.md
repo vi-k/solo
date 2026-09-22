@@ -34,14 +34,19 @@ final class ProfileController extends Solo<ProfileState> {
 
 The hook is named for the errors it receives, and the override does what it was
 added for: every error the controller hears about reaches the reporter. But the
-hook does not describe a route — it is the route: its own body is what carries
-the error onward. By default that body takes an error that has nowhere else to
-go — a failure nobody observed, an error from cleanup or from an abandoned
-operation — to `Solo.errorHandler`, and to the job's creation zone when no
-handler is set. An override replaces that body: the handler is never asked and
-the zone never hears, so those errors end in the reporter and nowhere else.
-That is where you would look for them, which is what makes the loss quiet: the
-line is there, the fallback is gone.
+hook is not only a notification. Its default body — the `super.onError` this
+override no longer calls — is the last address of an error that has no other.
+
+Those few lines ask one question: has this error somewhere else to go? A
+failure of the job's body has. It becomes `Failed`, where `run(onError: ...)`
+computes a state from it, and an outcome nobody observes reaches the creation
+zone on its own; the lines leave it alone. An error from cleanup, from a
+cancellation callback, or from an operation abandoned by `wait` has nowhere
+else: that one they hand to `Solo.errorHandler`, and with no handler set they
+take it to the zone the job was created in. An override replaces those lines,
+so for such an error the handler is never asked and the zone never hears: it
+ends in the reporter and nowhere else. That is where you would look for it,
+which is what makes the loss quiet: the line is there, the fallback is gone.
 
 ### Reporting and keeping the route
 
