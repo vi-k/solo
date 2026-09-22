@@ -346,7 +346,7 @@ taking responsibility for it, and an observer only watches: an installed
 observer marks no outcome as observed. A `Failed` that nobody observed goes to
 the job's creation zone through `Zone.handleUncaughtError` as well, where an
 unhandled error can end the application — a moment after the crash report was
-sent by hand.
+sent.
 
 ### Observing the outcome
 
