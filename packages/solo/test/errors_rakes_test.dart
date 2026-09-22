@@ -160,6 +160,13 @@ final class Cam extends Solo<Value> {
         },
       );
 
+  /// A job that turns cancellations down and keeps a section open.
+  Job<void> refusing(Completer<void> gate) => run<Value, void>(
+        key: 'refusing',
+        cancellable: false,
+        (ctx) => ctx.uncancellable(() => gate.future),
+      );
+
   /// A body that holds cancellation in an uncancellable section.
   Job<void> held(Completer<void> gate, List<String> marks) => run<Value, void>(
         key: 'held',
@@ -605,6 +612,40 @@ void main() {
       expect(controller.pending, isNull);
       expect(controller.isDraining, isTrue);
 
+      await closing;
+    });
+
+    test('pending names every field of the table', () async {
+      final controller = Cam();
+      final gate = Completer<void>();
+      final job = controller.refusing(gate)..ignore();
+
+      await pumpEventQueue();
+
+      final waiting = controller.pending!;
+
+      expect(waiting.job, same(job));
+      expect(waiting.phase, SoloPhase.body);
+      expect(waiting.cancellation, isNull);
+      expect(waiting.heldCancellation, isNull);
+      expect(waiting.children, 0);
+      expect(waiting.inUncancellableSection, isTrue);
+      expect(waiting.refusesCancellation, isTrue);
+      expect(waiting.closing, isFalse);
+
+      final closing = controller.close();
+      await pumpEventQueue();
+
+      final asked = controller.pending!;
+
+      expect(asked.closing, isTrue);
+      expect(
+        asked.cancellationPending,
+        isFalse,
+        reason: 'a job that refuses turns this cancellation down',
+      );
+
+      gate.complete();
       await closing;
     });
 

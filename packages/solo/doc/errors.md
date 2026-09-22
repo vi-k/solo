@@ -130,10 +130,23 @@ unawaited(controller.close().timeout(
 ));
 ```
 
-`SoloPending` names the job, its `phase` — body, children, cleanup — the
-cancellation it carries, one a `ctx.uncancellable` section is holding back,
-whether such a section is open, and whether the job was created with
-`cancellable: false` and turns them down.
+`SoloPending` is a snapshot of the job the controller is waiting for:
+
+| Field | What it says |
+| --- | --- |
+| `job` | the job being waited for |
+| `phase` | what it is doing: `body`, `children`, `cleanup` |
+| `cancellation` | the cancellation it is marked with, or `null` |
+| `heldCancellation` | the one an open `ctx.uncancellable` section holds back |
+| `children` | how many children it is still waiting for |
+| `inUncancellableSection` | whether such a section is open |
+| `refusesCancellation` | whether it was created with `cancellable: false` |
+| `closing` | whether `close()` was called on the controller |
+
+`cancellationPending` is true when either of the two cancellations is there,
+the marked one or the held one. A job with `refusesCancellation` turns down the
+ones it may turn down, so nothing is pending on it however often it was asked
+to stop.
 
 `null` says that no job is running, not that nothing holds the close. A drain
 waits for the queue too, and a group of `collect` or `accumulate` stays queued
