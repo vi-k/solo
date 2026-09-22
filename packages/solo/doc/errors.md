@@ -40,8 +40,13 @@ error anywhere.
 ### Answering for an error
 
 ```dart
-Solo.errorHandler = (solo, job, error, stackTrace) =>
-    Sentry.captureException(error, stackTrace: stackTrace);
+final class ProfileController extends Solo<ProfileState> {
+  // ...the jobs and the reporting hook above...
+
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      _apiFailures.add(error);
+}
 ```
 
 Most errors are carried by an outcome. The failure of a body becomes `Failed`,
@@ -50,29 +55,28 @@ observes reaches the job's creation zone by itself. What no outcome carries is
 the rest: an operation abandoned by `wait` that fails later, a disposer, an
 `onCancel` callback, work handed to `ctx.unattended`. Somebody has to answer
 for those, and the one asked is always the same: `onUnanswered`, on the
-controller whose job it was. Its default body is the handler above — one for
-the process, set once at startup — and the zone the job was created in when no
-handler is set.
+controller whose job it was.
 
-Separating the two is deliberate: answering for an error is a responsibility
-somebody takes, not a side effect of switching a log on. Setting a
-`SoloObserver` is not it either — watching is not answering.
-
-A controller that owns what its jobs failed at can answer for them itself:
+The override above answers for them here, and they reach nothing else: this
+controller owns what its jobs failed at and has said so. A controller that
+writes no such override keeps the default body, which hands them on:
 
 ```dart
-  @override
-  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
-      _apiFailures.add(error);
+Solo.errorHandler = (solo, job, error, stackTrace) =>
+    Sentry.captureException(error, stackTrace: stackTrace);
 ```
 
-That override replaces the default route, so these errors reach neither the
-handler nor the zone: this controller has said they are its own. The hook is
-where the error arrives and the handler is what the hook calls, so each
-controller decides for its own jobs whether the process-wide handler hears them
-at all. Call `super.onUnanswered(job, error, stackTrace)` to keep the route as
-well. Every other hook stands on its own call, and `super` in one says nothing
-about the rest.
+One handler for the whole process, set once at startup; it takes `solo` because
+it serves every controller. With none set, these errors go to the zone the job
+was created in. The hook is where the error arrives and the handler is what the
+hook calls, so each controller decides for its own jobs whether the
+process-wide handler hears them at all. An override keeps that route as well by
+calling `super.onUnanswered(job, error, stackTrace)`; every other hook stands
+on its own call, and `super` in one says nothing about the rest.
+
+Answering for an error is a responsibility somebody takes, not a side effect of
+switching a log on. Setting a `SoloObserver` is not it either — watching is not
+answering.
 
 ## Watching every controller
 
