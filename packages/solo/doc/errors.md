@@ -186,10 +186,10 @@ stuck is still running: SoloPending([stuck] in its body)
 held is still running: SoloPending([held] in its body, holding Cancelled(manual) back)
 ```
 
-The timer is armed at the start because that is the only end a hang has.
-`onFinish` never comes for a job that never finishes, so a delay worked out
-there — the stamp of [Why cancellation was slow](#why-cancellation-was-slow) —
-is never worked out at all.
+The timer is armed at the start because that is the only end a hang has:
+`onFinish` never comes for a job that never finishes. The recipe of
+[Why cancellation was slow](#why-cancellation-was-slow) works out its delay
+right there, on `onFinish`, and so says nothing about a hang.
 
 Five seconds is a statement about the domain, not about the engine: a job that
 opens a camera may fairly take longer, and the number is the one this
