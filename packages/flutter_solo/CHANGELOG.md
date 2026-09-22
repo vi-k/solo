@@ -1,5 +1,13 @@
 ## Unreleased
 
+- **Breaking, inherited from `solo`:** `Solo.onError` is a notice with an empty
+  body, and the route for an error nobody answered for moved to the new hook
+  `Solo.onUnanswered`. A controller of this package that overrode `onError`
+  without calling `super` no longer keeps such an error out of
+  `Solo.errorHandler` and the creation zone; move that body to `onUnanswered`.
+  Read the `solo` entry before migrating:
+  [the `solo` changelog](https://github.com/vi-k/solo/blob/main/packages/solo/CHANGELOG.md).
+
 - **Breaking, inherited from `solo` and `async_job`:** this package re-exports
   both, so their breaking changes are its own. From `solo`: `SoloBase` becomes
   `Solo` and the stream moves to the mixin `SoloStream`; `job`, `add`, `run`,

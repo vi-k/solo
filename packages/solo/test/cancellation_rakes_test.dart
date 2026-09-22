@@ -217,6 +217,11 @@ final class Uploader extends Solo<String> with OpenSolo<String> {
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
       errors.add(error);
 
+  // A recorder of a test: it reads the errors and answers for them here,
+  // so nothing reaches the handler or the zone.
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {}
+
   /// The first attempt: each wait is the one the other place needed.
   Job<void> uploadInverted(int chunks) => run<String, void>((ctx) async {
         ctx.onDispose(() async {

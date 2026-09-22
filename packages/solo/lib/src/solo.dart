@@ -101,9 +101,6 @@ abstract class Solo<S extends Object> {
   /// The observer every job of this controller is given.
   late final JobObserver _jobObserver = _SoloJobObserver<S>(this);
 
-  /// The job whose error with nowhere to go is going through the hooks
-  /// right now, set by `_SoloJob.notifyError`.
-  _SoloJob<S, S, Object?>? _homeless;
   _SoloJob<S, S, Object?>? _current;
 
   /// The job the pump holds while it asks its start rules: taken off the
@@ -842,37 +839,45 @@ abstract class Solo<S extends Object> {
   /// disposer or an `onCancel` callback; and a rule of this controller —
   /// `canStart` or `keepWhile` — that threw instead of answering.
   ///
-  /// Called for every such error. The job's own cancellation is not an
-  /// error and never comes here; a [Cancelled] thrown by an abandoned
-  /// action does, because for an observer that is a late failure like any
-  /// other. See [Failed] for the errors that also reach the zone.
+  /// Called once for every such error, to be seen: this hook reports and
+  /// nothing else, and overriding it changes nowhere the error goes.
+  /// [onUnanswered] is the hook that answers. The job's own cancellation
+  /// is not an error and never comes here; a [Cancelled] thrown by an
+  /// abandoned action does, because for an observer that is a late failure
+  /// like any other. See [Failed] for the errors that also reach the zone.
+  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {}
+
+  /// Nobody answered for this error, and this controller is the last one
+  /// holding it.
   ///
-  /// **What the default body does.** With no [errorHandler] set and this
-  /// hook not overridden, the error goes to the zone the job was created
-  /// in — the same thing the core does when a job has no observer at all.
-  /// With a handler set it goes there instead, and nowhere else. Setting
-  /// an [observer] changes neither: watching is not answering. A
-  /// [Cancelled] is the one exception and never goes to the zone: a
-  /// cancellation is a decision somebody made, not a failure, and the core
-  /// keeps one out of the zone whatever route leads there. The body's own
-  /// failure does not go there from here either — it reaches the zone
-  /// through its unobserved outcome instead, and one error is announced
-  /// once.
+  /// The errors an outcome cannot carry: an action abandoned by
+  /// [JobContext.wait] failing later, a disposer, an `onCancel` callback,
+  /// work handed over with [JobContext.unattended]. A failure of a body
+  /// does not come here — it becomes a [Failed], where `run(onError: ...)`
+  /// computes a state from it and an outcome nobody observes reaches the
+  /// zone by itself — and neither does a rule that threw, for the same
+  /// reason. Every error that comes here has been through [onError]
+  /// already: one error is announced once.
   ///
-  /// **Overriding replaces that**, so an override that says nothing keeps
-  /// the error out of the zone; call `super.onError(job, error,
-  /// stackTrace)` to keep the default route as well.
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
-    final homeless = _homeless;
-    // Only an error with nowhere else to go. A cancellation is not weeded
-    // out here: the core holds one back at its own door, and the rule is
-    // written in one place.
-    if (homeless == null || !identical(homeless, job)) {
-      return;
-    }
+  /// **What the default body does.** With no [errorHandler] set, the error
+  /// goes to the zone the job was created in — the same thing the core
+  /// does when a job has no observer at all. With a handler set it goes
+  /// there instead, and nowhere else. Setting an [observer] changes
+  /// neither: watching is not answering. A [Cancelled] is the one
+  /// exception and never goes to the zone: a cancellation is a decision
+  /// somebody made, not a failure, and the core keeps one out of the zone
+  /// whatever route leads there.
+  ///
+  /// **Override it to answer here instead** — a controller that owns what
+  /// its jobs failed at reports to its own system and stops there. An
+  /// override that says nothing keeps these errors out of the handler and
+  /// out of the zone; call `super.onUnanswered(job, error, stackTrace)` to
+  /// keep the default route as well.
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
     final handler = errorHandler;
     if (handler == null) {
-      homeless._reportToZone(error, stackTrace);
+      // Every job that reaches this hook is one of this controller's.
+      (job as _SoloJob)._reportToZone(error, stackTrace);
     } else {
       // Already inside `_callHook`, so a handler that throws reaches the
       // zone without a wrapper of its own.

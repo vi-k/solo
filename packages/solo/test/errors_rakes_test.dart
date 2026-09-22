@@ -10,12 +10,14 @@ import 'package:test/test.dart';
 
 /// The first attempts of `doc/errors.md`, and what each one costs.
 ///
-/// Six sections of the page open with the version its vocabulary leads to,
-/// and each one is run here: the hook that reports and returns, the
-/// observer that times a job instead of its cancellation, the observer that
-/// reports a failure nobody answered for, the broad catch that takes the
-/// cancellation along with the device failures, the rule that throws to
-/// refuse, and the bare `unawaited`.
+/// Five sections of the page open with the version its vocabulary leads to,
+/// and each one is run here: the observer that times a job instead of its
+/// cancellation, the observer that reports a failure nobody answered for,
+/// the broad catch that takes the cancellation along with the device
+/// failures, the rule that throws to refuse, and the bare `unawaited`.
+///
+/// The page's first section has no first attempt left: reporting and
+/// answering are two hooks, and neither can be written for the other.
 ///
 /// The page has no bench: it shows fragments of an application, not a
 /// program that runs. So every claim it makes about where an error goes —
@@ -65,14 +67,15 @@ final class SlowCancellations extends SoloObserver {
   }
 }
 
-/// A controller that keeps what its hooks were given, and passes the
-/// reporting hook on to `super` — the page's default route.
+/// A controller that keeps what its hooks were given. Its reporting hook
+/// reports and returns, which takes nothing away from the route below it.
 final class Cam extends Solo<Value> {
   Cam() : super(const Value(0));
 
   final changes = <SoloTransition<Value>>[];
   final started = <Object?>[];
   final errors = <Object>[];
+  final unanswered = <Object>[];
   final logs = <Object?>[];
 
   void set(int n) => externalSetState(Value(n));
@@ -87,10 +90,38 @@ final class Cam extends Solo<Value> {
   void onLog(Job<Object?> job, Object? message) => logs.add(message);
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
-    errors.add(error);
-    super.onError(job, error, stackTrace);
+  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      errors.add(error);
+
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
+    unanswered.add(error);
+    super.onUnanswered(job, error, stackTrace);
   }
+
+  /// A group of two: the caller sees the first failure, and the second,
+  /// which refuses to stop and fails on its own, is answered for by
+  /// nobody.
+  Job<void> groupOfTwo() => run<Value, void>(key: 'group', (ctx) async {
+        try {
+          await ctx.runAll([
+            job<Value, void>(key: 'first', (child) async {
+              await child.wait(
+                () => Future<void>.delayed(const Duration(milliseconds: 10)),
+              );
+              throw StateError('first');
+            }),
+            job<Value, void>(key: 'second', cancellable: false, (child) async {
+              await child.wait(
+                () => Future<void>.delayed(const Duration(milliseconds: 20)),
+              );
+              throw StateError('second');
+            }),
+          ]);
+        } on Object catch (error) {
+          ctx.log('caught $error');
+        }
+      });
 
   /// A body that holds its cancellation for the whole wait.
   Job<void> bare() => run<Value, void>(
@@ -314,12 +345,11 @@ final class Cam extends Solo<Value> {
   }
 }
 
-/// The first attempt of "Reporting an error": a hook that reports and
-/// returns.
+/// A controller of "Reporting an error" that answers for its own errors:
+/// it keeps them and hands them on to nobody.
 final class Silent extends Cam {
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
-      errors.add(error);
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {}
 }
 
 /// The first attempt of "Why cancellation was slow": the two ends of a job,
@@ -462,9 +492,59 @@ void main() {
       expect(zoneErrors, isEmpty);
     });
 
-    test(
-        'the first attempt: a hook that reports and returns takes the error '
-        'nowhere', () async {
+    test('a hook that reports and returns keeps the route', () async {
+      final taken = <Object>[];
+      final zoneErrors = <Object>[];
+      final controller = Cam();
+      Solo.errorHandler = (solo, job, error, stackTrace) => taken.add(error);
+
+      await runZonedGuarded(
+        () async {
+          await controller.dirtyCleanup().value;
+          await pumpEventQueue();
+        },
+        (error, stackTrace) => zoneErrors.add(error),
+      );
+
+      expect(controller.errors, [isA<StateError>()], reason: 'it reports');
+      expect(
+        controller.unanswered,
+        [isA<StateError>()],
+        reason: 'and is asked to answer, because an outcome cannot',
+      );
+      expect(taken, [isA<StateError>()], reason: 'the handler answers');
+      expect(zoneErrors, isEmpty);
+    });
+
+    test('a failure a group did not throw is answered for', () async {
+      final taken = <Object>[];
+      final zoneErrors = <Object>[];
+      final controller = Cam();
+      Solo.errorHandler = (solo, job, error, stackTrace) => taken.add(error);
+
+      await runZonedGuarded(
+        () async {
+          await controller.groupOfTwo().value;
+          await pumpEventQueue();
+        },
+        (error, stackTrace) => zoneErrors.add(error),
+      );
+
+      expect(
+        controller.errors.map((error) => '$error'),
+        ['Bad state: first', 'Bad state: second'],
+        reason: 'both failures are reported',
+      );
+      expect(
+        controller.unanswered.map((error) => '$error'),
+        ['Bad state: second'],
+        reason: 'the caller took the first one, and nobody took this one',
+      );
+      expect(taken.map((error) => '$error'), ['Bad state: second']);
+      expect(zoneErrors, isEmpty);
+    });
+
+    test('an override of onUnanswered answers for the error', () async {
       final taken = <Object>[];
       final zoneErrors = <Object>[];
       final controller = Silent();
@@ -478,8 +558,8 @@ void main() {
         (error, stackTrace) => zoneErrors.add(error),
       );
 
-      expect(controller.errors, [isA<StateError>()]);
-      expect(taken, isEmpty, reason: 'the handler is never asked');
+      expect(controller.errors, [isA<StateError>()], reason: 'it reports');
+      expect(taken, isEmpty, reason: 'the handler is not asked');
       expect(zoneErrors, isEmpty, reason: 'and neither is the zone');
     });
 
@@ -498,6 +578,11 @@ void main() {
       );
 
       expect(controller.errors, [isA<StateError>()], reason: 'the hook hears');
+      expect(
+        controller.unanswered,
+        isEmpty,
+        reason: 'and nobody is asked to answer: the outcome carries it',
+      );
       expect(taken, isEmpty, reason: 'that error has an address of its own');
       expect(
         zoneErrors,

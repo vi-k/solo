@@ -259,24 +259,17 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   void _notifyError(Object error, StackTrace stackTrace) =>
       notifyError(error, stackTrace);
 
-  /// Marks the controller while an error with nowhere to go passes
-  /// through the hooks.
+  /// Announces an error with nowhere to go, then asks the controller to
+  /// answer for it.
   ///
-  /// [Solo.onError] takes two kinds and cannot tell them apart by
-  /// itself: the body's failure, which has an outcome carrying it to the
-  /// zone already, and this one, which has nothing. Only this one may end
-  /// in the zone. Saved and restored, not merely set: the hooks are
-  /// synchronously reentrant through `externalSetState` → `_reevaluate` →
-  /// `_notifyError`.
+  /// Two hooks, because these are two questions: [Solo.onError] is told
+  /// about every error, [Solo.onUnanswered] is asked only about the ones
+  /// an outcome cannot carry. The body's failure goes through the first
+  /// alone — it has an outcome taking it to the zone already.
   @override
   void notifyError(Object error, StackTrace stackTrace) {
-    final previous = _solo._homeless;
-    _solo._homeless = this;
-    try {
-      super.notifyError(error, stackTrace);
-    } finally {
-      _solo._homeless = previous;
-    }
+    super.notifyError(error, stackTrace);
+    Solo._callHook(() => _solo.onUnanswered(this, error, stackTrace));
   }
 
   void _reportToZone(Object error, StackTrace stackTrace) =>
@@ -287,18 +280,11 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   /// Not through the observer: the body's failure was announced there
   /// already, where it was caught, and one error is announced once. What
   /// is left is the answer for an error nobody handled, and in a
-  /// controller that is [Solo.onError] and the [Solo.errorHandler]
-  /// behind it. Marked homeless the same way [notifyError] marks it, so
-  /// the hook knows this error has nowhere else to go.
+  /// controller that is [Solo.onUnanswered] and the [Solo.errorHandler]
+  /// behind it.
   @override
   void handleUnanswered(Object error, StackTrace stackTrace) {
-    final previous = _solo._homeless;
-    _solo._homeless = this;
-    try {
-      Solo._callHook(() => _solo.onError(this, error, stackTrace));
-    } finally {
-      _solo._homeless = previous;
-    }
+    Solo._callHook(() => _solo.onUnanswered(this, error, stackTrace));
   }
 
   void _cancelWith(Cancelled cancelled, {bool rejectable = true}) =>

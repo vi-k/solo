@@ -362,8 +362,8 @@ job nobody looks at is not silent: an unobserved `Failed` reaches the zone that
 created the job, so a fire-and-forget call is `controller.load().ignore()` —
 the `ignore()` is what says the outcome is nobody's business. The same road
 carries a failure of work handed to `ctx.unattended` when the controller
-neither overrides `onError` nor has a `Solo.errorHandler` to answer for it. A
-`SoloObserver` sees that failure and does not take it: watching is not
+neither overrides `onUnanswered` nor has a `Solo.errorHandler` to answer for
+it. A `SoloObserver` sees that failure and does not take it: watching is not
 answering.
 
 What "to the zone" means in a Flutter app: the error travels the zones

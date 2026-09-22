@@ -35,6 +35,11 @@ final class _Controller<S extends Object> extends Solo<S> with OpenSolo<S> {
     }
     errors.add(error);
   }
+
+  // A recorder of a test: it reads the errors and answers for them here,
+  // so nothing reaches the handler or the zone.
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {}
 }
 
 void _run(void Function(_Controller<String> solo, FakeAsync clock) body) {

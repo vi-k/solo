@@ -3,20 +3,19 @@
 State handlers and reporting hooks have different responsibilities.
 `run(onError: ...)` computes a state after a job fails. The controller's
 `onError` method and `SoloObserver.onError` receive errors for logging or
-reporting, including errors from cleanup and abandoned operations.
+reporting, including errors from cleanup and abandoned operations, and
+`onUnanswered` answers for the ones no outcome carries.
 
-Six sections below open with the version the vocabulary of this API leads to —
-the hook named for the errors you want, the member named for the question you
-are asking — and say what that version does instead of what it was meant to do.
-The version that works follows under its own heading.
+Five sections below open with the version the vocabulary of this API leads to —
+the member named for the question you are asking, the call that says what you
+mean — and say what that version does instead of what it was meant to do. The
+version that works follows under its own heading.
 
 ## Reporting an error
 
 A controller can override `onStart`, `onFinish`, `onError`, `onLog`, `onChange`
 and `onClose`, and `onListenerError` for a listener that throws while being
 notified. The profile controller wants its failures in the crash reporter.
-
-### The first attempt
 
 ```dart
 final class ProfileController extends Solo<ProfileState> {
@@ -32,47 +31,45 @@ final class ProfileController extends Solo<ProfileState> {
 }
 ```
 
-The hook is named for the errors it receives, and the override does what it was
-added for: every error the controller hears about reaches the reporter. But the
-hook is not only a notification. Its default body — the `super.onError` this
-override no longer calls — is the last address of an error that has no other.
+The hook is told about every error of this controller — the failure of a body,
+an error from cleanup or from an operation abandoned by `wait`, a rule that
+threw instead of answering — and it is told once. It reports and returns, which
+is all it is for: the hook answers for nothing, and overriding it moves no
+error anywhere.
 
-Those few lines ask one question: has this error somewhere else to go? A
-failure of the job's body has. It becomes `Failed`, where `run(onError: ...)`
-computes a state from it, and an outcome nobody observes reaches the creation
-zone on its own; the lines leave it alone. An error from cleanup, from a
-cancellation callback, or from an operation abandoned by `wait` has nowhere
-else: that one they hand to `Solo.errorHandler`, and with no handler set they
-take it to the zone the job was created in. An override replaces those lines,
-so for such an error the handler is never asked and the zone never hears: it
-ends in the reporter and nowhere else. That is where you would look for it,
-which is what makes the loss quiet: the line is there, the fallback is gone.
-
-### Reporting and keeping the route
-
-```dart
-  @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
-    reportCrash(error, stackTrace);
-    // Keeping the route: the handler, else the job's creation zone.
-    super.onError(job, error, stackTrace);
-  }
-```
-
-To answer for the errors that have nowhere else to go, set a handler:
+### Answering for an error
 
 ```dart
 Solo.errorHandler = (solo, job, error, stackTrace) =>
     Sentry.captureException(error, stackTrace: stackTrace);
 ```
 
-One handler for the process, set once at startup. With it set, those errors go
-to it instead of the zone; with nobody set, they go to the zone. Separating the
-two is deliberate: answering for an error is a responsibility somebody takes,
-not a side effect of switching a log on.
+Most errors have an address of their own. The failure of a body becomes
+`Failed`, where `run(onError: ...)` computes a state from it, and an outcome
+nobody observes reaches the job's creation zone by itself. What no outcome
+carries is the rest: an operation abandoned by `wait` that fails later, a
+disposer, an `onCancel` callback, work handed to `ctx.unattended`. Somebody has
+to answer for those, and by default that somebody is the handler above — one
+for the process, set once at startup. With nobody set, they go to the zone the
+job was created in.
 
-The other hooks are not affected either way. Each stands on its own call, and
-`super` in one says nothing about the rest.
+Separating the two is deliberate: answering for an error is a responsibility
+somebody takes, not a side effect of switching a log on. Setting a
+`SoloObserver` is not it either — watching is not answering.
+
+A controller that owns what its jobs failed at can answer for them itself:
+
+```dart
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      _deviceFailures.add(error);
+```
+
+That override replaces the default route, so these errors reach neither the
+handler nor the zone: this controller has said they are its own. Call
+`super.onUnanswered(job, error, stackTrace)` to keep the route as well. Every
+other hook stands on its own call, and `super` in one says nothing about the
+rest.
 
 ## Watching every controller
 
@@ -271,7 +268,8 @@ leaves reporting to the hooks; a caller that needs the result takes it with
 `await job.value` and answers for the error by catching it.
 
 Errors from cleanup, cancellation callbacks and operations abandoned by `wait`
-go to the reporting hooks. Without an overridden error hook or an installed
+go to the reporting hooks, and the controller is asked to answer for them
+through `onUnanswered`. Without an override of it or an installed
 `Solo.errorHandler`, they fall back to the job's creation zone. Such an error
 can arrive after the job has already completed. It does not replace an existing
 cancellation outcome. A `Cancelled` that arrives this way — an abandoned action
@@ -373,10 +371,10 @@ Where a rule throws anyway decides who hears about it:
 | Re-evaluation after a state update | Reported; it does not itself cancel the running body. |
 | A check that also controls a final state handler | The handler is disabled. |
 
-Re-evaluation errors fall back to the controller's creation zone when no error
-hook and no `Solo.errorHandler` answers for them. In the root Dart zone, an
-unhandled error can terminate the application. Install error reporting and
-observe job outcomes according to your application's needs.
+Re-evaluation errors fall back to the controller's creation zone when neither
+an override of `onUnanswered` nor a `Solo.errorHandler` answers for them. In
+the root Dart zone, an unhandled error can terminate the application. Install
+error reporting and observe job outcomes according to your application's needs.
 
 ## Background work and logs
 

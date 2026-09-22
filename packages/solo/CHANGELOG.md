@@ -1,5 +1,23 @@
 ## Unreleased
 
+- **Breaking:** the reporting hook no longer carries the errors nobody answered
+  for. `Solo.onError` is a notice now, with an empty body: it is told about
+  every error of the controller, once, and overriding it moves no error
+  anywhere. The route it used to hold -- `Solo.errorHandler`, and the job's
+  creation zone when no handler is set -- moved to the new hook
+  `Solo.onUnanswered`, asked only about the errors no outcome carries: an
+  operation abandoned by `wait` failing later, a disposer, an `onCancel`
+  callback, work handed to `ctx.unattended`. A failure of a body is not one of
+  them and never was: it becomes `Failed`, where `run(onError: ...)` computes a
+  state and an outcome nobody observes reaches the zone by itself. An override
+  of `onError` that called `super` keeps working -- that call now runs an empty
+  body, and the route stands without it. An override that did not call `super`
+  is what this changes, and quietly: the errors it used to swallow reach the
+  handler or the zone again. To keep them where that override put them, move
+  its body to `onUnanswered`; an override there answers for these errors and
+  stops them, and `super.onUnanswered(job, error, stackTrace)` reports and
+  keeps the route as well.
+
 - **Breaking, inherited from `async_job`:** `solo` re-exports the core whole,
   so the core's breaking changes are this package's too, and three of them
   reach an ordinary job body. A cancellation that travels inside a

@@ -131,7 +131,7 @@ void main() {
     expect(caught, ['Bad state: handler boom']);
   });
 
-  test('an override without super keeps the error out of the zone', () {
+  test('an override of onUnanswered keeps the error out of the zone', () {
     final caught = <String>[];
     final solo = _Quiet();
     fakeAsync((async) {
@@ -149,6 +149,30 @@ void main() {
     });
     expect(caught, isEmpty);
     expect(solo.errors, ['Bad state: abandoned boom']);
+  });
+
+  test('an override of onError alone leaves the route in place', () {
+    final caught = <String>[];
+    final solo = _Noting();
+    fakeAsync((async) {
+      _inZone(caught, () {
+        solo.run<TestState, void>(key: 'j', (ctx) async {
+          ctx.unattended(() async {
+            await Future<void>.delayed(const Duration(milliseconds: 10));
+            throw StateError('abandoned boom');
+          });
+        });
+      });
+      async.flushTimers();
+      solo.close();
+      async.flushTimers();
+    });
+    expect(solo.errors, ['Bad state: abandoned boom'], reason: 'it notes');
+    expect(
+      caught,
+      ['Bad state: abandoned boom'],
+      reason: 'and answers for nothing, so the zone still hears',
+    );
   });
 
   test('an override calling super still hands it to the zone', () {
@@ -297,6 +321,17 @@ final class _Quiet extends Solo<TestState> with OpenSolo<TestState> {
   final errors = <String>[];
 
   _Quiet() : super(const Initial());
+
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      errors.add('$error');
+}
+
+/// Notes every error and answers for none: the route stands as it is.
+final class _Noting extends Solo<TestState> with OpenSolo<TestState> {
+  final errors = <String>[];
+
+  _Noting() : super(const Initial());
 
   @override
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
