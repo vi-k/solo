@@ -95,8 +95,31 @@ test('a failed load carries the error to the caller', () async {
 });
 ```
 
-`value` отменённой `Job` бросает `Cancelled`, поэтому тест про отмену
-спрашивает `done` и сверяет исход, а не ловит исключение.
+Отмена — тоже исход, и тест про неё спрашивает `done`:
+
+```dart
+test('a cancelled load ends Cancelled', () async {
+  final profile = ProfileController(FakeProfileApi());
+  final job = profile.load();
+
+  await job.cancel();
+
+  expect(
+    await job.done,
+    isA<Cancelled>().having((outcome) => outcome.started, 'started', isFalse),
+  );
+  expect(profile.currentState, isA<Initial>());
+
+  await profile.close();
+});
+```
+
+`cancel()` завершается, когда `Job` закончилась, поэтому исход уже на следующей
+строке. `done` отдаёт его как любой другой, а `value` бросил бы — и тест,
+ожидающий отмену, вычитывал бы её из `throwsA`. `started: false` объясняет,
+почему состояние не тронуто: `Job` стояла в очереди, тело не выполнялось вовсе,
+и `onCancel` не звали ни разу. Отменённая на ходу загрузка кончится тем же
+`Cancelled`, а состояние у неё будет то, которое опубликовал её `onCancel`.
 
 ## Закрытие контроллера
 

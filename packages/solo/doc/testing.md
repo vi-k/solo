@@ -92,8 +92,32 @@ test('a failed load carries the error to the caller', () async {
 });
 ```
 
-`value` of a cancelled job throws `Cancelled`, so a test about cancellation
-asks `done` and matches the outcome instead of catching it.
+A cancellation is an outcome as well, and `done` is what a test about one asks:
+
+```dart
+test('a cancelled load ends Cancelled', () async {
+  final profile = ProfileController(FakeProfileApi());
+  final job = profile.load();
+
+  await job.cancel();
+
+  expect(
+    await job.done,
+    isA<Cancelled>().having((outcome) => outcome.started, 'started', isFalse),
+  );
+  expect(profile.currentState, isA<Initial>());
+
+  await profile.close();
+});
+```
+
+`cancel()` completes when the job has finished, so the outcome is there on the
+line below it. `done` hands it over like any other, while `value` would throw
+it — a test expecting a cancellation would be reading it out of a `throwsA`.
+`started: false` is why the state is untouched here: the job was still in the
+queue, its body never ran, and `onCancel` was not called at all. A load
+cancelled while it runs ends with the same `Cancelled`, and the state it ends
+in is the one its `onCancel` published.
 
 ## Closing the controller
 

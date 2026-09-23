@@ -272,6 +272,22 @@ void main() {
       await profile.close();
     });
 
+    test('a cancelled load ends Cancelled', () async {
+      final profile = ProfileController(FakeProfileApi());
+      final job = profile.load();
+
+      await job.cancel();
+
+      expect(
+        await job.done,
+        isA<Cancelled>()
+            .having((outcome) => outcome.started, 'started', isFalse),
+      );
+      expect(profile.currentState, isA<Initial>());
+
+      await profile.close();
+    });
+
     test('value of a cancelled job throws, done does not', () async {
       final profile = ProfileController(FakeProfileApi());
       final job = profile.load();
