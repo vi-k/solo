@@ -73,11 +73,17 @@ final class ProfileController extends Solo<ProfileState> {
 
   final FakeProfileApi api;
 
+  /// How many times `onCancel` ran; the page has no use for the count.
+  int cancels = 0;
+
   Job<String> load() => run<ProfileState, String>(
         key: 'load',
         policy: Policy.droppable,
         onError: (state, error, stackTrace) => Failure(error),
-        onCancel: (state, cancelled) => const Initial(),
+        onCancel: (state, cancelled) {
+          cancels++;
+          return const Initial();
+        },
         (ctx) async {
           ctx.emit(const Loading());
           final name = await ctx.wait(api.fetchName);
@@ -284,6 +290,7 @@ void main() {
             .having((outcome) => outcome.started, 'started', isFalse),
       );
       expect(profile.currentState, isA<Initial>());
+      expect(profile.cancels, 0);
 
       await profile.close();
     });
@@ -296,6 +303,7 @@ void main() {
 
       expect(await job.done, isA<Cancelled>());
       await expectLater(job.value, throwsA(isA<Cancelled>()));
+      expect(profile.cancels, 0);
 
       await profile.close();
     });
@@ -315,6 +323,7 @@ void main() {
       expect(job.outcome, isA<Cancelled>());
       expect('${job.outcome}', 'Cancelled(closed)');
       expect(profile.currentState, isA<Initial>());
+      expect(profile.cancels, 1);
       expect(profile.api.finished, 0);
     });
 
@@ -326,6 +335,7 @@ void main() {
 
       expect('${job.outcome}', 'Cancelled(closed)');
       expect(profile.currentState, isA<Initial>());
+      expect(profile.cancels, 0);
       expect(profile.api.started, 0);
     });
 

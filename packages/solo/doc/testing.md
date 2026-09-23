@@ -1,9 +1,35 @@
 # Testing
 
 A controller is tested through its jobs: a call queues one and returns it, and
-the state it publishes arrives later. Every example below uses `package:test`,
-the controller of the quick start and a fake API that answers after twenty
-milliseconds, or fails:
+the state it publishes arrives later. Every example below uses `package:test`
+and drives the `load` of the quick start controller from the
+[README](https://github.com/vi-k/solo/blob/main/packages/solo/README.md):
+
+```dart
+final class ProfileController extends Solo<ProfileState> {
+  final ProfileApi api;
+
+  ProfileController(this.api) : super(const Initial());
+
+  Job<String> load() => run<ProfileState, String>(
+        key: 'load',
+        policy: Policy.droppable,
+        onError: (state, error, stackTrace) => Failure(error),
+        onCancel: (state, cancelled) => const Initial(),
+        (ctx) async {
+          ctx.emit(const Loading());
+          final name = await ctx.wait(api.fetchName);
+          ctx.emit(Loaded(name));
+          return name;
+        },
+      );
+}
+```
+
+`onError` turns a failure into `Failure`, `onCancel` puts the state back to
+`Initial`, and `key: 'load'` with `Policy.droppable` is what makes a second
+call join the load already in flight — the tests below read all three. The API
+it calls is faked: an answer after twenty milliseconds, or an error.
 
 ```dart
 class FakeProfileApi implements ProfileApi {
@@ -115,9 +141,9 @@ test('a cancelled load ends Cancelled', () async {
 line below it. `done` hands it over like any other, while `value` would throw
 it — a test expecting a cancellation would be reading it out of a `throwsA`.
 `started: false` is why the state is untouched here: the job was still in the
-queue, its body never ran, and `onCancel` was not called at all. A load
-cancelled while it runs ends with the same `Cancelled`, and the state it ends
-in is the one its `onCancel` published.
+queue, its body never ran, and the controller's `onCancel` was not called at
+all. A load cancelled while it runs ends with the same `Cancelled`, and the
+state it ends in is the one its `onCancel` published.
 
 ## Closing the controller
 
@@ -138,8 +164,8 @@ test('load fills in the name', () async {
 here never leaves the queue: both lines run in the same turn, so `close` drops
 it with `Cancelled(closed)` before the body starts, and the state is still the
 one the controller was built with. A load that had started would end the same
-way, cancelled where it was waiting, with `onCancel` publishing `Initial` over
-the `Loading` it had emitted.
+way, cancelled where it was waiting, and the controller's `onCancel` would
+publish `Initial` over the `Loading` its body had emitted.
 
 ### Letting the work finish
 

@@ -2,8 +2,35 @@
 
 Контроллер тестируется через его `Job`: вызов ставит одну в очередь и её же
 возвращает, а состояние, которое она публикует, приходит позже. Все примеры
-ниже используют `package:test`, контроллер из быстрого старта и фейковое API,
-которое отвечает через двадцать миллисекунд или падает:
+ниже используют `package:test` и гоняют `load` контроллера из быстрого старта
+[README](https://github.com/vi-k/solo/blob/main/packages/solo/README.ru.md):
+
+```dart
+final class ProfileController extends Solo<ProfileState> {
+  final ProfileApi api;
+
+  ProfileController(this.api) : super(const Initial());
+
+  Job<String> load() => run<ProfileState, String>(
+        key: 'load',
+        policy: Policy.droppable,
+        onError: (state, error, stackTrace) => Failure(error),
+        onCancel: (state, cancelled) => const Initial(),
+        (ctx) async {
+          ctx.emit(const Loading());
+          final name = await ctx.wait(api.fetchName);
+          ctx.emit(Loaded(name));
+          return name;
+        },
+      );
+}
+```
+
+`onError` превращает ошибку в `Failure`, `onCancel` возвращает состояние
+в `Initial`, а `key: 'load'` вместе с `Policy.droppable` заставляют второй
+вызов присоединиться к уже идущей загрузке — всё это тесты ниже и читают. API,
+которое контроллер зовёт, фейковое: ответ через двадцать миллисекунд или
+ошибка.
 
 ```dart
 class FakeProfileApi implements ProfileApi {
@@ -118,8 +145,9 @@ test('a cancelled load ends Cancelled', () async {
 строке. `done` отдаёт его как любой другой, а `value` бросил бы — и тест,
 ожидающий отмену, вычитывал бы её из `throwsA`. `started: false` объясняет,
 почему состояние не тронуто: `Job` стояла в очереди, тело не выполнялось вовсе,
-и `onCancel` не звали ни разу. Отменённая на ходу загрузка кончится тем же
-`Cancelled`, а состояние у неё будет то, которое опубликовал её `onCancel`.
+и `onCancel` контроллера не звали ни разу. Отменённая на ходу загрузка кончится
+тем же `Cancelled`, а состояние у неё будет то, которое опубликовал её
+`onCancel`.
 
 ## Закрытие контроллера
 
@@ -140,8 +168,8 @@ test('load fills in the name', () async {
 из очереди: обе строки идут в одном такте, поэтому `close` отбрасывает её
 с `Cancelled(closed)` до старта тела, и состояние остаётся тем, с которым
 контроллер создан. Успевшая стартовать загрузка кончилась бы так же — отменой
-там, где она ждала, и `onCancel` опубликовал бы `Initial` поверх своего
-`Loading`.
+там, где она ждала, и `onCancel` контроллера опубликовал бы `Initial` поверх
+`Loading`, который успело опубликовать тело.
 
 ### Дать работе закончиться
 
