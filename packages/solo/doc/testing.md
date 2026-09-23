@@ -308,6 +308,15 @@ job it has just created — inside the call itself, before anything has started.
 The test is right that a duplicate was dropped and wrong about the case its
 name describes: nothing was running.
 
+That first line is the `onFinish` of the dropped job, and the only line it ever
+gets: its body never ran, so there was no `onStart` for it, and the
+controller's `onCancel` was not called either — which is why no state of its
+own stands next to it. The key in the line is the key the policy matched on,
+the same `load` the other job carries, so it is the outcome that tells the two
+apart. In that outcome `manual` is the reason — the one a `cancel()` from
+outside carries as well — and `duplicate` is the description `Policy.droppable`
+writes into it when it drops a job.
+
 ### Letting the first job start
 
 ```dart
@@ -328,10 +337,10 @@ state: Loaded
 load Done(Ada Lovelace)
 ```
 
-The cancelled duplicate in the journal is the newly created job that
-`droppable` discarded; both calls returned the first job, which is what
-`identical` checks. The observer is a process-wide static, so the test resets
-it — through `addTearDown` and not a line at the end, for the reason in
+The cancelled line is the same dropped job as before, in the place the test
+expected it; both calls returned the first job, which is what `identical`
+checks. The observer is a process-wide static, so the test resets it — through
+`addTearDown` and not a line at the end, for the reason in
 [What one test leaves for the next](#what-one-test-leaves-for-the-next).
 
 ## Awaiting inside fakeAsync

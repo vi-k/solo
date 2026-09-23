@@ -467,6 +467,7 @@ void main() {
 
         expect(identical(first, second), isTrue);
         expect(journal.lines, ['load Cancelled(manual: duplicate)']);
+        expect(profile.cancels, 0);
 
         async.elapse(const Duration(milliseconds: 20));
 
@@ -477,6 +478,7 @@ void main() {
           'state: Loaded',
           'load Done(Ada Lovelace)',
         ]);
+        expect(profile.cancels, 0);
 
         profile.close();
         async.flushTimers();
@@ -504,6 +506,7 @@ void main() {
           'state: Loaded',
           'load Done(Ada Lovelace)',
         ]);
+        expect(profile.cancels, 0);
 
         profile.close();
         async.flushTimers();
