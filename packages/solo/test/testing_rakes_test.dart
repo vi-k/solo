@@ -235,6 +235,20 @@ void main() {
       await profile.close();
     });
 
+    test('a test that awaits waits the fake out for real', () async {
+      final profile = ProfileController(FakeProfileApi());
+      final started = clock.now();
+
+      await profile.load().done;
+
+      expect(
+        clock.now().difference(started),
+        greaterThanOrEqualTo(const Duration(milliseconds: 20)),
+      );
+
+      await profile.close();
+    });
+
     test('value returns the name the body returned', () async {
       final profile = ProfileController(FakeProfileApi());
 
