@@ -314,6 +314,40 @@ final class Cam extends Solo<Value> {
         (ctx) async {},
       );
 
+  /// A job the state can break under, and the members that break it: the
+  /// names are what a stack trace shows, so a guard can tell the trace of
+  /// the change from the trace of the checkpoint that noticed it.
+  Job<void> keptWhileSmall(Completer<void> gate) => run<Value, void>(
+        key: 'kept',
+        keepWhile: (state) => state.n < 5,
+        (ctx) => ctx.wait(() => gate.future),
+      );
+
+  /// A job that breaks its own rule: its own emit is not re-evaluated, so
+  /// the checkpoint after it is where the job finds out.
+  Job<void> breaksItsOwnRule() => run<Value, void>(
+        key: 'own',
+        keepWhile: (state) => state.n < 5,
+        (ctx) async {
+          emitsTooBig(ctx);
+          await Future<void>.delayed(Duration.zero);
+          readsTheState(ctx);
+        },
+      );
+
+  /// A job the queue refuses on a state that is already too big.
+  Job<void> refusedWhileBig() => run<Value, void>(
+        key: 'big',
+        canStart: (state) => state.n < 5,
+        (ctx) async {},
+      );
+
+  void setsTooBig() => externalSetState(const Value(9));
+
+  void emitsTooBig(SoloContext<Value, Value> ctx) => ctx.emit(const Value(9));
+
+  void readsTheState(SoloContext<Value, Value> ctx) => ctx.state;
+
   /// The first attempt of "Background work and logs": a future the caller
   /// does not wait for.
   Job<void> bareUnawaited(Completer<void> gate) => run<Value, void>(
@@ -504,9 +538,12 @@ final class Streaming extends Solo<Value> with SoloStream<Value> {
 }
 
 void main() {
+  final traceStateChanges = Solo.traceStateChanges;
+
   tearDown(() {
     Solo.observer = null;
     Solo.errorHandler = null;
+    Solo.traceStateChanges = traceStateChanges;
   });
 
   // --- Hooks, the observer and the handler --------------------------------
@@ -1389,6 +1426,74 @@ void main() {
       expect(marks, isEmpty, reason: 'the final handler is disabled');
       expect(controller.currentState.n, 1, reason: 'no correction to 99');
       expect(zoneErrors, isNotEmpty, reason: 'reported, and nobody answers');
+    });
+
+    test('a rejected change leaves its own trace on the Cancelled', () async {
+      final controller = Cam();
+      final job = controller.keptWhileSmall(Completer<void>())..ignore();
+
+      await pumpEventQueue();
+      controller.setsTooBig();
+      await job.done;
+
+      expect(
+        '${(job.outcome! as Cancelled).stackTrace}',
+        contains('setsTooBig'),
+      );
+    });
+
+    test('and leads to the change without that trace as well', () async {
+      Solo.traceStateChanges = false;
+      final controller = Cam();
+      final job = controller.keptWhileSmall(Completer<void>())..ignore();
+
+      await pumpEventQueue();
+      controller.setsTooBig();
+      await job.done;
+
+      expect(
+        '${(job.outcome! as Cancelled).stackTrace}',
+        contains('setsTooBig'),
+        reason: 'the rejection runs inside the change',
+      );
+    });
+
+    test('a rule that says no later names the emit that broke it', () async {
+      final controller = Cam();
+      final job = controller.breaksItsOwnRule()..ignore();
+
+      await job.done;
+
+      expect(
+        '${(job.outcome! as Cancelled).stackTrace}',
+        contains('emitsTooBig'),
+      );
+    });
+
+    test('without the trace of the change it names the checkpoint', () async {
+      Solo.traceStateChanges = false;
+      final controller = Cam();
+      final job = controller.breaksItsOwnRule()..ignore();
+
+      await job.done;
+
+      final trace = '${(job.outcome! as Cancelled).stackTrace}';
+
+      expect(trace, contains('readsTheState'));
+      expect(trace, isNot(contains('emitsTooBig')));
+    });
+
+    test('a start rule names the queue, not the change', () async {
+      final controller = Cam()..setsTooBig();
+      final job = controller.refusedWhileBig()..ignore();
+
+      await job.done;
+
+      expect(
+        '${(job.outcome! as Cancelled).stackTrace}',
+        isNot(contains('setsTooBig')),
+        reason: 'canStart is asked as the job leaves the queue',
+      );
     });
 
     test('the zone of last resort is the one the job was created in', () async {

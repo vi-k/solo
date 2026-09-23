@@ -471,12 +471,19 @@ canStart: (state) => state.free > 0,
 ```
 
 A rule that answers `false` is not an error: it cancels the job, and the
-`Cancelled` carries the trace of the change it turned down — the `emit` or the
-`externalSetState` whose state broke the rule. Taking that trace costs most of
-what a change costs, so it is taken where assertions are on and left out of a
-release build. `Solo.traceStateChanges = true` keeps it everywhere and `false`
-drops it everywhere; without it the cancellation still carries the trace of the
-place that noticed.
+`Cancelled` carries a trace. A `keepWhile` re-checked on a change says no from
+inside it, so that trace is the change — the `emit` or the `externalSetState`
+whose state broke the rule. Taking it costs most of what a change costs, so it
+is taken where assertions are on and left out of a release build:
+`Solo.traceStateChanges = true` keeps it everywhere, `false` drops it
+everywhere. Dropped, the trace is taken at the rejection instead, a couple of
+engine frames above the same change.
+
+Where a rule says no away from the change, the trace names the place that
+noticed. `canStart` is asked once, as the job leaves the queue, and names the
+queue. A job that breaks its own rule is not re-evaluated on its own `emit`: it
+finds out at the next `ctx.state` or `ctx.check()`, and without the trace of
+the change that checkpoint is all the `Cancelled` has.
 
 Where a rule throws anyway decides who hears about it:
 
