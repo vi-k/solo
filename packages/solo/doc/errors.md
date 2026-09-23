@@ -527,10 +527,17 @@ ctx.unattended(() => analytics.send('zoom'));
 `ctx.unattended(action)` starts work that the job does not wait for or cancel.
 Its errors are reported through the job's error hooks, even after the job
 finishes, with the same zone fallback when no handler is installed. Use it for
-work with an independent lifetime. Starting children from this work is
-prohibited. A captured context still belongs to the original job: `emit` can
-work while that job is active, but is rejected after cancellation or
-completion. The background operation does not extend the context's lifetime.
+work with an independent lifetime.
+
+Unattended work is not the job, and the context refuses there whatever acts on
+the job: `ctx.run`, `ctx.runAll`, `ctx.each` and `ctx.uncancellable` all throw
+a `StateError` — `cannot run a child inside unattended work`. That throw is an
+error of the work it happened in, so it takes the road above, to the hooks, and
+the job itself still ends `Done`.
+
+A captured context still belongs to the original job: `emit` can work while
+that job is active, but is rejected after cancellation or completion. The
+background operation does not extend the context's lifetime.
 
 ### Logs
 

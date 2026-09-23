@@ -237,6 +237,36 @@ final class Cam extends Solo<Value> {
         },
       );
 
+  /// Every member of the context that unattended work is refused, each
+  /// one caught where it is called.
+  Job<void> refusedFromUnattended(List<String> messages) => run<Value, void>(
+        key: 'refused',
+        (ctx) async {
+          ctx.unattended(() async {
+            for (final action in <Future<void> Function()>[
+              () async => ctx.run(job<Value, void>((child) async {})),
+              () async => ctx.runAll([job<Value, void>((child) async {})]),
+              () async => ctx.each(const Stream<int>.empty(), (child, e) {}),
+              () async => ctx.uncancellable(() async {}),
+            ]) {
+              try {
+                await action();
+              } on Object catch (error) {
+                messages.add('$error');
+              }
+            }
+          });
+        },
+      );
+
+  /// The same refusal with nobody to catch it.
+  Job<void> forksFromUnattended() => run<Value, void>(
+        key: 'fork',
+        (ctx) async {
+          ctx.unattended(() => ctx.run(job<Value, void>((child) async {})));
+        },
+      );
+
   /// The first attempt of "Catching errors inside a body": one catch for
   /// everything that comes out of the device.
   Job<void> broadCatch(Completer<void> gate, Hw hw, List<Object> broken) =>
@@ -1581,6 +1611,41 @@ void main() {
 
       expect(controller.errors, [isA<StateError>()]);
       expect(caught, hasLength(1), reason: 'a child from there is refused');
+    });
+
+    test('unattended work is refused whatever acts on the job', () async {
+      final controller = Cam();
+      final messages = <String>[];
+
+      await controller.refusedFromUnattended(messages).value;
+      await pumpEventQueue();
+
+      expect(messages, [
+        contains('cannot run a child inside unattended work'),
+        contains('cannot run a child inside unattended work'),
+        contains('cannot follow a stream inside unattended work'),
+        contains('cannot run an uncancellable action inside unattended work'),
+      ]);
+    });
+
+    test('a refusal nobody catches goes to the hooks, not the outcome',
+        () async {
+      final controller = Cam();
+      final zoneErrors = <Object>[];
+      late final Job<void> job;
+
+      await runZonedGuarded(
+        () async {
+          job = controller.forksFromUnattended()..ignore();
+          await job.done;
+          await pumpEventQueue();
+        },
+        (error, stackTrace) => zoneErrors.add(error),
+      );
+
+      expect(controller.errors, [isA<StateError>()]);
+      expect(zoneErrors, [isA<StateError>()], reason: 'nobody answered');
+      expect(job.outcome, isA<Done<void>>(), reason: 'the job is not it');
     });
 
     test('a captured context is refused after its job is done', () async {
