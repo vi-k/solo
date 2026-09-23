@@ -218,6 +218,11 @@ final class Cam extends Solo<Value> {
   Job<void> logsData() =>
       run<Value, void>(key: 'log', (ctx) async => ctx.log(('zoom', 2)));
 
+  /// A line that costs something to build, logged as the callback that
+  /// builds it.
+  Job<void> logsLazily(String Function() line) =>
+      run<Value, void>(key: 'lazy', (ctx) async => ctx.log(line));
+
   /// Work with a life of its own.
   Job<void> unattended(Completer<void> gate, List<Object> caught) =>
       run<Value, void>(
@@ -1662,6 +1667,24 @@ void main() {
       await controller.logsData().value;
 
       expect(controller.logs, [('zoom', 2)]);
+    });
+
+    test('a message that is a callback is handed on uncalled', () async {
+      final controller = Cam();
+      var built = 0;
+
+      await controller.logsLazily(() {
+        built++;
+
+        return 'zoom to 2';
+      }).value;
+
+      expect(built, 0, reason: 'nothing calls it on the way');
+
+      final message = controller.logs.single! as String Function();
+
+      expect(message(), 'zoom to 2');
+      expect(built, 1, reason: 'the line is built where it is wanted');
     });
   });
 }

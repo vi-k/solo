@@ -552,3 +552,22 @@ Solo.debug = print;
 `ctx.log(data)` forwards application data to log hooks and observers as it is,
 so a listener that wants a line makes one. `Solo.debug` additionally traces the
 controller's internal queue and lifecycle operations.
+
+Nothing is called on the way either. Where the line costs something to build,
+log the callback that builds it and leave the level to decide whether to call
+it:
+
+```dart
+// A line that costs something to build: log the callback, not the line.
+ctx.log(() => 'zoom to $zoom on ${device.describe()}');
+
+@override
+void onLog(Job<Object?> job, Object? message) {
+  if (!logger.isLoggable(Level.FINE)) return;
+  logger.fine(message is Object Function() ? message() : message);
+}
+```
+
+The body logs unconditionally, and `describe()` runs only where somebody
+listens at that level. Everywhere else the message stays a closure nobody
+called.
