@@ -2,6 +2,7 @@
 library;
 
 import 'dart:io';
+import 'dart:math';
 
 import 'package:fake_async/fake_async.dart';
 import 'package:solo/solo.dart';
@@ -217,6 +218,34 @@ void opened(
 
 void main() {
   tearDown(() => Solo.observer = null);
+
+  group('the states', () {
+    test('copyWith cannot clear focusPoint', () {
+      const ready = Ready(zoom: 2, focusPoint: Point(0.5, 0.5));
+
+      // The null is what the test passes on purpose.
+      // ignore: avoid_redundant_argument_values
+      expect(ready.copyWith(focusPoint: null), ready);
+    });
+
+    test('resetFocusPoint publishes a fresh Ready with the current zoom', () {
+      camera(CameraController.new, (camera, hw, journal, async) {
+        opened(camera.init, hw, journal, async);
+        camera.setZoom(2).ignore();
+        camera.setFocusPoint(const Point(0.5, 0.5)).ignore();
+        async.elapse(const Duration(milliseconds: 20));
+        expect(
+          camera.currentState,
+          const Ready(zoom: 2, focusPoint: Point(0.5, 0.5)),
+        );
+
+        camera.resetFocusPoint().ignore();
+        async.elapse(const Duration(milliseconds: 10));
+
+        expect(camera.currentState, const Ready(zoom: 2));
+      });
+    });
+  });
 
   group('opening the camera', () {
     test('a working type of Initial is broken by its own first emit', () {

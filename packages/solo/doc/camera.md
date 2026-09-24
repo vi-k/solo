@@ -58,6 +58,10 @@ hardware lands; it is not called `Failed`, which is the name of an outcome. In
 the example every state also prints itself, and that text is what the journals
 below show.
 
+A `null` passed to `copyWith` keeps the old value, so `copyWith` cannot clear
+`focusPoint`, where `null` means automatic focus. The example's
+`resetFocusPoint` publishes a fresh `Ready` that keeps the current zoom.
+
 The hardware is `FakeCameraHardware` from the example. Every operation takes
 ten milliseconds and a capture thirty; `failures` makes a named operation fail
 after its delay, `onError` reports a failure from outside any job, and `log`

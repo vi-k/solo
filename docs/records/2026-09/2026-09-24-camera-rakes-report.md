@@ -1,4 +1,4 @@
-> **Состояние на 2026-09-24:** вычитка сделана, ждёт чтения владельца; ветка
+> **Состояние на 2026-09-24:** вычитка сделана, идёт чтение владельца; ветка
 > `doc-camera`, слияние за владельцем.
 > **Что это:** отчёт о вычитке `packages/solo/doc/camera.md` и её русской
 > версии `docs/ru/solo/camera.md`: зонды по утверждениям, две правки самого
@@ -123,12 +123,12 @@
 
 `packages/solo/example`: `dart format` без изменений, `dart analyze` чисто,
 `dart test` 39, `dart run bin/main.dart` доходит до `closed`. `packages/solo`:
-`dart format lib test example` без изменений, `dart analyze` чисто, `dart test`
-790. Из корня: `reflow.py --check`, `check_line_width.py`,
-     `check_translations.py` (21 заголовок и 27 блоков в обеих версиях),
-     `check_links.py`, `check_doc_shape.py` — зелёные. Скрипты скилла
-     `doc-reader`: `jargon.py` чист на обеих версиях,
-     `bare_names.py --allow=future` — ноль голых имён.
+`dart format lib test example` без изменений, `dart analyze` чисто,
+в `dart test` все 790 тестов зелёные. Из корня: `reflow.py --check`,
+`check_line_width.py`, `check_translations.py` (21 заголовок и 27 блоков
+в обеих версиях), `check_links.py`, `check_doc_shape.py` — зелёные. Скрипты
+скилла `doc-reader`: `jargon.py` чист на обеих версиях,
+`bare_names.py --allow=future` — ноль голых имён.
 
 ## Попутно: очередь bloc при закрытии
 
@@ -167,3 +167,21 @@ droppable               2 и 3 отброшены ещё при add; close() в�
 и `drain`, заменённый обычным закрытием, — краснят драйвер. Стенд целиком
 зелёный: анализ трёх пакетов чист, все драйверы доходят до конца,
 `check_traces.py` — 2 и 11 трасс, ни одной не напечатанной.
+
+## По чтению владельца
+
+1. «focusPoint не сбросить через copyWith». Страница показывала `copyWith`, где
+   `null` оставляет старое значение, и молчала, что поэтому им не очистить
+   `focusPoint`, у которого `null` — автоматический фокус. В примере это
+   учтено: dartdoc `copyWith` говорит об этом, а `resetFocusPoint` публикует
+   новый `Ready`. Но страница показывает код без комментариев, а операций
+   фокуса не показывает вовсе. Под абзацем о состояниях теперь две фразы:
+   `null` в `copyWith` оставляет старое значение, поэтому `focusPoint` им
+   не очистить, а `resetFocusPoint` публикует новый `Ready` с текущим
+   масштабом. Сторож — группа `the states` в `camera_rakes_test.dart`, два
+   теста; в примере их стало 41. Три мутации, все пойманы: `copyWith`,
+   очищающий поле, — первым тестом; `resetFocusPoint`, публикующий
+   `const Ready()`, — только вторым, потому что тест примера сбрасывает фокус
+   при масштабе 1; `resetFocusPoint` через `copyWith(focusPoint: null)` —
+   вторым и тестом примера. `null` в первом тесте передан нарочно, и линт
+   `avoid_redundant_argument_values` на этой строке заглушён с причиной.
