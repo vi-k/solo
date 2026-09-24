@@ -53,52 +53,43 @@ final class CameraController extends Solo<CameraState> {
 
   /// Opens the hardware once. `W` is [NotDisposed], not [Initial]: the body
   /// emits [Preparing] and must still be allowed to read the context.
+  ///
+  /// An opening that fails or is cancelled lands in [Broken], the state
+  /// [reopen] starts from. Left in [Preparing], the controller could start
+  /// nothing again: `init` wants [Initial], `reopen` [Ready] or [Broken].
   Job<void> init() => run<NotDisposed, void>(
         key: CameraKey.init,
         policy: Policy.droppable,
         canStart: (state) => state is Initial,
+        onError: (state, error, stackTrace) => Broken(error),
+        onCancel: (state, cancelled) => Broken(cancelled),
         (ctx) async {
           ctx.emit(const Preparing());
-          // The same landing as in `reopen`: `Preparing` says the hardware
-          // is opening, and a controller left in it after the opening
-          // failed can be started by nothing — `init` wants `Initial` and
-          // `reopen` wants `Ready` or `Broken`.
-          try {
-            await ctx.join(hw.open);
-          } on Cancelled {
-            rethrow;
-          } on Object catch (error) {
-            ctx.emit(Broken(error));
-            rethrow;
-          }
+          await ctx.join(hw.open);
           ctx.emit(const Ready());
         },
       );
 
   /// Closes and reopens the hardware, restoring the zoom. The close runs as
-  /// a `cancellable: false` child: once started it always completes.
+  /// a `cancellable: false` child: once started it always completes. A
+  /// reopening that fails or is cancelled lands in [Broken], as [init] does.
   Job<void> reopen() => run<NotDisposed, void>(
         key: CameraKey.reopen,
         policy: Policy.droppable,
         canStart: (state) => state is Ready || state is Broken,
+        onError: (state, error, stackTrace) => Broken(error),
+        onCancel: (state, cancelled) => Broken(cancelled),
         (ctx) async {
           final zoom = switch (ctx.state) {
             Ready(:final zoom) => zoom,
             _ => 1.0,
           };
-          try {
-            // `run` throws what the close threw: hardware that is still open
-            // must not be reopened over in silence.
-            await ctx.run(_closeCameraJob());
-            ctx.emit(const Preparing());
-            await ctx.join(hw.open);
-            await ctx.join(() => hw.setZoom(zoom));
-          } on Cancelled {
-            rethrow;
-          } on Object catch (error) {
-            ctx.emit(Broken(error));
-            rethrow;
-          }
+          // `run` throws what the close threw: hardware that is still open
+          // must not be reopened over in silence.
+          await ctx.run(_closeCameraJob());
+          ctx.emit(const Preparing());
+          await ctx.join(hw.open);
+          await ctx.join(() => hw.setZoom(zoom));
           ctx.emit(Ready(zoom: zoom));
         },
       );
@@ -182,15 +173,20 @@ final class CameraController extends Solo<CameraState> {
         },
       );
 
-  /// Forces the way: clears the queue, cancels the current job, closes the
-  /// hardware. Call [close] afterwards to release the controller.
+  /// Clears the way: drops the queued commands, cancels the current job,
+  /// closes the hardware. Await it, then call [close] to release the
+  /// controller.
   Job<void> dispose() {
     // The source of external states goes first: the disposal below decides
     // the final state, and a `Broken` arriving in the middle of it would
     // overwrite that decision. Past `close` such a write throws instead --
     // the state of a closed controller is final.
     hw.onError = null;
-    queue.clear(force: true);
+    // Not `force`: an earlier disposal still in the queue is not
+    // cancellable, so it survives the clear, and `droppable` below hands it
+    // to this call too. Forced out, it would end `Cancelled` for its caller
+    // while this one did the disposing.
+    queue.clear();
     current?.cancel();
     return run<CameraState, void>(
       key: CameraKey.dispose,

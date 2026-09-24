@@ -471,6 +471,15 @@
   and, unless somebody observes the outcome, to the creation zone, and the
   `onError` of that same `run` corrects nothing, because the job never started.
 
+- The runnable camera example lands a failed or cancelled opening in `Broken`
+  through the `onError` and `onCancel` of `run`. `init` and `reopen` used to
+  catch the failure in the body, and a cancellation passed through that catch
+  with its `emit` refused: an opening cancelled half way left the camera in
+  `Preparing`, where neither of them could start again. `dispose()` no longer
+  forces the queue clear. An earlier disposal still in the queue survives it,
+  and a second call gets that same job back instead of cancelling it under its
+  caller.
+
 ## 0.2.0
 
 The first published release. 0.1.0 never left the tree, so nothing below is a

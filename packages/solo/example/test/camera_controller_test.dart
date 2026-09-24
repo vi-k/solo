@@ -154,8 +154,8 @@ void main() {
         '> [closeCamera] started',
         '> [closeCamera] finished Done(null)',
         'state: Preparing()',
-        'state: Broken(Bad state: no device)',
         '[reopen] error Bad state: no device',
+        'state: Broken(Bad state: no device)',
         '[reopen] finished Failed(Bad state: no device)',
       ]);
       expect(reopen.outcome, isA<Failed>());
