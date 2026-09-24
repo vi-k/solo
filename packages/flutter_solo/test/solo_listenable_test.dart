@@ -129,6 +129,35 @@ void main() {
     expect(find.text('2'), findsOneWidget);
   });
 
+  testWidgets('controller drives ListenableBuilder and AnimatedBuilder',
+      (tester) async {
+    final counter = _Counter();
+    addTearDown(counter.close);
+
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: Column(
+          children: [
+            ListenableBuilder(
+              listenable: counter,
+              builder: (context, _) => Text('listenable ${counter.value}'),
+            ),
+            AnimatedBuilder(
+              animation: counter,
+              builder: (context, _) => Text('animated ${counter.value}'),
+            ),
+          ],
+        ),
+      ),
+    );
+    counter.set(3);
+    await tester.pump();
+
+    expect(find.text('listenable 3'), findsOneWidget);
+    expect(find.text('animated 3'), findsOneWidget);
+  });
+
   test('value mirrors state', () async {
     final counter = _Counter();
     expect(counter.value, 0);

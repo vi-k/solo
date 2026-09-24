@@ -1,11 +1,14 @@
 # Миксины
 
-`SoloListenable` — единственный миксин, который нужен
-[README](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.ru.md):
-он делает контроллер `ValueListenable`, а дальше его берут билдеры фреймворка.
-Эта страница — о том, что стоит вокруг него: `SoloStream` рядом с ним, экран
-на этом стриме и базовый класс контроллеров в пакете без Flutter, куда миксин
-не подмешать.
+`SoloListenable` делает контроллер `ValueListenable`, а значит, и `Listenable`:
+`ValueListenableBuilder`, `ListenableBuilder` и `AnimatedBuilder` фреймворка
+принимают контроллер как есть,
+и [README](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.ru.md)
+строит свой экран на первом из них. Билдеры этого пакета, `SoloBuilder`
+и `SoloSelector`, принимают любой контроллер, с миксином и без. Эта страница —
+о том, что стоит вокруг `SoloListenable`: `SoloStream` из `solo` рядом с ним,
+экран на этом стриме и базовый класс контроллеров в пакете без Flutter, куда
+миксин не подмешать.
 
 Строки под кодом — то, что он печатает при запуске. Два раздела открываются
 версией, к которой ведёт словарь фреймворка и движка, — виджетом, который

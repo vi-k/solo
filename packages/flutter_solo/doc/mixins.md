@@ -1,10 +1,13 @@
 # Mixins
 
-`SoloListenable` is the one mixin the
+`SoloListenable` makes a controller a `ValueListenable`, and so a `Listenable`
+as well: the framework's `ValueListenableBuilder`, `ListenableBuilder` and
+`AnimatedBuilder` take the controller as it is, and the
 [README](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.md)
-needs: it makes a controller a `ValueListenable`, and the builders of the
-framework take it from there. This page is about what sits around it —
-`SoloStream` beside it, a screen built on that stream, and a base class of
+builds its screen on the first of them. The builders of this package,
+`SoloBuilder` and `SoloSelector`, take any controller, with the mixin or
+without it. This page is about what sits around `SoloListenable` — `SoloStream`
+of `solo` beside it, a screen built on that stream, and a base class of
 controllers in a package without Flutter, where the mixin cannot go.
 
 The lines under the code are what it prints when it runs. Two sections open
