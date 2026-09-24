@@ -216,11 +216,13 @@ droppable               2 и 3 отброшены ещё при add; close() в�
    сверка.
 4. «Может тогда сделать вторую попытку и там объяснить?» Абзац из пункта 3
    стоял в ответе и объяснял то, чего читатель на странице не видел. Раздел
-   «Disposing of the camera» перестроен так, как устроены `resources.md`
-   и `cancellation.md`: первая попытка — освобождение, поставленное в очередь
-   как любая `Job`, и `canStart: (state) => state is! Disposed` в ней взят
-   из словаря `init`; вторая попытка — та же `Job` с расчисткой дороги, и её
-   изъян — `[dispose] dropped Cancelled(rules: canStart)` на вызов после конца
+   «Disposing of the camera» получил вторую попытку. От `resources.md`
+   и `cancellation.md` взят только порядок заголовков — первая попытка, вторая,
+   ответ под своим заголовком; `canStart` на тех страницах нет. Первая попытка
+   здесь — освобождение, поставленное в очередь как любая `Job`,
+   и `canStart: (state) => state is! Disposed` в ней взят из словаря `init`;
+   вторая попытка — та же `Job` с расчисткой дороги, и её изъян —
+   `[dispose] dropped Cancelled(rules: canStart)` на вызов после конца
    освобождения; ответ «Checking in the body» переносит проверку в тело
    и показывает `[dispose] started` и `[dispose] finished Done(null)`. Абзац
    о `force` остался в ответе, а заголовок «Clearing the way» ушёл: расчистку
