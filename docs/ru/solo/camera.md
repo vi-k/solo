@@ -142,9 +142,10 @@ Job<void> init() => run<NotDisposed, void>(
 
 ## Открытие, которое не удалось
 
-Устройство может отказаться открываться, а `Job` могут отменить посреди
-открытия. В обоих случаях контроллер должен оказаться в состоянии, из которого
-что-то может стартовать.
+Устройство может отказаться открываться, пока камеру держит другое приложение,
+а `Job` могут отменить посреди открытия. В обоих случаях контроллер должен
+оказаться в состоянии, из которого что-то может стартовать, чтобы камеру можно
+было открыть позже.
 
 ### Первая попытка
 
@@ -202,9 +203,9 @@ Job<void> init() => run<NotDisposed, void>(
 ```text
 [init] started
 state: Preparing()
-[init] error Bad state: no camera
-state: Broken(Bad state: no camera)
-[init] finished Failed(Bad state: no camera)
+[init] error Bad state: camera in use
+state: Broken(Bad state: camera in use)
+[init] finished Failed(Bad state: camera in use)
 ```
 
 ```text

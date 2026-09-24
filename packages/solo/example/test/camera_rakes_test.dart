@@ -355,7 +355,7 @@ void main() {
 
     test('the handlers land a failure in Broken', () {
       final hw = FakeCameraHardware()
-        ..failures['open'] = StateError('no camera');
+        ..failures['open'] = StateError('camera in use');
       camera(CameraController.new, hardware: hw, (camera, hw, journal, async) {
         final job = camera.init()..ignore();
         async.elapse(const Duration(milliseconds: 20));
@@ -363,11 +363,19 @@ void main() {
         expect(journal.take(), [
           '[init] started',
           'state: Preparing()',
-          '[init] error Bad state: no camera',
-          'state: Broken(Bad state: no camera)',
-          '[init] finished Failed(Bad state: no camera)',
+          '[init] error Bad state: camera in use',
+          'state: Broken(Bad state: camera in use)',
+          '[init] finished Failed(Bad state: camera in use)',
         ]);
         expect(job.outcome, isA<Failed>());
+
+        // The other app lets go of the camera.
+        hw.failures.remove('open');
+        final rescue = camera.reopen()..ignore();
+        async.elapse(const Duration(milliseconds: 40));
+
+        expect(rescue.outcome, isA<Done<void>>());
+        expect(camera.currentState, const Ready());
       });
     });
 

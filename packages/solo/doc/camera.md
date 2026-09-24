@@ -139,8 +139,9 @@ opened once.
 
 ## An opening that fails
 
-The hardware can refuse to open, and a job can be cancelled while it opens.
-Either way the controller has to end in a state something can start from.
+The hardware can refuse to open while another app holds the camera, and a job
+can be cancelled while it opens. Either way the controller has to end in a
+state something can start from, so that the camera can be opened later.
 
 ### The first attempt
 
@@ -199,9 +200,9 @@ cancellation both land in `Broken`, and `reopen` starts from there:
 ```text
 [init] started
 state: Preparing()
-[init] error Bad state: no camera
-state: Broken(Bad state: no camera)
-[init] finished Failed(Bad state: no camera)
+[init] error Bad state: camera in use
+state: Broken(Bad state: camera in use)
+[init] finished Failed(Bad state: camera in use)
 ```
 
 ```text
