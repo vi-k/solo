@@ -5,12 +5,20 @@
 needs: it makes a controller a `ValueListenable`, and the builders of the
 framework take it from there. This page is about what sits around it —
 `SoloStream` beside it, a screen built on that stream, and a base class of
-controllers with no Flutter to mix it into.
+controllers in a package without Flutter, where the mixin cannot go.
+
+The lines under the code are what it prints when it runs. Two sections open
+with the version the vocabulary of the framework and of the engine leads to — a
+widget that takes a stream, a hook named after the failure it reports — and
+show what that code does. Where the version that repairs it still falls short,
+it stands as a second attempt, and the version to use follows under its own
+heading. The section on both deliveries has nothing to trip over and opens with
+the answer.
 
 ## A controller with both deliveries
 
-`SoloListenable` combines with `SoloStream` when a screen needs the widget side
-and a broadcast `stream` at once:
+`SoloListenable` combines with `SoloStream` when a controller that feeds
+widgets also hands a broadcast `stream` to code that takes one:
 
 ```dart
 sealed class SessionState {
@@ -37,18 +45,18 @@ final class Session extends Solo<SessionState> with SoloStream, SoloListenable {
 
 Both deliveries are live, on their own schedules: the listener behind
 `ValueListenableBuilder` fires synchronously, inside the change, and the
-`stream` event arrives a microtask later. The combination has a cost: a
-listener failure goes to `FlutterError`, a stream failure to the zone -- one
-change, two error routes; a rebuild and a stream event are two separate
-reactions to one change, where a widget reading only `value` had one; and
-`await close()` now waits for the stream's own subscribers too, which a plain
-`SoloListenable` never did.
+`stream` event arrives a microtask later. The combination costs two things. One
+change has two error routes: a listener's failure goes to `FlutterError`, and a
+failure of a `stream` subscriber goes to the zone it subscribed in. And
+`await close()` waits until every subscriber of `stream` has taken its done
+event, which a plain `SoloListenable` does not do: an `await for` over
+`session.stream` holds `close()` while its body is still awaiting.
 
 ## A screen built on the stream
 
-The requirement is the ordinary one: from its first frame, the screen shows the
-state the controller is in. `Session` above has a `stream`, and the framework
-has a widget that takes one.
+The requirement is the ordinary one: the badge shows the state of the session
+it is given, from its first frame. `Session` above has a `stream`, and the
+framework has a widget that takes one.
 
 ### The first attempt
 
@@ -86,7 +94,7 @@ them, so the badge waits for a change to show what was true before it was
 built. The session is not what is wrong here: `currentState` holds `SignedIn`
 all along, in the same builder that renders `nothing yet`.
 
-A screen sees this every time it is built anew — a push and a pop, a tab
+A screen sees this every time it is built anew — its route pushed, a tab
 switched away and back — and the wait is as long as the next change, which for
 a session can be the rest of the day. Closing takes the state away for good:
 after `close()` the stream is done and no event is ever coming.
@@ -96,7 +104,10 @@ mounted over a session signed in as Ada: nothing yet
 after close(): nothing yet
 ```
 
-### The state a screen needs is `currentState`
+### The second attempt
+
+`initialData` hands the builder a state to open with, and the state the session
+is in is `currentState`:
 
 ```dart
 StreamBuilder<SessionState>(
@@ -112,18 +123,26 @@ StreamBuilder<SessionState>(
 )
 ```
 
-```text
-mounted over a session signed in as Ada: signed in as Ada
-after Bob signs in: signed in as Bob
-```
-
 `snapshot.data` and `currentState` differ in where they come from.
 `snapshot.data` is what the stream delivered to this subscriber; `currentState`
 is the state the controller is in now, and `initialData` is what hands the
-subscriber that state at the moment it subscribes.
+subscriber that state at the moment it subscribes. The fault shows when the
+badge is handed another session:
 
-A builder of this package takes the controller rather than a delivery, so the
-gap never opens and there is nothing to pass for the first frame:
+```text
+mounted over a session signed in as Ada: signed in as Ada
+after Bob signs in: signed in as Bob
+handed another session, signed in as Cy: signed in as Bob
+```
+
+`StreamBuilder` reads `initialData` once, when it is first built. Handed a new
+stream, it subscribes to it and keeps the data the old one delivered, so the
+badge shows Bob over Cy's session until that session changes.
+
+### A builder that takes the controller
+
+A builder of this package takes the controller rather than a delivery, so there
+is nothing to pass for the first frame:
 
 ```dart
 SoloBuilder<SessionState>(
@@ -140,23 +159,36 @@ SoloBuilder<SessionState>(
 ```text
 mounted over a session signed in as Ada: signed in as Ada
 after Bob signs in: signed in as Bob
+handed another session, signed in as Cy: signed in as Cy
 ```
 
-The state has no `null` case now, because a controller always has a state. The
-`stream` is for what is not a widget: a log, a bridge into code that takes a
-`Stream`, a test that wants the whole sequence of changes.
+`SoloBuilder` reads `currentState` in `build` and moves to a controller it is
+handed, so the badge shows the state of the session it is given from the first
+frame, and from the frame it is handed another. The state has no `null` case
+now, because a controller always has a state. The `stream` is for what is not a
+widget: a log, a bridge into code that takes a `Stream`, a test that wants the
+whole sequence of changes.
 
 ## A base class without Flutter
 
 A base class the app's controllers share can live in a package with no Flutter
-in it, and the leaf mixes `SoloListenable` in:
+in it, and the leaf mixes `SoloListenable` in. What every controller shares
+goes into the base, and here that is a report of a listener's failure to the
+app's own log, `AppLog`.
+
+### The first attempt
+
+The engine has a hook for this failure, and the base overrides it:
 
 ```dart
 // A package of your own, without Flutter.
 abstract class AppController<S extends Object> extends Solo<S> {
   AppController(super.initialState);
 
-  // ...what every controller of the app shares...
+  @protected
+  @override
+  void onListenerError(Object error, StackTrace stackTrace) =>
+      AppLog.error(error, stackTrace);
 }
 
 // The app.
@@ -166,13 +198,65 @@ final class ProfileController extends AppController<Profile>
 }
 ```
 
+A listener of `ProfileController` throws, and the report goes past the base:
+
+```text
+AppLog: nothing
+FlutterError: Bad state: the listener blew up
+```
+
 Where the mixin sits decides whose `onListenerError` reports a listener's
-failure. On the leaf, as here, it overrides the base: a base that overrides
-`onListenerError` loses to the mixin's report through `FlutterError`, and the
-leaf cannot reach the base's version through `super` either — that lands in the
-mixin. A base that wants its own report keeps it in a method of another name,
-and the leaf's `onListenerError` calls that. A base that mixes `SoloListenable`
-in itself keeps its own override: a class sits above the mixins it mixes in.
-Mix it in once, though, in the base or in the leaf: mixed in again on a leaf
-over such a base, it sits above the base's override and silences it the same
-way.
+failure. A mixin sits above the class it is mixed into, here above
+`AppController`, so its override wins, with a report through `FlutterError`,
+and the base's override never runs. The analyzer says nothing about it. Nor
+does `super` reach the base from the leaf: `super` there is the mixin, and an
+override that only calls it is one the analyzer calls unnecessary.
+
+### A report under another name
+
+The base keeps its report in a method of another name, which no mixin
+overrides, and its own hook calls that:
+
+```dart
+// A package of your own, without Flutter.
+abstract class AppController<S extends Object> extends Solo<S> {
+  AppController(super.initialState);
+
+  @protected
+  void reportListenerError(Object error, StackTrace stackTrace) =>
+      AppLog.error(error, stackTrace);
+
+  @protected
+  @override
+  void onListenerError(Object error, StackTrace stackTrace) =>
+      reportListenerError(error, stackTrace);
+}
+
+// The app.
+final class ProfileController extends AppController<Profile>
+    with SoloListenable {
+  ProfileController() : super(Empty());
+
+  @protected
+  @override
+  void onListenerError(Object error, StackTrace stackTrace) =>
+      reportListenerError(error, stackTrace);
+}
+```
+
+```text
+AppLog: Bad state: the listener blew up
+FlutterError: nothing
+```
+
+The base's hook reports for a controller that mixes nothing in, and the leaf's
+hook sends its failures to the same place. A leaf that wants the report through
+`FlutterError` as well calls `super.onListenerError` next to
+`reportListenerError`. `@protected` is repeated on every override because Dart
+does not inherit it: left off, the hook becomes a public member of every
+controller of the app.
+
+A base with Flutter in it mixes `SoloListenable` in itself and keeps its own
+override: a class sits above the mixins it mixes in. Mix it in once, though:
+mixed in again on a leaf over such a base, it sits above the base's override
+and silences it the same way.

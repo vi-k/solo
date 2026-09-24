@@ -81,6 +81,13 @@ final class _MigratedLeaf extends _FlutterBase<int> {
   void set(int value) => externalSetState(value);
 }
 
+/// [_FlutterBase] with the face mixed in again on the leaf.
+final class _MixedTwiceLeaf extends _FlutterBase<int> with SoloListenable {
+  _MixedTwiceLeaf() : super(0);
+
+  void set(int value) => externalSetState(value);
+}
+
 final class _ClosingObserver extends SoloObserver {
   final void Function(Solo<Object> solo) onCloseCallback;
 
@@ -528,6 +535,22 @@ void main() {
     expect(leaf, isA<ValueListenable<int>>(), reason: 'the base mixes it in');
     expect(leaf.reported.single, isA<StateError>());
     expect(reports, isEmpty);
+    await leaf.close();
+  });
+
+  test('SoloListenable mixed in again on the leaf silences the base', () async {
+    final leaf = _MixedTwiceLeaf();
+    final reports = <FlutterErrorDetails>[];
+    final previous = FlutterError.onError;
+    FlutterError.onError = reports.add;
+    addTearDown(() => FlutterError.onError = previous);
+
+    leaf
+      ..addListener(() => throw StateError('the listener blew up'))
+      ..set(1);
+
+    expect(leaf.reported, isEmpty, reason: 'the second mixin sits above');
+    expect(reports.single.exception, isA<StateError>());
     await leaf.close();
   });
 

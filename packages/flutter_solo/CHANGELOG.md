@@ -260,6 +260,16 @@
   `package:solo/listeners.dart`. Reporting a listener's failure through
   `FlutterError` stays here, where Flutter is.
 
+- `doc/mixins.md` opens two of its sections with the version the vocabulary of
+  the framework and of the engine leads to: a `StreamBuilder` over the
+  controller's `stream`, and an override of `onListenerError` in a base class
+  without Flutter, which the mixin on the leaf silences. `initialData` stands
+  as a second attempt: `StreamBuilder` reads it once, and handed another
+  controller it keeps showing the first one's state. The section on both
+  deliveries says where a failure of a `stream` subscriber goes and what holds
+  `close()`, and the overrides on the page repeat `@protected`, which Dart does
+  not inherit.
+
 ## 0.2.0
 
 The first published release. 0.1.0 never left the tree.
