@@ -465,8 +465,7 @@ addTearDown(() => Solo.traceStateChanges = tracing);
 Solo.traceStateChanges = false;
 ```
 
-Three lines that fit any of the four, and the only ones that are right for the
-last.
+Any of the four can be put back this way, and the last one only this way.
 
 ## Assertions inside a zone
 
