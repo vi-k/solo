@@ -117,20 +117,20 @@ StreamBuilder<SessionState>(
   stream: session.stream,
   initialData: session.currentState,
   builder: (context, snapshot) => Text(
-    switch (snapshot.data) {
+    switch (snapshot.requireData) {
       SignedIn(:final name) => 'signed in as $name',
       SignedOut() => 'signed out',
-      null => 'nothing yet',
     },
   ),
 )
 ```
 
-`snapshot.data` и `currentState` отличаются тем, откуда они берутся.
-`snapshot.data` — это то, что стрим доставил этому подписчику; `currentState` —
-состояние, в котором контроллер находится сейчас, а `initialData` — то, что
-отдаёт подписчику это состояние в момент подписки. Изъян виден, когда бейджу
-дают другую сессию:
+Данные снимка и `currentState` отличаются тем, откуда они берутся. Данные — это
+то, что стрим доставил этому подписчику, или `initialData`, пока он ничего
+не доставил; `currentState` — состояние, в котором контроллер находится сейчас.
+`initialData` отдаёт подписчику это состояние в момент подписки, поэтому данные
+у снимка есть с первого кадра, и `requireData` читает их без ветки `null`.
+Изъян виден, когда бейджу дают другую сессию:
 
 ```text
 mounted over a session signed in as Ada: signed in as Ada
@@ -167,8 +167,7 @@ handed another session, signed in as Cy: signed in as Cy
 
 `SoloBuilder` читает `currentState` в `build` и переходит на контроллер,
 который ему дали, поэтому бейдж показывает состояние своей сессии с первого
-кадра и с того кадра, в котором ему дали другую. Ветки `null` у состояния
-теперь нет: у контроллера состояние есть всегда. `stream` — для того, что
+кадра и с того кадра, в котором ему дали другую. `stream` — для того, что
 виджетом не является: журнал, мост в код, который принимает `Stream`, тест,
 которому нужна вся последовательность изменений.
 

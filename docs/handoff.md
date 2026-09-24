@@ -29,14 +29,15 @@
 мутаций, все пойманы. Отчёт — `2026-09-24-mixins-rakes-report.md`.
 В `CHANGELOG` `flutter_solo` добавлена запись о странице. Ответ на каждый
 вопрос чтения — правка обеих версий страницы и сторож на новое утверждение,
-отдельным коммитом ветки. Отвечено на два вопроса 2026-09-24: вступление
+отдельным коммитом ветки. Отвечено на три вопроса 2026-09-24: вступление
 называло `SoloListenable` единственным нужным миксином, а билдеры пакета
 обходятся без него, и миксинов два, — теперь вступление говорит, что миксин
 делает, и тест держит `ListenableBuilder` и `AnimatedBuilder`; «where the mixin
-cannot go» стояло после `SoloStream` и теперь называет `SoloListenable`. Дальше
-по карте вычитки идут четыре оставшихся страницы `async_job` — `outcomes.md`,
-`cancellation.md`, `observing.md`, `extending.md` — и README `solo`
-и `flutter_solo`.
+cannot go» стояло после `SoloStream` и теперь называет `SoloListenable`; вторая
+попытка экрана на стриме читает `snapshot.requireData` вместо ветки `null`,
+которая с `initialData` не срабатывала. Дальше по карте вычитки идут четыре
+оставшихся страницы `async_job` — `outcomes.md`, `cancellation.md`,
+`observing.md`, `extending.md` — и README `solo` и `flutter_solo`.
 
 Ветка `doc-camera` влита владельцем 2026-09-24. Новая ветка этой сессии —
 `doc-mixins`, её тоже сливает владелец: `git merge --ff-only doc-mixins`
@@ -309,7 +310,7 @@ Edit'ами на время коммита, а сверка требует, чт
 до правок по чтению; снять её можно только push'ем.
 
 **Дерево и проверки.** Эта сессия — worktree `.claude/worktrees/doc-errors`,
-ветка `doc-mixins`. Проверки после второго вопроса чтения `mixins.md`:
+ветка `doc-mixins`. Проверки после третьего вопроса чтения `mixins.md`:
 `packages/flutter_solo` — `dart format` без изменений, `flutter analyze` чисто,
 `flutter test` 85, пример 4; стенд `tool/flutter_snippets.py` — анализ чистый,
 29 тестов, шесть процитированных трасс сверены; `packages/solo` не менялся;

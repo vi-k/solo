@@ -117,20 +117,20 @@ StreamBuilder<SessionState>(
   stream: session.stream,
   initialData: session.currentState,
   builder: (context, snapshot) => Text(
-    switch (snapshot.data) {
+    switch (snapshot.requireData) {
       SignedIn(:final name) => 'signed in as $name',
       SignedOut() => 'signed out',
-      null => 'nothing yet',
     },
   ),
 )
 ```
 
-`snapshot.data` and `currentState` differ in where they come from.
-`snapshot.data` is what the stream delivered to this subscriber; `currentState`
-is the state the controller is in now, and `initialData` is what hands the
-subscriber that state at the moment it subscribes. The fault shows when the
-badge is handed another session:
+The data of a snapshot and `currentState` differ in where they come from. The
+data is what the stream delivered to this subscriber, or `initialData` until it
+delivers something; `currentState` is the state the controller is in now.
+`initialData` hands the subscriber that state at the moment it subscribes, so
+the snapshot has data from the first frame, and `requireData` reads it with no
+`null` case to write. The fault shows when the badge is handed another session:
 
 ```text
 mounted over a session signed in as Ada: signed in as Ada
@@ -167,10 +167,9 @@ handed another session, signed in as Cy: signed in as Cy
 
 `SoloBuilder` reads `currentState` in `build` and moves to a controller it is
 handed, so the badge shows the state of the session it is given from the first
-frame, and from the frame it is handed another. The state has no `null` case
-now, because a controller always has a state. The `stream` is for what is not a
-widget: a log, a bridge into code that takes a `Stream`, a test that wants the
-whole sequence of changes.
+frame, and from the frame it is handed another. The `stream` is for what is not
+a widget: a log, a bridge into code that takes a `Stream`, a test that wants
+the whole sequence of changes.
 
 ## A base class without Flutter
 
