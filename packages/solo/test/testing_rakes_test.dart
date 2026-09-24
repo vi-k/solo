@@ -92,6 +92,19 @@ final class ProfileController extends Solo<ProfileState> {
         },
       );
 
+  /// The same call under a deadline the fake answers well inside.
+  Job<String> loadWithLongTimeout() => run<ProfileState, String>(
+        key: 'load',
+        (ctx) async {
+          ctx.emit(const Loading());
+          final name = await ctx.wait(
+            () => api.fetchName().timeout(const Duration(seconds: 5)),
+          );
+          ctx.emit(Loaded(name));
+          return name;
+        },
+      );
+
   /// The first attempt of the timeouts section: a deadline on the call.
   Job<String> loadWithTimeout() => run<ProfileState, String>(
         key: 'load',
@@ -751,6 +764,19 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 40));
 
       expect(api.finished, 1);
+
+      await profile.close();
+    });
+
+    test('a deadline the fake answers inside never fires', () async {
+      final api = FakeProfileApi();
+      final profile = ProfileController(api);
+
+      final outcome = await profile.loadWithLongTimeout().done;
+
+      expect(outcome, isA<Done<String>>());
+      expect(api.finished, 1);
+      expect(profile.currentState, isA<Loaded>());
 
       await profile.close();
     });

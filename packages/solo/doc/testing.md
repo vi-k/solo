@@ -531,16 +531,19 @@ failure has been reported.
 
 ```dart
 final name = await ctx.wait(
-  () => api.fetchName().timeout(const Duration(seconds: 5)),
+  () => api.fetchName().timeout(const Duration(milliseconds: 5)),
 );
 ```
 
-`Future.timeout` limits the waiting, not the work behind it. Five seconds in,
-the job ends `Failed(TimeoutException)` and the queue moves on, while the
-request is still in flight and finishes later into nothing. A test sees both
-halves: when the job ends, the fake has been called and has not returned; a few
-milliseconds later it returns, with nobody waiting for it. For a result that
-can be abandoned this is the whole story, and the line above is enough.
+`Future.timeout` limits the waiting, not the work behind it. Five milliseconds
+in, the job ends `Failed(TimeoutException)` and the queue moves on, while the
+call is still in flight and finishes later into nothing. A test sees both
+halves: when the job ends, the fake has been called and has not returned; it
+returns at its twentieth millisecond, fifteen after the job was over, with
+nobody waiting for it. The deadline is in milliseconds because this test awaits
+real time: a deadline of seconds is seconds the test waits out, and a fake that
+answers in twenty milliseconds would never reach it. For a result that can be
+abandoned this is the whole story, and `timeout` alone is enough.
 
 ### A timer wired to the device
 
