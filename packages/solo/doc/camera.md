@@ -411,6 +411,12 @@ call: two `dispose()` calls in a row get the same job, and both callers see
 `Done`. `queue.clear(force: true)` would drop that job instead, and its caller
 would get `Cancelled(manual)` for a camera that was disposed after all.
 
+For the same reason `Disposed` is checked in the body rather than by
+`canStart`. A call made after the disposal is over starts a job of its own, and
+the check ends it `Done` at once. `canStart: (state) => state is! Disposed`
+would drop that job before it starts, and its caller would get
+`Cancelled(rules: canStart)`.
+
 ## Closing the controller
 
 After the disposal the controller itself is released with `close()`.

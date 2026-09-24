@@ -168,6 +168,25 @@ final class FirstAttempts extends Solo<CameraState> {
     return _disposal();
   }
 
+  /// The answer of that section with `Disposed` refused by `canStart`
+  /// instead of the check in the body.
+  Job<void> disposeRefusingDisposed() {
+    queue.clear();
+    current?.cancel();
+    return run<CameraState, void>(
+      key: CameraKey.dispose,
+      policy: Policy.droppable,
+      cancellable: false,
+      canStart: (state) => state is! Disposed,
+      (ctx) async {
+        if (ctx.state is! Initial) {
+          await ctx.run(_closeCameraJob());
+        }
+        ctx.emit(const Disposed());
+      },
+    );
+  }
+
   /// A failure after the disposal: the answer of the disposal section,
   /// with the listener left in place.
   Job<void> disposeKeepingListener() {
@@ -652,6 +671,45 @@ void main() {
         expect('${first.outcome}', 'Cancelled(manual)');
         expect(second.outcome, isA<Done<void>>());
         expect(camera.currentState, isA<Disposed>());
+      });
+    });
+
+    test('a dispose after the disposal is over ends Done', () {
+      camera(CameraController.new, (camera, hw, journal, async) {
+        opened(camera.init, hw, journal, async);
+        camera.dispose().ignore();
+        async.elapse(const Duration(milliseconds: 20));
+        journal.take();
+        hw.log.clear();
+
+        final again = camera.dispose()..ignore();
+        async.elapse(const Duration(milliseconds: 20));
+
+        expect(journal.take(), [
+          '[dispose] started',
+          '[dispose] finished Done(null)',
+        ]);
+        expect(again.outcome, isA<Done<void>>());
+        expect(hw.log, isEmpty);
+      });
+    });
+
+    test('canStart drops a dispose after the disposal is over', () {
+      camera(FirstAttempts.new, (camera, hw, journal, async) {
+        opened(camera.init, hw, journal, async);
+        final first = camera.disposeRefusingDisposed()..ignore();
+        async.elapse(const Duration(milliseconds: 20));
+        expect(first.outcome, isA<Done<void>>());
+        expect(camera.currentState, isA<Disposed>());
+        journal.take();
+
+        final again = camera.disposeRefusingDisposed()..ignore();
+        async.elapse(const Duration(milliseconds: 20));
+
+        expect(journal.take(), [
+          '[dispose] dropped Cancelled(rules: canStart)',
+        ]);
+        expect('${again.outcome}', 'Cancelled(rules: canStart)');
       });
     });
   });

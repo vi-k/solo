@@ -199,3 +199,18 @@ droppable               2 и 3 отброшены ещё при add; close() в�
    состояние — `Ready()`. Мутация — `reopen`, стартующий только из `Ready`, —
    краснит оба сторожа раздела, провал и отмену; до правки её ловил только
    сторож отмены.
+3. «`if (ctx.state is Disposed) return;` — может использовать `canStart`?»
+   Может, но с другим исходом. Зонд: пока первое освобождение идёт,
+   `Policy.droppable` отдаёт его второму вызову, и оба получают `Done` — как
+   и с проверкой в теле. Вызов после конца освобождения `canStart` отбрасывает:
+   `[dispose] dropped Cancelled(rules: canStart)`, и `switch` из «Awaiting the
+   disposal» печатает `cancelled` за освобождённую камеру. Это та же ложная
+   отмена, из-за которой убрали `force`, поэтому страница теперь говорит
+   об этом абзацем после абзаца о `force`: `Disposed` проверяется в теле,
+   а не в `canStart`, и почему. Сторожа —
+   `a dispose after the disposal is over ends Done` на пример
+   и `canStart drops a dispose after the disposal is over` на вариант
+   `FirstAttempts.disposeRefusingDisposed`; в примере 43 теста. Две мутации
+   `dispose()` примера — без проверки в теле и с `canStart` вместо неё —
+   краснят первый сторож и сверку фрагментов; до правки их ловила только
+   сверка.
