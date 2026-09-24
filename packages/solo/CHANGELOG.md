@@ -480,6 +480,13 @@
   and a second call gets that same job back instead of cancelling it under its
   caller.
 
+- `doc/camera.md` opens its sections with the version the API's vocabulary
+  leads to: a working type named after the starting state, a landing written as
+  a catch, a zoom with no policy, a disposal queued like any other job, a
+  `close()` in the same turn as `dispose()`, and a hardware listener left in
+  place through the disposal. The last fragment of each method is the example's
+  code, and the example's tests hold the page to it.
+
 ## 0.2.0
 
 The first published release. 0.1.0 never left the tree, so nothing below is a
