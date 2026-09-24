@@ -278,8 +278,14 @@ class Api {
   /// reply the user never saw must not be one of them.
   int reads = 0;
 
+  /// Messages the server was asked to deliver, and the ones it answered.
+  final sent = <String>[];
+  final answered = <String>[];
+
   Future<String> send(String text) async {
+    sent.add(text);
     await tick(50);
+    answered.add(text);
     return 'reply to $text';
   }
 
@@ -1372,6 +1378,20 @@ class LateChatBloc extends Bloc<ChatEvent, ChatState> {
   final Api _api;
 }
 
+/// The first attempt's send, without its follow-up, under a transformer
+/// other than `sequential()`.
+class TransformedChatBloc extends Bloc<ChatEvent, ChatState> {
+  TransformedChatBloc(this._api, EventTransformer<SendMessage>? transformer)
+      : super(const ChatState()) {
+    on<SendMessage>((e, emit) async {
+      final reply = await _api.send(e.text);
+      emit(state.withReply(reply));
+    }, transformer: transformer);
+  }
+
+  final Api _api;
+}
+
 Future<void> main() async {
   final api = Api();
   final chat = ChatBloc(api)..add(const SendMessage('hi'));
@@ -1408,6 +1428,66 @@ Future<void> main() async {
     final first = '$error'.split('\\n').where((l) => l.isNotEmpty).first;
     print('late emit raised: $first');
   });
+
+  // A message queued behind the one in flight. `sequential()` runs it out
+  // inside `close()`: it is sent, and `close()` returns after its answer.
+  final queuedApi = Api();
+  final queued = ChatBloc(queuedApi)
+    ..add(const SendMessage('hi'))
+    ..add(const SendMessage('and again'));
+  await tick(10);
+  await queued.close();
+  print('queued behind, guarded: answered ${queuedApi.answered} by the '
+      'end of close, state ${queued.state}, reads reported ${queuedApi.reads}');
+  if (queuedApi.answered.length != 2) {
+    throw StateError('sequential close must run the queued event as well');
+  }
+  if (queued.state.reply != null || queuedApi.reads != 0) {
+    throw StateError('the guard must turn the queued reply away too');
+  }
+
+  await runZonedGuarded(() async {
+    final api = Api();
+    final unguarded = UnguardedChatBloc(api)
+      ..add(const SendMessage('hi'))
+      ..add(const SendMessage('and again'));
+    await tick(10);
+    await unguarded.close();
+    print('queued behind, no guard: state ${unguarded.state}');
+    if (unguarded.state.reply != 'reply to and again') {
+      throw StateError('a queued handler must still emit while closing');
+    }
+  }, (error, _) {
+    if (error is StateError && '$error'.contains('must')) throw error;
+  });
+
+  // Every other transformer has no queue to run: the events already reached
+  // their handlers or were dropped on arrival, and `close()` returns first.
+  for (final (name, transformer, delivered) in [
+    ('concurrent', null, ['hi', 'and again']),
+    ('droppable', droppable<SendMessage>(), ['hi']),
+    ('restartable', restartable<SendMessage>(), ['hi', 'and again']),
+  ]) {
+    final api = Api();
+    final bloc = TransformedChatBloc(api, transformer)
+      ..add(const SendMessage('hi'))
+      ..add(const SendMessage('and again'));
+    await tick(10);
+    await bloc.close();
+    final answeredAtClose = [...api.answered];
+    await tick(100);
+    print('queued behind, $name: answered $answeredAtClose by the end of '
+        'close, sent ${api.sent}, state ${bloc.state}');
+    if (answeredAtClose.isNotEmpty) {
+      throw StateError('$name close must return before the bodies finish');
+    }
+    if ('${api.sent}' != '$delivered' || '${api.answered}' != '$delivered') {
+      throw StateError('$name close must not stop a call already made');
+    }
+    if (bloc.state.reply != null) {
+      throw StateError('$name close must turn the late writes away');
+    }
+  }
 }
 ''')
 
@@ -1443,6 +1523,25 @@ Future<void> main() async {
   print('state after close: ${chat.currentState}, '
       'reads reported ${api.reads}');
   print('send after close: ${chat.send('later').outcome}');
+  if (queued.outcome is! Cancelled || api.sent.length != 1) {
+    throw StateError('close must end the queued send before it starts');
+  }
+
+  // Draining instead: the queued message goes out, as under `sequential()`.
+  final drainApi = Api();
+  final draining = ChatController(drainApi)
+    ..send('hi')
+    ..send('and again');
+  await tick(10);
+  await draining.close(mode: SoloCloseMode.drain);
+  print('drain: answered ${drainApi.answered}, '
+      'state ${draining.currentState}, reads reported ${drainApi.reads}');
+  if (drainApi.answered.length != 2) {
+    throw StateError('a drain must send the queued message');
+  }
+  if (drainApi.reads != 0) {
+    throw StateError('a closing controller must take no new root job');
+  }
 
   await runZonedGuarded(
     () async {

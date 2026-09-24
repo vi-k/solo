@@ -25,10 +25,14 @@
 мутаций; он же сверяет последний фрагмент каждого метода на странице с кодом
 примера. Отчёт — `2026-09-24-camera-rakes-report.md`. Ответ на каждый вопрос
 чтения — правка обеих версий страницы и сторож на новое утверждение, отдельным
-коммитом ветки. Дальше по карте вычитки идут
-`packages/flutter_solo/doc/mixins.md`, четыре оставшихся страницы `async_job` —
-`outcomes.md`, `cancellation.md`, `observing.md`, `extending.md` — и README
-`solo` и `flutter_solo`.
+коммитом ветки. Попутно, по вопросу владельца от 2026-09-24, поправлен раздел 3
+`packages/solo/doc/vs-bloc.md`: при закрытии `sequential()` проходит очередь
+до конца, а не ждёт один работающий обработчик; стенд `tool/doc_snippets.py`
+сторожит это для четырёх трансформеров и для `SoloCloseMode.drain`.
+В `CHANGELOG` `solo` добавлена запись о `testing.md`, которой там не было.
+Дальше по карте вычитки идут `packages/flutter_solo/doc/mixins.md`, четыре
+оставшихся страницы `async_job` — `outcomes.md`, `cancellation.md`,
+`observing.md`, `extending.md` — и README `solo` и `flutter_solo`.
 
 Ветка `doc-testing` влита владельцем 2026-09-24. Новая ветка этой сессии —
 `doc-camera`, её тоже сливает владелец: `git merge --ff-only doc-camera`

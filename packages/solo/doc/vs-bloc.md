@@ -443,11 +443,16 @@ would have reported it is the call that threw. Half the requirement holds by
 the accident that broke the other half.
 
 Closing behavior depends on the transformer in these versions. With
-`sequential()`, `close()` waits for the running handler, which can still emit
-while closure is pending. With `concurrent` — the one a registration gets by
-default — or with `droppable` or `restartable`, `close()` returns before the
-body finishes and the cancelled emitter ignores subsequent writes. Neither case
-interrupts the API call or the rest of the handler body.
+`sequential()`, `close()` runs the queue out: the handler in flight and every
+event waiting behind it are handled in turn, each of them can still emit, and
+`close()` returns after the last. With `concurrent` — the one a registration
+gets by default — or with `restartable` there is no queue to run: every event
+added before `close()` reaches its handler at once, since nothing holds it
+back. With `droppable` the events that arrived while a handler was busy were
+dropped on arrival. In these three cases `close()` returns before the bodies
+finish, and the cancelled emitters ignore the writes that follow. No case
+interrupts an API call or the rest of a handler body, and none drops an event
+the transformer had let through.
 
 ### Bloc
 
@@ -473,9 +478,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 ```
 
 The guard prevents both the reply update and the `MarkReplyRead` event. Closing
-still waits for the API call and handler to return. The separate
-`MarkReplyRead` registration is safe for this example because it does not write
-shared state; otherwise section 1's ordering concern would apply.
+still waits for the API call and handler to return, and for every message
+queued behind them: each is still sent to the API while `close()` runs, and the
+guard turns away only its reply. The separate `MarkReplyRead` registration is
+safe for this example because it does not write shared state; otherwise section
+1's ordering concern would apply.
 
 `add` after close throws `StateError`, so callers that can submit late events
 need their own handling. A `Cubit` method also continues after closure, but its
@@ -527,6 +534,14 @@ With a plain await instead, closing would wait for the API response. The later
 `ctx.emit` would still reject the cancelled job. Calls made after closure
 return jobs already completed with `Cancelled(closed)`, so the call site needs
 no `isClosed` guard.
+
+A message still queued behind the running one never reaches the API: it ends
+`Cancelled(closed)` without starting, where `sequential()` would send it. When
+queued work has to go out,
+[`close(mode: SoloCloseMode.drain)`](cancellation.md#cancelling-and-closing-a-controller)
+runs the queue first, as `sequential()` does. The `markReplyRead()` each reply
+calls still comes back `Cancelled(closed)` there, because a closing controller
+takes no new root job.
 
 A `ctx` is valid while its job runs, and the bloc case above has a counterpart
 here: a body that starts a future and does not await it returns, and the future
