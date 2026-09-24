@@ -143,6 +143,7 @@ final class FirstAttempts extends Solo<CameraState> {
         (ctx) async => hw.close(),
       );
 
+  /// The job of the disposal section's answer, without the clearing.
   Job<void> _disposal() => run<CameraState, void>(
         key: CameraKey.dispose,
         policy: Policy.droppable,
@@ -158,33 +159,34 @@ final class FirstAttempts extends Solo<CameraState> {
         },
       );
 
-  /// Disposing of the camera: a disposal queued like any other job.
-  Job<void> disposeQueued() => _disposal();
+  /// Disposing of the camera: the first attempt, a disposal queued like
+  /// any other job, with `Disposed` refused by `canStart`.
+  Job<void> disposeQueued() => run<CameraState, void>(
+        key: CameraKey.dispose,
+        policy: Policy.droppable,
+        cancellable: false,
+        canStart: (state) => state is! Disposed,
+        (ctx) async {
+          if (ctx.state is! Initial) {
+            await ctx.run(_closeCameraJob());
+          }
+          ctx.emit(const Disposed());
+        },
+      );
 
-  /// The answer of that section with the clear forced.
+  /// The second attempt: the way cleared, `Disposed` still refused by
+  /// `canStart`.
+  Job<void> disposeClearing() {
+    queue.clear();
+    current?.cancel();
+    return disposeQueued();
+  }
+
+  /// The answer of the disposal section with the clear forced.
   Job<void> disposeForced() {
     queue.clear(force: true);
     current?.cancel();
     return _disposal();
-  }
-
-  /// The answer of that section with `Disposed` refused by `canStart`
-  /// instead of the check in the body.
-  Job<void> disposeRefusingDisposed() {
-    queue.clear();
-    current?.cancel();
-    return run<CameraState, void>(
-      key: CameraKey.dispose,
-      policy: Policy.droppable,
-      cancellable: false,
-      canStart: (state) => state is! Disposed,
-      (ctx) async {
-        if (ctx.state is! Initial) {
-          await ctx.run(_closeCameraJob());
-        }
-        ctx.emit(const Disposed());
-      },
-    );
   }
 
   /// A failure after the disposal: the answer of the disposal section,
@@ -626,22 +628,24 @@ void main() {
           ..dispose().ignore();
         async.elapse(const Duration(milliseconds: 100));
 
-        expect(journal.take(), [
-          '[setZoom: zoom: 2.0] started',
-          '[takePhoto] dropped Cancelled(manual)',
-          '[setZoom: zoom: 2.0] finished Cancelled(manual)',
-          '[dispose] started',
-          '> [closeCamera] started',
-          '> [closeCamera] finished Done(null)',
-          'state: Disposed()',
-          '[dispose] finished Done(null)',
-        ]);
-        expect(hw.log, [
-          'zoom 2.0: begin',
-          'zoom 2.0: end',
-          'close: begin',
-          'close: end',
-        ]);
+        expect(journal.take(), _clearedWay);
+        expect(hw.log, _clearedHardware);
+      });
+    });
+
+    test('the second attempt clears the way the same', () {
+      camera(FirstAttempts.new, (camera, hw, journal, async) {
+        opened(camera.init, hw, journal, async);
+
+        camera.setZoom(2).ignore();
+        async.elapse(const Duration(milliseconds: 5));
+        camera
+          ..takePhoto().ignore()
+          ..disposeClearing().ignore();
+        async.elapse(const Duration(milliseconds: 100));
+
+        expect(journal.take(), _clearedWay);
+        expect(hw.log, _clearedHardware);
       });
     });
 
@@ -694,16 +698,16 @@ void main() {
       });
     });
 
-    test('canStart drops a dispose after the disposal is over', () {
+    test('the second attempt drops a dispose after the disposal is over', () {
       camera(FirstAttempts.new, (camera, hw, journal, async) {
         opened(camera.init, hw, journal, async);
-        final first = camera.disposeRefusingDisposed()..ignore();
+        final first = camera.disposeClearing()..ignore();
         async.elapse(const Duration(milliseconds: 20));
         expect(first.outcome, isA<Done<void>>());
         expect(camera.currentState, isA<Disposed>());
         journal.take();
 
-        final again = camera.disposeRefusingDisposed()..ignore();
+        final again = camera.disposeClearing()..ignore();
         async.elapse(const Duration(milliseconds: 20));
 
         expect(journal.take(), [
@@ -901,6 +905,26 @@ void main() {
     });
   });
 }
+
+/// The journal of a disposal that clears the way for itself.
+const _clearedWay = [
+  '[setZoom: zoom: 2.0] started',
+  '[takePhoto] dropped Cancelled(manual)',
+  '[setZoom: zoom: 2.0] finished Cancelled(manual)',
+  '[dispose] started',
+  '> [closeCamera] started',
+  '> [closeCamera] finished Done(null)',
+  'state: Disposed()',
+  '[dispose] finished Done(null)',
+];
+
+/// What the hardware does under that disposal.
+const _clearedHardware = [
+  'zoom 2.0: begin',
+  'zoom 2.0: end',
+  'close: begin',
+  'close: end',
+];
 
 /// The first line of a method or of the constructor, at the start of a line.
 final _head =

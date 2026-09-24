@@ -72,9 +72,10 @@ and every change of `state:`. A child job's lines begin with `>`.
 
 Sections open with the version the API's vocabulary leads to — the working type
 named after the state a job starts from, the default policy, a disposal queued
-like any other job — show what that code does, and then give the version the
-example uses. The section on commands that arrive during a shot has nothing to
-trip over and opens with the answer.
+like any other job — and show what that code does. Where the version that
+repairs it still falls short, it stands as a second attempt. The version the
+example uses follows under its own heading. The section on commands that arrive
+during a shot has nothing to trip over and opens with the answer.
 
 ## Opening the camera
 
@@ -323,10 +324,8 @@ Job<void> dispose() => run<CameraState, void>(
       key: CameraKey.dispose,
       policy: Policy.droppable,
       cancellable: false,
+      canStart: (state) => state is! Disposed,
       (ctx) async {
-        if (ctx.state is Disposed) {
-          return;
-        }
         if (ctx.state is! Initial) {
           await ctx.run(_closeCameraJob());
         }
@@ -359,11 +358,11 @@ state: Disposed()
 ```
 
 Everything in front of it still runs, and the camera takes a photo after it was
-told to shut down. The job itself is right: it may not be cancelled once
-started, and its child that closes the hardware may not be either, so the
-device is never left half closed.
+told to shut down. Its `cancellable: false` is right: the job may not be
+cancelled once started, and neither may its child that closes the hardware, so
+the device is never left half closed.
 
-### Clearing the way
+### The second attempt
 
 ```dart
 Job<void> dispose() {
@@ -373,10 +372,8 @@ Job<void> dispose() {
     key: CameraKey.dispose,
     policy: Policy.droppable,
     cancellable: false,
+    canStart: (state) => state is! Disposed,
     (ctx) async {
-      if (ctx.state is Disposed) {
-        return;
-      }
       if (ctx.state is! Initial) {
         await ctx.run(_closeCameraJob());
       }
@@ -405,17 +402,52 @@ once the operation it started is over — the table at the top of
 saves is the rest of the body: the zoom publishes no state for a camera about
 to close, and the disposal starts as soon as the hardware is free.
 
+The fault is in a call made after the disposal is over. It starts a job of its
+own, and `canStart` drops that job before it starts:
+
+```text
+[dispose] dropped Cancelled(rules: canStart)
+```
+
+The camera is disposed, and its caller is told the disposal was cancelled.
+
+### Checking in the body
+
+```dart
+Job<void> dispose() {
+  queue.clear();
+  current?.cancel();
+  return run<CameraState, void>(
+    key: CameraKey.dispose,
+    policy: Policy.droppable,
+    cancellable: false,
+    (ctx) async {
+      if (ctx.state is Disposed) {
+        return;
+      }
+      if (ctx.state is! Initial) {
+        await ctx.run(_closeCameraJob());
+      }
+      ctx.emit(const Disposed());
+    },
+  );
+}
+```
+
+```text
+[dispose] started
+[dispose] finished Done(null)
+```
+
+The same call now starts, finds the camera disposed and ends `Done`; the
+hardware log stays empty. `canStart` is for a job that must not run in some
+state, and a disposal of a disposed camera may run: it only has nothing to do.
+
 The clear is not forced. A disposal that is still in the queue survives it,
 because it is not cancellable, and `Policy.droppable` hands it to the second
 call: two `dispose()` calls in a row get the same job, and both callers see
 `Done`. `queue.clear(force: true)` would drop that job instead, and its caller
 would get `Cancelled(manual)` for a camera that was disposed after all.
-
-For the same reason `Disposed` is checked in the body rather than by
-`canStart`. A call made after the disposal is over starts a job of its own, and
-the check ends it `Done` at once. `canStart: (state) => state is! Disposed`
-would drop that job before it starts, and its caller would get
-`Cancelled(rules: canStart)`.
 
 ## Closing the controller
 
