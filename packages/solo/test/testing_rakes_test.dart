@@ -551,6 +551,25 @@ void main() {
       });
     });
 
+    test('microtasks alone never reach the delay', () {
+      fakeAsync((async) {
+        final profile = ProfileController(FakeProfileApi());
+        final job = profile.load()..ignore();
+
+        async.flushMicrotasks();
+
+        expect(job.outcome, isNull);
+        expect(profile.currentState, isA<Loading>());
+
+        async.elapse(const Duration(milliseconds: 20));
+
+        expect(job.outcome, isA<Done<String>>());
+
+        profile.close();
+        async.flushTimers();
+      });
+    });
+
     test('elapse moves the clock along with the timers', () {
       fakeAsync((async) {
         final before = clock.now();

@@ -388,13 +388,32 @@ test('load fills in the name', () {
 The callback stays synchronous and reads `job.outcome` where the test above
 awaited `done` — and `ignore()` is what stands in for that read: inside
 `fakeAsync` nothing can be awaited, so a failure would reach the zone with no
-one having observed it. `flushMicrotasks()` runs microtasks; `Future(...)` and
-`Future.delayed(...)` use timers and need `elapse(...)` or `flushTimers()`.
-Cancellation is requested with `job.cancel().ignore()` — that one is
-`Future.ignore`, on the future the call returns — and lands on the next
-microtask. `close()` and a last `flushTimers()` end the test with an empty
-clock; a controller left with work in flight stays as it is, and `fakeAsync`
-says nothing about a timer nobody fired.
+one having observed it. The fake's twenty milliseconds are a `Future.delayed`,
+that is a timer, and `elapse` is what gets past it: `flushMicrotasks()` alone
+leaves the job with no outcome at all and the state on `Loading`. `close()` and
+a last `flushTimers()` end the test with an empty clock; a controller left with
+work in flight stays as it is, and `fakeAsync` says nothing about a timer
+nobody fired.
+
+Cancellation is the one thing here that no clock has to move for:
+
+```dart
+final job = profile.load();
+async.flushMicrotasks();
+
+job.cancel().ignore();
+expect(job.outcome, isNull);
+
+async.flushMicrotasks();
+expect('${job.outcome}', 'Cancelled(manual)');
+```
+
+That `ignore()` is `Future.ignore`, on the future `cancel()` returns, and not
+the `Job.ignore()` of the test above. The request lands on the next microtask:
+on the line under the call the outcome is still `null`, and one
+`flushMicrotasks()` carries it to `Cancelled`. The first `flushMicrotasks()` is
+the one from the section above — it lets the load leave the queue, so what gets
+cancelled is a load that is running.
 
 `elapse` moves `clock.now()` along with the timers, so a recipe that stamps
 time — the observer of
