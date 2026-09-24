@@ -8,7 +8,7 @@ builds its screen on the first of them. The builders of this package,
 `SoloBuilder` and `SoloSelector`, take any controller, with the mixin or
 without it. This page is about what sits around `SoloListenable` — `SoloStream`
 of `solo` beside it, a screen built on that stream, and a base class of
-controllers in a package without Flutter, where the mixin cannot go.
+controllers in a package without Flutter, where `SoloListenable` cannot go.
 
 The lines under the code are what it prints when it runs. Two sections open
 with the version the vocabulary of the framework and of the engine leads to — a
