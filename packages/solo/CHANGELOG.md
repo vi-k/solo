@@ -471,6 +471,18 @@
   and, unless somebody observes the outcome, to the creation zone, and the
   `onError` of that same `run` corrects nothing, because the job never started.
 
+- `doc/testing.md` opens each of its eight sections with the version the
+  vocabulary of the API and of `package:test` leads to, and puts the one that
+  works under the next heading: an assertion right after the call, `close()` as
+  the way to let the work finish, a failure nobody reads, two calls in one turn
+  taken for a running job and its duplicate, `await` inside `fakeAsync`, a
+  reset on the last line of the test, `expect` inside `runZonedGuarded`, and
+  `Future.timeout` on the call. The page used to be two sections with none of
+  them. It now shows the controller and the fake it tests, says which tests
+  await real time and which run on the fake clock, how a static with a default
+  of its own is put back, and that a job dropped as a duplicate reaches only
+  `onFinish`.
+
 - The runnable camera example lands a failed or cancelled opening in `Broken`
   through the `onError` and `onCancel` of `run`. `init` and `reopen` used to
   catch the failure in the body, and a cancellation passed through that catch
