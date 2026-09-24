@@ -465,13 +465,40 @@ await camera.close();
 closed
 ```
 
-`cancellable: false` refuses `cancel()`. It does not keep a job in a controller
-that closes before the job has started: `dispose()` queued the job, `close()`
-came in the same turn and ended every queued job with `Cancelled(closed)`, as
+`close()` goes by where a job is, not by its flag. It waits for the running
+job, and a job that is not cancellable runs to its end. A job still in the
+queue never starts: `close()` ends it with `Cancelled(closed)`, cancellable or
+not, and whoever awaits it gets that outcome at once, as
 [Cancelling and closing a controller](cancellation.md#cancelling-and-closing-a-controller)
-describes. The hardware log has no `close` in it. The camera stays open, the
-state still says `Ready`, and the controller that could close the camera is
-closed itself.
+describes. `dispose()` queued its job and `close()` came in the same turn, so
+the disposal ended in the queue. The hardware log has no `close` in it. The
+camera stays open, the state still says `Ready`, and the controller that could
+close the camera is closed itself.
+
+### The second attempt
+
+```dart
+camera.dispose();
+await camera.close(mode: SoloCloseMode.drain);
+```
+
+`SoloCloseMode.drain` runs the queue before closing, and the disposal with it:
+the hardware closes and the state becomes `Disposed`. The fault shows when the
+hardware fails to close:
+
+```text
+[dispose] started
+> [closeCamera] started
+> [closeCamera] error Bad state: close timed out
+> [closeCamera] finished Failed(Bad state: close timed out)
+[dispose] error Bad state: close timed out
+[dispose] finished Failed(Bad state: close timed out)
+closed
+```
+
+The disposal failed and the camera is still open, but the controller closed
+right after it, and a second `dispose()` comes back `Cancelled(closed)`. The
+outcome arrives when nothing can act on it any more.
 
 ### Awaiting the disposal
 
@@ -496,14 +523,13 @@ await camera.close();
 ```
 
 The disposal is over before `close()` is called, and `close()` finds nothing to
-cancel. A disposal that has already started is safe from `close()` as well:
-`close()` waits for the running job, and a job that is not cancellable runs to
-its end.
+cancel.
 
 `Failed` is the case that needs handling: a close that fails is not a disposal.
 `ctx.run` throws what the child threw, the body never reaches
-`emit(Disposed())`, and the state stays where it was. `Cancelled` comes back
-from a controller that was closed before `dispose()` was called.
+`emit(Disposed())`, and the state stays where it was. The controller is still
+open, so a second `dispose()` can try again. `Cancelled` comes back from a
+controller that was closed before `dispose()` was called.
 
 `setZoom(2)` is not awaited: a `Job` is not a `Future`, and `unawaited_futures`
 has nothing to say about it. The shot waits behind the zoom in the queue, and

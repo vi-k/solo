@@ -724,9 +724,13 @@ void main() {
         opened(camera.init, hw, journal, async);
 
         final job = camera.dispose()..ignore();
+        Outcome<void>? awaited;
+        job.done.then((outcome) => awaited = outcome).ignore();
         camera.close().ignore();
-        async.flushTimers();
+        async.flushMicrotasks();
 
+        expect('$awaited', 'Cancelled(closed)', reason: 'at once');
+        async.flushTimers();
         expect(journal.take(), [
           '[dispose] dropped Cancelled(closed)',
           'closed',
@@ -752,16 +756,68 @@ void main() {
       });
     });
 
+    test('a drain runs the queued disposal', () {
+      camera(CameraController.new, (camera, hw, journal, async) {
+        opened(camera.init, hw, journal, async);
+
+        final job = camera.dispose()..ignore();
+        camera.close(mode: SoloCloseMode.drain).ignore();
+        async.flushTimers();
+
+        expect(job.outcome, isA<Done<void>>());
+        expect(hw.log, ['close: begin', 'close: end']);
+        expect(camera.currentState, isA<Disposed>());
+      });
+    });
+
+    test('a drain closes the controller over a failed disposal', () {
+      camera(CameraController.new, (camera, hw, journal, async) {
+        opened(camera.init, hw, journal, async);
+        hw.failures['close'] = StateError('close timed out');
+
+        final job = camera.dispose()..ignore();
+        camera.close(mode: SoloCloseMode.drain).ignore();
+        async.flushTimers();
+
+        expect(journal.take(), [
+          '[dispose] started',
+          '> [closeCamera] started',
+          '> [closeCamera] error Bad state: close timed out',
+          '> [closeCamera] finished Failed(Bad state: close timed out)',
+          '[dispose] error Bad state: close timed out',
+          '[dispose] finished Failed(Bad state: close timed out)',
+          'closed',
+        ]);
+        expect(job.outcome, isA<Failed>());
+        expect(camera.currentState, isA<Ready>());
+
+        hw.failures.remove('close');
+        final again = camera.dispose()..ignore();
+        async.flushTimers();
+
+        expect('${again.outcome}', 'Cancelled(closed)');
+        expect(hw.log, ['close: begin', 'close: failed']);
+      });
+    });
+
     test('a close that fails leaves the state where it was', () {
       camera(CameraController.new, (camera, hw, journal, async) {
         opened(camera.init, hw, journal, async);
-        hw.failures['close'] = StateError('close-failed');
+        hw.failures['close'] = StateError('close timed out');
 
         final job = camera.dispose()..ignore();
         async.elapse(const Duration(milliseconds: 20));
 
         expect(job.outcome, isA<Failed>());
         expect(camera.currentState, isA<Ready>());
+
+        // The controller is still open: the disposal can be tried again.
+        hw.failures.remove('close');
+        final again = camera.dispose()..ignore();
+        async.elapse(const Duration(milliseconds: 20));
+
+        expect(again.outcome, isA<Done<void>>());
+        expect(camera.currentState, isA<Disposed>());
       });
     });
 
