@@ -615,6 +615,36 @@ void main() {
       expect(reset, isFalse);
     });
 
+    test('three of the four statics start as null', () {
+      expect(Solo.observer, isNull);
+      expect(Solo.errorHandler, isNull);
+      expect(Solo.debug, isNull);
+      expect(Solo.traceStateChanges, isTrue, reason: 'assertions are on');
+    });
+
+    group('a static with a default of its own', () {
+      late bool outside;
+
+      setUp(() {
+        outside = Solo.traceStateChanges;
+        Solo.traceStateChanges = false;
+      });
+
+      tearDown(() {
+        expect(Solo.traceStateChanges, isFalse);
+        Solo.traceStateChanges = outside;
+      });
+
+      test('the tear-down puts back the value the test found', () {
+        final tracing = Solo.traceStateChanges;
+        addTearDown(() => Solo.traceStateChanges = tracing);
+
+        Solo.traceStateChanges = true;
+
+        expect(Solo.traceStateChanges, isTrue);
+      });
+    });
+
     test('one observer serves every controller in the process', () async {
       final journal = Journal();
       Solo.observer = journal;

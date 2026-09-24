@@ -452,10 +452,21 @@ addTearDown(() => Solo.observer = null);
 
 `addTearDown` выполняется и после провала, и после успеха. Процессу,
 а не контроллеру, принадлежат четыре статических поля, и каждое переживает тест
-одинаково: `Solo.observer`, `Solo.errorHandler`, `Solo.traceStateChanges`
-и `Solo.debug`. У двух последних умолчание не `null` — `traceStateChanges`
-включён везде, где работают `assert`, — поэтому тест, который их меняет,
-возвращает найденное значение, а не константу.
+одинаково: `Solo.observer`, `Solo.errorHandler`, `Solo.debug`
+и `Solo.traceStateChanges`. Первые три начинают с `null`, его и возвращает
+сброс выше. У четвёртого умолчание своё: `traceStateChanges` включён везде, где
+работают `assert`, — в разработке и в тестах, — и выключен в релизной сборке,
+так что сброс, записывающий `true`, гадает о том, как собрана программа.
+Прочитай значение до правки и верни прочитанное:
+
+```dart
+final tracing = Solo.traceStateChanges;
+addTearDown(() => Solo.traceStateChanges = tracing);
+
+Solo.traceStateChanges = false;
+```
+
+Три строки годятся любому из четырёх полей, а последнему подходят только они.
 
 ## Проверки внутри зоны
 

@@ -450,10 +450,23 @@ addTearDown(() => Solo.observer = null);
 
 `addTearDown` runs whether the test passed or failed. Four statics belong to
 the process rather than to a controller, and each of them outlives a test the
-same way: `Solo.observer`, `Solo.errorHandler`, `Solo.traceStateChanges` and
-`Solo.debug`. The last two have a default that is not `null` —
-`traceStateChanges` is on wherever assertions are — so a test that changes one
-restores the value it found, not a constant.
+same way: `Solo.observer`, `Solo.errorHandler`, `Solo.debug` and
+`Solo.traceStateChanges`. The first three start as `null`, and `null` is what
+the tear-down above puts back. The fourth has a default of its own:
+`traceStateChanges` is on wherever assertions are — in development and in
+tests — and off in a release build, so a tear-down that writes `true` is
+guessing at how the program was compiled. Read the value before changing it,
+and put back what was read:
+
+```dart
+final tracing = Solo.traceStateChanges;
+addTearDown(() => Solo.traceStateChanges = tracing);
+
+Solo.traceStateChanges = false;
+```
+
+Three lines that fit any of the four, and the only ones that are right for the
+last.
 
 ## Assertions inside a zone
 
