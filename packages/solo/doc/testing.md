@@ -487,11 +487,19 @@ test('a failure nobody read reaches the zone', () async {
 });
 ```
 
-The test is green whatever the zone caught. A job reports to the zone it was
-created in, so the controller has to be built inside `runZonedGuarded`, and the
-expectations follow it in — where `expect` throws `TestFailure` and the handler
-collects that throw like any other error. The expectation in the handler is no
-better: it says nothing at all about the run where no error arrives.
+The test ends either green with nothing checked, or red away from what broke. A
+job reports to the zone it was created in, so the controller has to be built
+inside `runZonedGuarded`, and the expectation about its state comes inside with
+it. There it stops being an expectation: `expect` reports a failure by throwing
+`TestFailure`, and a throw from inside the zone belongs to the zone's handler,
+like any other error. The handler compares it to `StateError`, finds no match
+and reports that on a line of the handler rather than the line the expectation
+was on; and the `await` never returns — the body's error went to the zone
+instead of into its future — so the test ends on a timeout.
+
+The expectation in the handler saves nothing on its own: the handler is called
+only when an error arrives. When none does it never runs, the test is green,
+and nothing has been said about the zone.
 
 ### Collecting in the zone, asserting outside
 

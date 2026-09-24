@@ -683,6 +683,37 @@ void main() {
       expect(returned, isFalse);
     });
 
+    test('an expectation that fails inside the zone never returns', () async {
+      final zoneErrors = <Object>[];
+
+      final returned = runZonedGuarded(
+        () async {
+          expect(1 + 1, 3);
+        },
+        (error, stackTrace) => zoneErrors.add(error),
+      );
+
+      await expectLater(
+        returned!.timeout(const Duration(milliseconds: 100)),
+        throwsA(isA<TimeoutException>()),
+      );
+      expect(zoneErrors, [isA<TestFailure>()]);
+    });
+
+    test('a handler that checks is not called when nothing fails', () {
+      var handled = 0;
+
+      runZonedGuarded(
+        () {},
+        (error, stackTrace) {
+          handled++;
+          expect(error, isA<StateError>());
+        },
+      );
+
+      expect(handled, 0);
+    });
+
     test('collected in the zone, asserted outside it', () async {
       final zoneErrors = <Object>[];
 
