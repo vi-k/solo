@@ -602,6 +602,27 @@ void main() {
       });
     });
 
+    test('a queued disposal turns a cancel away', () {
+      camera(CameraController.new, (camera, hw, journal, async) {
+        opened(camera.init, hw, journal, async);
+
+        camera.takePhoto().ignore();
+        async.elapse(const Duration(milliseconds: 5));
+        final job = camera.dispose()..ignore();
+        job.cancel().ignore();
+        async.elapse(const Duration(milliseconds: 60));
+
+        expect(job.outcome, isA<Done<void>>());
+        expect(hw.log, [
+          'capture: begin',
+          'capture: end',
+          'close: begin',
+          'close: end',
+        ]);
+        expect(camera.currentState, isA<Disposed>());
+      });
+    });
+
     test('a started disposal turns a cancel away', () {
       camera(CameraController.new, (camera, hw, journal, async) {
         opened(camera.init, hw, journal, async);

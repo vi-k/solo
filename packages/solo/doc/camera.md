@@ -528,8 +528,13 @@ cancel.
 `Failed` is the case that needs handling: a close that fails is not a disposal.
 `ctx.run` throws what the child threw, the body never reaches
 `emit(Disposed())`, and the state stays where it was. The controller is still
-open, so a second `dispose()` can try again. `Cancelled` comes back from a
-controller that was closed before `dispose()` was called.
+open, so a second `dispose()` can try again. `Cancelled` does not come back in
+this code. A disposal that has started turns every cancellation down; a queued
+one is taken out only by `close()` or a forced clear, and nothing here calls
+either before the outcome arrives. The switch names the case because an outcome
+is always one of the three. It does come back when `close()` gets there first,
+as in the first attempt, or when the controller was closed before `dispose()`
+was called.
 
 `setZoom(2)` is not awaited: a `Job` is not a `Future`, and `unawaited_futures`
 has nothing to say about it. The shot waits behind the zoom in the queue, and
