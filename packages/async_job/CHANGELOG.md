@@ -247,6 +247,17 @@
   runs before one made earlier. The dartdoc of `whenCancelled` has been saying
   so; the page had the short version.
 
+- `doc/outcomes.md` opens three of its four sections with the version the
+  vocabulary of the API leads to and shows what it prints: a `catch` around
+  `job.value` that reports the user's cancellation as a failure, a status line
+  that reads `job.outcome` while the same failure reaches the zone, and a
+  `switch` on the reason of a job whose cancellation came from a child and sits
+  in `cause`. The page now also says that only a child is linked through
+  `cause` — a body that awaits `value` of a job it does not own passes that
+  job's reason on as its own — and where an error of an `async` listener of
+  `whenCancelled` goes: to the zone of the code that cancelled, never to
+  `onError`.
+
 ## 0.2.0
 
 - **Breaking:** `ctx.run(child)` returns `Future<T>` instead of the child's
