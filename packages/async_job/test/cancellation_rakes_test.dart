@@ -794,6 +794,33 @@ void main() {
     });
   });
 
+  test('accepting reaches the children at once and decides the outcome', () {
+    fakeAsync((async) {
+      final seen = <String>[];
+      final job = Job<int>((ctx) async {
+        final child = Job.deferred<void>((ctx) async {
+          ctx.onCancel(() => seen.add('child onCancel'));
+          await ctx.wait(() => delay(50));
+        });
+        ctx.run(child).ignore();
+        await delay(20);
+        seen.add('body returns');
+        return 42;
+      });
+      async.elapse(const Duration(milliseconds: 5));
+      unawaited(job.cancel());
+      seen.add('cancel() returned, isCancelled: ${job.isCancelled}');
+      async.flushTimers();
+
+      expect(seen, [
+        'child onCancel',
+        'cancel() returned, isCancelled: true',
+        'body returns',
+      ]);
+      expect(job.outcome, isA<Cancelled>());
+    });
+  });
+
   test('after the cancellation, the waiting members throw and the rest work',
       () {
     fakeAsync((async) {

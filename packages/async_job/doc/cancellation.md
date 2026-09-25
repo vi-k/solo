@@ -17,8 +17,8 @@ Job<void>((ctx) async {
   // only then does the job give up.
   await ctx.join(() => database.migrate(stop));
 
-  // Nothing marks the job while this runs, and the token stays as it
-  // is; the next checkpoint throws.
+  // The cancellation waits for this to end: onCancel does not fire,
+  // so the token stays as it is, and then the next checkpoint throws.
   await ctx.uncancellable(() => database.markReady(stop));
 
   // Nothing to wrap between the steps of a calculation.
@@ -34,11 +34,15 @@ Job<void>((ctx) async {
 | `ctx.uncancellable(action)` | Holds the request until the section ends: no `onCancel`, no cascade to children while it runs. |
 | `ctx.check()` | Throws when the job has already accepted cancellation. |
 
-After `Job` accepts the request, `check`, `wait`, `join`, `uncancellable`,
-`run` and `each` throw `Cancelled` at their checkpoints. `onCancel` throws too:
-its callbacks have already run, and one registered now never would.
-`onDispose`, `onDiscard`, `disown` and `unattended` remain available so the
-body can arrange cleanup after cancellation.
+A running job accepts the request inside `cancel()` itself, unless an
+`uncancellable` section holds it back or the job was created with
+`cancellable: false`. Accepting it makes the job cancelled: its `onCancel`
+callbacks run, the cancellation passes to the children it has started, and the
+job ends `Cancelled` whatever the body does next. From then on `check`, `wait`,
+`join`, `uncancellable`, `run` and `each` throw `Cancelled` at their
+checkpoints. `onCancel` throws too: its callbacks have already run, and one
+registered now never would. `onDispose`, `onDiscard`, `disown` and `unattended`
+remain available so the body can arrange cleanup after cancellation.
 
 Inside an action passed to the context, a plain `await` is right: the context
 adds no checkpoint between the steps of that action, and a step that needs a
@@ -125,8 +129,8 @@ migration would have ended anyway.
 
 ### A token through `onCancel`
 
-Cancellation marks the job; stopping the operation behind it takes the
-operation's own mechanism, here the token:
+The job's cancellation does not reach the operation behind it; stopping the
+operation takes its own mechanism, here the token:
 
 ```dart
 final stop = CancelToken();
@@ -184,7 +188,7 @@ outcome: Cancelled(manual)
 ```
 
 `join` waits for all of `markReady`, and `markReady` stops halfway anyway.
-`join` accepts the cancellation as it arrives: the job is marked at once,
+`join` does not hold the cancellation back: the job accepts it as it arrives,
 `onCancel` cancels the token, and `markReady` reads it between its two writes.
 The database is left with a version and no ready flag.
 
@@ -202,9 +206,9 @@ outcome: Cancelled(manual)
 ```
 
 `uncancellable` holds the request until the section ends. While `markReady`
-runs, the job is not marked: `onCancel` does not fire, the token stays as it
-is, and a child the body has started is not cancelled. Held, not refused: the
-cancellation lands the moment the section closes, and the next checkpoint
+runs, the job does not accept it: `onCancel` does not fire, the token stays as
+it is, and a child the body has started is not cancelled. Held, not refused:
+the job accepts it the moment the section closes, and the next checkpoint
 throws it. The job still ends `Cancelled`, even if the body returns a value, so
 whatever has to happen after the step anyway belongs inside the same section.
 
