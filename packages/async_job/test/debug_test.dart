@@ -80,25 +80,47 @@ void main() {
     expect(traces, contains('Job(job) error: Bad state: onCancel'));
   });
 
-  test('the same error is traced when an observer takes it', () {
+  test(
+      'the same error is traced when an observer hears it, and on to its '
+      'answer', () {
     final traces = <String>[];
     final seen = <String>[];
+    final zone = <Object>[];
     JobBase.debug = traces.add;
-    fakeAsync((async) {
-      final job = Job<void>(
-        key: 'job',
-        observer: _RecordingObserver(seen),
-        (ctx) async {
-          ctx.onCancel(() => throw StateError('onCancel'));
-          await ctx.wait(() => delay(50));
-        },
-      );
-      async.elapse(const Duration(milliseconds: 10));
-      job.cancel().ignore();
-      async.flushTimers();
-    });
-    expect(traces, contains('Job(job) error: Bad state: onCancel'));
-    expect(seen, ['Bad state: onCancel'], reason: 'and it stopped there');
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          final job = Job<void>(
+            key: 'job',
+            observer: _RecordingObserver(seen),
+            (ctx) async {
+              ctx.onCancel(() => throw StateError('onCancel'));
+              await ctx.wait(() => delay(50));
+            },
+          );
+          async.elapse(const Duration(milliseconds: 10));
+          job.cancel().ignore();
+          async.flushTimers();
+        });
+      },
+      (error, stackTrace) => zone.add(error),
+    );
+    // Outside the guarded zone: an `expect` that fails inside it lands in
+    // the handler and is counted as a zone error instead of failing.
+    expect(
+      traces,
+      containsAllInOrder([
+        'Job(job) error: Bad state: onCancel',
+        'Job(job) error nobody answered for: Bad state: onCancel',
+        'Job(job) error went to the zone: Bad state: onCancel',
+      ]),
+    );
+    expect(seen, ['Bad state: onCancel']);
+    expect(
+      zone.map((error) => '$error'),
+      ['Bad state: onCancel'],
+      reason: 'an observer that only watches answers for nothing',
+    );
   });
 
   test('finish called by hand tells the tracer about the stack', () {
@@ -348,7 +370,7 @@ void main() {
 }
 
 /// Keeps the errors it is given, and nothing else.
-final class _RecordingObserver implements JobObserver {
+final class _RecordingObserver extends JobObserver {
   final List<String> _seen;
 
   _RecordingObserver(this._seen);

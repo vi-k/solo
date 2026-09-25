@@ -29,12 +29,16 @@
   `runAll`, and an extension of that name on `JobContext` is shadowed by it.
   `ctx.run` takes `dispose` and `discard`: no call site breaks, but a
   registration written on the line after `await ctx.run(child)` belongs in the
-  call now. The rest concern an engine built on the kernel only: the protected
-  `JobBase.handleUnanswered`, `JobBase.inUncancellableSection` and
-  `JobBase.heldCancel`, and the move of `JobBase`, `JobContextBase` and
-  `JobStatus` to `package:async_job/engine.dart` -- which also takes them out
-  of what an app sees through this package. Read the core's own entries before
-  migrating:
+  call now. One more reaches code that gives a job of the core an observer of
+  its own: `JobObserver.onError` is a notice, and the new
+  `JobObserver.onUnanswered` answers for an error no outcome carries, so such
+  an observer no longer keeps those errors out of the zone, and a class that
+  implements `JobObserver` needs an `onUnanswered`. The hooks of a controller
+  are unchanged. The rest concern an engine built on the kernel only: the
+  protected `JobBase.inUncancellableSection` and `JobBase.heldCancel`, and the
+  move of `JobBase`, `JobContextBase` and `JobStatus` to
+  `package:async_job/engine.dart` -- which also takes them out of what an app
+  sees through this package. Read the core's own entries before migrating:
   [the `async_job` changelog](https://github.com/vi-k/solo/blob/main/packages/async_job/CHANGELOG.md).
 
 - **Breaking:** `SoloBase` is renamed to `Solo`, and the former `Solo` -- the

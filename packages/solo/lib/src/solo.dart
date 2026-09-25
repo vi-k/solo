@@ -1221,6 +1221,14 @@ final class _SoloJobObserver<S extends Object> implements JobObserver {
     Solo._callHook(() => _solo.onError(job, error, stackTrace));
   }
 
+  /// The controller answers for its jobs: [Solo.onUnanswered], and the
+  /// [Solo.errorHandler] behind it. [Solo.observer] is not asked — watching
+  /// every controller is not answering for any of them.
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
+    Solo._callHook(() => _solo.onUnanswered(job, error, stackTrace));
+  }
+
   @override
   void onLog(Job<Object?> job, Object? message) {
     Solo._callHook(() => Solo.observer?.onLog(_solo, job, message));

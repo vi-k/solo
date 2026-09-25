@@ -438,9 +438,10 @@ void main() {
           final a = branch('a');
           final b = branch('b');
           Object? thrown;
-          // An observer, so that the failure the group does not throw has
-          // somewhere to go: where it goes is criterion ten's business.
-          Job<void>(observer: ErrorObserver(<Object>[]), (ctx) async {
+          // An observer that answers, so that the failure the group does
+          // not throw stops there: where it goes is criterion ten's
+          // business.
+          Job<void>(observer: ErrorObserver.answering(<Object>[]), (ctx) async {
             try {
               await ctx.runAll(listOrder == 'ab' ? [a, b] : [b, a]);
             } on Object catch (error) {
@@ -766,7 +767,9 @@ void main() {
 
   test('a failure the group received and did not throw is not lost', () {
     fakeAsync((async) {
-      final journal = JobJournal();
+      // Answering: this half counts the announcements, and the zone below
+      // is where the one nobody received goes.
+      final journal = JobJournal(answers: true);
       final chosen = StateError('chosen');
       final other = StateError('other');
       Job<void>(key: 'parent', observer: journal, (ctx) async {
@@ -883,8 +886,9 @@ void main() {
       );
       expect(
         zone.where((error) => identical(error, other)).length,
-        withObserver ? 0 : 1,
-        reason: 'observer: $withObserver',
+        1,
+        reason: 'an observer that only watches answers for nothing: '
+            'observer: $withObserver',
       );
     }
   });
@@ -1310,12 +1314,13 @@ void main() {
     });
     fakeAsync((async) {
       // An error in that cleanup does not replace what comes out, and does
-      // not stop the unwinding of the other branch.
+      // not stop the unwinding of the other branch. The observer answers
+      // for it: where it goes after the observer is not what this checks.
       final errors = <Object>[];
       final closed = <String>[];
       final chosen = StateError('chosen');
       Object? thrown;
-      Job<void>(observer: ErrorObserver(errors), (ctx) async {
+      Job<void>(observer: ErrorObserver.answering(errors), (ctx) async {
         try {
           await ctx.runAll([
             Job.deferred<int>(key: 'a', (ctx) async {
@@ -1475,7 +1480,9 @@ void main() {
         });
         final parent = Job<void>(
           key: 'parent',
-          observer: ErrorObserver(<Object>[]),
+          // Answering: what the group throws, and where, is other
+          // criteria's business.
+          observer: ErrorObserver.answering(<Object>[]),
           (ctx) async {
             try {
               await ctx.runAll([held, other]);
@@ -1537,7 +1544,9 @@ void main() {
         Object? thrown;
         CheckingJob<void>(
           key: 'parent',
-          observer: ErrorObserver(<Object>[]),
+          // Answering: what the group throws, and where, is other
+          // criteria's business.
+          observer: ErrorObserver.answering(<Object>[]),
           (ctx) async {
             context = ctx;
             try {

@@ -346,7 +346,9 @@ void main() {
       final errors = <Object>[];
       final job = Job<void>(
         key: 'boom',
-        observer: ErrorObserver(errors),
+        // Answering: the order is the subject, not where the error goes
+        // after the observer.
+        observer: ErrorObserver.answering(errors),
         (ctx) async {
           ctx
             ..onDispose(() async => trace.add('under it'))

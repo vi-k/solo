@@ -39,6 +39,7 @@ const quoted = [
   [
     'outcome: Done(null)',
     'onError: Bad state: analytics offline',
+    'zone: Bad state: analytics offline',
   ],
 ];
 
@@ -69,6 +70,27 @@ final class Reporter extends JobObserver {
   @override
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
       say('onError: $error');
+}
+
+/// An observer that answers for the errors no outcome carries, the way the
+/// page overrides `onUnanswered`, and, with [passedOn], hands each one on
+/// to `super` as well.
+final class Answering extends JobObserver {
+  Answering({this.passedOn = false});
+
+  final bool passedOn;
+
+  @override
+  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      say('onError: $error');
+
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
+    say('onUnanswered: $error');
+    if (passedOn) {
+      super.onUnanswered(job, error, stackTrace);
+    }
+  }
 }
 
 /// Every hook, for the rules the page states about them.
@@ -647,7 +669,7 @@ void main() {
           },
         )..whenCancelled((_) => throw StateError('whenCancelled'));
 
-    test('errors outside the body: onError, or the zone', () {
+    test('errors outside the body: onError, then the zone', () {
       const errors = [
         'Bad state: unattended',
         'Bad state: onCancel',
@@ -668,7 +690,46 @@ void main() {
         ],
         [for (final error in errors) 'onError: $error'],
       );
-      expect(heard.where((line) => line.startsWith('zone')), isEmpty);
+      expect(
+        [
+          for (final line in heard)
+            if (line.startsWith('zone')) line,
+        ],
+        [for (final error in errors) 'zone: $error'],
+        reason: 'an observer written to watch changes nowhere an error goes',
+      );
+
+      final answered = play(
+        () => failingOutside(observer: Answering()),
+        cancelAt: 10,
+        outcomeObserved: false,
+      );
+      expect(
+        [
+          for (final line in answered)
+            if (line.startsWith('onUnanswered')) line,
+        ],
+        [for (final error in errors) 'onUnanswered: $error'],
+      );
+      expect(
+        answered.where((line) => line.startsWith('zone')),
+        isEmpty,
+        reason: 'an override of onUnanswered is where they stop',
+      );
+
+      final passedOn = play(
+        () => failingOutside(observer: Answering(passedOn: true)),
+        cancelAt: 10,
+        outcomeObserved: false,
+      );
+      expect(
+        [
+          for (final line in passedOn)
+            if (line.startsWith('zone')) line,
+        ],
+        [for (final error in errors) 'zone: $error'],
+        reason: 'super sends each one on to the zone as well',
+      );
 
       final unheard = play(
         failingOutside,
@@ -701,11 +762,12 @@ void main() {
           outcomeObserved: false,
         );
 
-    test("a child's cancellation description that fails: onError or the zone",
-        () {
+    test(
+        "a child's cancellation description that fails: onError, then the "
+        'zone', () {
       expect(
         childDescribed(observer: Reporter()),
-        ['onError: Bad state: key failed'],
+        ['onError: Bad state: key failed', 'zone: Bad state: key failed'],
       );
       expect(childDescribed(), ['zone: Bad state: key failed']);
     });
@@ -726,8 +788,57 @@ void main() {
       expect(
         play(() => cancelledOutside(observer: Reporter())),
         ['onError: Cancelled(manual)', 'outcome: Done(null)'],
+        reason: 'the default body of onUnanswered drops a cancellation',
+      );
+      expect(
+        play(() => cancelledOutside(observer: Answering())),
+        [
+          'onError: Cancelled(manual)',
+          'onUnanswered: Cancelled(manual)',
+          'outcome: Done(null)',
+        ],
+        reason: 'an override is asked about it all the same',
       );
       expect(play(cancelledOutside), ['outcome: Done(null)']);
+    });
+    // A branch of `ctx.runAll` that fails on its own after the group has
+    // thrown the first failure: its body told the observer where it was
+    // caught, and what the group did not throw is nobody's outcome.
+    Job<void> branchNotThrown({JobObserver? observer}) => Job<void>(
+          observer: observer,
+          (ctx) async {
+            try {
+              await ctx.runAll([
+                Job.deferred<int>((ctx) async {
+                  await ctx.wait(() => delay(10));
+                  throw StateError('first');
+                }),
+                Job.deferred<int>(cancellable: false, (ctx) async {
+                  await ctx.wait(() => delay(20));
+                  throw StateError('second');
+                }),
+              ]);
+            } on Object catch (_) {
+              // The group throws the first one, and only that one.
+            }
+          },
+        );
+
+    test('a branch failure the group did not throw: onError, then the zone',
+        () {
+      expect(
+        play(() => branchNotThrown(observer: Reporter())),
+        [
+          'onError: Bad state: first',
+          'onError: Bad state: second',
+          'zone: Bad state: second',
+          'outcome: Done(null)',
+        ],
+      );
+      expect(
+        play(branchNotThrown),
+        ['zone: Bad state: second', 'outcome: Done(null)'],
+      );
     });
   });
 
@@ -809,7 +920,10 @@ void main() {
         }),
       );
 
-      expect(lines, ['onError: Bad state: analytics offline']);
+      expect(lines, [
+        'onError: Bad state: analytics offline',
+        'zone: Bad state: analytics offline',
+      ]);
     });
   });
 

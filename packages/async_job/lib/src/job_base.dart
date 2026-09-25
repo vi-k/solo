@@ -3,12 +3,11 @@ import 'dart:collection';
 
 import 'package:meta/meta.dart';
 
-import 'observer.dart';
-
 part 'envelope.dart';
 part 'job_context.dart';
 part 'job_stream.dart';
 part 'job_then.dart';
+part 'observer.dart';
 part 'outcome.dart';
 
 /// A handle to a job: the outcome, the waiting and the cancellation.
@@ -210,11 +209,13 @@ abstract interface class Job<T> {
   /// a callback from that pass. Registering during notification calls the new
   /// callback immediately. Unregistering more than once is harmless.
   ///
-  /// A synchronous error goes to [JobObserver.onError], or to the job's
-  /// creation zone if there is no observer; a thrown [Cancelled] is kept out
-  /// of the zone. The error changes neither cancellation nor other callbacks.
-  /// The callback is synchronous: an `async` callback's future is not awaited
-  /// and its errors are not caught here.
+  /// A synchronous error is one no outcome carries: [JobObserver.onError]
+  /// hears it and [JobObserver.onUnanswered] answers for it, in the job's
+  /// creation zone by default and there too when there is no observer; a
+  /// thrown [Cancelled] is kept out of the zone. The error changes neither
+  /// cancellation nor other callbacks. The callback is synchronous: an
+  /// `async` callback's future is not awaited and its errors are not caught
+  /// here.
   ///
   /// ```dart
   /// final unregister = job.whenCancelled((cancelled) {
@@ -419,7 +420,7 @@ abstract class JobBase<T> implements Job<T> {
   /// the two guards that wrap user code let it through instead of
   /// announcing it. Outside the window a callback that runs out of stack
   /// did it by itself, and the promise stands: its error goes to
-  /// `onError` and changes nothing else.
+  /// `onError` and `onUnanswered` and changes nothing else.
   bool _outOfStack = false;
 
   /// What the body ended with, from that moment until the job has an
@@ -982,82 +983,88 @@ abstract class JobBase<T> implements Job<T> {
     }
   }
 
-  /// Hands [error] to the observer alone.
+  /// Announces [error] to the observer and asks nobody to answer for it.
   ///
   /// For an error that has an outcome of its own — the body's. It reaches
   /// the zone through that outcome, if nobody observes it, and shouting
-  /// twice about one error is worse than once.
+  /// twice about one error is worse than once. [notifyError] starts here
+  /// too, and goes on to the answer.
   @protected
   void notifyObserver(Object error, StackTrace stackTrace) {
     _debug(() => '$this error: $error');
     _notify(() => _observer?.onError(this, error, stackTrace));
   }
 
-  /// Hands [error] to the observer, or to the zone when there is none.
+  /// Announces [error] and asks for an answer to it.
   ///
   /// For the errors that have nowhere else to go: an action abandoned by
   /// [JobContext.wait] failing later, a disposer, a callback of
   /// [JobContext.onCancel] or [Job.whenCancelled], work handed over with
-  /// [JobContext.unattended].
-  /// Silence is the choice of whoever listens, not the default of the
-  /// package. A [Cancelled] is the one thing that never reaches the zone
-  /// from here: a cancellation is a decision somebody made, not a failure,
-  /// and without an observer it is heard by nobody.
+  /// [JobContext.unattended]. The observer hears it through
+  /// [JobObserver.onError] and answers for it through
+  /// [JobObserver.onUnanswered], whose default body sends it to the zone
+  /// the job was created in; without an observer the error goes to that
+  /// zone directly. Two calls, each guarded on its own: an `onError` that
+  /// throws does not cost the error its answer.
+  ///
+  /// A [Cancelled] is the one thing that never reaches the zone from here:
+  /// a cancellation is a decision somebody made, not a failure, and
+  /// without an observer answering for it, it is heard by nobody.
   @protected
   void notifyError(Object error, StackTrace stackTrace) {
-    // Traced on both paths: the one without an observer is the harder of
-    // the two to debug, and it is the one that reaches the zone.
-    _debug(() => '$this error: $error');
+    notifyObserver(error, stackTrace);
+    _handleUnanswered(error, stackTrace);
+  }
+
+  /// Hands [error] to the zone the job was created in, unless it is a
+  /// cancellation.
+  ///
+  /// For an engine of a domain whose own answer for an error with nowhere
+  /// to go ends with the zone: `solo` sends one here when neither an
+  /// override of `Solo.onUnanswered` nor `Solo.errorHandler` took it. The
+  /// core reaches the zone by itself, through the default body of
+  /// [JobObserver.onUnanswered], through [notifyError] without an observer
+  /// and through an unobserved [Failed]. A cancellation is held back here as
+  /// it is there, so an engine of a domain does not write that rule again.
+  @protected
+  void reportToZone(Object error, StackTrace stackTrace) =>
+      _toZone(error, stackTrace);
+
+  /// Answers for [error] without announcing it.
+  ///
+  /// The observer's [JobObserver.onUnanswered], or the zone the job was
+  /// created in when there is no observer. [notifyError] ends here, and so
+  /// does the failure of a branch of [JobContext.runAll] that the group did
+  /// not throw: the branch told its observer itself, where its body was
+  /// caught, and one error is announced once — but an error nobody
+  /// answered for still has to reach somebody.
+  ///
+  /// An engine of a domain answers through the observer it puts on its
+  /// jobs, as `solo` does: there is no second door.
+  void _handleUnanswered(Object error, StackTrace stackTrace) {
+    _debug(() => '$this error nobody answered for: $error');
     final observer = _observer;
     if (observer == null) {
       _toZone(error, stackTrace);
       return;
     }
-    _notify(() => observer.onError(this, error, stackTrace));
+    _notify(() => observer.onUnanswered(this, error, stackTrace));
   }
 
-  /// Hands [error] to the zone the job was created in, unless it is a
-  /// [Cancelled].
-  ///
-  /// For an engine of a domain whose own route for an error with nowhere
-  /// to go ends with nobody: `solo` sends one here when neither an
-  /// observer nor its hook took it. The core reaches the zone by itself,
-  /// through [notifyError] without an observer and through an unobserved
-  /// [Failed]. A cancellation is held back here as it is there, so an
-  /// engine of a domain does not write that rule again.
-  @protected
-  void reportToZone(Object error, StackTrace stackTrace) =>
-      _toZone(error, stackTrace);
-
-  /// Handles [error] without announcing it a second time.
-  ///
-  /// For an error this job has announced once already: the failure of a
-  /// branch of [JobContext.runAll] that the group did not throw. The
-  /// branch told its observer itself, where its body was caught, and one
-  /// error is announced once — but an error nobody answered for still has
-  /// to reach somebody.
-  ///
-  /// The route is [notifyError]'s with that second announcement left out:
-  /// an observer has heard this error and hears nothing more, and without
-  /// one the error goes to the zone the job was created in. A [Cancelled]
-  /// never goes there, as everywhere else.
-  ///
-  /// An engine of a domain overrides this to reach its own answer for an
-  /// error instead — `solo` sends it to `Solo.errorHandler`. It has
-  /// to: an engine that puts an observer of its own on every job makes the
-  /// check below true always, and the error would be swallowed.
-  @protected
-  void handleUnanswered(Object error, StackTrace stackTrace) {
-    _debug(() => '$this error nobody answered for: $error');
-    if (_observer != null) {
-      return;
+  /// Whether [error] is a cancellation and stays out of the zone: a
+  /// [Cancelled], or a `ParallelWaitError` carrying nothing but
+  /// cancellations.
+  static bool _isCancellation(Object error) {
+    if (error is Cancelled) {
+      return true;
     }
-    _toZone(error, stackTrace);
+    final envelope = _analyzeEnvelope(error);
+    return envelope != null && envelope.isCleanCancellation;
   }
 
   /// The one door to the zone for an error with nowhere else to go.
   ///
-  /// A [Cancelled] does not go through it. A cancellation is a decision
+  /// A cancellation does not go through it. A cancellation is a decision
   /// somebody made, not a failure; the one that ends this job has been
   /// heard on the outcome already, and any other has an owner of its own.
   /// In Flutter the zone is `PlatformDispatcher.onError`, and a
@@ -1068,13 +1075,8 @@ abstract class JobBase<T> implements Job<T> {
   /// failure somebody built out of a [Cancelled] on purpose still reaches
   /// the zone.
   void _toZone(Object error, StackTrace stackTrace) {
-    if (error is Cancelled) {
+    if (_isCancellation(error)) {
       _debug(() => '$this kept a cancellation out of the zone: $error');
-      return;
-    }
-    final envelope = _analyzeEnvelope(error);
-    if (envelope != null && envelope.isCleanCancellation) {
-      _debug(() => '$this kept a cancellation envelope out of the zone');
       return;
     }
     _debug(() => '$this error went to the zone: $error');
@@ -1093,8 +1095,8 @@ abstract class JobBase<T> implements Job<T> {
   ///
   /// Called for every job that gets an outcome, including one dropped
   /// before its body ever ran — then there was no [started] to match it.
-  /// An error thrown here goes to `onError` and the job finishes all the
-  /// same, but the engine of the domain is left half-way through its own
+  /// An error thrown here goes to [notifyError] and the job finishes all
+  /// the same, but the engine of the domain is left half-way through its own
   /// bookkeeping: keep it short and unconditional.
   @protected
   void finished() {}
@@ -1354,7 +1356,8 @@ abstract class JobBase<T> implements Job<T> {
     });
   }
 
-  /// Runs one registration; its error belongs to `onError` and ends there.
+  /// Runs one registration; its error goes to [notifyError], and the stack
+  /// unwinds on.
   Future<void> _runCleanup(_Cleanup cleanup) async {
     try {
       await cleanup.run();

@@ -73,34 +73,48 @@ void main() {
     });
   });
 
-  test('an error of the disposer goes to the observer', () {
-    fakeAsync((async) {
-      final journal = JobJournal();
-      final job = Job<String>(
-        key: 'job',
-        observer: journal,
-        (ctx) async {
-          ctx.onDiscard(() => throw StateError('close failed'));
-          ctx
-              .run(
-                Job.deferred<void>(
-                  key: 'child',
-                  (ctx) => ctx.wait(() => delay(100)),
-                ),
-              )
-              .ignore();
-          return 'db';
-        },
-      );
-      async.elapse(const Duration(milliseconds: 10));
-      job.cancel().ignore();
-      async.flushTimers();
-      expect(job.outcome, isA<Cancelled>());
-      expect(
-        journal.take(),
-        contains('[job] error Bad state: close failed'),
-      );
-    });
+  test('an error of the disposer goes to the observer, then the zone', () {
+    final journal = JobJournal();
+    final zone = <Object>[];
+    late final Job<String> job;
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          job = Job<String>(
+            key: 'job',
+            observer: journal,
+            (ctx) async {
+              ctx.onDiscard(() => throw StateError('close failed'));
+              ctx
+                  .run(
+                    Job.deferred<void>(
+                      key: 'child',
+                      (ctx) => ctx.wait(() => delay(100)),
+                    ),
+                  )
+                  .ignore();
+              return 'db';
+            },
+          );
+          async.elapse(const Duration(milliseconds: 10));
+          job.cancel().ignore();
+          async.flushTimers();
+        });
+      },
+      (error, stackTrace) => zone.add(error),
+    );
+    // Outside the guarded zone: an `expect` that fails inside it lands in
+    // the handler and is counted as a zone error instead of failing.
+    expect(job.outcome, isA<Cancelled>());
+    expect(
+      journal.take(),
+      contains('[job] error Bad state: close failed'),
+    );
+    expect(
+      zone.map((error) => '$error'),
+      ['Bad state: close failed'],
+      reason: 'an observer that only watches answers for nothing',
+    );
   });
 
   test('without an observer the disposer error goes to the zone', () {
@@ -248,32 +262,48 @@ void main() {
   });
 
   test('an action failing after the body walked away is not swallowed', () {
-    fakeAsync((async) {
-      final errors = <Object>[];
-      final job = Job<String>(
-        observer: ErrorObserver(errors),
-        (ctx) => ctx.wait<String>(() async {
-          await delay(50);
-          throw StateError('the action failed late');
-        }).timeout(
-          const Duration(milliseconds: 10),
-          onTimeout: () => 'fallback',
-        ),
-      );
-      async.flushTimers();
-      expect(job.outcome.toString(), 'Done(fallback)');
-      expect(
-        errors.map((error) => '$error').toList(),
-        ['Bad state: the action failed late'],
-        reason: 'the wrapper the body walked away through swallows what it '
-            'is handed, and an error is never lost silently',
-      );
-    });
+    final errors = <Object>[];
+    final zone = <Object>[];
+    late final Job<String> job;
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          job = Job<String>(
+            observer: ErrorObserver(errors),
+            (ctx) => ctx.wait<String>(() async {
+              await delay(50);
+              throw StateError('the action failed late');
+            }).timeout(
+              const Duration(milliseconds: 10),
+              onTimeout: () => 'fallback',
+            ),
+          );
+          async.flushTimers();
+        });
+      },
+      (error, stackTrace) => zone.add(error),
+    );
+    // Outside the guarded zone: an `expect` that fails inside it lands in
+    // the handler and is counted as a zone error instead of failing.
+    expect(job.outcome.toString(), 'Done(fallback)');
+    expect(
+      errors.map((error) => '$error').toList(),
+      ['Bad state: the action failed late'],
+      reason: 'the wrapper the body walked away through swallows what it '
+          'is handed, and an error is never lost silently',
+    );
+    expect(
+      zone.map((error) => '$error').toList(),
+      ['Bad state: the action failed late'],
+      reason: 'an observer that only watches answers for nothing',
+    );
   });
 
   test('a wait made in the work still reports once, and only once', () {
     fakeAsync((async) {
-      final journal = JobJournal();
+      // Answering: this counts the announcements; where the error goes
+      // after them is `unattended_test.dart`'s business.
+      final journal = JobJournal(answers: true);
       Job<void>(key: 'j', observer: journal, (ctx) async {
         ctx.unattended(() async {
           await ctx.wait<void>(() async {

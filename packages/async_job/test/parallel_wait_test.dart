@@ -594,8 +594,12 @@ void main() {
 
       expect(errors, hasLength(1));
       expect(errors.single, isA<ParallelWaitError<Object?, Object?>>());
-      expect(zone, hasLength(1));
-      expect(zone.single, isA<ParallelWaitError<Object?, Object?>>());
+      expect(
+        zone,
+        hasLength(2),
+        reason: 'with an observer that only watches, and without one',
+      );
+      expect(zone, everyElement(isA<ParallelWaitError<Object?, Object?>>()));
     });
 
     test('each turns a handler cancellation into a parent cancellation',

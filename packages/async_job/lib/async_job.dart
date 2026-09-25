@@ -7,4 +7,3 @@
 library;
 
 export 'src/job_base.dart' hide JobBase, JobContextBase, JobStatus;
-export 'src/observer.dart';

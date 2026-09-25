@@ -145,9 +145,14 @@ void main() {
     );
     expect(
       caught.map((error) => '$error').toList(),
-      ['Bad state: onStart', 'Bad state: onError', 'Bad state: onFinish'],
-      reason: 'the disposer failed, the hook failed on hearing it, and both '
-          'went to the zone on their own',
+      [
+        'Bad state: onStart',
+        'Bad state: onError',
+        'Bad state: onUnanswered',
+        'Bad state: onFinish',
+      ],
+      reason: 'the disposer failed, both hooks failed on hearing it, and '
+          'each went to the zone on its own',
     );
   });
 
@@ -194,7 +199,7 @@ final class _Messages extends JobObserver {
 }
 
 /// Throws from every hook the engine calls.
-final class _ThrowingObserver implements JobObserver {
+final class _ThrowingObserver extends JobObserver {
   @override
   void onStart(Job<Object?> job) => throw StateError('onStart');
 
@@ -204,6 +209,10 @@ final class _ThrowingObserver implements JobObserver {
   @override
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
       throw StateError('onError');
+
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      throw StateError('onUnanswered');
 
   @override
   void onLog(Job<Object?> job, Object? message) => throw StateError('onLog');

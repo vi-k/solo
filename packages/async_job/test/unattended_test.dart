@@ -12,23 +12,39 @@ import 'support/journal.dart';
 import 'support/probe_job.dart';
 
 void main() {
-  test('a failure of unattended work reaches the observer', () {
+  // Where a failure of the work goes after the observer is the first test's
+  // business. The journals that answer, below it, answer so that each test
+  // checks its own subject and nothing lands in the test zone.
+  test('a failure of unattended work reaches the observer, then the zone', () {
     final journal = JobJournal();
-    fakeAsync((async) {
-      Job<void>(key: 'j', observer: journal, (ctx) async {
-        ctx.unattended(() async {
-          await delay(10);
-          throw StateError('abandoned boom');
+    final zone = <Object>[];
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          Job<void>(key: 'j', observer: journal, (ctx) async {
+            ctx.unattended(() async {
+              await delay(10);
+              throw StateError('abandoned boom');
+            });
+            await ctx.wait(() => delay(1));
+          });
+          async.flushTimers();
         });
-        await ctx.wait(() => delay(1));
-      });
-      async.flushTimers();
-    });
+      },
+      (error, stackTrace) => zone.add(error),
+    );
+    // Outside the guarded zone: an `expect` that fails inside it lands in
+    // the handler and is counted as a zone error instead of failing.
     expect(journal.take(), [
       '[j] started',
       '[j] finished Done(null)',
       '[j] error Bad state: abandoned boom',
     ]);
+    expect(
+      zone.map((error) => '$error'),
+      ['Bad state: abandoned boom'],
+      reason: 'an observer that only watches answers for nothing',
+    );
   });
 
   test(
@@ -54,7 +70,7 @@ void main() {
   });
 
   test('the failure arrives after the job has finished', () {
-    final journal = JobJournal();
+    final journal = JobJournal(answers: true);
     fakeAsync((async) {
       Job<void>(key: 'j', observer: journal, (ctx) async {
         ctx.unattended(() async {
@@ -73,7 +89,7 @@ void main() {
   test(
       'a synchronous throw of the action goes to the observer, not to the '
       'body', () {
-    final journal = JobJournal();
+    final journal = JobJournal(answers: true);
     late final Job<void> job;
     fakeAsync((async) {
       job = Job<void>(key: 'j', observer: journal, (ctx) async {
@@ -220,7 +236,7 @@ void main() {
   });
 
   test('a disposer may start unattended work', () {
-    final journal = JobJournal();
+    final journal = JobJournal(answers: true);
     fakeAsync((async) {
       Job<void>(key: 'j', observer: journal, (ctx) async {
         ctx.onDispose(
@@ -259,7 +275,7 @@ void main() {
 
   test('a late failure of a wait made in the work reports as it always does',
       () {
-    final journal = JobJournal();
+    final journal = JobJournal(answers: true);
     fakeAsync((async) {
       final job = Job<void>(key: 'j', observer: journal, (ctx) async {
         ctx.unattended(() async {
@@ -340,7 +356,7 @@ void main() {
   });
 
   test('an outcome that is not a cancellation is an error like any other', () {
-    final journal = JobJournal();
+    final journal = JobJournal(answers: true);
     fakeAsync((async) {
       final job = ProbeJob<void>(
         key: 'j',
@@ -364,7 +380,7 @@ void main() {
   });
 
   test('onCancel may hand an asynchronous stop to unattended work', () {
-    final journal = JobJournal();
+    final journal = JobJournal(answers: true);
     var stopped = false;
     fakeAsync((async) {
       final job = Job<void>(key: 'j', observer: journal, (ctx) async {

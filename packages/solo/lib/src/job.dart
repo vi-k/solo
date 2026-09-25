@@ -259,33 +259,8 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   void _notifyError(Object error, StackTrace stackTrace) =>
       notifyError(error, stackTrace);
 
-  /// Announces an error with nowhere to go, then asks the controller to
-  /// answer for it.
-  ///
-  /// Two hooks, because these are two questions: [Solo.onError] is told
-  /// about every error, [Solo.onUnanswered] is asked only about the ones
-  /// an outcome cannot carry. The body's failure goes through the first
-  /// alone — it has an outcome taking it to the zone already.
-  @override
-  void notifyError(Object error, StackTrace stackTrace) {
-    super.notifyError(error, stackTrace);
-    Solo._callHook(() => _solo.onUnanswered(this, error, stackTrace));
-  }
-
   void _reportToZone(Object error, StackTrace stackTrace) =>
       reportToZone(error, stackTrace);
-
-  /// The route of a failure of this job that its group did not throw.
-  ///
-  /// Not through the observer: the body's failure was announced there
-  /// already, where it was caught, and one error is announced once. What
-  /// is left is the answer for an error nobody handled, and in a
-  /// controller that is [Solo.onUnanswered] and the [Solo.errorHandler]
-  /// behind it.
-  @override
-  void handleUnanswered(Object error, StackTrace stackTrace) {
-    Solo._callHook(() => _solo.onUnanswered(this, error, stackTrace));
-  }
 
   void _cancelWith(Cancelled cancelled, {bool rejectable = true}) =>
       cancelWith(cancelled, rejectable: rejectable);

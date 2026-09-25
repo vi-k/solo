@@ -14,7 +14,9 @@ void main() {
     fakeAsync((async) {
       final errors = <Object>[];
       Job<int>(
-        observer: ErrorObserver(errors),
+        // Answering: the refusals are the subject, not where they go after
+        // the observer.
+        observer: ErrorObserver.answering(errors),
         (ctx) async {
           // The outcome is `Done`: nothing marked the job, so without a
           // check of the phase every one of these would go through — `run`

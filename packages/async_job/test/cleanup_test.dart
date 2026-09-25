@@ -188,25 +188,40 @@ void main() {
     });
   });
 
-  test('an error of a cleanup goes to the observer and the rest still runs',
+  test(
+      'an error of a cleanup goes to the observer, then the zone, and the '
+      'rest still runs', () {
+    final errors = <Object>[];
+    final order = <String>[];
+    final zone = <Object>[];
+    late final Job<int> job;
+    runZonedGuarded(
       () {
-    fakeAsync((async) {
-      final errors = <Object>[];
-      final order = <String>[];
-      final job = Job<int>(
-        observer: ErrorObserver(errors),
-        (ctx) async {
-          ctx
-            ..onDispose(() => order.add('below'))
-            ..onDispose(() => throw StateError('cleanup failed'));
-          return 7;
-        },
-      );
-      async.flushTimers();
-      expect(order, ['below']);
-      expect(errors.single, isA<StateError>());
-      expect(job.outcome, isA<Done<int>>());
-    });
+        fakeAsync((async) {
+          job = Job<int>(
+            observer: ErrorObserver(errors),
+            (ctx) async {
+              ctx
+                ..onDispose(() => order.add('below'))
+                ..onDispose(() => throw StateError('cleanup failed'));
+              return 7;
+            },
+          );
+          async.flushTimers();
+        });
+      },
+      (error, stackTrace) => zone.add(error),
+    );
+    // Outside the guarded zone: an `expect` that fails inside it lands in
+    // the handler and is counted as a zone error instead of failing.
+    expect(order, ['below']);
+    expect(errors.single, isA<StateError>());
+    expect(
+      zone.map((error) => '$error'),
+      ['Bad state: cleanup failed'],
+      reason: 'an observer that only watches answers for nothing',
+    );
+    expect(job.outcome, isA<Done<int>>());
   });
 
   test('a cancellation arriving during the cleanup still discards', () {

@@ -7,10 +7,9 @@ described on the pages [Outcomes](outcomes.md) and
 behavior. Their protected API provides access to job status, pending
 cancellation, children, start and completion. Cancellation has a flag
 controlling whether the job may refuse it. Override `started()` and
-`finished()` to handle lifecycle events, and `handleUnanswered` to give an
-error nobody answered for an answer of your own — an engine that puts an
-observer of its own on every job has to, or the kernel takes the observer for
-the answer and the error stops there.
+`finished()` to handle lifecycle events. To give an error nobody answered for
+an answer of your own, put an observer of your own on every job and override
+its `onUnanswered`, the way `solo` does.
 
 The three live in `package:async_job/engine.dart`, not in the main import: an
 app that only runs jobs never needs them. An engine imports that library in

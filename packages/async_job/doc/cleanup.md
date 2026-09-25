@@ -224,7 +224,7 @@ them: neither one already accepted nor one arriving into the unwinding itself.
 callback must await its resource directly. It must not await its own job:
 `done`, `value` and `cancel()` all complete after the cleanup that would be
 waiting for them. Keep callbacks short and unconditional. An error from one
-goes to `onError` and the remaining callbacks still run.
+goes to `onError` and on to the zone, and the remaining callbacks still run.
 
 **Cancellation after the body returns.** A job may still be waiting for
 children or running cleanup after `return`. Cancellation during that time can

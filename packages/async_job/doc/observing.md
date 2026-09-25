@@ -41,17 +41,21 @@ final job = Job<int>(
 Job(load): Done(3)
 ```
 
-A `JobObserver` has four hooks: `onStart`, `onFinish`, `onError` and `onLog`.
-`Job` calls the first three itself; the body sends messages to `onLog` through
-`ctx.log(message)`. `onFinish` runs for every job, including one cancelled
-before it started; `onStart` runs only for a job whose body runs.
+A `JobObserver` has five hooks: `onStart`, `onFinish`, `onError`,
+`onUnanswered` and `onLog`. `Job` calls the first four itself; the body sends
+messages to `onLog` through `ctx.log(message)`. `onFinish` runs for every job,
+including one cancelled before it started; `onStart` runs only for a job whose
+body runs.
 
-All four do nothing by default, so you override only those you need. You can
-also use `implements JobObserver` if your class already extends another class.
+All but `onUnanswered` do nothing by default, so you override only those you
+need; what `onUnanswered` does is the subject of
+[Where errors go](#where-errors-go) below. A class that already extends another
+class mixes the observer in with `with JobObserver` and keeps these defaults.
 Pass the observer when creating the job; the children it runs inherit it unless
-they have their own. If one of the observer's hooks throws, its error goes to
-the current zone and nothing else changes: the job ends as it would have, and
-the observer's other hooks are still called.
+they have their own, and a continuation made with `then` takes only the
+observer passed to `then`. If one of the observer's hooks throws, its error
+goes to the current zone and nothing else changes: the job ends as it would
+have, and the observer's other hooks are still called.
 
 A job's string representation is `Job($key)`, or `Job($key: $description)` when
 `describe` returns something, or `Job($description)` when there is no key, or
@@ -161,28 +165,49 @@ onError: Bad state: database locked
 outcome: Cancelled(manual)
 ```
 
-An observer hears every error of its job. Where each one goes, with an observer
-and without, the zone being the one the job was created in:
+An observer hears every error of its job through `onError`, and only hears it:
+overriding `onError` moves no error anywhere. Where each one goes, with an
+observer and without, the zone being the one the job was created in:
 
 | The error | With an observer | Without one |
 | --- | --- | --- |
 | The body's, and the job ends `Failed` with it | `onError`, and the zone if nobody observed the outcome | The zone if nobody observed the outcome |
 | The body's, and a cancellation arrives while the job waits for its children | `onError`, and the zone if nobody observed the outcome | The zone if nobody observed the outcome |
 | The body's, after the job accepted a cancellation | `onError` | Nobody |
-| Outside the body: a late error of an action abandoned by `wait`, cleanup, a callback of `ctx.onCancel` or `job.whenCancelled`, work of `ctx.unattended`, formatting a child's cancellation description | `onError` | The zone |
-| A `Cancelled` thrown outside the body | `onError` | Nobody |
+| The body's, in a branch of `ctx.runAll` whose group throws another failure | `onError`, then `onUnanswered`: the zone by default | The zone |
+| Outside the body: a late error of an action abandoned by `wait`, cleanup, a callback of `ctx.onCancel` or `job.whenCancelled`, work of `ctx.unattended`, formatting a child's cancellation description | `onError`, then `onUnanswered`: the zone by default | The zone |
+| A `Cancelled` thrown outside the body | `onError`, then `onUnanswered`: nobody by default | Nobody |
 
-A failure the job ends with reaches `onError` and, when nobody observed the
-outcome, the zone as well: an app that reports in both places hears it twice.
-Observing the outcome keeps it out of the zone;
+The errors no outcome carries go on from `onError` to `onUnanswered`, the hook
+that answers for them. Its default body sends them where they go without an
+observer, to the zone, and drops a cancellation: a `Cancelled`, or a
+`ParallelWaitError` carrying nothing but cancellations. So an observer written
+to watch, like `Reporter`, changes nowhere an error goes. An observer that
+answers for these errors itself overrides `onUnanswered`:
+
+```dart
+@override
+void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
+    print('onUnanswered: $error');
+```
+
+The errors stop there and do not reach the zone. Calling
+`super.onUnanswered(job, error, stackTrace)` sends one on to the zone as well.
+Hand `super` whatever the override cannot tell apart: the default body knows
+which errors are cancellations.
+
+An error can reach `onError` and the zone both: a failure the job ends with,
+when nobody observed the outcome, and an error no outcome carries, when
+`onUnanswered` sends it on. An app that reports in both places hears it twice.
+Observing the outcome keeps a failure out of the zone;
 [A failure nobody waits for](outcomes.md#a-failure-nobody-waits-for) on the
-outcomes page shows how.
+outcomes page shows how. An override of `onUnanswered` does the same for the
+rest.
 
 ## Work the job does not wait for
 
 A job sends an analytics event and does not wait for it, and the sending fails:
-analytics is offline. The job has the `Reporter` from the section above, so the
-app hears about the job's errors there.
+analytics is offline. The job has the `Reporter` from the section above.
 
 ### The first attempt
 
@@ -197,9 +222,9 @@ outcome: Done(null)
 zone: Bad state: analytics offline
 ```
 
-The observer hears nothing. A future nobody awaits hands its error to the zone
-as an uncaught one; `unawaited` only tells the analyzer that not waiting is on
-purpose.
+The observer hears nothing, and nothing ties the error to the job. A future
+nobody awaits hands its error to the zone as an uncaught one; `unawaited` only
+tells the analyzer that not waiting is on purpose.
 
 ### Work handed to the job
 
@@ -210,11 +235,13 @@ ctx.unattended(() => analytics.send('loaded'));
 ```text
 outcome: Done(null)
 onError: Bad state: analytics offline
+zone: Bad state: analytics offline
 ```
 
 `ctx.unattended(action)` keeps the work's errors with the job, including errors
-after the job finishes: they go to its observer or, without one, the zone the
-job was created in. The job does not wait for the work and does not cancel it.
+after the job finishes: its observer hears them, and its `onUnanswered` sends
+them on to the zone the job was created in. Without an observer they go
+straight there. The job does not wait for the work and does not cancel it.
 
 Start the work inside the callback and take nothing out of it: the work runs in
 an error zone of its own, and the boundary holds both ways. A future made

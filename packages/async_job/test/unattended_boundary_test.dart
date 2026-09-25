@@ -20,8 +20,11 @@ const _noSection = '[j] error Bad state: Job(j) cannot run an uncancellable '
     'action inside unattended work';
 
 void main() {
+  // A journal that records the refusal answers for it too: these tests are
+  // about the ban, and where its error goes after the observer is
+  // `unattended_test.dart`'s business.
   test('run inside unattended work throws and starts no child', () {
-    final journal = JobJournal();
+    final journal = JobJournal(answers: true);
     var childRan = false;
     fakeAsync((async) {
       final job = Job<void>(key: 'j', observer: journal, (ctx) async {
@@ -48,7 +51,7 @@ void main() {
   });
 
   test('uncancellable inside unattended work throws and holds nothing', () {
-    final journal = JobJournal();
+    final journal = JobJournal(answers: true);
     var actionRan = false;
     late final Job<void> job;
     fakeAsync((async) {
@@ -136,7 +139,7 @@ void main() {
   });
 
   test('a nested fork of another job does not lift the ban on run', () {
-    final journal = JobJournal();
+    final journal = JobJournal(answers: true);
     var childRan = false;
     late final Job<void> a;
     late final JobContext ctxA;
@@ -222,7 +225,7 @@ void main() {
   test(
     'a nested fork of another job does not lift the ban on uncancellable',
     () {
-      final journal = JobJournal();
+      final journal = JobJournal(answers: true);
       var actionRan = false;
       late final Job<void> a;
       late final JobContext ctxA;

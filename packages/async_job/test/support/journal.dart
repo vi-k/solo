@@ -4,8 +4,18 @@ import 'package:async_job/async_job.dart';
 ///
 /// The format is the one `solo` uses for its own journal, so both suites
 /// read the same way: `finished` and `dropped` carry no colon.
-final class JobJournal implements JobObserver {
+///
+/// It watches and answers for nothing unless [answers] says so: by default
+/// an error no outcome carries goes on to the zone the job was created in,
+/// as it would with no observer.
+final class JobJournal extends JobObserver {
   final lines = <String>[];
+
+  /// Whether the journal answers for the errors it records, keeping them
+  /// out of the zone. For a test whose subject is not where they go.
+  final bool answers;
+
+  JobJournal({this.answers = false});
 
   /// Returns the lines collected so far and clears the journal.
   List<String> take() {
@@ -36,6 +46,13 @@ final class JobJournal implements JobObserver {
   @override
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
       lines.add('${_label(job)} error $error');
+
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
+    if (!answers) {
+      super.onUnanswered(job, error, stackTrace);
+    }
+  }
 
   @override
   void onLog(Job<Object?> job, Object? message) =>

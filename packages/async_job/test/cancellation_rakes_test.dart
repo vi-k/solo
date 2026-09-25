@@ -801,7 +801,7 @@ void main() {
       ]);
     });
 
-    test('a synchronous throw of onCancel reaches onError', () {
+    test('a synchronous throw of onCancel reaches onError, then the zone', () {
       final lines = play(
         (ctx) async {
           ctx.onCancel(() => throw StateError('device did not stop'));
@@ -813,11 +813,14 @@ void main() {
       expect(lines, [
         'cancel',
         'onError: Bad state: device did not stop',
+        'zone: Bad state: device did not stop',
         'outcome: Cancelled(manual)',
       ]);
     });
 
-    test('an asynchronous stop through unattended reaches onError', () {
+    test(
+        'an asynchronous stop through unattended reaches onError, then the '
+        'zone', () {
       final lines = play(
         (ctx) async {
           ctx.onCancel(() => ctx.unattended(device.stop));
@@ -830,6 +833,7 @@ void main() {
         'cancel',
         'outcome: Cancelled(manual)',
         'onError: Bad state: device did not stop',
+        'zone: Bad state: device did not stop',
       ]);
     });
   });

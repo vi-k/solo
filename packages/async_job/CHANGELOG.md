@@ -1,5 +1,24 @@
 ## Unreleased
 
+- **Breaking:** `JobObserver.onError` is a notice, and the answer for an error
+  no outcome carries moved to the new hook `JobObserver.onUnanswered`. Such an
+  error -- a late failure of an action `wait` walked away from, a disposer, a
+  callback of `ctx.onCancel` or `job.whenCancelled`, work handed to
+  `ctx.unattended`, the failure of a branch of `ctx.runAll` that the group did
+  not throw -- used to stop at whatever observer the job had, so an observer
+  written for a log, overriding `onFinish` alone, kept every one of them out of
+  the zone without a word. Now `onError` hears it and `onUnanswered` answers
+  for it: the default body sends the error to the zone the job was created in,
+  where it goes without an observer too, and drops a cancellation. For a class
+  that extends `JobObserver` the change is silent: it compiles, and the errors
+  it used to swallow reach the zone. An override of `onUnanswered` with an
+  empty body keeps the old behaviour. A class that implements `JobObserver`
+  stops compiling until it has an `onUnanswered`. `JobObserver` is a mixin
+  class now: a class that extends another one mixes it in with
+  `with JobObserver` and keeps the default bodies. An engine of a domain
+  answers for these errors through the observer it puts on its jobs, the way
+  `solo` does. See `doc/observing.md`.
+
 - **Breaking:** `JobBase`, `JobContextBase` and `JobStatus` moved to
   `package:async_job/engine.dart`. They are the protocol for building an engine
   on the kernel, and the main import handed them to every file that merely runs
@@ -30,12 +49,12 @@
   swallowed. A `ctx.wait` the body left through a `.timeout` or a `Future.any`
   handed its late error to the future the wrapper was holding, and a wrapper
   that has already fired drops what it is given: the error reached nobody at
-  all, not the observer and not the zone. It now goes to `onError`, the way the
-  failure of any abandoned action does, and the future is completed as well so
-  that nothing left waiting on it waits for ever. A `wait` made inside work
-  handed over with `unattended` is untouched: the work is still holding that
-  future and the fork announces what it leaves uncaught, so it is announced
-  once, there.
+  all, not the observer and not the zone. It now goes the way the failure of
+  any abandoned action does, to `onError` and `onUnanswered`, and the future is
+  completed as well so that nothing left waiting on it waits for ever. A `wait`
+  made inside work handed over with `unattended` is untouched: the work is
+  still holding that future and the fork announces what it leaves uncaught, so
+  it is announced once, there.
 - **Fix:** a step that failed inside `ctx.uncancellable` while a cancellation
   was held keeps its diagnosis. The section applies the held cancellation on
   the way out, which is before the error reaches the body, so the kernel read
@@ -202,15 +221,6 @@
   rule of a domain that threw instead of answering used to cost the job the
   resource it already held: the value reached no body and was registered on no
   cleanup stack.
-- **Breaking:** add the protected `JobBase.handleUnanswered`, the route for an
-  error of a job that nobody answered for -- today a branch of `ctx.runAll`
-  whose failure the group did not throw. Its default is `notifyError` with the
-  second announcement left out, and an engine of a domain overrides it to reach
-  an answer of its own: `solo` sends it to `Solo.errorHandler`. Such an engine
-  has to, because one that puts an observer on every job makes the kernel's
-  check for an observer true always, and the error would stop there. Adding a
-  member to a class meant to be extended is breaking on its own: a subclass
-  with a member of that name stops compiling. See `doc/extending.md`.
 - **Breaking:** add the protected `JobBase.inUncancellableSection` and
   `JobBase.heldCancel`, for an engine that waits for a job and wants to say
   why. The first says a section is open; the second is the cancellation such a
@@ -287,12 +297,12 @@
   for work the job does not wait for; and `await job.cancel()` inside
   `fakeAsync`, a test that passes without running a single `expect`. Where each
   error goes, with an observer and without one, is now a table instead of three
-  paragraphs. The paragraph on timing a cancellation with `whenCancelled` and
-  `onFinish` no longer says that the number is what the caller of `cancel`
-  waits through: it counts from the moment the job accepts the cancellation, so
-  a cancellation held back by `ctx.uncancellable` shows less than the caller
-  waited. The README links the open that failed after a cancellation to the new
-  section.
+  paragraphs, with `onUnanswered` in it. The paragraph on timing a cancellation
+  with `whenCancelled` and `onFinish` no longer says that the number is what
+  the caller of `cancel` waits through: it counts from the moment the job
+  accepts the cancellation, so a cancellation held back by `ctx.uncancellable`
+  shows less than the caller waited. The README links the open that failed
+  after a cancellation to the new section.
 
 ## 0.2.0
 

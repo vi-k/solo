@@ -52,25 +52,41 @@ void main() {
     });
   });
 
-  test('a late error of an abandoned action goes to the observer', () {
-    fakeAsync((async) {
-      final journal = JobJournal();
-      final job = Job<void>(
-        key: 'job',
-        observer: journal,
-        (ctx) async {
-          await ctx.wait(() async {
-            await delay(100);
-            throw StateError('late');
-          });
-        },
-      );
-      async.elapse(const Duration(milliseconds: 10));
-      job.cancel().ignore();
-      async.flushTimers();
-      expect(journal.take(), contains('[job] error Bad state: late'));
-      expect(job.outcome, isA<Cancelled>());
-    });
+  test(
+      'a late error of an abandoned action goes to the observer, then the '
+      'zone', () {
+    final journal = JobJournal();
+    final zone = <Object>[];
+    late final Job<void> job;
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          job = Job<void>(
+            key: 'job',
+            observer: journal,
+            (ctx) async {
+              await ctx.wait(() async {
+                await delay(100);
+                throw StateError('late');
+              });
+            },
+          );
+          async.elapse(const Duration(milliseconds: 10));
+          job.cancel().ignore();
+          async.flushTimers();
+        });
+      },
+      (error, stackTrace) => zone.add(error),
+    );
+    // Outside the guarded zone: an `expect` that fails inside it lands in
+    // the handler and is counted as a zone error instead of failing.
+    expect(journal.take(), contains('[job] error Bad state: late'));
+    expect(
+      zone.map((error) => '$error'),
+      ['Bad state: late'],
+      reason: 'an observer that only watches answers for nothing',
+    );
+    expect(job.outcome, isA<Cancelled>());
   });
 
   test('every member throws up front once the job is marked', () {

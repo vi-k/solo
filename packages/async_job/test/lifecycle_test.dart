@@ -228,7 +228,9 @@ void main() {
   });
   test('a finished hook that throws still lets the job finish', () {
     fakeAsync((async) {
-      final journal = JobJournal();
+      // Answering: the job finishing is the subject, not where the hook's
+      // error goes after the observer.
+      final journal = JobJournal(answers: true);
       var done = false;
       final job = FailingHookJob<int>(
         key: 'job',

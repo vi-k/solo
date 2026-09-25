@@ -104,7 +104,9 @@ void main() {
     );
   });
 
-  test('the same errors go to the observer when there is one', () {
+  test(
+      'the same errors go to the observer when there is one, and on to the '
+      'zone', () {
     final journal = JobJournal();
     final caught = <Object>[];
     runZonedGuarded(
@@ -140,7 +142,11 @@ void main() {
         '[job] error Bad state: late action',
       ],
     );
-    expect(caught, isEmpty, reason: 'an observer takes the whole path');
+    expect(
+      caught.map((error) => '$error'),
+      ['Bad state: onCancel', 'Bad state: late action'],
+      reason: 'an observer that only watches answers for nothing',
+    );
   });
   test('an error a late cancellation covers still reaches the zone', () {
     final caught = <Object>[];

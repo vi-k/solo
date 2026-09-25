@@ -16,6 +16,9 @@ void main() {
   // levels, and a run that reached the bottom instead would fail on the
   // first expectation rather than pass quietly.
   const depth = 50000;
+  // Every observer below answers for what it collects: the subject is what
+  // a cascade out of stack reports, and how many times, not where the
+  // report goes after the observer.
 
   test('a cascade out of stack still tells what it marked to stop', () async {
     final chain = _Chain(depth);
@@ -69,7 +72,7 @@ void main() {
           stackTrace: StackTrace.current,
         );
       },
-      observer: ErrorObserver(errors),
+      observer: ErrorObserver.answering(errors),
     );
 
     for (var attempt = 0; errors.isEmpty && attempt < 100; attempt++) {
@@ -158,7 +161,7 @@ void main() {
         ready.complete();
         await never.future;
       },
-      observer: ErrorObserver(errors),
+      observer: ErrorObserver.answering(errors),
     );
     parent.launch();
     await ready.future;
@@ -203,7 +206,7 @@ void main() {
           stackTrace: StackTrace.current,
         );
       },
-      observer: ErrorObserver(errors),
+      observer: ErrorObserver.answering(errors),
     );
     for (var attempt = 0; errors.isEmpty && attempt < 100; attempt++) {
       await delay(1);
@@ -236,7 +239,7 @@ void main() {
   test('the window closes with the pass that told the callbacks', () async {
     final chain = _Chain(depth);
     final errors = <Object>[];
-    final root = chain.start(observer: ErrorObserver(errors));
+    final root = chain.start(observer: ErrorObserver.answering(errors));
     await chain.bottom.future;
     try {
       root.cancel().ignore();
@@ -267,7 +270,7 @@ void main() {
           stackTrace: StackTrace.current,
         );
       },
-      observer: ErrorObserver(errors),
+      observer: ErrorObserver.answering(errors),
     )
       ..whenCancelled((_) => _forever(0))
       ..whenCancelled((_) => second = true);
@@ -291,7 +294,7 @@ void main() {
           ..onCancel(() => second = true);
         await ctx.wait(() => Completer<void>().future);
       },
-      observer: ErrorObserver(errors),
+      observer: ErrorObserver.answering(errors),
     );
     await delay(1);
 
@@ -305,7 +308,7 @@ void main() {
       () async {
     final chain = _Chain(depth, framesPerCallback: 400);
     final errors = <Object>[];
-    final root = chain.start(observer: ErrorObserver(errors));
+    final root = chain.start(observer: ErrorObserver.answering(errors));
     await chain.bottom.future;
 
     try {

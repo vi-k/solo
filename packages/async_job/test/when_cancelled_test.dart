@@ -201,17 +201,32 @@ void main() {
     });
   });
 
-  test('a callback error reaches the observer and other callbacks still run',
-      () {
+  test(
+      'a callback error reaches the observer, then the zone, and other '
+      'callbacks still run', () {
     final observer = _ErrorObserver();
     final seen = <Cancelled>[];
     final error = StateError('callback');
-    final job = Job.deferred<void>((ctx) async {}, observer: observer)
-      ..whenCancelled((_) => throw error)
-      ..whenCancelled(seen.add);
-    job.cancel().ignore();
-    job.whenCancelled((_) => throw error);
+    final zone = <Object>[];
+    late final Job<void> job;
+    runZonedGuarded(
+      () {
+        job = Job.deferred<void>((ctx) async {}, observer: observer)
+          ..whenCancelled((_) => throw error)
+          ..whenCancelled(seen.add);
+        job.cancel().ignore();
+        job.whenCancelled((_) => throw error);
+      },
+      (error, stackTrace) => zone.add(error),
+    );
+    // Outside the guarded zone: an `expect` that fails inside it lands in
+    // the handler and is counted as a zone error instead of failing.
     expect(observer.errors, [same(error), same(error)]);
+    expect(
+      zone,
+      [same(error), same(error)],
+      reason: 'an observer that only watches answers for nothing',
+    );
     expect(seen, hasLength(1));
     expect(job.outcome, same(seen.single));
   });

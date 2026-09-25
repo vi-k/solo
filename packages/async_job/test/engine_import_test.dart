@@ -15,7 +15,6 @@ void main() {
   test('the main import leaves the engine protocol out', () {
     expect(_exports('lib/async_job.dart'), [
       "export 'src/job_base.dart' hide JobBase, JobContextBase, JobStatus;",
-      "export 'src/observer.dart';",
     ]);
   });
 

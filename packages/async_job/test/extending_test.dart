@@ -1,10 +1,12 @@
 // The protected surface an engine of a domain stands on.
 //
-// Five of its members are held by `solo` alone and by nothing in here, so
+// Four of its members are held by `solo` alone and by nothing in here, so
 // a change to their contract would leave this package green and redden the
-// neighbour: `handleUnanswered`, `createEachJob`, `whenDone`,
-// `inUncancellableSection` and `heldCancel`. Each of them is exercised
-// below by a small engine of its own, the way `solo` does it.
+// neighbour: `createEachJob`, `whenDone`, `inUncancellableSection` and
+// `heldCancel`. Each of them is exercised below by a small engine of its
+// own, the way `solo` does it. So is the way an engine answers for an
+// error nobody answered for: through an observer of its own on every job,
+// which is how `solo` reaches `Solo.onUnanswered`.
 @Timeout(Duration(seconds: 5))
 library;
 
@@ -16,18 +18,38 @@ import 'package:test/test.dart';
 
 import 'support/delay.dart';
 
-/// An engine that has its own answer for an error nobody answered for.
+/// An engine that has its own answer for an error nobody answered for: it
+/// puts an observer of its own on every job, the way `solo` does, and
+/// answers there.
 final class AnsweringJob<T> extends JobBase<T> {
-  AnsweringJob(this._body, {super.key, super.cancellable, super.observer});
+  factory AnsweringJob(
+    Future<T> Function(JobContext ctx) body, {
+    Object? key,
+    bool cancellable = true,
+  }) {
+    final answer = EngineAnswer();
+    return AnsweringJob._(
+      body,
+      answer,
+      key: key,
+      cancellable: cancellable,
+      observer: answer,
+    );
+  }
+
+  AnsweringJob._(
+    this._body,
+    this._answer, {
+    super.key,
+    super.cancellable,
+    super.observer,
+  });
 
   final Future<T> Function(JobContext ctx) _body;
+  final EngineAnswer _answer;
 
-  /// What reached the override instead of the zone.
-  final answered = <Object>[];
-
-  @override
-  void handleUnanswered(Object error, StackTrace stackTrace) =>
-      answered.add(error);
+  /// What reached the engine's answer instead of the zone.
+  List<Object> get answered => _answer.answered;
 
   @override
   JobContextBase createContext() => DomainContext(this);
@@ -38,6 +60,16 @@ final class AnsweringJob<T> extends JobBase<T> {
 
 final class DomainContext extends JobContextBase {
   DomainContext(super.owner);
+}
+
+/// The observer of [AnsweringJob]: it hears nothing and answers for
+/// everything nobody else answered for.
+final class EngineAnswer extends JobObserver {
+  final answered = <Object>[];
+
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      answered.add(error);
 }
 
 /// An engine that waits for a job the way it waits for a child: without
@@ -107,7 +139,8 @@ final class EachContext extends JobContextBase {
 }
 
 void main() {
-  test('handleUnanswered takes the failure a group did not throw', () {
+  test("the engine's observer answers for the failure a group did not throw",
+      () {
     fakeAsync((async) {
       final first = AnsweringJob<int>(key: 'a', (ctx) async {
         await ctx.wait(() => delay(10));
@@ -138,13 +171,14 @@ void main() {
       expect(
         second.answered.map((error) => '$error').toList(),
         ['Bad state: second'],
-        reason: 'and this one reached the answer of the engine, which is the '
-            'whole reason the member is open to override',
+        reason: 'and this one reached the answer of the engine, which is '
+            'the whole reason the engine puts an observer of its own on '
+            'every job',
       );
     });
   });
 
-  test('handleUnanswered not overridden goes to the zone', () {
+  test('without an answer of its own it goes to the zone', () {
     final caught = <Object>[];
     Object? thrown;
     runZonedGuarded(

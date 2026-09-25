@@ -144,7 +144,10 @@ void main() {
       var disposed = false;
       late Job<void> child;
       final reason = _BrokenLabelReason();
-      final parent = Job<void>(observer: ErrorObserver(errors), (ctx) async {
+      // Answering: the subject is the parent finishing, not where the
+      // label's error goes after the observer.
+      final parent =
+          Job<void>(observer: ErrorObserver.answering(errors), (ctx) async {
         ctx.onDispose(() => disposed = true);
         child = Job.deferred<void>((ctx) => ctx.wait(() => delay(50)));
         await ctx.run(child);
