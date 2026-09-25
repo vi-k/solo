@@ -108,8 +108,8 @@ database is locked.
 
 ### The first attempt
 
-An error nobody caught goes to the zone, and the app hears what reaches it; the
-job gets no observer:
+Dart sends an error nobody caught to the zone, so the app counts on the zone
+and gives the job no observer:
 
 ```dart
 final job = Job<Database>(
@@ -125,12 +125,17 @@ cancel
 outcome: Cancelled(manual)
 ```
 
-Nothing reaches the zone, and the app never learns that the open failed. The
-job accepted the cancellation while the database was opening, so it ends
-`Cancelled` whatever the open does. `join` then throws the open's own error,
-and the body gives up with it on a job that is already cancelled: that error is
-not the outcome, and it goes to the observer alone. Without one, nobody hears
-it.
+Nothing reaches the zone, and the app never learns that the open failed: the
+job itself caught the error. The job accepted the cancellation while the
+database was opening, so it ends `Cancelled` whatever the open does. `join`
+then throws the open's own error, and the body gives up with it on a job that
+is already cancelled. That error is not the outcome, and the job hands it to
+its observer alone. Most often such an error is the operation stopping at the
+job's token, the way the migration throws `DatabaseStopped` in
+[A token through `onCancel`](cancellation.md#a-token-through-oncancel) on the
+cancellation page, and in the zone every such cancellation would show up as a
+failure. The job cannot tell that stop from a failure like this one, so without
+an observer neither is heard.
 
 ### An observer
 

@@ -160,6 +160,14 @@ final class MigrationFailed implements Exception {
   }
 }
 
+/// How the migration of the cancellation page stops at its token.
+final class DatabaseStopped implements Exception {
+  const DatabaseStopped();
+
+  @override
+  String toString() => 'DatabaseStopped';
+}
+
 final class Analytics {
   Future<void> send(String event) async {
     await delay(10);
@@ -481,6 +489,40 @@ void main() {
       final lines = play(open, cancelAt: 10, outcomeObserved: false);
 
       expect(quotable(lines), ['cancel']);
+    });
+
+    // The stop the page names: the operation stops at the job's token and
+    // throws its own error, the way the migration of the cancellation page
+    // does.
+    Job<void> stoppedAtToken({JobObserver? observer}) => Job<void>(
+          observer: observer,
+          (ctx) async {
+            var stopped = false;
+            ctx.onCancel(() => stopped = true);
+            await ctx.join(() async {
+              await delay(20);
+              if (stopped) {
+                throw const DatabaseStopped();
+              }
+            });
+          },
+        );
+
+    test('a stop at the token goes the same way: onError or nobody', () {
+      expect(
+        quotable(
+          play(
+            () => stoppedAtToken(observer: Reporter()),
+            cancelAt: 10,
+            outcomeObserved: false,
+          ),
+        ),
+        ['cancel', 'onError: DatabaseStopped'],
+      );
+      expect(
+        quotable(play(stoppedAtToken, cancelAt: 10, outcomeObserved: false)),
+        ['cancel'],
+      );
     });
 
     Job<void> failing({JobObserver? observer}) => Job<void>(
