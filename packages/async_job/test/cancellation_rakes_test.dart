@@ -295,98 +295,112 @@ void main() {
       });
     });
 
-    test('a late value of wait joins the stack while the job finishes', () {
-      fakeAsync((async) {
-        final seen = <String>[];
-        final job = Job<void>((ctx) async {
-          ctx.onDispose(() async {
-            await delay(30);
-            seen.add('${async.elapsed.inMilliseconds} ms: slow disposer');
-          });
-          await ctx.wait(
-            () async {
-              await delay(20);
-              return 'connection';
-            },
-            discard: (value) =>
-                seen.add('${async.elapsed.inMilliseconds} ms: discard $value'),
-          );
-        });
-        unawaited(
-          job.done.then(
-            (outcome) => seen
-                .add('${async.elapsed.inMilliseconds} ms: finished $outcome'),
-          ),
-        );
-        async.elapse(const Duration(milliseconds: 5));
-        unawaited(job.cancel());
-        async.flushTimers();
-
-        expect(seen, [
-          '35 ms: slow disposer',
-          '35 ms: discard connection',
-          '35 ms: finished Cancelled(manual)',
-        ]);
-      });
-    });
-
-    test('a late value of wait runs alone once the job has finished', () {
-      fakeAsync((async) {
-        final seen = <String>[];
-        final job = Job<void>((ctx) async {
-          await ctx.wait(
-            () async {
-              await delay(20);
-              return 'connection';
-            },
-            discard: (value) =>
-                seen.add('${async.elapsed.inMilliseconds} ms: discard $value'),
-          );
-        });
-        unawaited(
-          job.done.then(
-            (outcome) => seen
-                .add('${async.elapsed.inMilliseconds} ms: finished $outcome'),
-          ),
-        );
-        async.elapse(const Duration(milliseconds: 5));
-        unawaited(job.cancel());
-        async.flushTimers();
-
-        expect(seen, [
-          '5 ms: finished Cancelled(manual)',
-          '20 ms: discard connection',
-        ]);
-      });
-    });
-
-    test('join awaits the cleanup of its value before it throws', () {
-      fakeAsync((async) {
-        final seen = <String>[];
-        final job = Job<void>((ctx) async {
-          try {
-            await ctx.join(
+    // The page names both parameters, so each test runs with either one.
+    for (final kind in ['dispose', 'discard']) {
+      test(
+          'a late value of wait joins the stack while the job finishes '
+          '($kind)', () {
+        fakeAsync((async) {
+          final seen = <String>[];
+          void cleanup(String value) =>
+              seen.add('${async.elapsed.inMilliseconds} ms: $kind $value');
+          final job = Job<void>((ctx) async {
+            ctx.onDispose(() async {
+              await delay(30);
+              seen.add('${async.elapsed.inMilliseconds} ms: slow disposer');
+            });
+            await ctx.wait(
               () async {
                 await delay(20);
                 return 'connection';
               },
-              dispose: (value) async {
-                await delay(5);
-                seen.add('${async.elapsed.inMilliseconds} ms: dispose $value');
-              },
+              dispose: kind == 'dispose' ? cleanup : null,
+              discard: kind == 'discard' ? cleanup : null,
             );
-          } on Cancelled {
-            seen.add('${async.elapsed.inMilliseconds} ms: join threw');
-            rethrow;
-          }
-        });
-        async.elapse(const Duration(milliseconds: 5));
-        unawaited(job.cancel());
-        async.flushTimers();
+          });
+          unawaited(
+            job.done.then(
+              (outcome) => seen
+                  .add('${async.elapsed.inMilliseconds} ms: finished $outcome'),
+            ),
+          );
+          async.elapse(const Duration(milliseconds: 5));
+          unawaited(job.cancel());
+          async.flushTimers();
 
-        expect(seen, ['25 ms: dispose connection', '25 ms: join threw']);
+          expect(seen, [
+            '35 ms: slow disposer',
+            '35 ms: $kind connection',
+            '35 ms: finished Cancelled(manual)',
+          ]);
+        });
       });
-    });
+
+      test(
+          'a late value of wait runs alone once the job has finished '
+          '($kind)', () {
+        fakeAsync((async) {
+          final seen = <String>[];
+          void cleanup(String value) =>
+              seen.add('${async.elapsed.inMilliseconds} ms: $kind $value');
+          final job = Job<void>((ctx) async {
+            await ctx.wait(
+              () async {
+                await delay(20);
+                return 'connection';
+              },
+              dispose: kind == 'dispose' ? cleanup : null,
+              discard: kind == 'discard' ? cleanup : null,
+            );
+          });
+          unawaited(
+            job.done.then(
+              (outcome) => seen
+                  .add('${async.elapsed.inMilliseconds} ms: finished $outcome'),
+            ),
+          );
+          async.elapse(const Duration(milliseconds: 5));
+          unawaited(job.cancel());
+          async.flushTimers();
+
+          expect(seen, [
+            '5 ms: finished Cancelled(manual)',
+            '20 ms: $kind connection',
+          ]);
+        });
+      });
+
+      test('join awaits the $kind of its value before it throws', () {
+        fakeAsync((async) {
+          final seen = <String>[];
+          Future<void> cleanup(String value) async {
+            await delay(5);
+            seen.add('${async.elapsed.inMilliseconds} ms: $kind $value');
+          }
+
+          final job = Job<void>((ctx) async {
+            try {
+              await ctx.join(
+                () async {
+                  await delay(20);
+                  return 'connection';
+                },
+                dispose: kind == 'dispose' ? cleanup : null,
+                discard: kind == 'discard' ? cleanup : null,
+              );
+            } on Cancelled {
+              seen.add('${async.elapsed.inMilliseconds} ms: join threw');
+              rethrow;
+            }
+          });
+          async.elapse(const Duration(milliseconds: 5));
+          unawaited(job.cancel());
+          async.flushTimers();
+
+          expect(seen, ['25 ms: $kind connection', '25 ms: join threw']);
+        });
+      });
+    }
   });
 
   group('A step that must finish', () {

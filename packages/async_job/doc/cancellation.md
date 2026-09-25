@@ -9,8 +9,7 @@ Job<void>((ctx) async {
   final stop = CancelToken();
   ctx.onCancel(stop.cancel);
 
-  // The wait ends at once; the read goes on, and its value is
-  // dropped or handed to the cleanup callback.
+  // The wait ends at once; the read goes on, and its value is dropped.
   final rows = await ctx.wait(database.readAll);
 
   // Waited for until the migration ends or stops at the token, and
@@ -29,8 +28,8 @@ Job<void>((ctx) async {
 
 | Method | If cancellation arrives while it waits |
 | --- | --- |
-| `ctx.wait(action)` | Throws `Cancelled` at once. The action continues; its result is dropped or passed to the cleanup callback. |
-| `ctx.join(action)` | Waits for the action, then throws `Cancelled` instead of returning the value, or the action's own error if it failed. A cleanup callback for the value is awaited first. |
+| `ctx.wait(action)` | Throws `Cancelled` at once. The action continues; its result is dropped, or goes to the call's `dispose` or `discard` if it has one. |
+| `ctx.join(action)` | Waits for the action, then throws `Cancelled` instead of returning the value, or the action's own error if it failed. If the call has a `dispose` or `discard`, the value goes there first, and `join` throws once that callback has finished. |
 | `ctx.uncancellable(action)` | Holds the request until the section ends: no `onCancel`, no cascade to children while it runs. |
 | `ctx.check()` | Throws when the job has already accepted cancellation. |
 
@@ -100,7 +99,7 @@ of the migration still to write. Whatever the migration throws afterwards goes
 to `onError`. `wait` is for an operation the job may walk away from, such as a
 read whose result nobody needs any more.
 
-A result arriving that late is dropped, or handed to the cleanup callback
+A result arriving that late is dropped, or goes to the `dispose` or `discard`
 passed to `wait`: while the job is still finishing, that callback joins its
 cleanup stack and the job awaits it; once the job has finished, the callback
 runs on its own.
