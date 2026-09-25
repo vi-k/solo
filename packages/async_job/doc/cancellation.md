@@ -62,9 +62,10 @@ that works follows under its own heading.
 
 The job opens a database, migrates it and hands it over; `discard` closes it
 when the job ends without handing it over. The migration takes three steps of
-10 ms and reads a `CancelToken` before each. When the user cancels, the
-migration should stop, and the database should close once nothing writes into
-it. The user cancels 15 ms in, during the second step.
+10 ms and reads a `CancelToken` before each; finding it cancelled, it stops by
+throwing `DatabaseStopped`. When the user cancels, the migration should stop,
+and the database should close once nothing writes into it. The user cancels
+during the second step, 15 ms in.
 
 ### The first attempt
 
@@ -150,22 +151,24 @@ outcome: Cancelled(manual)
 
 `ctx.onCancel(callback)` runs synchronously when the job accepts the
 cancellation, before the body reaches a checkpoint. It cancels the token, the
-migration reads it before the third step and stops, and `join` waits for that
-before the job closes the database. A request to abort or a subscription to
-cancel is handed over the same way.
+migration reads it before the third step and throws `DatabaseStopped`, and
+`join` waits for that before the job closes the database. A request to abort or
+a subscription to cancel is handed over the same way.
 
-The migration stops by throwing `DatabaseStopped`, and `join` throws an error
-of its action as it is, even after a cancellation. The job still ends
-`Cancelled`, so the error is nobody's outcome: it reaches the observer and
-stops there, and without an observer nothing hears it. What a `catch` around
-this `join` sees is the subject of the section on catching, below.
+The `onError:` line is that `DatabaseStopped`. `join` throws an error of its
+action as it is, even after a cancellation, and the body does not catch it. The
+job still ends `Cancelled`, so the error is nobody's outcome: it reaches the
+observer and stops there, and without an observer nothing hears it. What a
+`catch` around this `join` sees is the subject of the section on catching,
+below.
 
 ## A step that must finish
 
 The migration is over, and the last step marks the database ready: `markReady`
 writes the schema version and then the ready flag, and a database with the
 version and no flag is neither old nor ready. `markReady` takes the token of
-the migration, and the user cancels while the version is being written.
+the migration and, like the migration, stops by throwing `DatabaseStopped`. The
+user cancels while the version is being written.
 
 ### The first attempt
 
@@ -188,8 +191,9 @@ outcome: Cancelled(manual)
 
 `join` waits for all of `markReady`, and `markReady` stops halfway anyway.
 `join` does not hold the cancellation back: the job accepts it as it arrives,
-`onCancel` cancels the token, and `markReady` reads it between its two writes.
-The database is left with a version and no ready flag.
+`onCancel` cancels the token, and `markReady` reads it between its two writes
+and throws. The database is left with a version and no ready flag, and the
+`DatabaseStopped` reaches `onError`, as in the section above.
 
 ### Holding the cancellation back
 
