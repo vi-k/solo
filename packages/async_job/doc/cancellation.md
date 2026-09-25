@@ -307,12 +307,13 @@ outcome: Cancelled(manual)
 The log calls a cancellation a failed migration. The token stopped the
 migration, and what came out of `join` is the migration's own
 `DatabaseStopped`, not a `Cancelled`: `join` throws an error of its action as
-it is. The job still ends `Cancelled` — the `join` of the next step throws
-before its action starts — but the code between the `catch` and that checkpoint
-runs on a cancelled job. Without the token the clause holds: the migration runs
-to its end, and `join` throws the `Cancelled`. Without the clause,
-`on Exception` takes that `Cancelled` too, because `Cancelled` implements
-`Exception`, and logs `migration failed: Cancelled(manual)`.
+it is. The clause for `Cancelled` lets it by, `on Exception` takes it, and the
+code inside that clause runs on a job that is already cancelled. The job still
+ends `Cancelled`: the `join` of the next step throws before its action starts.
+Without the token the clause for `Cancelled` holds: the migration runs to its
+end, and `join` throws the `Cancelled`. Without that clause, `on Exception`
+takes that `Cancelled` too, because `Cancelled` implements `Exception`, and
+logs `migration failed: Cancelled(manual)`.
 
 ### Asking the job
 
