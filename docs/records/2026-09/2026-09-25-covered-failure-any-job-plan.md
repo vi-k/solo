@@ -1,15 +1,19 @@
 # Покрытый провал отвечается у любой задачи
 
-> **Состояние на 2026-09-26:** выполнен в `main`, отчёт —
-> `2026-09-26-covered-failure-any-job-report.md`; не отправлено. Ревью плана —
+> **Состояние на 2026-09-26:** выполнен в `main` (`e5e6d20` и правки по ревью
+> сделанного следом), отчёт — `2026-09-26-covered-failure-any-job-report.md`;
+> не отправлено. Ревью плана —
 > `2026-09-25-covered-failure-any-job-plan-review.md`, девять находок приняты
-> и внесены; ревью сделанного ждёт.
+> и внесены; ревью сделанного —
+> `2026-09-26-covered-failure-any-job-work-review.md`, четыре находки приняты.
 > **Что это:** план открытого вопроса 4
 > `2026-09-25-covered-child-failure-plan.md`: провал тела, который потом
 > покрыла отмена, отвечается у любой задачи — у корня, у ребёнка `ctx.each`,
 > у продолжения `then`, — а не только у ребёнка `ctx.run` и ветки `ctx.runAll`;
 > `Job.ignore` его глушит.
-> **Связанные записи:** `2026-09-25-covered-failure-any-job-plan-review.md`,
+> **Связанные записи:** `2026-09-26-covered-failure-any-job-report.md`,
+> `2026-09-26-covered-failure-any-job-work-review.md`,
+> `2026-09-25-covered-failure-any-job-plan-review.md`,
 > `2026-09-25-covered-child-failure-plan.md` (вопрос 4),
 > `2026-09-25-covered-child-failure-report.md`,
 > `2026-09-25-covered-child-failure-work-review.md`,

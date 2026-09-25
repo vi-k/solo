@@ -1,13 +1,14 @@
 # Покрытый провал у любой задачи: сделано
 
-> **Состояние на 2026-09-26:** сделано в `main`, ждёт ревью сделанного;
-> не отправлено.
+> **Состояние на 2026-09-26:** сделано в `main` (`e5e6d20` и правки по ревью
+> сделанного следом); не отправлено.
 > **Что это:** отчёт о правке по плану
 > `2026-09-25-covered-failure-any-job-plan.md`: провал тела, после которого
 > пришла отмена, отвечается у любой задачи, кто бы ни читал исход,
 > а `Job.ignore` его глушит.
 > **Связанные записи:** `2026-09-25-covered-failure-any-job-plan.md`,
 > `2026-09-25-covered-failure-any-job-plan-review.md`,
+> `2026-09-26-covered-failure-any-job-work-review.md`,
 > `2026-09-25-covered-child-failure-plan.md` (вопрос 4),
 > `2026-09-25-covered-child-failure-report.md`,
 > `2026-09-25-observing-rakes-report.md` (пункт 6 «По чтению владельца»).
@@ -58,7 +59,7 @@
 
 ## Сторожа
 
-`packages/async_job/test/unanswered_test.dart` — 48 тестов вместо 34:
+`packages/async_job/test/unanswered_test.dart` — 51 тест вместо 34:
 
 - группа «a failure a cancellation covered is answered for, whoever reads it»
   (была «…, when a parent took the outcome»): корень, которого никто не читает;
@@ -74,13 +75,19 @@
   `expectOnlyTold`: корень; корень, чей `value` прочитан до `ignore()`; ребёнок
   `ctx.run`; ветка `runAll`, покрытая отменой; ветка, чей провал тела группа
   не бросила; ветка, которую движок кончил `Failed` руками, а группа
-  не бросила; продолжение; `ignore()` из `whenCancelled`; провал, поданный
-  движком поверх отметки, — один `onError`;
+  не бросила; продолжение; `ignore()` из `whenCancelled`; `ignore()`
+  из `onFinish` продолжения и задачи, которой движок подал провал поверх
+  отметки; провал, поданный движком поверх отметки, — один `onError`;
 - группа «a failure of the body no parent took is never asked about» стала «…
   no cancellation covered …» и потеряла тест о покрытом провале; группа «a job
   no parent took keeps the rule of its outcome» ушла, её случаи — в первой
   группе;
-- `expectOnlyTold` получил `alsoTold`, как у `expectAnswered`.
+- задача, которую движок кончил руками, пока упавшее первым тело ждало
+  ребёнка, — один `onError`, ни ответа, ни зоны: оговорка dartdoc
+  `_reportCovered` и `docs/architecture.md`;
+- `expectOnlyTold` получил `alsoTold`, как у `expectAnswered`; наблюдатель
+  `Forwarding` передаёт хуки внутреннему и может звать `ignore()`
+  из `onFinish`.
 
 `packages/async_job/test/zone_test.dart`: «a listener one microtask late still
 counts for a covered error too» стал обратным — «a reader a microtask after
@@ -114,31 +121,40 @@ does not observe a failure a cancellation covered» держит новый аб
 
 ## Мутации
 
-Тринадцать, по всему набору `async_job` после всех сторожей: девять из плана,
-три из ревью плана и `value` отдельно от `done`. Откат копией файла со сверкой
-хэша (`hash ok` после каждой), счёт по меткам `[E]`:
+Пятнадцать, по всему набору `async_job` после правок по ревью сделанного:
+девять из плана, три из ревью плана, две из ревью сделанного и `value` отдельно
+от `done`. Откат копией файла со сверкой хэша (`hash ok` после каждой), счёт
+по меткам `[E]`:
 
 | Мутация | Красных |
 | --- | --- |
-| `ignore()` не ставит `_ignored` | 13 |
+| `ignore()` не ставит `_ignored` | 15 |
 | `done` ставит `_ignored` | 15 |
 | `value` ставит `_ignored` | 12 |
-| `_reportCovered` не смотрит на `_ignored` | 11 |
-| при `_ignored` поданный движком провал не объявляется | 1 |
-| при `_ignored` провал тела объявляется снова | 7 |
+| `_reportCovered` не смотрит на `_ignored` | 13 |
+| при `_ignored` поданный движком провал не объявляется | 2 |
+| при `_ignored` провал тела объявляется снова | 8 |
 | вернуть проверку `_observed` в микрозадаче | 21 |
 | ответ микрозадачей, с проверкой `_ignored` в ней | 4 |
 | всегда `_handleUnanswered` | 3 |
 | всегда `notifyError` | 20 |
-| продолжение `then` передаёт `announced: false` | 2 |
+| продолжение `then` передаёт `announced: false` | 3 |
 | `_conclude` не смотрит на `_ignored` | 3 |
 | в `_conclude` при `_ignored` поданный движком провал не объявляется | 1 |
+| ответ за провал движка поверх отметки — до `onFinish` | 1 |
+| ответ продолжения `then` — до его `finish` | 0 |
 
-Пойманы все. «Ответ микрозадачей» ловят сторож порядка прошлой работы («the
-answer comes before the parent hears the cancellation»), «ignore from a
-listener of done comes too late» и два теста строки таблицы страницы: ответ
-встаёт после строки исхода. Ровно это и покупала бы микрозадача — `ignore()`
-из слушателя `done` — ценой порядка.
+Не поймана одна, и она эквивалентна. Наблюдатель, который отменяет продолжение
+из `onError`, кончает его сразу: `onFinish` проходит внутри `cancel()`, до того
+как `_sourceFinished` дойдёт до `finish` и ответа (зонд), так что ответ идёт
+после `onFinish` при любом порядке строк. Тест «from onFinish of a continuation
+its observer cancels, still in time» держит обещание dartdoc, а не порядок.
+
+«Ответ микрозадачей» ловят сторож порядка прошлой работы («the answer comes
+before the parent hears the cancellation»), «ignore from a listener of done
+comes too late» и два теста строки таблицы страницы: ответ встаёт после строки
+исхода. Ровно это и покупала бы микрозадача — `ignore()` из слушателя `done` —
+ценой порядка.
 
 «`done` ставит `_ignored`» краснит и тесты группы `runAll`
 в `run_all_test.dart` и `extending_test.dart`: группа читает `done` каждой
@@ -191,8 +207,9 @@ listener of done comes too late» и два теста строки таблиц
   в `children.md` не правились: они о провале, который несёт исход (вердикт
   находки 4).
 - Сторож «`ignore()` из `onFinish` ещё успевает» — переименованный тест
-  `zone_test.dart`, а не новый в `unanswered_test.dart`: тот тест держит ровно
-  это.
+  `zone_test.dart`: тот тест держит ровно это на пути `_execute`. Пути
+  продолжения и провала движка поверх отметки получили свои
+  в `unanswered_test.dart` по находке 1 ревью сделанного.
 - Сверх плана: корень, чей `value` прочитан до `ignore()` (фраза dartdoc
   `Job.ignore`, которую ревью плана назвало неверной), сторожа страниц
   в `observing_rakes_test` и `outcomes_rakes_test` и тест `solo` о ребёнке
@@ -205,8 +222,8 @@ listener of done comes too late» и два теста строки таблиц
 
 ## Проверки
 
-- `async_job`: формат, анализ, `dart doc --dry-run` чистые; 622 теста (606
-  до правки: в `unanswered_test.dart` 48 вместо 34, по одному новому
+- `async_job`: формат, анализ, `dart doc --dry-run` чистые; 625 тестов (606
+  до правки: в `unanswered_test.dart` 51 вместо 34, по одному новому
   в `observing_rakes_test.dart` и `outcomes_rakes_test.dart`).
 - `solo`: то же; 799 тестов (795 и четыре новых); пример — 47.
 - `flutter_solo`: анализ чист, 85; пример — 4.
@@ -221,7 +238,17 @@ listener of done comes too late» и два теста строки таблиц
 
 ## Ревью сделанного
 
-Ждёт.
+`2026-09-26-covered-failure-any-job-work-review.md`, четыре находки, все Low,
+все приняты; вердикты в записи. Ревьюер воспроизвёл числа, красные на старом
+ядре и десять строк таблицы мутаций. Главная — находка 1: срок `ignore()`
+из `onFinish` держал сторож только на пути `_execute`. Добавлены два сторожа,
+продолжение и провал движка поверх отметки, и тест задачи, которую движок
+кончил руками; dartdoc, `CHANGELOG` и `docs/architecture.md` говорят о колбэке
+`whenCancelled`, зарегистрированном до конца задачи. Остальное — слова:
+`notifyObserver`, `_handleUnanswered` и `JobObserver.onError` называют
+исключение `ignore()`, а о ветке, которую группа не бросила, dartdoc и абзац
+`observing.md` больше не говорят «no outcome carries»: её исход — `Failed`,
+не передаёт её группа.
 
 ## Открытое
 

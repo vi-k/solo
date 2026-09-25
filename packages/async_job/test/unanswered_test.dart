@@ -205,18 +205,18 @@ List<String> eachCancelled(
       async.flushTimers();
     });
 
-/// Cancels the job it watches while hearing its error, and hands both
-/// hooks on to [inner]; without one, the answer is the default one.
-final class CancellingOnError extends JobObserver {
+/// Hands both hooks on to [inner], and without one answers the default
+/// way; with [ignoresOnFinish], calls `ignore` on the job from `onFinish`,
+/// the way an engine of a domain that routes failures itself would.
+class Forwarding extends JobObserver {
   final JobObserver? inner;
+  final bool ignoresOnFinish;
 
-  CancellingOnError(this.inner);
+  Forwarding(this.inner, {this.ignoresOnFinish = false});
 
   @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
-    inner?.onError(job, error, stackTrace);
-    job.cancel().ignore();
-  }
+  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      inner?.onError(job, error, stackTrace);
 
   @override
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
@@ -227,14 +227,35 @@ final class CancellingOnError extends JobObserver {
       inner.onUnanswered(job, error, stackTrace);
     }
   }
+
+  @override
+  void onFinish(Job<Object?> job) {
+    if (ignoresOnFinish) {
+      job.ignore();
+    }
+  }
+}
+
+/// Cancels the job it watches while hearing its error, and forwards the
+/// rest.
+final class CancellingOnError extends Forwarding {
+  CancellingOnError(super.inner, {super.ignoresOnFinish});
+
+  @override
+  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
+    super.onError(job, error, stackTrace);
+    job.cancel().ignore();
+  }
 }
 
 /// A continuation of a source that fails 5 ms in, cancelled by its own
 /// observer while that observer hears the failure. [read] takes the
-/// continuation as soon as it is created.
+/// continuation as soon as it is created; with [ignoredOnFinish], the
+/// observer calls `ignore` on it from `onFinish`.
 List<String> continuationCancelled(
   JobObserver? observer, {
   void Function(Job<int> tail)? read,
+  bool ignoredOnFinish = false,
 }) =>
     zoneOf((async) {
       final source = Job<int>((ctx) async {
@@ -243,7 +264,10 @@ List<String> continuationCancelled(
       });
       final tail = source.then<int>(
         (ctx, value) => value,
-        observer: CancellingOnError(observer),
+        observer: CancellingOnError(
+          observer,
+          ignoresOnFinish: ignoredOnFinish,
+        ),
       );
       read?.call(tail);
       async.flushTimers();
@@ -986,6 +1010,24 @@ void main() {
       );
     });
 
+    test('from onFinish of a continuation its observer cancels, still in time',
+        () {
+      expectOnlyTold(
+        (observer) => continuationCancelled(observer, ignoredOnFinish: true),
+        'Bad state: source failed',
+      );
+    });
+
+    test('from onFinish, for a failure an engine handed in, still in time', () {
+      expectOnlyTold(
+        (observer) => rootDroppedOverTheMark(
+          Forwarding(observer, ignoresOnFinish: true),
+          () => Failed(StateError('by hand'), StackTrace.current),
+        ),
+        'Bad state: by hand',
+      );
+    });
+
     test('a failure an engine handed in over the mark is still told, once', () {
       // Nothing else shows it: the outcome carries the cancellation.
       expectOnlyTold(
@@ -997,6 +1039,36 @@ void main() {
         'Bad state: by hand',
       );
     });
+  });
+
+  test('a job an engine ends while a body that failed first waits is only told',
+      () {
+    // The engine decides the outcome while the body waits for its child,
+    // and the run of the body stops there: the failure was told where the
+    // body threw it, and nothing answers for it.
+    expectOnlyTold(
+      (observer) => zoneOf((async) {
+        final root = ProbeJob<void>(observer: observer, (ctx) async {
+          ctx
+              .run(Job.deferred<void>((ctx) => ctx.wait(() => delay(50))))
+              .ignore();
+          await delay(5);
+          throw StateError('failed first');
+        })
+          ..launch();
+        async.elapse(const Duration(milliseconds: 10));
+        root.drop(
+          Cancelled.by(
+            reason: const ManualCancelReason(),
+            started: true,
+            description: 'by hand',
+            stackTrace: StackTrace.current,
+          ),
+        );
+        async.flushTimers();
+      }),
+      'Bad state: failed first',
+    );
   });
 
   test('a branch failure the group did not throw is asked about once', () {

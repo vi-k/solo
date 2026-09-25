@@ -43,8 +43,8 @@
   `ignore` silences such a failure, on a child of `ctx.run` as well, and the
   failure of a branch of `ctx.runAll` that the group did not throw: `onError`
   hears it, and nobody answers for it. Call `ignore` before the job ends, or at
-  the latest from `onFinish` or a callback of `whenCancelled`. See
-  `doc/observing.md`.
+  the latest from `onFinish` or a callback of `whenCancelled` registered before
+  it ends. See `doc/observing.md`.
 - **Fix:** a `whenCancelled` registered while the cancellation is still
   cascading onto the children now runs in its turn instead of ahead of everyone
   who registered earlier. Between the mark and the pass that tells the

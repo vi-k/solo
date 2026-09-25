@@ -271,16 +271,16 @@ abstract interface class Job<T> {
   ///
   /// So it is for a child of [JobContext.run] and a branch of
   /// [JobContext.runAll] as well. A [Failed] their parent takes reaches the
-  /// parent's caller whether or not this was called. A failure a
-  /// cancellation covered, and that of a branch the group did not throw,
-  /// reach no caller, and this silences them. To answer for them
-  /// differently instead, give the child an observer of its own that
-  /// overrides [JobObserver.onUnanswered].
+  /// parent's caller whether or not this was called. A failure a cancellation
+  /// covered, and that of a branch the group did not throw, do not reach the
+  /// parent's caller, and this silences them. To answer for them differently
+  /// instead, give the child an observer of its own that overrides
+  /// [JobObserver.onUnanswered].
   ///
-  /// Call it before the job ends, or at the latest from
-  /// [JobObserver.onFinish] or a callback of [whenCancelled]. A failure a
-  /// cancellation covered is answered as the job finishes, and a call from
-  /// a listener of [done] comes too late for it.
+  /// Call it before the job ends, or at the latest from [JobObserver.onFinish]
+  /// or a callback of [whenCancelled] registered before it ends. A failure a
+  /// cancellation covered is answered as the job finishes, and a call from a
+  /// listener of [done] comes too late for it.
   ///
   /// A job is not background work: it has an outcome and an observer of
   /// its own, and this is how it is quenched. Work with neither goes to
@@ -413,9 +413,9 @@ abstract class JobBase<T> implements Job<T> {
   /// Whether [Job.ignore] was called: nobody wants this job's failure.
   ///
   /// More than [_observed]. Whoever reads the outcome has the failure the
-  /// outcome carries; a failure a cancellation covered, or one of a branch
-  /// the group did not throw, is in no outcome anybody gets, and only this
-  /// keeps it from being answered for — see [_reportCovered] and
+  /// outcome carries. A failure a cancellation covered is in no outcome, and
+  /// one of a branch the group did not throw is in nothing the group passes on;
+  /// only this keeps them from being answered for — see [_reportCovered] and
   /// `_RunAllGroup._conclude`.
   bool _ignored = false;
 
@@ -1017,12 +1017,14 @@ abstract class JobBase<T> implements Job<T> {
 
   /// Announces [error] to the observer and asks nobody to answer for it.
   ///
-  /// For an error that has an outcome of its own — the body's. It reaches
-  /// the zone through that outcome, if nobody observes it, and shouting
-  /// twice about one error is worse than once. When a cancellation covers
-  /// it afterwards, the outcome no longer carries it, and it is answered
-  /// later without being announced again. [notifyError] starts here too,
-  /// and goes on to the answer.
+  /// For an error that has an outcome of its own — the body's. It reaches the
+  /// zone through that outcome, if nobody observes it, and shouting twice about
+  /// one error is worse than once. When a cancellation covers it afterwards,
+  /// the outcome no longer carries it, and it is answered later without being
+  /// announced again — unless [Job.ignore] was called, and then nobody answers
+  /// for it. A failure an engine of a domain handed to [finish] over the mark
+  /// of such a job is told here and nowhere else. [notifyError] starts here
+  /// too, and goes on to the answer.
   @protected
   void notifyObserver(Object error, StackTrace stackTrace) {
     _debug(() => '$this error: $error');
@@ -1067,13 +1069,13 @@ abstract class JobBase<T> implements Job<T> {
 
   /// Answers for [error] without announcing it.
   ///
-  /// The observer's [JobObserver.onUnanswered], or the zone the job was
-  /// created in when there is no observer. [notifyError] ends here, and so
-  /// do two failures of a body: that of a branch of [JobContext.runAll]
-  /// the group did not throw, and one a cancellation covered afterwards.
-  /// The job told its observer itself, where its body was caught, and one
-  /// error is announced once — but an error nobody answered for still has
-  /// to reach somebody.
+  /// The observer's [JobObserver.onUnanswered], or the zone the job was created
+  /// in when there is no observer. [notifyError] ends here, and so do two
+  /// failures of a body: that of a branch of [JobContext.runAll] the group did
+  /// not throw, and one a cancellation covered afterwards, unless [Job.ignore]
+  /// was called on the job. The job told its observer itself, where its body
+  /// was caught, and one error is announced once — but an error nobody answered
+  /// for still has to reach somebody.
   ///
   /// An engine of a domain answers through the observer it puts on its
   /// jobs, as `solo` does: there is no second door.

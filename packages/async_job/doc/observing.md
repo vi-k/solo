@@ -202,9 +202,10 @@ when nobody observed the outcome, or when `onUnanswered` sends it on. Observing
 the outcome closes the first way;
 [A failure nobody waits for](outcomes.md#a-failure-nobody-waits-for) on the
 outcomes page shows how. An override of `onUnanswered` closes the second. For
-the two failures of a body that the outcome does not carry — one a cancellation
-covered, and one of a branch whose group throws another — `job.ignore()` closes
-the second way as well: `onError` hears the failure, and nobody answers for it.
+the two failures of a body the table sends to `onUnanswered` — one a
+cancellation covered, and one of a branch whose group throws another —
+`job.ignore()` closes the second way as well: `onError` hears the failure, and
+nobody answers for it.
 
 ## Work the job does not wait for
 
