@@ -1,7 +1,9 @@
 # Разделение хука ошибки в ядре: оповещение отдельно, ответ отдельно
 
-> **Состояние на 2026-09-25:** план написан, ждёт независимого ревью; правки
-> в коде нет.
+> **Состояние на 2026-09-25:** план написан и прошёл круг независимого ревью
+> (`2026-09-25-core-error-hook-split-plan-review.md`), все тринадцать находок
+> приняты и внесены; открытые вопросы 1–4 решены, пятый — для владельца.
+> Правки в коде нет.
 > **Что это:** план правки `async_job`: `JobObserver.onError` становится
 > чистым оповещением, ответ за ошибку, которую не несёт ни один исход,
 > переезжает в новый хук наблюдателя `onUnanswered`, а движок `solo` теряет
@@ -10,7 +12,7 @@
 > в `solo`, открытый вопрос 4 которого этот план пересматривает),
 > `2026-09-22-error-hook-split-report.md`,
 > `2026-09-25-observing-rakes-report.md` (вычитка страницы, откуда пришёл
-> вопрос).
+> вопрос), `2026-09-25-core-error-hook-split-plan-review.md` (ревью плана).
 
 ## Зачем
 
@@ -63,9 +65,10 @@ abstract mixin class JobObserver {
   /// The errors no outcome carries: ... Each has been through [onError]
   /// already. The default body hands the error to the zone the job was
   /// created in — where it goes when the job has no observer — all but a
-  /// [Cancelled], which goes nowhere. Override it to answer here instead;
+  /// [Cancelled] and a `ParallelWaitError` carrying nothing but
+  /// cancellations, which go nowhere. Override it to answer here instead;
   /// call `super.onUnanswered(job, error, stackTrace)` to keep the zone as
-  /// well.
+  /// well, and hand it anything the override cannot tell apart.
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
     ...
   }
@@ -84,8 +87,8 @@ abstract mixin class JobObserver {
 
 ## Маршруты до и после
 
-Меняется одна строка из пяти в таблице раздела «Where errors go» и ещё одна,
-которой там нет.
+Меняются две строки из пяти в таблице раздела «Where errors go», и добавляется
+третья, которой там нет.
 
 | Ошибка | Сейчас, с наблюдателем | После, с наблюдателем | Без наблюдателя, до и после |
 | --- | --- | --- | --- |
@@ -107,6 +110,10 @@ abstract mixin class JobObserver {
 и после правки. Ответ за него — `handleUnanswered`, и сегодня при наблюдателе
 он молчит: это та же ловушка, только глубже.
 
+Вторая строка для детей, чей исход смотрит `ctx.run` или группа `runAll`,
+на деле значит «никогда»: исход наблюдали, а несёт он `Cancelled`, не провал.
+Так было и до правки, правка этого не меняет — открытый вопрос 5.
+
 ## Что станет с ядром
 
 - `packages/async_job/lib/src/observer.dart` становится частью `job_base.dart`
@@ -118,23 +125,27 @@ abstract mixin class JobObserver {
   экспортов и меняется вместе с ним.
 - Задача, чей наблюдатель зовёт `onUnanswered` по умолчанию, — всегда
   `JobBase`: ядро передаёт хуку `this`. Если хук позвали руками с чужой
-  реализацией `Job`, тело по умолчанию отдаёт ошибку текущей зоне, кроме
-  `Cancelled`.
+  реализацией `Job`, тело по умолчанию отдаёт ошибку текущей зоне. Фильтр
+  `_toZone` — `Cancelled` и чистый конверт отмен — выносится в один предикат,
+  и обе ветки зовут его.
 - `JobObserver` становится `abstract mixin class`. Класс, который уже наследует
   другой, подмешивает его `with JobObserver` и получает тела по умолчанию,
   в том числе маршрут `onUnanswered`. `implements JobObserver` после правки
-  не компилируется, пока класс не напишет `onUnanswered` сам, а написать
-  маршрут в зону создания он не может: зона закрыта. Поэтому страница советует
-  `with`, а не `implements`.
-- `JobBase.notifyError`: оповещение, как сейчас, затем ответ — с наблюдателем
-  его `onUnanswered` через `_notify`, без наблюдателя `_toZone`. Трасса
-  `JobBase.debug` остаётся прежней.
+  не компилируется, пока класс не напишет `onUnanswered` сам, а маршрут в зону
+  создания он получит только делегированием в наблюдателя, который его
+  наследует. Поэтому страница советует `with`, а не `implements`.
+- Ответ — один путь, `_handleUnanswered`: с наблюдателем его `onUnanswered`
+  через `_notify`, без наблюдателя `_toZone`. `notifyError` — это
+  `notifyObserver`, затем `_handleUnanswered`, двумя отдельными вызовами
+  `_notify`: бросивший `onError` не отменяет ответа. Трасса `JobBase.debug`
+  меняется: у каждого ответа строка «error nobody answered for», а при
+  наблюдателе ещё и строки `_toZone`.
 - `JobBase.handleUnanswered` становится приватным: единственное место вызова —
   `_conclude` у `runAll`, а переопределял его только движок `solo`, которому
   после правки это не нужно. Его dartdoc сегодня велит движку переопределять
   его, иначе «the kernel takes the observer for the answer and the error stops
   there»; после правки ответ движка — это `onUnanswered` его собственного
-  наблюдателя. Вариант оставить его защищённым — открытый вопрос 1.
+  наблюдателя. Член не публиковался (открытый вопрос 1).
 - `notifyObserver`, `notifyError` и `reportToZone` остаются в протоколе движка.
   `reportToZone` нужен `solo`: `Solo.onUnanswered` по умолчанию, без
   `Solo.errorHandler`, отдаёт ошибку туда, а `Solo` — не наблюдатель ядра.
@@ -153,38 +164,53 @@ abstract mixin class JobObserver {
 - Поведение `solo` не меняется: порядок тот же — `Solo.observer.onError`,
   `Solo.onError`, затем `Solo.onUnanswered`.
 
-**Зонд 2026-09-25, пробная правка в копии.** Ядро: `observer.dart` частью
-`job_base.dart`, `onUnanswered` с маршрутом в `_toZone`, `notifyError`
+**Зонд 2026-09-25, пробная правка в копии, до ревью.** Ядро: `observer.dart`
+частью `job_base.dart`, `onUnanswered` с маршрутом в `_toZone`, `notifyError`
 и `handleUnanswered` зовут его при наблюдателе. `solo`: оба переопределения
 сняты, `_SoloJobObserver.onUnanswered` добавлен. Итог: `solo` — 791 тест из 791
 зелёные, без правки тестов. `async_job` — 43 теста красные: 40 ждут, что ошибка
 с наблюдателем в зону не дойдёт, три — список экспортов, трасса `debug_test`,
 `implements JobObserver` у трёх тестовых наблюдателей (`JobJournal`,
 `_RecordingObserver`, `_ThrowingObserver`, до правки они не собирались и роняли
-13 файлов при загрузке).
+13 файлов при загрузке). Ревьюер собрал правку ровно по плану, с приватным
+`handleUnanswered`: 44 красных из 566 и предупреждение анализатора
+в `extending_test.dart:29`; `solo` 791 и его пример 47, `flutter_solo` 85 и его
+пример 4 — зелёные.
 
 ## Миграция тестов ядра
 
 Каждый красный тест — по смыслу, как в `solo` 2026-09-22.
 
+- **Общие наблюдатели из `test/support` — `ErrorObserver` и `JobJournal` —
+  не отвечают.** На них стоят и тесты маршрута: `zone_test.dart:107` («the same
+  errors go to the observer when there is one») — на `JobJournal`,
+  `parallel_wait_test.dart:501`, единственный сторож фильтра конверта, —
+  на `ErrorObserver`. Отвечающий вариант — явный, с именем
+  (`ErrorObserver.answering`, `JobJournal(answers: true)` или отдельный класс),
+  и тест, который его берёт, говорит почему.
 - **Тесты, чей предмет — маршрут**, получают новый маршрут: `onError` и зона.
   Их имена говорят «goes to the observer»: `zone_test.dart` («the same errors
   go to the observer when there is one»), `cleanup_test.dart`,
   `waiting_test.dart`, `late_value_test.dart` («an error of the disposer goes
   to the observer»), `when_cancelled_test.dart`, `unattended_test.dart` («a
   failure of unattended work reaches the observer»), два теста
-  `cancellation_rakes_test.dart`, четыре `observing_rakes_test.dart`. Имя
-  меняется вместе с утверждением.
+  `cancellation_rakes_test.dart`, четыре `observing_rakes_test.dart`,
+  `debug_test.dart` («the same error is traced when an observer takes it», его
+  reason «and it stopped there» станет ложным). Имя меняется вместе
+  с утверждением.
 - **Тесты, чей предмет другой** — глубина каскада, порядок уборки, группа
   `runAll`, граница `unattended`, — собирают ошибки наблюдателем и не хотят их
-  в зоне. Их наблюдатель отвечает сам: `onUnanswered` переопределён. Для
-  `ErrorObserver` и `JobJournal` из `test/support` это одна строка
-  с комментарием, почему.
+  в зоне. Они берут отвечающий вариант.
+- **`extending_test.dart`** — сторож протокола движка. Его шапка (`:3-7`)
+  называет `handleUnanswered` среди пяти членов, которые держит один `solo`;
+  станет четыре. `AnsweringJob` перестаёт переопределять член и ставит
+  на задачу свой наблюдатель с `onUnanswered` — так движок отвечает теперь, так
+  отвечает и `solo`. Тест `:110` проверяет это, тест `:147` («handleUnanswered
+  not overridden goes to the zone») переименовывается.
 - Три тестовых наблюдателя с `implements JobObserver` переходят на `extends`
-  или `with`.
-
-Список уточняется по прогону: пробная правка — не та, что будет, и трасса
-`debug_test` может остаться зелёной.
+  или `with`. `_ThrowingObserver` обещает «Throws from every hook the engine
+  calls» и бросает и из `onUnanswered`.
+- `engine_import_test.dart` сверяет список экспортов `lib/async_job.dart`.
 
 ## Документация
 
@@ -207,26 +233,44 @@ abstract mixin class JobObserver {
   - Легенда вступления, если в выводе появится строка `onUnanswered`.
 - `packages/async_job/doc/outcomes.md` (абзац об ошибке слушателя
   `whenCancelled`), `doc/cleanup.md` (ошибка колбэка уборки),
-  `doc/extending.md` (абзац о `handleUnanswered` и абзац о `reportToZone`), их
-  переводы.
+  `doc/cancellation.md` (`:99-103` о том, что бросит миграция после `wait`,
+  и `:166-180` о колбэке `onCancel` и `unattended`), `doc/extending.md` (абзац
+  о `handleUnanswered` уходит, ответ движка — его наблюдатель; абзац
+  о `reportToZone`), их переводы в `docs/ru/async_job/`.
+- Страница `observing.md` прямо говорит, что `JobObserver` — место того, кто
+  запускает задачу, и что продолжение `then` наблюдателя источника
+  не наследует. `solo` говорит «An observer only watches» о `SoloObserver`
+  и реэкспортирует `JobObserver`, который отвечает: иначе два пакета,
+  прочитанные подряд, кажутся противоречащими друг другу.
 - `packages/async_job/README.md` и `README.ru.md`: абзац об открытии, упавшем
   после отмены, остаётся верным; проверить абзац о наблюдателе.
 - dartdoc: `JobObserver` и все его хуки, `JobBase.notifyError`,
-  `notifyObserver`, `reportToZone`, `JobContextBase.notifyError`, `Failed`
-  (`outcome.dart`), `Job.whenCancelled`, `JobContext.onCancel`,
-  `JobContext.unattended`, `JobContext.wait` — всё, что говорит «goes to
-  `onError`», «or to the zone when there is none» или «stops there».
+  `notifyObserver`, `reportToZone`, `JobBase.finished`,
+  `JobContextBase.notifyError`, `Failed` (`outcome.dart`), `Job.whenCancelled`,
+  `JobContext.onCancel`, `JobContext.unattended`, `JobContext.wait`,
+  `JobContext.join` (`job_context.dart:133-136`), комментарии `_runCleanup`
+  («ends there»), `_dispose` и `_race` — всё, что говорит «goes to `onError`»,
+  «or to the zone when there is none», «stops there» или «ends there». Dartdoc
+  `onUnanswered` называет и `Cancelled`, и конверт из одних отмен.
 - `packages/async_job/CHANGELOG.md`: запись **Breaking** в `Unreleased`. Правка
   тихая для `extends JobObserver` — код скомпилируется, и ошибки, которые
   наблюдатель глушил, пойдут в зону, — поэтому в записи сказано, что прежнее
   поведение возвращает одна строка: пустой `onUnanswered`. Громкая для
-  `implements JobObserver`: не скомпилируется, и запись говорит про `with`. Для
-  протокола движка — `handleUnanswered` ушёл, ответ движка — его наблюдатель.
-- `packages/solo/CHANGELOG.md`: запись «Breaking, inherited from `async_job`» —
-  `solo` реэкспортирует ядро целиком, `JobObserver` вместе с ним. Поведение
-  контроллеров не меняется.
-- `docs/architecture.md`: абзац о маршрутах ядра (около строки 184) и строка
+  `implements JobObserver`: не скомпилируется, и запись говорит про `with`.
+  Запись о защищённом `handleUnanswered` (`:205-212`) удаляется: член
+  не публиковался — тегов `async_job` два, `v0.1.0` и `v0.2.0`, а запись стоит
+  в `Unreleased`, — и записи об удалении ему не нужно.
+- `packages/solo/CHANGELOG.md`: запись «Breaking, inherited from `async_job`»
+  (`:21`) дополняется `JobObserver.onUnanswered`, а `handleUnanswered` из неё
+  уходит (`:30-33`). Второй записи не заводится. Поведение контроллеров
+  не меняется.
+- `packages/flutter_solo/CHANGELOG.md`: запись «Breaking, inherited from `solo`
+  and `async_job`» (`:11`) дополняется: пакет реэкспортирует и ядро.
+- `docs/architecture.md`: абзац о маршрутах ядра (около строки 184), строка
+  «`observer.dart` — отдельная библиотека» (`:309`, станет `part`) и строка
   о `notifyError` (около строки 377).
+- Шапка `2026-09-22-error-hook-split-plan.md`: его открытый вопрос 4
+  пересмотрен этим планом.
 - `2026-09-25-observing-rakes-report.md`: четвёртый пункт «По чтению
   владельца».
 
@@ -235,30 +279,42 @@ abstract mixin class JobObserver {
 Новые сторожа в `packages/async_job/test/observer_test.dart` или своём файле:
 
 - наблюдатель без переопределений маршрут не уносит: ошибка уборки,
-  `unattended`, брошенного `wait`, колбэка отмены доходит до зоны;
-- переопределённый `onUnanswered` без `super` берёт ответ: зона пуста;
+  `unattended`, брошенного `wait`, колбэка отмены доходит до зоны создания,
+  а не до текущей: `Job.deferred` с наблюдателем создаётся под одним
+  `runZonedGuarded`, `start()` зовётся под другим, и ошибку ждут в первом;
+- переопределённый `onUnanswered` без `super` берёт ответ: он записал ошибку,
+  а зона пуста;
 - с `super` — и свой ответ, и зона;
 - `onUnanswered` не зовётся для провала тела — ни для `Failed`, ни для провала
-  после принятой отмены, ни для покрытого отменой;
+  после принятой отмены, ни для покрытого отменой, — а ошибка уборки в той же
+  задаче до него доходит;
 - на каждое такое событие `onError` один раз и `onUnanswered` один раз,
   `onError` первым;
 - провал ветки `runAll`, который группа не бросила, приходит в `onUnanswered`,
   а в `onError` второй раз не приходит;
 - `Cancelled` вне тела: `onUnanswered` его получает, тело по умолчанию в зону
-  его не несёт;
+  его не несёт; конверт из одних отмен — так же (`parallel_wait_test.dart:501`
+  остаётся на неотвечающем наблюдателе);
 - ребёнок без своего наблюдателя отвечает наблюдателем родителя;
 - `onUnanswered`, который бросил: его ошибка в текущей зоне, задача кончается
   как кончилась бы, остальные хуки вызваны;
+- `onError`, который бросил: `onUnanswered` всё равно спрошен, ошибка уборки
+  в зоне;
 - `with JobObserver` на классе, который наследует другой, получает маршрут
-  по умолчанию.
+  по умолчанию;
+- тело по умолчанию, позванное руками с чужой реализацией `Job`, держит тот же
+  фильтр.
 
 В `solo` сторожа есть с 2026-09-22 и зелены на пробной правке; новый — что
 `Solo.onUnanswered` слышит одну ошибку один раз и после снятия переопределений.
 
-Мутации: снять маршрут в теле `onUnanswered` по умолчанию; не звать
-`onUnanswered` из `notifyError`; не звать его для ветки `runAll`; позвать его
-для провала после принятой отмены; позвать `onError` второй раз для ветки
-`runAll`; вернуть в `_SoloJobObserver` пустой `onUnanswered`.
+Мутации: снять маршрут в теле `onUnanswered` по умолчанию; тело по умолчанию
+уходит в текущую зону, а не в зону создания; тело по умолчанию без фильтра
+конверта; ветка чужой задачи без фильтра; не звать `onUnanswered`
+из `notifyError`; не звать его для ветки `runAll`; не звать его для
+`Cancelled`; позвать его для провала после принятой отмены; позвать `onError`
+второй раз для ветки `runAll`; оба хука в одном `_notify`; вернуть
+в `_SoloJobObserver` пустой `onUnanswered`.
 
 ## Проверки
 
@@ -280,24 +336,35 @@ abstract mixin class JobObserver {
 5. Документы, переводы, `CHANGELOG` обоих пакетов, `docs/architecture.md`.
 6. Батарея, отчёт, ревью сделанного, коммит.
 
-Дерево зелёное на каждом коммите: ядро и `solo` правятся одним коммитом, иначе
-`solo` против нового ядра звал бы `onUnanswered` дважды — своим
-переопределением `notifyError` и через наблюдателя.
+Дерево зелёное на каждом коммите: ядро и `solo` правятся одним коммитом. Новое
+ядро со старым `solo` не собирается: `_SoloJobObserver` не реализует
+`onUnanswered`, а `_SoloJob` переопределяет член, которого больше нет.
 
 ## Открытые вопросы
 
-1. `handleUnanswered`: приватным или оставить защищённым? Приватный убирает
-   из протокола второй путь ответа, и абзац `extending.md` о нём исчезает
-   целиком. Защищённый оставляет движку способ ответить мимо наблюдателя,
-   которым сегодня никто не пользуется. Предложение — приватный.
-2. `abstract mixin class`: цена — ещё одно изменение API; без него класс,
-   который уже наследует другой, остаётся без маршрута по умолчанию.
-   Предложение — делать.
-3. `onUnanswered` получает `Cancelled`, брошенный вне тела, как
-   `Solo.onUnanswered` его получает сегодня. Альтернатива — не звать хук для
-   `Cancelled` вовсе. Предложение — звать: переопределение, которое отвечает
-   само, должно видеть всё, за что отвечает, а решение «отмена в зону не идёт»
-   принадлежит маршруту по умолчанию.
+Вопросы 1–4 решены ревью (`2026-09-25-core-error-hook-split-plan-review.md`):
+
+1. `handleUnanswered` — приватный. Защищённый звался бы только из `_conclude`,
+   а `notifyError` его обходил бы: полудверь.
+2. `abstract mixin class` — делать. `mixin` на классе без конструкторов и без
+   суперкласса ничего не ломает, при `sdk: ^3.6.0` собирается.
+3. `onUnanswered` получает `Cancelled`, брошенный вне тела, и конверт из одних
+   отмен, как `Solo.onUnanswered` получает их сегодня. Переопределение, которое
+   отвечает само, видит всё, за что отвечает; решение «отмена в зону не идёт»
+   принадлежит маршруту по умолчанию, и dartdoc говорит, что `super`
+   отбрасывает оба.
 4. Наследование: ребёнок без своего наблюдателя получает наблюдателя родителя,
-   а с ним и ответ. Отдельного правила для ответа нет — это довод за хук
-   на наблюдателе, а не параметр `Job`.
+   а с ним и ответ. Продолжение `then` наблюдателя источника не наследует,
+   и его ответ по умолчанию уходит в его собственную зону создания.
+
+Для владельца:
+
+5. Провал ребёнка, покрытый отменой, не слышит ни зона, ни `onUnanswered`, если
+   исход ребёнка смотрит `ctx.run` или группа `runAll`: `_reportCovered` отдаёт
+   ошибку только при ненаблюдённом исходе (`job_base.dart:1347-1354`), а группа
+   читает `branch.job.done`, `ctx.run` ждёт значение, и оба исход наблюдают.
+   Исход — `Cancelled`, провала в нём нет. Слышит его только `onError`. Так
+   было и до правки, и в этой работе это не чинится. Вариант починки: раз
+   группа и `run` взяли исход на себя, покрытый провал они отдают
+   в `_handleUnanswered`, как `_conclude` отдаёт невыбранный `Failed`; для
+   этого задача хранит `failedFirst`.
