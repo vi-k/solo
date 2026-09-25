@@ -68,8 +68,6 @@ through `ctx.wait` shows 0 ms. The count starts at acceptance, not at
 `cancel()`: a cancellation held back by `ctx.uncancellable` is accepted when
 the section ends, so a 100 ms section cancelled 10 ms in shows 0 ms, while the
 caller of `cancel` waited 90 ms.
-[Why cancellation was slow](https://github.com/vi-k/solo/blob/main/packages/solo/doc/errors.md#why-cancellation-was-slow)
-on the errors page of `solo` shows such an observer in full.
 
 ## A message for the log
 
