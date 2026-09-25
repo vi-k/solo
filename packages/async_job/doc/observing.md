@@ -41,17 +41,17 @@ final job = Job<int>(
 Job(load): Done(3)
 ```
 
-It has four hooks: `onStart`, `onFinish`, `onError` and `onLog`. `Job` calls
-the first three itself; the body sends messages to `onLog` through
+A `JobObserver` has four hooks: `onStart`, `onFinish`, `onError` and `onLog`.
+`Job` calls the first three itself; the body sends messages to `onLog` through
 `ctx.log(message)`. `onFinish` runs for every job, including one cancelled
 before it started; `onStart` runs only for a job whose body runs.
 
 All four do nothing by default, so you override only those you need. You can
 also use `implements JobObserver` if your class already extends another class.
 Pass the observer when creating the job; the children it runs inherit it unless
-they have their own. If a hook throws, its error goes to the current zone and
-nothing else changes: the job ends as it would have, and the other hooks are
-still called.
+they have their own. If one of the observer's hooks throws, its error goes to
+the current zone and nothing else changes: the job ends as it would have, and
+the observer's other hooks are still called.
 
 A job's string representation is `Job($key)`, or `Job($key: $description)` when
 `describe` returns something, or `Job($description)` when there is no key, or
