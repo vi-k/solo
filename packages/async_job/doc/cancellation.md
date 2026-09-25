@@ -99,8 +99,8 @@ step 3 on a closed database
 `wait` ends the waiting, not the migration. The cancellation comes out of
 `wait` at once, the job ends, and `discard` closes the database with two steps
 of the migration still to write. Whatever the migration throws afterwards goes
-to `onError` and on to the zone. `wait` is for an operation the job may walk
-away from, such as a read whose result nobody needs any more.
+to `onError` and, by default, on to the zone. `wait` is for an operation the
+job may walk away from, such as a read whose result nobody needs any more.
 
 A result arriving that late is dropped, or goes to the `dispose` or `discard`
 passed to `wait`: while the job is still finishing, that callback joins its
@@ -175,7 +175,7 @@ ctx.onCancel(() => ctx.unattended(device.stop));
 ```
 
 `ctx.unattended` keeps the errors of the stop with the job: they reach the
-observer, and after it the zone the job was created in;
+observer, and after it, by default, the zone the job was created in;
 [Work the job does not wait for](observing.md#work-the-job-does-not-wait-for)
 on the observing page takes it apart.
 

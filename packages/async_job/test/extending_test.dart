@@ -22,6 +22,9 @@ import 'support/delay.dart';
 /// puts an observer of its own on every job, the way `solo` does, and
 /// answers there.
 final class AnsweringJob<T> extends JobBase<T> {
+  final Future<T> Function(JobContext ctx) _body;
+  final EngineAnswer _answer;
+
   factory AnsweringJob(
     Future<T> Function(JobContext ctx) body, {
     Object? key,
@@ -44,9 +47,6 @@ final class AnsweringJob<T> extends JobBase<T> {
     super.cancellable,
     super.observer,
   });
-
-  final Future<T> Function(JobContext ctx) _body;
-  final EngineAnswer _answer;
 
   /// What reached the engine's answer instead of the zone.
   List<Object> get answered => _answer.answered;

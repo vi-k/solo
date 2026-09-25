@@ -127,14 +127,13 @@ abstract interface class JobContext {
   /// ```
   ///
   /// An error from [action] is thrown as it is, cancelled or not, and the
-  /// body can catch it like any other — **so await this call.** A body
-  /// that walked on can end while [action] is still in flight, and the
-  /// error then reaches a future nobody awaits: Dart hands that to the
-  /// zone, where [wait] would have handed it to `onError` and
-  /// `onUnanswered`. The value half of the same case is taken care of — it
-  /// goes quietly to [dispose] or [discard]. An error from the disposer
-  /// goes to `onError` and `onUnanswered`, and the
-  /// [Cancelled] is thrown all the same. Throws
+  /// body can catch it like any other — **so await this call.** A body that
+  /// walked on can end while [action] is still in flight, and the error
+  /// then reaches a future nobody awaits: Dart hands that to the zone,
+  /// where [wait] would have handed it to `onError` and `onUnanswered`. The
+  /// value half of the same case is taken care of — it goes quietly to
+  /// [dispose] or [discard]. An error from the disposer goes to `onError`
+  /// and `onUnanswered`, and the [Cancelled] is thrown all the same. Throws
   /// [Cancelled] up front if the job is already cancelled or its rules no
   /// longer hold, the same as [wait] and [uncancellable].
   ///

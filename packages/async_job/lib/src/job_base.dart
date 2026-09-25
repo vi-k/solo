@@ -1007,9 +1007,10 @@ abstract class JobBase<T> implements Job<T> {
   /// zone directly. Two calls, each guarded on its own: an `onError` that
   /// throws does not cost the error its answer.
   ///
-  /// A [Cancelled] is the one thing that never reaches the zone from here:
-  /// a cancellation is a decision somebody made, not a failure, and
-  /// without an observer answering for it, it is heard by nobody.
+  /// A cancellation — a [Cancelled], or a `ParallelWaitError` carrying
+  /// nothing but cancellations — never reaches the zone from here: it is a
+  /// decision somebody made, not a failure. An observer hears it through
+  /// `onError`; without one, nobody does.
   @protected
   void notifyError(Object error, StackTrace stackTrace) {
     notifyObserver(error, stackTrace);

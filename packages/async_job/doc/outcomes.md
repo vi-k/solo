@@ -275,11 +275,11 @@ snapshot of the list: removing a listener during notification does not remove
 it from the current pass. A listener added during notification runs
 immediately. Unregistering more than once is safe.
 
-A synchronous listener error goes to `onError` and on to the job's creation
-zone, and straight to that zone if there is no observer. A thrown `Cancelled`
-is never forwarded to the zone. Listener errors do not change cancellation or
-prevent other listeners from running. An `async` callback is accepted, but the
-job does not wait for its future, and an error after its first `await` reaches
-neither `onError` nor the job's creation zone: it is an uncaught error of the
-zone the listener was called in, which for a cancellation from outside is the
-zone of the code that called `cancel`.
+A synchronous listener error goes to `onError` and, by default, on to the job's
+creation zone, and straight to that zone if there is no observer. A thrown
+`Cancelled` is never forwarded to the zone. Listener errors do not change
+cancellation or prevent other listeners from running. An `async` callback is
+accepted, but the job does not wait for its future, and an error after its
+first `await` reaches neither `onError` nor the job's creation zone: it is an
+uncaught error of the zone the listener was called in, which for a cancellation
+from outside is the zone of the code that called `cancel`.

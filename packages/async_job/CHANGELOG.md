@@ -237,17 +237,18 @@
   `cancel()` turned around at the mark. The callbacks now run as the cascade
   unwinds, and the error still reaches whoever asked. A body giving itself up
   meets the same descent with nobody to hand a failure to, so there the error
-  goes to `onError` and the job still waits for its children and unwinds its
-  cleanup stack instead of stopping where it stood. The siblings of the child
-  that overflowed are no longer skipped either -- one child is not the rest of
-  them, and the one that runs the stack out may be a chain of thousands next to
-  a leaf -- and an overflow landing in a cancellation callback at the very
-  bottom is not announced as a failure of that callback, which would name it
-  for something it did not do -- there and nowhere else, though: a callback
-  that runs out of stack anywhere but under that unwinding did it by itself,
-  and its error goes to `onError` and changes nothing else, as it always has.
-  What lies below the break is still left running: the depth of a tree is
-  bounded by the stack either way, and `doc/children.md` says by how much.
+  goes to `onError` and `onUnanswered` and the job still waits for its children
+  and unwinds its cleanup stack instead of stopping where it stood. The
+  siblings of the child that overflowed are no longer skipped either -- one
+  child is not the rest of them, and the one that runs the stack out may be a
+  chain of thousands next to a leaf -- and an overflow landing in a
+  cancellation callback at the very bottom is not announced as a failure of
+  that callback, which would name it for something it did not do -- there and
+  nowhere else, though: a callback that runs out of stack anywhere but under
+  that unwinding did it by itself, and its error goes to `onError` and
+  `onUnanswered` and changes nothing else, as it always has. What lies below
+  the break is still left running: the depth of a tree is bounded by the stack
+  either way, and `doc/children.md` says by how much.
 
 - `doc/outcomes.md` no longer promises that a `whenCancelled` registered after
   a cancellation always fires on the spot. It does once the cancellation has

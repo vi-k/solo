@@ -8,6 +8,7 @@ import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart';
 
 import 'support/delay.dart';
+import 'support/probe_job.dart';
 
 // Two hooks see an error no outcome carries, and they do different work:
 // `onError` is told about it, `onUnanswered` answers for it. An observer
@@ -21,10 +22,10 @@ final class Plain extends JobObserver {}
 /// Both hooks in one list, in order; with [answers] it answers and stops
 /// the error, without it `super` sends the error on.
 final class Counting extends JobObserver {
-  Counting({this.answers = false});
-
   final bool answers;
   final seen = <String>[];
+
+  Counting({this.answers = false});
 
   @override
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
@@ -46,14 +47,14 @@ class Base {}
 final class Mixed extends Base with JobObserver {}
 
 final class ThrowingAnswer extends JobObserver {
+  final finished = <String>[];
+
   @override
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
       throw StateError('onUnanswered');
 
   @override
   void onFinish(Job<Object?> job) => finished.add('$job');
-
-  final finished = <String>[];
 }
 
 final class ThrowingNotice extends JobObserver {
@@ -77,6 +78,7 @@ final class ForeignJob implements Job<Object?> {
 }
 
 const outside = [
+  'Bad state: discard',
   'Bad state: cleanup',
   'Bad state: onCancel',
   'Bad state: whenCancelled',
@@ -84,9 +86,10 @@ const outside = [
   'Bad state: abandoned',
 ];
 
-/// Every error a job can run into outside its body, one of each: cleanup,
-/// a callback of `onCancel` and of `whenCancelled`, unattended work, and
-/// the late failure of an action `wait` walked away from.
+/// Every error a job can run into outside its body, one of each: a
+/// `discard` releasing a value the cancellation kept from the body,
+/// cleanup, a callback of `onCancel` and of `whenCancelled`, unattended
+/// work, and the late failure of an action `wait` walked away from.
 Job<void> failingOutside(JobObserver? observer) {
   final job = Job<void>(key: 'j', observer: observer, (ctx) async {
     ctx
@@ -102,7 +105,12 @@ Job<void> failingOutside(JobObserver? observer) {
       await delay(50);
       throw StateError('abandoned');
     }).ignore();
-    await ctx.wait(() => delay(100));
+    // Cancelled 10 ms in, `join` waits the action out and hands the value
+    // to `discard`, which throws.
+    await ctx.join(
+      () => delay(20),
+      discard: (_) => throw StateError('discard'),
+    );
   })
     ..whenCancelled((_) => throw StateError('whenCancelled'));
   return job;
@@ -368,6 +376,35 @@ void main() {
       async.flushTimers();
     });
     expect(zone, ['Bad state: cleanup']);
+  });
+
+  test('an error of the finished hook of an engine is answered for', () {
+    final observer = Counting();
+    late final Job<int> job;
+    final zone = zoneOf((async) {
+      job = FailingHookJob<int>(observer: observer, (ctx) async => 1)..launch();
+      async.flushTimers();
+    });
+    expect(job.outcome, isA<Done<int>>());
+    expect(observer.seen, [
+      'onError: Bad state: hook failed',
+      'onUnanswered: Bad state: hook failed',
+    ]);
+    expect(zone, ['Bad state: hook failed']);
+  });
+
+  test('a source that fails to stop is answered for on the continuation', () {
+    final observer = Counting();
+    final zone = zoneOf((async) {
+      final source = UncancellableByBugJob<int>((ctx) async => 1);
+      source.then((ctx, value) => value, observer: observer).cancel().ignore();
+      async.flushTimers();
+    });
+    expect(observer.seen, [
+      'onError: Bad state: engine failed to cancel',
+      'onUnanswered: Bad state: engine failed to cancel',
+    ]);
+    expect(zone, ['Bad state: engine failed to cancel']);
   });
 
   test('called by hand with a job of another kind, the filter holds', () async {

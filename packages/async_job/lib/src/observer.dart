@@ -57,8 +57,8 @@ abstract mixin class JobObserver {
   /// [JobContext.onCancel] or [Job.whenCancelled], work handed over with
   /// [JobContext.unattended], a failure while formatting a child's
   /// cancellation description, and the failure of a branch of
-  /// [JobContext.runAll] that the group did not throw. A failure of the
-  /// body does not come here: it has an outcome, and one nobody observes
+  /// [JobContext.runAll] that the group did not throw. Any other failure of
+  /// a body does not come here: it has an outcome, and one nobody observes
   /// reaches the zone by itself. Every error that comes here has been
   /// through [onError] already.
   ///

@@ -51,11 +51,11 @@ All but `onUnanswered` do nothing by default, so you override only those you
 need; what `onUnanswered` does is the subject of
 [Where errors go](#where-errors-go) below. A class that already extends another
 class mixes the observer in with `with JobObserver` and keeps these defaults.
-Pass the observer when creating the job; the children it runs inherit it unless
-they have their own, and a continuation made with `then` takes only the
-observer passed to `then`. If one of the observer's hooks throws, its error
-goes to the current zone and nothing else changes: the job ends as it would
-have, and the observer's other hooks are still called.
+Whoever runs the job passes the observer when creating it; the children it runs
+inherit it unless they have their own, and a continuation made with `then`
+takes only the observer passed to `then`. If one of the observer's hooks
+throws, its error goes to the current zone and nothing else changes: the job
+ends as it would have, and the observer's other hooks are still called.
 
 A job's string representation is `Job($key)`, or `Job($key: $description)` when
 `describe` returns something, or `Job($description)` when there is no key, or

@@ -76,9 +76,9 @@ final class Reporter extends JobObserver {
 /// page overrides `onUnanswered`, and, with [passedOn], hands each one on
 /// to `super` as well.
 final class Answering extends JobObserver {
-  Answering({this.passedOn = false});
-
   final bool passedOn;
+
+  Answering({this.passedOn = false});
 
   @override
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>

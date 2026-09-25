@@ -852,21 +852,23 @@ abstract class Solo<S extends Object> {
   ///
   /// The errors an outcome cannot carry: an action abandoned by
   /// [JobContext.wait] failing later, a disposer, an `onCancel` callback,
-  /// work handed over with [JobContext.unattended]. A failure of a body
-  /// does not come here — it becomes a [Failed], where `run(onError: ...)`
-  /// computes a state from it and an outcome nobody observes reaches the
-  /// zone by itself — and neither does a rule that threw, for the same
-  /// reason. Every error that comes here has been through [onError]
-  /// already: one error is announced once.
+  /// work handed over with [JobContext.unattended], a `keepWhile` that
+  /// threw anywhere but at a checkpoint of the body, and the failure of a
+  /// branch of [JobContext.runAll] that the group did not throw. Any other
+  /// failure of a body does not come here — it becomes a [Failed], where
+  /// `run(onError: ...)` computes a state from it and an outcome nobody
+  /// observes reaches the zone by itself — and neither does a `canStart`
+  /// that threw, for the same reason. Every error that comes here has been
+  /// through [onError] already: one error is announced once.
   ///
   /// **What the default body does.** With no [errorHandler] set, the error
-  /// goes to the zone the job was created in — the same thing the core
-  /// does when a job has no observer at all. With a handler set it goes
-  /// there instead, and nowhere else. Setting an [observer] changes
-  /// neither: watching is not answering. A [Cancelled] is the one
-  /// exception and never goes to the zone: a cancellation is a decision
-  /// somebody made, not a failure, and the core keeps one out of the zone
-  /// whatever route leads there.
+  /// goes to the zone the job was created in — the same thing the core does
+  /// by default, with an observer or without one. With a handler set it
+  /// goes there instead, and nowhere else. Setting an [observer] changes
+  /// neither: watching is not answering. A [Cancelled] is the one exception
+  /// and never goes to the zone: a cancellation is a decision somebody
+  /// made, not a failure, and the core keeps one out of the zone whatever
+  /// route leads there.
   ///
   /// **Override it to answer here instead** — a controller that owns what
   /// its jobs failed at reports to its own system and stops there. An

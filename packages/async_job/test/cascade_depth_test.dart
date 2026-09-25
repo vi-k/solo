@@ -16,9 +16,10 @@ void main() {
   // levels, and a run that reached the bottom instead would fail on the
   // first expectation rather than pass quietly.
   const depth = 50000;
-  // Every observer below answers for what it collects: the subject is what
-  // a cascade out of stack reports, and how many times, not where the
-  // report goes after the observer.
+  // The observers that collect a report answer for it too: the subject is
+  // what a cascade out of stack reports, and how many times. Where the
+  // report goes after the observer is the business of the test right
+  // after the first one that reports.
 
   test('a cascade out of stack still tells what it marked to stop', () async {
     final chain = _Chain(depth);
@@ -91,6 +92,39 @@ void main() {
       isEmpty,
       reason: '${chain.marked} jobs were marked and ${silent.length} of '
           'them were never told to stop',
+    );
+  });
+
+  test('a cascade out of stack goes on to the zone like any error', () async {
+    final chain = _Chain(depth);
+    final errors = <Object>[];
+    final zone = <Object>[];
+    runZonedGuarded(
+      () => Job<void>(
+        (ctx) async {
+          ctx.run(chain.deferred()).ignore();
+          await chain.bottom.future;
+          throw Cancelled.by(
+            reason: const TestCancelReason('handler'),
+            started: true,
+            stackTrace: StackTrace.current,
+          );
+        },
+        observer: ErrorObserver(errors),
+      ),
+      (error, stackTrace) => zone.add(error),
+    );
+
+    for (var attempt = 0; zone.isEmpty && attempt < 100; attempt++) {
+      await delay(1);
+    }
+    // Outside the guarded zone: an `expect` that fails inside it lands in
+    // the handler and is counted as a zone error instead of failing.
+    expect(errors.single, isA<StackOverflowError>());
+    expect(
+      zone.single,
+      isA<StackOverflowError>(),
+      reason: 'an observer that only watches answers for nothing',
     );
   });
 
@@ -308,7 +342,7 @@ void main() {
       () async {
     final chain = _Chain(depth, framesPerCallback: 400);
     final errors = <Object>[];
-    final root = chain.start(observer: ErrorObserver.answering(errors));
+    final root = chain.start(observer: ErrorObserver(errors));
     await chain.bottom.future;
 
     try {
