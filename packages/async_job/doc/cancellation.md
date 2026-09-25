@@ -189,11 +189,12 @@ onError: DatabaseStopped
 outcome: Cancelled(manual)
 ```
 
-`join` waits for all of `markReady`, and `markReady` stops halfway anyway.
-`join` does not hold the cancellation back: the job accepts it as it arrives,
-`onCancel` cancels the token, and `markReady` reads it between its two writes
-and throws. The database is left with a version and no ready flag, and the
-`DatabaseStopped` reaches `onError`, as in the section above.
+`join` waits for `markReady` to the end, and `markReady` still stops halfway.
+The cancellation arrives while the version is being written. `join` does not
+hold it back, so the job accepts it at once, and `onCancel` cancels the token.
+`markReady` finishes the version, finds the token cancelled and throws
+`DatabaseStopped` without writing the flag. The database is left with a version
+and no ready flag, and the error goes to `onError`, as in the section above.
 
 ### Holding the cancellation back
 
