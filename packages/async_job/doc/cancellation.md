@@ -353,8 +353,9 @@ A `Cancelled` caught in the body is not always the job's own. A child started
 with `ctx.run` and cancelled directly, not through its parent, throws its
 `Cancelled` out of `run`. If that child was optional, `ctx.check()` passes, and
 the body goes on without it and ends `Done`. A clause that rethrows every
-`Cancelled` ends the parent too, with `Cancelled(handler)`; see
-[Outcomes](outcomes.md).
+`Cancelled` ends the parent too, with `Cancelled(handler)`; the page on
+outcomes takes that reason apart in
+[Why a job was cancelled](outcomes.md#why-a-job-was-cancelled).
 
 ## Work the job does not wait for
 
