@@ -169,10 +169,10 @@ final outcome = await job.done; // Cancelled(manual)
 | Страница | О чём |
 | --- | --- |
 | [Исходы](../../docs/ru/async_job/outcomes.md) | `Done`, `Failed`, `Cancelled` и кто отвечает за ошибку |
-| [Отмена](../../docs/ru/async_job/cancellation.md) | Контрольные точки, `onCancel`, `uncancellable`, `unattended` |
+| [Отмена](../../docs/ru/async_job/cancellation.md) | Контрольные точки, `onCancel`, `uncancellable` |
 | [Дети, стримы и цепочки](../../docs/ru/async_job/children.md) | `ctx.run`, `ctx.each`, `then` |
 | [Уборка](../../docs/ru/async_job/cleanup.md) | `dispose`, `discard`, `onDispose`, порядок |
-| [Наблюдение и тестирование](../../docs/ru/async_job/observing.md) | `JobObserver`, логи, фейковое время |
+| [Наблюдение и тестирование](../../docs/ru/async_job/observing.md) | `JobObserver`, логи, `unattended`, фейковое время |
 | [Своё поверх ядра](../../docs/ru/async_job/extending.md) | `JobBase`, отложенный старт, свой движок |
 
 ## solo

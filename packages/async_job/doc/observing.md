@@ -87,6 +87,52 @@ something slow with a bare `await` holds the cancellation for its whole length,
 where the same call through `ctx.wait` gives it up at once. `solo` shows the
 observer in full; see `doc/errors.md` in that package.
 
+## Work the job does not wait for
+
+A job sends an analytics event and does not wait for it. The job's observer is
+where the app hears about the job's errors, and the sending fails: analytics is
+offline. The lines under the code are what it prints when it runs: `outcome:`
+is what `job.done` completes with, `onError:` is what reaches the observer, and
+`zone:` is an error that reached the zone uncaught.
+
+### The first attempt
+
+Dart's `unawaited` marks a future left on purpose:
+
+```dart
+unawaited(analytics.send('loaded'));
+```
+
+```text
+outcome: Done(null)
+zone: Bad state: analytics offline
+```
+
+The observer hears nothing. A future nobody awaits hands its error to the zone
+as an uncaught one; `unawaited` only tells the analyzer that not waiting is on
+purpose.
+
+### Work handed to the job
+
+```dart
+ctx.unattended(() => analytics.send('loaded'));
+```
+
+```text
+outcome: Done(null)
+onError: Bad state: analytics offline
+```
+
+`ctx.unattended(action)` keeps the work's errors with the job, including errors
+after the job finishes: they go to its observer or, without one, the zone the
+job was created in. The job does not wait for the work and does not cancel it.
+
+Start the work inside the callback and take nothing out of it: the work runs in
+an error zone of its own, and the boundary holds both ways. A future made
+outside and awaited in there never comes back if it fails, and its error goes
+to the zone it was made in. A future made in there and awaited outside hangs
+whoever awaits it if it fails; awaited by the body, it hangs the job.
+
 ## Testing
 
 Testing start, cancellation and cleanup requires controlling microtasks and

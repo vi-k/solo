@@ -53,13 +53,12 @@ check of its own takes a context call of its own.
 The lines under the code are what it prints when it runs. The database says
 what it writes, and the job's observer prints what reaches it: `log:` for
 `ctx.log`, `onError:` for an error. `cancel` is the moment the user cancels,
-`outcome:` is what `job.done` completes with, and `zone:` is an error that
-reached the zone uncaught. Each section below opens with the version the names
-lead to — `wait` to wait for an operation, `join` to see a step through, a
-clause for `Cancelled` to let the cancellation pass, Dart's `unawaited` for
-work nobody waits for — and shows what that code does. Where the version that
-repairs it still falls short, it stands as a second attempt, and the version
-that works follows under its own heading.
+and `outcome:` is what `job.done` completes with. Each section below opens with
+the version the names lead to — `wait` to wait for an operation, `join` to see
+a step through, a clause for `Cancelled` to let the cancellation pass — and
+shows what that code does. Where the version that repairs it still falls short,
+it stands as a second attempt, and the version that works follows under its own
+heading.
 
 ## Stopping the operation
 
@@ -164,6 +163,21 @@ job still ends `Cancelled`, so the error is nobody's outcome: it reaches the
 observer and stops there, and without an observer nothing hears it. What a
 `catch` around this `join` sees is the subject of the section on catching,
 below.
+
+A stop that takes time is handed over differently. `onCancel` takes a
+`void Function()`, and Dart lets an `async` function through: the future it
+returns is awaited by nobody, and its error goes to the zone past the observer.
+Only what the callback throws synchronously reaches `onError`. For a device
+that takes a while to stop, hand the stop to the job:
+
+```dart
+ctx.onCancel(() => ctx.unattended(device.stop));
+```
+
+`ctx.unattended` keeps the errors of the stop with the job, and they reach the
+observer;
+[Work the job does not wait for](observing.md#work-the-job-does-not-wait-for)
+on the observing page takes it apart.
 
 ## A step that must finish
 
@@ -356,57 +370,3 @@ the body goes on without it and ends `Done`. A clause that rethrows every
 `Cancelled` ends the parent too, with `Cancelled(handler)`; the page on
 outcomes takes that reason apart in
 [Why a job was cancelled](outcomes.md#why-a-job-was-cancelled).
-
-## Work the job does not wait for
-
-When the migration is over, the job sends an analytics event and does not wait
-for it. The job's observer is where the app hears about the job's errors, and
-the sending fails: analytics is offline.
-
-### The first attempt
-
-Dart's `unawaited` marks a future left on purpose:
-
-```dart
-unawaited(analytics.send('migrated'));
-```
-
-```text
-outcome: Done(null)
-zone: Bad state: analytics offline
-```
-
-The observer hears nothing. A future nobody awaits hands its error to the zone
-as an uncaught one; `unawaited` only tells the analyzer that not waiting is on
-purpose.
-
-### Work handed to the job
-
-```dart
-ctx.unattended(() => analytics.send('migrated'));
-```
-
-```text
-outcome: Done(null)
-onError: Bad state: analytics offline
-```
-
-`ctx.unattended(action)` keeps the work's errors with the job, including errors
-after the job finishes: they go to its observer or, without one, the zone the
-job was created in. The job does not wait for the work and does not cancel it.
-
-An asynchronous stop passed to `onCancel` is the same kind of work. `onCancel`
-takes a `void Function()`, and Dart lets an `async` function through: the
-future it returns is awaited by nobody, and its error goes to the zone past the
-observer. Only what the callback throws synchronously reaches `onError`. For a
-device that takes a while to stop, hand the stop to the job:
-
-```dart
-ctx.onCancel(() => ctx.unattended(device.stop));
-```
-
-Start the work inside the callback and take nothing out of it: the work runs in
-an error zone of its own, and the boundary holds both ways. A future made
-outside and awaited in there never comes back if it fails, and its error goes
-to the zone it was made in. A future made in there and awaited outside hangs
-whoever awaits it if it fails; awaited by the body, it hangs the job.

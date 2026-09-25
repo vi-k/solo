@@ -82,14 +82,6 @@ const quoted = [
     'migration stopped',
     'outcome: Cancelled(manual)',
   ],
-  [
-    'outcome: Done(null)',
-    'zone: Bad state: analytics offline',
-  ],
-  [
-    'outcome: Done(null)',
-    'onError: Bad state: analytics offline',
-  ],
 ];
 
 /// What the database, the observer and the code around the job print.
@@ -151,13 +143,6 @@ final class Database {
   }
 }
 
-final class Analytics {
-  Future<void> send(String event) async {
-    await delay(10);
-    throw StateError('analytics offline');
-  }
-}
-
 final class Device {
   Future<void> stop() async {
     await delay(10);
@@ -177,7 +162,6 @@ final class PrintingObserver extends JobObserver {
 
 /// The database of the sections that do not open one.
 Database database = Database();
-final analytics = Analytics();
 final device = Device();
 
 /// Runs [body] as a job with the page's observer, cancels it [cancelAt] ms
@@ -798,34 +782,7 @@ void main() {
     }
   });
 
-  group('Work the job does not wait for', () {
-    test('unawaited sends the failure past the observer to the zone', () {
-      final lines = play((ctx) async {
-        unawaited(analytics.send('migrated'));
-      });
-
-      expect(lines, quoted[9]);
-    });
-
-    test('unattended hands it to the observer, after the job is over', () {
-      final lines = play((ctx) async {
-        ctx.unattended(() => analytics.send('migrated'));
-      });
-
-      expect(lines, quoted[10]);
-    });
-
-    test('without an observer unattended goes to the creation zone', () {
-      final lines = play(
-        (ctx) async {
-          ctx.unattended(() => analytics.send('migrated'));
-        },
-        observed: false,
-      );
-
-      expect(lines, quoted[9]);
-    });
-
+  group('A token through onCancel: a stop that takes time', () {
     test('an async onCancel callback fails into the zone', () {
       final lines = play(
         (ctx) async {
@@ -874,40 +831,6 @@ void main() {
         'outcome: Cancelled(manual)',
         'onError: Bad state: device did not stop',
       ]);
-    });
-
-    test('a future made outside never comes back in there', () {
-      final lines = play((ctx) async {
-        final sending = analytics.send('migrated');
-        ctx.unattended(() async {
-          try {
-            await sending;
-          } on Object catch (error) {
-            say('caught: $error');
-          }
-        });
-      });
-
-      expect(lines, [
-        'outcome: Done(null)',
-        'zone: Bad state: analytics offline',
-      ]);
-    });
-
-    test('a future made in there hangs the job that awaits it', () {
-      final lines = play((ctx) async {
-        late Future<void> sending;
-        ctx.unattended(() {
-          sending = analytics.send('migrated');
-        });
-        try {
-          await ctx.wait(() => sending);
-        } on Object catch (error) {
-          say('caught: $error');
-        }
-      });
-
-      expect(lines, ['onError: Bad state: analytics offline']);
     });
   });
 

@@ -258,7 +258,7 @@
   `whenCancelled` goes: to the zone of the code that cancelled, never to
   `onError`.
 
-- `doc/cancellation.md` opens each of its four sections with the version the
+- `doc/cancellation.md` opens each of its three sections with the version the
   names lead to and shows what it prints: `ctx.wait` around a migration, which
   lets the job close the database under it; `ctx.join` without a token, which
   waits for steps nobody wants; a `ctx.join` for each write of a step that must
@@ -266,16 +266,19 @@
   around a step that runs a child, which `ctx.run` refuses once the
   cancellation is accepted, so that only `uncancellable` keeps the step whole;
   `on Cancelled { rethrow; }`, which logs a migration stopped by its token as a
-  failure, because `join` throws the action's own error; and `unawaited`, whose
-  failure goes to the zone past the observer. The clause the page used to
-  recommend is replaced by `ctx.check()` in the `catch`, which also lets an
-  optional child's cancellation through. The page now says where the action's
-  error goes after a cancellation, and what happens to a future that crosses
-  the boundary of `ctx.unattended`. The guide table of the README no longer
-  lists cancel reasons under this page: they live in `doc/outcomes.md`. The
-  Quick start of the README and `example/example.dart` mark the database ready
-  the same way: the last step runs its child inside `uncancellable` rather than
-  passing the migration's token to a step that must not stop.
+  failure, because `join` throws the action's own error. The clause the page
+  used to recommend is replaced by `ctx.check()` in the `catch`, which also
+  lets an optional child's cancellation through. The page now says where the
+  action's error goes after a cancellation, and why an asynchronous stop goes
+  to `onCancel` through `ctx.unattended`. The guide table of the README no
+  longer lists cancel reasons under this page: they live in `doc/outcomes.md`.
+  The Quick start of the README and `example/example.dart` mark the database
+  ready the same way: the last step runs its child inside `uncancellable`
+  rather than passing the migration's token to a step that must not stop. The
+  section on work the job does not wait for moved to `doc/observing.md`, where
+  the errors of work outside the body are: it opens with `unawaited`, whose
+  failure goes to the zone past the observer, and says what happens to a future
+  that crosses the boundary of `ctx.unattended`.
 
 ## 0.2.0
 
