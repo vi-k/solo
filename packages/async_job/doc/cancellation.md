@@ -128,8 +128,8 @@ migration would have ended anyway.
 
 ### A token through `onCancel`
 
-The job's cancellation does not reach the operation behind it; stopping the
-operation takes its own mechanism, here the token:
+The migration knows nothing about the job's cancellation: it listens only to
+its token. `onCancel` cancels the token together with the job:
 
 ```dart
 final stop = CancelToken();
