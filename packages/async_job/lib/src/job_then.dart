@@ -75,7 +75,7 @@ final class _ThenJob<T, R> extends JobBase<R> {
         // An observer may cancel this continuation while hearing the error.
         final decided = outcome ?? _pendingCancel ?? result;
         finish(decided);
-        if (decided is Cancelled) _reportCovered(result);
+        if (decided is Cancelled) _reportCovered(result, announced: true);
       case Cancelled():
         _cancelFromSource(result);
     }

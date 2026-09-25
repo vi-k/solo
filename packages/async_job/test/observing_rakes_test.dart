@@ -622,6 +622,46 @@ void main() {
       );
     });
 
+    Job<void> childFailingBeforeCancel({JobObserver? observer}) => Job<void>(
+          observer: observer,
+          (ctx) async {
+            await ctx.run(
+              Job.deferred<void>((ctx) async {
+                ctx
+                    .run(
+                      Job.deferred<void>((ctx) => ctx.wait(() => delay(50))),
+                    )
+                    .ignore();
+                await delay(10);
+                throw StateError('disk full');
+              }),
+            );
+          },
+        );
+
+    test('the same in a child of run: onError, then the zone', () {
+      // The parent observed the child's outcome, and the outcome carries
+      // the cancellation: the failure is answered for, not dropped.
+      expect(
+        quotable(
+          play(
+            () => childFailingBeforeCancel(observer: Reporter()),
+            cancelAt: 20,
+          ),
+        ),
+        [
+          'onError: Bad state: disk full',
+          'cancel',
+          'zone: Bad state: disk full',
+          'outcome: Cancelled(manual)',
+        ],
+      );
+      expect(
+        quotable(play(childFailingBeforeCancel, cancelAt: 20)),
+        ['cancel', 'zone: Bad state: disk full', 'outcome: Cancelled(manual)'],
+      );
+    });
+
     Job<void> failingAfterCancel({JobObserver? observer}) => Job<void>(
           observer: observer,
           (ctx) async {

@@ -313,6 +313,77 @@ void main() {
     ]);
     expect(caught, isEmpty);
   });
+
+  group('a failure a cancellation covered in a child', () {
+    // The parent took the child's outcome through `ctx.run`, and the
+    // outcome carries the cancellation: the controller answers for the
+    // failure itself.
+    test('reaches onUnanswered of the controller', () {
+      final caught = <String>[];
+      final solo = _Quiet();
+      fakeAsync((async) => _coveredChild(solo, async, caught));
+      expect(solo.errors, ['Bad state: child failed first']);
+      expect(caught, isEmpty, reason: 'the override answered for it');
+    });
+
+    test('reaches the error handler behind it', () {
+      final caught = <String>[];
+      final answered = <String>[];
+      Solo.errorHandler =
+          (solo, job, error, stackTrace) => answered.add('${job.key}: $error');
+      try {
+        fakeAsync((async) => _coveredChild(TestSolo(), async, caught));
+      } finally {
+        Solo.errorHandler = null;
+      }
+      expect(answered, ['child: Bad state: child failed first']);
+      expect(caught, isEmpty, reason: 'the handler answered for it');
+    });
+
+    test('reaches the zone with neither', () {
+      final caught = <String>[];
+      fakeAsync((async) => _coveredChild(TestSolo(), async, caught));
+      expect(caught, ['Bad state: child failed first']);
+    });
+  });
+}
+
+/// A parent that runs a child through `ctx.run` and is cancelled 10 ms
+/// in, while the child waits for a child of its own after its body failed
+/// 5 ms in.
+void _coveredChild(
+  OpenSolo<TestState> solo,
+  FakeAsync async,
+  List<String> caught,
+) {
+  late final Job<void> parent;
+  _inZone(caught, () {
+    parent = solo.run<TestState, void>(key: 'parent', (ctx) async {
+      await ctx.run(
+        solo.job<TestState, int>(key: 'child', (ctx) async {
+          ctx
+              .run(
+                solo.job<TestState, void>(
+                  key: 'grandchild',
+                  (ctx) => ctx.wait(
+                    () => Future<void>.delayed(
+                      const Duration(milliseconds: 50),
+                    ),
+                  ),
+                ),
+              )
+              .ignore();
+          await Future<void>.delayed(const Duration(milliseconds: 5));
+          throw StateError('child failed first');
+        }),
+      );
+    });
+  });
+  async.elapse(const Duration(milliseconds: 10));
+  parent.cancel().ignore();
+  async.flushTimers();
+  solo.close();
+  async.flushTimers();
 }
 
 final class _Silent extends SoloObserver {}

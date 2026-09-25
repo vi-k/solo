@@ -264,6 +264,13 @@ abstract interface class Job<T> {
   /// afterwards changes nothing. Has no effect on [Cancelled], which is
   /// never reported to the zone.
   ///
+  /// A child of [JobContext.run] and a branch of [JobContext.runAll] are
+  /// observed by their parent, so this changes nothing for them. A failure
+  /// of such a child that a cancellation covered is not in what the parent
+  /// passes on, and it is answered through [JobObserver.onUnanswered]
+  /// whether or not this was called. A child whose failures nobody should
+  /// answer for is given an observer of its own that answers for nothing.
+  ///
   /// A job is not background work: it has an outcome and an observer of
   /// its own, and this is how it is quenched. Work with neither goes to
   /// [JobContext.unattended] instead.
@@ -392,6 +399,14 @@ abstract class JobBase<T> implements Job<T> {
   /// Whether anyone observed the outcome, directly or by forwarding it.
   bool _observed = false;
 
+  /// Whether a parent took the outcome to pass it on: [JobContext.run]
+  /// waits for the value, a group of [JobContext.runAll] for the outcome.
+  ///
+  /// What they pass on is what the outcome carries, and a failure a
+  /// cancellation covered is not in it. Such a job answers for that failure
+  /// itself — see [_reportCovered].
+  bool _takenByParent = false;
+
   /// Continuations still waiting to receive this outcome. A late listener
   /// may attach within the observation grace period but receive the result
   /// on the next microtask; give it that chance before reporting a failure.
@@ -402,15 +417,17 @@ abstract class JobBase<T> implements Job<T> {
   Cancelled? _pendingCancel;
   bool _bodyEnded = false;
 
-  /// Whether a failure reached the job before anything marked it, in a
+  /// The failure that reached the job before anything marked it, in a
   /// place where the marking then happened first.
   ///
   /// [JobContext.uncancellable] applies the cancellation it was holding on
   /// its way out, and on the way out of a failure that happens before the
   /// error has travelled to the body. The kernel reads the order at the
   /// throw and would see it the wrong way round; this is the section
-  /// saying which came first.
-  bool _failedBeforeMark = false;
+  /// saying which came first. It names the error and not just the fact: a
+  /// body that caught this one and went on may fail again after the job
+  /// accepted a cancellation, and that failure is not first.
+  Object? _failedBeforeMark;
 
   /// Whether this job is unwinding a cascade that ran out of stack.
   ///
@@ -975,11 +992,11 @@ abstract class JobBase<T> implements Job<T> {
       _reportUnobserved(decided);
     }
     // A failure handed in over the mark. The cancellation decides the
-    // outcome, but an error is never lost silently: it goes exactly where
-    // one the body threw before a cancellation goes -- only if nobody
-    // looked at the outcome, and whether or not there is an observer.
+    // outcome, but an error is never lost silently: it goes where one the
+    // body threw before a cancellation goes. It came in here and not
+    // through the body, so nobody has announced it yet.
     if (replaced is Failed) {
-      _reportCovered(replaced);
+      _reportCovered(replaced, announced: false);
     }
   }
 
@@ -987,8 +1004,10 @@ abstract class JobBase<T> implements Job<T> {
   ///
   /// For an error that has an outcome of its own — the body's. It reaches
   /// the zone through that outcome, if nobody observes it, and shouting
-  /// twice about one error is worse than once. [notifyError] starts here
-  /// too, and goes on to the answer.
+  /// twice about one error is worse than once. When a cancellation covers
+  /// it afterwards and a parent took the outcome, it is answered later
+  /// without being announced again. [notifyError] starts here too, and
+  /// goes on to the answer.
   @protected
   void notifyObserver(Object error, StackTrace stackTrace) {
     _debug(() => '$this error: $error');
@@ -1035,10 +1054,11 @@ abstract class JobBase<T> implements Job<T> {
   ///
   /// The observer's [JobObserver.onUnanswered], or the zone the job was
   /// created in when there is no observer. [notifyError] ends here, and so
-  /// does the failure of a branch of [JobContext.runAll] that the group did
-  /// not throw: the branch told its observer itself, where its body was
-  /// caught, and one error is announced once — but an error nobody
-  /// answered for still has to reach somebody.
+  /// do two failures of a body: that of a branch of [JobContext.runAll]
+  /// the group did not throw, and one a cancellation covered in a job
+  /// whose outcome a parent took. The job told its observer itself, where
+  /// its body was caught, and one error is announced once — but an error
+  /// nobody answered for still has to reach somebody.
   ///
   /// An engine of a domain answers through the observer it puts on its
   /// jobs, as `solo` does: there is no second door.
@@ -1074,7 +1094,10 @@ abstract class JobBase<T> implements Job<T> {
   /// The route of an unobserved [Failed] is not this one and keeps its own
   /// rule: there the outcome decides, not the object it carries, so a
   /// failure somebody built out of a [Cancelled] on purpose still reaches
-  /// the zone.
+  /// the zone. A failure the outcome no longer carries — of a branch the
+  /// group did not throw, or one a cancellation covered in a job whose
+  /// outcome a parent took — has no outcome to decide, comes this way,
+  /// and such a [Cancelled] stays out.
   void _toZone(Object error, StackTrace stackTrace) {
     if (_isCancellation(error)) {
       _debug(() => '$this kept a cancellation out of the zone: $error');
@@ -1164,7 +1187,8 @@ abstract class JobBase<T> implements Job<T> {
         // `onError` that cancels would otherwise make a failure that came
         // first look like it came second. The order is the whole diagnosis,
         // and it is settled at the moment of the throw.
-        failedFirst = _pendingCancel == null || _failedBeforeMark;
+        failedFirst =
+            _pendingCancel == null || identical(error, _failedBeforeMark);
         notifyObserver(error, stackTrace);
         outcome = Failed(error, stackTrace);
       }
@@ -1324,30 +1348,49 @@ abstract class JobBase<T> implements Job<T> {
     }
     final decided = _pendingCancel ?? outcome;
     finish(decided);
-    // After `finish`, not before: the terms are those of an uncovered
-    // failure, and those include the window to observe — `finished`,
-    // `onFinish`, the completion of `done`, and a microtask after them.
-    // Reported earlier, this reached the zone while an observer taking the
-    // outcome at finish had not been called yet.
+    // After `finish`, not before. For a job no parent took the outcome
+    // of, the terms are those of an uncovered failure, and those include
+    // the window to observe — `finished`, `onFinish`, the completion of
+    // `done`, and a microtask after them; reported earlier, this reached
+    // the zone while an observer taking the outcome at finish had not been
+    // called yet. For one a parent took, the answer follows `onFinish`.
     if (failedFirst && outcome is Failed && !identical(decided, outcome)) {
-      _reportCovered(outcome);
+      _reportCovered(outcome, announced: true);
     }
   }
 
-  /// Hands an error the outcome no longer carries to the zone.
+  /// Hands on an error the outcome no longer carries.
   ///
   /// The body failed and a cancellation arrived afterwards, so the job ends
   /// [Cancelled] and the path that reports an unobserved [Failed] never
-  /// runs. An observer has heard the error already, through
-  /// [notifyObserver] where it was caught; without one it would be lost,
-  /// and an error is never lost silently. It goes on exactly the terms an
-  /// uncovered [Failed] would: only when nobody looked at the outcome, and
-  /// whether or not there is an observer — one hearing it through
-  /// [notifyObserver] does not settle where an error nobody handled
-  /// belongs, and an engine of a domain that puts an observer on every job
-  /// would otherwise silence this for good. [Job.ignore] silences it, as
-  /// it silences any other failure nobody wants.
-  void _reportCovered(Failed outcome) {
+  /// runs. Without this the error would be lost, and an error is never
+  /// lost silently. Where it goes depends on who took the outcome.
+  ///
+  /// A parent that took it — [JobContext.run], a group of
+  /// [JobContext.runAll] — passes on the cancellation and cannot pass on
+  /// this. It is an error no outcome carries, answered here the way the
+  /// failure of a branch the group did not throw is: through
+  /// [JobObserver.onUnanswered], by default in the zone. [announced] says
+  /// whether [JobObserver.onError] has heard it already — a failure of the
+  /// body was told where it was caught, one an engine of a domain handed
+  /// to [finish] was told nowhere.
+  ///
+  /// Otherwise it goes on exactly the terms an uncovered [Failed] would:
+  /// to the zone, only when nobody looked at the outcome, and whether or
+  /// not there is an observer — one hearing it through [notifyObserver]
+  /// does not settle where an error nobody handled belongs, and an engine
+  /// of a domain that puts an observer on every job would otherwise
+  /// silence this for good. [Job.ignore] silences it, as it silences any
+  /// other failure nobody wants.
+  void _reportCovered(Failed outcome, {required bool announced}) {
+    if (_takenByParent) {
+      if (announced) {
+        _handleUnanswered(outcome.error, outcome.stackTrace);
+      } else {
+        notifyError(outcome.error, outcome.stackTrace);
+      }
+      return;
+    }
     _zone.scheduleMicrotask(() {
       if (_observed) {
         return;

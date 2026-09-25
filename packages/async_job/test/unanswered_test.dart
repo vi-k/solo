@@ -135,6 +135,71 @@ List<String> cancelledOutside(JobObserver? observer) => zoneOf((async) {
       async.flushTimers();
     });
 
+/// A child whose body fails 5 ms in while a child of its own still runs:
+/// it waits for that one, and a cancellation arriving 10 ms in covers the
+/// failure.
+Job<int> failingFirst(String key, {JobObserver? observer}) =>
+    Job.deferred<int>(key: key, observer: observer, (ctx) async {
+      ctx.run(Job.deferred<void>((ctx) => ctx.wait(() => delay(50)))).ignore();
+      await delay(5);
+      throw StateError('$key failed first');
+    });
+
+/// A parent that runs [child] through `ctx.run` and is cancelled 10 ms in.
+List<String> runCancelled(
+  JobObserver? observer,
+  Job<int> Function() child,
+) =>
+    zoneOf((async) {
+      final parent = Job<void>(observer: observer, (ctx) async {
+        await ctx.run(child());
+      });
+      async.elapse(const Duration(milliseconds: 10));
+      parent.cancel().ignore();
+      async.flushTimers();
+    });
+
+/// Runs [scenario] with an observer that watches, with none and with one
+/// that answers, and expects [error] answered for: told once, after
+/// whatever [alsoTold] names, then asked once, and in the zone unless the
+/// override kept it out.
+void expectAnswered(
+  List<String> Function(JobObserver? observer) scenario,
+  String error, {
+  List<String> alsoTold = const [],
+}) {
+  final watching = Counting();
+  expect(
+    scenario(watching),
+    [error],
+    reason: 'the default answer is the zone, once',
+  );
+  expect(
+    watching.seen,
+    [...alsoTold, 'onError: $error', 'onUnanswered: $error'],
+  );
+  expect(scenario(null), [error], reason: 'without an observer, the zone');
+  final answering = Counting(answers: true);
+  expect(
+    scenario(answering),
+    isEmpty,
+    reason: 'an override answers, and nothing reaches the zone',
+  );
+  expect(answering.seen, watching.seen);
+}
+
+/// Runs [scenario] with an observer that watches and with none, and
+/// expects [error] told once and nothing in the zone.
+void expectOnlyTold(
+  List<String> Function(JobObserver? observer) scenario,
+  String error,
+) {
+  final watching = Counting();
+  expect(scenario(watching), isEmpty);
+  expect(watching.seen, ['onError: $error']);
+  expect(scenario(null), isEmpty);
+}
+
 void main() {
   test('an observer that only watches keeps the route to the zone', () {
     expect(cancelledOutside(Plain()), unorderedEquals(outside));
@@ -204,7 +269,7 @@ void main() {
     );
   });
 
-  group('a failure of the body is never asked about', () {
+  group('a failure of the body no parent took is never asked about', () {
     // Each job also fails in its cleanup, so a hook that is never called
     // at all cannot pass for one that is called at the right times.
     List<String> asked(Job<void> Function(JobObserver observer) start) {
@@ -264,6 +329,285 @@ void main() {
         ),
         ['onUnanswered: Bad state: cleanup'],
       );
+    });
+  });
+
+  group('a failure a cancellation covered, when a parent took the outcome', () {
+    // The parent passes on what the outcome carries, and the outcome
+    // carries the cancellation: the failure is in nothing it passes on, so
+    // the child answers for it the way a branch the group did not throw
+    // does.
+    const error = 'Bad state: child failed first';
+
+    test('a child of run whose parent was cancelled', () {
+      expectAnswered(
+        (observer) => runCancelled(observer, () => failingFirst('child')),
+        error,
+      );
+    });
+
+    test('a child of run cancelled through its own handle', () {
+      expectAnswered(
+        (observer) => zoneOf((async) {
+          final child = failingFirst('child');
+          Job<void>(observer: observer, (ctx) async {
+            await ctx.run(child);
+          }).ignore();
+          async.elapse(const Duration(milliseconds: 10));
+          child.cancel().ignore();
+          async.flushTimers();
+        }),
+        error,
+      );
+    });
+
+    test('a branch of runAll whose parent was cancelled', () {
+      expectAnswered(
+        (observer) => zoneOf((async) {
+          final parent = Job<void>(observer: observer, (ctx) async {
+            await ctx.runAll([
+              failingFirst('branch'),
+              Job.deferred<int>((ctx) async {
+                await ctx.wait(() => delay(100));
+                return 2;
+              }),
+            ]);
+          });
+          async.elapse(const Duration(milliseconds: 10));
+          parent.cancel().ignore();
+          async.flushTimers();
+        }),
+        'Bad state: branch failed first',
+      );
+    });
+
+    test('a branch that failed inside uncancellable while holding the stop',
+        () {
+      expectAnswered(
+        (observer) => zoneOf((async) {
+          Job<void>(observer: observer, (ctx) async {
+            try {
+              await ctx.runAll([
+                Job.deferred<int>((ctx) async {
+                  await ctx.wait(() => delay(5));
+                  throw StateError('first');
+                }),
+                Job.deferred<int>((ctx) async {
+                  await ctx.uncancellable<void>(() async {
+                    await delay(10);
+                    throw StateError('held');
+                  });
+                  return 2;
+                }),
+              ]);
+            } on Object catch (_) {
+              // The group throws the first failure; the one under test is
+              // the other.
+            }
+          }).ignore();
+          async.flushTimers();
+        }),
+        'Bad state: held',
+        alsoTold: ['onError: Bad state: first'],
+      );
+    });
+
+    test('a branch that failed first and was stopped by a refused sibling', () {
+      // A body that throws before its first `await` has failed before the
+      // group hears a word from it, and the refusal of the next child
+      // stops every branch already admitted -- this one too.
+      expectAnswered(
+        (observer) => zoneOf((async) {
+          Job<void>(observer: observer, (ctx) async {
+            try {
+              await ctx.runAll<int>([
+                Job.deferred<int>((ctx) {
+                  ctx
+                      .run(
+                        Job.deferred<void>(
+                          (ctx) => ctx.wait(() => delay(50)),
+                        ),
+                      )
+                      .ignore();
+                  throw StateError('failed at once');
+                }),
+                Job<int>((ctx) async => 0),
+              ]);
+            } on Object catch (_) {
+              // The refusal is what comes out of the group.
+            }
+          }).ignore();
+          async.flushTimers();
+        }),
+        'Bad state: failed at once',
+      );
+    });
+
+    test('a failure an engine handed in over the mark is told, then asked', () {
+      // It never went through the body, so nobody has announced it yet.
+      expectAnswered(
+        (observer) => zoneOf((async) {
+          final child = ProbeJob<int>((ctx) async {
+            await delay(100);
+            return 1;
+          });
+          final parent = Job<void>(observer: observer, (ctx) async {
+            await ctx.run(child);
+          });
+          async.elapse(const Duration(milliseconds: 10));
+          parent.cancel().ignore();
+          async.elapse(const Duration(milliseconds: 10));
+          child.drop(Failed(StateError('by hand'), StackTrace.current));
+          async.flushTimers();
+        }),
+        'Bad state: by hand',
+      );
+    });
+
+    test('ignore on the child does not silence it', () {
+      expectAnswered(
+        (observer) =>
+            runCancelled(observer, () => failingFirst('child')..ignore()),
+        error,
+      );
+    });
+
+    test('a child with an observer of its own answers with it', () {
+      final parent = Counting();
+      final own = Counting(answers: true);
+      final zone = runCancelled(
+        parent,
+        () => failingFirst('child', observer: own),
+      );
+      expect(own.seen, ['onError: $error', 'onUnanswered: $error']);
+      expect(parent.seen, isEmpty, reason: "the parent's is not asked");
+      expect(zone, isEmpty, reason: 'the child answered with its own');
+    });
+  });
+
+  group('a failure after the child accepted a cancellation is only told', () {
+    test('a stop at the token', () {
+      expectOnlyTold(
+        (observer) => runCancelled(
+          observer,
+          () => Job.deferred<int>((ctx) async {
+            final stopped = Completer<int>();
+            ctx.onCancel(
+              () => stopped.completeError(StateError('stopped at the token')),
+            );
+            return stopped.future;
+          }),
+        ),
+        'Bad state: stopped at the token',
+      );
+    });
+
+    test('the failure of a step caught earlier, thrown again after the stop',
+        () {
+      // The section held nothing when its step failed, so it said nothing
+      // about the order, and the same error thrown after the job accepted
+      // the cancellation is a failure after the mark.
+      expectOnlyTold(
+        (observer) => runCancelled(
+          observer,
+          () => Job.deferred<int>((ctx) async {
+            Object? step;
+            try {
+              await ctx.uncancellable<void>(() async {
+                await delay(1);
+                throw StateError('the step failed');
+              });
+            } on Object catch (error) {
+              step = error;
+            }
+            final stopped = Completer<void>();
+            ctx.onCancel(stopped.complete);
+            await stopped.future;
+            Error.throwWithStackTrace(step!, StackTrace.current);
+          }),
+        ),
+        'Bad state: the step failed',
+      );
+    });
+
+    test('another failure after a step that failed under a held stop', () {
+      // The section put the order right for its own error, and for no
+      // other: the body caught that one and threw a new one after the mark.
+      expectOnlyTold(
+        (observer) => runCancelled(
+          observer,
+          () => Job.deferred<int>((ctx) async {
+            try {
+              await ctx.uncancellable<void>(() async {
+                await delay(20);
+                throw StateError('the step failed');
+              });
+            } on Object catch (_) {
+              // Handled: the job goes on, cancelled by now.
+            }
+            throw StateError('after the step');
+          }),
+        ),
+        'Bad state: after the step',
+      );
+    });
+  });
+
+  group('a job no parent took keeps the rule of its outcome', () {
+    /// A child of `each` whose callback fails while a child of its own
+    /// still runs.
+    Job<void> eachFailingFirst(JobContext ctx) =>
+        ctx.each(Stream<int>.fromIterable([1]), (child, event) {
+          child
+              .run(Job.deferred<void>((ctx) => ctx.wait(() => delay(50))))
+              .ignore();
+          throw StateError('each failed first');
+        });
+
+    test('a child of each nobody reads goes to the zone, unasked', () {
+      final observer = Counting();
+      final zone = zoneOf((async) {
+        final parent = Job<void>(observer: observer, (ctx) async {
+          eachFailingFirst(ctx);
+          await ctx.wait(() => delay(100));
+        });
+        async.elapse(const Duration(milliseconds: 10));
+        parent.cancel().ignore();
+        async.flushTimers();
+      });
+      expect(observer.seen, ['onError: Bad state: each failed first']);
+      expect(zone, ['Bad state: each failed first']);
+    });
+
+    test('an outcome somebody reads keeps it out of the zone', () {
+      // The reader got the cancellation and not the failure; the rule of an
+      // observed outcome decides here, for a root and for a child of `each`.
+      final observer = Counting();
+      final zone = zoneOf((async) {
+        final root = Job<void>(observer: observer, (ctx) async {
+          ctx
+              .run(Job.deferred<void>((ctx) => ctx.wait(() => delay(50))))
+              .ignore();
+          await delay(5);
+          throw StateError('root failed first');
+        });
+        root.value.ignore();
+        final parent = Job<void>(observer: observer, (ctx) async {
+          await eachFailingFirst(ctx).value;
+        });
+        async.elapse(const Duration(milliseconds: 10));
+        root.cancel().ignore();
+        parent.cancel().ignore();
+        async.flushTimers();
+      });
+      expect(
+        observer.seen,
+        unorderedEquals([
+          'onError: Bad state: root failed first',
+          'onError: Bad state: each failed first',
+        ]),
+      );
+      expect(zone, isEmpty);
     });
   });
 

@@ -326,6 +326,10 @@ abstract interface class JobContext {
   /// Once the child starts, this method observes its [Job.value]. Handle the
   /// future returned here even when [Job.ignore] was called on [child]: that
   /// ignores the job's own reporting, not an error carried by this future.
+  /// A failure of the child's body that a cancellation covered afterwards is
+  /// not in the future — the future carries the cancellation — and the child
+  /// answers for it through [JobObserver.onUnanswered], by default in the
+  /// zone, whether or not [Job.ignore] was called.
   ///
   /// A child is a job nobody starts by itself: [Job.deferred], or a job of
   /// an engine whose start belongs to the engine. One from `Job(body)` is
@@ -381,7 +385,9 @@ abstract interface class JobContext {
   /// would have thrown — so a cancellation arrives as a cancellation and
   /// there is no envelope to take apart. A failure the group received and
   /// did not throw is not lost either: it goes the way an error nobody
-  /// answered for goes, once.
+  /// answered for goes, once. Nor is a failure of a branch's body that a
+  /// cancellation covered afterwards: the outcome carries the cancellation,
+  /// and the branch answers for the failure the same way.
   ///
   /// **When which.** `[ctx.run(a), ctx.run(b)].wait` and [Future.wait] wait
   /// for every branch and stop none, so a branch whose sibling has already
@@ -833,13 +839,17 @@ abstract class JobContextBase implements JobContext {
     enterUncancellable();
     try {
       return await action();
-    } on Object {
+    } on Object catch (error) {
       // The step failed, and the cancellation this section was holding
       // lands on the way out -- before the error has reached the body,
       // where the kernel decides which of the two came first. It was the
       // failure, and said nowhere else the diagnosis of the one step that
-      // cannot be rolled back is the one the cancellation swallows.
-      _owner._failedBeforeMark = true;
+      // cannot be rolled back is the one the cancellation swallows. Only
+      // when a cancellation is held: without one nothing lands on the way
+      // out, and there is no order to put right.
+      if (_owner._heldCancel != null) {
+        _owner._failedBeforeMark = error;
+      }
       rethrow;
     } finally {
       leaveUncancellable();
@@ -1135,6 +1145,10 @@ abstract class JobContextBase implements JobContext {
     FutureOr<void> Function(T value)? dispose,
     FutureOr<void> Function(T value)? discard,
   }) async {
+    // Before the value is read, and so before there is an outcome: what
+    // comes out of here is what the outcome carries, and a failure a
+    // cancellation covered is not in it. The child answers for that one.
+    (child as JobBase<T>)._takenByParent = true;
     final value = await child.value;
     // Registered before the checkpoint, and that is the whole of it. The
     // child ended [Done], so its own conditional registration went with
@@ -1456,7 +1470,10 @@ final class _RunAllGroup<T> {
       _branches.add(branch);
       // `done` and not `whenDone`: the group looks at every outcome and
       // answers for the failures it does not throw, so no branch is left
-      // reporting one on its own as well.
+      // reporting one on its own as well. A failure a cancellation covered
+      // is in no outcome, and the group never sees it: the branch answers
+      // for that one, as a job whose outcome a parent took.
+      branch.job._takenByParent = true;
       branch.job.done
           .then((outcome) => _branchFinished(branch, outcome))
           .ignore();

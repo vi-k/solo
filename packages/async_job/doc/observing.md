@@ -173,6 +173,7 @@ observer and without, the zone being the one the job was created in:
 | --- | --- | --- |
 | The body's, and the job ends `Failed` with it | `onError`, and the zone if nobody observed the outcome | The zone if nobody observed the outcome |
 | The body's, and a cancellation arrives while the job waits for its children | `onError`, and the zone if nobody observed the outcome | The zone if nobody observed the outcome |
+| The same, in a child of `ctx.run` or a branch of `ctx.runAll` | `onError`, then `onUnanswered`: the zone by default | The zone |
 | The body's, after the job accepted a cancellation | `onError` | Nobody |
 | The body's, in a branch of `ctx.runAll` whose group throws another failure | `onError`, then `onUnanswered`: the zone by default | The zone |
 | Outside the body: a late error of an action abandoned by `wait`, cleanup, a callback of `ctx.onCancel` or `job.whenCancelled`, work of `ctx.unattended`, formatting a child's cancellation description | `onError`, then `onUnanswered`: the zone by default | The zone |
@@ -196,13 +197,14 @@ The errors stop there and do not reach the zone. Calling
 Hand `super` whatever the override cannot tell apart: the default body knows
 which errors are cancellations.
 
-An error can reach `onError` and the zone both: a failure the job ends with,
-when nobody observed the outcome, and an error no outcome carries, when
+An error can reach `onError` and the zone both: a failure the body throws, when
+nobody observed the outcome, and an error no outcome carries, when
 `onUnanswered` sends it on. An app that reports in both places hears it twice.
-Observing the outcome keeps a failure out of the zone;
+Observing the outcome keeps the first kind out of the zone;
 [A failure nobody waits for](outcomes.md#a-failure-nobody-waits-for) on the
-outcomes page shows how. An override of `onUnanswered` does the same for the
-rest.
+outcomes page shows how. An override of `onUnanswered` keeps out the second,
+and with it the failure of a child or a branch whose parent took the outcome:
+the parent passes on the cancellation, and the failure is not in it.
 
 ## Work the job does not wait for
 

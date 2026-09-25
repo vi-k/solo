@@ -714,6 +714,48 @@ void main() {
     );
   });
 
+  test('a step that failed with nothing held says nothing about what follows',
+      () {
+    final caught = <Object>[];
+    final errors = <Object>[];
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          final job = Job<void>(observer: ErrorObserver(errors), (ctx) async {
+            try {
+              await ctx.uncancellable(() async {
+                await delay(1);
+                throw StateError('the step failed');
+              });
+            } on Object catch (_) {
+              // Handled: the job goes on.
+            }
+            final stopped = Completer<void>();
+            ctx.onCancel(
+              () => stopped.completeError(StateError('stopped at the token')),
+            );
+            await stopped.future;
+          });
+          async.elapse(const Duration(milliseconds: 10));
+          job.cancel().ignore();
+          async.flushTimers();
+        });
+      },
+      (error, stackTrace) => caught.add(error),
+    );
+    expect(
+      errors.map((error) => '$error'),
+      ['Bad state: stopped at the token'],
+    );
+    expect(
+      caught,
+      isEmpty,
+      reason: 'the stop came after the job accepted the cancellation; the '
+          'section held nothing when its step failed, so it has no order to '
+          'put right',
+    );
+  });
+
   test('a join the body walked away from sends its late error to the zone', () {
     final caught = <Object>[];
     final errors = <Object>[];

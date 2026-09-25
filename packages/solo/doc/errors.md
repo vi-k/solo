@@ -53,9 +53,11 @@ Most errors are carried by an outcome. The failure of a body becomes `Failed`,
 where `run(onError: ...)` computes a state from it, and an outcome nobody
 observes reaches the job's creation zone by itself. What no outcome carries is
 the rest: an operation abandoned by `wait` that fails later, a disposer, an
-`onCancel` callback, work handed to `ctx.unattended`. Somebody has to answer
-for those, and the one asked is always the same: `onUnanswered`, on the
-controller whose job it was.
+`onCancel` callback, work handed to `ctx.unattended`, the failure of a branch
+of `ctx.runAll` that the group did not throw, and the failure of a child's body
+when a cancellation reaches the child afterwards, while it still waits for
+children of its own. Somebody has to answer for those, and the one asked is
+always the same: `onUnanswered`, on the controller whose job it was.
 
 The override above answers for them here, and they reach nothing else: this
 controller owns what its jobs failed at and has said so. A controller that

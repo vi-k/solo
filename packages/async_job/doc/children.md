@@ -68,6 +68,13 @@ looks -- it waits for the child's value. The error arrives through the future
 `run` returned, an ordinary Dart future: left unhandled, it goes to the zone,
 and so does a cancellation of the child.
 
+One failure of the child is not in that future: its body failed, and a
+cancellation reached the child while it still waited for children of its own.
+The child ends `Cancelled`, the future carries the cancellation, and the
+failure goes on to `onUnanswered` of the child's observer -- by default to the
+zone, whichever `ignore` was called. To answer for it differently, give the
+child an observer of its own.
+
 A child inherits the parent's observer unless it has its own. If a child's
 cancellation escapes through `await ctx.run(child)` or `child.value`, the
 parent ends with `HandlerCancelReason` and a description naming the child.
