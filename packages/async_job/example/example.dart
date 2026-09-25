@@ -17,7 +17,13 @@ class Database {
 
   Future<void> migrate(CancelToken stop) async {}
 
-  Future<void> markReady(CancelToken stop) async {}
+  Future<void> writeVersion() async {}
+
+  /// The ready flag is written by a job of its own, which the last step of
+  /// the body runs as a child.
+  Job<void> readyFlag() => Job.deferred((ctx) => ctx.join(_writeReadyFlag));
+
+  Future<void> _writeReadyFlag() async {}
 
   Future<void> close() async => print('database closed');
 }
@@ -37,8 +43,12 @@ Future<void> main() async {
 
     // Told to stop the moment the job is cancelled, and waited for.
     await ctx.join(() => database.migrate(stop));
-    // Not told to stop at all: the token stays untouched until this is over.
-    await ctx.uncancellable(() => database.markReady(stop));
+    // A cancellation waits for the whole step, and the child it runs is
+    // started all the same: no version is left without its flag.
+    await ctx.uncancellable(() async {
+      await database.writeVersion();
+      await ctx.run(database.readyFlag());
+    });
 
     return database;
   });

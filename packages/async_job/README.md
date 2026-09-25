@@ -80,9 +80,9 @@ dart pub add async_job
 
 ## Quick start
 
-Suppose a job needs to open a database, migrate it and return the open database
-to its caller. If the job fails or is cancelled, it must close the database
-instead. The context lets the body describe both paths:
+Suppose a job needs to open a database, migrate it, mark it ready and return
+the open database to its caller. If the job fails or is cancelled, it must
+close the database instead. The context lets the body describe both paths:
 
 ```dart
 import 'package:async_job/async_job.dart';
@@ -97,7 +97,10 @@ final job = Job<Database>((ctx) async {
   ctx.onCancel(stop.cancel);
 
   await ctx.join(() => database.migrate(stop));
-  await ctx.uncancellable(() => database.markReady(stop));
+  await ctx.uncancellable(() async {
+    await database.writeVersion();
+    await ctx.run(database.readyFlag());
+  });
 
   return database;
 });
@@ -136,12 +139,15 @@ final outcome = await job.done; // Cancelled(manual)
   waits for it to stop before the job closes the database. If you need to stop
   waiting immediately on cancellation, use `ctx.wait`. It stops the waiting
   without stopping the operation itself.
-- **`ctx.uncancellable(() => database.markReady(stop))`** protects this final
-  step from a request to stop. During migration, `join` waits while the token
-  tells the database to stop. Here the step must finish without receiving that
-  signal, so `uncancellable` holds the cancellation request: `onCancel` does
-  not fire and the token remains active during the call. After the section, the
-  request takes effect and the next context checkpoint throws `Cancelled`. See
+- **`ctx.uncancellable(() async { ... })`** keeps the last step whole. The step
+  writes the schema version and then runs `database.readyFlag()`, a job of its
+  own that writes the ready flag, as a child. Once the job has accepted a
+  cancellation, `ctx.run` throws it instead of starting the child, so a `join`
+  around the step would leave a version with no flag. Inside the section the
+  job does not accept the cancellation: the child starts, and `onCancel` does
+  not fire. After the section, the request takes effect and the next context
+  checkpoint throws `Cancelled`. A step of plain code needs no section: one
+  `join` around it is enough. See
   [Holding the cancellation back](doc/cancellation.md#holding-the-cancellation-back)
   on the cancellation page.
 - **`await job.cancel()`** requests cancellation and waits for the job to

@@ -1,4 +1,5 @@
-// The block the README opens with, run as it is written there.
+// The block the README opens with, run as it is written there, and the
+// block of its Quick start.
 //
 // It is a showcase, so it is the one block a reader is most likely to copy
 // and the one a reader is most likely to check under a debugger. It also
@@ -30,8 +31,56 @@ final class Database {
     return const ['row'];
   }
 
+  Future<void> migrate(CancelToken stop) async {
+    for (var step = 1; step <= 3; step++) {
+      if (stop.cancelled) {
+        events.add('migration stopped');
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+    events.add('migrated');
+  }
+
+  Future<void> writeVersion() async {
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    events.add('version written');
+  }
+
+  Job<void> readyFlag() => Job.deferred(
+        (ctx) => ctx.join(() async {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+          events.add('ready flag written');
+        }),
+      );
+
   Future<void> close() async => events.add('closed');
 }
+
+final class CancelToken {
+  bool cancelled = false;
+
+  void cancel() => cancelled = true;
+}
+
+/// The body of the Quick start, as the README writes it.
+Job<Database> quickStart() => Job<Database>((ctx) async {
+      final database = await ctx.join(
+        Database.open,
+        discard: (database) => database.close(),
+      );
+
+      final stop = CancelToken();
+      ctx.onCancel(stop.cancel);
+
+      await ctx.join(() => database.migrate(stop));
+      await ctx.uncancellable(() async {
+        await database.writeVersion();
+        await ctx.run(database.readyFlag());
+      });
+
+      return database;
+    });
 
 void use(List<String> rows) => Database.events.add('used ${rows.length}');
 
@@ -66,6 +115,58 @@ void main() {
             'first',
       );
       expect(job.outcome.toString(), 'Cancelled(manual)');
+    });
+  });
+
+  group('the Quick start', () {
+    test('cancelled while the database opens, it closes the database', () {
+      fakeAsync((async) {
+        final job = quickStart();
+
+        // Somebody changed their mind while the database was opening.
+        async.elapse(const Duration(milliseconds: 10));
+        job.cancel().ignore();
+        async.flushTimers();
+
+        expect(Database.events, ['opened', 'closed']);
+        expect(job.outcome.toString(), 'Cancelled(manual)');
+      });
+    });
+
+    test('cancelled during the migration, the token stops it', () {
+      fakeAsync((async) {
+        final job = quickStart();
+        async.elapse(const Duration(milliseconds: 35));
+        job.cancel().ignore();
+        async.flushTimers();
+
+        expect(Database.events, ['opened', 'migration stopped', 'closed']);
+        expect(job.outcome.toString(), 'Cancelled(manual)');
+      });
+    });
+
+    test('cancelled while the version is written, the step ends whole', () {
+      fakeAsync((async) {
+        final job = quickStart();
+        // Open 20 ms, migration 30 ms, then the version.
+        async.elapse(const Duration(milliseconds: 55));
+        job.cancel().ignore();
+        async.flushTimers();
+
+        expect(
+          Database.events,
+          [
+            'opened',
+            'migrated',
+            'version written',
+            'ready flag written',
+            'closed',
+          ],
+          reason: 'the section holds the cancellation, so `ctx.run` starts '
+              'the child that writes the flag',
+        );
+        expect(job.outcome.toString(), 'Cancelled(manual)');
+      });
     });
   });
 
