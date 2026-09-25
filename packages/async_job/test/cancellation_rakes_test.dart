@@ -48,8 +48,17 @@ const quoted = [
   [
     'cancel',
     'version written',
-    'marking stopped',
-    'onError: DatabaseStopped',
+    'outcome: Cancelled(manual)',
+  ],
+  [
+    'cancel',
+    'version written',
+    'ready flag written',
+    'outcome: Cancelled(manual)',
+  ],
+  [
+    'cancel',
+    'version written',
     'outcome: Cancelled(manual)',
   ],
   [
@@ -120,17 +129,21 @@ final class Database {
     }
   }
 
-  /// Two writes, 10 ms each; the token is read between them.
-  Future<void> markReady(CancelToken stop) async {
+  /// The first write of marking the database ready, 10 ms.
+  Future<void> writeVersion() async {
     await delay(10);
     say('version written');
-    if (stop.cancelled) {
-      say('marking stopped');
-      throw const DatabaseStopped();
-    }
+  }
+
+  /// The second write, 10 ms.
+  Future<void> writeReadyFlag() async {
     await delay(10);
     say('ready flag written');
   }
+
+  /// The second write as a job of its own, for a step that runs it as a
+  /// child.
+  Job<void> readyFlag() => Job.deferred((ctx) => ctx.join(writeReadyFlag));
 
   Future<void> close() async {
     closed = true;
@@ -404,13 +417,11 @@ void main() {
   });
 
   group('A step that must finish', () {
-    test('join lets the token stop the step halfway', () {
+    test('two joins lose the flag between them', () {
       final lines = play(
         (ctx) async {
-          final stop = CancelToken();
-          ctx.onCancel(stop.cancel);
-
-          await ctx.join(() => database.markReady(stop));
+          await ctx.join(database.writeVersion);
+          await ctx.join(database.writeReadyFlag);
         },
         cancelAt: 5,
       );
@@ -418,18 +429,98 @@ void main() {
       expect(lines, quoted[3]);
     });
 
-    test('uncancellable holds the cancellation until the step is over', () {
+    test('one join around the step makes both writes', () {
       final lines = play(
         (ctx) async {
-          final stop = CancelToken();
-          ctx.onCancel(stop.cancel);
-
-          await ctx.uncancellable(() => database.markReady(stop));
+          await ctx.join(() async {
+            await database.writeVersion();
+            await database.writeReadyFlag();
+          });
         },
         cancelAt: 5,
       );
 
       expect(lines, quoted[4]);
+    });
+
+    test('one join keeps neither the token nor a checkpoint out', () {
+      final withToken = play(
+        (ctx) async {
+          final stop = CancelToken();
+          ctx.onCancel(stop.cancel);
+
+          await ctx.join(() async {
+            await database.writeVersion();
+            if (stop.cancelled) {
+              throw const DatabaseStopped();
+            }
+            await database.writeReadyFlag();
+          });
+        },
+        cancelAt: 5,
+      );
+      final withCheckpoint = play(
+        (ctx) async {
+          await ctx.join(() async {
+            await database.writeVersion();
+            ctx.check();
+            await database.writeReadyFlag();
+          });
+        },
+        cancelAt: 5,
+      );
+
+      expect(withToken, isNot(contains('ready flag written')));
+      expect(withCheckpoint, isNot(contains('ready flag written')));
+    });
+
+    test('one join around a step with a child loses the flag', () {
+      var childStarted = false;
+      final lines = play(
+        (ctx) async {
+          await ctx.join(() async {
+            await database.writeVersion();
+            await ctx.run(
+              Job.deferred<void>((ctx) async {
+                childStarted = true;
+                await ctx.join(database.writeReadyFlag);
+              }),
+            );
+          });
+        },
+        cancelAt: 5,
+      );
+
+      expect(lines, quoted[5]);
+      expect(childStarted, isFalse, reason: 'run throws instead of starting');
+    });
+
+    test('the page version of that step: run throws after acceptance', () {
+      final lines = play(
+        (ctx) async {
+          await ctx.join(() async {
+            await database.writeVersion();
+            await ctx.run(database.readyFlag());
+          });
+        },
+        cancelAt: 5,
+      );
+
+      expect(lines, quoted[5]);
+    });
+
+    test('uncancellable writes both, the child included', () {
+      final lines = play(
+        (ctx) async {
+          await ctx.uncancellable(() async {
+            await database.writeVersion();
+            await ctx.run(database.readyFlag());
+          });
+        },
+        cancelAt: 5,
+      );
+
+      expect(lines, quoted[6]);
     });
 
     test('a held cancellation reaches no child until the section ends', () {
@@ -531,12 +622,15 @@ void main() {
           } on Exception catch (error) {
             ctx.log('migration failed: $error');
           }
-          await ctx.uncancellable(() => database.markReady(stop));
+          await ctx.join(() async {
+            await database.writeVersion();
+            await database.writeReadyFlag();
+          });
         },
         cancelAt: 15,
       );
 
-      expect(lines, quoted[5]);
+      expect(lines, quoted[7]);
     });
 
     test('without the token the clause for Cancelled holds', () {
@@ -551,7 +645,10 @@ void main() {
           } on Exception catch (error) {
             ctx.log('migration failed: $error');
           }
-          await ctx.uncancellable(() => database.markReady(stop));
+          await ctx.join(() async {
+            await database.writeVersion();
+            await database.writeReadyFlag();
+          });
         },
         cancelAt: 15,
       );
@@ -595,12 +692,15 @@ void main() {
             // ignore: cascade_invocations -- the page's code as it stands
             ctx.log('migration failed: $error');
           }
-          await ctx.uncancellable(() => database.markReady(stop));
+          await ctx.join(() async {
+            await database.writeVersion();
+            await database.writeReadyFlag();
+          });
         },
         cancelAt: 15,
       );
 
-      expect(lines, quoted[6]);
+      expect(lines, quoted[8]);
     });
 
     test('check in an on Object catch does the same', () {
@@ -620,7 +720,7 @@ void main() {
         cancelAt: 15,
       );
 
-      expect(lines, quoted[6]);
+      expect(lines, quoted[8]);
     });
 
     test('a failure of its own is logged, and the body goes on', () {
@@ -635,7 +735,10 @@ void main() {
           // ignore: cascade_invocations -- the page's code as it stands
           ctx.log('migration failed: $error');
         }
-        await ctx.uncancellable(() => database.markReady(stop));
+        await ctx.join(() async {
+          await database.writeVersion();
+          await database.writeReadyFlag();
+        });
       });
 
       expect(lines, [
@@ -701,7 +804,7 @@ void main() {
         unawaited(analytics.send('migrated'));
       });
 
-      expect(lines, quoted[7]);
+      expect(lines, quoted[9]);
     });
 
     test('unattended hands it to the observer, after the job is over', () {
@@ -709,7 +812,7 @@ void main() {
         ctx.unattended(() => analytics.send('migrated'));
       });
 
-      expect(lines, quoted[8]);
+      expect(lines, quoted[10]);
     });
 
     test('without an observer unattended goes to the creation zone', () {
@@ -720,7 +823,7 @@ void main() {
         observed: false,
       );
 
-      expect(lines, quoted[7]);
+      expect(lines, quoted[9]);
     });
 
     test('an async onCancel callback fails into the zone', () {

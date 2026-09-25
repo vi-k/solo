@@ -16,9 +16,12 @@ Job<void>((ctx) async {
   // по токену, и только потом задача сдаётся.
   await ctx.join(() => database.migrate(stop));
 
-  // Отмена ждёт, пока это не кончится: onCancel не вызывается,
-  // поэтому токен остаётся как был, а потом её бросит следующая точка.
-  await ctx.uncancellable(() => database.markReady(stop));
+  // Отмена ждёт конца всего шага, и запущенный им ребёнок
+  // не отменяется; бросит следующая точка.
+  await ctx.uncancellable(() async {
+    await database.writeVersion();
+    await ctx.run(database.readyFlag());
+  });
 
   // Между шагами вычисления оборачивать нечего.
   ctx.check();
@@ -164,41 +167,37 @@ outcome: Cancelled(manual)
 
 ## Шаг, который должен закончиться
 
-Миграция позади, и последний шаг помечает базу готовой: `markReady` пишет
-версию схемы, а затем флаг готовности, и база с версией, но без флага —
-ни старая, ни готовая. `markReady` берёт токен миграции и, как миграция,
-останавливается, бросая `DatabaseStopped`. Пользователь отменяет, пока пишется
-версия.
+Миграция позади, и последний шаг помечает базу готовой: пишет версию схемы,
+а затем флаг готовности, и база с версией, но без флага — ни старая,
+ни готовая. Две записи — два вызова базы, `writeVersion` и `writeReadyFlag`.
+Пользователь отменяет, пока пишется версия.
 
 ### Первая попытка
 
-`join` ждёт всё действие:
+`join` ждёт своё действие, поэтому каждая запись идёт через него:
 
 ```dart
-final stop = CancelToken();
-ctx.onCancel(stop.cancel);
-
-await ctx.join(() => database.markReady(stop));
+await ctx.join(database.writeVersion);
+await ctx.join(database.writeReadyFlag);
 ```
 
 ```text
 cancel
 version written
-marking stopped
-onError: DatabaseStopped
 outcome: Cancelled(manual)
 ```
 
 Шаг не доходит до конца: база остаётся с версией, но без флага готовности.
-Отмена приходит, пока пишется версия, и задача принимает её сразу: `join` ждёт
-действие, но отмену не придерживает. `onCancel` отменяет токен, `markReady`
-дописывает версию, видит отменённый токен и бросает `DatabaseStopped`, так
-и не записав флаг. Ошибка уходит в `onError`, как в разделе выше.
+Каждый `join` — отдельная контрольная точка. Первый дожидается версии и бросает
+отмену, и до второго тело не доходит.
 
-### Придержать отмену
+### Один `join` на шаг
 
 ```dart
-await ctx.uncancellable(() => database.markReady(stop));
+await ctx.join(() async {
+  await database.writeVersion();
+  await database.writeReadyFlag();
+});
 ```
 
 ```text
@@ -208,10 +207,51 @@ ready flag written
 outcome: Cancelled(manual)
 ```
 
-`uncancellable` удерживает запрос до конца секции. Пока идёт `markReady`,
-задача её не принимает: `onCancel` не вызывается, токен остаётся как был,
-и дочерняя задача, запущенная телом, не отменяется. Удерживает, а не отклоняет:
-задача принимает её в тот момент, когда секция закрывается, и следующая
+Внутри действия контрольных точек нет, поэтому обе записи сделаны, а отмена
+выходит из `join` уже после них. Этого хватает, пока шаг — обычный код: он
+не берёт токен, который отменяет `onCancel`, не запускает дочерних задач
+и не проходит контрольных точек контекста.
+
+### Придержать отмену
+
+Шаг, который сам пользуется задачей, — другое дело. Пусть флаг пишет отдельная
+задача, `database.readyFlag()`, и шаг запускает её дочерней:
+
+```dart
+await ctx.join(() async {
+  await database.writeVersion();
+  await ctx.run(database.readyFlag());
+});
+```
+
+```text
+cancel
+version written
+outcome: Cancelled(manual)
+```
+
+Флаг снова потерян. `join` ждёт своё действие, но задача принимает отмену
+сразу, и дальше `ctx.run` бросает её вместо того, чтобы запустить ребёнка; уже
+запущенный ребёнок был бы отменён. `uncancellable` придерживает отмену, пока
+шаг не кончится:
+
+```dart
+await ctx.uncancellable(() async {
+  await database.writeVersion();
+  await ctx.run(database.readyFlag());
+});
+```
+
+```text
+cancel
+version written
+ready flag written
+outcome: Cancelled(manual)
+```
+
+Пока идёт секция, задача отмену не принимает: `ctx.run` запускает ребёнка, дети
+задачи не отменяются, и `onCancel` не вызывается. Удерживает, а не отклоняет:
+задача принимает отмену в тот момент, когда секция закрывается, и следующая
 контрольная точка её бросает. Задача всё равно кончается `Cancelled`, даже если
 тело вернёт значение, поэтому всему, что должно случиться после шага в любом
 случае, место внутри той же секции.
@@ -247,7 +287,10 @@ try {
 } on Exception catch (error) {
   ctx.log('migration failed: $error');
 }
-await ctx.uncancellable(() => database.markReady(stop));
+await ctx.join(() async {
+  await database.writeVersion();
+  await database.writeReadyFlag();
+});
 ```
 
 ```text
@@ -262,11 +305,11 @@ outcome: Cancelled(manual)
 Лог называет отмену неудачной миграцией. Миграцию остановил токен, и из `join`
 вышел собственный `DatabaseStopped` миграции, а не `Cancelled`: `join` бросает
 ошибку своего действия как есть. Задача всё равно кончается `Cancelled` —
-`uncancellable` бросает до начала `markReady`, — но код между `catch` и этой
-точкой выполняется на отменённой задаче. Без токена ветка работает: миграция
-доходит до конца, и `join` бросает `Cancelled`. Без ветки `on Exception` ловит
-и этот `Cancelled`, потому что `Cancelled` реализует `Exception`, и пишет
-`migration failed: Cancelled(manual)`.
+`join` следующего шага бросает, не начав своё действие, — но код между `catch`
+и этой точкой выполняется на отменённой задаче. Без токена ветка работает:
+миграция доходит до конца, и `join` бросает `Cancelled`. Без ветки
+`on Exception` ловит и этот `Cancelled`, потому что `Cancelled` реализует
+`Exception`, и пишет `migration failed: Cancelled(manual)`.
 
 ### Спросить задачу
 

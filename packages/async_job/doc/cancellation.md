@@ -16,9 +16,12 @@ Job<void>((ctx) async {
   // only then does the job give up.
   await ctx.join(() => database.migrate(stop));
 
-  // The cancellation waits for this to end: onCancel does not fire,
-  // so the token stays as it is, and then the next checkpoint throws.
-  await ctx.uncancellable(() => database.markReady(stop));
+  // The cancellation waits for the whole step, and the child it
+  // runs is not cancelled; the next checkpoint throws it.
+  await ctx.uncancellable(() async {
+    await database.writeVersion();
+    await ctx.run(database.readyFlag());
+  });
 
   // Nothing to wrap between the steps of a calculation.
   ctx.check();
@@ -164,42 +167,39 @@ below.
 
 ## A step that must finish
 
-The migration is over, and the last step marks the database ready: `markReady`
-writes the schema version and then the ready flag, and a database with the
-version and no flag is neither old nor ready. `markReady` takes the token of
-the migration and, like the migration, stops by throwing `DatabaseStopped`. The
-user cancels while the version is being written.
+The migration is over, and the last step marks the database ready: it writes
+the schema version and then the ready flag, and a database with the version and
+no flag is neither old nor ready. The two writes are two calls of the database,
+`writeVersion` and `writeReadyFlag`. The user cancels while the version is
+being written.
 
 ### The first attempt
 
-`join` waits for all of the action:
+`join` waits for its action, so each write goes through one:
 
 ```dart
-final stop = CancelToken();
-ctx.onCancel(stop.cancel);
-
-await ctx.join(() => database.markReady(stop));
+await ctx.join(database.writeVersion);
+await ctx.join(database.writeReadyFlag);
 ```
 
 ```text
 cancel
 version written
-marking stopped
-onError: DatabaseStopped
 outcome: Cancelled(manual)
 ```
 
 The step does not finish: the database is left with a version and no ready
-flag. The cancellation arrives while the version is being written, and the job
-accepts it at once: `join` waits for the action but does not hold the
-cancellation back. `onCancel` cancels the token, and `markReady` finishes the
-version, finds the token cancelled and throws `DatabaseStopped` without writing
-the flag. The error goes to `onError`, as in the section above.
+flag. Each `join` is a checkpoint of its own. The first one waits for the
+version and then throws the cancellation, and the body never reaches the
+second.
 
-### Holding the cancellation back
+### One `join` for the step
 
 ```dart
-await ctx.uncancellable(() => database.markReady(stop));
+await ctx.join(() async {
+  await database.writeVersion();
+  await database.writeReadyFlag();
+});
 ```
 
 ```text
@@ -209,12 +209,54 @@ ready flag written
 outcome: Cancelled(manual)
 ```
 
-`uncancellable` holds the request until the section ends. While `markReady`
-runs, the job does not accept it: `onCancel` does not fire, the token stays as
-it is, and a child the body has started is not cancelled. Held, not refused:
-the job accepts it the moment the section closes, and the next checkpoint
-throws it. The job still ends `Cancelled`, even if the body returns a value, so
-whatever has to happen after the step anyway belongs inside the same section.
+The action has no checkpoint inside, so both writes are made, and the
+cancellation comes out of `join` after them. That is enough while the step is
+plain code: it takes no token that `onCancel` cancels, starts no child and
+passes no checkpoint of the context.
+
+### Holding the cancellation back
+
+A step that uses the job itself is another matter. Suppose the flag is written
+by a job of its own, `database.readyFlag()`, which the step runs as a child:
+
+```dart
+await ctx.join(() async {
+  await database.writeVersion();
+  await ctx.run(database.readyFlag());
+});
+```
+
+```text
+cancel
+version written
+outcome: Cancelled(manual)
+```
+
+The flag is lost again. `join` waits for its action, but the job accepts the
+cancellation at once, and from then on `ctx.run` throws it instead of starting
+the child; a child already running would be cancelled. `uncancellable` holds
+the cancellation back until the step is over:
+
+```dart
+await ctx.uncancellable(() async {
+  await database.writeVersion();
+  await ctx.run(database.readyFlag());
+});
+```
+
+```text
+cancel
+version written
+ready flag written
+outcome: Cancelled(manual)
+```
+
+While the section runs, the job does not accept the cancellation: `ctx.run`
+starts the child, the job's children are not cancelled, and `onCancel` does not
+fire. Held, not refused: the job accepts it the moment the section closes, and
+the next checkpoint throws it. The job still ends `Cancelled`, even if the body
+returns a value, so whatever has to happen after the step anyway belongs inside
+the same section.
 
 Always await `ctx.uncancellable`. The section opens when called, even if you do
 not await its future. An unawaited section can outlive the body; if the job
@@ -246,7 +288,10 @@ try {
 } on Exception catch (error) {
   ctx.log('migration failed: $error');
 }
-await ctx.uncancellable(() => database.markReady(stop));
+await ctx.join(() async {
+  await database.writeVersion();
+  await database.writeReadyFlag();
+});
 ```
 
 ```text
@@ -261,12 +306,12 @@ outcome: Cancelled(manual)
 The log calls a cancellation a failed migration. The token stopped the
 migration, and what came out of `join` is the migration's own
 `DatabaseStopped`, not a `Cancelled`: `join` throws an error of its action as
-it is. The job still ends `Cancelled` — `uncancellable` throws before
-`markReady` starts — but the code between the `catch` and that checkpoint runs
-on a cancelled job. Without the token the clause holds: the migration runs to
-its end, and `join` throws the `Cancelled`. Without the clause, `on Exception`
-takes that `Cancelled` too, because `Cancelled` implements `Exception`, and
-logs `migration failed: Cancelled(manual)`.
+it is. The job still ends `Cancelled` — the `join` of the next step throws
+before its action starts — but the code between the `catch` and that checkpoint
+runs on a cancelled job. Without the token the clause holds: the migration runs
+to its end, and `join` throws the `Cancelled`. Without the clause,
+`on Exception` takes that `Cancelled` too, because `Cancelled` implements
+`Exception`, and logs `migration failed: Cancelled(manual)`.
 
 ### Asking the job
 
