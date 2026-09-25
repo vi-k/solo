@@ -338,9 +338,11 @@ outcome: Cancelled(manual)
 
 `ctx.check()` throws the job's cancellation if it has accepted one, whatever
 the `catch` took. A migration that failed on its own is logged, and the body
-goes on. The `onError: DatabaseStopped` line of the stopped migration above is
-gone as well: the body gives up with the job's cancellation, not with the
-migration's error. The same `ctx.check()` works in an `on Object` clause.
+goes on. There is no `onError: DatabaseStopped` line, unlike in the token
+section: `on Exception` catches the `DatabaseStopped`, so it never leaves the
+body. The body ends with the job's cancellation from `ctx.check()`, and a
+cancellation does not go to `onError`. A clause that catches everything, errors
+included, `on Object catch (error)`, starts with the same `ctx.check()`.
 
 If the job has already accepted cancellation, catching its `Cancelled` does not
 undo it. Code after the catch runs, but the next checkpoint throws again, and
