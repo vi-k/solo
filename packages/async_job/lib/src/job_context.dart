@@ -336,7 +336,7 @@ abstract interface class JobContext {
   /// A failure of the child's body that a cancellation covered afterwards is
   /// not in the future — the future carries the cancellation — and the child
   /// answers for it through [JobObserver.onUnanswered], by default in the
-  /// zone, whether or not [Job.ignore] was called.
+  /// zone, unless [Job.ignore] was called on [child].
   ///
   /// A child is a job nobody starts by itself: [Job.deferred], or a job of
   /// an engine whose start belongs to the engine. One from `Job(body)` is
@@ -394,7 +394,9 @@ abstract interface class JobContext {
   /// did not throw is not lost either: it goes the way an error nobody
   /// answered for goes, once. Nor is a failure of a branch's body that a
   /// cancellation covered afterwards: the outcome carries the cancellation,
-  /// and the branch answers for the failure the same way.
+  /// and the branch answers for the failure the same way. [Job.ignore] on a
+  /// branch silences both: [JobObserver.onError] hears them, and nobody
+  /// answers for them.
   ///
   /// **When which.** `[ctx.run(a), ctx.run(b)].wait` and [Future.wait] wait
   /// for every branch and stop none, so a branch whose sibling has already
@@ -1154,10 +1156,6 @@ abstract class JobContextBase implements JobContext {
     FutureOr<void> Function(T value)? dispose,
     FutureOr<void> Function(T value)? discard,
   }) async {
-    // Before the value is read, and so before there is an outcome: what
-    // comes out of here is what the outcome carries, and a failure a
-    // cancellation covered is not in it. The child answers for that one.
-    (child as JobBase<T>)._takenByParent = true;
     final value = await child.value;
     // Registered before the checkpoint, and that is the whole of it. The
     // child ended [Done], so its own conditional registration went with
@@ -1481,8 +1479,7 @@ final class _RunAllGroup<T> {
       // answers for the failures it does not throw, so no branch is left
       // reporting one on its own as well. A failure a cancellation covered
       // is in no outcome, and the group never sees it: the branch answers
-      // for that one, as a job whose outcome a parent took.
-      branch.job._takenByParent = true;
+      // for that one itself, as any job does.
       branch.job.done
           .then((outcome) => _branchFinished(branch, outcome))
           .ignore();
@@ -1759,8 +1756,15 @@ final class _RunAllGroup<T> {
       // an error nobody answered for is left. A failure that never went
       // through the body — an engine of a domain ending the branch by hand
       // with [Failed] — was announced nowhere, and the group is the last
-      // one holding it.
-      if (identical(outcome, branch.bodyOutcome)) {
+      // one holding it. A branch that [Job.ignore] was called on wants no
+      // answer: the notice stays, as it does for a failure a cancellation
+      // covered.
+      final announced = identical(outcome, branch.bodyOutcome);
+      if (branch.job._ignored) {
+        if (!announced) {
+          branch.job.notifyObserver(outcome.error, outcome.stackTrace);
+        }
+      } else if (announced) {
         branch.job._handleUnanswered(outcome.error, outcome.stackTrace);
       } else {
         branch.job.notifyError(outcome.error, outcome.stackTrace);

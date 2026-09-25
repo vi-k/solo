@@ -53,8 +53,9 @@ That future does not carry a failure of the child's body if a cancellation
 reaches the child after it, while the child still waits for children of its own
 or runs its cleanup. The child ends `Cancelled`, the future carries the
 cancellation, and the failure goes to the controller's `onUnanswered` -- by
-default to `Solo.errorHandler`, or to the zone without one, whether or not
-`child.ignore()` or `ctx.run(child).ignore()` was called.
+default to `Solo.errorHandler`, or to the zone without one. `child.ignore()`
+silences it, and `ctx.run(child).ignore()` does not: that call ignores the
+future, and the failure is not in it.
 
 Accepted parent cancellation propagates to children. This also applies when the
 parent throws `Cancelled`, including an uncaught cancellation from

@@ -586,11 +586,11 @@ void main() {
           },
         );
 
-    test('a cancellation after the failure: the same as the failure', () {
+    test('a cancellation after the failure: answered, whoever reads it', () {
       expect(
         quotable(
           play(
-            () => failingBeforeCancel(observer: Reporter()),
+            () => failingBeforeCancel(observer: Answering(passedOn: true)),
             cancelAt: 20,
             outcomeObserved: false,
           ),
@@ -598,27 +598,36 @@ void main() {
         [
           'onError: Bad state: disk full',
           'cancel',
+          'onUnanswered: Bad state: disk full',
           'zone: Bad state: disk full',
         ],
       );
       expect(
         quotable(
           play(
-            () => failingBeforeCancel(observer: Reporter()),
+            () => failingBeforeCancel(observer: Answering(passedOn: true)),
             cancelAt: 20,
           ),
         ),
         [
           'onError: Bad state: disk full',
           'cancel',
+          'onUnanswered: Bad state: disk full',
+          'zone: Bad state: disk full',
           'outcome: Cancelled(manual)',
         ],
+        reason: 'the reader gets the cancellation, and the failure is answered '
+            'all the same',
       );
       expect(
         quotable(
           play(failingBeforeCancel, cancelAt: 20, outcomeObserved: false),
         ),
         ['cancel', 'zone: Bad state: disk full'],
+      );
+      expect(
+        quotable(play(failingBeforeCancel, cancelAt: 20)),
+        ['cancel', 'zone: Bad state: disk full', 'outcome: Cancelled(manual)'],
       );
     });
 
@@ -631,11 +640,12 @@ void main() {
           },
         );
 
-    test('a cancellation while the cleanup runs: the same as the failure', () {
+    test('a cancellation while the cleanup runs: answered, whoever reads it',
+        () {
       expect(
         quotable(
           play(
-            () => failingBeforeCleanup(observer: Reporter()),
+            () => failingBeforeCleanup(observer: Answering(passedOn: true)),
             cancelAt: 20,
             outcomeObserved: false,
           ),
@@ -643,27 +653,36 @@ void main() {
         [
           'onError: Bad state: disk full',
           'cancel',
+          'onUnanswered: Bad state: disk full',
           'zone: Bad state: disk full',
         ],
       );
       expect(
         quotable(
           play(
-            () => failingBeforeCleanup(observer: Reporter()),
+            () => failingBeforeCleanup(observer: Answering(passedOn: true)),
             cancelAt: 20,
           ),
         ),
         [
           'onError: Bad state: disk full',
           'cancel',
+          'onUnanswered: Bad state: disk full',
+          'zone: Bad state: disk full',
           'outcome: Cancelled(manual)',
         ],
+        reason: 'the reader gets the cancellation, and the failure is answered '
+            'all the same',
       );
       expect(
         quotable(
           play(failingBeforeCleanup, cancelAt: 20, outcomeObserved: false),
         ),
         ['cancel', 'zone: Bad state: disk full'],
+      );
+      expect(
+        quotable(play(failingBeforeCleanup, cancelAt: 20)),
+        ['cancel', 'zone: Bad state: disk full', 'outcome: Cancelled(manual)'],
       );
     });
 
@@ -684,9 +703,9 @@ void main() {
           },
         );
 
-    test('the same in a child of run: onError, then the zone', () {
-      // The parent observed the child's outcome, and the outcome carries
-      // the cancellation: the failure is answered for, not dropped.
+    test('a child of run the same way: onError, then the zone', () {
+      // The parent read the child's outcome, and the outcome carries the
+      // cancellation: the failure is answered for, not dropped.
       expect(
         quotable(
           play(
@@ -889,19 +908,27 @@ void main() {
     // A branch of `ctx.runAll` that fails on its own after the group has
     // thrown the first failure: its body told the observer where it was
     // caught, and what the group did not throw is nobody's outcome.
-    Job<void> branchNotThrown({JobObserver? observer}) => Job<void>(
+    Job<void> branchNotThrown({
+      JobObserver? observer,
+      bool secondIgnored = false,
+    }) =>
+        Job<void>(
           observer: observer,
           (ctx) async {
+            final second = Job.deferred<int>(cancellable: false, (ctx) async {
+              await ctx.wait(() => delay(20));
+              throw StateError('second');
+            });
+            if (secondIgnored) {
+              second.ignore();
+            }
             try {
               await ctx.runAll([
                 Job.deferred<int>((ctx) async {
                   await ctx.wait(() => delay(10));
                   throw StateError('first');
                 }),
-                Job.deferred<int>(cancellable: false, (ctx) async {
-                  await ctx.wait(() => delay(20));
-                  throw StateError('second');
-                }),
+                second,
               ]);
             } on Object catch (_) {
               // The group throws the first one, and only that one.
@@ -923,6 +950,33 @@ void main() {
       expect(
         play(branchNotThrown),
         ['zone: Bad state: second', 'outcome: Done(null)'],
+      );
+    });
+
+    test('ignore closes the second way for a failure no outcome carries', () {
+      expect(
+        quotable(
+          play(
+            () => failingBeforeCancel(observer: Answering(passedOn: true))
+              ..ignore(),
+            cancelAt: 20,
+            outcomeObserved: false,
+          ),
+        ),
+        ['onError: Bad state: disk full', 'cancel'],
+      );
+      expect(
+        play(
+          () => branchNotThrown(
+            observer: Answering(passedOn: true),
+            secondIgnored: true,
+          ),
+        ),
+        [
+          'onError: Bad state: first',
+          'onError: Bad state: second',
+          'outcome: Done(null)',
+        ],
       );
     });
   });

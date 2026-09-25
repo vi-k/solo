@@ -172,8 +172,7 @@ observer and without, the zone being the one the job was created in:
 | The error | With an observer | Without one |
 | --- | --- | --- |
 | The body's, and the job ends `Failed` with it | `onError`, and the zone if nobody observed the outcome | The zone if nobody observed the outcome |
-| The body's, and a cancellation arrives while the job waits for its children or runs its cleanup | `onError`, and the zone if nobody observed the outcome | The zone if nobody observed the outcome |
-| The same, in a child of `ctx.run` or a branch of `ctx.runAll` | `onError`, then `onUnanswered`: the zone by default | The zone |
+| The body's, and a cancellation arrives while the job waits for its children or runs its cleanup | `onError`, then `onUnanswered`: the zone by default | The zone |
 | The body's, after the job accepted a cancellation | `onError` | Nobody |
 | The body's, in a branch of `ctx.runAll` whose group throws another failure | `onError`, then `onUnanswered`: the zone by default | The zone |
 | Outside the body: a late error of an action abandoned by `wait`, cleanup, a callback of `ctx.onCancel` or `job.whenCancelled`, work of `ctx.unattended`, formatting a child's cancellation description | `onError`, then `onUnanswered`: the zone by default | The zone |
@@ -202,7 +201,10 @@ places hears it twice. The table shows the way each error takes to the zone:
 when nobody observed the outcome, or when `onUnanswered` sends it on. Observing
 the outcome closes the first way;
 [A failure nobody waits for](outcomes.md#a-failure-nobody-waits-for) on the
-outcomes page shows how. An override of `onUnanswered` closes the second.
+outcomes page shows how. An override of `onUnanswered` closes the second. For
+the two failures of a body that the outcome does not carry — one a cancellation
+covered, and one of a branch whose group throws another — `job.ignore()` closes
+the second way as well: `onError` hears the failure, and nobody answers for it.
 
 ## Work the job does not wait for
 

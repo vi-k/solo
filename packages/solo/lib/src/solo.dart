@@ -851,18 +851,18 @@ abstract class Solo<S extends Object> {
   /// holding it.
   ///
   /// The errors an outcome cannot carry: an action abandoned by
-  /// [JobContext.wait] failing later, a disposer, an `onCancel` callback,
-  /// work handed over with [JobContext.unattended], a `keepWhile` that
-  /// threw anywhere but at a checkpoint of the body, the failure of a
-  /// branch of [JobContext.runAll] that the group did not throw, and a
-  /// failure of the body that a cancellation covered afterwards in a child
-  /// of [JobContext.run] or a branch — the parent took the outcome, and the
-  /// outcome carries the cancellation. Any other failure of a body does not
-  /// come here — it becomes a [Failed], where `run(onError: ...)` computes
-  /// a state from it and an outcome nobody observes reaches the zone by
-  /// itself — and neither does a `canStart` that threw, for the same
-  /// reason. Every error that comes here has been through [onError]
-  /// already: one error is announced once.
+  /// [JobContext.wait] failing later, a disposer, an `onCancel` callback, work
+  /// handed over with [JobContext.unattended], a `keepWhile` that threw
+  /// anywhere but at a checkpoint of the body, the failure of a branch of
+  /// [JobContext.runAll] that the group did not throw, and a failure of the
+  /// body that a cancellation covered afterwards — the outcome carries the
+  /// cancellation, whoever reads it: `job.value`, `ctx.run`, a group.
+  /// [Job.ignore] keeps the last two from coming here. Any other failure of a
+  /// body does not come here — it becomes a [Failed], where `run(onError: ...)`
+  /// computes a state from it and an outcome nobody observes reaches the zone
+  /// by itself — and neither does a `canStart` that threw, for the same reason.
+  /// Every error that comes here has been through [onError] already: one error
+  /// is announced once.
   ///
   /// **What the default body does.** With no [errorHandler] set, the error
   /// goes to the zone the job was created in — the same thing the core does

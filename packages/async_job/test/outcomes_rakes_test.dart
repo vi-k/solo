@@ -212,6 +212,37 @@ void main() {
         expect(caught, isEmpty);
       });
     }
+
+    test('waiting does not observe a failure a cancellation covered', () {
+      // The upload fails 10 ms in while a child of the job still runs, and
+      // the cancellation 20 ms in arrives before the job has ended.
+      Future<void> uploadWithChild(JobContext ctx) async {
+        ctx
+            .run(Job.deferred<void>((ctx) => ctx.wait(() => delay(50))))
+            .ignore();
+        await upload(ctx);
+      }
+
+      final seen = <String>[];
+      final waited = zoneOf((async) {
+        final sync = Job<void>(uploadWithChild);
+        unawaited(sync.done.then((outcome) => seen.add('done: $outcome')));
+        async.elapse(const Duration(milliseconds: 20));
+        sync.cancel().ignore();
+        async.flushTimers();
+        seen.add('status: ${status(sync)}');
+      });
+      expect(seen, ['done: Cancelled(manual)', 'status: sync cancelled']);
+      expect(waited, ['zone: Bad state: disk full']);
+
+      final ignored = zoneOf((async) {
+        final sync = Job<void>(uploadWithChild)..ignore();
+        async.elapse(const Duration(milliseconds: 20));
+        sync.cancel().ignore();
+        async.flushTimers();
+      });
+      expect(ignored, isEmpty, reason: 'ignore keeps it out of the zone');
+    });
   });
 
   group('Why a job was cancelled', () {

@@ -314,11 +314,11 @@ void main() {
     expect(caught, isEmpty);
   });
 
-  group('a failure a cancellation covered in a child', () {
-    // The parent took the child's outcome through `ctx.run`, and the
-    // outcome carries the cancellation: the controller answers for the
-    // failure itself.
-    test('reaches onUnanswered of the controller', () {
+  group('a failure a cancellation covered', () {
+    // Whoever reads the outcome gets the cancellation — `ctx.run`, a reader
+    // of `value`, a body waiting for a child of `each` — and the controller
+    // answers for the failure itself.
+    test('in a child of run reaches onUnanswered of the controller', () {
       final caught = <String>[];
       final solo = _Quiet();
       fakeAsync((async) => _coveredChild(solo, async, caught));
@@ -326,7 +326,7 @@ void main() {
       expect(caught, isEmpty, reason: 'the override answered for it');
     });
 
-    test('reaches the error handler behind it', () {
+    test('in a child of run reaches the error handler behind it', () {
       final caught = <String>[];
       final answered = <String>[];
       Solo.errorHandler =
@@ -340,10 +340,26 @@ void main() {
       expect(caught, isEmpty, reason: 'the handler answered for it');
     });
 
-    test('reaches the zone with neither', () {
+    test('in a child of run reaches the zone with neither', () {
       final caught = <String>[];
       fakeAsync((async) => _coveredChild(TestSolo(), async, caught));
       expect(caught, ['Bad state: child failed first']);
+    });
+
+    test('in a child of run that ignore was called on is only told', () {
+      final caught = <String>[];
+      final answered = <String>[];
+      final solo = _Loud();
+      Solo.errorHandler =
+          (solo, job, error, stackTrace) => answered.add('${job.key}: $error');
+      try {
+        fakeAsync((async) => _coveredChild(solo, async, caught, ignored: true));
+      } finally {
+        Solo.errorHandler = null;
+      }
+      expect(solo.errors, ['Bad state: child failed first']);
+      expect(answered, isEmpty, reason: 'nobody answers for it');
+      expect(caught, isEmpty);
     });
 
     test('a step the state stopped while a section held a stop is only told',
@@ -380,7 +396,123 @@ void main() {
       expect(solo.errors, ['Bad state: stopped']);
       expect(caught, isEmpty, reason: 'a failure after the mark is only told');
     });
+
+    for (final read in [false, true]) {
+      test(
+          read
+              ? 'in a root whose value is awaited reaches the error handler'
+              : 'in a root nobody reads reaches the error handler', () {
+        final caught = <String>[];
+        final answered = <String>[];
+        final readers = <String>[];
+        Solo.errorHandler = (solo, job, error, stackTrace) =>
+            answered.add('${job.key}: $error');
+        try {
+          fakeAsync(
+            (async) => _coveredRoot(
+              TestSolo(),
+              async,
+              caught,
+              read: read ? readers : null,
+            ),
+          );
+        } finally {
+          Solo.errorHandler = null;
+        }
+        expect(answered, ['root: Bad state: root failed first']);
+        expect(caught, isEmpty, reason: 'the handler answered for it');
+        expect(readers, read ? ['Cancelled(manual)'] : isEmpty);
+      });
+    }
+
+    test('in a child of each whose value is awaited reaches the error handler',
+        () {
+      final caught = <String>[];
+      final answered = <String>[];
+      Solo.errorHandler =
+          (solo, job, error, stackTrace) => answered.add('$error');
+      try {
+        fakeAsync((async) => _coveredEach(TestSolo(), async, caught));
+      } finally {
+        Solo.errorHandler = null;
+      }
+      expect(answered, ['Bad state: each failed first']);
+      expect(caught, isEmpty, reason: 'the handler answered for it');
+    });
   });
+}
+
+/// A root whose body fails 5 ms in while a child of its own still runs, and
+/// is cancelled 10 ms in; with [read], the value is awaited and what it
+/// throws lands there.
+void _coveredRoot(
+  OpenSolo<TestState> solo,
+  FakeAsync async,
+  List<String> caught, {
+  List<String>? read,
+}) {
+  late final Job<void> root;
+  _inZone(caught, () {
+    root = solo.run<TestState, void>(key: 'root', (ctx) async {
+      ctx
+          .run(
+            solo.job<TestState, void>(
+              key: 'child',
+              (ctx) => ctx.wait(
+                () => Future<void>.delayed(const Duration(milliseconds: 50)),
+              ),
+            ),
+          )
+          .ignore();
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      throw StateError('root failed first');
+    });
+    if (read != null) {
+      unawaited(
+        root.value.then<void>(
+          (_) {},
+          onError: (Object error) => read.add('$error'),
+        ),
+      );
+    }
+  });
+  async.elapse(const Duration(milliseconds: 10));
+  root.cancel().ignore();
+  async.flushTimers();
+  solo.close();
+  async.flushTimers();
+}
+
+/// A parent that awaits the value of a child of `each`, cancelled 10 ms in,
+/// while that child waits for a child of its own after its callback failed.
+void _coveredEach(
+  OpenSolo<TestState> solo,
+  FakeAsync async,
+  List<String> caught,
+) {
+  late final Job<void> parent;
+  _inZone(caught, () {
+    parent = solo.run<TestState, void>(key: 'parent', (ctx) async {
+      await ctx.each(Stream<int>.fromIterable([1]), (child, event) {
+        child
+            .run(
+              solo.job<TestState, void>(
+                key: 'grandchild',
+                (ctx) => ctx.wait(
+                  () => Future<void>.delayed(const Duration(milliseconds: 50)),
+                ),
+              ),
+            )
+            .ignore();
+        throw StateError('each failed first');
+      }).value;
+    });
+  });
+  async.elapse(const Duration(milliseconds: 10));
+  parent.cancel().ignore();
+  async.flushTimers();
+  solo.close();
+  async.flushTimers();
 }
 
 /// A parent that runs a child through `ctx.run` and is cancelled 10 ms
@@ -389,29 +521,30 @@ void main() {
 void _coveredChild(
   OpenSolo<TestState> solo,
   FakeAsync async,
-  List<String> caught,
-) {
+  List<String> caught, {
+  bool ignored = false,
+}) {
   late final Job<void> parent;
   _inZone(caught, () {
     parent = solo.run<TestState, void>(key: 'parent', (ctx) async {
-      await ctx.run(
-        solo.job<TestState, int>(key: 'child', (ctx) async {
-          ctx
-              .run(
-                solo.job<TestState, void>(
-                  key: 'grandchild',
-                  (ctx) => ctx.wait(
-                    () => Future<void>.delayed(
-                      const Duration(milliseconds: 50),
-                    ),
-                  ),
+      final child = solo.job<TestState, int>(key: 'child', (ctx) async {
+        ctx
+            .run(
+              solo.job<TestState, void>(
+                key: 'grandchild',
+                (ctx) => ctx.wait(
+                  () => Future<void>.delayed(const Duration(milliseconds: 50)),
                 ),
-              )
-              .ignore();
-          await Future<void>.delayed(const Duration(milliseconds: 5));
-          throw StateError('child failed first');
-        }),
-      );
+              ),
+            )
+            .ignore();
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+        throw StateError('child failed first');
+      });
+      if (ignored) {
+        child.ignore();
+      }
+      await ctx.run(child);
     });
   });
   async.elapse(const Duration(milliseconds: 10));

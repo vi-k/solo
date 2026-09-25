@@ -72,9 +72,10 @@ That future does not carry a failure of the child's body if a cancellation
 reaches the child after it, while the child still waits for children of its own
 or runs its cleanup. The child ends `Cancelled`, the future carries the
 cancellation, and the failure goes on to `onUnanswered` of the child's observer
--- by default to the zone, whether or not `child.ignore()` or
-`ctx.run(child).ignore()` was called. To answer for it differently, give the
-child an observer of its own.
+-- by default to the zone. `child.ignore()` silences it, and
+`ctx.run(child).ignore()` does not: that call ignores the future, and the
+failure is not in it. To answer for it differently, give the child an observer
+of its own.
 
 A child inherits the parent's observer unless it has its own. If a child's
 cancellation escapes through `await ctx.run(child)` or `child.value`, the

@@ -8,19 +8,21 @@
   `Solo.onUnanswered`, asked only about the errors no outcome carries: an
   operation abandoned by `wait` failing later, a disposer, an `onCancel`
   callback, work handed to `ctx.unattended`, the failure of a branch of
-  `ctx.runAll` that the group did not throw, and the failure of the body of a
-  child of `ctx.run` or a branch of `ctx.runAll` when a cancellation reaches it
-  afterwards, while it still waits for children of its own or runs its cleanup.
-  Any other failure of a body is not one of them: it becomes `Failed`, where
-  `run(onError: ...)` computes a state and an outcome nobody observes reaches
-  the zone by itself. An override of `onError` that called `super` keeps
-  working -- that call now runs an empty body, and the route stands without it.
-  An override that did not call `super` is what this changes, and quietly: the
-  errors it used to swallow reach the handler or the zone again. To keep them
-  where that override put them, move its body to `onUnanswered`; an override
-  there answers for these errors and stops them, and
-  `super.onUnanswered(job, error, stackTrace)` reports and keeps the route as
-  well.
+  `ctx.runAll` that the group did not throw, and the failure of a body when a
+  cancellation reaches the job afterwards, while it still waits for children of
+  its own or runs its cleanup. Whoever reads that outcome gets the
+  cancellation, so such a failure of a root or of a child of `ctx.each` reaches
+  `Solo.errorHandler` even when its `value` was awaited; `job.ignore()`
+  silences it. Any other failure of a body is not one of them: it becomes
+  `Failed`, where `run(onError: ...)` computes a state and an outcome nobody
+  observes reaches the zone by itself. An override of `onError` that called
+  `super` keeps working -- that call now runs an empty body, and the route
+  stands without it. An override that did not call `super` is what this
+  changes, and quietly: the errors it used to swallow reach the handler or the
+  zone again. To keep them where that override put them, move its body to
+  `onUnanswered`; an override there answers for these errors and stops them,
+  and `super.onUnanswered(job, error, stackTrace)` reports and keeps the route
+  as well.
 
 - **Breaking, inherited from `async_job`:** `solo` re-exports the core whole,
   so the core's breaking changes are this package's too, and three of them

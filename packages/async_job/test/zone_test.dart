@@ -175,8 +175,7 @@ void main() {
     expect(caught.map((error) => '$error').toList(), ['Bad state: boom']);
   });
 
-  test('an error a late cancellation covers goes where an uncovered one goes',
-      () {
+  test('an error a late cancellation covers is told once and answered', () {
     final journal = JobJournal();
     final caught = <Object>[];
     runZonedGuarded(
@@ -207,8 +206,8 @@ void main() {
     expect(
       caught.map((error) => '$error').toList(),
       ['Bad state: boom'],
-      reason: 'nobody looked at the outcome, so the zone hears — as it '
-          'does for a failure no cancellation covered',
+      reason: 'the outcome carries the cancellation, and an observer that '
+          'only watches answers for the failure with the zone',
     );
     expect(
       journal.lines.where((line) => line.contains('error')).toList(),
@@ -600,13 +599,13 @@ void main() {
     expect(
       caught.map((error) => '$error').toList(),
       ['Bad state: boom'],
-      reason: 'the body failed first, and a cancellation decided afterwards '
-          'leaves that failure on the same road it would have taken anyway',
+      reason: 'the body failed first, and the cancellation that decided '
+          'afterwards leaves it an error no outcome carries, answered with '
+          'the zone',
     );
   });
 
-  test('a covered error waits for the same window an uncovered one waits for',
-      () {
+  test('ignore from onFinish still silences a covered error', () {
     final order = <String>[];
     runZonedGuarded(
       () {
@@ -640,12 +639,12 @@ void main() {
     expect(
       order,
       ['onFinish job'],
-      reason: 'an observer taking the outcome at finish is in time here as '
-          'it is for a failure no cancellation covered',
+      reason: 'an engine of a domain calling ignore at finish is in time: '
+          'the answer follows onFinish',
     );
   });
 
-  test('a listener one microtask late still counts for a covered error too',
+  test('a reader a microtask after finish does not keep a covered error back',
       () {
     final caught = <Object>[];
     runZonedGuarded(
@@ -676,9 +675,10 @@ void main() {
       (error, stackTrace) => caught.add(error),
     );
     expect(
-      caught,
-      isEmpty,
-      reason: 'the same microtask of grace an uncovered failure gives',
+      caught.map((error) => '$error').toList(),
+      ['Bad state: boom'],
+      reason: 'the reader gets the cancellation, not the failure, and the '
+          'failure is answered as the job ends',
     );
   });
 

@@ -283,3 +283,26 @@ one» отвечала на реплику, которой читатель не
    идёт уборка. Строка стала «… while the job waits for its children or runs
    its cleanup»; сторож — тест «a cancellation while the cleanup runs: the same
    as the failure», 37 тестов вместо 36.
+
+6. «Давай обсудим вопрос 4 плана» — о границе правила из пункта 5: корень, чьё
+   `value` или `done` ждут, и ребёнок `ctx.each`, чьё `value` ждёт тело, теряли
+   провал, который потом покрыла отмена. Читатель получал отмену, а правило
+   «в зону, если исход никто не смотрел» считало ошибку полученной. Владелец
+   решил: такой провал отвечается у любой задачи, кто бы ни читал исход,
+   а `Job.ignore` его глушит. План —
+   `2026-09-25-covered-failure-any-job-plan.md`, его ревью —
+   `2026-09-25-covered-failure-any-job-plan-review.md`, отчёт —
+   `2026-09-26-covered-failure-any-job-report.md`.
+
+   Страница правлена вместе с ядром. Строки таблицы «The body's, and a
+   cancellation arrives…» и «The same, in a child of `ctx.run`…» слились
+   в одну: `onError`, затем `onUnanswered`, по умолчанию зона; без наблюдателя
+   зона. Абзац о двойном слухе дописан: для двух провалов тела, которых исход
+   не несёт, — покрытого отменой и провала ветки, чья группа бросает другой, —
+   второй путь закрывает и `job.ignore()`. Сторожа строки — тесты «a
+   cancellation after the failure: answered, whoever reads it» и «a
+   cancellation while the cleanup runs: answered, whoever reads it»
+   с наблюдателем `Answering(passedOn: true)`: `Reporter` печатает один
+   `onError`. Тест «a child of run the same way: onError, then the zone»
+   сторожит ту же строку у ребёнка `ctx.run`. Сторож абзаца — «ignore closes
+   the second way for a failure no outcome carries», 38 тестов вместо 37.

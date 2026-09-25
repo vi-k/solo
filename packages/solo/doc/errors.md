@@ -54,9 +54,9 @@ where `run(onError: ...)` computes a state from it, and an outcome nobody
 observes reaches the job's creation zone by itself. What no outcome carries is
 the rest: an operation abandoned by `wait` that fails later, a disposer, an
 `onCancel` callback, work handed to `ctx.unattended`, the failure of a branch
-of `ctx.runAll` that the group did not throw, and the failure of the body of a
-child of `ctx.run` or a branch of `ctx.runAll` when a cancellation reaches it
-afterwards, while it still waits for children of its own or runs its cleanup.
+of `ctx.runAll` that the group did not throw, and the failure of a body when a
+cancellation reaches the job afterwards, while it still waits for children of
+its own or runs its cleanup: whoever reads that outcome gets the cancellation.
 Somebody has to answer for those, and the one asked is always the same:
 `onUnanswered`, on the controller whose job it was.
 
@@ -360,7 +360,11 @@ profile.load().ignore(); // the counterpart of Future.ignore
 Accessing `job.done` or `job.value`, or calling `job.ignore()`, marks the
 outcome as observed. `ignore()` is for the caller that needs no result and
 leaves reporting to the hooks; a caller that needs the result takes it with
-`await job.value` and answers for the error by catching it.
+`await job.value` and answers for the error by catching it. One failure it
+cannot catch: if the load fails and a cancellation reaches the job while it
+still waits for children of its own or runs its cleanup, `await job.value`
+throws the `Cancelled`, and the failure goes to `onUnanswered` like the errors
+below. `ignore()` silences that one too.
 
 Errors from cleanup, cancellation callbacks and operations abandoned by `wait`
 go to the reporting hooks, and the controller is asked to answer for them

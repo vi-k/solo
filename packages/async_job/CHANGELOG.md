@@ -28,16 +28,23 @@
   `async_job.dart`. Code that only runs jobs is untouched. See
   `doc/extending.md`.
 
-- **Fix:** the failure of a child's body is no longer lost when a cancellation
-  reaches the child afterwards, while it still waits for children of its own or
-  runs its cleanup. The child ends `Cancelled`, and a failure so covered went
-  to the zone only if nobody observed the outcome -- but `ctx.run` and a group
-  of `ctx.runAll` always observe it, and pass on the cancellation alone. Such a
-  failure is now an error no outcome carries: `onError` hears it where the body
-  threw it, and `onUnanswered` of the child's observer answers for it, by
-  default in the zone; without an observer it goes to the zone. `ignore` on the
-  child changes nothing there, as it changes nothing about a failure `ctx.run`
-  throws. Any other job keeps the rule it had. See `doc/observing.md`.
+- **Fix:** the failure of a body is no longer lost when a cancellation reaches
+  the job afterwards, while it still waits for children of its own or runs its
+  cleanup. The job ends `Cancelled`, and whoever reads the outcome gets the
+  cancellation -- `await job.value`, `job.done`, `await ctx.each(...).value`,
+  `ctx.run`, a group of `ctx.runAll`. The failure went to the zone only if
+  nobody read the outcome, so each of these readers lost it, and `ctx.run` and
+  a group always read. It is now an error no outcome carries, whoever reads the
+  outcome: `onError` hears it where the body threw it, and `onUnanswered` of
+  the job's observer answers for it, by default in the zone; without an
+  observer it goes to the zone. Reading the outcome no longer keeps it out of
+  the zone, and in a test the zone is the test's. A failure an engine of a
+  domain hands to `finish` after the mark goes the same way, told once.
+  `ignore` silences such a failure, on a child of `ctx.run` as well, and the
+  failure of a branch of `ctx.runAll` that the group did not throw: `onError`
+  hears it, and nobody answers for it. Call `ignore` before the job ends, or at
+  the latest from `onFinish` or a callback of `whenCancelled`. See
+  `doc/observing.md`.
 - **Fix:** a `whenCancelled` registered while the cancellation is still
   cascading onto the children now runs in its turn instead of ahead of everyone
   who registered earlier. Between the mark and the pass that tells the
