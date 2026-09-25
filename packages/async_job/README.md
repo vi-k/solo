@@ -156,7 +156,7 @@ search.
 | Page | What it covers |
 | --- | --- |
 | [Outcomes](doc/outcomes.md) | `Done`, `Failed`, `Cancelled`, and who is answerable for an error |
-| [Cancellation](doc/cancellation.md) | Checkpoints, `onCancel`, `uncancellable`, reasons |
+| [Cancellation](doc/cancellation.md) | Checkpoints, `onCancel`, `uncancellable`, `unattended` |
 | [Children, streams and chains](doc/children.md) | `ctx.run`, `ctx.each`, `then` |
 | [Cleanup](doc/cleanup.md) | `dispose`, `discard`, `onDispose`, ordering |
 | [Observing and testing](doc/observing.md) | `JobObserver`, logs, fake time |

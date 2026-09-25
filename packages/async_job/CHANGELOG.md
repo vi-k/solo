@@ -258,6 +258,20 @@
   `whenCancelled` goes: to the zone of the code that cancelled, never to
   `onError`.
 
+- `doc/cancellation.md` opens each of its four sections with the version the
+  names lead to and shows what it prints: `ctx.wait` around a migration, which
+  lets the job close the database under it; `ctx.join` without a token, which
+  waits for steps nobody wants; `ctx.join` around a step that must finish,
+  which the token stops halfway; `on Cancelled { rethrow; }`, which logs a
+  migration stopped by its token as a failure, because `join` throws the
+  action's own error; and `unawaited`, whose failure goes to the zone past the
+  observer. The clause the page used to recommend is replaced by `ctx.check()`
+  in the `catch`, which also lets an optional child's cancellation through. The
+  page now says where the action's error goes after a cancellation, and what
+  happens to a future that crosses the boundary of `ctx.unattended`. The guide
+  table of the README no longer lists cancel reasons under this page: they live
+  in `doc/outcomes.md`.
+
 ## 0.2.0
 
 - **Breaking:** `ctx.run(child)` returns `Future<T>` instead of the child's
