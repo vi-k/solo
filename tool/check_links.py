@@ -34,6 +34,18 @@ shows a package without its neighbours, so `solo` links a section of
 in this tree, and they are checked like a relative link's -- the address
 holds the same promise, and until 2026-09-25 nobody checked it.
 
+A guide page does not lead up. The packages are layered -- `solo` is built
+on `async_job`, `flutter_solo` on `solo` -- and a page of `doc/` explains
+its own package to a reader who may not have the one above it at all. So a
+guide page, or its translation, that links into a document of a package
+built on its own is reported. `observing.md` of `async_job` sent its
+reader to the errors page of `solo` for "such an observer in full", and
+what stood there was a `SoloObserver`, with hooks the core does not have.
+A README is left alone: it is the front of its package and introduces the
+family, and sending a reader to the package that solves their problem is
+its job. Which package is built on which is read from the `dependencies` of
+every pubspec, so a new package needs no edit here.
+
 `docs/records/` is not checked: a record is history, written on its day and
 kept as it was, and a link that pointed somewhere then is not a defect now.
 """
@@ -54,6 +66,43 @@ REPO = pathlib.Path(__file__).resolve().parent.parent
 # The repository's address is the site's setting, so one place names it.
 BLOB = json.loads((REPO / 'site' / 'site.json').read_text())['repo']
 BLOB = BLOB.rstrip('/') + '/blob/main/'
+
+
+DEPENDENCIES = re.compile(r'^dependencies:\n((?:[ \t].*\n|\n)*)', re.M)
+NAME = re.compile(r'^  (\w+):', re.M)
+
+
+def built_on():
+    """Package -> every package of this tree built on it, however deep."""
+    needs = {}
+    for pubspec in sorted((REPO / 'packages').glob('*/pubspec.yaml')):
+        block = DEPENDENCIES.search(pubspec.read_text())
+        needs[pubspec.parent.name] = set(
+            NAME.findall(block.group(1)) if block else ()
+        )
+    above = {package: set() for package in needs}
+    for package in needs:
+        pending = [package]
+        while pending:
+            below = pending.pop()
+            for dependency in needs.get(below, ()):
+                if dependency in above and package not in above[dependency]:
+                    above[dependency].add(package)
+                    pending.append(dependency)
+    return above
+
+
+def place(path):
+    """The package a document belongs to, and whether it is a guide page."""
+    try:
+        parts = path.resolve().relative_to(REPO.resolve()).parts
+    except ValueError:
+        return None, False
+    if len(parts) >= 3 and parts[0] == 'packages':
+        return parts[1], len(parts) == 4 and parts[2] == 'doc'
+    if len(parts) == 4 and parts[:2] == ('docs', 'ru'):
+        return parts[2], True
+    return None, False
 
 
 def slug(heading):
@@ -83,6 +132,8 @@ def anchors(path):
 
 
 def offenders(path):
+    package, guide = place(path)
+    above = built_on().get(package, set()) if guide else set()
     fenced = False
     for number, line in enumerate(path.read_text().split('\n'), start=1):
         if line.startswith('```'):
@@ -99,6 +150,9 @@ def offenders(path):
             else:
                 file, _, anchor = target.partition('#')
                 destination = (path.parent / file).resolve() if file else path
+            upper, _ = place(destination)
+            if upper in above:
+                yield number, f'a page of {package} leads up to {upper}: {target}'
             if not destination.exists():
                 yield number, f'no such file: {target}'
                 continue

@@ -183,5 +183,109 @@ class ThisRepositoryOnGitHub(LinkCase):
         self.assertEqual(self.problems(page), [])
 
 
+
+class ThePackageAbove(LinkCase):
+    # A guide page explains its own package to a reader who may not have
+    # the package built on it. `observing.md` of `async_job` sent that
+    # reader to `solo` for "such an observer in full".
+    def setUp(self):
+        super().setUp()
+        patcher = mock.patch.object(check_links, 'REPO', self.root)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.package('core', 'meta')
+        self.package('middle', 'core')
+        self.package('top', 'flutter', 'middle')
+        for name in (
+            'packages/middle/README.md',
+            'packages/middle/doc/errors.md',
+            'packages/top/doc/widgets.md',
+            'docs/ru/middle/errors.md',
+        ):
+            self.write(name, '# Page\n\n## Slow cancellation\n')
+
+    def package(self, name, *dependencies):
+        (self.root / 'packages' / name / 'doc').mkdir(parents=True)
+        lines = ''.join(f'  {each}: any\n' for each in dependencies)
+        self.write(
+            f'packages/{name}/pubspec.yaml',
+            f'name: {name}\n\ndependencies:\n{lines}\ndev_dependencies:\n'
+            '  test: any\n',
+        )
+
+    def write(self, name, text):
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+        return path
+
+    def test_a_guide_page_linking_up(self):
+        page = self.write(
+            'packages/core/doc/observing.md',
+            'See [it](../../middle/doc/errors.md#slow-cancellation).\n',
+        )
+        self.assertEqual(
+            self.problems(page),
+            [
+                'a page of core leads up to middle: '
+                '../../middle/doc/errors.md#slow-cancellation'
+            ],
+        )
+
+    def test_a_guide_page_linking_up_by_its_github_address(self):
+        target = f'{check_links.BLOB}packages/middle/doc/errors.md'
+        page = self.write(
+            'packages/core/doc/observing.md', f'See [it]({target}).\n'
+        )
+        self.assertEqual(
+            self.problems(page), [f'a page of core leads up to middle: {target}']
+        )
+
+    def test_a_translation_linking_up(self):
+        page = self.write(
+            'docs/ru/core/observing.md',
+            'См. [это](../middle/errors.md#slow-cancellation).\n',
+        )
+        self.assertEqual(
+            self.problems(page),
+            [
+                'a page of core leads up to middle: '
+                '../middle/errors.md#slow-cancellation'
+            ],
+        )
+
+    def test_a_package_built_on_one_built_on_it(self):
+        page = self.write(
+            'packages/core/doc/observing.md',
+            'See [it](../../top/doc/widgets.md).\n',
+        )
+        self.assertEqual(
+            self.problems(page),
+            ['a page of core leads up to top: ../../top/doc/widgets.md'],
+        )
+
+    def test_a_guide_page_linking_down(self):
+        self.write('packages/core/doc/cleanup.md', '# Cleanup\n')
+        page = self.write(
+            'packages/middle/doc/resources.md',
+            'See [it](../../core/doc/cleanup.md).\n',
+        )
+        self.assertEqual(self.problems(page), [])
+
+    def test_a_readme_introducing_the_family(self):
+        page = self.write(
+            'packages/core/README.md',
+            'For a queue, see [middle](../middle/README.md).\n',
+        )
+        self.assertEqual(self.problems(page), [])
+
+    def test_a_guide_page_naming_the_package_on_pub(self):
+        page = self.write(
+            'packages/core/doc/observing.md',
+            'Built on it: [middle](https://pub.dev/packages/middle).\n',
+        )
+        self.assertEqual(self.problems(page), [])
+
+
 if __name__ == '__main__':
     unittest.main()
