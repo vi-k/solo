@@ -1,8 +1,8 @@
 # Cancellation
 
 Cancellation is cooperative. Dart cannot interrupt an arbitrary `await`, and
-marking a job cancelled does not stop its underlying I/O. The context gives the
-body checkpoints to answer at, and the one you pick decides what happens to the
+cancelling a job does not stop its underlying I/O. The context gives the body
+checkpoints to answer at, and the one you pick decides what happens to the
 operation behind it:
 
 ```dart
@@ -19,7 +19,7 @@ operation behind it:
     dispose: (handle) => handle.close(),
   );
 
-  // Nothing marks the job at all while this runs.
+  // An ordinary cancellation waits for this to end.
   await ctx.uncancellable(() => payment.commit());
 
   // Nothing to wrap: a checkpoint standing on its own.
@@ -34,6 +34,13 @@ operation behind it:
 | `ctx.join(action)` | Waits for the operation to finish, then throws `Cancelled` in place of a successful result. |
 | `ctx.uncancellable(action)` | Holds ordinary cancellation until the action finishes, then returns its result without throwing `Cancelled`; code after it runs until the next checkpoint, which throws it. |
 | `ctx.check()` | Throws `Cancelled` when the job is already cancelled or its rules no longer hold. |
+
+A running job accepts a cancellation the moment it is asked to stop, unless an
+`uncancellable` section holds the request back or the job refuses it with
+`cancellable: false`; both are taken apart below. Accepting it makes the job
+cancelled: its `onCancel` callbacks run, the cancellation passes to its
+children, and the job ends `Cancelled` whatever the body does next. The body
+itself goes on until its next checkpoint.
 
 `wait` suits a request whose result can be abandoned. The request can continue
 after the job has finished and the next job has started. `join` suits work that
@@ -124,10 +131,10 @@ Job<void> seek(Duration position) => run<Ready, void>(
 ```
 
 `ctx.onCancel(callback)` connects job cancellation to an operation's own
-cancellation mechanism; the callback runs synchronously when the job is marked
-cancelled. The token asks the player to stop seeking, and `join` waits for it
-to stop, so a replacement seek starts right after the one it replaces has
-stopped, not at the end of it. This depends on the player's API actually
+cancellation mechanism; the callback runs synchronously when the job accepts
+the cancellation. The token asks the player to stop seeking, and `join` waits
+for it to stop, so a replacement seek starts right after the one it replaces
+has stopped, not at the end of it. This depends on the player's API actually
 responding to the token. One that ignores it puts you back at the second
 attempt: the seek dragged past runs to its end, and only then does the next one
 start.
@@ -174,10 +181,10 @@ SoloJob<void> commit(String entry) => run<Ready, void>((ctx) async {
     });
 ```
 
-Both calls are now inside what `join` waits out, but the job is marked the
-moment the cancellation arrives, not when the step is over. The step goes on as
-the code of a cancelled job: the `emit` inside it is a checkpoint and throws,
-and the entry is lost once more.
+Both calls are now inside what `join` waits out, but the job accepts the
+cancellation the moment it arrives, not when the step is over. The step goes on
+as the code of a cancelled job: the `emit` inside it is a checkpoint and
+throws, and the entry is lost once more.
 
 ### One section for the step
 
@@ -193,7 +200,7 @@ SoloJob<void> commit(String entry) => run<Ready, void>((ctx) async {
 ```
 
 Manual cancellation, parent cancellation and closing are held while an
-`uncancellable` action runs. The job is not marked by those requests yet, so a
+`uncancellable` action runs. The job does not accept those requests yet, so a
 checkpoint inside the section does not throw on them — the receipt reaches the
 state — and its cancellation callbacks and child cancellation cascade are
 delayed as well.

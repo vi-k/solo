@@ -136,7 +136,7 @@ unawaited(controller.close().timeout(
 | --- | --- |
 | `job` | the job being waited for |
 | `phase` | what it is doing: `body`, `children`, `cleanup` |
-| `cancellation` | the cancellation it is marked with, or `null` |
+| `cancellation` | the cancellation it has accepted, or `null` |
 | `heldCancellation` | the one an open `ctx.uncancellable` section holds back |
 | `children` | how many children it is still waiting for |
 | `inUncancellableSection` | whether such a section is open |
@@ -145,9 +145,9 @@ unawaited(controller.close().timeout(
 
 Next to those fields the snapshot computes one answer of its own:
 `pending.cancellationPending` is true when either cancellation above is there,
-the marked one or the held one. A job with `refusesCancellation` turns down the
-ones it may turn down, so nothing is pending on it however often it was asked
-to stop.
+the accepted one or the held one. A job with `refusesCancellation` turns down
+the ones it may turn down, so nothing is pending on it however often it was
+asked to stop.
 
 `null` says that no job is running, not that nothing holds the close. A drain
 waits for the queue as well, and a group of `collect` or `accumulate` stays

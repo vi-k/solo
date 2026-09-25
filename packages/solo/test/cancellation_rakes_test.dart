@@ -108,6 +108,27 @@ final class Opener extends Solo<String> {
       });
 }
 
+// --- Accepting a cancellation ----------------------------------------------
+
+final class Stepper extends Solo<String> {
+  final Device device;
+
+  Stepper(this.device) : super('ready');
+
+  /// A job with a child of its own and no checkpoint after its step.
+  Job<int> step() => run<String, int>((ctx) async {
+        ctx.onCancel(() => device.trace.add('onCancel'));
+        ctx.run(
+          job<String, void>((ctx) async {
+            ctx.onCancel(() => device.trace.add('child onCancel'));
+            await ctx.wait(() => device.start('child'));
+          }),
+        ).ignore();
+        await device.start('step');
+        return 42;
+      });
+}
+
 // --- Stopping the underlying operation ------------------------------------
 
 final class Player extends Solo<int> {
@@ -339,6 +360,27 @@ void main() {
             'the handle open on a job that finished',
       );
       expect(opener.currentState, 'open');
+    });
+  });
+
+  group('accepting a cancellation', () {
+    test('happens inside cancel(), and the body no longer decides', () async {
+      final device = Device();
+      final job = Stepper(device).step();
+      await pump();
+      unawaited(job.cancel());
+      device.trace.add('cancel() returned');
+
+      await device.end('step');
+      expect(device.trace, [
+        'child start',
+        'step start',
+        'child onCancel',
+        'onCancel',
+        'cancel() returned',
+        'step end',
+      ]);
+      expect(job.outcome, isA<Cancelled>(), reason: 'the body returned 42');
     });
   });
 

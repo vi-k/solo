@@ -89,7 +89,7 @@ is a promise; both follow from the size of a body's frame, and the second one
 moves between runs of the same program as the compiler optimizes the descent
 under way.
 
-A cascade that runs out of stack tells every job it marked to stop, save a
+A cascade that runs out of stack tells every job it cancelled to stop, save a
 handful at the deep end: down there the stack has only just run out, and a
 callback that asks for a few frames of its own may not get them. An overflow
 landing there is not announced as a failure of that callback, because it is not
@@ -320,10 +320,10 @@ ctx.onDispose(() {
 
 `ctx.onDispose` and `ctx.onDiscard` run no check first, so there is no
 checkpoint left for a pending cancellation to win, and the registration happens
-even on a job already marked. Put it on the very next line after the group
-returns: `onDispose` when the list is the body's own, `onDiscard` when the list
-is what the body returns or hands on further -- the same choice as anywhere
-else in this rule.
+even on a job that has already accepted a cancellation. Put it on the very next
+line after the group returns: `onDispose` when the list is the body's own,
+`onDiscard` when the list is what the body returns or hands on further -- the
+same choice as anywhere else in this rule.
 
 ## Processing streams
 
