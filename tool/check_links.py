@@ -28,10 +28,17 @@ are not checked: a network call is not a gate's business. Links inside
 fenced code blocks and inside backticks are not checked either, because a
 fragment showing Markdown is code, not a link.
 
+A link to this repository on GitHub is not external, only absolute: pub.dev
+shows a package without its neighbours, so `solo` links a section of
+`async_job` by its GitHub address. The file and the section behind it are
+in this tree, and they are checked like a relative link's -- the address
+holds the same promise, and until 2026-09-25 nobody checked it.
+
 `docs/records/` is not checked: a record is history, written on its day and
 kept as it was, and a link that pointed somewhere then is not a defect now.
 """
 
+import json
 import pathlib
 import re
 import sys
@@ -43,6 +50,10 @@ LINK = re.compile(r'\[[^\]]*\]\(([^)\s]+)\)')
 SPAN = re.compile(r'`[^`]+`')
 HEADING = re.compile(r'^#{1,6}\s+(.*)$')
 EXTERNAL = re.compile(r'^(https?:|mailto:)')
+REPO = pathlib.Path(__file__).resolve().parent.parent
+# The repository's address is the site's setting, so one place names it.
+BLOB = json.loads((REPO / 'site' / 'site.json').read_text())['repo']
+BLOB = BLOB.rstrip('/') + '/blob/main/'
 
 
 def slug(heading):
@@ -80,10 +91,14 @@ def offenders(path):
         if fenced:
             continue
         for target in LINK.findall(SPAN.sub('', line)):
-            if EXTERNAL.match(target):
+            if target.startswith(BLOB):
+                file, _, anchor = target[len(BLOB):].partition('#')
+                destination = REPO / file
+            elif EXTERNAL.match(target):
                 continue
-            file, _, anchor = target.partition('#')
-            destination = (path.parent / file).resolve() if file else path
+            else:
+                file, _, anchor = target.partition('#')
+                destination = (path.parent / file).resolve() if file else path
             if not destination.exists():
                 yield number, f'no such file: {target}'
                 continue

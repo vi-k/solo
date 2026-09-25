@@ -145,9 +145,10 @@ The receiver that registered the value on arrival is the one that closes it.
 The same value stays reachable through the child's `Job.value` for as long as
 anyone holds the handle, but closing it there closes it a second time. Where
 the value reaches no receiver at all, closing falls to whoever holds the
-handle:
-[a branch that refused the group's stop](children.md#what-a-group-hands-back),
-and [a chain whose `then` was cancelled while it waited](children.md#chains).
+handle: a branch that refused the group's stop, in
+[What a group hands back](children.md#what-a-group-hands-back), and a chain
+whose `then` was cancelled while it waited, in [Chains](children.md#chains),
+both on the children page.
 
 The debug channel names every hand-over that drops a registration, whether or
 not the receiver registered anything, so the places where this rule applies can

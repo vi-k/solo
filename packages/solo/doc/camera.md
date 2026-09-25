@@ -174,8 +174,8 @@ state: Preparing()
 it is still opening. Nothing starts from `Preparing`: `init` wants `Initial`,
 and `reopen`, the example's way back, wants `Ready` or `Broken`. It is the trap
 of
-[State after failure or cancellation](state.md#state-after-failure-or-cancellation),
-with a device behind the spinner.
+[State after failure or cancellation](state.md#state-after-failure-or-cancellation)
+on the state page, with a device behind the spinner.
 
 ### The handlers of run
 
@@ -397,7 +397,7 @@ state: Disposed()
 `queue.clear()` drops what has not started, and the shot never reaches the
 hardware. `current?.cancel()` asks the running zoom to stop, and the lens moves
 to 2 all the same: the zoom waits with `join`, which lets the job leave only
-once the operation it started is over — the table at the top of
+once the operation it started is over — the table at the top of the page
 [Cancellation](cancellation.md) has each waiting method. What the cancellation
 saves is the rest of the body: the zoom publishes no state for a camera about
 to close, and the disposal starts as soon as the hardware is free.
@@ -470,10 +470,10 @@ job, and a job that is not cancellable runs to its end. A job still in the
 queue never starts: `close()` ends it with `Cancelled(closed)`, cancellable or
 not, and whoever awaits it gets that outcome at once, as
 [Cancelling and closing a controller](cancellation.md#cancelling-and-closing-a-controller)
-describes. `dispose()` queued its job and `close()` came in the same turn, so
-the disposal ended in the queue. The hardware log has no `close` in it. The
-camera stays open, the state still says `Ready`, and the controller that could
-close the camera is closed itself.
+on the cancellation page describes. `dispose()` queued its job and `close()`
+came in the same turn, so the disposal ended in the queue. The hardware log has
+no `close` in it. The camera stays open, the state still says `Ready`, and the
+controller that could close the camera is closed itself.
 
 ### The second attempt
 

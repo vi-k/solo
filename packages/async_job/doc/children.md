@@ -270,7 +270,8 @@ A branch that did not take the resource itself but got it from a child of its
 own registers it on arrival, the way every receiver does: the child ended
 `Done` inside the branch, and a child's registration is settled by the child's
 outcome. `ctx.run(opener, discard: ...)` puts the registration on the branch,
-and everything above then holds for it. See [Cleanup](cleanup.md).
+and everything above then holds for it. The cleanup page shows that call in
+[Registering on arrival](cleanup.md#registering-on-arrival).
 
 One thing stays open, and it follows from a rule written elsewhere. A branch
 created with `cancellable: false` refuses the stop and ends `Done`: it hands

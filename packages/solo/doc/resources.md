@@ -306,10 +306,10 @@ release must precede the next job or controller closure.
 
 The first three steps are the engine's, and so are the late results they can
 bring:
-[Cleanup](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cleanup.md)
-in `async_job` is where that order is described and kept. A controller adds the
-last row — the final state handler runs, the outcome is delivered, and the
-queue is released for the next job.
+[Cleanup order and late results](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cleanup.md#cleanup-order-and-late-results)
+on the cleanup page of `async_job` is where that order is described and kept. A
+controller adds the last row — the final state handler runs, the outcome is
+delivered, and the queue is released for the next job.
 
 An ordinary `try`/`finally` is for what does not outlive the body: a lock held
 for one step and released before the body goes on, a temporary of one turn of a

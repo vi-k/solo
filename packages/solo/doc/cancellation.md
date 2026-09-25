@@ -51,8 +51,8 @@ What `join` hands over to own goes to its `dispose`, not to a line after the
 call. A cancellation accepted while the device is opening comes out of `join`
 in place of the handle, and the body never reaches the next line; `dispose`
 receives the handle either way.
-[Resources](resources.md#taking-a-resource-from-a-call) takes that first
-attempt apart.
+[Taking a resource from a call](resources.md#taking-a-resource-from-a-call) on
+the resources page takes that first attempt apart.
 
 After a cancellation, a successful result of `join` turns into `Cancelled`, as
 the table says; a failure does not. If the operation fails, `join` throws the
@@ -403,9 +403,9 @@ Closing publishes no state of its own: the controller stays on the state
 published last, and once closing has finished that state can no longer change.
 Resources owned by your application are not released either. Put the teardown
 and the state the screen ends on in a controller method and await it before
-`close()`, as in the [camera example](camera.md), where `dispose()` closes the
-hardware and emits `Disposed`. A state handler of the cancelled job may still
-update state while closing.
+`close()`, as in [Awaiting the disposal](camera.md#awaiting-the-disposal) of
+the camera example, where `dispose()` closes the hardware and emits `Disposed`.
+A state handler of the cancelled job may still update state while closing.
 
 ### Closing from a job
 
@@ -440,9 +440,11 @@ The job makes the call, and the method closes the controller once that job is
 over. This one comes back, and it leaves a window open: the controller takes
 work until the `close()` line. A job submitted while the call to the server is
 in flight is accepted, starts once the logout is over and is cancelled on the
-way, so the API hears a call nobody wanted. The [camera example](camera.md)
-keeps the same order with its `dispose()`, but there the window stays empty:
-the only place that submits work is the caller, waiting on that very line.
+way, so the API hears a call nobody wanted. The camera example keeps the same
+order with its `dispose()` in
+[Awaiting the disposal](camera.md#awaiting-the-disposal), but there the window
+stays empty: the only place that submits work is the caller, waiting on that
+very line.
 
 #### Queue the job and drain
 

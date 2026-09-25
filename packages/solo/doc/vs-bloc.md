@@ -537,11 +537,12 @@ no `isClosed` guard.
 
 A message still queued behind the running one never reaches the API: it ends
 `Cancelled(closed)` without starting, where `sequential()` would send it. When
-queued work has to go out,
-[`close(mode: SoloCloseMode.drain)`](cancellation.md#cancelling-and-closing-a-controller)
-runs the queue first, as `sequential()` does. The `markReplyRead()` each reply
-calls still comes back `Cancelled(closed)` there, because a closing controller
-takes no new root job.
+queued work has to go out, `close(mode: SoloCloseMode.drain)` runs the queue
+first, as `sequential()` does;
+[Cancelling and closing a controller](cancellation.md#cancelling-and-closing-a-controller)
+on the cancellation page takes it apart. The `markReplyRead()` each reply calls
+still comes back `Cancelled(closed)` there, because a closing controller takes
+no new root job.
 
 A `ctx` is valid while its job runs, and the bloc case above has a counterpart
 here: a body that starts a future and does not await it returns, and the future

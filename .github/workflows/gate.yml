@@ -347,6 +347,12 @@ jobs:
       - name: The link check knows a broken link
         run: python3 -m unittest tool/check_links_test.py
 
+      # A link that resolves in the tree can still land nowhere on the
+      # site: a section of another package lost its anchor there, and a
+      # Russian page of `async_job` became a page of `solo`.
+      - name: Links land where they point on the site
+        run: python3 -m unittest tool/build_site_test.py
+
       # Not a duplicate of `site.yml`: that one runs after a merge and only
       # for the paths it watches. Here the assembly is a smoke test — a page
       # that cannot be assembled fails before the merge, not after it.

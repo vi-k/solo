@@ -60,13 +60,14 @@ stored in `Failed` and is also reported to the job's creation zone if the
 outcome remains unobserved.
 
 When the job ends with something else, which order the two came in decides
-where the error goes. A failure thrown before the job
-[accepted a cancellation](cancellation.md) is covered by the cancellation that
-took its place, and still reaches the zone on the same terms: only if nobody
-looked at the outcome. A failure thrown after the job accepted it is the body
-giving up on a job that was already cancelled, and it goes to the observer
-alone — never to the zone, whoever listens. Without an observer that one is
-silent, and it is the case an observer is for.
+where the error goes; what it means for a job to accept a cancellation is said
+at the top of the page [Cancellation](cancellation.md). A failure thrown before
+the job accepted a cancellation is covered by the cancellation that took its
+place, and still reaches the zone on the same terms: only if nobody looked at
+the outcome. A failure thrown after the job accepted it is the body giving up
+on a job that was already cancelled, and it goes to the observer alone — never
+to the zone, whoever listens. Without an observer that one is silent, and it is
+the case an observer is for.
 
 Errors outside the body cannot become its outcome. These include late errors
 from an action abandoned by `wait`, cleanup errors, cancellation callback

@@ -66,8 +66,8 @@ words the user had already typed past.
 #### The second attempt
 
 `Policy.restart` cancels the job that is running when the next one arrives; the
-queue's own policies are in [Jobs and the queue](jobs.md). Only the method
-changes:
+queue's own policies are in [Queue and policies](jobs.md#queue-and-policies) on
+the jobs page. Only the method changes:
 
 ```dart
 SoloJob<void> query(String text) => run<SearchState, void>(
@@ -812,11 +812,11 @@ also checks that the target group is still eligible after the callback, before
 committing the result.
 
 `canStart`, `keepWhile` and cancellation apply to the whole job, and the rules
-themselves are in [State and rules](state.md). A start rule can cancel all of
-its accumulated input. The handler's result and errors follow the ordinary
-`Job` contract; accepted cancellation still takes precedence over a later value
-or error. The accumulator does not roll back partial external effects or resend
-failed input automatically.
+themselves are in [State and rules](state.md#state-and-rules) on the state
+page. A start rule can cancel all of its accumulated input. The handler's
+result and errors follow the ordinary `Job` contract; accepted cancellation
+still takes precedence over a later value or error. The accumulator does not
+roll back partial external effects or resend failed input automatically.
 
 Cancelling a queued debounce group removes its timer. Removing or clearing
 throttle groups preserves an already started interval, so adding another event
@@ -829,8 +829,10 @@ for the running job under the usual rules. It sends no final batch: a group
 still waiting for its window is dropped, and the jobs it handed out complete
 with `Cancelled(closed)`. `close(mode: SoloCloseMode.drain)` is the other
 choice — it waits the accumulation window out and runs the groups already
-queued, by the rules in [Cancellation](cancellation.md). Neither mode takes
-anything new: an `add` after `close()` returns a new job already completed with
-`Cancelled(closed)`; it does not call `merge` or the handler. Once a group
-completes, its internal input storage is released. A handler, result or error
-that retains the input still owns those references.
+queued, by the rules in
+[Cancelling and closing a controller](cancellation.md#cancelling-and-closing-a-controller)
+on the cancellation page. Neither mode takes anything new: an `add` after
+`close()` returns a new job already completed with `Cancelled(closed)`; it does
+not call `merge` or the handler. Once a group completes, its internal input
+storage is released. A handler, result or error that retains the input still
+owns those references.

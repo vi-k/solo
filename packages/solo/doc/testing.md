@@ -2,8 +2,9 @@
 
 A controller is tested through its jobs: a call queues one and returns it, and
 the state it publishes arrives later. Every example below uses `package:test`
-and drives the `load` of the quick start controller from the
-[README](https://github.com/vi-k/solo/blob/main/packages/solo/README.md):
+and drives the `load` of the controller from
+[Quick start](https://github.com/vi-k/solo/blob/main/packages/solo/README.md#quick-start)
+in the package README:
 
 ```dart
 final class ProfileController extends Solo<ProfileState> {
@@ -417,8 +418,8 @@ cancelled is a load that is running.
 
 `elapse` moves `clock.now()` along with the timers, so a recipe that stamps
 time — the observer of
-[Why cancellation was slow](errors.md#why-cancellation-was-slow) — is tested
-here too, without the test waiting for any of it.
+[Why cancellation was slow](errors.md#why-cancellation-was-slow) on the errors
+page — is tested here too, without the test waiting for any of it.
 
 ## What one test leaves for the next
 

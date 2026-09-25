@@ -21,6 +21,7 @@ Then, in `site/`: `npm ci && npm run build`.
 
 import json
 import pathlib
+import posixpath
 import re
 import shutil
 import sys
@@ -42,8 +43,6 @@ LOCALES = {'en': '', 'ru': 'ru'}
 
 HEADING = re.compile(r'^#\s+(.*)$')
 LINK = re.compile(r'\]\(([^)]+)\)')
-# A link may cross into another package's folder; the path says which.
-IN_PACKAGE = re.compile(r'(?:^|/)(?:packages|ru)/([A-Za-z_]+)/')
 
 
 def config():
@@ -74,50 +73,65 @@ def page_url(base, locale, segment, name=None):
     return '/' + '/'.join(part for part in parts if part) + '/'
 
 
-def rewrite(target, segment, locale, base, repo):
+def page_of(path, base, locale):
+    """The site page a file of the repository becomes, or None."""
+    parts = path.split('/')
+    if len(parts) == 3 and parts[0] == 'packages':
+        _, package, name = parts
+        if package in PACKAGES and name.startswith('README'):
+            return page_url(base, locale, PACKAGES[package])
+    if len(parts) == 4 and parts[3].endswith('.md'):
+        root, package, folder, name = parts
+        published = (
+            (root, folder) == ('packages', 'doc')
+            or (root, package) == ('docs', 'ru')
+        )
+        if published:
+            # `docs/ru/<package>/` names the package one level later.
+            if root == 'docs':
+                package = folder
+            if package in PACKAGES:
+                return page_url(
+                    base, locale, PACKAGES[package], name[:-len('.md')]
+                )
+    return None
+
+
+def rewrite(target, locale, base, repo, source):
     """Turns one markdown link target into a site URL."""
     if target.startswith(('#', 'mailto:')):
-        return target
-
-    # The absolute links between packages are pages of this site.
-    blob = f'{repo}/blob/main/packages/'
-    if target.startswith(blob):
-        package, _, tail = target[len(blob):].partition('/')
-        if package in PACKAGES:
-            if tail.startswith('README'):
-                return page_url(base, locale, PACKAGES[package])
-            if tail.startswith('doc/') and tail.endswith('.md'):
-                name = tail[len('doc/'):-len('.md')]
-                return page_url(base, locale, PACKAGES[package], name)
-
-    if target.startswith(('http://', 'https://')):
         return target
 
     path, _, anchor = target.partition('#')
     anchor = f'#{anchor}' if anchor else ''
 
-    named = IN_PACKAGE.search(path)
-    package = named.group(1) if named and named.group(1) in PACKAGES else None
-    where = PACKAGES[package] if package else segment
+    # The absolute links between packages are pages of this site, and the
+    # section they name is a section of that page: the anchor stays. Cut
+    # off, `README.md#selecting-one-value` led to the top of the page.
+    blob = f'{repo}/blob/main/'
+    if path.startswith(blob):
+        page = page_of(path[len(blob):], base, locale)
+        return page + anchor if page else target
 
-    if path.endswith('.md'):
-        name = pathlib.PurePosixPath(path).name
-        if name.startswith('README'):
-            return page_url(base, locale, where) + anchor
-        return page_url(base, locale, where, name[:-len('.md')]) + anchor
+    if path.startswith(('http://', 'https://')):
+        return target
+
+    # A relative link is read from the file it stands in, the way GitHub
+    # reads it: `../async_job/cleanup.md` in a Russian page of `solo` is
+    # the Russian page of `async_job`, not a page of `solo`.
+    where = posixpath.normpath(
+        posixpath.join(posixpath.dirname(source), path)
+    )
+    page = page_of(where, base, locale)
+    if page:
+        return page + anchor
 
     # Anything else is a folder in the repository -- the example package, a
     # source directory. Those have no page here, so they point at GitHub.
-    if named:
-        source = f'packages/{package or named.group(1)}'
-        tail = path[named.end():]
-    else:
-        source = f'packages/{where}'
-        tail = path.lstrip('./')
-    return f'{repo}/tree/main/{source}/{tail}{anchor}'
+    return f'{repo}/tree/main/{where}{anchor}'
 
 
-def convert(text, segment, locale, base, repo, source):
+def convert(text, locale, base, repo, source):
     title = None
     fenced = False
     body = []
@@ -150,7 +164,7 @@ def convert(text, segment, locale, base, repo, source):
         out.append(
             LINK.sub(
                 lambda m: ']({})'.format(
-                    rewrite(m.group(1), segment, locale, base, repo)
+                    rewrite(m.group(1), locale, base, repo, source)
                 ),
                 line,
             )
@@ -174,13 +188,12 @@ def main():
     OUT.mkdir(parents=True)
 
     written = 0
-    for source, relative, segment, locale in sources():
+    for source, relative, _, locale in sources():
         target = OUT / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(
             convert(
                 source.read_text(encoding='utf-8'),
-                segment,
                 locale,
                 base,
                 repo,

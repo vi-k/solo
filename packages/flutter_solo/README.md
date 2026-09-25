@@ -235,8 +235,8 @@ a parent rebuild, so the value the comparison answers from survives one.
 around it, for a `State` field of a controller that is not a `ValueListenable`.
 
 A controller with both a `stream` and `SoloListenable`, a screen built on that
-stream, and a base class of controllers with no Flutter in it are on
-[a page of their own](doc/mixins.md).
+stream, and a base class of controllers with no Flutter in it are on a page of
+their own, [Mixins](doc/mixins.md).
 
 ## Listening without keeping the callback
 

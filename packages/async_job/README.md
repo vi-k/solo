@@ -119,13 +119,15 @@ final outcome = await job.done; // Cancelled(manual)
   throws the original error, even after cancellation. The job still ends
   `Cancelled`, so that error becomes nobody's outcome: it reaches the observer
   and stops there. Without one, an open that failed after a cancellation leaves
-  no trace. See [Observing](doc/observing.md).
+  no trace. See [Observer](doc/observing.md#observer) on the observing page.
 - **`discard: (database) => database.close()`** closes the database if the job
   ends with cancellation or an error. With `Done(database)`, it stays open for
   the caller. Cleanup also covers cancellation after `return database`: for
   example, if the body has started a child that is still running, the job waits
   for that child before completing. Cancelling during this wait produces
-  `Cancelled` and closes the database. See [Cleanup](doc/cleanup.md).
+  `Cancelled` and closes the database. See
+  [Cleanup order and late results](doc/cleanup.md#cleanup-order-and-late-results)
+  on the cleanup page.
 - **`ctx.onCancel(stop.cancel)`** connects job cancellation to the database's
   cancellation token. The callback runs as soon as the job accepts
   cancellation, before the body reaches its next checkpoint.
@@ -140,7 +142,8 @@ final outcome = await job.done; // Cancelled(manual)
   signal, so `uncancellable` holds the cancellation request: `onCancel` does
   not fire and the token remains active during the call. After the section, the
   request takes effect and the next context checkpoint throws `Cancelled`. See
-  [Cancellation](doc/cancellation.md).
+  [Holding the cancellation back](doc/cancellation.md#holding-the-cancellation-back)
+  on the cancellation page.
 - **`await job.cancel()`** requests cancellation and waits for the job to
   finish, including its cleanup. The outcome on the next line is therefore
   ready. You can omit `await` if you only need to request cancellation.

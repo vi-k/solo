@@ -9,6 +9,7 @@ import pathlib
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 
@@ -140,6 +141,45 @@ class WhereTheLinkPoints(LinkCase):
         (self.root / 'two').mkdir()
         self.write('two/b.md', '# B\n')
         page = self.write('one/a.md', 'See [it](../two/b.md).\n')
+        self.assertEqual(self.problems(page), [])
+
+
+class ThisRepositoryOnGitHub(LinkCase):
+    # `solo` links `async_job` by its GitHub address, because pub.dev shows
+    # a package without its neighbours. The file is still in this tree.
+    def setUp(self):
+        super().setUp()
+        patcher = mock.patch.object(check_links, 'REPO', self.root)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        (self.root / 'doc').mkdir()
+        self.write('doc/b.md', '# B\n\n## Cleanup order\n')
+
+    def link(self, tail):
+        return self.write('a.md', f'See [it]({check_links.BLOB}{tail}).\n')
+
+    def test_a_section_that_is_there(self):
+        page = self.link('doc/b.md#cleanup-order')
+        self.assertEqual(self.problems(page), [])
+
+    def test_a_section_that_was_reworded(self):
+        page = self.link('doc/b.md#ordering')
+        self.assertEqual(
+            self.problems(page),
+            [f'no such section: {check_links.BLOB}doc/b.md#ordering'],
+        )
+
+    def test_a_file_that_is_not_there(self):
+        page = self.link('doc/gone.md')
+        self.assertEqual(
+            self.problems(page),
+            [f'no such file: {check_links.BLOB}doc/gone.md'],
+        )
+
+    def test_another_repository_on_github(self):
+        page = self.write(
+            'a.md', 'See [it](https://github.com/felangel/bloc/issues/1).\n'
+        )
         self.assertEqual(self.problems(page), [])
 
 

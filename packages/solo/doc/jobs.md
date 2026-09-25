@@ -39,7 +39,8 @@ whose outcome is never accessed through `done`, `value` or `ignore()` also
 reports an unhandled error to the Dart zone in which it was created. Use
 `ignore()` when error reporting elsewhere is sufficient; leaving a job
 unawaited does not by itself mark the error as handled. See
-[Error reporting and observation](errors.md).
+[Handled and unhandled failures](errors.md#handled-and-unhandled-failures) on
+the errors page.
 
 ### Creating and scheduling jobs
 
@@ -113,10 +114,10 @@ SoloJob<void> seek(Duration position) => run<Ready, void>(
 | `Policy.restart` | Do the same as `replace` and request cancellation of the running root job with that key. |
 
 A root job holds the queue until its body, children, cleanup and final state
-handler finish. Child jobs can run within that interval; they are described in
-[Children and streams](children.md). A policy does not see them: a child with
-the same key runs inside another job and never went through the queue, and the
-queue with its running root job is all a policy looks at.
+handler finish. Child jobs can run within that interval; they are described on
+the page [Children and streams](children.md). A policy does not see them: a
+child with the same key runs inside another job and never went through the
+queue, and the queue with its running root job is all a policy looks at.
 
 `restart` requests cancellation when the new job is submitted. The new job
 still waits for the current job to finish; their bodies do not overlap. A job
@@ -124,8 +125,9 @@ that refuses cancellation can therefore delay its replacement — and so can one
 that has nothing to hand the request to: a `join` around a call the request
 cannot reach waits that call out to the end, and the outcome is `Cancelled` all
 the same. The token above is the way in; `ctx.wait` is the other, for an
-operation that can be left to finish on its own. Both are on
-[Cancellation](cancellation.md).
+operation that can be left to finish on its own. Both are in
+[Stopping the underlying operation](cancellation.md#stopping-the-underlying-operation)
+on the cancellation page.
 
 A key is any object, compared with `==`, so the record `(_Op.load, id)` above
 gives the policy the identity of one request rather than of the operation:
@@ -160,7 +162,7 @@ SoloJob<void> stop() {
 `first` passes what is waiting and nothing else. A zoom that is already running
 is neither removed by `removeWhere` nor interrupted by `first`: the stop starts
 when that zoom finishes. Only cancellation stops a job that has already
-started; see [Cancellation](cancellation.md).
+started, and the page [Cancellation](cancellation.md) is about it.
 
 `queue` exposes `jobs`, `length`, `isEmpty`, `isNotEmpty`, `remove`,
 `removeWhere` and `clear`; the last job with a key is `lastJobWhere` on the
@@ -173,7 +175,8 @@ takes one as well.
 The order in `jobs` is not the order jobs will run in: a job waiting for an
 accumulation window can be passed by a ready one standing behind it, so the
 head of the queue is not always what starts next. See
-[Event accumulation](accumulation.md).
+[Choosing when a group is ready](accumulation.md#choosing-when-a-group-is-ready)
+on the accumulation page.
 
 ### Pausing the queue
 

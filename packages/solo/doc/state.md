@@ -60,7 +60,8 @@ The first type argument of `run<W, T>` is the job's working state type,
 state update sets `paused` to true, `keepWhile` cancels the recording; the body
 does not need to repeat that condition. Here `Ready`, `device` and `store`
 belong to the application, and `ctx.each` processes the stream — its full
-lifecycle is explained under [Children and streams](children.md).
+lifecycle is explained in
+[Processing a stream](children.md#processing-a-stream) on the children page.
 
 Use separate classes when states allow different operations, and shared base
 types when an operation can span several states.
@@ -101,8 +102,10 @@ null -- a mismatch cancels the job. Waiting methods use state checkpoints too.
 context check themselves; `check()` covers the gaps between them. A plain
 `await` and the return from `ctx.uncancellable` check nothing: a job the rules
 have already cancelled walks on until something inside asks: can it still go
-on? Those gaps are covered in [Cancellation](cancellation.md), where `check()`
-stands beside the waiting methods it goes with.
+on? Those gaps are covered in
+[Ordinary await and context lifetime](cancellation.md#ordinary-await-and-context-lifetime)
+on the cancellation page, and the table at the top of that page puts `check()`
+beside the waiting methods it goes with.
 
 `ctx.emit(next)` allows a job to publish a state outside its own working type:
 an initialization job may finish by emitting `Ready`. A later state checkpoint
@@ -112,11 +115,13 @@ and nothing brings it back later -- this emit included.
 
 Other running bodies are checked after a state update. A job's own emit is
 excluded from that rule check, but still checks cancellation before and after
-writing. Both `onChange` (see [Errors](errors.md)) and a listener run
-synchronously inside the write, and neither has a `ctx`: the only write open to
-either one is [`externalSetState`](#externalsetstate). A hook that corrects a
-state this way -- turning one job's `Preparing` straight into `Working` -- can
-therefore cancel the emitting job before its own `emit` returns.
+writing. Both `onChange` (see
+[Watching every controller](errors.md#watching-every-controller) on the errors
+page) and a listener run synchronously inside the write, and neither has a
+`ctx`: the only write open to either one is
+[`externalSetState`](#externalsetstate). A hook that corrects a state this way
+-- turning one job's `Preparing` straight into `Working` -- can therefore
+cancel the emitting job before its own `emit` returns.
 
 Rules stop cancelling a job once its body has ended. Manual cancellation,
 controller closing and parent cancellation can still reach it while it waits
@@ -482,4 +487,5 @@ write. A state write made from inside one — `externalSetState`, or a source
 that calls it synchronously — does not combine with that value: if the job's
 rules accept the write, the handler's result lands on top of it, computed from
 the state before it, and the fact is lost; if they refuse it, the handler's
-result is dropped. Resource release belongs in the [cleanup API](resources.md).
+result is dropped. Resource release belongs in the cleanup API, on the page
+[Resources and cleanup](resources.md).

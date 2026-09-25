@@ -151,8 +151,8 @@ Here, `Screen` and `Session` are application states with a `signedIn` property.
 The subscription keeps the following controller's queue occupied until it ends.
 If that controller must also process other jobs, use an external listener that
 queues a short job for each update instead. When the update represents an
-immediate change to the validity of current work, consider the
-[External state](state.md#external-state) rules instead.
+immediate change to the validity of current work, consider the rules in
+[External state](state.md#external-state) on the state page instead.
 
 ## Chaining completed work
 

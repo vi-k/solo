@@ -147,8 +147,8 @@ final class ProfileController extends Solo<ProfileState> with SoloStream {
 }
 ```
 
-See [State](doc/state.md) for the full delivery picture, including
-`SoloListenable` from `flutter_solo`.
+See [Observing state](doc/state.md#observing-state) on the state page for the
+full delivery picture, including `SoloListenable` from `flutter_solo`.
 
 Cancellation uses the same job object. This separate example requests
 cancellation immediately, so the job may still be in the queue:
@@ -304,23 +304,23 @@ search.
 
 ## Recipes
 
-Situations that come up, and what to reach for. Each one is explained on the
-page named beside it.
+Situations that come up, and what to reach for. Each one is explained in the
+section linked beside it.
 
 | Situation | Reach for | Where |
 | --- | --- | --- |
-| Only the last of a burst of commands matters | `accumulate` with a `merge` that keeps the incoming value | [Commands where only the last one counts](doc/accumulation.md) |
-| Typing into a search box | `accumulate` with `AccumulationTiming.debounce` | [Event accumulation](doc/accumulation.md) |
-| A later request must not be dropped as a duplicate of an earlier one | a record key, `(Op.load, id)` | [Jobs and the queue](doc/jobs.md) |
-| Queued work is made pointless by what just arrived | `queue.removeWhere` before submitting, or `cancelAll()` if it may be running | [Commands where only the last one counts](doc/accumulation.md) |
-| A last batch has to go out before the screen goes away | `close(mode: SoloCloseMode.drain)` | [Cancellation](doc/cancellation.md) |
-| `close()` does not come back | `Solo.pending` | [Errors and observation](doc/errors.md) |
-| A journal needs to say which operation changed the state | `SoloTransition` in `onChange` | [Errors and observation](doc/errors.md) |
-| A step must not be interrupted halfway | `ctx.join` for a call, `ctx.uncancellable` for a step | [Cancellation](doc/cancellation.md) |
-| A resource opened by a call nobody waited for still has to close | `dispose` or `discard` on `ctx.wait` and `ctx.join` | [Resources and cleanup](doc/resources.md) |
-| A widget rebuilds for state it does not use | `SoloSelector` from `flutter_solo` | [Flutter](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.md#selecting-one-value) |
-| The queue has to stand still for a while | a job waiting on a `Completer` at the head of it | [Jobs and the queue](doc/jobs.md) |
-| A stream event arrives a microtask late, and that is too late | `publish` on a `Solo` subclass, notifying inside the change | [State](doc/state.md) |
+| Only the last of a burst of commands matters | `accumulate` with a `merge` that keeps the incoming value | [Commands where only the last one counts](doc/accumulation.md#commands-where-only-the-last-one-counts) |
+| Typing into a search box | `accumulate` with `AccumulationTiming.debounce` | [A search that fires on every keystroke](doc/accumulation.md#a-search-that-fires-on-every-keystroke) |
+| A later request must not be dropped as a duplicate of an earlier one | a record key, `(Op.load, id)` | [Queue and policies](doc/jobs.md#queue-and-policies) |
+| Queued work is made pointless by what just arrived | `queue.removeWhere` before submitting, or `cancelAll()` if it may be running | [When they are separate jobs after all](doc/accumulation.md#when-they-are-separate-jobs-after-all) |
+| A last batch has to go out before the screen goes away | `close(mode: SoloCloseMode.drain)` | [Cancelling and closing a controller](doc/cancellation.md#cancelling-and-closing-a-controller) |
+| `close()` does not come back | `Solo.pending` | [What is holding the controller](doc/errors.md#what-is-holding-the-controller) |
+| A journal needs to say which operation changed the state | `SoloTransition` in `onChange` | [Watching every controller](doc/errors.md#watching-every-controller) |
+| A step must not be interrupted halfway | `ctx.join` for a call, `ctx.uncancellable` for a step | [Protecting a step or a whole job](doc/cancellation.md#protecting-a-step-or-a-whole-job) |
+| A resource opened by a call nobody waited for still has to close | `dispose` or `discard` on `ctx.wait` and `ctx.join` | [Taking a resource from a call](doc/resources.md#taking-a-resource-from-a-call) |
+| A widget rebuilds for state it does not use | `SoloSelector` from `flutter_solo` | [Selecting one value](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.md#selecting-one-value) |
+| The queue has to stand still for a while | a job waiting on a `Completer` at the head of it | [Pausing the queue](doc/jobs.md#pausing-the-queue) |
+| A stream event arrives a microtask late, and that is too late | `publish` on a `Solo` subclass, notifying inside the change | [A delivery of your own](doc/state.md#a-delivery-of-your-own) |
 
 ## Coming from bloc
 
