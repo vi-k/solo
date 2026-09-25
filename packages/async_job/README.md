@@ -122,7 +122,8 @@ final outcome = await job.done; // Cancelled(manual)
   throws the original error, even after cancellation. The job still ends
   `Cancelled`, so that error becomes nobody's outcome: it reaches the observer
   and stops there. Without one, an open that failed after a cancellation leaves
-  no trace. See [Observer](doc/observing.md#observer) on the observing page.
+  no trace. See [Where errors go](doc/observing.md#where-errors-go) on the
+  observing page.
 - **`discard: (database) => database.close()`** closes the database if the job
   ends with cancellation or an error. With `Done(database)`, it stays open for
   the caller. Cleanup also covers cancellation after `return database`: for

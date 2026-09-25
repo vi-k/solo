@@ -280,6 +280,20 @@
   failure goes to the zone past the observer, and says what happens to a future
   that crosses the boundary of `ctx.unattended`.
 
+- `doc/observing.md` opens four of its five sections with the version the names
+  lead to and shows what it does: a string for `ctx.log`, built even when no
+  observer reads it; the zone as the one place to hear errors, which never
+  hears an open that failed after the job accepted a cancellation; `unawaited`
+  for work the job does not wait for; and `await job.cancel()` inside
+  `fakeAsync`, a test that passes without running a single `expect`. Where each
+  error goes, with an observer and without one, is now a table instead of three
+  paragraphs. The paragraph on timing a cancellation with `whenCancelled` and
+  `onFinish` no longer says that the number is what the caller of `cancel`
+  waits through: it counts from the moment the job accepts the cancellation, so
+  a cancellation held back by `ctx.uncancellable` shows less than the caller
+  waited. The README links the open that failed after a cancellation to the new
+  section.
+
 ## 0.2.0
 
 - **Breaking:** `ctx.run(child)` returns `Future<T>` instead of the child's
