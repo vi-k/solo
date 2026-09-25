@@ -49,11 +49,12 @@ state writes can then interleave. `ctx.run(child).ignore()` explicitly ignores
 that future's result while the parent still waits for its children.
 `child.ignore()` alone does not handle errors of the future returned by `run`.
 
-One failure of a child is not in that future: its body failed, and a
-cancellation reached it while it still waited for children of its own. The
-child ends `Cancelled`, the future carries the cancellation, and the failure
-goes to the controller's `onUnanswered` -- by default to `Solo.errorHandler`,
-or to the zone without one, whichever `ignore` was called.
+That future does not carry a failure of the child's body if a cancellation
+reaches the child after it, while the child still waits for children of its own
+or runs its cleanup. The child ends `Cancelled`, the future carries the
+cancellation, and the failure goes to the controller's `onUnanswered` -- by
+default to `Solo.errorHandler`, or to the zone without one, whether or not
+`child.ignore()` or `ctx.run(child).ignore()` was called.
 
 Accepted parent cancellation propagates to children. This also applies when the
 parent throws `Cancelled`, including an uncaught cancellation from

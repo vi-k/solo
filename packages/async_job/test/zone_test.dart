@@ -756,6 +756,38 @@ void main() {
     );
   });
 
+  test('a step a rule stopped while the section held a stop is not first', () {
+    final caught = <Object>[];
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          late RulesContext rules;
+          final job = RulesJob<void>((ctx) async {
+            rules = ctx;
+            final stopped = Completer<void>();
+            ctx.onCancel(
+              () => stopped.completeError(StateError('stopped by a rule')),
+            );
+            await ctx.uncancellable(() => stopped.future);
+          })
+            ..launch();
+          async.elapse(const Duration(milliseconds: 5));
+          job.cancel().ignore();
+          async.elapse(const Duration(milliseconds: 5));
+          rules.breakRule('a rule');
+          async.flushTimers();
+        });
+      },
+      (error, stackTrace) => caught.add(error),
+    );
+    expect(
+      caught,
+      isEmpty,
+      reason: 'the rule marked the job before the step failed; the stop the '
+          'section held has nothing left to land and no order to put right',
+    );
+  });
+
   test('a join the body walked away from sends its late error to the zone', () {
     final caught = <Object>[];
     final errors = <Object>[];

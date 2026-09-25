@@ -345,6 +345,41 @@ void main() {
       fakeAsync((async) => _coveredChild(TestSolo(), async, caught));
       expect(caught, ['Bad state: child failed first']);
     });
+
+    test('a step the state stopped while a section held a stop is only told',
+        () {
+      // The state leaves the child's working type inside the section: that
+      // marks the child at once, the step fails after the mark, and the
+      // stop the section held has nothing left to land.
+      final caught = <String>[];
+      final solo = _Loud();
+      fakeAsync((async) {
+        late final Job<void> parent;
+        _inZone(caught, () {
+          parent = solo.run<TestState, void>(key: 'parent', (ctx) async {
+            await ctx.run(
+              solo.job<Initial, int>(key: 'child', (ctx) async {
+                final stopped = Completer<void>();
+                ctx.onCancel(
+                  () => stopped.completeError(StateError('stopped')),
+                );
+                await ctx.uncancellable<void>(() => stopped.future);
+                return 1;
+              }),
+            );
+          });
+        });
+        async.elapse(const Duration(milliseconds: 5));
+        parent.cancel().ignore();
+        async.elapse(const Duration(milliseconds: 5));
+        solo.set(const Preparing());
+        async.flushTimers();
+        solo.close();
+        async.flushTimers();
+      });
+      expect(solo.errors, ['Bad state: stopped']);
+      expect(caught, isEmpty, reason: 'a failure after the mark is only told');
+    });
   });
 }
 

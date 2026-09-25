@@ -172,6 +172,13 @@ abstract interface class JobContext {
   /// section leaves alone. Sections nest — only the outermost lets a held
   /// cancellation through — and it is let through even if [action] throws.
   ///
+  /// When [action] throws while a cancellation is held, the error came
+  /// before the cancellation, and it goes on the way a failure a
+  /// cancellation covered does — see [Failed]. That is said of this error
+  /// alone: the body keeps it so by letting it through or rethrowing it,
+  /// while a new error thrown in its place, a wrapper included, comes after
+  /// the cancellation landed and only [JobObserver.onError] hears it.
+  ///
   /// **Always await this call.** The section belongs to the job, not to the
   /// future returned here: it opens on the call and holds a cancellation
   /// whether the body waits for it or not. A body that walked on can end
@@ -845,9 +852,11 @@ abstract class JobContextBase implements JobContext {
       // where the kernel decides which of the two came first. It was the
       // failure, and said nowhere else the diagnosis of the one step that
       // cannot be rolled back is the one the cancellation swallows. Only
-      // when a cancellation is held: without one nothing lands on the way
-      // out, and there is no order to put right.
-      if (_owner._heldCancel != null) {
+      // when a cancellation is held and nothing has marked the job: without
+      // one nothing lands on the way out, and after a mark -- a rule of a
+      // domain makes one inside the section -- the held one has nothing
+      // left to land, and the step failed after the mark.
+      if (_owner._heldCancel != null && _owner._pendingCancel == null) {
         _owner._failedBeforeMark = error;
       }
       rethrow;

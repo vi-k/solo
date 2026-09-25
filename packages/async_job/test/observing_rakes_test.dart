@@ -622,6 +622,51 @@ void main() {
       );
     });
 
+    Job<void> failingBeforeCleanup({JobObserver? observer}) => Job<void>(
+          observer: observer,
+          (ctx) async {
+            ctx.onDispose(() => delay(50));
+            await delay(10);
+            throw StateError('disk full');
+          },
+        );
+
+    test('a cancellation while the cleanup runs: the same as the failure', () {
+      expect(
+        quotable(
+          play(
+            () => failingBeforeCleanup(observer: Reporter()),
+            cancelAt: 20,
+            outcomeObserved: false,
+          ),
+        ),
+        [
+          'onError: Bad state: disk full',
+          'cancel',
+          'zone: Bad state: disk full',
+        ],
+      );
+      expect(
+        quotable(
+          play(
+            () => failingBeforeCleanup(observer: Reporter()),
+            cancelAt: 20,
+          ),
+        ),
+        [
+          'onError: Bad state: disk full',
+          'cancel',
+          'outcome: Cancelled(manual)',
+        ],
+      );
+      expect(
+        quotable(
+          play(failingBeforeCleanup, cancelAt: 20, outcomeObserved: false),
+        ),
+        ['cancel', 'zone: Bad state: disk full'],
+      );
+    });
+
     Job<void> childFailingBeforeCancel({JobObserver? observer}) => Job<void>(
           observer: observer,
           (ctx) async {

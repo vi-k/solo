@@ -268,8 +268,9 @@ abstract interface class Job<T> {
   /// observed by their parent, so this changes nothing for them. A failure
   /// of such a child that a cancellation covered is not in what the parent
   /// passes on, and it is answered through [JobObserver.onUnanswered]
-  /// whether or not this was called. A child whose failures nobody should
-  /// answer for is given an observer of its own that answers for nothing.
+  /// whether or not this was called. To answer for it differently, give
+  /// the child an observer of its own that overrides
+  /// [JobObserver.onUnanswered].
   ///
   /// A job is not background work: it has an outcome and an observer of
   /// its own, and this is how it is quenched. Work with neither goes to

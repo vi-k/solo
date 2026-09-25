@@ -172,7 +172,7 @@ observer and without, the zone being the one the job was created in:
 | The error | With an observer | Without one |
 | --- | --- | --- |
 | The body's, and the job ends `Failed` with it | `onError`, and the zone if nobody observed the outcome | The zone if nobody observed the outcome |
-| The body's, and a cancellation arrives while the job waits for its children | `onError`, and the zone if nobody observed the outcome | The zone if nobody observed the outcome |
+| The body's, and a cancellation arrives while the job waits for its children or runs its cleanup | `onError`, and the zone if nobody observed the outcome | The zone if nobody observed the outcome |
 | The same, in a child of `ctx.run` or a branch of `ctx.runAll` | `onError`, then `onUnanswered`: the zone by default | The zone |
 | The body's, after the job accepted a cancellation | `onError` | Nobody |
 | The body's, in a branch of `ctx.runAll` whose group throws another failure | `onError`, then `onUnanswered`: the zone by default | The zone |
@@ -197,14 +197,12 @@ The errors stop there and do not reach the zone. Calling
 Hand `super` whatever the override cannot tell apart: the default body knows
 which errors are cancellations.
 
-An error can reach `onError` and the zone both: a failure the body throws, when
-nobody observed the outcome, and an error no outcome carries, when
-`onUnanswered` sends it on. An app that reports in both places hears it twice.
-Observing the outcome keeps the first kind out of the zone;
+An error can reach `onError` and the zone both, and an app that reports in both
+places hears it twice. The table shows the way each error takes to the zone:
+when nobody observed the outcome, or when `onUnanswered` sends it on. Observing
+the outcome closes the first way;
 [A failure nobody waits for](outcomes.md#a-failure-nobody-waits-for) on the
-outcomes page shows how. An override of `onUnanswered` keeps out the second,
-and with it the failure of a child or a branch whose parent took the outcome:
-the parent passes on the cancellation, and the failure is not in it.
+outcomes page shows how. An override of `onUnanswered` closes the second.
 
 ## Work the job does not wait for
 

@@ -32,8 +32,8 @@ abstract mixin class JobObserver {
   ///
   /// Notification only: overriding it changes nothing about where the
   /// error goes. The errors with no outcome go on to [onUnanswered], and so
-  /// does a failure of the body the parent took and cannot pass on: that of
-  /// a branch of [JobContext.runAll] the group did not throw, and one a
+  /// do two failures of the body that a parent cannot pass on: that of a
+  /// branch of [JobContext.runAll] the group did not throw, and one a
   /// cancellation covered in a child of [JobContext.run] or a branch. Any
   /// other failure of the body is carried by the outcome, and one nobody
   /// observes reaches the zone — all but a failure thrown after the job

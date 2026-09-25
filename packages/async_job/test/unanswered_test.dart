@@ -361,6 +361,21 @@ void main() {
       );
     });
 
+    test('a child of run cancelled while its cleanup runs', () {
+      // No child of its own: the cleanup is what it still waits for.
+      expectAnswered(
+        (observer) => runCancelled(
+          observer,
+          () => Job.deferred<int>((ctx) async {
+            ctx.onDispose(() => delay(20));
+            await delay(5);
+            throw StateError('failed before its cleanup');
+          }),
+        ),
+        'Bad state: failed before its cleanup',
+      );
+    });
+
     test('a branch of runAll whose parent was cancelled', () {
       expectAnswered(
         (observer) => zoneOf((async) {
@@ -483,6 +498,66 @@ void main() {
       expect(parent.seen, isEmpty, reason: "the parent's is not asked");
       expect(zone, isEmpty, reason: 'the child answered with its own');
     });
+
+    test('the answer comes before the parent hears the cancellation', () {
+      final observer = Counting();
+      final zone = zoneOf((async) {
+        final parent = Job<void>(observer: observer, (ctx) async {
+          try {
+            await ctx.run(failingFirst('child'));
+          } on Cancelled {
+            observer.seen.add('the parent hears the cancellation');
+            rethrow;
+          }
+        });
+        async.elapse(const Duration(milliseconds: 10));
+        parent.cancel().ignore();
+        async.flushTimers();
+      });
+      expect(observer.seen, [
+        'onError: $error',
+        'onUnanswered: $error',
+        'the parent hears the cancellation',
+      ]);
+      expect(zone, [error]);
+    });
+
+    test('a cancellation an engine handed in as a failure is dropped', () {
+      // Asked like any other, and the default answer drops a cancellation
+      // -- without an observer as well.
+      const cancelled = 'Cancelled(manual: built on purpose)';
+      List<String> scenario(JobObserver? observer) => zoneOf((async) {
+            final child = ProbeJob<int>((ctx) async {
+              await delay(100);
+              return 1;
+            });
+            final parent = Job<void>(observer: observer, (ctx) async {
+              await ctx.run(child);
+            });
+            async.elapse(const Duration(milliseconds: 10));
+            parent.cancel().ignore();
+            async.elapse(const Duration(milliseconds: 10));
+            child.drop(
+              Failed(
+                Cancelled.by(
+                  reason: const ManualCancelReason(),
+                  started: true,
+                  description: 'built on purpose',
+                  stackTrace: StackTrace.current,
+                ),
+                StackTrace.current,
+              ),
+            );
+            async.flushTimers();
+          });
+      final watching = Counting();
+      expect(scenario(watching), isEmpty);
+      expect(
+        watching.seen,
+        ['onError: $cancelled', 'onUnanswered: $cancelled'],
+      );
+      expect(scenario(null), isEmpty);
+    });
   });
 
   group('a failure after the child accepted a cancellation is only told', () {
@@ -549,6 +624,36 @@ void main() {
           }),
         ),
         'Bad state: after the step',
+      );
+    });
+
+    test('a step a rule stopped while the section held a stop', () {
+      // A rule marks the job inside the section, where the stop it held
+      // could not: the step fails after that mark, and the held stop has
+      // nothing left to land.
+      expectOnlyTold(
+        (observer) => zoneOf((async) {
+          late RulesContext rules;
+          final parent = Job<void>(observer: observer, (ctx) async {
+            await ctx.run(
+              RulesJob<int>((ctx) async {
+                rules = ctx;
+                final stopped = Completer<void>();
+                ctx.onCancel(
+                  () => stopped.completeError(StateError('stopped by a rule')),
+                );
+                await ctx.uncancellable<void>(() => stopped.future);
+                return 1;
+              }),
+            );
+          });
+          async.elapse(const Duration(milliseconds: 5));
+          parent.cancel().ignore();
+          async.elapse(const Duration(milliseconds: 5));
+          rules.breakRule('a rule');
+          async.flushTimers();
+        }),
+        'Bad state: stopped by a rule',
       );
     });
   });

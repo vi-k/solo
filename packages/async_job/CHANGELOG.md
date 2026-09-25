@@ -29,15 +29,15 @@
   `doc/extending.md`.
 
 - **Fix:** the failure of a child's body is no longer lost when a cancellation
-  reaches the child afterwards, while it still waits for children of its own.
-  The child ends `Cancelled`, and a failure so covered went to the zone only if
-  nobody observed the outcome -- but `ctx.run` and a group of `ctx.runAll`
-  always observe it, and pass on the cancellation alone. Such a failure is now
-  an error no outcome carries: `onError` hears it where the body threw it, and
-  `onUnanswered` of the child's observer answers for it, by default in the
-  zone; without an observer it goes to the zone. `ignore` on the child changes
-  nothing there, as it changes nothing about a failure `ctx.run` throws. A job
-  whose outcome no parent took keeps the rule it had. See `doc/observing.md`.
+  reaches the child afterwards, while it still waits for children of its own or
+  runs its cleanup. The child ends `Cancelled`, and a failure so covered went
+  to the zone only if nobody observed the outcome -- but `ctx.run` and a group
+  of `ctx.runAll` always observe it, and pass on the cancellation alone. Such a
+  failure is now an error no outcome carries: `onError` hears it where the body
+  threw it, and `onUnanswered` of the child's observer answers for it, by
+  default in the zone; without an observer it goes to the zone. `ignore` on the
+  child changes nothing there, as it changes nothing about a failure `ctx.run`
+  throws. Any other job keeps the rule it had. See `doc/observing.md`.
 - **Fix:** a `whenCancelled` registered while the cancellation is still
   cascading onto the children now runs in its turn instead of ahead of everyone
   who registered earlier. Between the mark and the pass that tells the
@@ -72,8 +72,9 @@
   belongs to the observer alone, and without an observer that was silence. The
   section now says which came first, and the failure of the one step that
   cannot be rolled back goes on as any failure a cancellation covered does. It
-  says so only for its own error and only when it held a cancellation: anything
-  else the body throws after the mark is a failure after the mark.
+  says so only for its own error and only when it held a cancellation and
+  nothing had marked the job yet: anything else the body throws after the mark
+  is a failure after the mark.
 - **Fix:** a job that has accepted a cancellation no longer ends with a value.
   The protected `finish`, which an engine of a domain uses to end a job by
   hand, took whatever it was handed: after `cancel()` a `finish(Done(42))` left
