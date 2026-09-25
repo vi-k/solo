@@ -266,8 +266,9 @@ finishes first, the held cancellation is lost and `cancel()` returns with a
 To protect the entire body instead of one section, create
 `Job(body, cancellable: false)`. It refuses ordinary cancellation once the body
 starts, but can still be cancelled before start. `solo`, built on this core,
-also cancels a job by rules of its own, and neither a section nor
-`cancellable: false` holds those back.
+also cancels a job when the controller's state no longer suits it: a job there
+declares which states it runs in. Neither a section nor `cancellable: false`
+holds that cancellation back.
 
 ## Catching errors of the operation
 
