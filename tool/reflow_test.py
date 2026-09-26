@@ -90,6 +90,23 @@ class ListsKeepTheirShape(unittest.TestCase):
         self.assertKept(text)
         self.assertEqual(reflow.reflow(text)[1], 1)
 
+    def test_a_fence_inside_an_item_is_left_alone(self):
+        # The fence was recognised in column 0 only, and a block under a
+        # list item was filled as prose: a quoted trace became one line,
+        # a draft of a dartdoc got its `///` in the middle of lines.
+        self.assertKept(
+            '- Пункт с блоком:\n'
+            '\n'
+            '  ```text\n'
+            '  /// **Heading.** A first line of a dartdoc draft.\n'
+            '  /// A second one.\n'
+            '  L17 bare after cancel: parent=null cancel returned=false '
+            'a=null b=null\n'
+            '  ```\n'
+            '\n'
+            '  Абзац пункта после блока.\n'
+        )
+
 
 class FillStaysAFill(unittest.TestCase):
     def test_a_plain_paragraph_is_still_filled(self):

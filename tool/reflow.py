@@ -218,7 +218,8 @@ def reflow(text):
                 break
     while index < len(lines):
         line = lines[index]
-        if line.startswith('```'):
+        # Indented too: a fence under a list item is still a fence.
+        if line.lstrip().startswith('```'):
             fenced = not fenced
             out.append(line)
             index += 1
@@ -230,7 +231,7 @@ def reflow(text):
         block = []
         while index < len(lines):
             line = lines[index]
-            if (not line.strip() or line.startswith('```')
+            if (not line.strip() or line.lstrip().startswith('```')
                     or UNTOUCHED.match(line)):
                 break
             block.append(line)
