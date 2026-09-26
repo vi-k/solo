@@ -78,7 +78,7 @@ void main() {
     expect(observer.lines, ['running 0']);
   });
 
-  test('a step held by uncancellable is not counted as delay', () {
+  test('an open section of uncancellable is not counted as delay', () {
     final observer = _SlowCancellations();
     runSolo((solo, journal, async) {
       Solo.observer = observer;
@@ -91,8 +91,52 @@ void main() {
       async.flushTimers();
     });
 
-    // The protected step ran its remaining 90 ms untouched; only the bare
-    // await after it counts.
+    // The section ran its remaining 90 ms untouched; only the bare await
+    // after it counts.
     expect(observer.lines, ['held 50']);
   });
+
+  test('the caller of cancel waits as long as a bare await reports', () {
+    final observer = _SlowCancellations();
+    Duration? waited;
+    runSolo((solo, journal, async) {
+      Solo.observer = observer;
+      final job =
+          solo.run<TestState, void>(key: 'bare', (ctx) async => delay(300));
+      async.elapse(const Duration(milliseconds: 10));
+      final calledAt = clock.now();
+      job.cancel().then((_) => waited = clock.now().difference(calledAt));
+      async.flushTimers();
+    });
+
+    expect(observer.lines, ['bare 290']);
+    expect(waited, const Duration(milliseconds: 290));
+  });
+
+  for (final call in ['cancel', 'close']) {
+    test(
+        'a section of uncancellable counts from its end, and the caller of '
+        '$call waits for it', () {
+      final observer = _SlowCancellations();
+      Duration? waited;
+      runSolo((solo, journal, async) {
+        Solo.observer = observer;
+        final job = solo.run<TestState, void>(
+          key: 'section',
+          (ctx) => ctx.uncancellable(() => delay(100)),
+        );
+        async.elapse(const Duration(milliseconds: 10));
+        final calledAt = clock.now();
+        (call == 'cancel' ? job.cancel() : solo.close())
+            .then((_) => waited = clock.now().difference(calledAt));
+        async.flushTimers();
+      });
+
+      // The cancellation takes effect when the section ends, so the stamp
+      // and the outcome come together, while the caller sat through the
+      // rest of the section.
+      expect(observer.lines, ['section 0']);
+      expect(waited, const Duration(milliseconds: 90));
+    });
+  }
 }

@@ -50,7 +50,7 @@ final class SlowCancellations extends SoloObserver {
   @override
   void onStart(Solo<Object> solo, Job<Object?> job) {
     // whenCancelled fires when the cancellation takes effect, not when
-    // cancel() was called: a step held by ctx.uncancellable runs first.
+    // cancel() was called: an open ctx.uncancellable section ends first.
     job.whenCancelled((_) => _markedAt[job] = clock.now());
   }
 
@@ -123,7 +123,7 @@ final class Cam extends Solo<Value> {
         }
       });
 
-  /// A body that holds its cancellation for the whole wait.
+  /// A body that notices its cancellation only when the wait is over.
   Job<void> bare() => run<Value, void>(
         key: 'bare',
         (ctx) => Future<void>.delayed(const Duration(milliseconds: 300)),

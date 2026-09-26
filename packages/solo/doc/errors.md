@@ -249,7 +249,7 @@ final class SlowCancellations extends SoloObserver {
   @override
   void onStart(Solo<Object> solo, Job<Object?> job) {
     // whenCancelled fires when the cancellation takes effect, not when
-    // cancel() was called: a step held by ctx.uncancellable runs first.
+    // cancel() was called: an open ctx.uncancellable section ends first.
     job.whenCancelled((_) => _markedAt[job] = clock.now());
   }
 
@@ -266,14 +266,16 @@ final class SlowCancellations extends SoloObserver {
 ```
 
 A job nobody cancelled is never stamped and never reported, however long it
-runs. The number is what the caller of `cancel` or `close` sat through: from
-the moment the cancellation took effect to the outcome, children and cleanup
-included.
+runs. The number is counted from the moment the cancellation took effect, not
+from `cancel()`, to the outcome, children and cleanup included. A cancellation
+that comes while a `ctx.uncancellable` section is open takes effect when the
+section ends: a 100 ms section cancelled 10 ms in gives 0 ms, while the caller
+of `cancel` or `close` waited 90 ms.
 
-It is worth watching for one mistake in particular. A body that waits on
-something slow with a bare `await` holds the cancellation for the whole wait,
-where the same call through `ctx.wait` gives it up at once. A 300 ms wait,
-cancelled 10 ms in:
+The number is worth watching for one mistake in particular. A body that waits
+on something slow with a bare `await` notices the cancellation only when the
+wait is over, where the same call through `ctx.wait` stops waiting at once. A
+300 ms wait, cancelled 10 ms in:
 
 | how the body waits | reported delay |
 | --- | --- |
