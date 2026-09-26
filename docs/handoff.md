@@ -91,6 +91,8 @@
 - scopo не трогать, 2026-09-19. Находка о его `CHANGELOG.md` — раздел `0.14.0`
   говорит об удалении `ScopeInitState`, `ScopeProgress` и `ScopeReady`,
   а в дереве тега они есть — передана владельцу и закрыта этим решением.
+- Упоминание Fable в `end/SKILL.md` оставлено по слову владельца, 2026-09-19:
+  оно внутри цитаты испорченного handoff'а.
 
 **Грабли.**
 
@@ -648,6 +650,24 @@ github.com port 443» — отправлять приходится с откл�
 исходников, на которых собраны фрагменты, и сейчас это `0.2.0`.
 
 ## Документация: вычитка страниц doc/
+
+Карта вычитки — `2026-09-11[16]-docs-structure-design.md`. По ней вычитаны все
+страницы до `packages/async_job/doc/observing.md`, и все, кроме неё, владелец
+прочитал; её он читает сейчас. Остались `packages/async_job/doc/extending.md`
+и README `solo` и `flutter_solo`. Разбор страницы — в её отчёте
+`<дата>-<тема>-rakes-report.md`, чтение владельца — под «По чтению владельца»
+в конце того же отчёта.
+
+У страницы без стенда утверждения держит тест пакета, и правка страницы идёт
+вместе с ним. В `async_job` это `cleanup_rakes_test.dart`,
+`outcomes_rakes_test.dart`, `cancellation_rakes_test.dart`,
+`observing_rakes_test.dart` и `children_rakes_test.dart`. В `solo` —
+`state_rakes_test.dart`, `cancellation_rakes_test.dart`,
+`resources_rakes_test.dart`, `errors_rakes_test.dart`
+с `cancel_delay_recipe_test.dart` и `testing_rakes_test.dart`; `camera.md`
+держит `camera_rakes_test.dart` пакета примера, а `children.md` —
+`children_test.dart`, `each_test.dart`, `each_child_test.dart`
+и `zone_test.dart`.
 
 Начата сквозная вычитка страниц, которых она ещё не касалась: вычитаны
 `packages/async_job/README.md`, `packages/solo/doc/vs-bloc.md`,
