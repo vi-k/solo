@@ -28,6 +28,15 @@ final class Source {
   void close() => trace.add('$name closed');
 }
 
+/// Hears what the jobs it watches announce, and answers for nothing.
+final class Listening extends JobObserver {
+  final heard = <String>[];
+
+  @override
+  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      heard.add('$job: $error');
+}
+
 void main() {
   group('Waiting for several children', () {
     test('Future.wait: the failure that came first decides the outcome', () {
@@ -84,6 +93,44 @@ void main() {
           isA<HandlerCancelReason>(),
         );
       });
+    });
+
+    test('Future.wait: an observer of the parent is the one that hears it', () {
+      for (final observed in [true, false]) {
+        final observer = Listening();
+        final zone = <String>[];
+        runZonedGuarded(
+          () => fakeAsync((async) {
+            final fails = Job.deferred<int>(key: 'fails', (ctx) async {
+              await ctx.wait(() => delay(80));
+              throw StateError('disk');
+            });
+            final stops = Job.deferred<int>(key: 'stops', (ctx) async {
+              await ctx.wait(() => delay(200));
+              return 2;
+            });
+            Job<void>(observer: observed ? observer : null, (ctx) async {
+              await Future.wait([ctx.run(fails), ctx.run(stops)]);
+            }).ignore();
+
+            async.elapse(const Duration(milliseconds: 20));
+            stops.cancel().ignore();
+            async.flushTimers();
+          }),
+          (error, stackTrace) => zone.add('$error'),
+        );
+
+        // The children have no observer of their own and inherit the
+        // parent's. With none on the parent either, nothing hears the
+        // failure, and the zone does not get it.
+        final reason = observed ? 'the parent observed' : 'no observer';
+        expect(
+          observer.heard,
+          observed ? ['Job(fails): Bad state: disk'] : isEmpty,
+          reason: reason,
+        );
+        expect(zone, isEmpty, reason: reason);
+      }
     });
 
     test('Future.wait: nobody closes what the other branch handed over', () {

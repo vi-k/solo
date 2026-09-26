@@ -75,7 +75,7 @@ does not arrive through that future. The child ends `Cancelled`,
 `onUnanswered` of the child's observer -- by default to the zone.
 `child.ignore()` silences it. `ctx.run(child).ignore()` does not: it handles
 what the future throws, and the future throws the cancellation. To answer for
-the error differently, give the child an observer of its own.
+the error differently, override `onUnanswered` in the child's observer.
 
 A child inherits the parent's observer unless it has its own. If a child's
 cancellation escapes through `await ctx.run(child)` or `child.value`, the
@@ -136,9 +136,9 @@ that decides the parent's outcome by a race. A failure that arrives before the
 other branch is cancelled ends the parent `Failed`; a cancellation that arrives
 first ends it `Cancelled(HandlerCancelReason)`, and the failure of the other
 branch is nowhere in the outcome. Each failed child does still announce its own
-failure to its observer -- and only there, so a parent whose children have no
-observer of their own loses that error entirely: the body took their futures,
-and that counts as answering for them.
+failure to its observer -- and only there, so where neither the parent nor its
+children have an observer, that error is lost entirely: the body took their
+futures, and that counts as answering for them.
 
 The source the other branch opened is lost with the values. A branch that
 returns what it opened hands it over -- that is what `discard` means, and the

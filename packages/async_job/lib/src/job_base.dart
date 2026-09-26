@@ -274,8 +274,8 @@ abstract interface class Job<T> {
   /// parent's caller whether or not this was called. A failure a cancellation
   /// covered, and that of a branch the group did not throw, do not reach the
   /// parent's caller, and this silences them. To answer for them differently
-  /// instead, give the child an observer of its own that overrides
-  /// [JobObserver.onUnanswered].
+  /// instead, override [JobObserver.onUnanswered] in the child's observer,
+  /// which is the parent's unless the child has one of its own.
   ///
   /// Call it before the job ends, or at the latest from [JobObserver.onFinish]
   /// or a callback of [whenCancelled] registered before it ends. A failure a

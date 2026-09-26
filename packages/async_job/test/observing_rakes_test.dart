@@ -979,6 +979,45 @@ void main() {
         ],
       );
     });
+
+    test('the override answers for a child of a child, the zone for the app',
+        () {
+      // The observer is the root's; the child and the child's child
+      // inherit it.
+      Job<void> tree(JobObserver observer) => Job<void>(
+            observer: observer,
+            (ctx) => ctx.run(
+              Job.deferred<void>(
+                (ctx) => ctx.run(
+                  Job.deferred<void>((ctx) async {
+                    ctx
+                        .run(
+                          Job.deferred<void>(
+                            (ctx) => ctx.wait(() => delay(50)),
+                          ),
+                        )
+                        .ignore();
+                    await delay(10);
+                    throw StateError('disk full');
+                  }),
+                ),
+              ),
+            ),
+          );
+
+      expect(quotable(play(() => tree(Answering()), cancelAt: 20)), [
+        'onError: Bad state: disk full',
+        'cancel',
+        'onUnanswered: Bad state: disk full',
+        'outcome: Cancelled(manual)',
+      ]);
+      expect(quotable(play(() => tree(Reporter()), cancelAt: 20)), [
+        'onError: Bad state: disk full',
+        'cancel',
+        'zone: Bad state: disk full',
+        'outcome: Cancelled(manual)',
+      ]);
+    });
   });
 
   group('Work the job does not wait for', () {

@@ -196,6 +196,12 @@ The errors stop there and do not reach the zone. Calling
 Hand `super` whatever the override cannot tell apart: the default body knows
 which errors are cancellations.
 
+The override answers for the job that got the observer and for the children
+that inherit it, at any depth. The app answers for every job at once in its
+zone, where it already reports what nobody caught: the default body brings
+these errors there. The zone gets the error and its stack trace but not the
+job, so a report that names the job takes an override.
+
 An error can reach `onError` and the zone both, and an app that reports in both
 places hears it twice. The table shows the way each error takes to the zone:
 when nobody observed the outcome, or when `onUnanswered` sends it on. Observing
