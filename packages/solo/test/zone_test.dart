@@ -340,6 +340,17 @@ void main() {
       expect(caught, isEmpty, reason: 'the handler answered for it');
     });
 
+    test('in a child of run: the parent catches Cancelled, not the failure',
+        () {
+      final caught = <String>[];
+      final thrown = <String>[];
+      fakeAsync(
+        (async) => _coveredChild(TestSolo(), async, caught, thrown: thrown),
+      );
+      expect(thrown, ['Cancelled']);
+      expect(caught, ['Bad state: child failed first']);
+    });
+
     test('in a child of run reaches the zone with neither', () {
       final caught = <String>[];
       fakeAsync((async) => _coveredChild(TestSolo(), async, caught));
@@ -523,6 +534,7 @@ void _coveredChild(
   FakeAsync async,
   List<String> caught, {
   bool ignored = false,
+  List<String>? thrown,
 }) {
   late final Job<void> parent;
   _inZone(caught, () {
@@ -544,7 +556,12 @@ void _coveredChild(
       if (ignored) {
         child.ignore();
       }
-      await ctx.run(child);
+      try {
+        await ctx.run(child);
+      } on Object catch (error) {
+        thrown?.add(error is Cancelled ? 'Cancelled' : '$error');
+        rethrow;
+      }
     });
   });
   async.elapse(const Duration(milliseconds: 10));

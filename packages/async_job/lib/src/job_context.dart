@@ -332,11 +332,11 @@ abstract interface class JobContext {
   ///
   /// Once the child starts, this method observes its [Job.value]. Handle the
   /// future returned here even when [Job.ignore] was called on [child]: that
-  /// ignores the job's own reporting, not an error carried by this future.
-  /// A failure of the child's body that a cancellation covered afterwards is
-  /// not in the future — the future carries the cancellation — and the child
-  /// answers for it through [JobObserver.onUnanswered], by default in the
-  /// zone, unless [Job.ignore] was called on [child].
+  /// ignores the job's own reporting, not an error carried by this future. A
+  /// failure of the child's body that a cancellation covered afterwards does
+  /// not come through the future: the future throws the [Cancelled], and the
+  /// child answers for the failure through [JobObserver.onUnanswered], by
+  /// default in the zone, unless [Job.ignore] was called on [child].
   ///
   /// A child is a job nobody starts by itself: [Job.deferred], or a job of
   /// an engine whose start belongs to the engine. One from `Job(body)` is

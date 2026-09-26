@@ -560,6 +560,30 @@ void main() {
       );
     });
 
+    test('the body awaiting run catches Cancelled, not the failure', () {
+      for (final cancelParent in [true, false]) {
+        final thrown = <String>[];
+        final zone = zoneOf((async) {
+          final child = failingFirst('child');
+          final parent = Job<void>((ctx) async {
+            try {
+              await ctx.run(child);
+            } on Object catch (error) {
+              thrown.add(error is Cancelled ? 'Cancelled' : '$error');
+              rethrow;
+            }
+          })
+            ..ignore();
+          async.elapse(const Duration(milliseconds: 10));
+          (cancelParent ? parent.cancel() : child.cancel()).ignore();
+          async.flushTimers();
+        });
+        final reason = cancelParent ? 'the parent cancelled' : 'the child';
+        expect(thrown, ['Cancelled'], reason: reason);
+        expect(zone, [error], reason: reason);
+      }
+    });
+
     test('a child of run cancelled while its cleanup runs', () {
       // No child of its own: the cleanup is what it still waits for.
       expectAnswered(
