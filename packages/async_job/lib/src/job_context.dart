@@ -421,7 +421,8 @@ abstract interface class JobContext {
   /// the group waits for them too.
   ///
   /// **No branch ends before the group has decided.** A branch stands
-  /// twice: once when its body is over and before it unwinds, once between
+  /// twice: once when its body and its children are over and before it
+  /// unwinds, once between
   /// the two passes of its unwinding. That is what keeps a resource a
   /// branch took for the caller — one registered through `discard` — alive
   /// until the group is sure the caller will get it, and closed by the
@@ -439,13 +440,21 @@ abstract interface class JobContext {
   /// starts unwinding only when every branch has ended its body and its
   /// children, or when the body of one of them has ended in anything but a
   /// value; until then its `dispose` and [onDispose] callbacks wait too. A
-  /// lock the branches share, or a slot of a pool smaller than the group,
-  /// taken with `dispose`, stays with the branch that got it, and a branch
-  /// waiting for it waits forever: the group hangs with no timer and no
-  /// error. Cancelling the parent unties it only when the waiting branch
-  /// waits through [wait]; through [join] or a bare `await` it does not.
-  /// Take such a lock in a child of the branch, which releases it when the
-  /// child ends, still inside the body, or use `[a, b].wait`, under which
+  /// lock the branches share, or a slot of a pool with fewer free slots than
+  /// the branches that want one, taken with `dispose`, stays with the branch
+  /// that got it. The branch waiting for it keeps every branch from
+  /// unwinding, and the group hangs with no timer and no error until the
+  /// body of another branch ends in anything but a value. A cancellation,
+  /// of the parent or of a branch, unties it only by ending the body of a
+  /// branch still running: one waiting through [wait], or on an operation
+  /// that hears [onCancel]. It does not end a body stuck in [join] on an
+  /// operation deaf to it, in a bare `await`, or in a branch created with
+  /// `cancellable: false`, and cancelling the branch that holds the lock
+  /// does nothing: its body is over. Take such a lock in a child of the
+  /// branch, which releases it when the child ends, still inside the body.
+  /// If that child also opens what the branch hands out, the branch
+  /// registers it on arrival, `run(child, discard: ...)`, and that
+  /// `discard` runs without the lock. Or use `[a, b].wait`, under which
   /// every branch unwinds on its own.
   ///
   /// On success the group does not wait for the tails of its branches: the

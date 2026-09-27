@@ -255,13 +255,22 @@ that. For branches that depend on each other, `[...].wait` is the answer.
 unwinding only when every branch has ended its body and its children, or when
 the body of one of them has ended in anything but a value; until then its
 `dispose` and `onDispose` callbacks wait too. A lock the branches share, or a
-slot of a pool smaller than the group, taken with `dispose` as on
-[the cleanup page](cleanup.md), stays with the branch that got it, and a branch
-waiting for it waits forever: the group hangs with no timer and no error.
-Cancelling the parent unties it only when the waiting branch waits through
-`ctx.wait`; through `ctx.join` or a bare `await` it does not. Take such a lock
-in a child of the branch, which releases it when the child ends, still inside
-the body, or use `[...].wait`, under which every branch unwinds on its own.
+slot of a pool with fewer free slots than the branches that want one, taken
+with `dispose` as on [the cleanup page](cleanup.md), stays with the branch that
+got it. The branch waiting for it keeps every branch from unwinding, and the
+group hangs with no timer and no error until the body of another branch ends in
+anything but a value. A cancellation, of the parent or of a branch, unties it
+only by ending the body of a branch still running: one waiting through
+`ctx.wait`, or on an operation that hears `ctx.onCancel`. It does not end a
+body stuck in `ctx.join` on an operation deaf to it, in a bare `await`, or in a
+branch created with `cancellable: false`, and cancelling the branch that holds
+the lock does nothing: its body is over. Take such a lock in a child of the
+branch, which releases it when the child ends, still inside the body. If that
+child also opens what the branch hands out, the branch registers it on arrival,
+`ctx.run(child, discard: ...)`, as in
+[Registering on arrival](cleanup.md#registering-on-arrival), and that `discard`
+runs without the lock. Or use `[...].wait`, under which every branch unwinds on
+its own.
 
 ## What a group hands back
 

@@ -75,11 +75,12 @@ successful job leaves the database open for the caller and releases the lock
 all the same; a cancelled or failed one releases both.
 
 A branch of `ctx.runAll` releases later than its body ends: it starts unwinding
-only when every branch of the group has ended its body, or the body of one of
-them has ended in anything but a value. A lock two branches share stays taken
-until then, and the branch waiting for it never ends its body.
+only when every branch of the group has ended its body and waited for its
+children, or when the body of one of them has ended in anything but a value. A
+lock two branches share stays taken until then, and the branch waiting for it
+keeps the group from getting there, so the group hangs.
 [When one failure makes the rest pointless](children.md#when-one-failure-makes-the-rest-pointless)
-says how to take such a lock.
+says what unties it and how to take such a lock.
 
 ## A resource that travels
 
