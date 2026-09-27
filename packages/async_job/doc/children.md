@@ -230,7 +230,7 @@ Use `[ctx.run(a), ctx.run(b)].wait` when the branches are independent of each
 other's failure, or when one of them waits for another. Use `ctx.runAll` when a
 result missing one of its parts is of no use anyway.
 
-Four things `runAll` does not promise.
+Five things `runAll` does not promise.
 
 **The stop is cooperative.** A branch waiting through `ctx.wait` ends, and the
 operation behind it plays on and writes its result. To stop the work itself,
@@ -250,6 +250,18 @@ neither `child.outcome` nor `child.isCancelled` is the last word.
 sibling's `Job.value` never finishes: the sibling is held until the group
 decides, and the group decides only once every branch is held. Nothing catches
 that. For branches that depend on each other, `[...].wait` is the answer.
+
+**Nor for what another branch releases in its cleanup.** A branch starts
+unwinding only when every branch has ended its body and its children, or when
+the body of one of them has ended in anything but a value; until then its
+`dispose` and `onDispose` callbacks wait too. A lock the branches share, or a
+slot of a pool smaller than the group, taken with `dispose` as on
+[the cleanup page](cleanup.md), stays with the branch that got it, and a branch
+waiting for it waits forever: the group hangs with no timer and no error.
+Cancelling the parent unties it only when the waiting branch waits through
+`ctx.wait`; through `ctx.join` or a bare `await` it does not. Take such a lock
+in a child of the branch, which releases it when the child ends, still inside
+the body, or use `[...].wait`, under which every branch unwinds on its own.
 
 ## What a group hands back
 

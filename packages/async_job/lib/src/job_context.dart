@@ -435,6 +435,19 @@ abstract interface class JobContext {
   /// other use `[a, b].wait` instead, which waits for all of them and
   /// stops none.
   ///
+  /// **Nor for what another branch releases in its cleanup.** A branch
+  /// starts unwinding only when every branch has ended its body and its
+  /// children, or when the body of one of them has ended in anything but a
+  /// value; until then its `dispose` and [onDispose] callbacks wait too. A
+  /// lock the branches share, or a slot of a pool smaller than the group,
+  /// taken with `dispose`, stays with the branch that got it, and a branch
+  /// waiting for it waits forever: the group hangs with no timer and no
+  /// error. Cancelling the parent unties it only when the waiting branch
+  /// waits through [wait]; through [join] or a bare `await` it does not.
+  /// Take such a lock in a child of the branch, which releases it when the
+  /// child ends, still inside the body, or use `[a, b].wait`, under which
+  /// every branch unwinds on its own.
+  ///
   /// On success the group does not wait for the tails of its branches: the
   /// values are handed over the moment the decision is made, and whatever
   /// a branch still has to unwind plays out under the parent, which waits

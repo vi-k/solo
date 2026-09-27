@@ -216,6 +216,17 @@
   changed: it reports the first error to reach it and discards the rest before
   anything else can see them.
 
+- `doc/children.md` and the dartdoc of `ctx.runAll` name a fifth thing the
+  group does not promise: a branch must not wait for what another branch
+  releases in its cleanup. A branch starts unwinding only when every branch has
+  ended its body, so a lock two branches share, taken with `dispose` as
+  `doc/cleanup.md` teaches, stays with the branch that got it, and the other
+  waits for it forever, with no timer and no error; cancelling the parent
+  unties it only when the waiting branch waits through `ctx.wait`. The lock
+  goes into a child of the branch, which releases it before the body ends, or
+  the branches go under `[...].wait`. `doc/cleanup.md` points there from the
+  lock it shows.
+
 - `doc/children.md` says what `ctx.run` does with a chain, and why: a
   continuation starts itself when its source finishes, so no link of one can be
   adopted — the head is the only job in a chain a parent can take. And the

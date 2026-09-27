@@ -1995,4 +1995,208 @@ void main() {
       );
     });
   });
+
+  test('a branch unwinds once every body is over, or one ended without a value',
+      () {
+    for (final fails in [false, true]) {
+      fakeAsync((async) {
+        final trace = <String>[];
+        void at(String what) =>
+            trace.add('${async.elapsed.inMilliseconds}: $what');
+        final early = Job.deferred<int>(key: 'early', (ctx) async {
+          ctx.onDispose(() => at('early disposed'));
+          await ctx.wait(() => delay(10));
+          return 1;
+        });
+        final childOfLate = Job.deferred<void>((ctx) async {
+          await ctx.wait(() => delay(80));
+          at('child of late ends');
+        });
+        final late = Job.deferred<int>(key: 'late', (ctx) async {
+          ctx.run(childOfLate).ignore();
+          await ctx.wait(() => delay(40));
+          at('late body ends');
+          if (fails) throw StateError('late');
+          return 2;
+        });
+        Job<void>((ctx) async {
+          try {
+            await ctx.runAll([early, late]);
+          } on Object catch (_) {
+            // The failure is the path under test, not its subject.
+          }
+        }).ignore();
+        async.flushTimers();
+        expect(
+          trace,
+          fails
+              ? [
+                  '40: late body ends',
+                  '40: early disposed',
+                  '80: child of late ends',
+                ]
+              : [
+                  '40: late body ends',
+                  '80: child of late ends',
+                  '80: early disposed',
+                ],
+          reason: 'fails: $fails',
+        );
+      });
+    }
+  });
+
+  test('a lock or a pool the branches share through dispose hangs the group',
+      () {
+    for (final through in ['join', 'bare await', 'wait']) {
+      fakeAsync((async) {
+        final trace = <String>[];
+        final lock = SharedSlots(trace);
+        Job<int> branch(String name) =>
+            Job.deferred<int>(key: name, (ctx) async {
+              switch (through) {
+                case 'join':
+                  await ctx.join(
+                    () => lock.acquire(name),
+                    dispose: (_) => lock.release(name),
+                  );
+                case 'bare await':
+                  await lock.acquire(name);
+                  ctx.onDispose(() => lock.release(name));
+                case _:
+                  await ctx.wait(
+                    () => lock.acquire(name),
+                    dispose: (_) => lock.release(name),
+                  );
+              }
+              await ctx.wait(() => delay(10));
+              return 1;
+            });
+        final parent = Job<List<int>>(
+          (ctx) => ctx.runAll([branch('a'), branch('b')]),
+        )..ignore();
+        async.elapse(const Duration(seconds: 1));
+        expect(trace, ['a holds', 'b waits'], reason: through);
+        expect(parent.isFinished, isFalse, reason: through);
+        expect(
+          async.pendingTimers,
+          isEmpty,
+          reason: 'nothing is left to wake the group: $through',
+        );
+        var returned = false;
+        parent.cancel().then((_) => returned = true).ignore();
+        async.elapse(const Duration(seconds: 1));
+        if (through == 'wait') {
+          expect(returned, isTrue);
+          expect(parent.outcome, isA<Cancelled>());
+          expect(trace, [
+            'a holds',
+            'b waits',
+            'a releases',
+            'b holds',
+            'b releases',
+          ]);
+        } else {
+          expect(
+            returned,
+            isFalse,
+            reason: 'the waiting branch never hears the cancellation: $through',
+          );
+          expect(parent.isFinished, isFalse, reason: through);
+          expect(trace, ['a holds', 'b waits'], reason: through);
+        }
+      });
+    }
+    fakeAsync((async) {
+      // A pool with fewer slots than the group has branches, the same way.
+      final trace = <String>[];
+      final pool = SharedSlots(trace, slots: 2);
+      Job<int> branch(String name) => Job.deferred<int>(key: name, (ctx) async {
+            await ctx.join(
+              () => pool.acquire(name),
+              dispose: (_) => pool.release(name),
+            );
+            await ctx.wait(() => delay(10));
+            return 1;
+          });
+      final parent = Job<List<int>>(
+        (ctx) => ctx.runAll([branch('a'), branch('b'), branch('c')]),
+      )..ignore();
+      async.elapse(const Duration(seconds: 1));
+      expect(trace, ['a holds', 'b holds', 'c waits']);
+      expect(parent.isFinished, isFalse);
+      expect(async.pendingTimers, isEmpty);
+    });
+  });
+
+  test('a lock two branches share is free in a child of each, or under .wait',
+      () {
+    for (final form in ['child of the branch', '.wait']) {
+      fakeAsync((async) {
+        final trace = <String>[];
+        final lock = SharedSlots(trace);
+        Future<int> underLock(JobContext ctx, String name) async {
+          await ctx.join(
+            () => lock.acquire(name),
+            dispose: (_) => lock.release(name),
+          );
+          await ctx.wait(() => delay(10));
+          return 1;
+        }
+
+        Job<int> branch(String name) => form == '.wait'
+            ? Job.deferred<int>(key: name, (ctx) => underLock(ctx, name))
+            : Job.deferred<int>(
+                key: name,
+                (ctx) => ctx.run(
+                  Job.deferred<int>((ctx) => underLock(ctx, name)),
+                ),
+              );
+        final parent = Job<List<int>>(
+          (ctx) => form == '.wait'
+              ? [ctx.run(branch('a')), ctx.run(branch('b'))].wait
+              : ctx.runAll([branch('a'), branch('b')]),
+        )..ignore();
+        async.flushTimers();
+        expect(parent.outcome, isA<Done<List<int>>>(), reason: form);
+        expect(
+          trace,
+          ['a holds', 'b waits', 'a releases', 'b holds', 'b releases'],
+          reason: form,
+        );
+      });
+    }
+  });
+}
+
+/// A lock, or a pool when it has more than one slot, and a trace of who
+/// holds a slot and who waits for one.
+final class SharedSlots {
+  final List<String> trace;
+  final _waiting = <Completer<void>>[];
+  int _free;
+
+  SharedSlots(this.trace, {int slots = 1}) : _free = slots;
+
+  Future<void> acquire(String name) async {
+    if (_free == 0) {
+      trace.add('$name waits');
+      final turn = Completer<void>();
+      _waiting.add(turn);
+      // A release hands its slot straight to the first in line.
+      await turn.future;
+    } else {
+      _free--;
+    }
+    trace.add('$name holds');
+  }
+
+  void release(String name) {
+    trace.add('$name releases');
+    if (_waiting.isEmpty) {
+      _free++;
+    } else {
+      _waiting.removeAt(0).complete();
+    }
+  }
 }
