@@ -107,13 +107,6 @@ final class _ThenJob<T, R> extends JobBase<R> {
   }
 
   @override
-  void adoptedBy(JobContextBase parent) => throw ArgumentError.value(
-        this,
-        'child',
-        'A continuation starts itself after its source finishes',
-      );
-
-  @override
   JobContextBase createContext() => _CoreContext(this);
 
   @override

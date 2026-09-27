@@ -94,6 +94,22 @@
   the stop; for a step of `ctx.uncancellable` this now holds whether or not the
   section held a cancellation. A new error in its place, a wrapper included,
   still comes after, and so does a failure the body awaited past its context.
+- **Fix:** `ctx.run` refuses a `then` job with the same `ArgumentError`
+  whenever it is called. Once the source had finished, the tail was already
+  running, and the call threw `StateError: Job(then) is already running`, which
+  did not say that a continuation is never a child; the order of
+  `doc/children.md`, the head first and then the tail, ran into exactly that.
+- **Fix:** `ctx.join` and `ctx.wait` called from work handed over with
+  `ctx.unattended` no longer hand that work a resource they have already
+  closed. A value that came back after the body had ended was treated as one
+  nobody waits for, but the work does wait for it: on a finished job it got the
+  value after `dispose` or `discard` had run, with no word of it, and on a job
+  still waiting for its children the release was registered unconditionally, so
+  a `discard` closed the value on a `Done` job while the work still used it.
+  The work now gets the value on the body's terms: registered as the call
+  asked, released with the cancellation thrown on a job marked cancelled,
+  including one whose body gave itself up, and on a job that is over released
+  with a `StateError` thrown when there is a `dispose` or `discard` to run.
 - **Fix:** a job that has accepted a cancellation no longer ends with a value.
   The protected `finish`, which an engine of a domain uses to end a job by
   hand, took whatever it was handed: after `cancel()` a `finish(Done(42))` left

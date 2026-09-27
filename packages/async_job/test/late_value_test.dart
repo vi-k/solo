@@ -323,4 +323,163 @@ void main() {
       );
     });
   });
+
+  group('a value unattended work takes after the body ended', () {
+    // The work waits for the value, so it is the receiver: it gets the
+    // value on the terms the call asked for, and a job that is over hands
+    // it nothing closed -- it releases the value and says why.
+    final members = <String,
+        Future<_Resource> Function(
+      JobContext ctx,
+      Future<_Resource> Function() open, {
+      void Function(_Resource)? dispose,
+      void Function(_Resource)? discard,
+    })>{
+      'join': (ctx, open, {dispose, discard}) =>
+          ctx.join(open, dispose: dispose, discard: discard),
+      'wait': (ctx, open, {dispose, discard}) =>
+          ctx.wait(open, dispose: dispose, discard: discard),
+    };
+
+    /// The body hands `take` to unattended work and returns, or gives
+    /// itself up with [givesUp]; `open` brings the value back [opensIn] ms
+    /// later and `make` right away, and a child keeps the job alive for
+    /// [childFor] ms. With [cancelAt] the job is cancelled from outside
+    /// that many ms in. What the work saw, and whether the resource ended
+    /// up closed.
+    List<String> scenario(
+      Future<_Resource> Function(
+        JobContext ctx,
+        Future<_Resource> Function() open,
+        _Resource Function() make,
+      ) take, {
+      int opensIn = 10,
+      int childFor = 0,
+      int? cancelAt,
+      bool givesUp = false,
+    }) {
+      final seen = <String>[];
+      fakeAsync((async) {
+        _Resource? made;
+        final job = Job<void>((ctx) async {
+          if (childFor > 0) {
+            ctx.run(Job.deferred<void>((_) => delay(childFor))).ignore();
+          }
+          ctx.unattended(() async {
+            try {
+              final resource = await take(
+                ctx,
+                () async {
+                  await delay(opensIn);
+                  return made = _Resource();
+                },
+                () => made = _Resource(),
+              );
+              seen.add('got it, closed: ${resource.closed}');
+            } on Cancelled {
+              seen.add('cancelled');
+            } on Object catch (error) {
+              seen.add('$error');
+            }
+          });
+          if (givesUp) {
+            throw const Cancelled('gave up');
+          }
+        });
+        if (cancelAt != null) {
+          async.elapse(Duration(milliseconds: cancelAt));
+          job.cancel().ignore();
+        }
+        async.flushTimers();
+        seen.add('in the end closed: ${made?.closed}');
+      });
+      return seen;
+    }
+
+    void close(_Resource resource) => resource.closed = true;
+
+    const refused = 'Bad state: Job() has already finished, '
+        'cannot take the value of a call it made';
+
+    for (final MapEntry(key: member, value: call) in members.entries) {
+      for (final discard in [false, true]) {
+        final kind = discard ? 'discard' : 'dispose';
+        test('$member with $kind, on a job that is over', () {
+          expect(
+            scenario(
+              opensIn: 20,
+              (ctx, open, _) => call(
+                ctx,
+                open,
+                dispose: discard ? null : close,
+                discard: discard ? close : null,
+              ),
+            ),
+            [
+              refused,
+              'in the end closed: true',
+            ],
+          );
+        });
+      }
+      test('$member with dispose, on a job still waiting for a child', () {
+        expect(
+          scenario(
+            childFor: 30,
+            (ctx, open, _) => call(ctx, open, dispose: close),
+          ),
+          ['got it, closed: false', 'in the end closed: true'],
+        );
+      });
+      test('$member with discard, on a job still waiting for a child', () {
+        expect(
+          scenario(
+            childFor: 30,
+            (ctx, open, _) => call(ctx, open, discard: close),
+          ),
+          ['got it, closed: false', 'in the end closed: false'],
+          reason: 'the job ended Done: the work is the receiver',
+        );
+      });
+      test('$member, the job cancelled while the call runs', () {
+        expect(
+          scenario(
+            opensIn: 20,
+            childFor: 40,
+            cancelAt: 10,
+            (ctx, open, _) => call(ctx, open, discard: close),
+          ),
+          ['cancelled', 'in the end closed: true'],
+        );
+      });
+      test('$member, the body gave itself up', () {
+        expect(
+          scenario(
+            childFor: 40,
+            givesUp: true,
+            (ctx, open, _) => call(ctx, open, discard: close),
+          ),
+          ['cancelled', 'in the end closed: true'],
+          reason: 'the mark ran no callbacks, and the work still gets it',
+        );
+      });
+    }
+    test('wait with a value at hand, on a job still waiting for a child', () {
+      expect(
+        scenario(
+          childFor: 30,
+          (ctx, open, make) async {
+            await delay(10);
+            return ctx.wait(make, discard: close);
+          },
+        ),
+        ['got it, closed: false', 'in the end closed: false'],
+        reason: 'the job ended Done: the work is the receiver',
+      );
+    });
+  });
+}
+
+final class _Resource {
+  bool closed = false;
 }

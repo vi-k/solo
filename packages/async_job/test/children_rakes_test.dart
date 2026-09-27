@@ -463,29 +463,51 @@ void main() {
   });
 
   group('Chains', () {
-    test('ctx.run refuses a continuation', () {
-      fakeAsync((async) {
-        Object? thrown;
-        final head = Job.deferred<int>((ctx) async => 1);
-        final tail = head.then<void>((ctx, rows) async {});
-        Job<void>((ctx) async {
-          try {
-            await ctx.run(tail);
-          } on Object catch (error) {
-            thrown = error;
-          }
+    // The same answer whichever got there first: in the page's order the
+    // source has finished and the tail is already running, in the other
+    // one the tail still waits for its source.
+    final orders = <String,
+        Future<void> Function(
+      JobContext ctx,
+      Job<int> head,
+      Job<void> tail,
+    )>{
+      'after the head, as on the page': (ctx, head, tail) async {
+        await ctx.run(head);
+        await ctx.run(tail);
+      },
+      'before the head': (ctx, head, tail) async {
+        try {
+          await ctx.run(tail);
+        } finally {
           await ctx.run(head);
-        }).ignore();
+        }
+      },
+    };
+    for (final MapEntry(key: order, value: body) in orders.entries) {
+      test('ctx.run refuses a continuation $order', () {
+        fakeAsync((async) {
+          Object? thrown;
+          final head = Job.deferred<int>((ctx) async => 1);
+          final tail = head.then<void>((ctx, rows) async {});
+          Job<void>((ctx) async {
+            try {
+              await body(ctx, head, tail);
+            } on Object catch (error) {
+              thrown = error;
+            }
+          }).ignore();
 
-        async.flushTimers();
+          async.flushTimers();
 
-        expect(thrown, isA<ArgumentError>());
-        expect(
-          (thrown! as ArgumentError).message,
-          contains('A continuation starts itself after its source finishes'),
-        );
+          expect(thrown, isA<ArgumentError>());
+          expect(
+            (thrown! as ArgumentError).message,
+            contains('A continuation starts itself after its source finishes'),
+          );
+        });
       });
-    });
+    }
 
     test('the parent ends Done while the tail is still running', () {
       fakeAsync((async) {

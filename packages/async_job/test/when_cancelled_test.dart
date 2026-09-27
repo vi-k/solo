@@ -7,6 +7,7 @@ import 'package:async_job/async_job.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart';
 
+import 'support/cancel_reason.dart';
 import 'support/delay.dart';
 import 'support/probe_job.dart';
 
@@ -127,6 +128,66 @@ void main() {
       expect(success.outcome, isA<Done<int>>());
       expect(failure.outcome, isA<Failed>());
       expect(seen, isEmpty);
+    });
+  });
+
+  test('a branch giving itself up is heard with its own reason, once', () {
+    // The group asks the siblings to stop as soon as this branch's body
+    // ends, and a sibling's `onCancel` cancels the branch in turn. The
+    // body decided first: that cancellation finds the branch cancelled
+    // already, and one instance is heard and becomes the outcome.
+    fakeAsync((async) {
+      final heard = <Cancelled>[];
+      late Job<void> gaveUp;
+      gaveUp = Job.deferred<void>((ctx) async {
+        await delay(1);
+        throw const Cancelled('gave up');
+      })
+        ..whenCancelled(heard.add);
+      final sibling = Job.deferred<void>((ctx) async {
+        ctx.onCancel(
+          () => gaveUp.cancel(reason: const TestCancelReason('sibling')),
+        );
+        await delay(50);
+      });
+      Object? thrown;
+      Job<void>((ctx) async {
+        try {
+          await ctx.runAll<void>([gaveUp, sibling]);
+        } on Cancelled catch (cancelled) {
+          thrown = cancelled;
+        }
+      });
+      async.flushTimers();
+      expect(heard, hasLength(1));
+      expect(heard.single.description, 'gave up');
+      expect(gaveUp.outcome, same(heard.single));
+      expect(thrown, same(heard.single));
+    });
+  });
+
+  test('a cancellation made while the body gives up is the one heard', () {
+    // Putting the body's cancellation into words formats the child's key,
+    // which is the caller's code, and this one cancels the parent right
+    // then. That cancellation came first and stands.
+    fakeAsync((async) {
+      final heard = <Cancelled>[];
+      final key = _CancellingKey();
+      final child = Job.deferred<void>(key: key, (ctx) async {
+        await delay(1);
+        throw const Cancelled('child gave up');
+      });
+      final parent = Job<void>((ctx) async {
+        ctx.run(Job.deferred<void>((_) => delay(30))).ignore();
+        await ctx.run(child);
+      })
+        ..whenCancelled(heard.add)
+        ..ignore();
+      key.onFormat = () => parent.cancel(reason: const TestCancelReason('key'));
+      async.flushTimers();
+      expect(heard, hasLength(1));
+      expect(heard.single.reason, isA<TestCancelReason>());
+      expect(parent.outcome, same(heard.single));
     });
   });
 
@@ -310,4 +371,17 @@ void main() {
       );
     });
   });
+}
+
+/// A key whose formatting runs [onFormat] once.
+final class _CancellingKey {
+  void Function()? onFormat;
+
+  @override
+  String toString() {
+    final action = onFormat;
+    onFormat = null;
+    action?.call();
+    return 'key';
+  }
 }

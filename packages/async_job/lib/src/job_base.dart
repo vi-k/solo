@@ -461,9 +461,16 @@ abstract class JobBase<T> implements Job<T> {
       error is String || error is num || error is bool || error is Record;
 
   /// Notes [error] as a failure that came before any mark, if nothing has
-  /// marked the job yet.
+  /// marked the job yet and it is not over.
+  ///
+  /// Once the job is over nothing reads the note, and [finish] has already
+  /// let go of it. A call from work handed over with
+  /// [JobContext.unattended], or from a body still playing out on a job an
+  /// engine of a domain finished by hand, may fail after that, and a string
+  /// or a record would then stay in [_plainFailedBeforeMark] for as long as
+  /// the job lives.
   void _failedUnmarked(Object error) {
-    if (_pendingCancel != null) {
+    if (_pendingCancel != null || isFinished) {
       return;
     }
     if (_isPlain(error)) {
@@ -1226,24 +1233,31 @@ abstract class JobBase<T> implements Job<T> {
     // *after* the mark is the body's own way of giving up, and its error
     // belongs to the observer alone.
     var failedFirst = false;
+    // The outcome of a body that threw [cancelled]: the mark if there is
+    // one, and otherwise its own decision to give up.
+    Cancelled gaveUp(Cancelled cancelled, StackTrace stackTrace) {
+      if (_pendingCancel case final pending?) {
+        return pending;
+      }
+      final own = _handlerCancel(cancelled, stackTrace);
+      // Read again: putting the cancellation into words runs the caller's
+      // code -- the `toString` of a child's key, `onError` when that
+      // throws -- and code that cancels this job in between marks it with
+      // its own reason, which `whenCancelled` then hears. That one stands.
+      return _pendingCancel ?? (selfCancelled = own);
+    }
+
     try {
       outcome = Done(await execute(ctx));
     } on Cancelled catch (cancelled, stackTrace) {
-      if (_pendingCancel case final pending?) {
-        outcome = pending;
-      } else {
-        outcome = selfCancelled = _handlerCancel(cancelled, stackTrace);
-      }
+      outcome = gaveUp(cancelled, stackTrace);
     } on Object catch (error, stackTrace) {
       final envelope = _analyzeEnvelope(error);
       if (envelope != null && envelope.isCleanCancellation) {
-        final cancelled = envelope.firstCancelled!;
-        if (_pendingCancel case final pending?) {
-          outcome = pending;
-        } else {
-          outcome = selfCancelled =
-              _handlerCancel(cancelled, envelope.firstStackTrace!);
-        }
+        outcome = gaveUp(
+          envelope.firstCancelled!,
+          envelope.firstStackTrace!,
+        );
       } else {
         // Read before the observer hears: it is handed the job, and an
         // `onError` that cancels would otherwise make a failure that came
@@ -1264,13 +1278,6 @@ abstract class JobBase<T> implements Job<T> {
     if (outcome case Failed(:final error)) {
       _parent?._failedUnmarked(error);
     }
-    // The early word of a branch to its group: the siblings are asked to
-    // stop while this one is still waiting for its own descendants. It
-    // decides nothing and hands nothing over — what comes out of a group
-    // is settled by the final outcomes, later and elsewhere. After the
-    // classification and not before it: a clean envelope thrown by a child
-    // is a cancellation here, not a failure.
-    _hold?.bodyEnded(outcome);
     if (selfCancelled != null) {
       // Marked before the children are waited for, and only marked. The
       // body gave itself up, so from here the job is cancelled to anyone
@@ -1288,9 +1295,25 @@ abstract class JobBase<T> implements Job<T> {
       // error, where today they quietly get their value; and
       // `_notifyCancelled` waits for the children below, because `solo`
       // pins the order in which a cancellation is seen.
+      //
+      // And marked before the group below hears of it: asking the siblings
+      // to stop runs their `onCancel` callbacks, which are the caller's
+      // code, and one that cancels this job must find the decision already
+      // made. Marked after, that `cancelWith` would mark the job with its
+      // own reason, `whenCancelled` would hear that one, and the outcome
+      // would carry the body's.
       _pendingCancel = selfCancelled;
+    }
+    // The early word of a branch to its group: the siblings are asked to
+    // stop while this one is still waiting for its own descendants. It
+    // decides nothing and hands nothing over — what comes out of a group
+    // is settled by the final outcomes, later and elsewhere. After the
+    // classification and not before it: a clean envelope thrown by a child
+    // is a cancellation here, not a failure.
+    _hold?.bodyEnded(outcome);
+    if (selfCancelled case final cancelled?) {
       try {
-        cascadeToChildren(selfCancelled);
+        cascadeToChildren(cancelled);
       } on Object catch (error, stackTrace) {
         // The cascade is recursive, and a deep enough tree overflows the
         // stack inside it. Here there is nobody to hand that to: the

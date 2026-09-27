@@ -341,10 +341,10 @@ abstract interface class JobContext {
   /// default in the zone, unless [Job.ignore] was called on [child].
   ///
   /// A child is a job nobody starts by itself: [Job.deferred], or a job of
-  /// an engine whose start belongs to the engine. One from `Job(body)` is
-  /// refused, whether or not its own start has come round yet: which of
-  /// the two got there first is a matter of microtasks nobody can see in
-  /// the source.
+  /// an engine whose start belongs to the engine. One from `Job(body)` or
+  /// [Job.then] is refused, whether or not its own start has come round
+  /// yet: which of the two got there first is a matter of microtasks nobody
+  /// can see in the source.
   ///
   /// Admission errors are synchronous: throws [ArgumentError] for a handle
   /// that is not a job of this kernel, one an engine of a domain does not own,
@@ -568,7 +568,12 @@ abstract interface class JobContext {
   /// job. A child started here would hang on that boundary with the
   /// parent waiting for it forever, and a section opened here would hold
   /// back the cancellation of a body that stands in no section at all.
-  /// [wait] and [join] are fine — they register on the job and behave.
+  /// [wait] and [join] are fine — they register on the job and behave. The
+  /// work waits for their value, so it gets it on the body's terms even
+  /// after the body has ended: on a job marked cancelled the value is
+  /// released and the call throws the cancellation, and on a job that is
+  /// over a value with a `dispose` or `discard` is released and the call
+  /// throws a [StateError] instead of handing it over closed.
   ///
   /// **How the work stops.** Not by polling [check]: while the engine
   /// unwinds the cleanup stack it throws a [StateError] instead of the
@@ -773,6 +778,27 @@ abstract class JobContextBase implements JobContext {
       // it, go on and throw it again after a cancellation.
       _owner._failedUnmarked(error);
       rethrow;
+    }
+    if (_owner.bodyEnded && identical(Zone.current[_owner], _owner)) {
+      // Called from work handed over with `unattended`, and that work is
+      // waiting for the value: it is the receiver, on the body's terms. A
+      // job marked cancelled -- from outside, or by a body that gave itself
+      // up -- releases the value and throws the cancellation, the rules of
+      // a domain aside: they speak to the body, which is gone. Otherwise
+      // the value is the work's on the terms the call asked for, and on a
+      // job that is over it is released and the call throws, as for a job
+      // an engine finished by hand.
+      try {
+        throwIfCancelled();
+      } on Cancelled {
+        final disposer = dispose ?? discard;
+        if (disposer != null) {
+          await _dispose(disposer, result);
+        }
+        rethrow;
+      }
+      _keepOnStack(dispose, discard, result);
+      return result;
     }
     if (_owner.bodyEnded) {
       // The body ended while the call was in flight: the value did not
@@ -1006,7 +1032,9 @@ abstract class JobContextBase implements JobContext {
     check();
     final result = action();
     if (result is! Future<T>) {
-      if (_owner.bodyEnded) {
+      // Work handed over with `unattended` waits for the value, so it goes
+      // on below like the body's: see `join`.
+      if (_owner.bodyEnded && !identical(Zone.current[_owner], _owner)) {
         await _keepLate(dispose, discard, result);
         return result;
       }
@@ -1069,7 +1097,22 @@ abstract class JobContextBase implements JobContext {
           // the stack while the job is still unwinding it, so whoever
           // waits for the job waits for the release too.
           await _keepLate(dispose, discard, value);
-        } else if (_owner.bodyEnded) {
+        } else if (fromFork && pendingCancel != null) {
+          // The work waits for the value, and the job is marked without
+          // this race having heard it: a body that gave itself up marks
+          // the job and runs no callbacks. The work gets what the body
+          // would: the cancellation, and the value is released.
+          onCancel();
+          final disposer = dispose ?? discard;
+          if (disposer != null) {
+            await _dispose(disposer, value);
+          }
+        } else if (_owner.bodyEnded && !fromFork) {
+          // Nobody is waiting for the value. Work handed over with
+          // `unattended` is, and it takes the branch below: the value is
+          // its on the terms the call asked for, and on a job that is over
+          // `_keepOnStack` releases it and throws, and the work hears that.
+          //
           // The registration below costs a microtask even when there is
           // nothing to register, and a cancellation arriving in it
           // finishes this future through the callback still standing.
@@ -1236,6 +1279,16 @@ abstract class JobContextBase implements JobContext {
         child,
         'child',
         'starts itself; a child is made with Job.deferred',
+      );
+    }
+    if (child is _ThenJob<Object?, Object?>) {
+      // Refused before the status too, and for the same reason: while its
+      // source runs this call would find it `created`, and once the source
+      // has finished it is already running on its own.
+      throw ArgumentError.value(
+        child,
+        'child',
+        'A continuation starts itself after its source finishes',
       );
     }
     if (child.status != JobStatus.created) {

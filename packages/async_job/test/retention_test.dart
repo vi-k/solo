@@ -7,9 +7,12 @@
 @Timeout(Duration(seconds: 30))
 library;
 
+import 'dart:async';
+
 import 'package:async_job/async_job.dart';
 import 'package:test/test.dart';
 
+import 'support/probe_job.dart';
 import 'support/reachability.dart';
 
 /// What a body captures. Big enough that holding it is worth noticing.
@@ -85,6 +88,63 @@ final class CarryingFailure implements Exception {
   );
 }
 
+/// Unattended work whose `ctx.wait` fails once the gate opens, with a record
+/// that holds the payload; the job itself is over by then.
+(Job<int>, WeakReference<Payload>, Completer<void>, Future<void>)
+    failureOfWorkAfterTheJob() {
+  final payload = Payload();
+  final gate = Completer<void>();
+  final workDone = Completer<void>();
+  return (
+    Job<int>((ctx) async {
+      ctx.unattended(() async {
+        try {
+          await ctx.wait<void>(() async {
+            await gate.future;
+            Error.throwWithStackTrace((payload,), StackTrace.current);
+          });
+        } on Object catch (_) {
+          // Handled: the work is over.
+        }
+        workDone.complete();
+      });
+      return 1;
+    }),
+    WeakReference(payload),
+    gate,
+    workDone.future,
+  );
+}
+
+/// A job an engine finishes by hand while its body waits on a `ctx.wait`
+/// that fails, after that, with a record holding a payload. The payload is
+/// made inside the action and handed out weakly through [made]: a
+/// [ProbeJob] keeps its body function, which must not capture it.
+(ProbeJob<int>, Completer<void>, Future<void>) failureAfterAHandFinish(
+  List<WeakReference<Payload>> made,
+) {
+  final gate = Completer<void>();
+  final bodyDone = Completer<void>();
+  return (
+    ProbeJob<int>((ctx) async {
+      try {
+        await ctx.wait<void>(() async {
+          await gate.future;
+          final payload = Payload();
+          made.add(WeakReference(payload));
+          Error.throwWithStackTrace((payload,), StackTrace.current);
+        });
+      } on Object catch (_) {
+        // Handled: the body is over.
+      }
+      bodyDone.complete();
+      return 1;
+    }),
+    gate,
+    bodyDone.future,
+  );
+}
+
 void main() {
   test('a finished job lets go of its body', () async {
     final (job, capture) = captureInBody();
@@ -127,6 +187,36 @@ void main() {
     'an exception': CarryingFailure.new,
     'a record': (payload) => (payload,),
   };
+  test('a job finished by hand keeps nothing its body failed with after',
+      () async {
+    final made = <WeakReference<Payload>>[];
+    final (job, gate, bodyDone) = failureAfterAHandFinish(made);
+    job.launch();
+    await Future<void>.delayed(Duration.zero);
+    job.drop(const Done(0));
+    gate.complete();
+    await bodyDone;
+    expect(
+      await collected(made.single),
+      isTrue,
+      reason: 'the job is over, and nothing will read the order again',
+    );
+  });
+
+  test('a finished job keeps nothing its unattended work failed with',
+      () async {
+    final (job, capture, gate, workDone) = failureOfWorkAfterTheJob();
+    await job.done;
+    gate.complete();
+    await workDone;
+    expect(
+      await collected(capture),
+      isTrue,
+      reason: 'nothing reads the order once the body has ended, so a failure '
+          'arriving after it is not noted at all',
+    );
+  });
+
   for (final MapEntry(key: kind, value: failure) in failures.entries) {
     test('a finished job lets go of $kind it caught', () async {
       final (job, capture) = failureTheBodyCaught(failure);
