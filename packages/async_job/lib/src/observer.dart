@@ -36,8 +36,8 @@ abstract mixin class JobObserver {
   /// did not throw, and one a cancellation covered afterwards. [Job.ignore] on
   /// the job stops these two here. Any other failure of the body is carried by
   /// the outcome, and one nobody observes reaches the zone — all but a failure
-  /// thrown after the job accepted a cancellation: an operation stopping at the
-  /// job's token looks like that, and this hook is the only one to hear it.
+  /// that happened after the job accepted a cancellation: an operation stopping
+  /// at the job's token looks like that, and only this hook hears it.
   ///
   /// A [Cancelled] reaches this hook whenever one is thrown where there is
   /// no outcome to carry it — never the job giving up, which is not an

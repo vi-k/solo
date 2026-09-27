@@ -50,12 +50,13 @@ that future's result while the parent still waits for its children.
 `child.ignore()` alone does not handle errors of the future returned by `run`.
 
 If the child's body fails and a cancellation reaches the child afterwards,
-while it still waits for children of its own or runs its cleanup, its error is
-not thrown into the parent body. The child ends `Cancelled`,
-`await ctx.run(child)` throws `Cancelled`, and the error goes to the
-controller's `onUnanswered` -- by default to `Solo.errorHandler`, or to the
-zone without one. `child.ignore()` silences it. `ctx.run(child).ignore()` does
-not: it handles what the future throws, and the future throws the cancellation.
+whether before the error leaves the body or while the child still waits for
+children of its own or runs its cleanup, its error is not thrown into the
+parent body. The child ends `Cancelled`, `await ctx.run(child)` throws
+`Cancelled`, and the error goes to the controller's `onUnanswered` -- by
+default to `Solo.errorHandler`, or to the zone without one. `child.ignore()`
+silences it. `ctx.run(child).ignore()` does not: it handles what the future
+throws, and the future throws the cancellation.
 
 Accepted parent cancellation propagates to children. This also applies when the
 parent throws `Cancelled`, including an uncaught cancellation from

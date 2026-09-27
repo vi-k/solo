@@ -172,11 +172,22 @@ observer and without, the zone being the one the job was created in:
 | The error | With an observer | Without one |
 | --- | --- | --- |
 | The body's, and the job ends `Failed` with it | `onError`, and the zone if nobody observed the outcome | The zone if nobody observed the outcome |
-| The body's, and a cancellation arrives while the job waits for its children or runs its cleanup | `onError`, then `onUnanswered`: the zone by default | The zone |
-| The body's, after the job accepted a cancellation | `onError` | Nobody |
+| The body's, and a cancellation arrives after it: before the error leaves the body, while the job waits for its children or runs its cleanup | `onError`, then `onUnanswered`: the zone by default | The zone |
+| The body's, and it happened after the job accepted a cancellation | `onError` | Nobody |
 | The body's, in a branch of `ctx.runAll` whose group throws another failure | `onError`, then `onUnanswered`: the zone by default | The zone |
 | Outside the body: a late error of an action abandoned by `wait`, cleanup, a callback of `ctx.onCancel` or `job.whenCancelled`, work of `ctx.unattended`, formatting a child's cancellation description | `onError`, then `onUnanswered`: the zone by default | The zone |
 | A `Cancelled` thrown outside the body | `onError`, then `onUnanswered`: nobody by default | Nobody |
+
+A failure comes first by when it happened, not by when the body threw it. An
+operation behind `ctx.wait` or `ctx.join` that fails, a handler of `ctx.each`,
+a child, a step of `ctx.uncancellable`: the error takes time to leave the body,
+a few microtasks or a child's whole cleanup, and a cancellation arriving in
+that time came after the failure. The body keeps the failure first by letting
+it through, or by catching it and throwing it again later; a new error thrown
+in its place, a wrapper included, comes after the cancellation. The job learns
+when a failure happened from these members and from its children: a future the
+body awaits on its own comes first only if the body throws its error before the
+cancellation.
 
 The errors no outcome carries go on from `onError` to `onUnanswered`, the hook
 that answers for them. Its default body sends them where they go without an

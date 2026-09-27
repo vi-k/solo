@@ -66,6 +66,16 @@ extension _JobStreamBody on JobContext {
       }
     }
 
+    // A failure is the job's from the moment it happens. It reaches the
+    // body several microtasks later -- through the wait and the `finally`
+    // below -- and a cancellation arriving in that time, the source's own
+    // `onCancel` among them, would look first.
+    void failing(Object error) {
+      if (job case final JobBase<Object?> owner) {
+        owner._failedUnmarked(error);
+      }
+    }
+
     void fail(Object error, StackTrace stackTrace) {
       if (!done.isCompleted) {
         failure = (error, stackTrace);
@@ -77,9 +87,11 @@ extension _JobStreamBody on JobContext {
       // The stream goes first: nothing else is delivered, so a handler
       // that threw is never called again.
       //
-      // The source can cancel this job from its own `onCancel`. The
-      // failure still leaves this body, and the engine preserves the
-      // accepted cancellation as the outcome while notifying the observer.
+      // The source can cancel this job from its own `onCancel`, so the
+      // failure is noted first. It still leaves this body: the accepted
+      // cancellation is the outcome, and the failure, which came before
+      // it, goes where a covered one goes.
+      failing(error);
       letGoOfStream();
       // A cancellation from the context has already marked the job, and the
       // wait below throws it by itself. A body cancelling itself with
@@ -174,6 +186,7 @@ extension _JobStreamBody on JobContext {
             if (letGo) {
               return;
             }
+            failing(error);
             if (sub == null) {
               if (!earlyDone && earlyFailure == null) {
                 earlyFailure = (error, stackTrace);
@@ -212,7 +225,8 @@ extension _JobStreamBody on JobContext {
           // `false`, and the error path lets go by itself: see `onError`.
           cancelOnError: false,
         );
-      } on Object {
+      } on Object catch (error) {
+        failing(error);
         // Nothing will ever complete the waiting now.
         end();
         // A throwing listen takes precedence over an earlier stream error.

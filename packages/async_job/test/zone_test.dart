@@ -714,7 +714,7 @@ void main() {
     );
   });
 
-  test('a step that failed with nothing held says nothing about what follows',
+  test('a step caught before the stop says nothing about a new failure after',
       () {
     final caught = <Object>[];
     final errors = <Object>[];
@@ -750,9 +750,9 @@ void main() {
     expect(
       caught,
       isEmpty,
-      reason: 'the stop came after the job accepted the cancellation; the '
-          'section held nothing when its step failed, so it has no order to '
-          'put right',
+      reason: 'the section noted its step as a failure before the mark, '
+          'but the body threw a new error after the job accepted the '
+          'cancellation, and that one came after it',
     );
   });
 

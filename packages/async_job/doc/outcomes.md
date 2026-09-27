@@ -117,11 +117,11 @@ when it is over, say — needs no `ignore()`. Forwarding a failure through `then
 observes it too; the `then` job takes responsibility for it.
 
 Waiting does not observe one failure: the body of `sync` fails, and a
-cancellation arrives while the job still waits for its children or runs its
-cleanup. The job ends `Cancelled`, and the code waiting for it gets the
-cancellation, not the error. The error goes the way of an error no outcome
-carries — [Where errors go](observing.md#where-errors-go) on the observing page
-shows it — and `ignore()` is what keeps it out of the zone.
+cancellation arrives after it — while the job still waits for its children or
+runs its cleanup, say. The job ends `Cancelled`, and the code waiting for it
+gets the cancellation, not the error. The error goes the way of an error no
+outcome carries — [Where errors go](observing.md#where-errors-go) on the
+observing page shows it — and `ignore()` is what keeps it out of the zone.
 
 ## Why a job was cancelled
 

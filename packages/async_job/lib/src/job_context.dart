@@ -174,10 +174,12 @@ abstract interface class JobContext {
   ///
   /// When [action] throws while a cancellation is held, the error came
   /// before the cancellation, and it goes on the way a failure a
-  /// cancellation covered does — see [Failed]. That is said of this error
-  /// alone: the body keeps it so by letting it through or rethrowing it,
+  /// cancellation covered does — see [Failed]. So does an error of [action]
+  /// the body caught and throws again after a cancellation that came later,
+  /// whether the section held it or not. That is said of this error alone:
+  /// the body keeps it first by letting it through or throwing it again,
   /// while a new error thrown in its place, a wrapper included, comes after
-  /// the cancellation landed and only [JobObserver.onError] hears it.
+  /// the cancellation and only [JobObserver.onError] hears it.
   ///
   /// **Always await this call.** The section belongs to the job, not to the
   /// future returned here: it opens on the call and holds a cancellation
@@ -763,7 +765,15 @@ abstract class JobContextBase implements JobContext {
     throwIfFinished('join');
     _oneCleanupOnly(dispose, discard);
     check();
-    final result = await action();
+    final T result;
+    try {
+      result = await action();
+    } on Object catch (error) {
+      // It reaches the body in this very microtask, but the body may catch
+      // it, go on and throw it again after a cancellation.
+      _owner._failedUnmarked(error);
+      rethrow;
+    }
     if (_owner.bodyEnded) {
       // The body ended while the call was in flight: the value did not
       // reach it, and nothing is waiting for this call any more. It hands
@@ -879,14 +889,10 @@ abstract class JobContextBase implements JobContext {
       // lands on the way out -- before the error has reached the body,
       // where the kernel decides which of the two came first. It was the
       // failure, and said nowhere else the diagnosis of the one step that
-      // cannot be rolled back is the one the cancellation swallows. Only
-      // when a cancellation is held and nothing has marked the job: without
-      // one nothing lands on the way out, and after a mark -- a rule of a
-      // domain makes one inside the section -- the held one has nothing
-      // left to land, and the step failed after the mark.
-      if (_owner._heldCancel != null && _owner._pendingCancel == null) {
-        _owner._failedBeforeMark = error;
-      }
+      // cannot be rolled back is the one the cancellation swallows. After
+      // a mark -- a rule of a domain makes one inside the section -- the
+      // held one has nothing left to land, and the step failed after it.
+      _owner._failedUnmarked(error);
       rethrow;
     } finally {
       leaveUncancellable();
@@ -1108,6 +1114,10 @@ abstract class JobContextBase implements JobContext {
             notifyError(error, stackTrace);
           }
         } else {
+          // The completer hands the error on a microtask later, and the
+          // body throws it later still: a cancellation arriving in between
+          // would look first.
+          _owner._failedUnmarked(error);
           completer.completeError(error, stackTrace);
         }
       } finally {

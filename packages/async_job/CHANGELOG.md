@@ -79,9 +79,21 @@
   belongs to the observer alone, and without an observer that was silence. The
   section now says which came first, and the failure of the one step that
   cannot be rolled back goes on as any failure a cancellation covered does. It
-  says so only for its own error and only when it held a cancellation and
-  nothing had marked the job yet: anything else the body throws after the mark
-  is a failure after the mark.
+  says so only for its own error and only when nothing had marked the job yet:
+  anything else the body throws after the mark is a failure after the mark.
+- **Fix:** a failure that came before a cancellation is no longer lost when the
+  cancellation arrives while the error is still on its way to the body's throw:
+  a microtask out of `ctx.wait`, several out of a handler, the source or
+  `listen` of `ctx.each`, and the whole cleanup of a failed child on its way
+  through `ctx.run` or `value`, a branch of `ctx.runAll` among them. The kernel
+  read the order at the throw, saw the failure second, and without an observer
+  said nothing at all. It now notes a failure the moment it happens, one out of
+  `ctx.wait`, `ctx.join`, `ctx.each`, `ctx.uncancellable` or a child, and such
+  a failure goes where any failure a cancellation covered goes. The body keeps
+  it first by letting it through, or by catching it and throwing it again after
+  the stop; for a step of `ctx.uncancellable` this now holds whether or not the
+  section held a cancellation. A new error in its place, a wrapper included,
+  still comes after, and so does a failure the body awaited past its context.
 - **Fix:** a job that has accepted a cancellation no longer ends with a value.
   The protected `finish`, which an engine of a domain uses to end a job by
   hand, took whatever it was handed: after `cancel()` a `finish(Done(42))` left

@@ -67,9 +67,9 @@ looks — it waits for the child's value. The error arrives through the future
 `run` returned, an ordinary Dart future: left unhandled, it goes to the zone,
 and so does a cancellation of the child.
 
-If the child's body fails and a cancellation reaches the child afterwards,
-while it still waits for children of its own or runs its cleanup, its error
-does not arrive through that future. The child ends `Cancelled`,
+If the child's body fails and a cancellation reaches the child afterwards —
+while it still waits for children of its own or runs its cleanup, say — its
+error does not arrive through that future. The child ends `Cancelled`,
 `await ctx.run(child)` throws `Cancelled`, and the error goes on to
 `onUnanswered` of the child's observer — by default to the zone.
 `child.ignore()` silences it. `ctx.run(child).ignore()` does not: it handles

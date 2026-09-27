@@ -56,6 +56,35 @@ final class Payload {
   return (first, WeakReference(payload));
 }
 
+/// A failure that holds what it carries.
+final class CarryingFailure implements Exception {
+  final Payload payload;
+  CarryingFailure(this.payload);
+
+  @override
+  String toString() => 'CarryingFailure(${payload.bytes.length} bytes)';
+}
+
+/// A body that catches the failure of an operation it waited for and goes
+/// on. The payload is then reachable only through that failure, made of it
+/// by [failure].
+(Job<int>, WeakReference<Payload>) failureTheBodyCaught(
+  Object Function(Payload payload) failure,
+) {
+  final payload = Payload();
+  return (
+    Job<int>((ctx) async {
+      try {
+        await ctx.wait(() => Future<void>.error(failure(payload)));
+      } on Object catch (_) {
+        // Handled: the job goes on and ends with a value.
+      }
+      return 1;
+    }),
+    WeakReference(payload),
+  );
+}
+
 void main() {
   test('a finished job lets go of its body', () async {
     final (job, capture) = captureInBody();
@@ -92,4 +121,24 @@ void main() {
           'hold the coordinator and every sibling in it',
     );
   });
+
+  // An error an `Expando` can hold and a record, which it cannot.
+  final failures = <String, Object Function(Payload payload)>{
+    'an exception': CarryingFailure.new,
+    'a record': (payload) => (payload,),
+  };
+  for (final MapEntry(key: kind, value: failure) in failures.entries) {
+    test('a finished job lets go of $kind it caught', () async {
+      final (job, capture) = failureTheBodyCaught(failure);
+      await job.done;
+      expect(job.outcome, isA<Done<int>>());
+      expect(
+        await collected(capture),
+        isTrue,
+        reason: 'the kernel notes a failure on its way to the body, to tell '
+            'the order against a cancellation; once the job is over there '
+            'is no order left to tell',
+      );
+    });
+  }
 }

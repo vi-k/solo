@@ -677,7 +677,12 @@ void main() {
       },
       (error, stackTrace) => caught.add(error),
     );
-    expect(caught, isEmpty, reason: 'an error of the stream is not zone news');
+    expect(
+      caught.map((error) => '$error'),
+      ['Bad state: source boom'],
+      reason: 'the stream failed before the cancellation, which covers it: '
+          'it goes where a covered failure goes, to the zone by default',
+    );
     expect(
       journal.lines.where((line) => line.contains('error')).toList(),
       ['> [null: each] error Bad state: source boom'],
@@ -947,44 +952,57 @@ void main() {
   });
 
   test('an error of a handler covered by the source cancelling the job', () {
+    final zone = <Object>[];
     final journal = JobJournal();
-    fakeAsync((async) {
-      late Job<void> job;
-      Object? caught;
-      final controller = StreamController<int>(
-        onCancel: () => job.cancel().ignore(),
-      );
-      job = Job<void>(
-        key: 'job',
-        observer: journal,
-        (ctx) async {
-          try {
-            await ctx
-                .each(
-                  controller.stream,
-                  (_, event) => throw StateError('handler boom'),
-                )
-                .value;
-          } on Object catch (error) {
-            caught = error;
-          }
-        },
-      )..ignore();
-      async.flushMicrotasks();
-      controller.add(1);
-      async.flushTimers();
-      expect(
-        caught,
-        isA<Cancelled>(),
-        reason: 'the cancellation the source made wins the wait',
-      );
-      expect(job.outcome, isA<Cancelled>());
-      controller.close().ignore();
-    });
+    Object? caught;
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          late Job<void> job;
+          final controller = StreamController<int>(
+            onCancel: () => job.cancel().ignore(),
+          );
+          job = Job<void>(
+            key: 'job',
+            observer: journal,
+            (ctx) async {
+              try {
+                await ctx
+                    .each(
+                      controller.stream,
+                      (_, event) => throw StateError('handler boom'),
+                    )
+                    .value;
+              } on Object catch (error) {
+                caught = error;
+              }
+            },
+          )..ignore();
+          async.flushMicrotasks();
+          controller.add(1);
+          async.flushTimers();
+          expect(job.outcome, isA<Cancelled>());
+          controller.close().ignore();
+        });
+      },
+      (error, stackTrace) => zone.add(error),
+    );
+    expect(
+      caught,
+      isA<Cancelled>(),
+      reason: 'the cancellation the source made wins the wait',
+    );
     expect(
       journal.lines,
       contains('> [null: each] error Bad state: handler boom'),
       reason: 'and the error it covered goes to the observer',
+    );
+    expect(
+      zone.map((error) => '$error'),
+      ['Bad state: handler boom'],
+      reason: 'the handler failed first: the stream is let go of, and only '
+          'then does the source cancel the job, so the failure is one a '
+          'cancellation covered and goes on to the zone',
     );
   });
 

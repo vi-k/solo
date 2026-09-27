@@ -263,8 +263,8 @@ abstract interface class Job<T> {
   ///
   /// Waiting for [done] or [value] observes a [Failed] too: the one
   /// waiting has the error. A failure of the body that a cancellation
-  /// covered afterwards, while the job waited for its children or ran its
-  /// cleanup, is not in the outcome, and the one waiting gets the
+  /// covered afterwards — while the job waited for its children or ran its
+  /// cleanup, say — is not in the outcome, and the one waiting gets the
   /// [Cancelled]. That failure is answered through
   /// [JobObserver.onUnanswered], by default in the zone, however the
   /// outcome was read, and this is what silences it. [JobObserver.onError]
@@ -430,17 +430,53 @@ abstract class JobBase<T> implements Job<T> {
   Cancelled? _pendingCancel;
   bool _bodyEnded = false;
 
-  /// The failure that reached the job before anything marked it, in a
-  /// place where the marking then happened first.
+  /// The failures on their way to the body that happened before anything
+  /// marked the job, held weakly.
   ///
-  /// [JobContext.uncancellable] applies the cancellation it was holding on
-  /// its way out, and on the way out of a failure that happens before the
-  /// error has travelled to the body. The kernel reads the order at the
-  /// throw and would see it the wrong way round; this is the section
-  /// saying which came first. It names the error and not just the fact: a
-  /// body that caught this one and went on may fail again after the job
-  /// accepted a cancellation, and that failure is not first.
-  Object? _failedBeforeMark;
+  /// The kernel reads the order at the throw, and a failure takes time to
+  /// travel there: a microtask out of [JobContext.wait], several out of the
+  /// handler or the source of [JobContext.each], all the time a child that
+  /// failed spends on its own children and its cleanup, and
+  /// [JobContext.uncancellable] lands the cancellation it was holding on
+  /// the failure's way out. A cancellation arriving in that time would look
+  /// first, and a failure that came first is a diagnosis it must not
+  /// swallow. So every place a failure bound for the body passes through
+  /// says so here, at the moment it happens. Every such failure and not
+  /// only the latest: [JobContext.runAll] throws the first failure of its
+  /// branches, and another branch may fail after it and before the mark.
+  ///
+  /// It names the error and not just the fact: a body that caught one of
+  /// these and went on may fail again after the job accepted a
+  /// cancellation, and that failure is not first; the same error thrown
+  /// again is, and a constant error the body throws itself counts as the
+  /// same one. Weakly, because a body that catches failures in a loop would
+  /// otherwise hold every one of them until the job is over.
+  Expando<bool>? _failedBeforeMark;
+
+  /// The latest failure of [_failedBeforeMark] that an [Expando] cannot
+  /// hold: a string, a number, a boolean or a record.
+  Object? _plainFailedBeforeMark;
+
+  static bool _isPlain(Object error) =>
+      error is String || error is num || error is bool || error is Record;
+
+  /// Notes [error] as a failure that came before any mark, if nothing has
+  /// marked the job yet.
+  void _failedUnmarked(Object error) {
+    if (_pendingCancel != null) {
+      return;
+    }
+    if (_isPlain(error)) {
+      _plainFailedBeforeMark = error;
+    } else {
+      (_failedBeforeMark ??= Expando<bool>())[error] = true;
+    }
+  }
+
+  /// Whether [error] was noted by [_failedUnmarked].
+  bool _wasFailedUnmarked(Object error) => _isPlain(error)
+      ? identical(error, _plainFailedBeforeMark)
+      : _failedBeforeMark?[error] ?? false;
 
   /// Whether this job is unwinding a cascade that ran out of stack.
   ///
@@ -974,6 +1010,12 @@ abstract class JobBase<T> implements Job<T> {
       if (decided is Cancelled) {
         parent._outcomeChild[decided] = this;
       }
+      // On its way to the parent's body through `run` or `value`. A failure
+      // the body threw was noted when it was thrown; this is the one an
+      // engine of a domain finishes the job with by hand.
+      if (decided is Failed) {
+        parent._failedUnmarked(decided.error);
+      }
     }
     // Guarded: the hook belongs to an engine of a domain, and its error
     // must not stand between the job and its outcome — an unfinished job
@@ -997,13 +1039,16 @@ abstract class JobBase<T> implements Job<T> {
     // read later, by a controller holding the last job, by a widget, by a
     // journal -- but nothing it reached through is of any use now: the
     // parent chain leads to jobs that are over, the group of
-    // [JobContext.runAll] has taken its verdict, and the outcome of the
-    // body has become the outcome. Held on, these turn one handle in a
-    // field into the whole tree it came out of, and every closure that
-    // tree captured.
+    // [JobContext.runAll] has taken its verdict, the outcome of the body
+    // has become the outcome, and a failure noted on its way to the body
+    // has arrived or never will. Held on, these turn one handle in a field
+    // into the whole tree it came out of, every closure that tree captured
+    // and an error with everything it references.
     _parent = null;
     _hold = null;
     _bodyOutcome = null;
+    _failedBeforeMark = null;
+    _plainFailedBeforeMark = null;
     if (decided is Failed && !_observed) {
       _reportUnobserved(decided);
     }
@@ -1204,8 +1249,7 @@ abstract class JobBase<T> implements Job<T> {
         // `onError` that cancels would otherwise make a failure that came
         // first look like it came second. The order is the whole diagnosis,
         // and it is settled at the moment of the throw.
-        failedFirst =
-            _pendingCancel == null || identical(error, _failedBeforeMark);
+        failedFirst = _pendingCancel == null || _wasFailedUnmarked(error);
         notifyObserver(error, stackTrace);
         outcome = Failed(error, stackTrace);
       }
@@ -1214,6 +1258,12 @@ abstract class JobBase<T> implements Job<T> {
     // away from can no longer reach it, and no child is started any more.
     _bodyEnded = true;
     _bodyOutcome = outcome;
+    // On its way to the parent's body through `run` or `value` from this
+    // moment, and it gets there only when this job is over: after its
+    // children and its cleanup, which may take any time.
+    if (outcome case Failed(:final error)) {
+      _parent?._failedUnmarked(error);
+    }
     // The early word of a branch to its group: the siblings are asked to
     // stop while this one is still waiting for its own descendants. It
     // decides nothing and hands nothing over — what comes out of a group

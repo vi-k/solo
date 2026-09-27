@@ -125,8 +125,8 @@ final class Done<T> extends Outcome<T> {
 /// This is the error that has an outcome of its own. A body that throws
 /// after its cancellation ends as [Cancelled] instead, and [Cancelled] is
 /// never reported to the zone. A body that fails before a cancellation
-/// arrives — the job still waits for its children or runs its cleanup —
-/// ends [Cancelled] as well. Whoever reads that outcome gets the
+/// arrives — the job still waits for its children or runs its cleanup,
+/// say — ends [Cancelled] as well. Whoever reads that outcome gets the
 /// cancellation, and the error goes on the way of the errors below;
 /// [Job.ignore] silences it.
 ///
