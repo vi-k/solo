@@ -2,10 +2,10 @@
 
 - **Breaking:** `JobObserver.onError` is a notice, and the answer for an error
   no outcome carries moved to the new hook `JobObserver.onUnanswered`. Such an
-  error -- a late failure of an action `wait` walked away from, a disposer, a
+  error — a late failure of an action `wait` walked away from, a disposer, a
   callback of `ctx.onCancel` or `job.whenCancelled`, work handed to
   `ctx.unattended`, the failure of a branch of `ctx.runAll` that the group did
-  not throw -- used to stop at whatever observer the job had, so an observer
+  not throw — used to stop at whatever observer the job had, so an observer
   written for a log, overriding `onFinish` alone, kept every one of them out of
   the zone without a word. Now `onError` hears it and `onUnanswered` answers
   for it: the default body sends the error to the zone the job was created in,
@@ -22,7 +22,7 @@
 - **Breaking:** `JobBase`, `JobContextBase` and `JobStatus` moved to
   `package:async_job/engine.dart`. They are the protocol for building an engine
   on the kernel, and the main import handed them to every file that merely runs
-  a job -- and, through `solo` and `flutter_solo`, to every file of an app.
+  a job — and, through `solo` and `flutter_solo`, to every file of an app.
   `engine.dart` exports the rest of the package as well, so an engine swaps one
   import for the other: `import 'package:async_job/engine.dart';` in place of
   `async_job.dart`. Code that only runs jobs is untouched. See
@@ -31,7 +31,7 @@
 - **Fix:** the failure of a body is no longer lost when a cancellation reaches
   the job afterwards, while it still waits for children of its own or runs its
   cleanup. The job ends `Cancelled`, and whoever reads the outcome gets the
-  cancellation -- `await job.value`, `job.done`, `await ctx.each(...).value`,
+  cancellation — `await job.value`, `job.done`, `await ctx.each(...).value`,
   `ctx.run`, a group of `ctx.runAll`. The failure went to the zone only if
   nobody read the outcome, so each of these readers lost it, and `ctx.run` and
   a group always read. It is now an error no outcome carries, whoever reads the
@@ -49,7 +49,7 @@
   cascading onto the children now runs in its turn instead of ahead of everyone
   who registered earlier. Between the mark and the pass that tells the
   listeners there is a window, and a registration made in there was called on
-  the spot because the cancellation had been accepted -- which is true, and is
+  the spot because the cancellation had been accepted — which is true, and is
   not the same thing as the pass having run.
 - **Fix:** a job of a domain that compares itself by a key is no longer taken
   for another one inside unattended work. The fork of `ctx.unattended` carries
@@ -75,7 +75,7 @@
 - **Fix:** a step that failed inside `ctx.uncancellable` while a cancellation
   was held keeps its diagnosis. The section applies the held cancellation on
   the way out, which is before the error reaches the body, so the kernel read
-  the order the wrong way round -- it saw a failure thrown after a mark, which
+  the order the wrong way round — it saw a failure thrown after a mark, which
   belongs to the observer alone, and without an observer that was silence. The
   section now says which came first, and the failure of the one step that
   cannot be rolled back goes on as any failure a cancellation covered does. It
@@ -85,7 +85,7 @@
 - **Fix:** a job that has accepted a cancellation no longer ends with a value.
   The protected `finish`, which an engine of a domain uses to end a job by
   hand, took whatever it was handed: after `cancel()` a `finish(Done(42))` left
-  a handle saying both at once -- `isCancelled` true, `check` throwing,
+  a handle saying both at once — `isCancelled` true, `check` throwing,
   `whenCancelled` fired, and `outcome` a `Done(42)`. The mark now decides a
   `Done` or a `Failed` handed in over it, and a failure so replaced goes where
   one a cancellation covered goes, so nothing is lost silently. A `Cancelled`
@@ -103,25 +103,25 @@
   arriving in that microtask finished the wait through the callback still
   standing; the completion that followed threw `Future already completed` out
   of the kernel, and the job reported that to `onError` as an error of its own.
-  The value was never in danger -- the registration had it -- but whoever
-  listens saw a defect of the package where there was none.
+  The value was never in danger — the registration had it — but whoever listens
+  saw a defect of the package where there was none.
 - **Fix:** a body that gives itself up is marked there and then. Until now the
   mark went on only after the job had waited for its children, so between the
   `throw Cancelled(...)` and that wait the job answered `isCancelled` with
   `false`, `ctx.check()` let work through, and a `cancel()` arriving in the
   window went through in full and put its own reason over the one the body
-  chose -- the description the body wrote disappeared from the diagnosis. The
+  chose — the description the body wrote disappeared from the diagnosis. The
   children were cascaded to at once, so they carried a `ParentCancelReason`
   whose cause their parent then did not end with. What a caller may see
   differently: cancelling a job whose body has already given up now keeps the
   body's reason, and `Job.cancel` returns when the job finishes, as a second
-  call always did. What is unchanged is the reason the mark is late at all --
+  call always did. What is unchanged is the reason the mark is late at all —
   the `onCancel` callbacks still do not run on this path, and the waits the
   body walked away from still get their values quietly.
 - **Fix:** a finished job lets go of its body, of its parent and of the group
   of `ctx.runAll` that held it. The body of a core job ran once and was kept
-  for good, so everything it captured -- a controller, a connection, a buffer
-  -- stayed alive for as long as anyone kept the handle; the link to the parent
+  for good, so everything it captured — a controller, a connection, a buffer —
+  stayed alive for as long as anyone kept the handle; the link to the parent
   turned one child handle into the whole chain it came out of, and the hold of
   a group turned one branch handle into the coordinator and every sibling in
   it. A handle is kept precisely to be read later, by a controller holding its
@@ -129,9 +129,9 @@
   Nothing an outcome carries is touched: `outcome`, `value` and the key read
   exactly as they did.
 - **Fix:** `ctx.runAll` stops the siblings when a branch throws before its
-  first `await`. The group attaches its hold once the branch is admitted --
+  first `await`. The group attaches its hold once the branch is admitted —
   before that a handle already running as somebody else's branch would be
-  pulled out of their hold -- and a body that is not `async` has ended inside
+  pulled out of their hold — and a body that is not `async` has ended inside
   `startChild`, one line earlier. Its early word found nothing to say itself
   to, so the group learned of the trouble only at the second barrier: the
   siblings played out in full, opened what they opened, wrote what they wrote,
@@ -141,11 +141,11 @@
   its first suspension point.
 - **Fix:** a job giving up no longer reaches `JobObserver.onError`. A call the
   body walked away from with `ctx.wait` keeps the context, and after the mark
-  every door back into it -- `check`, `join`, `run` -- throws the very
+  every door back into it — `check`, `join`, `run` — throws the very
   `Cancelled` that became the outcome; the kernel took that for a late failure
   of the abandoned action and reported it. `JobObserver.onError` says the
-  opposite in so many words -- "never the job giving up, which is not an error"
-  -- and in an engine of a domain that hook is the error channel of the
+  opposite in so many words — "never the job giving up, which is not an
+  error" — and in an engine of a domain that hook is the error channel of the
   application, so every cancellation of a job written with a helper that takes
   the context showed up there as a failure. The filter `unattended` already
   applies to work handed over now stands on this path as well, by identity
@@ -157,11 +157,11 @@
   implementation of `JobContext` written by hand no longer compiles;
   `JobContextBase` gets them once and every engine built on it, `solo`
   included, gets them for nothing. Why they belong on the call: `run` checks
-  the parent once the value is in hand -- for its own cancellation, and for the
-  rules of its domain -- and a checkpoint that throws there takes the value
-  with it. The child ended `Done`, so its own conditional registration went
-  with the value and is gone, and the line that would have made the next one is
-  never reached: `parent=Cancelled(rules) child=Done(db)` with nothing closed.
+  the parent once the value is in hand — for its own cancellation, and for the
+  rules of its domain — and a checkpoint that throws there takes the value with
+  it. The child ended `Done`, so its own conditional registration went with the
+  value and is gone, and the line that would have made the next one is never
+  reached: `parent=Cancelled(rules) child=Done(db)` with nothing closed.
   **Migrating.** Nothing breaks at a call site: `ctx.run(child)` is unchanged,
   and `ctx.wait(() => ctx.run(child), discard: ...)` still compiles and still
   closes what it took on every path it ever did. It does not close this one,
@@ -170,7 +170,7 @@
   registration written on the line after `await ctx.run(child)` are both the
   ones to move into the call. See `doc/cleanup.md`.
 - **Added:** the debug channel names a job that handed its value over and
-  dropped the conditional registrations that went with it --
+  dropped the conditional registrations that went with it —
   `Job(opener) handed its value over: 1 conditional cleanup dropped`. A
   registration made by `discard` or `onDiscard` is settled by the outcome of
   the job that made it and travels with no value, so a receiver that keeps the
@@ -182,17 +182,17 @@
   and asks the rest to stop as soon as one of them goes wrong. New on an
   `abstract interface class`, so an implementation of `JobContext` written by
   hand no longer compiles, and so does an extension of the same name on
-  `JobContext` -- the member now wins over it. `JobContextBase` gets it once
-  and every engine built on it, `solo` included, gets it for nothing. It brings
-  a fifth built-in reason with it, `SiblingCancelReason`, which is what the
-  group gives the branches it asks to stop; its `cause` is what went wrong. The
+  `JobContext` — the member now wins over it. `JobContextBase` gets it once and
+  every engine built on it, `solo` included, gets it for nothing. It brings a
+  fifth built-in reason with it, `SiblingCancelReason`, which is what the group
+  gives the branches it asks to stop; its `cause` is what went wrong. The
   contract of `discard` is untouched: it still runs only when the job ends
   without handing its value over, and in a branch of a group the group is what
   says whether it did. See `doc/children.md`.
 - **Breaking:** a cancellation that travels inside a `ParallelWaitError` is a
   cancellation again. `[...].wait` wraps every branch error in that envelope,
   and the kernel read a caught error by type, so a child cancelled under
-  `[ctx.run(a), ctx.run(b)].wait` ended the parent `Failed` -- where the same
+  `[ctx.run(a), ctx.run(b)].wait` ended the parent `Failed` — where the same
   code written as `await ctx.run(child)` ends it `Cancelled`, as
   `doc/children.md` promises. An envelope carrying cancellations and successful
   branches now decides the outcome the way the cancellation it carries would,
@@ -210,7 +210,7 @@
   closes it whatever the outcome, and nothing is needed at the call site. For a
   branch that cannot go through `ctx.wait`, catch the envelope inside the body,
   where it still arrives as it did. An envelope built by hand is read by the
-  same rule -- it cannot be told apart from the one the language builds -- so
+  same rule — it cannot be told apart from the one the language builds — so
   code that deliberately throws an aggregate with a cancellation inside should
   wrap it in an error of its own. `Future.wait` is unchanged and cannot be
   changed: it reports the first error to reach it and discards the rest before
@@ -265,30 +265,30 @@
   tree jammed. The cascade is recursive, and a tree thousands of levels deep
   overflows inside it; the mark goes on before the descent and the callbacks
   run after it, so the unwinding left every job the cascade had reached marked
-  and unannounced -- no `onCancel` ran, nothing was told to stop, and a second
+  and unannounced — no `onCancel` ran, nothing was told to stop, and a second
   `cancel()` turned around at the mark. The callbacks now run as the cascade
   unwinds, and the error still reaches whoever asked. A body giving itself up
   meets the same descent with nobody to hand a failure to, so there the error
   goes to `onError` and `onUnanswered` and the job still waits for its children
   and unwinds its cleanup stack instead of stopping where it stood. The
-  siblings of the child that overflowed are no longer skipped either -- one
+  siblings of the child that overflowed are no longer skipped either — one
   child is not the rest of them, and the one that runs the stack out may be a
-  chain of thousands next to a leaf -- and an overflow landing in a
-  cancellation callback at the very bottom is not announced as a failure of
-  that callback, which would name it for something it did not do -- there and
-  nowhere else, though: a callback that runs out of stack anywhere but under
-  that unwinding did it by itself, and its error goes to `onError` and
-  `onUnanswered` and changes nothing else, as it always has. What lies below
-  the break is still left running: the depth of a tree is bounded by the stack
-  either way, and `doc/children.md` says by how much.
+  chain of thousands next to a leaf — and an overflow landing in a cancellation
+  callback at the very bottom is not announced as a failure of that callback,
+  which would name it for something it did not do — there and nowhere else,
+  though: a callback that runs out of stack anywhere but under that unwinding
+  did it by itself, and its error goes to `onError` and `onUnanswered` and
+  changes nothing else, as it always has. What lies below the break is still
+  left running: the depth of a tree is bounded by the stack either way, and
+  `doc/children.md` says by how much.
 
 - `doc/outcomes.md` no longer promises that a `whenCancelled` registered after
   a cancellation always fires on the spot. It does once the cancellation has
-  been announced; one made in between -- while the cancellation cascades onto
-  the children, or while a job whose body gave itself up waits for them --
-  joins that announcement in its own place, and a registration made later never
-  runs before one made earlier. The dartdoc of `whenCancelled` has been saying
-  so; the page had the short version.
+  been announced; one made in between — while the cancellation cascades onto
+  the children, or while a job whose body gave itself up waits for them — joins
+  that announcement in its own place, and a registration made later never runs
+  before one made earlier. The dartdoc of `whenCancelled` has been saying so;
+  the page had the short version.
 
 - `doc/outcomes.md` opens three of its four sections with the version the
   vocabulary of the API leads to and shows what it prints: a `catch` around
