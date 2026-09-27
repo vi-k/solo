@@ -2165,79 +2165,109 @@ void main() {
     }
   });
 
-  test('a cancellation unties the hang only by ending a body still running',
+  group('a cancellation unties the hang only by ending what a branch waits for',
       () {
-    // `a` takes the lock and ends its body; `b` waits for the lock the way
-    // the case says. What is cancelled, and what `b` waits through, decide
-    // whether a body still running ends, and with it the hang.
+    // `a` takes the lock and ends its body; `b`, or a child `b` starts and
+    // does not await, waits for the lock the way the case says. What is
+    // cancelled, and what the waiting goes through, decide whether something
+    // a branch still waits for ends, and with it the hang.
     const cases = {
       // case: untied
       'parent; b joins an acquire that hears ctx.onCancel': true,
       'parent; b joins, a third branch waits through ctx.wait': true,
+      "parent; b's body is over, its child waits through ctx.wait": true,
+      "parent; b's body is over, its child awaits bare": false,
       'parent; b is cancellable: false and waits through ctx.wait': false,
+      'parent; b waits through ctx.wait inside ctx.uncancellable': false,
       'b itself; b waits through ctx.wait': true,
       'b itself; b joins': false,
       'a, which holds the lock; b waits through ctx.wait': false,
     };
     for (final MapEntry(key: name, value: untied) in cases.entries) {
-      fakeAsync((async) {
-        final trace = <String>[];
-        final lock = SharedSlots(trace);
-        final holder = Job.deferred<int>(key: 'a', (ctx) async {
-          await ctx.join(
-            () => lock.acquire('a'),
-            dispose: (_) => lock.release('a'),
-          );
-          return 1;
-        });
-        final waiter = Job.deferred<int>(
-          key: 'b',
-          cancellable: !name.contains('cancellable: false'),
-          (ctx) async {
+      test(name, () {
+        fakeAsync((async) {
+          final trace = <String>[];
+          final lock = SharedSlots(trace);
+          Future<int> waitForLock(JobContext ctx, String who) async {
             if (name.contains('hears ctx.onCancel')) {
-              ctx.onCancel(() => lock.giveUp('b'));
+              ctx.onCancel(() => lock.giveUp(who));
             }
-            if (name.contains('b joins')) {
+            if (name.contains('bare')) {
+              await lock.acquire(who);
+            } else if (name.contains('joins')) {
               await ctx.join(
-                () => lock.acquire('b'),
-                dispose: (_) => lock.release('b'),
+                () => lock.acquire(who),
+                dispose: (_) => lock.release(who),
+              );
+            } else if (name.contains('uncancellable')) {
+              await ctx.uncancellable(
+                () => ctx.wait(
+                  () => lock.acquire(who),
+                  dispose: (_) => lock.release(who),
+                ),
               );
             } else {
               await ctx.wait(
-                () => lock.acquire('b'),
-                dispose: (_) => lock.release('b'),
+                () => lock.acquire(who),
+                dispose: (_) => lock.release(who),
               );
             }
             return 2;
-          },
-        );
-        final third = Job.deferred<int>(key: 'c', (ctx) async {
-          await ctx.wait(() => delay(60000));
-          return 3;
+          }
+
+          final holder = Job.deferred<int>(key: 'a', (ctx) async {
+            await ctx.join(
+              () => lock.acquire('a'),
+              dispose: (_) => lock.release('a'),
+            );
+            return 1;
+          });
+          final waiter = Job.deferred<int>(
+            key: 'b',
+            cancellable: !name.contains('cancellable: false'),
+            (ctx) async {
+              if (name.contains('its child')) {
+                ctx
+                    .run(
+                      Job.deferred<int>(
+                        key: 'b-child',
+                        (ctx) => waitForLock(ctx, 'b-child'),
+                      ),
+                    )
+                    .ignore();
+                return 2;
+              }
+              return waitForLock(ctx, 'b');
+            },
+          );
+          final third = Job.deferred<int>(key: 'c', (ctx) async {
+            await ctx.wait(() => delay(60000));
+            return 3;
+          });
+          final parent = Job<List<int>>(
+            (ctx) => ctx.runAll([
+              holder,
+              waiter,
+              if (name.contains('third branch')) third,
+            ]),
+          )..ignore();
+          async.elapse(const Duration(seconds: 1));
+          expect(parent.isFinished, isFalse, reason: 'hung before: $name');
+          if (name.startsWith('parent')) {
+            parent.cancel().ignore();
+          } else if (name.startsWith('b')) {
+            waiter.cancel().ignore();
+          } else {
+            holder.cancel().ignore();
+          }
+          async.elapse(const Duration(seconds: 1));
+          expect(parent.isFinished, untied, reason: name);
+          expect(
+            trace.contains('a releases'),
+            untied,
+            reason: 'the lock goes back only when the group unties: $name',
+          );
         });
-        final parent = Job<List<int>>(
-          (ctx) => ctx.runAll([
-            holder,
-            waiter,
-            if (name.contains('third branch')) third,
-          ]),
-        )..ignore();
-        async.elapse(const Duration(seconds: 1));
-        expect(parent.isFinished, isFalse, reason: name);
-        if (name.startsWith('parent')) {
-          parent.cancel().ignore();
-        } else if (name.startsWith('b')) {
-          waiter.cancel().ignore();
-        } else {
-          holder.cancel().ignore();
-        }
-        async.elapse(const Duration(seconds: 1));
-        expect(parent.isFinished, untied, reason: name);
-        expect(
-          trace.contains('a releases'),
-          untied,
-          reason: 'the lock goes back only when the group unties: $name',
-        );
       });
     }
   });
@@ -2281,54 +2311,87 @@ void main() {
     }
   });
 
-  test("a branch awaiting a sibling's value hangs until a body ends otherwise",
-      () {
-    // `a` returns at once and stands held; `b` awaits `a.value` the way the
-    // case says. The value comes only once the group lets `a` go, and the
-    // group does that only when the body of a branch still running ends in
-    // anything but a value.
+  group('a branch awaiting a sibling hangs until the group can decide', () {
+    // `a` returns at once and stands held; `b` awaits `a` the way the case
+    // says. `a` is let go only when the group decides: once every branch is
+    // held, or once the body of one of them has ended in anything but a
+    // value. The words before the semicolon say what happens after the hang.
     const cases = {
       // case: untied
-      'nothing; b awaits it bare': false,
-      'parent; b awaits it bare': false,
-      'parent; b joins it': false,
-      'parent; b waits for it through ctx.wait': true,
-      'parent; b awaits it bare, a third branch waits through ctx.wait': true,
-      'a third branch fails; b awaits it bare': true,
-      'b itself; b awaits it bare': false,
-      'b itself; b waits for it through ctx.wait': true,
-      'a itself; b waits for it through ctx.wait': false,
+      'nothing; b awaits a.value bare': false,
+      'nothing; b awaits a.done bare': false,
+      'parent; b awaits a.value bare': false,
+      'parent; b awaits a.done bare': false,
+      'parent; b joins a.value': false,
+      'parent; b joins a.value with an abort that hears ctx.onCancel': true,
+      'parent; b waits for a.value through ctx.wait': true,
+      'parent; b waits for a.done through ctx.wait': true,
+      'parent; b is cancellable: false and waits through ctx.wait': false,
+      'parent; b waits through ctx.wait inside ctx.uncancellable': false,
+      'parent; b awaits a.value bare, a third branch waits through ctx.wait':
+          true,
+      'c fails; b awaits a.value bare, a third branch waits through ctx.wait':
+          true,
+      'c itself; b awaits a.value bare, a third branch waits through ctx.wait':
+          true,
+      'b itself; b awaits a.value bare': false,
+      'b itself; b waits for a.value through ctx.wait': true,
+      'a itself; b waits for a.value through ctx.wait': false,
     };
     for (final MapEntry(key: name, value: untied) in cases.entries) {
-      fakeAsync((async) {
-        final a = Job.deferred<int>(key: 'a', (ctx) async => 1);
-        final b = Job.deferred<int>(key: 'b', (ctx) async {
-          if (name.contains('bare')) return await a.value + 1;
-          if (name.contains('joins')) return ctx.join(() => a.value);
-          return await ctx.wait(() => a.value) + 1;
+      test(name, () {
+        fakeAsync((async) {
+          final a = Job.deferred<int>(key: 'a', (ctx) async => 1);
+          Future<int> sibling() async {
+            if (!name.contains('a.done')) return a.value;
+            await a.done;
+            return 1;
+          }
+
+          final b = Job.deferred<int>(
+            key: 'b',
+            cancellable: !name.contains('cancellable: false'),
+            (ctx) async {
+              if (name.contains('abort')) {
+                final abort = Completer<int>();
+                ctx.onCancel(() => abort.completeError(StateError('abort')));
+                return ctx.join(() => Future.any([sibling(), abort.future]));
+              }
+              if (name.contains('bare')) return await sibling() + 1;
+              if (name.contains('joins')) return ctx.join(sibling);
+              if (name.contains('uncancellable')) {
+                return ctx.uncancellable(() => ctx.wait(sibling));
+              }
+              return await ctx.wait(sibling) + 1;
+            },
+          );
+          final release = Completer<void>();
+          final c = Job.deferred<int>(key: 'c', (ctx) async {
+            await ctx.wait(() => release.future);
+            return 3;
+          });
+          final parent = Job<List<int>>(
+            (ctx) => ctx.runAll([a, b, if (name.contains('third')) c]),
+          )..ignore();
+          async.elapse(const Duration(seconds: 1));
+          expect(parent.isFinished, isFalse, reason: 'hung before: $name');
+          expect(async.pendingTimers, isEmpty, reason: 'nothing ticks: $name');
+          switch (name.split(';').first) {
+            case 'parent':
+              parent.cancel().ignore();
+            case 'b itself':
+              b.cancel().ignore();
+            case 'a itself':
+              a.cancel().ignore();
+            case 'c itself':
+              c.cancel().ignore();
+            case 'c fails':
+              release.completeError(StateError('c failed'));
+          }
+          async.elapse(const Duration(seconds: 1));
+          expect(parent.isFinished, untied, reason: name);
+          expect(a.isFinished, untied, reason: 'a is let go: $name');
         });
-        final third = Job.deferred<int>(key: 'c', (ctx) async {
-          await ctx.wait(() => delay(name.contains('fails') ? 100 : 60000));
-          if (name.contains('fails')) throw StateError('c failed');
-          return 3;
-        });
-        final parent = Job<List<int>>(
-          (ctx) => ctx.runAll([a, b, if (name.contains('third')) third]),
-        )..ignore();
-        async.elapse(const Duration(seconds: 1));
-        if (name.startsWith('nothing')) {
-          expect(async.pendingTimers, isEmpty, reason: 'nothing ticks');
-        }
-        if (name.startsWith('parent')) {
-          parent.cancel().ignore();
-        } else if (name.startsWith('b')) {
-          b.cancel().ignore();
-        } else if (name.startsWith('a itself')) {
-          a.cancel().ignore();
-        }
-        async.elapse(const Duration(seconds: 1));
-        expect(parent.isFinished, untied, reason: name);
-        expect(a.isFinished, untied, reason: 'a is let go: $name');
       });
     }
   });

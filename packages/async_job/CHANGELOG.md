@@ -222,11 +222,12 @@
   ended its body, or the body of one of them has ended in anything but a value,
   so a lock two branches share, taken with `dispose` as `doc/cleanup.md`
   teaches, stays with the branch that got it, and the other waits for it with
-  no timer and no error. A cancellation unties it only by ending the body of a
-  branch still running, which `ctx.join` on an operation deaf to it, a bare
-  `await` and `cancellable: false` do not allow. The lock goes into a child of
-  the branch, which releases it before the body ends, or the branches go under
-  `[...].wait`. `doc/cleanup.md` points there from the lock it shows.
+  no timer and no error. A cancellation unties it only by ending what a branch
+  still waits for, its body or a child of it, which `ctx.join` on an operation
+  deaf to it, a bare `await`, `ctx.uncancellable` and `cancellable: false` do
+  not allow. The lock goes into a child of the branch, which releases it before
+  the body ends, or the branches go under `[...].wait`. `doc/cleanup.md` points
+  there from the lock it shows.
 
 - `doc/children.md` says what `ctx.run` does with a chain, and why: a
   continuation starts itself when its source finishes, so no link of one can be

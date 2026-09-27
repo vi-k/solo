@@ -241,12 +241,13 @@ returned a value can still end `Cancelled`, and until the group has committed,
 neither `child.outcome` nor `child.isCancelled` is the last word.
 
 **A branch must not wait for another branch of the same group.** Awaiting a
-sibling's `Job.value` hangs the group: the sibling is held until the group
-decides, and the group decides only once every branch is held, or once the body
-of one of them has ended in anything but a value. Nothing catches that. A
-cancellation unties it on the same terms as the lock below: a branch awaiting
-the value through `ctx.wait` ends, one in a bare `await` does not. For branches
-that depend on each other, `[...].wait` is the answer.
+sibling's `Job.value` or `Job.done` hangs the group: the sibling is held until
+the group decides, and the group decides only once every branch is held, or
+once the body of one of them has ended in anything but a value. Nothing catches
+that. A cancellation unties it on the same terms as the lock below: a branch
+awaiting the sibling through `ctx.wait` ends, unless it was created with
+`cancellable: false` or waits inside `ctx.uncancellable`; one in a bare `await`
+does not. For branches that depend on each other, `[...].wait` is the answer.
 
 **Nor for what another branch releases in its cleanup.** A branch starts
 unwinding only when every branch has ended its body and its children, or when
@@ -257,13 +258,14 @@ with `dispose` as on [the cleanup page](cleanup.md), stays with the branch that
 got it. The branch waiting for it keeps every branch from unwinding, and the
 group hangs with no timer and no error until the body of another branch ends in
 anything but a value. A cancellation, of the parent or of a branch, unties it
-only by ending the body of a branch still running: one waiting through
-`ctx.wait`, or on an operation that hears `ctx.onCancel`. It does not end a
-body stuck in `ctx.join` on an operation deaf to it, in a bare `await`, or in a
-branch created with `cancellable: false`, and cancelling the branch that holds
-the lock does nothing: its body is over. Take such a lock in a child of the
-branch, which releases it when the child ends, still inside the body. If that
-child also opens what the branch hands out, the branch registers it on arrival,
+only by ending something a branch still waits for before it unwinds, its body
+or a child of it: one waiting through `ctx.wait`, or on an operation that hears
+`ctx.onCancel`. It does not end one stuck in `ctx.join` on an operation deaf to
+it, in a bare `await`, inside `ctx.uncancellable`, or in a job created with
+`cancellable: false`, and cancelling the branch that holds the lock does
+nothing: its body is over. Take such a lock in a child of the branch, which
+releases it when the child ends, still inside the body. If that child also
+opens what the branch hands out, the branch registers it on arrival,
 `ctx.run(child, discard: ...)`, as in
 [Registering on arrival](cleanup.md#registering-on-arrival), and that `discard`
 runs without the lock. Or use `[...].wait`, under which every branch unwinds on
