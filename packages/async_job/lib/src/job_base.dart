@@ -9,6 +9,7 @@ part 'job_stream.dart';
 part 'job_then.dart';
 part 'observer.dart';
 part 'outcome.dart';
+part 'run_all.dart';
 
 /// A handle to a job: the outcome, the waiting and the cancellation.
 ///

@@ -2280,6 +2280,58 @@ void main() {
       });
     }
   });
+
+  test("a branch awaiting a sibling's value hangs until a body ends otherwise",
+      () {
+    // `a` returns at once and stands held; `b` awaits `a.value` the way the
+    // case says. The value comes only once the group lets `a` go, and the
+    // group does that only when the body of a branch still running ends in
+    // anything but a value.
+    const cases = {
+      // case: untied
+      'nothing; b awaits it bare': false,
+      'parent; b awaits it bare': false,
+      'parent; b joins it': false,
+      'parent; b waits for it through ctx.wait': true,
+      'parent; b awaits it bare, a third branch waits through ctx.wait': true,
+      'a third branch fails; b awaits it bare': true,
+      'b itself; b awaits it bare': false,
+      'b itself; b waits for it through ctx.wait': true,
+      'a itself; b waits for it through ctx.wait': false,
+    };
+    for (final MapEntry(key: name, value: untied) in cases.entries) {
+      fakeAsync((async) {
+        final a = Job.deferred<int>(key: 'a', (ctx) async => 1);
+        final b = Job.deferred<int>(key: 'b', (ctx) async {
+          if (name.contains('bare')) return await a.value + 1;
+          if (name.contains('joins')) return ctx.join(() => a.value);
+          return await ctx.wait(() => a.value) + 1;
+        });
+        final third = Job.deferred<int>(key: 'c', (ctx) async {
+          await ctx.wait(() => delay(name.contains('fails') ? 100 : 60000));
+          if (name.contains('fails')) throw StateError('c failed');
+          return 3;
+        });
+        final parent = Job<List<int>>(
+          (ctx) => ctx.runAll([a, b, if (name.contains('third')) third]),
+        )..ignore();
+        async.elapse(const Duration(seconds: 1));
+        if (name.startsWith('nothing')) {
+          expect(async.pendingTimers, isEmpty, reason: 'nothing ticks');
+        }
+        if (name.startsWith('parent')) {
+          parent.cancel().ignore();
+        } else if (name.startsWith('b')) {
+          b.cancel().ignore();
+        } else if (name.startsWith('a itself')) {
+          a.cancel().ignore();
+        }
+        async.elapse(const Duration(seconds: 1));
+        expect(parent.isFinished, untied, reason: name);
+        expect(a.isFinished, untied, reason: 'a is let go: $name');
+      });
+    }
+  });
 }
 
 /// A lock, or a pool when it has more than one slot, and a trace of who

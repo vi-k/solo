@@ -304,11 +304,11 @@ BLE-устройство, плеер, синхронизация), где сос
 `packages/async_job/lib/src/`:
 
 - `job_base.dart` — библиотека с частями (`part`): `outcome.dart`,
-  `job_context.dart`, `job_stream.dart`, `job_then.dart`, `envelope.dart`.
-  Держит `Job<T>` с фабрикой и `Job.deferred`, `DeferredJob<T>`, `JobStatus`,
-  основу `JobBase<T>` и реализации ядра `_Job`, `_AutoJob`, `_DeferredJob`.
-  Части нужны потому, что `JobContextBase` зовёт защищённые члены задачи,
-  не будучи её наследником.
+  `job_context.dart`, `job_stream.dart`, `job_then.dart`, `envelope.dart`,
+  `run_all.dart`. Держит `Job<T>` с фабрикой и `Job.deferred`,
+  `DeferredJob<T>`, `JobStatus`, основу `JobBase<T>` и реализации ядра `_Job`,
+  `_AutoJob`, `_DeferredJob`. Части нужны потому, что `JobContextBase` зовёт
+  защищённые члены задачи, не будучи её наследником.
 - `outcome.dart` — `part`: `Outcome`, `Done`, `Failed`, `Cancelled`
   с публичными конструкторами `Cancelled([description])` и `Cancelled.by`,
   открытый абстрактный `CancelReason`, причины `ManualCancelReason`,
@@ -322,10 +322,12 @@ BLE-устройство, плеер, синхронизация), где сос
   через защищённую фабрику `createEachJob`. Защищённый `startChild` синхронно
   усыновляет и запускает `Job` без наблюдения исхода; его используют `run`
   и `each`. `run` дополнительно ждёт и проверяет родителя, `each` сразу
-  возвращает исходный хэндл. Здесь же живёт координатор группы `_RunAllGroup`
-  за `runAll`: он держит каждую ветку на двух барьерах внутри `_execute`, чтобы
-  ни одна не дошла до исхода раньше решения группы, и отдаёт значения одним
-  синхронным шагом.
+  возвращает исходный хэндл.
+- `run_all.dart` — `part`: координатор группы `_RunAllGroup` за `runAll`. Он
+  держит каждую ветку на двух барьерах, чтобы ни одна не дошла до исхода раньше
+  решения группы, и отдаёт значения одним синхронным шагом. Сами барьеры стоят
+  внутри `_execute` в `job_base.dart`, и ветка знает о группе только
+  `_GroupHold`.
 - `envelope.dart` — `part`: разбор `ParallelWaitError`, чтобы отмена,
   приехавшая внутри конверта от `[...].wait`, осталась отменой. Обход
   итеративный, кадрами; карта узлов — `Map.identity()`, потому что конверт

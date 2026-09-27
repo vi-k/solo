@@ -241,9 +241,12 @@ returned a value can still end `Cancelled`, and until the group has committed,
 neither `child.outcome` nor `child.isCancelled` is the last word.
 
 **A branch must not wait for another branch of the same group.** Awaiting a
-sibling's `Job.value` never finishes: the sibling is held until the group
-decides, and the group decides only once every branch is held. Nothing catches
-that. For branches that depend on each other, `[...].wait` is the answer.
+sibling's `Job.value` hangs the group: the sibling is held until the group
+decides, and the group decides only once every branch is held, or once the body
+of one of them has ended in anything but a value. Nothing catches that. A
+cancellation unties it on the same terms as the lock below: a branch awaiting
+the value through `ctx.wait` ends, one in a bare `await` does not. For branches
+that depend on each other, `[...].wait` is the answer.
 
 **Nor for what another branch releases in its cleanup.** A branch starts
 unwinding only when every branch has ended its body and its children, or when
