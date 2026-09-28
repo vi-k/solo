@@ -40,7 +40,7 @@
   `JobObserver.onUnanswered` answers for an error no outcome carries, so such
   an observer no longer keeps those errors out of the zone, and a class that
   implements `JobObserver` needs an `onUnanswered`. The hooks of a controller
-  are unchanged. The rest concern an engine built on the kernel only: the
+  are unchanged. The rest concern an engine built on the core only: the
   protected `JobBase.inUncancellableSection` and `JobBase.heldCancel`, and the
   move of `JobBase`, `JobContextBase` and `JobStatus` to
   `package:async_job/engine.dart` -- which also takes them out of what an app

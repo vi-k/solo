@@ -2,7 +2,7 @@
 /// cooperative cancellation.
 ///
 /// This is the import for code that runs jobs. The protocol for building an
-/// engine of your own on the kernel — `JobBase`, `JobContextBase` and
+/// engine of your own on the core — `JobBase`, `JobContextBase` and
 /// `JobStatus` — is in `package:async_job/engine.dart`.
 library;
 

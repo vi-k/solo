@@ -11,7 +11,7 @@ import 'support/probe_job.dart';
 void main() {
   // Deep enough that no stack survives the cascade, with room to spare on
   // a machine whose frames are smaller. The point of the run is not the
-  // depth itself but what the kernel leaves behind when it runs out: on
+  // depth itself but what the core leaves behind when it runs out: on
   // the machine these tests were written on the cascade marks about 3100
   // levels, and a run that reached the bottom instead would fail on the
   // first expectation rather than pass quietly.

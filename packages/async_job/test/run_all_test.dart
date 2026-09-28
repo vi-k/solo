@@ -384,7 +384,7 @@ void main() {
     });
     fakeAsync((async) {
       // The same cancellation let out of the body of the parent: the
-      // kernel classifies it, finds the branch behind it and says so.
+      // core classifies it, finds the branch behind it and says so.
       var heardCancelled = 0;
       final branch = Job.deferred<int>(key: 'b', (ctx) async {
         await ctx.wait(() => delay(1000));
@@ -905,7 +905,7 @@ void main() {
           return 2;
         }),
       ];
-      // The third handle starts itself, and the kernel refuses it.
+      // The third handle starts itself, and the core refuses it.
       final refused = Job<int>(key: 'c', (ctx) async => 3)..ignore();
       Object? thrown;
       final zone = <Object>[];
@@ -1010,7 +1010,7 @@ void main() {
     });
     fakeAsync((async) {
       // The cancellation arrives when the error is already chosen, and it
-      // wins: that is the rule of the kernel, not of the group.
+      // wins: that is the rule of the core, not of the group.
       final errors = <Object>[];
       final held = Completer<void>();
       final parent = Job<void>(
@@ -1836,7 +1836,7 @@ void main() {
         return 1;
       });
       // Its own context refuses to be built: the child ends [Failed]
-      // without a body, and `startChild` tells nobody — that is the kernel,
+      // without a body, and `startChild` tells nobody — that is the core,
       // and `solo` is the other half of criterion twelve.
       final unstartable = UnstartableJob<int>(key: 'b');
       Object? thrown;
@@ -1861,7 +1861,7 @@ void main() {
       expect(
         journal.take().where((line) => line.contains('error')).toList(),
         isEmpty,
-        reason: 'the bare kernel announces a refusal of admission to nobody',
+        reason: 'the bare core announces a refusal of admission to nobody',
       );
     });
   });

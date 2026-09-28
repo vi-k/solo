@@ -198,7 +198,7 @@ final class _Messages extends JobObserver {
   void onLog(Job<Object?> job, Object? message) => seen.add(message);
 }
 
-/// Throws from every hook the engine calls.
+/// Throws from every hook the core calls.
 final class _ThrowingObserver extends JobObserver {
   @override
   void onStart(Job<Object?> job) => throw StateError('onStart');

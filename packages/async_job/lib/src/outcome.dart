@@ -31,7 +31,7 @@ final class ManualCancelReason extends CancelReason {
 final class ParentCancelReason extends CancelReason {
   /// The parent's cancellation, including its original reason and data.
   ///
-  /// Set by the engine when it cascades; optional for domain engines that
+  /// Set by the core when it cascades; optional for domain engines that
   /// have no parent cancellation to attach.
   final Cancelled? cause;
 
@@ -118,7 +118,7 @@ final class Done<T> extends Outcome<T> {
 
 /// The job body threw [error].
 ///
-/// The engine hands it to [JobObserver.onError] first. If nobody then
+/// The core hands it to [JobObserver.onError] first. If nobody then
 /// observes the job through [Job.done], [Job.value], [Job.ignore] or failure
 /// forwarding by [Job.then], it hands [error] to the job's creation zone
 /// through [Zone.handleUncaughtError]. The check runs on the microtask after
@@ -157,9 +157,9 @@ final class Failed extends Outcome<Never> {
 /// The job was cancelled before or during its run.
 ///
 /// Thrown by the [JobContext] members that wait or start something once
-/// the job is marked cancelled — the ones that only register a cleanup go
-/// on working — and stored in [Job.outcome]. A body may also
-/// `throw Cancelled('why')` to cancel itself; the engine records that as
+/// the job has accepted a cancellation — the ones that only register a
+/// cleanup go on working — and stored in [Job.outcome]. A body may also
+/// `throw Cancelled('why')` to cancel itself; the core records that as
 /// [HandlerCancelReason] and cancels the children of that body.
 final class Cancelled extends Outcome<Never> implements Exception {
   /// Who cancelled the job.
@@ -185,7 +185,7 @@ final class Cancelled extends Outcome<Never> implements Exception {
   /// Creates a cancellation with a reason of your own.
   ///
   /// A body may throw this to keep a custom [reason] and its data. The
-  /// engine records the throw's stack trace and sets [started] to `true`.
+  /// core records the throw's stack trace and sets [started] to `true`.
   /// Domain engines also use it for their own cancellations, such as rules
   /// and closing in `solo`.
   ///
@@ -198,7 +198,7 @@ final class Cancelled extends Outcome<Never> implements Exception {
   ///
   /// [started] matters only where the cancellation becomes an outcome as
   /// it is, through `JobBase.finish`: on the way through `cancelWith` the
-  /// engine sets it by the status of the job and whatever was passed here
+  /// core sets it by the status of the job and whatever was passed here
   /// is replaced.
   const Cancelled.by({
     required this.reason,

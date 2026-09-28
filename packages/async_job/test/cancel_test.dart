@@ -257,7 +257,7 @@ void main() {
     // Without children the window is one microtask wide: the body has
     // returned, and the engine is waiting for a list of children that is
     // empty. Walking the depths pins that width instead of assuming it —
-    // a kernel that read the mark before waiting for the children would
+    // a core that read the mark before waiting for the children would
     // hand back Done at depth 1.
     final outcomes = <int, Outcome<int>>{};
     for (var depth = 0; depth <= 3; depth++) {

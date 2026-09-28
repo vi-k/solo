@@ -1,6 +1,6 @@
 # Cancellation
 
-`cancel()` requests; the body answers at a checkpoint. Which checkpoint it is
+`cancel()` requests; the body stops at a checkpoint. Which checkpoint it is
 decides what happens to the operation behind it:
 
 ```dart

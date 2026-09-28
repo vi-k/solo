@@ -247,7 +247,7 @@ final class CleaningJob extends JobBase<int> {
       late ? LateSuperContext(this) : MyContext(this);
 
   // The disposer asks the checkpoint after the user signed out, while the
-  // engine cleans up after a body that returned a value.
+  // core cleans up after a body that returned a value.
   @override
   Future<int> execute(covariant JobContextBase ctx) async {
     ctx.onDispose(() {

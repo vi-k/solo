@@ -7,7 +7,7 @@ extension _JobStreamBody on JobContext {
     FutureOr<void> Function(T event) onData,
   ) async {
     final done = Completer<void>();
-    // The signal carries no errors: this body owns and awaits the handler.
+    // The signal carries no errors: this body owns and awaits the callback.
     // Throw failures from the body after it has stopped, so cancellation
     // uses the ordinary Job error route rather than a late wait's route.
     (Object, StackTrace)? failure;
@@ -37,7 +37,7 @@ extension _JobStreamBody on JobContext {
     // Whether the stream has been let go of. A cancelled subscription
     // drops what was still on its way to it; the buffer below is not the
     // subscription's, so it needs telling — otherwise a job that has been
-    // cancelled, or has finished, goes on calling the handler.
+    // cancelled, or has finished, goes on calling the callback.
     var letGo = false;
     var subscriptionCancelled = false;
     Future<void>? active;
@@ -84,7 +84,7 @@ extension _JobStreamBody on JobContext {
     }
 
     void thrown(Object error, StackTrace stackTrace) {
-      // The stream goes first: nothing else is delivered, so a handler
+      // The stream goes first: nothing else is delivered, so a callback
       // that threw is never called again.
       //
       // The source can cancel this job from its own `onCancel`, so the
@@ -107,7 +107,7 @@ extension _JobStreamBody on JobContext {
       try {
         final handled = onData(event);
         if (handled is Future<void>) {
-          // Delivery waits for the handler, so the events keep their order.
+          // Delivery waits for the callback, so the events keep their order.
           // The signal never carries the error: it only says when to go on,
           // and `thrown` has the error already.
           final handling = handled.then<void>((_) {}, onError: thrown);

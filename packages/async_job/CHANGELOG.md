@@ -21,8 +21,8 @@
 
 - **Breaking:** `JobBase`, `JobContextBase` and `JobStatus` moved to
   `package:async_job/engine.dart`. They are the protocol for building an engine
-  on the kernel, and the main import handed them to every file that merely runs
-  a job — and, through `solo` and `flutter_solo`, to every file of an app.
+  on the core, and the main import handed them to every file that merely runs a
+  job — and, through `solo` and `flutter_solo`, to every file of an app.
   `engine.dart` exports the rest of the package as well, so an engine swaps one
   import for the other: `import 'package:async_job/engine.dart';` in place of
   `async_job.dart`. Code that only runs jobs is untouched. See
@@ -86,8 +86,8 @@
   it is announced once, there.
 - **Fix:** a step that failed inside `ctx.uncancellable` while a cancellation
   was held keeps its diagnosis. The section applies the held cancellation on
-  the way out, which is before the error reaches the body, so the kernel read
-  the order the wrong way round — it saw a failure thrown after a mark, which
+  the way out, which is before the error reaches the body, so the core read the
+  order the wrong way round — it saw a failure thrown after a mark, which
   belongs to the observer alone, and without an observer that was silence. The
   section now says which came first, and the failure of the one step that
   cannot be rolled back goes on as any failure a cancellation covered does. It
@@ -95,9 +95,9 @@
   anything else the body throws after the mark is a failure after the mark.
 - **Fix:** a failure that came before a cancellation is no longer lost when the
   cancellation arrives while the error is still on its way to the body's throw:
-  a microtask out of `ctx.wait`, several out of a handler, the source or
+  a microtask out of `ctx.wait`, several out of a callback, the source or
   `listen` of `ctx.each`, and the whole cleanup of a failed child on its way
-  through `ctx.run` or `value`, a branch of `ctx.runAll` among them. The kernel
+  through `ctx.run` or `value`, a branch of `ctx.runAll` among them. The core
   read the order at the throw, saw the failure second, and without an observer
   said nothing at all. It now notes a failure the moment it happens, one out of
   `ctx.wait`, `ctx.join`, `ctx.each`, `ctx.uncancellable` or a child, and such
@@ -106,11 +106,12 @@
   the stop; for a step of `ctx.uncancellable` this now holds whether or not the
   section held a cancellation. A new error in its place, a wrapper included,
   still comes after, and so does a failure the body awaited past its context.
-- **Fix:** `ctx.run` refuses a `then` job with the same `ArgumentError`
-  whenever it is called. Once the source had finished, the tail was already
-  running, and the call threw `StateError: Job(then) is already running`, which
-  did not say that a continuation is never a child; the order of
-  `doc/children.md`, the head first and then the tail, ran into exactly that.
+- **Fix:** `ctx.run` refuses a continuation with the same `ArgumentError`
+  whenever it is called. Once the source had finished, the continuation was
+  already running, and the call threw
+  `StateError: Job(then) is already running`, which did not say that a
+  continuation is never a child; the order of `doc/children.md`, the source
+  first and then the continuation, ran into exactly that.
 - **Fix:** `ctx.join` and `ctx.wait` called from work handed over with
   `ctx.unattended` no longer hand that work a resource they have already
   closed. A value that came back after the body had ended was treated as one
@@ -142,7 +143,7 @@
   microtask even when there is nothing to put there, and a cancellation
   arriving in that microtask finished the wait through the callback still
   standing; the completion that followed threw `Future already completed` out
-  of the kernel, and the job reported that to `onError` as an error of its own.
+  of the core, and the job reported that to `onError` as an error of its own.
   The value was never in danger — the registration had it — but whoever listens
   saw a defect of the package where there was none.
 - **Fix:** a body that gives itself up is marked there and then. Until now the
@@ -182,15 +183,15 @@
 - **Fix:** a job giving up no longer reaches `JobObserver.onError`. A call the
   body walked away from with `ctx.wait` keeps the context, and after the mark
   every door back into it — `check`, `join`, `run` — throws the very
-  `Cancelled` that became the outcome; the kernel took that for a late failure
-  of the abandoned action and reported it. `JobObserver.onError` says the
-  opposite in so many words — "never the job giving up, which is not an
-  error" — and in an engine of a domain that hook is the error channel of the
-  application, so every cancellation of a job written with a helper that takes
-  the context showed up there as a failure. The filter `unattended` already
-  applies to work handed over now stands on this path as well, by identity
-  against the outcome and the mark: a `Cancelled` built inside the action, and
-  one belonging to another job, report exactly as they did.
+  `Cancelled` that became the outcome; the core took that for a late failure of
+  the abandoned action and reported it. `JobObserver.onError` says the opposite
+  in so many words — "never the job giving up, which is not an error" — and in
+  an engine of a domain that hook is the error channel of the application, so
+  every cancellation of a job written with a helper that takes the context
+  showed up there as a failure. The filter `unattended` already applies to work
+  handed over now stands on this path as well, by identity against the outcome
+  and the mark: a `Cancelled` built inside the action, and one belonging to
+  another job, report exactly as they did.
 - **Breaking:** `ctx.run` takes `dispose` and `discard`, the way `ctx.wait`
   does, and makes the registration the moment the child's value comes back. New
   named parameters on a member of an `abstract interface class`, so an
@@ -231,7 +232,7 @@
   says whether it did. See `doc/children.md`.
 - **Breaking:** a cancellation that travels inside a `ParallelWaitError` is a
   cancellation again. `[...].wait` wraps every branch error in that envelope,
-  and the kernel read a caught error by type, so a child cancelled under
+  and the core read a caught error by type, so a child cancelled under
   `[ctx.run(a), ctx.run(b)].wait` ended the parent `Failed` — where the same
   code written as `await ctx.run(child)` ends it `Cancelled`, as
   `doc/children.md` promises. An envelope carrying cancellations and successful
@@ -243,10 +244,10 @@
   intact, because a failure must not hide behind a cancellation. What changes
   for a caller: `job.value` throws the `Cancelled` instead of the envelope, a
   `catch (ParallelWaitError)` around it no longer runs, `whenCancelled` fires,
-  and in `solo` the job's `onCancel` handler takes the outcome where `onError`
+  and in `solo` the job's `onCancel` hook takes the outcome where `onError`
   used to. **Migrating.** A resource opened in a successful branch and closed
   from that outer `catch` should be taken through
-  `ctx.wait(() => open(), dispose: (value) => value.close())`: the kernel then
+  `ctx.wait(() => open(), dispose: (value) => value.close())`: the core then
   closes it whatever the outcome, and nothing is needed at the call site. For a
   branch that cannot go through `ctx.wait`, catch the envelope inside the body,
   where it still arrives as it did. An envelope built by hand is read by the
@@ -271,11 +272,11 @@
 
 - `doc/children.md` says what `ctx.run` does with a chain, and why: a
   continuation starts itself when its source finishes, so no link of one can be
-  adopted — the head is the only job in a chain a parent can take. And the
-  parent waits for its children, not for what hangs off them: a slow tail runs
-  on after the parent has finished `Done`, its failure goes to the zone that
-  built the chain rather than to the parent, and only cancellation still
-  reaches it, forward through the source.
+  adopted — the source is the only job in a chain a parent can take. And the
+  parent waits for its children, not for what hangs off them: a slow
+  continuation runs on after the parent has finished `Done`, its failure goes
+  to the zone that built the chain rather than to the parent, and only
+  cancellation still reaches it, forward through the source.
 
 - `doc/observing.md` now says how to measure the wait a cancellation costs,
   with no hook of its own: `Job.whenCancelled` fires when the cancellation
@@ -284,11 +285,11 @@
   shows the observer in full.
 
 - The README is a starting page: what a job is, why a plain `Future` does not
-  cover it — now shown as the flag that asks and the job that answers —
-  `Install`, `Quick start` and a map of the guides. The reference material
-  moved to `doc/`: `outcomes.md`, `cancellation.md`, `children.md`,
-  `cleanup.md`, `observing.md`, `extending.md`. Nothing was dropped, and every
-  section now starts with the code it is about.
+  cover it — now shown as the flag that asks and the job that looks after what
+  the work opened — `Install`, `Quick start` and a map of the guides. The
+  reference material moved to `doc/`: `outcomes.md`, `cancellation.md`,
+  `children.md`, `cleanup.md`, `observing.md`, `extending.md`. Nothing was
+  dropped, and every section now starts with the code it is about.
 - **Fix:** `ctx.join` releases the value through `dispose` or `discard` when
   the checkpoint after the action throws anything, not only a `Cancelled`. A
   rule of a domain that threw instead of answering used to cost the job the

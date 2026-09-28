@@ -12,7 +12,7 @@
 ## Зачем
 
 У обычной `Future` нет отмены. Флаг может попросить работу остановиться,
-но за то, что она уже открыла, не отвечает никто:
+но за тем, что она уже открыла, не следит никто:
 
 ```dart
 var cancelled = false;
@@ -30,7 +30,7 @@ Future<void> load() async {
 }
 ```
 
-`Job` отвечает:
+`Job` следит:
 
 ```dart
 final job = Job<void>((ctx) async {
@@ -189,7 +189,7 @@ final outcome = await job.done; // Cancelled(manual)
 
 | Страница | О чём |
 | --- | --- |
-| [Исходы](../../docs/ru/async_job/outcomes.md) | `Done`, `Failed`, `Cancelled` и кто отвечает за ошибку |
+| [Исходы](../../docs/ru/async_job/outcomes.md) | `Done`, `Failed`, `Cancelled` и наблюдение за провалом |
 | [Отмена](../../docs/ru/async_job/cancellation.md) | Контрольные точки, `onCancel`, `uncancellable` |
 | [Дети, стримы и цепочки](../../docs/ru/async_job/children.md) | `Job.deferred`, `ctx.run`, `ctx.runAll`, `ctx.each`, `then` |
 | [Уборка](../../docs/ru/async_job/cleanup.md) | `dispose`, `discard`, `onDispose`, порядок |

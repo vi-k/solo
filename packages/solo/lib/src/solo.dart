@@ -1160,7 +1160,7 @@ abstract class Solo<S extends Object> {
           // job while answering: `cancel()` on a job that has not started
           // finishes it where it stands, and a `cancelAll` or a `close`
           // from in there reaches it through `_inTransition`. Launching it
-          // now would throw `has already finished` from the kernel and
+          // now would throw `has already finished` from the core and
           // leave the pump holding a finished `_current` — the queue would
           // never move again.
           _debug(() => 'start $job: ended while the rules were asked');
@@ -1184,7 +1184,7 @@ abstract class Solo<S extends Object> {
     if (debug == null) {
       return;
     }
-    // Isolated like the channel of the kernel: building the message is the
+    // Isolated like the channel of the core: building the message is the
     // caller's code as well, and a diagnostic that throws must not leave a
     // lifecycle half-done. `close` fills `_closing` before it logs, so a
     // throw from there would hang the controller for good.

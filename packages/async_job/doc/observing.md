@@ -206,7 +206,7 @@ one the job was created in:
 | What a context call the body did not await throws, the job's own cancellation included, and for `wait` only until the body ends | The zone the body runs in, as with any future nobody awaits | The zone the body runs in |
 
 A failure comes first by when it happened, not by when the body threw it. An
-operation behind `ctx.wait` or `ctx.join` that fails, a handler of `ctx.each`,
+operation behind `ctx.wait` or `ctx.join` that fails, a callback of `ctx.each`,
 a child, a step of `ctx.uncancellable`: the error takes time to leave the body,
 a few microtasks or a child's whole cleanup, and a cancellation the job
 accepted in that time came after the failure. The body keeps the failure first

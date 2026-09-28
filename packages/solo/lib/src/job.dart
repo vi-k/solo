@@ -100,7 +100,7 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     final queued = _solo._queue._jobs.contains(this);
     // A job the pump holds between the queue and the start is queued work
     // too: it has not run a line, and a `cancellable: false` one turns
-    // down a rejectable cancellation the same way. Left to the kernel it
+    // down a rejectable cancellation the same way. Left to the core it
     // would not: a job that has not started is `created`, and `created` is
     // finished without asking.
     if (queued || identical(this, _solo._inTransition)) {

@@ -2,7 +2,7 @@ part of 'job_base.dart';
 
 /// What a group of [JobContext.runAll] needs from a branch it holds.
 ///
-/// It lives on the branch because the barriers are inside the kernel's own
+/// It lives on the branch because the barriers are inside the core's own
 /// unwinding, in [JobBase._execute]; every call here goes straight back to
 /// the group.
 final class _GroupHold {

@@ -673,11 +673,11 @@ void main() {
       Job<int> head,
       Job<void> tail,
     )>{
-      'after the head, as on the page': (ctx, head, tail) async {
+      'after the source, as on the page': (ctx, head, tail) async {
         await ctx.run(head);
         await ctx.run(tail);
       },
-      'before the head': (ctx, head, tail) async {
+      'before the source': (ctx, head, tail) async {
         try {
           await ctx.run(tail);
         } finally {
@@ -756,8 +756,9 @@ void main() {
       });
     });
 
-    test("the parent's cancellation reaches a tail still waiting for its head",
-        () {
+    test(
+        "the parent's cancellation reaches a continuation still waiting "
+        'for its source', () {
       fakeAsync((async) {
         final head = Job.deferred<int>((ctx) async {
           await ctx.wait(() => delay(50));
@@ -777,7 +778,9 @@ void main() {
       });
     });
 
-    test("the parent's cancellation does not reach a tail already running", () {
+    test(
+        "the parent's cancellation does not reach a continuation already "
+        'running', () {
       fakeAsync((async) {
         final head = Job.deferred<int>((ctx) async => 1);
         final tail = head.then<void>((ctx, rows) async {
@@ -799,7 +802,7 @@ void main() {
       });
     });
 
-    test('the parent ends Done while the tail is still running', () {
+    test('the parent ends Done while the continuation is still running', () {
       fakeAsync((async) {
         final trace = <String>[];
         final head = Job.deferred<int>((ctx) async => 1);
@@ -825,7 +828,9 @@ void main() {
       });
     });
 
-    test('a parent still running stops a running tail through onCancel', () {
+    test(
+        'a parent still running stops a running continuation through '
+        'onCancel', () {
       fakeAsync((async) {
         final head = Job.deferred<int>((ctx) async => 1);
         final tail = head.then<void>((ctx, rows) async {

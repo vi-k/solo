@@ -1089,7 +1089,7 @@ void main() {
     }
 
     test('awaited past the context, it is dated by the throw', () {
-      // The kernel learns when a failure happened from the members of the
+      // The core learns when a failure happened from the members of the
       // context and from the children: one the body awaits on its own
       // comes first only if the body throws it before the mark.
       expect(

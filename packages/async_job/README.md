@@ -10,7 +10,7 @@ returned by the body. `Job` itself does not implement `Future`.
 ## Why
 
 A plain `Future` has no cancellation. A flag can ask work to stop, but nothing
-answers for what the work has already opened:
+looks after what the work has already opened:
 
 ```dart
 var cancelled = false;
@@ -28,7 +28,7 @@ Future<void> load() async {
 }
 ```
 
-A job answers for it:
+A job looks after it:
 
 ```dart
 final job = Job<void>((ctx) async {
@@ -184,7 +184,7 @@ search.
 
 | Page | What it covers |
 | --- | --- |
-| [Outcomes](doc/outcomes.md) | `Done`, `Failed`, `Cancelled`, and who is answerable for an error |
+| [Outcomes](doc/outcomes.md) | `Done`, `Failed`, `Cancelled`, and observing a failure |
 | [Cancellation](doc/cancellation.md) | Checkpoints, `onCancel`, `uncancellable` |
 | [Children, streams and chains](doc/children.md) | `Job.deferred`, `ctx.run`, `ctx.runAll`, `ctx.each`, `then` |
 | [Cleanup](doc/cleanup.md) | `dispose`, `discard`, `onDispose`, ordering |

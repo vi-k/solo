@@ -157,7 +157,7 @@ final class _SoloContext<S extends Object, W extends S, R>
     try {
       rejection = impl._rejectStart(_solo._state);
     } on Object catch (error, stackTrace) {
-      // The kernel ends such a child `Failed` and hands the error to the
+      // The core ends such a child `Failed` and hands the error to the
       // body of the parent, which may catch it; `finish` alone tells no
       // observer, and `ignore` closes the road an unobserved failure would
       // have taken. The root pump announces a throwing rule itself, and a

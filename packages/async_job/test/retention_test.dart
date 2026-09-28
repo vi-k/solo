@@ -225,7 +225,7 @@ void main() {
       expect(
         await collected(capture),
         isTrue,
-        reason: 'the kernel notes a failure on its way to the body, to tell '
+        reason: 'the core notes a failure on its way to the body, to tell '
             'the order against a cancellation; once the job is over there '
             'is no order left to tell',
       );

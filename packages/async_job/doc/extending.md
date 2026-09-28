@@ -312,7 +312,7 @@ the job cannot refuse, which neither `cancellable: false` nor
 `pendingCancel` is the cancellation it has accepted. `check()` may also be
 asked after the job has ended `Done` or `Failed`, from work its body left
 behind; there `cancelOwnJob` changes nothing, `pendingCancel` is `null`, and
-the rule throws its own. `super.check()` goes first: while the engine cleans up
+the rule throws its own. `super.check()` goes first: while the core cleans up
 after the body, it throws a `StateError`, and a rule asked before it would turn
 a job that returned a value into a cancelled one. The rule is asked where
 `check()` is asked and nowhere else: a sign-out during the download is noticed

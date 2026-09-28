@@ -313,7 +313,7 @@ void main() {
         });
         // The body ends here; the fork plays on, and the job is over long
         // before the action fails. The work is still holding that future,
-        // so the fork is what announces -- announcing from the kernel as
+        // so the fork is what announces -- announcing from the core as
         // well would say one error twice.
       }).ignore();
       async.flushTimers();

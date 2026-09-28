@@ -155,7 +155,7 @@ void main() {
       expect(captured.check, throwsA(isA<Cancelled>()));
     });
   });
-  test('the job is still running while the engine cleans up after it', () {
+  test('the job is still running while the core cleans up after it', () {
     fakeAsync((async) {
       final marks = <bool>[];
       final job = Job<int>((ctx) async {

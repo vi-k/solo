@@ -101,7 +101,7 @@ result. In a test that zone is the test's, and the test fails. Reading
 observer: `onError` and `onFinish` hear the failure, and it reaches the zone
 all the same.
 
-### Telling the engine it is handled
+### Telling the core it is handled
 
 ```dart
 final sync = Job<void>(upload)..ignore();
@@ -111,12 +111,12 @@ final sync = Job<void>(upload)..ignore();
 status: sync failed: Bad state: disk full
 ```
 
-`ignore()` tells the engine that the failure is handled elsewhere, here by the
+`ignore()` tells the core that the failure is handled elsewhere, here by the
 status line, and nothing reaches the zone. Accessing `done` or `value` observes
 a failure as well, so code that waits for the job — to redraw the status line
 when it is over, say — needs no `ignore()`. `done` never throws; with `value`
 the waiting code gets the error itself and has to handle it, as with any
-`Future`. Forwarding a failure through `then` observes it too; the `then` job
+`Future`. Forwarding a failure through `then` observes it too; the continuation
 takes responsibility for it.
 
 Waiting does not observe one failure: the body of `sync` fails, and a
