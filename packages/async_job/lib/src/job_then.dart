@@ -71,6 +71,7 @@ final class _ThenJob<T, R> extends JobBase<R> {
         start();
       case Failed():
         _source!._observed = true;
+        _announcedError = result.error;
         notifyObserver(result.error, result.stackTrace);
         // An observer may cancel this continuation while hearing the error.
         // The failure is this continuation's now, and a cancellation that

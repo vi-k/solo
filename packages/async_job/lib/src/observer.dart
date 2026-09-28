@@ -24,17 +24,18 @@ abstract mixin class JobObserver {
 
   /// Something the job did threw.
   ///
-  /// The body's failure, or one of the errors with no outcome to carry
-  /// them: an action abandoned by [JobContext.wait] failing later, a
-  /// disposer, a cancellation callback, work handed over with
-  /// [JobContext.unattended], or a failure while formatting a child's
-  /// cancellation description. Each is told here once.
+  /// The job's failure — its body's, or one an engine of a domain ended it with
+  /// by hand — or one of the errors with no outcome to carry them: an action
+  /// abandoned by [JobContext.wait] failing later, a disposer, a cancellation
+  /// callback, work handed over with [JobContext.unattended], a failure while
+  /// formatting a child's cancellation description, or a failure an engine of a
+  /// domain handed to a job already over. Each is told here once.
   ///
   /// Notification only: overriding it changes nothing about where the error
   /// goes. The errors with no outcome go on to [onUnanswered], and so do two
   /// failures of the body: that of a branch of [JobContext.runAll] the group
   /// did not throw, and one a cancellation covered afterwards. [Job.ignore] on
-  /// the job stops these two here. Any other failure of the body is carried by
+  /// the job stops these two here. Any other failure of the job is carried by
   /// the outcome, and one nobody observes reaches the zone — all but a failure
   /// that happened after the job accepted a cancellation: an operation stopping
   /// at the job's token looks like that, and only this hook hears it.
@@ -61,9 +62,11 @@ abstract mixin class JobObserver {
   /// of a branch of [JobContext.runAll] that the group did not throw, and a
   /// failure of the body that a cancellation covered afterwards — the outcome
   /// carries the cancellation, whoever reads it. [Job.ignore] keeps the last
-  /// two from coming here. Any other failure of a body does not come here: it
-  /// has an outcome, and one nobody observes reaches the zone by itself. Every
-  /// error that comes here has been through [onError] already.
+  /// two from coming here. So does a failure an engine of a domain hands to a
+  /// job already over, and [Job.ignore] keeps that one away as well. Any other
+  /// failure of a body does not come here: it has an outcome, and one nobody
+  /// observes reaches the zone by itself. Every error that comes here has been
+  /// through [onError] already.
   ///
   /// **What the default body does.** It hands the error to the zone the
   /// job was created in — where the error goes when the job has no

@@ -1377,8 +1377,10 @@ void main() {
     test('on a branch an engine ended by hand, and the group did not throw it',
         () {
       // The branch refused the stop, so no cancellation covers its failure:
-      // the group holds it, and nobody has announced it yet. The third
-      // branch keeps the group from deciding before both have ended.
+      // the group holds it, and only `finish` has announced it. The first
+      // branch's failure is the one the group throws, announced by `finish`
+      // too. The third branch keeps the group from deciding before both
+      // have ended.
       expectOnlyTold(
         (observer) => zoneOf((async) {
           final first = ProbeJob<int>((ctx) async => 1);
@@ -1403,6 +1405,7 @@ void main() {
           async.flushTimers();
         }),
         'Bad state: second',
+        alsoTold: ['onError: Bad state: first'],
       );
     });
 

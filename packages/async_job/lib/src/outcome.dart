@@ -116,9 +116,10 @@ final class Done<T> extends Outcome<T> {
   String toString() => 'Done($value)';
 }
 
-/// The job body threw [error].
+/// The job body threw [error], or an engine of a domain ended the job with
+/// it by hand.
 ///
-/// The core hands it to [JobObserver.onError] first. If nobody then
+/// The core hands it to [JobObserver.onError] first, once. If nobody then
 /// observes the job through [Job.done], [Job.value], [Job.ignore] or failure
 /// forwarding by [Job.then], it hands [error] to the job's creation zone
 /// through [Zone.handleUncaughtError]. The check runs on the microtask after
@@ -135,11 +136,11 @@ final class Done<T> extends Outcome<T> {
 ///
 /// The errors with no outcome to carry them — a late failure of an action
 /// [JobContext.wait] walked away from, a disposer, a callback of
-/// [JobContext.onCancel] or [Job.whenCancelled], a failure of work handed
-/// over with [JobContext.unattended] — take the other path:
-/// [JobObserver.onError] hears them and [JobObserver.onUnanswered] answers
-/// for them, by default in the zone the job was created in, where they go
-/// straight away when there is no observer.
+/// [JobContext.onCancel] or [Job.whenCancelled], a failure of work handed over
+/// with [JobContext.unattended], a failure an engine of a domain hands to a job
+/// already over — take the other path: [JobObserver.onError] hears them and
+/// [JobObserver.onUnanswered] answers for them, by default in the zone the job
+/// was created in, where they go straight away when there is no observer.
 final class Failed extends Outcome<Never> {
   /// The thrown error.
   final Object error;

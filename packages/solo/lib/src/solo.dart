@@ -1141,11 +1141,12 @@ abstract class Solo<S extends Object> {
         } on Object catch (error, stackTrace) {
           // The rules are the caller's code, and this one threw. The job is
           // already out of the queue: left as it is, it would never finish,
-          // and the pump would never come back for the ones behind it.
+          // and the pump would never come back for the ones behind it. The
+          // core tells the observer of a failure handed in, and of one handed
+          // to a job the rule has already ended — cancelled, or dropped by a
+          // `close` made from inside it.
           _debug(() => 'rule of $job threw: $error');
-          job
-            .._notifyObserver(error, stackTrace)
-            .._drop(Failed(error, stackTrace));
+          job._drop(Failed(error, stackTrace));
           continue;
         }
         if (rejection != null) {

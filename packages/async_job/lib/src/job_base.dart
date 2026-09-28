@@ -428,6 +428,14 @@ abstract class JobBase<T> implements Job<T> {
   /// `_RunAllGroup._conclude`.
   bool _ignored = false;
 
+  /// The error of the last failure the core has announced for this job:
+  /// the body's, where it was caught, the one a continuation received from
+  /// its source, or one an engine of a domain handed to [finish]. The same
+  /// error arriving by a second route — a body that throws what the engine
+  /// has already ended the job with, say — is not announced again. By
+  /// identity: two errors equal by `==` are still two errors.
+  Object? _announcedError;
+
   /// Continuations still waiting to receive this outcome. A late listener
   /// may attach within the observation grace period but receive the result
   /// on the next microtask; give it that chance before reporting a failure.
@@ -969,18 +977,45 @@ abstract class JobBase<T> implements Job<T> {
 
   /// Ends the job with [outcome].
   ///
-  /// On a job that has already finished this does nothing, the same as
-  /// [cancel]: an outcome is final, and an engine of a domain racing its
-  /// own body must not be able to replace one.
+  /// On a job that has already finished the outcome stays, the same as
+  /// with [cancel]: an outcome is final, and an engine of a domain racing
+  /// its own body must not be able to replace one. A [Failed] handed in
+  /// there has no outcome to carry it, and it goes where the errors with
+  /// no outcome go: to [JobObserver.onError] and [JobObserver.onUnanswered],
+  /// or to [JobObserver.onError] alone once [Job.ignore] was called.
   ///
   /// Ending a job that is still running is not a way to cancel it: this
   /// waits for no children and unwinds no cleanup stack, so everything the
   /// body opened stays open. Cancel with [cancelWith] instead, and let the
   /// body unwind; how many cleanups were left behind is in the debug
   /// trace.
+  ///
+  /// A [Failed] handed in is announced here: [JobObserver.onError] hears it
+  /// once, before [finished] and [JobObserver.onFinish]. Unlike a failure
+  /// of the body, which is announced while the job still runs, it is
+  /// announced after the job is over, so an `onError` that cancels finds
+  /// it finished and the outcome stays [Failed]. If nobody then observes
+  /// the outcome, the error reaches the zone as any [Failed] does. Do not
+  /// call [notifyObserver] for it first: the observer would hear it twice.
+  /// An error the core has announced for this job already — one its body
+  /// threw — is not announced again.
+  ///
+  /// A job that has accepted a cancellation ends with that cancellation,
+  /// whatever is handed in. A [Done] is replaced, and its value goes
+  /// nowhere and is closed by nobody: release it before calling this. A
+  /// [Failed] is replaced too, and its error goes where a failure a
+  /// cancellation covered goes — to [JobObserver.onError] and
+  /// [JobObserver.onUnanswered]. A [Cancelled] handed in stands.
   @protected
   void finish(Outcome<T> outcome) {
     if (_status == JobStatus.finished) {
+      // The outcome stays. A failure handed in now has no outcome to carry
+      // it — a rule of a domain that ended the job and then threw looks
+      // like that — and dropped here it would be heard by nobody.
+      if (outcome is Failed && !identical(outcome.error, _announcedError)) {
+        _announcedError = outcome.error;
+        _reportCovered(outcome, announced: false);
+      }
       return;
     }
     // A marked job does not end with a value. `isCancelled`, `check` and
@@ -1032,6 +1067,19 @@ abstract class JobBase<T> implements Job<T> {
         parent._failedUnmarked(decided.error);
       }
     }
+    // A failure an engine of a domain hands in has been told to nobody,
+    // unless the body threw the same error first. Announced here, once the
+    // job is over, so an `onError` that cancels finds a finished job
+    // instead of marking one that is about to end `Failed`; and before
+    // `finished`, so the observer hears the error before the engine's
+    // bookkeeping and `onFinish`. One handed in over the mark goes the way
+    // of a covered failure below.
+    if (decided is Failed &&
+        replaced == null &&
+        !identical(decided.error, _announcedError)) {
+      _announcedError = decided.error;
+      notifyObserver(decided.error, decided.stackTrace);
+    }
     // Guarded: the hook belongs to an engine of a domain, and its error
     // must not stand between the job and its outcome — an unfinished job
     // holds its parent, its waiters and the engine itself forever.
@@ -1070,8 +1118,10 @@ abstract class JobBase<T> implements Job<T> {
     // A failure handed in over the mark. The cancellation decides the
     // outcome, but an error is never lost silently: it goes where one the
     // body threw before a cancellation goes. It came in here and not
-    // through the body, so nobody has announced it yet.
-    if (replaced is Failed) {
+    // through the body, so nobody has announced it yet — unless the body
+    // threw this very error, and then the body's route answers for it.
+    if (replaced is Failed && !identical(replaced.error, _announcedError)) {
+      _announcedError = replaced.error;
       _reportCovered(replaced, announced: false);
     }
   }
@@ -1083,9 +1133,9 @@ abstract class JobBase<T> implements Job<T> {
   /// one error is worse than once. When a cancellation covers it afterwards,
   /// the outcome no longer carries it, and it is answered later without being
   /// announced again — unless [Job.ignore] was called, and then nobody answers
-  /// for it. A failure an engine of a domain handed to [finish] after such a
-  /// job accepted a cancellation is told here and nowhere else. [notifyError]
-  /// starts here too, and goes on to the answer.
+  /// for it. A [Failed] an engine of a domain hands to [finish] needs no call
+  /// here: [finish] announces it itself. [notifyError] starts here too, and
+  /// goes on to the answer.
   @protected
   void notifyObserver(Object error, StackTrace stackTrace) {
     _debug(() => '$this error: $error');
@@ -1272,7 +1322,10 @@ abstract class JobBase<T> implements Job<T> {
         // first look like it came second. The order is the whole diagnosis,
         // and it is settled at the moment of the throw.
         failedFirst = _pendingCancel == null || _wasFailedUnmarked(error);
-        notifyObserver(error, stackTrace);
+        if (!identical(error, _announcedError)) {
+          _announcedError = error;
+          notifyObserver(error, stackTrace);
+        }
         outcome = Failed(error, stackTrace);
       }
     }
@@ -1456,18 +1509,20 @@ abstract class JobBase<T> implements Job<T> {
     }
   }
 
-  /// Hands on an error the outcome no longer carries.
+  /// Hands on an error the outcome does not carry.
   ///
   /// The body failed and a cancellation arrived afterwards, so the job ends
-  /// [Cancelled] and the path that reports an unobserved [Failed] never
-  /// runs. Whoever reads the outcome — [Job.value], [Job.done],
-  /// [JobContext.run], a group of [JobContext.runAll] — gets the
-  /// cancellation and not this, so reading it settles nothing. It is an
-  /// error no outcome carries, answered the way the failure of a branch the
-  /// group did not throw is: through [JobObserver.onUnanswered], by default
-  /// in the zone. [announced] says whether [JobObserver.onError] has heard
-  /// it already — a failure of the body was told where it was caught, one
-  /// an engine of a domain handed to [finish] was told nowhere.
+  /// [Cancelled] and the path that reports an unobserved [Failed] never runs.
+  /// An engine of a domain can bring one here too: a [Failed] it hands to
+  /// [finish] over the mark, or to a job that is already over. Whoever reads
+  /// the outcome — [Job.value], [Job.done], [JobContext.run], a group of
+  /// [JobContext.runAll] — gets the cancellation, or whatever the job ended
+  /// with first, and not this, so reading it settles nothing. It is an error no
+  /// outcome carries, answered the way the failure of a branch the group did
+  /// not throw is: through [JobObserver.onUnanswered], by default in the zone.
+  /// [announced] says whether [JobObserver.onError] has heard it already — a
+  /// failure of the body was told where it was caught, one an engine of a
+  /// domain handed to [finish] was told nowhere.
   ///
   /// [Job.ignore] takes the answer away and leaves the notice: one handed
   /// to [finish] is still told to [JobObserver.onError], once. An uncovered

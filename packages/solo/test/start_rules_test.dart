@@ -155,6 +155,40 @@ void main() {
     });
   });
 
+  // The job is over by the time the rule throws, so there is no outcome to
+  // carry the error; the observer still hears it, once.
+  for (final how in ['close', 'cancel', 'cancelAll']) {
+    test('a start rule that calls $how and then throws is heard', () {
+      runSolo((solo, journal, async) {
+        late SoloJob<void> job;
+        job = solo.job<Initial, void>(
+          key: 'x',
+          canStart: (state) {
+            switch (how) {
+              case 'close':
+                solo.close();
+              case 'cancel':
+                job.cancel().ignore();
+              case 'cancelAll':
+                solo.cancelAll();
+            }
+            throw StateError('rule boom');
+          },
+          (ctx) async {},
+        );
+        solo.add(job);
+        async.flushTimers();
+        expect(job.outcome, isA<Cancelled>());
+        expect(
+          journal.take().where(
+                (line) => line == '[x] error Bad state: rule boom',
+              ),
+          hasLength(1),
+        );
+      });
+    });
+  }
+
   test('a keep rule that throws does not stop the reevaluation', () {
     runSolo((solo, journal, async) {
       // It holds at the state the job started in and throws at the next

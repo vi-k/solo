@@ -1828,7 +1828,7 @@ void main() {
     }
   });
 
-  test('a branch of the bare core can end without a body, and silently', () {
+  test('a branch of the bare core that ends without a body is announced', () {
     fakeAsync((async) {
       final journal = JobJournal();
       final started = Job.deferred<int>(key: 'a', (ctx) async {
@@ -1836,8 +1836,8 @@ void main() {
         return 1;
       });
       // Its own context refuses to be built: the child ends [Failed]
-      // without a body, and `startChild` tells nobody — that is the core,
-      // and `solo` is the other half of criterion twelve.
+      // without a body. `finish` tells its observer, as it tells every
+      // failure handed in, and the same error goes to the parent's body.
       final unstartable = UnstartableJob<int>(key: 'b');
       Object? thrown;
       Job<void>(key: 'parent', observer: journal, (ctx) async {
@@ -1860,8 +1860,8 @@ void main() {
       );
       expect(
         journal.take().where((line) => line.contains('error')).toList(),
-        isEmpty,
-        reason: 'the bare core announces a refusal of admission to nobody',
+        ['> [b] error Bad state: no context'],
+        reason: 'a refusal of admission is announced once, on the branch',
       );
     });
   });

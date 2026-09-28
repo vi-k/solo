@@ -185,6 +185,37 @@ final class ThrowingRulesContext extends JobContextBase {
       throw StateError('rule failed');
 }
 
+/// A job whose context ends the child and then throws.
+///
+/// Stands in for a rule of a domain that gives up on the child — `canStart`
+/// in `solo` calling `cancel()` on it — and throws afterwards: the error
+/// arrives at a child that is already over.
+final class ChildEndingRulesJob<T> extends JobBase<T> {
+  final Future<T> Function(JobContext ctx) _body;
+
+  ChildEndingRulesJob(this._body, {super.key, super.observer});
+
+  /// Starts the body the way an engine of a domain would.
+  void launch() => start();
+
+  @override
+  JobContextBase createContext() => ChildEndingRulesContext(this);
+
+  @override
+  Future<T> execute(covariant ChildEndingRulesContext ctx) => _body(ctx);
+}
+
+/// The context of [ChildEndingRulesJob].
+final class ChildEndingRulesContext extends JobContextBase {
+  ChildEndingRulesContext(super.owner);
+
+  @override
+  Cancelled? beforeChildStart(JobBase<Object?> child) {
+    child.cancel().ignore();
+    throw StateError('rule failed');
+  }
+}
+
 /// A job whose `finished` hook throws, the way an engine of a domain can.
 final class FailingHookJob<T> extends JobBase<T> {
   final Future<T> Function(JobContext ctx) _body;

@@ -48,6 +48,23 @@ now reach the zone, and fail a test there.
   holds cancels the job through `cancelOwnJob` and throws `pendingCancel`. See
   [A rule of your own](doc/extending.md#a-rule-of-your-own).
 
+- **The core announces a `Failed` an engine hands to `finish`.** An engine that
+  ended a job by hand with a failure its body never threw — a rule of its own
+  that threw, say — left `onError` silent unless it told the observer itself,
+  and a child that `beforeChildStart` or its own context turned away with a
+  throw ended `Failed` with no `onError` at all. Now `finish` tells the
+  observer of every `Failed` it ends a job with, once, before `finished()` and
+  `onFinish`; the error of a turned-away child still goes to the parent's body
+  as well. A `Failed` handed to a job that is already over used to vanish:
+  `finish` did nothing. The outcome still stays, and the error goes to
+  `onError` and `onUnanswered` — by default the zone — as any error with no
+  outcome does; `ignore` keeps it to `onError`. One error object is announced
+  once, however many routes bring it: a body that throws what the engine has
+  already ended the job with is not heard twice. **Migrating.** An engine that
+  called `notifyObserver` before `finish` drops that call, or the observer
+  hears the error twice; `solo` has dropped its own. The call is safe to drop
+  on a job that may be over as well: `finish` announces there too.
+
 - **`ctx.run` takes `dispose` and `discard`,** the way `ctx.wait` does, and
   makes the registration the moment the child's value comes back. `run` checks
   the parent once the value is in hand — for its own cancellation, and for the

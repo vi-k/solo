@@ -663,12 +663,49 @@ void main() {
         }
       });
       async.flushTimers();
+      final lines = journal.take();
       expect(
-        journal.take(),
+        lines,
         containsAllInOrder([
           '> [child] error Bad state: rule boom',
           '> [child] finished Failed(Bad state: rule boom)',
         ]),
+      );
+      // Once: the core tells the observer of a failure handed in, and
+      // `solo` does not tell it again.
+      expect(
+        lines.where((line) => line.contains('error Bad state: rule boom')),
+        hasLength(1),
+      );
+    });
+  });
+
+  test('a start rule that ends the child and then throws is heard', () {
+    runSolo((solo, journal, async) {
+      Object? thrown;
+      solo.run<TestState, void>(key: 'parent', (ctx) async {
+        late SoloJob<void> child;
+        child = solo.job<TestState, void>(
+          key: 'child',
+          canStart: (state) {
+            child.cancel().ignore();
+            throw StateError('rule boom');
+          },
+          (childCtx) async {},
+        );
+        try {
+          await ctx.run(child);
+        } on Object catch (error) {
+          thrown = error;
+        }
+      });
+      async.flushTimers();
+      expect(thrown, isA<StateError>());
+      expect(
+        journal.take().where(
+              (line) => line == '> [child] error Bad state: rule boom',
+            ),
+        hasLength(1),
       );
     });
   });

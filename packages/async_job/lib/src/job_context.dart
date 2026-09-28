@@ -1337,9 +1337,11 @@ abstract class JobContextBase implements JobContext {
     // domain, a context that would not be built — ends the child rather
     // than leaving it be. By now it has a parent, a level and an observer,
     // and a job like that, left alive, would sit half-adopted: parented,
-    // levelled, never started and waited for by nobody. `ignore` first: the
-    // error is already on its way to the body through the rethrow, and one
-    // error is announced once.
+    // levelled, never started and waited for by nobody. `finish` tells the
+    // child's observer, as it does for every failure handed in, and a child
+    // the rule has already ended is told too. `ignore` first: the error is
+    // already on its way to the body through the rethrow, and the body is
+    // where it is answered for, not the zone.
     Cancelled? markedWhileAsking;
     try {
       final rejection = beforeChildStart(child);

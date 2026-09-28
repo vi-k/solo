@@ -710,14 +710,14 @@ void main() {
       expect(log, ['run threw StateError']);
       expect(child.outcome, isA<Failed>());
       expect(parent.outcome, isA<Done<int>>());
-      // The one place a `Failed` does not call `onError`, and the reason
-      // is that the very same error went to the body by the throw above:
-      // announced once, where somebody can do something about it. The
-      // parent swallowed it here, as a `try/catch` of its own would.
+      // The child's observer hears the failure like any other, and the
+      // same error goes to the body by the throw above. The parent
+      // swallowed it here, as a `try/catch` of its own would.
       expect(
         journal.take(),
         [
           '[null] started',
+          '> [ghost] error Bad state: rule failed',
           '> [ghost] finished Failed(Bad state: rule failed)',
           '[null] finished Done(7)',
         ],

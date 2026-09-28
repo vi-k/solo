@@ -153,18 +153,10 @@ final class _SoloContext<S extends Object, W extends S, R>
   Cancelled? beforeChildStart(JobBase<Object?> child) {
     // `run` has already asked `_own` whether the child is ours.
     final impl = child as _SoloJob<S, S, Object?>;
-    final String? rejection;
-    try {
-      rejection = impl._rejectStart(_solo._state);
-    } on Object catch (error, stackTrace) {
-      // The core ends such a child `Failed` and hands the error to the
-      // body of the parent, which may catch it; `finish` alone tells no
-      // observer, and `ignore` closes the road an unobserved failure would
-      // have taken. The root pump announces a throwing rule itself, and a
-      // child of the same rules is announced here.
-      impl._notifyObserver(error, stackTrace);
-      rethrow;
-    }
+    // A rule that throws is not caught here: the core ends the child
+    // `Failed`, tells its observer and hands the error to the body of the
+    // parent, which may catch it.
+    final rejection = impl._rejectStart(_solo._state);
     return rejection == null
         ? null
         : Cancelled.by(

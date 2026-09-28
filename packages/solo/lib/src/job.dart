@@ -253,9 +253,6 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
 
   void _drop(Outcome<T> outcome) => finish(outcome);
 
-  void _notifyObserver(Object error, StackTrace stackTrace) =>
-      notifyObserver(error, stackTrace);
-
   void _notifyError(Object error, StackTrace stackTrace) =>
       notifyError(error, stackTrace);
 
