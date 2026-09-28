@@ -231,8 +231,8 @@ has ended: it lets its action go then, and an error of that action is a late
 error of an abandoned action, in the fifth row.
 
 The errors no outcome carries go on from `onError` to `onUnanswered`, the hook
-that answers for them. Its default body sends them where they go without an
-observer, to the zone, and drops a cancellation: a `Cancelled`, or a
+that answers for them. Its default implementation sends them where they go
+without an observer, to the zone, and drops a cancellation: a `Cancelled`, or a
 `ParallelWaitError` carrying nothing but cancellations. So an observer written
 to watch, like `Reporter`, changes nowhere an error goes. An observer that
 answers for these errors itself overrides `onUnanswered`:
@@ -246,13 +246,13 @@ void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
 The errors stop there and do not reach the zone. Calling
 `super.onUnanswered(job, error, stackTrace)` sends one on to the zone as well.
 Hand `super` whatever the override cannot tell from a cancellation: the default
-body knows which errors are cancellations.
+implementation knows which errors are cancellations.
 
 The override answers for the job that got the observer and for the children
 that inherit it, at any depth. The app answers for every job at once in its
-zone, where it already reports what nobody caught: the default body brings
-these errors there. The zone gets the error and its stack trace but not the
-job, so a report that names the job takes an override.
+zone, where it already reports what nobody caught: the default implementation
+brings these errors there. The zone gets the error and its stack trace but not
+the job, so a report that names the job takes an override.
 
 An error can reach `onError` and the zone both, and an app that reports in both
 places hears it twice. The table shows the way each error takes to the zone:

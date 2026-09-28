@@ -60,11 +60,11 @@ Use `child.cancel()` to request cancellation and `child.done` to inspect the
 outcome. To start a child concurrently, retain the future returned by
 `ctx.run(child)` and await it later, or handle its errors. Use
 `ctx.run(child).ignore()` when deliberately ignoring that result. The parent
-still waits for the child before finishing. `child.ignore()` does not do it: it
-quenches the core's report of a failure nobody looked at, and `run` already
-looks — it waits for the child's value. The error arrives through the future
-`run` returned, an ordinary Dart future: left unhandled, it goes to the zone,
-and so does a cancellation of the child.
+still waits for the child before finishing. `child.ignore()` is no substitute
+for `ctx.run(child).ignore()`: it quenches the core's report of a failure
+nobody looked at, and `run` already looks — it waits for the child's value. The
+error arrives through the future `run` returned, an ordinary Dart future: left
+unhandled, it goes to the zone, and so does a cancellation of the child.
 
 If the child's body fails and a cancellation reaches the child afterwards —
 while it still waits for children of its own or runs its cleanup, say — its

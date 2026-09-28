@@ -191,11 +191,11 @@ cancelled: handler
 ```
 
 Запрос отменил `fetch`, а не `report`. Отмена `fetch` вышла через тело
-`report`, и `report` кончился собственным `Cancelled`, причина которого —
-`HandlerCancelReason`: его тело сдалось. `RequestCancelReason` лежит на шаг
+`report`, и `report` кончилась собственным `Cancelled` с причиной
+`HandlerCancelReason`: её тело сдалось. `RequestCancelReason` лежит на шаг
 глубже, в `cause` этой причины.
 
-### Следуя за `cause`
+### По цепочке `cause`
 
 ```dart
 CancelReason origin(Cancelled cancelled) => switch (cancelled.reason) {
@@ -246,9 +246,8 @@ request failed: Bad state: token expired
 выдаёт своим веткам, когда проваливается. Все они наследуют `CancelReason`.
 
 Проверяйте причину по типу, например `reason is ParentCancelReason`. Свойство
-`name` служит меткой для журнала и не определяет равенство. По умолчанию
-причины сравниваются по идентичности, но класс может определить равенство
-по данным.
+`name` служит меткой для лога и не определяет равенство. По умолчанию причины
+сравниваются по идентичности, но класс может определить равенство по данным.
 
 Тело может бросить `Cancelled.by(reason: reason, started: true)` с явной
 причиной или `Cancelled('why')` с причиной `HandlerCancelReason`. Стектрейс
@@ -259,7 +258,7 @@ request failed: Bad state: token expired
 ## Реакция до исхода
 
 Чтобы отреагировать на принятую отмену до получения итогового исхода,
-зарегистрируйте слушатель через `job.whenCancelled(callback)`. Он вызывается
+зарегистрируйте слушателя через `job.whenCancelled(callback)`. Он вызывается
 синхронно и получает `Cancelled` с причиной и подробностями. Сам метод
 регистрации возвращает функцию снятия слушателя:
 
