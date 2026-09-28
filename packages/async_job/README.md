@@ -49,9 +49,11 @@ print(job.outcome); // Cancelled(manual)
 `Job` manages this lifetime. It finishes with one of three outcomes: `Done`,
 `Failed` or `Cancelled` with a reason. It waits for its children and runs
 registered cleanup before completing. An unobserved `Failed` is reported to the
-zone that created the job, just as Dart reports an unhandled `Future` error.
-For errors from work the body no longer awaits, `Job` also provides an
-observer.
+zone that created the job, just as Dart reports an unhandled `Future` error. An
+error that does not become the outcome, such as one from cleanup, goes to the
+zone as well by default, or to nobody unless the job has an observer, depending
+on where it came from; [Where errors go](doc/observing.md#where-errors-go) on
+the observing page lists each one, with an observer and without.
 
 Cancellation is cooperative: `cancel()` requests it, and the body stops when it
 reaches a cancellation checkpoint. `Job` provides these checkpoints through the
@@ -62,15 +64,25 @@ returning its value to the body.
 A direct `await action()` is allowed, but does not check job cancellation. It
 keeps waiting, and the code after it can run even if the job has been
 cancelled. That is why using the context is part of writing a cancellable body.
-`CancelableOperation` cancels the waiting; a job owns what the work left
-behind.
+
+Dart can already stop the waiting. `Future.timeout` stops it after a time
+limit, and `CancelableOperation` from `package:async` stops delivering its
+value on `cancel()`, running its `onCancel`, which can ask the work to stop.
+Neither holds on to what the work opens: unless an `onCancel` is written to
+catch it, a value that arrives once the waiting has stopped goes to nobody, and
+a database that opens late stays open. `ctx.join` hands a database that opens
+after the job's cancellation to its `dispose` all the same, with no code
+written for the cancellation.
 
 `async_job` does not provide state management, a task queue or scheduling
-rules. If you need them, use `solo`, which adds these features on top of
-`async_job` and re-exports its API.
+rules: [solo](#solo) adds them.
 
-Neither package provides retries, timeouts or a task pool; applications can add
-these as needed.
+Neither package provides retries or a task pool; applications can add these as
+needed. A job has no timeout of its own either: `Timer(limit, job.cancel)`
+cancels it once the limit has run out, and does nothing to a job that has
+already finished. The timer itself lives until the limit. Stopping it through
+`job.done` counts as observing the outcome, and a failure of the job then no
+longer reaches the zone.
 
 ## Install
 
@@ -133,8 +145,9 @@ final outcome = await job.done; // Cancelled(manual)
   [Cleanup order and late results](doc/cleanup.md#cleanup-order-and-late-results)
   on the cleanup page.
 - **`ctx.onCancel(stop.cancel)`** connects job cancellation to the database's
-  cancellation token. The callback runs as soon as the job accepts
-  cancellation, before the body reaches its next checkpoint.
+  cancellation token. `CancelToken` belongs to the database client, not to this
+  package. The callback runs as soon as the job accepts cancellation, before
+  the body reaches its next checkpoint.
 - **`ctx.join(() => database.migrate(stop))`** waits for the migration to
   finish. On cancellation, the token asks the migration to stop, and `join`
   waits for it to stop before the job closes the database. If you need to stop
@@ -142,21 +155,27 @@ final outcome = await job.done; // Cancelled(manual)
   without stopping the operation itself.
 - **`ctx.uncancellable(() async { ... })`** keeps the last step whole. The step
   writes the schema version and then runs `database.readyFlag()`, a job of its
-  own that writes the ready flag, as a child. Once the job has accepted a
-  cancellation, `ctx.run` throws it instead of starting the child, so a `join`
-  around the step would leave a version with no flag. Inside the section the
-  job does not accept the cancellation: the child starts, and `onCancel` does
-  not fire. After the section, the request takes effect and the next context
-  checkpoint throws `Cancelled`. A step of plain code needs no section: one
-  `join` around it is enough. See
+  own that writes the ready flag, as a child. `readyFlag()` makes that job with
+  `Job.deferred`, which leaves its start to `ctx.run`: a job made with
+  `Job(...)` starts on its own, and `ctx.run` throws an `ArgumentError` instead
+  of adopting it. Once the job has accepted a cancellation, `ctx.run` throws it
+  instead of starting the child, so a `join` around the step would leave a
+  version with no flag. Inside the section the job does not accept the
+  cancellation: the child starts, and `onCancel` does not fire. The job accepts
+  it when the section closes, and the body goes on to `return database`, yet
+  the job ends `Cancelled` all the same, and `discard` closes the database: the
+  section keeps the step whole, not the result. A step of plain code needs no
+  section: one `join` around it is enough. See
   [Holding the cancellation back](doc/cancellation.md#holding-the-cancellation-back)
   on the cancellation page.
 - **`await job.cancel()`** requests cancellation and waits for the job to
   finish, including its cleanup. The outcome on the next line is therefore
   ready. You can omit `await` if you only need to request cancellation.
 
-The complete runnable example, including a fake `Database`, is in
-`example/example.dart`.
+The complete runnable example, with a fake `Database` and `CancelToken`, is in
+`example/example.dart`. It runs the job four times: once to the end, and
+cancelled while the database opens, while it migrates and while the version is
+written.
 
 ## Guides
 
@@ -167,10 +186,10 @@ search.
 | --- | --- |
 | [Outcomes](doc/outcomes.md) | `Done`, `Failed`, `Cancelled`, and who is answerable for an error |
 | [Cancellation](doc/cancellation.md) | Checkpoints, `onCancel`, `uncancellable` |
-| [Children, streams and chains](doc/children.md) | `ctx.run`, `ctx.each`, `then` |
+| [Children, streams and chains](doc/children.md) | `Job.deferred`, `ctx.run`, `ctx.runAll`, `ctx.each`, `then` |
 | [Cleanup](doc/cleanup.md) | `dispose`, `discard`, `onDispose`, ordering |
 | [Observing and testing](doc/observing.md) | `JobObserver`, logs, `unattended`, fake time |
-| [Building on the core](doc/extending.md) | `JobBase`, deferred start, your own engine |
+| [Building on the core](doc/extending.md) | `JobBase`, `JobContextBase`, your own engine |
 
 ## solo
 
