@@ -161,9 +161,10 @@ handle: a branch that refused the group's stop, in
 whose `then` was cancelled while it waited, in [Chains](children.md#chains),
 both on the children page.
 
-The debug channel names every hand-over that drops a registration, whether or
-not the receiver registered anything, so the places where this rule applies can
-be read off a run. For `connect` above it says:
+The debug channel, switched on with `Job.debug = print;`, names every hand-over
+that drops a registration, whether or not the receiver registered anything, so
+the places where this rule applies can be read off a run. For `connect` above
+it says:
 
 ```text
 Job(connect) handed its value over: 1 conditional cleanup dropped

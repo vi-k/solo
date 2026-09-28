@@ -3,7 +3,7 @@ library;
 
 import 'dart:async';
 
-import 'package:async_job/engine.dart';
+import 'package:async_job/async_job.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart';
 
@@ -11,11 +11,11 @@ import 'support/delay.dart';
 import 'support/probe_job.dart';
 
 void main() {
-  tearDown(() => JobBase.debug = null);
+  tearDown(() => Job.debug = null);
 
   test('the debug channel traces the life of a job', () {
     final traces = <String>[];
-    JobBase.debug = traces.add;
+    Job.debug = traces.add;
     fakeAsync((async) {
       final job = Job<void>(key: 'job', (ctx) => ctx.wait(() => delay(50)));
       async.elapse(const Duration(milliseconds: 10));
@@ -31,7 +31,7 @@ void main() {
 
   test('a refusal and a job dropped before start are traced too', () {
     final traces = <String>[];
-    JobBase.debug = traces.add;
+    Job.debug = traces.add;
     fakeAsync((async) {
       Job<void>(key: 'dropped', (ctx) async {}).cancel().ignore();
       final stubborn = Job<void>(
@@ -57,7 +57,7 @@ void main() {
 
   test('an error is traced on both paths, observer or none', () {
     final traces = <String>[];
-    JobBase.debug = traces.add;
+    Job.debug = traces.add;
     runZonedGuarded(
       () {
         fakeAsync((async) {
@@ -86,7 +86,7 @@ void main() {
     final traces = <String>[];
     final seen = <String>[];
     final zone = <Object>[];
-    JobBase.debug = traces.add;
+    Job.debug = traces.add;
     runZonedGuarded(
       () {
         fakeAsync((async) {
@@ -125,8 +125,8 @@ void main() {
 
   test('finish called by hand tells the tracer about the stack', () {
     final lines = <String>[];
-    JobBase.debug = lines.add;
-    addTearDown(() => JobBase.debug = null);
+    Job.debug = lines.add;
+    addTearDown(() => Job.debug = null);
     fakeAsync((async) {
       final job = ProbeJob<void>((ctx) async {
         ctx.onDispose(() {});
@@ -150,7 +150,7 @@ void main() {
 
   test('a job that hands its value over says what it dropped', () {
     final traces = <String>[];
-    JobBase.debug = traces.add;
+    Job.debug = traces.add;
     fakeAsync((async) {
       final opener = Job.deferred<String>(
         key: 'opener',
@@ -178,7 +178,7 @@ void main() {
     final handedOver = <String>[];
     final ranThem = <String>[];
     fakeAsync((async) {
-      JobBase.debug = handedOver.add;
+      Job.debug = handedOver.add;
       final two = Job.deferred<String>(key: 'two', (ctx) async {
         ctx.onDiscard(() {});
         return ctx.wait(() => 'db', discard: (db) {});
@@ -188,7 +188,7 @@ void main() {
         throw StateError('boom');
       }).ignore();
       async.flushTimers();
-      JobBase.debug = ranThem.add;
+      Job.debug = ranThem.add;
       Job<String>(key: 'failing', (ctx) async {
         ctx.onDiscard(() {});
         throw StateError('boom');
@@ -210,7 +210,7 @@ void main() {
 
   test('a job finished by hand while unwinding says that instead', () {
     final traces = <String>[];
-    JobBase.debug = traces.add;
+    Job.debug = traces.add;
     final closed = <String>[];
     late ProbeJob<String> job;
     fakeAsync((async) {
@@ -248,7 +248,7 @@ void main() {
 
   test('a branch of a group says it too, once the group has committed', () {
     final traces = <String>[];
-    JobBase.debug = traces.add;
+    Job.debug = traces.add;
     fakeAsync((async) {
       Job<List<String>>(
         key: 'group',
@@ -272,7 +272,7 @@ void main() {
 
   test('a branch finished by hand at the second barrier says so too', () {
     final traces = <String>[];
-    JobBase.debug = traces.add;
+    Job.debug = traces.add;
     final closed = <String>[];
     late ProbeJob<String> branch;
     fakeAsync((async) {
@@ -316,7 +316,7 @@ void main() {
     final caught = <Object>[];
     var doneSeen = false;
     Outcome<void>? outcome;
-    JobBase.debug = (message) => throw StateError('logger: $message');
+    Job.debug = (message) => throw StateError('logger: $message');
     runZonedGuarded(
       () {
         fakeAsync((async) {
@@ -344,7 +344,7 @@ void main() {
     final traces = <String>[];
     final caught = <Object>[];
     var doneSeen = false;
-    JobBase.debug = traces.add;
+    Job.debug = traces.add;
     runZonedGuarded(
       () {
         fakeAsync((async) {

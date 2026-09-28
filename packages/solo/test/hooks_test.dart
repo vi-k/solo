@@ -3,7 +3,6 @@ library;
 
 import 'dart:async';
 
-import 'package:async_job/engine.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:solo/solo.dart';
 import 'package:test/test.dart';
@@ -410,7 +409,7 @@ void main() {
     final engine = <String>[];
     final jobs = <String>[];
     Solo.debug = engine.add;
-    JobBase.debug = jobs.add;
+    Job.debug = jobs.add;
     try {
       runSolo((solo, journal, async) {
         solo.run<TestState, void>(key: 'job', (ctx) async {
@@ -420,13 +419,13 @@ void main() {
       });
     } finally {
       Solo.debug = null;
-      JobBase.debug = null;
+      Job.debug = null;
     }
     // The queue, the state and the closing belong to the controller.
     expect(engine, contains('add Job(job)'));
     expect(engine, contains('state: Preparing(progress: 0)'));
     expect(engine, isNot(contains('Job(job) started')));
-    // The life of a job belongs to the kernel.
+    // The life of a job belongs to the core.
     expect(jobs, contains('Job(job) started'));
     expect(jobs, contains('Job(job) finished: Done(null)'));
     expect(jobs, isNot(contains('add Job(job)')));

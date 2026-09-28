@@ -558,11 +558,16 @@ ctx.log(('zoom', zoom));
 
 // And the engine's own trace, when the queue itself needs watching.
 Solo.debug = print;
+
+// And the core's trace of each job: start, errors, cancellation, outcome.
+Job.debug = print;
 ```
 
 `ctx.log(data)` forwards application data to log hooks and observers as it is,
 so a listener that wants a line makes one. `Solo.debug` additionally traces the
-controller's internal queue and lifecycle operations.
+controller's internal queue and lifecycle operations. Each job reports its
+start, its errors, a cancellation that reaches it and its outcome to
+`Job.debug`, the core's channel; both sides show when both are set.
 
 Nothing is called on the way either. Where the line costs something to build,
 log the callback that builds it and leave the level to decide whether to call

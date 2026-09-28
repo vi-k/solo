@@ -25,7 +25,9 @@
   job — and, through `solo` and `flutter_solo`, to every file of an app.
   `engine.dart` exports the rest of the package as well, so an engine swaps one
   import for the other: `import 'package:async_job/engine.dart';` in place of
-  `async_job.dart`. Code that only runs jobs is untouched. See
+  `async_job.dart`. Code that only runs jobs is untouched but for the debug
+  switch: `JobBase.debug` is `Job.debug` now, so the channel stays in the main
+  import, and an app on `solo` sets it next to `Solo.debug`. See
   `doc/extending.md`.
 
 - **Breaking:** `JobContextBase.check` is marked `@mustCallSuper`. The
@@ -210,8 +212,8 @@
   and at this checkpoint `run` throws instead of returning. That wrapper and a
   registration written on the line after `await ctx.run(child)` are both the
   ones to move into the call. See `doc/cleanup.md`.
-- **Added:** the debug channel names a job that handed its value over and
-  dropped the conditional registrations that went with it —
+- **Added:** the debug channel, `Job.debug`, names a job that handed its value
+  over and dropped the conditional registrations that went with it —
   `Job(opener) handed its value over: 1 conditional cleanup dropped`. A
   registration made by `discard` or `onDiscard` is settled by the outcome of
   the job that made it and travels with no value, so a receiver that keeps the

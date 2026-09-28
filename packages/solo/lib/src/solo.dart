@@ -66,6 +66,10 @@ abstract class Solo<S extends Object> {
   static SoloErrorHandler? errorHandler;
 
   /// Engine tracing for debugging the engine itself; `null` by default.
+  ///
+  /// The queue, the state and the closing report here. The life of each job,
+  /// its start, its errors, a cancellation that reaches it and its outcome, is
+  /// on [Job.debug]; to follow both sides, set both.
   static void Function(String message)? debug;
 
   /// Whether a change of state records where it was made.

@@ -4,7 +4,7 @@ library;
 import 'dart:async';
 import 'dart:io';
 
-import 'package:async_job/engine.dart';
+import 'package:async_job/async_job.dart';
 import 'package:meta/meta.dart';
 import 'package:test/test.dart';
 
@@ -104,7 +104,7 @@ void main() {
 
   setUp(() => trace = <String>[]);
 
-  tearDown(() => JobBase.debug = null);
+  tearDown(() => Job.debug = null);
 
   group('Choosing the callback', () {
     test('discard leaves a lock the body keeps held', () async {
@@ -237,7 +237,7 @@ void main() {
 
     test('the debug channel names the hand-over of the page', () async {
       final said = <String>[];
-      JobBase.debug = said.add;
+      Job.debug = said.add;
 
       final connect = Job.deferred<Database>(
         key: 'connect',

@@ -86,6 +86,20 @@ abstract interface class Job<T> {
         observer: observer,
       );
 
+  /// Tracing of the job lifecycle for debugging; `null` by default.
+  ///
+  /// Every job reports here, one made by an engine of a domain included: the
+  /// start, a cancellation, an error, the outcome and a value handed over.
+  ///
+  /// ```dart
+  /// Job.debug = print;
+  /// ```
+  ///
+  /// An engine of a domain prints its own side elsewhere — `solo` puts the
+  /// queue, the state and the closing into `Solo.debug`. To follow both sides,
+  /// set both.
+  static void Function(String message)? debug;
+
   /// The key given at creation.
   ///
   /// The core does not read it: it is there for [toString], for the
@@ -338,13 +352,6 @@ final class _Cleanup {
 /// through private wrappers of its own: `@protected` holds inside a
 /// subclass, and an engine reaches a job from the side.
 abstract class JobBase<T> implements Job<T> {
-  /// Tracing of the job lifecycle for debugging; `null` by default.
-  ///
-  /// An engine built on this one prints its own side elsewhere — `solo`
-  /// puts the queue, the state and the closing into `Solo.debug`. To
-  /// follow both sides, set both.
-  static void Function(String message)? debug;
-
   final Object? _key;
   final String Function()? _describe;
 
@@ -565,13 +572,13 @@ abstract class JobBase<T> implements Job<T> {
   /// Builds and delivers a diagnostic message, guarded on both halves.
   ///
   /// Guarded because the channel stands between transitions a job cannot be
-  /// left in the middle of: an error here once left a job `isFinished` with
-  /// its `done` never completing. Both halves belong to whoever turned the
-  /// channel on — `message()` runs their `describe` and `toString`, and
-  /// [debug] is theirs — and a diagnostic channel is cross-cutting like an
-  /// observer: an error in it changes nothing else.
+  /// left in the middle of: an error here once left a job `isFinished` with its
+  /// `done` never completing. Both halves belong to whoever turned the channel
+  /// on — `message()` runs their `describe` and `toString`, and [Job.debug] is
+  /// theirs — and a diagnostic channel is cross-cutting like an observer: an
+  /// error in it changes nothing else.
   static void _debug(String Function() message) {
-    final debug = JobBase.debug;
+    final debug = Job.debug;
     if (debug == null) {
       return;
     }

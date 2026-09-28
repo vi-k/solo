@@ -39,10 +39,12 @@
   its own: `JobObserver.onError` is a notice, and the new
   `JobObserver.onUnanswered` answers for an error no outcome carries, so such
   an observer no longer keeps those errors out of the zone, and a class that
-  implements `JobObserver` needs an `onUnanswered`. The hooks of a controller
-  are unchanged. The rest concern an engine built on the core only: the
-  protected `JobBase.inUncancellableSection` and `JobBase.heldCancel`, and the
-  move of `JobBase`, `JobContextBase` and `JobStatus` to
+  implements `JobObserver` needs an `onUnanswered`. The switch of the core's
+  debug channel, the one set next to `Solo.debug`, is `Job.debug` now, where it
+  was `JobBase.debug`. The hooks of a controller are unchanged. The rest
+  concern an engine built on the core only: the protected
+  `JobBase.inUncancellableSection` and `JobBase.heldCancel`, and the move of
+  `JobBase`, `JobContextBase` and `JobStatus` to
   `package:async_job/engine.dart` -- which also takes them out of what an app
   sees through this package. Read the core's own entries before migrating:
   [the `async_job` changelog](https://github.com/vi-k/solo/blob/main/packages/async_job/CHANGELOG.md).
