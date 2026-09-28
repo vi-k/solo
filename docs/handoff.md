@@ -137,11 +137,11 @@ dartdoc и сторожами: ошибка `async`-колбэка уходит 
 с `Solo.debug`; записи в обоих `CHANGELOG.md`, `cleanup.md` и раздел «Logs»
 `solo/doc/errors.md` называют переключатель. Всё —
 в `2026-09-28-async-job-debug-switch-report.md`, итог — в вердикте M6. Раздел
-`## Unreleased` `CHANGELOG.md` `async_job` 2026-09-28 переписан против `0.2.0`
-по M19, M20, M21, L32 и L34: группы Breaking с миграцией, «Changes you will see
-on upgrade» с рецептом по зонду на теге и на дереве, Added, Fixed,
-Documentation; исправления новых функций влиты в их записи. Ревью нашло два
-места Medium и семь Low, всё принято; всё —
+`## Unreleased` `CHANGELOG.md` `async_job` 2026-09-28 (`117726b`) переписан
+против `0.2.0` по M19, M20, M21, L32 и L34: группы Breaking с миграцией,
+«Changes you will see on upgrade» с рецептом по зонду на теге и на дереве,
+Added, Fixed, Documentation; исправления новых функций влиты в их записи. Ревью
+нашло два места Medium и семь Low, всё принято; всё —
 в `2026-09-28-async-job-unreleased-report.md`, итоги — в вердиктах.
 
 **Что дальше.** Следующая находка ревью `async_job` с владельцем; порядок,
@@ -303,27 +303,28 @@ Documentation; исправления новых функций влиты в и
 Локальный `main` впереди него на правки `observing.md` (`7763e54`),
 `cancellation.md` с `outcomes.md` (`6ec4f76`), `extending.md` (`1beb05e`),
 README `async_job` (`86ee39e`), чистку словаря (`db19ca6`), переключатель
-отладочного канала (`340a5e2`) и записи их хешей. CI: `gate` и `site`
-на `44a9c19` зелёные (`36253615225` и `36253615212`), `gate` на `31e1c3a`
-зелёный (`36255219059`). Проверки на последней правке кода ядра, `d3916fb`,
-2026-09-26: `packages/async_job` — формат, анализ и `dart doc --dry-run`
-чистые, `dart test` 628; `packages/solo` — анализ чист, 803, пример 47; стенды
-`vs-bloc`, `accumulation` и Flutter собраны и прогнаны, цитаты трасс сходятся;
-сайт собран, 42 страницы. `packages/flutter_solo` на `63016dd` — 85 тестов,
-пример 4. После `d3916fb` код ядра менялся только переносом группы `runAll`
-в `run_all.dart` (L15), правкой M1, M2 и L8 и правкой M3, M4 и M5; после неё —
-сторожа H3, M27, M28 и M29 и dartdoc `disown` (L9), `dart test` 744, формат,
-анализ и `dart doc --dry-run` чистые; после правки `children.md` — 758, после
-правки `cleanup.md` — 759, после правки `observing.md` — 770, после правки
-`cancellation.md` и `outcomes.md` — 793, после правки `extending.md` — 825,
-после правки README — 837; с ней `@mustCallSuper` на `check()`,
-и `packages/solo` против дерева — анализ чист, 803. С правкой M3, M4 и M5,
-2026-09-28: `packages/async_job` — формат, анализ и `dart doc --dry-run`
-чистые, `dart test` 734; `packages/solo` против дерева — формат и анализ
-чистые, 803, пример 47; `packages/flutter_solo` — 85. Пять документных проверок
-из корня и форма разделов зелёные, сайт собран, 42 страницы. Стенды после
-`d3916fb` не гонялись: их страницы не менялись. Базовая линия ревью 2026-09-26
-на `1a332d6`: `packages/async_job` — формат, анализ, `dart doc --dry-run`
+отладочного канала (`340a5e2`), раздел `## Unreleased` (`117726b`) и записи их
+хешей. CI: `gate` и `site` на `44a9c19` зелёные (`36253615225`
+и `36253615212`), `gate` на `31e1c3a` зелёный (`36255219059`). Проверки
+на последней правке кода ядра, `d3916fb`, 2026-09-26: `packages/async_job` —
+формат, анализ и `dart doc --dry-run` чистые, `dart test` 628;
+`packages/solo` — анализ чист, 803, пример 47; стенды `vs-bloc`, `accumulation`
+и Flutter собраны и прогнаны, цитаты трасс сходятся; сайт собран, 42 страницы.
+`packages/flutter_solo` на `63016dd` — 85 тестов, пример 4. После `d3916fb` код
+ядра менялся только переносом группы `runAll` в `run_all.dart` (L15), правкой
+M1, M2 и L8 и правкой M3, M4 и M5; после неё — сторожа H3, M27, M28 и M29
+и dartdoc `disown` (L9), `dart test` 744, формат, анализ и `dart doc --dry-run`
+чистые; после правки `children.md` — 758, после правки `cleanup.md` — 759,
+после правки `observing.md` — 770, после правки `cancellation.md`
+и `outcomes.md` — 793, после правки `extending.md` — 825, после правки README —
+837; с ней `@mustCallSuper` на `check()`, и `packages/solo` против дерева —
+анализ чист, 803. С правкой M3, M4 и M5, 2026-09-28: `packages/async_job` —
+формат, анализ и `dart doc --dry-run` чистые, `dart test` 734; `packages/solo`
+против дерева — формат и анализ чистые, 803, пример 47;
+`packages/flutter_solo` — 85. Пять документных проверок из корня и форма
+разделов зелёные, сайт собран, 42 страницы. Стенды после `d3916fb` не гонялись:
+их страницы не менялись. Базовая линия ревью 2026-09-26 на `1a332d6`:
+`packages/async_job` — формат, анализ, `dart doc --dry-run`
 и `dart pub publish --dry-run` чистые, `dart test` 628.
 
 ## На следующий релиз собрано у всех трёх
