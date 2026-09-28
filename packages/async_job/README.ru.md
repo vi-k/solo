@@ -204,5 +204,5 @@ final outcome = await job.done; // Cancelled(manual)
 с такими гарантиями. Он реэкспортирует `async_job`, поэтому достаточно
 зависимости от `solo`.
 
-Задачи работают везде, где работает Dart. Для интеграции `solo` с виджетами
+Задачи работают везде, где работает Dart. Чтобы связать `solo` с виджетами,
 используйте [flutter_solo](https://pub.dev/packages/flutter_solo).
