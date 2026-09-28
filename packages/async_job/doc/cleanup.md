@@ -12,7 +12,7 @@ final database = await ctx.join(
   discard: (database) => database.close(),
 );
 
-await ctx.join(() => database.migrate(stop));
+await ctx.join(() => database.migrate());
 
 return database;
 ```
@@ -22,7 +22,7 @@ return database;
 | `dispose` | on every outcome |
 | `discard` | when the job ends without handing its value over |
 
-`wait`, `join` and `run` take both; `ctx.onDispose` and `ctx.onDiscard`
+`wait`, `join` and `run` take either; `ctx.onDispose` and `ctx.onDiscard`
 register a callback where there is no call to wrap. Passing a `dispose` and a
 `discard` to one call is an `ArgumentError`.
 
@@ -57,7 +57,7 @@ path but the one the job is written for: cancelled or failed, it goes; done, it
 stays held for as long as the process lives. A test that cancels the job sees
 nothing wrong, because on that path the callback does run.
 
-### Dispose for what stays
+### Dispose for what the job keeps
 
 ```dart
 final lock = await ctx.join(Lock.acquire, dispose: (lock) => lock.release());
@@ -92,6 +92,7 @@ still be able to close it.
 
 ```dart
 final connect = Job.deferred<Database>(
+  key: 'connect',
   (ctx) => ctx.wait(Database.open, discard: (db) => db.close()),
 );
 
@@ -105,11 +106,13 @@ final ready = Job.deferred<Database>((ctx) async {
 
 `connect` registered the release, so the database looks covered wherever it
 goes. A conditional registration is settled by the outcome of the job that made
-it, and by nothing else. `connect` ended `Done` — it handed its value over — so
-its `discard` is dropped together with the value, and nothing carries the
-registration to the receiver. When the migration then fails, `ready` has a
-database and no registration of its own, and the connection stays open with
-nobody left to close it.
+it, not of the job the value goes to. The one exception, a branch of
+`ctx.runAll`, is in
+[Cleanup order and late results](#cleanup-order-and-late-results). `connect`
+ended `Done` — it handed its value over — so its `discard` is dropped together
+with the value, and nothing carries the registration to the receiver. When the
+migration then fails, `ready` has a database and no registration of its own,
+and the connection stays open with nobody left to close it.
 
 ### The second attempt
 
@@ -127,9 +130,9 @@ The receiver registers what it received, on the line where it receives it. With
 the child's value in hand `run` checks the parent — for its own cancellation,
 and for the rules of its domain — and a checkpoint that throws there takes the
 value with it. The child ended `Done` and dropped its registration on the way,
-the line that would have made the next one is never reached, and nothing closes
-the database at all. A child that refuses the cascade with `cancellable: false`
-reaches that window on any cancellation of its parent.
+the `onDiscard` line is never reached, and nothing closes the database at all.
+A child that refuses the cascade with `cancellable: false` reaches that window
+on any cancellation of its parent.
 
 ### Registering on arrival
 
@@ -160,10 +163,10 @@ both on the children page.
 
 The debug channel names every hand-over that drops a registration, whether or
 not the receiver registered anything, so the places where this rule applies can
-be read off a run:
+be read off a run. For `connect` above it says:
 
 ```text
-Job(opener) handed its value over: 1 conditional cleanup dropped
+Job(connect) handed its value over: 1 conditional cleanup dropped
 ```
 
 ## Registering without a call
@@ -240,7 +243,7 @@ children or running cleanup after `return`. Cancellation during that time can
 change its outcome to `Cancelled`, and a database registered with `discard` is
 then closed instead of being returned to the caller. A `discard` already
 skipped on the successful path runs in a second pass, which puts it after
-callbacks registered later than it rather than in the strict reverse order of
+callbacks registered before it rather than in the strict reverse order of
 registration.
 
 A branch of `ctx.runAll` is the one exception, and it is the whole point of the
@@ -255,9 +258,10 @@ A value returned by an action abandoned by `wait` needs cleanup whatever the
 outcome, because it never reached the body. Its registered callback runs even
 after the job has ended — late and alone, with nobody waiting for it.
 
-Registration works after a plain `await` as well, and the rule above is why it
-is worth naming: a plain `await` is no checkpoint, so nothing can throw between
-the call and the line under it.
+Registration works after a plain `await` as well, and the checkpoint of
+[The second attempt](#the-second-attempt) is why it is worth naming: a plain
+`await` is no checkpoint, so nothing can throw between the call and the line
+under it.
 
 ```dart
 final job = Job<Database>((ctx) async {
@@ -271,5 +275,7 @@ final job = Job<Database>((ctx) async {
 Cancellation arriving while `Database.open()` runs cannot interrupt it. The
 body waits the call out, registers what it opened, and the job ends
 `Cancelled` — with `onDiscard` closing the database, because the value reached
-no caller. For an acquisition that a cancellation can cut short, prefer
-`ctx.join` with `dispose` or `discard`, as above.
+no caller. Where the body waits through `ctx.wait`, `ctx.join` or `ctx.run`,
+hand the callback to that call, as
+[Registering on arrival](#registering-on-arrival) does: each of them is a
+checkpoint, and the line under it may never run.

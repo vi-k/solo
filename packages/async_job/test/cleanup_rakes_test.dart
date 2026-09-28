@@ -2,6 +2,7 @@
 library;
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:async_job/engine.dart';
 import 'package:meta/meta.dart';
@@ -16,7 +17,13 @@ import 'support/error_observer.dart';
 /// meant to do. Nothing else guards those statements: the page has no
 /// bench, so an owner or an order quoted there rots silently. Every claim
 /// the page makes about who closes the resource, and when, is pinned here
-/// next to the version it then shows.
+/// next to the version it then shows, and the last test holds the lines
+/// the page quotes to the lines these tests print.
+
+/// What each `text` block of the page says, in the order of the page.
+const quoted = [
+  ['Job(connect) handed its value over: 1 conditional cleanup dropped'],
+];
 
 final class Database {
   final String name;
@@ -24,6 +31,9 @@ final class Database {
   int closes = 0;
 
   Database(this.name, this.trace);
+
+  /// `Database.open` of the page, for a fragment run as it stands there.
+  static Future<Database> open() async => Database('db', <String>[]);
 
   bool get closed => closes > 0;
 
@@ -225,20 +235,27 @@ void main() {
       expect(trace, contains('db migrated'));
     });
 
-    test('the debug channel names the dropped registration', () async {
+    test('the debug channel names the hand-over of the page', () async {
       final said = <String>[];
       JobBase.debug = said.add;
-      final parent = Job<void>(key: 'parent', (ctx) async {
-        await ctx.run(connect());
-      })
-        ..ignore();
-      await parent.done;
 
-      expect(
-        said,
-        contains('Job(connect) handed its value over: '
-            '1 conditional cleanup dropped'),
+      final connect = Job.deferred<Database>(
+        key: 'connect',
+        (ctx) => ctx.wait(Database.open, discard: (db) => db.close()),
       );
+
+      final ready = Job.deferred<Database>((ctx) async {
+        final database = await ctx.run(connect);
+        // As the page writes it.
+        // ignore: unnecessary_lambdas
+        await ctx.join(() => database.migrate());
+
+        return database;
+      })
+        ..start();
+      await ready.done;
+
+      expect(said.where((line) => line.contains('handed')), quoted[0]);
     });
   });
 
@@ -479,7 +496,7 @@ void main() {
       expect(db.closed, isTrue);
     });
 
-    test('the second pass runs the discard after the later callbacks',
+    test('the second pass runs the discard after the earlier callbacks',
         () async {
       final gate = Gate();
       final job = Job<Database>(key: 'order', (ctx) async {
@@ -490,7 +507,9 @@ void main() {
             await gate.wait();
             trace.add('disposer B done');
           });
-        return ctx.join(open, discard: (db) => db.close());
+        final db = await ctx.join(open, discard: (db) => db.close());
+        ctx.onDispose(() async => trace.add('disposer D'));
+        return db;
       })
         ..ignore();
       unawaited(job.value.onError((_, __) => Database('none', trace)));
@@ -503,11 +522,17 @@ void main() {
 
       expect(
         trace,
-        containsAllInOrder(<String>[
+        <String>[
+          'db opened',
+          'disposer D',
+          'disposer B waits',
           'disposer B done',
           'disposer A',
           'db closed',
-        ]),
+        ],
+        reason: 'strict reverse order would close the database before A '
+            'and B, registered before the discard; the second pass closes it '
+            'after them',
       );
     });
 
@@ -616,6 +641,16 @@ void main() {
       expect(job.outcome, isA<Cancelled>());
       expect(db.closed, isTrue);
     });
+  });
+
+  test('the page quotes what these tests print', () {
+    final page = File('doc/cleanup.md').readAsStringSync();
+    final blocks = RegExp(r'```text\n(.*?)\n```', dotAll: true)
+        .allMatches(page)
+        .map((match) => match.group(1)!.split('\n'))
+        .toList();
+
+    expect(blocks, quoted);
   });
 }
 
