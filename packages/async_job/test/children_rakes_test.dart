@@ -702,9 +702,11 @@ void main() {
           async.flushTimers();
 
           expect(thrown, isA<ArgumentError>());
+          // The page quotes the error whole.
           expect(
-            (thrown! as ArgumentError).message,
-            contains('A continuation starts itself after its source finishes'),
+            '$thrown',
+            'Invalid argument (child): is a continuation, which starts itself '
+                'once its source finishes: "Job(then)"',
           );
         });
       });

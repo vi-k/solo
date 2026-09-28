@@ -122,14 +122,14 @@ moves again. To stop the subscription from inside a callback, call `cancel()`
 and do not await it.
 
 The child waits for the callback in flight, but not for the source: the engine
-does not await the future that the subscription's `cancel()` returns, and
-quenches its error instead of letting it reach the zone. Delivery stops at
-once, and what that future carries is the cleanup of the source, which this job
-does not own -- waiting for it would hold the child on a source free to take
-its time or never come back, and a cleanup that failed is the source's business
-too. If your source has asynchronous cleanup to wait for, wait for it yourself.
-Like `ctx.run`, `each` cannot start a child after the parent body ends, during
-cleanup, or from `unattended` work.
+does not await the future that the subscription's `cancel()` returns. Delivery
+stops at once, and what that future carries is the cleanup of the source, which
+this job does not own -- waiting for it would hold the child on a source free
+to take its time or never come back. If that cleanup fails, its error goes to
+`Solo.onError` and on to `Solo.onUnanswered`, as an error no outcome carries
+does. If your source has asynchronous cleanup to wait for, wait for it
+yourself. Like `ctx.run`, `each` cannot start a child after the parent body
+ends, during cleanup, or from `unattended` work.
 
 ## Following another controller
 

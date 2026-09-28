@@ -738,7 +738,8 @@ void main() {
     });
   });
 
-  test('a cleanup of the source that fails does not reach the zone', () {
+  test('a cleanup of the source that fails goes the way of an unanswered error',
+      () {
     final zone = <Object>[];
     final journal = JobJournal();
     runZonedGuarded(
@@ -761,12 +762,13 @@ void main() {
       },
       (error, stack) => zone.add(error),
     );
-    expect(
-      zone,
-      isEmpty,
-      reason: 'what the source does about its own cleanup stays with it',
-    );
-    expect(journal.lines.where((line) => line.contains('error')), isEmpty);
+    // Not awaited, and not lost either: an error no outcome carries, told
+    // to `onError` of the child and answered for by `onUnanswered`, whose
+    // default body sends it to the zone once.
+    expect(zone.map((error) => '$error').toList(), ['Bad state: cleanup boom']);
+    expect(journal.lines.where((line) => line.contains('error')).toList(), [
+      '> [null: each] error Bad state: cleanup boom',
+    ]);
   });
 
   test('a listen that throws over what it handed over leaves the zone be', () {

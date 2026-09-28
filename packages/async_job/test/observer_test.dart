@@ -174,6 +174,31 @@ void main() {
     });
   });
 
+  test('a cancellation a hook throws stays out of the zone', () {
+    // The natural way there: a message built lazily, whose closure asks
+    // the job, and a job that has accepted a cancellation by then.
+    final caught = <Object>[];
+    Outcome<void>? outcome;
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          final job = Job<void>(observer: _CallsMessages(), (ctx) async {
+            ctx.job.cancel().ignore();
+            ctx.log(() {
+              ctx.check();
+              return 'unreachable';
+            });
+          });
+          async.flushTimers();
+          outcome = job.outcome;
+        });
+      },
+      (error, stackTrace) => caught.add(error),
+    );
+    expect(outcome, isA<Cancelled>());
+    expect(caught, isEmpty);
+  });
+
   test('the message reaches the observer as it was given', () {
     fakeAsync((async) {
       var conversions = 0;
@@ -235,4 +260,12 @@ class _Counted {
 class _Unspeakable {
   @override
   String toString() => throw StateError('message conversion');
+}
+
+/// Builds a lazy message the way the observing guide does.
+final class _CallsMessages extends JobObserver {
+  @override
+  void onLog(Job<Object?> job, Object? message) {
+    if (message is Object? Function()) message();
+  }
 }

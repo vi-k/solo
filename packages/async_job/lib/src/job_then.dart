@@ -19,7 +19,9 @@ final class _ThenJob<T, R> extends JobBase<R> {
     _unregisterSource = source.whenCancelled(_cancelFromSource);
     // Do not observe until a failure is actually forwarded. A cancelled
     // continuation must not swallow a source failure it will never carry.
-    unawaited(source._done.future.then(_sourceFinished));
+    // Subscribed in the continuation's own zone, for the reason `_AutoJob`
+    // starts in it: the body runs from this callback.
+    _zone.run(() => unawaited(source._done.future.then(_sourceFinished)));
   }
 
   void _cancelFromSource(Cancelled cause) => _forwardCancellation(this, cause);

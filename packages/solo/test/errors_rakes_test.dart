@@ -1627,7 +1627,7 @@ void main() {
 
       expect(messages, [
         contains('cannot run a child inside unattended work'),
-        contains('cannot run a child inside unattended work'),
+        contains('cannot run a group of children inside unattended work'),
         contains('cannot follow a stream inside unattended work'),
         contains('cannot run an uncancellable action inside unattended work'),
       ]);

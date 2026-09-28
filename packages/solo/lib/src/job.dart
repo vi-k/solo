@@ -79,7 +79,11 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   void adoptedBy(JobContextBase parent) {
     if (parent is! _SoloContext<S, S, Object?> ||
         !identical(parent._solo, _solo)) {
-      throw ArgumentError.value(this, 'child', 'was not created by this Solo');
+      throw ArgumentError.value(
+        '$this',
+        'child',
+        'was not created by this Solo',
+      );
     }
     if (_solo._queue._jobs.contains(this)) {
       throw StateError('$this is queued and cannot be run as a child');

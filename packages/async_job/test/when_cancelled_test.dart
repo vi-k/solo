@@ -371,6 +371,38 @@ void main() {
       );
     });
   });
+
+  test('whenCancelled from onFinish of a job dropped before start', () {
+    // `finish` calls `onFinish` before it tells the listeners; a job dropped
+    // before its start is finished by then, but its cancellation is still
+    // on its way to them, and a registration made there belongs to it.
+    final seen = <Cancelled>[];
+    final job = Job.deferred<void>(
+      observer: _RegisterOnFinish(seen),
+      (ctx) async {},
+    );
+    job.cancel().ignore();
+    expect(seen, hasLength(1));
+    expect(seen.single, same(job.outcome));
+  });
+
+  test('whenCancelled from onFinish of a job that ended Done', () {
+    fakeAsync((async) {
+      final seen = <Cancelled>[];
+      Job<void>(observer: _RegisterOnFinish(seen), (ctx) async {});
+      async.flushTimers();
+      expect(seen, isEmpty);
+    });
+  });
+}
+
+class _RegisterOnFinish extends JobObserver {
+  final List<Cancelled> seen;
+
+  _RegisterOnFinish(this.seen);
+
+  @override
+  void onFinish(Job<Object?> job) => job.whenCancelled(seen.add);
 }
 
 /// A key whose formatting runs [onFormat] once.

@@ -232,8 +232,8 @@ data, and `origin` follows them to the end: `cause` is `null` where nothing
 stands behind the reason, as for a body that threw `Cancelled('why')` itself.
 `SiblingCancelReason` has a `cause` too, but that is what a group stopped for —
 the error or the cancellation another branch ended with, or an error of the
-group itself, such as the `ArgumentError` for a job it refused to take as a
-branch — and `origin` stops at it.
+group itself, such as the `ArgumentError` of an engine that refused to let a
+job be taken as a branch — and `origin` stops at it.
 
 A job that is not a child gets no such link. A body that awaits `value` of a
 job it does not own lets that job's cancellation through with its reason as it

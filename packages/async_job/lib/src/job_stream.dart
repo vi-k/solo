@@ -44,10 +44,11 @@ extension _JobStreamBody on JobContext {
 
     void letGoOfStream() {
       letGo = true;
-      // Dropped, not merely unawaited: `unawaited` leaves the future of
-      // the source's own cleanup without a listener, and a cleanup that
-      // fails would go from there to the zone, taking the program with
-      // it. It is the source's business either way, this end of it too.
+      // Not awaited: the source's own cleanup is the source's to finish,
+      // and the child does not wait for it. Not dropped either: a cleanup
+      // that fails is an error with no outcome to carry it, and it goes
+      // the way the others go -- `onError`, then `onUnanswered` of this
+      // child -- rather than to the zone past every observer, or nowhere.
       //
       // This end of it, and no more: a source may route the same failure
       // elsewhere by itself — a broadcast controller runs `onCancel`
@@ -56,7 +57,17 @@ extension _JobStreamBody on JobContext {
       // those.
       if (sub != null && !subscriptionCancelled) {
         subscriptionCancelled = true;
-        sub.cancel().ignore();
+        final cancelling = sub.cancel();
+        if (job case final JobBase<Object?> owner) {
+          cancelling
+              .then<void>(
+                (_) {},
+                onError: owner.notifyError,
+              )
+              .ignore();
+        } else {
+          cancelling.ignore();
+        }
       }
     }
 

@@ -95,7 +95,8 @@ final class _RunAllGroup<T> {
   _RunAllGroup(this._ctx, this._children);
 
   Future<List<T>> run() {
-    for (final child in _children) {
+    for (var index = 0; index < _children.length; index++) {
+      final child = _children[index];
       try {
         _ctx.startChild(child);
       } on Object catch (error, stackTrace) {
@@ -105,6 +106,9 @@ final class _RunAllGroup<T> {
         // does not join the branches, or the group would report it a
         // second time as a failure nobody chose.
         _refusal = (error, stackTrace);
+        if (identical(error, _ctx.pendingCancel)) {
+          _turnAwayTheRest(index + 1);
+        }
         break;
       }
       if (child is! JobBase<T>) {
@@ -156,6 +160,24 @@ final class _RunAllGroup<T> {
       _beginFailing(refusal.$1, null);
     }
     return _settle();
+  }
+
+  /// Turns away the handles from [from] on: a branch started earlier in the
+  /// list cancelled the parent before its first `await`, and the rest would
+  /// be left `created` for good, the way [JobContext.runAll] would have
+  /// left them under a parent cancelled before the call. An engine refusing
+  /// one of them is the answer `run` would give, and it comes out instead.
+  void _turnAwayTheRest(int from) {
+    final pending = _ctx.pendingCancel;
+    for (final child in _children.skip(from)) {
+      try {
+        _ctx.startChild(child);
+      } on Object catch (error, stackTrace) {
+        if (!identical(error, pending) && identical(_refusal?.$1, pending)) {
+          _refusal = (error, stackTrace);
+        }
+      }
+    }
   }
 
   _GroupHold _holdFor(_GroupBranch<T> branch) => _GroupHold(
@@ -305,8 +327,12 @@ final class _RunAllGroup<T> {
         // wait for `child.value`, and the check of the parent that waiting
         // makes goes with it — without this one a group would commit under
         // a parent that is already cancelled, or one whose rules of a
-        // domain no longer hold.
-        _ctx.check();
+        // domain no longer hold. Not once the body has ended, the same as
+        // `run`: nobody is left to hear the answer, and a cancellation
+        // thrown into a future nobody awaits goes to the zone.
+        if (!_ctx._owner.bodyEnded) {
+          _ctx.check();
+        }
         // Step three, and after the check rather than before it: the check
         // runs a predicate of a domain, and that predicate may cancel a
         // branch on its way to answering yes.

@@ -61,10 +61,11 @@ observing its outcome, so a failure nobody looked at still reaches the zone;
 waiting for `done` would count as looking.
 
 Override `started()` and `finished()` to follow the lifecycle. `started()` runs
-as the body is about to start, with the job already running, so it must not
-throw: an error there leaves a running job with no body, and nothing will ever
-finish it. `finished()` runs once the job has its outcome — for a job dropped
-before its body ran too, with no `started()` before it.
+as the body is about to start, with the job already running. `finished()` runs
+once the job has its outcome — for a job dropped before its body ran too, with
+no `started()` before it. An error either of them throws goes to `onError` and
+`onUnanswered`, and the job goes on as it would have; your own bookkeeping is
+what is left half-done, so keep both short and unconditional.
 
 To give an error nobody answered for an answer of your own, put an observer of
 your own on every job and override its

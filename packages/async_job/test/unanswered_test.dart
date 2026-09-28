@@ -704,8 +704,8 @@ void main() {
 
     test('a branch that failed first and was stopped by a refused sibling', () {
       // A body that throws before its first `await` has failed before the
-      // group hears a word from it, and the refusal of the next child
-      // stops every branch already admitted -- this one too.
+      // group hears a word from it, and the refusal of the next child by
+      // its engine stops every branch already admitted -- this one too.
       expectAnswered(
         (observer) => zoneOf((async) {
           Job<void>(observer: observer, (ctx) async {
@@ -721,7 +721,7 @@ void main() {
                       .ignore();
                   throw StateError('failed at once');
                 }),
-                Job<int>((ctx) async => 0),
+                UnadoptableJob<int>((ctx) async => 0),
               ]);
             } on Object catch (_) {
               // The refusal is what comes out of the group.

@@ -91,6 +91,48 @@ final class WaitingJob<T> extends JobBase<T> {
   Future<T> execute(covariant DomainContext ctx) => _body(ctx);
 }
 
+/// An engine whose context, while it is built, cancels the job it is for:
+/// a rule of its domain asked at creation and found wanting.
+final class RefusingContextJob<T> extends JobBase<T> {
+  RefusingContextJob(this._body);
+
+  final Future<T> Function(JobContext ctx) _body;
+
+  bool ran = false;
+
+  void launch() => start();
+
+  @override
+  JobContextBase createContext() {
+    cancel().ignore();
+    return DomainContext(this);
+  }
+
+  @override
+  Future<T> execute(covariant DomainContext ctx) {
+    ran = true;
+    return _body(ctx);
+  }
+}
+
+/// An engine whose bookkeeping at the start fails.
+final class FailingStartJob<T> extends JobBase<T> {
+  FailingStartJob(this._body, {super.observer});
+
+  final Future<T> Function(JobContext ctx) _body;
+
+  void launch() => start();
+
+  @override
+  void started() => throw StateError('bookkeeping');
+
+  @override
+  JobContextBase createContext() => DomainContext(this);
+
+  @override
+  Future<T> execute(covariant DomainContext ctx) => _body(ctx);
+}
+
 /// An engine that wants to say why it is still waiting.
 final class SectionJob<T> extends JobBase<T> {
   SectionJob(this._body, {super.key});
@@ -375,6 +417,40 @@ void main() {
       ]);
       expect(job.held, isNull, reason: 'the section closed and let it go');
       expect(job.outcome, isA<Cancelled>());
+    });
+  });
+
+  test('a job the engine ends while building its context stays ended', () {
+    final zone = <Object>[];
+    Outcome<int>? outcome;
+    var ran = true;
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          final job = RefusingContextJob<int>((ctx) async => 42)..launch();
+          async.flushTimers();
+          outcome = job.outcome;
+          ran = job.ran;
+        });
+      },
+      (error, stackTrace) => zone.add(error),
+    );
+    expect(outcome, isA<Cancelled>());
+    expect((outcome! as Cancelled).started, isFalse);
+    expect(ran, isFalse, reason: 'a finished job does not run');
+    expect(zone, isEmpty);
+  });
+
+  test('a started hook that throws does not leave the job running', () {
+    fakeAsync((async) {
+      final answer = EngineAnswer();
+      final job = FailingStartJob<int>(observer: answer, (ctx) async => 42)
+        ..launch();
+      async.flushTimers();
+      expect(job.outcome, isA<Done<int>>(), reason: 'the body ran and ended');
+      expect(answer.answered.map((error) => '$error'), [
+        'Bad state: bookkeeping',
+      ]);
     });
   });
 }

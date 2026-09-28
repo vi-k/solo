@@ -671,7 +671,7 @@ void main() {
           isA<StateError>().having(
             (e) => e.message,
             'message',
-            contains('disposing, cannot join'),
+            contains('cleaning up after its body, cannot join'),
           ),
         ],
         reason: 'the join in the cleanup throws, and the flush never starts',

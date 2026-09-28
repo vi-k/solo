@@ -48,6 +48,16 @@ now reach the zone, and fail a test there.
   holds cancels the job through `cancelOwnJob` and throws `pendingCancel`. See
   [A rule of your own](doc/extending.md#a-rule-of-your-own).
 
+- **`JobBase.finish` and `JobContextBase.startChild` are marked
+  `@mustCallSuper`, and the hooks an engine overrides are marked
+  `@visibleForOverriding`:** `started`, `finished`, `adoptedBy`,
+  `createContext`, `execute`, `createEachJob` and `beforeChildStart`. An
+  override of `startChild` without `super` left `ctx.run` waiting for a child
+  nobody started, and one of `finish` left the job without an outcome. The
+  analyzer now warns about such an override and about a hook called other than
+  through `super`, and `dart analyze` fails on the warning. **Migrating.** Call
+  `super` in both overrides, and call a hook only from its own override.
+
 - **The core announces a `Failed` an engine hands to `finish`.** An engine that
   ended a job by hand with a failure its body never threw — a rule of its own
   that threw, say — left `onError` silent unless it told the observer itself,
@@ -159,7 +169,10 @@ job was created in. In a test that zone is the test's, and the test fails:
 - the late failure of an action `ctx.wait` walked away from, through `.timeout`
   or `Future.any`: `0.2.0` told nobody at all;
 - an error no outcome carries, of a job that has an observer: `0.2.0` stopped
-  it there, see the first of the breaking changes.
+  it there, see the first of the breaking changes;
+- the failure of a source's own cleanup, the future of the subscription's
+  `cancel()`, when `ctx.each` lets go of a stream: `0.2.0` dropped it. It
+  reaches `onError` and `onUnanswered` of the `each` child.
 
 To keep such an error out of the zone, find which of the two it is. A failure
 of the job's own body or step that a cancellation covered, and the failure of a
@@ -176,6 +189,15 @@ helper that takes the context and calls `ctx.check()` after `ctx.wait` let go
 of it — no longer reaches `onError` as a failure. `onError` promises never to
 report the job giving up.
 
+A test that matches error messages by text needs the new wording. A job
+cleaning up after its body says `is cleaning up after its body` where it said
+`is disposing`; `ctx.runAll` and `ctx.each` refused after the body has ended or
+from `ctx.unattended` name their own call, `cannot run a group of children` and
+`cannot follow a stream`; a continuation refused as a child says
+`is a continuation, which starts itself once its source finishes` where it said
+`A continuation starts itself after its source finishes`; a refused handle is
+named as `Job(key)`, not by its class.
+
 ### Added
 
 - The debug channel names a job that handed its value over and dropped the
@@ -190,6 +212,34 @@ report the job giving up.
 
 ### Fixed
 
+- A `whenCancelled` registered from `onFinish` of a job cancelled before its
+  start runs. It was dropped: the job was finished, and its cancellation had
+  not reached the listeners yet.
+- A job made by `Job(...)` inside `ctx.unattended`, and a continuation `then`
+  made there, runs its body in the zone the work was started from. It ran in
+  the zone of the work, and a bare `unawaited` error in it reached the observer
+  of the job that started the work. A job started by hand inside the work — a
+  `Job.deferred` whose `start` is called there, a job of an engine that starts
+  it synchronously — still runs its body in the work's zone.
+- A `Cancelled` a hook of the observer throws no longer reaches the zone: a
+  lazy log message that asks a cancelled job, for one.
+- A job an engine ends while `createContext` builds its context keeps that
+  outcome. Its body ran anyway, and the job ended twice, with
+  `Future already completed` in the zone.
+- `ctx.run`, `ctx.runAll` and `ctx.each` refuse, with an `ArgumentError` as
+  they promise, a class that implements `JobBase` instead of extending it. It
+  threw `NoSuchMethodError`.
+- `ctx.runAll` makes every check of the core for every handle before it starts
+  any, so a handle the core refuses at the end of the list no longer leaves the
+  branches before it running; a refusal of an engine still comes at the
+  adoption. Under a parent that is already cancelled, or one a branch cancels
+  while the list starts, it turns away every branch not yet started, not the
+  next one alone; the rest stayed unstarted for good.
+- A `ctx.runAll` the body walked away from no longer throws the parent's
+  cancellation into the zone once the branches end. It hands the values over,
+  as `ctx.run` does.
+- An error thrown by `JobBase.started` goes to `onError` and `onUnanswered`,
+  and the body runs. It left the job running with no body, forever.
 - A child leaves its parent's waiting list by identity. With children equal by
   `==`, as in an engine that compares jobs by key, the one that ended stayed on
   the list and a live sibling was dropped from it: the parent waited for a job
@@ -266,7 +316,8 @@ report the job giving up.
   registers, and `run`, `runAll`, `each` and the engine protocol name what they
   throw. `Job.isChild` names every way a job is adopted, `Job.deferred` says
   what cancelling it before its start does, and the summaries in the reference
-  no longer speak the vocabulary of `solo`.
+  no longer speak the vocabulary of `solo`. `addCancelCallback` says what an
+  error of its callback does.
 
 ## 0.2.0
 

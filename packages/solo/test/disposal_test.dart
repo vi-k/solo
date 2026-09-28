@@ -34,7 +34,7 @@ void main() {
       async.flushTimers();
       expect(job.outcome, isA<Done<int>>());
       expect(errors.single, isA<StateError>());
-      expect('${errors.single}', contains('is disposing'));
+      expect('${errors.single}', contains('is cleaning up after its body'));
     });
   });
 

@@ -4,7 +4,8 @@ part of 'job_base.dart';
 ///
 /// Given to a job by whoever runs it — in `solo`, by the controller. A hook
 /// that throws hands its error to the current zone and changes nothing
-/// else: not the job's outcome, not the hook standing next to it.
+/// else: not the job's outcome, not the hook standing next to it. A
+/// [Cancelled] a hook throws goes nowhere, as it does everywhere in the core.
 ///
 /// Two hooks see errors, and they do different work. [onError] is told
 /// about the errors the job catches, all but its own cancellation, and

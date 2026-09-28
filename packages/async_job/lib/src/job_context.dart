@@ -480,12 +480,22 @@ abstract interface class JobContext {
   /// a branch still has to unwind plays out under the parent, which waits
   /// for its children as always. On failure it is the other way round —
   /// every branch is stopped and waited for, so that by the time the error
-  /// arrives everything the branches took is closed.
+  /// arrives everything the branches took is closed. If the body ended
+  /// without awaiting the future, the group hands the values over without
+  /// checking the parent, as [run] does.
   ///
   /// An empty group starts nothing and returns an empty list, after making
-  /// the same checks [run] would make. Admission errors are those of [run],
-  /// and a refusal that arrives after some branches have started stops them
-  /// and waits for them before it comes out.
+  /// the same checks [run] would make. Admission errors are those of [run].
+  /// Everything that needs no adoption is asked of every handle before the
+  /// first one starts, so such a refusal leaves nothing running, and under a
+  /// parent that is already cancelled every branch is turned away the way
+  /// [run] turns away its child, and so is the rest of the list when a branch
+  /// cancels the parent before its first `await`, while the list starts. A
+  /// refusal only the adoption can give — an
+  /// engine of a domain turning the parent down, a rule of its domain that
+  /// throws — may arrive after some branches have started: it stops them and
+  /// waits for them before it comes out, and the handles after the refused
+  /// one are left as they were, never started.
   Future<List<T>> runAll<T>(Iterable<Job<T>> children);
 
   /// Starts a child job that processes [stream] one event at a time.
@@ -508,8 +518,10 @@ abstract interface class JobContext {
   /// child's [wait] or [join] as appropriate. Do not await the child's own
   /// completion or cancellation from its callback.
   ///
-  /// The future returned by the subscription's cancellation is ignored:
-  /// cleanup owned by the source is not awaited. A normal stream ending
+  /// The future returned by the subscription's cancellation is not awaited:
+  /// cleanup owned by the source is the source's to finish. If it fails, the
+  /// error goes to [JobObserver.onError] and [JobObserver.onUnanswered] of
+  /// the child, as other errors no outcome carries do. A normal stream ending
   /// still depends on the source delivering its `onDone` notification.
   ///
   /// Throws synchronously if a child cannot be started, as [run] does: a
@@ -664,7 +676,7 @@ abstract class JobContextBase implements JobContext {
   /// A domain that restricts child ownership overrides this factory to
   /// return its own job with the appropriate context and rules. The result
   /// must be accepted by [startChild]. This factory must not start the child.
-  @protected
+  @visibleForOverriding
   Job<void> createEachJob(Future<void> Function(JobContext ctx) body) =>
       Job.deferred<void>(body, describe: () => 'each');
 
@@ -673,8 +685,10 @@ abstract class JobContextBase implements JobContext {
     Stream<T> stream,
     FutureOr<void> Function(JobContext ctx, T event) onData,
   ) {
-    throwIfUnattended('follow a stream');
-    throwIfFinished('follow a stream');
+    // Asked here, with its own verb, before `startChild` asks again with
+    // one about children: the caller followed a stream, and the message
+    // names what they did.
+    _checkCanRun('follow a stream');
     final child = createEachJob(
       (child) => child._followStream(stream, (event) => onData(child, event)),
     );
@@ -728,7 +742,7 @@ abstract class JobContextBase implements JobContext {
   @protected
   void throwIfDisposing(String action) {
     if (_owner.isDisposing) {
-      throw StateError('$_owner is disposing, cannot $action');
+      throw StateError('$_owner is cleaning up after its body, cannot $action');
     }
   }
 
@@ -759,6 +773,13 @@ abstract class JobContextBase implements JobContext {
 
   /// Registers [callback] past the public [onCancel]: the race inside
   /// [wait] needs a raw one, unguarded and removable. Returns a remover.
+  ///
+  /// Unguarded means [callback] must not throw. It runs inside the call that
+  /// cancels the job, and an error escapes from that call — [Job.cancel], the
+  /// cascade from a parent — and stops the pass: the callbacks registered
+  /// after it never run, and [Job.whenCancelled] listeners hear the
+  /// cancellation only when the job finishes, not when it is accepted.
+  /// Register through [onCancel] for code that may throw.
   @protected
   void Function() addCancelCallback(void Function() callback) {
     _owner._onCancel.add(callback);
@@ -792,7 +813,7 @@ abstract class JobContextBase implements JobContext {
   ///
   /// A non-null result finishes the child with it. `solo`, for example, checks
   /// its start rules here.
-  @protected
+  @visibleForOverriding
   Cancelled? beforeChildStart(JobBase<Object?> child) => null;
 
   @override
@@ -1242,23 +1263,44 @@ abstract class JobContextBase implements JobContext {
     for (final child in branches) {
       if (!seen.add(child)) {
         throw ArgumentError.value(
-          child,
+          '$child',
           'children',
           'is in the group more than once',
         );
       }
     }
+    // Everything that needs no adoption, for every handle, before the first
+    // start: otherwise a handle refused at the end of the list leaves the
+    // branches before it started, their bodies already past their first
+    // `await`. An empty group is asked the same about the context: it is
+    // not a way around its checks.
+    _checkCanRun('run a group of children');
+    for (final child in branches) {
+      _checkChild(child, 'children');
+    }
+    if (_owner.pendingCancel case final pending?) {
+      // Every branch turned away, not the first one alone: the rest would
+      // be left `created`, and whoever awaits one of them would wait for
+      // good.
+      // An engine of a domain refusing the adoption is a different answer,
+      // and the one `run` would give: the first such refusal comes out
+      // instead of the cancellation, once the rest are turned away.
+      (Object, StackTrace)? refusal;
+      for (final child in branches) {
+        try {
+          startChild(child);
+        } on Object catch (error, stackTrace) {
+          if (!identical(error, pending)) {
+            refusal ??= (error, stackTrace);
+          }
+        }
+      }
+      if (refusal case (final error, final stackTrace)) {
+        Error.throwWithStackTrace(error, stackTrace);
+      }
+      throw pending;
+    }
     if (branches.isEmpty) {
-      // Nothing to start, and the same answers `run` would give: an empty
-      // group is not a way around the checks of the context.
-      throwIfUnattended('run a group of children');
-      throwIfFinished('run a group of children');
-      if (_owner.bodyEnded) {
-        throw StateError('$_owner has ended its body, cannot run a child');
-      }
-      if (_owner.pendingCancel case final pending?) {
-        throw pending;
-      }
       return Future<List<T>>.value(<T>[]);
     }
     return _RunAllGroup<T>(this, branches).run();
@@ -1292,16 +1334,46 @@ abstract class JobContextBase implements JobContext {
   /// synchronous admission rules of [run] and does not observe the child's
   /// outcome.
   @protected
+  @mustCallSuper
   void startChild<T>(Job<T> child) {
-    throwIfUnattended('run a child');
-    throwIfFinished('run a child');
+    _checkCanRun('run a child');
+    _checkChild(child, 'child');
+    child as JobBase<T>;
+    child
+      ..adoptedBy(this)
+      .._observer ??= _owner._observer
+      .._parent = _owner
+      ..level = _owner.level + 1;
+    if (_owner.pendingCancel case final pending?) {
+      throw _refuseChild(child, pending);
+    }
+    _startAdopted(child);
+  }
+
+  /// Turns [child] away because this job is already giving up, and returns
+  /// the cancellation to throw into the body.
+  Cancelled _refuseChild(JobBase<Object?> child, Cancelled pending) {
+    _owner._cancelChild(child, pending);
+    return pending;
+  }
+
+  /// Whether this job may start children right now, for [action].
+  void _checkCanRun(String action) {
+    throwIfUnattended(action);
+    throwIfFinished(action);
     if (_owner.bodyEnded) {
       // The body is gone, and a child started now would be waited for by
       // nobody: the core has already left the children behind.
-      throw StateError('$_owner has ended its body, cannot run a child');
+      throw StateError('$_owner has ended its body, cannot $action');
     }
-    if (child is! JobBase<T>) {
-      throw ArgumentError.value(child, 'child', 'is not a job of this core');
+  }
+
+  /// The checks of a child that need no adoption: what it is and where it
+  /// is in its life. [runAll] makes them for the whole list before the
+  /// first start, so that a handle refused here leaves nothing running.
+  void _checkChild<T>(Job<T> child, String name) {
+    if (child is! JobBase<T> || JobBase._builtOnCore[child] != true) {
+      throw ArgumentError.value('$child', name, 'is not a job of this core');
     }
     if (child is _AutoJob) {
       // Refused before the status is even looked at, so that the answer
@@ -1310,8 +1382,8 @@ abstract class JobContextBase implements JobContext {
       // microtask later it is already running on its own. The start of a
       // child belongs to its parent.
       throw ArgumentError.value(
-        child,
-        'child',
+        '$child',
+        name,
         'starts itself; a child is made with Job.deferred',
       );
     }
@@ -1320,9 +1392,9 @@ abstract class JobContextBase implements JobContext {
       // source runs this call would find it `created`, and once the source
       // has finished it is already running on its own.
       throw ArgumentError.value(
-        child,
-        'child',
-        'A continuation starts itself after its source finishes',
+        '$child',
+        name,
+        'is a continuation, which starts itself once its source finishes',
       );
     }
     if (child.status != JobStatus.created) {
@@ -1332,22 +1404,10 @@ abstract class JobContextBase implements JobContext {
             : '$child has already finished',
       );
     }
-    child
-      ..adoptedBy(this)
-      .._observer ??= _owner._observer
-      .._parent = _owner
-      ..level = _owner.level + 1;
+  }
 
-    /// Turns [child] away because this job is already giving up, and
-    /// returns the cancellation to throw into the body.
-    Cancelled refuse(Cancelled pending) {
-      _owner._cancelChild(child, pending);
-      return pending;
-    }
-
-    if (_owner.pendingCancel case final pending?) {
-      throw refuse(pending);
-    }
+  /// Asks the rule of the domain and starts [child], adopted already.
+  void _startAdopted<T>(JobBase<T> child) {
     // Everything that can refuse the child happens before it joins the
     // waiting list, and a refusal that arrives as a throw — a rule of a
     // domain, a context that would not be built — ends the child rather
@@ -1388,7 +1448,7 @@ abstract class JobContextBase implements JobContext {
       rethrow;
     }
     if (markedWhileAsking case final pending?) {
-      throw refuse(pending);
+      throw _refuseChild(child, pending);
     }
   }
 

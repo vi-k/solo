@@ -447,7 +447,8 @@ sees this child as a separate job.
 
 Like `run`, `each` can only start children while the parent body is active;
 calls from `unattended` or cleanup are rejected. The future returned by the
-underlying subscription's `cancel()` is not awaited. If the source needs
+underlying subscription's `cancel()` is not awaited; if it fails, the error
+goes to `onError` and `onUnanswered` of the child. If the source needs
 asynchronous cleanup, arrange to await that cleanup separately. Normal stream
 completion still depends on the source sending `onDone`.
 
@@ -566,11 +567,12 @@ final parent = Job<void>((ctx) async {
 });
 ```
 
-The second `ctx.run` throws `ArgumentError`: `Invalid argument (child): A
-continuation starts itself after its source finishes`. `ctx.run` takes a job
-nobody starts by itself, and a continuation is not one of those. The length of
-the chain changes nothing: `child.then(...).then(...)` hangs one continuation
-off another, and every link refuses adoption the same way.
+The second `ctx.run` throws `ArgumentError`:
+`Invalid argument (child): is a continuation,
+which starts itself once its source finishes: "Job(then)"`. `ctx.run` takes a
+job nobody starts by itself, and a continuation is not one of those. The length
+of the chain changes nothing: `child.then(...).then(...)` hangs one
+continuation off another, and every link refuses adoption the same way.
 
 ### Two children in a row
 

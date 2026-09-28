@@ -304,17 +304,14 @@ void main() {
       });
     });
 
-    test('a started that throws leaves a running job nothing finishes', () {
-      fakeAsync((async) {
-        final job = HookJob(failToStart: true);
-        expect(job.launch, throwsA(isA<StateError>()));
-        var finished = false;
-        job.done.then((_) => finished = true).ignore();
-        async.flushTimers();
-        expect(job.isRunning, isTrue);
-        expect(finished, isFalse, reason: 'nothing will ever finish it');
-        expect(job.hooks, ['started']);
+    test('a started that throws is told, and the job runs to its end', () {
+      late HookJob job;
+      final errors = reachingTheZone(() {
+        job = HookJob(failToStart: true)..launch();
       });
+      expect(errors, ['Bad state: started failed']);
+      expect(job.outcome, isA<Done<void>>());
+      expect(job.hooks, ['started', 'finished']);
     });
 
     test('whenDone waits without looking: a failure reaches the zone', () {

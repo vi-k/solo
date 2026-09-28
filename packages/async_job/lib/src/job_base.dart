@@ -553,7 +553,18 @@ abstract class JobBase<T> implements Job<T> {
   })  : _key = key,
         _describe = describe,
         _cancellable = cancellable,
-        _observer = observer;
+        _observer = observer {
+    _builtOnCore[this] = true;
+  }
+
+  /// The jobs that went through this constructor.
+  ///
+  /// `is JobBase` answers yes to a class that implements the protocol
+  /// instead of extending it — a mock, a fake — and such a job has none of
+  /// the state the core adopts a child with: the first private field the
+  /// core touches throws `NoSuchMethodError`. Asked here instead, it is
+  /// refused as what it is, a job of no core.
+  static final _builtOnCore = Expando<bool>('builtOnCore');
 
   /// Says what went nowhere when the value of this job went to somebody.
   ///
@@ -602,7 +613,8 @@ abstract class JobBase<T> implements Job<T> {
     }
   }
 
-  /// Calls [hook] and hands whatever it throws to the current zone.
+  /// Calls [hook] and hands whatever it throws to the current zone, a
+  /// cancellation excepted.
   ///
   /// The observer of a job is a cross-cutting channel: an error in it
   /// changes nothing else.
@@ -610,6 +622,12 @@ abstract class JobBase<T> implements Job<T> {
     try {
       hook();
     } on Object catch (error, stackTrace) {
+      // The same rule as `_toZone`: a cancellation is a decision, not a
+      // failure. A lazy message whose closure asks a job that has accepted
+      // one throws it from `onLog`, and the zone can do nothing with it.
+      if (_isCancellation(error)) {
+        return;
+      }
       Zone.current.handleUncaughtError(error, stackTrace);
     }
   }
@@ -706,7 +724,12 @@ abstract class JobBase<T> implements Job<T> {
       guarded(cancelled);
       return () {};
     }
-    if (isFinished) return () {};
+    // Only a job that finished without a cancellation has nothing left to
+    // tell. One that finished cancelled and has not told its listeners yet
+    // -- `finished` and `onFinish` run first, and for a job dropped before
+    // its start there was no mark to set `_cancelled` earlier -- still has
+    // the pass ahead of it, and this registration belongs in it.
+    if (isFinished && _outcome is! Cancelled) return () {};
     _cancelListeners.add(guarded);
     return () => _cancelListeners.remove(guarded);
   }
@@ -970,7 +993,8 @@ abstract class JobBase<T> implements Job<T> {
   ///
   /// Throws [StateError] if the job already ran, and also if it was cancelled
   /// before it started: a job dropped then is finished, and a finished job does
-  /// not run.
+  /// not run. Nor does one ended while [createContext] built its context, and
+  /// then this returns without a word: that end was the engine's own.
   @protected
   void start() {
     if (_status != JobStatus.created) {
@@ -983,8 +1007,21 @@ abstract class JobBase<T> implements Job<T> {
     // Built before the job is running: a context that throws on creation
     // leaves the job as it was, and not running with no body.
     final ctx = createContext();
+    if (_status != JobStatus.created) {
+      // Ended while the context was being built -- an engine of a domain
+      // asked a rule there and cancelled, or finished the job by hand. It
+      // has its outcome, and a finished job does not run.
+      return;
+    }
     _status = JobStatus.running;
-    started();
+    // Guarded as `finished` is: the job is running by now, and an error of
+    // the engine's bookkeeping left to escape would leave it running with
+    // no body, and nothing would ever finish it.
+    try {
+      started();
+    } on Object catch (error, stackTrace) {
+      notifyError(error, stackTrace);
+    }
     _notifyStart();
     unawaited(_execute(ctx));
   }
@@ -1020,7 +1057,11 @@ abstract class JobBase<T> implements Job<T> {
   /// [Failed] is replaced too, and its error goes where a failure a
   /// cancellation covered goes — to [JobObserver.onError] and
   /// [JobObserver.onUnanswered]. A [Cancelled] handed in stands.
+  ///
+  /// An override calls `super.finish`: this is where the job gets its
+  /// outcome, and without it the job never ends.
   @protected
+  @mustCallSuper
   void finish(Outcome<T> outcome) {
     if (_status == JobStatus.finished) {
       // The outcome stays. A failure handed in now has no outcome to carry
@@ -1250,11 +1291,12 @@ abstract class JobBase<T> implements Job<T> {
 
   /// The subclass joins the run.
   ///
-  /// Called with the job already [JobStatus.running], so it must not throw: an
-  /// error here leaves a job that is running and has no body, and nothing will
-  /// ever finish it. `solo`, for example, adds the job to its running list
+  /// Called with the job already [JobStatus.running]. An error thrown here
+  /// goes to [notifyError] and the body runs all the same, but the engine of
+  /// the domain is left half-way through its own bookkeeping: keep it short
+  /// and unconditional. `solo`, for example, adds the job to its running list
   /// here.
-  @protected
+  @visibleForOverriding
   void started() {}
 
   /// The subclass leaves the run.
@@ -1265,7 +1307,7 @@ abstract class JobBase<T> implements Job<T> {
   /// the engine of the domain is left half-way through its own bookkeeping:
   /// keep it short and unconditional. `solo`, for example, clears `current`
   /// here and moves its queue on.
-  @protected
+  @visibleForOverriding
   void finished() {}
 
   /// The child's own word on who may adopt it. Empty here:
@@ -1277,16 +1319,16 @@ abstract class JobBase<T> implements Job<T> {
   /// of the call that asked — for [JobContext.runAll], once the branches it
   /// already started have stopped — before the child has a parent, and the
   /// child stays `created`.
-  @protected
+  @visibleForOverriding
   void adoptedBy(JobContextBase parent) {}
 
   /// The context this job hands to its body.
-  @protected
+  @visibleForOverriding
   JobContextBase createContext();
 
   /// Runs the body with [ctx]; a subclass narrows the type with
   /// `covariant`.
-  @protected
+  @visibleForOverriding
   Future<T> execute(JobContextBase ctx);
 
   void _notifyStart() {
@@ -1736,14 +1778,24 @@ final class _AutoJob<T> extends _Job<T> {
     super.observer,
   }) {
     // `scheduleMicrotask`, not `Future(...)`: that one schedules a timer,
-    // and under `FakeAsync` the start would need `flushTimers`.
-    scheduleMicrotask(() {
-      // A job dropped before its own start ever came round is finished
-      // already, and a finished job does not run.
-      if (status == JobStatus.created) {
-        start();
-      }
-    });
+    // and under `FakeAsync` the start would need `flushTimers`. From the
+    // job's own zone and not the current one: inside the work of
+    // `JobContext.unattended` the current zone is that work's, and the body
+    // of a job made there would run in it and report to the observer of
+    // the job that started the work. Through `run` and the top-level
+    // function, not `_zone.scheduleMicrotask`: that hands the callback to
+    // the zone's handler unbound, and a handler that runs it wherever it
+    // happens to flush -- `fake_async` before 1.3.3 -- would run the body
+    // in none of the zones the job knows.
+    _zone.run(() => scheduleMicrotask(_startIfStillCreated));
+  }
+
+  /// A job dropped before its own start ever came round is finished
+  /// already, and a finished job does not run.
+  void _startIfStillCreated() {
+    if (status == JobStatus.created) {
+      start();
+    }
   }
 }
 

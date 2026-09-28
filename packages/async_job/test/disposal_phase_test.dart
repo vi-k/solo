@@ -35,7 +35,9 @@ void main() {
       expect(errors, hasLength(6));
       expect(errors.every((error) => error is StateError), isTrue);
       expect(
-        errors.every((error) => '$error'.contains('is disposing')),
+        errors.every(
+          (error) => '$error'.contains('is cleaning up after its body'),
+        ),
         isTrue,
         reason: 'the message names the cleanup, not a finished job',
       );

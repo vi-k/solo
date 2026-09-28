@@ -416,6 +416,23 @@ void main() {
     });
   });
 
+  test('an implementation of JobBase is refused the same way', () {
+    // A mock or a fake typed as the protocol, not built on it: it passes a
+    // type check, and has none of the state the core adopts a child with.
+    fakeAsync((async) {
+      Object? thrown;
+      Job<void>((ctx) async {
+        try {
+          ctx.run(_ImplementedJobBase()).ignore();
+        } on Object catch (error) {
+          thrown = error;
+        }
+      });
+      async.flushMicrotasks();
+      expect(thrown, isA<ArgumentError>());
+    });
+  });
+
   test('a child given an observer of its own keeps it', () {
     fakeAsync((async) {
       final parentJournal = JobJournal();
@@ -953,4 +970,10 @@ final class _SwitchableRulesContext extends JobContextBase {
     }
     return null;
   }
+}
+
+/// The protocol implemented rather than extended, the way a mock is.
+final class _ImplementedJobBase implements JobBase<void> {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

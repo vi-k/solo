@@ -14,6 +14,43 @@ import 'support/journal.dart';
 import 'support/probe_job.dart';
 
 void main() {
+  for (final group in [false, true]) {
+    final name = group ? 'runAll' : 'run';
+    test('$name the body walked away from keeps the parent out of the zone',
+        () {
+      // The body ends without awaiting the future; the parent is cancelled
+      // while it waits for a child that refuses the cascade and ends with a
+      // value. Nobody is left to hear the future, so it must not throw the
+      // parent's cancellation into the zone.
+      final zone = <Object>[];
+      Outcome<void>? parent;
+      runZonedGuarded(
+        () {
+          fakeAsync((async) {
+            final job = Job<void>((ctx) async {
+              final child = Job.deferred<int>(cancellable: false, (ctx) async {
+                await ctx.wait(() => delay(50));
+                return 1;
+              });
+              if (group) {
+                unawaited(ctx.runAll([child]));
+              } else {
+                unawaited(ctx.run(child));
+              }
+            });
+            async.elapse(const Duration(milliseconds: 10));
+            job.cancel().ignore();
+            async.flushTimers();
+            parent = job.outcome;
+          });
+        },
+        (error, stackTrace) => zone.add(error),
+      );
+      expect(parent, isA<Cancelled>());
+      expect(zone, isEmpty);
+    });
+  }
+
   test('the values come back in the order of the list', () {
     fakeAsync((async) {
       List<int>? values;
@@ -893,6 +930,125 @@ void main() {
     }
   });
 
+  test('a handle the core refuses is refused before any branch starts', () {
+    fakeAsync((async) {
+      final waiting = <Job<int>>[
+        Job.deferred<int>(key: 'a', (ctx) async => 1),
+        Job.deferred<int>(key: 'b', (ctx) async => 2),
+      ];
+      // The third handle starts itself: that needs no adoption to see.
+      final refused = Job<int>(key: 'c', (ctx) async => 3)..ignore();
+      Object? thrown;
+      Job<void>((ctx) async {
+        try {
+          await ctx.runAll([...waiting, refused]);
+        } on Object catch (error) {
+          thrown = error;
+        }
+      }).ignore();
+      async.flushTimers();
+      expect(thrown, isA<ArgumentError>());
+      expect('$thrown', contains('Job(c)'), reason: 'named, not its class');
+      for (final branch in waiting) {
+        expect(branch.isRunning || branch.isFinished, isFalse);
+      }
+    });
+  });
+
+  test('under a cancelled parent every branch is turned away', () {
+    fakeAsync((async) {
+      final branches = <Job<int>>[
+        Job.deferred<int>(key: 'a', (ctx) async => 1),
+        Job.deferred<int>(key: 'b', (ctx) async => 2),
+        Job.deferred<int>(key: 'c', (ctx) async => 3),
+      ];
+      Object? thrown;
+      Job<void>((ctx) async {
+        ctx.job.cancel().ignore();
+        try {
+          await ctx.runAll(branches);
+        } on Object catch (error) {
+          thrown = error;
+        }
+      }).ignore();
+      async.flushTimers();
+      expect(thrown, isA<Cancelled>());
+      for (final branch in branches) {
+        expect(
+          branch.outcome,
+          isA<Cancelled>()
+              .having((c) => c.started, 'started', isFalse)
+              .having((c) => c.reason, 'reason', isA<ParentCancelReason>()),
+          reason: 'nobody would ever start it',
+        );
+      }
+    });
+  });
+
+  test('under a cancelled parent an engine refusal still comes out', () {
+    fakeAsync((async) {
+      final turnedAway = Job.deferred<int>(key: 'b', (ctx) async => 2);
+      Object? thrown;
+      Job<void>((ctx) async {
+        ctx.job.cancel().ignore();
+        try {
+          await ctx.runAll([
+            UnadoptableJob<int>(key: 'a', (ctx) async => 1),
+            turnedAway,
+          ]);
+        } on Object catch (error) {
+          thrown = error;
+        }
+      }).ignore();
+      async.flushTimers();
+      expect(thrown, isA<ArgumentError>(), reason: 'what run would give');
+      expect(turnedAway.outcome, isA<Cancelled>());
+    });
+  });
+
+  test('a parent cancelled while the list starts turns the rest away', () {
+    fakeAsync((async) {
+      late final Job<int> tail;
+      Object? thrown;
+      Job<void>((ctx) async {
+        tail = Job.deferred<int>(key: 'c', (ctx) async => 3);
+        try {
+          await ctx.runAll([
+            // Cancels the parent before its first `await`, inside the start.
+            Job.deferred<int>(key: 'a', (c) {
+              ctx.job.cancel().ignore();
+              return Future.value(1);
+            }),
+            Job.deferred<int>(key: 'b', (ctx) async => 2),
+            tail,
+          ]);
+        } on Object catch (error) {
+          thrown = error;
+        }
+      }).ignore();
+      async.flushTimers();
+      expect(thrown, isA<Cancelled>());
+      expect(tail.outcome, isA<Cancelled>(), reason: 'nobody would start it');
+    });
+  });
+
+  test('the same handle twice is named in the refusal', () {
+    fakeAsync((async) {
+      final twice = Job.deferred<int>(key: 'a', (ctx) async => 1);
+      Object? thrown;
+      Job<void>((ctx) async {
+        try {
+          await ctx.runAll([twice, twice]);
+        } on Object catch (error) {
+          thrown = error;
+        }
+      }).ignore();
+      async.flushTimers();
+      expect(thrown, isA<ArgumentError>());
+      expect('$thrown', contains('Job(a)'));
+    });
+  });
+
   test('a refusal of admission stops whatever already started', () {
     fakeAsync((async) {
       final started = <Job<int>>[
@@ -905,8 +1061,10 @@ void main() {
           return 2;
         }),
       ];
-      // The third handle starts itself, and the core refuses it.
-      final refused = Job<int>(key: 'c', (ctx) async => 3)..ignore();
+      // The third handle is a job of this core, and its engine refuses the
+      // parent: a refusal that only the adoption itself can give, after the
+      // first two have started.
+      final refused = UnadoptableJob<int>(key: 'c', (ctx) async => 3);
       Object? thrown;
       final zone = <Object>[];
       runZonedGuarded(
@@ -952,7 +1110,7 @@ void main() {
               throw other;
             },
           );
-          final refused = Job<int>(key: 'c', (ctx) async => 3)..ignore();
+          final refused = UnadoptableJob<int>(key: 'c', (ctx) async => 3);
           Object? thrown;
           Job<void>((ctx) async {
             try {
@@ -1579,9 +1737,11 @@ void main() {
       });
     }
     fakeAsync((async) {
-      // A refusal of admission after part of the list has started. The
-      // whole list starts before any body continues, so the refusal cannot
-      // be asked to come "after the first ones are held".
+      // A refusal of admission after part of the list has started: only an
+      // engine refusing the adoption gives one, everything else is asked
+      // before the first start. The whole list starts before any body
+      // continues, so the refusal cannot be asked to come "after the first
+      // ones are held".
       var disposed = 0;
       var discarded = 0;
       final started = Job.deferred<int>(key: 'a', (ctx) async {
@@ -1591,7 +1751,7 @@ void main() {
         await ctx.wait(() => delay(1000));
         return 1;
       });
-      final refused = Job<int>(key: 'c', (ctx) async => 3)..ignore();
+      final refused = UnadoptableJob<int>(key: 'c', (ctx) async => 3);
       Object? thrown;
       Job<void>((ctx) async {
         try {

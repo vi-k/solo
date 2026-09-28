@@ -39,14 +39,20 @@
   its own: `JobObserver.onError` is a notice, and the new
   `JobObserver.onUnanswered` answers for an error no outcome carries, so such
   an observer no longer keeps those errors out of the zone, and a class that
-  implements `JobObserver` needs an `onUnanswered`. The switch of the core's
-  debug channel, the one set next to `Solo.debug`, is `Job.debug` now, where it
-  was `JobBase.debug`. The hooks of a controller are unchanged. The rest
-  concern an engine built on the core only: the protected
-  `JobBase.inUncancellableSection` and `JobBase.heldCancel`, and the move of
-  `JobBase`, `JobContextBase` and `JobStatus` to
-  `package:async_job/engine.dart` -- which also takes them out of what an app
-  sees through this package. Read the core's own entries before migrating:
+  implements `JobObserver` needs an `onUnanswered`. The failure of a source's
+  own cleanup when `ctx.each` lets go of a stream, dropped until now, reaches
+  `Solo.onError` and `Solo.onUnanswered`. Some error messages of the core read
+  differently: a job cleaning up after its body says
+  `is cleaning up after its body`, and `ctx.runAll` refused from unattended
+  work says `cannot run a group of children`; a test that matches them by text
+  needs the new wording. The switch of the core's debug channel, the one set
+  next to `Solo.debug`, is `Job.debug` now, where it was `JobBase.debug`. The
+  hooks of a controller are unchanged. The rest concern an engine built on the
+  core only: the protected `JobBase.inUncancellableSection` and
+  `JobBase.heldCancel`, and the move of `JobBase`, `JobContextBase` and
+  `JobStatus` to `package:async_job/engine.dart` -- which also takes them out
+  of what an app sees through this package. Read the core's own entries before
+  migrating:
   [the `async_job` changelog](https://github.com/vi-k/solo/blob/main/packages/async_job/CHANGELOG.md).
 
 - **Breaking:** `SoloBase` is renamed to `Solo`, and the former `Solo` -- the

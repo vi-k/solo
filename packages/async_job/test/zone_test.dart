@@ -876,6 +876,30 @@ void main() {
       'Bad state: the step failed',
     ]);
   });
+
+  test('a job starts in its zone under a scheduler that runs callbacks raw',
+      () async {
+    // A microtask handler that keeps the callback as it came and runs it
+    // later from somewhere else, the way `fake_async` before 1.3.3 did:
+    // the start must not depend on the handler binding it.
+    final pending = <void Function()>[];
+    Object? seen;
+    runZoned(
+      () => runZoned(
+        () => Job<void>((ctx) async => seen = Zone.current[#mine]),
+        zoneValues: {#mine: 'mine'},
+      ),
+      zoneSpecification: ZoneSpecification(
+        scheduleMicrotask: (self, parent, zone, callback) =>
+            pending.add(callback),
+      ),
+    );
+    for (final callback in pending.toList()) {
+      callback();
+    }
+    await pumpEventQueue();
+    expect(seen, 'mine');
+  });
 }
 
 /// Touches the outcome one microtask after the job finished.

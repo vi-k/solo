@@ -542,7 +542,8 @@ work with an independent lifetime.
 
 Unattended work is not the job, and the context refuses there whatever acts on
 the job: `ctx.run`, `ctx.runAll`, `ctx.each` and `ctx.uncancellable` all throw
-a `StateError` — `cannot run a child inside unattended work`. That throw is an
+a `StateError` that names the call —
+`cannot run a child inside unattended work` for `ctx.run`. That throw is an
 error of the work it happened in, so it takes the road above, to the hooks, and
 the job itself still ends `Done`.
 

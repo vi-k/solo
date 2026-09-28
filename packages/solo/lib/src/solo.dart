@@ -929,7 +929,7 @@ abstract class Solo<S extends Object> {
     if (job is _SoloJob<S, S, T> && identical(job._solo, this)) {
       return job;
     }
-    throw ArgumentError.value(job, 'job', 'was not created by this Solo');
+    throw ArgumentError.value('$job', 'job', 'was not created by this Solo');
   }
 
   void _setState(

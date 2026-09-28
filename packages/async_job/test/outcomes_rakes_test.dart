@@ -10,6 +10,7 @@ import 'package:test/test.dart';
 
 import 'support/delay.dart';
 import 'support/page_code.dart';
+import 'support/probe_job.dart';
 
 /// The first attempts of `doc/outcomes.md`, and what each one costs.
 ///
@@ -478,8 +479,10 @@ void main() {
           await ctx.wait(() => delay(50));
           return 1;
         });
-        Job<List<int>>((ctx) => ctx.runAll([first, Job<int>((ctx) async => 2)]))
-            .ignore();
+        // Refused by its engine, at the adoption: the core asks everything
+        // else before the first branch starts.
+        final refused = UnadoptableJob<int>((ctx) async => 2);
+        Job<List<int>>((ctx) => ctx.runAll([first, refused])).ignore();
         async.flushTimers();
 
         final reason = origin(first.outcome! as Cancelled);

@@ -447,9 +447,10 @@ Future<void> watchTicks() async {
 
 Как и `run`, `each` запускает детей только пока тело родителя активно; вызовы
 из `unattended` или уборки отвергаются. Никто не ждёт future, которую
-возвращает `cancel()` самой подписки. Если источнику нужна асинхронная уборка,
-дождитесь её отдельно. Обычное завершение стрима по-прежнему зависит
-от отправки `onDone` источником.
+возвращает `cancel()` самой подписки; если она упадёт, ошибка уйдёт в `onError`
+и `onUnanswered` ребёнка. Если источнику нужна асинхронная уборка, дождитесь её
+отдельно. Обычное завершение стрима по-прежнему зависит от отправки `onDone`
+источником.
 
 ### Первая попытка
 
@@ -564,8 +565,9 @@ final parent = Job<void>((ctx) async {
 });
 ```
 
-Второй `ctx.run` бросает `ArgumentError`: `Invalid argument (child): A
-continuation starts itself after its source finishes`. `ctx.run` принимает
+Второй `ctx.run` бросает `ArgumentError`:
+`Invalid argument (child): is a continuation,
+which starts itself once its source finishes: "Job(then)"`. `ctx.run` принимает
 `Job`, которую никто не стартует сам, а продолжение не из таких. Длина цепочки
 ничего не меняет: `child.then(...).then(...)` вешает одно продолжение
 на другое, и каждое звено отказывает в усыновлении одинаково.

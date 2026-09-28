@@ -16,6 +16,8 @@ import 'support/probe_job.dart';
 // compare.
 const _noChild =
     '[j] error Bad state: Job(j) cannot run a child inside unattended work';
+const _noGroup = '[j] error Bad state: Job(j) cannot run a group of children '
+    'inside unattended work';
 const _noSection = '[j] error Bad state: Job(j) cannot run an uncancellable '
     'action inside unattended work';
 
@@ -67,7 +69,7 @@ void main() {
     });
     expect(journal.take(), [
       '[j] started',
-      _noChild,
+      _noGroup,
       '[j] finished Done(null)',
     ]);
     expect(branchRan, isFalse);
@@ -244,6 +246,42 @@ void main() {
     expect(caught, ['Bad state: stray']);
     expect(journal.take().where((line) => line.contains('error')), isEmpty);
   });
+
+  for (final continuation in [false, true]) {
+    final what = continuation ? 'a continuation' : 'a job';
+    test('the body of $what created inside unattended work runs outside it',
+        () {
+      // Its outcome was already the new job's own; its body is too. A bare
+      // `unawaited` error in it lands in the zone the work was started
+      // from, not at the observer of the job that started the work.
+      final journal = JobJournal();
+      final caught = <String>[];
+      runZonedGuarded(
+        () {
+          fakeAsync((async) {
+            Job<void>(key: 'j', observer: journal, (ctx) async {
+              ctx.unattended(() {
+                Future<void> leak(JobContext c) async =>
+                    unawaited(Future<void>.error(StateError('leak')));
+                if (continuation) {
+                  Job<void>(key: 'source', (c) async {}).then<void>(
+                    (c, _) => leak(c),
+                  );
+                } else {
+                  Job<void>(key: 'stray', leak);
+                }
+              });
+              await ctx.wait(() => delay(1));
+            });
+            async.flushTimers();
+          });
+        },
+        (error, stackTrace) => caught.add('$error'),
+      );
+      expect(caught, ['Bad state: leak']);
+      expect(journal.take().where((line) => line.contains('error')), isEmpty);
+    });
+  }
 
   test(
     'a nested fork of another job does not lift the ban on uncancellable',
