@@ -9,14 +9,16 @@ import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart';
 
 import 'support/delay.dart';
+import 'support/page_code.dart';
 
 /// The first attempts of `doc/outcomes.md`, and what each one costs.
 ///
 /// Three sections of the page open with the version the vocabulary of the
 /// API leads to and show what that version prints. The page has no bench,
-/// so the code is repeated here as it stands there, and the last test holds
-/// the lines the page quotes to the lines these tests print: a quote that
-/// drifts from its code turns this file red, not only a broken engine.
+/// so the code is repeated here as it stands there. The last two tests hold
+/// the page to this file: the lines it quotes to the lines these tests
+/// print, and every line of its code to a line of this file. A quote or a
+/// fragment that drifts turns this file red, not only a broken engine.
 
 final class RequestCancelReason extends CancelReason {
   final Object error;
@@ -33,13 +35,45 @@ const quoted = [
   ['failed: Cancelled(manual)'],
   ['cancelled: manual'],
   [
-    'status: sync failed: Bad state: disk full',
     'zone: Bad state: disk full',
+    'status: sync failed: Bad state: disk full',
   ],
   ['status: sync failed: Bad state: disk full'],
   ['cancelled: handler'],
   ['request failed: Bad state: token expired'],
 ];
+
+/// What the page's code prints, in the order it prints it.
+final printed = <String>[];
+
+/// The page prints; here that goes to [printed].
+void print(Object? line) => printed.add('$line');
+
+/// The data `fetch` brings, and the report made of it.
+final class Data {
+  const Data();
+}
+
+final class Report {
+  final Data data;
+
+  const Report(this.data);
+
+  @override
+  String toString() => 'Report($data)';
+}
+
+Future<Data> download(JobContext ctx) async {
+  await ctx.wait(() => delay(50));
+  return const Data();
+}
+
+/// The observer of a job whose failure nobody waits for: it hears it.
+final class HearingObserver extends JobObserver {
+  @override
+  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      print('onError: $error');
+}
 
 /// The report job of the page: its body takes 50 ms.
 Job<String> startReport() => Job<String>((ctx) async {
@@ -81,13 +115,13 @@ void main() {
   group('Reading the result', () {
     test('value in a try prints a cancellation as a failure', () {
       fakeAsync((async) {
-        final printed = <String>[];
+        printed.clear();
         final report = startReport();
         () async {
           try {
-            printed.add('report: ${await report.value}');
+            print('report: ${await report.value}');
           } on Object catch (error) {
-            printed.add('failed: $error');
+            print('failed: $error');
           }
         }();
         async.elapse(const Duration(milliseconds: 10));
@@ -119,7 +153,7 @@ void main() {
 
     test('a switch over done gives the cancellation its own line', () {
       fakeAsync((async) {
-        final printed = <String>[];
+        printed.clear();
         final report = startReport();
         () async {
           final message = switch (await report.done) {
@@ -127,7 +161,7 @@ void main() {
             Failed(:final error) => 'failed: $error',
             Cancelled(:final reason) => 'cancelled: $reason',
           };
-          printed.add(message);
+          print(message);
         }();
         async.elapse(const Duration(milliseconds: 10));
         report.cancel().ignore();
@@ -152,27 +186,61 @@ void main() {
         };
 
     test('reading outcome leaves the failure to the zone', () {
-      final printed = <String>[];
-      final caught = zoneOf((async) {
-        final sync = Job<void>(upload);
-        printed.add('status: ${status(sync)}');
-        async.flushTimers();
-        printed.add('status: ${status(sync)}');
-      });
+      printed.clear();
+      runZonedGuarded(
+        () => fakeAsync((async) {
+          final sync = Job<void>(upload);
 
-      expect(printed.first, 'status: syncing');
-      expect([printed.last, ...caught], quoted[2]);
+          void draw() {
+            // Wherever the status line is drawn:
+            final status = switch (sync.outcome) {
+              null => 'syncing',
+              Done() => 'synced',
+              Failed(:final error) => 'sync failed: $error',
+              Cancelled() => 'sync cancelled',
+            };
+            print('status: $status');
+          }
+
+          draw();
+          async.flushTimers();
+          draw();
+        }),
+        (error, stackTrace) => print('zone: $error'),
+      );
+
+      expect(printed, ['status: syncing', ...quoted[2]]);
     });
 
     test('ignore keeps the zone quiet while the status line reads it', () {
-      final printed = <String>[];
-      final caught = zoneOf((async) {
-        final sync = Job<void>(upload)..ignore();
-        async.flushTimers();
-        printed.add('status: ${status(sync)}');
-      });
+      printed.clear();
+      runZonedGuarded(
+        () => fakeAsync((async) {
+          final sync = Job<void>(upload)..ignore();
+          async.flushTimers();
+          print('status: ${status(sync)}');
+        }),
+        (error, stackTrace) => print('zone: $error'),
+      );
 
-      expect([...printed, ...caught], quoted[3]);
+      expect(printed, quoted[3]);
+    });
+
+    test('onError of the observer hears the failure and does not observe it',
+        () {
+      printed.clear();
+      runZonedGuarded(
+        () => fakeAsync((async) {
+          Job<void>(observer: HearingObserver(), upload);
+          async.flushTimers();
+        }),
+        (error, stackTrace) => print('zone: $error'),
+      );
+
+      expect(printed, [
+        'onError: Bad state: disk full',
+        'zone: Bad state: disk full',
+      ]);
     });
 
     test('onFinish reading the outcome does not observe it', () {
@@ -213,6 +281,16 @@ void main() {
       });
     }
 
+    test('value left unhandled throws the error, as any future does', () {
+      final caught = zoneOf((async) {
+        // The waiting code takes the future and handles nothing.
+        unawaited(Job<void>(upload).value);
+        async.flushTimers();
+      });
+
+      expect(caught, ['zone: Bad state: disk full']);
+    });
+
     test('waiting does not observe a failure a cancellation covered', () {
       // The upload fails 10 ms in while a child of the job still runs, and
       // the cancellation 20 ms in arrives before the job has ended.
@@ -249,17 +327,15 @@ void main() {
     Future<void> refreshToken() async => throw StateError('token expired');
 
     /// `report` and its child `fetch`, cancelled the way the page does it.
-    ({Job<String> report, Job<String> fetch, RequestCancelReason? heard})
+    ({Job<Report> report, Job<Data> fetch, RequestCancelReason? heard})
         requestFails(FakeAsync async) {
-      late Job<String> fetch;
-      final report = Job<String>((ctx) async {
-        fetch = Job.deferred<String>((ctx) async {
-          await ctx.wait(() => delay(50));
-          return 'data';
-        });
-        return 'report of ${await ctx.run(fetch)}';
-      })
-        ..ignore();
+      final fetch = Job.deferred<Data>(download);
+      final report = Job<Report>((ctx) async {
+        final data = await ctx.run(fetch);
+        return Report(data);
+      });
+      // ignore: cascade_invocations -- the page's code ends above
+      report.ignore();
       async.elapse(const Duration(milliseconds: 5));
       RequestCancelReason? heard;
       fetch.whenCancelled(
@@ -287,16 +363,21 @@ void main() {
 
     test('a case for the reason of report misses the request', () {
       fakeAsync((async) {
+        printed.clear();
         final (:report, :fetch, heard: _) = requestFails(async);
-        final message = switch (report.outcome!) {
-          Done(:final value) => 'report: $value',
-          Failed(:final error) => 'failed: $error',
-          Cancelled(reason: RequestCancelReason(:final error)) =>
-            'request failed: $error',
-          Cancelled(:final reason) => 'cancelled: $reason',
-        };
+        () async {
+          final message = switch (await report.done) {
+            Done(:final value) => 'report: $value',
+            Failed(:final error) => 'failed: $error',
+            Cancelled(reason: RequestCancelReason(:final error)) =>
+              'request failed: $error',
+            Cancelled(:final reason) => 'cancelled: $reason',
+          };
+          print(message);
+        }();
+        async.flushMicrotasks();
 
-        expect([message], quoted[4]);
+        expect(printed, quoted[4]);
         final reason = (report.outcome! as Cancelled).reason;
         expect(reason, isA<HandlerCancelReason>());
         expect((reason as HandlerCancelReason).cause, same(fetch.outcome));
@@ -305,17 +386,22 @@ void main() {
 
     test('origin follows the cause down to the request', () {
       fakeAsync((async) {
+        printed.clear();
         final (:report, fetch: _, heard: _) = requestFails(async);
-        final message = switch (report.outcome!) {
-          Done(:final value) => 'report: $value',
-          Failed(:final error) => 'failed: $error',
-          final Cancelled cancelled => switch (origin(cancelled)) {
-              RequestCancelReason(:final error) => 'request failed: $error',
-              final reason => 'cancelled: $reason',
-            },
-        };
+        () async {
+          final message = switch (await report.done) {
+            Done(:final value) => 'report: $value',
+            Failed(:final error) => 'failed: $error',
+            final Cancelled cancelled => switch (origin(cancelled)) {
+                RequestCancelReason(:final error) => 'request failed: $error',
+                final reason => 'cancelled: $reason',
+              },
+          };
+          print(message);
+        }();
+        async.flushMicrotasks();
 
-        expect([message], quoted[5]);
+        expect(printed, quoted[5]);
       });
     });
 
@@ -386,6 +472,22 @@ void main() {
       });
     });
 
+    test('a group that refused a job gives the others its ArgumentError', () {
+      fakeAsync((async) {
+        final first = Job.deferred<int>((ctx) async {
+          await ctx.wait(() => delay(50));
+          return 1;
+        });
+        Job<List<int>>((ctx) => ctx.runAll([first, Job<int>((ctx) async => 2)]))
+            .ignore();
+        async.flushTimers();
+
+        final reason = origin(first.outcome! as Cancelled);
+        expect(reason, isA<SiblingCancelReason>());
+        expect((reason as SiblingCancelReason).cause, isA<ArgumentError>());
+      });
+    });
+
     test('awaiting value of a job it does not own passes the reason as is', () {
       fakeAsync((async) {
         final other = startReport()..ignore();
@@ -422,27 +524,112 @@ void main() {
   group('Reacting before the outcome', () {
     test('the listener runs at acceptance, the outcome after the body', () {
       fakeAsync((async) {
-        final printed = <String>[];
-        String at() => '${async.elapsed.inMilliseconds} ms';
+        printed.clear();
         final report = Job<void>((ctx) async {
           await ctx.run(
             Job.deferred<void>(cancellable: false, (ctx) => delay(50)),
           );
         });
-        final unregister = report.whenCancelled((cancelled) {
-          printed.add('${at()} cancelling: ${cancelled.reason}');
-        });
         () async {
+// Runs when the cancellation is accepted; the job may still be finishing.
+          final unregister = report.whenCancelled((cancelled) {
+            print('cancelling: ${cancelled.reason}');
+          });
+
           await report.done;
-          printed.add('${at()} done');
+          // Safe after completion; call earlier to stop listening sooner.
           unregister();
+          print('done at ${async.elapsed.inMilliseconds} ms');
         }();
         async.elapse(const Duration(milliseconds: 10));
         report.cancel().ignore();
+
+        expect(printed, ['cancelling: manual'], reason: 'at acceptance');
+        expect(report.isFinished, isFalse);
+        async.flushTimers();
+        expect(printed, ['cancelling: manual', 'done at 50 ms']);
+      });
+    });
+
+    test('a listener registered inside the call runs ahead of the waiting', () {
+      fakeAsync((async) {
+        final seen = <String>[];
+        final job = Job<void>((ctx) => ctx.wait(() => delay(50)))..ignore();
+        job
+          ..whenCancelled((_) {
+            seen.add('first');
+            job.whenCancelled((_) => seen.add('third, made inside the first'));
+          })
+          ..whenCancelled((_) => seen.add('second'));
+        async.elapse(const Duration(milliseconds: 5));
+        job.cancel().ignore();
         async.flushTimers();
 
-        expect(printed, ['10 ms cancelling: manual', '50 ms done']);
+        expect(seen, ['first', 'third, made inside the first', 'second']);
       });
+    });
+
+    for (final path in ['a section held it', 'the body gave itself up']) {
+      test('an async listener fails in the zone of the body when $path',
+          () async {
+        final zones = <String>[];
+        late Job<void> job;
+        // A job that starts itself runs its body in the zone it was
+        // created in.
+        runZonedGuarded(
+          () => job = Job<void>((ctx) async {
+            if (path == 'a section held it') {
+              await ctx.uncancellable(() => delay(20));
+              await ctx.wait(() => delay(50));
+            } else {
+              await delay(5);
+              throw const Cancelled('why');
+            }
+          })
+            ..ignore(),
+          (error, stackTrace) => zones.add('creation: $error'),
+        );
+        job.whenCancelled((cancelled) async {
+          throw StateError('save failed');
+        });
+        await delay(2);
+        if (path == 'a section held it') {
+          runZonedGuarded(
+            () => job.cancel().ignore(),
+            (error, stackTrace) => zones.add('cancel: $error'),
+          );
+        }
+        await job.done;
+        await delay(5);
+
+        expect(zones, ['creation: Bad state: save failed']);
+      });
+    }
+
+    test('an async listener fails there before its first await too', () async {
+      final zones = <String>[];
+      late Job<void> job;
+      runZonedGuarded(
+        () => job = Job<void>(
+          (ctx) => ctx.wait(() => delay(50)),
+          observer: HearingObserver(),
+        )..ignore(),
+        (error, stackTrace) => zones.add('creation: $error'),
+      );
+      job.whenCancelled((cancelled) async {
+        throw StateError('save failed');
+      });
+      await delay(5);
+      printed.clear();
+      runZonedGuarded(
+        () => job.cancel().ignore(),
+        (error, stackTrace) => zones.add('cancel: $error'),
+      );
+      await job.done;
+      await delay(5);
+
+      expect(zones, ['cancel: Bad state: save failed']);
+      expect(printed, isEmpty, reason: 'onError hears nothing');
     });
 
     test('an async listener fails in the zone of the code that cancelled',
@@ -480,5 +667,12 @@ void main() {
         .toList();
 
     expect(blocks, quoted);
+  });
+
+  test('every piece of code on the page is a run of lines of this file', () {
+    expect(
+      codeMissingFrom('doc/outcomes.md', 'test/outcomes_rakes_test.dart'),
+      isEmpty,
+    );
   });
 }

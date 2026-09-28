@@ -9,14 +9,16 @@ import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart';
 
 import 'support/delay.dart';
+import 'support/page_code.dart';
 
 /// The first attempts of `doc/cancellation.md`, and what each one costs.
 ///
 /// Every section of the page opens with the version the names lead to and
 /// shows what that version prints. The page has no bench, so the code is
-/// repeated here as it stands there, and the last test holds the lines the
-/// page quotes to the lines these tests print: a quote that drifts from its
-/// code turns this file red, not only a broken engine.
+/// repeated here as it stands there. The last two tests hold the page to
+/// this file: the lines it quotes to the lines these tests print, and every
+/// piece of its code to a run of lines of this file. A quote or a fragment
+/// that drifts turns this file red, not only a broken engine.
 
 /// What each `text` block of the page says, in the order of the page.
 const quoted = [
@@ -109,6 +111,13 @@ final class Database {
 
   static Future<Database> open() async => Database();
 
+  /// A read of 10 ms, the kind a job may walk away from.
+  Future<List<String>> readAll() async {
+    await delay(10);
+    say('rows read');
+    return ['row'];
+  }
+
   /// Three steps, 10 ms each; the token is read before every one.
   Future<void> migrate(CancelToken stop) async {
     for (var step = 1; step <= 3; step++) {
@@ -164,6 +173,27 @@ final class PrintingObserver extends JobObserver {
 Database database = Database();
 final device = Device();
 
+void use(List<String> rows) => say('rows used');
+
+/// What [renderThumbnail] does instead of taking its 20 ms: nothing,
+/// fail, or be cancelled 5 ms in, directly and not through its parent.
+enum Thumbnail { renders, fails, isCancelled }
+
+Thumbnail thumbnailDoes = Thumbnail.renders;
+
+Future<String> renderThumbnail(JobContext ctx) async {
+  switch (thumbnailDoes) {
+    case Thumbnail.renders:
+      break;
+    case Thumbnail.fails:
+      throw const FormatException('bad image');
+    case Thumbnail.isCancelled:
+      Timer(const Duration(milliseconds: 5), ctx.job.cancel);
+  }
+  await ctx.wait(() => delay(20));
+  return 'thumbnail';
+}
+
 /// Runs [body] as a job with the page's observer, cancels it [cancelAt] ms
 /// in, and returns what was printed. An error that reaches the zone is
 /// printed as `zone:`.
@@ -194,11 +224,103 @@ List<String> play<T>(
   return printed.toList();
 }
 
+/// Runs the job [start] makes, as the page writes it and so without an
+/// observer, cancels it [cancelAt] ms in, and returns what was printed.
+List<String> watch(Job<Object?> Function() start, {int? cancelAt}) {
+  printed.clear();
+  database = Database();
+  runZonedGuarded(
+    () => fakeAsync((async) {
+      final job = start();
+      unawaited(job.done.then((outcome) => say('outcome: $outcome')));
+      if (cancelAt != null) {
+        async.elapse(Duration(milliseconds: cancelAt));
+        say('cancel');
+        unawaited(job.cancel());
+      }
+      async.flushTimers();
+    }),
+    (error, stackTrace) => say('zone: $error'),
+  );
+  return printed.toList();
+}
+
 void main() {
+  group('The opening example', () {
+    // The read takes 0-10 ms, the migration 10-40, the section 40-60.
+    Job<void> opening() => Job<void>((ctx) async {
+          // The database client's own stop signal, cancelled with the job.
+          final stop = CancelToken();
+          ctx.onCancel(stop.cancel);
+
+          // The wait ends at once; the read goes on, and its value is dropped.
+          final rows = await ctx.wait(database.readAll);
+
+          // Waited for until the migration ends or stops at the token, and
+          // only then does the job give up.
+          await ctx.join(() => database.migrate(stop));
+
+          // The cancellation waits for the whole step, and the child it
+          // runs is not cancelled; the next checkpoint throws it.
+          await ctx.uncancellable(() async {
+            await database.writeVersion();
+            await ctx.run(database.readyFlag());
+          });
+
+          // Nothing to wrap between the steps of a calculation.
+          ctx.check();
+          use(rows);
+        });
+
+    test('uncancelled, it runs to its end', () {
+      expect(watch(opening), [
+        'rows read',
+        'step 1',
+        'step 2',
+        'step 3',
+        'version written',
+        'ready flag written',
+        'rows used',
+        'outcome: Done(null)',
+      ]);
+    });
+
+    test('the wait ends at once, and the read goes on', () {
+      expect(watch(opening, cancelAt: 5), [
+        'cancel',
+        'outcome: Cancelled(manual)',
+        'rows read',
+      ]);
+    });
+
+    test('the join waits for the migration to stop at the token', () {
+      expect(watch(opening, cancelAt: 15), [
+        'rows read',
+        'cancel',
+        'step 1',
+        'migration stopped',
+        'outcome: Cancelled(manual)',
+      ]);
+    });
+
+    test('the section writes both, and check throws after it', () {
+      expect(watch(opening, cancelAt: 45), [
+        'rows read',
+        'step 1',
+        'step 2',
+        'step 3',
+        'cancel',
+        'version written',
+        'ready flag written',
+        'outcome: Cancelled(manual)',
+      ]);
+    });
+  });
+
   group('Stopping the operation', () {
     test('wait closes the database under a running migration', () {
-      final lines = play(
-        (ctx) async {
+      final lines = watch(cancelAt: 15, () {
+        final job = Job<Database>((ctx) async {
           final database = await ctx.join(
             Database.open,
             discard: (database) => database.close(),
@@ -208,9 +330,9 @@ void main() {
           await ctx.wait(() => database.migrate(stop));
 
           return database;
-        },
-        cancelAt: 15,
-      );
+        });
+        return job;
+      });
 
       expect(lines, quoted[0]);
     });
@@ -457,7 +579,9 @@ void main() {
       expect(withToken, isNot(contains('ready flag written')));
       expect(withCheckpoint, isNot(contains('ready flag written')));
     });
+  });
 
+  group('A step that runs a child', () {
     test('one join around a step with a child loses the flag', () {
       var childStarted = false;
       final lines = play(
@@ -754,6 +878,74 @@ void main() {
       });
     });
 
+    test('the clause of Asking the job logs a cancelled child as a failure',
+        () {
+      thumbnailDoes = Thumbnail.isCancelled;
+      addTearDown(() => thumbnailDoes = Thumbnail.renders);
+      final lines = play((ctx) async {
+        final thumbnail = Job.deferred<String>(renderThumbnail);
+        try {
+          return 'page with ${await ctx.run(thumbnail)}';
+        } on Exception catch (error) {
+          ctx.check();
+          // ignore: cascade_invocations -- the form of Asking the job
+          ctx.log('thumbnail failed: $error');
+          return 'page without a thumbnail';
+        }
+      });
+
+      expect(lines, [
+        'log: thumbnail failed: Cancelled(manual)',
+        'outcome: Done(page without a thumbnail)',
+      ]);
+    });
+
+    for (final fails in [false, true]) {
+      test(
+          'a test of the type tells a cancelled child from a failed one '
+          '(fails: $fails)', () {
+        thumbnailDoes = fails ? Thumbnail.fails : Thumbnail.isCancelled;
+        addTearDown(() => thumbnailDoes = Thumbnail.renders);
+        final lines = play((ctx) async {
+          final thumbnail = Job.deferred<String>(renderThumbnail);
+          try {
+            return 'page with ${await ctx.run(thumbnail)}';
+          } on Exception catch (error) {
+            ctx.check();
+            if (error is! Cancelled) ctx.log('thumbnail failed: $error');
+            return 'page without a thumbnail';
+          }
+        });
+
+        expect(lines, [
+          if (fails) ...[
+            'onError: FormatException: bad image',
+            'log: thumbnail failed: FormatException: bad image',
+          ],
+          'outcome: Done(page without a thumbnail)',
+        ]);
+      });
+    }
+
+    test('an operation waiting for a cancelled job passes check', () {
+      final lines = play((ctx) async {
+        final other = Job<String>((ctx) async {
+          await ctx.wait(() => delay(20));
+          return 'rows';
+        });
+        Timer(const Duration(milliseconds: 5), other.cancel);
+        try {
+          return await ctx.join(() async => 'read ${await other.value}');
+        } on Exception catch (error) {
+          ctx.check();
+          if (error is! Cancelled) ctx.log('read failed: $error');
+          return 'nothing read';
+        }
+      });
+
+      expect(lines, ['outcome: Done(nothing read)']);
+    });
+
     for (final (form, outcome) in [
       ('rethrow', 'Cancelled(handler: child null: Cancelled(manual))'),
       ('check', 'Done(page without a thumbnail)'),
@@ -801,6 +993,36 @@ void main() {
       ]);
     });
 
+    test('an async onCancel callback fails before its first await the same',
+        () async {
+      // Real time and three zones: which one hears it is the claim.
+      final zones = <String>[];
+      late Job<void> job;
+      runZonedGuarded(
+        () => job = Job<void>(
+          (ctx) async {
+            ctx.onCancel(() async {
+              throw StateError('device did not stop');
+            });
+            await ctx.wait(() => delay(50));
+          },
+          observer: PrintingObserver(),
+        )..ignore(),
+        (error, stackTrace) => zones.add('creation: $error'),
+      );
+      await delay(5);
+      printed.clear();
+      runZonedGuarded(
+        () => job.cancel().ignore(),
+        (error, stackTrace) => zones.add('cancel: $error'),
+      );
+      await job.done;
+      await delay(5);
+
+      expect(zones, ['cancel: Bad state: device did not stop']);
+      expect(printed, isEmpty, reason: 'onError hears nothing');
+    });
+
     test('a synchronous throw of onCancel reaches onError, then the zone', () {
       final lines = play(
         (ctx) async {
@@ -836,12 +1058,92 @@ void main() {
         'zone: Bad state: device did not stop',
       ]);
     });
+
+    test('the job does not wait for the stop it handed to unattended', () {
+      final lines = play(
+        (ctx) async {
+          ctx
+            ..onDispose(() => say('device released'))
+            ..onCancel(
+              () => ctx.unattended(() async {
+                await delay(10);
+                say('device stopped');
+              }),
+            );
+          await ctx.wait(() => delay(50));
+        },
+        cancelAt: 5,
+      );
+
+      expect(lines, [
+        'cancel',
+        'device released',
+        'outcome: Cancelled(manual)',
+        'device stopped',
+      ]);
+    });
+
+    test('a join around an operation that ends first waits for nothing more',
+        () {
+      final lines = play(
+        (ctx) async {
+          // The stop interrupts the playback at once and takes 10 ms more.
+          final interrupted = Completer<void>();
+          ctx
+            ..onDispose(() => say('device released'))
+            ..onCancel(
+              () => ctx.unattended(() async {
+                interrupted.complete();
+                await delay(10);
+                say('device stopped');
+              }),
+            );
+          await ctx.join(() => interrupted.future);
+        },
+        cancelAt: 5,
+      );
+
+      expect(lines, [
+        'cancel',
+        'device released',
+        'outcome: Cancelled(manual)',
+        'device stopped',
+      ]);
+    });
+
+    test('a join around the operation the stop interrupts waits for it', () {
+      final lines = play(
+        (ctx) async {
+          // The playback ends when the device has stopped.
+          final stopped = Completer<void>();
+          ctx
+            ..onDispose(() => say('device released'))
+            ..onCancel(
+              () => ctx.unattended(() async {
+                await delay(10);
+                say('device stopped');
+                stopped.complete();
+              }),
+            );
+          await ctx.join(() => stopped.future);
+        },
+        cancelAt: 5,
+      );
+
+      expect(lines, [
+        'cancel',
+        'device stopped',
+        'device released',
+        'outcome: Cancelled(manual)',
+      ]);
+    });
   });
 
   test('accepting reaches the children at once and decides the outcome', () {
     fakeAsync((async) {
       final seen = <String>[];
       final job = Job<int>((ctx) async {
+        ctx.onCancel(() => seen.add('job onCancel'));
         final child = Job.deferred<void>((ctx) async {
           ctx.onCancel(() => seen.add('child onCancel'));
           await ctx.wait(() => delay(50));
@@ -858,6 +1160,7 @@ void main() {
 
       expect(seen, [
         'child onCancel',
+        'job onCancel',
         'cancel() returned, isCancelled: true',
         'body returns',
       ]);
@@ -865,10 +1168,53 @@ void main() {
     });
   });
 
+  test('a body that gives itself up runs no onCancel', () {
+    fakeAsync((async) {
+      final seen = <String>[];
+      final threw = Job<void>((ctx) async {
+        ctx.onCancel(() => seen.add('threw: onCancel'));
+        await ctx.wait(() => delay(5));
+        throw const Cancelled('why');
+      })
+        ..ignore();
+      late Job<void> left;
+      final threwWithChild = Job<void>((ctx) async {
+        left = Job.deferred<void>((ctx) => ctx.wait(() => delay(50)));
+        ctx.run(left).ignore();
+        await ctx.wait(() => delay(5));
+        throw const Cancelled('why');
+      })
+        ..ignore();
+      final letOut = Job<void>((ctx) async {
+        ctx.onCancel(() => seen.add('let out: onCancel'));
+        final child = Job.deferred<void>((ctx) => ctx.wait(() => delay(20)));
+        Timer(const Duration(milliseconds: 5), child.cancel);
+        await ctx.run(child);
+      })
+        ..ignore();
+      async.flushTimers();
+
+      expect(seen, isEmpty);
+      expect(threw.outcome, isA<Cancelled>());
+      expect(letOut.outcome, isA<Cancelled>());
+      expect(threwWithChild.outcome, isA<Cancelled>());
+      expect(
+        left.outcome,
+        isA<Cancelled>().having(
+          (cancelled) => cancelled.reason,
+          'reason',
+          isA<ParentCancelReason>(),
+        ),
+        reason: 'the cancellation still passes to the children',
+      );
+    });
+  });
+
   test('after the cancellation, the waiting members throw and the rest work',
       () {
     fakeAsync((async) {
       final seen = <String>[];
+      final branch = Job.deferred<int>((ctx) async => 1);
       final job = Job<void>((ctx) async {
         try {
           await ctx.wait(() => delay(50));
@@ -890,6 +1236,8 @@ void main() {
           await probe('join', () => ctx.join(() => 1));
           await probe('uncancellable', () => ctx.uncancellable(() => 1));
           await probe('run', () => ctx.run(Job.deferred((ctx) async => 1)));
+          await probe('runAll', () => ctx.runAll<int>([]));
+          await probe('runAll of a job', () => ctx.runAll<int>([branch]));
           await probe(
             'each',
             () => ctx.each<int>(const Stream.empty(), (ctx, _) async {}),
@@ -912,6 +1260,8 @@ void main() {
         'join throws',
         'uncancellable throws',
         'run throws',
+        'runAll throws',
+        'runAll of a job throws',
         'each throws',
         'onCancel throws',
         'onDispose works',
@@ -919,6 +1269,15 @@ void main() {
         'disown works',
         'unattended works',
       ]);
+      expect(
+        branch.outcome,
+        isA<Cancelled>().having(
+          (cancelled) => cancelled.reason,
+          'reason',
+          isA<ParentCancelReason>(),
+        ),
+        reason: 'the group started nothing and cancelled its branch',
+      );
     });
   });
 
@@ -930,5 +1289,15 @@ void main() {
         .toList();
 
     expect(blocks, quoted);
+  });
+
+  test('every piece of code on the page is a run of lines of this file', () {
+    expect(
+      codeMissingFrom(
+        'doc/cancellation.md',
+        'test/cancellation_rakes_test.dart',
+      ),
+      isEmpty,
+    );
   });
 }

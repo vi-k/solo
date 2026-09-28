@@ -4,11 +4,11 @@ part of 'job_base.dart';
 ///
 /// Once the job is marked cancelled, the members that wait or start
 /// something throw that [Cancelled]: [check], [wait], [join],
-/// [uncancellable], [onCancel], [run] and `each`. The members that only
-/// register do not — [onDispose], [onDiscard], [disown] and [unattended]
-/// go on working, so a body that has just been cancelled can still put
-/// what it holds on the cleanup stack, and still hand out a stop nobody
-/// waits for — and neither do [log] and [job]. What a cancellation
+/// [uncancellable], [onCancel], [run], [runAll] and `each`. The members
+/// that only register do not — [onDispose], [onDiscard], [disown] and
+/// [unattended] go on working, so a body that has just been cancelled can
+/// still put what it holds on the cleanup stack, and still hand out a stop
+/// nobody waits for — and neither do [log] and [job]. What a cancellation
 /// arriving *during* a call does to that call is the call's own business:
 /// see [wait], [join] and [uncancellable].
 ///
@@ -244,6 +244,11 @@ abstract interface class JobContext {
   /// to register for, and nothing should be started either. An error thrown
   /// by [callback] goes to `onError` and `onUnanswered`; the cancellation
   /// itself is not affected and the other callbacks still run.
+  ///
+  /// A body that gives itself up — throws [Cancelled], or lets out the
+  /// cancellation of a child — ends cancelled without running these
+  /// callbacks: nobody asked the job to stop, and a token handed out
+  /// through here stays as it was.
   ///
   /// [callback] is synchronous, and only what it throws synchronously is
   /// caught. `void Function()` takes an `async` function without a word
@@ -568,11 +573,12 @@ abstract interface class JobContext {
   /// a failure is exactly the case nobody plans for. The `void` return
   /// does not stop a closure carrying one out, and nothing will warn you.
   ///
-  /// [run] and [uncancellable] throw a [StateError] when called from
-  /// inside [action]: both act on the whole job, and this work is not the
-  /// job. A child started here would hang on that boundary with the
-  /// parent waiting for it forever, and a section opened here would hold
-  /// back the cancellation of a body that stands in no section at all.
+  /// [run], [runAll], `each` and [uncancellable] throw a [StateError] when
+  /// called from inside [action]: they act on the whole job, and this work
+  /// is not the job. A child started here, by [run], [runAll] or `each`,
+  /// would hang on that boundary with the parent waiting for it forever,
+  /// and a section opened here would hold back the cancellation of a body
+  /// that stands in no section at all.
   /// [wait] and [join] are fine — they register on the job and behave. The
   /// work waits for their value, so it gets it on the body's terms even
   /// after the body has ended: on a job marked cancelled the value is
@@ -710,10 +716,12 @@ abstract class JobContextBase implements JobContext {
   /// Throws [StateError] when called from inside this job's own
   /// [JobContext.unattended] work.
   ///
-  /// Two members act on the whole job, and unattended work is not the
-  /// job: a child started there would hang on the fork's boundary with
-  /// the parent waiting for it forever, and a section opened there would
-  /// hold a cancellation of a body that stands in no section at all.
+  /// Four members act on the whole job, [JobContext.run],
+  /// [JobContext.runAll], [JobContext.each] and [JobContext.uncancellable],
+  /// and unattended work is not the job: a child started there would hang
+  /// on the fork's boundary with the parent waiting for it forever, and a
+  /// section opened there would hold a cancellation of a body that stands
+  /// in no section at all.
   /// Another job's fork is not this job's business, and the key is the
   /// job itself: forks nest, and a shared key would let the inner one
   /// answer for the outer.

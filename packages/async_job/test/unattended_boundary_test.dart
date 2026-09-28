@@ -50,6 +50,29 @@ void main() {
     expect(childRan, isFalse);
   });
 
+  test('runAll inside unattended work throws and starts no branch', () {
+    final journal = JobJournal(answers: true);
+    var branchRan = false;
+    fakeAsync((async) {
+      final job = Job<void>(key: 'j', observer: journal, (ctx) async {
+        ctx.unattended(() {
+          ctx.runAll([
+            Job.deferred<void>(key: 'branch', (c) async => branchRan = true),
+          ]);
+        });
+        await ctx.wait(() => delay(1));
+      });
+      async.flushTimers();
+      expect(job.outcome, isA<Done<void>>());
+    });
+    expect(journal.take(), [
+      '[j] started',
+      _noChild,
+      '[j] finished Done(null)',
+    ]);
+    expect(branchRan, isFalse);
+  });
+
   test('uncancellable inside unattended work throws and holds nothing', () {
     final journal = JobJournal(answers: true);
     var actionRan = false;

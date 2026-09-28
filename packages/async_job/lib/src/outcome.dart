@@ -54,8 +54,10 @@ final class ChainCancelReason extends CancelReason {
   String get name => 'chain';
 }
 
-/// A branch of [JobContext.runAll] was stopped because another branch of
-/// the same group ended in an error.
+/// A branch of [JobContext.runAll] was stopped because its group is
+/// failing: another branch of the group ended in an error or a
+/// cancellation, or the group itself hit an error, such as a job it refused
+/// to take as a branch.
 ///
 /// Nobody cancelled this job by hand and no cascade of a parent reached it:
 /// the group asked it to stop, so that work whose result the caller will
@@ -63,8 +65,9 @@ final class ChainCancelReason extends CancelReason {
 /// created with `cancellable: false` refuses it, and an operation that
 /// cannot be interrupted plays out.
 final class SiblingCancelReason extends CancelReason {
-  /// What the group stopped for: the error another branch failed with, or
-  /// the cancellation that ended it.
+  /// What the group stopped for: the error another branch failed with, the
+  /// cancellation that ended it, or an error of the group itself, such as
+  /// the [ArgumentError] or [StateError] it refused a job with.
   final Object cause;
 
   /// Creates a reason for a branch stopped by its group.

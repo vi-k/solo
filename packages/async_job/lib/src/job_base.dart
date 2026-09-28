@@ -70,7 +70,7 @@ abstract interface class Job<T> {
   /// A static method and not a constructor: the result is a
   /// [DeferredJob], and a constructor of [Job] could only be typed as one.
   /// Whoever owns the job starts it — by hand, a queue, or a parent
-  /// through [JobContext.run].
+  /// through [JobContext.run] or [JobContext.runAll].
   static DeferredJob<T> deferred<T>(
     Future<T> Function(JobContext ctx) body, {
     Object? key,
@@ -198,17 +198,17 @@ abstract interface class Job<T> {
   /// calls [callback] immediately, even if the job has finished. Registering
   /// in between — while the cancellation cascades onto the children, or
   /// while a job whose body gave itself up waits for them — puts the
-  /// callback in that pass instead, in its own place: a registration made
-  /// later never runs before one made earlier. A refused or held
-  /// cancellation does not trigger it; a held one triggers it when it is
-  /// accepted. A job that ends
-  /// [Done] or [Failed] without cancellation never calls it and releases its
-  /// registrations on finish. Registering does not observe a [Failed] outcome.
+  /// callback in that pass instead, after the ones registered before it. A
+  /// refused or held cancellation does not trigger it; a held one triggers
+  /// it when it is accepted. A job that ends [Done] or [Failed] without
+  /// cancellation never calls it and releases its registrations on finish.
+  /// Registering does not observe a [Failed] outcome.
   ///
   /// Each registration runs once. Pending callbacks run in registration
   /// order, from a snapshot: unregistering during notification does not remove
   /// a callback from that pass. Registering during notification calls the new
-  /// callback immediately. Unregistering more than once is harmless.
+  /// callback immediately, ahead of the callbacks still waiting in that pass.
+  /// Unregistering more than once is harmless.
   ///
   /// A synchronous error is one no outcome carries: [JobObserver.onError]
   /// hears it and [JobObserver.onUnanswered] answers for it, in the job's

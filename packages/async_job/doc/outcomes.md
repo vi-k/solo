@@ -85,20 +85,21 @@ final status = switch (sync.outcome) {
 print('status: $status');
 ```
 
-The upload fails. The status line says so, and the zone the job was created in
-receives the same error as an uncaught one:
+The upload fails. The zone the job was created in receives the error as an
+uncaught one, and the status line drawn after that says the same:
 
 ```text
-status: sync failed: Bad state: disk full
 zone: Bad state: disk full
+status: sync failed: Bad state: disk full
 ```
 
 A failure nobody observes goes to the job's creation zone on the microtask
 after the job finishes: that keeps it visible when no caller waits for the
 result. In a test that zone is the test's, and the test fails. Reading
-`outcome` does not count as observing, and neither does the observer's
-`onFinish` callback, awaiting `job.cancel()` or registering with
-`whenCancelled`.
+`outcome` does not count as observing, and neither does awaiting
+`job.cancel()`, registering with `whenCancelled` or any callback of the
+observer: `onError` and `onFinish` hear the failure, and it reaches the zone
+all the same.
 
 ### Telling the engine it is handled
 
@@ -113,8 +114,10 @@ status: sync failed: Bad state: disk full
 `ignore()` tells the engine that the failure is handled elsewhere, here by the
 status line, and nothing reaches the zone. Accessing `done` or `value` observes
 a failure as well, so code that waits for the job — to redraw the status line
-when it is over, say — needs no `ignore()`. Forwarding a failure through `then`
-observes it too; the `then` job takes responsibility for it.
+when it is over, say — needs no `ignore()`. `done` never throws; with `value`
+the waiting code gets the error itself and has to handle it, as with any
+`Future`. Forwarding a failure through `then` observes it too; the `then` job
+takes responsibility for it.
 
 Waiting does not observe one failure: the body of `sync` fails, and a
 cancellation arrives after it — while the job still waits for its children or
@@ -141,10 +144,22 @@ final class RequestCancelReason extends CancelReason {
 }
 ```
 
-`report` runs a child, `fetch`, for its data, and `fetch` needs a token that a
-request elsewhere refreshes. When that request fails, the code that sent it
-cancels `fetch` and passes the error in the reason; the cancellation listener
-and the outcome of `fetch` receive the same instance:
+`report` runs a child, `fetch`, for its data, and catches nothing that comes
+out of it:
+
+```dart
+final fetch = Job.deferred<Data>(download);
+final report = Job<Report>((ctx) async {
+  final data = await ctx.run(fetch);
+  return Report(data);
+});
+```
+
+`fetch` needs a token that a request elsewhere refreshes. When that request
+fails, the code that sent it cancels `fetch` and passes the error in the
+reason; a listener registered with `fetch.whenCancelled`, which
+[Reacting before the outcome](#reacting-before-the-outcome) takes apart, and
+the outcome of `fetch` receive the same instance:
 
 ```dart
 try {
@@ -216,20 +231,20 @@ in `ChainCancelReason.cause`. These links preserve the original reason and its
 data, and `origin` follows them to the end: `cause` is `null` where nothing
 stands behind the reason, as for a body that threw `Cancelled('why')` itself.
 `SiblingCancelReason` has a `cause` too, but that is what a group stopped for —
-the error another branch failed with, or the cancellation that ended it — and
-`origin` stops at it.
+the error or the cancellation another branch ended with, or an error of the
+group itself, such as the `ArgumentError` for a job it refused to take as a
+branch — and `origin` stops at it.
 
-Only a child is linked this way. A body that awaits `value` of a job it does
-not own lets that job's cancellation through with its reason as it is: the
-outcome reads `Cancelled(manual)` for a job nobody called `cancel` on.
+A job that is not a child gets no such link. A body that awaits `value` of a
+job it does not own lets that job's cancellation through with its reason as it
+is: the outcome reads `Cancelled(manual)` for a job nobody called `cancel` on.
 
 Besides the `reason`, `Cancelled` contains a `started` flag, an optional
 `description` and the stack trace of the cancellation. `started` tells you
 whether the body ran or was cancelled before start. The built-in reason classes
 are `ManualCancelReason`, `ParentCancelReason`, `HandlerCancelReason`,
 `ChainCancelReason` and `SiblingCancelReason` — the last one is what a group of
-`ctx.runAll` gives the siblings of a branch that went wrong. All extend
-`CancelReason`.
+`ctx.runAll` gives its branches when it fails. All extend `CancelReason`.
 
 Check reasons by type, for example `reason is ParentCancelReason`. The `name`
 property is a label for logs and does not determine equality. Reasons use
@@ -268,25 +283,29 @@ When the listener runs depends on how the job is cancelled:
 - If the body throws `Cancelled`, it runs after the body and its children have
   ended, before cleanup.
 
-Registering once the cancellation has been announced calls the listener
-immediately, even if the job has finished. A registration made in between —
-while the cancellation cascades onto the children, or while a job whose body
-gave itself up waits for them — joins that announcement instead, in its own
-place: one made later never runs before one made earlier. A refused
-cancellation does not notify listeners. An `uncancellable` section delays
-notification until cancellation is accepted. A job that finishes as `Done` or
-`Failed` without cancellation releases its listeners without calling them.
+Once the pass over the listeners has begun, registering calls the new one
+immediately, even if the job has finished: a listener that registers another
+while it runs sees the new one run at once, ahead of the listeners still
+waiting their turn. A registration made earlier, while the cancellation
+cascades onto the children or while a job whose body gave itself up waits for
+them, waits its turn in the pass, after the ones made before it. A refused
+cancellation does not start the pass. An `uncancellable` section delays it
+until cancellation is accepted. A job that finishes as `Done` or `Failed`
+without cancellation releases its listeners without calling them.
 
-Each registration runs once. Listeners run in registration order, using a
-snapshot of the list: removing a listener during notification does not remove
-it from the current pass. A listener added during notification runs
-immediately. Unregistering more than once is safe.
+Each registration runs once. Listeners waiting their turn run in registration
+order, using a snapshot of the list: removing a listener during the pass does
+not take it out of the pass. Unregistering more than once is safe.
 
 A synchronous listener error goes to `onError` and, by default, on to the job's
 creation zone, and straight to that zone if there is no observer. A thrown
 `Cancelled` is never forwarded to the zone. Listener errors do not change
 cancellation or prevent other listeners from running. An `async` callback is
-accepted, but the job does not wait for its future, and an error after its
-first `await` reaches neither `onError` nor the job's creation zone: it is an
-uncaught error of the zone the listener was called in, which for a cancellation
-from outside is the zone of the code that called `cancel`.
+accepted, but the job does not wait for its future, and none of its errors
+reaches `onError`: an `async` function never throws synchronously, and even an
+error before its first `await` goes into the future it returns. The error is an
+uncaught one of the zone the listener was called in. For a cancellation
+accepted inside `cancel()`, that is the zone of the code that called it. For
+one an `uncancellable` section held, and for a body that gave itself up, it is
+the zone the body runs in, which for a job that starts itself is the zone it
+was created in.
