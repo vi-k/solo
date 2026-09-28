@@ -131,7 +131,55 @@ def rewrite(target, locale, base, repo, source):
     return f'{repo}/tree/main/{where}{anchor}'
 
 
-def convert(text, locale, base, repo, source):
+# The first line of a block that is not a paragraph of prose: indented,
+# a table, a heading, a quote, a list item.
+NOT_PROSE = re.compile(r'^(\s|[|#>*+-]|\d+[.)]\s)')
+FENCES = ('```', '~~~')
+
+
+def drop_self_links(lines, url):
+    """Drops each paragraph of prose whose links all lead to [url].
+
+    A README says where its site is -- "Also on the documentation site" --
+    and on the site that sentence is a link to the page it stands in. Only a
+    paragraph of prose goes, and only one that links nowhere else: a code
+    block, a table, a heading, a quote, a list or an indented block stays
+    whatever it links to.
+    """
+    kept = []
+    paragraph = []
+    fenced = False
+
+    def flush():
+        links = LINK.findall('\n'.join(paragraph))
+        prose = paragraph and not NOT_PROSE.match(paragraph[0])
+        if not (prose and links and all(link == url for link in links)):
+            kept.extend(paragraph)
+        elif kept and not kept[-1].strip():
+            # The blank line before it goes with it, so none is doubled.
+            kept.pop()
+        paragraph.clear()
+
+    for line in lines:
+        fence = line.lstrip().startswith(FENCES)
+        if fence:
+            fenced = not fenced
+        if fenced or fence:
+            flush()
+            kept.append(line)
+            continue
+        if line.strip():
+            paragraph.append(line)
+        else:
+            flush()
+            kept.append(line)
+    flush()
+    while kept and not kept[0].strip():
+        kept.pop(0)
+    return kept
+
+
+def convert(text, locale, base, repo, source, site=''):
     title = None
     fenced = False
     body = []
@@ -170,6 +218,10 @@ def convert(text, locale, base, repo, source):
             )
         )
 
+    page = page_of(source, base, locale)
+    if site and page:
+        out = drop_self_links(out, site.rstrip('/') + page)
+
     escaped = title.replace('\\', '\\\\').replace('"', '\\"')
     # "Edit this page" must reach the file that is actually edited, which
     # is the one in the repository, not the copy generated here.
@@ -198,6 +250,7 @@ def main():
                 base,
                 repo,
                 source.relative_to(REPO).as_posix(),
+                settings['site'],
             ),
             encoding='utf-8',
         )

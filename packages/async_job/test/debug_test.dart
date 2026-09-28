@@ -262,11 +262,11 @@ void main() {
       async.flushTimers();
     });
     expect(
-      traces,
-      contains(
-        'Job(branch) handed its value over: 1 conditional cleanup dropped',
-      ),
-      reason: 'the values reached the caller, and so did what they hold',
+      traces.where((line) => line.contains('handed its value over')),
+      ['Job(branch) handed its value over: 1 conditional cleanup dropped'],
+      reason: 'the values reached the caller, and so did what they hold; '
+          'once: the commit took the put-aside registrations away, and the '
+          'branch has nothing left to name at the end of its unwinding',
     );
   });
 

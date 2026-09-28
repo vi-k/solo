@@ -124,5 +124,96 @@ class WhatIsLeftAlone(unittest.TestCase):
         self.assertEqual(rewrite(target, 'packages/solo/README.md'), target)
 
 
+SITE = 'https://docs.yet-another.dev'
+
+
+def page(text, source, locale='en'):
+    """The body of the page [text] becomes, without its front matter."""
+    built = build_site.convert(text, locale, '', REPO, source, SITE)
+    return built.split('---\n', 2)[2].lstrip('\n')
+
+
+class ALinkToThePageItself(unittest.TestCase):
+    # "Also on the documentation site" is a link to the page it stands in,
+    # once the README is that page. The sentence goes, and nothing else.
+    def test_the_readme_drops_it(self):
+        text = (
+            '# async_job\n\n## Guides\n\n'
+            'Also on the [documentation site](https://docs.yet-another.dev/'
+            'async_job/), with\nsearch.\n\n| Page | What |\n| --- | --- |\n'
+        )
+        self.assertEqual(
+            page(text, 'packages/async_job/README.md'),
+            '## Guides\n\n| Page | What |\n| --- | --- |\n',
+        )
+
+    def test_the_russian_readme_drops_its_own(self):
+        text = (
+            '# async_job\n\nОни же на [сайте документации]'
+            '(https://docs.yet-another.dev/ru/async_job/),\nс поиском.\n\n'
+            'Текст.\n'
+        )
+        self.assertEqual(
+            page(text, 'packages/async_job/README.ru.md', 'ru'),
+            'Текст.\n',
+        )
+
+    def test_a_link_to_another_page_of_the_site_stays(self):
+        text = (
+            '# solo\n\nSee [the core](https://docs.yet-another.dev/'
+            'async_job/).\n'
+        )
+        self.assertIn(
+            'docs.yet-another.dev/async_job/',
+            page(text, 'packages/solo/README.md'),
+        )
+
+    def test_a_list_a_quote_and_other_links_stay(self):
+        link = '[site](https://docs.yet-another.dev/solo/)'
+        other = '[pub](https://pub.dev/packages/solo)'
+        text = (
+            f'# solo\n\n- one\n- {link}\n\n> {link}\n\n'
+            f'On the {link} and on {other}.\n'
+        )
+        built = page(text, 'packages/solo/README.md')
+        self.assertEqual(built.count(link), 3)
+
+    def test_a_fence_inside_a_list_item_stays_closed(self):
+        link = '[site](https://docs.yet-another.dev/solo/)'
+        text = f'# solo\n\n- item\n\n  ```\n  {link}\n  ```\n\nAfter.\n'
+        built = page(text, 'packages/solo/README.md')
+        self.assertEqual(built.count('```'), 2)
+        self.assertIn('After.', built)
+
+    def test_no_real_readme_links_to_itself_on_the_site(self):
+        # The guards above run on text written here. This one runs on the
+        # READMEs themselves, so a change of wording that slips past the
+        # filter -- a link without its slash, with an anchor -- shows up.
+        settings = build_site.config()
+        for source, _, segment, locale in build_site.sources():
+            if not source.name.startswith('README'):
+                continue
+            relative = source.relative_to(build_site.REPO).as_posix()
+            built = build_site.convert(
+                source.read_text(encoding='utf-8'),
+                locale,
+                settings['base'].strip('/'),
+                settings['repo'].rstrip('/'),
+                relative,
+                settings['site'],
+            )
+            itself = settings['site'].rstrip('/') + build_site.page_url(
+                settings['base'].strip('/'), locale, segment
+            )
+            with self.subTest(relative):
+                self.assertNotIn(itself.rstrip('/'), built)
+
+    def test_code_and_tables_stay(self):
+        link = '[site](https://docs.yet-another.dev/solo/)'
+        text = f'# solo\n\n```\n{link}\n```\n\n| {link} |\n'
+        built = page(text, 'packages/solo/README.md')
+        self.assertEqual(built.count(link), 2)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -8,6 +8,7 @@ import 'package:meta/meta.dart';
 import 'package:test/test.dart';
 
 import 'support/error_observer.dart';
+import 'support/fake_time.dart';
 import 'support/probe_job.dart';
 
 typedef _ListEnvelope = ParallelWaitError<List<Object?>, List<AsyncError?>>;
@@ -77,7 +78,7 @@ void _cancel(ProbeJob<void> job, Cancelled cancellation) =>
 
 void main() {
   group('clean envelopes', () {
-    test('a list envelope gives the body cancellation', () async {
+    fakeAsyncTest('a list envelope gives the body cancellation', () async {
       const cancelled = Cancelled('why');
       final branchTrace = StackTrace.current;
       var notifications = 0;
@@ -99,7 +100,7 @@ void main() {
       expect(notifications, 1);
     });
 
-    test('a record envelope gives the body cancellation', () async {
+    fakeAsyncTest('a record envelope gives the body cancellation', () async {
       const cancelled = Cancelled('why');
       final branchTrace = StackTrace.current;
       final outcome = await _run(() async {
@@ -116,7 +117,8 @@ void main() {
       expect(result.reason, isA<HandlerCancelReason>());
     });
 
-    test('a child cancellation keeps its child description and cascades',
+    fakeAsyncTest(
+        'a child cancellation keeps its child description and cascades',
         () async {
       const childThrown = Cancelled('child stopped');
       late Job<void> child;
@@ -159,7 +161,8 @@ void main() {
       );
     });
 
-    test('a list envelope nested in a list keeps the branch trace', () async {
+    fakeAsyncTest('a list envelope nested in a list keeps the branch trace',
+        () async {
       const cancelled = Cancelled('nested');
       final branchTrace = StackTrace.current;
       final inner = _listEnvelope([AsyncError(cancelled, branchTrace)]);
@@ -171,7 +174,7 @@ void main() {
       expect(outcome.stackTrace, same(branchTrace));
     });
 
-    test('a record envelope nested in a record keeps the branch trace',
+    fakeAsyncTest('a record envelope nested in a record keeps the branch trace',
         () async {
       const cancelled = Cancelled('nested');
       final branchTrace = StackTrace.current;
@@ -188,27 +191,32 @@ void main() {
       expect(outcome.stackTrace, same(branchTrace));
     });
 
-    test('an unobserved clean envelope stays out of the zone', () async {
+    fakeAsyncTest('an unobserved clean envelope stays out of the zone',
+        () async {
       final zoneErrors = <Object>[];
       const cancelled = Cancelled('quiet');
       final trace = StackTrace.current;
+      Outcome<void>? outcome;
       await runZonedGuarded(
         () async {
           final job = Job<void>(
             (ctx) async => throw _listEnvelope([AsyncError(cancelled, trace)]),
           );
           await Future<void>.delayed(Duration.zero);
-          expect(job.outcome, isA<Cancelled>());
+          outcome = job.outcome;
           await Future<void>.delayed(Duration.zero);
         },
         (error, stackTrace) => zoneErrors.add(error),
       );
+      // Out here, and not inside the zone above: an `expect` in there is
+      // an error like any other, and the handler would swallow it.
+      expect(outcome, isA<Cancelled>());
       expect(zoneErrors, isEmpty);
     });
   });
 
   group('forms and traversal', () {
-    test('all tuple arities and positions are parsed', () async {
+    fakeAsyncTest('all tuple arities and positions are parsed', () async {
       for (var arity = 2; arity <= 9; arity++) {
         for (var position = 0; position < arity; position++) {
           final cancelled = Cancelled('tuple $arity/$position');
@@ -230,21 +238,22 @@ void main() {
       }
     });
 
-    test('an empty envelope remains a failure', () async {
+    fakeAsyncTest('an empty envelope remains a failure', () async {
       final envelope = _listEnvelope([]);
       final outcome = await _run(() async => throw envelope);
       expect(outcome, isA<Failed>());
       expect((outcome as Failed).error, same(envelope));
     });
 
-    test('an all-null envelope remains a failure', () async {
+    fakeAsyncTest('an all-null envelope remains a failure', () async {
       final envelope = _listEnvelope([null, null]);
       final outcome = await _run(() async => throw envelope);
       expect(outcome, isA<Failed>());
       expect((outcome as Failed).error, same(envelope));
     });
 
-    test('an unknown nested form beside cancellation remains a failure',
+    fakeAsyncTest(
+        'an unknown nested form beside cancellation remains a failure',
         () async {
       const cancelled = Cancelled('known');
       final unknown = _recordEnvelope(Object());
@@ -257,7 +266,8 @@ void main() {
       expect((outcome as Failed).error, same(envelope));
     });
 
-    test('a cast list read failure still finishes as a failure', () async {
+    fakeAsyncTest('a cast list read failure still finishes as a failure',
+        () async {
       const cancelled = Cancelled('first');
       final source = <Object?>[
         AsyncError(cancelled, StackTrace.current),
@@ -273,7 +283,8 @@ void main() {
       expect((outcome as Failed).error, same(envelope));
     });
 
-    test('a chain of twenty thousand envelopes does not overflow', () async {
+    fakeAsyncTest('a chain of twenty thousand envelopes does not overflow',
+        () async {
       const cancelled = Cancelled('deep');
       ParallelWaitError<Object?, Object?> envelope = _listEnvelope([
         AsyncError(cancelled, StackTrace.current),
@@ -289,7 +300,7 @@ void main() {
       expect((outcome as Cancelled).description, 'deep');
     });
 
-    test('a shared completed subgraph is not a cycle', () async {
+    fakeAsyncTest('a shared completed subgraph is not a cycle', () async {
       const cancelled = Cancelled('shared');
       final inner = _listEnvelope([AsyncError(cancelled, StackTrace.current)]);
       final branch = AsyncError(inner, StackTrace.current);
@@ -300,7 +311,7 @@ void main() {
       expect((outcome as Cancelled).description, 'shared');
     });
 
-    test('a cycle makes the envelope unparsed', () async {
+    fakeAsyncTest('a cycle makes the envelope unparsed', () async {
       const cancelled = Cancelled('cycle');
       final errors = <AsyncError?>[];
       final envelope = _listEnvelope(errors);
@@ -313,7 +324,8 @@ void main() {
       expect((outcome as Failed).error, same(envelope));
     });
 
-    test('an envelope that calls itself equal is still not a cycle', () async {
+    fakeAsyncTest('an envelope that calls itself equal is still not a cycle',
+        () async {
       // `ParallelWaitError` is not a `final` class, so `==` can say two
       // distinct envelopes are the same. Nesting must follow identity, or a
       // nested envelope would be read as a cycle and lose its cancellation.
@@ -335,7 +347,8 @@ void main() {
   });
 
   group('cancellation selection', () {
-    test('selection follows position rather than completion time', () async {
+    fakeAsyncTest('selection follows position rather than completion time',
+        () async {
       final first = Completer<void>();
       final second = Completer<void>();
       const firstCancelled = Cancelled('first position');
@@ -356,7 +369,7 @@ void main() {
       expect(outcome.reason, isA<HandlerCancelReason>());
     });
 
-    test('a foreign cancellation before a child wins', () async {
+    fakeAsyncTest('a foreign cancellation before a child wins', () async {
       const foreign = Cancelled('foreign first');
       final foreignTrace = StackTrace.current;
       late Job<void> child;
@@ -381,7 +394,8 @@ void main() {
       expect(result.description, 'foreign first');
     });
 
-    test('the first trace is kept when cancellation repeats', () async {
+    fakeAsyncTest('the first trace is kept when cancellation repeats',
+        () async {
       const cancelled = Cancelled('repeated');
       final firstTrace = StackTrace.current;
       final secondTrace = StackTrace.current;
@@ -397,7 +411,8 @@ void main() {
   });
 
   group('external cancellation and diagnostics', () {
-    test('an external cancellation inside wait keeps its identity', () async {
+    fakeAsyncTest('an external cancellation inside wait keeps its identity',
+        () async {
       final errors = <Object>[];
       final cancellation = Cancelled.by(
         reason: const ManualCancelReason(),
@@ -419,7 +434,8 @@ void main() {
       expect(errors, isEmpty);
     });
 
-    test('a clean envelope reaches an observer as cancellation', () async {
+    fakeAsyncTest('a clean envelope reaches an observer as cancellation',
+        () async {
       final errors = <Object>[];
       const cancelled = Cancelled('observed');
       final envelope =
@@ -434,7 +450,8 @@ void main() {
       expect(errors, isEmpty);
     });
 
-    test('the zone route filters only a clean cancellation envelope', () async {
+    fakeAsyncTest('the zone route filters only a clean cancellation envelope',
+        () async {
       final caught = <Object>[];
       final clean = _listEnvelope([
         AsyncError(const Cancelled('clean route'), StackTrace.current),
@@ -455,7 +472,8 @@ void main() {
       expect(caught, [same(mixed)]);
     });
 
-    test('unattended cancellation keeps ownership filtering', () async {
+    fakeAsyncTest('unattended cancellation keeps ownership filtering',
+        () async {
       final ownErrors = <Object>[];
       final entered = Completer<void>();
       final own = Job<void>(
@@ -498,7 +516,8 @@ void main() {
       expect(foreignErrors, [same(foreign)]);
     });
 
-    test('unattended hears a clean envelope but the zone does not', () async {
+    fakeAsyncTest('unattended hears a clean envelope but the zone does not',
+        () async {
       final errors = <Object>[];
       final zone = <Object>[];
       const cancelled = Cancelled('unattended-clean');
@@ -528,7 +547,8 @@ void main() {
       expect(zone, isEmpty);
     });
 
-    test('an unobserved clean envelope from unattended stays silent', () async {
+    fakeAsyncTest('an unobserved clean envelope from unattended stays silent',
+        () async {
       final zone = <Object>[];
       const cancelled = Cancelled('unattended-clean');
 
@@ -552,7 +572,8 @@ void main() {
       expect(zone, isEmpty);
     });
 
-    test('a mixed envelope from unattended reaches both routes', () async {
+    fakeAsyncTest('a mixed envelope from unattended reaches both routes',
+        () async {
       final errors = <Object>[];
       final zone = <Object>[];
       final boom = StateError('unattended-boom');
@@ -602,7 +623,8 @@ void main() {
       expect(zone, everyElement(isA<ParallelWaitError<Object?, Object?>>()));
     });
 
-    test('each turns a handler cancellation into a parent cancellation',
+    fakeAsyncTest(
+        'each turns a handler cancellation into a parent cancellation',
         () async {
       final controller = StreamController<int>();
       const cancelled = Cancelled('handler stopped');
@@ -619,10 +641,13 @@ void main() {
       expect(outcome, isA<Cancelled>());
       expect((outcome as Cancelled).description, contains('handler stopped'));
       expect(controller.hasListener, isFalse);
-      await controller.close();
+      // Not awaited: the subscription is cancelled by now, and `close` then
+      // hands back a future of the root zone, which fake time does not run.
+      unawaited(controller.close());
     });
 
-    test('each finishes its active handler before external cancellation',
+    fakeAsyncTest(
+        'each finishes its active handler before external cancellation',
         () async {
       final controller = StreamController<int>();
       final started = Completer<void>();
@@ -652,10 +677,13 @@ void main() {
       expect(events, 1);
       expect(errors, isEmpty);
       expect(controller.hasListener, isFalse);
-      await controller.close();
+      // Not awaited: the subscription is cancelled by now, and `close` then
+      // hands back a future of the root zone, which fake time does not run.
+      unawaited(controller.close());
     });
 
-    test('each preserves a handler failure inside its diagnostic envelope',
+    fakeAsyncTest(
+        'each preserves a handler failure inside its diagnostic envelope',
         () async {
       final controller = StreamController<int>();
       final handlerError = StateError('handler failure');
@@ -701,12 +729,15 @@ void main() {
       );
       expect(errors, contains(same(handlerError)));
       expect(controller.hasListener, isFalse);
-      await controller.close();
+      // Not awaited: the subscription is cancelled by now, and `close` then
+      // hands back a future of the root zone, which fake time does not run.
+      unawaited(controller.close());
     });
   });
 
   group('continuation', () {
-    test('a continuation classifies a clean parallel cancellation', () async {
+    fakeAsyncTest('a continuation classifies a clean parallel cancellation',
+        () async {
       const cancelled = Cancelled('continuation stopped');
       final source = Job<int>((ctx) async => 1);
       final continuation = source.then<void>((ctx, value) async {
@@ -724,7 +755,8 @@ void main() {
   });
 
   group('invariance guards', () {
-    test('a mixed envelope stays a failed object everywhere', () async {
+    fakeAsyncTest('a mixed envelope stays a failed object everywhere',
+        () async {
       final failure = StateError('real failure');
       const cancelled = Cancelled('mixed cancellation');
       final values = <Object?>[null, 'value'];
@@ -745,7 +777,8 @@ void main() {
       expect((result.error as ParallelWaitError).values, same(values));
     });
 
-    test('an unobserved mixed envelope reaches the zone once', () async {
+    fakeAsyncTest('an unobserved mixed envelope reaches the zone once',
+        () async {
       final caught = <Object>[];
       final failure = StateError('mixed zone failure');
       final envelope = _listEnvelope([
@@ -764,7 +797,8 @@ void main() {
       expect(caught, [same(envelope)]);
     });
 
-    test('a mixed nested envelope stays as the outer object', () async {
+    fakeAsyncTest('a mixed nested envelope stays as the outer object',
+        () async {
       final failure = StateError('nested real failure');
       final inner = _listEnvelope([
         AsyncError(failure, StackTrace.current),
@@ -777,7 +811,8 @@ void main() {
       expect((outcome as Failed).error, same(outer));
     });
 
-    test('a pending cancellation wins over a mixed envelope with observer',
+    fakeAsyncTest(
+        'a pending cancellation wins over a mixed envelope with observer',
         () async {
       final errors = <Object>[];
       final failure = StateError('pending failure');
@@ -807,7 +842,8 @@ void main() {
       expect(outcome, same(cancellation));
     });
 
-    test('a pending cancellation wins over a mixed envelope without observer',
+    fakeAsyncTest(
+        'a pending cancellation wins over a mixed envelope without observer',
         () async {
       final caught = <Object>[];
       final failure = StateError('pending silent failure');
@@ -837,7 +873,8 @@ void main() {
       expect(caught, isEmpty);
     });
 
-    test('Future.wait keeps its first completed error behavior', () async {
+    fakeAsyncTest('Future.wait keeps its first completed error behavior',
+        () async {
       final first = Completer<void>();
       final second = Completer<void>();
       final firstFailure = StateError('first future');
@@ -855,7 +892,8 @@ void main() {
       expect(outcome.reason, isA<HandlerCancelReason>());
     });
 
-    test('eagerError moves when the body wakes, and nothing else', () async {
+    fakeAsyncTest('eagerError moves when the body wakes, and nothing else',
+        () async {
       // What `doc/children.md` promises about the three forms: only the
       // moment of waking differs. Either way a body that catches and
       // returns leaves the job successful with a branch failed, and a value
@@ -940,7 +978,8 @@ void main() {
       );
     });
 
-    test('an intentional envelope and a nested Failed stay opaque', () async {
+    fakeAsyncTest('an intentional envelope and a nested Failed stay opaque',
+        () async {
       final failure = StateError('intentional failure');
       final envelope = _listEnvelope([AsyncError(failure, StackTrace.current)]);
       final envelopeOutcome = await _run(() async => throw envelope);
@@ -955,7 +994,8 @@ void main() {
       expect((nestedOutcome as Failed).error, same(failed));
     });
 
-    test('a continuation forwards a source failure unchanged', () async {
+    fakeAsyncTest('a continuation forwards a source failure unchanged',
+        () async {
       final failure = StateError('source failure');
       var called = false;
       final source = Job<int>((ctx) async => throw failure);
@@ -969,7 +1009,7 @@ void main() {
       expect(called, isFalse);
     });
 
-    test('wait disposal runs once before the job finishes', () async {
+    fakeAsyncTest('wait disposal runs once before the job finishes', () async {
       final resource = Object();
       var closed = 0;
       const cancelled = Cancelled('dispose');

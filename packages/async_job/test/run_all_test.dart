@@ -258,8 +258,10 @@ void main() {
     });
   });
 
-  test('a real failure beats a cancellation, whenever it arrives', () {
-    for (final escapes in [false, true]) {
+  for (final escapes in [false, true]) {
+    test(
+        'a real failure beats a cancellation, whenever it arrives, '
+        'escapes: $escapes', () {
       fakeAsync((async) {
         final journal = JobJournal();
         final selected = StateError('selected');
@@ -312,8 +314,8 @@ void main() {
               'retells what the caller received',
         );
       });
-    }
-  });
+    });
+  }
 
   test('a failure covered by the stop does not beat a real cancellation', () {
     final zone = <Object>[];
@@ -457,9 +459,11 @@ void main() {
     });
   });
 
-  test('the first outcome to arrive wins, whatever the list order', () {
-    for (final listOrder in ['ab', 'ba']) {
-      for (final finishOrder in ['ab', 'ba']) {
+  for (final listOrder in ['ab', 'ba']) {
+    for (final finishOrder in ['ab', 'ba']) {
+      test(
+          'the first outcome to arrive wins, whatever the list order, '
+          'listOrder: $listOrder, finishOrder: $finishOrder', () {
         fakeAsync((async) {
           final gates = {'a': Completer<void>(), 'b': Completer<void>()};
           final errors = {'a': StateError('a'), 'b': StateError('b')};
@@ -497,9 +501,9 @@ void main() {
             reason: 'list $listOrder, finish $finishOrder',
           );
         });
-      }
+      });
     }
-  });
+  }
 
   test('the stop is cooperative and reaches only what listens', () {
     fakeAsync((async) {
@@ -744,8 +748,10 @@ void main() {
     });
   });
 
-  test('between two cancellations the first one to arrive wins', () {
-    for (final dropOrder in ['ab', 'ba']) {
+  for (final dropOrder in ['ab', 'ba']) {
+    test(
+        'between two cancellations the first one to arrive wins, '
+        'dropOrder: $dropOrder', () {
       fakeAsync((async) {
         // Two branches are ended by hand while they stand at the second
         // barrier, one after the other in the same synchronous burst. The
@@ -799,8 +805,8 @@ void main() {
           reason: 'and the branch the group stopped is not in the running',
         );
       });
-    }
-  });
+    });
+  }
 
   test('a failure the group received and did not throw is not lost', () {
     fakeAsync((async) {
@@ -872,8 +878,10 @@ void main() {
     );
   });
 
-  test('a failure that never went through a body is not lost either', () {
-    for (final withObserver in [false, true]) {
+  for (final withObserver in [false, true]) {
+    test(
+        'a failure that never went through a body is not lost either, '
+        'withObserver: $withObserver', () {
       final zone = <Object>[];
       final heard = <Object>[];
       final chosen = StateError('chosen');
@@ -927,8 +935,8 @@ void main() {
         reason: 'an observer that only watches answers for nothing: '
             'observer: $withObserver',
       );
-    }
-  });
+    });
+  }
 
   test('a handle the core refuses is refused before any branch starts', () {
     fakeAsync((async) {
@@ -1214,8 +1222,10 @@ void main() {
     });
   });
 
-  test('the group checks the parent before it commits, and reads again', () {
-    for (final trigger in ['cancel', 'rules', 'reentrant']) {
+  for (final trigger in ['cancel', 'rules', 'reentrant']) {
+    test(
+        'the group checks the parent before it commits, and reads again, '
+        'trigger: $trigger', () {
       fakeAsync((async) {
         var continued = false;
         var closes = 0;
@@ -1280,8 +1290,8 @@ void main() {
                   'false',
         );
       });
-    }
-  });
+    });
+  }
 
   test('a cancellation from outside a branch comes out as it is', () {
     fakeAsync((async) {
@@ -1617,8 +1627,10 @@ void main() {
     });
   });
 
-  test('a branch is held before it unwinds, and let go on every path', () {
-    for (final path in ['success', 'branch-error', 'parent-cancel']) {
+  for (final path in ['success', 'branch-error', 'parent-cancel']) {
+    test(
+        'a branch is held before it unwinds, and let go on every path, '
+        'path: $path', () {
       fakeAsync((async) {
         final slow = Completer<void>();
         var bodyEnded = false;
@@ -1672,8 +1684,13 @@ void main() {
           reason: 'on success the value went to the caller: $path',
         );
       });
-    }
-    for (final barrier in ['first', 'second']) {
+    });
+  }
+
+  for (final barrier in ['first', 'second']) {
+    test(
+        'a group whose own code throws at a barrier leaves nothing held, '
+        'barrier: $barrier', () {
       fakeAsync((async) {
         // The code of the group itself throws while branches stand at a
         // barrier: at the first one an engine of a domain fails to stop,
@@ -1735,7 +1752,12 @@ void main() {
               'released: $barrier',
         );
       });
-    }
+    });
+  }
+
+  test(
+      'a refusal of admission after part of the list has started stops the '
+      'started branch and discards what it took', () {
     fakeAsync((async) {
       // A refusal of admission after part of the list has started: only an
       // engine refusing the adoption gives one, everything else is asked
@@ -1768,8 +1790,10 @@ void main() {
     });
   });
 
-  test('the second barrier catches what the first one would have missed', () {
-    for (final trigger in ['branch', 'parent']) {
+  for (final trigger in ['branch', 'parent']) {
+    test(
+        'the second barrier catches what the first one would have missed, '
+        'trigger: $trigger', () {
       fakeAsync((async) {
         // Both branches took a resource for the caller and returned. The
         // group let them into the unwinding; one is still in an
@@ -1810,7 +1834,12 @@ void main() {
         expect(closes, {'a': 1, 'b': 1}, reason: trigger);
         expect(thrown, isA<Cancelled>(), reason: trigger);
       });
-    }
+    });
+  }
+
+  test(
+      'a cancellation from the finish of a sibling comes after the commit '
+      'and closes nothing', () {
     fakeAsync((async) {
       // A cancellation that arrives from the finish of a sibling, in the
       // very window the commit closes: synchronous, with no schedule of
@@ -1892,8 +1921,10 @@ void main() {
     });
   });
 
-  test('what a branch registers while it waits follows the verdict', () {
-    for (final path in ['success', 'accepted', 'late-cancel', 'refused']) {
+  for (final path in ['success', 'accepted', 'late-cancel', 'refused']) {
+    test(
+        'what a branch registers while it waits follows the verdict, '
+        'path: $path', () {
       fakeAsync((async) {
         var disposed = 0;
         var discarded = 0;
@@ -1985,8 +2016,8 @@ void main() {
           expect(bare.outcome, isA<Done<String>>());
         }
       });
-    }
-  });
+    });
+  }
 
   test('a branch of the bare core that ends without a body is announced', () {
     fakeAsync((async) {
@@ -2156,28 +2187,30 @@ void main() {
     });
   });
 
-  test('a branch unwinds once every body is over, or one ended without a value',
-      () {
-    const expected = {
-      'value': [
-        '40: late body ends',
-        '80: child of late ends',
-        '80: early disposed',
-      ],
-      'failure': [
-        '40: late body ends',
-        '40: early disposed',
-        '80: child of late ends',
-      ],
-      // Cancelled on its own, not through the parent: its body ends there
-      // and then, and that is as much an early word as a failure. `slow`,
-      // still in its body, is what the others would otherwise wait for.
-      'cancellation': [
-        '20: late cancelled',
-        '20: early disposed',
-      ],
-    };
-    for (final path in expected.keys) {
+  // Where each path of the unwinding leaves its trace.
+  const unwinding = {
+    'value': [
+      '40: late body ends',
+      '80: child of late ends',
+      '80: early disposed',
+    ],
+    'failure': [
+      '40: late body ends',
+      '40: early disposed',
+      '80: child of late ends',
+    ],
+    // Cancelled on its own, not through the parent: its body ends there
+    // and then, and that is as much an early word as a failure. `slow`,
+    // still in its body, is what the others would otherwise wait for.
+    'cancellation': [
+      '20: late cancelled',
+      '20: early disposed',
+    ],
+  };
+  for (final path in unwinding.keys) {
+    test(
+        'a branch unwinds once every body is over, or one ended without a '
+        'value, path: $path', () {
       fakeAsync((async) {
         final trace = <String>[];
         void at(String what) =>
@@ -2215,14 +2248,15 @@ void main() {
           late.cancel().ignore();
         }
         async.flushTimers();
-        expect(trace, expected[path], reason: path);
+        expect(trace, unwinding[path], reason: path);
       });
-    }
-  });
+    });
+  }
 
-  test('a lock or a pool the branches share through dispose hangs the group',
-      () {
-    for (final through in ['join', 'bare await', 'wait']) {
+  for (final through in ['join', 'bare await', 'wait']) {
+    test(
+        'a lock the branches share through dispose hangs the group, '
+        'through: $through', () {
       fakeAsync((async) {
         final trace = <String>[];
         final lock = SharedSlots(trace);
@@ -2280,11 +2314,16 @@ void main() {
           expect(trace, ['a holds', 'b waits'], reason: through);
         }
       });
-    }
-    // A pool with fewer free slots than the branches that want one, the
-    // same way: three branches for two slots, or two branches for two slots
-    // of which the parent already holds one.
-    for (final parentHolds in [false, true]) {
+    });
+  }
+
+  // A pool with fewer free slots than the branches that want one, the
+  // same way: three branches for two slots, or two branches for two slots
+  // of which the parent already holds one.
+  for (final parentHolds in [false, true]) {
+    test(
+        'a pool the branches share through dispose hangs the group, '
+        'parentHolds: $parentHolds', () {
       fakeAsync((async) {
         final trace = <String>[];
         final pool = SharedSlots(trace, slots: 2);
@@ -2322,8 +2361,8 @@ void main() {
         );
         expect(async.pendingTimers, isEmpty);
       });
-    }
-  });
+    });
+  }
 
   group('a cancellation unties the hang only by ending what a branch waits for',
       () {
@@ -2432,9 +2471,10 @@ void main() {
     }
   });
 
-  test('a lock two branches share is free in a child of each, or under .wait',
-      () {
-    for (final form in ['child of the branch', '.wait']) {
+  for (final form in ['child of the branch', '.wait']) {
+    test(
+        'a lock two branches share is free in a child of each, or under .wait, '
+        'form: $form', () {
       fakeAsync((async) {
         final trace = <String>[];
         final lock = SharedSlots(trace);
@@ -2468,8 +2508,8 @@ void main() {
           reason: form,
         );
       });
-    }
-  });
+    });
+  }
 
   group('a branch awaiting a sibling hangs until the group can decide', () {
     // `a` returns at once and stands held; `b` awaits `a` the way the case

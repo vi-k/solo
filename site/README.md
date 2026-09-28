@@ -1,11 +1,13 @@
 # Documentation site
 
-[Starlight](https://starlight.astro.build) over the packages' own
-Markdown. The pages under `src/content/docs/` are **generated** and not
-kept in git: `tool/build_site.py` reads the READMEs and the `doc/` folders,
-adds the frontmatter Starlight wants, and rewrites the links between files
-into links between pages. The packages stay the single source of truth, so
-the site cannot drift from what ships on pub.dev.
+[Starlight](https://starlight.astro.build) over the packages' own Markdown. The
+pages under `src/content/docs/` are **generated** and not kept in git:
+`tool/build_site.py` reads the READMEs and the `doc/` folders, adds the
+frontmatter Starlight wants, and rewrites the links between files into links
+between pages. A paragraph of prose that links only to the very page it stands
+in — a README's "Also on the documentation site" — is dropped. The packages
+stay the single source of truth, so the site cannot drift from what ships on
+pub.dev.
 
 Both languages are published. English is the root locale and comes from
 the packages; Russian lives under `/ru/` and comes from each package's

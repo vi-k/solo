@@ -95,8 +95,10 @@ void main() {
       });
     });
 
-    test('Future.wait: an observer of the parent is the one that hears it', () {
-      for (final observed in [true, false]) {
+    for (final observed in [true, false]) {
+      test(
+          'Future.wait: an observer of the parent is the one that hears it, '
+          'observed: $observed', () {
         final observer = Listening();
         final zone = <String>[];
         runZonedGuarded(
@@ -130,8 +132,8 @@ void main() {
           reason: reason,
         );
         expect(zone, isEmpty, reason: reason);
-      }
-    });
+      });
+    }
 
     test('Future.wait: nobody closes what the other branch handed over', () {
       fakeAsync((async) {

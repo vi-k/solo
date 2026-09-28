@@ -257,14 +257,18 @@ void main() {
 
     test('awaiting cancel and registering with whenCancelled do not either',
         () {
+      var cancelReturned = false;
       final caught = zoneOf((async) {
         final sync = Job<void>(cancellable: false, upload)
           ..whenCancelled((_) {});
         async.elapse(const Duration(milliseconds: 5));
-        sync.cancel().ignore();
+        // Awaited for real: the future of `cancel` completes, and the
+        // failure still goes to the zone.
+        sync.cancel().then((_) => cancelReturned = true).ignore();
         async.flushTimers();
       });
 
+      expect(cancelReturned, isTrue);
       expect(caught, ['zone: Bad state: disk full']);
     });
 

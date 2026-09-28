@@ -9,6 +9,7 @@ import 'package:meta/meta.dart';
 import 'package:test/test.dart';
 
 import 'support/error_observer.dart';
+import 'support/fake_time.dart';
 
 /// The first attempts of `doc/cleanup.md`, and what each one costs.
 ///
@@ -107,7 +108,7 @@ void main() {
   tearDown(() => Job.debug = null);
 
   group('Choosing the callback', () {
-    test('discard leaves a lock the body keeps held', () async {
+    fakeAsyncTest('discard leaves a lock the body keeps held', () async {
       late Lock lock;
       final job = Job<Database>(key: 'work', (ctx) async {
         lock = await ctx.join(acquire, discard: (lock) => lock.release());
@@ -121,7 +122,7 @@ void main() {
       expect(db.closed, isFalse);
     });
 
-    test('dispose releases it on the successful path too', () async {
+    fakeAsyncTest('dispose releases it on the successful path too', () async {
       late Lock lock;
       final job = Job<Database>(key: 'work', (ctx) async {
         lock = await ctx.join(acquire, dispose: (lock) => lock.release());
@@ -134,7 +135,7 @@ void main() {
       expect(db.closed, isFalse);
     });
 
-    test('a cancelled job releases both', () async {
+    fakeAsyncTest('a cancelled job releases both', () async {
       final gate = Gate();
       late Lock lock;
       late Database db;
@@ -170,7 +171,8 @@ void main() {
           },
         );
 
-    test('the child that handed its value over closes nothing', () async {
+    fakeAsyncTest('the child that handed its value over closes nothing',
+        () async {
       final ready = Job<Database>(key: 'ready', (ctx) async {
         final db = await ctx.run(connect());
         await ctx.join(db.failingMigrate);
@@ -183,7 +185,7 @@ void main() {
       expect(trace, isNot(contains('db closed')));
     });
 
-    test('the registration under run is never reached', () async {
+    fakeAsyncTest('the registration under run is never reached', () async {
       final gate = Gate();
       final ready = Job<Database>(key: 'ready', (ctx) async {
         final db = await ctx.run(connect(gate: gate, cancellable: false));
@@ -202,7 +204,7 @@ void main() {
       expect(trace, isNot(contains('db closed')));
     });
 
-    test('the registration handed to run closes it', () async {
+    fakeAsyncTest('the registration handed to run closes it', () async {
       final gate = Gate();
       final ready = Job<Database>(key: 'ready', (ctx) async {
         final db = await ctx.run(
@@ -222,7 +224,8 @@ void main() {
       expect(trace, contains('db closed'));
     });
 
-    test('a hand-over that succeeds leaves the database open', () async {
+    fakeAsyncTest('a hand-over that succeeds leaves the database open',
+        () async {
       final ready = Job<Database>(key: 'ready', (ctx) async {
         final db = await ctx.run(connect(), discard: (db) => db.close());
         await ctx.join(db.migrate);
@@ -235,7 +238,8 @@ void main() {
       expect(trace, contains('db migrated'));
     });
 
-    test('the debug channel names the hand-over of the page', () async {
+    fakeAsyncTest('the debug channel names the hand-over of the page',
+        () async {
       final said = <String>[];
       Job.debug = said.add;
 
@@ -260,7 +264,8 @@ void main() {
   });
 
   group('Registering without a call', () {
-    test('the unregister call under the action is not reached', () async {
+    fakeAsyncTest('the unregister call under the action is not reached',
+        () async {
       final gate = Gate();
       final cursor = Database('cursor', trace);
       final job = Job<void>(key: 'read', (ctx) async {
@@ -280,7 +285,7 @@ void main() {
       expect(cursor.closes, 2);
     });
 
-    test('unregistering inside the action closes it once', () async {
+    fakeAsyncTest('unregistering inside the action closes it once', () async {
       final gate = Gate();
       final cursor = Database('cursor', trace);
       final job = Job<void>(key: 'read', (ctx) async {
@@ -300,7 +305,8 @@ void main() {
       expect(cursor.closes, 1);
     });
 
-    test('the unregister function is safe twice and after cleanup', () async {
+    fakeAsyncTest('the unregister function is safe twice and after cleanup',
+        () async {
       late void Function() removeDisposer;
       final job = Job<void>(key: 'twice', (ctx) async {
         removeDisposer = ctx.onDispose(() async => trace.add('disposer ran'));
@@ -315,7 +321,7 @@ void main() {
       expect(trace, isEmpty);
     });
 
-    test('disown looks the value up by identity', () async {
+    fakeAsyncTest('disown looks the value up by identity', () async {
       final answers = <bool>[];
       final job = Job<void>(key: 'disown', (ctx) async {
         final address = await ctx.join(
@@ -341,7 +347,7 @@ void main() {
       expect(trace, isEmpty);
     });
 
-    test('a number is found by an equal one of its type', () async {
+    fakeAsyncTest('a number is found by an equal one of its type', () async {
       final answers = <bool>[];
       final job = Job<void>(key: 'disown', (ctx) async {
         final port = await ctx.join(
@@ -366,7 +372,7 @@ void main() {
   });
 
   group('Cleanup order and late results', () {
-    test('cleanup waits for the children', () async {
+    fakeAsyncTest('cleanup waits for the children', () async {
       final gate = Gate();
       final job = Job<void>(key: 'parent', (ctx) async {
         ctx.onDispose(() async => trace.add('parent cleanup'));
@@ -393,7 +399,8 @@ void main() {
       );
     });
 
-    test('callbacks run in reverse order and each is awaited', () async {
+    fakeAsyncTest('callbacks run in reverse order and each is awaited',
+        () async {
       final job = Job<void>(key: 'order', (ctx) async {
         ctx
           ..onDispose(() async {
@@ -408,7 +415,7 @@ void main() {
       expect(trace, <String>['second', 'first']);
     });
 
-    test('an error in one callback leaves the rest running', () async {
+    fakeAsyncTest('an error in one callback leaves the rest running', () async {
       final errors = <Object>[];
       final job = Job<void>(
         key: 'boom',
@@ -428,7 +435,8 @@ void main() {
       expect(job.outcome, isA<Done<void>>());
     });
 
-    test('a cancellation into the unwinding stops no callback', () async {
+    fakeAsyncTest('a cancellation into the unwinding stops no callback',
+        () async {
       final gate = Gate();
       final job = Job<void>(key: 'unwind', (ctx) async {
         ctx
@@ -449,7 +457,8 @@ void main() {
       expect(trace, <String>['waiting', 'released', 'under it']);
     });
 
-    test('waiting methods throw StateError inside a callback', () async {
+    fakeAsyncTest('waiting methods throw StateError inside a callback',
+        () async {
       final caught = <Object>[];
       final job = Job<void>(key: 'late', (ctx) async {
         ctx.onDispose(() async {
@@ -466,7 +475,8 @@ void main() {
       expect(caught, <Matcher>[isStateError]);
     });
 
-    test('cancellation after the return closes what was returned', () async {
+    fakeAsyncTest('cancellation after the return closes what was returned',
+        () async {
       final gate = Gate();
       late Database db;
       final job = Job<Database>(key: 'open', (ctx) async {
@@ -496,7 +506,8 @@ void main() {
       expect(db.closed, isTrue);
     });
 
-    test('the second pass runs the discard after the earlier callbacks',
+    fakeAsyncTest(
+        'the second pass runs the discard after the earlier callbacks',
         () async {
       final gate = Gate();
       final job = Job<Database>(key: 'order', (ctx) async {
@@ -536,7 +547,7 @@ void main() {
       );
     });
 
-    test('a branch whose group handed the values over keeps its value',
+    fakeAsyncTest('a branch whose group handed the values over keeps its value',
         () async {
       final job = Job<void>(key: 'group', (ctx) async {
         final values = await ctx.runAll(<Job<Database>>[
@@ -562,7 +573,8 @@ void main() {
       expect(trace, isNot(contains('right closed')));
     });
 
-    test('a branch whose group never decided closes what it took', () async {
+    fakeAsyncTest('a branch whose group never decided closes what it took',
+        () async {
       final gate = Gate();
       final job = Job<void>(key: 'group', (ctx) async {
         await ctx.runAll(<Job<Database>>[
@@ -592,7 +604,8 @@ void main() {
       expect(trace, contains('right closed'));
     });
 
-    test('a value abandoned by wait is released after the job ended', () async {
+    fakeAsyncTest('a value abandoned by wait is released after the job ended',
+        () async {
       final gate = Gate();
       final job = Job<void>(key: 'abandon', (ctx) async {
         await ctx.wait(
@@ -621,7 +634,8 @@ void main() {
       );
     });
 
-    test('a plain await registers what a cancellation could not interrupt',
+    fakeAsyncTest(
+        'a plain await registers what a cancellation could not interrupt',
         () async {
       final gate = Gate();
       late Database db;
