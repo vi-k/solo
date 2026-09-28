@@ -302,13 +302,16 @@ abstract interface class JobContext {
 
   /// Drops the cleanup registered for [value] by [wait] or [join].
   ///
-  /// Returns whether anything was dropped. The lookup is by identity, so
-  /// pass the very object the body was handed: an equal one of its own —
-  /// a string, a record, a number built again — finds nothing.
-  /// Registrations made by [onDispose] and [onDiscard] carry no value and
-  /// are invisible here — they are dropped by the function those members
-  /// return; an unknown value is not an error. With two registrations for
-  /// one value the top one goes, one per call.
+  /// Returns whether anything was dropped. The lookup is by identity, so pass
+  /// the very object the body was handed. What an equal one finds depends on
+  /// the value and the platform: `identical` answers by value for numbers of
+  /// one type and for `bool`s, and on some platforms for strings and records,
+  /// so an equal value of that kind may drop a registration somebody else
+  /// made. A resource such a value stands for is registered with [onDispose]
+  /// or [onDiscard] instead. Registrations made by those two carry no value
+  /// and are invisible here — they are dropped by the function those members
+  /// return; an unknown value is not an error. With two registrations for one
+  /// value the top one goes, one per call.
   ///
   /// Stands next to the hand-over: before it, when the hand-over is
   /// synchronous and may throw after its own work (`emit` of `solo`), and

@@ -51,6 +51,10 @@ final class ProbeJob<T> extends JobBase<T> {
 /// The context that goes with [ProbeJob].
 final class ProbeContext extends JobContextBase {
   ProbeContext(super.owner);
+
+  /// Starts [child] the way an engine of a domain does, through the
+  /// protected door, with nobody looking at its outcome.
+  void adopt(Job<Object?> child) => startChild(child);
 }
 
 /// A job of the core that refuses whoever tries to adopt it.

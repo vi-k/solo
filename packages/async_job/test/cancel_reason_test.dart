@@ -8,6 +8,7 @@ import 'package:test/test.dart';
 import 'support/cancel_reason.dart';
 import 'support/delay.dart';
 import 'support/error_observer.dart';
+import 'support/probe_job.dart';
 
 final class _BrokenLabelReason extends CancelReason {
   @override
@@ -100,6 +101,82 @@ void main() {
           (child.outcome! as Cancelled).reason as ParentCancelReason;
       expect(childReason.cause, same(parent.outcome));
       expect(childReason.cause!.reason, same(reason));
+    });
+  });
+
+  // `Cancelled.stackTrace` is where the cancellation came from, and for a
+  // child the parent took down that is where the parent's came from.
+  test('a cascade carries the stack trace of the cancel over to the child', () {
+    fakeAsync((async) {
+      late Job<void> child;
+      final parent = Job<void>((ctx) async {
+        child = Job.deferred<void>((ctx) => ctx.wait(() => delay(50)));
+        ctx.run(child).ignore();
+        await ctx.wait(() => delay(50));
+      })
+        ..ignore();
+      async.flushMicrotasks();
+      parent.cancel().ignore();
+      async.flushTimers();
+      final cause = parent.outcome! as Cancelled;
+      expect(cause.stackTrace, isNotNull);
+      expect((child.outcome! as Cancelled).stackTrace, same(cause.stackTrace));
+    });
+  });
+
+  test('a cascade carries the stack trace of a body that gave up', () {
+    fakeAsync((async) {
+      late Job<void> child;
+      final parent = Job<void>((ctx) async {
+        child = Job.deferred<void>((ctx) => ctx.wait(() => delay(50)));
+        ctx.run(child).ignore();
+        await ctx.wait(() => delay(10));
+        throw const Cancelled('gave up');
+      })
+        ..ignore();
+      async.flushTimers();
+      final cause = parent.outcome! as Cancelled;
+      expect(cause.stackTrace, isNotNull);
+      expect((child.outcome! as Cancelled).stackTrace, same(cause.stackTrace));
+    });
+  });
+
+  test('a child turned away by a cancelled parent carries its stack trace', () {
+    fakeAsync((async) {
+      final child = Job.deferred<void>((ctx) async {});
+      final parent = Job<void>((ctx) async {
+        try {
+          await ctx.wait(() => delay(50));
+        } on Cancelled {
+          ctx.run(child).ignore();
+          rethrow;
+        }
+      })
+        ..ignore();
+      async.flushMicrotasks();
+      parent.cancel().ignore();
+      async.flushTimers();
+      final cause = parent.outcome! as Cancelled;
+      expect(cause.stackTrace, isNotNull);
+      expect((child.outcome! as Cancelled).stackTrace, same(cause.stackTrace));
+    });
+  });
+
+  test('a cancellation corrected to not started keeps its stack trace', () {
+    fakeAsync((async) {
+      final trace = StackTrace.current;
+      final job = ProbeJob<void>((ctx) async {})
+        ..cancelBy(
+          Cancelled.by(
+            reason: const TestCancelReason('engine'),
+            started: true,
+            stackTrace: trace,
+          ),
+        );
+      async.flushMicrotasks();
+      final outcome = job.outcome! as Cancelled;
+      expect(outcome.started, isFalse, reason: 'the body never ran');
+      expect(outcome.stackTrace, same(trace));
     });
   });
 

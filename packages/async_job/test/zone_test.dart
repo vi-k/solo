@@ -41,6 +41,64 @@ void main() {
     expect(caught, isEmpty);
   });
 
+  // A parent waits for its children with `whenDone`: waiting is the
+  // engine's business, and a child nobody looked at still answers to the
+  // zone. The ordinary shape of it: the body starts listening and returns,
+  // and the stream fails later.
+  test('a child of each that fails after the body goes to the zone', () {
+    final caught = <Object>[];
+    Outcome<void>? parentOutcome;
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          final source = StreamController<int>();
+          final parent = Job<void>((ctx) async {
+            ctx.each(source.stream, (_, event) {});
+          });
+          async.flushMicrotasks();
+          source.addError(StateError('stream boom'));
+          async.flushMicrotasks();
+          parentOutcome = parent.outcome;
+          source.close().ignore();
+        });
+      },
+      (error, stackTrace) => caught.add(error),
+    );
+    expect(parentOutcome, isA<Done<void>>());
+    expect(
+      caught.map((error) => '$error').toList(),
+      ['Bad state: stream boom'],
+    );
+  });
+
+  test('a child an engine started and nobody looked at goes to the zone', () {
+    final caught = <Object>[];
+    Outcome<void>? parentOutcome;
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          final gate = Completer<void>();
+          final parent = ProbeJob<void>((ctx) async {
+            (ctx as ProbeContext).adopt(
+              Job.deferred<void>((ctx) async {
+                await gate.future;
+                throw StateError('late');
+              }),
+            );
+          })
+            ..launch();
+          async.flushMicrotasks();
+          gate.complete();
+          async.flushMicrotasks();
+          parentOutcome = parent.outcome;
+        });
+      },
+      (error, stackTrace) => caught.add(error),
+    );
+    expect(parentOutcome, isA<Done<void>>());
+    expect(caught.map((error) => '$error').toList(), ['Bad state: late']);
+  });
+
   test('the body error reaches the observer once, not the zone twice', () {
     final journal = JobJournal();
     final caught = <Object>[];

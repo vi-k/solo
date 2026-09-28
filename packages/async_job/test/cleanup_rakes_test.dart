@@ -4,6 +4,7 @@ library;
 import 'dart:async';
 
 import 'package:async_job/engine.dart';
+import 'package:meta/meta.dart';
 import 'package:test/test.dart';
 
 import 'support/error_observer.dart';
@@ -49,6 +50,21 @@ final class Lock {
     released = true;
     trace.add('lock released');
   }
+}
+
+/// A value with an equality of its own: two built from one name are equal,
+/// and only one of them is the value a call handed over.
+@immutable
+final class Address {
+  final String name;
+
+  const Address(this.name);
+
+  @override
+  bool operator ==(Object other) => other is Address && other.name == name;
+
+  @override
+  int get hashCode => name.hashCode;
 }
 
 /// A step the test lets through when it wants to.
@@ -285,17 +301,50 @@ void main() {
     test('disown looks the value up by identity', () async {
       final answers = <bool>[];
       final job = Job<void>(key: 'disown', (ctx) async {
-        final db = await ctx.join(open, dispose: (db) => db.close());
+        final address = await ctx.join(
+          () => const Address('db'),
+          dispose: (address) => trace.add('${address.name} released'),
+        );
+        // Built at run time: a constant would be the very same one.
+        final equal = Address(address.name);
         answers
-          ..add(ctx.disown(Database('db', trace)))
-          ..add(ctx.disown(db))
-          ..add(ctx.disown(db));
+          ..add(equal == address)
+          ..add(ctx.disown(equal))
+          ..add(ctx.disown(address))
+          ..add(ctx.disown(address));
       })
         ..ignore();
       await job.done;
 
-      expect(answers, <bool>[false, true, false]);
-      expect(trace, isNot(contains('db closed')));
+      expect(
+        answers,
+        <bool>[true, false, true, false],
+        reason: 'an equal value is not the one the call handed over',
+      );
+      expect(trace, isEmpty);
+    });
+
+    test('a number is found by an equal one of its type', () async {
+      final answers = <bool>[];
+      final job = Job<void>(key: 'disown', (ctx) async {
+        final port = await ctx.join(
+          () => int.parse('8080'),
+          dispose: (port) => trace.add('port $port released'),
+        );
+        answers
+          ..add(ctx.disown(8080))
+          ..add(ctx.disown(port));
+      })
+        ..ignore();
+      await job.done;
+
+      expect(
+        answers,
+        <bool>[true, false],
+        reason: 'a number has no identity apart from its value, as the '
+            'dartdoc of disown says',
+      );
+      expect(trace, isEmpty);
     });
   });
 

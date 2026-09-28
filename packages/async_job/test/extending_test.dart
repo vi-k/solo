@@ -17,6 +17,7 @@ import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart';
 
 import 'support/delay.dart';
+import 'support/probe_job.dart';
 
 /// An engine that has its own answer for an error nobody answered for: it
 /// puts an observer of its own on every job, the way `solo` does, and
@@ -136,6 +137,11 @@ final class EachContext extends JobContextBase {
     made.add(child);
     return child;
   }
+}
+
+/// What the rule of a domain throws when it no longer holds.
+final class RuleBroken implements Exception {
+  const RuleBroken();
 }
 
 void main() {
@@ -285,6 +291,38 @@ void main() {
     );
     expect(caught, isEmpty);
   });
+
+  // `doc/extending.md`: `wait`, `join` and `uncancellable` begin by calling
+  // `check()`. A rule already broken stops the action before it starts;
+  // asked only after, it would let the action run for a job whose rules no
+  // longer hold.
+  final members = <String,
+      Future<void> Function(JobContext ctx, Future<void> Function() action)>{
+    'wait': (ctx, action) => ctx.wait(action),
+    'join': (ctx, action) => ctx.join(action),
+    'uncancellable': (ctx, action) => ctx.uncancellable(action),
+  };
+  for (final MapEntry(key: name, value: call) in members.entries) {
+    test('$name asks check() before the action runs', () {
+      fakeAsync((async) {
+        var ran = false;
+        Object? thrown;
+        final job = CheckingJob<void>((ctx) async {
+          ctx.rules = () => throw const RuleBroken();
+          try {
+            await call(ctx, () async => ran = true);
+          } on RuleBroken catch (error) {
+            thrown = error;
+          }
+        })
+          ..launch();
+        async.flushMicrotasks();
+        expect(thrown, isA<RuleBroken>());
+        expect(ran, isFalse, reason: 'the rule was broken before the call');
+        expect(job.outcome, isA<Done<void>>());
+      });
+    });
+  }
 
   test('inUncancellableSection is open while the section is', () {
     fakeAsync((async) {
