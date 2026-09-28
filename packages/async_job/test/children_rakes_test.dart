@@ -220,11 +220,6 @@ void main() {
             await [ctx.run(opens), ctx.run(stops)].wait;
           } on Object catch (error) {
             caught = error;
-            final envelope =
-                error as ParallelWaitError<List<Source?>, List<AsyncError?>>;
-            for (final source in envelope.values.whereType<Source>()) {
-              source.close();
-            }
           }
         }).ignore();
 
@@ -241,8 +236,173 @@ void main() {
         expect(envelope.values.whereType<Source>().map((s) => s.name), [
           'rows',
         ]);
-        // The body that caught the envelope could still release them.
+      });
+    });
+
+    // The solution of the section, the body as on the page: each value is
+    // registered on the parent the moment its branch hands it over. The
+    // branches are made here only so a test can hold their handles.
+    (Job<void>, Job<Source>, Job<Source>) export(
+      List<String> trace, {
+      bool imagesFail = false,
+      bool closeTheEnvelope = false,
+    }) {
+      Future<Source> openRows() async {
+        await delay(5);
+        return Source('rows', trace);
+      }
+
+      Future<Source> openImages() async {
+        await delay(10);
+        if (imagesFail) throw StateError('disk');
+        return Source('images', trace);
+      }
+
+      Future<void> writeArchive(List<Source> sources) async {
+        await delay(50);
+        trace.add('archive of ${sources.length}');
+      }
+
+      final rows = Job.deferred<Source>(
+        key: 'rows',
+        (ctx) => ctx.wait(openRows, discard: (source) => source.close()),
+      );
+      final images = Job.deferred<Source>(
+        key: 'images',
+        (ctx) => ctx.wait(openImages, discard: (source) => source.close()),
+      );
+      final parent = closeTheEnvelope
+          ? Job<void>((ctx) async {
+              try {
+                final sources = await [
+                  ctx.run(rows, dispose: (source) => source.close()),
+                  ctx.run(images, dispose: (source) => source.close()),
+                ].wait;
+                await ctx.join(() => writeArchive(sources));
+              } on Object catch (error) {
+                if (error
+                    is ParallelWaitError<List<Source?>, List<AsyncError?>>) {
+                  for (final source in error.values.whereType<Source>()) {
+                    source.close();
+                  }
+                }
+                rethrow;
+              }
+            })
+          : Job<void>((ctx) async {
+              final sources = await [
+                ctx.run(rows, dispose: (source) => source.close()),
+                ctx.run(images, dispose: (source) => source.close()),
+              ].wait;
+              await ctx.join(() => writeArchive(sources));
+            })
+        ..ignore();
+      return (parent, rows, images);
+    }
+
+    test('.wait: every source is closed once when the export succeeds', () {
+      fakeAsync((async) {
+        final trace = <String>[];
+        final (parent, _, _) = export(trace);
+        async.flushTimers();
+        expect(parent.outcome, isA<Done<void>>());
+        expect(trace, ['archive of 2', 'images closed', 'rows closed']);
+      });
+    });
+
+    test('.wait: the source that came back is closed when the other fails', () {
+      fakeAsync((async) {
+        final trace = <String>[];
+        final (parent, _, _) = export(trace, imagesFail: true);
+        async.flushTimers();
+        expect(parent.outcome, isA<Failed>());
         expect(trace, ['rows closed']);
+      });
+    });
+
+    test('.wait: both are closed when the parent is cancelled while writing',
+        () {
+      fakeAsync((async) {
+        final trace = <String>[];
+        final (parent, _, _) = export(trace);
+        async.elapse(const Duration(milliseconds: 30));
+        parent.cancel().ignore();
+        async.flushTimers();
+        // `join` waits the step out, and the cancellation comes after it.
+        expect(parent.outcome, isA<Cancelled>());
+        expect(trace, ['archive of 2', 'images closed', 'rows closed']);
+      });
+    });
+
+    test('.wait: closing the values of the envelope as well closes twice', () {
+      fakeAsync((async) {
+        final trace = <String>[];
+        export(trace, imagesFail: true, closeTheEnvelope: true);
+        async.flushTimers();
+        expect(trace, ['rows closed', 'rows closed']);
+      });
+    });
+
+    test('registering on arrival closes the source under Future.wait too', () {
+      fakeAsync((async) {
+        final trace = <String>[];
+        final rows = Job.deferred<Source>(
+          (ctx) => ctx.wait(
+            () async => Source('rows', trace),
+            discard: (source) => source.close(),
+          ),
+        );
+        final images = Job.deferred<Source>((ctx) async {
+          await ctx.wait(() => delay(10));
+          throw StateError('disk');
+        });
+        final parent = Job<void>((ctx) async {
+          await Future.wait([
+            ctx.run(rows, dispose: (source) => source.close()),
+            ctx.run(images, dispose: (source) => source.close()),
+          ]);
+        })
+          ..ignore();
+
+        async.flushTimers();
+        // The registration closes what the first attempt lost; what
+        // `.wait` adds is the outcome.
+        expect(parent.outcome, isA<Failed>());
+        expect(trace, ['rows closed']);
+      });
+    });
+
+    test('.wait: a branch cancelled on its own leaves its sibling running', () {
+      fakeAsync((async) {
+        final trace = <String>[];
+        final (parent, rows, images) = export(trace);
+        async.elapse(const Duration(milliseconds: 2));
+        images.cancel().ignore();
+        async.flushTimers();
+        expect(rows.outcome, isA<Done<Source>>());
+        expect(images.outcome, isA<Cancelled>());
+        expect(parent.outcome, isA<Cancelled>());
+        // The late image closed by its branch, the rows by the parent.
+        expect(trace, unorderedEquals(['images closed', 'rows closed']));
+      });
+    });
+
+    test("the parent's cancellation reaches the branches of .wait", () {
+      fakeAsync((async) {
+        final trace = <String>[];
+        final (parent, rows, images) = export(trace);
+        async.elapse(const Duration(milliseconds: 2));
+        parent.cancel().ignore();
+        async.flushTimers();
+        // Each branch walked away from its opening, and the source that
+        // came late is closed by the branch's own `discard`.
+        expect(trace, unorderedEquals(['rows closed', 'images closed']));
+        for (final branch in [rows, images]) {
+          expect(
+            (branch.outcome! as Cancelled).reason,
+            isA<ParentCancelReason>(),
+          );
+        }
       });
     });
 
@@ -289,39 +449,79 @@ void main() {
     });
   });
 
+  group('When one failure makes the rest pointless', () {
+    test('a branch held for the group has no outcome yet', () {
+      fakeAsync((async) {
+        final quick = Job.deferred<int>(key: 'quick', (ctx) async => 1);
+        final slow = Job.deferred<int>(key: 'slow', (ctx) async {
+          await ctx.wait(() => delay(50));
+          throw StateError('disk');
+        });
+        Job<void>((ctx) async {
+          await ctx.runAll([quick, slow]);
+        }).ignore();
+
+        async.elapse(const Duration(milliseconds: 10));
+        // Its body returned a value, and the group has not decided.
+        expect(quick.outcome, isNull);
+        expect(quick.isCancelled, isFalse);
+
+        async.flushTimers();
+        expect(quick.outcome, isA<Cancelled>());
+      });
+    });
+  });
+
   group('What a group hands back', () {
-    test('ctx.wait registers the list when nothing is pending', () {
+    // The first attempt, as on the page: the manifest is a step the
+    // cancellation can arrive during.
+    Job<void> firstAttempt(List<String> trace) {
+      final branches = [
+        Job.deferred<Source>((ctx) async => Source('rows', trace)),
+        Job.deferred<Source>((ctx) async => Source('images', trace)),
+      ];
+      Future<void> loadManifest() => delay(40);
+      return Job<void>((ctx) async {
+        final sources = await ctx.runAll(branches);
+        await ctx.join(loadManifest);
+        await ctx.wait(
+          () => sources,
+          dispose: (values) {
+            for (final source in values) {
+              source.close();
+            }
+          },
+        );
+        trace.add('registered');
+      })
+        ..ignore();
+    }
+
+    test('the first attempt closes the list when nothing interrupts it', () {
       fakeAsync((async) {
         final trace = <String>[];
-        final parent = Job<void>((ctx) async {
-          final sources = await ctx.runAll([
-            Job.deferred<Source>((ctx) async => Source('rows', trace)),
-          ]);
-          await ctx.wait(
-            () => sources,
-            discard: (values) {
-              for (final source in values) {
-                source.close();
-              }
-            },
-          );
-          await ctx.wait(() => delay(80));
-        })
-          ..ignore();
-
-        async.elapse(const Duration(milliseconds: 20));
-        parent.cancel().ignore();
+        final parent = firstAttempt(trace);
         async.flushTimers();
-
-        // Nothing was pending at the registration line, so the discard of
-        // `wait` did run: the cost of this form is not that it never
-        // registers.
-        expect(trace, ['rows closed']);
+        expect(parent.outcome, isA<Done<void>>());
+        expect(trace, ['registered', 'rows closed', 'images closed']);
       });
     });
 
-    test('ctx.wait throws instead of registering on a pending cancellation',
-        () {
+    test('the first attempt leaks the list on a stop during the manifest', () {
+      fakeAsync((async) {
+        final trace = <String>[];
+        final parent = firstAttempt(trace);
+        async.elapse(const Duration(milliseconds: 20));
+        parent.cancel().ignore();
+        async.flushTimers();
+        // `join` waits the manifest out and lets the cancellation out in
+        // place of its value: the body never reaches the registration.
+        expect(parent.outcome, isA<Cancelled>());
+        expect(trace, isEmpty);
+      });
+    });
+
+    test('ctx.wait throws before its action on a pending cancellation', () {
       fakeAsync((async) {
         final trace = <String>[];
         Object? thrownAtRegistration;
@@ -329,8 +529,6 @@ void main() {
           final sources = await ctx.runAll([
             Job.deferred<Source>((ctx) async => Source('rows', trace)),
           ]);
-          // Anything awaited between the group and the registration is a
-          // door the cancellation can come through.
           try {
             await ctx.wait(() => delay(40));
           } on Cancelled {
@@ -338,8 +536,11 @@ void main() {
           }
           try {
             await ctx.wait(
-              () => sources,
-              discard: (values) {
+              () {
+                trace.add('the action ran');
+                return sources;
+              },
+              dispose: (values) {
                 for (final source in values) {
                   source.close();
                 }
@@ -356,8 +557,8 @@ void main() {
         parent.cancel().ignore();
         async.flushTimers();
 
-        // The checkpoint of `wait` comes before its action, so the list
-        // in hand is never registered and nothing closes it.
+        // Even a body that caught the first checkpoint gets no further:
+        // the one of `wait` comes before its action.
         expect(thrownAtRegistration, isA<Cancelled>());
         expect(trace, ['the manifest was cancelled']);
       });
@@ -509,6 +710,95 @@ void main() {
       });
     }
 
+    test('two children in a row: the parent waits for both', () {
+      fakeAsync((async) {
+        final trace = <String>[];
+        Future<int> load() async => 21;
+        Future<void> report(int rows) async {
+          await delay(80);
+          trace.add('reported $rows');
+        }
+
+        Job<void>((ctx) async {
+          final rows =
+              await ctx.run(Job.deferred<int>((ctx) => ctx.wait(load)));
+          await ctx.run(
+            Job.deferred<void>((ctx) => ctx.join(() => report(rows * 2))),
+          );
+        }).done.then((outcome) => trace.add('parent $outcome'));
+
+        async.flushTimers();
+        expect(trace, ['reported 42', 'parent Done(null)']);
+      });
+    });
+
+    test("two children in a row: the parent's cancellation reaches the second",
+        () {
+      fakeAsync((async) {
+        late Job<void> second;
+        final parent = Job<void>((ctx) async {
+          final rows = await ctx.run(Job.deferred<int>((ctx) async => 21));
+          second = Job.deferred<void>(
+            (ctx) => ctx.join(() => delay(80 + rows)),
+          );
+          await ctx.run(second);
+        })
+          ..ignore();
+
+        async.elapse(const Duration(milliseconds: 10));
+        parent.cancel().ignore();
+        async.flushTimers();
+
+        expect(
+          (second.outcome! as Cancelled).reason,
+          isA<ParentCancelReason>(),
+        );
+      });
+    });
+
+    test("the parent's cancellation reaches a tail still waiting for its head",
+        () {
+      fakeAsync((async) {
+        final head = Job.deferred<int>((ctx) async {
+          await ctx.wait(() => delay(50));
+          return 1;
+        });
+        final tail = head.then<void>((ctx, rows) async {})..ignore();
+        final parent = Job<void>((ctx) async {
+          await ctx.run(head);
+        })
+          ..ignore();
+
+        async.elapse(const Duration(milliseconds: 10));
+        parent.cancel().ignore();
+        async.flushTimers();
+
+        expect((tail.outcome! as Cancelled).reason, isA<ChainCancelReason>());
+      });
+    });
+
+    test("the parent's cancellation does not reach a tail already running", () {
+      fakeAsync((async) {
+        final head = Job.deferred<int>((ctx) async => 1);
+        final tail = head.then<void>((ctx, rows) async {
+          await ctx.wait(() => delay(80));
+        });
+        final parent = Job<void>((ctx) async {
+          await ctx.run(head);
+          await ctx.wait(() => delay(50));
+        })
+          ..ignore();
+
+        async.elapse(const Duration(milliseconds: 10));
+        expect(tail.isRunning, isTrue);
+        parent.cancel().ignore();
+        async.flushTimers();
+
+        expect(parent.outcome, isA<Cancelled>());
+        expect(tail.outcome, isA<Done<void>>());
+      });
+    });
+
     test('the parent ends Done while the tail is still running', () {
       fakeAsync((async) {
         final trace = <String>[];
@@ -532,6 +822,29 @@ void main() {
         async.flushTimers();
         expect(trace, ['the tail starts', 'the tail ends']);
         expect(tail.outcome, isA<Done<void>>());
+      });
+    });
+
+    test('a parent still running stops a running tail through onCancel', () {
+      fakeAsync((async) {
+        final head = Job.deferred<int>((ctx) async => 1);
+        final tail = head.then<void>((ctx, rows) async {
+          await ctx.wait(() => delay(80));
+        })
+          ..ignore();
+        final parent = Job<void>((ctx) async {
+          ctx.onCancel(() => tail.cancel().ignore());
+          await ctx.run(head);
+          await ctx.wait(() => delay(50));
+        })
+          ..ignore();
+
+        async.elapse(const Duration(milliseconds: 10));
+        expect(tail.isRunning, isTrue);
+        parent.cancel().ignore();
+        async.flushTimers();
+
+        expect(tail.outcome, isA<Cancelled>());
       });
     });
   });
