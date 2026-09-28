@@ -57,21 +57,45 @@ takes only the observer passed to `then`. If one of the observer's hooks
 throws, its error goes to the current zone and nothing else changes: the job
 ends as it would have, and the observer's other hooks are still called.
 
-A job's string representation is `Job($key)`, or `Job($key: $description)` when
-`describe` returns something, or `Job($description)` when there is no key, or
-`Job()` when there is neither. Use `key` to identify the job in logs or in a
-library's scheduling rules, such as `solo` queue policies; `describe` adds
-details to that representation.
+A job can be given a `key` and a `describe` callback when it is created. Its
+string representation is `Job($key)`, or `Job($key: $description)` when
+`describe` returns a description that is not empty, or `Job($description)` when
+there is no key, or `Job()` when there is neither. Use `key` to identify the
+job in logs or in a library's scheduling rules, such as `solo` queue policies;
+`describe` adds details to that representation.
 
-An observer can also time a cancellation. `Job.whenCancelled`, registered in
-`onStart`, fires when the job accepts the cancellation, and `onFinish` when the
-outcome arrives; the time between them is how long the job ran past its
-cancellation, children and cleanup included. A body waiting on something slow
-with a bare `await` shows up with the rest of that wait, where the same call
-through `ctx.wait` shows 0 ms. The count starts at acceptance, not at
-`cancel()`: a cancellation held back by `ctx.uncancellable` is accepted when
-the section ends, so a 100 ms section cancelled 10 ms in shows 0 ms, while the
-caller of `cancel` waited 90 ms.
+An observer can also time a cancellation:
+
+```dart
+final class SlowCancellations extends JobObserver {
+  final _since = Expando<Stopwatch>('cancellation');
+
+  @override
+  void onStart(Job<Object?> job) =>
+      job.whenCancelled((_) => _since[job] = Stopwatch()..start());
+
+  @override
+  void onFinish(Job<Object?> job) {
+    final watch = _since[job];
+    if (watch != null) {
+      print('$job ran ${watch.elapsedMilliseconds} ms past its cancellation');
+    }
+  }
+}
+```
+
+`Job.whenCancelled`, registered in `onStart`, fires when the job accepts a
+cancellation from outside, and `onFinish` when the outcome arrives; the time
+between them is how long the job ran past its cancellation, children and
+cleanup included. A body waiting on something slow with a bare `await` adds the
+rest of that wait to the count, where the same call through `ctx.wait` shows 0
+ms. The count starts at acceptance, not at `cancel()`: a cancellation held back
+by `ctx.uncancellable` is accepted when the section ends, so a 100 ms section
+cancelled 10 ms in shows 0 ms, while the caller of `cancel` waited 90 ms. A
+body that gives itself up, throwing `Cancelled` or letting a child's
+cancellation out, accepts the cancellation as it throws, but `whenCancelled`
+fires only once its children have ended: the count leaves them out and shows
+the cleanup alone.
 
 ## A message for the log
 
@@ -132,10 +156,10 @@ outcome: Cancelled(manual)
 Nothing reaches the zone, and the app never learns that the open failed: the
 job itself caught the error. The job accepted the cancellation while the
 database was opening, so it ends `Cancelled` whatever the open does. `join`
-then throws the open's own error, and the body gives up with it on a job that
-is already cancelled. That error is not the outcome, and the job hands it to
-its observer alone. Most often such an error is the operation stopping at the
-job's token, the way the migration throws `DatabaseStopped` in
+then throws the open's own error, and the body fails with it on a job that is
+already cancelled. That error is not the outcome, and the job hands it to its
+observer alone. Most often such an error is the operation stopping at the job's
+token, the way the migration throws `DatabaseStopped` in
 [A token through `onCancel`](cancellation.md#a-token-through-oncancel) on the
 cancellation page, and in the zone every such cancellation would show up as a
 failure. The job cannot tell that stop from a failure like this one, so without
@@ -165,29 +189,46 @@ onError: Bad state: database locked
 outcome: Cancelled(manual)
 ```
 
-An observer hears every error of its job through `onError`, and only hears it:
-overriding `onError` moves no error anywhere. Where each one goes, with an
-observer and without, the zone being the one the job was created in:
+An observer hears through `onError` the errors its job catches, all but its own
+cancellation, and only hears them: overriding `onError` moves no error
+anywhere. Where each one goes, with an observer and without, the zone being the
+one the job was created in:
 
 | The error | With an observer | Without one |
 | --- | --- | --- |
 | The body's, and the job ends `Failed` with it | `onError`, and the zone if nobody observed the outcome | The zone if nobody observed the outcome |
-| The body's, and a cancellation arrives after it: before the error leaves the body, while the job waits for its children or runs its cleanup | `onError`, then `onUnanswered`: the zone by default | The zone |
+| The body's, and the job accepts a cancellation after it: one arriving before the error leaves the body, while the job waits for its children or runs its cleanup, or one `ctx.uncancellable` held while its step failed | `onError`, then `onUnanswered`: the zone by default | The zone |
 | The body's, and it happened after the job accepted a cancellation | `onError` | Nobody |
 | The body's, in a branch of `ctx.runAll` whose group throws another failure | `onError`, then `onUnanswered`: the zone by default | The zone |
 | Outside the body: a late error of an action abandoned by `wait`, cleanup, a callback of `ctx.onCancel` or `job.whenCancelled`, work of `ctx.unattended`, formatting a child's cancellation description | `onError`, then `onUnanswered`: the zone by default | The zone |
 | A `Cancelled` thrown outside the body | `onError`, then `onUnanswered`: nobody by default | Nobody |
+| The job's own cancellation, out of an action abandoned by `wait` or work of `ctx.unattended` | Nobody | Nobody |
+| What a context call the body did not await throws, the job's own cancellation included, and for `wait` only until the body ends | The zone the body runs in, as with any future nobody awaits | The zone the body runs in |
 
 A failure comes first by when it happened, not by when the body threw it. An
 operation behind `ctx.wait` or `ctx.join` that fails, a handler of `ctx.each`,
 a child, a step of `ctx.uncancellable`: the error takes time to leave the body,
-a few microtasks or a child's whole cleanup, and a cancellation arriving in
-that time came after the failure. The body keeps the failure first by letting
-it through, or by catching it and throwing it again later; a new error thrown
-in its place, a wrapper included, comes after the cancellation. The job learns
-when a failure happened from these members and from its children: a future the
-body awaits on its own comes first only if the body throws its error before the
-cancellation.
+a few microtasks or a child's whole cleanup, and a cancellation the job
+accepted in that time came after the failure. The body keeps the failure first
+by letting it through, or by catching it and throwing it again later; a new
+error thrown in its place, a wrapper included, comes after the cancellation.
+The job learns when a failure happened from these members and from its
+children: a future the body awaits on its own comes first only if the body
+throws its error before the cancellation.
+
+A step of `ctx.uncancellable` and the same step behind `ctx.join` land in
+different rows. The section holds a cancellation that arrives while the step
+runs, and the job accepts it when the section closes, on the way out of the
+failure: the failure came first and reaches the zone even without an observer.
+`join` lets the job accept the cancellation as it arrives, so the step's
+failure comes after it, and without an observer nobody hears it.
+
+A context call the body did not await throws into a future nobody awaits, and
+Dart hands that to the zone the body runs in: for `Job.deferred`, the zone that
+started it. The job's own cancellation goes there too, though the job itself
+never sends a cancellation to the zone. `wait` is the exception once the body
+has ended: it lets its action go then, and an error of that action is a late
+error of an abandoned action, in the fifth row.
 
 The errors no outcome carries go on from `onError` to `onUnanswered`, the hook
 that answers for them. Its default body sends them where they go without an
@@ -204,8 +245,8 @@ void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
 
 The errors stop there and do not reach the zone. Calling
 `super.onUnanswered(job, error, stackTrace)` sends one on to the zone as well.
-Hand `super` whatever the override cannot tell apart: the default body knows
-which errors are cancellations.
+Hand `super` whatever the override cannot tell from a cancellation: the default
+body knows which errors are cancellations.
 
 The override answers for the job that got the observer and for the children
 that inherit it, at any depth. The app answers for every job at once in its
@@ -273,8 +314,7 @@ whoever awaits it if it fails; awaited by the body, it hangs the job.
 
 A test checks that cancelling a database open still closes the database once
 opening finishes. `package:fake_async` runs timers and microtasks on fake time,
-so the test waits for nothing in real time; this package uses it in its own
-tests.
+so the test waits for nothing in real time.
 
 ### The first attempt
 

@@ -7,11 +7,11 @@ part of 'job_base.dart';
 /// else: not the job's outcome, not the hook standing next to it.
 ///
 /// Two hooks see errors, and they do different work. [onError] is told
-/// about every error of the job and answers for none. [onUnanswered] is
-/// asked about the errors no outcome carries, and its default body sends
-/// them to the zone the job was created in — the same place they go when
-/// the job has no observer at all. An observer written to watch changes
-/// nowhere an error goes.
+/// about the errors the job catches, all but its own cancellation, and
+/// answers for none. [onUnanswered] is asked about the errors no outcome
+/// carries, and its default body sends them to the zone the job was created
+/// in — the same place they go when the job has no observer at all. An
+/// observer written to watch changes nowhere an error goes.
 ///
 /// A class that already extends another one mixes this in, `with
 /// JobObserver`, and keeps the default bodies.

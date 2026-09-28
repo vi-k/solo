@@ -50,8 +50,10 @@ abstract interface class JobContext {
   /// unawaited, write the type out — `unawaited(ctx.wait<Db>(...))`: without
   /// it `T` is inferred from `unawaited`, which takes a `Future<void>`, and
   /// [dispose] then has to be a `void Function(void)`, which is not what the
-  /// call site says and not what the analyzer explains. For a step that
-  /// must not be interrupted at all, see [uncancellable].
+  /// call site says and not what the analyzer explains. What such a call
+  /// throws while the body runs, its [Cancelled] included, goes to the zone,
+  /// as from any future nobody awaits. For a step that must not be
+  /// interrupted at all, see [uncancellable].
   ///
   /// [dispose] and [discard] say how the value is cleaned up, and the rule
   /// is one: **a value that did not reach the body is cleaned up without

@@ -126,6 +126,12 @@ final class ThrowingStart extends JobObserver {
   void onFinish(Job<Object?> job) => say('onFinish $job');
 }
 
+/// A hook that throws when the job ends.
+final class ThrowingFinish extends JobObserver {
+  @override
+  void onFinish(Job<Object?> job) => throw StateError('onFinish failed');
+}
+
 /// An observer that keeps what `ctx.log` handed it.
 final class Keeping extends JobObserver {
   final messages = <Object?>[];
@@ -134,7 +140,8 @@ final class Keeping extends JobObserver {
   void onLog(Job<Object?> job, Object? message) => messages.add(message);
 }
 
-/// The observer the page describes for timing a cancellation.
+/// The observer the page times a cancellation with, on fake time: the page
+/// takes a `Stopwatch`, and fake time does not move one.
 final class SlowCancellations extends JobObserver {
   final _acceptedAt = Expando<int>('cancellation');
 
@@ -327,12 +334,36 @@ void main() {
       ]);
     });
 
+    test("a hook's error goes to the zone that calls it", () {
+      // Created in one zone and cancelled before start from another: the
+      // hook runs in the canceller's.
+      final caught = <String>[];
+      fakeAsync((async) {
+        late Job<void> job;
+        runZonedGuarded(
+          () => job = Job.deferred<void>(
+            observer: ThrowingFinish(),
+            (ctx) async {},
+          ),
+          (error, stackTrace) => caught.add('creation: $error'),
+        );
+        runZonedGuarded(
+          () => job.cancel().ignore(),
+          (error, stackTrace) => caught.add('canceller: $error'),
+        );
+        async.flushTimers();
+      });
+
+      expect(caught, ['canceller: Bad state: onFinish failed']);
+    });
+
     test('the four string representations', () {
       Job<void> job({Object? key, String Function()? describe}) =>
           Job<void>(key: key, describe: describe, (ctx) async {});
 
       fakeAsync((async) {
         expect(job(key: 'load').toString(), 'Job(load)');
+        expect(job(key: 'load', describe: () => '').toString(), 'Job(load)');
         expect(
           job(key: 'load', describe: () => 'user 7').toString(),
           'Job(load: user 7)',
@@ -402,6 +433,70 @@ void main() {
         'cancel',
         'Job(slow) ran 0 ms past its cancellation',
         'cancel() returned after 90 ms',
+      ]);
+    });
+
+    test('a body that gives itself up counts from the end of its children', () {
+      // The body throws at 10 ms, the child it cannot cancel runs to 110 ms,
+      // and the cleanup takes 50 ms more: only the cleanup is in the count.
+      final lines = play(
+        () => Job<void>(
+          key: 'self',
+          observer: SlowCancellations(),
+          (ctx) async {
+            ctx
+              ..onDispose(() => delay(50))
+              ..run(
+                Job.deferred<void>(cancellable: false, (ctx) => delay(110)),
+              ).ignore();
+            await delay(10);
+            throw const Cancelled.by(
+              reason: ManualCancelReason(),
+              started: true,
+            );
+          },
+        ),
+        outcomeObserved: false,
+      );
+
+      expect(lines, ['Job(self) ran 50 ms past its cancellation']);
+    });
+
+    test("a child's cancellation let out counts the same way", () {
+      final lines = play(
+        () {
+          final child = Job.deferred<void>(
+            key: 'child',
+            (ctx) => ctx.wait(() => delay(50)),
+          );
+          unawaited(
+            Future<void>.delayed(
+              const Duration(milliseconds: 10),
+              () => child.cancel().ignore(),
+            ),
+          );
+          return Job<void>(
+            key: 'parent',
+            observer: SlowCancellations(),
+            (ctx) async {
+              ctx
+                  .run(
+                    Job.deferred<void>(
+                      cancellable: false,
+                      (ctx) => delay(110),
+                    ),
+                  )
+                  .ignore();
+              await ctx.run(child);
+            },
+          );
+        },
+        outcomeObserved: false,
+      );
+
+      expect(lines, [
+        'Job(child) ran 0 ms past its cancellation',
+        'Job(parent) ran 0 ms past its cancellation',
       ]);
     });
   });
@@ -756,6 +851,54 @@ void main() {
       );
     });
 
+    // A step that cannot be rolled back fails at 20 ms, and the user
+    // cancels at 10 ms.
+    Future<void> pay() async {
+      await delay(20);
+      throw StateError('payment failed');
+    }
+
+    test('a step of uncancellable fails first: onError, then the zone', () {
+      Job<void> held({JobObserver? observer}) =>
+          Job<void>(observer: observer, (ctx) => ctx.uncancellable(pay));
+
+      expect(quotable(play(() => held(observer: Reporter()), cancelAt: 10)), [
+        'cancel',
+        'onError: Bad state: payment failed',
+        'zone: Bad state: payment failed',
+        'outcome: Cancelled(manual)',
+      ]);
+      expect(quotable(play(() => held(observer: Answering()), cancelAt: 10)), [
+        'cancel',
+        'onError: Bad state: payment failed',
+        'onUnanswered: Bad state: payment failed',
+        'outcome: Cancelled(manual)',
+      ]);
+      expect(quotable(play(held, cancelAt: 10)), [
+        'cancel',
+        'zone: Bad state: payment failed',
+        'outcome: Cancelled(manual)',
+      ]);
+    });
+
+    test('the same step behind join fails after: onError or nobody', () {
+      Job<void> joined({JobObserver? observer}) =>
+          Job<void>(observer: observer, (ctx) => ctx.join(pay));
+
+      expect(
+        quotable(play(() => joined(observer: Reporter()), cancelAt: 10)),
+        [
+          'cancel',
+          'onError: Bad state: payment failed',
+          'outcome: Cancelled(manual)',
+        ],
+      );
+      expect(
+        quotable(play(joined, cancelAt: 10)),
+        ['cancel', 'outcome: Cancelled(manual)'],
+      );
+    });
+
     Job<void> failingOutside({JobObserver? observer}) => Job<void>(
           observer: observer,
           (ctx) async {
@@ -905,6 +1048,143 @@ void main() {
       );
       expect(play(cancelledOutside), ['outcome: Done(null)']);
     });
+    test("the job's own cancellation out of work left behind: nobody", () {
+      // Both checkpoints run after the job accepted the cancellation: one in
+      // work of unattended, one in the action `wait` let go of.
+      Job<void> checking({JobObserver? observer}) => Job<void>(
+            observer: observer,
+            (ctx) async {
+              ctx.unattended(() async {
+                await delay(20);
+                ctx.check();
+              });
+              await ctx.wait(() async {
+                await delay(20);
+                ctx.check();
+              });
+            },
+          );
+
+      expect(
+        quotable(play(() => checking(observer: Answering()), cancelAt: 10)),
+        ['cancel', 'outcome: Cancelled(manual)'],
+      );
+      expect(
+        quotable(play(checking, cancelAt: 10)),
+        ['cancel', 'outcome: Cancelled(manual)'],
+      );
+    });
+
+    test('the same cancellation thrown by a callback: onError', () {
+      Job<void> rethrowing({JobObserver? observer}) =>
+          Job<void>(observer: observer, (ctx) => ctx.wait(() => delay(50)))
+            ..whenCancelled((cancelled) => throw cancelled);
+
+      expect(
+        quotable(play(() => rethrowing(observer: Answering()), cancelAt: 10)),
+        [
+          'cancel',
+          'onError: Cancelled(manual)',
+          'onUnanswered: Cancelled(manual)',
+          'outcome: Cancelled(manual)',
+        ],
+      );
+    });
+
+    test('a join the body did not await: the zone, past the observer', () {
+      Job<void> leaving({JobObserver? observer}) => Job<void>(
+            observer: observer,
+            (ctx) async {
+              unawaited(
+                ctx.join(() async {
+                  await delay(20);
+                  throw StateError('late join');
+                }),
+              );
+            },
+          );
+
+      expect(
+        play(() => leaving(observer: Answering())),
+        ['outcome: Done(null)', 'zone: Bad state: late join'],
+      );
+      expect(
+        play(leaving),
+        ['outcome: Done(null)', 'zone: Bad state: late join'],
+      );
+    });
+
+    test('any call the body did not await: the zone, cancellation included',
+        () {
+      Job<void> walkingOn(
+        JobObserver? observer,
+        Future<void> Function(JobContext ctx) call,
+      ) =>
+          Job<void>(observer: observer, (ctx) async {
+            unawaited(call(ctx));
+            await delay(50);
+          });
+
+      expect(
+        quotable(
+          play(
+            () => walkingOn(Answering(), (ctx) => ctx.wait(() => delay(30))),
+            cancelAt: 10,
+          ),
+        ),
+        ['cancel', 'zone: Cancelled(manual)', 'outcome: Cancelled(manual)'],
+      );
+      for (final call in <Future<void> Function(JobContext ctx)>[
+        (ctx) => ctx.wait(pay),
+        (ctx) => ctx.uncancellable(pay),
+      ]) {
+        expect(
+          play(() => walkingOn(Answering(), call)),
+          ['zone: Bad state: payment failed', 'outcome: Done(null)'],
+        );
+      }
+    });
+
+    test('a wait left behind by a body that ended: an abandoned action', () {
+      Job<void> leaving({JobObserver? observer}) => Job<void>(
+            observer: observer,
+            (ctx) async => unawaited(ctx.wait(pay)),
+          );
+
+      expect(play(() => leaving(observer: Answering())), [
+        'outcome: Done(null)',
+        'onError: Bad state: payment failed',
+        'onUnanswered: Bad state: payment failed',
+      ]);
+      expect(
+        play(leaving),
+        ['outcome: Done(null)', 'zone: Bad state: payment failed'],
+      );
+    });
+
+    test('a call the body did not await: the zone the body runs in', () {
+      // Created in one zone and started from another: the error goes to
+      // the starter's, where the body runs.
+      final caught = <String>[];
+      fakeAsync((async) {
+        late DeferredJob<void> job;
+        runZonedGuarded(
+          () => job = Job.deferred<void>((ctx) async {
+            unawaited(ctx.join(pay));
+            await delay(50);
+          }),
+          (error, stackTrace) => caught.add('creation: $error'),
+        );
+        runZonedGuarded(
+          job.start,
+          (error, stackTrace) => caught.add('starter: $error'),
+        );
+        async.flushTimers();
+      });
+
+      expect(caught, ['starter: Bad state: payment failed']);
+    });
+
     // A branch of `ctx.runAll` that fails on its own after the group has
     // thrown the first failure: its body told the observer where it was
     // caught, and what the group did not throw is nobody's outcome.

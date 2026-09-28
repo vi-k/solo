@@ -272,6 +272,13 @@ the next checkpoint throws it. The job still ends `Cancelled`, even if the body
 returns a value, so whatever has to happen after the step anyway belongs inside
 the same section.
 
+If the step fails and the body lets the error through, the failure came before
+the job accepted the cancellation the section held: the job still ends
+`Cancelled`, and the failure reaches the zone even without an observer. Through
+`join`, where the job accepts the cancellation at once, the same failure comes
+after it, and only an observer hears it.
+[Where errors go](observing.md#where-errors-go) on the observing page has both.
+
 Always await `ctx.uncancellable`. The section opens when called, even if you do
 not await its future. An unawaited section can outlive the body; if the job
 finishes first, the held cancellation is lost and `cancel()` returns with a
