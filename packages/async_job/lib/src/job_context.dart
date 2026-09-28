@@ -629,8 +629,17 @@ abstract interface class JobContext {
 ///
 /// Subclass it to add a domain of your own; `solo` adds the state and its
 /// rules. [check] is the checkpoint, and it is virtual on purpose: a
-/// domain checks more than the cancellation, and [wait], [join] and
-/// [uncancellable] all go through it.
+/// domain checks more than the cancellation. While the body runs, [wait],
+/// [join] and [uncancellable] ask it before the action, [join] again after
+/// it, [run] once the child's value has arrived, and [runAll] before it
+/// hands the values back. An override calls `super.check()`, and calls it
+/// first. That is where the cancellation of the job is asked: without it
+/// [join] hands a value to a job already cancelled and [uncancellable]
+/// begins its step on one. And while the engine cleans up after the body
+/// it throws a [StateError], before a rule could turn a job that returned
+/// a value into a cancelled one. A rule that no longer holds cancels the
+/// job through [cancelOwnJob] and throws [pendingCancel], so the job
+/// accepts the cancellation and its [onCancel] callbacks run.
 abstract class JobContextBase implements JobContext {
   final JobBase<Object?> _owner;
 
@@ -665,6 +674,7 @@ abstract class JobContextBase implements JobContext {
   }
 
   @override
+  @mustCallSuper
   void check() {
     throwIfDisposing('check');
     throwIfCancelled();

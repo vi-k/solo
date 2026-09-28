@@ -2,8 +2,9 @@
 
 > **Состояние на 2026-09-28:** ревью проведено, находки уровня Medium и выше
 > перепроверены моими зондами, у каждой находки стоит вердикт. Ничего
-> не исправлено, кроме H1–H3, M1–M5, M11, M12, M15–M18, M25–M30, L8, L9, L15,
-> L17, L37, L47, L51–L59, L76 и частей L41, L61, L62 и M6: находки разбираются
+> не исправлено, кроме H1–H3, M1–M5, M7, M11–M18, M25–M30, L8, L9, L12, L15,
+> L17, L19, L21, L25, L37–L40, L42, L44–L59, L61, L76 и частей L1, L29, L33,
+> L41, L43, L60, L62 и M6: находки разбираются
 > с владельцем по одной; H1 закрыт документами,
 > `2026-09-27-run-all-shared-lock-report.md`; M1, M2 и L8 закрыты одной правкой
 > ядра, `2026-09-27-failed-first-report.md`; M3, M4 и M5 —
@@ -11,7 +12,9 @@
 > M29 и dartdoc L9 — `2026-09-28-review-sentinels-report.md`; страница
 > `children.md` — `2026-09-28-children-page-report.md`; страница `cleanup.md` —
 > `2026-09-28-cleanup-page-report.md`; страница `observing.md` —
-> `2026-09-28-observing-page-report.md`.
+> `2026-09-28-observing-page-report.md`; страницы `cancellation.md`
+> и `outcomes.md` — `2026-09-28-cancellation-outcomes-pages-report.md`;
+> страница `extending.md` — `2026-09-28-extending-page-report.md`.
 > Полные отчёты ревьюеров и их зонды лежат локально
 > в `.artifacts/2026-09-26-async-job-review/`, каталог не под гитом.
 > **Что это:** девять независимых ревьюеров Opus, по копии дерева на каждого.
@@ -508,7 +511,16 @@ apply additional checks to all three methods.» Чего страница не �
 это раздел, где есть на чём ошибиться: слово «additional» и ведёт
 к переопределению без `super`, так что первая попытка здесь напрашивается.
 `@mustCallSuper` поставить; `solo` тогда должен звать `super.check()` вместо
-двух своих вызовов, это проверить прогоном `solo`.
+двух своих вызовов, это проверить прогоном `solo`. Итог 2026-09-28: сделано,
+отчёт `2026-09-28-extending-page-report.md`. На `extending.md` раздел «A rule
+of your own»: первая попытка — `check()` без `super`, вторая — `super.check()`
+и свежий `Cancelled` (свои `onCancel` не вызываются), ответ — `cancelOwnJob`
+и `throw pendingCancel ?? cancelled`, с перечнем мест, где спрашивают
+`check()`, и с тем, почему `super.check()` первым. `@mustCallSuper`
+на `JobContextBase.check`, запись CHANGELOG — «Breaking», потому что
+`dart analyze` падает на предупреждении; `solo` зовёт `super.check()`, 803
+зелёных. Сторож — `extending_rakes_test.dart`, включая текстовую проверку
+аннотации: без неё её снятие не ловил ни один тест.
 
 ### M8. Dartdoc `JobBase.finish` молчит о том, что отметка отмены решает исход
 
@@ -1414,7 +1426,11 @@ Low).
 `throwIfUnattended` и `Job.deferred`; `each` там, где его не было. Сторож
 держит `runAll` и пустым, и с отложенной задачей, которая кончается
 с `ParentCancelReason`. Сторожа — в отчёте
-`2026-09-28-cancellation-outcomes-pages-report.md`.
+`2026-09-28-cancellation-outcomes-pages-report.md`. Итог 2026-09-28 по остатку:
+список тех, кто спрашивает `check()`, на `extending.md` и в dartdoc
+`JobContextBase` — `wait`, `join` и `uncancellable` до действия, `join` после,
+`run` когда пришло значение, `runAll` перед выдачей, пока тело работает; отчёт
+`2026-09-28-extending-page-report.md`.
 
 ### L20. `Job.isChild` и `JobBase.children` говорят «запущен через `run`»
 
@@ -1630,7 +1646,10 @@ pub.dev переписывает относительные ссылки README 
 
 **Вердикт: принято, Low.** До выпуска принять как есть; в порядок выпуска
 добавить пункт: `0.3.0` публикуется раньше, чем сайт с этой ссылкой. Ссылку
-на `JobContextBase` добавить сейчас.
+на `JobContextBase` добавить сейчас. Итог 2026-09-28 по второй части: ссылка
+на справку `JobContextBase` стоит рядом с `JobBase` на `extending.md`
+и в переводе, отчёт `2026-09-28-extending-page-report.md`. Обе отдают 404
+до выпуска `0.3.0`, как решено выше.
 
 ### L34. «See `doc/…`» в CHANGELOG — код-спаны без ссылки и без раздела
 
@@ -1776,7 +1795,10 @@ operation», «A token through `onCancel`», «Choosing the callback» на ст
 `cancellation.md` и `extending.md` открыты. Итог 2026-09-28
 по `cancellation.md`: обе ссылки поставлены, отчёт
 `2026-09-28-cancellation-outcomes-pages-report.md`; часть `extending.md`
-открыта.
+открыта. Итог 2026-09-28 по `extending.md`: «as in the children example» стало
+ссылкой на раздел «Children»; по ревью правки ещё ссылки на `onUnanswered`,
+«unattended work» и страницы из вступления; отчёт
+`2026-09-28-extending-page-report.md`.
 
 ### L42. Страницам не хватает определений: `readyFlag()` обязан вернуть `Job.deferred`, `CancelToken` не тип пакета, не показано тело `report`
 
@@ -1888,7 +1910,16 @@ error» стало «the errors its job catches, all but its own cancellation»
 
 **Вердикт: принято, Low.** Одна-две фразы на `extending.md`: какие задачи
 наблюдатель движка не покрывает и какие члены закрывают первое. Касается
-и `solo`: его `then` тоже не переопределён, это проверить отдельно.
+и `solo`: его `then` тоже не переопределён, это проверить отдельно. Итог
+2026-09-28: сделано, отчёт `2026-09-28-extending-page-report.md`. Абзац в «A
+job of your own»: ребёнок без наблюдателя берёт наблюдателя родителя, ребёнок
+со своим отвечает через свой, продолжение `then` получает только переданного —
+переопределите `then` и передайте своего. Разошлось с предложенным: члены,
+которые удерживают детей (`adoptedBy`, `startChild`), не названы — ребёнок
+со своим наблюдателем отвечает через него, и это не дыра движка. Сторожа на все
+четыре случая. Проверено отдельно: `solo` `then` не переопределяет, ошибка
+`unattended` из продолжения задачи `solo` уходит мимо `Solo.onUnanswered`
+в зону — вопрос владельцу, правка `solo`.
 
 ### L49. `extending.md` не называет того, что автор движка узнаёт только из dartdoc и исходника `solo`
 
@@ -1903,7 +1934,12 @@ error» стало «the errors its job catches, all but its own cancellation»
 
 **Вердикт: принято, Low.** Короткий раздел «Queue and rules» с `cancelWith`
 и правилом через `cancelOwnJob` закроет и M7; обёртку в примере сделать
-приватной.
+приватной. Итог 2026-09-28: сделано, отчёт
+`2026-09-28-extending-page-report.md`. Разошлось с предложенным: не один
+раздел, а два — «A queue of your own» (первая попытка падает на `start`
+отменённой в очереди задачи, ответ — `cancelWith` с `super`) и «A rule of your
+own» (M7). Обёртки `_launch` и `_whenDone` приватные; `started()`
+и `finished()` со своими правилами — на странице.
 
 ### L50. `extending.md`: «The three» ни разу не названы, флаг отказа без имени
 
@@ -1915,7 +1951,10 @@ error» стало «the errors its job catches, all but its own cancellation»
 it» не говорит, `rejectable` это у `cancelWith` или геттер `cancellable`.
 
 **Вердикт: принято, Low.** Назвать все три типа и `cancelWith(…, rejectable:)`
-с `cancelOwnJob`, в обеих версиях.
+с `cancelOwnJob`, в обеих версиях. Итог 2026-09-28: сделано, отчёт
+`2026-09-28-extending-page-report.md`: вступление называет `JobBase`,
+`JobContextBase` и `JobStatus`, раздел о правиле — `cancelOwnJob` как
+`cancelWith(cancelled, rejectable: false)`.
 
 ### L51. `observing.md`: одно слово в двух смыслах и места, где читатель спотыкается
 
@@ -2061,6 +2100,10 @@ piece of code on the page is a run of lines of this file»
 тест даёт трассу под каким блоком, сверка не знает: правка, после которой код
 страницы совпадает с кодом другого теста, проходит. Отчёт
 `2026-09-28-cancellation-outcomes-pages-report.md`. Остальные страницы открыты.
+Итог 2026-09-28 по `extending.md`: сверка кода и по порядку цитат, а код под
+заголовком каждой версии сверяется со своим файлом (`under:`
+у `codeMissingFrom`) — так ловится ответ, подменённый строкой первой попытки;
+отчёт `2026-09-28-extending-page-report.md`.
 
 ### L61. Утверждения страниц без сторожа, который покраснеет
 
@@ -2078,7 +2121,9 @@ piece of code on the page is a run of lines of this file»
 сторожа M12, зона хука — «a hook's error goes to the zone that calls it», оба
 в `2026-09-28-observing-page-report.md`; `check()` из `wait` и `uncancellable`
 держат сторожа M29, `2026-09-28-review-sentinels-report.md`. Фрагмент `MyJob`
-остаётся открытым до страницы `extending.md`.
+остаётся открытым до страницы `extending.md`. Итог 2026-09-28 по фрагменту
+`MyJob`: весь код `extending.md` гоняет `extending_rakes_test.dart`, отчёт
+`2026-09-28-extending-page-report.md`.
 
 ### L62. `check_links.py` слаггирует заголовок с тире не так, как GitHub и Starlight
 
@@ -2416,7 +2461,8 @@ R9 (9.10).
    L59, L76; сделана 2026-09-28 вместе с M25), `observing.md` (M11, M12, L47,
    L51; сделана 2026-09-28 вместе с M26 и частью L61), `cancellation.md`
    и `outcomes.md` (M13, M14, L38–L46; сделаны 2026-09-28 вместе с L12, L19,
-   L21, L25 и L60 для этих страниц), `extending.md` (M7, L48–L50), README (M10,
+   L21, L25 и L60 для этих страниц), `extending.md` (M7, L48–L50; сделана
+   2026-09-28 вместе с остатком L19, L61, частями L33, L41 и L60), README (M10,
    L30, L31, L35, L36). Проверка цитат из L60 закроет половину причин,
    по которым неверные тексты прошли мимо сторожей.
 4. **Подготовка выпуска:** сперва решение по словам (M22), потом M23 и L27

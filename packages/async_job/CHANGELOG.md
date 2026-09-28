@@ -28,6 +28,18 @@
   `async_job.dart`. Code that only runs jobs is untouched. See
   `doc/extending.md`.
 
+- **Breaking:** `JobContextBase.check` is marked `@mustCallSuper`. The
+  checkpoint is where the cancellation of the job is asked: while the body
+  runs, `ctx.wait`, `ctx.join` and `ctx.uncancellable` ask it before the
+  action, `ctx.join` again after it, `ctx.run` once the child's value has
+  arrived and `ctx.runAll` before it hands the values back. An engine of a
+  domain that overrode it for a rule of its own without calling `super` stopped
+  asking: `ctx.join` handed a value to a job already cancelled, and
+  `ctx.uncancellable` began its step on one. The analyzer now warns about such
+  an override, and `dart analyze` fails on the warning. Call `super.check()`
+  first; a rule that no longer holds cancels the job through `cancelOwnJob` and
+  throws `pendingCancel`. See `doc/extending.md`.
+
 - **Fix:** the failure of a body is no longer lost when a cancellation reaches
   the job afterwards, while it still waits for children of its own or runs its
   cleanup. The job ends `Cancelled`, and whoever reads the outcome gets the

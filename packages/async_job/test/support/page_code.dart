@@ -10,15 +10,29 @@ import 'dart:io';
 /// the test hands the page's expression to a helper of its own. A line
 /// checked alone would let a piece drop a line or swap two and still be
 /// found.
-List<String> codeMissingFrom(String page, String test) {
+///
+/// A page whose first attempts cannot share a library with its answer —
+/// two classes of one name — names the libraries that hold them in
+/// [alsoIn], and a piece may stand in any one of the files. [under] narrows
+/// the page to the parts under the headings of that text, each up to the
+/// next heading: that is how a page holds an answer to its own file, where
+/// the line of a first attempt would be found as well.
+List<String> codeMissingFrom(
+  String page,
+  String test, {
+  List<String> alsoIn = const [],
+  String? under,
+}) {
   List<String> lines(String text) => [
         for (final line in text.split('\n'))
           if (line.trim().isNotEmpty && !line.trim().startsWith('// ignore:'))
             line.trim(),
       ];
 
-  final source = lines(File(test).readAsStringSync());
-  bool runs(List<String> piece) {
+  final sources = [
+    for (final file in [test, ...alsoIn]) lines(File(file).readAsStringSync()),
+  ];
+  bool runsIn(List<String> source, List<String> piece) {
     for (var start = 0; start + piece.length <= source.length; start++) {
       if (!source[start].endsWith(piece.first)) {
         continue;
@@ -35,9 +49,19 @@ List<String> codeMissingFrom(String page, String test) {
     return false;
   }
 
+  bool runs(List<String> piece) =>
+      sources.any((source) => runsIn(source, piece));
+
+  var text = File(page).readAsStringSync();
+  if (under != null) {
+    text = [
+      for (final part in text.split(RegExp('^(?=#)', multiLine: true)))
+        if (part.split('\n').first == under) part,
+    ].join();
+  }
   return [
-    for (final block in RegExp(r'```dart\n(.*?)\n```', dotAll: true)
-        .allMatches(File(page).readAsStringSync()))
+    for (final block
+        in RegExp(r'```dart\n(.*?)\n```', dotAll: true).allMatches(text))
       for (final piece in block.group(1)!.split(RegExp(r'\n\s*\n')))
         if (!runs(lines(piece))) piece,
   ];
