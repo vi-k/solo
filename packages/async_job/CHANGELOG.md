@@ -259,6 +259,14 @@ report the job giving up.
   README did not: the failures a cancellation covered, in a table of where each
   error goes, and that a parent waits for its children and not for the
   continuations hanging off them.
+- The API reference says where to start and where the guides are. The example
+  of `Job.ignore` gives its job an observer, as the text above it asks.
+  `ctx.onCancel` promises the order its callbacks run in, `ctx.log` says which
+  message costs nothing without an observer, `ctx.disown` covers what `ctx.run`
+  registers, and `run`, `runAll`, `each` and the engine protocol name what they
+  throw. `Job.isChild` names every way a job is adopted, `Job.deferred` says
+  what cancelling it before its start does, and the summaries in the reference
+  no longer speak the vocabulary of `solo`.
 
 ## 0.2.0
 

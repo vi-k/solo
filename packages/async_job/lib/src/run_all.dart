@@ -99,8 +99,9 @@ final class _RunAllGroup<T> {
       try {
         _ctx.startChild(child);
       } on Object catch (error, stackTrace) {
-        // `startChild` has already finished this child with this very
-        // error, and the error is what comes out of the group. The child
+        // A child refused before adoption is left as it was, and one refused
+        // after it `startChild` has already finished with this very error;
+        // either way the error is what comes out of the group. The child
         // does not join the branches, or the group would report it a
         // second time as a failure nobody chose.
         _refusal = (error, stackTrace);

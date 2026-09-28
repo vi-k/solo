@@ -96,6 +96,9 @@ abstract mixin class JobObserver {
   /// [message] arrives as the body gave it, untouched: making a line out
   /// of it is this listener's business, and a `toString` that throws while
   /// it does is a hook that throws — the error goes to the current zone
-  /// and nothing else changes.
+  /// and nothing else changes. A body that wants its message built only
+  /// when somebody listens passes a closure, and calling it is this
+  /// listener's convention: one that prints the message as it came prints
+  /// the closure itself.
   void onLog(Job<Object?> job, Object? message) {}
 }

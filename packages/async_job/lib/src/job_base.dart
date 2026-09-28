@@ -67,10 +67,10 @@ abstract interface class Job<T> {
 
   /// Creates a job that waits to be told to start.
   ///
-  /// A static method and not a constructor: the result is a
-  /// [DeferredJob], and a constructor of [Job] could only be typed as one.
-  /// Whoever owns the job starts it — by hand, a queue, or a parent
-  /// through [JobContext.run] or [JobContext.runAll].
+  /// The result is a [DeferredJob], and whoever owns it starts it: by hand
+  /// through [DeferredJob.start], or a parent through [JobContext.run] or
+  /// [JobContext.runAll]. Cancelled before that, it ends [Cancelled] with
+  /// `started: false`, and its body never runs.
   static DeferredJob<T> deferred<T>(
     Future<T> Function(JobContext ctx) body, {
     Object? key,
@@ -95,16 +95,16 @@ abstract interface class Job<T> {
   /// Job.debug = print;
   /// ```
   ///
-  /// An engine of a domain prints its own side elsewhere — `solo` puts the
-  /// queue, the state and the closing into `Solo.debug`. To follow both sides,
-  /// set both.
+  /// An engine of a domain prints its own side elsewhere — `solo`, for example,
+  /// puts the queue, the state and the closing into `Solo.debug`. To follow
+  /// both sides, set both.
   static void Function(String message)? debug;
 
   /// The key given at creation.
   ///
-  /// The core does not read it: it is there for [toString], for the
-  /// observer, and for whatever an engine of a domain does with it —
-  /// `solo` compares keys with `==` in its queue policies.
+  /// The core does not read it: it is there for [toString], for the observer,
+  /// and for whatever an engine of a domain does with it — `solo`, for example,
+  /// compares keys with `==` in its queue policies.
   Object? get key;
 
   /// The description given at creation, or an empty string.
@@ -113,7 +113,12 @@ abstract interface class Job<T> {
   /// Nesting depth: 0 for a root job, `parent.level + 1` for a child.
   int get level;
 
-  /// Whether this job was started by [JobContext.run].
+  /// Whether this job was adopted by a parent — through [JobContext.run],
+  /// [JobContext.runAll] or [JobContext.each].
+  ///
+  /// A child the parent turned away — it was already giving up, or a rule of
+  /// its domain refused the start — is one too: its [level] is its parent's
+  /// plus one, and it never ran.
   bool get isChild;
 
   /// Whether the body is running or its children are still finishing.
@@ -273,7 +278,7 @@ abstract interface class Job<T> {
   /// handled elsewhere, by a [JobObserver] of your own.
   ///
   /// ```dart
-  /// Job<void>((ctx) => ctx.wait(device.close)).ignore();
+  /// Job<void>(observer: reporter, (ctx) => ctx.wait(device.close)).ignore();
   /// ```
   ///
   /// Waiting for [done] or [value] observes a [Failed] too: the one
@@ -324,10 +329,10 @@ enum JobStatus {
 
 /// One registration on the cleanup stack of a job.
 ///
-/// [always] tells the two kinds apart: a `dispose` registration runs
-/// whatever the outcome, a `discard` one only when the value reached
-/// nobody. [value] is set for registrations made by `wait` and `join`, and
-/// it is what `disown` looks up.
+/// [always] tells the two kinds apart: a `dispose` registration runs whatever
+/// the outcome, a `discard` one only when the value reached nobody. [value] is
+/// set for registrations made by `wait`, `join` and `run`, and it is what
+/// `disown` looks up.
 final class _Cleanup {
   final FutureOr<void> Function() run;
   final bool always;
@@ -810,6 +815,10 @@ abstract class JobBase<T> implements Job<T> {
   /// refuses it. Each child receives [ParentCancelReason] with [cancelled]
   /// as its cause, preserving the parent's reason and data. The cancellation
   /// stack trace is carried over as well.
+  ///
+  /// Every child is asked, even when asking one of them throws — an engine
+  /// whose `cancelWith` fails, a subtree deep enough to run the stack out. The
+  /// first error is rethrown once the last child has been asked.
   @protected
   void cascadeToChildren(Cancelled cancelled) {
     (Object, StackTrace)? failure;
@@ -944,9 +953,10 @@ abstract class JobBase<T> implements Job<T> {
 
   /// The children this job waits for; read-only.
   ///
-  /// The way in is [JobContext.run] alone: it sets the parent, the level
-  /// and the observer of the child, and nothing else may put a job on this
-  /// list — the core would wait for a child it never adopted.
+  /// The way in is [JobContextBase.startChild] alone, which [JobContext.run],
+  /// [JobContext.runAll] and [JobContext.each] go through: it sets the parent,
+  /// the level and the observer of the child, and nothing else may put a job on
+  /// this list — the core would wait for a child it never adopted.
   @protected
   List<JobBase<Object?>> get children => UnmodifiableListView(_children);
 
@@ -956,7 +966,11 @@ abstract class JobBase<T> implements Job<T> {
   @protected
   Future<void> get whenDone => _done.future.then((_) {});
 
-  /// Runs the body. Throws [StateError] if the job already ran.
+  /// Runs the body.
+  ///
+  /// Throws [StateError] if the job already ran, and also if it was cancelled
+  /// before it started: a job dropped then is finished, and a finished job does
+  /// not run.
   @protected
   void start() {
     if (_status != JobStatus.created) {
@@ -1167,13 +1181,13 @@ abstract class JobBase<T> implements Job<T> {
   /// Hands [error] to the zone the job was created in, unless it is a
   /// cancellation.
   ///
-  /// For an engine of a domain whose own answer for an error with nowhere
-  /// to go ends with the zone: `solo` sends one here when neither an
-  /// override of `Solo.onUnanswered` nor `Solo.errorHandler` took it. The
-  /// core reaches the zone by itself, through the default body of
-  /// [JobObserver.onUnanswered], through [notifyError] without an observer
-  /// and through an unobserved [Failed]. A cancellation is held back here as
-  /// it is there, so an engine of a domain does not write that rule again.
+  /// For an engine of a domain whose own answer for an error with nowhere to go
+  /// ends with the zone: `solo`, for example, sends one here when neither an
+  /// override of `Solo.onUnanswered` nor `Solo.errorHandler` took it. The core
+  /// reaches the zone by itself, through the default body of
+  /// [JobObserver.onUnanswered], through [notifyError] without an observer and
+  /// through an unobserved [Failed]. A cancellation is held back here as it is
+  /// there, so an engine of a domain does not write that rule again.
   @protected
   void reportToZone(Object error, StackTrace stackTrace) =>
       _toZone(error, stackTrace);
@@ -1234,26 +1248,35 @@ abstract class JobBase<T> implements Job<T> {
     _zone.handleUncaughtError(error, stackTrace);
   }
 
-  /// The subclass joins the run: `solo` adds the job to its running list.
+  /// The subclass joins the run.
   ///
-  /// Called with the job already [JobStatus.running], so it must not
-  /// throw: an error here leaves a job that is running and has no body,
-  /// and nothing will ever finish it.
+  /// Called with the job already [JobStatus.running], so it must not throw: an
+  /// error here leaves a job that is running and has no body, and nothing will
+  /// ever finish it. `solo`, for example, adds the job to its running list
+  /// here.
   @protected
   void started() {}
 
-  /// The subclass leaves the run: `solo` clears `current` and pumps.
+  /// The subclass leaves the run.
   ///
-  /// Called for every job that gets an outcome, including one dropped
-  /// before its body ever ran — then there was no [started] to match it.
-  /// An error thrown here goes to [notifyError] and the job finishes all
-  /// the same, but the engine of the domain is left half-way through its own
-  /// bookkeeping: keep it short and unconditional.
+  /// Called for every job that gets an outcome, including one dropped before
+  /// its body ever ran — then there was no [started] to match it. An error
+  /// thrown here goes to [notifyError] and the job finishes all the same, but
+  /// the engine of the domain is left half-way through its own bookkeeping:
+  /// keep it short and unconditional. `solo`, for example, clears `current`
+  /// here and moves its queue on.
   @protected
   void finished() {}
 
-  /// The child's own word on who may adopt it. Empty here: [JobContext.run]
-  /// has already checked that the child is a job of this core.
+  /// The child's own word on who may adopt it. Empty here:
+  /// [JobContextBase.startChild] has already checked that the child is a job of
+  /// this core.
+  ///
+  /// To refuse, throw — an [ArgumentError] for a parent that may not have this
+  /// child, a [StateError] for a child that is spoken for. The error comes out
+  /// of the call that asked — for [JobContext.runAll], once the branches it
+  /// already started have stopped — before the child has a parent, and the
+  /// child stays `created`.
   @protected
   void adoptedBy(JobContextBase parent) {}
 

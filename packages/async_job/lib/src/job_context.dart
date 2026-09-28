@@ -21,8 +21,11 @@ part of 'job_base.dart';
 /// on the stack the core is unwinding, and a disposer may hand out work
 /// nobody waits for.
 abstract interface class JobContext {
-  /// Gives up if the job was cancelled — in `solo`, also if its rules
-  /// stopped holding.
+  /// Gives up if the job was cancelled, or if a rule its engine adds stopped
+  /// holding.
+  ///
+  /// `solo`, for example, gives up here once the rules of the job stopped
+  /// holding.
   ///
   /// [join] is the same thing around a call. Reach for `check` where there
   /// is no call to wrap: a loop over work of your own, a `switch` after
@@ -197,9 +200,9 @@ abstract interface class JobContext {
   /// it arrives and only keeps waiting: there the job accepts it at once, and a
   /// token handed to [onCancel] stops the very call being waited for.
   ///
-  /// The rules an engine of a domain adds are not covered: `solo` cancels
-  /// a job whose state left its working type whatever this does, and the
-  /// body learns about it at its next read as always.
+  /// The rules an engine of a domain adds are not covered: `solo`, for example,
+  /// cancels a job whose state left its working type whatever this does, and
+  /// the body learns about it at its next read as always.
   ///
   /// Throws [Cancelled] if the job is already cancelled, the same as
   /// [wait]: a step that cannot be taken back must not begin for a job
@@ -223,7 +226,8 @@ abstract interface class JobContext {
 
   /// Registers [callback] to run the moment the job accepts a cancellation,
   /// before the body itself learns about it. Returns a function that
-  /// unregisters it.
+  /// unregisters it. Callbacks run in the order they were registered, each
+  /// once.
   ///
   /// This is how a cancellation reaches something that can really stop:
   /// a device's own cancel token, an HTTP client's abort, a subscription.
@@ -303,7 +307,7 @@ abstract interface class JobContext {
   /// such a job keeps to itself the member is [onDispose].
   void Function() onDiscard(FutureOr<void> Function() disposer);
 
-  /// Drops the cleanup registered for [value] by [wait] or [join].
+  /// Drops the cleanup registered for [value] by [wait], [join] or [run].
   ///
   /// Returns whether anything was dropped. The lookup is by identity, so pass
   /// the very object the body was handed. What an equal one finds depends on
@@ -316,8 +320,8 @@ abstract interface class JobContext {
   /// return; an unknown value is not an error. With two registrations for one
   /// value the top one goes, one per call.
   ///
-  /// Stands next to the hand-over: before it, when the hand-over is
-  /// synchronous and may throw after its own work (`emit` of `solo`), and
+  /// Stands next to the hand-over: before it, when the hand-over is synchronous
+  /// and may throw after its own work (`emit` of `solo`, for example), and
   /// inside the same uncancellable section, when it is asynchronous.
   bool disown(Object value);
 
@@ -352,11 +356,13 @@ abstract interface class JobContext {
   /// yet: which of the two got there first is a matter of microtasks nobody
   /// can see in the source.
   ///
-  /// Admission errors are synchronous: throws [ArgumentError] for a handle
-  /// that is not a job of this core, one an engine of a domain does not own,
-  /// or one that starts itself; [StateError] for a job that has already been
-  /// started; and the parent's own [Cancelled], with the child dropped, if the
-  /// parent is already cancelled.
+  /// Admission errors are synchronous: throws [ArgumentError] for a handle that
+  /// is not a job of this core, one an engine of a domain does not own, or one
+  /// that starts itself; [StateError] for a job that has already been started
+  /// or has finished — one cancelled before its start included — and for a call
+  /// made after this job's body has ended — from its cleanup, say — or from
+  /// [unattended] work; and the parent's own [Cancelled], with the child
+  /// dropped, if the parent is already cancelled.
   ///
   /// [dispose] and [discard] say how the child's value is cleaned up, and
   /// they work as they do in [wait]: [dispose] runs whatever the outcome,
@@ -383,12 +389,12 @@ abstract interface class JobContext {
   /// Runs [children] side by side and stops the rest as soon as one of
   /// them goes wrong.
   ///
-  /// Starts every child synchronously, in the order of the list, and
-  /// returns their values in that same order — not in the order they
-  /// finished. The list is read once, by copy, before the first start: an
-  /// `Iterable` promises neither repeatability nor stability, and the
-  /// bodies start soon enough to change the list it was built from. The
-  /// same handle twice is refused before anything starts.
+  /// Starts every child synchronously, in the order of the list, and returns
+  /// their values in that same order — not in the order they finished. The list
+  /// is read once, by copy, before the first start: an `Iterable` promises
+  /// neither repeatability nor stability, and the bodies start soon enough to
+  /// change the list it was built from. The same handle twice is refused with
+  /// an [ArgumentError] before anything starts.
   ///
   /// As soon as the body of any branch ends in anything but a value, the
   /// other branches are asked to stop with [SiblingCancelReason] — the
@@ -506,9 +512,10 @@ abstract interface class JobContext {
   /// cleanup owned by the source is not awaited. A normal stream ending
   /// still depends on the source delivering its `onDone` notification.
   ///
-  /// Throws synchronously if a child cannot be started, as [run] does:
-  /// after the parent's body ended, during cleanup, from [unattended] work,
-  /// or after cancellation was accepted.
+  /// Throws synchronously if a child cannot be started, as [run] does: a
+  /// [StateError] after the parent's body ended, during cleanup and from
+  /// [unattended] work, and the parent's [Cancelled] after it accepted a
+  /// cancellation.
   ///
   /// ```dart
   /// final listening = ctx.each<int>(events, (child, event) {
@@ -523,10 +530,17 @@ abstract interface class JobContext {
 
   /// Hands [message] to [JobObserver.onLog] as it is.
   ///
-  /// Nothing happens to it on the way: a listener that wants a line makes
-  /// one, a listener that wants the object keeps it. A no-op when the job
-  /// has no observer, so a body logs unconditionally, and a message that
-  /// is expensive to put into words costs nothing until somebody listens.
+  /// Nothing happens to it on the way: a listener that wants a line makes one,
+  /// a listener that wants the object keeps it. A no-op when the job has no
+  /// observer, so a body logs unconditionally.
+  ///
+  /// Only a message passed unbuilt costs nothing until somebody listens: the
+  /// object itself, or a closure the observer calls. A string with
+  /// interpolation is built before this call, observer or not.
+  ///
+  /// ```dart
+  /// ctx.log(() => 'migration failed: $error');
+  /// ```
   void log(Object? message);
 
   /// Runs [action] as work this job does not wait for.
@@ -595,16 +609,15 @@ abstract interface class JobContext {
   /// ctx.onCancel(() => ctx.unattended(device.stop));
   /// ```
   ///
-  /// **Unfinished work holds the job**, its outcome and the body's
-  /// closure with everything it captured — and, in `solo`, the controller
-  /// itself, with its state and its listeners, after `close()` too. A
-  /// periodic timer left running in here leaks all of that.
+  /// **Unfinished work holds the job**, its outcome and the body's closure with
+  /// everything it captured — and whatever an engine of a domain hangs on the
+  /// job: in `solo`, for example, the controller itself, with its state and its
+  /// listeners, after `close()` too. A periodic timer left running in here
+  /// leaks all of that.
   ///
-  /// A job created in here is not this work: it has an outcome and an
-  /// observer of its own, and its unobserved failure goes to the zone the
-  /// body runs in rather than to this job's observer. Quench it with
-  /// [Job.ignore]. The `emit` of `solo` works from in here too, while the
-  /// job is alive, the same as [wait] does.
+  /// A job created in here is not this work: it has an outcome and an observer
+  /// of its own, and its unobserved failure goes to the zone the body runs in
+  /// rather than to this job's observer. Quench it with [Job.ignore].
   ///
   /// Legal on a job that has already accepted a cancellation, and legal while
   /// the core unwinds the cleanup stack — a disposer starting work nobody waits
@@ -622,24 +635,25 @@ abstract interface class JobContext {
 
 /// The base of a job context: everything a body does without a state.
 ///
-/// Subclass it to add a domain of your own; `solo` adds the state and its
-/// rules. [check] is the checkpoint, and it is virtual on purpose: a
-/// domain checks more than the cancellation. While the body runs, [wait],
-/// [join] and [uncancellable] ask it before the action, [join] again after
-/// it, [run] once the child's value has arrived, and [runAll] before it
+/// Subclass it to add a domain of your own — `solo`, for example, adds the
+/// state and its rules. [check] is the checkpoint, and it is virtual on
+/// purpose: a domain checks more than the cancellation. While the body runs,
+/// [wait], [join] and [uncancellable] ask it before the action, [join] again
+/// after it, [run] once the child's value has arrived, and [runAll] before it
 /// hands the values back. An override calls `super.check()`, and calls it
-/// first. That is where the cancellation of the job is asked: without it
-/// [join] hands a value to a job already cancelled and [uncancellable]
-/// begins its step on one. And while the core cleans up after the body
-/// it throws a [StateError], before a rule could turn a job that returned
-/// a value into a cancelled one. A rule that no longer holds cancels the
-/// job through [cancelOwnJob] and throws [pendingCancel], so the job
-/// accepts the cancellation and its [onCancel] callbacks run.
+/// first. That is where the cancellation of the job is asked: without it [join]
+/// hands a value to a job already cancelled and [uncancellable] begins its step
+/// on one. And while the core cleans up after the body it throws a
+/// [StateError], before a rule could turn a job that returned a value into a
+/// cancelled one. A rule that no longer holds cancels the job through
+/// [cancelOwnJob] and throws [pendingCancel], so the job accepts the
+/// cancellation and its [onCancel] callbacks run.
 abstract class JobContextBase implements JobContext {
   final JobBase<Object?> _owner;
 
-  /// A plain positional parameter, not `this._owner`: a subclass writes
-  /// `MyContext(super.owner)`, and a private name cannot be used there.
+  /// Creates the context [owner] hands to its body.
+  ///
+  /// A subclass passes the job on: `MyContext(super.owner)`.
   JobContextBase(JobBase<Object?> owner) : _owner = owner;
 
   @override
@@ -774,8 +788,10 @@ abstract class JobContextBase implements JobContext {
   @protected
   void leaveUncancellable() => _owner.leaveUncancellable();
 
-  /// The parent's last word before a child starts; `solo` checks the start
-  /// rules here. A non-null result finishes the child with it.
+  /// The parent's last word before a child starts.
+  ///
+  /// A non-null result finishes the child with it. `solo`, for example, checks
+  /// its start rules here.
   @protected
   Cancelled? beforeChildStart(JobBase<Object?> child) => null;
 
@@ -971,7 +987,7 @@ abstract class JobContextBase implements JobContext {
   /// Puts a registration on the cleanup stack of the owner.
   ///
   /// The public [onDispose] and [onDiscard] are this with [value] unset;
-  /// `wait` and `join` pass the value they hand to the body, so that
+  /// `wait`, `join` and `run` pass the value they hand to the body, so that
   /// `disown` can find the registration by it.
   @protected
   void Function() addCleanup(

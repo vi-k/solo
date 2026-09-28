@@ -18,7 +18,11 @@ abstract class CancelReason {
   String toString() => name;
 }
 
-/// An explicit cancellation, queue removal, or duplicate dropped by a policy.
+/// An explicit cancellation: the default reason of [Job.cancel].
+///
+/// An engine of a domain may give it to removals of its own — `solo`, for
+/// example, to a job taken out of its queue and to a duplicate dropped by a
+/// policy.
 final class ManualCancelReason extends CancelReason {
   /// Creates an explicit cancellation reason.
   const ManualCancelReason();
@@ -170,8 +174,8 @@ final class Cancelled extends Outcome<Never> implements Exception {
   final bool started;
 
   /// Details within [reason]: the text passed by the body, or whatever an
-  /// engine of a domain writes there — `'is not Ready'`, `'canStart'`,
-  /// `'keepWhile'`, `'duplicate'` in `solo`.
+  /// engine of a domain writes there — `solo`, for example, writes
+  /// `'is not Ready'`, `'canStart'`, `'keepWhile'` and `'duplicate'`.
   final String? description;
 
   /// Where the cancellation came from, not where the body died.
