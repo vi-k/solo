@@ -1222,6 +1222,83 @@ void main() {
         ['Bad state: second', 'Bad state: first'],
       );
     });
+
+    test('two branches of runAll failed before the mark, both with strings',
+        () {
+      // An Expando holds no string, so these are noted apart from objects;
+      // the second must not take the place of the first. Thrown with
+      // `throwWithStackTrace`, which `only_throw_errors` lets through.
+      expect(
+        cancelledAt10(
+          (ctx) => ctx.runAll<void>([
+            Job.deferred<void>((ctx) async {
+              await delay(5);
+              Error.throwWithStackTrace('first', StackTrace.current);
+            }),
+            Job.deferred<void>(cancellable: false, (ctx) async {
+              await delay(8);
+              Error.throwWithStackTrace('second', StackTrace.current);
+            }),
+            Job.deferred<void>((ctx) => ctx.uncancellable(() => delay(50))),
+          ]),
+        ),
+        ['second', 'first'],
+      );
+    });
+
+    test('a NaN caught before the stop and thrown again after it', () {
+      // Noted by identity: `double.nan == double.nan` is false, and a note
+      // compared by `==` would never find the failure again.
+      expect(
+        cancelledAt10((ctx) async {
+          late final Object caught;
+          try {
+            await ctx.wait(() async {
+              await delay(1);
+              Error.throwWithStackTrace(double.nan, StackTrace.current);
+            });
+          } on Object catch (error) {
+            caught = error;
+          }
+          final stopped = Completer<void>();
+          ctx.onCancel(stopped.complete);
+          await stopped.future;
+          Error.throwWithStackTrace(caught, StackTrace.current);
+        }),
+        ['NaN'],
+      );
+    });
+
+    for (final (which, expected) in [
+      ('earlier', 'step'),
+      ('later', 'second'),
+    ]) {
+      test('the $which of two caught strings, thrown again after the stop', () {
+        expect(
+          cancelledAt10((ctx) async {
+            final caught = <Object>[];
+            for (final error in ['step', 'second']) {
+              try {
+                await ctx.wait(() async {
+                  await delay(1);
+                  Error.throwWithStackTrace(error, StackTrace.current);
+                });
+              } on Object catch (error) {
+                caught.add(error);
+              }
+            }
+            final stopped = Completer<void>();
+            ctx.onCancel(stopped.complete);
+            await stopped.future;
+            Error.throwWithStackTrace(
+              caught[which == 'earlier' ? 0 : 1],
+              StackTrace.current,
+            );
+          }),
+          [expected],
+        );
+      });
+    }
   });
 
   group('a failure after the child accepted a cancellation is only told', () {

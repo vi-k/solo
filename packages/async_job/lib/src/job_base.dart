@@ -474,9 +474,17 @@ abstract class JobBase<T> implements Job<T> {
   /// otherwise hold every one of them until the job is over.
   Expando<bool>? _failedBeforeMark;
 
-  /// The latest failure of [_failedBeforeMark] that an [Expando] cannot
-  /// hold: a string, a number, a boolean or a record.
-  Object? _plainFailedBeforeMark;
+  /// The failures of [_failedBeforeMark] that an [Expando] cannot hold: a
+  /// string, a number, a boolean or a record.
+  ///
+  /// Every one of them, as for objects: [JobContext.runAll] throws the
+  /// first failure of its branches, another branch may fail with a string
+  /// of its own before the mark, and both have to stay noted. Held
+  /// strongly, because no weak reference can hold them, and by identity, so
+  /// a body that throws the same constant in a loop keeps one entry. A body
+  /// that catches distinct ones in a loop before any mark keeps them all
+  /// until [finish] — and a record keeps whatever it references.
+  Set<Object>? _plainFailedBeforeMark;
 
   static bool _isPlain(Object error) =>
       error is String || error is num || error is bool || error is Record;
@@ -495,7 +503,7 @@ abstract class JobBase<T> implements Job<T> {
       return;
     }
     if (_isPlain(error)) {
-      _plainFailedBeforeMark = error;
+      (_plainFailedBeforeMark ??= Set.identity()).add(error);
     } else {
       (_failedBeforeMark ??= Expando<bool>())[error] = true;
     }
@@ -503,7 +511,7 @@ abstract class JobBase<T> implements Job<T> {
 
   /// Whether [error] was noted by [_failedUnmarked].
   bool _wasFailedUnmarked(Object error) => _isPlain(error)
-      ? identical(error, _plainFailedBeforeMark)
+      ? _plainFailedBeforeMark?.contains(error) ?? false
       : _failedBeforeMark?[error] ?? false;
 
   /// Whether this job is unwinding a cascade that ran out of stack.
