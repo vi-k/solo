@@ -2,15 +2,16 @@
 
 > **Состояние на 2026-09-29:** ревью проведено, находки уровня Medium и выше
 > перепроверены моими зондами, у каждой находки стоит вердикт. Ничего
-> не исправлено, кроме H1–H3, M1–M30, L2–L4, L6–L15, L17–L28, L30–L32,
-> L34–L40, L42, L44–L59, L61, L63–L81 и частей L1, L16,
-> L29, L33, L41, L43, L60 и L62: находки разбираются с владельцем
-> по одной; H1 закрыт документами, `2026-09-27-run-all-shared-lock-report.md`;
-> M1, M2 и L8 закрыты одной правкой ядра, `2026-09-27-failed-first-report.md`;
-> M3, M4 и M5 — `2026-09-27-reason-continuation-late-value-report.md`; сторожа
-> H3, M27, M28, M29 и dartdoc L9 — `2026-09-28-review-sentinels-report.md`;
-> страница `children.md` — `2026-09-28-children-page-report.md`; страница
-> `cleanup.md` — `2026-09-28-cleanup-page-report.md`; страница `observing.md` —
+> не исправлено, кроме H1–H3, M1–M30, L2–L4, L6–L15, L17–L32, L34–L40, L42,
+> L44–L59, L61, L63–L81 и частей L1, L16, L33, L41, L43, L60 и L62: находки
+> разбираются с владельцем по одной; H1 закрыт документами,
+> `2026-09-27-run-all-shared-lock-report.md`; L29 закрыт 2026-09-29 решением
+> владельца в пользу страницы; M1, M2 и L8 закрыты одной правкой ядра,
+> `2026-09-27-failed-first-report.md`; M3, M4 и M5 —
+> `2026-09-27-reason-continuation-late-value-report.md`; сторожа H3, M27, M28,
+> M29 и dartdoc L9 — `2026-09-28-review-sentinels-report.md`; страница
+> `children.md` — `2026-09-28-children-page-report.md`; страница `cleanup.md` —
+> `2026-09-28-cleanup-page-report.md`; страница `observing.md` —
 > `2026-09-28-observing-page-report.md`; страницы `cancellation.md`
 > и `outcomes.md` — `2026-09-28-cancellation-outcomes-pages-report.md`;
 > страница `extending.md` — `2026-09-28-extending-page-report.md`; README
@@ -25,10 +26,10 @@
 > целиком через humanizer-ru, — `2026-09-28-async-job-humanizer-report.md`;
 > dartdoc вне порядка работ (волна А пункта 8) —
 > `2026-09-28-async-job-dartdoc-report.md`; код ядра (волна Б) —
-> `2026-09-28-async-job-core-edges-report.md`; тесты и сборка сайта (волны В
-> и Г) — `2026-09-29-async-job-tests-site-report.md`.
-> Полные отчёты ревьюеров и их зонды лежат локально
-> в `.artifacts/2026-09-26-async-job-review/`, каталог не под гитом.
+> `2026-09-28-async-job-core-edges-report.md`; тесты и сборка сайта (волны
+> В и Г) — `2026-09-29-async-job-tests-site-report.md`. Полные отчёты ревьюеров
+> и их зонды лежат локально в `.artifacts/2026-09-26-async-job-review/`,
+> каталог не под гитом.
 > **Что это:** девять независимых ревьюеров Opus, по копии дерева на каждого.
 > Шестеро смотрели документацию: README с CHANGELOG и упаковкой, шесть страниц
 > `doc/` парами, dartdoc со сквозной терминологией, русские переводы с сайтом.
@@ -1718,7 +1719,11 @@ immediately». Зонд ревьюера: `[A (1st), C (3rd, made inside A), B (
 настоящий. Итог 2026-09-28 по слову «operation»: последний абзац
 `cancellation.md` называет операцию, которая ждёт `value` отменённой задачи,
 сторож на неё; отчёт `2026-09-28-cancellation-outcomes-pages-report.md`. Выбор
-между требованием handoff и страницей открыт.
+между требованием handoff и страницей открыт. Итог 2026-09-29: владелец выбрал
+страницу. `cancellation.md` не менялась: `on Cancelled { rethrow; }` остаётся
+первой попыткой, решение — `ctx.check()` первой строкой `catch`, а проверка
+типа, добавленная в `6ec4f76`, стоит после неё и отличает чужой `Cancelled`.
+Пункт требований в `docs/handoff.md` переписан под страницу тем же коммитом.
 
 ### L30. Чем пакет отличается от того, что уже есть в Dart, сказано одной неполной фразой
 
@@ -2726,3 +2731,6 @@ R9 (9.10).
 - 2026-09-28: L65 — `Job` в русском тексте женского рода: «job - джоба, женский
   род». Правило — в `docs/conventions.md`, отчёт —
   `2026-09-28-async-job-translations-report.md`.
+- 2026-09-29: L29 — действует страница об отмене с `ctx.check()`, а не
+  требование handoff о двух примерах проброса `Cancelled`. Итог — в вердикте
+  L29.
