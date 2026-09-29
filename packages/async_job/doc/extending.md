@@ -319,6 +319,14 @@ a job that returned a value into a cancelled one. The rule is asked where
 `check()` is asked and nowhere else: a sign-out during the download is noticed
 when `join` comes back.
 
+Cancelling is also how an engine ends a job that is still running. `finish`
+ends a job with the outcome handed in, but it waits for no children and unwinds
+no cleanup stack: no `onDispose` and no `discard` runs, and what the body
+opened stays open. Only the debug channel says how many cleanups were left
+behind. A job that has accepted a cancellation ends with that cancellation
+whatever `finish` is handed, and a value handed in goes nowhere. An engine that
+finishes a running job by hand anyway releases what the job holds first.
+
 ## Deferred start
 
 A regular `Job` schedules its own start on the next microtask. If the caller

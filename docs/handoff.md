@@ -56,7 +56,9 @@
   обещает dartdoc `finish`: «unwinds no cleanup stack, so everything the body
   opened stays open», и отладочный канал говорит «finished with 2 cleanups
   pending». Компенсацию давал только прототип брошенного дизайна. Менять ли
-  контракт `finish` — вопрос владельцу; мой совет — не менять. Тест
+  контракт `finish` — вопрос владельцу; мой совет — не менять. Контракт
+  с 2026-09-29 назван и на странице `extending.md` с переводом, в разделе
+  «Cancelling the job from the rule». Тест
   `a branch finished by hand at the second barrier says so too`
   в `debug_test.dart` держит тот же контракт на втором барьере. Две другие
   находки того круга закрыты 2026-09-29. CAUSE, пятая находка ревьюера Б:
@@ -198,19 +200,18 @@
 коммитом — ветка и `git status`, чужое не коммитится. Других веток нет
 ни локально, ни на `origin`; копий дерева, stash и `.git/wip` нет,
 незакоммиченного нет; скретчпад сессии 2026-09-29 удалён. `main` отправлен
-в `origin` 2026-09-29 по поручению владельца, до `4d8971d`; после него локально
-коммиты L29, RV13, CAUSE и FINMARK, не отправлены; `dart test` `async_job`
-на них — 893, зелёный. CI на `be62079` зелёный: `gate` `36473267218`, `site`
-`36473267468`; поздние коммиты правят только handoff и запись ревью. Push
-только отдельным поручением. Фоновых процессов у сессии не осталось: зависшие
-прогоны ревьюера владелец снял 2026-09-29. Проверки на `0da80a9` 2026-09-29:
-`packages/async_job` — формат, анализ и `dart doc --dry-run` чистые,
-`dart test` 893; `packages/solo` — 807, пример 47; `packages/flutter_solo` —
-85, пример 4; из корня `reflow.py --check`, `check_line_width.py`,
-`check_links.py`, `check_translations.py`, `check_doc_shape.py`,
-`build_site_test.py` и `reflow_test.py` зелёные. Стенды `vs-bloc`
-и `accumulation` последний раз прогнаны с правкой M8 2026-09-28, их страницы
-с тех пор не менялись.
+в `origin` 2026-09-29 по поручению владельца, до коммита с этой строкой
+включительно; `dart test` `async_job` на `d051ba5` — 893, зелёный. CI
+на `be62079` зелёный: `gate` `36473267218`, `site` `36473267468`; CI этого push
+смотреть командой `gh run list --limit 4`. Push только отдельным поручением.
+Фоновых процессов у сессии не осталось: зависшие прогоны ревьюера владелец снял
+2026-09-29. Проверки на `0da80a9` 2026-09-29: `packages/async_job` — формат,
+анализ и `dart doc --dry-run` чистые, `dart test` 893; `packages/solo` — 807,
+пример 47; `packages/flutter_solo` — 85, пример 4; из корня
+`reflow.py --check`, `check_line_width.py`, `check_links.py`,
+`check_translations.py`, `check_doc_shape.py`, `build_site_test.py`
+и `reflow_test.py` зелёные. Стенды `vs-bloc` и `accumulation` последний раз
+прогнаны с правкой M8 2026-09-28, их страницы с тех пор не менялись.
 
 ## На следующий релиз собрано у всех трёх
 
