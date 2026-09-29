@@ -300,7 +300,9 @@ void main() {
     expect(
       closed,
       isEmpty,
-      reason: 'the value went to the group, so nothing closed it here',
+      reason: 'the engine finished the branch by hand while the group held '
+          'it: the value went nowhere, the group ends cancelled, and the '
+          'discard put aside for the group to settle is never run',
     );
     expect(
       traces,
