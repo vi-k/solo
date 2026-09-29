@@ -60,11 +60,18 @@ abstract interface class JobContext {
   /// [dispose] and [discard] say how the value is cleaned up, and the rule
   /// is one: **a value that did not reach the body is cleaned up without
   /// a condition; a value that did goes on the cleanup stack.** So a
-  /// connection or a file opened by an abandoned action still gets closed:
-  /// through the stack while the job is still unwinding it, so the closing
-  /// of an engine waits for that too, and on the spot — late and alone —
-  /// once the job is over. A late error goes to `onError` and
-  /// `onUnanswered` as always, and so does an error of the disposer itself.
+  /// connection or a file opened by an action the cancellation abandoned
+  /// still gets closed, and at once, alongside whatever the job is still
+  /// doing: a child the job waits for may want the same slot of a pool, and
+  /// held for the unwinding the value would keep it from that child for
+  /// good. The job ends only after that release all the same, so the
+  /// closing of an engine waits for it too. A value arriving while the job
+  /// runs its cleanup stack joins the stack instead, and one arriving once
+  /// the job is over is released on the spot — late and alone. A value that
+  /// comes to a call the body walked away from without a cancellation still
+  /// goes to whoever holds its future, and waits for the unwinding on the
+  /// stack. A late error goes to `onError` and `onUnanswered` as always,
+  /// and so does an error of the disposer itself.
   ///
   /// On the stack the two differ: [dispose] runs whatever the outcome,
   /// [discard] only if the value reaches nobody. So [discard] is for what
@@ -921,10 +928,13 @@ abstract class JobContextBase implements JobContext {
 
   /// Cleans up [value] that came out after the body had ended.
   ///
-  /// It reached nobody, so the outcome does not matter: on a job that has
-  /// finished the disposer runs on the spot and nobody waits for it, and
-  /// while the core unwinds the stack the registration is unconditional
-  /// — the same pass takes it off.
+  /// It did not reach the body, so the outcome does not matter: on a job
+  /// that has finished the disposer runs on the spot and nobody waits for
+  /// it, and while the job is still alive the registration is
+  /// unconditional and waits for the unwinding. Not sooner: the call still
+  /// hands the value to whoever holds its future, and a body that walked
+  /// away may have handed that future to a child, which the job waits for
+  /// before the unwinding.
   Future<void> _keepLate<T>(
     FutureOr<void> Function(T value)? dispose,
     FutureOr<void> Function(T value)? discard,
@@ -939,6 +949,53 @@ abstract class JobContextBase implements JobContext {
       return;
     }
     addCleanup(() => disposer(value), always: true, value: value);
+  }
+
+  /// Cleans up [value] that came to a call the cancellation had already
+  /// finished.
+  ///
+  /// Whoever holds the future of the call got the cancellation instead, so
+  /// the value reaches nobody at all, and nothing the job registered can
+  /// depend on it. Before the unwinding the disposer runs on the spot, and
+  /// the stack gets only the wait for it, so the job still ends after the
+  /// release. Kept for the unwinding, the value would be held while the job
+  /// waits for its children, and a child waiting for that very value — a
+  /// slot of a pool — would never end. So the release runs alongside the
+  /// body, the children and whatever else the job is doing then. A branch
+  /// of [JobContext.runAll] standing at its second barrier runs no callback
+  /// either, and its group waits there for the cleanup of a sibling that
+  /// may want the same slot: it releases on the spot too. While the core
+  /// runs the stack the registration goes on the stack as a late one does,
+  /// and the same pass takes it off after the callback that is running: the
+  /// callbacks of the stack do not overlap. On a job that has finished the
+  /// disposer runs on the spot and nobody waits for it.
+  void _releaseAbandoned<T>(
+    FutureOr<void> Function(T value)? dispose,
+    FutureOr<void> Function(T value)? discard,
+    T value,
+  ) {
+    final disposer = dispose ?? discard;
+    if (disposer == null) {
+      return;
+    }
+    if (_owner.isFinished) {
+      unawaited(_dispose(disposer, value));
+      return;
+    }
+    if (_owner.isDisposing && !_owner._betweenPasses) {
+      addCleanup(() => disposer(value), always: true, value: value);
+      return;
+    }
+    // No `value:` on the registration: the value is being released, and
+    // `disown` must not take back what is no longer there to hand on. Taken
+    // off once the release is over, so that a job an engine finishes by hand
+    // does not count it among the cleanups it leaves behind. Registered
+    // before the release starts: a disposer that finishes the job by hand
+    // would leave no stack to register on.
+    late final Future<void> release;
+    final remove = addCleanup(() => release, always: true);
+    release = _dispose(disposer, value);
+    release.whenComplete(remove).ignore();
   }
 
   /// Hands [value] to the body's own disposer. Its error goes to
@@ -1118,9 +1175,9 @@ abstract class JobContextBase implements JobContext {
   }
 
   /// Completes with [future] or with the job's cancellation, whichever
-  /// comes first. A result arriving after cancellation goes to
-  /// [discard], or nowhere if there is none; an error arriving after
-  /// cancellation goes to [notifyError].
+  /// comes first. A result arriving after cancellation goes to [dispose] or
+  /// [discard], or nowhere if there is none, as `_releaseAbandoned` says; an
+  /// error arriving after cancellation goes to [notifyError].
   Future<T> _race<T>(
     Future<T> future,
     FutureOr<void> Function(T value)? dispose,
@@ -1147,11 +1204,9 @@ abstract class JobContextBase implements JobContext {
       try {
         final value = await future;
         if (completer.isCompleted) {
-          // The value did not reach the body: cleaned up whatever the
-          // outcome, and on the same terms as any other late value — on
-          // the stack while the job is still unwinding it, so whoever
-          // waits for the job waits for the release too.
-          await _keepLate(dispose, discard, value);
+          // The cancellation finished the call first, so the value reaches
+          // nobody: cleaned up whatever the outcome, and at once.
+          _releaseAbandoned(dispose, discard, value);
         } else if (fromFork && pendingCancel != null) {
           // The work waits for the value, and the job is marked without
           // this race having heard it: a body that gave itself up marks

@@ -238,6 +238,18 @@ named as `Job(key)`, not by its class.
 - A `ctx.runAll` the body walked away from no longer throws the parent's
   cancellation into the zone once the branches end. It hands the values over,
   as `ctx.run` does.
+- A value that comes to a `ctx.wait` the cancellation has already ended is
+  released as soon as it arrives, and the job still ends only after that
+  release. It was held for the unwinding of the cleanup stack, after the
+  children, so a child that kept waiting for the same lock or slot of a pool
+  through the cancellation, inside `ctx.uncancellable` for one, waited for it
+  for good, and the job or the branch of `ctx.runAll` never ended. A branch
+  waiting for its group between the two passes over its cleanup stack releases
+  it at once too, so a cleanup of a sibling that wants the same slot no longer
+  holds the group for good. A value arriving while the job runs its cleanup
+  stack still joins the stack, and a value of a call the body walked away from
+  without a cancellation still waits for the unwinding: whoever holds its
+  future gets it.
 - An error thrown by `JobBase.started` goes to `onError` and `onUnanswered`,
   and the body runs. It left the job running with no body, forever.
 - A child leaves its parent's waiting list by identity. With children equal by

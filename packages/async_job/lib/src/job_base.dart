@@ -534,6 +534,14 @@ abstract class JobBase<T> implements Job<T> {
   /// where the group reads what it was not there to hear.
   Outcome<T>? _bodyOutcome;
   bool _disposing = false;
+
+  /// A branch of [JobContext.runAll] stands at its second barrier, between
+  /// the two passes over the cleanup stack.
+  ///
+  /// It is disposing, yet no callback of its stack runs there, and a value
+  /// that reached nobody need not wait for the second pass: a cleanup of a
+  /// sibling the group is waiting for may want that very slot of a pool.
+  bool _betweenPasses = false;
   int _level = 0;
 
   /// What holds this job while a group of [JobContext.runAll] decides.
@@ -1532,7 +1540,9 @@ abstract class JobBase<T> implements Job<T> {
         // whether or not it registered a thing: what it may do while it
         // waits must not depend on that, and the group needs every branch
         // to check against, not only the ones with a cleanup stack.
+        _betweenPasses = true;
         _committedByGroup = await hold.beforeOutcome();
+        _betweenPasses = false;
         if (isFinished) {
           _traceDroppedCleanups();
           _disposing = false;

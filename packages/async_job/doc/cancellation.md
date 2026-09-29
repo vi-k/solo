@@ -109,9 +109,10 @@ to `onError` and, by default, on to the zone. `wait` is for an operation the
 job may walk away from, such as a read whose result nobody needs any more.
 
 A result arriving that late is dropped, or goes to the `dispose` or `discard`
-passed to `wait`: while the job is still finishing, that callback joins its
-cleanup stack and the job awaits it; once the job has finished, the callback
-runs on its own.
+passed to `wait`. While the job is still finishing, that callback runs at once
+and the job awaits it, and if the job is already running its cleanup stack, the
+callback joins the stack. Once the job has finished, the callback runs on its
+own.
 
 ### The second attempt
 

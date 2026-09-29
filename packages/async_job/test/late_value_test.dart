@@ -478,6 +478,476 @@ void main() {
       );
     });
   });
+
+  group('a value that reached nobody is released before the unwinding', () {
+    // One slot, and a queue for it: the first to ask gets it, the rest wait
+    // in turn.
+    ({List<String> log, Future<_Slot> Function(String) take}) slot() {
+      final log = <String>[];
+      final slot = _Slot(log);
+      return (log: log, take: slot.take);
+    }
+
+    /// Holds the slot until 20 ms, so that `a` queues for it first and the
+    /// child of `a` after it.
+    void holdUntil20(Future<_Slot> Function(String) take) {
+      Job<void>((ctx) async {
+        final held = await ctx.join(() => take('x'));
+        await ctx.wait(() => delay(20));
+        held.give('x');
+      }).ignore();
+    }
+
+    for (final how in ['plain child', 'runAll branch']) {
+      test('a child that waits for it gets it, $how', () {
+        fakeAsync((async) {
+          final (:log, :take) = slot();
+          holdUntil20(take);
+          final a = Job.deferred<int>(key: 'a', (ctx) async {
+            // Asks a millisecond later, so the slot comes to `a` first, and
+            // holds on through the cancellation of `a`.
+            ctx.run(
+              Job.deferred<void>((ctx) async {
+                await ctx.wait(() => delay(1));
+                await ctx.uncancellable(() async {
+                  (await take('child')).give('child');
+                });
+              }),
+            ).ignore();
+            await ctx.wait(() => take('a'), dispose: (s) => s.give('a'));
+            return 0;
+          });
+          final parent = Job<void>((ctx) async {
+            if (how == 'runAll branch') {
+              await ctx.runAll([
+                a,
+                Job.deferred<int>((ctx) async => 2),
+              ]);
+            } else {
+              await ctx.run(a);
+            }
+          })
+            ..ignore();
+          async.elapse(const Duration(milliseconds: 5));
+          a.cancel().ignore();
+          async.flushTimers();
+          expect(
+            log,
+            [
+              'x takes',
+              'a waits',
+              'child waits',
+              'x gives',
+              'a takes',
+              'a gives',
+              'child takes',
+              'child gives',
+            ],
+            reason: 'the slot came to `a` after its wait was abandoned: `a` '
+                'waits for its child, the child for the slot, and kept for '
+                'the unwinding the slot would wait for `a`',
+          );
+          expect(a.outcome, isA<Cancelled>());
+          expect(parent.outcome, isA<Cancelled>());
+        });
+      });
+    }
+
+    for (final how in ['by itself', 'by its parent']) {
+      test('a branch between the passes gets it out, cancelled $how', () {
+        fakeAsync((async) {
+          final (:log, :take) = slot();
+          holdUntil20(take);
+          final a = Job.deferred<int>(key: 'a', (ctx) async {
+            ctx.wait(() => take('a'), dispose: (s) => s.give('a')).ignore();
+            return 1;
+          });
+          // Its cleanup keeps the group at the second barrier, `a` with it.
+          final b = Job.deferred<int>(key: 'b', (ctx) async {
+            ctx.onDispose(() async {
+              (await take('b cleanup')).give('b cleanup');
+            });
+            await ctx.wait(() => delay(1));
+            return 2;
+          });
+          final group = Job<List<int>>((ctx) => ctx.runAll([a, b]))..ignore();
+          async.elapse(const Duration(milliseconds: 10));
+          if (how == 'by itself') {
+            a.cancel().ignore();
+          } else {
+            group.cancel().ignore();
+          }
+          async.flushTimers();
+          expect(
+            log,
+            [
+              'x takes',
+              'a waits',
+              'b cleanup waits',
+              'x gives',
+              'a takes',
+              'a gives',
+              'b cleanup takes',
+              'b cleanup gives',
+            ],
+            reason: 'the slot came to `a` at the second barrier, where no '
+                'callback runs: held for the second pass, it would wait for '
+                'the barrier, the barrier for `b`, and `b` for the slot',
+          );
+          expect(a.outcome, isA<Cancelled>());
+          expect(group.outcome, isA<Cancelled>());
+        });
+      });
+    }
+
+    test('and the job still ends only after the release', () {
+      fakeAsync((async) {
+        final seen = <String>[];
+        void at(String what) =>
+            seen.add('${async.elapsed.inMilliseconds} ms: $what');
+        final job = Job<void>((ctx) async {
+          ctx
+              .run(
+                Job.deferred<void>(
+                  (ctx) => ctx.uncancellable(() => delay(30)),
+                ),
+              )
+              .ignore();
+          await ctx.wait(
+            () => delay(10).then((_) => 'db'),
+            dispose: (db) async {
+              at('release starts');
+              await delay(40);
+              at('release ends');
+            },
+          );
+        });
+        job.done.then((_) => at('done')).ignore();
+        async.elapse(const Duration(milliseconds: 5));
+        job.cancel().ignore();
+        async.flushTimers();
+        expect(seen, [
+          '10 ms: release starts',
+          '50 ms: release ends',
+          '50 ms: done',
+        ]);
+      });
+    });
+
+    test('while the body is still running too', () {
+      fakeAsync((async) {
+        final seen = <String>[];
+        void at(String what) =>
+            seen.add('${async.elapsed.inMilliseconds} ms: $what');
+        final job = Job<void>((ctx) async {
+          try {
+            await ctx.wait(
+              () => delay(20).then((_) => 'db'),
+              // Outlives the body: the job waits for it all the same.
+              dispose: (db) async {
+                at('release starts');
+                await delay(50);
+                at('release ends');
+              },
+            );
+          } on Cancelled {
+            // A body finishing its own business after the cancellation:
+            // the value is not coming to it either way.
+            await Future<void>.delayed(const Duration(milliseconds: 30));
+            at('body ends');
+            rethrow;
+          }
+        });
+        job.done.then((_) => at('done')).ignore();
+        async.elapse(const Duration(milliseconds: 5));
+        job.cancel().ignore();
+        async.flushTimers();
+        expect(seen, [
+          '20 ms: release starts',
+          '35 ms: body ends',
+          '70 ms: release ends',
+          '70 ms: done',
+        ]);
+      });
+    });
+
+    test('a branch unwinding its stack takes it in turn', () {
+      fakeAsync((async) {
+        final order = <String>[];
+        void at(String what) =>
+            order.add('${async.elapsed.inMilliseconds} ms: $what');
+        final a = Job.deferred<void>((ctx) async {
+          ctx.wait<String>(
+            () => delay(50).then((_) => 'db'),
+            discard: (value) async {
+              at('discard starts');
+              await delay(100);
+              at('discard ends');
+            },
+          ).ignore();
+          ctx.onDispose(() async {
+            at('dispose starts');
+            await delay(50);
+            at('dispose ends');
+          });
+          await ctx.wait(() => delay(200));
+        });
+        Job<void>(
+          (ctx) => ctx.runAll([a, Job.deferred<void>((ctx) async {})]),
+        ).ignore();
+        async.elapse(const Duration(milliseconds: 10));
+        a.cancel().ignore();
+        async.flushTimers();
+        expect(
+          order,
+          [
+            '10 ms: dispose starts',
+            '60 ms: dispose ends',
+            '60 ms: discard starts',
+            '160 ms: discard ends',
+          ],
+          reason: 'the value came while the stack was unwinding, and the '
+              'callbacks of the stack do not overlap',
+        );
+      });
+    });
+
+    for (final how in ['throws', 'fails later']) {
+      test('an error of the release reaches the observer once: $how', () {
+        final errors = <Object>[];
+        final zone = <Object>[];
+        late final Job<void> job;
+        runZonedGuarded(
+          () {
+            fakeAsync((async) {
+              job = Job<void>(
+                observer: ErrorObserver(errors),
+                (ctx) async {
+                  ctx
+                      .run(
+                        Job.deferred<void>(
+                          (ctx) => ctx.uncancellable(() => delay(30)),
+                        ),
+                      )
+                      .ignore();
+                  await ctx.wait(
+                    () => delay(10).then((_) => 'db'),
+                    dispose: (db) => how == 'throws'
+                        ? throw StateError('close failed')
+                        : delay(5)
+                            .then((_) => throw StateError('close failed')),
+                  );
+                },
+              )..ignore();
+              async.elapse(const Duration(milliseconds: 5));
+              job.cancel().ignore();
+              async.flushTimers();
+            });
+          },
+          (error, stackTrace) => zone.add(error),
+        );
+        // Outside the guarded zone: an `expect` that fails inside it lands in
+        // the handler and is counted as a zone error instead of failing.
+        expect(job.outcome, isA<Cancelled>());
+        expect(errors.map((error) => '$error'), ['Bad state: close failed']);
+        expect(zone.map((error) => '$error'), ['Bad state: close failed']);
+      });
+    }
+
+    test('a release that ends the job by hand is no error', () {
+      final errors = <Object>[];
+      final zone = <Object>[];
+      late final ProbeJob<void> job;
+      runZonedGuarded(
+        () {
+          fakeAsync((async) {
+            job = ProbeJob<void>(
+              observer: ErrorObserver.answering(errors),
+              (ctx) async {
+                ctx
+                    .run(
+                      Job.deferred<void>(
+                        (ctx) => ctx.uncancellable(() => delay(30)),
+                      ),
+                    )
+                    .ignore();
+                await ctx.wait(
+                  () => delay(10).then((_) => 'db'),
+                  dispose: (db) => job.drop(const Cancelled('by hand')),
+                );
+              },
+            )
+              ..launch()
+              ..ignore();
+            async.elapse(const Duration(milliseconds: 5));
+            job.cancel().ignore();
+            async.flushTimers();
+          });
+        },
+        (error, stackTrace) => zone.add(error),
+      );
+      expect(job.outcome, isA<Cancelled>());
+      expect(
+        [...errors, ...zone],
+        isEmpty,
+        reason: 'the wait for the release is on the stack before the release '
+            'starts, not after the disposer has finished the job',
+      );
+    });
+
+    test('a branch the group has taken, cancelled while it unwinds', () {
+      fakeAsync((async) {
+        final released = <String>[];
+        final a = Job.deferred<int>(key: 'a', (ctx) async {
+          ctx
+              .wait(
+                () => delay(100).then((_) => 'db'),
+                dispose: (db) =>
+                    released.add('${async.elapsed.inMilliseconds} ms: $db'),
+              )
+              .ignore();
+          // Lands at the second barrier and keeps `a` in its second pass
+          // from 70 ms to 170: the value comes while `a` unwinds.
+          Timer(const Duration(milliseconds: 50), () {
+            ctx.onDispose(() => delay(100));
+          });
+          return 1;
+        });
+        // Keeps the group at its second barrier until 70 ms, so that the
+        // group has taken the value of `a` by the time `a` is cancelled.
+        final b = Job.deferred<int>(key: 'b', (ctx) async {
+          ctx.onDispose(() => delay(70));
+          return 2;
+        });
+        final group = Job<List<int>>((ctx) => ctx.runAll([a, b]))..ignore();
+        async.elapse(const Duration(milliseconds: 80));
+        a.cancel().ignore();
+        async.flushTimers();
+        expect(group.outcome, isA<Done<List<int>>>());
+        expect(
+          released,
+          ['170 ms: db'],
+          reason: 'the value came to a wait the cancellation had ended: it '
+              'reaches nobody, and the group taking the value of the branch '
+              'does not pass over its release; it came in the second pass, '
+              'so it waits for the callback running there',
+        );
+      });
+    });
+
+    test('disown still finds what the body registered by the same value', () {
+      fakeAsync((async) {
+        final released = <String>[];
+        final token = Object();
+        late bool disowned;
+        final job = Job<void>((ctx) async {
+          final mine = await ctx.join(
+            () => token,
+            dispose: (_) => released.add('by the body'),
+          );
+          try {
+            await ctx.wait(
+              () => delay(10).then((_) => token),
+              // Slow, so that it is still under way when the body disowns.
+              dispose: (_) async {
+                await delay(50);
+                released.add('late');
+              },
+            );
+          } on Cancelled {
+            // Past the arrival of the late one, and before the unwinding.
+            await Future<void>.delayed(const Duration(milliseconds: 20));
+            disowned = ctx.disown(mine);
+            rethrow;
+          }
+        })
+          ..ignore();
+        async.elapse(const Duration(milliseconds: 5));
+        job.cancel().ignore();
+        async.flushTimers();
+        expect(disowned, isTrue);
+        expect(
+          released,
+          ['late'],
+          reason: 'the release of the late value is no registration of the '
+              'value: disown takes back the one the body made',
+        );
+      });
+    });
+  });
+
+  group('a value that came to a future the body handed on', () {
+    for (final how in ['wait', 'join', 'run']) {
+      test('reaches its holder open, $how', () {
+        fakeAsync((async) {
+          final log = <String>[];
+          Job<void>((ctx) async {
+            Future<_Resource> open() => delay(10).then((_) => _Resource());
+            void close(_Resource resource) {
+              resource.closed = true;
+              log.add('closed');
+            }
+
+            final resource = switch (how) {
+              'wait' => ctx.wait(open, dispose: close),
+              'join' => ctx.join(open, dispose: close),
+              _ => ctx.run(
+                  Job.deferred<_Resource>((ctx) => open()),
+                  dispose: close,
+                ),
+            };
+            ctx.run(
+              Job.deferred<void>((ctx) async {
+                final taken = await resource;
+                await ctx.wait(() => delay(5));
+                log.add('used, closed: ${taken.closed}');
+              }),
+            ).ignore();
+          }).ignore();
+          async.flushTimers();
+          expect(
+            log,
+            ['used, closed: false', 'closed'],
+            reason: 'the body walked away, but the child holds the future: '
+                'the value reaches it, and the parent closes it after its '
+                'children, on the stack',
+          );
+        });
+      });
+    }
+  });
+}
+
+/// A slot for one holder at a time, handed to the next in the queue.
+final class _Slot {
+  _Slot(this._log);
+
+  final List<String> _log;
+  String? _holder;
+  final _queue = <(String, Completer<void>)>[];
+
+  Future<_Slot> take(String who) {
+    if (_holder == null) {
+      _holder = who;
+      _log.add('$who takes');
+      return Future.value(this);
+    }
+    _log.add('$who waits');
+    final turn = Completer<void>();
+    _queue.add((who, turn));
+    return turn.future.then((_) => this);
+  }
+
+  void give(String who) {
+    _log.add('$who gives');
+    _holder = null;
+    if (_queue.isNotEmpty) {
+      final (next, turn) = _queue.removeAt(0);
+      _holder = next;
+      _log.add('$next takes');
+      turn.complete();
+    }
+  }
 }
 
 final class _Resource {

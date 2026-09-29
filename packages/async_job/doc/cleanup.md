@@ -256,8 +256,18 @@ the value went to nobody. Until the group decides, everything above holds as
 written: a cancellation reaching the branch closes what the branch took.
 
 A value returned by an action abandoned by `wait` needs cleanup whatever the
-outcome, because it never reached the body. Its registered callback runs even
-after the job has ended — late and alone, with nobody waiting for it.
+outcome, because it never reached the body. Its callback runs as soon as the
+value arrives and does not wait for the unwinding: a child the job is still
+waiting for may want the same lock or slot of a pool, and a value held for the
+unwinding would keep it from that child for good. So this is the one callback
+that overlaps others. It runs alongside the body and the children, alongside
+the release of another such value, and alongside the cleanup stack if it is
+still running when the unwinding starts. The job does not end before it has. A
+value arriving while the job runs its cleanup stack joins the stack instead. A
+branch of `ctx.runAll` waiting for its group between the two passes runs no
+callback, so it releases the value at once as well: a cleanup of a sibling may
+want the same slot. Once the job has ended, the callback runs late and alone,
+with nobody waiting for it.
 
 Registration works after a plain `await` as well, and the checkpoint of
 [The second attempt](#the-second-attempt) is why it is worth naming: a plain

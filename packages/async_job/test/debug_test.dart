@@ -148,6 +148,41 @@ void main() {
     );
   });
 
+  test('a value released before the unwinding is not left pending', () {
+    final lines = <String>[];
+    Job.debug = lines.add;
+    final released = <String>[];
+    fakeAsync((async) {
+      final job = ProbeJob<void>((ctx) async {
+        ctx
+            .run(
+              Job.deferred<void>((ctx) => ctx.uncancellable(() => delay(30))),
+            )
+            .ignore();
+        await ctx.wait(
+          () => delay(10).then((_) => 'db'),
+          dispose: released.add,
+        );
+      })
+        ..launch()
+        ..ignore();
+      async.elapse(const Duration(milliseconds: 5));
+      job.cancel().ignore();
+      async.elapse(const Duration(milliseconds: 15));
+      // The value came at 10 and was released there; the job still waits
+      // for its child when an engine of a domain ends it by hand.
+      job.drop(const Cancelled('by hand'));
+      async.flushTimers();
+    });
+    expect(released, ['db']);
+    expect(
+      lines.where((line) => line.contains('cleanups pending')),
+      isEmpty,
+      reason: 'the wait for a release that is over is off the stack, and '
+          'nothing is left behind',
+    );
+  });
+
   test('a job that hands its value over says what it dropped', () {
     final traces = <String>[];
     Job.debug = traces.add;
