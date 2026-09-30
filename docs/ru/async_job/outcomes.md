@@ -257,6 +257,47 @@ request failed: Bad state: token expired
 
 ## Реакция до исхода
 
+`report` выполняет шаг, который отмена прервать не может, и после него убирает
+за собой:
+
+```dart
+final report = Job<void>((ctx) async {
+  ctx.onDispose(() => print('cleanup'));
+  await ctx.run(
+    Job.deferred<void>(cancellable: false, (ctx) async {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      print('step finished');
+    }),
+  );
+});
+```
+
+Экран, который показывает отчёт, должен сказать об отмене сразу, как только
+кто-то отменил задачу, пока шаг ещё идёт.
+
+### Первая попытка
+
+Исход говорит, отменили ли задачу:
+
+```dart
+if (await report.done case Cancelled(:final reason)) {
+  print('cancelling: $reason');
+}
+```
+
+```text
+step finished
+cleanup
+cancelling: manual
+```
+
+Экран говорит об этом, только когда шаг и уборка уже позади. `done` означает
+исход, а исход у задачи появляется, только когда закончились её тело, её дети
+и уборка. Ожидание `report.cancel()` быстрее не будет: оно возвращается
+в тот же момент.
+
+### Слушатель отмены
+
 Чтобы отреагировать на принятую отмену до получения итогового исхода,
 зарегистрируйте слушателя через `job.whenCancelled(callback)`. Он вызывается
 синхронно и получает `Cancelled` с причиной и подробностями. Сам метод
@@ -271,6 +312,12 @@ final unregister = report.whenCancelled((cancelled) {
 await report.done;
 // Безопасно после завершения; можно снять раньше, если больше не слушаем.
 unregister();
+```
+
+```text
+cancelling: manual
+step finished
+cleanup
 ```
 
 Когда слушатель вызывается, зависит от того, как задачу отменили:

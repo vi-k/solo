@@ -251,10 +251,13 @@ abstract interface class Job<T> {
   ///
   /// Pass a custom [CancelReason] subclass to carry data to [whenCancelled]
   /// and the [Cancelled] outcome. The accepted reason is kept by identity;
-  /// another cancellation does not replace it, even while it is held. A
-  /// body that gives itself up accepts one the same way, from the moment
-  /// it throws: this call then finds the job already cancelled and waits
-  /// for it, exactly as a second call does.
+  /// another cancellation does not replace it. Nor does a later one replace
+  /// a cancellation an `uncancellable` section holds, with one exception: a
+  /// cancellation the job cannot refuse, such as the one an engine of a
+  /// domain makes for its rules, is not held, and the job accepts it at
+  /// once and drops the held one. A body that gives itself up accepts one
+  /// the same way, from the moment it throws: this call then finds the job
+  /// already cancelled and waits for it, exactly as a second call does.
   ///
   /// A job created with `cancellable: false` refuses this once it has
   /// started; before that there is no body to protect, and a job cancelled
@@ -813,6 +816,10 @@ abstract class JobBase<T> implements Job<T> {
           return;
         }
         _debug(() => 'cancel $this: $marked');
+        // Only a cancellation the job cannot refuse gets here inside a
+        // section, and it is accepted over the one the section holds: that
+        // one would never land, and `heldCancel` must not keep showing it.
+        _heldCancel = null;
         // Marked before the cascade, and only marked: a callback of a child
         // may come back for this job, and the early return above is the only
         // thing that stops it from cascading and marking a second time.
@@ -821,7 +828,7 @@ abstract class JobBase<T> implements Job<T> {
         // order in which a cancellation is seen.
         _pendingCancel = marked;
         try {
-          cascadeToChildren(marked);
+          _cascadeToChildren(marked);
         } finally {
           // In a `finally`, because the cascade is recursive and a deep
           // enough tree overflows the stack inside it. Everything the
@@ -858,8 +865,7 @@ abstract class JobBase<T> implements Job<T> {
   /// Every child is asked, even when asking one of them throws — an engine
   /// whose `cancelWith` fails, a subtree deep enough to run the stack out. The
   /// first error is rethrown once the last child has been asked.
-  @protected
-  void cascadeToChildren(Cancelled cancelled) {
+  void _cascadeToChildren(Cancelled cancelled) {
     (Object, StackTrace)? failure;
     for (final child in _children.reversed.toList()) {
       try {
@@ -959,7 +965,11 @@ abstract class JobBase<T> implements Job<T> {
   /// opened by [enterUncancellable], and cleared when the outermost section
   /// closes and lets it through. The job does not accept it meanwhile —
   /// [pendingCancel] stays `null` — so this is the only place such a
-  /// request shows.
+  /// request shows. A cancellation the job cannot refuse is not held: the
+  /// job accepts it at once, and the one held until then is dropped and
+  /// cleared here. So is one a section the body walked away from still
+  /// holds when the body gives itself up or the job ends: it would land on
+  /// a job already cancelled or over.
   @protected
   Cancelled? get heldCancel => _heldCancel;
 
@@ -985,10 +995,6 @@ abstract class JobBase<T> implements Job<T> {
     _heldCancel = null;
     cancelWith(held);
   }
-
-  /// Set by whoever adopts the job, before it starts.
-  @protected
-  set level(int value) => _level = value;
 
   /// The children this job waits for; read-only.
   ///
@@ -1116,6 +1122,9 @@ abstract class JobBase<T> implements Job<T> {
     }
     _outcome = decided;
     _status = JobStatus.finished;
+    // A section the body walked away from may still hold a cancellation;
+    // it would land on a job that is over, which drops it.
+    _heldCancel = null;
     // The list of children is a waiting list, so it shrinks; the link from
     // an outcome to the child that carried it lives on, in the parent's
     // `Expando`. Both happen here, where they are observable: in `finished`
@@ -1445,6 +1454,10 @@ abstract class JobBase<T> implements Job<T> {
       // own reason, `whenCancelled` would hear that one, and the outcome
       // would carry the body's.
       _pendingCancel = selfCancelled;
+      // A cancellation a section still holds would land on a job already
+      // cancelled, and `cancelWith` turns such a one around: it never
+      // lands, so `heldCancel` stops naming it.
+      _heldCancel = null;
     }
     // The early word of a branch to its group: the siblings are asked to
     // stop while this one is still waiting for its own descendants. It
@@ -1455,7 +1468,7 @@ abstract class JobBase<T> implements Job<T> {
     _hold?.bodyEnded(outcome);
     if (selfCancelled case final cancelled?) {
       try {
-        cascadeToChildren(cancelled);
+        _cascadeToChildren(cancelled);
       } on Object catch (error, stackTrace) {
         // The cascade is recursive, and a deep enough tree overflows the
         // stack inside it. Here there is nobody to hand that to: the

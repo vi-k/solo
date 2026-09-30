@@ -310,16 +310,17 @@ outcome: Cancelled(manual)
 
 `cancelOwnJob` is `cancelWith(cancelled, rejectable: false)`: a cancellation
 the job cannot refuse, which neither `cancellable: false` nor
-`ctx.uncancellable` holds back. From there on the job is cancelled the way
-`cancel()` cancels it — its `onCancel` callbacks run, its children stop — and
-`pendingCancel` is the cancellation it has accepted. `check()` may also be
-asked after the job has ended `Done` or `Failed`, from work its body left
-behind; there `cancelOwnJob` changes nothing, `pendingCancel` is `null`, and
-the rule throws its own. `super.check()` goes first: while the core cleans up
-after the body, it throws a `StateError`, and a rule asked before it would turn
-a job that returned a value into a cancelled one. The rule is asked where
-`check()` is asked and nowhere else: a sign-out during the download is noticed
-when `join` comes back.
+`ctx.uncancellable` holds back. A cancellation such a section held until then
+is dropped: it never lands, and `heldCancel` stops naming it. From there on the
+job is cancelled the way `cancel()` cancels it — its `onCancel` callbacks run,
+its children stop — and `pendingCancel` is the cancellation it has accepted.
+`check()` may also be asked after the job has ended `Done` or `Failed`, from
+work its body left behind; there `cancelOwnJob` changes nothing,
+`pendingCancel` is `null`, and the rule throws its own. `super.check()` goes
+first: while the core cleans up after the body, it throws a `StateError`, and a
+rule asked before it would turn a job that returned a value into a cancelled
+one. The rule is asked where `check()` is asked and nowhere else: a sign-out
+during the download is noticed when `join` comes back.
 
 Cancelling is also how an engine ends a job that is still running. `finish`
 ends a job with the outcome handed in, but it waits for no children and unwinds

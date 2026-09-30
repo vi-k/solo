@@ -258,6 +258,46 @@ stack trace stored in a reason is separate from the cancellation's stack trace:
 
 ## Reacting before the outcome
 
+`report` runs a step a cancellation cannot interrupt, and cleans up after it:
+
+```dart
+final report = Job<void>((ctx) async {
+  ctx.onDispose(() => print('cleanup'));
+  await ctx.run(
+    Job.deferred<void>(cancellable: false, (ctx) async {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      print('step finished');
+    }),
+  );
+});
+```
+
+The screen that shows the report should say it is being cancelled the moment
+somebody cancels it, while the step still runs.
+
+### The first attempt
+
+The outcome says whether the job was cancelled:
+
+```dart
+if (await report.done case Cancelled(:final reason)) {
+  print('cancelling: $reason');
+}
+```
+
+```text
+step finished
+cleanup
+cancelling: manual
+```
+
+The screen says it only once the step and the cleanup are over. `done` is the
+outcome, and the job has one only when its body, its children and its cleanup
+have ended. Awaiting `report.cancel()` is no quicker: it returns at the same
+moment.
+
+### Listening for the cancellation
+
 To react when cancellation is accepted, without waiting for the final outcome,
 register a listener with `job.whenCancelled(callback)`. It runs synchronously
 and receives the `Cancelled` with its reason and details. The registration
@@ -272,6 +312,12 @@ final unregister = report.whenCancelled((cancelled) {
 await report.done;
 // Safe after completion; call earlier to stop listening sooner.
 unregister();
+```
+
+```text
+cancelling: manual
+step finished
+cleanup
 ```
 
 When the listener runs depends on how the job is cancelled:

@@ -61,6 +61,18 @@ final class AnsweringJob<T> extends JobBase<T> {
 
 final class DomainContext extends JobContextBase {
   DomainContext(super.owner);
+
+  /// A rule of the domain: a cancellation the job cannot refuse.
+  void breakRule() => cancelOwnJob(
+        const Cancelled.by(reason: RuleReason(), started: true),
+      );
+}
+
+final class RuleReason extends CancelReason {
+  const RuleReason();
+
+  @override
+  String get name => 'rule';
 }
 
 /// The observer of [AnsweringJob]: it hears nothing and answers for
@@ -143,10 +155,14 @@ final class SectionJob<T> extends JobBase<T> {
 
   Cancelled? get held => heldCancel;
 
+  late final DomainContext context;
+
   void launch() => start();
 
+  void end(Outcome<T> outcome) => finish(outcome);
+
   @override
-  JobContextBase createContext() => DomainContext(this);
+  JobContextBase createContext() => context = DomainContext(this);
 
   @override
   Future<T> execute(covariant DomainContext ctx) => _body(ctx);
@@ -417,6 +433,117 @@ void main() {
       ]);
       expect(job.held, isNull, reason: 'the section closed and let it go');
       expect(job.outcome, isA<Cancelled>());
+    });
+  });
+
+  test('a cancellation the job cannot refuse drops the one a section holds',
+      () {
+    fakeAsync((async) {
+      final seen = <String>[];
+      late SectionJob<void> job;
+      job = SectionJob<void>((ctx) async {
+        ctx.onCancel(() => seen.add('onCancel: ${job.held}'));
+        await ctx.uncancellable(() async {
+          await delay(10);
+          seen.add('held: ${job.held}');
+          await delay(10);
+          seen.add('after the rule: ${job.held}');
+          await delay(10);
+        });
+      })
+        ..whenCancelled(
+          (cancelled) => seen.add('accepted: $cancelled, held: ${job.held}'),
+        );
+      job.launch();
+      async.elapse(const Duration(milliseconds: 5));
+      var asked = false;
+      unawaited(job.cancel().then((_) => asked = true));
+      async.elapse(const Duration(milliseconds: 10));
+      job.context.breakRule();
+      async.flushMicrotasks();
+      expect(asked, isFalse, reason: 'the job still runs its section');
+      async.flushTimers();
+
+      expect(seen, [
+        'held: Cancelled(manual)',
+        'onCancel: null',
+        'accepted: Cancelled(rule), held: null',
+        'after the rule: null',
+      ]);
+      expect(
+        (job.outcome! as Cancelled).reason,
+        isA<RuleReason>(),
+        reason: 'the rule wins, and the held cancellation never lands',
+      );
+      expect(asked, isTrue, reason: 'whoever asked still hears the end');
+    });
+  });
+
+  test('a job the engine finishes drops what a section holds', () {
+    fakeAsync((async) {
+      final job = SectionJob<int>((ctx) async {
+        await ctx.uncancellable(() => delay(100));
+        return 7;
+      })
+        ..ignore()
+        ..launch();
+      async.elapse(const Duration(milliseconds: 5));
+      unawaited(job.cancel());
+      expect(job.held, isA<Cancelled>());
+      job.end(const Done(9));
+
+      expect(job.held, isNull, reason: 'it would land on a job that is over');
+      async.flushTimers();
+      expect(job.outcome, isA<Done<int>>());
+    });
+  });
+
+  test('a body that gives itself up drops what a section it left open holds',
+      () {
+    fakeAsync((async) {
+      final job = SectionJob<void>((ctx) async {
+        unawaited(ctx.uncancellable(() => delay(100)));
+        unawaited(
+          ctx.run(Job.deferred<void>(cancellable: false, (_) => delay(80))),
+        );
+        await delay(20);
+        throw const Cancelled('self');
+      })
+        ..launch();
+      async.elapse(const Duration(milliseconds: 5));
+      unawaited(job.cancel());
+      async.elapse(const Duration(milliseconds: 20));
+
+      expect(job.isFinished, isFalse, reason: 'its child still runs');
+      expect(job.held, isNull, reason: 'the job already accepted its own');
+      async.flushTimers();
+      expect((job.outcome! as Cancelled).reason, isA<HandlerCancelReason>());
+    });
+  });
+
+  test('a body that returns before its child keeps what a section holds', () {
+    fakeAsync((async) {
+      final job = SectionJob<int>((ctx) async {
+        unawaited(ctx.uncancellable(() => delay(50)));
+        unawaited(
+          ctx.run(Job.deferred<void>(cancellable: false, (_) => delay(100))),
+        );
+        await delay(20);
+        return 7;
+      })
+        ..ignore()
+        ..launch();
+      async.elapse(const Duration(milliseconds: 5));
+      unawaited(job.cancel());
+      async.elapse(const Duration(milliseconds: 20));
+
+      expect(
+        job.held,
+        isA<Cancelled>(),
+        reason: 'the job is not over, and the section may still land it',
+      );
+      async.flushTimers();
+      expect((job.outcome! as Cancelled).reason, isA<ManualCancelReason>());
     });
   });
 

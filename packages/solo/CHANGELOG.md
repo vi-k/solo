@@ -318,7 +318,9 @@
   a section is open, and whether it was created `cancellable: false`. For a
   `close` that has not come back. It reports what the engine knows: a body
   waiting on a bare `await` is in its body, an open section is an open section
-  until somebody asks, and the snapshot does not guess at why.
+  until somebody asks, and the snapshot does not guess at why. A rule of the
+  job that cancels it inside such a section is accepted at once, and the
+  snapshot stops naming the held cancellation: that one will never land.
 - **Breaking:** setting `Solo.observer` no longer takes an error with nowhere
   else to go off its default route to the zone. Watching is not answering: an
   observer set for a log used to switch reporting off for the whole process

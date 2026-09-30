@@ -14,7 +14,7 @@ import 'support/probe_job.dart';
 
 /// The first attempts of `doc/outcomes.md`, and what each one costs.
 ///
-/// Three sections of the page open with the version the vocabulary of the
+/// Four sections of the page open with the version the vocabulary of the
 /// API leads to and show what that version prints. The page has no bench,
 /// so the code is repeated here as it stands there. The last two tests hold
 /// the page to this file: the lines it quotes to the lines these tests
@@ -42,6 +42,8 @@ const quoted = [
   ['status: sync failed: Bad state: disk full'],
   ['cancelled: handler'],
   ['request failed: Bad state: token expired'],
+  ['step finished', 'cleanup', 'cancelling: manual'],
+  ['cancelling: manual', 'step finished', 'cleanup'],
 ];
 
 /// What the page's code prints, in the order it prints it.
@@ -529,12 +531,74 @@ void main() {
   });
 
   group('Reacting before the outcome', () {
+    test('done hears of the cancellation after the step and the cleanup', () {
+      fakeAsync((async) {
+        printed.clear();
+        final report = Job<void>((ctx) async {
+          ctx.onDispose(() => print('cleanup'));
+          await ctx.run(
+            Job.deferred<void>(cancellable: false, (ctx) async {
+              await Future<void>.delayed(const Duration(milliseconds: 50));
+              print('step finished');
+            }),
+          );
+        });
+        () async {
+          if (await report.done case Cancelled(:final reason)) {
+            print('cancelling: $reason');
+          }
+        }();
+        async.elapse(const Duration(milliseconds: 10));
+        report.cancel().ignore();
+
+        expect(printed, isEmpty, reason: 'accepted, and the screen is silent');
+        async.flushTimers();
+        expect(printed, quoted[6]);
+      });
+    });
+
+    test('awaiting cancel is no quicker than awaiting done', () {
+      fakeAsync((async) {
+        printed.clear();
+        final report = Job<void>((ctx) async {
+          ctx.onDispose(() => print('cleanup'));
+          await ctx.run(
+            Job.deferred<void>(cancellable: false, (ctx) async {
+              await Future<void>.delayed(const Duration(milliseconds: 50));
+              print('step finished');
+            }),
+          );
+        });
+        async.elapse(const Duration(milliseconds: 10));
+        () async {
+          await report.cancel();
+          print('cancel returned at ${async.elapsed.inMilliseconds} ms');
+        }();
+        () async {
+          await report.done;
+          print('done at ${async.elapsed.inMilliseconds} ms');
+        }();
+        async.flushTimers();
+
+        expect(printed, [
+          'step finished',
+          'cleanup',
+          'cancel returned at 50 ms',
+          'done at 50 ms',
+        ]);
+      });
+    });
+
     test('the listener runs at acceptance, the outcome after the body', () {
       fakeAsync((async) {
         printed.clear();
         final report = Job<void>((ctx) async {
+          ctx.onDispose(() => print('cleanup'));
           await ctx.run(
-            Job.deferred<void>(cancellable: false, (ctx) => delay(50)),
+            Job.deferred<void>(cancellable: false, (ctx) async {
+              await Future<void>.delayed(const Duration(milliseconds: 50));
+              print('step finished');
+            }),
           );
         });
         () async {
@@ -546,7 +610,6 @@ void main() {
           await report.done;
           // Safe after completion; call earlier to stop listening sooner.
           unregister();
-          print('done at ${async.elapsed.inMilliseconds} ms');
         }();
         async.elapse(const Duration(milliseconds: 10));
         report.cancel().ignore();
@@ -554,7 +617,7 @@ void main() {
         expect(printed, ['cancelling: manual'], reason: 'at acceptance');
         expect(report.isFinished, isFalse);
         async.flushTimers();
-        expect(printed, ['cancelling: manual', 'done at 50 ms']);
+        expect(printed, quoted[7]);
       });
     });
 

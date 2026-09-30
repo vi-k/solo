@@ -209,7 +209,9 @@ abstract interface class JobContext {
   ///
   /// The rules an engine of a domain adds are not covered: `solo`, for example,
   /// cancels a job whose state left its working type whatever this does, and
-  /// the body learns about it at its next read as always.
+  /// the body learns about it at its next read as always. A cancellation the
+  /// section held until then gives way: the job ends with the reason of the
+  /// rule, and the held one never lands.
   ///
   /// Throws [Cancelled] if the job is already cancelled, the same as
   /// [wait]: a step that cannot be taken back must not begin for a job
@@ -1398,7 +1400,7 @@ abstract class JobContextBase implements JobContext {
       ..adoptedBy(this)
       .._observer ??= _owner._observer
       .._parent = _owner
-      ..level = _owner.level + 1;
+      .._level = _owner.level + 1;
     if (_owner.pendingCancel case final pending?) {
       throw _refuseChild(child, pending);
     }

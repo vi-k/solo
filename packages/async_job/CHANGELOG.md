@@ -58,6 +58,15 @@ now reach the zone, and fail a test there.
   through `super`, and `dart analyze` fails on the warning. **Migrating.** Call
   `super` in both overrides, and call a hook only from its own override.
 
+- **`JobBase.cascadeToChildren` and the `JobBase.level` setter are no longer
+  part of the protected surface.** Neither had a use outside the core: the
+  cascade runs inside `cancelWith`, after the job is marked, and the level is
+  set by `startChild` when a child is adopted. An engine that ran the cascade
+  itself cancelled the children of a job it had not marked, and one that set
+  the level changed what the public `isChild` answers. **Migrating.** Cancel a
+  job through `cancelWith` or `cancelOwnJob`, and adopt a child through
+  `startChild`; the `level` getter stays.
+
 - **The core announces a `Failed` an engine hands to `finish`.** An engine that
   ended a job by hand with a failure its body never threw — a rule of its own
   that threw, say — left `onError` silent unless it told the observer itself,
@@ -215,6 +224,13 @@ named as `Job(key)`, not by its class.
 - A `whenCancelled` registered from `onFinish` of a job cancelled before its
   start runs. It was dropped: the job was finished, and its cancellation had
   not reached the listeners yet.
+- A cancellation a job cannot refuse, one an engine makes for the rules of its
+  domain, drops the cancellation an `uncancellable` section holds, and
+  `heldCancel` stops naming it. The job accepted the rule over the held one all
+  along, but `heldCancel` kept naming a cancellation that would never land
+  until the section closed, and the dartdoc of `cancel` promised that nothing
+  replaces a held one. The same goes for a section the body walked away from:
+  once the body gives itself up or the job ends, `heldCancel` is `null`.
 - A job made by `Job(...)` inside `ctx.unattended`, and a continuation `then`
   made there, runs its body in the zone the work was started from. It ran in
   the zone of the work, and a bare `unawaited` error in it reached the observer

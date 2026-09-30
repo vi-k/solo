@@ -40,7 +40,9 @@ final class SoloPending {
 
   /// The cancellation an open `JobContext.uncancellable` section is holding
   /// back, or `null`. The job is not marked with it until the section
-  /// closes, so [cancellation] is `null` meanwhile.
+  /// closes, so [cancellation] is `null` meanwhile. A rule of the job is not
+  /// held: it marks the job at once, and the cancellation held until then
+  /// is dropped, so this goes back to `null`.
   final Cancelled? heldCancellation;
 
   /// How many children the job is still waiting for.

@@ -84,6 +84,29 @@ void main() {
     });
   });
 
+  test('a rule drops the cancellation a section holds', () {
+    runSolo((solo, journal, async) {
+      final job = solo.run<Initial, void>(
+        key: 'job',
+        (ctx) => ctx.uncancellable(() => delay(100)),
+      );
+      async.flushMicrotasks();
+      solo.cancelAll();
+      expect(solo.pending!.heldCancellation, isA<Cancelled>());
+      solo.externalSetState(const Working(a: 1));
+      final pending = solo.pending!;
+      expect(
+        pending.heldCancellation,
+        isNull,
+        reason: 'the rule is accepted over it, and it will never land',
+      );
+      expect(pending.cancellation?.reason, isA<RulesCancelReason>());
+      expect('$pending', contains('in its body'));
+      async.flushTimers();
+      expect((job.outcome! as Cancelled).reason, isA<RulesCancelReason>());
+    });
+  });
+
   test('an open section nobody asked to leave is only an open section', () {
     runSolo((solo, journal, async) {
       solo.run<TestState, void>(
