@@ -18,15 +18,43 @@ enum SoloPhase {
 }
 
 /// What is holding the controller right now: a snapshot for whoever is
-/// looking at a `close` that has not come back.
+/// looking at a `close` that has not come back, taken by `Solo.pending`.
+///
+/// One of three, and a `switch` over them is exhaustive:
+///
+/// * [SoloPendingJob] — a job the controller is waiting for: its body,
+///   its children or its cleanup;
+/// * [SoloPendingQueue] — a drain with no job running, and the queue it
+///   has still to run;
+/// * [SoloPendingStream] — the engine has closed, and the stream of
+///   `SoloStream` waits for a subscription to take its done event.
+///
+/// ```dart
+/// final line = switch (controller.pending) {
+///   SoloPendingJob(:final job, :final phase) => '${job.key} in $phase',
+///   SoloPendingQueue(:final jobs) => '${jobs.length} queued',
+///   SoloPendingStream() => 'a subscriber',
+///   null => 'nothing',
+/// };
+/// ```
+///
+/// Every one of them prints as `SoloPending(...)`: a log line is read by
+/// eye, and the name of the variant adds nothing to it.
+@immutable
+sealed class SoloPending {
+  /// Lets the three variants be constant.
+  const SoloPending();
+}
+
+/// A job the controller is waiting for, and what it is doing as far as the
+/// engine knows.
 ///
 /// It says what the engine knows and stops there. A long cancellation
 /// does not prove a forgotten `JobContext.wait`: the same wait happens
 /// while a resource is being released or inside a section the body asked
 /// not to be interrupted in, and it happens for reasons outside the
 /// engine altogether.
-@immutable
-final class SoloPending {
+final class SoloPendingJob extends SoloPending {
   /// The job the controller is waiting for.
   final Job<Object?> job;
 
@@ -60,8 +88,13 @@ final class SoloPending {
   /// Whether `close` has been called on the controller.
   final bool closing;
 
+  /// Whether that `close` is a drain: the job is not asked to stop, it
+  /// runs to its end by the usual rules, and the queue behind it runs
+  /// next. [closing] is true as well.
+  final bool draining;
+
   /// Creates a snapshot; the engine makes these, a domain reads them.
-  const SoloPending({
+  const SoloPendingJob({
     required this.job,
     required this.phase,
     required this.cancellation,
@@ -70,6 +103,7 @@ final class SoloPending {
     required this.inUncancellableSection,
     required this.refusesCancellation,
     required this.closing,
+    required this.draining,
   });
 
   /// Whether a cancellation is on this job and waiting to land: it is
@@ -86,16 +120,13 @@ final class SoloPending {
 
   @override
   String toString() {
-    final description = job.describe();
-    final name =
-        description.isEmpty ? '${job.key}' : '${job.key}: $description';
     final what = switch (phase) {
       SoloPhase.body => 'in its body',
       SoloPhase.children => 'waiting for $children children',
       SoloPhase.cleanup => 'in its cleanup',
     };
     final notes = [
-      if (closing) 'closing',
+      if (draining) 'draining' else if (closing) 'closing',
       if (cancellation != null) 'cancelled by $cancellation',
       if (heldCancellation != null)
         'holding $heldCancellation back'
@@ -104,7 +135,59 @@ final class SoloPending {
       if (refusesCancellation) 'created cancellable: false',
     ];
 
-    return 'SoloPending([$name] $what${notes.isEmpty ? '' : ', '
+    return 'SoloPending(${_name(job)} $what${notes.isEmpty ? '' : ', '
         '${notes.join(', ')}'})';
   }
+}
+
+/// A drain with no job running: the queue it has still to run holds the
+/// `close`.
+///
+/// Only a drain makes one. Without `close` a queued group waiting for its
+/// window holds nothing — the controller is idle, and `Solo.pending` is
+/// `null` — and a plain `close` drops the queue at once.
+///
+/// Once a microtask has passed with no job running, every job in [jobs] is
+/// a group of `collect` or `accumulate` its timing still holds back: the
+/// engine goes past such a group to a ready job behind it, and starts that
+/// one. A ready job is seen here only synchronously — right after
+/// `close(mode: SoloCloseMode.drain)`, or from a hook before the engine
+/// comes back to the queue.
+final class SoloPendingQueue extends SoloPending {
+  /// The jobs the drain has still to run, in queue order. Taken when the
+  /// snapshot is: the queue moving on does not change it.
+  ///
+  /// A job whose start rules are being asked right now is first: it is off
+  /// the queue and not started yet, so a rule that closes the controller
+  /// with a drain and reads this finds its own job. A job its rules have
+  /// ended, turned down or cancelled, is not in here: the drain will never
+  /// run it.
+  final List<Job<Object?>> jobs;
+
+  /// Creates a snapshot; the engine makes these, a domain reads them.
+  const SoloPendingQueue(this.jobs);
+
+  @override
+  String toString() => 'SoloPending(draining, ${jobs.length} queued: '
+      '${jobs.map(_name).join(', ')})';
+}
+
+/// The engine has closed, and the stream of `SoloStream` waits for a
+/// subscription to take its done event: one left paused holds `close`
+/// until it is resumed or cancelled.
+///
+/// A broadcast stream says neither how many subscriptions it has nor which
+/// of them is paused, so this says only that the stream is waiting.
+final class SoloPendingStream extends SoloPending {
+  /// Creates the snapshot; the engine makes it, a domain reads it.
+  const SoloPendingStream();
+
+  @override
+  String toString() =>
+      'SoloPending(stream: a subscription has not taken its done event)';
+}
+
+String _name(Job<Object?> job) {
+  final description = job.describe();
+  return description.isEmpty ? '[${job.key}]' : '[${job.key}: $description]';
 }

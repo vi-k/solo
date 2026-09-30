@@ -250,7 +250,7 @@ understand a controller.
 
 `SoloStream` closes the stream after the engine, and the stream waits for every
 subscription to take its done event: one left paused holds `close()` after the
-engine has finished, where `pending` has nothing to name.
+engine has finished, and `pending` then says `SoloPendingStream`.
 
 ## External state
 

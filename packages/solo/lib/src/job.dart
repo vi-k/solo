@@ -147,7 +147,8 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   }
 
   /// A snapshot of what this job is doing, for [Solo.pending].
-  SoloPending _pending({required bool closing}) => SoloPending(
+  SoloPendingJob _pending({required bool closing, required bool draining}) =>
+      SoloPendingJob(
         job: this,
         phase: _phase,
         cancellation: pendingCancel,
@@ -156,6 +157,7 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
         inUncancellableSection: inUncancellableSection,
         refusesCancellation: !cancellable,
         closing: closing,
+        draining: draining,
       );
 
   SoloPhase get _phase {

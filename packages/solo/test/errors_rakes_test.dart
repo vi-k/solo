@@ -741,17 +741,56 @@ void main() {
   // --- What is holding the controller -------------------------------------
 
   group('what is holding the controller', () {
-    test('pending is null while a group waits for its window', () async {
+    test('a drain names the group still waiting for its window', () async {
       final controller = Cam();
       controller.group().add(1);
       final closing = controller.close(mode: SoloCloseMode.drain);
 
       await pumpEventQueue();
 
-      expect(controller.pending, isNull);
+      expect(controller.pending, isA<SoloPendingQueue>());
       expect(controller.isDraining, isTrue);
 
       await closing;
+    });
+
+    test('the three things a close waits for print as the page says', () {
+      fakeAsync((async) {
+        final lines = <String>[];
+
+        final draining = Cam();
+        final gate = Completer<void>();
+        draining.stuck(gate).ignore();
+        async.flushMicrotasks();
+        draining.close(mode: SoloCloseMode.drain);
+        lines.add('closing is held by ${draining.pending}');
+        gate.complete();
+        async.flushMicrotasks();
+
+        final queued = Cam();
+        queued.group().add(1);
+        queued.close(mode: SoloCloseMode.drain);
+        async.flushMicrotasks();
+        lines.add('closing is held by ${queued.pending}');
+        async.flushTimers();
+
+        final streaming = Streaming();
+        final subscription = streaming.stream.listen((_) {})..pause();
+        streaming.close();
+        async.flushMicrotasks();
+        lines.add('closing is held by ${streaming.pending}');
+        unawaited(subscription.cancel());
+        async.flushMicrotasks();
+
+        const stream = 'closing is held by SoloPending(stream: '
+            'a subscription has not taken its done event)';
+        expect(lines, [
+          'closing is held by SoloPending([stuck] in its body, draining)',
+          'closing is held by SoloPending(draining, 1 queued: [group])',
+          stream,
+        ]);
+        expect(streaming.pending, isNull);
+      });
     });
 
     test('pending names every field of the table', () async {
@@ -761,7 +800,7 @@ void main() {
 
       await pumpEventQueue();
 
-      final waiting = controller.pending!;
+      final waiting = controller.pending! as SoloPendingJob;
 
       expect(waiting.job, same(job));
       expect(waiting.phase, SoloPhase.body);
@@ -771,11 +810,12 @@ void main() {
       expect(waiting.inUncancellableSection, isTrue);
       expect(waiting.refusesCancellation, isTrue);
       expect(waiting.closing, isFalse);
+      expect(waiting.draining, isFalse);
 
       final closing = controller.close();
       await pumpEventQueue();
 
-      final asked = controller.pending!;
+      final asked = controller.pending! as SoloPendingJob;
 
       expect(asked.closing, isTrue);
       expect(
@@ -798,6 +838,7 @@ void main() {
       await pumpEventQueue();
 
       expect(controller.isFinished, isTrue);
+      expect(controller.pending, isA<SoloPendingStream>());
       expect(closed, isFalse);
 
       subscription.resume();

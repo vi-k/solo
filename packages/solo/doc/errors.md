@@ -134,7 +134,7 @@ unawaited(controller.close().timeout(
 ));
 ```
 
-`SoloPending` is a snapshot of the job the controller is waiting for:
+While a job holds it, `pending` is a `SoloPendingJob`, a snapshot of that job:
 
 | Field | What it says |
 | --- | --- |
@@ -146,19 +146,33 @@ unawaited(controller.close().timeout(
 | `inUncancellableSection` | whether such a section is open |
 | `refusesCancellation` | whether it was created with `cancellable: false` |
 | `closing` | whether `close()` was called on the controller |
+| `draining` | whether that `close()` is a drain, which lets the job run to its end |
 
 Next to those fields the snapshot computes one answer of its own:
-`pending.cancellationPending` is true when either cancellation above is there,
-the accepted one or the held one. A job with `refusesCancellation` turns down
-the ones it may turn down, so nothing is pending on it however often it was
-asked to stop.
+`SoloPendingJob.cancellationPending` is true when either cancellation above is
+there, the accepted one or the held one. A job with `refusesCancellation` turns
+down the ones it may turn down, so nothing is pending on it however often it
+was asked to stop.
 
-`null` says that no job is running, not that nothing holds the close. A drain
-waits for the queue as well, and a group of `collect` or `accumulate` stays
-queued until its timing lets it go — `isDraining` is still true then. With
-`SoloStream` the stream closes after the engine and waits for every
-subscription to take its done event: one left paused holds `close()` with
-`isFinished` already true.
+A job is not the only thing a close waits for, and `pending` names the other
+two. A drain waits for the queue as well, and a group of `collect` or
+`accumulate` stays queued until its timing lets it go: with no job running,
+`pending` is a `SoloPendingQueue`, and its `jobs` are what the drain has still
+to run. With `SoloStream` the stream closes after the engine and waits for
+every subscription to take its done event: one left paused holds `close()` with
+`isFinished` already true, and `pending` is a `SoloPendingStream`. The three
+print alike, so the line above needs no switch:
+
+```text
+closing is held by SoloPending([stuck] in its body, draining)
+closing is held by SoloPending(draining, 1 queued: [group])
+closing is held by SoloPending(stream: a subscription has not taken its done event)
+```
+
+`null` says that nothing the controller knows of holds the close. A timer reads
+`pending` between the steps of a close, a synchronous hook in the middle of
+one: `onFinish` of the last job and `onClose` read `null`, though `close()` has
+not come back yet.
 
 The snapshot answers whoever asks, and the example above asks at `close()`. A
 job that hangs earlier — while the screen is still open and nothing is
@@ -207,7 +221,7 @@ engine does not guess.
 
 ## Why cancellation was slow
 
-`SoloPending` answers while the job is still running. The other half of the
+`SoloPendingJob` answers while the job is still running. The other half of the
 question comes afterwards, and in a place where nobody is watching: which jobs
 ran on past the cancellation that was meant to stop them, and for how long.
 

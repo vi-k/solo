@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'close_mode.dart';
+import 'pending.dart';
 import 'solo.dart';
 
 /// Adds a broadcast [stream] of states to [Solo].
@@ -17,6 +18,7 @@ import 'solo.dart';
 mixin SoloStream<S extends Object> on Solo<S> {
   final _controller = StreamController<S>.broadcast();
   Future<void>? _closed;
+  var _streamClosing = false;
 
   /// Every state change, in order, delivered on the next microtask. The
   /// source of truth is [currentState]; an event may be older than it by
@@ -29,8 +31,8 @@ mixin SoloStream<S extends Object> on Solo<S> {
   ///
   /// The stream closes once every subscription has taken its done event,
   /// so one left paused holds the returned future until it is resumed or
-  /// cancelled. The engine is closed by then: [isFinished] is true and
-  /// [pending] is `null`, and a close held with both is held here.
+  /// cancelled. The engine is closed by then and [isFinished] is true;
+  /// [pending] says [SoloPendingStream] until the stream has closed.
   @override
   Future<void> close({SoloCloseMode mode = SoloCloseMode.cancel}) {
     final closed = _closed;
@@ -47,10 +49,22 @@ mixin SoloStream<S extends Object> on Solo<S> {
     final completer = Completer<void>();
     _closed = completer.future;
     completer.complete(
-      super.close(mode: mode).then((_) => _controller.close()),
+      super.close(mode: mode).then((_) {
+        // Set here and not at the call: until the engine has closed, what
+        // holds the close is the engine's to name.
+        _streamClosing = true;
+        return _controller.close().whenComplete(() => _streamClosing = false);
+      }),
     );
     return completer.future;
   }
+
+  /// What the engine holds a close with, and once it has closed, the
+  /// stream waiting for a subscription to take its done event:
+  /// [SoloPendingStream].
+  @override
+  SoloPending? get pending =>
+      super.pending ?? (_streamClosing ? const SoloPendingStream() : null);
 
   /// Pushes [current] into [stream].
   @override

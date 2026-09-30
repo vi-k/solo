@@ -312,15 +312,22 @@
   both and told nobody, and neither can be worked out from outside. Migration:
   `previous` becomes `transition.previous`, `current` becomes
   `transition.current`.
-- Add `Solo.pending`: a `SoloPending` snapshot of the job the controller is
-  waiting for — its phase (body, children or cleanup), the cancellation it
+- Add `Solo.pending`: what is holding the controller, for a `close` that has
+  not come back, as one of three. A `SoloPendingJob` is the job the controller
+  is waiting for — its phase (body, children or cleanup), the cancellation it
   carries, the one a `ctx.uncancellable` section is holding back, whether such
-  a section is open, and whether it was created `cancellable: false`. For a
-  `close` that has not come back. It reports what the engine knows: a body
-  waiting on a bare `await` is in its body, an open section is an open section
-  until somebody asks, and the snapshot does not guess at why. A rule of the
-  job that cancels it inside such a section is accepted at once, and the
-  snapshot stops naming the held cancellation: that one will never land.
+  a section is open, whether it was created `cancellable: false`, and whether
+  the close is a drain. A `SoloPendingQueue` is a drain with no job running and
+  the queue it has still to run, where a group of `collect` or `accumulate`
+  waits for its timing. A `SoloPendingStream` is the stream of `SoloStream`,
+  closing after the engine and held by a subscription left paused.
+  `SoloPending` is sealed, so a `switch` over the three is exhaustive, and all
+  of them print as `SoloPending(...)`; `null` means that nothing the controller
+  knows of holds the close. It reports what the engine knows: a body waiting on
+  a bare `await` is in its body, an open section is an open section until
+  somebody asks, and the snapshot does not guess at why. A rule of the job that
+  cancels it inside such a section is accepted at once, and the snapshot stops
+  naming the held cancellation: that one will never land.
 - **Breaking:** setting `Solo.observer` no longer takes an error with nowhere
   else to go off its default route to the zone. Watching is not answering: an
   observer set for a log used to switch reporting off for the whole process
@@ -398,14 +405,6 @@
   `join` throws in place of the value, and the body never reaches that line.
   `doc/resources.md` takes the same line apart as a first attempt; the
   introduction no longer teaches it.
-
-- `Solo.pending`, `SoloStream.close`, `doc/errors.md` and `doc/state.md` say
-  when a close waits with nothing pending. `null` means that no job is running,
-  and a close can wait without one: a drain waits for a group of `collect` or
-  `accumulate` its timing still holds in the queue, and the stream of
-  `SoloStream` closes after the engine and waits for a subscription left
-  paused, with `isFinished` already true. The recipe that logs `pending` on a
-  slow close printed `null` for both and said nothing of why.
 
 - **Breaking:** `SoloQueue.lastWhere` is gone. `Solo.lastJobWhere` finds the
   same job and looks at the running one as well, so the queue had a second way

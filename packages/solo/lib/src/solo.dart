@@ -589,12 +589,17 @@ abstract class Solo<S extends Object> {
   @protected
   SoloQueue get queue => _queue;
 
-  /// What is holding the controller right now, or `null` when no job is
-  /// running.
+  /// What is holding the controller right now, or `null` when nothing the
+  /// controller knows of is.
   ///
   /// For a `close` that has not come back, or a `cancel` that is taking
-  /// its time: it names the job, says what it is doing and whether
-  /// anybody has asked it to stop.
+  /// its time. A running job is a [SoloPendingJob]: it names the job, says
+  /// what it is doing and whether anybody has asked it to stop. A drain
+  /// with no job running is a [SoloPendingQueue]: the queue it has still
+  /// to run, where a group of `collect` or `accumulate` stays until its
+  /// timing lets it go. With `SoloStream`, once the engine has closed, a
+  /// subscription left paused holds the stream, and that is a
+  /// [SoloPendingStream].
   ///
   /// ```dart
   /// unawaited(controller.close().timeout(
@@ -603,18 +608,39 @@ abstract class Solo<S extends Object> {
   /// ));
   /// ```
   ///
-  /// `null` says that no job is running, not that nothing holds a close.
-  /// A drain waits for the queue too, and a group of `collect` or
-  /// `accumulate` stays queued until its timing lets it go — [isDraining]
-  /// is still true then. With `SoloStream` the stream closes after the
-  /// engine and waits for every subscription to take its done event, so
-  /// one left paused holds `close` with [isFinished] already true.
+  /// A timer reads it between the steps of a close; a synchronous hook
+  /// reads it in the middle of one. A close that is finishing reads `null`
+  /// from `onFinish` of its last job and from [onClose], though the
+  /// returned future has not completed yet, and an idle controller reads
+  /// `null` right after `close()`. The last subscription's `onDone` still
+  /// reads [SoloPendingStream]. A subclass whose `close` waits for
+  /// something of its own before or after `super.close` holds it where
+  /// the controller does not see: domain cleanup belongs in [onClose].
   ///
   /// It reports and does not diagnose. A body that holds on for reasons of
   /// its own — a bare `await` on a slow call, an external operation it is
   /// inside — shows up as [SoloPhase.body]: the engine knows the body has
   /// not come back, and not what it waits for.
-  SoloPending? get pending => _current?._pending(closing: isClosed);
+  SoloPending? get pending {
+    final current = _current;
+    if (current != null) {
+      return current._pending(closing: isClosed, draining: _draining);
+    }
+    if (_draining) {
+      // A copy, not a view: the snapshot says what held the close when it
+      // was taken. The job whose rules are being asked is queued work
+      // until it is launched, and it goes first — unless a rule has
+      // already ended it, which leaves it here until the pump lets go.
+      final jobs = List<Job<Object?>>.unmodifiable([
+        if (_inTransition case final job? when !job.isFinished) job,
+        ..._queue._jobs,
+      ]);
+      if (jobs.isNotEmpty) {
+        return SoloPendingQueue(jobs);
+      }
+    }
+    return null;
+  }
 
   /// The running root job, or `null` when idle.
   @protected
