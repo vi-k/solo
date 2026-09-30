@@ -8,8 +8,93 @@ import 'package:solo/solo.dart';
 import 'package:test/test.dart';
 
 import 'support/plain_solo.dart';
+import 'support/test_solo.dart';
+
+/// A controller that writes down what its hooks hear and answers for
+/// everything that reaches [onUnanswered].
+final class _Heard extends Solo<int> with OpenSolo<int> {
+  _Heard() : super(0);
+
+  final heard = <String>[];
+
+  @override
+  void onStart(Job<Object?> job) => heard.add('start $job');
+
+  @override
+  void onFinish(Job<Object?> job) => heard.add('finish $job');
+
+  @override
+  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      heard.add('error $job: $error');
+
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      heard.add('unanswered $job: $error');
+
+  @override
+  void onLog(Job<Object?> job, Object? message) =>
+      heard.add('log $job: $message');
+}
+
+/// What every controller's observer hears.
+final class _Watching extends SoloObserver {
+  final heard = <String>[];
+
+  @override
+  void onError(
+    Solo<Object> solo,
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace,
+  ) =>
+      heard.add('error $job: $error');
+
+  @override
+  void onLog(Solo<Object> solo, Job<Object?> job, Object? message) =>
+      heard.add('log $job: $message');
+}
 
 void main() {
+  test('a continuation belongs to whoever called then, not to the controller',
+      () {
+    fakeAsync((async) {
+      final watching = _Watching();
+      Solo.observer = watching;
+      addTearDown(() => Solo.observer = null);
+      final solo = _Heard();
+      final zone = <String>[];
+      Object? read;
+      runZonedGuarded(
+        () {
+          final source = solo.run<int, int>(key: 'source', (ctx) async => 1)
+            ..then<void>((ctx, _) {
+              ctx
+                ..log('hello')
+                ..unattended(() => throw StateError('unattended'));
+            });
+          source.then<void>((ctx, _) => throw StateError('body')).value.then(
+            (_) {},
+            onError: (Object error) {
+              read = error;
+            },
+          ).ignore();
+        },
+        (error, stack) => zone.add('$error'),
+      );
+      async.flushMicrotasks();
+      expect(
+        solo.heard,
+        ['start Job(source)', 'finish Job(source)'],
+        reason: 'the hooks of the controller hear its own job alone',
+      );
+      expect(watching.heard, isEmpty);
+      expect(zone, ['Bad state: unattended'], reason: "the caller's zone");
+      expect('$read', 'Bad state: body', reason: 'whoever reads the outcome');
+      solo.close().ignore();
+      async.flushMicrotasks();
+    });
+  });
+
   test('a continuation cleanup error reaches its zone without an observer', () {
     fakeAsync((async) {
       final errors = <Object>[];

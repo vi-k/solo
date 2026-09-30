@@ -541,6 +541,12 @@ a queue slot. Cleanup registered by the source has already run when the
 continuation receives its value; a resource closed by the source's `onDispose`
 is therefore already closed at that point.
 
+A continuation belongs to whoever called `then`. A failure that starts anywhere
+up the chain comes down it and ends every link after it, so an observer on the
+last link hears it there, as that link's own. An error with no outcome, such as
+a failure of `ctx.unattended` work or of a disposer, stays with the link where
+it happened and goes to the zone that link was created in.
+
 A `discard` of the source is the other way round: the source ended `Done`, so
 it never ran and never will, and the continuation is the receiver — it takes
 the value as its argument and registers the release in its own body. One case

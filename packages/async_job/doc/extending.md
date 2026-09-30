@@ -72,9 +72,11 @@ your own on every job and override its
 [`onUnanswered`](observing.md#an-observer), the way `solo` does. A child
 adopted without an observer takes its parent's, so the answer reaches the
 children as well, except a child that came with an observer of its own: that
-one answers through its own. A continuation made by `then` is a job of the core
-with the observer passed to `then` and no other; override `then` in your job
-and pass yours.
+one answers through its own. A continuation made by `then` is no job of your
+engine: it belongs to whoever called `then`, with the observer passed to `then`
+and no other. A failure it takes over from your job reaches that observer as
+the continuation's own. What goes wrong in the continuation's own code is for
+its caller to answer, in the caller's zone, so do not hand it your observer.
 
 When the answer of your engine ends with nobody, `reportToZone` hands the error
 to the job's creation zone, and it keeps a cancellation out of the zone the way

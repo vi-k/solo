@@ -53,15 +53,10 @@
   dartdoc `SiblingCancelReason.cause` и `doc/outcomes.md` поправил ещё
   `6ec4f76`, а хвост в `docs/architecture.md` дописан. RV13: `reason` этого
   теста теперь говорит, что происходит.
-- `solo` не переопределяет `then`: ошибка `unattended` из продолжения задачи
-  `solo` уходит мимо `Solo.onUnanswered` прямо в зону (зонд
-  `.artifacts/2026-09-28-extending-page/probe_then_test.dart`, L48 ревью
-  `async_job`). Правка `solo` — переопределить `then` и передать своего
-  наблюдателя; не делалась, решает владелец. Там же: запись CHANGELOG
-  о `@mustCallSuper` на `check()` стоит в «Breaking», потому что `dart analyze`
-  движка падает на предупреждении; если владелец сочтёт это не поломкой —
-  вернуть в «Added». В той же записи «Breaking» с 2026-09-28 стоят
-  `@visibleForOverriding` на хуках движка и `@mustCallSuper` на `finish`
+- Запись CHANGELOG о `@mustCallSuper` на `check()` стоит в «Breaking», потому
+  что `dart analyze` движка падает на предупреждении; если владелец сочтёт это
+  не поломкой — вернуть в «Added». В той же записи «Breaking» с 2026-09-28
+  стоят `@visibleForOverriding` на хуках движка и `@mustCallSuper` на `finish`
   и `startChild` (L16), и ответ владельца решает и их. Другая половина L16 —
   сузить ли члены без потребителя — тоже его.
 - Остаток L3 ревью `async_job`: задача, которую стартуют руками внутри работы
@@ -187,25 +182,27 @@
 с 2026-09-25 по слову владельца работа идёт прямо в ней, перед каждым
 коммитом — ветка и `git status`, чужое не коммитится. Других веток нет
 ни локально, ни на `origin`; копий дерева, stash и `.git/wip` нет,
-незакоммиченного нет; скретчпад сессии 2026-09-29 удалён. `main` отправлен
-в `origin` 2026-09-29 по поручению владельца, до `3e9f31f`; после него локально
-два коммита, не отправлены: правка `_plainFailedBeforeMark` и правка RJ,
-блокировки из А8 `2026-09-27-run-all-one-barrier-design-review-4.md`. Разбор
-RJ, два независимых ревью и мутации —
-`2026-09-29-late-value-deadlock-report.md`, итог в вердикте А8; форма
-с `.timeout` без отмены висит по-прежнему, ядро не отличит брошенный future
-от отданного ребёнку. На этих коммитах `dart test`: `async_job` 913, `solo` 807
-и 47 в примере, `flutter_solo` 85 и 4 в примере, всё зелёное. CI на `be62079`
-зелёный: `gate` `36473267218`, `site` `36473267468`; CI этого push смотреть
-командой `gh run list --limit 4`. Push только отдельным поручением. Фоновых
-процессов у сессии не осталось: зависшие прогоны ревьюера владелец снял
-2026-09-29. Проверки на `0da80a9` 2026-09-29: `packages/async_job` — формат,
-анализ и `dart doc --dry-run` чистые, `dart test` 893; `packages/solo` — 807,
-пример 47; `packages/flutter_solo` — 85, пример 4; из корня
-`reflow.py --check`, `check_line_width.py`, `check_links.py`,
-`check_translations.py`, `check_doc_shape.py`, `build_site_test.py`
-и `reflow_test.py` зелёные. Стенды `vs-bloc` и `accumulation` последний раз
-прогнаны с правкой M8 2026-09-28, их страницы с тех пор не менялись.
+незакоммиченного нет. `main` отправлен в `origin` 2026-09-29 по поручению
+владельца, до `3e9f31f`; после него локально три коммита, не отправлены: правка
+`_plainFailedBeforeMark`, правка RJ, блокировки из А8
+`2026-09-27-run-all-one-barrier-design-review-4.md`. Разбор RJ, два независимых
+ревью и мутации — `2026-09-29-late-value-deadlock-report.md`, итог в вердикте
+А8; форма с `.timeout` без отмены висит по-прежнему, ядро не отличит брошенный
+future от отданного ребёнку. Третий — закрытие L48 в `solo` как контракта: код
+прежний, `2026-09-29-solo-then-observer-report.md`, итог в вердикте L48.
+На этих коммитах `dart test`: `async_job` 913, `solo` 807 и 47 в примере,
+`flutter_solo` 85 и 4 в примере, всё зелёное; с закрытием L48 `async_job` 915,
+`solo` 808. CI на `be62079` зелёный: `gate` `36473267218`, `site`
+`36473267468`; CI этого push смотреть командой `gh run list --limit 4`. Push
+только отдельным поручением. Фоновых процессов у сессии не осталось: зависшие
+прогоны ревьюера владелец снял 2026-09-29. Проверки на `0da80a9` 2026-09-29:
+`packages/async_job` — формат, анализ и `dart doc --dry-run` чистые,
+`dart test` 893; `packages/solo` — 807, пример 47; `packages/flutter_solo` —
+85, пример 4; из корня `reflow.py --check`, `check_line_width.py`,
+`check_links.py`, `check_translations.py`, `check_doc_shape.py`,
+`build_site_test.py` и `reflow_test.py` зелёные. Стенды `vs-bloc`
+и `accumulation` последний раз прогнаны с правкой M8 2026-09-28, их страницы
+с тех пор не менялись.
 
 ## На следующий релиз собрано у всех трёх
 

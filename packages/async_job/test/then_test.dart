@@ -647,4 +647,62 @@ void main() {
       );
     });
   });
+
+  test('the last link hears a failure from up the chain, and only that', () {
+    fakeAsync((async) {
+      final heard = <String>[];
+      final zone = <String>[];
+      runZonedGuarded(
+        () {
+          Job<int>((ctx) async => 1)
+              .then<int>((ctx, value) {
+                ctx.unattended(() => throw StateError('unattended'));
+                throw StateError('first link');
+              })
+              .then<int>((ctx, value) => value)
+              .then<void>(
+                (ctx, value) {},
+                observer: _Observer(error: (job, error) => heard.add('$error')),
+              )
+              .done
+              .ignore();
+        },
+        (error, stack) => zone.add('$error'),
+      );
+      async.flushMicrotasks();
+      expect(heard, ['Bad state: first link']);
+      expect(
+        zone,
+        ['Bad state: unattended'],
+        reason: 'an error with no outcome stays with its link, in its zone',
+      );
+    });
+  });
+
+  test('a link hung off a continuation does not take its observer', () {
+    fakeAsync((async) {
+      final heard = <String>[];
+      final zone = <String>[];
+      runZonedGuarded(
+        () {
+          // Whoever made the first link handed it on; the second is someone
+          // else's code.
+          final handedOn = Job<int>((ctx) async => 1).then<int>(
+            (ctx, value) => value,
+            observer: _Observer(error: (job, error) => heard.add('$error')),
+          );
+          handedOn
+              .then<void>((ctx, _) {
+                ctx.unattended(() => throw StateError('someone else'));
+              })
+              .done
+              .ignore();
+        },
+        (error, stack) => zone.add('$error'),
+      );
+      async.flushMicrotasks();
+      expect(heard, isEmpty);
+      expect(zone, ['Bad state: someone else']);
+    });
+  });
 }

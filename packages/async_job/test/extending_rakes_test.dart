@@ -178,29 +178,6 @@ final class Answer extends JobObserver {
       answered.add('$error');
 }
 
-/// A job of an engine that passes its answer to its continuations.
-final class AnsweredJob<T> extends JobBase<T> {
-  AnsweredJob(this._answer, this._body) : super(observer: _answer);
-
-  final JobObserver _answer;
-  final Future<T> Function(JobContext ctx) _body;
-
-  void launch() => start();
-
-  @override
-  Job<R> then<R>(
-    FutureOr<R> Function(JobContext ctx, T value) onValue, {
-    JobObserver? observer,
-  }) =>
-      super.then(onValue, observer: observer ?? _answer);
-
-  @override
-  JobContextBase createContext() => MyContext(this);
-
-  @override
-  Future<T> execute(covariant MyContext ctx) => _body(ctx);
-}
-
 /// A job of the engine that hands an error to the zone by hand.
 final class ReportingJob extends JobBase<void> {
   ReportingJob();
@@ -353,9 +330,9 @@ void main() {
       expect(errors, isEmpty);
     });
 
-    test('then gets only the observer passed to it, unless then is overridden',
-        () {
+    test('a continuation answers to whoever called then', () {
       final answer = Answer();
+      final caller = Answer();
       final errors = reachingTheZone(() {
         final job = MyJob<int>(observer: answer, (ctx) async => 1).._launch();
         job
@@ -364,16 +341,19 @@ void main() {
             })
             .done
             .ignore();
-        final answered = AnsweredJob<int>(answer, (ctx) async => 1)..launch();
-        answered
-            .then<void>((ctx, _) {
-              ctx.unattended(() => throw StateError('then overridden'));
-            })
+        job
+            .then<void>(
+              (ctx, _) {
+                ctx.unattended(() => throw StateError('then with its own'));
+              },
+              observer: caller,
+            )
             .done
             .ignore();
       });
-      expect(errors, ['Bad state: then']);
-      expect(answer.answered, ['Bad state: then overridden']);
+      expect(errors, ['Bad state: then'], reason: "the caller's zone");
+      expect(caller.answered, ['Bad state: then with its own']);
+      expect(answer.answered, isEmpty, reason: 'not the engine of the source');
     });
 
     test('reportToZone keeps a cancellation out of the zone', () {

@@ -177,12 +177,16 @@ a new core `JobContext`, and may return a value or future. A source failure
 propagates without calling the callback.
 
 A `then` job does not inherit the controller's state context, rules, observer
-or queue position. It has its own optional observer. Its callback gets a plain
-core `JobContext`, with no `emit` on it and no state behind it, so a `then`
-cannot write controller state itself: it asks the controller for another job,
-and that job takes its turn at the back of the queue. The end of the source
-does two things at once: it frees the slot and it starts the `then`. So
-whatever was queued while the source ran stands ahead of the new job.
+or queue position. It has its own optional observer. It belongs to whoever
+called `then`, not to the controller: the controller's hooks and
+`Solo.observer` do not hear it. A failure reaches whoever reads its outcome,
+and an error with no outcome goes to the zone where `then` was called. Its
+callback gets a plain core `JobContext`, with no `emit` on it and no state
+behind it, so a `then` cannot write controller state itself: it asks the
+controller for another job, and that job takes its turn at the back of the
+queue. The end of the source does two things at once: it frees the slot and it
+starts the `then`. So whatever was queued while the source ran stands ahead of
+the new job.
 
 ```dart
 // The same split as `sync`: the step itself, and the queue's way in.
