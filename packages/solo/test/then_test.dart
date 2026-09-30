@@ -116,7 +116,7 @@ void main() {
     });
   });
 
-  test('cancelling the tail removes its queued source', () {
+  test('cancelling the continuation removes its queued source', () {
     fakeAsync((async) {
       final solo = PlainSolo<int>(0);
       final gate = Completer<void>();

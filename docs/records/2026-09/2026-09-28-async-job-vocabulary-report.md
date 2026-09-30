@@ -1,7 +1,8 @@
 # `async_job`: чистка словаря по M22, M23 и L27
 
-> **Состояние на 2026-09-28:** сделано в `db19ca6`; независимое ревью нашло
-> восемь мест Low, все приняты, седьмое частично.
+> **Состояние на 2026-09-30:** сделано в `db19ca6`; независимое ревью нашло
+> восемь мест Low, все приняты, седьмое частично. Остаток седьмого, словарь
+> страниц `solo`, сведён 2026-09-30, итог в его вердикте.
 > **Что это:** отчёт о чистке словаря dartdoc, страниц `doc/`, README,
 > `## Unreleased` в `CHANGELOG.md` и русских переводов `async_job` по находкам
 > M22, M23 и L27 из `2026-09-26-async-job-project-review.md`.
@@ -147,7 +148,22 @@ no cancellation»: `isCancelled`, `then`, `pendingCancel` (оба), `heldCancel`
    «continuation» и «source»; `solo/CHANGELOG.md` — «on the core».
    `then_test.dart` оставил: там tail — последнее звено цепочки в имени теста,
    читатель документации его не видит. Словарь страниц `solo` — отдельная
-   работа вместе с переводом, в эту правку не входит.
+   работа вместе с переводом, в эту правку не входит. Итог 2026-09-30: словарь
+   страниц `solo` сведён отдельной работой, в коммите с этой строкой. В разделе
+   «Chaining completed work» `packages/solo/doc/children.md` «`then` job»
+   и `then` в роли существительного стали «continuation», а первое упоминание
+   связано с методом: «`job.then(...)` creates a continuation». В переводе
+   «задача `then`» стала «продолжением», как в `docs/ru/async_job/children.md`,
+   и в тронутом абзаце про `ctx.run` сняты два тире.
+   В `packages/solo/test/children_test.dart` два имени тестов и комментарий
+   говорят «continuation», в `packages/solo/test/then_test.dart` — одно имя.
+   В `## Unreleased` `CHANGELOG.md` `solo` «does not wait for a tail» стало
+   «does not wait for a continuation». Остальные страницы `solo`
+   и `flutter_solo`, их README и `lib` проверены поиском: старого слова там
+   нет, а «head» и «tail» на страницах `solo` — голова и хвост очереди, её
+   собственные слова. Независимое ревью Codex (`gpt-6-astra`, `xhigh`) P1
+   не нашло; `tail` в CHANGELOG и имя теста в `then_test.dart` — его находки,
+   обе приняты. Отдельного отчёта нет.
 
 8. **«The tails of its branches» в `runAll`.**
 

@@ -580,7 +580,7 @@ void main() {
     });
   });
 
-  test('a then job and a core job are refused in the same words', () {
+  test('a continuation and a core job are refused in the same words', () {
     runSolo((solo, journal, async) {
       final refusals = <String>[];
       final source = solo.job<TestState, void>(key: 'source', (ctx) async {});
@@ -746,9 +746,9 @@ void main() {
     });
   }
 
-  // The chaining example of the page: a `then` cannot write state, so it
-  // asks the controller for a job, and that job waits its turn.
-  test('a job a then asks for goes behind what is already queued', () {
+  // The chaining example of the page: a continuation cannot write state, so
+  // it asks the controller for a job, and that job waits its turn.
+  test('a job a continuation asks for goes behind what is already queued', () {
     runSolo((solo, journal, async) {
       final order = <String>[];
       final source = solo.run<TestState, void>(key: 'sync', (ctx) async {

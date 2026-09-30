@@ -171,22 +171,22 @@ Job<void> syncAndReport(int item) =>
     sync(item).then((ctx, path) => analytics.send(path));
 ```
 
-`job.then((ctx, value) => ...)` creates a job that runs after its source
-succeeds, including children and cleanup. Its callback receives the result and
-a new core `JobContext`, and may return a value or future. A source failure
-propagates without calling the callback.
+`job.then((ctx, value) => ...)` creates a continuation: a job that runs after
+its source succeeds, including children and cleanup. Its callback receives the
+result and a new core `JobContext`, and may return a value or future. A source
+failure propagates without calling the callback.
 
-A `then` job does not inherit the controller's state context, rules, observer
+A continuation does not inherit the controller's state context, rules, observer
 or queue position. It has its own optional observer. It belongs to whoever
 called `then`, not to the controller: the controller's hooks and
 `Solo.observer` do not hear it. A failure reaches whoever reads its outcome,
 and an error with no outcome goes to the zone where `then` was called. Its
 callback gets a plain core `JobContext`, with no `emit` on it and no state
-behind it, so a `then` cannot write controller state itself: it asks the
+behind it, so a continuation cannot write controller state itself: it asks the
 controller for another job, and that job takes its turn at the back of the
 queue. The end of the source does two things at once: it frees the slot and it
-starts the `then`. So whatever was queued while the source ran stands ahead of
-the new job.
+starts the continuation. So whatever was queued while the source ran stands
+ahead of the new job.
 
 ```dart
 // The same split as `sync`: the step itself, and the queue's way in.
@@ -222,21 +222,21 @@ queued before it goes first. A step written as `job(...)` has both ways open:
 that already holds one. Use children within one parent when the whole sequence
 must occupy the queue without another root job running between its steps.
 
-Cancellation propagates forward to `then` jobs and backward to unfinished
+Cancellation propagates forward to continuations and backward to unfinished
 sources, subject to each job's cancellation rules. Cancelling the last job of a
 chain waits for those sources and their cleanup, including a source that
-refuses cancellation. `close()` reaches a `then` job through an unfinished
+refuses cancellation. `close()` reaches a continuation through an unfinished
 source, but does not own one already running after the source finished.
 
 Inside a controller's body `ctx.run` is narrower still: it takes jobs of that
-controller, the ones `job(...)` makes and nobody has queued. A `then` job is
+controller, the ones `job(...)` makes and nobody has queued. A continuation is
 none of those -- it is a root job of the core -- and the core would refuse to
 adopt it anyway. Here the refusal comes from the controller first and for its
 own reason: `ArgumentError`, `was not created by this Solo`. A job of the core
 made by hand is refused in the same words.
 
 The queue does not wait for what comes after a job: the slot is freed when the
-root job finishes, and the next queued job starts while the `then` job still
-has to run. A `then` hung off `load()` can be working after `save()` has taken
-the queue. Where that would be wrong, keep the sequence inside one job and make
-its steps children.
+root job finishes, and the next queued job starts while the continuation still
+has to run. A continuation hung off `load()` can be working after `save()` has
+taken the queue. Where that would be wrong, keep the sequence inside one job
+and make its steps children.

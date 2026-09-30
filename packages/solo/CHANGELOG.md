@@ -215,9 +215,9 @@
 
 - `doc/children.md` adds what a chain costs on a controller: inside a body
   `ctx.run` takes jobs of that controller alone, so a continuation is turned
-  away there as a job of nobody's; and the queue does not wait for a tail — the
-  slot is freed when the root job finishes, and the next queued job starts
-  while the continuation still has to run.
+  away there as a job of nobody's; and the queue does not wait for a
+  continuation — the slot is freed when the root job finishes, and the next
+  queued job starts while the continuation still has to run.
 
 - **Breaking:** `Solo` carries its own listeners: `addListener` and
   `removeListener`, and the protected `hasListeners` and `onListenerError`
