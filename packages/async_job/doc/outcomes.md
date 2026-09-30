@@ -354,4 +354,5 @@ uncaught one of the zone the listener was called in. For a cancellation
 accepted inside `cancel()`, that is the zone of the code that called it. For
 one an `uncancellable` section held, and for a body that gave itself up, it is
 the zone the body runs in, which for a job that starts itself is the zone it
-was created in.
+was created in, or the zone the work was started from if it was created inside
+`ctx.unattended`.

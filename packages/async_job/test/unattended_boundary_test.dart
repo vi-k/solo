@@ -283,6 +283,105 @@ void main() {
     });
   }
 
+  for (final (made, nested) in [
+    ('inside', false),
+    ('elsewhere', false),
+    ('inside', true),
+  ]) {
+    final where = nested ? 'nested unattended work' : 'unattended work';
+    test(
+        'the body of a job made $made and started by hand inside $where runs '
+        'outside it', () {
+      // Started there, not only made there: `start` is called inside the
+      // work, and the body would run in the work's zone. It runs in the
+      // zone the work was started from, the one a job made there reports
+      // to, and its bare `unawaited` error lands there -- not in the zone
+      // a job made elsewhere was made in, either. It starts at once, as a
+      // job started anywhere else does.
+      final journal = JobJournal();
+      final caught = <String>[];
+      var bodyStarted = false;
+      runZonedGuarded(
+        () {
+          fakeAsync((async) {
+            Job<void>(key: 'j', observer: journal, (ctx) async {
+              Future<void> leak(JobContext c) async {
+                bodyStarted = true;
+                unawaited(Future<void>.error(StateError('leak')));
+              }
+
+              final elsewhere = made == 'elsewhere'
+                  ? runZonedGuarded(
+                      () => Job.deferred<void>(key: 'stray', leak),
+                      (error, stackTrace) => caught.add('made in: $error'),
+                    )
+                  : null;
+              void startIt() {
+                (elsewhere ?? Job.deferred<void>(key: 'stray', leak)).start();
+                expect(bodyStarted, isTrue);
+              }
+
+              ctx.unattended(
+                nested ? () => ctx.unattended(startIt) : startIt,
+              );
+              await ctx.wait(() => delay(1));
+            });
+            async.flushTimers();
+          });
+        },
+        (error, stackTrace) => caught.add('$error'),
+      );
+      expect(bodyStarted, isTrue);
+      expect(caught, ['Bad state: leak']);
+      expect(journal.take().where((line) => line.contains('error')), isEmpty);
+    });
+  }
+
+  test('a job started by hand inside the work of another job starts outside',
+      () {
+    // Forks of two jobs, one inside the other: the job starts where the
+    // outer work was started from, the way a job made in there reports.
+    // Its observer's `onStart` throwing is its own, and reaches neither
+    // observer of the two jobs.
+    final journal = JobJournal();
+    final caught = <String>[];
+    late final JobContext ctxB;
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          runZonedGuarded(
+            () => Job<void>(key: 'b', observer: journal, (ctx) async {
+              ctxB = ctx;
+              await ctx.wait(() => delay(100));
+            }),
+            (error, stackTrace) => caught.add('zone of b: $error'),
+          );
+          async.elapse(const Duration(milliseconds: 5));
+          Job<void>(key: 'a', observer: journal, (ctx) async {
+            ctx.unattended(
+              () => ctxB.unattended(
+                () => Job.deferred<void>(
+                  key: 'stray',
+                  observer: _ThrowingStart(),
+                  (c) async =>
+                      unawaited(Future<void>.error(StateError('leak'))),
+                ).start(),
+              ),
+            );
+            await ctx.wait(() => delay(1));
+          });
+          async.flushTimers();
+        });
+      },
+      (error, stackTrace) => caught.add('zone of a: $error'),
+    );
+    expect(caught, [
+      'zone of a: Bad state: onStart of stray',
+      'zone of a: Bad state: leak',
+    ]);
+    expect(journal.take().where((line) => line.contains('error')), isEmpty);
+  });
+
   test(
     'a nested fork of another job does not lift the ban on uncancellable',
     () {
@@ -354,4 +453,9 @@ void main() {
       expect(outer.outcome, isA<Done<void>>());
     });
   });
+}
+
+final class _ThrowingStart extends JobObserver {
+  @override
+  void onStart(Job<Object?> job) => throw StateError('onStart of stray');
 }

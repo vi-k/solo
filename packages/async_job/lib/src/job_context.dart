@@ -637,8 +637,12 @@ abstract interface class JobContext {
   /// leaks all of that.
   ///
   /// A job created in here is not this work: it has an outcome and an observer
-  /// of its own, and its unobserved failure goes to the zone the body runs in
-  /// rather than to this job's observer. Quench it with [Job.ignore].
+  /// of its own. Its unobserved failure goes to the zone this work was started
+  /// from rather than to this job's observer, and a job that starts itself
+  /// runs its body there. So does a job started in here by hand, wherever it
+  /// was made: it starts in that zone, past any zone forked inside the work.
+  /// When the work of one job runs inside the work of another, that zone is
+  /// the one the outer work was started from. Quench it with [Job.ignore].
   ///
   /// Legal on a job that has already accepted a cancellation, and legal while
   /// the core unwinds the cleanup stack — a disposer starting work nobody waits

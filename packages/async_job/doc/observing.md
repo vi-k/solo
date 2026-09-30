@@ -227,10 +227,11 @@ failure comes after it, and without an observer nobody hears it.
 
 A context call the body did not await throws into a future nobody awaits, and
 Dart hands that to the zone the body runs in: for `Job.deferred`, the zone that
-started it. The job's own cancellation goes there too, though the job itself
-never sends a cancellation to the zone. `wait` is the exception once the body
-has ended: it lets its action go then, and an error of that action is a late
-error of an abandoned action, in the fifth row.
+started it, or the one the work was started from if it was started inside
+`ctx.unattended`. The job's own cancellation goes there too, though the job
+itself never sends a cancellation to the zone. `wait` is the exception once the
+body has ended: it lets its action go then, and an error of that action is a
+late error of an abandoned action, in the fifth row.
 
 The errors no outcome carries go on from `onError` to `onUnanswered`, the hook
 that answers for them. Its default implementation sends them where they go

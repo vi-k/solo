@@ -314,6 +314,37 @@ void main() {
     expect(caught, isEmpty);
   });
 
+  test('a job run inside unattended work of another controller is its own', () {
+    // The queue starts the job at once, inside the work, and the job would
+    // start in the work's zone: a bare error in its body and a throwing
+    // `onStart` reached the controller whose job started the work. It
+    // starts in the zone the work was started from, and both land there.
+    final caught = <String>[];
+    final a = _Loud();
+    final b = _StartThrows();
+    fakeAsync((async) {
+      _inZone(caught, () {
+        a.run<TestState, void>(key: 'a', (ctx) async {
+          ctx.unattended(() {
+            b.run<TestState, void>(key: 'b', (ctx) async {
+              unawaited(Future<void>.error(StateError('leak')));
+            });
+          });
+          await ctx.wait(
+            () => Future<void>.delayed(const Duration(milliseconds: 1)),
+          );
+        });
+      });
+      async.flushTimers();
+      a.close();
+      b.close();
+      async.flushTimers();
+    });
+    expect(a.errors, isEmpty);
+    expect(b.errors, isEmpty);
+    expect(caught, ['Bad state: onStart of b', 'Bad state: leak']);
+  });
+
   group('a failure a cancellation covered', () {
     // Whoever reads the outcome gets the cancellation — `ctx.run`, a reader
     // of `value`, a body waiting for a child of `each` — and the controller
@@ -600,6 +631,21 @@ final class _Loud extends Solo<TestState> with OpenSolo<TestState> {
   _Loud() : super(const Initial());
 
   void set(TestState state) => externalSetState(state);
+
+  @override
+  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
+    errors.add('$error');
+    super.onError(job, error, stackTrace);
+  }
+}
+
+final class _StartThrows extends Solo<TestState> with OpenSolo<TestState> {
+  final errors = <String>[];
+
+  _StartThrows() : super(const Initial());
+
+  @override
+  void onStart(Job<Object?> job) => throw StateError('onStart of b');
 
   @override
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) {

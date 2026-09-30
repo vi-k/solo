@@ -234,9 +234,12 @@ named as `Job(key)`, not by its class.
 - A job made by `Job(...)` inside `ctx.unattended`, and a continuation `then`
   made there, runs its body in the zone the work was started from. It ran in
   the zone of the work, and a bare `unawaited` error in it reached the observer
-  of the job that started the work. A job started by hand inside the work — a
-  `Job.deferred` whose `start` is called there, a job of an engine that starts
-  it synchronously — still runs its body in the work's zone.
+  of the job that started the work. A job started by hand inside the work, a
+  `Job.deferred` whose `start` is called there or a job of an engine that
+  starts it synchronously, now starts in that zone too, wherever it was made:
+  its body, the engine's `started` and the observer's `onStart` run there, past
+  any zone the work forked on the way, as for a job made in there. Anywhere
+  else a job started by hand starts where `start` is called, as before.
 - A `Cancelled` a hook of the observer throws no longer reaches the zone: a
   lazy log message that asks a cancelled job, for one.
 - A job an engine ends while `createContext` builds its context keeps that

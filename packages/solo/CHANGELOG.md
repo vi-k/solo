@@ -441,6 +441,13 @@
   `cancellable: false` one turns down a `cancelAll` without `force` exactly as
   it does in the queue.
 
+- **Fix:** a job run inside `ctx.unattended` of another job is its own. When
+  the queue started it at once, inside that work, it started in the work's
+  zone: a bare `unawaited` error in its body, and a `Solo.onStart` that threw,
+  reached `Solo.onError` and `Solo.onUnanswered` of the controller whose job
+  started the work. It starts in the zone the work was started from now, past
+  any zone the work forked on the way, inherited from `async_job`.
+
 - **Fix:** a listener's failure survives an `onListenerError` that throws. The
   hook is where a listener's error is reported, and one that threw instead took
   that error with it -- the zone heard about the broken reporter and never

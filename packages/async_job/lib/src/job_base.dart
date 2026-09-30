@@ -1013,12 +1013,35 @@ abstract class JobBase<T> implements Job<T> {
 
   /// Runs the body.
   ///
+  /// The job starts in the zone this is called from: its body runs there, and
+  /// so do [started] and the observer's `onStart`. Called inside the work of
+  /// [JobContext.unattended], it starts in the zone that work was started
+  /// from, past any zone forked inside the work, as a job made in there does:
+  /// a job is not that work, and its errors are not the observer's of the job
+  /// that started it.
+  ///
   /// Throws [StateError] if the job already ran, and also if it was cancelled
   /// before it started: a job dropped then is finished, and a finished job does
   /// not run. Nor does one ended while [createContext] built its context, and
   /// then this returns without a word: that end was the engine's own.
   @protected
   void start() {
+    // Inside the work of `JobContext.unattended` the whole start moves out,
+    // not the body alone: `started` and `onStart` are the job's own too, and
+    // a hook that throws in the work would report to the observer of the job
+    // that started it. To the zone the work was started from, the one a job
+    // made in there reports to. Through `run`, not a microtask: the job
+    // starts now, as it does anywhere else, and a `StateError` still reaches
+    // the caller.
+    final outsideTheWork = Zone.current[_unattendedKey] as Zone?;
+    if (outsideTheWork == null) {
+      _start();
+    } else {
+      outsideTheWork.run(_start);
+    }
+  }
+
+  void _start() {
     if (_status != JobStatus.created) {
       throw StateError(
         _status == JobStatus.running
@@ -1762,7 +1785,10 @@ abstract class JobBase<T> implements Job<T> {
 
 /// A job that starts when it is told to.
 abstract interface class DeferredJob<T> implements Job<T> {
-  /// Runs the body.
+  /// Runs the body, in the zone this is called from. Called inside the work
+  /// of [JobContext.unattended], the job starts in the zone that work was
+  /// started from, past any zone forked inside the work, as a job made in
+  /// there does.
   ///
   /// Throws [StateError] if the job already ran, and also if it was
   /// cancelled before it started: a job dropped then is finished, and a

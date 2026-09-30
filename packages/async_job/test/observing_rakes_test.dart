@@ -1185,6 +1185,35 @@ void main() {
       expect(caught, ['starter: Bad state: payment failed']);
     });
 
+    test('a call the body did not await, started inside unattended work', () {
+      // Started inside the work of another job: the body runs in the zone
+      // that work was started from, not in the work's, and the observer of
+      // the other job hears nothing.
+      final caught = <String>[];
+      printed.clear();
+      fakeAsync((async) {
+        late DeferredJob<void> job;
+        runZonedGuarded(
+          () => job = Job.deferred<void>((ctx) async {
+            unawaited(ctx.join(pay));
+            await delay(50);
+          }),
+          (error, stackTrace) => caught.add('creation: $error'),
+        );
+        runZonedGuarded(
+          () => Job<void>(observer: Answering(), (ctx) async {
+            ctx.unattended(job.start);
+            await ctx.wait(() => delay(1));
+          }),
+          (error, stackTrace) => caught.add('work started from: $error'),
+        );
+        async.flushTimers();
+      });
+
+      expect(caught, ['work started from: Bad state: payment failed']);
+      expect(printed, isEmpty);
+    });
+
     // A branch of `ctx.runAll` that fails on its own after the group has
     // thrown the first failure: its body told the observer where it was
     // caught, and what the group did not throw is nobody's outcome.
