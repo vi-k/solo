@@ -16,8 +16,8 @@ part of 'job_base.dart';
 /// they go when the job has no observer at all. An observer written to
 /// watch changes nowhere an error goes.
 ///
-/// A class that already extends another one mixes this in, `with
-/// JobObserver`, and keeps the default bodies. Several observers watch one
+/// A class that already extends another one mixes this in, `with JobObserver`,
+/// and overrides the hooks it needs the same way. Several observers watch one
 /// job through [JobObserver.all].
 abstract mixin class JobObserver {
   /// Creates an observer; a subclass calls it implicitly.

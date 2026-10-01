@@ -49,16 +49,16 @@ They do nothing by default, so you override only those you need. An observer
 that also answers for errors mixes in `JobAnswerer`, which adds a fifth hook,
 `onUnanswered`: the subject of [Where errors go](#where-errors-go) below. A
 class that already extends another class mixes the observer in with
-`with JobObserver`, or `with JobObserver, JobAnswerer`, and keeps these
-defaults. Whoever runs the job passes the observer when creating it; the
-children it runs inherit it unless they have their own, and a continuation made
-with `then` takes only the observer passed to `then`. If one of the observer's
-hooks throws, its error goes to the current zone and nothing else changes: the
-job ends as it would have, and the observer's other hooks are still called. A
-`Cancelled` thrown by a hook does not reach the zone: nowhere in the core is a
-thrown cancellation a failure. It does not cancel the job either. A hook that
-has to cancel the job calls `job.cancel()`, and the job is cancelled as it
-would be from anywhere else.
+`with JobObserver`, or `with JobObserver, JobAnswerer`, and overrides the hooks
+it needs the same way. Whoever runs the job passes the observer when creating
+it; the children it runs inherit it unless they have their own, and a
+continuation made with `then` takes only the observer passed to `then`. If one
+of the observer's hooks throws, its error goes to the current zone and nothing
+else changes: the job ends as it would have, and the observer's other hooks are
+still called. A `Cancelled` thrown by a hook does not reach the zone: nowhere
+in the core is a thrown cancellation a failure. It does not cancel the job
+either. A hook that has to cancel the job calls `job.cancel()`, and the job is
+cancelled as it would be from anywhere else.
 
 A job can be given a `key` and a `describe` callback when it is created. Its
 string representation is `Job($key)`, or `Job($key: $description)` when
