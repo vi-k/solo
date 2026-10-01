@@ -341,8 +341,8 @@ zone: ParallelWaitError(2 errors): DatabaseException
 ```
 
 The database error went to the zone unanswered, and the analytics error is not
-named at all. `Job.visitErrors` hands the observer the errors inside one at a
-time:
+named at all. `Job.visitErrors` hands the observer the errors inside the
+`ParallelWaitError` one at a time:
 
 ```dart
 final class DatabaseErrors extends JobObserver with JobAnswerer {

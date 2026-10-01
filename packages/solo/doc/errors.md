@@ -85,8 +85,8 @@ hears them at all. An override keeps that route as well by calling
 
 The handler gets each error as it came, cancellations included: a `Cancelled`,
 and a `ParallelWaitError` that `[a, b].wait` throws with several errors in it.
-`Job.visitErrors` hands `onFailure` each failure inside on its own and drops
-the cancellations.
+`Job.visitErrors` hands `onFailure` each failure inside a `ParallelWaitError`
+on its own and drops each uncaught `Cancelled`, alone or inside one.
 
 Answering for an error is a responsibility somebody takes, not a side effect of
 switching a log on. Setting a `SoloObserver` is not it either — watching is not

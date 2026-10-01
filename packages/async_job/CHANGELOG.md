@@ -241,9 +241,10 @@ named as `Job(key)`, not by its class.
   holds several errors, other such errors too. A check for `error is Cancelled`
   lets a cancellation inside it through, and a report of the whole error names
   none of its failures. `Job.visitErrors(error, stackTrace, onFailure: report)`
-  reports each failure and drops the cancellations. It calls `onFailure` not at
-  all exactly when a job drops the error as a cancellation: the job decides by
-  the same walk. See [Where errors go](doc/observing.md#where-errors-go).
+  reports each failure and drops each uncaught `Cancelled`. It calls
+  `onFailure` not at all exactly when a job drops the error as a cancellation:
+  the job decides by the same walk. See
+  [Where errors go](doc/observing.md#where-errors-go).
 
 - The debug channel names a job that handed its value over and dropped the
   conditional registrations that went with it:

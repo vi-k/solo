@@ -149,7 +149,8 @@ abstract mixin class JobObserver {
 /// method of its own: the job never calls it.
 ///
 /// [Job.visitErrors] hands `report` each failure inside a
-/// `ParallelWaitError` on its own and drops the cancellations.
+/// `ParallelWaitError` on its own and drops each uncaught [Cancelled], alone
+/// or inside one.
 mixin JobAnswerer on JobObserver {
   /// Nobody answered for this error, and this observer is the last one
   /// holding it.
@@ -178,8 +179,8 @@ mixin JobAnswerer on JobObserver {
   /// its own system and stops there. An override that says nothing keeps
   /// these errors out of the zone. Call
   /// `super.onUnanswered(job, error, stackTrace)` to keep the zone as well.
-  /// [Job.visitErrors] tells the cancellations from the failures, those
-  /// inside a `ParallelWaitError` too.
+  /// [Job.visitErrors] tells each uncaught [Cancelled] from the failures,
+  /// those inside a `ParallelWaitError` too.
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
     if (job is JobBase<Object?>) {
       job._toZone(error, stackTrace);
