@@ -21,8 +21,7 @@ abstract class CancelReason {
 /// An explicit cancellation: the default reason of [Job.cancel].
 ///
 /// An engine of a domain may give it to removals of its own — `solo`, for
-/// example, to a job taken out of its queue and to a duplicate dropped by a
-/// policy.
+/// example, to a job taken out of its queue.
 final class ManualCancelReason extends CancelReason {
   /// Creates an explicit cancellation reason.
   const ManualCancelReason();

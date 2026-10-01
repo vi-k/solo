@@ -87,6 +87,8 @@ void main() {
         mine.outcome,
         isA<Cancelled>()
             .having((c) => c.reason, 'reason', isA<DuplicateCancelReason>())
+            // One of the engine's own reasons, beside `rules` and `closed`.
+            .having((c) => c.reason, 'reason', isA<SoloCancelReason>())
             .having((c) => c.reason.name, 'name', 'duplicate')
             .having((c) => c.description, 'description', isNull)
             .having((c) => c.started, 'started', isFalse),
