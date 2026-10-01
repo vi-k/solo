@@ -647,3 +647,10 @@ one» отвечала на реплику, которой читатель не
     по-английски «Each uncaught `Cancelled` inside a `ParallelWaitError` goes
     to `onCancelled`…». Смысл не менялся, сторож прежний.
 
+32. Редакция владельца 2026-10-01, следом за тридцать первым пунктом:
+    «`ParallelWaitError`, в котором одни `Cancelled`, сам не является
+    `Cancelled`, а `[a, b].wait` бросает именно его…» вместо «сам
+    не `Cancelled`, а `[a, b].wait` бросает его». Взята дословно, по-английски
+    «throws exactly that» вместо «throws one». Смысл не менялся, сторож
+    прежний.
+
