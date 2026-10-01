@@ -25,7 +25,7 @@ first group names them.
   `Solo<T>(value)` write a one-line class, which takes the constructor of
   `Solo` as it is: `class C<T extends Object> = Solo<T> with SoloStream;`. A
   subclass of `SoloObserver` renames the type of the first parameter of its
-  hooks. See [A delivery of your own](doc/state.md#a-delivery-of-your-own).
+  hooks. See [Observing state](doc/state.md#observing-state).
 
 - **`job`, `add`, `run`, `collect` and `accumulate` are `@protected`.** A
   controller's operations are its own methods, such as `load()` or `setZoom()`,
@@ -116,17 +116,6 @@ first group names them.
   change as well. **Migrating.** `previous` becomes `transition.previous`,
   `current` becomes `transition.current`.
 
-- **`Solo` carries its own listeners:** `addListener` and `removeListener`, and
-  the protected `hasListeners` and `onListenerError` beside them. A controller
-  is observable without a delivery of its own, which is what a widget or
-  another package's binding needs; `SoloStream` keeps its stream and feeds it
-  after the listeners. Notification is synchronous and in subscription order,
-  one call per registration. A listener that throws is reported through
-  `onListenerError` — the zone by default — and the pass goes on. Listeners are
-  dropped when the engine finishes closing, right after `onClose`, and a
-  registration made after that is ignored rather than retained. See
-  [Observing state](doc/state.md#observing-state).
-
 - **A subclass with a member named like a new member of `Solo` stops compiling,
   or overrides it.** The new instance members are `currentState`, `isFinished`,
   `isDraining`, `pending`, `onClose`, `onUnanswered`, `addListener`,
@@ -165,9 +154,9 @@ first group names them.
   `DuplicateCancelReason`, where it used to be `Cancelled(manual: duplicate)` —
   the `ManualCancelReason` of a `cancel()`, with the difference written into
   `description`. **Migrating.** Code that told a duplicate by that text checks
-  the type instead, `outcome.reason is DuplicateCancelReason`, and code that
-  took every `ManualCancelReason` for a cancellation somebody asked for no
-  longer counts duplicates among them.
+  the type of the reason instead, `DuplicateCancelReason`, and code that took
+  every `ManualCancelReason` for a cancellation somebody asked for no longer
+  counts duplicates among them.
 
 - **`collect` and `accumulate` default to `AccumulationPolicy.join`, not
   `adjacent`.** A job of another kind queued between two events is no longer a
@@ -188,19 +177,22 @@ first group names them.
   into a busy queue give one handle and one `Done`, where they used to give
   five handles and four `Cancelled(manual: replaced by accumulated group)`. The
   grouping and the moments a group starts are unchanged. `cancellable: false`
-  no longer means anything here — a move is not a removal — and the
-  cancellation callbacks that used to run in the middle of a replacement do not
-  run at all. **Migrating.** Code that waits on the handle an `add` returned
-  keeps working and now sees the group's real outcome. Code that treated that
-  `Cancelled` as "mine was pushed out" has nothing to react to: the event was
-  not pushed out, it is in the group. Code that compared an earlier handle with
-  a later one to detect a replacement has nothing left to compare.
+  has nothing to refuse here — a move is not a removal — where `0.2.0`
+  cancelled the replaced job in spite of it, and the cancellation callbacks
+  that used to run in the middle of a replacement do not run at all.
+  **Migrating.** Code that waits on the handle an `add` returned keeps working
+  and now sees the group's real outcome. Code that treated that `Cancelled` as
+  "mine was pushed out" has nothing to react to: the event was not pushed out,
+  it is in the group. Code that compared an earlier handle with a later one to
+  detect a replacement has nothing left to compare.
 
 - **`SoloQueue.lastWhere` is gone.** `Solo.lastJobWhere` finds the same job and
   looks at the running one as well, so the queue had a second way to ask one
   question. **Migrating.** `queue.lastWhere(test)` becomes
-  `lastJobWhere(test)`, or `queue.jobs.lastWhere` where only the queue should
-  answer.
+  `lastJobWhere(test)`, or `queue.jobs.where(test).lastOrNull` where only the
+  queue should answer. `queue.jobs.lastWhere(test)` is not the same thing: it
+  throws a `StateError` when nothing matches, where the old method returned
+  `null`.
 
 - **`cancelAll` and `SoloQueue.remove`, `removeWhere` and `clear` take a
   `reason`.** Every job they end carries it, so a policy of the domain that
@@ -219,8 +211,9 @@ first group names them.
   `runAll`, and an extension of that name on `JobContext` is shadowed by it.
   `ctx.run` takes `dispose` and `discard`: no call site breaks, but a
   registration written on the line after `await ctx.run(child)` belongs in the
-  call now. One more reaches code that gives a job of the core an observer of
-  its own: `JobObserver.onError` is a notice, and the new
+  call now. A class that implements `JobContext` or `SoloContext` by hand, a
+  test fake for one, needs both. One more reaches code that gives a job of the
+  core an observer of its own: `JobObserver.onError` is a notice, and the new
   `JobObserver.onUnanswered` answers for an error no outcome carries, so such
   an observer no longer keeps those errors out of the zone, and a class that
   implements `JobObserver` needs an `onUnanswered`. The switch of the core's
@@ -234,26 +227,34 @@ first group names them.
 
 ### Changes you will see on upgrade
 
-Errors that `0.2.0` kept to the hooks now reach `Solo.errorHandler`, or, with
-no handler set, the zone the job was created in. In a test that zone is the
-test's, and the test fails:
+Errors that `0.2.0` lost, or kept to the hooks, now reach `Solo.errorHandler`,
+or, with no handler set, the zone the job was created in. In a test that zone
+is the test's, and the test fails:
 
 - an error no outcome carries, in an application that sets `Solo.observer` or
   overrides `onError` without calling `super`: the entry on `onUnanswered`
   above;
 - the failure of a body when a cancellation reaches the job afterwards, while
   the job waits for children of its own or runs its cleanup. Whoever reads the
-  outcome gets the cancellation; `0.2.0` told `onError` and nobody else.
-  `job.ignore()` on that job silences it, and `onError` still hears it;
+  outcome gets the cancellation. In `0.2.0` reading it kept the failure to
+  `onError`; now it reaches the zone read or not. `job.ignore()` on that job
+  silences it, and `onError` still hears it;
+- the failure of a step of `ctx.uncancellable` while the section held a
+  cancellation back, the same way: `0.2.0` told `onError` and nobody else;
+- the late failure of an action the body walked away from, through `.timeout`
+  or `Future.any`, arriving once the job is over: `0.2.0` told nobody at all;
 - the failure of a source's own cleanup, the future of the subscription's
   `cancel()`, when `ctx.each` lets go of a stream: `0.2.0` dropped it.
+
+One report is gone: a job that gives up through `ctx.check()` inside a call
+`ctx.wait` has let go of no longer reaches `onError` as a failure.
 
 Text that reads differently, for a test that matches it:
 
 - a dropped duplicate prints `Cancelled(duplicate)`;
-- some error messages of the core: a job cleaning up after its body says
-  `is cleaning up after its body`, and `ctx.runAll` refused from unattended
-  work says `cannot run a group of children`.
+- some error messages: a job cleaning up after its body says
+  `is cleaning up after its body` where it said `is disposing`, and a job of
+  another controller refused by `add` is named as `Job(key)`, not by its class.
 
 And one trace is taken elsewhere in a release build. A change of state records
 its stack trace only where assertions are on, so the trace of a job its rules
@@ -261,6 +262,17 @@ cancelled is taken where the rules noticed; `Solo.traceStateChanges`, under
 "Added", turns the record back on.
 
 ### Added
+
+- `Solo` carries its own listeners: `addListener` and `removeListener`, and the
+  protected `hasListeners` and `onListenerError` beside them. A controller is
+  observable without a delivery of its own, which is what a widget or another
+  package's binding needs; `SoloStream` keeps its stream and feeds it after the
+  listeners. Notification is synchronous and in subscription order, one call
+  per registration. A listener that throws is reported through
+  `onListenerError` — the zone by default — and the pass goes on. Listeners are
+  dropped when the engine finishes closing, right after `onClose`, and a
+  registration made after that is ignored rather than retained. See
+  [Observing state](doc/state.md#observing-state).
 
 - `Solo.pending`: what is holding the controller, for a `close` that has not
   come back, as one of three. A `SoloPendingJob` is the job the controller is
@@ -361,9 +373,9 @@ cancelled is taken where the rules noticed; `Solo.traceStateChanges`, under
   `onClose`, which serves both close modes.
 - The runnable camera example lands a failed or cancelled opening in `Broken`
   through the `onError` and `onCancel` of `run`. `init` and `reopen` used to
-  catch the failure in the body, and a cancellation passed through that catch
-  with its `emit` refused: an opening cancelled half way left the camera in
-  `Preparing`, where neither of them could start again.
+  land a failure from a `catch` in the body, which a cancellation never
+  reaches: an opening cancelled half way left the camera in `Preparing`, where
+  neither of them could start again.
 
 ## 0.2.0
 

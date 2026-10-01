@@ -1,7 +1,8 @@
 # `solo` и `flutter_solo`: раздел `## Unreleased` против `0.2.0`
 
-> **Состояние на 2026-10-01:** написано в `c60addc`, в `main`, не отправлено.
-> Независимое ревью идёт, его находки и вердикты встанут в конец этой записи.
+> **Состояние на 2026-10-01:** написано в `c60addc` и поправлено по ревью,
+> в `main`, не отправлено. Независимое ревью: High нет, три Medium и девять
+> Low, все приняты — раздел в конце.
 > **Что это:** отчёт о переписанном разделе `## Unreleased`
 > в `packages/solo/CHANGELOG.md` и `packages/flutter_solo/CHANGELOG.md` — пункт
 > «единая таблица миграции» из остатка ревью `solo`, решение владельца
@@ -26,26 +27,26 @@
 
 ## Что стало
 
-Пять групп, как у `async_job`. `solo` — 367 строк, `flutter_solo` — 165.
+Пять групп, как у `async_job`. `solo` — 379 строк вместо 528, `flutter_solo` —
+170 вместо 274.
 
-- **Breaking changes**, у каждой записи «Migrating». В `solo` их шестнадцать:
+- **Breaking changes**, у каждой записи «Migrating». В `solo` их пятнадцать:
   `SoloBase` → `Solo` и миксин `SoloStream`; защищённые `job`, `add`, `run`,
   `collect`, `accumulate`; `currentState`; `onError` — оповещение,
   `onUnanswered` и `errorHandler` — ответ; окончательное состояние закрытого
   контроллера с `isFinished` и `onClose`; `SoloCloseMode`; `SoloTransition`;
-  слушатели `Solo`; новые члены `Solo`, с которыми столкнётся подкласс;
-  `Policy.droppable` и типы результата; `DuplicateCancelReason`; умолчание
-  `join`; `replace` переносит; снятый `SoloQueue.lastWhere`; `reason`
-  у `cancelAll` и методов очереди; унаследованное от `async_job`.
-  Во `flutter_solo` семь: миксин; без своего стрима; `currentState`; снятый
-  реэкспорт `ValueListenable`; `SoloCloseMode`; момент сброса слушателей;
-  унаследованное.
+  новые члены `Solo`, с которыми столкнётся подкласс; `Policy.droppable` и типы
+  результата; `DuplicateCancelReason`; умолчание `join`; `replace` переносит;
+  снятый `SoloQueue.lastWhere`; `reason` у `cancelAll` и методов очереди;
+  унаследованное от `async_job`. Во `flutter_solo` семь: миксин; без своего
+  стрима; `currentState`; снятый реэкспорт `ValueListenable`; `SoloCloseMode`;
+  момент сброса слушателей; унаследованное.
 - **Changes you will see on upgrade** — новая группа, по зондам ниже: какие
   ошибки теперь доходят до `Solo.errorHandler` или до зоны, какой текст
   читается иначе, и что трасса изменения в release снимается в другом месте.
-- **Added**: `Solo.pending`, `throttle(startAtOnce:)`, `traceStateChanges`,
-  `package:solo/listeners.dart`; во `flutter_solo` — `SoloBuilder`,
-  `SoloSelection` с `from`, `SoloSelector`, `select` и `listen`
+- **Added**: слушатели `Solo`, `Solo.pending`, `throttle(startAtOnce:)`,
+  `traceStateChanges`, `package:solo/listeners.dart`; во `flutter_solo` —
+  `SoloBuilder`, `SoloSelection` с `from`, `SoloSelector`, `select` и `listen`
   с `SoloSubscription` и `SoloSubscriptions`. Свойства, которые прежний раздел
   подавал исправлениями нового кода, стали фразами этих записей.
 - **Fixed** — только дефекты `0.2.0`: шесть в `solo`, три во `flutter_solo`.
@@ -100,3 +101,94 @@
 Удержание тела завершённой задачей и слушатель, оставленный после закрытия,
 взяты чтением исходника тега: `_body` там `final`, а `addListener` кладёт
 в список без проверки.
+
+## Независимое ревью
+
+Ревьюер Opus в копии дерева на `c60addc` и в распаковке обоих тегов, со своими
+зондами на обоих деревьях. Все девять записей «Fixed» у него воспроизвелись
+на `0.2.0` и исправлены на дереве, включая удержание тела завершённой задачей,
+слушателя после закрытия и квадратичный проход, которые я брал чтением
+исходника. «Было» и «стало» всех записей «Breaking changes» сошлись; список
+новых членов `Solo` сверен с исходником. Находки M1, M2 и L1 я повторил своим
+зондом `probe_upgrade2_test.dart` на обоих деревьях, L9 — по исходнику примера
+в теге, остальные принял чтением.
+
+1. **Medium. В списке ошибок, которые теперь доходят до зоны, не хватало
+   двух,** и не был назван исчезнувший отчёт. Шаг `ctx.uncancellable`, упавший
+   под придержанной отменой: `0.2.0` — только `onError`, дерево — ещё и зона.
+   Действие, от которого тело ушло через `.timeout`, упавшее после конца
+   задачи: `0.2.0` — никому, дерево — `onError` и зона. Помощник, сдавшийся
+   через `ctx.check()` в брошенном `wait`: `0.2.0` — `onError: Cancelled`,
+   дерево — тишина.
+
+   Вердикт: принято, исправлено. Вступление группы говорит «lost, or kept to
+   the hooks», оба пункта и абзац «One report is gone» добавлены.
+
+2. **Medium. «`0.2.0` told `onError` and nobody else» верно только для
+   прочитанного исхода.** Непрочитанный и в `0.2.0` шёл в зону.
+
+   Вердикт: принято, исправлено: «In `0.2.0` reading it kept the failure to
+   `onError`; now it reaches the zone read or not».
+
+3. **Medium. Миграция `queue.jobs.lastWhere` бросает там, где снятый метод
+   возвращал `null`.**
+
+   Вердикт: принято, исправлено: `queue.jobs.where(test).lastOrNull`,
+   и сказано, чем `lastWhere` отличается.
+
+4. **Low. Сообщение про `ctx.runAll` — о методе, которого в `0.2.0` нет.**
+   Изменились два других текста: `is disposing` и имя отвергнутой задачи чужого
+   контроллера.
+
+   Вердикт: принято, исправлено.
+
+5. **Low. «`cancellable: false` no longer means anything here»:** в `0.2.0` оно
+   тоже ничего не значило, заменённую задачу отменяли вопреки ему.
+
+   Вердикт: принято, исправлено.
+
+6. **Low. `flutter_solo`: «dropped one microtask later»** — слушатели слышали
+   ещё три микрозадачи, пока закрывался стрим.
+
+   Вердикт: принято, исправлено: «a few microtasks later, once the stream had
+   closed after the engine».
+
+7. **Low. Ссылка записи о `SoloStream` вела в раздел о своём `publish`.**
+
+   Вердикт: принято: теперь `#observing-state`.
+
+8. **Low. Запись о слушателях `Solo` стояла в «Breaking changes» без
+   «Migrating».** Ломающая её часть — столкновение имён — целиком в соседней.
+
+   Вердикт: принято: запись перенесена в «Added», ломающих в `solo` стало
+   пятнадцать.
+
+9. **Low. Перечень унаследованного во `flutter_solo` пропускал столкновение
+   имён и параметр `reason`.**
+
+   Вердикт: принято, дописано.
+
+10. **Low. Не сказано про ручную реализацию контекста:** фейк
+    `implements SoloContext` перестанет собираться.
+
+    Вердикт: принято, дописано в оба унаследованных абзаца.
+
+11. **Low. `flutter_solo`: фраза про `onListenerError` стояла в «Migrating»,**
+    а в `0.2.0` такого члена не было.
+
+    Вердикт: принято: фраза встала перед «Migrating».
+
+12. **Low. Механизм дефекта примера камеры описан неточно:** отмена шла мимо
+    `catch` через `on Cancelled { rethrow; }`, а не сквозь него.
+
+    Вердикт: принято, исправлено.
+
+Мелочь оттуда же: `outcome.reason is DuplicateCancelReason` не собирается
+на `job.outcome` без проверки на `Cancelled`; запись называет теперь тип
+причины, а не выражение.
+
+Вне коммита ревьюер заметил неточность образца: запись `async_job` о действии,
+брошенном через `.timeout`, не говорила, что отчёт приходит, только когда
+ошибка опоздала к концу задачи. Мой зонд: пока тело ещё идёт, оба дерева
+молчат. В `packages/async_job/CHANGELOG.md` дописано «arriving once the job is
+over».

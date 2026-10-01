@@ -13,17 +13,17 @@ first group names them.
   ValueListenable<S>`. It rides on `solo`'s rename — `SoloBase` becomes `Solo`,
   and the stream-carrying `Solo` becomes the mixin `SoloStream`. What the mixin
   opens is a base class of controllers without Flutter, with the mixin on the
-  leaf. **Migrating.** `extends SoloListenable<S>` becomes
-  `extends Solo<S> with SoloListenable`, the type argument inferred from the
-  superclass. `SoloListenable<S>(value)` no longer compiles — a mixin cannot be
-  instantiated — and a one-line class takes its place:
-  `class C<S extends Object> = Solo<S> with SoloListenable;`. In a type
-  position the argument is written out, `SoloListenable<S>`: the analyzer does
-  not ask for it, and a bare `SoloListenable` there is a
-  `SoloListenable<Object>`. A class that mixes `SoloListenable` in and
-  overrides `onListenerError` keeps its own report; a base without Flutter
-  under a leaf with the mixin loses its override to the mixin's, and keeps the
-  report in a method of another name for the leaf's override to call. See
+  leaf. A class that mixes `SoloListenable` in and overrides `onListenerError`
+  keeps its own report; a base without Flutter under a leaf with the mixin
+  loses its override to the mixin's, and keeps the report in a method of
+  another name for the leaf's override to call. **Migrating.**
+  `extends SoloListenable<S>` becomes `extends Solo<S> with SoloListenable`,
+  the type argument inferred from the superclass. `SoloListenable<S>(value)` no
+  longer compiles — a mixin cannot be instantiated — and a one-line class takes
+  its place: `class C<S extends Object> = Solo<S> with SoloListenable;`. In a
+  type position the argument is written out, `SoloListenable<S>`: the analyzer
+  does not ask for it, and a bare `SoloListenable` there is a
+  `SoloListenable<Object>`. See
   [A base class without Flutter](doc/mixins.md#a-base-class-without-flutter).
 
 - **`SoloListenable` no longer carries a stream.** The listeners are its whole
@@ -49,13 +49,14 @@ first group names them.
   parameter too and passes it to `super.close(mode: mode)`.
 
 - **The listeners are dropped when the engine finishes closing, right after the
-  observer's `onClose` and the controller's own.** They used to be dropped one
-  microtask later, in the continuation of the engine's close, so a change made
-  from a microtask scheduled inside the observer's `onClose` still reached
-  them. Now it is not a change at all: `solo` freezes the state of a closed
-  controller, and `externalSetState` from there throws a `StateError`. A change
-  made inside the hook itself still reaches the listeners. **Migrating.** Write
-  the last state synchronously, in the controller's `onClose`.
+  observer's `onClose` and the controller's own.** They used to be dropped a
+  few microtasks later, once the stream had closed after the engine, so a
+  change made from a microtask scheduled inside the observer's `onClose` still
+  reached them. Now it is not a change at all: `solo` freezes the state of a
+  closed controller, and `externalSetState` from there throws a `StateError`. A
+  change made inside the hook itself still reaches the listeners.
+  **Migrating.** Write the last state synchronously, in the controller's
+  `onClose`.
 
 - **Inherited from `solo` and `async_job`.** From `solo`: `SoloBase` becomes
   `Solo` and the stream moves to the mixin `SoloStream`; `job`, `add`, `run`,
@@ -71,15 +72,19 @@ first group names them.
   job instead of cancelling it; `Policy.droppable` compares the result types of
   the two jobs and throws `ArgumentError` when they differ, and the job it
   drops ends with a `DuplicateCancelReason` instead of a `ManualCancelReason`;
-  `SoloQueue.lastWhere` is gone. From `async_job`, through `solo`: a
-  cancellation inside a `ParallelWaitError` is a cancellation again, so the
-  job's `onCancel` handler takes the outcome where `onError` used to;
-  `JobContext` gains `runAll`; `ctx.run` takes `dispose` and `discard`;
-  `JobObserver.onError` is a notice and the new `JobObserver.onUnanswered`
-  answers for an error no outcome carries; the core's debug switch
-  `JobBase.debug` is `Job.debug`; `JobBase`, `JobContextBase` and `JobStatus`
-  move to `package:async_job/engine.dart` and are no longer visible through
-  this package. **Migrating.** Read the entries of both:
+  `SoloQueue.lastWhere` is gone; `cancelAll` and the removing methods of
+  `SoloQueue` take a `reason`; a subclass member named like a new member of
+  `Solo` stops compiling or overrides it, `isFinished` silently. From
+  `async_job`, through `solo`: a cancellation inside a `ParallelWaitError` is a
+  cancellation again, so the job's `onCancel` handler takes the outcome where
+  `onError` used to; `JobContext` gains `runAll` and `ctx.run` takes `dispose`
+  and `discard`, so a class that implements `JobContext` or `SoloContext` by
+  hand, a test fake for one, needs both; `JobObserver.onError` is a notice and
+  the new `JobObserver.onUnanswered` answers for an error no outcome carries;
+  the core's debug switch `JobBase.debug` is `Job.debug`; `JobBase`,
+  `JobContextBase` and `JobStatus` move to `package:async_job/engine.dart` and
+  are no longer visible through this package. **Migrating.** Read the entries
+  of both:
   [the `solo` changelog](https://github.com/vi-k/solo/blob/main/packages/solo/CHANGELOG.md)
   and
   [the `async_job` changelog](https://github.com/vi-k/solo/blob/main/packages/async_job/CHANGELOG.md).

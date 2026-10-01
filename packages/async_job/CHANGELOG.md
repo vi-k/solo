@@ -176,7 +176,7 @@ job was created in. In a test that zone is the test's, and the test fails:
 - the failure of a step of `ctx.uncancellable` while the section held a
   cancellation back, the same way;
 - the late failure of an action `ctx.wait` walked away from, through `.timeout`
-  or `Future.any`: `0.2.0` told nobody at all;
+  or `Future.any`, arriving once the job is over: `0.2.0` told nobody at all;
 - an error no outcome carries, of a job that has an observer: `0.2.0` stopped
   it there, see the first of the breaking changes;
 - the failure of a source's own cleanup, the future of the subscription's
