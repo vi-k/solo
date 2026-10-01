@@ -387,11 +387,14 @@ when nobody observed the outcome, or when nobody answers or `onUnanswered`
 sends it on. Observing the outcome closes the first way;
 [A failure nobody waits for](outcomes.md#a-failure-nobody-waits-for) on the
 outcomes page shows how. An observer that answers (`with JobAnswerer`) closes
-the second. For two failures of a body, `ignore()` closes the second way too: a
-failure after which the job takes a cancellation, and a failure of a branch of
-`ctx.runAll` whose group throws another. Call it on the job whose body failed:
-`onError` still hears the failure, and it reaches neither `onUnanswered` nor
-the zone.
+the second.
+
+A failure of a body the outcome does not carry goes to `onUnanswered` or the
+zone even when the outcome is observed. The table has two: the job failed and
+then took a cancellation, so the outcome carries the cancellation; or a branch
+of `ctx.runAll` failed and its group threw another error. `ignore()` on the job
+whose body failed lets such a failure go: `onError` still hears it, and it
+reaches neither `onUnanswered` nor the zone.
 
 ## Work the job does not wait for
 
