@@ -386,10 +386,11 @@ places hears it twice. The table shows the way each error takes to the zone:
 when nobody observed the outcome, or when nobody answers or `onUnanswered`
 sends it on. Observing the outcome closes the first way;
 [A failure nobody waits for](outcomes.md#a-failure-nobody-waits-for) on the
-outcomes page shows how. An observer that answers closes the second. For the
-two failures of a body the table sends to `onUnanswered` — one a cancellation
-covered, and one of a branch whose group throws another — `job.ignore()` closes
-the second way as well: `onError` hears the failure, and nobody answers for it.
+outcomes page shows how. An observer that answers closes the second. For two
+failures of a body, `ignore()` closes the second way too: a failure after which
+the job takes a cancellation, and a failure of a branch of `ctx.runAll` whose
+group throws another. Call it on the job whose body failed: `onError` still
+hears the failure, and it reaches neither `onUnanswered` nor the zone.
 
 ## Work the job does not wait for
 
