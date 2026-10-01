@@ -41,6 +41,16 @@ const quoted = [
     'onError: Bad state: analytics offline',
     'zone: Bad state: analytics offline',
   ],
+  [
+    'outcome: Done(null)',
+    'onError: Bad state: analytics offline',
+    'zone: Bad state: analytics offline',
+  ],
+  [
+    'outcome: Done(null)',
+    'onError: Bad state: analytics offline',
+    'onUnanswered: Bad state: analytics offline',
+  ],
 ];
 
 /// What the observers and the code around the job print.
@@ -75,7 +85,7 @@ final class Reporter extends JobObserver {
 /// An observer that answers for the errors no outcome carries, the way the
 /// page overrides `onUnanswered`, and, with [passedOn], hands each one on
 /// to `super` as well.
-final class Answering extends JobObserver {
+final class Answering extends JobObserver with JobAnswerer {
   final bool passedOn;
 
   Answering({this.passedOn = false});
@@ -89,6 +99,69 @@ final class Answering extends JobObserver {
     say('onUnanswered: $error');
     if (passedOn) {
       super.onUnanswered(job, error, stackTrace);
+    }
+  }
+}
+
+/// The crash reporter of the page's section on several observers.
+final class Crashes extends JobObserver with JobAnswerer {
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      say('onUnanswered: $error');
+}
+
+/// The first attempt of that section, every hook handed on as the page
+/// hands on `onError`.
+final class Both extends JobObserver {
+  final _observers = [Reporter(), Crashes()];
+
+  @override
+  void onStart(Job<Object?> job) {
+    for (final observer in _observers) {
+      observer.onStart(job);
+    }
+  }
+
+  @override
+  void onFinish(Job<Object?> job) {
+    for (final observer in _observers) {
+      observer.onFinish(job);
+    }
+  }
+
+  @override
+  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
+    for (final observer in _observers) {
+      observer.onError(job, error, stackTrace);
+    }
+  }
+
+  @override
+  void onLog(Job<Object?> job, Object? message) {
+    for (final observer in _observers) {
+      observer.onLog(job, message);
+    }
+  }
+}
+
+/// The `Both` the page names next, which answers by handing `onUnanswered`
+/// to the ones of its list that answer.
+final class BothAnswering extends JobObserver with JobAnswerer {
+  final List<JobObserver> _observers;
+
+  BothAnswering(this._observers);
+
+  @override
+  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
+    for (final observer in _observers) {
+      observer.onError(job, error, stackTrace);
+    }
+  }
+
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
+    for (final observer in _observers.whereType<JobAnswerer>()) {
+      observer.onUnanswered(job, error, stackTrace);
     }
   }
 }
@@ -1481,6 +1554,82 @@ void main() {
         'onError: Bad state: analytics offline',
         'zone: Bad state: analytics offline',
       ]);
+    });
+  });
+
+  group('Several observers', () {
+    Job<void> sending(JobObserver observer) => Job<void>(
+          observer: observer,
+          (ctx) async {
+            ctx.unattended(() => analytics.send('loaded'));
+          },
+        );
+
+    test('handing the hooks on asks Crashes for nothing', () {
+      expect(play(() => sending(Both())), quoted[5]);
+      expect(quoted[5], quoted[4], reason: 'the lines of Reporter alone');
+    });
+
+    test('a Both that answers goes wrong the other way', () {
+      expect(
+        play(() => sending(BothAnswering([Reporter()]))),
+        ['outcome: Done(null)', 'onError: Bad state: analytics offline'],
+        reason: 'with none that answers, the error goes nowhere',
+      );
+      expect(
+        play(() => sending(BothAnswering([Crashes(), Crashes()]))),
+        [
+          'outcome: Done(null)',
+          'onUnanswered: Bad state: analytics offline',
+          'onUnanswered: Bad state: analytics offline',
+        ],
+        reason: 'with two, both answer',
+      );
+    });
+
+    test('JobObserver.all asks the one that answers', () {
+      expect(
+        play(() => sending(JobObserver.all([Reporter(), Crashes()]))),
+        quoted[6],
+      );
+    });
+
+    test('with nobody answering, the zone, as for one that does not', () {
+      expect(
+        play(() => sending(JobObserver.all([Reporter(), Reporter()]))),
+        [
+          'outcome: Done(null)',
+          'onError: Bad state: analytics offline',
+          'onError: Bad state: analytics offline',
+          'zone: Bad state: analytics offline',
+        ],
+      );
+    });
+
+    test('two that answer, or one twice, and it throws', () {
+      final reporter = Reporter();
+      expect(
+        () => JobObserver.all([Crashes(), Crashes()]),
+        throwsArgumentError,
+      );
+      expect(
+        () => JobObserver.all([reporter, reporter]),
+        throwsArgumentError,
+      );
+    });
+
+    test('inside the list of another, it answers when one inside it does', () {
+      expect(
+        play(
+          () => sending(
+            JobObserver.all([
+              Reporter(),
+              JobObserver.all([Crashes()]),
+            ]),
+          ),
+        ),
+        quoted[6],
+      );
     });
   });
 

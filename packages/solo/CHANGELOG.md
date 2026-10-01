@@ -216,15 +216,15 @@ first group names them.
   the cancellation of a child, runs its `ctx.onCancel` callbacks, and
   `whenCancelled` fires as it throws rather than once its children have ended.
   One more reaches code that gives a job of the core an observer of its own:
-  `JobObserver.onError` is a notice, and the new `JobObserver.onUnanswered`
-  answers for an error no outcome carries, so such an observer no longer keeps
-  those errors out of the zone, and a class that implements `JobObserver` needs
-  an `onUnanswered`. The switch of the core's debug channel, the one set next
-  to `Solo.debug`, is `Job.debug`, where it was `JobBase.debug`. The rest
-  concern an engine built on the core: `JobBase`, `JobContextBase` and
-  `JobStatus` moved to `package:async_job/engine.dart`, which also takes them
-  out of what an app sees through this package, and the protected surface of
-  `JobBase` changed. **Migrating.** Read the core's own entries:
+  `JobObserver.onError` is a notice, and the new `JobAnswerer` answers for an
+  error no outcome carries in `onUnanswered`, so such an observer no longer
+  keeps those errors out of the zone unless it mixes in `JobAnswerer`. The
+  switch of the core's debug channel, the one set next to `Solo.debug`, is
+  `Job.debug`, where it was `JobBase.debug`. The rest concern an engine built
+  on the core: `JobBase`, `JobContextBase` and `JobStatus` moved to
+  `package:async_job/engine.dart`, which also takes them out of what an app
+  sees through this package, and the protected surface of `JobBase` changed.
+  **Migrating.** Read the core's own entries:
   [the `async_job` changelog](https://github.com/vi-k/solo/blob/main/packages/async_job/CHANGELOG.md).
 
 ### Changes you will see on upgrade
@@ -264,6 +264,15 @@ cancelled is taken where the rules noticed; `Solo.traceStateChanges`, under
 "Added", turns the record back on.
 
 ### Added
+
+- **`SoloObserver.all` makes one observer of several** for `Solo.observer`.
+  Every hook goes to each of them in the order of the list, each call on its
+  own, the way a single observer's is: one that throws hands its error to the
+  zone, and the next is called all the same. The same observer twice throws
+  `ArgumentError`. `SoloObserver` declares its unnamed constructor, so a class
+  that extends it compiles as before. From `async_job` comes `JobObserver.all`,
+  for an observer of jobs of the core. See
+  [A cancellation that never lands](doc/errors.md#a-cancellation-that-never-lands).
 
 - `Solo` carries its own listeners: `addListener` and `removeListener`, and the
   protected `hasListeners` and `onListenerError` beside them. A controller is

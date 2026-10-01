@@ -19,9 +19,12 @@ import 'support/probe_job.dart';
 /// Watches and answers for nothing: every body is the default one.
 final class Plain extends JobObserver {}
 
+/// Answers with the default body and nothing else.
+final class PlainAnswer extends JobObserver with JobAnswerer {}
+
 /// Both hooks in one list, in order; with [answers] it answers and stops
 /// the error, without it `super` sends the error on.
-final class Counting extends JobObserver {
+final class Counting extends JobObserver with JobAnswerer {
   final bool answers;
   final seen = <String>[];
 
@@ -46,7 +49,7 @@ class Base {}
 /// A class that extends another one and mixes the observer in.
 final class Mixed extends Base with JobObserver {}
 
-final class ThrowingAnswer extends JobObserver {
+final class ThrowingAnswer extends JobObserver with JobAnswerer {
   final finished = <String>[];
 
   @override
@@ -57,7 +60,7 @@ final class ThrowingAnswer extends JobObserver {
   void onFinish(Job<Object?> job) => finished.add('$job');
 }
 
-final class ThrowingNotice extends JobObserver {
+final class ThrowingNotice extends JobObserver with JobAnswerer {
   final answered = <Object>[];
 
   @override
@@ -208,7 +211,7 @@ List<String> eachCancelled(
 /// Hands both hooks on to [inner], and without one answers the default
 /// way; with [ignoresOnFinish], calls `ignore` on the job from `onFinish`,
 /// the way an engine of a domain that routes failures itself would.
-class Forwarding extends JobObserver {
+class Forwarding extends JobObserver with JobAnswerer {
   final JobObserver? inner;
   final bool ignoresOnFinish;
 
@@ -221,7 +224,7 @@ class Forwarding extends JobObserver {
   @override
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
     final inner = this.inner;
-    if (inner == null) {
+    if (inner is! JobAnswerer) {
       super.onUnanswered(job, error, stackTrace);
     } else {
       inner.onUnanswered(job, error, stackTrace);
@@ -412,25 +415,30 @@ void main() {
     );
   });
 
-  test('the default answer goes to the zone the job was created in', () {
-    final creation = <Object>[];
-    final starting = <Object>[];
-    fakeAsync((async) {
-      late final DeferredJob<void> job;
-      runZonedGuarded(
-        () {
-          job = Job.deferred<void>(observer: Plain(), (ctx) async {
-            ctx.onDispose(() => throw StateError('cleanup'));
-          });
-        },
-        (error, stackTrace) => creation.add(error),
-      );
-      runZonedGuarded(job.start, (error, stackTrace) => starting.add(error));
-      async.flushTimers();
+  for (final (name, make) in [
+    ('an observer that does not answer', Plain.new),
+    ('the default answer', PlainAnswer.new),
+  ]) {
+    test('$name: the error goes to the zone the job was created in', () {
+      final creation = <Object>[];
+      final starting = <Object>[];
+      fakeAsync((async) {
+        late final DeferredJob<void> job;
+        runZonedGuarded(
+          () {
+            job = Job.deferred<void>(observer: make(), (ctx) async {
+              ctx.onDispose(() => throw StateError('cleanup'));
+            });
+          },
+          (error, stackTrace) => creation.add(error),
+        );
+        runZonedGuarded(job.start, (error, stackTrace) => starting.add(error));
+        async.flushTimers();
+      });
+      expect(creation.map((error) => '$error'), ['Bad state: cleanup']);
+      expect(starting, isEmpty, reason: 'not the zone the job was started in');
     });
-    expect(creation.map((error) => '$error'), ['Bad state: cleanup']);
-    expect(starting, isEmpty, reason: 'not the zone the job was started in');
-  });
+  }
 
   test('an override without super answers, and nothing reaches the zone', () {
     final observer = Counting(answers: true);
@@ -1719,7 +1727,7 @@ void main() {
         } on Object catch (error) {
           envelope = error;
         }
-        final observer = Plain();
+        final observer = PlainAnswer();
         final job = ForeignJob();
         observer
           ..onUnanswered(job, const Cancelled('dropped'), StackTrace.empty)

@@ -141,9 +141,10 @@ final class Done<T> extends Outcome<T> {
 /// [JobContext.wait] walked away from, a disposer, a callback of
 /// [JobContext.onCancel] or [Job.whenCancelled], a failure of work handed over
 /// with [JobContext.unattended], a failure an engine of a domain hands to a job
-/// already over — take the other path: [JobObserver.onError] hears them and
-/// [JobObserver.onUnanswered] answers for them, by default in the zone the job
-/// was created in, where they go straight away when there is no observer.
+/// already over — take the other path: [JobObserver.onError] hears them, and an
+/// observer that is a [JobAnswerer] answers for them, by default in the zone
+/// the job was created in, where they go straight away without such an
+/// observer.
 final class Failed extends Outcome<Never> {
   /// The thrown error.
   final Object error;

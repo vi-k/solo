@@ -1,5 +1,8 @@
+import 'dart:collection';
+
 import 'package:async_job/async_job.dart';
 
+import 'call_hook.dart';
 import 'solo.dart';
 import 'transition.dart';
 
@@ -11,7 +14,45 @@ import 'transition.dart';
 /// observer off. A hook that throws hands its error to the current zone and
 /// changes nothing else — the engine goes on, and the controller's own hook
 /// is still called.
+///
+/// Several observers watch every controller through [SoloObserver.all].
 abstract class SoloObserver {
+  /// Creates an observer; a subclass calls it implicitly.
+  SoloObserver();
+
+  /// One observer made of [observers], in their order.
+  ///
+  /// Every hook goes to each of [observers] in turn, each call on its own:
+  /// one that throws hands its error to the current zone, the way a single
+  /// observer's does, and the next is called all the same.
+  ///
+  /// ```dart
+  /// Solo.observer = SoloObserver.all([Log(), SlowCancellations()]);
+  /// ```
+  ///
+  /// Throws [ArgumentError] when the same observer comes twice, counting those
+  /// inside one made by [SoloObserver.all]: it would hear every hook twice.
+  /// [observers] is walked once, here, and kept as a copy.
+  factory SoloObserver.all(Iterable<SoloObserver> observers) {
+    final all = List<SoloObserver>.unmodifiable(observers);
+    final seen = HashSet<SoloObserver>.identity();
+    void visit(SoloObserver observer) {
+      if (!seen.add(observer)) {
+        throw ArgumentError.value(
+          observers,
+          'observers',
+          '$observer comes twice and would hear every hook twice',
+        );
+      }
+      if (observer is _AllSoloObservers) {
+        observer._observers.forEach(visit);
+      }
+    }
+
+    all.forEach(visit);
+    return _AllSoloObservers(all);
+  }
+
   /// A controller was created.
   void onCreate(Solo<Object> solo) {}
 
@@ -71,3 +112,50 @@ typedef SoloErrorHandler = void Function(
   Object error,
   StackTrace stackTrace,
 );
+
+/// [SoloObserver.all].
+final class _AllSoloObservers extends SoloObserver {
+  final List<SoloObserver> _observers;
+
+  _AllSoloObservers(this._observers);
+
+  void _each(void Function(SoloObserver observer) hook) {
+    for (final observer in _observers) {
+      callHook(() => hook(observer));
+    }
+  }
+
+  @override
+  void onCreate(Solo<Object> solo) => _each((o) => o.onCreate(solo));
+
+  @override
+  void onStart(Solo<Object> solo, Job<Object?> job) =>
+      _each((o) => o.onStart(solo, job));
+
+  @override
+  void onFinish(Solo<Object> solo, Job<Object?> job) =>
+      _each((o) => o.onFinish(solo, job));
+
+  @override
+  void onError(
+    Solo<Object> solo,
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace,
+  ) =>
+      _each((o) => o.onError(solo, job, error, stackTrace));
+
+  @override
+  void onChange(Solo<Object> solo, SoloTransition<Object> transition) =>
+      _each((o) => o.onChange(solo, transition));
+
+  @override
+  void onLog(Solo<Object> solo, Job<Object?> job, Object? message) =>
+      _each((o) => o.onLog(solo, job, message));
+
+  @override
+  void onClose(Solo<Object> solo) => _each((o) => o.onClose(solo));
+
+  @override
+  String toString() => 'SoloObserver.all($_observers)';
+}

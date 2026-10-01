@@ -341,6 +341,22 @@ is about a cancellation that has not landed, not about slow work. Nor does it
 see a job inside an open `ctx.uncancellable` section — that cancellation is
 still held back, and `whenCancelled` has not fired.
 
+`Solo.observer` holds one observer, and this page has made four by now.
+`SoloObserver.all` puts them in one:
+
+```dart
+Solo.observer = SoloObserver.all([
+  LoggingObserver(),
+  Hangs(),
+  SlowCancellations(),
+  StuckCancellations(),
+]);
+```
+
+Every hook goes to each of them in the order of the list, each call on its own:
+one that throws hands its error to the zone, and the next is called all the
+same. The same observer twice in the list throws `ArgumentError`.
+
 ## Handled and unhandled failures
 
 A screen starts a job and goes on with its build: `profile.load()`, and nobody

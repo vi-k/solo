@@ -11,7 +11,7 @@ import 'support/delay.dart';
 import 'support/probe_job.dart';
 
 /// Every hook it hears, in order; answers for nothing.
-final class Hearing extends JobObserver {
+final class Hearing extends JobObserver with JobAnswerer {
   final seen = <String>[];
 
   /// Called from `onError`, to act on the job while it is being told.

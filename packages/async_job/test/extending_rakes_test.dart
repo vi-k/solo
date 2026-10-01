@@ -189,7 +189,7 @@ final class CountingJob extends JobBase<int> {
 }
 
 /// The answer of an engine: it keeps what nobody else answered for.
-final class Answer extends JobObserver {
+final class Answer extends JobObserver with JobAnswerer {
   final answered = <String>[];
 
   @override

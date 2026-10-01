@@ -69,11 +69,12 @@ unhandled, it goes to the zone, and so does a cancellation of the child.
 If the child's body fails and a cancellation reaches the child afterwards —
 while it still waits for children of its own or runs its cleanup, say — its
 error does not arrive through that future. The child ends `Cancelled`,
-`await ctx.run(child)` throws `Cancelled`, and the error goes on to
-`onUnanswered` of the child's observer — by default to the zone.
+`await ctx.run(child)` throws `Cancelled`, and the error goes on to the answer
+of the child's observer — the zone, unless the observer answers.
 `child.ignore()` silences it. `ctx.run(child).ignore()` does not: it handles
 what the future throws, and the future throws the cancellation. To answer for
-the error differently, override `onUnanswered` in the child's observer.
+the error differently, give the child an observer that answers: a `JobAnswerer`
+with `onUnanswered` overridden.
 
 A child inherits the parent's observer unless it has its own. If a child's
 cancellation escapes through `await ctx.run(child)` or `child.value`, the
@@ -448,7 +449,7 @@ sees this child as a separate job.
 Like `run`, `each` can only start children while the parent body is active;
 calls from `unattended` or cleanup are rejected. The future returned by the
 underlying subscription's `cancel()` is not awaited; if it fails, the error
-goes to `onError` and `onUnanswered` of the child. If the source needs
+goes to `onError` of the child and on to its answer. If the source needs
 asynchronous cleanup, arrange to await that cleanup separately. Normal stream
 completion still depends on the source sending `onDone`.
 

@@ -6,7 +6,7 @@ import 'package:async_job/async_job.dart';
 /// to the zone the job was created in, as it would with no observer. A test
 /// whose subject is not where such an error goes, and that does not want it
 /// in the zone, takes [ErrorObserver.answering] and says why.
-final class ErrorObserver extends JobObserver {
+final class ErrorObserver extends JobObserver with JobAnswerer {
   final List<Object> errors;
   final bool _answers;
 

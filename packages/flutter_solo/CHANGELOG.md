@@ -81,12 +81,11 @@ first group names them.
   callbacks, and `whenCancelled` fires as it throws; `JobContext` gains
   `runAll` and `ctx.run` takes `dispose` and `discard`, so a class that
   implements `JobContext` or `SoloContext` by hand, a test fake for one, needs
-  both; `JobObserver.onError` is a notice and the new
-  `JobObserver.onUnanswered` answers for an error no outcome carries; the
-  core's debug switch `JobBase.debug` is `Job.debug`; `JobBase`,
-  `JobContextBase` and `JobStatus` move to `package:async_job/engine.dart` and
-  are no longer visible through this package. **Migrating.** Read the entries
-  of both:
+  both; `JobObserver.onError` is a notice and the new `JobAnswerer` answers for
+  an error no outcome carries; the core's debug switch `JobBase.debug` is
+  `Job.debug`; `JobBase`, `JobContextBase` and `JobStatus` move to
+  `package:async_job/engine.dart` and are no longer visible through this
+  package. **Migrating.** Read the entries of both:
   [the `solo` changelog](https://github.com/vi-k/solo/blob/main/packages/solo/CHANGELOG.md)
   and
   [the `async_job` changelog](https://github.com/vi-k/solo/blob/main/packages/async_job/CHANGELOG.md).
@@ -104,6 +103,9 @@ first group names them.
   under the same heading.
 
 ### Added
+
+- Inherited from `solo` and `async_job`: `SoloObserver.all` and
+  `JobObserver.all`, one observer made of several.
 
 - `SoloBuilder`: what `ValueListenableBuilder` is, for a controller that is not
   a `ValueListenable`. It takes any `Solo` — one `with SoloStream` included —

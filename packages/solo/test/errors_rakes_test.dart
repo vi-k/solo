@@ -1069,6 +1069,32 @@ void main() {
         );
       });
     });
+
+    test('SoloObserver.all keeps the recipes at work under one observer', () {
+      fakeAsync((async) {
+        final lines = <String>[];
+        Solo.observer = SoloObserver.all([
+          Hangs(lines),
+          SlowCancellations(lines),
+          StuckCancellations(lines),
+        ]);
+        final bare = Cam().bare();
+        final stuck = Cam().ignores(Completer<void>())..ignore();
+
+        async.elapse(const Duration(milliseconds: 10));
+        bare.cancel().ignore();
+        stuck.cancel().ignore();
+        async.elapse(const Duration(seconds: 6));
+
+        const pending = 'SoloPending([ignores] in its body, cancelled by '
+            'Cancelled(manual))';
+        expect(lines, [
+          'bare ran 290 ms past its cancellation',
+          'ignores is still running: $pending',
+          'ignores has not stopped: $pending',
+        ]);
+      });
+    });
   });
 
   // --- Handled and unhandled failures -------------------------------------

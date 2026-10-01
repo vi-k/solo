@@ -77,7 +77,7 @@ final class RuleReason extends CancelReason {
 
 /// The observer of [AnsweringJob]: it hears nothing and answers for
 /// everything nobody else answered for.
-final class EngineAnswer extends JobObserver {
+final class EngineAnswer extends JobObserver with JobAnswerer {
   final answered = <Object>[];
 
   @override

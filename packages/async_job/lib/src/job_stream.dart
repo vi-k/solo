@@ -44,11 +44,11 @@ extension _JobStreamBody on JobContext {
 
     void letGoOfStream() {
       letGo = true;
-      // Not awaited: the source's own cleanup is the source's to finish,
-      // and the child does not wait for it. Not dropped either: a cleanup
-      // that fails is an error with no outcome to carry it, and it goes
-      // the way the others go -- `onError`, then `onUnanswered` of this
-      // child -- rather than to the zone past every observer, or nowhere.
+      // Not awaited: the source's own cleanup is the source's to finish, and
+      // the child does not wait for it. Not dropped either: a cleanup that
+      // fails is an error with no outcome to carry it, and it goes the way the
+      // others go -- `onError`, then the answer of this child's observer --
+      // rather than to the zone past every observer, or nowhere.
       //
       // This end of it, and no more: a source may route the same failure
       // elsewhere by itself — a broadcast controller runs `onCancel`

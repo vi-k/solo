@@ -6,23 +6,26 @@ now reach the zone, and fail a test there.
 
 ### Breaking changes
 
-- **`JobObserver.onError` is a notice, and the new `JobObserver.onUnanswered`
-  answers for an error no outcome carries.** Such an error — a late failure of
-  an action `ctx.wait` walked away from, a disposer, a callback of
-  `ctx.onCancel` or `job.whenCancelled`, work handed to `ctx.unattended` — used
-  to stop at whatever observer the job had, so an observer written for a log,
-  overriding `onFinish` alone, kept every one of them out of the zone without a
-  word. Now `onError` hears it and `onUnanswered` answers for it: the default
-  body sends the error to the zone the job was created in, where it goes
-  without an observer too, and drops a cancellation. `JobObserver` is a mixin
-  class now: a class that extends another one mixes it in with
-  `with JobObserver` and keeps the default bodies. **Migrating.** A class that
-  extends `JobObserver` compiles unchanged, and the errors it used to swallow
-  reach the zone; an override of `onUnanswered` with an empty body keeps the
-  old behaviour. A class that implements `JobObserver` stops compiling until it
-  has an `onUnanswered`. An engine built on the core answers for these errors
-  through the observer it puts on its jobs, the way `solo` does. See
-  [An observer](doc/observing.md#an-observer).
+- **`JobObserver.onError` is a notice, and the new `JobAnswerer` answers for an
+  error no outcome carries.** Such an error — a late failure of an action
+  `ctx.wait` walked away from, a disposer, a callback of `ctx.onCancel` or
+  `job.whenCancelled`, work handed to `ctx.unattended` — used to stop at
+  whatever observer the job had, so an observer written for a log, overriding
+  `onFinish` alone, kept every one of them out of the zone without a word. Now
+  `onError` hears it, and an observer that mixes in `JobAnswerer` answers for
+  it in `onUnanswered`; without one the error goes to the zone the job was
+  created in, where it goes without an observer too, and a cancellation is
+  dropped. The default body of `onUnanswered` does the same. `JobAnswerer` is a
+  mixin on `JobObserver`, and `JobObserver` is a mixin class now: a class that
+  extends another one mixes it in with `with JobObserver`, or
+  `with JobObserver, JobAnswerer`, and keeps the default bodies. **Migrating.**
+  An observer from `0.2.0` compiles unchanged, and the errors it used to
+  swallow reach the zone; one that mixes in `JobAnswerer` and overrides
+  `onUnanswered` with an empty body keeps the old behaviour. An `onUnanswered`
+  written on an observer without `JobAnswerer` is never called: the analyzer
+  says so where it carries `@override`, and nowhere else. An engine built on
+  the core answers for these errors through the observer it puts on its jobs,
+  the way `solo` does. See [An observer](doc/observing.md#an-observer).
 
 - **`JobBase`, `JobContextBase` and `JobStatus` moved to
   `package:async_job/engine.dart`.** They are the protocol for building an
@@ -203,9 +206,9 @@ branch of `ctx.runAll` that the group did not throw, are silenced by
 `job.ignore()` on that job, called before the job ends — or at the latest from
 `onFinish` or a callback of `whenCancelled` registered before it ends; on a
 child of `ctx.run` as well. `onError` still hears it. The rest belongs to no
-outcome, and `ignore` does not reach it: an observer that overrides
-`onUnanswered` answers for it in place of the zone. See
-[Where errors go](doc/observing.md#where-errors-go).
+outcome, and `ignore` does not reach it: an observer that mixes in
+`JobAnswerer` and overrides `onUnanswered` answers for it in place of the zone.
+See [Where errors go](doc/observing.md#where-errors-go).
 
 One report is gone: a job that gives up inside a call it walked away from — a
 helper that takes the context and calls `ctx.check()` after `ctx.wait` let go
@@ -222,6 +225,16 @@ from `ctx.unattended` name their own call, `cannot run a group of children` and
 named as `Job(key)`, not by its class.
 
 ### Added
+
+- **`JobObserver.all` makes one observer of several.** Every hook goes to each
+  of them in the order of the list, each call on its own, and the one among
+  them that is a `JobAnswerer` answers for all of them; with none, an error no
+  outcome carries goes to the zone. Two that answer, or the same observer
+  twice, throw `ArgumentError`. A class that hands the hooks on to a list by
+  hand is no `JobAnswerer`, and the answer of one in its list is never asked.
+  `JobObserver` declares its unnamed constructor, so a class that extends it
+  compiles as before. See
+  [Several observers](doc/observing.md#several-observers).
 
 - The debug channel names a job that handed its value over and dropped the
   conditional registrations that went with it:

@@ -343,6 +343,23 @@ ignores has not stopped: SoloPending([ignores] in its body, cancelled by Cancell
 Не видит он и `Job` внутри открытой секции `ctx.uncancellable`: её отмена ещё
 придержана, и `whenCancelled` не сработал.
 
+`Solo.observer` держит одного наблюдателя, а на этой странице их уже четыре.
+`SoloObserver.all` складывает их в одного:
+
+```dart
+Solo.observer = SoloObserver.all([
+  LoggingObserver(),
+  Hangs(),
+  SlowCancellations(),
+  StuckCancellations(),
+]);
+```
+
+Каждый хук идёт каждому из них в порядке списка, и каждый вызов сам по себе:
+тот, кто бросил исключение, отдаёт его в зону, а следующий всё равно
+вызывается. Один и тот же наблюдатель в списке дважды, и `SoloObserver.all`
+бросает `ArgumentError`.
+
 ## Обработанные и необработанные ошибки
 
 Экран запускает задачу и идёт строить дальше: `profile.load()`, и результата

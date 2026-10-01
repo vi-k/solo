@@ -8,7 +8,7 @@ import 'package:async_job/async_job.dart';
 /// It watches and answers for nothing unless [answers] says so: by default
 /// an error no outcome carries goes on to the zone the job was created in,
 /// as it would with no observer.
-final class JobJournal extends JobObserver {
+final class JobJournal extends JobObserver with JobAnswerer {
   final lines = <String>[];
 
   /// Whether the journal answers for the errors it records, keeping them

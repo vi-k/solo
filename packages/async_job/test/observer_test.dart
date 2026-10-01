@@ -224,7 +224,7 @@ final class _Messages extends JobObserver {
 }
 
 /// Throws from every hook the core calls.
-final class _ThrowingObserver extends JobObserver {
+final class _ThrowingObserver extends JobObserver with JobAnswerer {
   @override
   void onStart(Job<Object?> job) => throw StateError('onStart');
 

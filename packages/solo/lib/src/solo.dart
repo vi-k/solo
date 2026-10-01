@@ -4,6 +4,7 @@ import 'dart:collection';
 import 'package:async_job/engine.dart';
 import 'package:meta/meta.dart';
 
+import 'call_hook.dart';
 import 'close_mode.dart';
 import 'listeners.dart';
 import 'observer.dart';
@@ -135,22 +136,8 @@ abstract class Solo<S extends Object> {
     _callHook(() => observer?.onCreate(this));
   }
 
-  /// Calls [hook] and hands whatever it throws to the current zone, the way
-  /// Dart reports an unhandled `Future` error.
-  ///
-  /// Hooks are a cross-cutting channel — analytics, logging, error
-  /// reporting — called independently of each other and of the job. A
-  /// failure in one is therefore not allowed to change anything else: not a
-  /// job's outcome, not the queue, not the closing. Each call is isolated on
-  /// its own, so a throwing observer does not switch off the instance hook
-  /// standing next to it.
-  static void _callHook(void Function() hook) {
-    try {
-      hook();
-    } on Object catch (error, stackTrace) {
-      Zone.current.handleUncaughtError(error, stackTrace);
-    }
-  }
+  /// Calls [hook] the way every hook is called: see [callHook].
+  static void _callHook(void Function() hook) => callHook(hook);
 
   /// The current state, for a reader outside a job. Reading is always
   /// safe; only jobs write.
@@ -1237,7 +1224,8 @@ abstract class Solo<S extends Object> {
 ///
 /// A throwing observer must not switch off the instance hook standing next
 /// to it, so the two calls are wrapped separately.
-final class _SoloJobObserver<S extends Object> implements JobObserver {
+final class _SoloJobObserver<S extends Object>
+    implements JobObserver, JobAnswerer {
   final Solo<S> _solo;
 
   _SoloJobObserver(this._solo);
