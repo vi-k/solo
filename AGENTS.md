@@ -211,16 +211,41 @@
 `pubspec.yaml` проверяется отдельно из его папки. Подробности
 в `docs/conventions.md`.
 
-Те же команды гоняет CI — `.github/workflows/gate.yml`, четыре задания: `dart`
+Те же команды гоняет CI — `.github/workflows/gate.yml`, пять заданий: `dart`
 (ядро и его пример, без Flutter в PATH — так проверяется заодно и обещание
-«никакого Flutter в ядре»), `flutter` (`flutter_solo` и его пример), `snippets`
-(два стенда, `tool/doc_snippets.py` и `tool/accumulation_snippets.py`: собирают
-код `packages/solo/doc/vs-bloc.md` и `packages/solo/doc/accumulation.md` в три
-пакета и прогоняют все драйверы) и `docs` (пять питоновских проверок, сторожа
-трёх из них — `reflow.py`, `check_line_width.py` и `check_links.py` — и сборка
-сайта со своим сторожем `build_site_test.py`). Триггеры: push в `main`, pull
-request и ручной запуск. Прогон перед коммитом это не отменяет: CI говорит уже
-после того, как правка в `main`.
+«никакого Flutter в ядре»), `flutter` (`flutter_solo` и его пример), `floor`
+(о нём ниже), `snippets` (два стенда, `tool/doc_snippets.py`
+и `tool/accumulation_snippets.py`: собирают код `packages/solo/doc/vs-bloc.md`
+и `packages/solo/doc/accumulation.md` в три пакета и прогоняют все драйверы)
+и `docs` (пять питоновских проверок, сторожа трёх из них — `reflow.py`,
+`check_line_width.py` и `check_links.py`, сторож `archive_floor_test.py` —
+и сборка сайта со своим сторожем `build_site_test.py`). Триггеры: push
+в `main`, pull request и ручной запуск. Прогон перед коммитом это не отменяет:
+CI говорит уже после того, как правка в `main`.
+
+`floor` проверяет не дерево, а то, что получит пользователь: архив, без
+dev-зависимостей, на полу. `tool/archive_floor.py stage <каталог>` раскладывает
+по пакетам файлы, которые загрузил бы `dart pub publish` — состав печатает сам
+`pub` с `--dry-run`, — и это шаг задания `flutter`, потому что dry-run
+разрешает пакет вместе с линтами, а им нужен свежий SDK.
+`tool/archive_floor.py run <каталог>` гоняет раскладку на SDK из PATH:
+`pub get`, `pub downgrade` для прямых зависимостей с pub.dev, `analyze lib`,
+тесты, затем пример и его программа. Задание ставит Flutter 3.27.0 с его Dart
+3.6.0; скрипт сверяет SDK с полом из `pubspec.yaml` и на другом SDK краснеет,
+поэтому пол поднимают в `pubspec.yaml` и в задании одним коммитом.
+
+Локально пол лежит в `~/fvm/versions/3.27.0`, каталог раскладки — вне
+репозитория:
+
+```sh
+python3 tool/archive_floor.py stage <каталог>
+PATH=~/fvm/versions/3.27.0/bin:$PATH python3 tool/archive_floor.py run <каталог>
+```
+
+В раскладке два отличия от архива: из `dev_dependencies` убраны `lints`
+и `flutter_lints`, а пакет с оверрайдами в дереве получает их и в раскладке,
+где пути ведут на соседние раскладки. Пока оверрайды живут, ограничения между
+пакетами `floor` не доказывает.
 
 Адресация блоков у обоих стендов общая — `tool/doc_blocks.py`: фрагмент берётся
 по разделу и по имени, которое объявляет, а не по номеру. Копия этого скрипта

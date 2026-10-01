@@ -9,21 +9,30 @@ name: gate
 # in a package's own directory resolves its dev dependencies too, and
 # `lints ^6.1.0` and `flutter_lints ^6.0.0` want 3.8.0 and up. The first
 # run of this workflow said so on both jobs, and nothing but a run would
-# have. The floor stays unchecked by CI — a job that proves it needs a
-# consumer package of its own, resolving the package by path on an SDK
-# pinned to 3.6.0, where the dev dependencies do not come along.
+# have. The floor has a job of its own, `floor`, and it does not look at
+# the tree: it takes what would be published, without the lint packages,
+# and runs that on an SDK pinned to the floor.
 #
 # Following stable means a release of Dart or Flutter can turn this red
 # without a commit. That is the same news the maintainer would get on the
 # next local run, a few days earlier.
 #
-# Four jobs rather than one, and the split is the point. `dart` never
+# Five jobs rather than one, and the split is the point. `dart` never
 # installs Flutter: that is what keeps `solo` and `async_job` the pure Dart
 # they promise to be, because a stray `package:flutter` import would stop
 # resolving there and nowhere else. `flutter` covers the package that needs
 # it, and the bench of its README and `doc/mixins.md` along with it, whose
 # drivers are widget tests. `docs` needs no SDK at all. `snippets` builds
-# the code of `packages/solo/doc/vs-bloc.md` and runs it.
+# the code of `packages/solo/doc/vs-bloc.md` and runs it. `floor` replays
+# the suites from the archives on the lowest SDK the pubspecs admit.
+#
+# What `floor` proves is what the other four cannot. They resolve the tree:
+# every file in it, the dev dependencies along with the rest, the newest
+# versions the constraints allow. A user gets the archive, without the dev
+# dependencies, and may be on Dart 3.6.0 with `meta` 1.15.0. An annotation
+# that came with a later `meta`, a widget that came with a later Flutter, a
+# library file kept out of the archive by `.pubignore` — each of those is
+# green in the four and red there.
 #
 # What `snippets` proves is narrow and worth stating: that every fragment
 # of that document still compiles against the tree and still runs to the
@@ -39,10 +48,12 @@ name: gate
 # the process exits zero. The one driver that does assert, `item3_cancel`,
 # runs under `FakeAsync` and has no wall clock to lose.
 #
-# `dart pub publish --dry-run` is deliberately absent. Between releases the
-# tree carries `pubspec_overrides.yaml` files pointing at the packages next
-# door, and a dry run over those does not describe the archive that would
-# go out. Release readiness is a step of the release, and its order is in
+# `dart pub publish --dry-run` is run for one thing only, the list of files
+# an archive would hold, and what it says about the package is printed and
+# not judged. Between releases the tree carries `pubspec_overrides.yaml`
+# files pointing at the packages next door, and a dry run over those does
+# not describe the release that would go out. Release readiness is a step
+# of the release, and its order is in
 # `docs/records/2026-09-11[1]-solo-release-readiness-report.md`.
 #
 # `AGENTS.md` and the records are not covered either: `check_line_width.py`
@@ -218,6 +229,61 @@ jobs:
           python3 tool/check_traces.py \
             packages/flutter_solo/doc/mixins.md "$RUNNER_TEMP/flutter.out"
 
+      # Here and not in `floor`, which is where the layout is used: listing
+      # an archive is a dry run of `pub publish`, and that resolves the
+      # package where it stands, lint packages included, which the floor
+      # cannot do. This job has the one SDK that resolves all three.
+      - name: Lay out what would be published
+        run: python3 tool/archive_floor.py stage "$RUNNER_TEMP/archive"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: archive
+          path: ${{ runner.temp }}/archive
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Nothing drifted
+        run: |
+          git status --porcelain
+          test -z "$(git status --porcelain)"
+
+  floor:
+    needs: flutter
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # For the script alone: what it runs comes from the artifact.
+      - uses: actions/checkout@v7
+
+      # The floor of both: Flutter 3.27.0 carries Dart 3.6.0, the `sdk`
+      # the three pubspecs declare. The script reads the pubspecs and
+      # refuses any other SDK, so a floor raised in a pubspec and not here
+      # is a red job, not a check of the wrong thing.
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.27.0
+          cache: true
+
+      - uses: actions/cache@v6
+        with:
+          path: ~/.pub-cache
+          key: pub-floor-${{ runner.os }}-${{ hashFiles('packages/*/pubspec.yaml', 'packages/*/example/pubspec.yaml') }}
+          restore-keys: pub-floor-${{ runner.os }}-
+
+      - name: Toolchain
+        run: flutter --version
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: archive
+          path: ${{ runner.temp }}/archive
+
+      # Each package and its example: resolved, `meta` taken down to the
+      # lowest version the constraint allows, analyzed and run.
+      - name: The archives pass their gate on the floor
+        run: python3 tool/archive_floor.py run "$RUNNER_TEMP/archive"
+
       - name: Nothing drifted
         run: |
           git status --porcelain
@@ -332,6 +398,11 @@ jobs:
 
       - name: A section starts with code
         run: python3 tool/check_doc_shape.py
+
+      # The `floor` job trusts this script to say which files make an
+      # archive and which SDK is the floor. These hold both.
+      - name: The floor check reads pub and the pubspecs right
+        run: python3 -m unittest tool/archive_floor_test.py
 
       - name: Translations answer their originals
         run: python3 tool/check_translations.py
