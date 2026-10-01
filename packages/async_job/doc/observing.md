@@ -8,7 +8,7 @@ The lines under the code are what it prints when it runs. `cancel` is the
 moment the user cancels, `outcome:` is what `job.done` completes with,
 `onError:` is what reaches the observer, and `zone:` is an error that reached
 the zone uncaught. The first section, on the observer itself, opens with the
-answer. The others open with the version the names lead to — a string for
+answer. The others open with the version habit leads to — a string for
 `ctx.log`, the zone for an error nobody caught, `unawaited` for a future left
 on purpose, `await` for the future `cancel()` returns — and show what that code
 does. The version that works follows under its own heading.
