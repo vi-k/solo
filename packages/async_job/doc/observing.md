@@ -488,7 +488,8 @@ onUnanswered: Bad state: analytics offline
 
 It works: `Reporter` hears the error, and `Crashes` answers for it. Each hook
 is handed on by hand, though: five methods for two observers, and a third adds
-a line to each.
+a line to each. To be complete, each call also needs a `try`/`catch`: otherwise
+an observer that throws switches off the ones after it.
 
 ### Observers in one list
 

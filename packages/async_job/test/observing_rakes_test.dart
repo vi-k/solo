@@ -166,6 +166,32 @@ final class Both extends JobObserver with JobAnswerer {
       _crashes.onUnanswered(job, error, stackTrace);
 }
 
+/// An observer whose `onError` throws.
+final class Throwing extends JobObserver {
+  @override
+  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      throw StateError('reporter down');
+}
+
+/// `Both` with any two observers in its place: `onError` handed on by hand,
+/// unwrapped, the way the page writes it.
+final class HandedOn extends JobObserver with JobAnswerer {
+  final JobObserver first;
+  final JobObserver second;
+
+  HandedOn(this.first, this.second);
+
+  @override
+  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
+    first.onError(job, error, stackTrace);
+    second.onError(job, error, stackTrace);
+  }
+
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      say('onUnanswered: $error');
+}
+
 /// Every hook, for the rules the page states about them.
 final class Hooks extends JobObserver {
   Hooks([this.name = '']);
@@ -1710,6 +1736,27 @@ void main() {
 
     test('handing the hooks on by hand works', () {
       expect(play(() => sending(Both())), quoted[9]);
+    });
+
+    test('a call that throws switches off the next, unless it is wrapped', () {
+      expect(play(() => sending(HandedOn(Throwing(), Reporter()))), [
+        'outcome: Done(null)',
+        'zone: Bad state: reporter down',
+        'onUnanswered: Bad state: analytics offline',
+      ]);
+      expect(
+        play(
+          () => sending(
+            JobObserver.all([Throwing(), Reporter(), Crashes()]),
+          ),
+        ),
+        [
+          'outcome: Done(null)',
+          'zone: Bad state: reporter down',
+          'onError: Bad state: analytics offline',
+          'onUnanswered: Bad state: analytics offline',
+        ],
+      );
     });
 
     test('JobObserver.all does the same in one line', () {
