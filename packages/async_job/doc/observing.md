@@ -277,9 +277,12 @@ started it, or the one the work was started from if it was started inside
 `ctx.unattended`. The job's own cancellation goes there too: when the job is
 cancelled, a `ctx.wait` called without `await` throws `Cancelled` into its
 future, and Dart hands it to the zone like any other error. The job itself
-never sends a cancellation to the zone; Dart does. `wait` is the exception once
-the body has ended: it lets its action go then, and an error of that action is
-a late error of an abandoned action, in the fifth row.
+never sends a cancellation to the zone; Dart does. For `wait`, all of this
+holds only while the body runs. Once the body has ended, `wait` stops waiting
+for its action, as it does on a cancellation. If the action fails after that,
+its error takes the fifth row of the table, like that of an action `wait`
+stopped waiting for on a cancellation: `onError` hears it, and it goes on to
+the answer like the other errors outside the body.
 
 The errors no outcome carries go on from `onError` to an answer. An observer
 written to watch, like `Reporter`, gives none, and they go where they go
