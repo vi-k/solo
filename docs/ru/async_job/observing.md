@@ -11,7 +11,8 @@
 за которую наблюдатель ответил, и `zone:` с ошибкой, дошедшей до зоны
 неперехваченной. Первый раздел, о самом наблюдателе, открывается ответом.
 Остальные открываются версией, к которой ведёт привычка, и показывают, что этот
-код делает. Работающая версия идёт следом под своим заголовком.
+код делает. Следом под своим заголовком идёт версия, которая работает, а там,
+где первая уже работает, версия проще.
 
 ## Наблюдатель
 
@@ -461,34 +462,36 @@ final class Crashes extends JobObserver with JobAnswerer {
 ### Первая попытка
 
 `observer:` принимает одного `JobObserver`, поэтому класс передаёт свои хуки
-обоим:
+обоим, а ответ `Crashes`:
 
 ```dart
-final class Both extends JobObserver {
-  final _observers = [Reporter(), Crashes()];
+final class Both extends JobObserver with JobAnswerer {
+  final _reporter = Reporter();
+  final _crashes = Crashes();
 
   @override
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
-    for (final observer in _observers) {
-      observer.onError(job, error, stackTrace);
-    }
+    _reporter.onError(job, error, stackTrace);
+    _crashes.onError(job, error, stackTrace);
   }
 
-  // onStart, onFinish и onLog так же.
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      _crashes.onUnanswered(job, error, stackTrace);
+
+  // onStart, onFinish и onLog так же, как onError.
 }
 ```
 
 ```text
 outcome: Done(null)
 onError: Bad state: analytics offline
-zone: Bad state: analytics offline
+onUnanswered: Bad state: analytics offline
 ```
 
-Строки те же, что у одного `Reporter`: `Crashes` никто не спросил. `Both`
-не `JobAnswerer`, поэтому задача не просит у него ответа, и ошибка уходит
-в зону. `Both`, который подмешивает `JobAnswerer` и передаёт `onUnanswered` тем
-из своего списка, кто отвечает, ошибается в другую сторону: если таких нет,
-ошибка не уходит никуда, а если их двое, отвечают оба.
+Это работает: `Reporter` слышит ошибку, `Crashes` за неё отвечает. Но каждый
+хук передаётся руками: пять методов на два наблюдателя, а третий добавит
+по строке в каждый.
 
 ### Наблюдатели одним списком
 
@@ -507,14 +510,14 @@ onError: Bad state: analytics offline
 onUnanswered: Bad state: analytics offline
 ```
 
-`JobObserver.all` передаёт каждый хук каждому наблюдателю в порядке списка,
-и каждый вызов идёт сам по себе: тот, кто бросил исключение, не выключает
-следующего. Тот, кто `JobAnswerer`, наблюдает на своём месте и отвечает за весь
-список, когда `onError` услышали все; если такого нет, ошибки уходят в зону,
-как у наблюдателя, который не отвечает. Двое отвечающих или один и тот же
-наблюдатель дважды, и `JobObserver.all` бросает `ArgumentError`. Наблюдатель,
-собранный `JobObserver.all`, может стоять в списке другого и отвечает там, если
-отвечает кто-то внутри него.
+Строки те же, что у `Both`. `JobObserver.all` передаёт каждый хук каждому
+наблюдателю в порядке списка, и каждый вызов идёт сам по себе: тот, кто бросил
+исключение, не выключает следующего. Тот, кто `JobAnswerer`, наблюдает на своём
+месте и отвечает за весь список, когда `onError` услышали все; если такого нет,
+ошибки уходят в зону, как у наблюдателя, который не отвечает. Двое отвечающих
+или один и тот же наблюдатель дважды, и `JobObserver.all` бросает
+`ArgumentError`. Наблюдатель, собранный `JobObserver.all`, может стоять
+в списке другого и отвечает там, если отвечает кто-то внутри него.
 
 ## Тестирование
 

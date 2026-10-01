@@ -9,8 +9,9 @@ moment the user cancels, `outcome:` is what `job.done` completes with,
 `onError:` is what reaches the observer, `onUnanswered:` is an error an
 observer answered for, and `zone:` is an error that reached the zone uncaught.
 The first section, on the observer itself, opens with the answer. The others
-open with the version habit leads to and show what that code does. The version
-that works follows under its own heading.
+open with the version habit leads to and show what that code does. Under its
+own heading follows the version that works or, where the first one works
+already, a simpler one.
 
 ## Observer
 
@@ -457,34 +458,37 @@ final class Crashes extends JobObserver with JobAnswerer {
 
 ### The first attempt
 
-`observer:` takes one `JobObserver`, so a class hands its hooks on to both:
+`observer:` takes one `JobObserver`, so a class hands its hooks on to both and
+its answer to `Crashes`:
 
 ```dart
-final class Both extends JobObserver {
-  final _observers = [Reporter(), Crashes()];
+final class Both extends JobObserver with JobAnswerer {
+  final _reporter = Reporter();
+  final _crashes = Crashes();
 
   @override
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
-    for (final observer in _observers) {
-      observer.onError(job, error, stackTrace);
-    }
+    _reporter.onError(job, error, stackTrace);
+    _crashes.onError(job, error, stackTrace);
   }
 
-  // onStart, onFinish and onLog the same way.
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      _crashes.onUnanswered(job, error, stackTrace);
+
+  // onStart, onFinish and onLog the same way as onError.
 }
 ```
 
 ```text
 outcome: Done(null)
 onError: Bad state: analytics offline
-zone: Bad state: analytics offline
+onUnanswered: Bad state: analytics offline
 ```
 
-The lines are those of `Reporter` alone: `Crashes` was never asked. `Both` is
-no `JobAnswerer`, so the job asks it for no answer, and the error goes to the
-zone. A `Both` that mixes in `JobAnswerer` and hands `onUnanswered` to the ones
-of its list that answer goes wrong the other way: with none among them the
-error goes nowhere, and with two of them both answer for it.
+It works: `Reporter` hears the error, and `Crashes` answers for it. Each hook
+is handed on by hand, though: five methods for two observers, and a third adds
+a line to each.
 
 ### Observers in one list
 
@@ -503,14 +507,14 @@ onError: Bad state: analytics offline
 onUnanswered: Bad state: analytics offline
 ```
 
-`JobObserver.all` hands every hook to each observer in the order of the list,
-each call on its own: one that throws does not switch off the next. The one
-that is a `JobAnswerer` watches in its place and answers for the list, once
-every observer has heard `onError`; with none, the errors go to the zone, as
-for an observer that does not answer. Two that answer, or the same observer
-twice, and `JobObserver.all` throws `ArgumentError`. An observer made by
-`JobObserver.all` can stand in the list of another, and answers there when one
-inside it does.
+The lines are those of `Both`. `JobObserver.all` hands every hook to each
+observer in the order of the list, each call on its own: one that throws does
+not switch off the next. The one that is a `JobAnswerer` watches in its place
+and answers for the list, once every observer has heard `onError`; with none,
+the errors go to the zone, as for an observer that does not answer. Two that
+answer, or the same observer twice, and `JobObserver.all` throws
+`ArgumentError`. An observer made by `JobObserver.all` can stand in the list of
+another, and answers there when one inside it does.
 
 ## Testing
 
