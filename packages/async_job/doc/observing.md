@@ -368,12 +368,12 @@ zone: Bad state: analytics offline
 ```
 
 `super` now gets the failures one at a time, so the zone hears the analytics
-error on its own instead of the whole `ParallelWaitError`. Each `Cancelled`
-inside that nobody caught goes to `onCancelled`, which this observer does not
-pass, and is dropped, as the default implementation drops it. A check for
-`error is Cancelled` would not drop them all: a `ParallelWaitError` carrying
-nothing but `Cancelled` is not a `Cancelled` itself, and `[a, b].wait` throws
-one when the futures it waits for fail with `Cancelled`.
+error on its own instead of the whole `ParallelWaitError`. Each uncaught
+`Cancelled` inside a `ParallelWaitError` goes to `onCancelled`, which this
+observer does not pass, and is dropped, as the default implementation drops it.
+A check for `error is Cancelled` would not drop them all: a `ParallelWaitError`
+carrying nothing but `Cancelled` is not a `Cancelled` itself, and `[a, b].wait`
+throws one when the futures it waits for fail with `Cancelled`.
 
 The override answers for the job that got the observer and for the children
 that inherit it, at any depth. The app answers for every job at once in its

@@ -640,3 +640,10 @@ one» отвечала на реплику, которой читатель не
     and a check for Cancelled does not` ждёт как раз future, завершённые
     с `Cancelled`.
 
+31. «Неперехваченные `Cancelled` изнутри уходят в `onCancelled` — изнутри
+    уходят?» 2026-10-01, следом за тридцатым пунктом. «Изнутри» не называло,
+    изнутри чего, и читалось как «изнутри уходят». Теперь: «Неперехваченные
+    `Cancelled` внутри `ParallelWaitError` уходят в `onCancelled`…»,
+    по-английски «Each uncaught `Cancelled` inside a `ParallelWaitError` goes
+    to `onCancelled`…». Смысл не менялся, сторож прежний.
+
