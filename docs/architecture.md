@@ -373,10 +373,10 @@ BLE-устройство, плеер, синхронизация), где сос
 
 - `job_base.dart` — библиотека с частями (`part`): `outcome.dart`,
   `job_context.dart`, `job_stream.dart`, `job_then.dart`, `envelope.dart`,
-  `run_all.dart`, `observer.dart`. Держит `Job<T>` с фабрикой и `Job.deferred`,
-  `DeferredJob<T>`, `JobStatus`, основу `JobBase<T>` и реализации ядра `_Job`,
-  `_AutoJob`, `_DeferredJob`. Части нужны потому, что `JobContextBase` зовёт
-  защищённые члены задачи, не будучи её наследником.
+  `run_all.dart`, `observer.dart`. Держит `Job<T>` с фабрикой, `Job.deferred`
+  и `Job.visitErrors`, `DeferredJob<T>`, `JobStatus`, основу `JobBase<T>`
+  и реализации ядра `_Job`, `_AutoJob`, `_DeferredJob`. Части нужны потому, что
+  `JobContextBase` зовёт защищённые члены задачи, не будучи её наследником.
 - `outcome.dart` — `part`: `Outcome`, `Done`, `Failed`, `Cancelled`
   с публичными конструкторами `Cancelled([description])` и `Cancelled.by`,
   открытый абстрактный `CancelReason`, причины `ManualCancelReason`,
@@ -404,7 +404,8 @@ BLE-устройство, плеер, синхронизация), где сос
   не `final`-класс и подкласс с переопределённым `==` выдал бы вложенный
   конверт за цикл. Чистый конверт решает исход как та отмена, которую он несёт;
   конверт с настоящим отказом остаётся `Failed` — провал не прячется
-  за отменой.
+  за отменой. Тот же обход публичен: `Job.visitErrors` в `job_base.dart` зовёт
+  приватный `_visitErrors` отсюда, и разбор ради исхода идёт через него же.
 - `observer.dart` — `part`: `JobObserver`. Часть, а не своя библиотека: тело
   `onUnanswered` по умолчанию идёт в зону создания задачи через приватный
   `_toZone`.

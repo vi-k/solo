@@ -74,7 +74,7 @@ final class NoLength extends ListBase<AsyncError?> {
 
 /// One error, what the walk hands over, and whether the job drops it.
 ///
-/// `drops` was read off the core before it walked with [visitErrors], at
+/// `drops` was read off the core before it walked with [Job.visitErrors], at
 /// 1c2be62: a body throwing `error` ends `Cancelled` exactly when it is
 /// true. So the core of today is held to what it decided before.
 typedef Shape = ({
@@ -317,7 +317,7 @@ List<Shape> shapes() {
 
 List<String> walk(Object error, {bool cancellations = true}) {
   final calls = <String>[];
-  visitErrors(
+  Job.visitErrors(
     error,
     trace('root'),
     onFailure: (error, stackTrace) =>
@@ -346,7 +346,7 @@ void shrinkWhileWalking(SendPort port) {
     branch(failure, 'c'),
   ];
   final calls = <String>[];
-  visitErrors(
+  Job.visitErrors(
     envelope(branches),
     trace('root'),
     onFailure: (error, stackTrace) => calls.add(
@@ -439,7 +439,7 @@ void main() {
   test('a callback that throws ends the walk and reaches the caller', () {
     final calls = <String>[];
     expect(
-      () => visitErrors(
+      () => Job.visitErrors(
         envelope([branch(failure, 'a'), branch(failure, 'b')]),
         trace('root'),
         onFailure: (error, stackTrace) {
@@ -499,7 +499,7 @@ final class _Answering extends JobObserver with JobAnswerer {
 
   @override
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
-      visitErrors(
+      Job.visitErrors(
         error,
         stackTrace,
         onFailure: (error, stackTrace) {

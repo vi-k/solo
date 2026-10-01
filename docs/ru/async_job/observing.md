@@ -343,13 +343,13 @@ zone: ParallelWaitError(2 errors): DatabaseException
 ```
 
 Ошибка базы данных ушла в зону без ответа, а ошибка аналитики не названа вовсе.
-`visitErrors` отдаёт наблюдателю ошибки изнутри по одной:
+`Job.visitErrors` отдаёт наблюдателю ошибки изнутри по одной:
 
 ```dart
 final class DatabaseErrors extends JobObserver with JobAnswerer {
   @override
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
-      visitErrors(
+      Job.visitErrors(
         error,
         stackTrace,
         onFailure: (failure, failureStackTrace) {

@@ -318,7 +318,7 @@ final class DatabaseErrors extends JobObserver with JobAnswerer {
 final class DatabaseErrorsVisited extends JobObserver with JobAnswerer {
   @override
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
-      visitErrors(
+      Job.visitErrors(
         error,
         stackTrace,
         onFailure: (failure, failureStackTrace) {
@@ -1072,12 +1072,12 @@ void main() {
       expect(play(() => saving(DatabaseErrors())), quoted[5]);
     });
 
-    test('the page: visitErrors answers for it and hands on the rest', () {
+    test('the page: Job.visitErrors answers for it and hands on the rest', () {
       expect(play(() => saving(DatabaseErrorsVisited())), quoted[6]);
     });
 
     test(
-        'visitErrors drops what the default implementation drops, '
+        'Job.visitErrors drops what the default implementation drops, '
         'and a check for Cancelled does not', () {
       Job<void> leaving(JobObserver observer) =>
           Job<void>(observer: observer, (ctx) async {

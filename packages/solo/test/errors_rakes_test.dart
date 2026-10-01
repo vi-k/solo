@@ -656,7 +656,7 @@ void main() {
       expect(zoneErrors, isEmpty);
     });
 
-    test('the handler gets cancellations, and visitErrors drops them',
+    test('the handler gets cancellations, and Job.visitErrors drops them',
         () async {
       final taken = <String>[];
       Solo.errorHandler =
@@ -674,7 +674,7 @@ void main() {
 
       taken.clear();
       // The page's handler, with a list in place of Sentry.
-      Solo.errorHandler = (solo, job, error, stackTrace) => visitErrors(
+      Solo.errorHandler = (solo, job, error, stackTrace) => Job.visitErrors(
             error,
             stackTrace,
             onFailure: (failure, failureStackTrace) => taken.add('$failure'),

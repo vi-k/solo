@@ -100,6 +100,67 @@ abstract interface class Job<T> {
   /// both sides, set both.
   static void Function(String message)? debug;
 
+  /// Walks [error] and hands each failure in it to [onFailure] and each
+  /// cancellation to [onCancelled], one at a time.
+  ///
+  /// [JobAnswerer.onUnanswered] and [JobObserver.onError] are handed an error
+  /// whole, and so is `Solo.errorHandler` in `solo`. That error can be a
+  /// `ParallelWaitError`: `[a, b].wait` throws one when any of its futures
+  /// fails, and it holds failures and cancellations side by side, other such
+  /// errors too. A check for `error is Cancelled` lets a cancellation inside
+  /// it through, and a report of the whole error names none of its failures.
+  /// To report each failure and drop the cancellations:
+  ///
+  /// ```dart
+  /// @override
+  /// void onUnanswered(
+  ///   Job<Object?> job,
+  ///   Object error,
+  ///   StackTrace stackTrace,
+  /// ) =>
+  ///     Job.visitErrors(error, stackTrace, onFailure: report);
+  /// ```
+  ///
+  /// The rules:
+  ///
+  /// * A [Cancelled] goes to [onCancelled] and any other error that is not a
+  ///   `ParallelWaitError` to [onFailure], with [stackTrace].
+  /// * A `ParallelWaitError` is walked depth first, its branches in order. A
+  ///   `null` branch succeeded and is skipped. An [AsyncError] branch holding a
+  ///   [Cancelled] goes to [onCancelled], one holding a `ParallelWaitError` is
+  ///   walked in turn, and one holding anything else goes to [onFailure], each
+  ///   with the branch's stack trace.
+  /// * Nothing is lost. What the walk cannot read goes to [onFailure] whole: a
+  ///   `ParallelWaitError` of a record longer than nine or of a shape it does
+  ///   not know, one whose list throws when read, one already being walked
+  ///   further up, and a branch that is not an [AsyncError]. The readable
+  ///   branches of a partly readable list are walked all the same. What has no
+  ///   branch of its own gets the stack trace the enclosing error came with.
+  ///   An error with neither a failure nor a cancellation anywhere in it goes
+  ///   to [onFailure] whole, with [stackTrace].
+  /// * Each `ParallelWaitError` is walked once and handed over whole at most
+  ///   once, by identity, however many branches lead to it.
+  ///
+  /// No call to [onFailure] means that a job drops this error as a
+  /// cancellation and keeps it out of the zone: the job decides by this walk.
+  ///
+  /// A callback that throws ends the walk, and the error reaches the caller.
+  /// When the caller is a hook of an observer, the job catches it: the zone
+  /// gets it, except a [Cancelled], which is dropped, along with the branches
+  /// not yet walked.
+  static void visitErrors(
+    Object error,
+    StackTrace stackTrace, {
+    required void Function(Object error, StackTrace stackTrace) onFailure,
+    void Function(Cancelled cancelled, StackTrace stackTrace)? onCancelled,
+  }) =>
+      _visitErrors(
+        error,
+        stackTrace,
+        onFailure: onFailure,
+        onCancelled: onCancelled,
+      );
+
   /// The key given at creation.
   ///
   /// The core does not read it: it is there for [toString], for the observer,

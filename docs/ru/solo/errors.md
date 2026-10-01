@@ -67,7 +67,7 @@ final class ProfileController extends Solo<ProfileState> {
 передаёт их дальше:
 
 ```dart
-Solo.errorHandler = (solo, job, error, stackTrace) => visitErrors(
+Solo.errorHandler = (solo, job, error, stackTrace) => Job.visitErrors(
       error,
       stackTrace,
       onFailure: (failure, failureStackTrace) => Sentry.captureException(
@@ -86,7 +86,7 @@ Solo.errorHandler = (solo, job, error, stackTrace) => visitErrors(
 
 Обработчик получает каждую ошибку такой, какой она пришла, вместе с отменами:
 `Cancelled` и `ParallelWaitError`, который `[a, b].wait` бросает с несколькими
-ошибками внутри. `visitErrors` отдаёт `onFailure` каждый провал изнутри
+ошибками внутри. `Job.visitErrors` отдаёт `onFailure` каждый провал изнутри
 по отдельности, а отмены отбрасывает.
 
 Отвечать за ошибку — это ответственность, которую берут на себя, а не побочный

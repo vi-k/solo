@@ -66,7 +66,7 @@ controller owns what its jobs failed at and has said so. A controller that
 writes no such override keeps the default body, which hands them on:
 
 ```dart
-Solo.errorHandler = (solo, job, error, stackTrace) => visitErrors(
+Solo.errorHandler = (solo, job, error, stackTrace) => Job.visitErrors(
       error,
       stackTrace,
       onFailure: (failure, failureStackTrace) => Sentry.captureException(
@@ -85,8 +85,8 @@ hears them at all. An override keeps that route as well by calling
 
 The handler gets each error as it came, cancellations included: a `Cancelled`,
 and a `ParallelWaitError` that `[a, b].wait` throws with several errors in it.
-`visitErrors` hands `onFailure` each failure inside on its own and drops the
-cancellations.
+`Job.visitErrors` hands `onFailure` each failure inside on its own and drops
+the cancellations.
 
 Answering for an error is a responsibility somebody takes, not a side effect of
 switching a log on. Setting a `SoloObserver` is not it either — watching is not

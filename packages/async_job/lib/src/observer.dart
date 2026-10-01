@@ -140,7 +140,7 @@ abstract mixin class JobObserver {
 ///     Object error,
 ///     StackTrace stackTrace,
 ///   ) =>
-///       visitErrors(error, stackTrace, onFailure: report);
+///       Job.visitErrors(error, stackTrace, onFailure: report);
 /// }
 /// ```
 ///
@@ -148,8 +148,8 @@ abstract mixin class JobObserver {
 /// `onUnanswered` written on an observer that does not mix this in is a
 /// method of its own: the job never calls it.
 ///
-/// [visitErrors] hands `report` each failure inside a `ParallelWaitError` on
-/// its own and drops the cancellations.
+/// [Job.visitErrors] hands `report` each failure inside a
+/// `ParallelWaitError` on its own and drops the cancellations.
 mixin JobAnswerer on JobObserver {
   /// Nobody answered for this error, and this observer is the last one
   /// holding it.
@@ -178,8 +178,8 @@ mixin JobAnswerer on JobObserver {
   /// its own system and stops there. An override that says nothing keeps
   /// these errors out of the zone. Call
   /// `super.onUnanswered(job, error, stackTrace)` to keep the zone as well.
-  /// [visitErrors] tells the cancellations from the failures, those inside a
-  /// `ParallelWaitError` too.
+  /// [Job.visitErrors] tells the cancellations from the failures, those
+  /// inside a `ParallelWaitError` too.
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
     if (job is JobBase<Object?>) {
       job._toZone(error, stackTrace);
