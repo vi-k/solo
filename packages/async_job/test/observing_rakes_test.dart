@@ -12,7 +12,7 @@ import 'support/delay.dart';
 
 /// The first attempts of `doc/observing.md`, and what each one costs.
 ///
-/// A section of the page opens with the version the names lead to and shows
+/// A section of the page opens with the version habit leads to and shows
 /// what that version does. The page has no bench, so the code is repeated
 /// here as it stands there, together with the rules the page states in
 /// prose and in its table, and the last test holds the lines the page
