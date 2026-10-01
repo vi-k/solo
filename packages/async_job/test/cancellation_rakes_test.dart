@@ -1168,7 +1168,7 @@ void main() {
     });
   });
 
-  test('a body that gives itself up runs no onCancel', () {
+  test('a body that gives itself up runs its onCancel, after the children', () {
     fakeAsync((async) {
       final seen = <String>[];
       final threw = Job<void>((ctx) async {
@@ -1179,22 +1179,31 @@ void main() {
         ..ignore();
       late Job<void> left;
       final threwWithChild = Job<void>((ctx) async {
-        left = Job.deferred<void>((ctx) => ctx.wait(() => delay(50)));
+        ctx.onCancel(() => seen.add('with child: onCancel'));
+        left = Job.deferred<void>((ctx) async {
+          ctx.onCancel(() => seen.add('with child: the child onCancel'));
+          await ctx.wait(() => delay(50));
+        });
         ctx.run(left).ignore();
-        await ctx.wait(() => delay(5));
+        await ctx.wait(() => delay(10));
         throw const Cancelled('why');
       })
         ..ignore();
       final letOut = Job<void>((ctx) async {
         ctx.onCancel(() => seen.add('let out: onCancel'));
         final child = Job.deferred<void>((ctx) => ctx.wait(() => delay(20)));
-        Timer(const Duration(milliseconds: 5), child.cancel);
+        Timer(const Duration(milliseconds: 15), child.cancel);
         await ctx.run(child);
       })
         ..ignore();
       async.flushTimers();
 
-      expect(seen, isEmpty);
+      expect(seen, [
+        'threw: onCancel',
+        'with child: the child onCancel',
+        'with child: onCancel',
+        'let out: onCancel',
+      ]);
       expect(threw.outcome, isA<Cancelled>());
       expect(letOut.outcome, isA<Cancelled>());
       expect(threwWithChild.outcome, isA<Cancelled>());

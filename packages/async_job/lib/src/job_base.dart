@@ -209,15 +209,13 @@ abstract interface class Job<T> {
   /// Calls it synchronously with the [Cancelled] carrying the reason,
   /// description, start status and stack trace. For a running job this is
   /// after cancellation has cascaded to its children and [JobContext.onCancel]
-  /// callbacks have run, before the body finishes; for a job cancelled before
-  /// start, when it is dropped. If the body throws [Cancelled] itself, this
-  /// runs after the body and its children end, right before cleanup. That
-  /// path does not call [JobContext.onCancel].
+  /// callbacks have run: before the body finishes, or, for a body that gives
+  /// itself up by throwing [Cancelled], as it ends. For a job cancelled
+  /// before start, it is when the job is dropped.
   ///
   /// If cancellation has already been accepted and its callbacks have run,
   /// calls [callback] immediately, even if the job has finished. Registering
-  /// in between — while the cancellation cascades onto the children, or
-  /// while a job whose body gave itself up waits for them — puts the
+  /// in between, while the cancellation cascades onto the children, puts the
   /// callback in that pass instead, after the ones registered before it. A
   /// refused or held cancellation does not trigger it; a held one triggers
   /// it when it is accepted. A job that ends [Done] or [Failed] without
@@ -732,8 +730,8 @@ abstract class JobBase<T> implements Job<T> {
 
     // `_cancelled` and not `_pendingCancel`: between the mark and the pass
     // that tells the listeners there is a window -- the cascade onto the
-    // children, and the wait for them when the body gave itself up -- and
-    // a registration made in there belongs in that pass, not ahead of it.
+    // children -- and a registration made in there belongs in that pass,
+    // not ahead of it.
     // Calling it on the spot would run it before everyone who registered
     // earlier and is still waiting. Once the pass has run, `_cancelled` is
     // set and a late registration is called at once, as promised; a job
@@ -1463,13 +1461,6 @@ abstract class JobBase<T> implements Job<T> {
       // in it won by `??=`, and the children were left carrying a cause
       // their parent never had.
       //
-      // Only marked, because what the mark usually brings with it must
-      // not happen here. `_markCancelled` would run the `onCancel`
-      // callbacks and finish the waits the body walked away from with an
-      // error, where today they quietly get their value; and
-      // `_notifyCancelled` waits for the children below, because `solo`
-      // pins the order in which a cancellation is seen.
-      //
       // And marked before the group below hears of it: asking the siblings
       // to stop runs their `onCancel` callbacks, which are the caller's
       // code, and one that cancels this job must find the decision already
@@ -1490,20 +1481,31 @@ abstract class JobBase<T> implements Job<T> {
     // is a cancellation here, not a failure.
     _hold?.bodyEnded(outcome);
     if (selfCancelled case final cancelled?) {
+      // The rest of what `cancelWith` does, in its order: the children are
+      // asked first, then the `onCancel` callbacks run and `whenCancelled`
+      // hears it. A job whose body gives itself up no longer needs what
+      // the body started any more than one cancelled from outside does.
       try {
-        _cascadeToChildren(cancelled);
+        try {
+          _cascadeToChildren(cancelled);
+        } finally {
+          // Skipped when a callback of a child reached the engine of a
+          // domain and it ended the job by hand, as in `cancelWith`.
+          if (_status != JobStatus.finished) {
+            _markCancelled(cancelled);
+          } else {
+            _outOfStack = false;
+          }
+        }
       } on Object catch (error, stackTrace) {
         // The cascade is recursive, and a deep enough tree overflows the
-        // stack inside it. Here there is nobody to hand that to: the
-        // outcome is decided, the job still has to wait for its children
-        // and unwind its cleanup stack, and an error thrown out of
-        // `_execute` would leave it running for good. It goes out the one
-        // door for an error with nowhere else to go.
+        // stack inside it; a callback a domain registered unguarded may
+        // throw. Here there is nobody to hand that to: the outcome is
+        // decided, the job still has to wait for its children and unwind
+        // its cleanup stack, and an error thrown out of `_execute` would
+        // leave it running for good. It goes out the one door for an
+        // error with nowhere else to go.
         notifyError(error, stackTrace);
-        // The window closes here and not in the pass below: that pass is
-        // reached after the children have been waited for, on a stack
-        // that is whole again.
-        _outOfStack = false;
       }
     }
     await _awaitChildren();
@@ -1517,15 +1519,13 @@ abstract class JobBase<T> implements Job<T> {
     // caught the one that was there or gave itself up and was marked
     // above. Asserted rather than assigned, so a path that ever arrives
     // here unmarked shows up as the defect it is instead of quietly
-    // changing the reason the job ends with.
+    // changing the reason the job ends with. Nothing is told here: both
+    // paths told everyone when the mark went on.
     if (outcome is Cancelled) {
       assert(
         identical(_pendingCancel, outcome),
         'a cancelled body reaches its outcome marked',
       );
-      _notifyCancelled(outcome);
-      // A synchronous subscriber may reach an engine that finishes by hand.
-      if (isFinished) return;
     }
     final hold = _hold;
     if (hold != null) {

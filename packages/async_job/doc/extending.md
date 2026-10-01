@@ -18,9 +18,7 @@ prints what reaches it, `onError:` for an error; `cancel` and `sign out` are
 the moments the user does so, and `outcome:` is what `job.done` completes with.
 Two parts of the page below open with the version the protected API leads to —
 a queue that starts its jobs with `start`, a rule added to `check()` — and show
-what that code does. Where the version that repairs it still falls short, it
-stands as a second attempt, and the version that works follows under its own
-heading.
+what that code does. The version that works follows under its own heading.
 
 ## A job of your own
 
@@ -143,10 +141,11 @@ good.
 
 ### Leaving the queue on cancellation
 
-Every cancellation of a job arrives at `cancelWith`: `cancel()`, the cascade
-from a parent, a rule of the engine that cancels through `cancelOwnJob`. It is
-the one member of the lifecycle a subclass extends rather than replaces, and
-the analyzer holds an override to calling `super`. `MyJob` keeps the queue that
+Every cancellation asked of a job arrives at `cancelWith`: `cancel()`, the
+cascade from a parent, `cancelOwnJob` of its context. A body that gives itself
+up does not come through it, and its job has left the queue by then. It is the
+one member of the lifecycle a subclass extends rather than replaces, and the
+analyzer holds an override to calling `super`. `MyJob` keeps the queue that
 holds it and takes itself out of it there:
 
 ```dart
@@ -237,7 +236,7 @@ rule that no longer holds is not a failure. The job ends `Failed` with an error
 of the engine's own, nobody closes the connection, and a child of the job would
 run on to its end.
 
-### The second attempt
+### A cancellation of the engine's own
 
 The override asks `super.check()` first, and the rule throws a `Cancelled` with
 a reason of the engine's own:
@@ -267,37 +266,6 @@ final class SignedOutReason extends CancelReason {
 
 ```text
 sign out
-outcome: Cancelled(signed out)
-```
-
-A cancellation stops the job at `join` again, and a sign-out now ends the job
-`Cancelled`. Still nobody closes the connection. Nobody cancelled the job: its
-body gave itself up with a `Cancelled` of its own, and such a body passes the
-cancellation to its children, but its own `onCancel` callbacks do not run.
-
-### Cancelling the job from the rule
-
-The rule cancels the job, and then throws the cancellation the job has
-accepted:
-
-```dart
-  @override
-  void check() {
-    super.check();
-    if (!account.signedIn) {
-      final cancelled = Cancelled.by(
-        reason: const SignedOutReason(),
-        started: true,
-        stackTrace: StackTrace.current,
-      );
-      cancelOwnJob(cancelled);
-      throw pendingCancel ?? cancelled;
-    }
-  }
-```
-
-```text
-sign out
 close the connection
 outcome: Cancelled(signed out)
 ```
@@ -308,27 +276,26 @@ close the connection
 outcome: Cancelled(manual)
 ```
 
-`cancelOwnJob` is `cancelWith(cancelled, rejectable: false)`: a cancellation
-the job cannot refuse, which neither `cancellable: false` nor
-`ctx.uncancellable` holds back. A cancellation such a section held until then
-is dropped: it never lands, and `heldCancel` stops naming it. From there on the
-job is cancelled the way `cancel()` cancels it — its `onCancel` callbacks run,
-its children stop — and `pendingCancel` is the cancellation it has accepted.
-`check()` may also be asked after the job has ended `Done` or `Failed`, from
-work its body left behind; there `cancelOwnJob` changes nothing,
-`pendingCancel` is `null`, and the rule throws its own. `super.check()` goes
-first: while the core cleans up after the body, it throws a `StateError`, and a
-rule asked before it would turn a job that returned a value into a cancelled
-one. The rule is asked where `check()` is asked and nowhere else: a sign-out
-during the download is noticed when `join` comes back.
+A cancellation stops the job at `join` again, and a sign-out ends the job
+`Cancelled`. The body lets the rule's `Cancelled` out and gives itself up with
+it, and a job whose body gives itself up stops the way a cancelled one does:
+its `onCancel` callbacks run and its children stop. The job accepts the rule's
+cancellation as the body lets it out, not before: a body that catches it and
+goes on is not cancelled. Neither `cancellable: false` nor `ctx.uncancellable`
+holds the rule back: they turn down or hold a cancellation asked of the job,
+and the rule's comes as a throw from the very step it stops. The rule is asked
+where `check()` is asked and nowhere else: a sign-out during the download is
+noticed when `join` comes back.
 
-Cancelling is also how an engine ends a job that is still running. `finish`
-ends a job with the outcome handed in, but it waits for no children and unwinds
-no cleanup stack: no `onDispose` and no `discard` runs, and what the body
-opened stays open. Only the debug channel says how many cleanups were left
-behind. A job that has accepted a cancellation ends with that cancellation
-whatever `finish` is handed, and a value handed in goes nowhere. An engine that
-finishes a running job by hand anyway releases what the job holds first.
+An engine ends a job that is still running by cancelling it: through
+`cancelWith`, or through `cancelOwnJob` of its context, a cancellation the job
+cannot refuse. `finish` ends a job with the outcome handed in, but it waits for
+no children and unwinds no cleanup stack: no `onDispose` and no `discard` runs,
+and what the body opened stays open. Only the debug channel says how many
+cleanups were left behind. A job that has accepted a cancellation ends with
+that cancellation whatever `finish` is handed, and a value handed in goes
+nowhere. An engine that finishes a running job by hand anyway releases what the
+job holds first.
 
 ## Deferred start
 

@@ -326,18 +326,18 @@ When the listener runs depends on how the job is cancelled:
   cascaded to children and `ctx.onCancel` callbacks have run, without waiting
   for the body to finish.
 - For a job cancelled before start, it runs when the job is cancelled.
-- If the body throws `Cancelled`, it runs after the body and its children have
-  ended, before cleanup.
+- If the body throws `Cancelled`, it runs as the body ends, after cancellation
+  has cascaded to children and `ctx.onCancel` callbacks have run, without
+  waiting for the children to end.
 
 Once the pass over the listeners has begun, registering calls the new one
 immediately, even if the job has finished: a listener that registers another
 while it runs sees the new one run at once, ahead of the listeners still
 waiting their turn. A registration made earlier, while the cancellation
-cascades onto the children or while a job whose body gave itself up waits for
-them, waits its turn in the pass, after the ones made before it. A refused
-cancellation does not start the pass. An `uncancellable` section delays it
-until cancellation is accepted. A job that finishes as `Done` or `Failed`
-without cancellation releases its listeners without calling them.
+cascades onto the children, waits its turn in the pass, after the ones made
+before it. A refused cancellation does not start the pass. An `uncancellable`
+section delays it until cancellation is accepted. A job that finishes as `Done`
+or `Failed` without cancellation releases its listeners without calling them.
 
 Each registration runs once. Listeners waiting their turn run in registration
 order, using a snapshot of the list: removing a listener during the pass does

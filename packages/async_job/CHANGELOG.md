@@ -45,7 +45,7 @@ now reach the zone, and fail a test there.
   job already cancelled, and `ctx.uncancellable` began its step on one. The
   analyzer now warns about such an override, and `dart analyze` fails on the
   warning. **Migrating.** Call `super.check()` first; a rule that no longer
-  holds cancels the job through `cancelOwnJob` and throws `pendingCancel`. See
+  holds throws a `Cancelled` with a reason of the engine's own. See
   [A rule of your own](doc/extending.md#a-rule-of-your-own).
 
 - **`JobBase.finish` and `JobContextBase.startChild` are marked
@@ -153,6 +153,20 @@ now reach the zone, and fail a test there.
   changed: it reports the first error to reach it and discards the rest before
   anything else can see them. See
   [Registered on arrival, waited for in one envelope](doc/children.md#registered-on-arrival-waited-for-in-one-envelope).
+
+- **A body that gives itself up is cancelled the way a cancelled job is.** A
+  body that throws `Cancelled`, or lets out the cancellation of a child,
+  accepted the cancellation as it threw, but its `ctx.onCancel` callbacks never
+  ran, and `whenCancelled` fired only once its children had ended, right before
+  the cleanup. Now the throw goes the way of a cancellation from outside, as
+  the body ends: the children are asked to stop, then the `ctx.onCancel`
+  callbacks run and `whenCancelled` fires. A token or a connection handed to
+  `ctx.onCancel` is closed when the body gives up, and a listener that times a
+  cancellation counts the children in. A `ctx.uncancellable` section the body
+  walked away from does not hold this cancellation: a `ctx.wait` inside it
+  throws. **Migrating.** A callback that must not run when the body gives
+  itself up is unregistered before the throw, with the function `ctx.onCancel`
+  returns. See [Cancellation](doc/cancellation.md).
 
 - **`JobBase` gains the protected `inUncancellableSection` and `heldCancel`,**
   for an engine that waits for a job and wants to say why. The first says a
@@ -321,6 +335,12 @@ named as `Job(key)`, not by its class.
   The siblings of the child that overflowed are not skipped, and the error
   still reaches whoever cancelled. What lies below the break is still left
   running. How deep a tree may go is in [Children](doc/children.md#children).
+
+- A call of `ctx.wait` the body did not await no longer sends the job's
+  cancellation to the zone when the job accepts it after the body has ended:
+  cancelled while it waits for a child, say. The table of where errors go held
+  `wait` to the zone only until the body ends, and a late error of the same
+  call already went the way of an abandoned action.
 
 ### Documentation
 

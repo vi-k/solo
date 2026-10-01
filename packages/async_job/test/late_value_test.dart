@@ -460,10 +460,98 @@ void main() {
             (ctx, open, _) => call(ctx, open, discard: close),
           ),
           ['cancelled', 'in the end closed: true'],
-          reason: 'the mark ran no callbacks, and the work still gets it',
+          reason: 'the callbacks run for a body that gives itself up too',
         );
       });
     }
+    for (final givesUp in [true, false]) {
+      final how = givesUp ? 'the body gave itself up' : 'cancelled outside';
+      test('wait, the job ended by hand in the cascade, $how', () {
+        // A callback of the child reaches the engine, and it ends the parent
+        // by hand: the mark is on, and the callbacks that would have told
+        // this race are gone with `finish`.
+        final seen = <String>[];
+        fakeAsync((async) {
+          _Resource? made;
+          late final ProbeJob<void> parent;
+          parent = ProbeJob<void>((ctx) async {
+            ctx.run(
+              Job.deferred<void>((ctx) async {
+                ctx.onCancel(() => parent.drop(const Cancelled('by hand')));
+                await ctx.wait(() => delay(50));
+              }),
+            ).ignore();
+            ctx.unattended(() async {
+              try {
+                final resource = await ctx.wait(
+                  () async {
+                    await delay(20);
+                    return made = _Resource();
+                  },
+                  discard: close,
+                );
+                seen.add('got it, closed: ${resource.closed}');
+              } on Cancelled {
+                seen.add('cancelled');
+              } on Object catch (error) {
+                seen.add('$error');
+              }
+            });
+            await delay(5);
+            if (givesUp) {
+              throw const Cancelled('gave up');
+            }
+            await delay(100);
+          })
+            ..ignore()
+            ..launch();
+          if (!givesUp) {
+            async.elapse(const Duration(milliseconds: 5));
+            parent.cancel().ignore();
+          }
+          async.flushTimers();
+          seen.add('in the end closed: ${made?.closed}');
+        });
+        expect(seen, ['cancelled', 'in the end closed: true']);
+      });
+    }
+    test('wait, a raw callback before it threw, the body gave itself up', () {
+      // The pass over the callbacks stops at the throw, and the race of the
+      // call never hears the cancellation from it.
+      final seen = <String>[];
+      final errors = <String>[];
+      runZonedGuarded(
+        () => fakeAsync((async) {
+          _Resource? made;
+          ProbeJob<void>((ctx) async {
+            (ctx as ProbeContext).onCancelRaw(() => throw StateError('boom'));
+            ctx.unattended(() async {
+              try {
+                final resource = await ctx.wait(
+                  () async {
+                    await delay(20);
+                    return made = _Resource();
+                  },
+                  discard: close,
+                );
+                seen.add('got it, closed: ${resource.closed}');
+              } on Cancelled {
+                seen.add('cancelled');
+              }
+            });
+            await delay(5);
+            throw const Cancelled('gave up');
+          })
+            ..ignore()
+            ..launch();
+          async.flushTimers();
+          seen.add('in the end closed: ${made?.closed}');
+        }),
+        (error, stackTrace) => errors.add('$error'),
+      );
+      expect(seen, ['cancelled', 'in the end closed: true']);
+      expect(errors, ['Bad state: boom']);
+    });
     test('wait with a value at hand, on a job still waiting for a child', () {
       expect(
         scenario(

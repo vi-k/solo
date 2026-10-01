@@ -2,11 +2,10 @@
 // answers it: the job with its queue, the queue, the rule. The versions
 // before the answers carry classes of the same names and live in
 // libraries of their own — `support/extending_plain.dart` for the job as
-// the page first shows it, `support/extending_first_attempts.dart` and
-// `support/extending_second_attempt.dart` for the attempts. Every piece of
-// code on the page is a run of lines of one of these files, and every
-// quote under it is what that code prints: a piece or a quote that drifts
-// turns this file red.
+// the page first shows it, `support/extending_first_attempts.dart` for the
+// first attempts. Every piece of code on the page is a run of lines of one
+// of these files, and every quote under it is what that code prints: a
+// piece or a quote that drifts turns this file red.
 @Timeout(Duration(seconds: 5))
 library;
 
@@ -19,7 +18,6 @@ import 'package:test/test.dart';
 
 import 'support/extending_first_attempts.dart' as first;
 import 'support/extending_plain.dart' as plain;
-import 'support/extending_second_attempt.dart' as second;
 import 'support/extending_stubs.dart';
 import 'support/page_code.dart';
 
@@ -56,13 +54,11 @@ final class MyContext extends JobContextBase {
   void check() {
     super.check();
     if (!account.signedIn) {
-      final cancelled = Cancelled.by(
+      throw Cancelled.by(
         reason: const SignedOutReason(),
         started: true,
         stackTrace: StackTrace.current,
       );
-      cancelOwnJob(cancelled);
-      throw pendingCancel ?? cancelled;
     }
   }
 }
@@ -169,6 +165,29 @@ final class StubbornJob<T> extends JobBase<T> {
   Future<T> execute(covariant MyContext ctx) => _body(ctx);
 }
 
+/// A job of the engine that keeps every cancellation asked of it.
+final class CountingJob extends JobBase<int> {
+  CountingJob(this._body);
+
+  final Future<int> Function(MyContext ctx) _body;
+
+  final cancelsAsked = <String>[];
+
+  void _launch() => start();
+
+  @override
+  void cancelWith(Cancelled cancelled, {bool rejectable = true}) {
+    cancelsAsked.add('$cancelled');
+    super.cancelWith(cancelled, rejectable: rejectable);
+  }
+
+  @override
+  JobContextBase createContext() => MyContext(this);
+
+  @override
+  Future<int> execute(covariant MyContext ctx) => _body(ctx);
+}
+
 /// The answer of an engine: it keeps what nobody else answered for.
 final class Answer extends JobObserver {
   final answered = <String>[];
@@ -189,54 +208,6 @@ final class ReportingJob extends JobBase<void> {
 
   @override
   Future<void> execute(covariant MyContext ctx) async {}
-}
-
-/// The rule of the page asked before `super.check()`, not after it.
-final class LateSuperContext extends JobContextBase {
-  LateSuperContext(super.owner);
-
-  @override
-  void check() {
-    if (!account.signedIn) {
-      final cancelled = Cancelled.by(
-        reason: const SignedOutReason(),
-        started: true,
-        stackTrace: StackTrace.current,
-      );
-      cancelOwnJob(cancelled);
-      throw pendingCancel ?? cancelled;
-    }
-    super.check();
-  }
-}
-
-/// A job whose context is [MyContext], or [LateSuperContext] if [late].
-final class CleaningJob extends JobBase<int> {
-  CleaningJob({required this.late});
-
-  final bool late;
-  final seen = <String>[];
-
-  void launch() => start();
-
-  @override
-  JobContextBase createContext() =>
-      late ? LateSuperContext(this) : MyContext(this);
-
-  // The disposer asks the checkpoint after the user signed out, while the
-  // core cleans up after a body that returned a value.
-  @override
-  Future<int> execute(covariant JobContextBase ctx) async {
-    ctx.onDispose(() {
-      account.signedIn = false;
-      try {
-        ctx.check();
-      } on Object catch (error) {
-        seen.add('$error');
-      }
-    });
-    return 42;
-  }
 }
 
 /// What [scenario] prints while fake time runs it to its end.
@@ -444,36 +415,7 @@ void main() {
       expect(seen, ['outcome: Failed(SignedOut)']);
     });
 
-    test('the second attempt ends the job Cancelled and closes nothing', () {
-      expect(printed(() => second.runDownload('sign out')), [
-        'sign out',
-        'outcome: Cancelled(signed out)',
-      ]);
-      account.signedIn = true;
-      expect(printed(() => second.runDownload('cancel')), [
-        'cancel',
-        'close the connection',
-        'outcome: Cancelled(manual)',
-      ]);
-    });
-
-    test('under the second attempt the children stop, onCancel does not run',
-        () {
-      final seen = <String>[];
-      fakeAsync((async) {
-        final child = second.signOutWithChild(seen);
-        async.elapse(const Duration(milliseconds: 10));
-        account.signedIn = false;
-        async.flushTimers();
-        expect(
-          (child.outcome! as Cancelled).reason,
-          isA<ParentCancelReason>(),
-        );
-      });
-      expect(seen, ['child told to stop', 'outcome: Cancelled(signed out)']);
-    });
-
-    test('the rule that cancels the job closes the connection', () {
+    test('the rule closes the connection', () {
       expect(printed(() => runDownload('sign out')), [
         'sign out',
         'close the connection',
@@ -577,8 +519,8 @@ void main() {
         async.flushTimers();
         expect(
           seen,
-          ['told to stop', 'the step stopped: Cancelled(signed out)'],
-          reason: 'the job is marked inside the section, not given up on',
+          ['the step stopped: Cancelled(signed out)', 'told to stop'],
+          reason: 'the step throws, and the body gives itself up after it',
         );
         expect('${job.outcome}', 'Cancelled(signed out)');
       });
@@ -596,27 +538,45 @@ void main() {
           ..launch()
           ..ignore();
         async.flushTimers();
-        expect(seen, ['told to stop'], reason: 'marked, not refused');
+        expect(seen, ['told to stop'], reason: 'given up, not refused');
         expect('${job.outcome}', 'Cancelled(signed out)');
       });
     });
 
-    test('super.check() goes first: during cleanup it throws a StateError', () {
+    test('a body that catches the rule and goes on is not cancelled', () {
       fakeAsync((async) {
-        final first = CleaningJob(late: false)..launch();
+        final seen = <String>[];
+        final job = CountingJob((ctx) async {
+          ctx.onCancel(() => seen.add('told to stop'));
+          account.signedIn = false;
+          try {
+            await ctx.join(work);
+          } on Cancelled catch (error) {
+            seen.add('caught $error');
+          }
+          return 1;
+        })
+          .._launch()
+          ..ignore();
         async.flushTimers();
-        expect(first.seen.single, startsWith('Bad state:'));
-        expect(first.outcome, isA<Done<int>>());
+        expect(seen, ['caught Cancelled(signed out)']);
+        expect(job.outcome, isA<Done<int>>());
+        expect(job.isCancelled, isFalse);
+      });
+    });
 
-        account.signedIn = true;
-        final late = CleaningJob(late: true)..launch();
+    test('a body that gives itself up does not come through cancelWith', () {
+      fakeAsync((async) {
+        final job = CountingJob((ctx) async {
+          account.signedIn = false;
+          await ctx.join(work);
+          return 1;
+        })
+          .._launch()
+          ..ignore();
         async.flushTimers();
-        expect(late.seen, ['Cancelled(signed out)']);
-        expect(
-          '${late.outcome}',
-          'Cancelled(signed out)',
-          reason: 'a job that returned a value, turned into a cancelled one',
-        );
+        expect('${job.outcome}', 'Cancelled(signed out)');
+        expect(job.cancelsAsked, isEmpty);
       });
     });
 
@@ -644,37 +604,6 @@ void main() {
             'at, and nothing else here would notice the annotation gone',
       );
     });
-
-    test('after the job has ended, the rule throws a cancellation of its own',
-        () {
-      fakeAsync((async) {
-        late JobContext kept;
-        final job = MyJob<void>((ctx) async => kept = ctx).._launch();
-        async.flushTimers();
-        account.signedIn = false;
-        expect(kept.check, throwsA(isA<Cancelled>()));
-        expect(job.outcome, isA<Done<void>>());
-
-        account.signedIn = true;
-        late JobContext keptFailed;
-        final failed = MyJob<void>((ctx) async {
-          keptFailed = ctx;
-          throw StateError('failed');
-        })
-          .._launch()
-          ..ignore();
-        async.flushTimers();
-        account.signedIn = false;
-        expect(
-          keptFailed.check,
-          throwsA(
-            isA<Cancelled>()
-                .having((c) => '$c', 'text', 'Cancelled(signed out)'),
-          ),
-        );
-        expect(failed.outcome, isA<Failed>());
-      });
-    });
   });
 
   test('Deferred start', () {
@@ -696,10 +625,6 @@ void main() {
       printed(() => first.runDownload('sign out')),
       printed(() {
         account.signedIn = true;
-        second.runDownload('sign out');
-      }),
-      printed(() {
-        account.signedIn = true;
         runDownload('sign out');
       }),
       printed(() {
@@ -719,9 +644,8 @@ void main() {
   // line of a first attempt would still be found among all of them.
   final holders = {
     '### The first attempt': 'test/support/extending_first_attempts.dart',
-    '### The second attempt': 'test/support/extending_second_attempt.dart',
     '### Leaving the queue on cancellation': 'test/extending_rakes_test.dart',
-    '### Cancelling the job from the rule': 'test/extending_rakes_test.dart',
+    "### A cancellation of the engine's own": 'test/extending_rakes_test.dart',
   };
   for (final MapEntry(key: heading, value: holder) in holders.entries) {
     test('the code under "$heading" is a run of lines of $holder', () {
@@ -743,7 +667,6 @@ void main() {
         alsoIn: [
           'test/support/extending_plain.dart',
           'test/support/extending_first_attempts.dart',
-          'test/support/extending_second_attempt.dart',
           'test/support/extending_stubs.dart',
         ],
       ),

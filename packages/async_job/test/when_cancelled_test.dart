@@ -229,7 +229,7 @@ void main() {
     });
   });
 
-  test('self cancellation waits for children and notifies before cleanup', () {
+  test('self cancellation notifies at the throw, as one from outside does', () {
     fakeAsync((async) {
       final order = <String>[];
       Cancelled? seen;
@@ -252,9 +252,14 @@ void main() {
           order.add('cancelled');
         });
       async.flushMicrotasks();
-      expect(order, isEmpty);
+      expect(order, ['context cancelled', 'cancelled']);
       async.flushTimers();
-      expect(order, ['child done', 'cancelled', 'cleanup']);
+      expect(order, [
+        'context cancelled',
+        'cancelled',
+        'child done',
+        'cleanup',
+      ]);
       expect(seen!.reason, isA<HandlerCancelReason>());
       expect(seen!.description, 'no photo');
       expect(seen!.stackTrace, isNotNull);

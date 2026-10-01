@@ -201,7 +201,7 @@ first group names them.
   override of `cancelAll` and an implementation of `SoloQueue` of its own take
   the parameter too.
 
-- **Inherited from `async_job`.** Three of the core's breaking changes reach an
+- **Inherited from `async_job`.** Four of the core's breaking changes reach an
   ordinary job body. A cancellation that travels inside a `ParallelWaitError`
   is a cancellation again: a child cancelled under
   `[ctx.run(a), ctx.run(b)].wait` ends the job `Cancelled` where it used to end
@@ -212,17 +212,19 @@ first group names them.
   `ctx.run` takes `dispose` and `discard`: no call site breaks, but a
   registration written on the line after `await ctx.run(child)` belongs in the
   call now. A class that implements `JobContext` or `SoloContext` by hand, a
-  test fake for one, needs both. One more reaches code that gives a job of the
-  core an observer of its own: `JobObserver.onError` is a notice, and the new
-  `JobObserver.onUnanswered` answers for an error no outcome carries, so such
-  an observer no longer keeps those errors out of the zone, and a class that
-  implements `JobObserver` needs an `onUnanswered`. The switch of the core's
-  debug channel, the one set next to `Solo.debug`, is `Job.debug`, where it was
-  `JobBase.debug`. The rest concern an engine built on the core: `JobBase`,
-  `JobContextBase` and `JobStatus` moved to `package:async_job/engine.dart`,
-  which also takes them out of what an app sees through this package, and the
-  protected surface of `JobBase` changed. **Migrating.** Read the core's own
-  entries:
+  test fake for one, needs both. A body that throws `Cancelled`, or lets out
+  the cancellation of a child, runs its `ctx.onCancel` callbacks, and
+  `whenCancelled` fires as it throws rather than once its children have ended.
+  One more reaches code that gives a job of the core an observer of its own:
+  `JobObserver.onError` is a notice, and the new `JobObserver.onUnanswered`
+  answers for an error no outcome carries, so such an observer no longer keeps
+  those errors out of the zone, and a class that implements `JobObserver` needs
+  an `onUnanswered`. The switch of the core's debug channel, the one set next
+  to `Solo.debug`, is `Job.debug`, where it was `JobBase.debug`. The rest
+  concern an engine built on the core: `JobBase`, `JobContextBase` and
+  `JobStatus` moved to `package:async_job/engine.dart`, which also takes them
+  out of what an app sees through this package, and the protected surface of
+  `JobBase` changed. **Migrating.** Read the core's own entries:
   [the `async_job` changelog](https://github.com/vi-k/solo/blob/main/packages/async_job/CHANGELOG.md).
 
 ### Changes you will see on upgrade

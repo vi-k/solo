@@ -77,11 +77,13 @@ first group names them.
   `Solo` stops compiling or overrides it, `isFinished` silently. From
   `async_job`, through `solo`: a cancellation inside a `ParallelWaitError` is a
   cancellation again, so the job's `onCancel` handler takes the outcome where
-  `onError` used to; `JobContext` gains `runAll` and `ctx.run` takes `dispose`
-  and `discard`, so a class that implements `JobContext` or `SoloContext` by
-  hand, a test fake for one, needs both; `JobObserver.onError` is a notice and
-  the new `JobObserver.onUnanswered` answers for an error no outcome carries;
-  the core's debug switch `JobBase.debug` is `Job.debug`; `JobBase`,
+  `onError` used to; a body that throws `Cancelled` runs its `ctx.onCancel`
+  callbacks, and `whenCancelled` fires as it throws; `JobContext` gains
+  `runAll` and `ctx.run` takes `dispose` and `discard`, so a class that
+  implements `JobContext` or `SoloContext` by hand, a test fake for one, needs
+  both; `JobObserver.onError` is a notice and the new
+  `JobObserver.onUnanswered` answers for an error no outcome carries; the
+  core's debug switch `JobBase.debug` is `Job.debug`; `JobBase`,
   `JobContextBase` and `JobStatus` move to `package:async_job/engine.dart` and
   are no longer visible through this package. **Migrating.** Read the entries
   of both:

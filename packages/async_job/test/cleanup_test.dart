@@ -397,6 +397,37 @@ void main() {
       expect(order, isEmpty);
     });
   });
+
+  test('a section the body walked away from does not hold its give-up', () {
+    fakeAsync((async) {
+      final order = <String>[];
+      final job = Job<void>((ctx) async {
+        ctx.onCancel(() => order.add('onCancel'));
+        unawaited(
+          ctx.uncancellable(() async {
+            try {
+              await ctx.wait(() => delay(50));
+              order.add('step done');
+            } on Cancelled catch (error) {
+              order.add('step stopped: $error');
+            }
+          }),
+        );
+        await delay(5);
+        throw const Cancelled('gave up');
+      })
+        ..ignore();
+      async.flushTimers();
+      expect(
+        order,
+        ['onCancel', 'step stopped: Cancelled(handler: gave up)'],
+        reason:
+            'the body accepted its own cancellation, which no section holds',
+      );
+      expect(job.outcome, isA<Cancelled>());
+    });
+  });
+
   test('join keeps the value and cleans it up at the end', () {
     fakeAsync((async) {
       final closed = <String>[];

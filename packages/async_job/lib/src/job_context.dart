@@ -201,7 +201,10 @@ abstract interface class JobContext {
   /// is not over yet — its body ended but a child of it is still running —
   /// the held cancellation lands on a job that is very much alive: it
   /// becomes the outcome over the value the body returned, and the
-  /// registrations of [JobContext.onDiscard] run.
+  /// registrations of [JobContext.onDiscard] run. A body that walked on and
+  /// then gives itself up accepts a cancellation no section holds: the
+  /// [onCancel] callbacks run while the section is still open, and a [wait]
+  /// inside it throws.
   ///
   /// This is what separates it from [join], which accepts the cancellation as
   /// it arrives and only keeps waiting: there the job accepts it at once, and a
@@ -255,9 +258,9 @@ abstract interface class JobContext {
   /// itself is not affected and the other callbacks still run.
   ///
   /// A body that gives itself up — throws [Cancelled], or lets out the
-  /// cancellation of a child — ends cancelled without running these
-  /// callbacks: nobody asked the job to stop, and a token handed out
-  /// through here stays as it was.
+  /// cancellation of a child — accepts its cancellation as it throws, and
+  /// these callbacks run then: what the body started is no more needed
+  /// than when the job is cancelled from outside.
   ///
   /// [callback] is synchronous, and only what it throws synchronously is
   /// caught. `void Function()` takes an `async` function without a word
@@ -669,10 +672,15 @@ abstract interface class JobContext {
 /// first. That is where the cancellation of the job is asked: without it [join]
 /// hands a value to a job already cancelled and [uncancellable] begins its step
 /// on one. And while the core cleans up after the body it throws a
-/// [StateError], before a rule could turn a job that returned a value into a
-/// cancelled one. A rule that no longer holds cancels the job through
-/// [cancelOwnJob] and throws [pendingCancel], so the job accepts the
-/// cancellation and its [onCancel] callbacks run.
+/// [StateError]: the body is gone, and no rule is asked for it any more.
+///
+/// A rule that no longer holds throws a [Cancelled] with a reason of the
+/// engine's own. The body lets it out and gives itself up, and a job whose body
+/// gives itself up is cancelled the way [Job.cancel] cancels it: its children
+/// stop and its [onCancel] callbacks run. The job accepts that cancellation as
+/// the throw leaves the body, not before: a body that catches it and goes on
+/// is not cancelled. To stop the job whatever the body does, cancel it through
+/// [cancelOwnJob].
 abstract class JobContextBase implements JobContext {
   final JobBase<Object?> _owner;
 
@@ -1203,6 +1211,14 @@ abstract class JobContextBase implements JobContext {
           cancelled,
           cancelled.stackTrace ?? StackTrace.current,
         );
+        // A body that has ended walked away from this call, and a body
+        // that gives itself up is told here as much as one cancelled from
+        // outside. The cancellation is the job's own outcome, and its
+        // copy must not reach the zone as an error of an abandoned call;
+        // the error branch of `forward` does the same.
+        if (_owner.bodyEnded) {
+          completer.future.ignore();
+        }
       }
     }
 
@@ -1215,8 +1231,11 @@ abstract class JobContextBase implements JobContext {
           _releaseAbandoned(dispose, discard, value);
         } else if (fromFork && pendingCancel != null) {
           // The work waits for the value, and the job is marked without
-          // this race having heard it: a body that gave itself up marks
-          // the job and runs no callbacks. The work gets what the body
+          // this race having heard it: the pass over the callbacks never
+          // reached it. An engine of a domain ended the job by hand while
+          // its cancellation went down to the children, and `finish`
+          // dropped the callbacks; or a raw callback registered before this
+          // one threw and stopped the pass. The work gets what the body
           // would: the cancellation, and the value is released.
           onCancel();
           final disposer = dispose ?? discard;

@@ -47,9 +47,9 @@ registered now never would. `onDispose`, `onDiscard`, `disown` and `unattended`
 remain available so the body can arrange cleanup after cancellation.
 
 A body that gives itself up, by throwing `Cancelled` or by letting out the
-cancellation of a child, ends `Cancelled` too, and the cancellation still
-passes to its children, but its own `onCancel` callbacks do not run: nobody
-asked the job to stop, so no token it gave to `onCancel` is cancelled.
+cancellation of a child, accepts the cancellation as it throws, and the job is
+cancelled the same way: the cancellation passes to its children, its `onCancel`
+callbacks run, and it ends `Cancelled`.
 
 Inside an action passed to the context, a plain `await` is right: the context
 adds no checkpoint between the steps of that action, and a step that needs a
@@ -306,7 +306,9 @@ after it, and only an observer hears it.
 Always await `ctx.uncancellable`. The section opens when called, even if you do
 not await its future. An unawaited section can outlive the body; if the job
 finishes first, the held cancellation is lost and `cancel()` returns with a
-`Done` outcome.
+`Done` outcome. A body that walks on and then gives itself up accepts a
+cancellation no section holds: `onCancel` runs while the section is open, and a
+`wait` inside it throws.
 
 To protect the entire body instead of one section, create
 `Job(body, cancellable: false)`. It refuses ordinary cancellation once the body

@@ -55,6 +55,11 @@ final class ProbeContext extends JobContextBase {
   /// Starts [child] the way an engine of a domain does, through the
   /// protected door, with nobody looking at its outcome.
   void adopt(Job<Object?> child) => startChild(child);
+
+  /// Registers [callback] raw, unguarded, the way the race inside `wait`
+  /// does.
+  void Function() onCancelRaw(void Function() callback) =>
+      addCancelCallback(callback);
 }
 
 /// A job of the core that refuses whoever tries to adopt it.
