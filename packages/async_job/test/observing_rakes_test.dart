@@ -132,6 +132,24 @@ final class ThrowingFinish extends JobObserver {
   void onFinish(Job<Object?> job) => throw StateError('onFinish failed');
 }
 
+/// A hook that throws a cancellation, which goes nowhere.
+final class ThrowingCancellation extends JobObserver {
+  @override
+  void onStart(Job<Object?> job) => throw const Cancelled('from onStart');
+
+  @override
+  void onFinish(Job<Object?> job) => say('onFinish $job');
+}
+
+/// A hook that cancels its job the way anybody else would.
+final class CallingCancel extends JobObserver {
+  @override
+  void onStart(Job<Object?> job) => job.cancel().ignore();
+
+  @override
+  void onFinish(Job<Object?> job) => say('onFinish $job');
+}
+
 /// An observer that keeps what `ctx.log` handed it.
 final class Keeping extends JobObserver {
   final messages = <Object?>[];
@@ -332,6 +350,26 @@ void main() {
         'onFinish Job(hooked)',
         'outcome: Done(1)',
       ]);
+    });
+
+    test('a Cancelled a hook throws cancels nothing; cancel() does', () {
+      final thrown = play(
+        () => Job<int>(
+          key: 'thrown',
+          observer: ThrowingCancellation(),
+          (ctx) => ctx.wait(load),
+        ),
+      );
+      final called = play(
+        () => Job<int>(
+          key: 'called',
+          observer: CallingCancel(),
+          (ctx) => ctx.wait(load),
+        ),
+      );
+
+      expect(thrown, ['onFinish Job(thrown)', 'outcome: Done(3)']);
+      expect(called, ['onFinish Job(called)', 'outcome: Cancelled(manual)']);
     });
 
     test("a hook's error goes to the zone that calls it", () {

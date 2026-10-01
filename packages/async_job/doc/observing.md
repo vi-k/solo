@@ -54,8 +54,10 @@ inherit it unless they have their own, and a continuation made with `then`
 takes only the observer passed to `then`. If one of the observer's hooks
 throws, its error goes to the current zone and nothing else changes: the job
 ends as it would have, and the observer's other hooks are still called. A
-cancellation a hook throws goes nowhere, the same as everywhere else in the
-core.
+`Cancelled` thrown by a hook does not reach the zone: nowhere in the core is a
+thrown cancellation a failure. It does not cancel the job either. A hook that
+has to cancel the job calls `job.cancel()`, and the job is cancelled as it
+would be from anywhere else.
 
 A job can be given a `key` and a `describe` callback when it is created. Its
 string representation is `Job($key)`, or `Job($key: $description)` when
