@@ -584,3 +584,18 @@ one» отвечала на реплику, которой читатель не
     отправляет ошибку ещё и в зону.» Оригинал переписан так же. Сторож — тест
     двух зон в `packages/async_job/test/unanswered_test.dart`, который гоняется
     и для `PlainAnswer` с телом по умолчанию.
+
+27. «Отдавайте `super` всё, что переопределение не может отличить от отмены: —
+    пример бы» 2026-10-01. После абзаца встал наблюдатель `DatabaseErrors`: он
+    отвечает за знакомую ему `DatabaseException`, а остальное отдаёт `super`.
+    Под ним сказано, что даёт перевёрнутая проверка,
+    `if (error is Cancelled) return;` и отчёт обо всём остальном: отчёт получит
+    `ParallelWaitError`, в котором одни отмены, а его `[a, b].wait` бросает,
+    когда отменена future, которую он ждёт. Сторожа
+    в `packages/async_job/test/observing_rakes_test.dart`:
+    `the page: what it does not know goes to super` — четыре работы
+    `ctx.unattended`, `DatabaseException` уходит в ответ, `StateError` в зону,
+    два `ParallelWaitError` из одних отмен (обе future отменены и одна из двух)
+    никуда; `the page: the check turned around reports the cancellations` —
+    тот же набор с перевёрнутой проверкой даёт оба `ParallelWaitError` в отчёт.
+    Прогон — 63 теста страницы, 954 в пакете.

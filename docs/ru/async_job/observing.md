@@ -309,6 +309,27 @@ final class Answering extends JobObserver with JobAnswerer {
 отправляет ошибку ещё и в зону. Отдавайте `super` всё, что переопределение
 не может отличить от отмены: реализация по умолчанию отмену распознаёт.
 
+Наблюдатель, который отвечает только за знакомые ему ошибки базы данных, отдаёт
+остальное `super`:
+
+```dart
+final class DatabaseErrors extends JobObserver with JobAnswerer {
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
+    if (error is DatabaseException) {
+      print('onUnanswered: $error');
+    } else {
+      super.onUnanswered(job, error, stackTrace);
+    }
+  }
+}
+```
+
+Если перевернуть проверку, `if (error is Cancelled) return;` и отчёт обо всём
+остальном, отчёт получит и `ParallelWaitError`, в котором одни отмены:
+`[a, b].wait` бросает его, когда отменена future, которую он ждёт. Реализация
+по умолчанию отбрасывает и такую.
+
 Переопределение отвечает за задачу, которой передали наблюдателя, и за дочерние
 задачи, которые его наследуют, на любой глубине. За все задачи сразу приложение
 отвечает в своей зоне, где и так сообщает о неперехваченном: туда эти ошибки

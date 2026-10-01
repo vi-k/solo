@@ -284,6 +284,35 @@ final class Database {
 /// Shows [error] to the user for 30 ms.
 Future<void> showError(Object error) => delay(30);
 
+/// The database errors an observer of the page knows.
+final class DatabaseException implements Exception {
+  const DatabaseException();
+
+  @override
+  String toString() => 'DatabaseException';
+}
+
+/// The page's observer that answers only for the database errors it knows.
+final class DatabaseErrors extends JobObserver with JobAnswerer {
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
+    if (error is DatabaseException) {
+      say('onUnanswered: $error');
+    } else {
+      super.onUnanswered(job, error, stackTrace);
+    }
+  }
+}
+
+/// The same check turned around, the way the page warns against.
+final class AllButCancelled extends JobObserver with JobAnswerer {
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
+    if (error is Cancelled) return;
+    say('onUnanswered: ${error.runtimeType}');
+  }
+}
+
 /// The error of the log section; it counts how often it is put into words.
 final class MigrationFailed implements Exception {
   int formatted = 0;
@@ -990,6 +1019,45 @@ void main() {
         quoted[4],
         reason: 'the failure came after, and only the observer hears it',
       );
+    });
+
+    // Three errors no outcome carries: a database error, another one, and
+    // two operations that stopped at the job's token, waited for together.
+    Job<void> leavingThree(JobObserver observer) =>
+        Job<void>(observer: observer, (ctx) async {
+          ctx
+            ..unattended(() => throw const DatabaseException())
+            ..unattended(() => throw StateError('analytics offline'))
+            ..unattended(() async {
+              await [
+                Future<void>.error(const Cancelled('a'), StackTrace.empty),
+                Future<void>.error(const Cancelled('b'), StackTrace.empty),
+              ].wait;
+            })
+            ..unattended(() async {
+              await [
+                Future<void>.value(),
+                Future<void>.error(const Cancelled('c'), StackTrace.empty),
+              ].wait;
+            });
+        });
+
+    test('the page: what it does not know goes to super', () {
+      expect(play(() => leavingThree(DatabaseErrors())), [
+        'onUnanswered: DatabaseException',
+        'zone: Bad state: analytics offline',
+        'outcome: Done(null)',
+      ]);
+    });
+
+    test('the page: the check turned around reports the cancellations', () {
+      expect(play(() => leavingThree(AllButCancelled())), [
+        'onUnanswered: DatabaseException',
+        'onUnanswered: StateError',
+        'onUnanswered: ParallelWaitError<List<void>, List<AsyncError?>>',
+        'onUnanswered: ParallelWaitError<List<void>, List<AsyncError?>>',
+        'outcome: Done(null)',
+      ]);
     });
 
     test('a failure after the cancellation: onError or nobody', () {

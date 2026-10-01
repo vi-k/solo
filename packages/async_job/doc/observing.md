@@ -306,6 +306,27 @@ cancellation, as happens without an answer. So calling
 Hand `super` whatever the override cannot tell from a cancellation: the default
 implementation knows which errors are cancellations.
 
+An observer that answers only for the database errors it knows hands the rest
+to `super`:
+
+```dart
+final class DatabaseErrors extends JobObserver with JobAnswerer {
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
+    if (error is DatabaseException) {
+      print('onUnanswered: $error');
+    } else {
+      super.onUnanswered(job, error, stackTrace);
+    }
+  }
+}
+```
+
+Turned around, `if (error is Cancelled) return;` and a report of everything
+else, the observer reports a `ParallelWaitError` carrying nothing but
+cancellations: `[a, b].wait` throws one when a future it waits for is
+cancelled. The default implementation drops that one as well.
+
 The override answers for the job that got the observer and for the children
 that inherit it, at any depth. The app answers for every job at once in its
 zone, where it already reports what nobody caught: the default implementation
