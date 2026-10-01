@@ -963,6 +963,12 @@ abstract class Solo<S extends Object> {
     required _SoloJob<S, S, Object?>? emitter,
     required StackTrace? stackTrace,
   }) {
+    // Every write comes through here, and none can arrive once closing has
+    // finished: `externalSetState` throws before the call, and a job that
+    // could still emit is a job `close` is waiting for. Asserted rather
+    // than checked, so a path that ever lets a write through shows up as
+    // the defect it is instead of moving a state that is final.
+    assert(!_finished, 'the state of a closed controller is final');
     final previous = _state;
     _state = next;
     final revision = ++_stateRevision;
