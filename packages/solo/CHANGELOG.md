@@ -336,6 +336,16 @@
   set there the error reaches the zone the job was created in, observer or no
   observer. An observer that used to rely on the old silence now needs
   `errorHandler` set as well.
+- **Breaking:** a job dropped by `Policy.droppable` ends with a reason of its
+  own. Its outcome is `Cancelled(duplicate)` and the reason a new
+  `DuplicateCancelReason`, where it used to be `Cancelled(manual: duplicate)` —
+  the `ManualCancelReason` of a `cancel()`, with the difference written into
+  `description`. Code that told a duplicate by that text checks the type
+  instead, `outcome.reason is DuplicateCancelReason`, and code that took every
+  `ManualCancelReason` for a cancellation somebody asked for no longer counts
+  duplicates among them. A test that compares the printed outcome needs the new
+  text.
+
 - **Breaking:** `Policy.droppable` throws `ArgumentError`, not `TypeError`,
   when the key it finds belongs to a job of another result type — and it throws
   before the new job is taken, so a job refused this way is untouched and can

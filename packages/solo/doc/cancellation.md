@@ -326,9 +326,9 @@ switch (job.outcome) {
 cancellation stack trace. `started: false` means the body never ran. Reasons
 extend `CancelReason`. The built-in types include `ManualCancelReason`,
 `ParentCancelReason`, `HandlerCancelReason`, `ChainCancelReason`,
-`RulesCancelReason` and `ClosedCancelReason`. Inspect the type; `name` is a
-display label, not an equality key. Propagation between jobs retains the
-original cancellation in the reason's `cause`.
+`RulesCancelReason`, `ClosedCancelReason` and `DuplicateCancelReason`. Inspect
+the type; `name` is a display label, not an equality key. Propagation between
+jobs retains the original cancellation in the reason's `cause`.
 
 `job.whenCancelled(callback)` registers a synchronous listener and returns a
 function to unregister it. It fires when a running job accepts cancellation or

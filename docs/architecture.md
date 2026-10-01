@@ -443,7 +443,9 @@ BLE-устройство, плеер, синхронизация), где сос
   типом и `keepWhile` родителя. Переопределение `startChild` проверяет владение
   для `run`, `each` и веток `runAll`; ожидание `run` наследуется от ядра.
 - `solo_cancel_reason.dart` — отдельная библиотека: абстрактная основа
-  `SoloCancelReason`, классы `RulesCancelReason` и `ClosedCancelReason`.
+  `SoloCancelReason`, классы `RulesCancelReason`, `ClosedCancelReason`
+  и `DuplicateCancelReason` — её получает задача, которую `Policy.droppable`
+  отбросила как дубликат.
 - `queue.dart` — `part`: `SoloQueue` и `_SoloQueue` поверх `List<_SoloJob>`.
   Извлекает первую готовую задачу, обходя группы, ожидающие timing. Проверка
   готовности не вызывает пользовательских правил. Извлечение закрывает состав

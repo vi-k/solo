@@ -282,7 +282,7 @@ test('a second load while the first one runs is dropped', () {
     expect(journal.lines, [
       'load started',
       'state: Loading',
-      'load Cancelled(manual: duplicate)',
+      'load Cancelled(duplicate)',
       'state: Loaded',
       'load Done(Ada Lovelace)',
     ]);
@@ -296,7 +296,7 @@ test('a second load while the first one runs is dropped', () {
 The journal comes out in another order:
 
 ```text
-load Cancelled(manual: duplicate)
+load Cancelled(duplicate)
 load started
 state: Loading
 state: Loaded
@@ -314,9 +314,9 @@ gets: its body never ran, so there was no `onStart` for it, and the
 controller's `onCancel` was not called either — which is why no state of its
 own stands next to it. The key in the line is the key the policy matched on,
 the same `load` the other job carries, so it is the outcome that tells the two
-apart. In that outcome `manual` is the reason — the one a `cancel()` from
-outside carries as well — and `duplicate` is the description `Policy.droppable`
-writes into it when it drops a job.
+apart. In that outcome `duplicate` is the reason, a `DuplicateCancelReason`,
+which `Policy.droppable` gives to the job it drops; a `cancel()` from outside
+says `manual` in the same place.
 
 ### Letting the first job start
 
@@ -333,7 +333,7 @@ load that is running:
 ```text
 load started
 state: Loading
-load Cancelled(manual: duplicate)
+load Cancelled(duplicate)
 state: Loaded
 load Done(Ada Lovelace)
 ```

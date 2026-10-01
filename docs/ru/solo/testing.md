@@ -285,7 +285,7 @@ test('a second load while the first one runs is dropped', () {
     expect(journal.lines, [
       'load started',
       'state: Loading',
-      'load Cancelled(manual: duplicate)',
+      'load Cancelled(duplicate)',
       'state: Loaded',
       'load Done(Ada Lovelace)',
     ]);
@@ -299,7 +299,7 @@ test('a second load while the first one runs is dropped', () {
 Журнал выходит в другом порядке:
 
 ```text
-load Cancelled(manual: duplicate)
+load Cancelled(duplicate)
 load started
 state: Loading
 state: Loaded
@@ -312,14 +312,14 @@ load Done(Ada Lovelace)
 Тест прав в том, что дубликат отброшен, и неправ насчёт случая, который назван
 в его имени: ничего не выполнялось.
 
-Первая строка — это `onFinish` отброшенной `Job`, и единственная строка,
-которая ей досталась: тело не выполнялось, поэтому `onStart` для неё не было,
-а `onCancel` контроллера не звали — потому рядом и нет её собственного
-состояния. Ключ в строке — тот самый, по которому сработала политика, тот же
+Первую строку пишет `onFinish` отброшенной `Job`, и другой строки ей
+не достаётся: тело не выполнялось, поэтому `onStart` для неё не было,
+а `onCancel` контроллера не звали, потому рядом и нет её собственного
+состояния. Ключ в строке тот самый, по которому сработала политика, тот же
 `load`, что и у второй `Job`, так что различает их только исход. В исходе
-`manual` — это причина, та же, с которой приходит `cancel()` снаружи,
-а `duplicate` — описание, которое пишет туда `Policy.droppable`, когда
-отбрасывает `Job`.
+`duplicate` стоит на месте причины, это `DuplicateCancelReason`: её
+`Policy.droppable` даёт той `Job`, которую отбрасывает, а `cancel()` снаружи
+пишет там `manual`.
 
 ### Дать первой Job стартовать
 
@@ -336,7 +336,7 @@ final second = profile.load();
 ```text
 load started
 state: Loading
-load Cancelled(manual: duplicate)
+load Cancelled(duplicate)
 state: Loaded
 load Done(Ada Lovelace)
 ```

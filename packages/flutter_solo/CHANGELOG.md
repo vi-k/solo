@@ -19,15 +19,16 @@
   error, `Solo.errorHandler` does; `collect` and `accumulate` default to
   `AccumulationPolicy.join`, and `replace` moves the waiting group's job
   instead of cancelling it; `Policy.droppable` compares the result types of the
-  two jobs and throws `ArgumentError` when they differ. From `async_job`,
-  through `solo`: a cancellation inside a `ParallelWaitError` is a cancellation
-  again, so the job's `onCancel` handler takes the outcome where `onError` used
-  to; `JobContext` gains `runAll`; `ctx.run` takes `dispose` and `discard`;
-  `JobObserver.onError` is a notice and the new `JobObserver.onUnanswered`
-  answers for an error no outcome carries; the core's debug switch
-  `JobBase.debug` is `Job.debug`; `JobBase`, `JobContextBase` and `JobStatus`
-  move to `package:async_job/engine.dart` and are no longer visible through
-  this package. Migrate with the entries of both:
+  two jobs and throws `ArgumentError` when they differ, and the job it drops
+  ends with a `DuplicateCancelReason` instead of a `ManualCancelReason`. From
+  `async_job`, through `solo`: a cancellation inside a `ParallelWaitError` is a
+  cancellation again, so the job's `onCancel` handler takes the outcome where
+  `onError` used to; `JobContext` gains `runAll`; `ctx.run` takes `dispose` and
+  `discard`; `JobObserver.onError` is a notice and the new
+  `JobObserver.onUnanswered` answers for an error no outcome carries; the
+  core's debug switch `JobBase.debug` is `Job.debug`; `JobBase`,
+  `JobContextBase` and `JobStatus` move to `package:async_job/engine.dart` and
+  are no longer visible through this package. Migrate with the entries of both:
   [the `solo` changelog](https://github.com/vi-k/solo/blob/main/packages/solo/CHANGELOG.md)
   and
   [the `async_job` changelog](https://github.com/vi-k/solo/blob/main/packages/async_job/CHANGELOG.md).

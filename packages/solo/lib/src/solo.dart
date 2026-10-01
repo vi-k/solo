@@ -493,9 +493,8 @@ abstract class Solo<S extends Object> {
           _debug(() => 'add $impl: duplicate of $duplicate');
           impl._drop(
             Cancelled.by(
-              reason: const ManualCancelReason(),
+              reason: const DuplicateCancelReason(),
               started: false,
-              description: 'duplicate',
               stackTrace: StackTrace.current,
             ),
           );

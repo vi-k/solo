@@ -175,7 +175,7 @@ final class Cancelled extends Outcome<Never> implements Exception {
 
   /// Details within [reason]: the text passed by the body, or whatever an
   /// engine of a domain writes there — `solo`, for example, writes
-  /// `'is not Ready'`, `'canStart'`, `'keepWhile'` and `'duplicate'`.
+  /// `'is not Ready'`, `'canStart'` and `'keepWhile'`.
   final String? description;
 
   /// Where the cancellation came from, not where the body died.

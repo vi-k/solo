@@ -1,6 +1,8 @@
 @Timeout(Duration(seconds: 5))
 library;
 
+import 'dart:async';
+
 import 'package:solo/solo.dart';
 import 'package:test/test.dart';
 
@@ -51,7 +53,7 @@ void main() {
       expect(identical(first, second), isTrue);
       async.flushTimers();
       expect(journal.take(), [
-        '[droppable: 2] dropped Cancelled(manual: duplicate)',
+        '[droppable: 2] dropped Cancelled(duplicate)',
         '[droppable: 1] started',
         'state: Special(droppable: 1)',
         '[droppable: 1] finished Done(null)',
@@ -68,10 +70,36 @@ void main() {
       async.flushTimers();
       expect(journal.take(), [
         '[droppable: 1] started',
-        '[droppable: 2] dropped Cancelled(manual: duplicate)',
+        '[droppable: 2] dropped Cancelled(duplicate)',
         'state: Special(droppable: 1)',
         '[droppable: 1] finished Done(null)',
       ]);
+    });
+  });
+
+  test('a duplicate ends with a reason of its own, not a manual cancel', () {
+    runSolo(initialState: const Special(), (solo, journal, async) {
+      final first = droppable(solo, 1);
+      final mine = solo.job<Special, void>(key: 'droppable', (ctx) async {});
+      final taken = solo.add(mine, policy: Policy.droppable);
+      expect(identical(taken, first), isTrue);
+      expect(
+        mine.outcome,
+        isA<Cancelled>()
+            .having((c) => c.reason, 'reason', isA<DuplicateCancelReason>())
+            .having((c) => c.reason.name, 'name', 'duplicate')
+            .having((c) => c.description, 'description', isNull)
+            .having((c) => c.started, 'started', isFalse),
+      );
+
+      // The cancel from outside is the one that stays manual.
+      unawaited(first.cancel());
+      async.flushTimers();
+      expect(
+        first.outcome,
+        isA<Cancelled>()
+            .having((c) => c.reason, 'reason', isA<ManualCancelReason>()),
+      );
     });
   });
 

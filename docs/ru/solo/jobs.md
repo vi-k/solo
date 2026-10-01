@@ -136,6 +136,29 @@ SoloJob<void> seek(Duration position) => run<Ready, void>(
 вообще: `droppable` отбрасывает вторую загрузку того же профиля и пропускает
 загрузку другого, тогда как голый `_Op.load` отбросил бы обе.
 
+`Job`, которую принёс второй вызов, не стартует: она сразу кончается
+с `Cancelled(duplicate)`. Причина у неё `DuplicateCancelReason`,
+а не `ManualCancelReason`, как после `cancel()`: останавливать эту `Job` никто
+не просил. `run` возвращает один хэндл и не говорит, чья это `Job`, поэтому
+метод, которому нужно это знать, сначала собирает `Job`, а потом сравнивает её
+с тем, что вернул `add`:
+
+```dart
+SoloJob<Profile> load(String id) {
+  final mine = job<Ready, Profile>(
+    key: (_Op.load, id),
+    (ctx) => ctx.wait(() => api.load(id)),
+  );
+  final taken = add(mine, policy: Policy.droppable);
+  if (!identical(taken, mine)) {
+    // `mine` отброшена и уже кончилась с `Cancelled(duplicate)`;
+    // `taken` это загрузка, которая стояла до этого вызова.
+    duplicates++;
+  }
+  return taken;
+}
+```
+
 Используйте разные ключи для разных операций и типов результата. `Job<int>`,
 отданная `droppable` под ключом, который уже занят `Job<String>`, бросает
 `ArgumentError`, и бросает до того, как возьмёт задачу: в очередь ничего

@@ -328,9 +328,9 @@ switch (job.outcome) {
 вызовов отмены. `started: false` означает, что тело не запускалось. Причины
 наследуют `CancelReason`. Встроенные типы включают `ManualCancelReason`,
 `ParentCancelReason`, `HandlerCancelReason`, `ChainCancelReason`,
-`RulesCancelReason` и `ClosedCancelReason`. Проверяйте тип; `name` служит
-подписью, а не ключом для сравнения. При передаче отмены между `Job` исходная
-отмена сохраняется в поле `cause` причины.
+`RulesCancelReason`, `ClosedCancelReason` и `DuplicateCancelReason`. Проверяйте
+тип; `name` служит подписью, а не ключом для сравнения. При передаче отмены
+между `Job` исходная отмена сохраняется в поле `cause` причины.
 
 `job.whenCancelled(callback)` регистрирует синхронный слушатель и возвращает
 функцию его удаления. Слушатель вызывается, когда работающая `Job` принимает

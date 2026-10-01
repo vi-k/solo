@@ -134,6 +134,28 @@ gives the policy the identity of one request rather than of the operation:
 `droppable` drops a second load of the same profile and lets a load of another
 one through, where a bare `_Op.load` would have dropped both.
 
+The job the second call brought never starts: it ends on the spot with
+`Cancelled(duplicate)`. The reason is a `DuplicateCancelReason`, not the
+`ManualCancelReason` of a `cancel()` — nobody asked for that job to stop. `run`
+returns one handle and does not say whose job it is, so a method that has to
+know assembles the job first and compares it with what `add` gives back:
+
+```dart
+SoloJob<Profile> load(String id) {
+  final mine = job<Ready, Profile>(
+    key: (_Op.load, id),
+    (ctx) => ctx.wait(() => api.load(id)),
+  );
+  final taken = add(mine, policy: Policy.droppable);
+  if (!identical(taken, mine)) {
+    // `mine` was dropped and has already ended with `Cancelled(duplicate)`;
+    // `taken` is the load that was there before this call.
+    duplicates++;
+  }
+  return taken;
+}
+```
+
 Use a distinct key for each operation and result type. A `Job<int>` handed to
 `droppable` under a key a `Job<String>` already holds throws `ArgumentError`,
 and it throws before the job is taken: nothing was queued and nothing was
