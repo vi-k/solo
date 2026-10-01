@@ -21,6 +21,7 @@ import 'support/delay.dart';
 /// What each `text` block of the page says, in the order of the page.
 const quoted = [
   [
+    'Job(load): loading',
     'Job(load): Done(3)',
   ],
   [
@@ -346,12 +347,15 @@ List<String> quotable(List<String> lines) => [
 
 void main() {
   group('Observer', () {
-    test('the page prints how the job ended', () {
+    test('the page prints what the body logged and how the job ended', () {
       final lines = play(
         () => Job<int>(
           key: 'load',
           observer: Log(),
-          (ctx) => ctx.wait(load),
+          (ctx) async {
+            ctx.log('loading');
+            return ctx.wait(load);
+          },
         ),
         outcomeObserved: false,
       );

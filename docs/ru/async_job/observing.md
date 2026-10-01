@@ -33,11 +33,15 @@ final class Log extends JobObserver {
 final job = Job<int>(
   key: 'load',
   observer: Log(),
-  (ctx) => ctx.wait(load),
+  (ctx) async {
+    ctx.log('loading');
+    return ctx.wait(load);
+  },
 );
 ```
 
 ```text
+Job(load): loading
 Job(load): Done(3)
 ```
 

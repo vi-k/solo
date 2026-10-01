@@ -445,3 +445,14 @@ one» отвечала на реплику, которой читатель не
     `JobObserver`. Сторож — `Recording with JobObserver`
     в `packages/async_job/test/observer_all_test.dart`, который переопределяет
     четыре хука.
+
+14. «в первом примере есть onLog, но он никак не используется» 2026-10-01. Так
+    и было: вступление раздела «Observer» обещало, что наблюдатель печатает,
+    что тело залогировало, а тело только ждало `load`, и строка `onLog`
+    в выводе не появлялась. Тело теперь зовёт `ctx.log('loading')` перед
+    `ctx.wait(load)`, и под кодом две строки: `Job(load): loading`
+    и `Job(load): Done(3)`. Ветка `Log` для колбэка остаётся: на неё опирается
+    раздел о ленивом сообщении ниже. Сторож — тест
+    `the page prints what the body logged and how the job ended` и цитата
+    `quoted[0]` в `packages/async_job/test/observing_rakes_test.dart`; прогон —
+    59 тестов страницы.
