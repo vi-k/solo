@@ -188,7 +188,7 @@ search.
 | [Cancellation](doc/cancellation.md) | Checkpoints, `onCancel`, `uncancellable` |
 | [Children, streams and chains](doc/children.md) | `Job.deferred`, `ctx.run`, `ctx.runAll`, `ctx.each`, `then` |
 | [Cleanup](doc/cleanup.md) | `dispose`, `discard`, `onDispose`, ordering |
-| [Observing and testing](doc/observing.md) | `JobObserver`, `JobAnswerer`, logs, `unattended`, fake time |
+| [Observing and testing](doc/observing.md) | `JobObserver`, `JobAnswerer`, `visitErrors`, logs, `unattended`, fake time |
 | [Building on the core](doc/extending.md) | `JobBase`, `JobContextBase`, your own engine |
 
 ## solo

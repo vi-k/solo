@@ -67,8 +67,14 @@ final class ProfileController extends Solo<ProfileState> {
 передаёт их дальше:
 
 ```dart
-Solo.errorHandler = (solo, job, error, stackTrace) =>
-    Sentry.captureException(error, stackTrace: stackTrace);
+Solo.errorHandler = (solo, job, error, stackTrace) => visitErrors(
+      error,
+      stackTrace,
+      onFailure: (failure, failureStackTrace) => Sentry.captureException(
+        failure,
+        stackTrace: failureStackTrace,
+      ),
+    );
 ```
 
 Обработчик один на весь процесс, ставится один раз при старте; `solo` он
@@ -77,6 +83,11 @@ Solo.errorHandler = (solo, job, error, stackTrace) =>
 обработчика, поэтому каждый контроллер решает за свои задачи, услышит ли их
 общий обработчик процесса вообще. Переопределение сохраняет и этот маршрут,
 если позвать `super.onUnanswered(job, error, stackTrace)`.
+
+Обработчик получает каждую ошибку такой, какой она пришла, вместе с отменами:
+`Cancelled` и `ParallelWaitError`, который `[a, b].wait` бросает с несколькими
+ошибками внутри. `visitErrors` отдаёт `onFailure` каждый провал изнутри
+по отдельности, а отмены отбрасывает.
 
 Отвечать за ошибку — это ответственность, которую берут на себя, а не побочный
 эффект включения лога. Поставить `SoloObserver` — тоже не ответ: наблюдение

@@ -274,6 +274,13 @@ cancelled is taken where the rules noticed; `Solo.traceStateChanges`, under
   for an observer of jobs of the core. See
   [A cancellation that never lands](doc/errors.md#a-cancellation-that-never-lands).
 
+- From `async_job` comes `visitErrors`: it hands each failure inside an error
+  to `onFailure` on its own and each cancellation to `onCancelled`, if given.
+  `Solo.errorHandler` gets each error as it came, a `Cancelled` and a
+  `ParallelWaitError` of `[a, b].wait` included, and the example in its dartdoc
+  and on the errors page goes through `visitErrors`. See
+  [Answering for an error](doc/errors.md#answering-for-an-error).
+
 - `Solo` carries its own listeners: `addListener` and `removeListener`, and the
   protected `hasListeners` and `onListenerError` beside them. A controller is
   observable without a delivery of its own, which is what a widget or another

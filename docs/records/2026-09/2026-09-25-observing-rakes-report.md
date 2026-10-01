@@ -599,3 +599,23 @@ one» отвечала на реплику, которой читатель не
     никуда; `the page: the check turned around reports the cancellations` —
     тот же набор с перевёрнутой проверкой даёт оба `ParallelWaitError` в отчёт.
     Прогон — 63 теста страницы, 954 в пакете.
+
+28. «может стоит сделать какой-то хэлпер, который распаковывает
+    ParallelWaitError, убирая Cancelled?» 2026-10-01, следом за двадцать
+    седьмым пунктом. Владелец выбрал распаковку, а не предикат: обход всех
+    ошибок шаблоном visitor, функцией с колбэками, без списка рядом, без
+    прерывания обхода. Сделано по `2026-10-01-visit-errors-design.md`:
+    `visitErrors(error, stackTrace, onFailure:, onCancelled:)` в `async_job`,
+    и ядро решает «это отмена» тем же обходом. На странице прежний
+    `DatabaseErrors` стал первой попыткой: `DatabaseException` внутри
+    `ParallelWaitError` он не узнаёт, и трасса показывает
+    `zone: ParallelWaitError(2 errors): DatabaseException`. Ответ — тот же
+    класс поверх `visitErrors`: `onUnanswered: DatabaseException`, а ошибка
+    аналитики уходит в зону одна. Абзац о перевёрнутой проверке стал одной
+    фразой под ответом: проверка `error is Cancelled` отбросила бы не все
+    отмены. Сторожа в `packages/async_job/test/observing_rakes_test.dart`:
+    `the page: a database error inside a wait goes to the zone`,
+    `the page: visitErrors answers for it and hands on the rest`
+    и `visitErrors drops what the default implementation drops,
+    and a check for Cancelled does not`; прежние два сторожа двадцать седьмого
+    пункта ушли вместе с абзацем. Прогон — 64 теста страницы, 1042 в пакете.

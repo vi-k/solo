@@ -61,9 +61,20 @@ abstract class Solo<S extends Object> {
   /// on. An error it throws itself goes to the zone.
   ///
   /// ```dart
-  /// Solo.errorHandler = (solo, job, error, stackTrace) =>
-  ///     Sentry.captureException(error, stackTrace: stackTrace);
+  /// Solo.errorHandler = (solo, job, error, stackTrace) => visitErrors(
+  ///       error,
+  ///       stackTrace,
+  ///       onFailure: (failure, failureStackTrace) => Sentry.captureException(
+  ///         failure,
+  ///         stackTrace: failureStackTrace,
+  ///       ),
+  ///     );
   /// ```
+  ///
+  /// The handler gets each error as it came, cancellations included: a
+  /// [Cancelled], and a `ParallelWaitError` that `[a, b].wait` throws with
+  /// several errors in it. [visitErrors] hands `onFailure` each failure
+  /// inside on its own and drops the cancellations.
   static SoloErrorHandler? errorHandler;
 
   /// Engine tracing for debugging the engine itself; `null` by default.

@@ -236,6 +236,15 @@ named as `Job(key)`, not by its class.
   compiles as before. See
   [Several observers](doc/observing.md#several-observers).
 
+- **`visitErrors` hands each failure and each cancellation inside an error to a
+  callback of its own.** A `ParallelWaitError` that `[a, b].wait` throws holds
+  several errors, other such errors too. A check for `error is Cancelled` lets
+  a cancellation inside it through, and a report of the whole error names none
+  of its failures. `visitErrors(error, stackTrace, onFailure: report)` reports
+  each failure and drops the cancellations. It calls `onFailure` not at all
+  exactly when a job drops the error as a cancellation: the job decides by the
+  same walk. See [Where errors go](doc/observing.md#where-errors-go).
+
 - The debug channel names a job that handed its value over and dropped the
   conditional registrations that went with it:
   `Job(opener) handed its value over: 1 conditional cleanup dropped`. A
@@ -248,6 +257,13 @@ named as `Job(key)`, not by its class.
 
 ### Fixed
 
+- A `ParallelWaitError` whose list of errors throws when its length is read is
+  a failure like any other. A body that threw it ends `Failed` with it, and
+  from `onStart`, `onLog` or work handed to `unattended` it reaches the zone.
+  The length was read on every step, outside the guard around the rest of the
+  list. A job whose body or `onStart` threw it never finished, one whose
+  `onLog` threw it ended `Failed` with the error of the length, and from
+  `unattended` the zone got the error of the length instead.
 - A `whenCancelled` registered from `onFinish` of a job cancelled before its
   start runs. It was dropped: the job was finished, and its cancellation had
   not reached the listeners yet.

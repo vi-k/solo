@@ -306,11 +306,8 @@ final class Answering extends JobObserver with JobAnswerer {
 Там ошибки и останавливаются, до зоны они не доходят. Реализация `onUnanswered`
 по умолчанию отправляет их в зону, где задача создана, а отмену отбрасывает,
 как и без ответа. Поэтому вызов `super.onUnanswered(job, error, stackTrace)`
-отправляет ошибку ещё и в зону. Отдавайте `super` всё, что переопределение
-не может отличить от отмены: реализация по умолчанию отмену распознаёт.
-
-Наблюдатель, который отвечает только за знакомые ему ошибки базы данных, отдаёт
-остальное `super`:
+отправляет ошибку ещё и в зону. Наблюдатель, который отвечает только
+за знакомые ему ошибки базы данных, отдаёт остальное `super`:
 
 ```dart
 final class DatabaseErrors extends JobObserver with JobAnswerer {
@@ -325,10 +322,59 @@ final class DatabaseErrors extends JobObserver with JobAnswerer {
 }
 ```
 
-Если перевернуть проверку, `if (error is Cancelled) return;` и отчёт обо всём
-остальном, отчёт получит и `ParallelWaitError`, в котором одни отмены:
-`[a, b].wait` бросает его, когда отменена future, которую он ждёт. Реализация
-по умолчанию отбрасывает и такую.
+Ошибку базы данных, пришедшую вместе с другой, он пропускает. Задача отдаёт
+`ctx.unattended` две операции, которых ждут вместе: `saveDraft` падает
+с `DatabaseException` на 20 мс, а `sendAnalytics` со `StateError` на 10 мс.
+`[a, b].wait` бросает `ParallelWaitError`, в котором лежат оба провала,
+и наблюдатель получает эту одну ошибку:
+
+```dart
+final job = Job<void>(
+  observer: DatabaseErrors(),
+  (ctx) async {
+    ctx.unattended(() => [saveDraft(), sendAnalytics()].wait);
+  },
+);
+```
+
+```text
+outcome: Done(null)
+zone: ParallelWaitError(2 errors): DatabaseException
+```
+
+Ошибка базы данных ушла в зону без ответа, а ошибка аналитики не названа вовсе.
+`visitErrors` отдаёт наблюдателю ошибки изнутри по одной:
+
+```dart
+final class DatabaseErrors extends JobObserver with JobAnswerer {
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      visitErrors(
+        error,
+        stackTrace,
+        onFailure: (failure, failureStackTrace) {
+          if (failure is DatabaseException) {
+            print('onUnanswered: $failure');
+          } else {
+            super.onUnanswered(job, failure, failureStackTrace);
+          }
+        },
+      );
+}
+```
+
+```text
+outcome: Done(null)
+onUnanswered: DatabaseException
+zone: Bad state: analytics offline
+```
+
+Теперь `super` получает провалы по одному, и зона слышит ошибку аналитики
+отдельно, а не весь `ParallelWaitError`. Отмены изнутри уходят в `onCancelled`,
+которого этот наблюдатель не передаёт, и отбрасываются, как их отбрасывает
+реализация по умолчанию. Проверка `error is Cancelled` отбросила бы не все:
+`ParallelWaitError`, в котором одни отмены, не `Cancelled`, а `[a, b].wait`
+бросает его, когда отменены future, которые он ждёт.
 
 Переопределение отвечает за задачу, которой передали наблюдателя, и за дочерние
 задачи, которые его наследуют, на любой глубине. За все задачи сразу приложение

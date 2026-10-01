@@ -99,6 +99,24 @@ final class Cam extends Solo<Value> {
     super.onUnanswered(job, error, stackTrace);
   }
 
+  /// Two waits handed to `ctx.unattended`: a failure beside a cancellation,
+  /// and nothing but cancellations.
+  Job<void> waitsTogether() => run<Value, void>(key: 'waits', (ctx) async {
+        ctx
+          ..unattended(
+            () => [
+              Future<void>.error(StateError('sync'), StackTrace.empty),
+              Future<void>.error(const Cancelled('a'), StackTrace.empty),
+            ].wait,
+          )
+          ..unattended(
+            () => [
+              Future<void>.error(const Cancelled('b'), StackTrace.empty),
+              Future<void>.error(const Cancelled('c'), StackTrace.empty),
+            ].wait,
+          );
+      });
+
   /// A group of two: the caller sees the first failure, and the second,
   /// which refuses to stop and fails on its own, is answered for by
   /// nobody.
@@ -636,6 +654,34 @@ void main() {
 
       expect(taken, [isA<StateError>()]);
       expect(zoneErrors, isEmpty);
+    });
+
+    test('the handler gets cancellations, and visitErrors drops them',
+        () async {
+      final taken = <String>[];
+      Solo.errorHandler =
+          (solo, job, error, stackTrace) => taken.add('${error.runtimeType}');
+      await Cam().waitsTogether().value;
+      await pumpEventQueue();
+      expect(
+        taken,
+        [
+          'ParallelWaitError<List<void>, List<AsyncError?>>',
+          'ParallelWaitError<List<void>, List<AsyncError?>>',
+        ],
+        reason: 'each wait arrives whole, the cancellations with it',
+      );
+
+      taken.clear();
+      // The page's handler, with a list in place of Sentry.
+      Solo.errorHandler = (solo, job, error, stackTrace) => visitErrors(
+            error,
+            stackTrace,
+            onFailure: (failure, failureStackTrace) => taken.add('$failure'),
+          );
+      await Cam().waitsTogether().value;
+      await pumpEventQueue();
+      expect(taken, ['Bad state: sync']);
     });
 
     test('a hook that reports and returns keeps the route', () async {

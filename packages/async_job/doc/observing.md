@@ -303,9 +303,6 @@ The errors stop there and do not reach the zone. The default implementation of
 `onUnanswered` sends them to the zone the job was created in and drops a
 cancellation, as happens without an answer. So calling
 `super.onUnanswered(job, error, stackTrace)` sends one on to the zone as well.
-Hand `super` whatever the override cannot tell from a cancellation: the default
-implementation knows which errors are cancellations.
-
 An observer that answers only for the database errors it knows hands the rest
 to `super`:
 
@@ -322,10 +319,60 @@ final class DatabaseErrors extends JobObserver with JobAnswerer {
 }
 ```
 
-Turned around, `if (error is Cancelled) return;` and a report of everything
-else, the observer reports a `ParallelWaitError` carrying nothing but
-cancellations: `[a, b].wait` throws one when a future it waits for is
-cancelled. The default implementation drops that one as well.
+It misses a database error that comes together with another. The job hands
+`ctx.unattended` two operations waited for together: `saveDraft` fails with a
+`DatabaseException` at 20 ms, and `sendAnalytics` with a `StateError` at 10 ms.
+`[a, b].wait` throws a `ParallelWaitError` holding both failures, and the
+observer gets that one error:
+
+```dart
+final job = Job<void>(
+  observer: DatabaseErrors(),
+  (ctx) async {
+    ctx.unattended(() => [saveDraft(), sendAnalytics()].wait);
+  },
+);
+```
+
+```text
+outcome: Done(null)
+zone: ParallelWaitError(2 errors): DatabaseException
+```
+
+The database error went to the zone unanswered, and the analytics error is not
+named at all. `visitErrors` hands the observer the errors inside one at a time:
+
+```dart
+final class DatabaseErrors extends JobObserver with JobAnswerer {
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      visitErrors(
+        error,
+        stackTrace,
+        onFailure: (failure, failureStackTrace) {
+          if (failure is DatabaseException) {
+            print('onUnanswered: $failure');
+          } else {
+            super.onUnanswered(job, failure, failureStackTrace);
+          }
+        },
+      );
+}
+```
+
+```text
+outcome: Done(null)
+onUnanswered: DatabaseException
+zone: Bad state: analytics offline
+```
+
+`super` now gets the failures one at a time, so the zone hears the analytics
+error on its own instead of the whole `ParallelWaitError`. The cancellations
+inside go to `onCancelled`, which this observer does not pass, and are dropped,
+as the default implementation drops them. A check for `error is Cancelled`
+would not drop them all: a `ParallelWaitError` carrying nothing but
+cancellations is not a `Cancelled`, and `[a, b].wait` throws one when the
+futures it waits for are cancelled.
 
 The override answers for the job that got the observer and for the children
 that inherit it, at any depth. The app answers for every job at once in its

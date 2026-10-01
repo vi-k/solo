@@ -46,6 +46,15 @@ const quoted = [
   ],
   [
     'outcome: Done(null)',
+    'zone: ParallelWaitError(2 errors): DatabaseException',
+  ],
+  [
+    'outcome: Done(null)',
+    'onUnanswered: DatabaseException',
+    'zone: Bad state: analytics offline',
+  ],
+  [
+    'outcome: Done(null)',
     'zone: Bad state: analytics offline',
   ],
   [
@@ -304,13 +313,44 @@ final class DatabaseErrors extends JobObserver with JobAnswerer {
   }
 }
 
-/// The same check turned around, the way the page warns against.
+/// The page's answer: the same observer reads the database errors out of a
+/// `ParallelWaitError`.
+final class DatabaseErrorsVisited extends JobObserver with JobAnswerer {
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      visitErrors(
+        error,
+        stackTrace,
+        onFailure: (failure, failureStackTrace) {
+          if (failure is DatabaseException) {
+            say('onUnanswered: $failure');
+          } else {
+            super.onUnanswered(job, failure, failureStackTrace);
+          }
+        },
+      );
+}
+
+/// A check for `error is Cancelled`, which the page says does not drop them
+/// all.
 final class AllButCancelled extends JobObserver with JobAnswerer {
   @override
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
     if (error is Cancelled) return;
     say('onUnanswered: ${error.runtimeType}');
   }
+}
+
+/// Fails with a database error at 20 ms.
+Future<void> saveDraft() async {
+  await delay(20);
+  throw const DatabaseException();
+}
+
+/// Fails with another error at 10 ms.
+Future<void> sendAnalytics() async {
+  await delay(10);
+  throw StateError('analytics offline');
 }
 
 /// The error of the log section; it counts how often it is put into words.
@@ -1021,39 +1061,47 @@ void main() {
       );
     });
 
-    // Three errors no outcome carries: a database error, another one, and
-    // two operations that stopped at the job's token, waited for together.
-    Job<void> leavingThree(JobObserver observer) =>
-        Job<void>(observer: observer, (ctx) async {
-          ctx
-            ..unattended(() => throw const DatabaseException())
-            ..unattended(() => throw StateError('analytics offline'))
-            ..unattended(() async {
-              await [
-                Future<void>.error(const Cancelled('a'), StackTrace.empty),
-                Future<void>.error(const Cancelled('b'), StackTrace.empty),
-              ].wait;
-            })
-            ..unattended(() async {
-              await [
-                Future<void>.value(),
-                Future<void>.error(const Cancelled('c'), StackTrace.empty),
-              ].wait;
-            });
-        });
+    Job<void> saving(JobObserver observer) => Job<void>(
+          observer: observer,
+          (ctx) async {
+            ctx.unattended(() => [saveDraft(), sendAnalytics()].wait);
+          },
+        );
 
-    test('the page: what it does not know goes to super', () {
-      expect(play(() => leavingThree(DatabaseErrors())), [
-        'onUnanswered: DatabaseException',
-        'zone: Bad state: analytics offline',
-        'outcome: Done(null)',
-      ]);
+    test('the page: a database error inside a wait goes to the zone', () {
+      expect(play(() => saving(DatabaseErrors())), quoted[5]);
     });
 
-    test('the page: the check turned around reports the cancellations', () {
-      expect(play(() => leavingThree(AllButCancelled())), [
-        'onUnanswered: DatabaseException',
-        'onUnanswered: StateError',
+    test('the page: visitErrors answers for it and hands on the rest', () {
+      expect(play(() => saving(DatabaseErrorsVisited())), quoted[6]);
+    });
+
+    test(
+        'visitErrors drops what the default implementation drops, '
+        'and a check for Cancelled does not', () {
+      Job<void> leaving(JobObserver observer) =>
+          Job<void>(observer: observer, (ctx) async {
+            ctx
+              ..unattended(() async {
+                await [
+                  Future<void>.error(const Cancelled('a'), StackTrace.empty),
+                  Future<void>.error(const Cancelled('b'), StackTrace.empty),
+                ].wait;
+              })
+              ..unattended(() async {
+                await [
+                  Future<void>.value(),
+                  Future<void>.error(const Cancelled('c'), StackTrace.empty),
+                ].wait;
+              });
+          });
+      expect(play(() => leaving(DatabaseErrorsVisited())), [
+        'outcome: Done(null)',
+      ]);
+      expect(play(() => leaving(DatabaseErrors())), [
+        'outcome: Done(null)',
+      ]);
+      expect(play(() => leaving(AllButCancelled())), [
         'onUnanswered: ParallelWaitError<List<void>, List<AsyncError?>>',
         'onUnanswered: ParallelWaitError<List<void>, List<AsyncError?>>',
         'outcome: Done(null)',
@@ -1605,7 +1653,7 @@ void main() {
         }),
       );
 
-      expect(lines, quoted[5]);
+      expect(lines, quoted[7]);
     });
 
     test('unattended hands it to the observer, after the job is over', () {
@@ -1615,7 +1663,7 @@ void main() {
         }),
       );
 
-      expect(lines, quoted[6]);
+      expect(lines, quoted[8]);
     });
 
     test('without an observer unattended goes to the creation zone', () {
@@ -1628,7 +1676,7 @@ void main() {
         ),
       );
 
-      expect(lines, quoted[5]);
+      expect(lines, quoted[7]);
     });
 
     test('a future made outside never comes back in there', () {
@@ -1682,8 +1730,8 @@ void main() {
         );
 
     test('handing the hooks on asks Crashes for nothing', () {
-      expect(play(() => sending(Both())), quoted[7]);
-      expect(quoted[7], quoted[6], reason: 'the lines of Reporter alone');
+      expect(play(() => sending(Both())), quoted[9]);
+      expect(quoted[9], quoted[8], reason: 'the lines of Reporter alone');
     });
 
     test('a Both that answers goes wrong the other way', () {
@@ -1706,7 +1754,7 @@ void main() {
     test('JobObserver.all asks the one that answers', () {
       expect(
         play(() => sending(JobObserver.all([Reporter(), Crashes()]))),
-        quoted[8],
+        quoted[10],
       );
     });
 
@@ -1744,7 +1792,7 @@ void main() {
             ]),
           ),
         ),
-        quoted[8],
+        quoted[10],
       );
     });
   });

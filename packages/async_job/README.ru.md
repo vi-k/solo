@@ -193,7 +193,7 @@ final outcome = await job.done; // Cancelled(manual)
 | [Отмена](../../docs/ru/async_job/cancellation.md) | Контрольные точки, `onCancel`, `uncancellable` |
 | [Дети, стримы и цепочки](../../docs/ru/async_job/children.md) | `Job.deferred`, `ctx.run`, `ctx.runAll`, `ctx.each`, `then` |
 | [Уборка](../../docs/ru/async_job/cleanup.md) | `dispose`, `discard`, `onDispose`, порядок |
-| [Наблюдение и тестирование](../../docs/ru/async_job/observing.md) | `JobObserver`, `JobAnswerer`, логи, `unattended`, время под управлением теста |
+| [Наблюдение и тестирование](../../docs/ru/async_job/observing.md) | `JobObserver`, `JobAnswerer`, `visitErrors`, логи, `unattended`, время под управлением теста |
 | [Своё поверх ядра](../../docs/ru/async_job/extending.md) | `JobBase`, `JobContextBase`, свой движок |
 
 ## solo

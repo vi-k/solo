@@ -107,6 +107,9 @@ first group names them.
 - Inherited from `solo` and `async_job`: `SoloObserver.all` and
   `JobObserver.all`, one observer made of several.
 
+- Inherited from `async_job`: `visitErrors`, each failure inside an error on
+  its own and the cancellations apart.
+
 - `SoloBuilder`: what `ValueListenableBuilder` is, for a controller that is not
   a `ValueListenable`. It takes any `Solo` — one `with SoloStream` included —
   subscribes in `initState`, reads the controller's state on every build,

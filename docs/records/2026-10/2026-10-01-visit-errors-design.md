@@ -1,7 +1,7 @@
-> **Состояние на 2026-10-01:** вторая редакция после независимого ревью
-> на Opus, кода нет. Двенадцать находок, все проверены своими зондами
-> и приняты. Ждёт ответа владельца на открытый вопрос о прерывании обхода
-> и подтверждения имени.
+> **Состояние на 2026-10-01:** вторая редакция сделана и закоммичена в `main`,
+> не отправлена. Владелец 2026-10-01 принял отказ от прерывания обхода
+> и имена. Двенадцать находок ревью дизайна и шесть находок ревью сделанного
+> проверены своими зондами, приняты и закрыты.
 > **Что это:** публичный обход ошибки `visitErrors`: провалы и отмены внутри
 > `ParallelWaitError` по одному, тем же обходом, которым ядро решает, что
 > считается отменой.
@@ -37,8 +37,8 @@
 - форма — функция с колбэками, не класс с методами;
 - списка рядом с ней (`failuresOf`) не надо.
 
-Имя `visitErrors` и имена колбэков предложены мной, владелец их пока
-не подтверждал.
+Имя `visitErrors` и имена колбэков предложил я, владелец согласился 2026-10-01.
+Там же он согласился не делать прерывание обхода.
 
 ## API
 
@@ -236,6 +236,28 @@ void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
 - длина читается заново — тесты длины;
 - ядро на старом `_analyzeEnvelope` рядом с новым обходом, где цикл или кортеж
   из десяти читаются по-разному, — вшитая таблица и `parallel_wait_test.dart`.
+
+## Сделано
+
+Код, документы и сторожа — по разделам выше, с одним отступлением: сторож
+`solo` встал в `packages/solo/test/errors_rakes_test.dart` тестом
+`the handler gets cancellations, and visitErrors drops them`, а не отдельным
+файлом. Таблица `visit_errors_test.dart` — 23 формы; решения ядра по ним сняты
+с `1c2be62` прогоном того же файла с заглушкой вместо `visitErrors`, все 23
+совпали. В `async_job` 1029 тестов, в `solo` 830, пример `solo` 47,
+`flutter_solo` 85 и пример 4; формат, анализ и `dart doc --dry-run` чистые,
+проверки из корня зелёные.
+
+Мутации, весь набор `async_job` на каждую: из четырнадцати пойманы тринадцать.
+Не поймана «старое ядро рядом с новым обходом»: старый анализ и новый обход
+решают одинаково на любой форме, это и показал фаззер ревьюера, и различить их
+тесту нечем. Случай, ради которого она была в списке, — длина, прочитанная без
+защиты, как на `1c2be62`, — отдельной мутацией ловят три теста длины.
+
+После ревью сделанного, раздел ниже: в таблице 27 форм, решения ядра по всем
+сняты с `1c2be62` тем же способом и совпали, в `visit_errors_test.dart` 87
+тестов, в `async_job` 1042. Мутаций шестнадцать, пойманы пятнадцать: две
+новые — голая обёртка мимо `whole` и стектрейс корня вместо стектрейса кадра.
 
 ## Вопросы ревьюеру
 
@@ -532,3 +554,123 @@ void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
 Свои зонды проверки лежат в `scratchpad/vv`: `head` — `HEAD`
 с `test/zz_v_core_test.dart`, `proto` — прототип с `test/zz_v_edges_test.dart`,
 `mut3` — мутация третьей находки, `fix1` — правка длины первой.
+
+## Ревью сделанного
+
+Ревьюер работал в своей копии дерева: `scratchpad/review-visit-done`, это
+рабочее дерево до ревью. Зонды лежат там же: `test/zz_rv_fuzz_test.dart`,
+`zz_rv_edges_test.dart`, `zz_rv_table_test.dart`, `zz_rv_nolength_test.dart`.
+Мутации он накатывал на `lib/src/envelope.dart` и возвращал копией.
+
+### Что подтверждено
+
+- **Переписанный `_analyzeEnvelope` решает так же, как на `HEAD`.** Анализ
+  `HEAD` перенесён в зонд дословно. Генератор построил 200 000 случайных
+  графов: списки, `cast`-представления, списки с бросающими индексами, кортежи
+  от 2 до 10, неизвестная форма, `Unreadable`, `NoLength`, бросающий геттер
+  `errors`, `EqualEnvelope` со своим `==`, голые ветки, циклы, общие узлы.
+  Совпали `isCleanCancellation` и `cancellationCount`, а `firstCancelled`
+  и `firstStackTrace` — по `identical`. Чистых отмен 20 307. В 495 графах
+  старый анализ бросал (`NoLength`), новый даёт провал.
+- **Инвариант держится, и без `onCancelled` тоже,** на тех же 200 000 графах.
+  Решение настоящего ядра совпадает со старым анализом на 4 000 графах для тела
+  и на 2 000 для пути через `unattended` в зону.
+- **Колонка `drops` верна:** все 23 формы сверены со старым анализом.
+- **Мутации первой отмены и её трассы ловятся:** `??=` → `=` для
+  `firstCancelled` и `firstStackTrace` ловит `parallel_wait_test.dart`.
+- **Попутный дефект подтверждён:** на `HEAD` тело, бросившее обёртку
+  с `NoLength`, даёт `TIMEOUT` и `Bad state: no length` в зоне, после правки —
+  `Failed(ParallelWaitError)` и пустую зону.
+- **Проверки пакетов зелёные:** `async_job` 1029, `solo` 830, формат, анализ,
+  `dart doc --dry-run`, проверки из корня.
+- **Страница и переводы сходятся** с выводом тестов, тире в новых русских
+  абзацах нет.
+- **CHANGELOG разложены верно,** якоря существуют, `visitErrors` доходит
+  до `solo` и `flutter_solo` реэкспортом.
+
+### Находки
+
+1. **Нужно исправить. Новый абзац разорвал фразу в dartdoc `JobAnswerer`.**
+   `observer.dart:147-151`. Было: «A class mixes it in after [JobObserver]:
+   ```…``` or `with JobObserver, JobAnswerer` when it extends another class.»
+   Теперь между блоком кода и продолжением «or …» стоит абзац «[visitErrors]
+   reports each failure inside a `ParallelWaitError` on its own and drops the
+   cancellations.», и абзац «or …» висит на чужой фразе. Сам `visitErrors`
+   ничего не «reports»: он отдаёт провалы в `report`. Предложение: перенести
+   абзац за абзац «or … the job never calls it» и написать «[visitErrors] hands
+   `report` each failure inside a `ParallelWaitError` on its own and drops the
+   cancellations».
+
+   Вердикт: принято, по диффу `observer.dart` так и есть. Абзац перенесён
+   за «or …» в предложенной редакции.
+
+2. **Рекомендация. Правило «handed over whole at most once» неверно для голой
+   ветки-обёртки.** Ветку, которая не `AsyncError`, обход отдаёт через
+   `failure(branch, frameStackTrace)`, мимо `whole`, и множество `handedWhole`
+   её не видит. Зонд, где `inner` — обёртка с одним `StateError('x')`:
+   `ParallelWaitError(null, (inner, inner))` даёт обёртку целиком дважды,
+   `ParallelWaitError(null, (AsyncError(inner, w), inner))` — обходит её
+   и отдаёт целиком. В фаззере таких графов 2 374 из 200 000. Решение ядра
+   не меняется, но публичное правило ложно. Предложение: отдавать голую
+   `ParallelWaitError` через `whole(branch, frameStackTrace)` и добавить обе
+   формы в таблицу; другой путь — оговорить исключение в правиле.
+
+   Вердикт: принято, правкой обхода. Мой зонд в `scratchpad/verify-done`:
+   `[F inner @root, F inner @root]` и `[F f @x, F inner @root]`. Голая
+   `ParallelWaitError` идёт через `whole`, остальные голые ветки — через
+   `failure`. В таблице формы `one envelope bare twice` (один вызов)
+   и `one envelope walked, then bare` (обход и один вызов целиком: правило
+   говорит о целиком отданных, обход его не нарушает). Мутация «голая обёртка
+   мимо `whole`» ловится двумя тестами первой формы.
+
+3. **Рекомендация. Правило стектрейсов для вложенной обёртки ничем
+   не сторожится.** Правило «What has no branch of its own gets the stack
+   trace the enclosing error came with» проверено только на уровне корня, где
+   трасса обёртки и есть переданная. Мутация: в `failure(branch, …)`
+   и `whole(frame.envelope, …)` заменить `frameStackTrace` на `stackTrace`.
+   Набор `async_job` после неё зелёный целиком. Предложение: две строки
+   таблицы — голый провал во вложенной обёртке и частично читаемый список
+   во вложенной обёртке, оба со стектрейсом ветки.
+
+   Вердикт: принято. Мутацию повторил: `visit_errors_test.dart` `+74`
+   зелёный, мой зонд даёт `[F f @root, C @x]` вместо `@a`. Добавлены формы
+   `a bare failure in a nested record` и `a partly readable list, nested`;
+   мутацию ловят четыре теста.
+
+4. **Рекомендация. Строка `### Fixed` в `async_job/CHANGELOG.md` уже самой
+   правки.** Она называет только тело. Зонд на `HEAD` и на правке:
+
+   | Где брошена обёртка с `NoLength` | HEAD | после правки |
+   | --- | --- | --- |
+   | тело | `TIMEOUT`, `Bad state: no length` в зоне | `Failed(ParallelWaitError)`, зона пуста |
+   | `onStart` наблюдателя | `TIMEOUT` | `Done(null)`, обёртка в зоне |
+   | `onLog` | `Failed(Bad state: no length)` | `Done(null)`, обёртка в зоне |
+   | `unattended`, `onCancel` | в зону уходит `Bad state: no length` | обёртка в зоне |
+
+   Причина одна: `_isCancellation` в `_notify` и `_toZone` бросал.
+   Предложение: расширить запись и добавить тест на путь хука, например
+   `onStart`.
+
+   Вердикт: принято. Мой зонд на `HEAD` и на правке даёт ту же таблицу для
+   тела, `onStart`, `onLog` и `unattended`; `onCancel` я не гонял и в запись
+   CHANGELOG его не взял. Строка `### Fixed` перечисляет четыре пути. Тест
+   `that throws, from a hook of an observer, reaches the zone`: `onStart`
+   бросает обёртку, задача кончается `Done`, в зоне та же обёртка; на ядре
+   `HEAD` он краснеет по таймауту.
+
+5. **Мелочь. Пример `ctx.check()` в dartdoc `visitErrors` странен для хука
+   наблюдателя.** Хук получает `Job`, а не `ctx`. Предложение: убрать пример.
+
+   Вердикт: принято, пример убран: «except a [Cancelled], which is dropped,
+   along with the branches not yet walked».
+
+6. **Мелочь. «drops the cancellations» верно только без `onCancelled`.**
+   `solo/CHANGELOG.md` читается как свойство функции. Предложение для
+   CHANGELOG: «… to `onFailure` on its own and each cancellation to
+   `onCancelled`, if given».
+
+   Вердикт: принято для `solo/CHANGELOG.md` в предложенной редакции.
+   В dartdoc `Solo.errorHandler` и в `errors.md` фраза стоит под примером без
+   `onCancelled` и остаётся. Строка `async_job` говорит о вызове
+   `visitErrors(error, stackTrace, onFailure: report)`, строка `flutter_solo`
+   — «the cancellations apart»: обе верны.
