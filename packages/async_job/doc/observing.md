@@ -300,7 +300,8 @@ final class Answering extends JobObserver with JobAnswerer {
 ```
 
 The errors stop there and do not reach the zone. The default implementation of
-`onUnanswered` sends them where they go without an answer, and calling
+`onUnanswered` sends them to the zone the job was created in and drops a
+cancellation, as happens without an answer. So calling
 `super.onUnanswered(job, error, stackTrace)` sends one on to the zone as well.
 Hand `super` whatever the override cannot tell from a cancellation: the default
 implementation knows which errors are cancellations.
