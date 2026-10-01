@@ -508,14 +508,14 @@ onError: Bad state: analytics offline
 onUnanswered: Bad state: analytics offline
 ```
 
-The lines are those of `Both`. `JobObserver.all` hands every hook to each
-observer in the order of the list, each call on its own: one that throws does
-not switch off the next. The one that is a `JobAnswerer` watches in its place
-and answers for the list, once every observer has heard `onError`; with none,
-the errors go to the zone, as for an observer that does not answer. Two that
-answer, or the same observer twice, and `JobObserver.all` throws
-`ArgumentError`. An observer made by `JobObserver.all` can stand in the list of
-another, and answers there when one inside it does.
+`JobObserver.all` hands every hook to each observer in the order of the list,
+each call on its own: one that throws does not switch off the next. The one
+that is a `JobAnswerer` watches in its place and answers for the list, once
+every observer has heard `onError`; with none, the errors go to the zone, as
+for an observer that does not answer. Two that answer, or the same observer
+twice, and `JobObserver.all` throws `ArgumentError`. An observer made by
+`JobObserver.all` can stand in the list of another, and answers there when one
+inside it does.
 
 ## Testing
 

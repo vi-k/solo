@@ -1759,12 +1759,11 @@ void main() {
       );
     });
 
-    test('JobObserver.all does the same in one line', () {
+    test('JobObserver.all asks the one that answers', () {
       expect(
         play(() => sending(JobObserver.all([Reporter(), Crashes()]))),
         quoted[10],
       );
-      expect(quoted[10], quoted[9], reason: 'the lines of Both');
     });
 
     test('with nobody answering, the zone, as for one that does not', () {
