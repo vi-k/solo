@@ -23,22 +23,24 @@ name: gate
 # resolving there and nowhere else. `flutter` covers the package that needs
 # it, and the bench of its README and `doc/mixins.md` along with it, whose
 # drivers are widget tests. `docs` needs no SDK at all. `snippets` builds
-# the code of `packages/solo/doc/vs-bloc.md` and runs it. `floor` replays
-# the suites from the archives on the lowest SDK the pubspecs admit.
+# the code of `packages/solo/doc/vs-bloc.md` and of
+# `packages/solo/doc/accumulation.md` and runs it. `floor` replays the
+# suites from the archives on the lowest SDK the pubspecs admit.
 #
 # What `floor` proves is what the other four cannot. They resolve the tree:
 # every file in it, the dev dependencies along with the rest, the newest
 # versions the constraints allow. A user gets the archive, without the dev
 # dependencies, and may be on Dart 3.6.0 with `meta` 1.15.0. An annotation
 # that came with a later `meta`, a widget that came with a later Flutter, a
-# library file kept out of the archive by `.pubignore` — each of those is
-# green in the four and red there.
+# library file kept out of the archive by `.pubignore`, a library that
+# imports a dev dependency — each of those is green in the four and red
+# there.
 #
 # What `snippets` proves is narrow and worth stating: that every fragment
-# of that document still compiles against the tree and still runs to the
-# end. It does not compare the traces the document quotes against the ones
-# a run prints — the drivers print, they do not assert — so a number can
-# still go stale there without turning this red. Narrow is not nothing: the
+# of those documents still compiles against the tree and still runs to the
+# end, and that a trace quoted in a block is the one the run prints. A
+# number written into the prose is compared with nothing, and can still go
+# stale there without turning this red. Narrow is not nothing: the
 # recorder snippets of section 2 stopped compiling when `onChange` took a
 # `SoloTransition`, and lived on in the document for a release because
 # nothing here built them.
@@ -48,12 +50,14 @@ name: gate
 # the process exits zero. The one driver that does assert, `item3_cancel`,
 # runs under `FakeAsync` and has no wall clock to lose.
 #
-# `dart pub publish --dry-run` is run for one thing only, the list of files
-# an archive would hold, and what it says about the package is printed and
-# not judged. Between releases the tree carries `pubspec_overrides.yaml`
-# files pointing at the packages next door, and a dry run over those does
-# not describe the release that would go out. Release readiness is a step
-# of the release, and its order is in
+# `dart pub publish --dry-run` is run for the list of files an archive
+# would hold. What it says about the package is printed, and a dry run
+# that exits with a warning fails the step: a library importing a dev
+# dependency is one. It is still not release readiness. Between releases
+# the tree carries `pubspec_overrides.yaml` files pointing at the packages
+# next door, which pub lets through as a hint, and a dry run over those
+# does not describe the release that would go out. Readiness is a step of
+# the release, and its order is in
 # `docs/records/2026-09-11[1]-solo-release-readiness-report.md`.
 #
 # `AGENTS.md` and the records are not covered either: `check_line_width.py`
@@ -240,7 +244,8 @@ jobs:
         with:
           name: archive
           path: ${{ runner.temp }}/archive
-          retention-days: 1
+          # Long enough to run `floor` again by itself a few days later.
+          retention-days: 7
           if-no-files-found: error
 
       - name: Nothing drifted
@@ -279,8 +284,11 @@ jobs:
           name: archive
           path: ${{ runner.temp }}/archive
 
-      # Each package and its example: resolved, `meta` taken down to the
-      # lowest version the constraint allows, analyzed and run.
+      # Each package and its example, twice. As a dependency: without its
+      # dev dependencies, `meta` taken down to the lowest version the
+      # constraint allows, analyzed for errors, its program run. Then with
+      # its tests. A red test is printed whole: it does not reproduce on
+      # stable, and its name is all there is to go by.
       - name: The archives pass their gate on the floor
         run: python3 tool/archive_floor.py run "$RUNNER_TEMP/archive"
 
