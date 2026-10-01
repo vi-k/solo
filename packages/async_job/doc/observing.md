@@ -66,7 +66,9 @@ there is no key, or `Job()` when there is neither. Use `key` to identify the
 job in logs or in a library's scheduling rules, such as `solo` queue policies;
 `describe` adds details to that representation.
 
-An observer can also time a cancellation:
+A cancelled job is expected to end soon, and one that goes on is busy with work
+the user has already given up on. An observer finds such jobs by timing how
+long each one runs past its cancellation:
 
 ```dart
 final class SlowCancellations extends JobObserver {
