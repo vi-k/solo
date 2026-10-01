@@ -227,6 +227,43 @@ included, comes after the cancellation. The job learns when a failure happened
 from these members and from its children: a future the body awaits on its own
 comes first only if the body throws its error before the cancellation.
 
+A body that catches the failed open and shows it to the user before throwing it
+again:
+
+```dart
+final job = Job<Database>(
+  observer: Reporter(),
+  (ctx) async {
+    try {
+      return await ctx.join(Database.open);
+    } catch (error) {
+      await showError(error);
+      rethrow;
+    }
+  },
+);
+```
+
+The open fails at 20 ms, the user cancels at 30 ms while the error is on
+screen, and the body throws the failure at 50 ms:
+
+```text
+cancel
+onError: Bad state: database locked
+zone: Bad state: database locked
+outcome: Cancelled(manual)
+```
+
+The failure came before the cancellation, which is the second row: the zone
+hears it, though the job ends `Cancelled`. Cancelled at 10 ms, before the open
+fails, the same failure takes the third row, and only the observer hears it:
+
+```text
+cancel
+onError: Bad state: database locked
+outcome: Cancelled(manual)
+```
+
 A step of `ctx.uncancellable` and the same step behind `ctx.join` land in
 different rows. The section holds a cancellation that arrives while the step
 runs, and the job accepts it when the section closes, on the way out of the

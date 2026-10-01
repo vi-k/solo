@@ -523,3 +523,17 @@ one» отвечала на реплику, которой читатель не
     прежние сторожа,
     `a cancellation after the failure: answered, whoever reads it`
     и `a failure after the cancellation: onError or nobody`.
+
+22. «можем небольшой пример к этому?» 2026-10-01 — к фразе о трёх моментах
+    из пункта двадцать первого. После абзаца встал пример на базе данных
+    раздела: тело ловит провал `ctx.join(Database.open)`, показывает ошибку 30
+    мс и бросает её снова. Открытие падает на 20-й миллисекунде; отмена
+    на 30-й, пока ошибка на экране, даёт `onError`, `zone:`
+    и `Cancelled(manual)`: провал был раньше, вторая строка таблицы. Отмена
+    на 10-й, до провала, даёт только `onError` и `Cancelled(manual)`: третья
+    строка. Обе трассы — новые блоки `text`, в `quoted` они третий и четвёртый,
+    и номера следующих сдвинулись на два. Сторожа
+    в `packages/async_job/test/observing_rakes_test.dart`:
+    `the page: cancelled while the body shows the failure`
+    и `the page: cancelled before the open fails`; прогон — 61 тест страницы,
+    952 в пакете.

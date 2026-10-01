@@ -34,6 +34,17 @@ const quoted = [
     'outcome: Cancelled(manual)',
   ],
   [
+    'cancel',
+    'onError: Bad state: database locked',
+    'zone: Bad state: database locked',
+    'outcome: Cancelled(manual)',
+  ],
+  [
+    'cancel',
+    'onError: Bad state: database locked',
+    'outcome: Cancelled(manual)',
+  ],
+  [
     'outcome: Done(null)',
     'zone: Bad state: analytics offline',
   ],
@@ -269,6 +280,9 @@ final class Database {
 
   Future<void> close() async {}
 }
+
+/// Shows [error] to the user for 30 ms.
+Future<void> showError(Object error) => delay(30);
 
 /// The error of the log section; it counts how often it is put into words.
 final class MigrationFailed implements Exception {
@@ -948,6 +962,36 @@ void main() {
           },
         );
 
+    // The page's example of a failure the body throws late: it shows the
+    // error for 30 ms first.
+    Job<Database> shown({JobObserver? observer}) => Job<Database>(
+          observer: observer,
+          (ctx) async {
+            try {
+              return await ctx.join(Database.open);
+            } catch (error) {
+              await showError(error);
+              rethrow;
+            }
+          },
+        );
+
+    test('the page: cancelled while the body shows the failure', () {
+      expect(
+        quotable(play(() => shown(observer: Reporter()), cancelAt: 30)),
+        quoted[3],
+        reason: 'the failure came first, and the zone hears it',
+      );
+    });
+
+    test('the page: cancelled before the open fails', () {
+      expect(
+        quotable(play(() => shown(observer: Reporter()), cancelAt: 10)),
+        quoted[4],
+        reason: 'the failure came after, and only the observer hears it',
+      );
+    });
+
     test('a failure after the cancellation: onError or nobody', () {
       expect(
         quotable(
@@ -1493,7 +1537,7 @@ void main() {
         }),
       );
 
-      expect(lines, quoted[3]);
+      expect(lines, quoted[5]);
     });
 
     test('unattended hands it to the observer, after the job is over', () {
@@ -1503,7 +1547,7 @@ void main() {
         }),
       );
 
-      expect(lines, quoted[4]);
+      expect(lines, quoted[6]);
     });
 
     test('without an observer unattended goes to the creation zone', () {
@@ -1516,7 +1560,7 @@ void main() {
         ),
       );
 
-      expect(lines, quoted[3]);
+      expect(lines, quoted[5]);
     });
 
     test('a future made outside never comes back in there', () {
@@ -1570,8 +1614,8 @@ void main() {
         );
 
     test('handing the hooks on asks Crashes for nothing', () {
-      expect(play(() => sending(Both())), quoted[5]);
-      expect(quoted[5], quoted[4], reason: 'the lines of Reporter alone');
+      expect(play(() => sending(Both())), quoted[7]);
+      expect(quoted[7], quoted[6], reason: 'the lines of Reporter alone');
     });
 
     test('a Both that answers goes wrong the other way', () {
@@ -1594,7 +1638,7 @@ void main() {
     test('JobObserver.all asks the one that answers', () {
       expect(
         play(() => sending(JobObserver.all([Reporter(), Crashes()]))),
-        quoted[6],
+        quoted[8],
       );
     });
 
@@ -1632,7 +1676,7 @@ void main() {
             ]),
           ),
         ),
-        quoted[6],
+        quoted[8],
       );
     });
   });
