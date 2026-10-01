@@ -24,6 +24,10 @@ const quoted = [
     'Job(load): Done(3)',
   ],
   [
+    'Job(thumbnail) ran 100 ms past its cancellation',
+    'Job(upload) ran 50 ms past its cancellation',
+  ],
+  [
     'cancel',
     'outcome: Cancelled(manual)',
   ],
@@ -175,6 +179,13 @@ final class SlowCancellations extends JobObserver {
     }
   }
 }
+
+/// The thumbnail of the page's timing example: it does not hear a
+/// cancellation.
+Future<void> makeThumbnail() => delay(100);
+
+/// The cleanup of the page's timing example.
+Future<void> deleteDraft() => delay(50);
 
 Future<int> load() async {
   await delay(10);
@@ -500,6 +511,49 @@ void main() {
       expect(lines, ['Job(self) ran 50 ms past its cancellation']);
     });
 
+    test('the page: a body that gives up shows the cleanup alone', () {
+      final lines = play(
+        () => Job<void>(
+          key: 'upload',
+          observer: SlowCancellations(),
+          (ctx) async {
+            ctx.onDispose(deleteDraft);
+            ctx
+                .run(Job.deferred(key: 'thumbnail', (_) => makeThumbnail()))
+                .ignore();
+            throw const Cancelled('offline');
+          },
+        ),
+        outcomeObserved: false,
+      );
+
+      expect(lines, quoted[1]);
+    });
+
+    test('the same child and cleanup cancelled from outside show 150 ms', () {
+      final lines = play(
+        () => Job<void>(
+          key: 'upload',
+          observer: SlowCancellations(),
+          (ctx) async {
+            ctx.onDispose(deleteDraft);
+            ctx
+                .run(Job.deferred(key: 'thumbnail', (_) => makeThumbnail()))
+                .ignore();
+            await ctx.wait(() => delay(1000));
+          },
+        ),
+        cancelAt: 0,
+        outcomeObserved: false,
+      );
+
+      expect(quotable(lines), [
+        'cancel',
+        'Job(thumbnail) ran 100 ms past its cancellation',
+        'Job(upload) ran 150 ms past its cancellation',
+      ]);
+    });
+
     test("a child's cancellation let out counts the same way", () {
       final lines = play(
         () {
@@ -631,13 +685,13 @@ void main() {
     test('without an observer the failed open reaches nobody', () {
       final lines = play(open, cancelAt: 10);
 
-      expect(quotable(lines), quoted[1]);
+      expect(quotable(lines), quoted[2]);
     });
 
     test('the observer hears it', () {
       final lines = play(() => open(observer: Reporter()), cancelAt: 10);
 
-      expect(quotable(lines), quoted[2]);
+      expect(quotable(lines), quoted[3]);
     });
 
     test('nobody hears it even when the outcome is left unobserved', () {
@@ -1384,7 +1438,7 @@ void main() {
         }),
       );
 
-      expect(lines, quoted[3]);
+      expect(lines, quoted[4]);
     });
 
     test('unattended hands it to the observer, after the job is over', () {
@@ -1394,7 +1448,7 @@ void main() {
         }),
       );
 
-      expect(lines, quoted[4]);
+      expect(lines, quoted[5]);
     });
 
     test('without an observer unattended goes to the creation zone', () {
@@ -1407,7 +1461,7 @@ void main() {
         ),
       );
 
-      expect(lines, quoted[3]);
+      expect(lines, quoted[4]);
     });
 
     test('a future made outside never comes back in there', () {

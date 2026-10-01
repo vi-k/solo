@@ -95,11 +95,35 @@ cleanup included. A body waiting on something slow with a bare `await` adds the
 rest of that wait to the count, where the same call through `ctx.wait` shows 0
 ms. The count starts at acceptance, not at `cancel()`: a cancellation held back
 by `ctx.uncancellable` is accepted when the section ends, so a 100 ms section
-cancelled 10 ms in shows 0 ms, while the caller of `cancel` waited 90 ms. A
-body that gives itself up, throwing `Cancelled` or letting a child's
+cancelled 10 ms in shows 0 ms, while the caller of `cancel` waited 90 ms.
+
+A body that gives itself up, throwing `Cancelled` or letting a child's
 cancellation out, accepts the cancellation as it throws, but `whenCancelled`
 fires only once its children have ended: the count leaves them out and shows
-the cleanup alone.
+the cleanup alone. Here a body starts a thumbnail and gives up at once;
+`makeThumbnail` takes 100 ms and does not hear the cancellation, and
+`deleteDraft` takes 50:
+
+```dart
+final job = Job<void>(
+  key: 'upload',
+  observer: SlowCancellations(),
+  (ctx) async {
+    ctx.onDispose(deleteDraft);
+    ctx.run(Job.deferred(key: 'thumbnail', (_) => makeThumbnail())).ignore();
+    throw const Cancelled('offline');
+  },
+);
+```
+
+```text
+Job(thumbnail) ran 100 ms past its cancellation
+Job(upload) ran 50 ms past its cancellation
+```
+
+The job runs 150 ms past its throw, and the count shows the 50 of
+`deleteDraft`. A job with the same child and the same cleanup, cancelled from
+outside, shows all 150 ms.
 
 ## A message for the log
 
