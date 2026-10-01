@@ -208,10 +208,10 @@ one the job was created in:
 | The body's, and the job accepts a cancellation after it: one arriving before the error leaves the body, while the job waits for its children or runs its cleanup, or one `ctx.uncancellable` held while its step failed | `onError`, then `onUnanswered` if the observer answers, the zone otherwise | The zone |
 | The body's, and it happened after the job accepted a cancellation | `onError` | Nobody |
 | The body's, in a branch of `ctx.runAll` whose group throws another failure | `onError`, then `onUnanswered` if the observer answers, the zone otherwise | The zone |
-| Outside the body: a late error of an action abandoned by `wait`, cleanup, a callback of `ctx.onCancel` or `job.whenCancelled`, work of `ctx.unattended`, formatting a child's cancellation description | `onError`, then `onUnanswered` if the observer answers, the zone otherwise | The zone |
+| Outside the body: a late error of an action abandoned by `ctx.wait`, cleanup, a callback of `ctx.onCancel` or `job.whenCancelled`, work of `ctx.unattended`, formatting a child's cancellation description | `onError`, then `onUnanswered` if the observer answers, the zone otherwise | The zone |
 | A `Cancelled` thrown outside the body | `onError`, then `onUnanswered` if the observer answers, nobody otherwise | Nobody |
-| The job's own cancellation, out of an action abandoned by `wait` or work of `ctx.unattended` | Nobody | Nobody |
-| What a context call the body did not await throws, the job's own cancellation included, and for `wait` only until the body ends | The zone the body runs in, as with any future nobody awaits | The zone the body runs in |
+| The job's own cancellation, out of an action abandoned by `ctx.wait` or work of `ctx.unattended` | Nobody | Nobody |
+| What a context call the body did not await throws, the job's own cancellation included, and for `ctx.wait` only until the body ends | The zone the body runs in, as with any future nobody awaits | The zone the body runs in |
 
 Whether a failure came before a cancellation is decided by when it happened,
 not by when the body threw it. The failure of an operation behind `ctx.wait` or
@@ -277,12 +277,12 @@ started it, or the one the work was started from if it was started inside
 `ctx.unattended`. The job's own cancellation goes there too: when the job is
 cancelled, a `ctx.wait` called without `await` throws `Cancelled` into its
 future, and Dart hands it to the zone like any other error. The job itself
-never sends a cancellation to the zone; Dart does. For `wait`, all of this
-holds only while the body runs. Once the body has ended, `wait` stops waiting
-for its action, as it does on a cancellation. If the action fails after that,
-its error takes the fifth row of the table, like that of an action `wait`
-stopped waiting for on a cancellation: `onError` hears it, and it goes on to
-the answer like the other errors outside the body.
+never sends a cancellation to the zone; Dart does. For `ctx.wait`, all of this
+holds only while the body runs. Once the body has ended, `ctx.wait` stops
+waiting for its action, as it does on a cancellation. If the action fails after
+that, its error takes the fifth row of the table, like that of an action
+`ctx.wait` stopped waiting for on a cancellation: `onError` hears it, and it
+goes on to the answer like the other errors outside the body.
 
 The errors no outcome carries go on from `onError` to an answer. An observer
 written to watch, like `Reporter`, gives none, and they go where they go
