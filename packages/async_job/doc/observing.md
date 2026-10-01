@@ -217,13 +217,15 @@ Whether a failure came before a cancellation is decided by when it happened,
 not by when the body threw it. The failure of an operation behind `ctx.wait` or
 `ctx.join`, of a callback of `ctx.each`, of a child or of a step of
 `ctx.uncancellable` does not leave the body at once: that takes a few
-microtasks, or a child's whole cleanup. A cancellation the job accepted in
-between came after the failure, though the body threw the failure later. The
-body keeps the failure first by letting it through, or by catching it and
-throwing it again later; a new error thrown in its place, a wrapper included,
-comes after the cancellation. The job learns when a failure happened from these
-members and from its children: a future the body awaits on its own comes first
-only if the body throws its error before the cancellation.
+microtasks, or a child's whole cleanup. If the job accepts a cancellation in
+between, the order is: the failure happens, the job accepts the cancellation,
+the body throws the failure. The job ends `Cancelled`, but the failure came
+before the cancellation, and it takes the second row of the table, not the
+third. The body keeps the failure first by letting it through, or by catching
+it and throwing it again later; a new error thrown in its place, a wrapper
+included, comes after the cancellation. The job learns when a failure happened
+from these members and from its children: a future the body awaits on its own
+comes first only if the body throws its error before the cancellation.
 
 A step of `ctx.uncancellable` and the same step behind `ctx.join` land in
 different rows. The section holds a cancellation that arrives while the step
