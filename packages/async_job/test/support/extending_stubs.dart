@@ -20,9 +20,17 @@ final class SignedOut implements Exception {
   String toString() => 'SignedOut';
 }
 
-/// Whether the user is signed in; the rule of the engine reads it.
+/// Whether the user is signed in; the rule of the engine reads it. An
+/// engine that wants to hear of a sign-out at once sets [onSignOut].
 final class Account {
   bool signedIn = true;
+
+  void Function()? onSignOut;
+
+  void signOut() {
+    signedIn = false;
+    onSignOut?.call();
+  }
 }
 
 final account = Account();
@@ -57,7 +65,7 @@ void userDoes(String act, Job<void> job) {
     if (act == 'cancel') {
       unawaited(job.cancel());
     } else {
-      account.signedIn = false;
+      account.signOut();
     }
   });
   job.done.then((outcome) => print('outcome: $outcome')).ignore();

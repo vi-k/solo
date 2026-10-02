@@ -313,21 +313,66 @@ exception: `check()` throws it inside the call that asked the rule, here
 during the download is noticed when `join` comes back, and one during a `wait`
 only at the next call that asks.
 
-An engine that cannot wait for the next checkpoint, or has to stop a job
-whatever its body catches, cancels the job itself when the user signs out, with
-the `Cancelled` its rule throws. It does so through wrappers of its own, as
-with `start`: around `cancelWith` with `rejectable: false`, or around
-`cancelOwnJob` of the context, which passes `false`. The job cannot refuse that
-cancellation, and no `ctx.uncancellable` holds it. `finish` ends a job with the
-outcome handed in, and it is no way to stop a running one: it waits for no
-children and stops none, runs no `onCancel` callback and unwinds no cleanup
-stack, so no `dispose` and no `discard` runs, and what the body opened stays
-open. Only the debug channel, switched on with `Job.debug = print;`, says how
-many cleanups were left behind. A job that has accepted a cancellation ends
-`Cancelled` whatever `finish` is handed: a `Done` or a `Failed` gives way to
-the cancellation the job accepted, a value handed in goes nowhere, and only
-another `Cancelled` handed in stands. An engine that finishes a running job by
-hand anyway releases what the job holds first.
+### Not waiting for the checkpoint
+
+With `wait` in place of the first `join`, the body goes on after the user
+signed out:
+
+```dart
+  final rows = await ctx.wait(download);
+```
+
+```text
+sign out
+downloaded 42 rows
+close the connection
+outcome: Cancelled(signed out)
+```
+
+`wait` asks the rule before the download and not after it, so the body had its
+rows, and the connection stayed open until `join` asked. An engine that cannot
+wait for the next checkpoint, or has to stop a job whatever its body catches,
+cancels the job itself when the user signs out, with the `Cancelled` its rule
+throws. `MyJob` gets a wrapper around `cancelWith`, as it has one around
+`start`:
+
+```dart
+  void _stop(Cancelled cancelled) => cancelWith(cancelled, rejectable: false);
+```
+
+The engine calls it from `account.onSignOut`, which the account calls when the
+user signs out:
+
+```dart
+account.onSignOut = () => job._stop(
+      Cancelled.by(
+        reason: const SignedOutReason(),
+        started: true,
+        stackTrace: StackTrace.current,
+      ),
+    );
+```
+
+```text
+sign out
+close the connection
+outcome: Cancelled(signed out)
+```
+
+The job accepts the cancellation inside the sign-out: its `onCancel` callbacks
+run there, and `wait` throws at once. With `rejectable: false` the job cannot
+refuse that cancellation, and no `ctx.uncancellable` holds it. A wrapper around
+`cancelOwnJob` of the context does the same: it passes `false` itself.
+
+`finish` ends a job with the outcome handed in, and it is no way to stop a
+running one: it waits for no children and stops none, runs no `onCancel`
+callback and unwinds no cleanup stack, so no `dispose` and no `discard` runs,
+and what the body opened stays open. Only the debug channel, switched on with
+`Job.debug = print;`, says how many cleanups were left behind. A job that has
+accepted a cancellation ends `Cancelled` whatever `finish` is handed: a `Done`
+or a `Failed` gives way to the cancellation the job accepted, a value handed in
+goes nowhere, and only another `Cancelled` handed in stands. An engine that
+finishes a running job by hand anyway releases what the job holds first.
 
 ## Deferred start
 

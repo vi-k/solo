@@ -40,6 +40,8 @@ final class MyJob<T> extends JobBase<T> {
 
   Future<void> get _whenDone => whenDone;
 
+  void _stop(Cancelled cancelled) => cancelWith(cancelled, rejectable: false);
+
   @override
   void cancelWith(Cancelled cancelled, {bool rejectable = true}) {
     final waits = _queue?._waiting.contains(this) ?? false;
@@ -111,6 +113,29 @@ void runDownload(String act) {
   })
     .._launch();
   userDoes(act, job);
+}
+
+/// The download with `wait` in place of the first `join`, signed out of
+/// while it runs; with [engineStops] the engine cancels the job itself.
+void runWaitingDownload({required bool engineStops}) {
+  final job = MyJob<void>(observer: printer, (ctx) async {
+    ctx.onCancel(() => print('close the connection'));
+    final rows = await ctx.wait(download);
+    print('downloaded $rows rows');
+    await ctx.join(() => save(rows));
+    print('saved');
+  })
+    .._launch();
+  if (engineStops) {
+    account.onSignOut = () => job._stop(
+          Cancelled.by(
+            reason: const SignedOutReason(),
+            started: true,
+            stackTrace: StackTrace.current,
+          ),
+        );
+  }
+  userDoes('sign out', job);
 }
 
 /// A job with a child, signed out of while both run; returns the child.
@@ -208,12 +233,9 @@ final class CountingJob extends JobBase<int> {
   Future<int> execute(covariant MyContext ctx) => _body(ctx);
 }
 
-/// The job of the page created with `cancellable: false`, with a wrapper
-/// for a cancellation no job may refuse.
+/// The job of the page created with `cancellable: false`.
 final class PatientJob<T> extends MyJob<T> {
   PatientJob(super.body, {super.key}) : super(cancellable: false);
-
-  void _stop(Cancelled cancelled) => cancelWith(cancelled, rejectable: false);
 }
 
 Cancelled signedOut() => Cancelled.by(
@@ -299,7 +321,11 @@ List<String> reachingTheZone(void Function() scenario) {
 }
 
 void main() {
-  setUp(() => account.signedIn = true);
+  setUp(() {
+    account
+      ..signedIn = true
+      ..onSignOut = null;
+  });
 
   group('A job of your own', () {
     test('finished runs for a job dropped before its body, started not', () {
@@ -851,6 +877,45 @@ void main() {
       });
     });
 
+    test('with wait the body goes on with the rows after a sign-out', () {
+      expect(printed(() => runWaitingDownload(engineStops: false)), [
+        'sign out',
+        'downloaded 42 rows',
+        'close the connection',
+        'outcome: Cancelled(signed out)',
+      ]);
+    });
+
+    test('the engine that cancels the job itself stops it at the sign-out', () {
+      expect(printed(() => runWaitingDownload(engineStops: true)), [
+        'sign out',
+        'close the connection',
+        'outcome: Cancelled(signed out)',
+      ]);
+    });
+
+    test('the job accepts that cancellation inside the sign-out', () {
+      fakeAsync((async) {
+        final seen = <String>[];
+        final job = MyJob<void>((ctx) async {
+          ctx.onCancel(() => seen.add('${async.elapsed.inMilliseconds} ms'));
+          await ctx.wait(download);
+        })
+          .._launch()
+          ..ignore();
+        account.onSignOut = () => job._stop(signedOut());
+        async.elapse(const Duration(milliseconds: 10));
+        account.signOut();
+        expect(seen, ['10 ms'], reason: 'onCancel runs inside the sign-out');
+        async.flushMicrotasks();
+        expect(
+          '${job.outcome}',
+          'Cancelled(signed out)',
+          reason: 'wait threw at once, 10 ms before the download ends',
+        );
+      });
+    });
+
     // The engine cancels the job itself: at once, whatever the body catches,
     // and neither `cancellable: false` nor a section holds it.
     for (final through in ['cancelWith', 'cancelOwnJob']) {
@@ -942,6 +1007,14 @@ void main() {
         account.signedIn = true;
         runDownload('sign out');
       }),
+      printed(() {
+        account.signedIn = true;
+        runWaitingDownload(engineStops: false);
+      }),
+      printed(() {
+        account.signedIn = true;
+        runWaitingDownload(engineStops: true);
+      }),
     ].map((lines) => lines.join('\n')).toList();
     final quotes = [
       for (final block in RegExp(r'```text\n(.*?)\n```', dotAll: true)
@@ -961,6 +1034,7 @@ void main() {
     '### The first attempt': 'test/support/extending_first_attempts.dart',
     '### Refusing while the job waits': 'test/extending_rakes_test.dart',
     "### A cancellation of the engine's own": 'test/extending_rakes_test.dart',
+    '### Not waiting for the checkpoint': 'test/extending_rakes_test.dart',
   };
   for (final MapEntry(key: heading, value: holder) in holders.entries) {
     test('the code under "$heading" is a run of lines of $holder', () {
