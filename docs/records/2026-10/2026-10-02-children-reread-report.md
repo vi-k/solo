@@ -482,3 +482,16 @@ zone that link was created in».
     ошибки не будет, группа просто ждёт». Утверждение то же; зависание держит
     группа `a branch awaiting a sibling hangs until the group can decide`
     в `run_all_test.dart`.
+
+18. «взятые через dispose? звучит странно» — о пункте «The same goes for a
+    branch waiting for what another one releases in its cleanup». Блокировку
+    берут не через `dispose`: через `dispose` её отпускают, и потому отпускание
+    ждёт размотки ветки. Причастный оборот прятал это в одно слово. Теперь
+    пункт показывает сам вызов со страницы об уборке и говорит, что из него
+    следует: «each branch takes the lock or a slot as on the cleanup page:
+    `ctx.join(Lock.acquire, dispose: (lock) => lock.release())`. The release is
+    that `dispose`, and it waits, so the lock or slot stays with the branch
+    that got it», в переводе «каждая ветка берёт блокировку или слот так, как
+    на странице об уборке: `…`. Освобождение записано в `dispose`, а он ждёт,
+    так что блокировка или слот остаются у ветки, которая их получила».
+    Утверждения те же, сторож тот же.

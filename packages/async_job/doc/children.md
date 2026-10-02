@@ -322,12 +322,15 @@ the way out.
 **The same goes for a branch waiting for what another one releases in its
 cleanup.** A branch starts unwinding only when every branch has ended its body
 and its children, or when the body of one of them has ended in anything but a
-value; until then its `dispose` and `onDispose` callbacks wait too. A lock the
-branches share, or a slot of a pool with fewer free slots than the branches
-that want one, taken with `dispose` as on [the cleanup page](cleanup.md), stays
-with the branch that got it. The branch waiting for it keeps every branch from
-unwinding, and the group hangs with no timer and no error until the body of
-another branch ends in anything but a value.
+value; until then its `dispose` and `onDispose` callbacks wait too. Say the
+branches share a lock, or a pool with fewer free slots than the branches that
+want one, and each branch takes the lock or a slot as on
+[the cleanup page](cleanup.md):
+`ctx.join(Lock.acquire, dispose: (lock) => lock.release())`. The release is
+that `dispose`, and it waits, so the lock or slot stays with the branch that
+got it. The branch waiting for it keeps every branch from unwinding, and the
+group hangs with no timer and no error until the body of another branch ends in
+anything but a value.
 
 A cancellation, of the parent or of a branch, unties it only when it ends what
 a branch still waits on before it unwinds: its body, or a child of it, waiting
