@@ -276,11 +276,12 @@ abstract interface class Job<T> {
   ///
   /// If cancellation has already been accepted and its callbacks have run,
   /// calls [callback] immediately, even if the job has finished. Registering
-  /// in between, while the cancellation cascades onto the children, puts the
-  /// callback in that pass instead, after the ones registered before it. A
-  /// refused or held cancellation does not trigger it; a held one triggers
-  /// it when it is accepted. A job that ends [Done] or [Failed] without
-  /// cancellation never calls it and releases its registrations on finish.
+  /// in between, while the cancellation cascades onto the children or the
+  /// job's [JobContext.onCancel] callbacks run, puts the callback in that
+  /// pass instead, after the ones registered before it. A refused or held
+  /// cancellation does not trigger it; a held one triggers it when it is
+  /// accepted. A job that ends [Done] or [Failed] without cancellation never
+  /// calls it and releases its registrations on finish.
   /// Registering does not observe a [Failed] outcome.
   ///
   /// Each registration runs once. Pending callbacks run in registration
