@@ -25,7 +25,8 @@ now reach the zone, and fail a test there.
   written on an observer without `JobAnswerer` is never called: the analyzer
   says so where it carries `@override`, and nowhere else. An engine built on
   the core answers for these errors through the observer it puts on its jobs,
-  the way `solo` does. See [An observer](doc/observing.md#an-observer).
+  the way `solo` does. See
+  [Answering for errors](doc/observing.md#answering-for-errors).
 
 - **`JobBase`, `JobContextBase` and `JobStatus` moved to
   `package:async_job/engine.dart`.** They are the protocol for building an
@@ -244,7 +245,7 @@ named as `Job(key)`, not by its class.
   reports each failure and drops each uncaught `Cancelled`. It calls
   `onFailure` not at all exactly when a job drops the error as a cancellation:
   the job decides by the same walk. See
-  [Where errors go](doc/observing.md#where-errors-go).
+  [Each failure on its own](doc/observing.md#each-failure-on-its-own).
 
 - The debug channel names a job that handed its value over and dropped the
   conditional registrations that went with it:

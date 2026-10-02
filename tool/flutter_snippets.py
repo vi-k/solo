@@ -41,9 +41,11 @@ neither. Its blocks are addressed by the subsection they stand in instead,
 `the-first-attempt/AppController`; the rest of the page by its sections.
 
 The quick start of solo's README is built here as well. It is pure Dart
-and belongs to no widget, but no other bench builds it, and a Dart file
-compiles in a Flutter package the same as anywhere -- with its import of
-`solo` read as one of flutter_solo, which re-exports it.
+and belongs to no widget, and a Dart file compiles in a Flutter package the
+same as anywhere -- with its import of `solo` read as one of flutter_solo,
+which re-exports it. `packages/solo/test/readme_rakes_test.dart` runs the
+code of that README too, inside the package; this bench keeps proving that
+the quick start builds against flutter_solo.
 
 What the drivers print is quoted by the document in `text` blocks, and
 `tool/check_traces.py` holds the two together. The guards in them are

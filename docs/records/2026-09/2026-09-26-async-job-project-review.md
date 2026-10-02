@@ -2289,6 +2289,13 @@ piece of code on the page is a run of lines of this file»
 заголовком каждой версии сверяется со своим файлом (`under:`
 у `codeMissingFrom`) — так ловится ответ, подменённый строкой первой попытки;
 отчёт `2026-09-28-extending-page-report.md`.
+Итог 2026-10-02 по остальным страницам `async_job`: сторожа `children.md`,
+`cleanup.md` и `observing.md` теперь держат код страницы дословно в своих
+support-файлах и запускают его, сверка идёт кусками и под заголовками, а у
+`cancellation.md` — ещё и по порядку блоков, помощником `codeOutOfPlace`.
+Отчёты `2026-10-02-children-reread-report.md`,
+`2026-10-02-cleanup-reread-report.md`, `2026-10-02-observing-reread-report.md`
+и `2026-10-02-cancellation-reread-report.md`.
 
 ### L61. Утверждения страниц без сторожа, который покраснеет
 
