@@ -311,12 +311,13 @@ A branch created with `cancellable: false` refuses that cancellation and ends
 **A branch waiting for another branch of the same group may never end.**
 Awaiting a sibling's `Job.value` or `Job.done` hangs the group: the sibling is
 held until the group decides, and the group decides only once every branch is
-held, or once the body of one of them has ended in anything but a value.
-Nothing catches that. A cancellation unties it on the same terms as the lock of
-the next point: a branch awaiting the sibling through `ctx.wait` ends, unless
-it was created with `cancellable: false` or waits inside `ctx.uncancellable`;
-one in a bare `await` does not. For branches that depend on each other,
-`[...].wait` is the way out.
+held, or once the body of one of them has ended in anything but a value. The
+core does not detect such a hang: no error comes out, and the group simply
+waits. A cancellation unties it on the same terms as the lock of the next
+point: a branch awaiting the sibling through `ctx.wait` ends, unless it was
+created with `cancellable: false` or waits inside `ctx.uncancellable`; one in a
+bare `await` does not. For branches that depend on each other, `[...].wait` is
+the way out.
 
 **The same goes for a branch waiting for what another one releases in its
 cleanup.** A branch starts unwinding only when every branch has ended its body

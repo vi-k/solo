@@ -471,3 +471,14 @@ zone that link was created in».
     `probe_owner_held_test.dart` с `cancellable: false`: после решения группы
     `Done(1)`, `isCancelled=false`, родитель `Failed`. Сторож: новый тест
     `a held branch with cancellable: false refuses and ends Done`, 54 теста.
+
+17. «Ничто этого не ловит — перед уже многое сказано, поэтому не понятно, чего
+    „этого“ не ловит» — о пункте «A branch waiting for another branch of the
+    same group may never end». «Этого» стояло после фразы о трёх вещах — сосед,
+    которого держат, группа, которая решает, тело, кончившееся не значением, —
+    а значило само зависание. Теперь фраза его называет и говорит, что значит
+    «не ловит»: «The core does not detect such a hang: no error comes out, and
+    the group simply waits», в переводе «Ядро такое зависание не распознаёт:
+    ошибки не будет, группа просто ждёт». Утверждение то же; зависание держит
+    группа `a branch awaiting a sibling hangs until the group can decide`
+    в `run_all_test.dart`.
