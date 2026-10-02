@@ -572,3 +572,15 @@ zone that link was created in».
     and the body closes its value through the job it passed` — `images` падает,
     родитель `Failed`, трасса `rows closed`. Без строки `value.close()` трасса
     пуста: источник правда не закрывает никто. Сторож страницы — 58 тестов.
+
+24. «в этом примере зачем в rows используется ctx.wait? отмены же не будет» —
+    о примере из п. 23. Незачем: ветка с `cancellable: false` отклоняет любую
+    отмену, а её `discard` не срабатывает — об этом и абзац;
+    `ctx.wait(openRows, discard: ...)` в ней лишний. Теперь
+    `Job.deferred<Source>(cancellable: false, (ctx) => openRows())`, и проза
+    говорит это сама: «a `discard` the branch registered would not run, and
+    nothing else closes the resource. Such a branch has no use for `ctx.wait`
+    either, since it refuses every cancellation, so it opens the source
+    directly», в переводе так же. Что зарегистрированный `discard`
+    не сработал бы, показала проверка п. 23: с ним и без `value.close()` трасса
+    была пуста. Сторож тот же, 58 тестов.

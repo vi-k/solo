@@ -148,10 +148,7 @@ Job<void> refusingBranch() {
     final images = Job.deferred<Source>(
       (ctx) => ctx.wait(openImages, discard: (source) => source.close()),
     );
-    final rows = Job.deferred<Source>(
-      cancellable: false,
-      (ctx) => ctx.wait(openRows, discard: (source) => source.close()),
-    );
+    final rows = Job.deferred<Source>(cancellable: false, (ctx) => openRows());
     try {
       await ctx.runAll([rows, images]);
     } on Object {
