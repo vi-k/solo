@@ -304,13 +304,13 @@ closed, and the outcome is `Cancelled`. The body lets the rule's `Cancelled`
 out and gives itself up with it, and a job whose body gives itself up stops the
 way a cancelled one does: its `onCancel` callbacks run and its children stop.
 The job accepts the rule's cancellation as the body lets it out, not before: a
-body that catches it and goes on is not cancelled. Nobody asked the job for
-this cancellation, so it does not come through `cancelWith`. Neither
-`cancellable: false` nor `ctx.uncancellable` stands in the rule's way: they
-refuse or hold a cancellation asked of the job, and the rule's comes as a throw
-from the very step it stops. The rule is asked where `check()` is asked and
-nowhere else: a sign-out during the download is noticed when `join` comes back,
-and one during a `wait` only at the next call that asks.
+body that catches it in a `try`/`catch` and goes on is not cancelled. Nobody
+asked the job for this cancellation, so it does not come through `cancelWith`.
+Neither `cancellable: false` nor `ctx.uncancellable` stands in the rule's way:
+they refuse or hold a cancellation asked of the job, and the rule's comes as a
+throw from the very step it stops. The rule is asked where `check()` is asked
+and nowhere else: a sign-out during the download is noticed when `join` comes
+back, and one during a `wait` only at the next call that asks.
 
 An engine that cannot wait for the next checkpoint, or has to stop a job
 whatever its body catches, cancels the job itself when the user signs out, with
