@@ -338,12 +338,29 @@ through `ctx.wait` or on an operation that hears `ctx.onCancel`. It does not
 end one stuck in `ctx.join` on an operation deaf to it, in a bare `await`,
 inside `ctx.uncancellable`, or in a job created with `cancellable: false`.
 Cancelling the branch that holds the lock does nothing: its body is over. Take
-such a lock in a child of the branch, which releases it when the child ends,
-still inside the body. If that child also opens what the branch hands out, the
-branch registers it on arrival, `ctx.run(child, discard: ...)`, as in
-[Registering on arrival](cleanup.md#registering-on-arrival), and that `discard`
-runs without the lock. Or use `[...].wait`, under which every branch unwinds on
-its own.
+such a lock in a child of the branch instead, which releases it when the child
+ends, still inside the body of the branch:
+
+```dart
+Job.deferred<Source>((ctx) async {
+  final locked = Job.deferred<Source>((ctx) async {
+    await ctx.join(Lock.acquire, dispose: (lock) => lock.release());
+    return ctx.wait(openRows, discard: (source) => source.close());
+  });
+
+  return ctx.run(locked, discard: (source) => source.close());
+});
+```
+
+The child `locked` holds the lock and also opens the source the branch returns.
+It does not close that source itself — it hands the source over, and its
+`discard` runs only if the value reaches nobody. So the branch registers its
+own closing the moment the source arrives: the `discard` passed to
+`ctx.run(locked, ...)`, as in
+[Registering on arrival](cleanup.md#registering-on-arrival). If the group ends
+in anything but success, the branch closes the source itself, and by then
+nobody holds the lock: the child released it when it ended. Or use
+`[...].wait`, under which every branch unwinds on its own.
 
 ## What a group hands back
 

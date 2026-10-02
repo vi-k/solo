@@ -21,11 +21,35 @@ final class Stage {
   int warmTake = 30;
   Object? warmError;
 
+  bool lockHeld = false;
+  final lockQueue = <Completer<void>>[];
+
   // ignore: close_sinks
   final messages = StreamController<String>();
 }
 
 Stage stage = Stage();
+
+/// One lock for the whole stage: a second taker waits for the release.
+final class Lock {
+  static Future<Lock> acquire() async {
+    while (stage.lockHeld) {
+      final turn = Completer<void>();
+      stage.lockQueue.add(turn);
+      stage.trace.add('lock waits');
+      await turn.future;
+    }
+    stage.lockHeld = true;
+    stage.trace.add('lock acquired');
+    return Lock();
+  }
+
+  void release() {
+    stage.lockHeld = false;
+    stage.trace.add('lock released');
+    if (stage.lockQueue.isNotEmpty) stage.lockQueue.removeAt(0).complete();
+  }
+}
 
 /// A resource a branch opens; closing it is written to the trace.
 final class Source {

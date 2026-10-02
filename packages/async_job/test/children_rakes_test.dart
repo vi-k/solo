@@ -871,6 +871,72 @@ void main() {
       });
     });
 
+    test(
+        'a lock taken in a child of the branch: two branches share it, '
+        'and the group ends', () {
+      fakeAsync((async) {
+        final parent = Job<void>((ctx) async {
+          final sources =
+              await ctx.runAll([page.lockedBranch(), page.lockedBranch()]);
+          for (final source in sources) {
+            source.close();
+          }
+        });
+        async.flushTimers();
+        expect(parent.outcome, isA<Done<void>>());
+        expect(trace(), [
+          'lock acquired',
+          'lock waits',
+          'lock released',
+          'lock acquired',
+          'lock released',
+          'rows closed',
+          'rows closed',
+        ]);
+      });
+    });
+
+    test(
+        'a lock taken in a child of the branch: when the group fails, the '
+        'branch closes the source after the child released the lock', () {
+      fakeAsync((async) {
+        final fails = Job.deferred<stubs.Source>((ctx) async {
+          await ctx.wait(() => delay(50));
+          throw StateError('disk');
+        });
+        final parent = Job<void>((ctx) async {
+          await ctx.runAll([page.lockedBranch(), fails]);
+        })
+          ..ignore();
+        async.flushTimers();
+        expect(parent.outcome, isA<Failed>());
+        expect(trace(), ['lock acquired', 'lock released', 'rows closed']);
+      });
+    });
+
+    test('the same lock taken in the branch itself hangs the group', () {
+      fakeAsync((async) {
+        Job<stubs.Source> branch() => Job.deferred<stubs.Source>((ctx) async {
+              await ctx.join(
+                stubs.Lock.acquire,
+                dispose: (lock) => lock.release(),
+              );
+              return ctx.wait(
+                stubs.openRows,
+                discard: (source) => source.close(),
+              );
+            });
+        final parent = Job<void>((ctx) async {
+          await ctx.runAll([branch(), branch()]);
+        })
+          ..ignore();
+        async.flushTimers();
+        expect(parent.isFinished, isFalse);
+        expect(trace(), ['lock acquired', 'lock waits']);
+        parent.cancel().ignore();
+      });
+    });
+
     test('runAll hands the values back in the order of the list', () {
       fakeAsync((async) {
         final job = page.loadAll();

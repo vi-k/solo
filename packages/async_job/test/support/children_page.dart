@@ -131,6 +131,18 @@ Job<Source> warmingBranch() {
   return branch;
 }
 
+Job<Source> lockedBranch() {
+  final branch = Job.deferred<Source>((ctx) async {
+    final locked = Job.deferred<Source>((ctx) async {
+      await ctx.join(Lock.acquire, dispose: (lock) => lock.release());
+      return ctx.wait(openRows, discard: (source) => source.close());
+    });
+
+    return ctx.run(locked, discard: (source) => source.close());
+  });
+  return branch;
+}
+
 Job<void> groupFirstAttempt(List<Job<Source>> branches) =>
     Job<void>((ctx) async {
       final sources = await ctx.runAll(branches);

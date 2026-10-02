@@ -190,9 +190,9 @@ README `solo`, `2026-10-02-solo-readme-reread-report.md`. Владелец чи�
 `flutter`, `floor`, `snippets` и `docs`; это первый полный прогон `floor` в CI.
 У `gate` стоит `cancel-in-progress`, поэтому из коммитов, отправленных подряд,
 до конца доходит прогон только последнего. Последний прогон `site` —
-на `1a6a618`, зелёный. Проверки: `packages/async_job` после разбивки раздела
-«Children» в `children.md` — формат и анализ чистые, `dart test` зелёный, 1180
-тестов; `dart doc --dry-run` чистый на коммите вычитки `children.md`;
+на `1a6a618`, зелёный. Проверки: `packages/async_job` после примера
+с блокировкой в `children.md` — формат и анализ чистые, `dart test` зелёный,
+1184 теста; `dart doc --dry-run` чистый на коммите вычитки `children.md`;
 `packages/solo` на коммите переноса его README — формат и анализ чистые, 868
 тестов; из корня на коммите вычитки `reflow.py --check`, `check_line_width.py`,
 `check_links.py`, `check_translations.py` и `check_doc_shape.py` зелёные.
