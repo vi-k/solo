@@ -100,9 +100,10 @@ and
 
 The engine runs its jobs one at a time, in the order they came. A job may be
 cancelled while it waits for its turn, and the ones behind it still have to
-run. In this engine a job created with `cancellable: false` is not to be
-cancelled while it waits either: it runs when its turn comes, whatever was
-asked of it meanwhile.
+run. Unlike `solo`, which takes a cancelled job out of its queue, this engine
+leaves it there and skips it when its turn comes. With `cancellable: false` a
+job of this engine is not to be cancelled while it waits either: it runs when
+its turn comes, whatever was asked of it meanwhile.
 
 ### The first attempt
 
@@ -201,11 +202,6 @@ second: Done(null)
 
 `cancel()` returns a future that waits for the job to be over, refused or not,
 so here it completes once the second job has run.
-
-`solo` refuses in its `cancelWith` the same way. Its queue differs from this
-one in how a job that accepts a cancellation leaves it: there the same override
-takes the job out at once, while here the cancelled job stays in `_waiting`
-until its turn, and the loop skips it then.
 
 ## A rule of your own
 
