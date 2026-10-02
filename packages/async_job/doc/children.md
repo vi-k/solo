@@ -399,9 +399,23 @@ cleanup page shows the call in
 
 One thing stays open, and it follows from
 [Choosing the callback](cleanup.md#choosing-the-callback) on the cleanup page.
-A branch created with `cancellable: false` refuses the stop and ends `Done`: it
-hands its value over through its own `Job.value`, so its `discard` does not run
-and the resource is the caller's to close, through the handle it passed in.
+A branch created with `cancellable: false` refuses the stop and ends `Done`:
+its value counts as handed over through its own `Job.value`, so its `discard`
+does not run, and nothing else closes the resource. The body still holds
+`rows`, the job it passed to `runAll`, and closes the value through it:
+
+```dart
+final rows = Job.deferred<Source>(
+  cancellable: false,
+  (ctx) => ctx.wait(openRows, discard: (source) => source.close()),
+);
+try {
+  await ctx.runAll([rows, images]);
+} on Object {
+  if (rows.outcome case Done(:final value)) value.close();
+  rethrow;
+}
+```
 
 The list itself is a value like any other, and the body is its receiver: unlike
 `run`, `runAll` takes no `dispose` or `discard` of its own to register it with

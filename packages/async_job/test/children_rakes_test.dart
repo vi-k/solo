@@ -914,6 +914,18 @@ void main() {
       });
     });
 
+    test(
+        'a branch with cancellable: false ends Done under a failed group, '
+        'and the body closes its value through the job it passed', () {
+      fakeAsync((async) {
+        stubs.stage.imagesError = StateError('disk');
+        final parent = page.refusingBranch()..ignore();
+        async.flushTimers();
+        expect(parent.outcome, isA<Failed>());
+        expect(trace(), ['rows closed']);
+      });
+    });
+
     test('the same lock taken in the branch itself hangs the group', () {
       fakeAsync((async) {
         Job<stubs.Source> branch() => Job.deferred<stubs.Source>((ctx) async {

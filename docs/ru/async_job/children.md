@@ -399,9 +399,24 @@ Job.deferred<Source>((ctx) async {
 
 Одна вещь остаётся открытой, и она следует из раздела
 [«Выбор колбэка»](cleanup.md#выбор-колбэка) страницы об уборке. Ветка,
-созданная с `cancellable: false`, остановку отвергает и кончается `Done`: она
-отдаёт значение через свой `Job.value`, поэтому её `discard` не выполняется,
-и ресурс закрывает вызывающий через тот хэндл, который сам же и передал.
+созданная с `cancellable: false`, остановку отвергает и кончается `Done`: её
+значение считается отданным через её собственный `Job.value`, поэтому её
+`discard` не выполняется, и больше ресурс никто не закрывает. Тело по-прежнему
+держит `rows`, задачу, которую передало в `runAll`, и закрывает значение через
+неё:
+
+```dart
+final rows = Job.deferred<Source>(
+  cancellable: false,
+  (ctx) => ctx.wait(openRows, discard: (source) => source.close()),
+);
+try {
+  await ctx.runAll([rows, images]);
+} on Object {
+  if (rows.outcome case Done(:final value)) value.close();
+  rethrow;
+}
+```
 
 Сам список ничем не отличается от любого другого значения, и получателем его
 служит тело: в отличие от `run`, у `runAll` нет своих `dispose` или `discard`,

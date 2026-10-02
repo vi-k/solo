@@ -554,3 +554,21 @@ zone that link was created in».
     живёт до полного успеха группы, а если группа кончится чем-то другим, ветка
     закроет его сама. Утверждения те же; сторож — тест п. 19 о провале соседа,
     где ветка закрывает источник после того, как ребёнок отпустил блокировку.
+
+23. «и ресурс закрывает вызывающий через тот хэндл, который сам же и передал. —
+    не понятно» — о разделе «What a group hands back», абзац о ветке
+    с `cancellable: false`. «Хэндл» значил саму задачу ветки, которую тело
+    передало в `runAll` и которая у него осталась, но ни слово, ни сказанное
+    о нём ничего не показывали. Теперь абзац говорит, что ресурс больше никто
+    не закрывает, и показывает, как его закрыть: ветка `rows`
+    с `cancellable: false`, `try` вокруг `ctx.runAll([rows, images])`,
+    и в `on Object` —
+    `if (rows.outcome case Done(:final value)) value.close();` и `rethrow`.
+    Проза: «The body still holds `rows`, the job it passed to `runAll`, and
+    closes the value through it», в переводе «Тело по-прежнему держит `rows`,
+    задачу, которую передало в `runAll`, и закрывает значение через неё».
+    Сторож: блок в `children_page.dart` как `refusingBranch()`, тест
+    `a branch with cancellable: false ends Done under a failed group,
+    and the body closes its value through the job it passed` — `images` падает,
+    родитель `Failed`, трасса `rows closed`. Без строки `value.close()` трасса
+    пуста: источник правда не закрывает никто. Сторож страницы — 58 тестов.

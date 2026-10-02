@@ -143,6 +143,25 @@ Job<Source> lockedBranch() {
   return branch;
 }
 
+Job<void> refusingBranch() {
+  final parent = Job<void>((ctx) async {
+    final images = Job.deferred<Source>(
+      (ctx) => ctx.wait(openImages, discard: (source) => source.close()),
+    );
+    final rows = Job.deferred<Source>(
+      cancellable: false,
+      (ctx) => ctx.wait(openRows, discard: (source) => source.close()),
+    );
+    try {
+      await ctx.runAll([rows, images]);
+    } on Object {
+      if (rows.outcome case Done(:final value)) value.close();
+      rethrow;
+    }
+  });
+  return parent;
+}
+
 Job<void> groupFirstAttempt(List<Job<Source>> branches) =>
     Job<void>((ctx) async {
       final sources = await ctx.runAll(branches);
