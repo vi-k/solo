@@ -358,3 +358,21 @@ zone that link was created in».
    в первом прогоне так же не кончились 1200 и 2000 после 1000. Поодиночке
    1100, 1200 и 1500 кончаются `Failed`. Похоже, переполнение иногда приходится
    на код самого ядра посреди его учёта. Не чинилось: передано владельцу.
+
+8. «тело взяло их future, поэтому ядро считает их ошибки обработанными и в зону
+   их не отдаёт. — трудная для понимания фраза» и «`ctx.run(child).ignore()`
+   обрабатывает эту future — давай вместо „обрабатывает“ напишем что-то типа
+   „гасит“». Первая фраза, в разделе «Waiting for several children», сводила
+   в «их ошибки обработанными» два разных механизма. Теперь она их называет:
+   «Neither the core nor Dart hands it to the zone: for the core, `run` looks
+   at the child's outcome, since the body waits for its future, and
+   `Future.wait` lets every error but the first go quietly», в переводе «В зону
+   её не отдаёт ни ядро, ни Dart: для ядра на исход ребёнка смотрит `run`, ведь
+   тело ждёт его future, а `Future.wait` молча отпускает все ошибки, кроме
+   первой». Утверждение то же, и сторож тот же: тест группы
+   `Waiting for several children` без наблюдателя держит пустую зону. Вторая:
+   `ctx.run(child).ignore()` теперь «гасит ошибку этой future»,
+   а не «обрабатывает эту future» — гасит не future, а её ошибку; абзацем ниже
+   так же «он гасит то, что бросает future». Оригинал: «silences the error of
+   that future» и «it silences what the future throws», рядом
+   с «`child.ignore()` silences it».

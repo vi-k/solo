@@ -87,8 +87,8 @@ finishing. `child.ignore()` is no substitute for `ctx.run(child).ignore()`.
 here `run` looks — it waits for the child's value. If `child` fails, its error
 arrives through the future `run` returned, an ordinary Dart future: left
 unhandled, it goes to the zone, and so does the child's `Cancelled`.
-`ctx.run(child).ignore()` handles that future and nothing more: the child's
-observer still hears the error through `onError`.
+`ctx.run(child).ignore()` silences the error of that future and nothing more:
+the child's observer still hears the error through `onError`.
 
 If the child's body fails and a cancellation reaches the child afterwards —
 while it still waits for children of its own or runs its cleanup, say — its
@@ -97,7 +97,7 @@ error does not arrive through that future. The child ends `Cancelled`,
 nobody handled goes: to the child's observer and, unless that observer answers
 for it, to the zone, as in [Where errors go](observing.md#where-errors-go) on
 the observing page. `child.ignore()` silences it. `ctx.run(child).ignore()`
-does not: it handles what the future throws, and the future throws the
+does not: it silences what the future throws, and the future throws the
 cancellation. To answer for the error differently, give the child an observer
 that answers: a `JobAnswerer` with `onUnanswered` overridden.
 
@@ -168,8 +168,9 @@ that decides the parent's outcome by a race. Say `rows` fails and `images` ends
 and the failure of `rows` is nowhere in the outcome. Each failed child does
 still announce its own failure to its observer — and only there, so where
 neither the parent nor its children have an observer, that error is lost
-entirely: the body took their futures, so the core counts their errors as
-handled and keeps them out of the zone.
+entirely. Neither the core nor Dart hands it to the zone: for the core, `run`
+looks at the child's outcome, since the body waits for its future, and
+`Future.wait` lets every error but the first go quietly.
 
 If `rows` fails and `images` succeeds, the source `images` opened is lost with
 the values. A branch that returns what it opened hands it over — that is what
