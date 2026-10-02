@@ -168,15 +168,46 @@ Job<void> groupFirstAttempt(List<Job<Source>> branches) =>
       }
     });
 
-Job<void> groupNextLine(List<Job<Source>> branches) => Job<void>((ctx) async {
+Job<void> groupTry(List<Job<Source>> branches) => Job<void>((ctx) async {
       final sources = await ctx.runAll(branches);
-      ctx.onDispose(() {
+      try {
+        await ctx.join(() => writeArchive(sources));
+      } finally {
         for (final source in sources) {
           source.close();
         }
-      });
-      await ctx.join(() => writeArchive(sources));
+      }
     });
+
+Job<List<Source>> handedOutCatch(List<Job<Source>> branches) {
+  final exported = Job.deferred<List<Source>>((ctx) async {
+    final sources = await ctx.runAll(branches);
+    try {
+      await ctx.join(() => writeArchive(sources));
+    } on Object {
+      for (final source in sources) {
+        source.close();
+      }
+      rethrow;
+    }
+    return sources;
+  });
+  return exported;
+}
+
+Job<List<Source>> handedOutDiscard(List<Job<Source>> branches) {
+  final exported = Job.deferred<List<Source>>((ctx) async {
+    final sources = await ctx.runAll(branches);
+    ctx.onDiscard(() {
+      for (final source in sources) {
+        source.close();
+      }
+    });
+    await ctx.join(() => writeArchive(sources));
+    return sources;
+  });
+  return exported;
+}
 
 Future<void> saveMessages(
   Stream<String> messages,

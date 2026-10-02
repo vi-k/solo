@@ -460,41 +460,7 @@ void main() {
     });
   });
 
-  group('The list a group returns', () {
-    test('onDispose registers on a job already marked', () {
-      fakeAsync((async) {
-        final trace = <String>[];
-        final parent = Job<void>((ctx) async {
-          final sources = await ctx.runAll([
-            Job.deferred<Source>((ctx) async => Source('rows', trace)),
-          ]);
-          try {
-            await ctx.wait(() => delay(40));
-          } on Cancelled {
-            trace.add('the manifest was cancelled');
-          }
-          ctx.onDispose(() {
-            for (final source in sources) {
-              source.close();
-            }
-          });
-          trace.add('registered');
-        })
-          ..ignore();
-
-        async.elapse(const Duration(milliseconds: 20));
-        parent.cancel().ignore();
-        async.flushTimers();
-
-        // No checkpoint of its own, so the same window costs nothing.
-        expect(trace, [
-          'the manifest was cancelled',
-          'registered',
-          'rows closed',
-        ]);
-      });
-    });
-  });
+  group('The list a group returns', () {});
 
   group('Processing streams', () {});
 
@@ -999,9 +965,9 @@ void main() {
       });
     });
 
-    test('the next line closes the list on a stop during the archive', () {
+    test('the try closes the list on a stop during the archive', () {
       fakeAsync((async) {
-        final parent = page.groupNextLine(branches())..ignore();
+        final parent = page.groupTry(branches())..ignore();
         async.elapse(const Duration(milliseconds: 20));
         parent.cancel().ignore();
         async.flushTimers();
@@ -1010,13 +976,70 @@ void main() {
       });
     });
 
-    test('the next line closes the list on a failing archive', () {
+    test('the try closes the list on a failing archive', () {
       fakeAsync((async) {
         stubs.stage.archiveError = StateError('disk');
-        final parent = page.groupNextLine(branches())..ignore();
+        final parent = page.groupTry(branches())..ignore();
         async.flushTimers();
         expect(parent.outcome, isA<Failed>());
         expect(trace(), ['rows closed', 'images closed']);
+      });
+    });
+
+    /// Runs [exported] next to a sibling that fails after it returned.
+    Job<void> beside(Job<List<stubs.Source>> exported, {bool fails = true}) {
+      final sibling = Job.deferred<void>((ctx) async {
+        await ctx.join(() => delay(80));
+        if (fails) throw StateError('sibling');
+      });
+      return Job<void>((ctx) async {
+        final lists = await ctx.runAll<Object?>([exported, sibling]);
+        stubs.stage.trace.add('${(lists.first! as List).length} arrived');
+      });
+    }
+
+    test('catch closes a handed-out list on a failing archive', () {
+      fakeAsync((async) {
+        stubs.stage.archiveError = StateError('disk');
+        final exported = page.handedOutCatch(branches());
+        final parent = beside(exported)..ignore();
+        async.flushTimers();
+        expect(parent.outcome, isA<Failed>());
+        expect(trace(), ['rows closed', 'images closed']);
+      });
+    });
+
+    test('catch leaks a handed-out list a failing sibling takes away', () {
+      fakeAsync((async) {
+        final exported = page.handedOutCatch(branches());
+        final parent = beside(exported)..ignore();
+        async.flushTimers();
+        // The body returned at 50, the sibling fails at 80: the branch is
+        // cancelled with its value in hand, and nothing closes the list.
+        expect(exported.outcome, isA<Cancelled>());
+        expect(parent.outcome, isA<Failed>());
+        expect(trace(), ['archive of 2']);
+      });
+    });
+
+    test('onDiscard closes a handed-out list a failing sibling takes away', () {
+      fakeAsync((async) {
+        final exported = page.handedOutDiscard(branches());
+        final parent = beside(exported)..ignore();
+        async.flushTimers();
+        expect(exported.outcome, isA<Cancelled>());
+        expect(parent.outcome, isA<Failed>());
+        expect(trace(), ['archive of 2', 'rows closed', 'images closed']);
+      });
+    });
+
+    test('onDiscard leaves a handed-out list open when it arrives', () {
+      fakeAsync((async) {
+        final exported = page.handedOutDiscard(branches());
+        final parent = beside(exported, fails: false);
+        async.flushTimers();
+        expect(parent.outcome, isA<Done<void>>());
+        expect(trace(), ['archive of 2', '2 arrived']);
       });
     });
 

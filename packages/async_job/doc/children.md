@@ -442,24 +442,69 @@ reaches the loop. The list is already in the body's hands and now unreachable,
 and nothing announces the leak: what the caller sees is an ordinary
 cancellation or the error of the archive.
 
-### The next line
+### A `try` on the next line
 
 ```dart
 final sources = await ctx.runAll(branches);
-ctx.onDispose(() {
+try {
+  await ctx.join(() => writeArchive(sources));
+} finally {
   for (final source in sources) {
     source.close();
   }
-});
-await ctx.join(() => writeArchive(sources));
+}
 ```
 
-Registered on the very next line after the group returns, before anything that
-can throw, the list is closed by the end of the job whatever the outcome.
-`ctx.onDispose` and `ctx.onDiscard` run no check first, so the registration
-happens even on a job that has already accepted a cancellation. Use `onDispose`
-when the list is the body's own, `onDiscard` when the list is what the body
-returns or hands on further — the same choice as anywhere else in this rule.
+The `try` opens on the very next line after the group returns, before anything
+that can throw, and `finally` runs however the body leaves it: on the
+cancellation `join` throws, on the error of the archive, or after the last
+line. For a list the body keeps for itself, that closes every source.
+
+### A list the body hands out
+
+```dart
+final exported = Job.deferred<List<Source>>((ctx) async {
+  final sources = await ctx.runAll(branches);
+  try {
+    await ctx.join(() => writeArchive(sources));
+  } on Object {
+    for (final source in sources) {
+      source.close();
+    }
+    rethrow;
+  }
+  return sources;
+});
+```
+
+This branch writes the archive and then returns the sources open, for its
+caller to use further. `finally` would close them on success as well, so the
+closing moves to `catch`. That covers every error of the body, and nothing
+after it: a returned list can still reach nobody. When `exported` is a branch
+of a group and a sibling fails after the body has returned, the group cancels
+the branch, as [What a group hands back](#what-a-group-hands-back) describes,
+and the list never reaches the caller. The body has long left the `try` by
+then, and the sources stay open.
+
+`ctx.onDiscard` runs exactly when the value reaches nobody, so it closes the
+list in that case too, and stays out of the way when the list arrives:
+
+```dart
+final exported = Job.deferred<List<Source>>((ctx) async {
+  final sources = await ctx.runAll(branches);
+  ctx.onDiscard(() {
+    for (final source in sources) {
+      source.close();
+    }
+  });
+  await ctx.join(() => writeArchive(sources));
+  return sources;
+});
+```
+
+It goes on the very next line for the same reason as the `try`. For a list the
+body keeps for itself, `ctx.onDispose` with the same loop does what `finally`
+does.
 
 ## Processing streams
 
