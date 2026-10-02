@@ -89,7 +89,9 @@ it reaches `start`, and only on jobs of its own. A context method that must not
 be called from the work of `ctx.unattended` calls `throwIfUnattended` first;
 that work is the subject of
 [Work the job does not wait for](observing.md#work-the-job-does-not-wait-for)
-on the observing page. The full protected API is in the reference of
+on the observing page.
+
+The full protected API is in the reference of
 [JobBase](https://pub.dev/documentation/async_job/latest/engine/JobBase-class.html)
 and
 [JobContextBase](https://pub.dev/documentation/async_job/latest/engine/JobContextBase-class.html).

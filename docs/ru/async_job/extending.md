@@ -92,7 +92,9 @@ final class MyContext extends JobContextBase {
 переданной в `ctx.unattended`, сначала вызывает `throwIfUnattended`; об этой
 работе говорит раздел
 [«Работа, которую задача не ждёт»](observing.md#работа-которую-задача-не-ждёт)
-страницы о наблюдении. Весь защищённый API описан в справке
+страницы о наблюдении.
+
+Весь защищённый API описан в справке
 [JobBase](https://pub.dev/documentation/async_job/latest/engine/JobBase-class.html)
 и [JobContextBase](https://pub.dev/documentation/async_job/latest/engine/JobContextBase-class.html).
 
