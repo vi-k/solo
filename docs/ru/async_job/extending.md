@@ -127,8 +127,8 @@ final class MyQueue {
 
 ```dart
 final first = MyJob<void>(key: 'first', (ctx) => ctx.wait(upload));
-final second = MyJob<void>(key: 'second', (ctx) => ctx.wait(upload));
-final third = MyJob<void>(key: 'third', (ctx) async => print('third runs'));
+final second = MyJob<void>(key: 'second', (_) async => print('second runs'));
+final third = MyJob<void>(key: 'third', (_) async => print('third runs'));
 final queue = MyQueue()
   ..add(first)
   ..add(second)

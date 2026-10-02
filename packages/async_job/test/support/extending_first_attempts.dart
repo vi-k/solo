@@ -53,8 +53,8 @@ final class MyQueue {
 
 Future<void> runQueue() async {
   final first = MyJob<void>(key: 'first', (ctx) => ctx.wait(upload));
-  final second = MyJob<void>(key: 'second', (ctx) => ctx.wait(upload));
-  final third = MyJob<void>(key: 'third', (ctx) async => print('third runs'));
+  final second = MyJob<void>(key: 'second', (_) async => print('second runs'));
+  final third = MyJob<void>(key: 'third', (_) async => print('third runs'));
   final queue = MyQueue()
     ..add(first)
     ..add(second)
@@ -90,8 +90,8 @@ Future<void> runQueueLeavingInFinished() async {
   final queue = MyQueue();
   LeavingJob<void>(queue, key: 'first', (ctx) => ctx.wait(upload));
   final second =
-      LeavingJob<void>(queue, key: 'second', (ctx) => ctx.wait(upload));
-  LeavingJob<void>(queue, key: 'third', (ctx) async => print('third runs'));
+      LeavingJob<void>(queue, key: 'second', (_) async => print('second runs'));
+  LeavingJob<void>(queue, key: 'third', (_) async => print('third runs'));
   final running = queue.run();
   await second.cancel();
   print('second: ${await second.done}');
