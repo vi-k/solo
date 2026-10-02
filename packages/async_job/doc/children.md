@@ -427,31 +427,20 @@ the body registers the list itself.
 
 ```dart
 final sources = await ctx.runAll(branches);
-await ctx.join(loadManifest);
-await ctx.wait(
-  () => sources,
-  dispose: (values) {
-    for (final source in values) {
-      source.close();
-    }
-  },
-);
+await ctx.join(() => writeArchive(sources));
+for (final source in sources) {
+  source.close();
+}
 ```
 
-`ctx.wait` registers only what its action returns, so the list has to be
-wrapped in an action: `() => sources` opens nothing and only hands back the
-list the body already holds. The registration reads like the rest of the body,
-and most of the time it works: the `dispose` goes on the job, and the end of
-the job closes every source in the list, whatever the outcome. What it cannot
-survive is a cancellation that arrives **before** this line — during the
-manifest above it, or anywhere else the body waits after the group returned.
-The first checkpoint after the group lets it out: here that is
-`ctx.join(loadManifest)`, which waits the manifest out and then throws the
-cancellation in place of its value, so the body never reaches the registration.
-Nor would the line itself win after a bare `await`: `ctx.wait` opens with a
-checkpoint of its own, before the action runs. The list is already in the
-body's hands and now unreachable, and nothing announces the leak: what the
-caller sees is an ordinary cancellation.
+The body closes the sources where it is done with them, the way any Dart code
+closes a file after the last write. The loop runs only if the body gets to it.
+If a cancellation arrives while the archive is being written, `ctx.join` waits
+the archive out and then throws the cancellation in place of its value; a
+failing `writeArchive` throws its error the same way. Either way the body never
+reaches the loop. The list is already in the body's hands and now unreachable,
+and nothing announces the leak: what the caller sees is an ordinary
+cancellation or the error of the archive.
 
 ### The next line
 
@@ -462,14 +451,15 @@ ctx.onDispose(() {
     source.close();
   }
 });
+await ctx.join(() => writeArchive(sources));
 ```
 
-`ctx.onDispose` and `ctx.onDiscard` run no check first, so there is no
-checkpoint left for a pending cancellation to win, and the registration happens
-even on a job that has already accepted a cancellation. Put it on the very next
-line after the group returns: `onDispose` when the list is the body's own,
-`onDiscard` when the list is what the body returns or hands on further — the
-same choice as anywhere else in this rule.
+Registered on the very next line after the group returns, before anything that
+can throw, the list is closed by the end of the job whatever the outcome.
+`ctx.onDispose` and `ctx.onDiscard` run no check first, so the registration
+happens even on a job that has already accepted a cancellation. Use `onDispose`
+when the list is the body's own, `onDiscard` when the list is what the body
+returns or hands on further — the same choice as anywhere else in this rule.
 
 ## Processing streams
 

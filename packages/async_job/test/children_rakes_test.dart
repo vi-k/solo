@@ -461,49 +461,6 @@ void main() {
   });
 
   group('The list a group returns', () {
-    test('ctx.wait throws before its action on a pending cancellation', () {
-      fakeAsync((async) {
-        final trace = <String>[];
-        Object? thrownAtRegistration;
-        final parent = Job<void>((ctx) async {
-          final sources = await ctx.runAll([
-            Job.deferred<Source>((ctx) async => Source('rows', trace)),
-          ]);
-          try {
-            await ctx.wait(() => delay(40));
-          } on Cancelled {
-            trace.add('the manifest was cancelled');
-          }
-          try {
-            await ctx.wait(
-              () {
-                trace.add('the action ran');
-                return sources;
-              },
-              dispose: (values) {
-                for (final source in values) {
-                  source.close();
-                }
-              },
-            );
-            trace.add('registered');
-          } on Cancelled catch (error) {
-            thrownAtRegistration = error;
-          }
-        })
-          ..ignore();
-
-        async.elapse(const Duration(milliseconds: 20));
-        parent.cancel().ignore();
-        async.flushTimers();
-
-        // Even a body that caught the first checkpoint gets no further:
-        // the one of `wait` comes before its action.
-        expect(thrownAtRegistration, isA<Cancelled>());
-        expect(trace, ['the manifest was cancelled']);
-      });
-    });
-
     test('onDispose registers on a job already marked', () {
       fakeAsync((async) {
         final trace = <String>[];
@@ -1012,33 +969,54 @@ void main() {
         final parent = page.groupFirstAttempt(branches());
         async.flushTimers();
         expect(parent.outcome, isA<Done<void>>());
-        expect(trace(), ['registered', 'rows closed', 'images closed']);
+        expect(trace(), ['archive of 2', 'rows closed', 'images closed']);
       });
     });
 
     test(
         'the first attempt of the group leaks the list on a stop during '
-        'the manifest', () {
+        'the archive', () {
       fakeAsync((async) {
         final parent = page.groupFirstAttempt(branches())..ignore();
         async.elapse(const Duration(milliseconds: 20));
         parent.cancel().ignore();
         async.flushTimers();
-        // `join` waits the manifest out and lets the cancellation out in
-        // place of its value: the body never reaches the registration.
+        // `join` waits the archive out and lets the cancellation out in
+        // place of its value: the body never reaches the loop.
         expect(parent.outcome, isA<Cancelled>());
+        expect(trace(), ['archive of 2']);
+      });
+    });
+
+    test('the first attempt of the group leaks the list on a failing archive',
+        () {
+      fakeAsync((async) {
+        stubs.stage.archiveError = StateError('disk');
+        final parent = page.groupFirstAttempt(branches())..ignore();
+        async.flushTimers();
+        expect(parent.outcome, isA<Failed>());
         expect(trace(), isEmpty);
       });
     });
 
-    test('the next line closes the list on a stop during the manifest', () {
+    test('the next line closes the list on a stop during the archive', () {
       fakeAsync((async) {
         final parent = page.groupNextLine(branches())..ignore();
         async.elapse(const Duration(milliseconds: 20));
         parent.cancel().ignore();
         async.flushTimers();
         expect(parent.outcome, isA<Cancelled>());
-        expect(trace(), ['registered', 'rows closed', 'images closed']);
+        expect(trace(), ['archive of 2', 'rows closed', 'images closed']);
+      });
+    });
+
+    test('the next line closes the list on a failing archive', () {
+      fakeAsync((async) {
+        stubs.stage.archiveError = StateError('disk');
+        final parent = page.groupNextLine(branches())..ignore();
+        async.flushTimers();
+        expect(parent.outcome, isA<Failed>());
+        expect(trace(), ['rows closed', 'images closed']);
       });
     });
 

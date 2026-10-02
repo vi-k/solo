@@ -162,16 +162,10 @@ Job<void> refusingBranch() {
 Job<void> groupFirstAttempt(List<Job<Source>> branches) =>
     Job<void>((ctx) async {
       final sources = await ctx.runAll(branches);
-      await ctx.join(loadManifest);
-      await ctx.wait(
-        () => sources,
-        dispose: (values) {
-          for (final source in values) {
-            source.close();
-          }
-        },
-      );
-      stage.trace.add('registered');
+      await ctx.join(() => writeArchive(sources));
+      for (final source in sources) {
+        source.close();
+      }
     });
 
 Job<void> groupNextLine(List<Job<Source>> branches) => Job<void>((ctx) async {
@@ -181,8 +175,7 @@ Job<void> groupNextLine(List<Job<Source>> branches) => Job<void>((ctx) async {
           source.close();
         }
       });
-      stage.trace.add('registered');
-      await ctx.join(loadManifest);
+      await ctx.join(() => writeArchive(sources));
     });
 
 Future<void> saveMessages(

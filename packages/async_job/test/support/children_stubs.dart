@@ -16,7 +16,7 @@ final class Stage {
   int imagesTake = 10;
   Object? imagesError;
   int archiveTake = 50;
-  int manifestTake = 40;
+  Object? archiveError;
   int stepTake = 20;
   int warmTake = 30;
   Object? warmError;
@@ -83,12 +83,14 @@ Future<Source> openImages() =>
 
 Future<void> writeArchive(List<Source> sources) async {
   await delay(stage.archiveTake);
+  if (stage.archiveError case final error?) {
+    // ignore: only_throw_errors
+    throw error;
+  }
   stage.trace.add('archive of ${sources.length}');
 }
 
 Future<Cache> openCache() async => Cache();
-
-Future<void> loadManifest() => delay(stage.manifestTake);
 
 Future<int> loadRows() async => 21;
 
