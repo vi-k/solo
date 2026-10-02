@@ -382,3 +382,7 @@ zone that link was created in».
    «стек» и «обвал». Теперь «С `await null` постройка идёт по микротаскам»,
    в оригинале «With `await null`, building goes by microtasks». Утверждения
    не изменились.
+
+10. «источник, который открыла `images`» → «источник, открытый `images`» —
+    в переводе раздела «Waiting for several children». Принято как предложено;
+    оригинал, «the source `images` opened», не тронут.
