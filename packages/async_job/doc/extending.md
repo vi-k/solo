@@ -17,9 +17,9 @@ The lines under the code are what it prints when it runs. The job's observer
 prints what reaches it, `onError:` for an error; `cancel` and `sign out` are
 the moments the user cancels the job or signs out, and `outcome:` is what
 `job.done` completes with. Two parts of the page below open with the version
-the protected API leads to — a queue that starts its jobs with `start`, a rule
-added to `check()` — and show what that code does. The version that works
-follows under its own heading.
+you would write first — a queue that starts its jobs in turn, a rule written
+into `check()` — and show what that code does. The version that works follows
+under its own heading.
 
 ## A job of your own
 
