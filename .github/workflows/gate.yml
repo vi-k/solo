@@ -114,7 +114,7 @@ jobs:
       # step of the job mean anything.
       - name: Formatting
         run: |
-          (cd packages/async_job && dart format --output=none --set-exit-if-changed lib test)
+          (cd packages/async_job && dart format --output=none --set-exit-if-changed lib test example)
           (cd packages/solo && dart format --output=none --set-exit-if-changed lib test example)
 
       - name: Analyze
