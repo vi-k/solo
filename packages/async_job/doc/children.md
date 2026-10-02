@@ -3,27 +3,28 @@
 A body can hand work to another job. A child is started by the body and waited
 for by it; a stream is processed one event at a time in a child that owns the
 subscription; a continuation made by `then` starts when the job it follows
-finishes, and outlives it. The words for the three are close, and the wrong one
+succeeds, and outlives it. The words for the three are close, and the wrong one
 compiles:
 
 ```dart
-(ctx) async {
+final job = Job<void>((ctx) async {
   // A child: the body starts it, waits for it, and cancels along with it.
   final rows = await ctx.run(Job.deferred<int>((c) => c.wait(loadRows)));
 
   // A stream: one event at a time, in a child of its own.
   final saving = ctx.each(events, (c, e) => c.join(() => save(e)));
 
-  // A chain: it starts itself when its source finishes, and no parent
+  // A chain: it starts itself when its source succeeds, and no parent
   // can adopt it.
   final tail = saving.then<void>((c, _) => report(rows));
-}
+});
 ```
 
-Four sections below open with the version this vocabulary leads to — the plain
-`Future.wait` that every Dart program already has in it, or the method whose
-name matches the requirement — and say what that version does instead of what
-it was meant to do. The version that works follows under its own heading.
+Four sections below open with the version habit or the names of the API lead
+to — the plain `Future.wait` every Dart program already has, a plain `await`,
+or the method whose name matches the requirement — and say what that version
+does instead of what it was meant to do. The version that works follows under
+its own heading.
 
 ## Children
 
@@ -69,12 +70,13 @@ unhandled, it goes to the zone, and so does a cancellation of the child.
 If the child's body fails and a cancellation reaches the child afterwards —
 while it still waits for children of its own or runs its cleanup, say — its
 error does not arrive through that future. The child ends `Cancelled`,
-`await ctx.run(child)` throws `Cancelled`, and the error goes on to the answer
-of the child's observer — the zone, unless the observer answers.
-`child.ignore()` silences it. `ctx.run(child).ignore()` does not: it handles
-what the future throws, and the future throws the cancellation. To answer for
-the error differently, give the child an observer that answers: a `JobAnswerer`
-with `onUnanswered` overridden.
+`await ctx.run(child)` throws `Cancelled`, and the error goes where an error
+nobody handled goes: to the child's observer and, unless that observer answers
+for it, to the zone, as in [Where errors go](observing.md#where-errors-go) on
+the observing page. `child.ignore()` silences it. `ctx.run(child).ignore()`
+does not: it handles what the future throws, and the future throws the
+cancellation. To answer for the error differently, give the child an observer
+that answers: a `JobAnswerer` with `onUnanswered` overridden.
 
 A child inherits the parent's observer unless it has its own. If a child's
 cancellation escapes through `await ctx.run(child)` or `child.value`, the
@@ -82,9 +84,9 @@ parent ends with `HandlerCancelReason` and a description naming the child.
 
 `ctx.run` throws synchronously for an invalid start: `ArgumentError` for a job
 from another implementation or a job that starts automatically. It throws
-`StateError` if the child has already started or the parent body has ended. If
-the parent is already cancelled, it cancels the child before start and throws
-the parent's `Cancelled`.
+`StateError` if the child has already started or finished, or the parent body
+has ended. If the parent is already cancelled, it cancels the child before
+start and throws the parent's `Cancelled`.
 
 How deep a tree may go is bounded by the stack, and by two different walks of
 it. Starting a child runs the child's body up to its first `await`, so a body
@@ -95,16 +97,10 @@ into microtasks and lifts the limit to the other walk — cancellation, which
 descends the tree recursively and reaches about three thousand. Neither number
 is a promise; both follow from the size of a body's frame.
 
-A cascade that runs out of stack tells every job it cancelled to stop, save a
-handful at the deep end: down there the stack has only just run out, and a
-callback that asks for a few frames of its own may not get them. An overflow
-landing there is not announced as a failure of that callback, because it is not
-one; anywhere else a callback that runs out of stack by itself is reported like
-any other failure of one, and changes nothing about the cancellation. What the
-cascade never reached — the depth below the break — is left running. Recursion
-measured in thousands of nested jobs wants flattening, not a deeper stack. The
-overflow also comes out of `cancel()` itself, before it returns a future, so
-`cancel().ignore()` does not catch it.
+A cascade that runs out of stack stops where the stack ran out, and the jobs
+below that depth go on running. The overflow comes out of `cancel()` itself,
+before it returns a future, so `cancel().ignore()` does not catch it. Recursion
+measured in thousands of nested jobs wants flattening, not a deeper stack.
 
 ## Waiting for several children
 
@@ -130,21 +126,22 @@ final parent = Job<void>((ctx) async {
 ```
 
 `Future.wait` keeps the first error that reaches it and lets the rest go, and
-that decides the parent's outcome by a race. Say one branch fails and whoever
-holds the other one cancels it: a failure that arrives first ends the parent
-`Failed`; a cancellation that arrives first ends it
-`Cancelled(HandlerCancelReason)`, and the failure of the other branch is
-nowhere in the outcome. Each failed child does still announce its own failure
-to its observer — and only there, so where neither the parent nor its children
-have an observer, that error is lost entirely: the body took their futures, and
-that counts as observing them.
+that decides the parent's outcome by a race. Say `rows` fails and `images` ends
+`Cancelled`: if the failure reaches `Future.wait` first, the parent ends
+`Failed`; if the cancellation does, it ends `Cancelled(HandlerCancelReason)`,
+and the failure of `rows` is nowhere in the outcome. Each failed child does
+still announce its own failure to its observer — and only there, so where
+neither the parent nor its children have an observer, that error is lost
+entirely: the body took their futures, so the core counts their errors as
+handled and keeps them out of the zone.
 
-The source the other branch opened is lost with the values. A branch that
-returns what it opened hands it over — that is what `discard` means, and the
-branch ended `Done`, so its own cleanup never closes it. The receiver is the
-body, and the body registered nothing when the value arrived; `Future.wait`
-then completes with the error and drops the values of the branches that
-succeeded, so the body never even holds it. Nobody closes that source.
+If `rows` fails and `images` succeeds, the source `images` opened is lost with
+the values. A branch that returns what it opened hands it over — that is what
+`discard` means, and the branch ended `Done`, so its own cleanup never closes
+it. The receiver is the body, and the body registered nothing when the value
+arrived; `Future.wait` then completes with the error and drops the values of
+the branches that succeeded, so the body never even holds it. Nobody closes
+that source.
 
 `eagerError: true` does not repair either of the two:
 
@@ -159,8 +156,8 @@ It changes one thing only: when the body wakes. It buys no early end — nothing
 asks the other branches to stop, and the core waits for its children
 regardless, so the job still ends when the last of them does. What the body can
 do in between is the whole of the difference. The outcome is still decided by
-whichever trouble came first, and the source the other branch opened is still
-lost with the values.
+whichever trouble came first, and the source of the branch that succeeded is
+still lost with the values.
 
 ### Registered on arrival, waited for in one envelope
 
@@ -181,7 +178,7 @@ final parent = Job<void>((ctx) async {
 });
 ```
 
-Two lines changed, and each repairs one of the two faults.
+Two things changed, and each repairs one of the two faults.
 
 `ctx.run(child, dispose: ...)` registers the value on the parent the moment the
 branch hands it over, so every source a branch returned is closed when the
@@ -198,10 +195,10 @@ itself.
 `ParallelWaitError`, and the values of the branches that did succeed go into
 the same envelope. The core reads it: an envelope carrying a real failure stays
 a failure, with its errors and values untouched, and one carrying only
-cancellations and successes ends the parent with that cancellation, exactly as
-awaiting a single child does. The order the trouble arrived in no longer
-decides anything. The values in the envelope are registered already, and
-closing them there as well closes them twice.
+cancellations and successes ends the parent with the first cancellation in the
+list, exactly as awaiting a single child does. The order the trouble arrived in
+no longer decides anything. The values in the envelope are registered already,
+and closing them there as well closes them twice.
 
 `.wait` stops no branch early: it returns once every branch is done, so when
 one branch fails or is cancelled on its own, its sibling runs to its end. A
@@ -243,7 +240,10 @@ result missing one of its parts is of no use anyway. None of the forms closes
 those values: a registration does, made on arrival for `ctx.run` as above and
 for a group as in [What a group hands back](#what-a-group-hands-back).
 
-Five things `runAll` does not promise.
+Five things `runAll` does not promise. Some of them turn on what the group does
+with a branch whose body has returned a value: the group holds that branch
+until its own end is decided, and until then the branch has no outcome and its
+cleanup waits.
 
 **The stop is cooperative.** A branch waiting through `ctx.wait` ends, and the
 operation behind it plays on and writes its result. To stop the work itself,
@@ -256,18 +256,18 @@ cascades, so the children that branch started are not cancelled, and the group
 waits for them as it waits for everything else.
 
 **The outcome of a branch is not final until the group decides.** A body that
-returned a value can still end `Cancelled`: until the group has committed, the
+returned a value can still end `Cancelled`: until the group decides, the
 branch's `outcome` is `null`, and `isCancelled` is not the last word.
 
 **A branch waiting for another branch of the same group may never end.**
 Awaiting a sibling's `Job.value` or `Job.done` hangs the group: the sibling is
 held until the group decides, and the group decides only once every branch is
 held, or once the body of one of them has ended in anything but a value.
-Nothing catches that. A cancellation unties it on the same terms as the lock
-below: a branch awaiting the sibling through `ctx.wait` ends, unless it was
-created with `cancellable: false` or waits inside `ctx.uncancellable`; one in a
-bare `await` does not. For branches that depend on each other, `[...].wait` is
-the answer.
+Nothing catches that. A cancellation unties it on the same terms as the lock of
+the next point: a branch awaiting the sibling through `ctx.wait` ends, unless
+it was created with `cancellable: false` or waits inside `ctx.uncancellable`;
+one in a bare `await` does not. For branches that depend on each other,
+`[...].wait` is the way out.
 
 **The same goes for a branch waiting for what another one releases in its
 cleanup.** A branch starts unwinding only when every branch has ended its body
@@ -277,16 +277,17 @@ branches share, or a slot of a pool with fewer free slots than the branches
 that want one, taken with `dispose` as on [the cleanup page](cleanup.md), stays
 with the branch that got it. The branch waiting for it keeps every branch from
 unwinding, and the group hangs with no timer and no error until the body of
-another branch ends in anything but a value. A cancellation, of the parent or
-of a branch, unties it only by ending something a branch still waits for before
-it unwinds, its body or a child of it: one waiting through `ctx.wait`, or on an
-operation that hears `ctx.onCancel`. It does not end one stuck in `ctx.join` on
-an operation deaf to it, in a bare `await`, inside `ctx.uncancellable`, or in a
-job created with `cancellable: false`, and cancelling the branch that holds the
-lock does nothing: its body is over. Take such a lock in a child of the branch,
-which releases it when the child ends, still inside the body. If that child
-also opens what the branch hands out, the branch registers it on arrival,
-`ctx.run(child, discard: ...)`, as in
+another branch ends in anything but a value.
+
+A cancellation, of the parent or of a branch, unties it only when it ends what
+a branch still waits on before it unwinds: its body, or a child of it, waiting
+through `ctx.wait` or on an operation that hears `ctx.onCancel`. It does not
+end one stuck in `ctx.join` on an operation deaf to it, in a bare `await`,
+inside `ctx.uncancellable`, or in a job created with `cancellable: false`.
+Cancelling the branch that holds the lock does nothing: its body is over. Take
+such a lock in a child of the branch, which releases it when the child ends,
+still inside the body. If that child also opens what the branch hands out, the
+branch registers it on arrival, `ctx.run(child, discard: ...)`, as in
 [Registering on arrival](cleanup.md#registering-on-arrival), and that `discard`
 runs without the lock. Or use `[...].wait`, under which every branch unwinds on
 its own.
@@ -298,7 +299,7 @@ registers the release with:
 
 ```dart
 Job.deferred<Source>((ctx) async {
-  final cache = await ctx.wait(openCache, dispose: (c) => c.close());
+  final cache = await ctx.wait(openCache, dispose: (cache) => cache.close());
   final rows = await ctx.wait(openRows, discard: (source) => source.close());
   await ctx.join(() => cache.warm(rows));
 
@@ -449,9 +450,10 @@ sees this child as a separate job.
 Like `run`, `each` can only start children while the parent body is active;
 calls from `unattended` or cleanup are rejected. The future returned by the
 underlying subscription's `cancel()` is not awaited; if it fails, the error
-goes to `onError` of the child and on to its answer. If the source needs
-asynchronous cleanup, arrange to await that cleanup separately. Normal stream
-completion still depends on the source sending `onDone`.
+goes to `onError` of the child's observer and, unless that observer answers for
+it, to the zone. If the source needs asynchronous cleanup, arrange to await
+that cleanup separately. Normal stream completion still depends on the source
+sending `onDone`.
 
 ### The first attempt
 
@@ -537,16 +539,10 @@ await a continuation from its source's body or cleanup: it is waiting for that
 source to finish.
 
 Each continuation is a root job of the core. It has an optional `observer`
-argument and inherits neither the source's observer nor domain state, rules or
-a queue slot. Cleanup registered by the source has already run when the
-continuation receives its value; a resource closed by the source's `onDispose`
-is therefore already closed at that point.
-
-A continuation belongs to whoever called `then`. A failure that starts anywhere
-up the chain comes down it and ends every link after it, so an observer on the
-last link hears it there, as that link's own. An error with no outcome, such as
-a failure of `ctx.unattended` work or of a disposer, stays with the link where
-it happened and goes to the zone that link was created in.
+argument and inherits neither the source's observer nor anything an engine of a
+domain attaches to the source. Cleanup registered by the source has already run
+when the continuation receives its value; a resource closed by the source's
+`onDispose` is therefore already closed at that point.
 
 A `discard` of the source is the other way round: the source ended `Done`, so
 it never ran and never will, and the continuation is the receiver — it takes
@@ -559,6 +555,13 @@ arrived — ends `Done` all the same, and the resource is then the caller's to
 close, through the source's handle, exactly as for a branch that refuses a
 group's stop.
 
+An observer on the last link hears a failure from anywhere up the chain, as
+that link's own: the failure comes down the chain and ends every link after it.
+An error with no outcome, such as a failure of `ctx.unattended` work or of a
+disposer, stays with the link where it happened: it goes to that link's
+observer and, unless the observer answers for it, to the zone the link was made
+in — for a continuation, the zone `then` was called in.
+
 ### The first attempt
 
 A job loads the rows, a continuation reports them, and the body wants both done
@@ -566,7 +569,7 @@ before it ends — so it adopts them both:
 
 ```dart
 final child = Job.deferred<int>((ctx) => ctx.wait(load));
-final tail = child.then<void>((ctx, rows) => report(rows * 2));
+final tail = child.then<void>((ctx, rows) => report(rows));
 
 final parent = Job<void>((ctx) async {
   ctx.log(await ctx.run(child));
@@ -586,7 +589,7 @@ continuation off another, and every link refuses adoption the same way.
 ```dart
 final parent = Job<void>((ctx) async {
   final rows = await ctx.run(Job.deferred<int>((ctx) => ctx.wait(load)));
-  await ctx.run(Job.deferred<void>((ctx) => ctx.join(() => report(rows * 2))));
+  await ctx.run(Job.deferred<void>((ctx) => ctx.join(() => report(rows))));
 });
 ```
 
@@ -619,6 +622,6 @@ own handle stops it, `tail.cancel()`, or
 running.
 
 A failure in the continuation is nobody's business but its own. Observe it
-through `value`, `done` or `ignore`; an unobserved one goes to the zone that
-created the chain, after the parent has already finished. Its outcome comes
-back to you, not to the parent.
+through `value`, `done` or `ignore`; an unobserved one goes to the zone `then`
+was called in, after the parent has already finished. Its outcome comes back to
+you, not to the parent.

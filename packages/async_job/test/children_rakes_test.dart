@@ -2,12 +2,16 @@
 library;
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:async_job/async_job.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart';
 
+import 'support/children_page.dart' as page;
+import 'support/children_stubs.dart' as stubs;
 import 'support/delay.dart';
+import 'support/page_code.dart';
 
 /// The first attempts of `doc/children.md`, and what each one costs.
 ///
@@ -39,62 +43,6 @@ final class Listening extends JobObserver {
 
 void main() {
   group('Waiting for several children', () {
-    test('Future.wait: the failure that came first decides the outcome', () {
-      fakeAsync((async) {
-        final fails = Job.deferred<int>(key: 'fails', (ctx) async {
-          await ctx.wait(() => delay(20));
-          throw StateError('disk');
-        });
-        final stops = Job.deferred<int>(key: 'stops', (ctx) async {
-          await ctx.wait(() => delay(80));
-          return 2;
-        });
-        final parent = Job<void>((ctx) async {
-          await Future.wait([ctx.run(fails), ctx.run(stops)]);
-        })
-          ..ignore();
-
-        async.elapse(const Duration(milliseconds: 40));
-        stops.cancel().ignore();
-        async.flushTimers();
-
-        // The failure reached `Future.wait` first, so the cancellation of
-        // the other branch is nowhere in the outcome.
-        expect(parent.outcome, isA<Failed>());
-        expect((parent.outcome! as Failed).error, isA<StateError>());
-      });
-    });
-
-    test('Future.wait: the cancellation that came first decides it instead',
-        () {
-      fakeAsync((async) {
-        final fails = Job.deferred<int>(key: 'fails', (ctx) async {
-          await ctx.wait(() => delay(80));
-          throw StateError('disk');
-        });
-        final stops = Job.deferred<int>(key: 'stops', (ctx) async {
-          await ctx.wait(() => delay(200));
-          return 2;
-        });
-        final parent = Job<void>((ctx) async {
-          await Future.wait([ctx.run(fails), ctx.run(stops)]);
-        })
-          ..ignore();
-
-        async.elapse(const Duration(milliseconds: 20));
-        stops.cancel().ignore();
-        async.flushTimers();
-
-        // The same two branches, the other order: the failure of `fails`
-        // is the one that leaves no trace.
-        expect(parent.outcome, isA<Cancelled>());
-        expect(
-          (parent.outcome! as Cancelled).reason,
-          isA<HandlerCancelReason>(),
-        );
-      });
-    });
-
     for (final observed in [true, false]) {
       test(
           'Future.wait: an observer of the parent is the one that hears it, '
@@ -134,73 +82,6 @@ void main() {
         expect(zone, isEmpty, reason: reason);
       });
     }
-
-    test('Future.wait: nobody closes what the other branch handed over', () {
-      fakeAsync((async) {
-        final trace = <String>[];
-        final opens = Job.deferred<Source>(
-          key: 'opens',
-          (ctx) => ctx.wait(
-            () async => Source('rows', trace),
-            discard: (source) => source.close(),
-          ),
-        );
-        final fails = Job.deferred<Source>(key: 'fails', (ctx) async {
-          await ctx.wait(() => delay(20));
-          throw StateError('disk');
-        });
-        Job<void>((ctx) async {
-          final sources = await Future.wait([ctx.run(opens), ctx.run(fails)]);
-          trace.add('the body got ${sources.length} sources');
-        }).ignore();
-
-        async.flushTimers();
-
-        // The branch ended `Done` and handed its source over, so its own
-        // cleanup never closes it; the body it went to never received it.
-        expect(opens.outcome, isA<Done<Source>>());
-        expect(trace, isEmpty);
-      });
-    });
-
-    test('Future.wait with eagerError wakes the body and nothing else', () {
-      fakeAsync((async) {
-        final trace = <String>[];
-        final fails = Job.deferred<int>(key: 'fails', (ctx) async {
-          await ctx.wait(() => delay(20));
-          throw StateError('disk');
-        });
-        final slow = Job.deferred<int>(key: 'slow', (ctx) async {
-          await ctx.wait(() => delay(80));
-          trace.add('the slow branch returns');
-          return 1;
-        });
-        final parent = Job<void>((ctx) async {
-          try {
-            await Future.wait(
-              [ctx.run(fails), ctx.run(slow)],
-              eagerError: true,
-            );
-          } on Object {
-            trace.add('the body wakes');
-          }
-          trace.add('the body returns');
-        })
-          ..done.then((outcome) => trace.add('parent $outcome'));
-
-        async.flushTimers();
-
-        // The body wakes at the first error, and the job still ends when
-        // the last branch does.
-        expect(trace, [
-          'the body wakes',
-          'the body returns',
-          'the slow branch returns',
-          'parent Done(null)',
-        ]);
-        expect(parent.outcome, isA<Done<void>>());
-      });
-    });
 
     test('.wait: one envelope carries the cancellation and the value', () {
       fakeAsync((async) {
@@ -301,40 +182,6 @@ void main() {
         ..ignore();
       return (parent, rows, images);
     }
-
-    test('.wait: every source is closed once when the export succeeds', () {
-      fakeAsync((async) {
-        final trace = <String>[];
-        final (parent, _, _) = export(trace);
-        async.flushTimers();
-        expect(parent.outcome, isA<Done<void>>());
-        expect(trace, ['archive of 2', 'images closed', 'rows closed']);
-      });
-    });
-
-    test('.wait: the source that came back is closed when the other fails', () {
-      fakeAsync((async) {
-        final trace = <String>[];
-        final (parent, _, _) = export(trace, imagesFail: true);
-        async.flushTimers();
-        expect(parent.outcome, isA<Failed>());
-        expect(trace, ['rows closed']);
-      });
-    });
-
-    test('.wait: both are closed when the parent is cancelled while writing',
-        () {
-      fakeAsync((async) {
-        final trace = <String>[];
-        final (parent, _, _) = export(trace);
-        async.elapse(const Duration(milliseconds: 30));
-        parent.cancel().ignore();
-        async.flushTimers();
-        // `join` waits the step out, and the cancellation comes after it.
-        expect(parent.outcome, isA<Cancelled>());
-        expect(trace, ['archive of 2', 'images closed', 'rows closed']);
-      });
-    });
 
     test('.wait: closing the values of the envelope as well closes twice', () {
       fakeAsync((async) {
@@ -475,54 +322,6 @@ void main() {
   });
 
   group('What a group hands back', () {
-    // The first attempt, as on the page: the manifest is a step the
-    // cancellation can arrive during.
-    Job<void> firstAttempt(List<String> trace) {
-      final branches = [
-        Job.deferred<Source>((ctx) async => Source('rows', trace)),
-        Job.deferred<Source>((ctx) async => Source('images', trace)),
-      ];
-      Future<void> loadManifest() => delay(40);
-      return Job<void>((ctx) async {
-        final sources = await ctx.runAll(branches);
-        await ctx.join(loadManifest);
-        await ctx.wait(
-          () => sources,
-          dispose: (values) {
-            for (final source in values) {
-              source.close();
-            }
-          },
-        );
-        trace.add('registered');
-      })
-        ..ignore();
-    }
-
-    test('the first attempt closes the list when nothing interrupts it', () {
-      fakeAsync((async) {
-        final trace = <String>[];
-        final parent = firstAttempt(trace);
-        async.flushTimers();
-        expect(parent.outcome, isA<Done<void>>());
-        expect(trace, ['registered', 'rows closed', 'images closed']);
-      });
-    });
-
-    test('the first attempt leaks the list on a stop during the manifest', () {
-      fakeAsync((async) {
-        final trace = <String>[];
-        final parent = firstAttempt(trace);
-        async.elapse(const Duration(milliseconds: 20));
-        parent.cancel().ignore();
-        async.flushTimers();
-        // `join` waits the manifest out and lets the cancellation out in
-        // place of its value: the body never reaches the registration.
-        expect(parent.outcome, isA<Cancelled>());
-        expect(trace, isEmpty);
-      });
-    });
-
     test('ctx.wait throws before its action on a pending cancellation', () {
       fakeAsync((async) {
         final trace = <String>[];
@@ -601,69 +400,7 @@ void main() {
     });
   });
 
-  group('Processing streams', () {
-    test('a plain await runs the whole callback after cancellation', () {
-      fakeAsync((async) {
-        final trace = <String>[];
-        final messages = StreamController<String>();
-        final parent = Job<void>((ctx) async {
-          final processing = ctx.each(messages.stream, (child, message) async {
-            trace.add('$message: first step');
-            await delay(20);
-            trace.add('$message: second step');
-            await delay(20);
-            trace.add('$message: callback done');
-          });
-          ctx.onDispose(() => trace.add('parent cleanup'));
-          await processing.value;
-        })
-          ..ignore();
-
-        messages.add('m1');
-        async.elapse(const Duration(milliseconds: 5));
-        parent.cancel().ignore();
-        async.flushTimers();
-        messages.close().ignore();
-
-        // Neither step is a checkpoint, so the callback plays out and the
-        // parent's cleanup waits for all of it.
-        expect(trace, [
-          'm1: first step',
-          'm1: second step',
-          'm1: callback done',
-          'parent cleanup',
-        ]);
-      });
-    });
-
-    test('child.join lets the cancellation out at the next step', () {
-      fakeAsync((async) {
-        final trace = <String>[];
-        final messages = StreamController<String>();
-        final parent = Job<void>((ctx) async {
-          final processing = ctx.each(messages.stream, (child, message) async {
-            trace.add('$message: first step');
-            await child.join(() => delay(20));
-            trace.add('$message: second step');
-            await child.join(() => delay(20));
-            trace.add('$message: callback done');
-          });
-          ctx.onDispose(() => trace.add('parent cleanup'));
-          await processing.value;
-        })
-          ..ignore();
-
-        messages.add('m1');
-        async.elapse(const Duration(milliseconds: 5));
-        parent.cancel().ignore();
-        async.flushTimers();
-        messages.close().ignore();
-
-        // The step it wraps is waited out; the one after it never starts.
-        expect(trace, ['m1: first step', 'parent cleanup']);
-      });
-    });
-  });
+  group('Processing streams', () {});
 
   group('Chains', () {
     // The same answer whichever got there first: in the page's order the
@@ -713,28 +450,6 @@ void main() {
         });
       });
     }
-
-    test('two children in a row: the parent waits for both', () {
-      fakeAsync((async) {
-        final trace = <String>[];
-        Future<int> load() async => 21;
-        Future<void> report(int rows) async {
-          await delay(80);
-          trace.add('reported $rows');
-        }
-
-        Job<void>((ctx) async {
-          final rows =
-              await ctx.run(Job.deferred<int>((ctx) => ctx.wait(load)));
-          await ctx.run(
-            Job.deferred<void>((ctx) => ctx.join(() => report(rows * 2))),
-          );
-        }).done.then((outcome) => trace.add('parent $outcome'));
-
-        async.flushTimers();
-        expect(trace, ['reported 42', 'parent Done(null)']);
-      });
-    });
 
     test("two children in a row: the parent's cancellation reaches the second",
         () {
@@ -856,5 +571,348 @@ void main() {
         expect(tail.outcome, isA<Cancelled>());
       });
     });
+  });
+
+  group('The code of the page', () {
+    setUp(() => stubs.stage = stubs.Stage());
+
+    List<String> trace() => stubs.stage.trace;
+
+    test('the overview: a child, a stream and a chain', () {
+      fakeAsync((async) {
+        final job = page.overview();
+        stubs.stage.messages
+          ..add('e1')
+          ..close().ignore();
+        async.flushTimers();
+        expect(job.outcome, isA<Done<void>>());
+        expect(trace(), ['saved e1', 'reported 21']);
+      });
+    });
+
+    test('Children: run starts the child and hands its value back', () {
+      fakeAsync((async) {
+        final parent = page.children();
+        async.flushTimers();
+        expect(parent.outcome, isA<Done<void>>());
+      });
+    });
+
+    test('Future.wait: the failure that came first decides the outcome', () {
+      fakeAsync((async) {
+        stubs.stage
+          ..rowsTake = 20
+          ..rowsError = StateError('disk')
+          ..imagesTake = 40
+          ..imagesError = stubs.givenUp();
+        final parent = page.exportWithFutureWait()..ignore();
+        async.flushTimers();
+        expect(parent.outcome, isA<Failed>());
+        expect((parent.outcome! as Failed).error, isA<StateError>());
+      });
+    });
+
+    test('Future.wait: the cancellation that came first decides it instead',
+        () {
+      fakeAsync((async) {
+        stubs.stage
+          ..rowsTake = 40
+          ..rowsError = StateError('disk')
+          ..imagesTake = 20
+          ..imagesError = stubs.givenUp();
+        final parent = page.exportWithFutureWait()..ignore();
+        async.flushTimers();
+        // The failure of `rows` is nowhere in the outcome.
+        expect(parent.outcome, isA<Cancelled>());
+        expect(
+          (parent.outcome! as Cancelled).reason,
+          isA<HandlerCancelReason>(),
+        );
+      });
+    });
+
+    test('Future.wait: nobody closes the source of the branch that succeeded',
+        () {
+      fakeAsync((async) {
+        stubs.stage
+          ..imagesTake = 20
+          ..imagesError = StateError('disk');
+        final parent = page.exportWithFutureWait()..ignore();
+        async.flushTimers();
+        expect(parent.outcome, isA<Failed>());
+        expect(trace(), isEmpty);
+      });
+    });
+
+    test('eagerError wakes the body and changes nothing else', () {
+      fakeAsync((async) {
+        stubs.stage
+          ..rowsTake = 20
+          ..rowsError = StateError('disk')
+          ..imagesTake = 80;
+        final parent = page.exportWithEagerError();
+        async.elapse(const Duration(milliseconds: 40));
+        expect(trace(), ['the body wakes', 'the body returns']);
+        expect(parent.isFinished, isFalse, reason: 'images still opens');
+        async.flushTimers();
+        expect(parent.outcome, isA<Done<void>>());
+        expect(trace(), ['the body wakes', 'the body returns']);
+      });
+    });
+
+    test('.wait: every source is closed once when the export succeeds', () {
+      fakeAsync((async) {
+        final parent = page.exportWithWait();
+        async.flushTimers();
+        expect(parent.outcome, isA<Done<void>>());
+        expect(trace(), ['archive of 2', 'images closed', 'rows closed']);
+      });
+    });
+
+    test('.wait: the source that came back is closed when the other fails', () {
+      fakeAsync((async) {
+        stubs.stage.imagesError = StateError('disk');
+        final parent = page.exportWithWait()..ignore();
+        async.flushTimers();
+        expect(parent.outcome, isA<Failed>());
+        expect(trace(), ['rows closed']);
+      });
+    });
+
+    test('.wait: a branch giving up ends the parent with that cancellation',
+        () {
+      fakeAsync((async) {
+        stubs.stage.imagesError = stubs.givenUp();
+        final parent = page.exportWithWait()..ignore();
+        async.flushTimers();
+        expect(parent.outcome, isA<Cancelled>());
+        expect(trace(), ['rows closed']);
+      });
+    });
+
+    test('.wait: both are closed when the parent is cancelled while writing',
+        () {
+      fakeAsync((async) {
+        final parent = page.exportWithWait();
+        async.elapse(const Duration(milliseconds: 30));
+        parent.cancel().ignore();
+        async.flushTimers();
+        // `join` waits the step out, and the cancellation comes after it.
+        expect(parent.outcome, isA<Cancelled>());
+        expect(trace(), ['archive of 2', 'images closed', 'rows closed']);
+      });
+    });
+
+    test('runAll hands the values back in the order of the list', () {
+      fakeAsync((async) {
+        final job = page.loadAll();
+        async.flushTimers();
+        expect((job.outcome! as Done<List<int>>).value, [21, 1]);
+      });
+    });
+
+    test('a branch closes what it keeps and hands out what it returns', () {
+      fakeAsync((async) {
+        Job<void>((ctx) async {
+          final rows = await ctx.run(page.warmingBranch());
+          stubs.stage.trace.add('the caller got ${rows.name}');
+          rows.close();
+        });
+        async.flushTimers();
+        expect(trace(), [
+          'cache warmed',
+          'cache closed',
+          'the caller got rows',
+          'rows closed',
+        ]);
+      });
+    });
+
+    test('a branch closes what it took before a failed group returns', () {
+      fakeAsync((async) {
+        Job<void>((ctx) async {
+          try {
+            await ctx.runAll([
+              page.warmingBranch(),
+              Job.deferred<stubs.Source>((ctx) async {
+                await ctx.wait(() => delay(20));
+                throw StateError('disk');
+              }),
+            ]);
+          } on Object catch (error) {
+            stubs.stage.trace.add('the parent catches $error');
+          }
+        });
+        async.flushTimers();
+        expect(trace(), [
+          'cache warmed',
+          // The cleanup unwinds from the last registration.
+          'rows closed',
+          'cache closed',
+          'the parent catches Bad state: disk',
+        ]);
+      });
+    });
+
+    List<Job<stubs.Source>> branches() => [
+          Job.deferred<stubs.Source>((ctx) async => stubs.Source('rows')),
+          Job.deferred<stubs.Source>((ctx) async => stubs.Source('images')),
+        ];
+
+    test(
+        'the first attempt of the group closes the list when nothing '
+        'interrupts it', () {
+      fakeAsync((async) {
+        final parent = page.groupFirstAttempt(branches());
+        async.flushTimers();
+        expect(parent.outcome, isA<Done<void>>());
+        expect(trace(), ['registered', 'rows closed', 'images closed']);
+      });
+    });
+
+    test(
+        'the first attempt of the group leaks the list on a stop during '
+        'the manifest', () {
+      fakeAsync((async) {
+        final parent = page.groupFirstAttempt(branches())..ignore();
+        async.elapse(const Duration(milliseconds: 20));
+        parent.cancel().ignore();
+        async.flushTimers();
+        // `join` waits the manifest out and lets the cancellation out in
+        // place of its value: the body never reaches the registration.
+        expect(parent.outcome, isA<Cancelled>());
+        expect(trace(), isEmpty);
+      });
+    });
+
+    test('the next line closes the list on a stop during the manifest', () {
+      fakeAsync((async) {
+        final parent = page.groupNextLine(branches())..ignore();
+        async.elapse(const Duration(milliseconds: 20));
+        parent.cancel().ignore();
+        async.flushTimers();
+        expect(parent.outcome, isA<Cancelled>());
+        expect(trace(), ['registered', 'rows closed', 'images closed']);
+      });
+    });
+
+    test('saveMessages saves one message after the other', () {
+      fakeAsync((async) {
+        final messages = StreamController<String>();
+        var over = false;
+        page.saveMessages(messages.stream, (message) async {
+          stubs.stage.trace.add('$message begins');
+          await delay(10);
+          stubs.stage.trace.add('$message saved');
+        }).then((_) => over = true);
+        messages
+          ..add('a')
+          ..add('b')
+          ..close().ignore();
+        async.flushTimers();
+        expect(trace(), ['a begins', 'a saved', 'b begins', 'b saved']);
+        expect(over, isTrue);
+      });
+    });
+
+    test('watchTicks prints two ticks, then the parent goes on', () {
+      final lines = <String>[];
+      runZoned(
+        () => fakeAsync((async) {
+          page.watchTicks();
+          async.flushTimers();
+        }),
+        zoneSpecification: ZoneSpecification(
+          print: (self, parent, zone, line) => lines.add(line),
+        ),
+      );
+      expect(lines, ['Tick 1', 'Tick 2', 'Parent continues']);
+    });
+
+    test('a plain await runs the whole callback after the cancellation', () {
+      fakeAsync((async) {
+        final parent = page.savingInSteps()..ignore();
+        stubs.stage.messages.add('m1');
+        async.elapse(const Duration(milliseconds: 5));
+        parent.cancel().ignore();
+        async.flushTimers();
+        stubs.stage.messages.close().ignore();
+        expect(trace(), [
+          'm1: body begins',
+          'm1: body saved',
+          'm1: attachments begins',
+          'm1: attachments saved',
+          'parent cleanup',
+        ]);
+      });
+    });
+
+    test("the child's join lets the cancellation out after the first step", () {
+      fakeAsync((async) {
+        final parent = page.savingWithCheckpoints()..ignore();
+        stubs.stage.messages.add('m1');
+        async.elapse(const Duration(milliseconds: 5));
+        parent.cancel().ignore();
+        async.flushTimers();
+        stubs.stage.messages.close().ignore();
+        expect(trace(), [
+          'm1: body begins',
+          'm1: body saved',
+          'parent cleanup',
+        ]);
+      });
+    });
+
+    test('the chain saves the parsed number', () {
+      fakeAsync((async) {
+        page.chain();
+        async.flushTimers();
+        expect(trace(), ['saved number 21']);
+      });
+    });
+
+    test('ctx.run refuses the continuation with the error the page quotes', () {
+      fakeAsync((async) {
+        Object? thrown;
+        page.reportedRows(adoptTheTail: true).catchError((Object error) {
+          thrown = error;
+        });
+        async.flushTimers();
+        final text = File('doc/children.md').readAsStringSync();
+        final quote = RegExp(r'throws `ArgumentError`:\n`([^`]*)`')
+            .firstMatch(text)!
+            .group(1)!
+            .replaceAll('\n', ' ');
+        expect(thrown, isA<ArgumentError>());
+        expect('$thrown', quote);
+      });
+    });
+
+    test('with the source the only child, the parent ends first', () {
+      fakeAsync((async) {
+        page.reportedRows(adoptTheTail: false);
+        async.flushTimers();
+        expect(trace(), ['parent Done(null)', 'reported 21']);
+      });
+    });
+
+    test('two children in a row: the parent waits for both', () {
+      fakeAsync((async) {
+        final parent = page.twoChildrenInARow();
+        parent.done.then((outcome) => stubs.stage.trace.add('parent $outcome'));
+        async.flushTimers();
+        expect(trace(), ['reported 21', 'parent Done(null)']);
+      });
+    });
+  });
+
+  test('every piece of code on the page is a run of lines of these files', () {
+    expect(
+      codeMissingFrom(
+        'doc/children.md',
+        'test/support/children_page.dart',
+      ),
+      isEmpty,
+    );
   });
 }
