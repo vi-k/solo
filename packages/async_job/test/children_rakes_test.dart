@@ -96,6 +96,67 @@ void main() {
         });
       }
     }
+
+    for (final fails in [true, false]) {
+      test(
+          'a run future left unhandled hands the zone '
+          "${fails ? "the child's error" : "the child's Cancelled"}", () {
+        final zone = <Object>[];
+        late final Job<int> child;
+        runZonedGuarded(
+          () => fakeAsync((async) {
+            child = Job.deferred<int>((ctx) async {
+              await ctx.wait(() => delay(50));
+              if (fails) {
+                throw StateError('disk');
+              }
+              return 1;
+            });
+            Job<void>((ctx) async {
+              // ignore: unawaited_futures
+              ctx.run(child);
+              await ctx.wait(() => delay(10));
+              if (!fails) {
+                child.cancel().ignore();
+              }
+              await ctx.wait(() => delay(100));
+            });
+            async.flushTimers();
+          }),
+          (error, stackTrace) => zone.add(error),
+        );
+
+        expect(
+          zone,
+          [if (fails) isA<StateError>() else same(child.outcome)],
+        );
+        expect(child.outcome, fails ? isA<Failed>() : isA<Cancelled>());
+      });
+    }
+
+    test(
+        'ctx.run(child).ignore() keeps the error from the zone, and the '
+        "child's observer still hears it", () {
+      final observer = Listening();
+      final zone = <Object>[];
+      runZonedGuarded(
+        () => fakeAsync((async) {
+          final child = Job.deferred<int>(key: 'child', (ctx) async {
+            await ctx.wait(() => delay(50));
+            throw StateError('disk');
+          });
+          Job<void>(observer: observer, (ctx) async {
+            ctx.run(child).ignore();
+            await ctx.wait(() => delay(100));
+          });
+          async.flushTimers();
+        }),
+        (error, stackTrace) => zone.add(error),
+      );
+
+      expect(observer.heard, ['Job(child): Bad state: disk']);
+      expect(zone, isEmpty);
+    });
   });
 
   group('Waiting for several children', () {
