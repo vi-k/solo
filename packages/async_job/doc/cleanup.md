@@ -1,9 +1,9 @@
 # Cleanup
 
-A job may open a lock, a database or a temporary file, and its children may
-still be using them after the body returns. Register the release with the
-context, at the point where the resource is acquired, and the job runs it when
-the whole job finishes:
+A job may take a lock, open a database or create a temporary file, and its
+children may still be using them after the body returns. Register the release
+with the context, at the point where the resource is acquired, and the job runs
+it when the whole job finishes:
 
 ```dart
 final lock = await ctx.join(Lock.acquire, dispose: (lock) => lock.release());
@@ -26,17 +26,19 @@ return database;
 register a callback where there is no call to wrap. Passing a `dispose` and a
 `discard` to one call is an `ArgumentError`.
 
-Three sections below open with the version this vocabulary leads to — the
-callback whose name matches the intent, or the registration written on the line
-that reads best — and say what that version does instead of what it was meant
-to do. Where the next version repairs that and brings a fault of its own, it
-stands as a second attempt. The version that works follows under its own
-heading.
+Three sections below open with the version habit or the names of the API lead
+to — the same callback for two resources, a registration left with the job that
+made it, an unregistration on the line after the call — and say what that
+version does instead of what it was meant to do. Where the next version repairs
+that and brings a fault of its own, it stands as a second attempt. The version
+that works follows under its own heading.
 
 ## Choosing the callback
 
 A job takes a lock for the work it does and opens a database it returns to
-whoever asked for it. Neither may outlive the job that has no use for it.
+whoever asked for it. The lock is needed by the work of the job, and the
+database by the caller, if it reaches one; neither may live longer than it is
+needed.
 
 ### The first attempt
 
@@ -57,7 +59,7 @@ path but the one the job is written for: cancelled or failed, it goes; done, it
 stays held for as long as the process lives. A test that cancels the job sees
 nothing wrong, because on that path the callback does run.
 
-### Dispose for what the job keeps
+### `dispose` for what the job keeps
 
 ```dart
 final lock = await ctx.join(Lock.acquire, dispose: (lock) => lock.release());
@@ -80,7 +82,7 @@ children, or when the body of one of them has ended in anything but a value. A
 lock two branches share stays taken until then, and the branch waiting for it
 keeps the group from getting there, so the group hangs.
 [When one failure makes the rest pointless](children.md#when-one-failure-makes-the-rest-pointless)
-says what unties it and how to take such a lock.
+on the children page says what unties it and how to take such a lock.
 
 ## A resource that travels
 
@@ -105,9 +107,9 @@ final ready = Job.deferred<Database>((ctx) async {
 ```
 
 `connect` registered the release, so the database looks covered wherever it
-goes. A conditional registration is settled by the outcome of the job that made
-it, not of the job the value goes to. The one exception, a branch of
-`ctx.runAll`, is in
+goes. A `discard` is a conditional registration: it is settled by the outcome
+of the job that made it, not of the job the value goes to. The one exception, a
+branch of `ctx.runAll`, is in
 [Cleanup order and late results](#cleanup-order-and-late-results). `connect`
 ended `Done` — it handed its value over — so its `discard` is dropped together
 with the value, and nothing carries the registration to the receiver. When the
@@ -127,12 +129,18 @@ final ready = Job.deferred<Database>((ctx) async {
 ```
 
 The receiver registers what it received, on the line where it receives it. With
-the child's value in hand `run` checks the parent — for its own cancellation,
-and for the rules of its domain — and a checkpoint that throws there takes the
-value with it. The child ended `Done` and dropped its registration on the way,
-the `onDiscard` line is never reached, and nothing closes the database at all.
-A child that refuses the cascade with `cancellable: false` reaches that window
-on any cancellation of its parent.
+the child's value in hand `run` checks the parent — for its own cancellation
+and, under an engine built on the core, such as `solo`, for the rules of that
+engine — and a checkpoint that throws there takes the value with it. The child
+ended `Done` and dropped its registration on the way, the `onDiscard` line is
+never reached, and nothing closes the database at all. With `connect` as
+written, a cancellation loses the database this way only when it arrives after
+`connect` has ended `Done` and before `run` hands the value to the body: one
+that arrives while `connect` still opens the database cascades to it, and
+`connect` ends `Cancelled` and closes the database itself. A child that refuses
+the cascade with `cancellable: false` ends `Done` all the same, so with it any
+cancellation that arrives before `run` hands the value to the body loses the
+database.
 
 ### Registering on arrival
 
@@ -227,17 +235,18 @@ belongs where ownership changes, not on the line after it.
 | Second pass | runs a `discard` that cancellation has since made necessary |
 | End | the outcome, and the release of whatever an engine holds |
 
-Awaiting each callback is what lets a library built on the core wait for
-resource release while closing.
+Because each callback is awaited, the job ends only after the last of them is
+over, and an engine such as `solo` can wait for them while it closes.
 
-Cleanup callbacks run after the body ends, and cancellation does not interrupt
-them: neither one already accepted nor one arriving into the unwinding itself.
-`ctx.wait` and `ctx.join` are the body's and throw `StateError` here, so a
-callback must await its resource directly. It must not await its own job:
-`done`, `value` and `cancel()` all complete after the cleanup that would be
-waiting for them. Keep callbacks short and unconditional. An error from one
-goes to `onError` and, by default, on to the zone, and the remaining callbacks
-still run.
+The callbacks on the cleanup stack run after the body ends, and cancellation
+does not interrupt them: neither one already accepted nor one arriving into the
+unwinding itself. `check`, `wait`, `join`, `uncancellable`, `run`, `runAll`,
+`each` and `onCancel` are the body's and throw `StateError` here, so a callback
+must await its resource directly. It must not await its own job: `done`,
+`value` and `cancel()` all complete after the cleanup that would be waiting for
+them. Keep callbacks short, and let them wait for nothing but the release
+itself: nothing will interrupt them. An error from one goes to `onError` and,
+by default, on to the zone, and the remaining callbacks still run.
 
 **Cancellation after the body returns.** A job may still be waiting for
 children or running cleanup after `return`. Cancellation during that time can
@@ -247,27 +256,36 @@ skipped on the successful path runs in a second pass, which puts it after
 callbacks registered before it rather than in the strict reverse order of
 registration.
 
-A branch of `ctx.runAll` is the one exception, and it is the whole point of the
-hold. A branch is not let to an outcome until its group has decided, and once
-the group has handed the values to the caller, a `discard` of that branch no
-longer runs — not in a second pass, not on a cancellation arriving into the
-unwinding, not at all. The value is in the caller's hands, and `discard` means
-the value went to nobody. Until the group decides, everything above holds as
-written: a cancellation reaching the branch closes what the branch took.
+A branch of `ctx.runAll` is the one exception, and it is why a group holds its
+branches until it decides. A branch gets no outcome before that, and once the
+group has handed the values to the caller, a `discard` of that branch no longer
+runs — not in a second pass, not on a cancellation arriving into the unwinding,
+not at all. The value is in the caller's hands, and `discard` means the value
+went to nobody. Until the group decides, everything above holds as written: a
+cancellation reaching the branch closes what the branch took.
 
 A value returned by an action abandoned by `wait` needs cleanup whatever the
-outcome, because it never reached the body. Its callback runs as soon as the
-value arrives and does not wait for the unwinding: a child the job is still
-waiting for may want the same lock or slot of a pool, and a value held for the
-unwinding would keep it from that child for good. So this is the one callback
-that overlaps others. It runs alongside the body and the children, alongside
-the release of another such value, and alongside the cleanup stack if it is
-still running when the unwinding starts. The job does not end before it has. A
-value arriving while the job runs its cleanup stack joins the stack instead. A
-branch of `ctx.runAll` waiting for its group between the two passes runs no
-callback, so it releases the value at once as well: a cleanup of a sibling may
-want the same slot. Once the job has ended, the callback runs late and alone,
-with nobody waiting for it.
+outcome, because it never reached the body. Its callback does not wait for the
+unwinding: a child the job is still waiting for may want the same lock or slot
+of a pool, and a value held for the unwinding would keep it from that child for
+good. When the callback runs depends on when the value arrives:
+
+- during the body, while the job waits for its children, or while a branch of
+  `ctx.runAll` waits for its group: at once;
+- while the job runs its cleanup stack: on the stack, after the callback that
+  is running;
+- after the job has ended: at once, late and alone, with nobody waiting for it.
+
+In the first case this is the one callback that overlaps others: it runs
+alongside the body, the children and the release of another such value. For a
+value that arrives before the unwinding, the release counts as a callback
+registered at that moment: a callback registered later may run alongside it,
+and one registered earlier, such as the one that closes the pool the value came
+from, runs only once the release is over. A branch of `ctx.runAll` that waits
+for its group between the cleanup stack and the second pass has run its stack
+already and releases the value at once: the cleanup of another branch the group
+waits for may want the same slot. The job does not end before the release is
+over.
 
 Registration works after a plain `await` as well, and the checkpoint of
 [The second attempt](#the-second-attempt) is why it is worth naming: a plain
