@@ -261,7 +261,8 @@ outcome: Failed(SignedOut)
 
 A rule that no longer holds should not be a failure, and here the job ends
 `Failed` with an error of the engine's own. The observer hears an error, nobody
-closes the connection, and a child of the job would run on to its end.
+closes the connection, and a child of the job, if it had one, would run on to
+its end.
 
 ### A cancellation of the engine's own
 
