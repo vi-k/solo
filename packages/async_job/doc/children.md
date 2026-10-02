@@ -481,10 +481,11 @@ This branch writes the archive and then returns the sources open, for its
 caller to use further. `finally` would close them on success as well, so the
 closing moves to `catch`. That covers every error of the body, and nothing
 after it: a returned list can still reach nobody. When `exported` is a branch
-of a group and a sibling fails after the body has returned, the group cancels
-the branch, as [What a group hands back](#what-a-group-hands-back) describes,
-and the list never reaches the caller. The body has long left the `try` by
-then, and the sources stay open.
+of a `ctx.runAll` group and a sibling fails after the body has returned, the
+group cancels the branch, as
+[What a group hands back](#what-a-group-hands-back) describes, and the list
+never reaches the caller. The body has long left the `try` by then, and the
+sources stay open.
 
 `ctx.onDiscard` runs exactly when the value reaches nobody, so it closes the
 list in that case too, and stays out of the way when the list arrives:

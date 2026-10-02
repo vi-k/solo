@@ -664,3 +664,7 @@ zone that link was created in».
     брате и не трогает список, который дошёл (`2 arrived`). Мутации:
     `onDiscard` → `onDispose` краснит «leaves a handed-out list open», `catch`
     → `finally` краснит «catch leaks»; обе — и сверку кода страницы.
+
+30. «Если `exported` стоит веткой в группе и брат падает уже после того —
+    в группе `runAll`». Группа названа: «веткой в группе `ctx.runAll`»,
+    в оригинале «a branch of a `ctx.runAll` group».
