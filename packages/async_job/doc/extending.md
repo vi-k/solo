@@ -124,11 +124,13 @@ final class MyQueue {
 The user cancels the second job while the first one runs:
 
 ```dart
+final first = MyJob<void>(key: 'first', (ctx) => ctx.wait(upload));
 final second = MyJob<void>(key: 'second', (ctx) => ctx.wait(upload));
+final third = MyJob<void>(key: 'third', (ctx) async => print('third runs'));
 final queue = MyQueue()
-  ..add(MyJob<void>(key: 'first', (ctx) => ctx.wait(upload)))
+  ..add(first)
   ..add(second)
-  ..add(MyJob<void>(key: 'third', (ctx) async => print('third runs')));
+  ..add(third);
 final running = queue.run();
 await second.cancel();
 print('second: ${await second.done}');
