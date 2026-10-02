@@ -401,3 +401,20 @@ zone that link was created in».
     повторяла бы сказанное; осталось «The body registered nothing…», «Тело,
     когда значение пришло, ничего не зарегистрировало». Утверждения те же,
     сторож тот же.
+
+12. «если один завершился успешно, а второй отменился или провалился, то кто
+    сделает очистку у первого?» — о разделе «Registered on arrival, waited for
+    in one envelope». Родитель: `dispose`, переданный с `ctx.run(rows)`,
+    регистрирует источник на родителе в момент возврата, и родитель закрывает
+    его, когда кончается. Абзац это говорил, но случаем в середине перечня
+    «after the archive is written, when the other branch failed, or when a
+    cancellation reached the parent in between», и отмены другой ветки
+    в перечне не было вовсе. Теперь абзац с этого случая начинается: «When
+    `rows` succeeds and `images` fails or is cancelled, the parent closes the
+    rows source: the `dispose` passed with `ctx.run(rows)` runs as the parent
+    finishes», в переводе «Если `rows` удалась, а `images` упала или
+    отменилась, источник `rows` закрывает родитель…». Сторож у обоих случаев
+    был: тесты
+    `.wait: the source that came back is closed when the other fails`
+    и `.wait: a branch giving up ends the parent with that cancellation` ждут
+    `rows closed`.

@@ -219,12 +219,14 @@ final parent = Job<void>((ctx) async {
 Two things changed, and each repairs one of the two faults.
 
 `ctx.run(child, dispose: ...)` registers the value on the parent the moment the
-branch hands it over, so every source a branch returned is closed when the
-parent ends, whatever it ends with: after the archive is written, when the
-other branch failed, or when a cancellation reached the parent in between. A
-branch that never got as far as returning closes its own through the `discard`
-it opened the source with. This alone closes what the first attempt left open,
-and it would under `Future.wait` too. The rule is the one of
+branch hands it over, and from then on the parent closes it when it ends,
+whatever it ends with. When `rows` succeeds and `images` fails or is cancelled,
+the parent closes the rows source: the `dispose` passed with `ctx.run(rows)`
+runs as the parent finishes. It does the same after the archive is written, and
+when a cancellation reached the parent in between. A branch that never got as
+far as returning closes its own through the `discard` it opened the source
+with. This alone closes what the first attempt left open, and it would under
+`Future.wait` too. The rule is the one of
 [Registering on arrival](cleanup.md#registering-on-arrival) on the cleanup
 page; `dispose` rather than `discard`, because the parent keeps the sources to
 itself.
