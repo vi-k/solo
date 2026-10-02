@@ -35,8 +35,9 @@
 `2026-10-02-async-job-readme-reread-report.md`;
 `packages/async_job/doc/outcomes.md`, `2026-10-02-outcomes-reread-report.md`;
 `packages/async_job/doc/cleanup.md`, `2026-10-02-cleanup-reread-report.md`;
-`packages/async_job/doc/observing.md`, `2026-10-02-observing-reread-report.md`.
-Сторож `cancellation.md` сверяет n-й блок страницы с n-й областью файла новым
+`packages/async_job/doc/observing.md`, `2026-10-02-observing-reread-report.md`;
+README `solo`, `2026-10-02-solo-readme-reread-report.md`. Сторож
+`cancellation.md` сверяет n-й блок страницы с n-й областью файла новым
 помощником `codeOutOfPlace` в обеих копиях `page_code.dart`.
 
 **Что дальше.** Вычитанные страницы ждут чтения владельца по порядку
@@ -50,7 +51,12 @@
 отмену отбрасывает, а страница наблюдения и dartdoc `JobObserver` говорят, что
 ядро нигде не считает брошенную отмену провалом. Править ядро одной строкой
 со сторожем в `debug_test.dart` или сузить фразы страницы и dartdoc — решает
-владелец.
+владелец. Вердикт B1 в `2026-10-02-solo-readme-reread-report.md`: тур «The
+dozen calls» в README `solo` перестроен — `play` кончается со стартом трека,
+и из тура ушли `ctx.onDispose` и `canStart`, хотя карта
+`2026-09-11[16]-docs-structure-design.md` числит `ctx.onDispose` среди
+ежедневных вызовов; конца трека тур не моделирует. Устраивает ли такой тур или
+показать передачу ресурса состоянию — решает владелец.
 
 **Решения владельца, которые действуют.**
 
@@ -180,15 +186,15 @@
 дерева — только клоны вычитки в `.artifacts/`, о них «В работе». `main`
 отправлен в `origin` 2026-10-01 по поручению владельца, до `41f8d19`; коммиты
 2026-10-02 не отправлены — от `149e3af`: вычитка `extending.md`, правки
-по чтению владельца, вычитка `children.md` и подготовка второго круга, тридцать
-девять коммитов. CI на `41f8d19`: `gate` зелёный всеми пятью заданиями —
-`dart`, `flutter`, `floor`, `snippets` и `docs`; это первый полный прогон
-`floor` в CI. У `gate` стоит `cancel-in-progress`, поэтому из коммитов,
-отправленных подряд, до конца доходит прогон только последнего. Последний
-прогон `site` — на `1a6a618`, зелёный. Проверки: `packages/async_job`
-на коммите переноса `observing.md` — формат и анализ чистые, `dart test`
-зелёный, 1177 тестов; `dart doc --dry-run` чистый на коммите вычитки
-`children.md`; `packages/solo` там же — анализ чистый, 830 тестов; из корня
+по чтению владельца, вычитка `children.md` и подготовка второго круга, сорок
+коммитов. CI на `41f8d19`: `gate` зелёный всеми пятью заданиями — `dart`,
+`flutter`, `floor`, `snippets` и `docs`; это первый полный прогон `floor` в CI.
+У `gate` стоит `cancel-in-progress`, поэтому из коммитов, отправленных подряд,
+до конца доходит прогон только последнего. Последний прогон `site` —
+на `1a6a618`, зелёный. Проверки: `packages/async_job` на коммите переноса
+`observing.md` — формат и анализ чистые, `dart test` зелёный, 1177 тестов;
+`dart doc --dry-run` чистый на коммите вычитки `children.md`; `packages/solo`
+на коммите переноса его README — формат и анализ чистые, 868 тестов; из корня
 на коммите вычитки `reflow.py --check`, `check_line_width.py`,
 `check_links.py`, `check_translations.py` и `check_doc_shape.py` зелёные.
 `solo` пример 47, `flutter_solo` 85 и его пример 4, раскладки архивов на полу
@@ -241,10 +247,11 @@ on upgrade», «Added», «Fixed», «Documentation». Счёт ломающих
 `observing_rakes_test.dart`, `children_rakes_test.dart`
 и `extending_rakes_test.dart`. В `solo` — `state_rakes_test.dart`,
 `cancellation_rakes_test.dart`, `resources_rakes_test.dart`,
-`errors_rakes_test.dart` с `cancel_delay_recipe_test.dart`
-и `testing_rakes_test.dart`; `camera.md` держит `camera_rakes_test.dart` пакета
-примера, а `children.md` — `children_test.dart`, `each_test.dart`,
-`each_child_test.dart` и `zone_test.dart`.
+`errors_rakes_test.dart` с `cancel_delay_recipe_test.dart`,
+`testing_rakes_test.dart` и `readme_rakes_test.dart` для README; `camera.md`
+держит `camera_rakes_test.dart` пакета примера, а `children.md` —
+`children_test.dart`, `each_test.dart`, `each_child_test.dart`
+и `zone_test.dart`.
 
 `packages/async_job/doc/extending.md` вычитана 2026-10-02 в `main`. Страницу
 перестроили раньше, 2026-09-28, и форма её не менялась: раздел о своей задаче

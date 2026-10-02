@@ -92,19 +92,24 @@ final class ProfileController extends Solo<ProfileState> {
 ```
 
 `run<ProfileState, String>` creates and queues a job. `ProfileState` is the
-state type its body can work with; `String` is its result type. The body
-receives a context, `ctx`, which provides state updates and cancellation-aware
-waiting:
+job's working type `W`: the states its body works with, which may be narrower
+than the controller's state type `S`. `String` is the job's result type. The
+body receives a context, `ctx`, which provides state updates and
+cancellation-aware waiting:
 
 - `ctx.emit` updates the controller's state.
 - `ctx.wait` waits for the API response, or throws `Cancelled` if the job
   accepts cancellation while waiting.
+
+Two parameters of `run` give the state to publish when the job does not
+succeed:
+
 - `onError` returns the state to publish if the job fails.
 - `onCancel` returns the state to publish if a started job is cancelled.
 
 The state handlers run after the body and its cleanup. In this example, the
 state becomes `Loaded` on success, `Failure` on error, or `Initial` on
-cancellation. Failure and cancellation remain the job's outcome even when a
+cancellation. The job's outcome stays `Failed` or `Cancelled` even when a
 handler updates the state.
 
 `Policy.droppable` and `key: 'load'` make repeated calls share the queued or
@@ -138,8 +143,8 @@ synchronously too, inside the change itself. `job.value` returns the loaded
 name, or throws the job's error or `Cancelled`. The `finally` block removes the
 listener and closes the controller even if loading fails.
 
-Mix in `SoloStream` instead for a broadcast `stream`, delivered on the next
-microtask:
+For a broadcast `stream` as well, delivered on the next microtask, mix in
+`SoloStream`:
 
 ```dart
 final class ProfileController extends Solo<ProfileState> with SoloStream {
@@ -151,7 +156,7 @@ See [Observing state](doc/state.md#observing-state) on the state page for the
 full delivery picture, including `SoloListenable` from `flutter_solo`.
 
 Cancellation uses the same job object. This separate example requests
-cancellation immediately, so the job may still be in the queue:
+cancellation immediately, so the job is still in the queue:
 
 ```dart
 Future<void> cancelLoading() async {
@@ -176,18 +181,20 @@ request that has already been sent.
 
 ## Why `currentState` and not `state`
 
-A method of `ProfileController` that also watches a session:
+Say `ProfileController` also holds `session`, another controller, and the
+profile API takes the user: `fetchName(user)`. A method that reloads a loaded
+profile:
 
 ```dart
-Job<String> reload() => run<ProfileState, String>(
+Job<String> reload() => run<Loaded, String>(
       (ctx) async {
         // Another controller's snapshot: a plain read, and the name says
         // as much.
         final user = session.currentState.user;
         final name = await ctx.wait(() => api.fetchName(user));
         // This job's own state: a checkpoint that throws `Cancelled` if
-        // the load lost the state while it waited.
-        if (ctx.state case Loading()) {
+        // the job has been cancelled or the state is no longer `Loaded`.
+        if (ctx.state.name != name) {
           ctx.emit(Loaded(name));
         }
         return name;
@@ -196,12 +203,15 @@ Job<String> reload() => run<ProfileState, String>(
 ```
 
 A job body is a closure inside a method of the controller, so every member of
-the controller is in scope there. A plain read named `state` would look exactly
-like `ctx.state`, and a body that typed it out of habit would read past a
-cancellation it was supposed to honour: no `Cancelled`, no `keepWhile` check,
-and the whole of `S` instead of the job's working type `W`. Nobody writes
-`currentState` by habit where a checkpoint is meant, so what used to be a
-silent read is a compile error.
+the controller is in scope there. `ctx.state` is a checkpoint. Before it reads,
+it checks that the job has not been cancelled and that its rules still hold:
+the working type, here `Loaded`, and the `keepWhile` rule of a job that has
+one, like `play` below. A plain read named `state` would look exactly like
+`ctx.state`, and a body that typed it out of habit would read past a
+cancellation it was supposed to honour: no `Cancelled`, no check of the rules,
+and the whole of `S` instead of `W`, with no `name` to read. The controller's
+own read is named `currentState`: a bare `state` in a body does not compile,
+and nobody types `currentState` by habit where a checkpoint is meant.
 
 Outside a job `currentState` is the read to use. Inside one it stays right for
 a different controller: `session.currentState` above is somebody else's
@@ -209,8 +219,9 @@ snapshot, and this job's rules have nothing to say about it.
 
 ## The dozen calls
 
-Everything reached for day to day, in one controller. `PlayerState`, `Api` and
-`Device` belong to the application; the rest is the package.
+Everything reached for day to day, in one controller. `PlayerState` with its
+states, `Track`, `Download`, `Api` and `Device` belong to the application; the
+rest is the package.
 
 ```dart
 enum _Op { play }
@@ -219,35 +230,47 @@ final class Player extends Solo<PlayerState> {
   final Api api;
   final Device device;
 
-  Player(this.api, this.device) : super(const Idle());
+  Player(this.api, this.device) : super(const Idle()) {
+    // A fact from outside the queue: published at once, and the rule of
+    // the running job is asked about it.
+    device.onDisconnect = () => externalSetState(const Disconnected());
+  }
 
-  /// A job on the controller's queue. Root jobs run one at a time.
-  SoloJob<Track> play(String id) => run<PlayerState, Track>(
-        // Any object is a key. A record keys one request, not an operation.
-        key: (_Op.play, id),
+  /// A job on the controller's queue. Root jobs run one at a time, and
+  /// this one ends when the track starts: the device plays it on its own.
+  Job<Track> play(String id) => run<PlayerState, Track>(
+        // Any object is a key. This one keys the operation, not a track.
+        key: _Op.play,
         // A new play cancels the one running under the same key.
         policy: Policy.restart,
-        // Rules: checked before the start, and at every checkpoint after.
-        canStart: (state) => state is! Disconnected,
+        // A rule: asked before the start, and on every change of state
+        // while the body runs, except one the body makes with `ctx.emit`.
         keepWhile: (state) => state is! Disconnected,
+        // The state to publish when the job fails or is cancelled. A
+        // cancellation by the rule publishes nothing: `Disconnected` stays.
+        onError: (state, error, stackTrace) => const Idle(),
+        onCancel: (state, cancelled) => const Idle(),
         (ctx) async {
-          // The only way to change state. There is no setter outside.
+          // The body's way to change state. There is no setter outside.
           ctx.emit(const Loading());
+          // Waited out whatever happens: the track playing now stops
+          // before another one loads.
+          await ctx.join(device.stop);
           // Cancellation ends this wait at once; the request may go on.
           final track = await ctx.wait(() => api.fetch(id));
-          // This one is waited out whatever happens, and the value is
-          // released if the job ends before the body could take it.
-          final handle = await ctx.join(
-            () => device.open(track),
-            dispose: (handle) => handle.close(),
+          // Waited out as well. `dispose` closes the download when the
+          // job ends, or as soon as the call returns if the job was
+          // cancelled meanwhile.
+          final download = await ctx.join(
+            () => api.download(track),
+            dispose: (download) => download.close(),
           );
-          // Cleanup runs in reverse order, on every outcome: playback
-          // stops, then the handle closes. Register each release once.
-          ctx.onDispose(device.stop);
-          // A child job: the parent waits for it before it finishes.
-          ctx.each(device.position, (childCtx, position) async {
-            childCtx.emit(Playing(track, position));
-          });
+          // A child job: the device reads the download in, and the stream
+          // ends when the track starts. `value` waits for that.
+          await ctx.each(device.load(download), (childCtx, percent) {
+            childCtx.emit(Buffering(track, percent));
+          }).value;
+          ctx.emit(Playing(track));
           return track;
         },
       );
@@ -259,11 +282,17 @@ final class Player extends Solo<PlayerState> {
     timing: AccumulationTiming.debounce(const Duration(milliseconds: 50)),
   );
 
-  SoloJob<void> setVolume(double value) => _volume.add(value);
+  Job<void> setVolume(double value) => _volume.add(value);
+
+  // The callback is removed before the state is final: after that,
+  // `externalSetState` would throw.
+  @override
+  void onClose() => device.onDisconnect = null;
 }
 ```
 
-At the call site a job is a handle: await its outcome, or cancel it.
+At the call site a job is a handle: await its outcome, or cancel it as the
+quick start does.
 
 ```dart
 final player = Player(api, device);
@@ -279,7 +308,7 @@ switch (await job.done) {
 }
 
 player.setVolume(0.4);
-// Run what is already queued, then stop accepting work.
+// Stop taking new work now, run what is already queued, then close.
 await player.close(mode: SoloCloseMode.drain);
 ```
 
@@ -311,16 +340,17 @@ section linked beside it.
 | --- | --- | --- |
 | Only the last of a burst of commands matters | `accumulate` with a `merge` that keeps the incoming value | [Commands where only the last one counts](doc/accumulation.md#commands-where-only-the-last-one-counts) |
 | Typing into a search box | `accumulate` with `AccumulationTiming.debounce` | [A search that fires on every keystroke](doc/accumulation.md#a-search-that-fires-on-every-keystroke) |
-| A later request must not be dropped as a duplicate of an earlier one | a record key, `(Op.load, id)` | [Queue and policies](doc/jobs.md#queue-and-policies) |
+| A later request must not be dropped as a duplicate of an earlier one | a record key, `(_Op.load, id)` | [Queue and policies](doc/jobs.md#queue-and-policies) |
 | Queued work is made pointless by what just arrived | `queue.removeWhere` before submitting, or `cancelAll()` if it may be running | [When they are separate jobs after all](doc/accumulation.md#when-they-are-separate-jobs-after-all) |
 | A last batch has to go out before the screen goes away | `close(mode: SoloCloseMode.drain)` | [Cancelling and closing a controller](doc/cancellation.md#cancelling-and-closing-a-controller) |
-| `close()` does not come back | `Solo.pending` | [What is holding the controller](doc/errors.md#what-is-holding-the-controller) |
+| `close()` does not come back | `controller.pending` | [What is holding the controller](doc/errors.md#what-is-holding-the-controller) |
 | A journal needs to say which operation changed the state | `SoloTransition` in `onChange` | [Watching every controller](doc/errors.md#watching-every-controller) |
-| A step must not be interrupted halfway | `ctx.join` for a call, `ctx.uncancellable` for a step | [Protecting a step or a whole job](doc/cancellation.md#protecting-a-step-or-a-whole-job) |
+| A call must finish before the queue goes on | `ctx.join` | [Cancellation](doc/cancellation.md) |
+| A step of several calls must not be interrupted halfway | `ctx.uncancellable` | [Protecting a step or a whole job](doc/cancellation.md#protecting-a-step-or-a-whole-job) |
 | A resource opened by a call nobody waited for still has to close | `dispose` or `discard` on `ctx.wait` and `ctx.join` | [Taking a resource from a call](doc/resources.md#taking-a-resource-from-a-call) |
 | A widget rebuilds for state it does not use | `SoloSelector` from `flutter_solo` | [Selecting one value](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.md#selecting-one-value) |
 | The queue has to stand still for a while | a job waiting on a `Completer` at the head of it | [Pausing the queue](doc/jobs.md#pausing-the-queue) |
-| A stream event arrives a microtask late, and that is too late | `publish` on a `Solo` subclass, notifying inside the change | [A delivery of your own](doc/state.md#a-delivery-of-your-own) |
+| A stream event arrives a microtask late, and that is too late | `addListener`, which calls back inside the change | [Observing state](doc/state.md#observing-state) |
 
 ## Coming from bloc
 
