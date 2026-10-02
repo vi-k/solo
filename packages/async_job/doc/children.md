@@ -438,12 +438,14 @@ await ctx.wait(
 );
 ```
 
-The registration reads like the rest of the body, and most of the time it
-works: the action hands the list straight back, the `dispose` goes on the job,
-and the end of the job closes every source in the list, whatever the outcome.
-What it cannot survive is a cancellation that arrives **before** this line —
-during the manifest above it, or anywhere else the body waits after the group
-returned. The first checkpoint after the group lets it out: here that is
+`ctx.wait` registers only what its action returns, so the list has to be
+wrapped in an action: `() => sources` opens nothing and only hands back the
+list the body already holds. The registration reads like the rest of the body,
+and most of the time it works: the `dispose` goes on the job, and the end of
+the job closes every source in the list, whatever the outcome. What it cannot
+survive is a cancellation that arrives **before** this line — during the
+manifest above it, or anywhere else the body waits after the group returned.
+The first checkpoint after the group lets it out: here that is
 `ctx.join(loadManifest)`, which waits the manifest out and then throws the
 cancellation in place of its value, so the body never reaches the registration.
 Nor would the line itself win after a bare `await`: `ctx.wait` opens with a

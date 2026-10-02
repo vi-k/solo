@@ -608,3 +608,13 @@ zone that link was created in».
     sections below» по-прежнему четыре раздела с первой попыткой. Группа
     сторожа с двумя тестами о списке переименована
     в `The list a group returns`.
+
+27. «В первой попытке что делает `() => sources` внутри wait?» Обёртку первая
+    попытка не объясняла: проза говорила «the action hands the list straight
+    back», не сказав, зачем вообще действие. Теперь абзац под примером
+    открывается причиной: «`ctx.wait` registers only what its action returns,
+    so the list has to be wrapped in an action: `() => sources` opens nothing
+    and only hands back the list the body already holds». Прежние слова
+    о действии, которое отдаёт список сразу же, из следующей фразы убраны,
+    чтобы не повторять. Утверждение держит сигнатура: `wait` берёт
+    `FutureOr<T> Function() action` и готового значения не принимает.
