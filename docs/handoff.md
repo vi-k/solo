@@ -31,10 +31,11 @@
 проверки. Сторожам `solo` сверять код страницы помогает
 `packages/solo/test/support/page_code.dart` — копия помощника `async_job`.
 Готовы и перенесены в `main`: `packages/async_job/doc/cancellation.md`,
-`2026-10-02-cancellation-reread-report.md`, и README `async_job`,
-`2026-10-02-async-job-readme-reread-report.md`. Сторож `cancellation.md`
-сверяет n-й блок страницы с n-й областью файла новым помощником
-`codeOutOfPlace` в обеих копиях `page_code.dart`.
+`2026-10-02-cancellation-reread-report.md`; README `async_job`,
+`2026-10-02-async-job-readme-reread-report.md`;
+`packages/async_job/doc/outcomes.md`, `2026-10-02-outcomes-reread-report.md`.
+Сторож `cancellation.md` сверяет n-й блок страницы с n-й областью файла новым
+помощником `codeOutOfPlace` в обеих копиях `page_code.dart`.
 
 **Что дальше.** Вычитанные страницы ждут чтения владельца по порядку
 `async_job`, затем `solo` и `flutter_solo`; следующую страницу берёт владелец.
@@ -172,12 +173,12 @@
 отправлен в `origin` 2026-10-01 по поручению владельца, до `41f8d19`; коммиты
 2026-10-02 не отправлены — от `149e3af`: вычитка `extending.md`, правки
 по чтению владельца, вычитка `children.md` и подготовка второго круга, тридцать
-пять коммитов. CI на `41f8d19`: `gate` зелёный всеми пятью заданиями — `dart`,
+шесть коммитов. CI на `41f8d19`: `gate` зелёный всеми пятью заданиями — `dart`,
 `flutter`, `floor`, `snippets` и `docs`; это первый полный прогон `floor` в CI.
 У `gate` стоит `cancel-in-progress`, поэтому из коммитов, отправленных подряд,
 до конца доходит прогон только последнего. Последний прогон `site` —
 на `1a6a618`, зелёный. Проверки: `packages/async_job` на коммите переноса
-README `async_job` — формат и анализ чистые, `dart test` зелёный, 1100 тестов;
+`outcomes.md` — формат и анализ чистые, `dart test` зелёный, 1131 тест;
 `dart doc --dry-run` чистый на коммите вычитки `children.md`; `packages/solo`
 там же — анализ чистый, 830 тестов; из корня на коммите вычитки
 `reflow.py --check`, `check_line_width.py`, `check_links.py`,
