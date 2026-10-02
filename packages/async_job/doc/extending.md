@@ -166,7 +166,7 @@ through `cancelOwnJob` of the context. An override passes a cancellation on to
 `super` to let it through, and the analyzer requires that call to be there. To
 refuse one, the override returns before the call. `MyJob` keeps the queue it
 was added to, and while it waits there it refuses what it would refuse while it
-runs, as `solo` does:
+runs:
 
 ```dart
   MyQueue? _queue;
@@ -201,6 +201,11 @@ second: Done(null)
 
 `cancel()` returns a future that waits for the job to be over, refused or not,
 so here it completes once the second job has run.
+
+`solo` refuses in its `cancelWith` the same way. Its queue differs from this
+one in how a job that accepts a cancellation leaves it: there the same override
+takes the job out at once, while here the cancelled job stays in `_waiting`
+until its turn, and the loop skips it then.
 
 ## A rule of your own
 

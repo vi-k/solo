@@ -481,6 +481,7 @@ void main() {
         queue.run().then((_) => over = true).ignore();
         second.cancel().ignore();
         expect('${second.outcome}', 'Cancelled(manual)', reason: 'on the spot');
+        expect(queue._waiting, contains(second), reason: 'until its turn');
         async.flushTimers();
         expect(seen, ['third runs']);
         expect(over, isTrue);
