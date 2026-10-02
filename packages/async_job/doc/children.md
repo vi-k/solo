@@ -60,19 +60,35 @@ checks the parent's cancellation before returning the value to the body. If the
 child refuses cancellation, `run` still waits for it; after the child succeeds,
 `run` throws the parent's cancellation instead of continuing to the log call. A
 child's error or cancellation is thrown through the returned future with its
-stack trace.
+stack trace. Use `child.cancel()` to request cancellation and `child.done` to
+inspect the outcome.
 
-Use `child.cancel()` to request cancellation and `child.done` to inspect the
-outcome. To start a child concurrently, retain the future returned by
-`ctx.run(child)` and await it later, or handle its errors. Use
-`ctx.run(child).ignore()` when deliberately ignoring that result. The parent
-still waits for the child before finishing. `child.ignore()` is no substitute
-for `ctx.run(child).ignore()`. `child.ignore()` quenches the core's report of a
-failure nobody looked at, and here `run` looks — it waits for the child's
-value. The error arrives through the future `run` returned, an ordinary Dart
-future: left unhandled, it goes to the zone, and so does the child's
-`Cancelled`. `ctx.run(child).ignore()` handles that future and nothing more:
-the child's observer still hears the error through `onError`.
+A child inherits the parent's observer unless it has its own. If a child's
+cancellation escapes through `await ctx.run(child)` or `child.value`, the
+parent ends with `HandlerCancelReason` and a description naming the child.
+
+### A child the body does not await
+
+```dart
+final parent = Job<void>((ctx) async {
+  final rows = ctx.run(Job.deferred<int>((c) => c.wait(loadRows)));
+  final child = Job.deferred<void>((c) => c.wait(warmCache));
+  ctx.run(child).ignore();
+  ctx.log('${await rows} rows');
+});
+```
+
+Both children start at once. `rows` is the future `ctx.run` returned, kept and
+awaited later; a future kept this way must be awaited or have its errors
+handled. `child` warms a cache nobody reads here, and `ctx.run(child).ignore()`
+says the result is not wanted. The parent still waits for both before
+finishing. `child.ignore()` is no substitute for `ctx.run(child).ignore()`.
+`child.ignore()` quenches the core's report of a failure nobody looked at, and
+here `run` looks — it waits for the child's value. If `child` fails, its error
+arrives through the future `run` returned, an ordinary Dart future: left
+unhandled, it goes to the zone, and so does the child's `Cancelled`.
+`ctx.run(child).ignore()` handles that future and nothing more: the child's
+observer still hears the error through `onError`.
 
 If the child's body fails and a cancellation reaches the child afterwards —
 while it still waits for children of its own or runs its cleanup, say — its
@@ -85,22 +101,35 @@ does not: it handles what the future throws, and the future throws the
 cancellation. To answer for the error differently, give the child an observer
 that answers: a `JobAnswerer` with `onUnanswered` overridden.
 
-A child inherits the parent's observer unless it has its own. If a child's
-cancellation escapes through `await ctx.run(child)` or `child.value`, the
-parent ends with `HandlerCancelReason` and a description naming the child.
+### When `ctx.run` refuses a child
 
-`ctx.run` throws synchronously for an invalid start: `ArgumentError` for a job
-from another implementation or a job that starts automatically. It throws
-`StateError` if the child has already started or finished, or the parent body
-has ended. If the parent is already cancelled, it cancels the child before
-start and throws the parent's `Cancelled`.
+`ctx.run` refuses an invalid start synchronously, before the child runs:
+
+| The child | What `ctx.run` does |
+| --- | --- |
+| A job that starts automatically, or one from another implementation | Throws `ArgumentError` |
+| A job that has already started or finished | Throws `StateError` |
+| Any job, once the parent body has ended | Throws `StateError` |
+| Any job, once the parent is cancelled | Cancels the child before its start and throws the parent's `Cancelled` |
+
+### How deep a tree goes
+
+```dart
+Job<void> level(int depth) {
+  return Job.deferred<void>((ctx) async {
+    // Without this await, the whole chain is built on one stack.
+    await null;
+    if (depth > 0) await ctx.run(level(depth - 1));
+  });
+}
+```
 
 How deep a tree may go is bounded by the stack, and by two different walks of
-it. Starting a child runs the child's body up to its first `await`, so a body
-that makes its own child before it suspends builds the whole chain on one
-stack: about a thousand levels on a desktop VM, and the overflow lands while
-the tree is still being built. A single `await` before `ctx.run` breaks that
-into microtasks and lifts the limit to the other walk — cancellation, which
+it. Starting a child runs the child's body up to its first `await`. Without the
+`await null` above, each level makes its own child before it suspends, and the
+whole chain is built on one stack: about a thousand levels on a desktop VM, and
+the overflow lands while the tree is still being built. With it, building goes
+by microtasks, and the limit moves to the other walk — cancellation, which
 descends the tree recursively and reaches about three thousand. Neither number
 is a promise; both follow from the size of a body's frame.
 

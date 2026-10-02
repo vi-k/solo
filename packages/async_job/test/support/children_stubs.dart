@@ -18,6 +18,8 @@ final class Stage {
   int archiveTake = 50;
   int manifestTake = 40;
   int stepTake = 20;
+  int warmTake = 30;
+  Object? warmError;
 
   // ignore: close_sinks
   final messages = StreamController<String>();
@@ -67,6 +69,15 @@ Future<void> loadManifest() => delay(stage.manifestTake);
 Future<int> loadRows() async => 21;
 
 Future<int> loadExtra() async => 1;
+
+Future<void> warmCache() async {
+  await delay(stage.warmTake);
+  if (stage.warmError case final error?) {
+    // ignore: only_throw_errors
+    throw error;
+  }
+  stage.trace.add('cache warm');
+}
 
 Future<int> load() async => 21;
 

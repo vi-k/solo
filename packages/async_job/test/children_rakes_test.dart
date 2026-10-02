@@ -715,6 +715,35 @@ void main() {
       });
     });
 
+    for (final fails in [false, true]) {
+      test(
+          'a child the body does not await: the parent waits for it, and '
+          'its ignored ${fails ? 'failure' : 'value'} stays out of the zone',
+          () {
+        final zone = <Object>[];
+        late Job<void> parent;
+        runZonedGuarded(
+          () => fakeAsync((async) {
+            if (fails) stubs.stage.warmError = StateError('cold');
+            parent = page.childNotAwaited();
+            parent.done.then((outcome) => trace().add('parent $outcome'));
+            async.flushTimers();
+          }),
+          (error, stackTrace) => zone.add(error),
+        );
+        expect(parent.outcome, isA<Done<void>>());
+        expect(trace(), [if (!fails) 'cache warm', 'parent Done(null)']);
+        expect(zone, isEmpty);
+      });
+    }
+
+    test(
+        'how deep a tree goes: with the await, fifty thousand levels build '
+        'and finish', () async {
+      final root = Job<void>((ctx) => ctx.run(page.level(50000)));
+      expect(await root.done, isA<Done<void>>());
+    });
+
     test('Future.wait: the failure that came first decides the outcome', () {
       fakeAsync((async) {
         stubs.stage

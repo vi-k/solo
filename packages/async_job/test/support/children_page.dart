@@ -33,6 +33,27 @@ Job<void> children() {
   return parent;
 }
 
+Job<void> childNotAwaited() {
+  final parent = Job<void>((ctx) async {
+    final rows = ctx.run(Job.deferred<int>((c) => c.wait(loadRows)));
+    final child = Job.deferred<void>((c) => c.wait(warmCache));
+    ctx.run(child).ignore();
+    ctx.log('${await rows} rows');
+  });
+  return parent;
+}
+
+// A block body: at this language version dart format indents an expression
+// body six columns deep, and the page would show that.
+// ignore: prefer_expression_function_bodies
+Job<void> level(int depth) {
+  return Job.deferred<void>((ctx) async {
+    // Without this await, the whole chain is built on one stack.
+    await null;
+    if (depth > 0) await ctx.run(level(depth - 1));
+  });
+}
+
 Job<void> exportWithFutureWait() {
   final parent = Job<void>((ctx) async {
     final rows = Job.deferred<Source>(
