@@ -250,3 +250,35 @@ zone that link was created in».
    списком — ребёнок, стрим, продолжение, — а «The words for the three are
    close…» идёт отдельным абзацем после списка. Перевод поправлен так же.
    Утверждения не изменились, код страницы не тронут.
+
+2. «что будет, если родитель бросит Cancelled, а дочерняя задача
+   `cancellable: false`?» — о разделе «Children». Абзац говорил, что ребёнок
+   с `cancellable: false` может отклонить отмену родителя, а следующей фразой —
+   что при `Cancelled` из тела родителя дети «тоже будут отменены», и было
+   непонятно, отклоняет ли ребёнок и эту отмену. Отклоняет: тело, которое
+   бросило `Cancelled`, передаёт отмену детям тем же путём, что и отмена
+   снаружи. Ребёнок с `cancellable: false` дорабатывает до конца, родитель ждёт
+   его и только потом кончается `Cancelled`; ребёнок, которого можно отменить,
+   кончается `Cancelled` с причиной `ParentCancelReason`. Так показал зонд
+   `.artifacts/2026-10-02-children-reread/tree/packages/async_job/test/probe_owner_refuse_test.dart`
+   для обоих путей. Абзац теперь говорит это прямо: «When the parent is
+   cancelled, it passes the cancellation on to its children, and it does the
+   same when its body throws `Cancelled`. A child with `cancellable: false`
+   refuses the cancellation either way: it runs to its end, and the parent
+   waits for it and only then ends `Cancelled`». Сторож — новая группа
+   `Children` в `children_rakes_test.dart`, четыре теста: ребёнок
+   с `cancellable: false` и без, под отменой снаружи и под броском тела. Две
+   мутации ядра красные: каскад, который нельзя отклонить, — два теста; бросок
+   тела без каскада — один. Сторож — 47 тестов.
+
+3. «убери вообще „даже до запланированного старта“» о фразе «`ctx.run`
+   отклоняет обычную `Job`, даже до запланированного старта», и следом: «или
+   добавь: т.к. та запускается самостоятельно или что-то в таком духе». Оборот
+   снят, а причина сведена в одну фразу с прежней следующей, которая говорила
+   о гонке: «`ctx.run` rejects a regular `Job`, because such a job starts
+   automatically: it may start before the parent registers it and then run
+   outside the parent's cancellation and completion handling». «Automatically»,
+   а не «on its own»: ниже на странице тот же предмет назван «a job that starts
+   automatically» в описании `ArgumentError`, и в переводе так же —
+   «запускается автоматически».
+

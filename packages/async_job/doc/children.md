@@ -43,15 +43,16 @@ final parent = Job<void>((ctx) async {
 ```
 
 `ctx.run(child)` starts the child immediately and returns a future of its
-result. The parent waits for all its children before finishing and passes
-cancellation to them. A child with `cancellable: false` can refuse that
-cancellation. If the parent body throws `Cancelled`, its children are cancelled
-too. If it throws another error, the parent lets its children finish and waits
-for them.
+result. The parent waits for all its children before finishing. When the parent
+is cancelled, it passes the cancellation on to its children, and it does the
+same when its body throws `Cancelled`. A child with `cancellable: false`
+refuses the cancellation either way: it runs to its end, and the parent waits
+for it and only then ends `Cancelled`. If the body throws another error, the
+parent lets its children finish and waits for them.
 
 Create children with `Job.deferred`, so the parent controls their start.
-`ctx.run` rejects a regular `Job`, even before its scheduled start. This avoids
-a race where the child starts independently and is left outside the parent's
+`ctx.run` rejects a regular `Job`, because such a job starts automatically: it
+may start before the parent registers it and then run outside the parent's
 cancellation and completion handling.
 
 `run` waits for the child to finish, including its children and cleanup, and

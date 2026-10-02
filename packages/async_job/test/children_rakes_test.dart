@@ -42,6 +42,62 @@ final class Listening extends JobObserver {
 }
 
 void main() {
+  group('Children', () {
+    for (final cancellable in [false, true]) {
+      for (final fromOutside in [false, true]) {
+        final how = fromOutside
+            ? 'the parent cancelled from outside'
+            : 'a parent body that throws Cancelled';
+        test(
+            'a child with cancellable: $cancellable under $how, and the '
+            'parent ends Cancelled after it', () {
+          fakeAsync((async) {
+            final trace = <String>[];
+            final child = Job.deferred<int>(
+              cancellable: cancellable,
+              (ctx) async {
+                ctx.onCancel(() => trace.add('child onCancel'));
+                await ctx.wait(() => delay(50));
+                trace.add('child ran to its end');
+                return 1;
+              },
+            );
+            final parent = Job<void>((ctx) async {
+              ctx.run(child).ignore();
+              if (!fromOutside) {
+                await ctx.wait(() => delay(5));
+                throw const Cancelled('gives up');
+              }
+              await ctx.wait(() => delay(100));
+            });
+            parent.done.then((_) => trace.add('parent finished')).ignore();
+            async.elapse(const Duration(milliseconds: 10));
+            if (fromOutside) {
+              parent.cancel().ignore();
+            }
+            async.flushTimers();
+
+            expect(parent.outcome, isA<Cancelled>());
+            if (cancellable) {
+              expect(trace, ['child onCancel', 'parent finished']);
+              expect(
+                (child.outcome! as Cancelled).reason,
+                isA<ParentCancelReason>(),
+              );
+            } else {
+              expect(
+                trace,
+                ['child ran to its end', 'parent finished'],
+                reason: 'the child refuses, and the parent waits for it',
+              );
+              expect(child.outcome, isA<Done<int>>());
+            }
+          });
+        });
+      }
+    }
+  });
+
   group('Waiting for several children', () {
     for (final observed in [true, false]) {
       test(
