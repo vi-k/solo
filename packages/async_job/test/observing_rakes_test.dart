@@ -1,3 +1,12 @@
+// `doc/observing.md` runs here. The code of the page stands verbatim in
+// `support/observing_page.dart`, its first attempts in
+// `support/observing_first_attempts.dart`, and what that code takes for
+// granted in `support/observing_stubs.dart`. Every block of the page runs in
+// a test below, every quote is compared with what its block prints, and every
+// piece of code on the page has to be a run of lines of those files: a piece
+// or a quote that drifts turns this file red. The rules the page states in
+// prose and in its table are held with code of the tests' own where the page
+// shows none.
 @Timeout(Duration(seconds: 5))
 library;
 
@@ -9,208 +18,107 @@ import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart';
 
 import 'support/delay.dart';
-
-/// The first attempts of `doc/observing.md`, and what each one costs.
-///
-/// A section of the page opens with the version habit leads to and shows
-/// what that version does. The page has no bench, so the code is repeated
-/// here as it stands there, together with the rules the page states in
-/// prose and in its table, and the last test holds the lines the page
-/// quotes to the lines these tests print.
-
-/// What each `text` block of the page says, in the order of the page.
-const quoted = [
-  [
-    'Job(load): loading',
-    'Job(load): Done(3)',
-  ],
-  [
-    'cancel',
-    'outcome: Cancelled(manual)',
-  ],
-  [
-    'cancel',
-    'onError: Bad state: database locked',
-    'outcome: Cancelled(manual)',
-  ],
-  [
-    'cancel',
-    'onError: Bad state: database locked',
-    'zone: Bad state: database locked',
-    'outcome: Cancelled(manual)',
-  ],
-  [
-    'cancel',
-    'onError: Bad state: database locked',
-    'outcome: Cancelled(manual)',
-  ],
-  [
-    'outcome: Done(null)',
-    'zone: ParallelWaitError(2 errors): DatabaseException',
-  ],
-  [
-    'outcome: Done(null)',
-    'onUnanswered: DatabaseException',
-    'zone: Bad state: analytics offline',
-  ],
-  [
-    'outcome: Done(null)',
-    'zone: Bad state: analytics offline',
-  ],
-  [
-    'outcome: Done(null)',
-    'onError: Bad state: analytics offline',
-    'zone: Bad state: analytics offline',
-  ],
-  [
-    'outcome: Done(null)',
-    'onError: Bad state: analytics offline',
-    'onUnanswered: Bad state: analytics offline',
-  ],
-  [
-    'outcome: Done(null)',
-    'onError: Bad state: analytics offline',
-    'onUnanswered: Bad state: analytics offline',
-  ],
-];
-
-/// What the observers and the code around the job print.
-final printed = <String>[];
-
-void say(String line) => printed.add(line);
+import 'support/observing_first_attempts.dart' as first;
+import 'support/observing_page.dart';
+import 'support/observing_stubs.dart';
+import 'support/page_code.dart';
 
 /// The fake time of the running [play].
 late FakeAsync time;
 
 int get now => time.elapsed.inMilliseconds;
 
-/// The observer of the page's first section.
-final class Log extends JobObserver {
-  @override
-  void onFinish(Job<Object?> job) => say('$job: ${job.outcome}');
-
-  @override
-  void onLog(Job<Object?> job, Object? message) {
-    final data = message is Object? Function() ? message() : message;
-    say('$job: $data');
-  }
+/// Starts a job under fake time and returns what was printed.
+///
+/// The code around the job prints the outcome as `outcome:` unless
+/// [outcomeObserved] is false, and cancels at [cancelAt] ms, printing
+/// `cancel` and then how long `cancel()` took. An error that reaches the zone
+/// is printed as `zone:`.
+List<String> play(
+  Job<Object?> Function() start, {
+  int? cancelAt,
+  bool outcomeObserved = true,
+}) {
+  final printed = <String>[];
+  runZonedGuarded(
+    () => fakeAsync((async) {
+      time = async;
+      final job = start();
+      if (outcomeObserved) {
+        unawaited(job.done.then((outcome) => print('outcome: $outcome')));
+      }
+      if (cancelAt != null) {
+        async.elapse(Duration(milliseconds: cancelAt));
+        print('cancel');
+        final calledAt = now;
+        unawaited(
+          job.cancel().then(
+                (_) => print('cancel() returned after ${now - calledAt} ms'),
+              ),
+        );
+      }
+      async.flushTimers();
+    }),
+    (error, stackTrace) => printed.add('zone: $error'),
+    zoneSpecification: ZoneSpecification(
+      print: (self, parent, zone, line) => printed.add(line),
+    ),
+  );
+  return printed;
 }
 
-/// The observer of the page's section on where errors go.
-final class Reporter extends JobObserver {
-  @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
-      say('onError: $error');
-}
+/// The lines of [play] that the page quotes: `cancel()` timing is not one.
+List<String> quotable(List<String> lines) => [
+      for (final line in lines)
+        if (!line.startsWith('cancel()')) line,
+    ];
 
-/// An observer that answers for the errors no outcome carries, the way the
-/// page overrides `onUnanswered`, and, with [passedOn], hands each one on
-/// to `super` as well.
-final class Answering extends JobObserver with JobAnswerer {
+/// The `text` blocks of the page, line by line, in the order of the page.
+List<List<String>> pageQuotes() => [
+      for (final block in RegExp(r'```text\n(.*?)\n```', dotAll: true)
+          .allMatches(File('doc/observing.md').readAsStringSync()))
+        block.group(1)!.split('\n'),
+    ];
+
+/// An observer that hears through `onError` and answers in `onUnanswered`,
+/// and with [passedOn] hands each error on to `super` as well.
+final class Answerer extends JobObserver with JobAnswerer {
   final bool passedOn;
 
-  Answering({this.passedOn = false});
+  Answerer({this.passedOn = false});
 
   @override
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
-      say('onError: $error');
+      print('onError: $error');
 
   @override
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
-    say('onUnanswered: $error');
+    print('onUnanswered: $error');
     if (passedOn) {
       super.onUnanswered(job, error, stackTrace);
     }
   }
 }
 
-/// The crash reporter of the page's section on several observers.
-final class Crashes extends JobObserver with JobAnswerer {
-  @override
-  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
-      say('onUnanswered: $error');
-}
-
-/// The first attempt of that section: every hook handed on by hand, as the
-/// page hands on `onError`, and the answer handed to `Crashes`.
-final class Both extends JobObserver with JobAnswerer {
-  final _reporter = Reporter();
-  final _crashes = Crashes();
-
-  @override
-  void onStart(Job<Object?> job) {
-    _reporter.onStart(job);
-    _crashes.onStart(job);
-  }
-
-  @override
-  void onFinish(Job<Object?> job) {
-    _reporter.onFinish(job);
-    _crashes.onFinish(job);
-  }
-
-  @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
-    _reporter.onError(job, error, stackTrace);
-    _crashes.onError(job, error, stackTrace);
-  }
-
-  @override
-  void onLog(Job<Object?> job, Object? message) {
-    _reporter.onLog(job, message);
-    _crashes.onLog(job, message);
-  }
-
-  @override
-  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
-      _crashes.onUnanswered(job, error, stackTrace);
-}
-
-/// An observer whose `onError` throws.
-final class Throwing extends JobObserver {
-  @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
-      throw StateError('reporter down');
-}
-
-/// `Both` with any two observers in its place: `onError` handed on by hand,
-/// unwrapped, the way the page writes it.
-final class HandedOn extends JobObserver with JobAnswerer {
-  final JobObserver first;
-  final JobObserver second;
-
-  HandedOn(this.first, this.second);
-
-  @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
-    first.onError(job, error, stackTrace);
-    second.onError(job, error, stackTrace);
-  }
-
-  @override
-  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
-      say('onUnanswered: $error');
-}
-
 /// Every hook, for the rules the page states about them.
 final class Hooks extends JobObserver {
-  Hooks([this.name = '']);
-
   final String name;
 
-  @override
-  void onStart(Job<Object?> job) => say('${name}onStart $job');
+  Hooks([this.name = '']);
 
   @override
-  void onFinish(Job<Object?> job) => say('${name}onFinish $job');
+  void onStart(Job<Object?> job) => print('${name}onStart $job');
+
+  @override
+  void onFinish(Job<Object?> job) => print('${name}onFinish $job');
 
   @override
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
-      say('${name}onError: $error');
+      print('${name}onError: $error');
 
   @override
   void onLog(Job<Object?> job, Object? message) =>
-      say('${name}onLog: $message');
+      print('${name}onLog: $message');
 }
 
 /// A hook that throws, next to two that do not.
@@ -219,10 +127,10 @@ final class ThrowingStart extends JobObserver {
   void onStart(Job<Object?> job) => throw StateError('onStart failed');
 
   @override
-  void onLog(Job<Object?> job, Object? message) => say('onLog: $message');
+  void onLog(Job<Object?> job, Object? message) => print('onLog: $message');
 
   @override
-  void onFinish(Job<Object?> job) => say('onFinish $job');
+  void onFinish(Job<Object?> job) => print('onFinish $job');
 }
 
 /// A hook that throws when the job ends.
@@ -237,7 +145,7 @@ final class ThrowingCancellation extends JobObserver {
   void onStart(Job<Object?> job) => throw const Cancelled('from onStart');
 
   @override
-  void onFinish(Job<Object?> job) => say('onFinish $job');
+  void onFinish(Job<Object?> job) => print('onFinish $job');
 }
 
 /// A hook that cancels its job the way anybody else would.
@@ -246,7 +154,25 @@ final class CallingCancel extends JobObserver {
   void onStart(Job<Object?> job) => job.cancel().ignore();
 
   @override
-  void onFinish(Job<Object?> job) => say('onFinish $job');
+  void onFinish(Job<Object?> job) => print('onFinish $job');
+}
+
+/// A class the app already has, which an observer extends.
+class Tally {
+  int count = 0;
+}
+
+/// Extends [Tally] and mixes in the observer and the answer.
+final class TallyingAnswerer extends Tally with JobObserver, JobAnswerer {
+  @override
+  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
+    count++;
+    print('onError: $error');
+  }
+
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      print('onUnanswered: $error');
 }
 
 /// An observer that keeps what `ctx.log` handed it.
@@ -257,9 +183,10 @@ final class Keeping extends JobObserver {
   void onLog(Job<Object?> job, Object? message) => messages.add(message);
 }
 
-/// The observer the page times a cancellation with, on fake time: the page
-/// takes a `Stopwatch`, and fake time does not move one.
-final class SlowCancellations extends JobObserver {
+/// `SlowCancellations` of the page on fake time. A `Stopwatch` does not move
+/// with fake time, so this one reads the fake clock, and the numbers the page
+/// states come out exact.
+final class FakeTimeCancellations extends JobObserver {
   final _acceptedAt = Expando<int>('cancellation');
 
   @override
@@ -270,70 +197,35 @@ final class SlowCancellations extends JobObserver {
   void onFinish(Job<Object?> job) {
     final acceptedAt = _acceptedAt[job];
     if (acceptedAt != null) {
-      say('$job ran ${now - acceptedAt} ms past its cancellation');
+      print('$job ran ${now - acceptedAt} ms past its cancellation');
     }
   }
 }
 
-Future<int> load() async {
-  await delay(10);
-  return 3;
+/// An observer whose `onError` throws.
+final class Throwing extends JobObserver {
+  @override
+  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      throw StateError('reporter down');
 }
 
-/// Opens in 20 ms, or fails then when [locked].
-final class Database {
-  static bool locked = false;
+/// `Both` of the page with any two observers in its place: `onError` handed
+/// on by hand, unwrapped, the way the page writes it.
+final class HandedOn extends JobObserver with JobAnswerer {
+  final JobObserver first;
+  final JobObserver second;
 
-  static Future<Database> open() async {
-    await delay(20);
-    if (locked) {
-      throw StateError('database locked');
-    }
-    return Database();
-  }
-
-  Future<void> close() async {}
-}
-
-/// Shows [error] to the user for 30 ms.
-Future<void> showError(Object error) => delay(30);
-
-/// The database errors an observer of the page knows.
-final class DatabaseException implements Exception {
-  const DatabaseException();
+  HandedOn(this.first, this.second);
 
   @override
-  String toString() => 'DatabaseException';
-}
-
-/// The page's observer that answers only for the database errors it knows.
-final class DatabaseErrors extends JobObserver with JobAnswerer {
-  @override
-  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
-    if (error is DatabaseException) {
-      say('onUnanswered: $error');
-    } else {
-      super.onUnanswered(job, error, stackTrace);
-    }
+  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
+    first.onError(job, error, stackTrace);
+    second.onError(job, error, stackTrace);
   }
-}
 
-/// The page's answer: the same observer reads the database errors out of a
-/// `ParallelWaitError`.
-final class DatabaseErrorsVisited extends JobObserver with JobAnswerer {
   @override
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
-      Job.visitErrors(
-        error,
-        stackTrace,
-        onFailure: (failure, failureStackTrace) {
-          if (failure is DatabaseException) {
-            say('onUnanswered: $failure');
-          } else {
-            super.onUnanswered(job, failure, failureStackTrace);
-          }
-        },
-      );
+      print('onUnanswered: $error');
 }
 
 /// A check for `error is Cancelled`, which the page says does not drop them
@@ -342,20 +234,8 @@ final class AllButCancelled extends JobObserver with JobAnswerer {
   @override
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
     if (error is Cancelled) return;
-    say('onUnanswered: ${error.runtimeType}');
+    print('onUnanswered: ${error.runtimeType}');
   }
-}
-
-/// Fails with a database error at 20 ms.
-Future<void> saveDraft() async {
-  await delay(20);
-  throw const DatabaseException();
-}
-
-/// Fails with another error at 10 ms.
-Future<void> sendAnalytics() async {
-  await delay(10);
-  throw StateError('analytics offline');
 }
 
 /// The error of the log section; it counts how often it is put into words.
@@ -377,80 +257,101 @@ final class DatabaseStopped implements Exception {
   String toString() => 'DatabaseStopped';
 }
 
-final class Analytics {
-  Future<void> send(String event) async {
-    await delay(10);
-    throw StateError('analytics offline');
-  }
-}
-
-final analytics = Analytics();
-
 /// A key that cannot be put into words.
 final class BrokenKey {
   @override
   String toString() => throw StateError('key failed');
 }
 
-/// Starts a job under fake time and returns what was printed.
-///
-/// The code around the job prints the outcome as `outcome:` unless
-/// [outcomeObserved] is false, and cancels at [cancelAt] ms, printing
-/// `cancel`. An error that reaches the zone is printed as `zone:`.
-List<String> play(
-  Job<Object?> Function() start, {
-  int? cancelAt,
-  bool outcomeObserved = true,
-}) {
-  printed.clear();
-  runZonedGuarded(
-    () => fakeAsync((async) {
-      time = async;
-      final job = start();
-      if (outcomeObserved) {
-        unawaited(job.done.then((outcome) => say('outcome: $outcome')));
-      }
-      if (cancelAt != null) {
-        async.elapse(Duration(milliseconds: cancelAt));
-        say('cancel');
-        final calledAt = now;
-        unawaited(
-          job.cancel().then(
-                (_) => say('cancel() returned after ${now - calledAt} ms'),
-              ),
-        );
-      }
-      async.flushTimers();
-    }),
-    (error, stackTrace) => say('zone: $error'),
-  );
-  return printed.toList();
+/// A reason of a cancellation that cannot be put into words.
+final class BrokenReason extends CancelReason {
+  const BrokenReason();
+
+  @override
+  String get name => throw StateError('name failed');
 }
 
-/// The lines of [play] that the page quotes: `cancel()` timing is not one.
-List<String> quotable(List<String> lines) => [
-      for (final line in lines)
-        if (!line.startsWith('cancel()')) line,
-    ];
+/// A step that cannot be rolled back: it fails at 20 ms.
+Future<void> pay() async {
+  await delay(20);
+  throw StateError('payment failed');
+}
+
+/// A body that fails at 10 ms.
+Job<void> failing({JobObserver? observer}) => Job<void>(
+      key: 'save',
+      observer: observer,
+      (ctx) async {
+        await delay(10);
+        throw StateError('disk full');
+      },
+    );
 
 void main() {
-  group('Observer', () {
-    test('the page prints what the body logged and how the job ended', () {
-      final lines = play(
-        () => Job<int>(
-          key: 'load',
-          observer: Log(),
-          (ctx) async {
-            ctx.log('loading');
-            return ctx.wait(load);
-          },
-        ),
-        outcomeObserved: false,
-      );
+  group('The code of the page', () {
+    setUp(() => stage = Stage());
 
-      expect(lines, quoted[0]);
+    test('every quote on the page is what its code prints', () {
+      stage.databaseLocked = true;
+      final prints = [
+        play(loading, outcomeObserved: false),
+        quotable(play(first.opening, cancelAt: 10)),
+        quotable(play(openingReported, cancelAt: 10)),
+        quotable(play(openingShown, cancelAt: 30)),
+        quotable(play(openingShown, cancelAt: 10)),
+        play(first.sendingUnawaited),
+        play(() => sendingHandedOver(Reporter())),
+        play(first.saving),
+        play(saving),
+        play(first.sendingWithBoth),
+        play(sendingToTheList),
+      ];
+      expect(
+        pageQuotes(),
+        prints,
+        reason: 'each quote under the code that prints it',
+      );
     });
 
+    test('the page has no fence the checks do not read', () {
+      expect(strayFences('doc/observing.md'), isEmpty);
+    });
+
+    // Each version under its own file: a line of an answer turned into the
+    // line of a first attempt would still be found among all of them.
+    const page = 'test/support/observing_page.dart';
+    const firstAttempts = 'test/support/observing_first_attempts.dart';
+    const holders = {
+      '## Observer': page,
+      '### The first attempt': firstAttempts,
+      '### Formatting left to the observer': page,
+      '### An observer': page,
+      '### Work handed to the job': page,
+      '## Answering for errors': page,
+      '### Each failure on its own': page,
+      '## Several observers': page,
+      '### Observers in one list': page,
+      '### Time moved by the test': page,
+    };
+    for (final MapEntry(key: heading, value: holder) in holders.entries) {
+      test('the code under "$heading" is a run of lines of $holder', () {
+        expect(
+          codeMissingFrom('doc/observing.md', holder, under: heading),
+          isEmpty,
+        );
+      });
+    }
+
+    test('every piece of code on the page is a run of lines of these files',
+        () {
+      expect(
+        codeMissingFrom('doc/observing.md', page, alsoIn: [firstAttempts]),
+        isEmpty,
+      );
+    });
+  });
+
+  group('Observer', () {
     test('onFinish runs for a job cancelled before it started', () {
       final lines = play(
         () => Job.deferred<void>(
@@ -495,6 +396,26 @@ void main() {
         'own onFinish Job(b)',
         'parent onFinish Job(parent)',
       ]);
+    });
+
+    test('a class that extends another mixes in the observer and the answer',
+        () {
+      final observer = TallyingAnswerer();
+      final lines = play(
+        () => Job<void>(
+          observer: observer,
+          (ctx) async {
+            ctx.onDispose(() => throw StateError('cleanup'));
+          },
+        ),
+      );
+
+      expect(lines, [
+        'onError: Bad state: cleanup',
+        'onUnanswered: Bad state: cleanup',
+        'outcome: Done(null)',
+      ]);
+      expect(observer.count, 1);
     });
 
     test('a hook that throws changes nothing else', () {
@@ -582,7 +503,7 @@ void main() {
     List<String> timed(Future<void> Function(JobContext ctx) body) => play(
           () => Job<void>(
             key: 'slow',
-            observer: SlowCancellations(),
+            observer: FakeTimeCancellations(),
             body,
           ),
           cancelAt: 10,
@@ -646,7 +567,7 @@ void main() {
       final lines = play(
         () => Job<void>(
           key: 'self',
-          observer: SlowCancellations(),
+          observer: FakeTimeCancellations(),
           (ctx) async {
             ctx
               ..onDispose(() => delay(50))
@@ -681,7 +602,7 @@ void main() {
           );
           return Job<void>(
             key: 'parent',
-            observer: SlowCancellations(),
+            observer: FakeTimeCancellations(),
             (ctx) async {
               ctx
                   .run(
@@ -705,39 +626,132 @@ void main() {
     });
   });
 
-  group('A message for the log', () {
-    test('a string is built without an observer', () {
-      final error = MigrationFailed();
-      play(
-        () => Job<void>(
-          key: 'migrate',
-          (ctx) async => ctx.log('migration failed: $error'),
+  group('Timing a cancellation with the Stopwatch of the page', () {
+    // `SlowCancellations` as the page writes it, in real time: the numbers
+    // above are exact on fake time, and here the code of the page shows the
+    // same, give or take what a shared machine adds.
+    Future<List<String>> timed(
+      Future<void> Function(JobContext ctx) body, {
+      int? cancelAt,
+    }) async {
+      final lines = <String>[];
+      await runZoned(
+        () async {
+          final job = Job<void>(
+            key: 'slow',
+            observer: SlowCancellations(),
+            body,
+          );
+          if (cancelAt != null) {
+            await delay(cancelAt);
+            final watch = Stopwatch()..start();
+            await job.cancel();
+            lines.add(
+              'cancel() returned after ${watch.elapsedMilliseconds} ms',
+            );
+          }
+          await job.done;
+        },
+        zoneSpecification: ZoneSpecification(
+          print: (self, parent, zone, line) => lines.add(line),
         ),
       );
+      return lines;
+    }
+
+    int ms(String line) =>
+        int.parse(RegExp(r'(\d+) ms').firstMatch(line)!.group(1)!);
+
+    test(
+      'a bare await adds the rest of the wait',
+      () async {
+        final lines = await timed(
+          (ctx) async {
+            await delay(300);
+            ctx.check();
+          },
+          cancelAt: 10,
+        );
+
+        expect(lines.first, startsWith('Job(slow) ran '));
+        expect(ms(lines.first), greaterThanOrEqualTo(250));
+      },
+      retry: 2,
+    );
+
+    test(
+      'the same call through ctx.wait shows next to nothing',
+      () async {
+        final lines = await timed(
+          (ctx) => ctx.wait(() => delay(300)),
+          cancelAt: 10,
+        );
+
+        expect(ms(lines.first), lessThan(50));
+      },
+      retry: 2,
+    );
+
+    test(
+      'a held cancellation counts from the end of the section',
+      () async {
+        final lines = await timed(
+          (ctx) async {
+            await ctx.uncancellable(() => delay(100));
+            await ctx.wait(() => delay(300));
+          },
+          cancelAt: 10,
+        );
+
+        expect(ms(lines.first), lessThan(50));
+        expect(ms(lines.last), greaterThanOrEqualTo(80));
+      },
+      retry: 2,
+    );
+
+    test(
+      'a body that gives itself up counts its child and cleanup',
+      () async {
+        final lines = await timed((ctx) async {
+          ctx
+            ..onDispose(() => delay(50))
+            ..run(
+              Job.deferred<void>(cancellable: false, (ctx) => delay(110)),
+            ).ignore();
+          await delay(10);
+          throw const Cancelled('gave up');
+        });
+
+        expect(ms(lines.single), greaterThanOrEqualTo(140));
+      },
+      retry: 2,
+    );
+  });
+
+  group('A message for the log', () {
+    setUp(() => stage = Stage());
+
+    test('the first attempt builds the string without an observer', () {
+      final error = MigrationFailed();
+      stage.migrationError = error;
+      play(first.migrationLoggedAsAString);
 
       expect(error.formatted, 1);
     });
 
-    test('a callback is not called without an observer', () {
+    test('the callback is not called without an observer', () {
       final error = MigrationFailed();
-      play(
-        () => Job<void>(
-          key: 'migrate',
-          (ctx) async => ctx.log(() => 'migration failed: $error'),
-        ),
-      );
+      stage.migrationError = error;
+      play(migration);
 
       expect(error.formatted, 0);
     });
 
     test('Log calls the callback and prints what it returns', () {
       final error = MigrationFailed();
+      stage.migrationError = error;
       final lines = play(
-        () => Job<void>(
-          key: 'migrate',
-          observer: Log(),
-          (ctx) async => ctx.log(() => 'migration failed: $error'),
-        ),
+        () => migration(observer: Log()),
         outcomeObserved: false,
       );
 
@@ -750,14 +764,9 @@ void main() {
 
     test('ctx.log hands the callback over as it is', () {
       final error = MigrationFailed();
+      stage.migrationError = error;
       final observer = Keeping();
-      play(
-        () => Job<void>(
-          key: 'migrate',
-          observer: observer,
-          (ctx) async => ctx.log(() => 'migration failed: $error'),
-        ),
-      );
+      play(() => migration(observer: observer));
 
       expect(observer.messages, [isA<String Function()>()]);
       expect(error.formatted, 0);
@@ -783,31 +792,10 @@ void main() {
   });
 
   group('Where errors go', () {
-    setUp(() => Database.locked = true);
-    tearDown(() => Database.locked = false);
+    setUp(() => stage = Stage()..databaseLocked = true);
 
-    Job<Database> open({JobObserver? observer}) => Job<Database>(
-          observer: observer,
-          (ctx) => ctx.join(
-            Database.open,
-            discard: (database) => database.close(),
-          ),
-        );
-
-    test('without an observer the failed open reaches nobody', () {
-      final lines = play(open, cancelAt: 10);
-
-      expect(quotable(lines), quoted[1]);
-    });
-
-    test('the observer hears it', () {
-      final lines = play(() => open(observer: Reporter()), cancelAt: 10);
-
-      expect(quotable(lines), quoted[2]);
-    });
-
-    test('nobody hears it even when the outcome is left unobserved', () {
-      final lines = play(open, cancelAt: 10, outcomeObserved: false);
+    test('the first attempt: nobody hears it, the outcome unobserved too', () {
+      final lines = play(first.opening, cancelAt: 10, outcomeObserved: false);
 
       expect(quotable(lines), ['cancel']);
     });
@@ -846,13 +834,41 @@ void main() {
       );
     });
 
-    Job<void> failing({JobObserver? observer}) => Job<void>(
-          observer: observer,
-          (ctx) async {
-            await delay(10);
-            throw StateError('disk full');
+    test('the hooks do not observe the outcome, not even Log reading it', () {
+      expect(
+        play(() => failing(observer: Log()), outcomeObserved: false),
+        [
+          'Job(save): Failed(Bad state: disk full)',
+          'zone: Bad state: disk full',
+        ],
+      );
+    });
+
+    test('done, value, then and ignore() observe the outcome', () {
+      // A continuation takes the failure on, so it is ignored in its turn.
+      final ways = <String, void Function(Job<void> job)>{
+        'done': (job) => job.done.ignore(),
+        'value': (job) => job.value.ignore(),
+        'then': (job) => job.then<void>((ctx, _) async {}).ignore(),
+        'ignore()': (job) => job.ignore(),
+      };
+      for (final MapEntry(key: way, value: observe) in ways.entries) {
+        final lines = play(
+          () {
+            final job = failing();
+            observe(job);
+            return job;
           },
+          outcomeObserved: false,
         );
+        expect(lines, isEmpty, reason: way);
+      }
+      expect(
+        play(failing, outcomeObserved: false),
+        ['zone: Bad state: disk full'],
+        reason: 'nothing observes it',
+      );
+    });
 
     test('a failure the job ends with: onError, and the zone if unobserved',
         () {
@@ -889,7 +905,7 @@ void main() {
       expect(
         quotable(
           play(
-            () => failingBeforeCancel(observer: Answering(passedOn: true)),
+            () => failingBeforeCancel(observer: Answerer(passedOn: true)),
             cancelAt: 20,
             outcomeObserved: false,
           ),
@@ -904,7 +920,7 @@ void main() {
       expect(
         quotable(
           play(
-            () => failingBeforeCancel(observer: Answering(passedOn: true)),
+            () => failingBeforeCancel(observer: Answerer(passedOn: true)),
             cancelAt: 20,
           ),
         ),
@@ -944,7 +960,7 @@ void main() {
       expect(
         quotable(
           play(
-            () => failingBeforeCleanup(observer: Answering(passedOn: true)),
+            () => failingBeforeCleanup(observer: Answerer(passedOn: true)),
             cancelAt: 20,
             outcomeObserved: false,
           ),
@@ -959,7 +975,7 @@ void main() {
       expect(
         quotable(
           play(
-            () => failingBeforeCleanup(observer: Answering(passedOn: true)),
+            () => failingBeforeCleanup(observer: Answerer(passedOn: true)),
             cancelAt: 20,
           ),
         ),
@@ -1025,6 +1041,21 @@ void main() {
       );
     });
 
+    test('the failure the body shows and throws again', () {
+      expect(
+        quotable(play(openingShown, cancelAt: 30)),
+        contains('zone: Bad state: database locked'),
+        reason: 'cancelled while the error is on screen, the failure came '
+            'first, and the zone hears it',
+      );
+      expect(
+        quotable(play(openingShown, cancelAt: 10)),
+        isNot(contains('zone: Bad state: database locked')),
+        reason: 'cancelled before the open fails, the failure came after, '
+            'and only the observer hears it',
+      );
+    });
+
     Job<void> failingAfterCancel({JobObserver? observer}) => Job<void>(
           observer: observer,
           (ctx) async {
@@ -1035,83 +1066,6 @@ void main() {
             }
           },
         );
-
-    // The page's example of a failure the body throws late: it shows the
-    // error for 30 ms first.
-    Job<Database> shown({JobObserver? observer}) => Job<Database>(
-          observer: observer,
-          (ctx) async {
-            try {
-              return await ctx.join(Database.open);
-            } catch (error) {
-              await showError(error);
-              rethrow;
-            }
-          },
-        );
-
-    test('the page: cancelled while the body shows the failure', () {
-      expect(
-        quotable(play(() => shown(observer: Reporter()), cancelAt: 30)),
-        quoted[3],
-        reason: 'the failure came first, and the zone hears it',
-      );
-    });
-
-    test('the page: cancelled before the open fails', () {
-      expect(
-        quotable(play(() => shown(observer: Reporter()), cancelAt: 10)),
-        quoted[4],
-        reason: 'the failure came after, and only the observer hears it',
-      );
-    });
-
-    Job<void> saving(JobObserver observer) => Job<void>(
-          observer: observer,
-          (ctx) async {
-            ctx.unattended(() => [saveDraft(), sendAnalytics()].wait);
-          },
-        );
-
-    test('the page: a database error inside a wait goes to the zone', () {
-      expect(play(() => saving(DatabaseErrors())), quoted[5]);
-    });
-
-    test('the page: Job.visitErrors answers for it and hands on the rest', () {
-      expect(play(() => saving(DatabaseErrorsVisited())), quoted[6]);
-    });
-
-    test(
-        'Job.visitErrors drops what the default implementation drops, '
-        'and a check for Cancelled does not', () {
-      Job<void> leaving(JobObserver observer) =>
-          Job<void>(observer: observer, (ctx) async {
-            ctx
-              ..unattended(() async {
-                await [
-                  Future<void>.error(const Cancelled('a'), StackTrace.empty),
-                  Future<void>.error(const Cancelled('b'), StackTrace.empty),
-                ].wait;
-              })
-              ..unattended(() async {
-                await [
-                  Future<void>.value(),
-                  Future<void>.error(const Cancelled('c'), StackTrace.empty),
-                ].wait;
-              });
-          });
-      expect(play(() => leaving(DatabaseErrorsVisited())), [
-        'outcome: Done(null)',
-      ]);
-      expect(play(() => leaving(DatabaseErrors())), [
-        'outcome: Done(null)',
-      ]);
-      expect(play(() => leaving(AllButCancelled())), [
-        'onUnanswered: ParallelWaitError<List<void>, List<AsyncError?>>',
-        'onUnanswered: ParallelWaitError<List<void>, List<AsyncError?>>',
-        'outcome: Done(null)',
-      ]);
-    });
 
     test('a failure after the cancellation: onError or nobody', () {
       expect(
@@ -1132,13 +1086,6 @@ void main() {
       );
     });
 
-    // A step that cannot be rolled back fails at 20 ms, and the user
-    // cancels at 10 ms.
-    Future<void> pay() async {
-      await delay(20);
-      throw StateError('payment failed');
-    }
-
     test('a step of uncancellable fails first: onError, then the zone', () {
       Job<void> held({JobObserver? observer}) =>
           Job<void>(observer: observer, (ctx) => ctx.uncancellable(pay));
@@ -1149,7 +1096,7 @@ void main() {
         'zone: Bad state: payment failed',
         'outcome: Cancelled(manual)',
       ]);
-      expect(quotable(play(() => held(observer: Answering()), cancelAt: 10)), [
+      expect(quotable(play(() => held(observer: Answerer()), cancelAt: 10)), [
         'cancel',
         'onError: Bad state: payment failed',
         'onUnanswered: Bad state: payment failed',
@@ -1205,6 +1152,10 @@ void main() {
         'Bad state: cleanup',
         'Bad state: late wait',
       ];
+      List<String> starting(List<String> lines, String prefix) => [
+            for (final line in lines)
+              if (line.startsWith(prefix)) line,
+          ];
 
       final heard = play(
         () => failingOutside(observer: Reporter()),
@@ -1212,17 +1163,11 @@ void main() {
         outcomeObserved: false,
       );
       expect(
-        [
-          for (final line in heard)
-            if (line.startsWith('onError')) line,
-        ],
+        starting(heard, 'onError'),
         [for (final error in errors) 'onError: $error'],
       );
       expect(
-        [
-          for (final line in heard)
-            if (line.startsWith('zone')) line,
-        ],
+        starting(heard, 'zone'),
         [for (final error in errors) 'zone: $error'],
         reason: 'an observer written to watch changes nowhere an error goes',
       );
@@ -1233,28 +1178,22 @@ void main() {
         outcomeObserved: false,
       );
       expect(
-        [
-          for (final line in answered)
-            if (line.startsWith('onUnanswered')) line,
-        ],
+        starting(answered, 'onUnanswered'),
         [for (final error in errors) 'onUnanswered: $error'],
       );
       expect(
-        answered.where((line) => line.startsWith('zone')),
+        starting(answered, 'zone'),
         isEmpty,
-        reason: 'an override of onUnanswered is where they stop',
+        reason: 'the errors stop where the observer answers',
       );
 
       final passedOn = play(
-        () => failingOutside(observer: Answering(passedOn: true)),
+        () => failingOutside(observer: Answerer(passedOn: true)),
         cancelAt: 10,
         outcomeObserved: false,
       );
       expect(
-        [
-          for (final line in passedOn)
-            if (line.startsWith('zone')) line,
-        ],
+        starting(passedOn, 'zone'),
         [for (final error in errors) 'zone: $error'],
         reason: 'super sends each one on to the zone as well',
       );
@@ -1265,24 +1204,26 @@ void main() {
         outcomeObserved: false,
       );
       expect(
-        [
-          for (final line in unheard)
-            if (line.startsWith('zone')) line,
-        ],
+        starting(unheard, 'zone'),
         [for (final error in errors) 'zone: $error'],
       );
     });
 
-    List<String> childDescribed({JobObserver? observer}) => play(
+    List<String> childNamed({
+      required Object key,
+      CancelReason reason = const ManualCancelReason(),
+      JobObserver? observer,
+    }) =>
+        play(
           () {
             final child = Job.deferred<void>(
-              key: BrokenKey(),
+              key: key,
               (ctx) => ctx.wait(() => delay(50)),
             );
             unawaited(
               Future<void>.delayed(
                 const Duration(milliseconds: 10),
-                child.cancel,
+                () => child.cancel(reason: reason),
               ),
             );
             return Job<void>(observer: observer, (ctx) => ctx.run(child));
@@ -1291,13 +1232,21 @@ void main() {
         );
 
     test(
-        "a child's cancellation description that fails: onError, then the "
-        'zone', () {
+        "a child's key or Cancelled that fails to name the child: onError, "
+        'then the zone', () {
       expect(
-        childDescribed(observer: Reporter()),
+        childNamed(key: BrokenKey(), observer: Reporter()),
         ['onError: Bad state: key failed', 'zone: Bad state: key failed'],
       );
-      expect(childDescribed(), ['zone: Bad state: key failed']);
+      expect(childNamed(key: BrokenKey()), ['zone: Bad state: key failed']);
+      expect(
+        childNamed(
+          key: 'child',
+          reason: const BrokenReason(),
+          observer: Reporter(),
+        ),
+        ['onError: Bad state: name failed', 'zone: Bad state: name failed'],
+      );
     });
 
     Job<void> cancelledOutside({JobObserver? observer}) => Job<void>(
@@ -1319,7 +1268,7 @@ void main() {
         reason: 'the default body of onUnanswered drops a cancellation',
       );
       expect(
-        play(() => cancelledOutside(observer: Answering())),
+        play(() => cancelledOutside(observer: Answerer())),
         [
           'onError: Cancelled(manual)',
           'onUnanswered: Cancelled(manual)',
@@ -1329,6 +1278,7 @@ void main() {
       );
       expect(play(cancelledOutside), ['outcome: Done(null)']);
     });
+
     test("the job's own cancellation out of work left behind: nobody", () {
       // Both checkpoints run after the job accepted the cancellation: one in
       // work of unattended, one in the action `wait` let go of.
@@ -1347,7 +1297,7 @@ void main() {
           );
 
       expect(
-        quotable(play(() => checking(observer: Answering()), cancelAt: 10)),
+        quotable(play(() => checking(observer: Answerer()), cancelAt: 10)),
         ['cancel', 'outcome: Cancelled(manual)'],
       );
       expect(
@@ -1362,7 +1312,7 @@ void main() {
             ..whenCancelled((cancelled) => throw cancelled);
 
       expect(
-        quotable(play(() => rethrowing(observer: Answering()), cancelAt: 10)),
+        quotable(play(() => rethrowing(observer: Answerer()), cancelAt: 10)),
         [
           'cancel',
           'onError: Cancelled(manual)',
@@ -1386,7 +1336,7 @@ void main() {
           );
 
       expect(
-        play(() => leaving(observer: Answering())),
+        play(() => leaving(observer: Answerer())),
         ['outcome: Done(null)', 'zone: Bad state: late join'],
       );
       expect(
@@ -1409,7 +1359,7 @@ void main() {
       expect(
         quotable(
           play(
-            () => walkingOn(Answering(), (ctx) => ctx.wait(() => delay(30))),
+            () => walkingOn(Answerer(), (ctx) => ctx.wait(() => delay(30))),
             cancelAt: 10,
           ),
         ),
@@ -1420,7 +1370,7 @@ void main() {
         (ctx) => ctx.uncancellable(pay),
       ]) {
         expect(
-          play(() => walkingOn(Answering(), call)),
+          play(() => walkingOn(Answerer(), call)),
           ['zone: Bad state: payment failed', 'outcome: Done(null)'],
         );
       }
@@ -1432,7 +1382,7 @@ void main() {
             (ctx) async => unawaited(ctx.wait(pay)),
           );
 
-      expect(play(() => leaving(observer: Answering())), [
+      expect(play(() => leaving(observer: Answerer())), [
         'outcome: Done(null)',
         'onError: Bad state: payment failed',
         'onUnanswered: Bad state: payment failed',
@@ -1450,7 +1400,7 @@ void main() {
       // one from outside may arrive while the job waits for a child.
       expect(
         play(
-          () => Job<void>(observer: Answering(), (ctx) async {
+          () => Job<void>(observer: Answerer(), (ctx) async {
             unawaited(ctx.wait(() => delay(30)));
             await delay(10);
             throw const Cancelled('gave up');
@@ -1461,7 +1411,7 @@ void main() {
       expect(
         quotable(
           play(
-            () => Job<void>(observer: Answering(), (ctx) async {
+            () => Job<void>(observer: Answerer(), (ctx) async {
               ctx
                   .run(Job.deferred<void>((ctx) => ctx.wait(() => delay(50))))
                   .ignore();
@@ -1495,35 +1445,6 @@ void main() {
       });
 
       expect(caught, ['starter: Bad state: payment failed']);
-    });
-
-    test('a call the body did not await, started inside unattended work', () {
-      // Started inside the work of another job: the body runs in the zone
-      // that work was started from, not in the work's, and the observer of
-      // the other job hears nothing.
-      final caught = <String>[];
-      printed.clear();
-      fakeAsync((async) {
-        late DeferredJob<void> job;
-        runZonedGuarded(
-          () => job = Job.deferred<void>((ctx) async {
-            unawaited(ctx.join(pay));
-            await delay(50);
-          }),
-          (error, stackTrace) => caught.add('creation: $error'),
-        );
-        runZonedGuarded(
-          () => Job<void>(observer: Answering(), (ctx) async {
-            ctx.unattended(job.start);
-            await ctx.wait(() => delay(1));
-          }),
-          (error, stackTrace) => caught.add('work started from: $error'),
-        );
-        async.flushTimers();
-      });
-
-      expect(caught, ['work started from: Bad state: payment failed']);
-      expect(printed, isEmpty);
     });
 
     // A branch of `ctx.runAll` that fails on its own after the group has
@@ -1578,7 +1499,7 @@ void main() {
       expect(
         quotable(
           play(
-            () => failingBeforeCancel(observer: Answering(passedOn: true))
+            () => failingBeforeCancel(observer: Answerer(passedOn: true))
               ..ignore(),
             cancelAt: 20,
             outcomeObserved: false,
@@ -1589,7 +1510,7 @@ void main() {
       expect(
         play(
           () => branchNotThrown(
-            observer: Answering(passedOn: true),
+            observer: Answerer(passedOn: true),
             secondIgnored: true,
           ),
         ),
@@ -1599,6 +1520,146 @@ void main() {
           'outcome: Done(null)',
         ],
       );
+    });
+  });
+
+  group('Work the job does not wait for', () {
+    test('without an observer the work goes straight to the zone', () {
+      expect(
+        play(() => sendingHandedOver(null)),
+        ['outcome: Done(null)', 'zone: Bad state: analytics offline'],
+      );
+    });
+
+    test('the job neither waits for the work nor cancels it', () {
+      final lines = play(
+        () => Job<void>((ctx) async {
+          ctx.unattended(() async {
+            await delay(50);
+            print('the work ends at $now ms');
+          });
+          await ctx.wait(() => delay(100));
+        }),
+        cancelAt: 10,
+      );
+
+      expect(quotable(lines), [
+        'cancel',
+        'outcome: Cancelled(manual)',
+        'the work ends at 50 ms',
+      ]);
+    });
+
+    Job<void> sending(FutureOr<void> Function(JobContext ctx) send) =>
+        Job<void>(observer: Reporter(), (ctx) async => send(ctx));
+
+    test('a future made outside never comes back in there', () {
+      final lines = play(
+        () => sending((ctx) {
+          final sending = analytics.send('loaded');
+          ctx.unattended(() async {
+            try {
+              await sending;
+            } on Object catch (error) {
+              print('caught: $error');
+            }
+          });
+        }),
+      );
+
+      expect(lines, [
+        'outcome: Done(null)',
+        'zone: Bad state: analytics offline',
+      ]);
+    });
+
+    test('a future made in there hangs the job that awaits it', () {
+      final lines = play(
+        () => sending((ctx) async {
+          late Future<void> sending;
+          ctx.unattended(() {
+            sending = analytics.send('loaded');
+          });
+          try {
+            await ctx.wait(() => sending);
+          } on Object catch (error) {
+            print('caught: $error');
+          }
+        }),
+      );
+
+      expect(lines, [
+        'onError: Bad state: analytics offline',
+        'zone: Bad state: analytics offline',
+      ]);
+    });
+
+    test('a job started inside the callback is outside the boundary', () {
+      // Started inside the work of another job: the body runs in the zone
+      // that work was started from, not in the work's, and the observer of
+      // the other job hears nothing.
+      final caught = <String>[];
+      final printed = <String>[];
+      runZoned(
+        () => fakeAsync((async) {
+          late DeferredJob<void> job;
+          runZonedGuarded(
+            () => job = Job.deferred<void>((ctx) async {
+              unawaited(ctx.join(pay));
+              await delay(50);
+            }),
+            (error, stackTrace) => caught.add('creation: $error'),
+          );
+          runZonedGuarded(
+            () => Job<void>(observer: Answerer(), (ctx) async {
+              ctx.unattended(job.start);
+              await ctx.wait(() => delay(1));
+            }),
+            (error, stackTrace) => caught.add('work started from: $error'),
+          );
+          async.flushTimers();
+        }),
+        zoneSpecification: ZoneSpecification(
+          print: (self, parent, zone, line) => printed.add(line),
+        ),
+      );
+
+      expect(caught, ['work started from: Bad state: payment failed']);
+      expect(printed, isEmpty);
+    });
+  });
+
+  group('Answering for errors', () {
+    test(
+        'Job.visitErrors drops what the default implementation drops, '
+        'and a check for Cancelled does not', () {
+      Job<void> leaving(JobObserver observer) =>
+          Job<void>(observer: observer, (ctx) async {
+            ctx
+              ..unattended(() async {
+                await [
+                  Future<void>.error(const Cancelled('a'), StackTrace.empty),
+                  Future<void>.error(const Cancelled('b'), StackTrace.empty),
+                ].wait;
+              })
+              ..unattended(() async {
+                await [
+                  Future<void>.value(),
+                  Future<void>.error(const Cancelled('c'), StackTrace.empty),
+                ].wait;
+              });
+          });
+
+      expect(play(() => leaving(DatabaseErrors())), ['outcome: Done(null)']);
+      expect(
+        play(() => leaving(first.DatabaseErrors())),
+        ['outcome: Done(null)'],
+      );
+      expect(play(() => leaving(AllButCancelled())), [
+        'onUnanswered: ParallelWaitError<List<void>, List<AsyncError?>>',
+        'onUnanswered: ParallelWaitError<List<void>, List<AsyncError?>>',
+        'outcome: Done(null)',
+      ]);
     });
 
     test('the override answers for a child of a child, the zone for the app',
@@ -1627,7 +1688,6 @@ void main() {
           );
 
       expect(quotable(play(() => tree(Answering()), cancelAt: 20)), [
-        'onError: Bad state: disk full',
         'cancel',
         'onUnanswered: Bad state: disk full',
         'outcome: Cancelled(manual)',
@@ -1641,91 +1701,6 @@ void main() {
     });
   });
 
-  group('Work the job does not wait for', () {
-    Job<void> sending(
-      FutureOr<void> Function(JobContext ctx) send, {
-      bool reported = true,
-    }) =>
-        Job<void>(
-          observer: reported ? Reporter() : null,
-          (ctx) async => send(ctx),
-        );
-
-    test('unawaited sends the failure past the observer to the zone', () {
-      final lines = play(
-        () => sending((ctx) {
-          unawaited(analytics.send('loaded'));
-        }),
-      );
-
-      expect(lines, quoted[7]);
-    });
-
-    test('unattended hands it to the observer, after the job is over', () {
-      final lines = play(
-        () => sending((ctx) {
-          ctx.unattended(() => analytics.send('loaded'));
-        }),
-      );
-
-      expect(lines, quoted[8]);
-    });
-
-    test('without an observer unattended goes to the creation zone', () {
-      final lines = play(
-        () => sending(
-          (ctx) {
-            ctx.unattended(() => analytics.send('loaded'));
-          },
-          reported: false,
-        ),
-      );
-
-      expect(lines, quoted[7]);
-    });
-
-    test('a future made outside never comes back in there', () {
-      final lines = play(
-        () => sending((ctx) {
-          final sending = analytics.send('loaded');
-          ctx.unattended(() async {
-            try {
-              await sending;
-            } on Object catch (error) {
-              say('caught: $error');
-            }
-          });
-        }),
-      );
-
-      expect(lines, [
-        'outcome: Done(null)',
-        'zone: Bad state: analytics offline',
-      ]);
-    });
-
-    test('a future made in there hangs the job that awaits it', () {
-      final lines = play(
-        () => sending((ctx) async {
-          late Future<void> sending;
-          ctx.unattended(() {
-            sending = analytics.send('loaded');
-          });
-          try {
-            await ctx.wait(() => sending);
-          } on Object catch (error) {
-            say('caught: $error');
-          }
-        }),
-      );
-
-      expect(lines, [
-        'onError: Bad state: analytics offline',
-        'zone: Bad state: analytics offline',
-      ]);
-    });
-  });
-
   group('Several observers', () {
     Job<void> sending(JobObserver observer) => Job<void>(
           observer: observer,
@@ -1733,10 +1708,6 @@ void main() {
             ctx.unattended(() => analytics.send('loaded'));
           },
         );
-
-    test('handing the hooks on by hand works', () {
-      expect(play(() => sending(Both())), quoted[9]);
-    });
 
     test('a call that throws switches off the next, unless it is wrapped', () {
       expect(play(() => sending(HandedOn(Throwing(), Reporter()))), [
@@ -1756,13 +1727,6 @@ void main() {
           'onError: Bad state: analytics offline',
           'onUnanswered: Bad state: analytics offline',
         ],
-      );
-    });
-
-    test('JobObserver.all asks the one that answers', () {
-      expect(
-        play(() => sending(JobObserver.all([Reporter(), Crashes()]))),
-        quoted[10],
       );
     });
 
@@ -1800,37 +1764,31 @@ void main() {
             ]),
           ),
         ),
-        quoted[10],
+        [
+          'outcome: Done(null)',
+          'onError: Bad state: analytics offline',
+          'onUnanswered: Bad state: analytics offline',
+        ],
       );
     });
   });
 
   group('Testing', () {
-    test('awaiting cancel() inside fakeAsync checks nothing', () {
-      var checked = false;
+    setUp(() => stage = Stage());
 
-      expect(
-        () => fakeAsync((async) async {
-          var closed = 0;
-          final job = Job<Database>(
-            (ctx) => ctx.join(
-              Database.open,
-              discard: (db) {
-                closed++;
-                return db.close();
-              },
-            ),
-          );
+    group('the first attempt, as the page writes it,', () {
+      first.cancelledOpenAwaited(test, expect);
+    });
 
-          async.elapse(const Duration(milliseconds: 10));
-          await job.cancel();
-
-          checked = true;
-          expect(closed, 0); // wrong, and never run
-        }),
-        returnsNormally,
+    test('the first attempt runs neither of its checks', () async {
+      final checked = <Object?>[];
+      first.cancelledOpenAwaited(
+        (description, body) => body(),
+        (actual, matcher) => checked.add(actual),
       );
-      expect(checked, isFalse);
+      await pumpEventQueue();
+
+      expect(checked, isEmpty);
     });
 
     test('written as an arrow, the test waits for what never completes', () {
@@ -1844,26 +1802,21 @@ void main() {
       expect(waited, doesNotComplete);
     });
 
-    test('a cancelled open still closes what it opened', () {
-      fakeAsync((async) {
-        var closed = 0;
-        final job = Job<Database>(
-          (ctx) => ctx.join(
-            Database.open,
-            discard: (db) {
-              closed++;
-              return db.close();
-            },
-          ),
-        );
+    group('time moved by the test, as the page writes it,', () {
+      timeMovedByTheTest(test, expect);
+    });
 
-        async.elapse(const Duration(milliseconds: 10));
-        job.cancel().ignore(); // nothing awaits inside `fakeAsync`
-        async.flushTimers();
+    test('time moved by the test runs both of its checks', () {
+      final checked = <Object?>[];
+      timeMovedByTheTest(
+        (description, body) => body(),
+        (actual, matcher) {
+          checked.add(actual);
+          expect(actual, matcher);
+        },
+      );
 
-        expect(job.outcome, isA<Cancelled>());
-        expect(closed, 1); // what the test is named for
-      });
+      expect(checked, [isA<Cancelled>(), 1]);
     });
 
     test('flushMicrotasks is enough to start a job', () {
@@ -1876,15 +1829,5 @@ void main() {
         expect(started, isTrue);
       });
     });
-  });
-
-  test('the page quotes what these tests print', () {
-    final page = File('doc/observing.md').readAsStringSync();
-    final blocks = RegExp(r'```text\n(.*?)\n```', dotAll: true)
-        .allMatches(page)
-        .map((match) => match.group(1)!.split('\n'))
-        .toList();
-
-    expect(blocks, quoted);
   });
 }
