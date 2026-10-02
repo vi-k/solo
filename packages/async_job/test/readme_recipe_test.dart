@@ -9,6 +9,12 @@
 // `Cancelled(manual)` -- printed while the database was never opened and
 // never closed. The example printed that one path, while its comments
 // described the others.
+//
+// What the page quotes is read from the page: the output in the comments
+// of its blocks and the outcome of a job cancelled before its start, from
+// the README and its translation alike, the number of runs of the example
+// and the dependency of the package. A literal kept here would follow the
+// code, and the page would go on promising what the code no longer does.
 @Timeout(Duration(seconds: 5))
 library;
 
@@ -21,16 +27,23 @@ import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart';
 
 import '../example/example.dart' as example;
+import 'support/delay.dart';
 import 'support/page_code.dart';
 
 /// The `Database` of the blocks, with a journal instead of a disk.
 final class Database {
   static final events = <String>[];
 
+  /// What [open] fails with once its time has passed; nothing by default.
+  static StateError? openError;
+
   Database._();
 
   static Future<Database> open() async {
     await Future<void>.delayed(const Duration(milliseconds: 20));
+    if (openError case final error?) {
+      throw error;
+    }
     events.add('opened');
     return Database._();
   }
@@ -75,6 +88,22 @@ final class CancelToken {
 
 void use(List<String> rows) => Database.events.add('used ${rows.length}');
 
+/// Hears what reaches the observer of a job, and answers for nothing.
+final class Listening with JobObserver {
+  final heard = <String>[];
+
+  @override
+  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      heard.add('onError: $error');
+}
+
+/// Hears it as well, and answers for what has nowhere else to go.
+final class Answering extends Listening with JobAnswerer {
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      heard.add('onUnanswered: $error');
+}
+
 // The blocks of the README stand between these marks, each as it is
 // written there, with nothing more; the flag is declared as the block
 // declares it.
@@ -89,7 +118,7 @@ Future<void> load() async {
   }
   final rows = await db.readAll();
   if (cancelled) {
-    return; // and so does it here
+    return; // and here as well
   }
   use(rows);
 }
@@ -159,9 +188,51 @@ List<String> printedBy(Future<void> Function() run) {
   return lines;
 }
 
+/// What reaches the zone while [body] runs on fake time, every timer fired.
+///
+/// The zone catches whatever is thrown inside, a failed `expect` included,
+/// so the checks stand outside: [body] only collects.
+List<String> zoneErrorsOf(void Function(FakeAsync async) body) {
+  final zone = <String>[];
+  runZonedGuarded(
+    () => fakeAsync((async) {
+      body(async);
+      async.flushTimers();
+    }),
+    (error, stackTrace) => zone.add('$error'),
+  );
+  return zone;
+}
+
+/// The README and its translation: the output and the outcomes they quote
+/// are the same in both.
+///
+/// The translation is read where it is. `.pubignore` keeps it out of the
+/// archive, and the `floor` job runs this file on the archive, where the
+/// README is read alone. In the tree a missing translation fails
+/// `tool/check_translations.py`.
+final readmes = [
+  'README.md',
+  if (File('README.ru.md').existsSync()) 'README.ru.md',
+];
+
+String read(String file) => File(file).readAsStringSync();
+
+/// The output a block of [page] quotes in the comment that closes the line
+/// starting with [code].
+String quotedAfter(String page, String code) {
+  final line = RegExp(r'```dart\n(.*?)\n```', dotAll: true)
+      .allMatches(read(page))
+      .expand((block) => block.group(1)!.split('\n'))
+      .map((line) => line.trim())
+      .singleWhere((line) => line.startsWith(code));
+  return line.substring(line.indexOf('// ') + 3);
+}
+
 void main() {
   setUp(() {
     Database.events.clear();
+    Database.openError = null;
     cancelled = false;
   });
 
@@ -205,7 +276,13 @@ void main() {
       reason: 'and the value never reached the body: the cancellation came '
           'first',
     );
-    expect(printed, ['Cancelled(manual)']);
+    for (final page in readmes) {
+      expect(
+        printed,
+        [quotedAfter(page, 'print(job.outcome);')],
+        reason: page,
+      );
+    }
   });
 
   test('cancelled next to its constructor the same job does none of it', () {
@@ -217,10 +294,239 @@ void main() {
       job.cancel().ignore();
       async.flushTimers();
 
-      // The same printed line, and nothing behind it. This is what the
-      // Quick start used to show, and why the wait in it is not decoration.
-      expect(job.outcome.toString(), 'Cancelled(manual)');
+      // The outcome the README promises for it. This is what the Quick start
+      // used to show, and why the wait in it is not decoration.
+      final outcome = job.outcome! as Cancelled;
+      for (final page in readmes) {
+        final promised = RegExp(
+          r'`(Cancelled\(\w+\))`\s+(?:with|с)\s+`started: (\w+)`',
+        ).firstMatch(read(page))!;
+        expect('$outcome', promised.group(1), reason: page);
+        expect('${outcome.started}', promised.group(2), reason: page);
+      }
       expect(Database.events, isEmpty);
+    });
+  });
+
+  group('what reaches the zone', () {
+    test('awaiting cancel() and reading outcome do not observe a failure', () {
+      final reads = <String>[];
+      final zone = zoneErrorsOf((async) {
+        // `cancellable: false` refuses the cancellation, so `cancel()` is
+        // called and awaited while the job still runs, and the failure
+        // comes after both.
+        final job = Job<void>(cancellable: false, (ctx) async {
+          await ctx.join(() => delay(20));
+          throw StateError('read failed');
+        });
+        Future<void> cancelAndRead() async {
+          await delay(10);
+          final cancelling = job.cancel();
+          reads.add('${job.outcome}');
+          await cancelling;
+          reads.add('${job.outcome}');
+        }
+
+        unawaited(cancelAndRead());
+      });
+
+      expect(reads, ['null', 'Failed(Bad state: read failed)']);
+      expect(zone, ['Bad state: read failed']);
+    });
+
+    test('nor does the observer of the job, answering or not', () {
+      for (final observer in [Listening(), Answering()]) {
+        final zone = zoneErrorsOf((async) {
+          Job<void>(
+            observer: observer,
+            (ctx) async => throw StateError('read failed'),
+          );
+        });
+
+        final kind = observer is Answering ? 'answering' : 'listening';
+        expect(
+          observer.heard,
+          ['onError: Bad state: read failed'],
+          reason: kind,
+        );
+        expect(zone, ['Bad state: read failed'], reason: kind);
+      }
+    });
+
+    test('accessing done or value, or calling ignore(), observes it', () {
+      final ways = <String, void Function(Job<void> job)>{
+        'done': (job) => job.done.ignore(),
+        'value': (job) => job.value.ignore(),
+        'ignore()': (job) => job.ignore(),
+      };
+      for (final MapEntry(key: way, value: observe) in ways.entries) {
+        final zone = zoneErrorsOf((async) {
+          observe(Job<void>((ctx) async => throw StateError('read failed')));
+        });
+
+        expect(zone, isEmpty, reason: way);
+      }
+    });
+
+    test(
+        'a cleanup error goes to the zone, outcome observed or not, unless '
+        'the observer answers for it', () {
+      for (final observer in [null, Listening(), Answering()]) {
+        final zone = zoneErrorsOf((async) {
+          Job<void>(observer: observer, (ctx) async {
+            ctx.onDispose(() => throw StateError('close failed'));
+          }).done.ignore();
+        });
+
+        switch (observer) {
+          case null:
+            expect(zone, ['Bad state: close failed']);
+          case Answering():
+            expect(observer.heard, [
+              'onError: Bad state: close failed',
+              'onUnanswered: Bad state: close failed',
+            ]);
+            expect(zone, isEmpty);
+          case Listening():
+            expect(observer.heard, ['onError: Bad state: close failed']);
+            expect(zone, ['Bad state: close failed']);
+        }
+      }
+    });
+
+    test(
+        'an open that fails after the cancellation reaches the observer '
+        'alone, and nobody without one', () {
+      for (final observer in [null, Listening(), Answering()]) {
+        Database.openError = StateError('database locked');
+        Outcome<Database>? ended;
+        final zone = zoneErrorsOf((async) {
+          final job = Job<Database>(
+            observer: observer,
+            (ctx) => ctx.join(Database.open, discard: (db) => db.close()),
+          );
+          async.elapse(const Duration(milliseconds: 10));
+          job.cancel().ignore();
+          async.flushTimers();
+          ended = job.outcome;
+        });
+
+        expect('$ended', 'Cancelled(manual)');
+        expect(zone, isEmpty);
+        expect(
+          observer?.heard,
+          observer == null ? null : ['onError: Bad state: database locked'],
+        );
+      }
+    });
+  });
+
+  group('the checkpoints', () {
+    test('a running job accepts the request inside cancel() itself', () {
+      for (final cancellable in [true, false]) {
+        fakeAsync((async) {
+          final trace = <String>[];
+          final job = Job<void>(cancellable: cancellable, (ctx) async {
+            ctx.onCancel(() => trace.add('onCancel'));
+            for (final checkpoint in <Future<void> Function()>[
+              () => ctx.wait(() => delay(50)),
+              () async => ctx.check(),
+            ]) {
+              try {
+                await checkpoint();
+                trace.add('passed');
+              } on Cancelled {
+                trace.add('threw Cancelled');
+              }
+            }
+          });
+          async.elapse(const Duration(milliseconds: 10));
+          job.cancel().ignore();
+          trace.add('cancel() returned');
+          async.flushTimers();
+
+          if (cancellable) {
+            expect(trace, [
+              'onCancel',
+              'cancel() returned',
+              'threw Cancelled',
+              'threw Cancelled',
+            ]);
+            expect('${job.outcome}', 'Cancelled(manual)');
+          } else {
+            // Created with `cancellable: false`, it never accepts.
+            expect(trace, ['cancel() returned', 'passed', 'passed']);
+            expect('${job.outcome}', 'Done(null)');
+          }
+        });
+      }
+    });
+
+    test(
+        'inside an action passed to the context, and in cleanup, a direct '
+        'await waits each step out', () {
+      fakeAsync((async) {
+        Future<void> step(String name) async {
+          await delay(10);
+          Database.events.add(name);
+        }
+
+        final job = Job<void>((ctx) async {
+          ctx.onDispose(() async {
+            await step('cleanup, first step');
+            await step('cleanup, second step');
+          });
+          await ctx.join(() async {
+            await step('first step');
+            await step('second step');
+          });
+        });
+        job.done.then((outcome) => Database.events.add('$outcome')).ignore();
+        async.elapse(const Duration(milliseconds: 5));
+        job.cancel().ignore();
+        async.flushTimers();
+
+        expect(Database.events, [
+          'first step',
+          'second step',
+          'cleanup, first step',
+          'cleanup, second step',
+          'Cancelled(manual)',
+        ]);
+      });
+    });
+
+    test(
+        'one join keeps a step of plain code whole, and not a step that '
+        'takes the token', () {
+      for (final takesToken in [false, true]) {
+        fakeAsync((async) {
+          final written = <String>[];
+          final job = Job<void>((ctx) async {
+            final token = CancelToken();
+            ctx.onCancel(token.cancel);
+            await ctx.join(() async {
+              for (final part in ['version', 'flag']) {
+                if (takesToken && token.cancelled) {
+                  return;
+                }
+                await delay(10);
+                written.add(part);
+              }
+            });
+          });
+          async.elapse(const Duration(milliseconds: 5));
+          job.cancel().ignore();
+          async.flushTimers();
+
+          expect(
+            written,
+            takesToken ? ['version'] : ['version', 'flag'],
+            reason: takesToken ? 'takes the token' : 'plain code',
+          );
+          expect('${job.outcome}', 'Cancelled(manual)');
+        });
+      }
     });
   });
 
@@ -277,16 +583,32 @@ void main() {
 
     test(
         'ctx.join hands a database that opens after the cancellation to '
-        'its dispose', () {
+        'its dispose, and the job ends once the database is closed', () {
       fakeAsync((async) {
         final job = Job<void>((ctx) async {
           await ctx.join(Database.open, dispose: (db) => db.close());
         });
         async.elapse(const Duration(milliseconds: 10));
-        job.cancel().ignore();
+        job.cancel().then((_) => Database.events.add('job ended')).ignore();
         async.flushTimers();
 
-        expect(Database.events, ['opened', 'closed']);
+        expect(Database.events, ['opened', 'closed', 'job ended']);
+        expect(job.outcome.toString(), 'Cancelled(manual)');
+      });
+    });
+
+    test(
+        'ctx.wait stops the waiting as they do, and still hands that '
+        'database to its dispose after the job has ended', () {
+      fakeAsync((async) {
+        final job = Job<void>((ctx) async {
+          await ctx.wait(Database.open, dispose: (db) => db.close());
+        });
+        async.elapse(const Duration(milliseconds: 10));
+        job.cancel().then((_) => Database.events.add('job ended')).ignore();
+        async.flushTimers();
+
+        expect(Database.events, ['job ended', 'opened', 'closed']);
         expect(job.outcome.toString(), 'Cancelled(manual)');
       });
     });
@@ -312,27 +634,27 @@ void main() {
     });
 
     test(
-        'the timer lives until the limit, and stopping it through job.done '
-        'keeps a failure from the zone', () {
-      for (final throughDone in [false, true]) {
-        final zone = <Object>[];
+        'the timer lives until the limit, and cancelling it when the job '
+        'ends observes the outcome', () {
+      // The call the README gives for it.
+      expect(
+        read('README.md'),
+        contains('`job.done.whenComplete(timer.cancel)`'),
+      );
+      for (final cancelledAtTheEnd in [false, true]) {
         var timers = -1;
-        runZonedGuarded(
-          () => fakeAsync((async) {
-            final job = Job<int>((ctx) async => throw StateError('failed'));
-            final timer = Timer(const Duration(seconds: 1), job.cancel);
-            if (throughDone) {
-              job.done.whenComplete(timer.cancel).ignore();
-            }
-            async.elapse(const Duration(milliseconds: 5));
-            timers = async.pendingTimers.length;
-            async.flushTimers();
-          }),
-          (error, stackTrace) => zone.add(error),
-        );
+        final zone = zoneErrorsOf((async) {
+          final job = Job<int>((ctx) async => throw StateError('failed'));
+          final timer = Timer(const Duration(seconds: 1), job.cancel);
+          if (cancelledAtTheEnd) {
+            job.done.whenComplete(timer.cancel).ignore();
+          }
+          async.elapse(const Duration(milliseconds: 5));
+          timers = async.pendingTimers.length;
+        });
 
-        expect(timers, throughDone ? 0 : 1);
-        expect(zone, throughDone ? isEmpty : [isA<StateError>()]);
+        expect(timers, cancelledAtTheEnd ? 0 : 1);
+        expect(zone, cancelledAtTheEnd ? isEmpty : ['Bad state: failed']);
       }
     });
   });
@@ -342,7 +664,13 @@ void main() {
       final printed = printedBy(quickStart);
 
       expect(Database.events, ['opened', 'closed']);
-      expect(printed, ['Cancelled(manual)']);
+      for (final page in readmes) {
+        expect(
+          printed,
+          [quotedAfter(page, 'final outcome = await job.done;')],
+          reason: page,
+        );
+      }
     });
 
     test(
@@ -379,6 +707,38 @@ void main() {
       });
     });
 
+    test('a join around the step would leave a version with no flag', () {
+      fakeAsync((async) {
+        Object? thrown;
+        Job<void>? flag;
+        final job = Job<void>((ctx) async {
+          final database =
+              await ctx.join(Database.open, dispose: (db) => db.close());
+          await ctx.join(() async {
+            await database.writeVersion();
+            flag = database.readyFlag();
+            try {
+              await ctx.run(flag!);
+            } on Cancelled catch (error) {
+              thrown = error;
+              rethrow;
+            }
+          });
+        });
+        // The database opens in 20 ms, and the version takes 10.
+        async.elapse(const Duration(milliseconds: 25));
+        job.cancel().ignore();
+        async.flushTimers();
+
+        expect(Database.events, ['opened', 'version written', 'closed']);
+        // `ctx.run` threw the job's own cancellation instead of starting
+        // the child.
+        expect('$thrown', 'Cancelled(manual)');
+        expect((flag!.outcome! as Cancelled).started, isFalse);
+        expect(job.outcome.toString(), 'Cancelled(manual)');
+      });
+    });
+
     test('a child made with Job(...) is refused by ctx.run', () {
       fakeAsync((async) {
         final job = Job<void>((ctx) => ctx.run(Job<void>((ctx) async {})))
@@ -394,7 +754,8 @@ void main() {
   });
 
   test('the example runs the job to its end and cancels it at each step', () {
-    expect(printedBy(example.main), [
+    final printed = printedBy(example.main);
+    expect(printed, [
       'Nobody changes their mind:',
       'database opened',
       'migrated',
@@ -419,6 +780,70 @@ void main() {
       'database closed',
       'Cancelled(manual)',
     ]);
+
+    // The README counts the runs in a word, and each run opens with a
+    // heading of its own.
+    const numbers = {
+      'two': 2,
+      'three': 3,
+      'four': 4,
+      'five': 5,
+      'six': 6,
+    };
+    final said = RegExp(r'runs the job\s+(\w+)\s+times')
+        .firstMatch(read('README.md'))!
+        .group(1);
+    expect(printed.where((line) => line.endsWith(':')).length, numbers[said]);
+  });
+
+  group('what the README says of the package', () {
+    test('it depends on the one package the README names', () {
+      final named = RegExp(r'depends only on `(\w+)`')
+          .firstMatch(read('README.md'))!
+          .group(1);
+      final pubspec = File('pubspec.yaml').readAsLinesSync();
+      final dependencies = [
+        for (final line in pubspec
+            .skip(pubspec.indexOf('dependencies:') + 1)
+            .takeWhile((line) => line.isEmpty || line.startsWith(' ')))
+          if (RegExp(r'^  (\w+):').firstMatch(line) case final match?)
+            match.group(1),
+      ];
+
+      expect(dependencies, [named]);
+    });
+
+    test(
+        'the core imports dart:async, dart:collection and meta alone, so it '
+        'is pure Dart and runs wherever Dart does', () {
+      final imported = {
+        for (final file
+            in Directory('lib').listSync(recursive: true).whereType<File>())
+          for (final match in RegExp(
+            "^(?:import|export) '([^']+)'",
+            multiLine: true,
+          ).allMatches(file.readAsStringSync()))
+            if (match.group(1)!.contains(':')) match.group(1)!.split('/').first,
+      };
+
+      expect(imported, {'dart:async', 'dart:collection', 'package:meta'});
+    });
+
+    test('the one block the checks do not run installs this package', () {
+      final name = RegExp(r'^name: (\w+)$', multiLine: true)
+          .firstMatch(read('pubspec.yaml'))!
+          .group(1);
+      for (final page in readmes) {
+        expect(strayFences(page), ['```sh'], reason: page);
+        expect(
+          RegExp(r'```sh\n(.*?)\n```', dotAll: true)
+              .firstMatch(read(page))!
+              .group(1),
+          'dart pub add $name',
+          reason: page,
+        );
+      }
+    });
   });
 
   test('every block of the README runs in this file', () {

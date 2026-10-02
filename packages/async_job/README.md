@@ -22,7 +22,7 @@ Future<void> load() async {
   }
   final rows = await db.readAll();
   if (cancelled) {
-    return; // and so does it here
+    return; // and here as well
   }
   use(rows);
 }
@@ -46,24 +46,37 @@ await job.cancel();
 print(job.outcome); // Cancelled(manual)
 ```
 
-`Job` manages this lifetime. It finishes with one of three outcomes: `Done`,
-`Failed` or `Cancelled` with a reason. It waits for its children and runs
-registered cleanup before completing. An unobserved `Failed` is reported to the
-zone that created the job, just as Dart reports an unhandled `Future` error. An
-error that does not become the outcome, such as one from cleanup, goes to the
-zone as well by default, or to nobody unless the job has an observer, depending
-on where it came from; [Where errors go](doc/observing.md#where-errors-go) on
-the observing page lists each one, with an observer and without.
+A `Job` finishes with one of three outcomes: `Done`, `Failed` or `Cancelled`
+with a reason. It waits for its children and runs registered cleanup before
+completing. An unobserved `Failed` is reported to the zone that created the
+job, just as Dart reports an unhandled `Future` error. A failure is observed by
+accessing the job's `done` or `value`, or by calling `ignore()`; awaiting
+`cancel()` and reading `outcome`, as the block above does, do not observe it,
+and neither does the job's observer (`JobObserver`).
+
+An error that does not become the outcome, such as one from cleanup, goes to
+the zone as well, unless the job's observer answers for it (`JobAnswerer`). But
+an error of the body that happens once the job is cancelled, like an open that
+fails after the cancellation in the Quick start below, goes only to the job's
+observer, and without one to nobody.
+[Where errors go](doc/observing.md#where-errors-go) on the observing page lists
+each one, with an observer and without.
 
 Cancellation is cooperative: `cancel()` requests it, and the body stops when it
-reaches a cancellation checkpoint. `Job` provides these checkpoints through the
-context, `ctx`, passed to the body. `ctx.join(action)` checks cancellation
-before starting the operation, waits for it to finish, then checks again before
-returning its value to the body.
+reaches a cancellation checkpoint. A running job accepts the request inside
+`cancel()` itself, unless an `uncancellable` section holds it back or the job
+was created with `cancellable: false`: from then on the job is cancelled, its
+`onCancel` callbacks run, and every checkpoint throws `Cancelled`. `Job`
+provides these checkpoints through the context, `ctx`, passed to the body.
+`ctx.join(action)` checks cancellation before starting the operation, waits for
+it to finish, then checks again before returning its value to the body.
 
 A direct `await action()` is allowed, but does not check job cancellation. It
 keeps waiting, and the code after it can run even if the job has been
 cancelled. That is why using the context is part of writing a cancellable body.
+Inside an action passed to the context, such as the step of `ctx.uncancellable`
+in the Quick start below, and in cleanup, a direct `await` is right: the
+context adds no checkpoint between the awaits of that action.
 
 Dart can already stop the waiting. `Future.timeout` stops it after a time
 limit, and `CancelableOperation` from `package:async` stops delivering its
@@ -72,7 +85,9 @@ Neither holds on to what the work opens: unless an `onCancel` is written to
 catch it, a value that arrives once the waiting has stopped goes to nobody, and
 a database that opens late stays open. `ctx.join` hands a database that opens
 after the job's cancellation to its `dispose` all the same, with no code
-written for the cancellation.
+written for the cancellation, and the job ends once the database is closed.
+`ctx.wait` stops the waiting as they do and still hands that database to its
+`dispose` when it opens, even after the job has ended.
 
 `async_job` does not provide state management, a task queue or scheduling
 rules: [solo](#solo) adds them.
@@ -80,9 +95,11 @@ rules: [solo](#solo) adds them.
 Neither package provides retries or a task pool; applications can add these as
 needed. A job has no timeout of its own either: `Timer(limit, job.cancel)`
 cancels it once the limit has run out, and does nothing to a job that has
-already finished. The timer itself lives until the limit. Stopping it through
-`job.done` counts as observing the outcome, and a failure of the job then no
-longer reaches the zone.
+already finished. The timer itself lives until the limit: a program with
+nothing else to do does not exit before it fires. Cancelling it when the job
+ends, `job.done.whenComplete(timer.cancel)`, observes the outcome: a failure of
+the job then no longer reaches the zone, and the code that cancels the timer
+has to report it.
 
 ## Install
 
@@ -132,10 +149,9 @@ final outcome = await job.done; // Cancelled(manual)
   database. If cancellation arrives during opening, it waits for the call to
   finish and throws `Cancelled` if opening succeeded. If opening fails, it
   throws the original error, even after cancellation. The job still ends
-  `Cancelled`, so that error becomes nobody's outcome: it reaches the observer
-  and stops there. Without one, an open that failed after a cancellation leaves
-  no trace. See [Where errors go](doc/observing.md#where-errors-go) on the
-  observing page.
+  `Cancelled`, so the error is nobody's outcome: it reaches the job's observer
+  and stops there, and without an observer nothing hears it. See
+  [Where errors go](doc/observing.md#where-errors-go) on the observing page.
 - **`discard: (database) => database.close()`** closes the database if the job
   ends with cancellation or an error. With `Done(database)`, it stays open for
   the caller. Cleanup also covers cancellation after `return database`: for
@@ -154,20 +170,22 @@ final outcome = await job.done; // Cancelled(manual)
   waiting immediately on cancellation, use `ctx.wait`. It stops the waiting
   without stopping the operation itself.
 - **`ctx.uncancellable(() async { ... })`** keeps the last step whole. The step
-  writes the schema version and then runs `database.readyFlag()`, a job of its
-  own that writes the ready flag, as a child. `readyFlag()` makes that job with
-  `Job.deferred`, which leaves its start to `ctx.run`: a job made with
-  `Job(...)` starts on its own, and `ctx.run` throws an `ArgumentError` instead
-  of adopting it. Once the job has accepted a cancellation, `ctx.run` throws it
+  writes the schema version and then runs `database.readyFlag()` as a child.
+  Once the job has accepted a cancellation, `ctx.run` throws that cancellation
   instead of starting the child, so a `join` around the step would leave a
   version with no flag. Inside the section the job does not accept the
   cancellation: the child starts, and `onCancel` does not fire. The job accepts
   it when the section closes, and the body goes on to `return database`, yet
   the job ends `Cancelled` all the same, and `discard` closes the database: the
-  section keeps the step whole, not the result. A step of plain code needs no
+  section keeps the step whole, not the result. A step of plain code, one that
+  makes no context call and takes no token that `onCancel` cancels, needs no
   section: one `join` around it is enough. See
   [Holding the cancellation back](doc/cancellation.md#holding-the-cancellation-back)
   on the cancellation page.
+- **`ctx.run(database.readyFlag())`** starts, as a child, the job that writes
+  the ready flag. `readyFlag()` makes that job with `Job.deferred`, which
+  leaves its start to `ctx.run`; a job made with `Job(...)` starts on its own,
+  and `ctx.run` refuses it with an `ArgumentError`.
 - **`await job.cancel()`** requests cancellation and waits for the job to
   finish, including its cleanup. The outcome on the next line is therefore
   ready. You can omit `await` if you only need to request cancellation.
