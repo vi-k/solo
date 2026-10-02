@@ -8,17 +8,21 @@ import 'package:async_job/async_job.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart';
 
+import 'support/cancellation_page.dart' as page;
+import 'support/cancellation_stubs.dart';
 import 'support/delay.dart';
 import 'support/page_code.dart';
 
 /// The first attempts of `doc/cancellation.md`, and what each one costs.
 ///
 /// Every section of the page opens with the version the names lead to and
-/// shows what that version prints. The page has no bench, so the code is
-/// repeated here as it stands there. The last two tests hold the page to
-/// this file: the lines it quotes to the lines these tests print, and every
-/// piece of its code to a run of lines of this file. A quote or a fragment
-/// that drifts turns this file red, not only a broken engine.
+/// shows what that version prints. The page has no bench: its code stands
+/// verbatim in `support/cancellation_page.dart`, each block in a region of
+/// its own, and the tests below run it; the variants next to them hold what
+/// the code of the page does not show. The tests at the end hold the page to
+/// these files: the lines it quotes to the lines its code prints, every
+/// block of its code to the region in its place, the durations its prose
+/// names to the stubs, and every block to a fence these checks read.
 
 /// What each `text` block of the page says, in the order of the page.
 const quoted = [
@@ -86,112 +90,15 @@ const quoted = [
   ],
 ];
 
-/// What the database, the observer and the code around the job print.
-final printed = <String>[];
+/// When the user cancels in the sections on the migration: the page's
+/// "15 ms in".
+const cancelMs = 15;
 
-void say(String line) => printed.add(line);
-
-/// The stop signal of the database client, the kind `onCancel` is for.
-final class CancelToken {
-  bool cancelled = false;
-
-  void cancel() => cancelled = true;
-}
-
-/// How the database client stops when its token is cancelled.
-final class DatabaseStopped implements Exception {
-  const DatabaseStopped();
-
-  @override
-  String toString() => 'DatabaseStopped';
-}
-
-final class Database {
-  bool closed = false;
-
-  static Future<Database> open() async => Database();
-
-  /// A read of 10 ms, the kind a job may walk away from.
-  Future<List<String>> readAll() async {
-    await delay(10);
-    say('rows read');
-    return ['row'];
-  }
-
-  /// Three steps, 10 ms each; the token is read before every one.
-  Future<void> migrate(CancelToken stop) async {
-    for (var step = 1; step <= 3; step++) {
-      if (stop.cancelled) {
-        say('migration stopped');
-        throw const DatabaseStopped();
-      }
-      await delay(10);
-      say(closed ? 'step $step on a closed database' : 'step $step');
-    }
-  }
-
-  /// The first write of marking the database ready, 10 ms.
-  Future<void> writeVersion() async {
-    await delay(10);
-    say('version written');
-  }
-
-  /// The second write, 10 ms.
-  Future<void> writeReadyFlag() async {
-    await delay(10);
-    say('ready flag written');
-  }
-
-  /// The second write as a job of its own, for a step that runs it as a
-  /// child.
-  Job<void> readyFlag() => Job.deferred((ctx) => ctx.join(writeReadyFlag));
-
-  Future<void> close() async {
-    closed = true;
-    say('database closed');
-  }
-}
-
-final class Device {
-  Future<void> stop() async {
-    await delay(10);
-    throw StateError('device did not stop');
-  }
-}
-
-/// The observer of the page's jobs: it prints what reaches it.
-final class PrintingObserver extends JobObserver {
-  @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
-      say('onError: $error');
-
-  @override
-  void onLog(Job<Object?> job, Object? message) => say('log: $message');
-}
-
-/// The database of the sections that do not open one.
-Database database = Database();
-final device = Device();
-
-void use(List<String> rows) => say('rows used');
-
-/// What [renderThumbnail] does instead of taking its 20 ms: nothing,
-/// fail, or be cancelled 5 ms in, directly and not through its parent.
-enum Thumbnail { renders, fails, isCancelled }
-
-Thumbnail thumbnailDoes = Thumbnail.renders;
-
-Future<String> renderThumbnail(JobContext ctx) async {
-  switch (thumbnailDoes) {
-    case Thumbnail.renders:
-      break;
-    case Thumbnail.fails:
-      throw const FormatException('bad image');
-    case Thumbnail.isCancelled:
-      Timer(const Duration(milliseconds: 5), ctx.job.cancel);
-  }
-  await ctx.wait(() => delay(20));
-  return 'thumbnail';
+/// Starts a run on fresh stubs; the stage stays as the test has set it.
+void freshRun() {
+  printed.clear();
+  database = Database();
+  device = Device();
 }
 
 /// Runs [body] as a job with the page's observer, cancels it [cancelAt] ms
@@ -200,35 +107,17 @@ Future<String> renderThumbnail(JobContext ctx) async {
 List<String> play<T>(
   Future<T> Function(JobContext ctx) body, {
   int? cancelAt,
-  JobObserver? observer,
   bool observed = true,
-}) {
-  printed.clear();
-  database = Database();
-  runZonedGuarded(
-    () => fakeAsync((async) {
-      final job = Job<T>(
-        body,
-        observer: observed ? observer ?? PrintingObserver() : null,
-      );
-      unawaited(job.done.then((outcome) => say('outcome: $outcome')));
-      if (cancelAt != null) {
-        async.elapse(Duration(milliseconds: cancelAt));
-        say('cancel');
-        unawaited(job.cancel());
-      }
-      async.flushTimers();
-    }),
-    (error, stackTrace) => say('zone: $error'),
-  );
-  return printed.toList();
-}
+}) =>
+    watch(
+      () => Job<T>(body, observer: observed ? printing : null),
+      cancelAt: cancelAt,
+    );
 
-/// Runs the job [start] makes, as the page writes it and so without an
-/// observer, cancels it [cancelAt] ms in, and returns what was printed.
+/// Runs the job [start] makes, cancels it [cancelAt] ms in, and returns what
+/// was printed. An error that reaches the zone is printed as `zone:`.
 List<String> watch(Job<Object?> Function() start, {int? cancelAt}) {
-  printed.clear();
-  database = Database();
+  freshRun();
   runZonedGuarded(
     () => fakeAsync((async) {
       final job = start();
@@ -246,34 +135,14 @@ List<String> watch(Job<Object?> Function() start, {int? cancelAt}) {
 }
 
 void main() {
+  setUp(() {
+    stage = Stage();
+    freshRun();
+  });
+
   group('The opening example', () {
-    // The read takes 0-10 ms, the migration 10-40, the section 40-60.
-    Job<void> opening() => Job<void>((ctx) async {
-          // The database client's own stop signal, cancelled with the job.
-          final stop = CancelToken();
-          ctx.onCancel(stop.cancel);
-
-          // The wait ends at once; the read goes on, and its value is dropped.
-          final rows = await ctx.wait(database.readAll);
-
-          // Waited for until the migration ends or stops at the token, and
-          // only then does the job give up.
-          await ctx.join(() => database.migrate(stop));
-
-          // The cancellation waits for the whole step, and the child it
-          // runs is not cancelled; the next checkpoint throws it.
-          await ctx.uncancellable(() async {
-            await database.writeVersion();
-            await ctx.run(database.readyFlag());
-          });
-
-          // Nothing to wrap between the steps of a calculation.
-          ctx.check();
-          use(rows);
-        });
-
     test('uncancelled, it runs to its end', () {
-      expect(watch(opening), [
+      expect(watch(page.opening), [
         'rows read',
         'step 1',
         'step 2',
@@ -286,7 +155,7 @@ void main() {
     });
 
     test('the wait ends at once, and the read goes on', () {
-      expect(watch(opening, cancelAt: 5), [
+      expect(watch(page.opening, cancelAt: 5), [
         'cancel',
         'outcome: Cancelled(manual)',
         'rows read',
@@ -294,7 +163,7 @@ void main() {
     });
 
     test('the join waits for the migration to stop at the token', () {
-      expect(watch(opening, cancelAt: 15), [
+      expect(watch(page.opening, cancelAt: 15), [
         'rows read',
         'cancel',
         'step 1',
@@ -304,7 +173,7 @@ void main() {
     });
 
     test('the section writes both, and check throws after it', () {
-      expect(watch(opening, cancelAt: 45), [
+      expect(watch(page.opening, cancelAt: 45), [
         'rows read',
         'step 1',
         'step 2',
@@ -319,61 +188,15 @@ void main() {
 
   group('Stopping the operation', () {
     test('wait closes the database under a running migration', () {
-      final lines = watch(cancelAt: 15, () {
-        final job = Job<Database>((ctx) async {
-          final database = await ctx.join(
-            Database.open,
-            discard: (database) => database.close(),
-          );
-          final stop = CancelToken();
-
-          await ctx.wait(() => database.migrate(stop));
-
-          return database;
-        });
-        return job;
-      });
-
-      expect(lines, quoted[0]);
+      expect(watch(page.waitForTheMigration, cancelAt: cancelMs), quoted[0]);
     });
 
     test('join closes it after the migration has run to its end', () {
-      final lines = play(
-        (ctx) async {
-          final database = await ctx.join(
-            Database.open,
-            discard: (database) => database.close(),
-          );
-          final stop = CancelToken();
-
-          await ctx.join(() => database.migrate(stop));
-
-          return database;
-        },
-        cancelAt: 15,
-      );
-
-      expect(lines, quoted[1]);
+      expect(watch(page.joinTheMigration, cancelAt: cancelMs), quoted[1]);
     });
 
     test('a token through onCancel stops it, and join waits for that', () {
-      final lines = play(
-        (ctx) async {
-          final database = await ctx.join(
-            Database.open,
-            discard: (database) => database.close(),
-          );
-          final stop = CancelToken();
-          ctx.onCancel(stop.cancel);
-
-          await ctx.join(() => database.migrate(stop));
-
-          return database;
-        },
-        cancelAt: 15,
-      );
-
-      expect(lines, quoted[2]);
+      expect(watch(page.stopTheMigration, cancelAt: cancelMs), quoted[2]);
     });
 
     test('without an observer the stopped migration reaches no zone', () {
@@ -384,7 +207,7 @@ void main() {
 
           await ctx.join(() => database.migrate(stop));
         },
-        cancelAt: 15,
+        cancelAt: cancelMs,
         observed: false,
       );
 
@@ -416,6 +239,90 @@ void main() {
 
     // The page names both parameters, so each test runs with either one.
     for (final kind in ['dispose', 'discard']) {
+      test(
+          'a late value of wait is released at once while the body still '
+          'runs ($kind)', () {
+        fakeAsync((async) {
+          final seen = <String>[];
+          String at() => '${async.elapsed.inMilliseconds} ms';
+          void cleanup(String value) => seen.add('${at()}: $kind $value');
+          final job = Job<void>((ctx) async {
+            try {
+              await ctx.wait(
+                () async {
+                  await delay(20);
+                  return 'connection';
+                },
+                dispose: kind == 'dispose' ? cleanup : null,
+                discard: kind == 'discard' ? cleanup : null,
+              );
+            } on Cancelled {
+              await delay(40);
+              seen.add('${at()}: the body ends');
+              rethrow;
+            }
+          });
+          unawaited(
+            job.done.then((outcome) => seen.add('${at()}: finished $outcome')),
+          );
+          async.elapse(const Duration(milliseconds: 5));
+          unawaited(job.cancel());
+          async.flushTimers();
+
+          expect(seen, [
+            '20 ms: $kind connection',
+            '45 ms: the body ends',
+            '45 ms: finished Cancelled(manual)',
+          ]);
+        });
+      });
+
+      test(
+          'a late value of wait is released at once while a child still '
+          'runs, and the job waits for it ($kind)', () {
+        fakeAsync((async) {
+          final seen = <String>[];
+          String at() => '${async.elapsed.inMilliseconds} ms';
+          Future<void> cleanup(String value) async {
+            seen.add('${at()}: $kind $value');
+            await delay(40);
+            seen.add('${at()}: $kind done');
+          }
+
+          final job = Job<void>((ctx) async {
+            final child = Job.deferred<void>(
+              (ctx) async {
+                await delay(50);
+                seen.add('${at()}: the child ends');
+              },
+              cancellable: false,
+            );
+            ctx.run(child).ignore();
+            await ctx.wait(
+              () async {
+                await delay(20);
+                return 'connection';
+              },
+              dispose: kind == 'dispose' ? cleanup : null,
+              discard: kind == 'discard' ? cleanup : null,
+            );
+          });
+          unawaited(
+            job.done.then((outcome) => seen.add('${at()}: finished $outcome')),
+          );
+          async.elapse(const Duration(milliseconds: 5));
+          unawaited(job.cancel());
+          async.flushTimers();
+
+          expect(seen, [
+            '20 ms: $kind connection',
+            '50 ms: the child ends',
+            '60 ms: $kind done',
+            '60 ms: finished Cancelled(manual)',
+          ]);
+        });
+      });
+
       test(
           'a late value of wait joins the stack while the job finishes '
           '($kind)', () {
@@ -522,31 +429,163 @@ void main() {
     }
   });
 
-  group('A step that must finish', () {
-    test('two joins lose the flag between them', () {
+  group('A token through onCancel: a stop that takes time', () {
+    test('an async onCancel callback fails into the zone', () {
+      stage.stopFails = true;
       final lines = play(
         (ctx) async {
-          await ctx.join(database.writeVersion);
-          await ctx.join(database.writeReadyFlag);
+          ctx.onCancel(() async {
+            await device.stop();
+          });
+          await ctx.wait(() => delay(50));
         },
         cancelAt: 5,
       );
 
-      expect(lines, quoted[3]);
+      expect(lines, [
+        'cancel',
+        'outcome: Cancelled(manual)',
+        'zone: Bad state: device did not stop',
+      ]);
+    });
+
+    test('an async onCancel callback fails before its first await the same',
+        () async {
+      // Real time and three zones: which one hears it is the claim.
+      final zones = <String>[];
+      late Job<void> job;
+      runZonedGuarded(
+        () => job = Job<void>(
+          (ctx) async {
+            ctx.onCancel(() async {
+              throw StateError('device did not stop');
+            });
+            await ctx.wait(() => delay(50));
+          },
+          observer: printing,
+        )..ignore(),
+        (error, stackTrace) => zones.add('creation: $error'),
+      );
+      await delay(5);
+      printed.clear();
+      runZonedGuarded(
+        () => job.cancel().ignore(),
+        (error, stackTrace) => zones.add('cancel: $error'),
+      );
+      await job.done;
+      await delay(5);
+
+      expect(zones, ['cancel: Bad state: device did not stop']);
+      expect(printed, isEmpty, reason: 'onError hears nothing');
+    });
+
+    test('a synchronous throw of onCancel reaches onError, then the zone', () {
+      final lines = play(
+        (ctx) async {
+          ctx.onCancel(() => throw StateError('device did not stop'));
+          await ctx.wait(() => delay(50));
+        },
+        cancelAt: 5,
+      );
+
+      expect(lines, [
+        'cancel',
+        'onError: Bad state: device did not stop',
+        'zone: Bad state: device did not stop',
+        'outcome: Cancelled(manual)',
+      ]);
+    });
+
+    test('the job does not wait for the stop it handed to unattended', () {
+      expect(watch(page.stopTheDevice, cancelAt: 5), [
+        'cancel',
+        'device released',
+        'outcome: Cancelled(manual)',
+        'device stopped',
+      ]);
+    });
+
+    test('a failed stop through unattended reaches onError, then the zone', () {
+      stage.stopFails = true;
+      expect(watch(page.stopTheDevice, cancelAt: 5), [
+        'cancel',
+        'device released',
+        'outcome: Cancelled(manual)',
+        'onError: Bad state: device did not stop',
+        'zone: Bad state: device did not stop',
+      ]);
+    });
+
+    test(
+        'the zone that hears a failed stop is the one the job was created '
+        'in, not the one of cancel()', () {
+      stage.stopFails = true;
+      fakeAsync((async) {
+        late Job<void> job;
+        runZonedGuarded(
+          () => job = page.stopTheDevice(),
+          (error, stackTrace) => say('the zone of the job: $error'),
+        );
+        async.elapse(const Duration(milliseconds: 5));
+        runZonedGuarded(
+          () => job.cancel().ignore(),
+          (error, stackTrace) => say('the zone of cancel(): $error'),
+        );
+        async.flushTimers();
+      });
+
+      expect(printed, [
+        'device released',
+        'onError: Bad state: device did not stop',
+        'the zone of the job: Bad state: device did not stop',
+      ]);
+    });
+
+    test('a join around the operation the stop interrupts waits for it', () {
+      expect(watch(page.waitForTheDevice, cancelAt: 5), [
+        'cancel',
+        'device stopped',
+        'device released',
+        'outcome: Cancelled(manual)',
+      ]);
+    });
+
+    test('a join around an operation that ends first waits for nothing more',
+        () {
+      final lines = play(
+        (ctx) async {
+          // The stop interrupts the playback at once and takes 10 ms more.
+          final interrupted = Completer<void>();
+          ctx
+            ..onDispose(() => say('device released'))
+            ..onCancel(
+              () => ctx.unattended(() async {
+                interrupted.complete();
+                await delay(10);
+                say('device stopped');
+              }),
+            );
+          await ctx.join(() => interrupted.future);
+        },
+        cancelAt: 5,
+      );
+
+      expect(lines, [
+        'cancel',
+        'device released',
+        'outcome: Cancelled(manual)',
+        'device stopped',
+      ]);
+    });
+  });
+
+  group('A step that must finish', () {
+    test('two joins lose the flag between them', () {
+      expect(watch(page.twoJoins, cancelAt: 5), quoted[3]);
     });
 
     test('one join around the step makes both writes', () {
-      final lines = play(
-        (ctx) async {
-          await ctx.join(() async {
-            await database.writeVersion();
-            await database.writeReadyFlag();
-          });
-        },
-        cancelAt: 5,
-      );
-
-      expect(lines, quoted[4]);
+      expect(watch(page.oneJoinForTheStep, cancelAt: 5), quoted[4]);
     });
 
     test('one join keeps neither the token nor a checkpoint out', () {
@@ -582,53 +621,17 @@ void main() {
   });
 
   group('A step that runs a child', () {
-    test('one join around a step with a child loses the flag', () {
-      var childStarted = false;
-      final lines = play(
-        (ctx) async {
-          await ctx.join(() async {
-            await database.writeVersion();
-            await ctx.run(
-              Job.deferred<void>((ctx) async {
-                childStarted = true;
-                await ctx.join(database.writeReadyFlag);
-              }),
-            );
-          });
-        },
-        cancelAt: 5,
+    test('one join around the step loses the flag: run starts no child', () {
+      expect(watch(page.oneJoinWithAChild, cancelAt: 5), quoted[5]);
+      expect(
+        database.flagJobs.single.outcome,
+        isA<Cancelled>().having((c) => c.started, 'started', isFalse),
+        reason: 'run throws instead of starting the child',
       );
-
-      expect(lines, quoted[5]);
-      expect(childStarted, isFalse, reason: 'run throws instead of starting');
-    });
-
-    test('the page version of that step: run throws after acceptance', () {
-      final lines = play(
-        (ctx) async {
-          await ctx.join(() async {
-            await database.writeVersion();
-            await ctx.run(database.readyFlag());
-          });
-        },
-        cancelAt: 5,
-      );
-
-      expect(lines, quoted[5]);
     });
 
     test('uncancellable writes both, the child included', () {
-      final lines = play(
-        (ctx) async {
-          await ctx.uncancellable(() async {
-            await database.writeVersion();
-            await ctx.run(database.readyFlag());
-          });
-        },
-        cancelAt: 5,
-      );
-
-      expect(lines, quoted[6]);
+      expect(watch(page.holdTheCancellationBack, cancelAt: 5), quoted[6]);
     });
 
     test('a held cancellation reaches no child until the section ends', () {
@@ -688,6 +691,37 @@ void main() {
         expect(returned, isTrue);
         expect(job.outcome, isA<Done<void>>());
         async.flushTimers();
+      });
+    });
+
+    test(
+        'a body that goes on past an unawaited section and gives itself up '
+        'is cancelled at once', () {
+      fakeAsync((async) {
+        final seen = <String>[];
+        var open = false;
+        final job = Job<void>((ctx) async {
+          ctx.onCancel(() => seen.add('onCancel, the section open: $open'));
+          ctx.uncancellable(() async {
+            open = true;
+            try {
+              await ctx.wait(() => delay(20));
+            } on Cancelled catch (error) {
+              seen.add('the wait in the section threw $error');
+            } finally {
+              open = false;
+            }
+          }).ignore();
+          await delay(5);
+          throw const Cancelled('gave up');
+        });
+        async.flushTimers();
+
+        expect(seen, [
+          'onCancel, the section open: true',
+          'the wait in the section threw Cancelled(handler: gave up)',
+        ]);
+        expect(job.outcome, isA<Cancelled>());
       });
     });
 
@@ -759,27 +793,7 @@ void main() {
 
   group('Catching errors of the operation', () {
     test('a clause for Cancelled logs the stopped migration as a failure', () {
-      final lines = play(
-        (ctx) async {
-          final stop = CancelToken();
-          ctx.onCancel(stop.cancel);
-
-          try {
-            await ctx.join(() => database.migrate(stop));
-          } on Cancelled {
-            rethrow;
-          } on Exception catch (error) {
-            ctx.log('migration failed: $error');
-          }
-          await ctx.join(() async {
-            await database.writeVersion();
-            await database.writeReadyFlag();
-          });
-        },
-        cancelAt: 15,
-      );
-
-      expect(lines, quoted[7]);
+      expect(watch(page.catchCancelledFirst, cancelAt: cancelMs), quoted[7]);
     });
 
     test('without the token the clause for Cancelled holds', () {
@@ -799,7 +813,7 @@ void main() {
             await database.writeReadyFlag();
           });
         },
-        cancelAt: 15,
+        cancelAt: cancelMs,
       );
 
       expect(lines, [
@@ -822,34 +836,24 @@ void main() {
             ctx.log('migration failed: $error');
           }
         },
-        cancelAt: 15,
+        cancelAt: cancelMs,
       );
 
       expect(lines, contains('log: migration failed: Cancelled(manual)'));
     });
 
     test('check in the catch lets the cancellation through', () {
-      final lines = play(
-        (ctx) async {
-          final stop = CancelToken();
-          ctx.onCancel(stop.cancel);
+      expect(watch(page.askTheJob, cancelAt: cancelMs), quoted[8]);
+    });
 
-          try {
-            await ctx.join(() => database.migrate(stop));
-          } on Exception catch (error) {
-            ctx.check();
-            // ignore: cascade_invocations -- the page's code as it stands
-            ctx.log('migration failed: $error');
-          }
-          await ctx.join(() async {
-            await database.writeVersion();
-            await database.writeReadyFlag();
-          });
-        },
-        cancelAt: 15,
-      );
-
-      expect(lines, quoted[8]);
+    test('a failure of its own is logged, and the body goes on', () {
+      stage.migrationFails = true;
+      expect(watch(page.askTheJob), [
+        'log: migration failed: FormatException: bad schema',
+        'version written',
+        'ready flag written',
+        'outcome: Done(null)',
+      ]);
     });
 
     test('check in an on Object catch does the same', () {
@@ -862,40 +866,14 @@ void main() {
             await ctx.join(() => database.migrate(stop));
           } on Object catch (error) {
             ctx.check();
-            // ignore: cascade_invocations -- the page's code as it stands
+            // ignore: cascade_invocations -- the form of Asking the job
             ctx.log('migration failed: $error');
           }
         },
-        cancelAt: 15,
+        cancelAt: cancelMs,
       );
 
       expect(lines, quoted[8]);
-    });
-
-    test('a failure of its own is logged, and the body goes on', () {
-      final lines = play((ctx) async {
-        final stop = CancelToken();
-        ctx.onCancel(stop.cancel);
-
-        try {
-          await ctx.join(() => throw const FormatException('bad schema'));
-        } on Exception catch (error) {
-          ctx.check();
-          // ignore: cascade_invocations -- the page's code as it stands
-          ctx.log('migration failed: $error');
-        }
-        await ctx.join(() async {
-          await database.writeVersion();
-          await database.writeReadyFlag();
-        });
-      });
-
-      expect(lines, [
-        'log: migration failed: FormatException: bad schema',
-        'version written',
-        'ready flag written',
-        'outcome: Done(null)',
-      ]);
     });
 
     test('a caught Cancelled of the job does not undo it', () {
@@ -921,8 +899,7 @@ void main() {
 
     test('the clause of Asking the job logs a cancelled child as a failure',
         () {
-      thumbnailDoes = Thumbnail.isCancelled;
-      addTearDown(() => thumbnailDoes = Thumbnail.renders);
+      stage.thumbnail = Thumbnail.isCancelled;
       final lines = play((ctx) async {
         final thumbnail = Job.deferred<String>(renderThumbnail);
         try {
@@ -945,20 +922,8 @@ void main() {
       test(
           'a test of the type tells a cancelled child from a failed one '
           '(fails: $fails)', () {
-        thumbnailDoes = fails ? Thumbnail.fails : Thumbnail.isCancelled;
-        addTearDown(() => thumbnailDoes = Thumbnail.renders);
-        final lines = play((ctx) async {
-          final thumbnail = Job.deferred<String>(renderThumbnail);
-          try {
-            return 'page with ${await ctx.run(thumbnail)}';
-          } on Exception catch (error) {
-            ctx.check();
-            if (error is! Cancelled) ctx.log('thumbnail failed: $error');
-            return 'page without a thumbnail';
-          }
-        });
-
-        expect(lines, [
+        stage.thumbnail = fails ? Thumbnail.fails : Thumbnail.isCancelled;
+        expect(watch(page.pageWithAThumbnail), [
           if (fails) ...[
             'onError: FormatException: bad image',
             'log: thumbnail failed: FormatException: bad image',
@@ -993,7 +958,7 @@ void main() {
     ]) {
       test('an optional child cancelled on its own, with $form', () {
         fakeAsync((async) {
-          final page = Job<String>((ctx) async {
+          final job = Job<String>((ctx) async {
             final thumbnail = Job.deferred<String>((ctx) async {
               await ctx.wait(() => delay(20));
               return 'thumbnail';
@@ -1009,175 +974,10 @@ void main() {
           });
           async.flushTimers();
 
-          expect('${page.outcome}', outcome);
+          expect('${job.outcome}', outcome);
         });
       });
     }
-  });
-
-  group('A token through onCancel: a stop that takes time', () {
-    test('an async onCancel callback fails into the zone', () {
-      final lines = play(
-        (ctx) async {
-          ctx.onCancel(() async {
-            await device.stop();
-          });
-          await ctx.wait(() => delay(50));
-        },
-        cancelAt: 5,
-      );
-
-      expect(lines, [
-        'cancel',
-        'outcome: Cancelled(manual)',
-        'zone: Bad state: device did not stop',
-      ]);
-    });
-
-    test('an async onCancel callback fails before its first await the same',
-        () async {
-      // Real time and three zones: which one hears it is the claim.
-      final zones = <String>[];
-      late Job<void> job;
-      runZonedGuarded(
-        () => job = Job<void>(
-          (ctx) async {
-            ctx.onCancel(() async {
-              throw StateError('device did not stop');
-            });
-            await ctx.wait(() => delay(50));
-          },
-          observer: PrintingObserver(),
-        )..ignore(),
-        (error, stackTrace) => zones.add('creation: $error'),
-      );
-      await delay(5);
-      printed.clear();
-      runZonedGuarded(
-        () => job.cancel().ignore(),
-        (error, stackTrace) => zones.add('cancel: $error'),
-      );
-      await job.done;
-      await delay(5);
-
-      expect(zones, ['cancel: Bad state: device did not stop']);
-      expect(printed, isEmpty, reason: 'onError hears nothing');
-    });
-
-    test('a synchronous throw of onCancel reaches onError, then the zone', () {
-      final lines = play(
-        (ctx) async {
-          ctx.onCancel(() => throw StateError('device did not stop'));
-          await ctx.wait(() => delay(50));
-        },
-        cancelAt: 5,
-      );
-
-      expect(lines, [
-        'cancel',
-        'onError: Bad state: device did not stop',
-        'zone: Bad state: device did not stop',
-        'outcome: Cancelled(manual)',
-      ]);
-    });
-
-    test(
-        'an asynchronous stop through unattended reaches onError, then the '
-        'zone', () {
-      final lines = play(
-        (ctx) async {
-          ctx.onCancel(() => ctx.unattended(device.stop));
-          await ctx.wait(() => delay(50));
-        },
-        cancelAt: 5,
-      );
-
-      expect(lines, [
-        'cancel',
-        'outcome: Cancelled(manual)',
-        'onError: Bad state: device did not stop',
-        'zone: Bad state: device did not stop',
-      ]);
-    });
-
-    test('the job does not wait for the stop it handed to unattended', () {
-      final lines = play(
-        (ctx) async {
-          ctx
-            ..onDispose(() => say('device released'))
-            ..onCancel(
-              () => ctx.unattended(() async {
-                await delay(10);
-                say('device stopped');
-              }),
-            );
-          await ctx.wait(() => delay(50));
-        },
-        cancelAt: 5,
-      );
-
-      expect(lines, [
-        'cancel',
-        'device released',
-        'outcome: Cancelled(manual)',
-        'device stopped',
-      ]);
-    });
-
-    test('a join around an operation that ends first waits for nothing more',
-        () {
-      final lines = play(
-        (ctx) async {
-          // The stop interrupts the playback at once and takes 10 ms more.
-          final interrupted = Completer<void>();
-          ctx
-            ..onDispose(() => say('device released'))
-            ..onCancel(
-              () => ctx.unattended(() async {
-                interrupted.complete();
-                await delay(10);
-                say('device stopped');
-              }),
-            );
-          await ctx.join(() => interrupted.future);
-        },
-        cancelAt: 5,
-      );
-
-      expect(lines, [
-        'cancel',
-        'device released',
-        'outcome: Cancelled(manual)',
-        'device stopped',
-      ]);
-    });
-
-    test('a join around the operation the stop interrupts waits for it', () {
-      final lines = play(
-        (ctx) async {
-          // The playback ends when the device has stopped.
-          final stopped = Completer<void>();
-          ctx
-            ..onDispose(() => say('device released'))
-            ..onCancel(
-              () => ctx.unattended(() async {
-                await delay(10);
-                say('device stopped');
-                stopped.complete();
-              }),
-            );
-          await ctx.join(() => stopped.future);
-        },
-        cancelAt: 5,
-      );
-
-      expect(lines, [
-        'cancel',
-        'device stopped',
-        'device released',
-        'outcome: Cancelled(manual)',
-      ]);
-    });
   });
 
   test('accepting reaches the children at once and decides the outcome', () {
@@ -1331,23 +1131,45 @@ void main() {
     });
   });
 
-  test('the page quotes what these tests print', () {
-    final page = File('doc/cancellation.md').readAsStringSync();
-    final blocks = RegExp(r'```text\n(.*?)\n```', dotAll: true)
-        .allMatches(page)
-        .map((match) => match.group(1)!.split('\n'))
-        .toList();
+  group('The page', () {
+    test('quotes what its code prints', () {
+      final text = File('doc/cancellation.md').readAsStringSync();
+      final blocks = RegExp(r'```text\n(.*?)\n```', dotAll: true)
+          .allMatches(text)
+          .map((match) => match.group(1)!.split('\n'))
+          .toList();
 
-    expect(blocks, quoted);
-  });
+      expect(blocks, quoted);
+    });
 
-  test('every piece of code on the page is a run of lines of this file', () {
-    expect(
-      codeMissingFrom(
-        'doc/cancellation.md',
-        'test/cancellation_rakes_test.dart',
-      ),
-      isEmpty,
-    );
+    test('names the durations its code takes', () {
+      final text = File('doc/cancellation.md').readAsStringSync();
+      final steps = [
+        for (final match
+            in RegExp(r'three\s+steps\s+of\s+(\d+)\s+ms').allMatches(text))
+          match.group(1),
+      ];
+      final cancels = [
+        for (final match in RegExp(r'(\d+)\s+ms\s+in\b').allMatches(text))
+          match.group(1),
+      ];
+
+      expect(steps, ['$stepMs']);
+      expect(cancels, ['$cancelMs', '$cancelMs']);
+    });
+
+    test('holds every block of its code in the region in its place', () {
+      expect(
+        codeOutOfPlace(
+          'doc/cancellation.md',
+          'test/support/cancellation_page.dart',
+        ),
+        isEmpty,
+      );
+    });
+
+    test('has no fence the checks do not read', () {
+      expect(strayFences('doc/cancellation.md'), isEmpty);
+    });
   });
 }

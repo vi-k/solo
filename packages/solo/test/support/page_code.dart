@@ -78,6 +78,82 @@ List<String> codeMissingFrom(
   ];
 }
 
+/// The blocks of `dart` code on [page] that [file] does not hold in their
+/// place, and the regions of [file] that stand for no block.
+///
+/// [file] marks a region for every block: the lines after a
+/// `// #docregion` line, up to the next `// #enddocregion` line. The n-th
+/// block of the page has to be the n-th region, line for line, and there
+/// are as many regions as blocks. Indentation, blank lines and
+/// `// ignore:` comments do not count, and the first line of a region may
+/// end a longer line of [file], as in [codeMissingFrom]. That check finds
+/// a piece anywhere in its files, so a block turned into another block of
+/// the page, or one that lost a line between two of its pieces, still
+/// passes it; this one reports both.
+List<String> codeOutOfPlace(String page, String file) {
+  List<String> lines(Iterable<String> text) => [
+        for (final line in text)
+          if (line.trim().isNotEmpty && !line.trim().startsWith('// ignore:'))
+            line.trim(),
+      ];
+
+  final blocks = [
+    for (final block in RegExp(r'```dart\n(.*?)\n```', dotAll: true)
+        .allMatches(File(page).readAsStringSync()))
+      lines(block.group(1)!.split('\n')),
+  ];
+  final regions = <List<String>>[];
+  List<String>? region;
+  for (final line in File(file).readAsLinesSync()) {
+    switch (line.trim()) {
+      case '// #docregion':
+        if (region != null) {
+          throw StateError('$file opens a region inside a region');
+        }
+        region = [];
+      case '// #enddocregion':
+        if (region == null) {
+          throw StateError('$file closes a region it has not opened');
+        }
+        regions.add(lines(region));
+        region = null;
+      default:
+        region?.add(line);
+    }
+  }
+  if (region != null) {
+    throw StateError('$file leaves a region open');
+  }
+
+  bool holds(List<String> region, List<String> block) {
+    if (region.length != block.length ||
+        !_endsWithExpression(region.first, block.first)) {
+      return false;
+    }
+    for (var index = 1; index < block.length; index++) {
+      if (region[index] != block[index]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  String block(int index) =>
+      'block ${index + 1} of $page:\n${blocks[index].join('\n')}';
+
+  return [
+    for (var index = 0;
+        index < blocks.length || index < regions.length;
+        index++)
+      if (index >= regions.length)
+        '${block(index)}\nhas no region in $file'
+      else if (index >= blocks.length)
+        'region ${index + 1} of $file stands for no block of $page'
+      else if (!holds(regions[index], blocks[index]))
+        '${block(index)}\nis not region ${index + 1} of $file',
+  ];
+}
+
 /// Whether [line] of the test is [first], the first line of a piece, or
 /// hands it to a helper: `Job<void> opening() => ` in front of the page's
 /// expression, and nothing that would let a line cut short pass.
