@@ -386,11 +386,15 @@ the caller open. When the group ends in anything else, the branch that accepted
 the stop closes what it took, and it closes it before the group returns — so by
 the time the parent catches the error, that resource is already closed.
 
-A branch that did not take the resource itself but got it from a child of its
-own registers it on arrival, the way every receiver does: the child ended
-`Done` inside the branch, and a child's registration is settled by the child's
-outcome. `ctx.run(child, discard: ...)` puts the registration on the branch,
-and everything above then holds for it. The cleanup page shows that call in
+A branch can also get the resource from a child of its own, as the branch with
+the child `locked` does in the section above. The child's own `discard` does
+not close it: the child hands the resource over and ends `Done` inside the
+branch, before the group has decided anything, and a `discard` runs only if the
+value reaches nobody. Here it reached the branch, so the branch registers the
+resource again the moment it arrives, with `ctx.run(child, discard: ...)`. That
+registration is the branch's own: the resource lives until the group succeeds
+in full, and the branch closes it if the group ends in anything else. The
+cleanup page shows the call in
 [Registering on arrival](cleanup.md#registering-on-arrival).
 
 One thing stays open, and it follows from
