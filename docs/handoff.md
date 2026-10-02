@@ -36,9 +36,10 @@
 `packages/async_job/doc/outcomes.md`, `2026-10-02-outcomes-reread-report.md`;
 `packages/async_job/doc/cleanup.md`, `2026-10-02-cleanup-reread-report.md`;
 `packages/async_job/doc/observing.md`, `2026-10-02-observing-reread-report.md`;
-README `solo`, `2026-10-02-solo-readme-reread-report.md`. Сторож
-`cancellation.md` сверяет n-й блок страницы с n-й областью файла новым
-помощником `codeOutOfPlace` в обеих копиях `page_code.dart`.
+README `solo`, `2026-10-02-solo-readme-reread-report.md`. Владелец читает
+и `observing.md`; правки по его вопросам — в разделе «По чтению владельца» её
+отчёта. Сторож `cancellation.md` сверяет n-й блок страницы с n-й областью файла
+новым помощником `codeOutOfPlace` в обеих копиях `page_code.dart`.
 
 **Что дальше.** Вычитанные страницы ждут чтения владельца по порядку
 `async_job`, затем `solo` и `flutter_solo`; следующую страницу берёт владелец.
