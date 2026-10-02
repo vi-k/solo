@@ -460,7 +460,43 @@ void main() {
     });
   });
 
-  group('The list a group returns', () {});
+  group('The list a group returns', () {
+    var closed = <String>[];
+    setUp(() => closed = []);
+
+    Job<void> onDisposeOnTheNextLine() => Job<void>((ctx) async {
+          final sources = await ctx.runAll([
+            Job.deferred<Source>((ctx) async => Source('rows', closed)),
+          ]);
+          ctx.onDispose(() {
+            for (final source in sources) {
+              source.close();
+            }
+          });
+          await ctx.join(() => delay(50));
+          throw StateError('disk');
+        });
+
+    test('onDispose on the next line closes the list on a stop', () {
+      fakeAsync((async) {
+        final parent = onDisposeOnTheNextLine()..ignore();
+        async.elapse(const Duration(milliseconds: 20));
+        parent.cancel().ignore();
+        async.flushTimers();
+        expect(parent.outcome, isA<Cancelled>());
+        expect(closed, ['rows closed']);
+      });
+    });
+
+    test('onDispose on the next line closes the list on an error', () {
+      fakeAsync((async) {
+        final parent = onDisposeOnTheNextLine()..ignore();
+        async.flushTimers();
+        expect(parent.outcome, isA<Failed>());
+        expect(closed, ['rows closed']);
+      });
+    });
+  });
 
   group('Processing streams', () {});
 

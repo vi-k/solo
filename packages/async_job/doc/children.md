@@ -459,6 +459,7 @@ The `try` opens on the very next line after the group returns, before anything
 that can throw, and `finally` runs however the body leaves it: on the
 cancellation `join` throws, on the error of the archive, or after the last
 line. For a list the body keeps for itself, that closes every source.
+`ctx.onDispose` with the same loop, on the same line, does what `finally` does.
 
 ### A list the body hands out
 
@@ -503,9 +504,9 @@ final exported = Job.deferred<List<Source>>((ctx) async {
 });
 ```
 
-It goes on the very next line for the same reason as the `try`. For a list the
-body keeps for itself, `ctx.onDispose` with the same loop does what `finally`
-does.
+`ctx.onDiscard` goes on the very next line, before anything that can throw: an
+error or a cancellation above the registration would leave the list open, as in
+the first attempt.
 
 ## Processing streams
 

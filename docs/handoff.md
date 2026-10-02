@@ -192,9 +192,9 @@ README `solo`, `2026-10-02-solo-readme-reread-report.md`. Владелец чи�
 до конца доходит прогон только последнего. Последний прогон `site` —
 на `1a6a618`, зелёный. Проверки: `packages/async_job` после решений с `try`
 и `onDiscard` для списка группы в `children.md` — формат и анализ чистые,
-`dart test` зелёный, 1189 тестов; `dart doc --dry-run` чистый на коммите
-вычитки `children.md`; `packages/solo` на коммите переноса его README — формат
-и анализ чистые, 868 тестов; из корня на коммите вычитки `reflow.py --check`,
+`dart test` зелёный, 1191 тест; `dart doc --dry-run` чистый на коммите вычитки
+`children.md`; `packages/solo` на коммите переноса его README — формат и анализ
+чистые, 868 тестов; из корня на коммите вычитки `reflow.py --check`,
 `check_line_width.py`, `check_links.py`, `check_translations.py`
 и `check_doc_shape.py` зелёные. `solo` пример 47, `flutter_solo` 85 и его
 пример 4, раскладки архивов на полу 3.6.0 — на `f0ee2f7`; после него менялись
