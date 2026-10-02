@@ -515,3 +515,9 @@ dartdoc.
     `a deferred cancellable: false job cancelled before start is over`
     и `Job(body) starts on the next microtask: a later cancel is refused`.
     `dart test` зелёный, 1057 тестов.
+
+14. «Эту отменять нельзя, а её всё равно отменили» — владелец предложил «Но эту
+    отменять было нельзя». Вторая половина фразы повторяла то, что читатель
+    только что увидел в выводе. Перевод взят как предложено, оригинал приведён
+    к нему: «But this one was not to be cancelled» вместо «This one the user
+    may not, and it was cancelled all the same».

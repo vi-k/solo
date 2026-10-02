@@ -152,12 +152,12 @@ second: Cancelled(manual)
 ```
 
 The queue skipped the second job and went on to the third, as it should with a
-job the user may cancel. This one the user may not, and it was cancelled all
-the same. The core finishes a job that has not started on the spot, whatever
-`cancellable` says. `cancellable: false` keeps a body that has begun from being
-cut short, and before the start there is nothing to cut. Nor can the core tell
-whether such a job will ever be started: one that refused and was never started
-would never finish. The queue does know: it gives every job its turn.
+job the user may cancel. But this one was not to be cancelled. The core
+finishes a job that has not started on the spot, whatever `cancellable` says.
+`cancellable: false` keeps a body that has begun from being cut short, and
+before the start there is nothing to cut. Nor can the core tell whether such a
+job will ever be started: one that refused and was never started would never
+finish. The queue does know: it gives every job its turn.
 
 ### Refusing while the job waits
 
