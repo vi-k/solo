@@ -101,8 +101,7 @@ and
 The engine runs its jobs one at a time, in the order they came. A job may be
 cancelled while it waits for its turn, and the ones behind it still have to
 run. With `cancellable: false` a job is not to be cancelled while it waits
-either: it runs when its turn comes, whatever was asked of it meanwhile. `solo`
-treats the jobs of its queue the same way.
+either: it runs when its turn comes, whatever was asked of it meanwhile.
 
 ### The first attempt
 
