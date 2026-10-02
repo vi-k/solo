@@ -5,9 +5,9 @@
 `docs/ru/async_job/extending.md`: что нашлось и что поправлено —
 в `2026-10-02-extending-rakes-report.md`, независимое ревью с вердиктами —
 в `2026-10-02-extending-rakes-review-report.md`, все его находки разобраны.
-Сторож страницы — `packages/async_job/test/extending_rakes_test.dart`, 41 тест.
-Владелец читает страницу с 2026-10-02; правки по его вопросам идут в раздел
-«По чтению владельца» того же отчёта. Предыдущую страницу,
+Сторож страницы — `packages/async_job/test/extending_rakes_test.dart`, 42
+теста. Владелец читает страницу с 2026-10-02; правки по его вопросам идут
+в раздел «По чтению владельца» того же отчёта. Предыдущую страницу,
 `packages/async_job/doc/observing.md`, он дочитал 2026-10-01. Открытых находок
 у ревью нет: `async_job` — `2026-09-26-async-job-project-review.md`, `solo`
 и `flutter_solo` — `2026-09-19-solo-project-review.md`. Сделанное 2026-09-30
@@ -158,7 +158,7 @@
 из коммитов, отправленных подряд, до конца доходит прогон только последнего.
 Последний прогон `site` — на `1a6a618`, зелёный. Проверки: `packages/async_job`
 на коммите вычитки — формат, анализ и `dart doc --dry-run` чистые, `dart test`
-зелёный, 1054 теста; `packages/solo` там же — анализ чистый, 830 тестов;
+зелёный, 1055 тестов; `packages/solo` там же — анализ чистый, 830 тестов;
 из корня на коммите вычитки `reflow.py --check`, `check_line_width.py`,
 `check_links.py`, `check_translations.py` и `check_doc_shape.py` зелёные.
 `solo` пример 47, `flutter_solo` 85 и его пример 4, раскладки архивов на полу

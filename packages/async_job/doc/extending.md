@@ -100,10 +100,9 @@ and
 
 The engine runs its jobs one at a time, in the order they came. A job may be
 cancelled while it waits for its turn, and the ones behind it still have to
-run. Unlike `solo`, which takes a cancelled job out of its queue, this engine
-leaves it there and skips it when its turn comes. With `cancellable: false` a
-job of this engine is not to be cancelled while it waits either: it runs when
-its turn comes, whatever was asked of it meanwhile.
+run. With `cancellable: false` a job is not to be cancelled while it waits
+either: it runs when its turn comes, whatever was asked of it meanwhile. `solo`
+treats the jobs of its queue the same way.
 
 ### The first attempt
 
@@ -166,8 +165,8 @@ Every cancellation asked of a job arrives at `cancelWith`, among them
 through `cancelOwnJob` of the context. An override passes a cancellation on to
 `super` to let it through, and the analyzer requires that call to be there. To
 refuse one, the override returns before the call. `MyJob` keeps the queue it
-was added to, and while it waits there it refuses what it would refuse while it
-runs:
+was added to. While it waits there, it refuses what it would refuse while it
+runs, and a cancellation it lets through takes it out of the queue:
 
 ```dart
   MyQueue? _queue;
@@ -176,6 +175,7 @@ runs:
   void cancelWith(Cancelled cancelled, {bool rejectable = true}) {
     final waits = _queue?._waiting.contains(this) ?? false;
     if (waits && !cancellable && rejectable) return;
+    _queue?._waiting.remove(this);
     super.cancelWith(cancelled, rejectable: rejectable);
   }
 ```
@@ -186,10 +186,11 @@ The queue tells each job whose it is:
   void add(MyJob<Object?> job) => _waiting.add(job.._queue = this);
 ```
 
-Only a job that waits in the queue refuses. A `MyJob` nobody queued is left to
-the core, such as one a cancelled parent turns away from its `ctx.run`: refused
-there, it would never start and never finish. Once the queue has taken the job
-out to start it, the core refuses for it. `rejectable` is `false` for a
+The check in the loop stays for a job cancelled before it was added to the
+queue. Only a job that waits in the queue refuses. A `MyJob` nobody queued is
+left to the core, such as one a cancelled parent turns away from its `ctx.run`:
+refused there, it would never start and never finish. Once the queue has taken
+the job out to start it, the core refuses for it. `rejectable` is `false` for a
 cancellation no job may refuse, such as one the engine sends through a wrapper
 around `cancelWith` to drop a job whatever `cancellable` says, and that one
 goes on to `super`. The same run now gives the second job its turn:

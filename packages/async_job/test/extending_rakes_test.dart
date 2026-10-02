@@ -44,6 +44,7 @@ final class MyJob<T> extends JobBase<T> {
   void cancelWith(Cancelled cancelled, {bool rejectable = true}) {
     final waits = _queue?._waiting.contains(this) ?? false;
     if (waits && !cancellable && rejectable) return;
+    _queue?._waiting.remove(this);
     super.cancelWith(cancelled, rejectable: rejectable);
   }
 }
@@ -469,7 +470,7 @@ void main() {
       ]);
     });
 
-    test('the queue skips a job the user may cancel and goes on', () {
+    test('a job the user may cancel leaves the queue at once', () {
       fakeAsync((async) {
         final seen = <String>[];
         final second = MyJob<void>((_) async => seen.add('second runs'));
@@ -481,9 +482,31 @@ void main() {
         queue.run().then((_) => over = true).ignore();
         second.cancel().ignore();
         expect('${second.outcome}', 'Cancelled(manual)', reason: 'on the spot');
-        expect(queue._waiting, contains(second), reason: 'until its turn');
+        expect(queue._waiting, hasLength(1), reason: 'the third is left');
+        expect(queue._waiting, isNot(contains(second)));
         async.flushTimers();
         expect(seen, ['third runs']);
+        expect(over, isTrue);
+      });
+    });
+
+    test('the loop skips a job cancelled before it was added', () {
+      fakeAsync((async) {
+        final seen = <String>[];
+        final early = MyJob<void>((_) async => seen.add('early runs'));
+        early.cancel().ignore();
+        final queue = MyQueue()
+          ..add(early)
+          ..add(MyJob<void>((_) async => seen.add('next runs')));
+        Object? failure;
+        var over = false;
+        queue.run().then<void>(
+              (_) => over = true,
+              onError: (Object error) => failure = error,
+            );
+        async.flushTimers();
+        expect(failure, isNull, reason: 'start() of a finished job throws');
+        expect(seen, ['next runs']);
         expect(over, isTrue);
       });
     });
@@ -517,6 +540,7 @@ void main() {
           'Cancelled(signed out)',
           reason: 'rejectable: false is not its to refuse',
         );
+        expect(queue._waiting, isEmpty);
       });
     });
 
