@@ -81,13 +81,13 @@ your observer.
 
 When that `onUnanswered` has nobody to hand an error to,
 `super.onUnanswered(job, error, stackTrace)` sends it to the zone the job was
-created in and keeps a cancellation out of the zone, whichever job it came
-from: a child adopted without an observer may be no job of your engine.
-`reportToZone` does the same for an engine whose answer lives outside the
-observer. It is protected, so the engine reaches it through a wrapper, as it
-reaches `start`, and only on jobs of its own. A context method that must not be
-called from the work of `ctx.unattended` calls `throwIfUnattended` first; that
-work is the subject of
+created in and keeps a `Cancelled` out of the zone. It does so whichever job
+the error came from: a child adopted without an observer may be no job of your
+engine. `reportToZone` does the same for an engine whose answer lives outside
+the observer. It is protected, so the engine reaches it through a wrapper, as
+it reaches `start`, and only on jobs of its own. A context method that must not
+be called from the work of `ctx.unattended` calls `throwIfUnattended` first;
+that work is the subject of
 [Work the job does not wait for](observing.md#work-the-job-does-not-wait-for)
 on the observing page. The full protected API is in the reference of
 [JobBase](https://pub.dev/documentation/async_job/latest/engine/JobBase-class.html)
