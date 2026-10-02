@@ -307,10 +307,11 @@ The job accepts the rule's cancellation as the body lets it out, not before: a
 body that catches it in a `try`/`catch` and goes on is not cancelled. Nobody
 asked the job for this cancellation, so it does not come through `cancelWith`.
 Neither `cancellable: false` nor `ctx.uncancellable` stands in the rule's way:
-they refuse or hold a cancellation asked of the job, and the rule's comes as a
-throw from the very step it stops. The rule is asked where `check()` is asked
-and nowhere else: a sign-out during the download is noticed when `join` comes
-back, and one during a `wait` only at the next call that asks.
+they refuse or hold a cancellation asked of the job, and the rule's is an
+exception: `check()` throws it inside the call that asked the rule, here
+`join`. The rule is asked where `check()` is asked and nowhere else: a sign-out
+during the download is noticed when `join` comes back, and one during a `wait`
+only at the next call that asks.
 
 An engine that cannot wait for the next checkpoint, or has to stop a job
 whatever its body catches, cancels the job itself when the user signs out, with
