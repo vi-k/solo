@@ -312,10 +312,26 @@ cancellation no section holds: `onCancel` runs while the section is open, and a
 
 To protect the entire body instead of one section, create
 `Job(body, cancellable: false)`. It refuses ordinary cancellation once the body
-starts, but can still be cancelled before start. `solo`, built on this core,
-also cancels a job when the controller's state no longer suits it: a job there
-declares which states it runs in. Neither a section nor `cancellable: false`
-holds that cancellation back.
+starts.
+
+Before that the job can still be cancelled: it ends `Cancelled` with
+`started: false`, and the body never runs. The flag keeps a body that has begun
+from being cut short, and before the start there is nothing to cut. A job made
+with `Job(body)` starts on the next microtask, so only a cancellation that
+comes sooner finds it not started. A job made with `Job.deferred` waits until
+someone starts it, by `start()` or by `ctx.run` of a parent, and the core
+cannot tell whether anyone will. Had such a job refused the cancellation and
+then never been started, it would never finish: its `done` would not complete,
+the `cancel()` it refused would wait forever, and `cancel()` has no stronger
+form to drop the job with.
+
+An engine that holds jobs before their start knows what the core does not: it
+starts them itself. `solo`, built on this core, starts the jobs of its queue,
+and it refuses on behalf of a `cancellable: false` job while that job waits
+there. [A queue of your own](extending.md#a-queue-of-your-own) on the extending
+page builds such a refusal. `solo` also cancels a job when the controller's
+state no longer suits it: a job there declares which states it runs in. Neither
+a section nor `cancellable: false` holds that cancellation back.
 
 ## Catching errors of the operation
 

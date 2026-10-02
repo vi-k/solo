@@ -496,3 +496,22 @@ dartdoc.
     обе причины и кончается словами «The queue does know: it gives every job
     its turn», в переводе — «Очередь это знает: она даёт черёд каждой своей
     задаче». Поведение ядра не менялось.
+
+13. «А это объяснение есть где-нибудь? … Нужно дописать в `cancellation.md`,
+    но не одной фразой, а развёрнуто, чтобы разработчик понял, почему принято
+    такое решение.» Руководство `packages/async_job/doc/cancellation.md`
+    сообщало только факт: «can still be cancelled before start». Причина
+    «до старта защищать нечего» стояла в dartdoc `cancel()`
+    и в `docs/architecture.md`, а вторая — что ядро не знает, запустят ли
+    задачу, — нигде. В конец раздела «Holding the cancellation back» дописаны
+    два абзаца, в оригинале и в переводе `docs/ru/async_job/cancellation.md`.
+    Первый: что флаг защищает начатое тело; что `Job(body)` стартует
+    на следующей микрозадаче, а `Job.deferred` ждёт, пока её запустят; что
+    задача, отказавшая в отмене и никем не запущенная, не кончилась бы никогда,
+    её `done` и отклонённый `cancel()` висели бы, а снять её `cancel()` нечем.
+    Второй: движок, который сам запускает свои задачи, это знает, `solo`
+    отказывает за ждущую задачу, и ссылка на «A queue of your own»
+    в `extending.md`. В стороже `cancellation_rakes_test.dart` два новых теста:
+    `a deferred cancellable: false job cancelled before start is over`
+    и `Job(body) starts on the next microtask: a later cancel is refused`.
+    `dart test` зелёный, 1057 тестов.

@@ -714,6 +714,47 @@ void main() {
         );
       });
     });
+
+    test('a deferred cancellable: false job cancelled before start is over',
+        () {
+      fakeAsync((async) {
+        var ran = false;
+        final job = Job.deferred<void>(
+          (ctx) async => ran = true,
+          cancellable: false,
+        );
+        var back = false;
+        job.cancel().then((_) => back = true).ignore();
+        async.flushTimers();
+        expect(
+          job.outcome,
+          isA<Cancelled>().having((c) => c.started, 'started', isFalse),
+        );
+        expect(back, isTrue, reason: 'cancel() has nothing left to wait for');
+        expect(job.start, throwsStateError);
+        async.flushTimers();
+        expect(ran, isFalse);
+      });
+    });
+
+    test('Job(body) starts on the next microtask: a later cancel is refused',
+        () {
+      fakeAsync((async) {
+        final job = Job<int>(
+          (ctx) async {
+            await ctx.join(() => delay(20));
+            return 42;
+          },
+          cancellable: false,
+        );
+        expect(job.isRunning, isFalse, reason: 'created, not started yet');
+        async.flushMicrotasks();
+        expect(job.isRunning, isTrue);
+        unawaited(job.cancel());
+        async.flushTimers();
+        expect(job.outcome, isA<Done<int>>());
+      });
+    });
   });
 
   group('Catching errors of the operation', () {
