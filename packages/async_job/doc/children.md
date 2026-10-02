@@ -401,10 +401,9 @@ One thing stays open, and it follows from
 [Choosing the callback](cleanup.md#choosing-the-callback) on the cleanup page.
 A branch created with `cancellable: false` refuses the stop and ends `Done`,
 and its value counts as handed over through its own `Job.value`: a `discard`
-the branch registered would not run, and nothing else closes the resource. Such
-a branch has no use for `ctx.wait` either, since it refuses every cancellation,
-so it opens the source directly. The body still holds `rows`, the job it passed
-to `runAll`, and closes the value through it:
+the branch registered would not run, and nothing else closes the resource. The
+body still holds `rows`, the job it passed to `runAll`, and closes the value
+through it:
 
 ```dart
 final rows = Job.deferred<Source>(cancellable: false, (ctx) => openRows());
