@@ -434,6 +434,7 @@ void main() {
 
         async.flushTimers();
         expect(quick.outcome, isA<Cancelled>());
+        expect(quick.isCancelled, isTrue);
       });
     });
   });

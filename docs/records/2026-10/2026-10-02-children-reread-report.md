@@ -443,3 +443,18 @@ zone that link was created in».
     envelope»; у `ctx.runAll` такого аргумента нет, и как зарегистрировать его
     список, показывает «What a group hands back». Утверждения те же, что
     на странице выше и ниже; сторож тот же.
+
+15. «не понятно про „`isCancelled` последнего слова не говорит“» — о пункте
+    «The outcome of a branch is not final until the group decides». Оборот
+    прятал простое: пока группа держит ветку, её `isCancelled` равен `false`,
+    и это ещё не ответ. Зонд
+    `.artifacts/2026-10-02-children-reread/tree/packages/async_job/test/probe_owner_held_test.dart`:
+    ветка вернула значение, сосед упал позже — пока ветку держат,
+    `outcome=null`, `isCancelled=false`; после решения группы
+    `Cancelled(sibling)` и `isCancelled=true`. Теперь фраза так и говорит: «its
+    `isCancelled` is `false`, and both change when another branch ends in
+    anything but a value and this one accepts the stop», в переводе «её
+    `isCancelled` равен `false`, и оба меняются, когда другая ветка кончается
+    не значением, а эта принимает остановку». Сторож держал только первую
+    половину; тест `a branch held for the group has no outcome yet` теперь
+    проверяет и `isCancelled` после решения.
