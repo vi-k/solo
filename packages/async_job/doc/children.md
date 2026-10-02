@@ -174,12 +174,12 @@ looks at the child's outcome, since the body waits for its future, and
 `Future.wait` lets every error but the first go quietly.
 
 If `rows` fails and `images` succeeds, the source `images` opened is lost with
-the values. A branch that returns what it opened hands it over — that is what
-`discard` means, and the branch ended `Done`, so its own cleanup never closes
-it. The receiver is the body, and the body registered nothing when the value
-arrived; `Future.wait` then completes with the error and drops the values of
-the branches that succeeded, so the body never even holds it. Nobody closes
-that source.
+the values. `discard` closes the value only if it reaches nobody, and here it
+reaches the body: the branch returns what it opened and ends `Done`, so its own
+cleanup never closes it. The body registered nothing when the value arrived;
+`Future.wait` then completes with the error and drops the values of the
+branches that succeeded, so the body never even holds it. Nobody closes that
+source.
 
 `eagerError: true` does not repair either of the two:
 
