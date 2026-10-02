@@ -384,7 +384,7 @@ it whatever the outcome. A resource a branch hands out goes to their `discard`,
 or to `onDiscard`: it then lives until the group succeeds in full and reaches
 the caller open. When the group ends in anything else, the branch that accepted
 the stop closes what it took, and it closes it before the group returns — so by
-the time the parent catches the error, that much is already closed.
+the time the parent catches the error, that resource is already closed.
 
 A branch that did not take the resource itself but got it from a child of its
 own registers it on arrival, the way every receiver does: the child ended

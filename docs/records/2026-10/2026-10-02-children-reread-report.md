@@ -534,3 +534,8 @@ zone that link was created in».
     Утверждения те же; тест
     `a branch closes what it keeps and hands out what it returns` держит оба
     пути примера.
+
+21. «„вот это“ — не красиво» о конце той же фразы, что в п. 20: «к моменту,
+    когда родитель поймает ошибку, вот это уже закрыто». Теперь «этот ресурс
+    уже закрыт», в оригинале «that resource is already closed» вместо «that
+    much is already closed». Утверждение то же.
