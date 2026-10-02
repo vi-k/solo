@@ -97,7 +97,9 @@ engine a job created with `cancellable: false` is not to be cancelled while it
 waits either». Почему движку нужно больше, сказано под первой попыткой словами
 самого ревьюера о честности попытки: «A regular `Job` starts on the next
 microtask, so there the time before the start is a moment; in a queue it lasts
-as long as the jobs ahead take.» Перевод поправлен в тех же местах.
+as long as the jobs ahead take.» Перевод поправлен в тех же местах. Вторую
+из этих фраз владелец при чтении снял — пункт 9 раздела «По чтению владельца»
+в `2026-10-02-extending-rakes-report.md`: она отвечала ревьюеру, а не читателю.
 
 ### 3. Medium. Пробел сторожа: копии `MyQueue` и `runQueue` в файле ответа ни к чему не привязаны
 

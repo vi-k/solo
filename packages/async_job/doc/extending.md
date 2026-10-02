@@ -156,9 +156,7 @@ The queue skipped the second job and went on to the third, as it should with a
 job the user may cancel. This one the user may not, and it was cancelled all
 the same. The core finishes a job that has not started on the spot, whatever
 `cancellable` says: a job created with `cancellable: false` refuses a
-cancellation only once it runs. A regular `Job` starts on the next microtask,
-so there the time before the start is a moment; in a queue it lasts as long as
-the jobs ahead take.
+cancellation only once it runs.
 
 ### Refusing while the job waits
 
