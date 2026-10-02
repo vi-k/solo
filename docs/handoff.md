@@ -1,12 +1,14 @@
 # Handoff: текущее состояние проекта
 
-Обновлено: 2026-10-02. Работы в ходу нет. Владелец дочитал
-`packages/async_job/doc/observing.md` и её перевод
-`docs/ru/async_job/observing.md`: тридцать девять правок по его вопросам —
-в разделе «По чтению владельца» `2026-09-25-observing-rakes-report.md`,
-последняя называет то, что отбрасывает `Job.visitErrors`, — неперехваченные
-`Cancelled`. Сторож страницы —
-`packages/async_job/test/observing_rakes_test.dart`, 64 теста. Открытых находок
+Обновлено: 2026-10-02. Работы в ходу нет. Вычитана
+`packages/async_job/doc/extending.md` с переводом
+`docs/ru/async_job/extending.md`: что нашлось и что поправлено —
+в `2026-10-02-extending-rakes-report.md`, независимое ревью с вердиктами —
+в `2026-10-02-extending-rakes-review-report.md`, все его находки разобраны.
+Сторож страницы — `packages/async_job/test/extending_rakes_test.dart`, 40
+тестов. Владелец страницу ещё не читал; правки по его вопросам пойдут в раздел
+«По чтению владельца» того же отчёта. Предыдущую страницу,
+`packages/async_job/doc/observing.md`, он дочитал 2026-10-01. Открытых находок
 у ревью нет: `async_job` — `2026-09-26-async-job-project-review.md`, `solo`
 и `flutter_solo` — `2026-09-19-solo-project-review.md`. Сделанное 2026-09-30
 и 2026-10-01 — в записях `2026-09-30-close-hold-instrument-report.md`,
@@ -16,11 +18,11 @@
 
 **В работе.** Ничего.
 
-**Что дальше.** Дальше по карте — `packages/async_job/doc/extending.md`
-и README `solo` и `flutter_solo`, раздел «Документация: вычитка страниц doc/»;
-следующую страницу берёт владелец. В `docs/backlog.md` одна запись — общий
-отлов зависаний; по ней решено оставить рецептами, пока не выполнится условие,
-названное в самой записи.
+**Что дальше.** Владелец читает `packages/async_job/doc/extending.md`. Дальше
+по карте — README `solo` и `flutter_solo`, раздел «Документация: вычитка
+страниц doc/»; следующую страницу берёт владелец. В `docs/backlog.md` одна
+запись — общий отлов зависаний; по ней решено оставить рецептами, пока
+не выполнится условие, названное в самой записи.
 
 **Открытые вопросы владельцу.** Нет.
 
@@ -149,19 +151,20 @@
 коммитом — ветка и `git status`, чужое не коммитится. Других веток нет
 ни локально, ни на `origin`; копий дерева, stash и `.git/wip` нет, дерево
 чистое. `main` отправлен в `origin` 2026-10-01 по поручению владельца,
-до `41f8d19`; коммит с этой строкой, 2026-10-02, не отправлен. CI на `41f8d19`:
-`gate` зелёный всеми пятью заданиями — `dart`, `flutter`, `floor`, `snippets`
-и `docs`; это первый полный прогон `floor` в CI. У `gate` стоит
-`cancel-in-progress`, поэтому из коммитов, отправленных подряд, до конца
-доходит прогон только последнего. Последний прогон `site` — на `1a6a618`,
-зелёный. Проверки на `1a6a618`: `packages/async_job` — формат, анализ
-и `dart doc --dry-run` чистые, `dart test` 1042; `packages/solo` — то же, 830;
-из корня `reflow.py --check`, `check_line_width.py`, `check_links.py`,
-`check_translations.py` и `check_doc_shape.py` зелёные. `solo` пример 47,
-`flutter_solo` 85 и его пример 4, раскладки архивов на полу 3.6.0 —
-на `f0ee2f7`; после него менялись только документы и dartdoc. Стенды `vs-bloc`
-и `accumulation` последний раз прогнаны 2026-09-28, их страницы с тех пор
-не менялись. Фоновых процессов у сессии нет.
+до `41f8d19`; два коммита 2026-10-02 не отправлены — `149e3af` и вычитка
+`extending.md` с этой строкой. CI на `41f8d19`: `gate` зелёный всеми пятью
+заданиями — `dart`, `flutter`, `floor`, `snippets` и `docs`; это первый полный
+прогон `floor` в CI. У `gate` стоит `cancel-in-progress`, поэтому из коммитов,
+отправленных подряд, до конца доходит прогон только последнего. Последний
+прогон `site` — на `1a6a618`, зелёный. Проверки: `packages/async_job`
+на коммите вычитки — формат, анализ и `dart doc --dry-run` чистые, `dart test`
+зелёный, 1053 теста; `packages/solo` там же — анализ чистый, 830 тестов;
+из корня на коммите вычитки `reflow.py --check`, `check_line_width.py`,
+`check_links.py`, `check_translations.py` и `check_doc_shape.py` зелёные.
+`solo` пример 47, `flutter_solo` 85 и его пример 4, раскладки архивов на полу
+3.6.0 — на `f0ee2f7`; после него менялись только документы и dartdoc. Стенды
+`vs-bloc` и `accumulation` последний раз прогнаны 2026-09-28, их страницы с тех
+пор не менялись. Фоновых процессов у сессии нет.
 
 ## На следующий релиз собрано у всех трёх
 
@@ -193,9 +196,10 @@ on upgrade», «Added», «Fixed», «Documentation». Счёт ломающих
 ## Документация: вычитка страниц doc/
 
 Карта вычитки — `2026-09-11[16]-docs-structure-design.md`. По ней вычитаны все
-страницы до `packages/async_job/doc/observing.md` включительно, и все их
-владелец прочитал. Остались `packages/async_job/doc/extending.md` и README
-`solo` и `flutter_solo`. Разбор страницы — в её отчёте
+страницы `doc/` трёх пакетов. Владелец прочитал их
+до `packages/async_job/doc/observing.md` включительно;
+`packages/async_job/doc/extending.md` вычитана 2026-10-02 и ждёт его чтения.
+Остались README `solo` и `flutter_solo`. Разбор страницы — в её отчёте
 `<дата>-<тема>-rakes-report.md`, чтение владельца — под «По чтению владельца»
 в конце того же отчёта. Правка по чтению, задевшая другую страницу, пишется
 и в её отчёт: так `errors.md` получила раздел «Отмены у `Job.visitErrors`»
@@ -204,22 +208,30 @@ on upgrade», «Added», «Fixed», «Documentation». Счёт ломающих
 У страницы без стенда утверждения держит тест пакета, и правка страницы идёт
 вместе с ним. В `async_job` это `cleanup_rakes_test.dart`,
 `outcomes_rakes_test.dart`, `cancellation_rakes_test.dart`,
-`observing_rakes_test.dart` и `children_rakes_test.dart`. В `solo` —
-`state_rakes_test.dart`, `cancellation_rakes_test.dart`,
-`resources_rakes_test.dart`, `errors_rakes_test.dart`
-с `cancel_delay_recipe_test.dart` и `testing_rakes_test.dart`; `camera.md`
-держит `camera_rakes_test.dart` пакета примера, а `children.md` —
-`children_test.dart`, `each_test.dart`, `each_child_test.dart`
-и `zone_test.dart`.
+`observing_rakes_test.dart`, `children_rakes_test.dart`
+и `extending_rakes_test.dart`. В `solo` — `state_rakes_test.dart`,
+`cancellation_rakes_test.dart`, `resources_rakes_test.dart`,
+`errors_rakes_test.dart` с `cancel_delay_recipe_test.dart`
+и `testing_rakes_test.dart`; `camera.md` держит `camera_rakes_test.dart` пакета
+примера, а `children.md` — `children_test.dart`, `each_test.dart`,
+`each_child_test.dart` и `zone_test.dart`.
 
-`packages/async_job/doc/observing.md` вычитана 2026-09-25 в `main`. Четыре
-раздела из пяти открываются первой попыткой, раздел о наблюдателе — ответом.
-Главная находка — абзац о времени отмены: наблюдатель считает от принятия
-отмены, и придержанная `uncancellable` отмена показывает меньше, чем ждал
-вызвавший `cancel`. Сторож сверяет и цитаты страницы. Отчёт —
-`2026-09-25-observing-rakes-report.md`. Владелец дочитал страницу 2026-10-01,
-тридцать девять правок по его вопросам — под «По чтению владельца» в конце
-отчёта.
+`packages/async_job/doc/extending.md` вычитана 2026-10-02 в `main`. Страницу
+перестроили раньше, 2026-09-28, и форма её не менялась: раздел о своей задаче
+открывается ответом, разделы об очереди и о правиле — первой попыткой. Вычитка
+сверила каждую фразу с ядром. Главное: у очереди появилась третья задача,
+за отменённой; `cancelWith` перестал зваться единственным членом, который
+наследник дополняет; страница говорит, что `finished()` тоже вывел бы задачу
+из очереди и что даёт `cancelWith`; правило в `check()` названо ленивым —
+`wait` после действия его не спрашивает, — и сказано, что движок, которому
+ждать нельзя, отменяет задачу сам. Ревью добавило своё: отказ ждущей задачи
+показан строкой кода, которая стоит в `cancelWith` первой; ответ наблюдателя
+уходит в зону через `super.onUnanswered`, а не через обёртку `reportToZone`;
+`finish` не останавливает детей и не зовёт `onCancel`, а переданный ему
+`Cancelled` остаётся исходом. Общий помощник сторожей
+`test/support/page_code.dart` стал строже: `under:` бросает, когда под
+заголовком нет кода, `strayFences` ищет блоки под забором, которого проверки
+не читают. Отчёт — `2026-10-02-extending-rakes-report.md`.
 
 **Код `jobs.md` не собирается ничем.** Стенды есть только у `vs-bloc.md`
 (`tool/doc_snippets.py`), `accumulation.md` (`tool/accumulation_snippets.py`),

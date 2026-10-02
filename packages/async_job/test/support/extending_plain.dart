@@ -4,9 +4,9 @@
 import 'package:async_job/engine.dart';
 
 final class MyJob<T> extends JobBase<T> {
-  MyJob(this._body, {super.key, super.observer});
-
   final Future<T> Function(MyContext ctx) _body;
+
+  MyJob(this._body, {super.key, super.observer, super.cancellable});
 
   @override
   JobContextBase createContext() => MyContext(this);
@@ -14,8 +14,8 @@ final class MyJob<T> extends JobBase<T> {
   @override
   Future<T> execute(covariant MyContext ctx) => _body(ctx);
 
-  // `start` and `whenDone` are protected: the engine opens doors of its
-  // own to them, private to the library it lives in.
+  // `start` and `whenDone` are protected: the rest of the engine calls
+  // them through these wrappers, private to its library.
   void _launch() => start();
 
   Future<void> get _whenDone => whenDone;

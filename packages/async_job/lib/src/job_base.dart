@@ -413,9 +413,9 @@ final class _Cleanup {
 ///
 /// Subclass it to add a domain of your own — the state, the rules and the
 /// queue in `solo`, a scope elsewhere. Everything the engine of that
-/// domain needs is protected, and the subclass opens exactly what it needs
-/// through private wrappers of its own: `@protected` holds inside a
-/// subclass, and an engine reaches a job from the side.
+/// domain needs is protected, and the subclass hands out exactly what it
+/// needs through private wrappers of its own: a `@protected` member is for
+/// the subclass alone, and an engine reaches a job from the side.
 abstract class JobBase<T> implements Job<T> {
   final Object? _key;
   final String Function()? _describe;
@@ -830,14 +830,16 @@ abstract class JobBase<T> implements Job<T> {
   /// `cancellable: false` may refuse, and its refusal is final — nothing
   /// is replayed later. Inside [JobContext.uncancellable] a rejectable
   /// cancellation is held instead: the step runs untouched, and the
-  /// cancellation lands the moment the last section closes. The rules of a
-  /// domain pass `false` and go through both.
+  /// cancellation lands the moment the last section closes — it comes
+  /// through here a second time then, so an override hears a held
+  /// cancellation twice. The rules of a domain pass `false` and go through
+  /// both.
   ///
-  /// The one member of the lifecycle a subclass extends rather than
-  /// replaces: `solo` adds the branch for a job still waiting in its
-  /// queue and then calls `super`. An override that forgets the call
-  /// silently switches cancellation off — for [Job.cancel], for the
-  /// cascade from a parent and for whatever an engine of a domain adds.
+  /// A subclass extends this member rather than replacing it: `solo` adds
+  /// the branch for a job still waiting in its queue and then calls
+  /// `super`. An override that forgets the call silently switches
+  /// cancellation off — for [Job.cancel], for the cascade from a parent and
+  /// for whatever an engine of a domain adds.
   @protected
   @mustCallSuper
   void cancelWith(Cancelled cancelled, {bool rejectable = true}) {

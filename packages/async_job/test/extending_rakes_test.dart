@@ -22,9 +22,11 @@ import 'support/extending_stubs.dart';
 import 'support/page_code.dart';
 
 final class MyJob<T> extends JobBase<T> {
-  MyJob(this._body, {super.key, super.observer});
-
   final Future<T> Function(MyContext ctx) _body;
+
+  MyQueue? _queue;
+
+  MyJob(this._body, {super.key, super.observer, super.cancellable});
 
   @override
   JobContextBase createContext() => MyContext(this);
@@ -32,13 +34,11 @@ final class MyJob<T> extends JobBase<T> {
   @override
   Future<T> execute(covariant MyContext ctx) => _body(ctx);
 
-  // `start` and `whenDone` are protected: the engine opens doors of its
-  // own to them, private to the library it lives in.
+  // `start` and `whenDone` are protected: the rest of the engine calls
+  // them through these wrappers, private to its library.
   void _launch() => start();
 
   Future<void> get _whenDone => whenDone;
-
-  MyQueue? _queue;
 
   @override
   void cancelWith(Cancelled cancelled, {bool rejectable = true}) {
@@ -49,6 +49,9 @@ final class MyJob<T> extends JobBase<T> {
 
 final class MyContext extends JobContextBase {
   MyContext(super.owner);
+
+  // The wrapper the page's last paragraph on the rule speaks of.
+  void _stop(Cancelled cancelled) => cancelOwnJob(cancelled);
 
   @override
   void check() {
@@ -80,7 +83,8 @@ Future<void> runQueue() async {
   final second = MyJob<void>(key: 'second', (ctx) => ctx.wait(upload));
   final queue = MyQueue()
     ..add(MyJob<void>(key: 'first', (ctx) => ctx.wait(upload)))
-    ..add(second);
+    ..add(second)
+    ..add(MyJob<void>(key: 'third', (ctx) async => print('third runs')));
   final running = queue.run();
   await second.cancel();
   print('second: ${await second.done}');
@@ -125,16 +129,16 @@ Job<void> signOutWithChild(List<String> seen) {
 /// A job of the engine that records its lifecycle hooks, and may fail to
 /// join the run.
 final class HookJob extends JobBase<void> {
-  HookJob({this.failToStart = false});
-
   final bool failToStart;
   final hooks = <String>[];
+
+  HookJob({this.failToStart = false});
 
   void launch() => start();
 
   @override
   void started() {
-    hooks.add('started');
+    hooks.add(status == JobStatus.running ? 'started' : 'started as $status');
     if (failToStart) {
       throw StateError('started failed');
     }
@@ -152,11 +156,17 @@ final class HookJob extends JobBase<void> {
 
 /// A job of the engine created with `cancellable: false`.
 final class StubbornJob<T> extends JobBase<T> {
-  StubbornJob(this._body) : super(cancellable: false);
-
   final Future<T> Function(MyContext ctx) _body;
 
+  StubbornJob(this._body) : super(cancellable: false);
+
   void launch() => start();
+
+  /// A cancellation no job may refuse.
+  void stop(Cancelled cancelled) => cancelWith(cancelled, rejectable: false);
+
+  /// Ends the job by hand.
+  void end(Outcome<T> outcome) => finish(outcome);
 
   @override
   JobContextBase createContext() => MyContext(this);
@@ -167,11 +177,11 @@ final class StubbornJob<T> extends JobBase<T> {
 
 /// A job of the engine that keeps every cancellation asked of it.
 final class CountingJob extends JobBase<int> {
-  CountingJob(this._body);
-
   final Future<int> Function(MyContext ctx) _body;
 
   final cancelsAsked = <String>[];
+
+  CountingJob(this._body);
 
   void _launch() => start();
 
@@ -186,6 +196,41 @@ final class CountingJob extends JobBase<int> {
 
   @override
   Future<int> execute(covariant MyContext ctx) => _body(ctx);
+}
+
+/// The job of the page, refusing a cancellation while it waits in the
+/// queue: the line the page gives stands first in its `cancelWith`.
+final class PatientJob<T> extends MyJob<T> {
+  PatientJob(super.body, {super.key}) : super(cancellable: false);
+
+  void _stop(Cancelled cancelled) => cancelWith(cancelled, rejectable: false);
+
+  @override
+  void cancelWith(Cancelled cancelled, {bool rejectable = true}) {
+    if (status == JobStatus.created && !cancellable && rejectable) return;
+    super.cancelWith(cancelled, rejectable: rejectable);
+  }
+}
+
+Cancelled signedOut() => Cancelled.by(
+      reason: const SignedOutReason(),
+      started: true,
+      stackTrace: StackTrace.current,
+    );
+
+/// The answer of an engine that takes the errors it knows and has nobody
+/// to hand the rest to.
+final class KnownOnly extends JobObserver with JobAnswerer {
+  final answered = <String>[];
+
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
+    if (error is FormatException) {
+      answered.add('$error');
+    } else {
+      super.onUnanswered(job, error, stackTrace);
+    }
+  }
 }
 
 /// The answer of an engine: it keeps what nobody else answered for.
@@ -304,25 +349,38 @@ void main() {
     test('a continuation answers to whoever called then', () {
       final answer = Answer();
       final caller = Answer();
-      final errors = reachingTheZone(() {
-        final job = MyJob<int>(observer: answer, (ctx) async => 1).._launch();
-        job
-            .then<void>((ctx, _) {
-              ctx.unattended(() => throw StateError('then'));
-            })
-            .done
-            .ignore();
-        job
-            .then<void>(
-              (ctx, _) {
-                ctx.unattended(() => throw StateError('then with its own'));
-              },
-              observer: caller,
-            )
-            .done
-            .ignore();
+      final engineZone = <String>[];
+      final callerZone = <String>[];
+      fakeAsync((async) {
+        late MyJob<int> job;
+        runZonedGuarded(
+          () => job = MyJob<int>(observer: answer, (ctx) async => 1).._launch(),
+          (error, stackTrace) => engineZone.add('$error'),
+        );
+        runZonedGuarded(
+          () {
+            job
+                .then<void>((ctx, _) {
+                  ctx.unattended(() => throw StateError('then'));
+                })
+                .done
+                .ignore();
+            job
+                .then<void>(
+                  (ctx, _) {
+                    ctx.unattended(() => throw StateError('then with its own'));
+                  },
+                  observer: caller,
+                )
+                .done
+                .ignore();
+          },
+          (error, stackTrace) => callerZone.add('$error'),
+        );
+        async.flushTimers();
       });
-      expect(errors, ['Bad state: then'], reason: "the caller's zone");
+      expect(callerZone, ['Bad state: then']);
+      expect(engineZone, isEmpty, reason: 'not the zone of the source');
       expect(caller.answered, ['Bad state: then with its own']);
       expect(answer.answered, isEmpty, reason: 'not the engine of the source');
     });
@@ -340,6 +398,43 @@ void main() {
           ..report(StateError('nobody answered'));
       });
       expect(errors, ['Bad state: nobody answered']);
+    });
+
+    test('reportToZone hands the error to the zone the job was created in', () {
+      final created = <String>[];
+      final reported = <String>[];
+      late ReportingJob job;
+      runZonedGuarded(
+        () => job = ReportingJob(),
+        (error, stackTrace) => created.add('$error'),
+      );
+      runZonedGuarded(
+        () => job.report(StateError('nobody answered')),
+        (error, stackTrace) => reported.add('$error'),
+      );
+      expect(created, ['Bad state: nobody answered']);
+      expect(reported, isEmpty);
+    });
+
+    test('super.onUnanswered sends on the error of a child of another kind',
+        () {
+      final answer = KnownOnly();
+      final errors = reachingTheZone(() {
+        MyJob<void>(observer: answer, (ctx) async {
+          ctx
+            ..unattended(() => throw const FormatException('known'))
+            ..unattended(() => throw StateError('of MyJob'));
+          await ctx.run(
+            Job.deferred<void>((ctx) async {
+              ctx.unattended(() => throw StateError('of a plain child'));
+            }),
+          );
+        })
+          .._launch()
+          ..ignore();
+      });
+      expect(answer.answered, ['FormatException: known']);
+      expect(errors, ['Bad state: of MyJob', 'Bad state: of a plain child']);
     });
   });
 
@@ -363,8 +458,78 @@ void main() {
     test('a job that leaves the queue on cancellation lets the rest run', () {
       expect(printed(() => runQueue().ignore()), [
         'second: Cancelled(manual)',
+        'third runs',
         'the queue is empty',
       ]);
+    });
+
+    test('taking the job out in finished() lets the queue go on as well', () {
+      expect(printed(() => first.runQueueLeavingInFinished().ignore()), [
+        'second: Cancelled(manual)',
+        'third runs',
+        'the queue is empty',
+      ]);
+    });
+
+    test('a job that refuses first of all waits on in the queue', () {
+      fakeAsync((async) {
+        final seen = <String>[];
+        final second =
+            PatientJob<void>(key: 'second', (ctx) async => seen.add('runs'));
+        final queue = MyQueue()
+          ..add(MyJob<void>(key: 'first', (ctx) => ctx.wait(upload)))
+          ..add(second)
+          ..run().ignore();
+        second.cancel().ignore();
+        async.flushMicrotasks();
+        expect(second.isFinished, isFalse);
+        expect(queue._waiting, [second], reason: 'still waits for its turn');
+        async.flushTimers();
+        expect(seen, ['runs']);
+        expect(second.outcome, isA<Done<void>>());
+
+        final stopped = PatientJob<void>(key: 'stopped', (ctx) async {});
+        queue.add(stopped);
+        stopped._stop(signedOut());
+        expect(
+          '${stopped.outcome}',
+          'Cancelled(signed out)',
+          reason: 'rejectable: false is not its to refuse',
+        );
+        expect(queue._waiting, isEmpty);
+      });
+    });
+
+    test('the cascade and cancelOwnJob arrive at cancelWith as well', () {
+      fakeAsync((async) {
+        late MyContext context;
+        final child = CountingJob((ctx) async {
+          context = ctx;
+          await ctx.wait(work);
+          return 1;
+        });
+        final parent = MyJob<void>((ctx) => ctx.run(child))
+          .._launch()
+          ..ignore();
+        async.flushMicrotasks();
+        parent.cancel().ignore();
+        expect(child.cancelsAsked, ['Cancelled(parent)']);
+        context._stop(signedOut());
+        expect(
+          child.cancelsAsked,
+          ['Cancelled(parent)', 'Cancelled(signed out)'],
+          reason: 'asked again, though the job has accepted the first',
+        );
+        async.flushTimers();
+      });
+    });
+
+    test('mustCallSuper holds an override of cancelWith to super', () {
+      expect(
+        File('lib/src/job_base.dart').readAsStringSync(),
+        contains('  @protected\n  @mustCallSuper\n  void cancelWith('),
+        reason: 'the page says the analyzer holds the override to it',
+      );
     });
 
     test('the core finishes a job that has not started, cancellable or not',
@@ -416,16 +581,15 @@ void main() {
     });
 
     test('the rule closes the connection', () {
-      expect(printed(() => runDownload('sign out')), [
-        'sign out',
-        'close the connection',
-        'outcome: Cancelled(signed out)',
-      ]);
-      account.signedIn = true;
       expect(printed(() => runDownload('cancel')), [
         'cancel',
         'close the connection',
         'outcome: Cancelled(manual)',
+      ]);
+      expect(printed(() => runDownload('sign out')), [
+        'sign out',
+        'close the connection',
+        'outcome: Cancelled(signed out)',
       ]);
     });
 
@@ -580,6 +744,86 @@ void main() {
       });
     });
 
+    test('a sign-out during a wait is noticed only at the next call that asks',
+        () {
+      fakeAsync((async) {
+        final seen = <String>[];
+        final job = MyJob<void>((ctx) async {
+          await ctx.wait(download);
+          seen.add('the wait came back');
+          ctx.check();
+          seen.add('the body went on');
+        })
+          .._launch()
+          ..ignore();
+        async.elapse(const Duration(milliseconds: 10));
+        account.signedIn = false;
+        async.flushTimers();
+        expect(seen, ['the wait came back']);
+        expect('${job.outcome}', 'Cancelled(signed out)');
+      });
+    });
+
+    // The engine cancels the job itself: at once, whatever the body catches,
+    // and neither `cancellable: false` nor a section holds it.
+    for (final through in ['cancelWith', 'cancelOwnJob']) {
+      test('the engine stops a running job itself, through $through', () {
+        fakeAsync((async) {
+          final seen = <String>[];
+          late MyContext context;
+          String at(String what) => '${async.elapsed.inMilliseconds} ms: $what';
+          final job = StubbornJob<void>((ctx) async {
+            context = ctx;
+            ctx.onCancel(() => seen.add(at('told to stop')));
+            try {
+              await ctx.uncancellable(() => ctx.join(download));
+            } on Cancelled catch (error) {
+              seen.add(at('caught $error'));
+            }
+          })
+            ..launch()
+            ..ignore();
+          async.elapse(const Duration(milliseconds: 10));
+          // The user is still signed in for `check()`: the rule is not what
+          // stops the job here.
+          if (through == 'cancelWith') {
+            job.stop(signedOut());
+          } else {
+            context._stop(signedOut());
+          }
+          async.flushTimers();
+          expect(seen, [
+            '10 ms: told to stop',
+            '20 ms: caught Cancelled(signed out)',
+          ]);
+          expect('${job.outcome}', 'Cancelled(signed out)');
+        });
+      });
+    }
+
+    test('finish by hand stops no child and runs no onCancel', () {
+      fakeAsync((async) {
+        final seen = <String>[];
+        final child = Job.deferred<void>((ctx) async {
+          ctx.onCancel(() => seen.add('child told to stop'));
+          await ctx.wait(work);
+          seen.add('child ran to its end');
+        });
+        final job = StubbornJob<void>((ctx) async {
+          ctx.onCancel(() => seen.add('told to stop'));
+          await ctx.run(child);
+        })
+          ..launch()
+          ..ignore();
+        async.flushMicrotasks();
+        job.end(signedOut());
+        expect('${job.outcome}', 'Cancelled(signed out)');
+        async.flushTimers();
+        expect(seen, ['child ran to its end']);
+        expect(child.outcome, isA<Done<void>>());
+      });
+    });
+
     test(
         'under the first attempt uncancellable begins its step, wait and run '
         'still throw', () {
@@ -625,11 +869,11 @@ void main() {
       printed(() => first.runDownload('sign out')),
       printed(() {
         account.signedIn = true;
-        runDownload('sign out');
+        runDownload('cancel');
       }),
       printed(() {
         account.signedIn = true;
-        runDownload('cancel');
+        runDownload('sign out');
       }),
     ].map((lines) => lines.join('\n')).toList();
     final quotes = [
@@ -638,6 +882,10 @@ void main() {
         block.group(1)!,
     ];
     expect(quotes, prints, reason: 'each quote under the code that prints it');
+  });
+
+  test('the page has no fence the checks do not read', () {
+    expect(strayFences('doc/extending.md'), isEmpty);
   });
 
   // Each version under its own file: a line of the answer turned into the

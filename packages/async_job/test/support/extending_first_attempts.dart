@@ -9,9 +9,9 @@ import 'package:async_job/engine.dart';
 import 'extending_stubs.dart';
 
 final class MyJob<T> extends JobBase<T> {
-  MyJob(this._body, {super.key, super.observer});
-
   final Future<T> Function(MyContext ctx) _body;
+
+  MyJob(this._body, {super.key, super.observer, super.cancellable});
 
   @override
   JobContextBase createContext() => MyContext(this);
@@ -19,8 +19,8 @@ final class MyJob<T> extends JobBase<T> {
   @override
   Future<T> execute(covariant MyContext ctx) => _body(ctx);
 
-  // `start` and `whenDone` are protected: the engine opens doors of its
-  // own to them, private to the library it lives in.
+  // `start` and `whenDone` are protected: the rest of the engine calls
+  // them through these wrappers, private to its library.
   void _launch() => start();
 
   Future<void> get _whenDone => whenDone;
@@ -55,7 +55,8 @@ Future<void> runQueue() async {
   final second = MyJob<void>(key: 'second', (ctx) => ctx.wait(upload));
   final queue = MyQueue()
     ..add(MyJob<void>(key: 'first', (ctx) => ctx.wait(upload)))
-    ..add(second);
+    ..add(second)
+    ..add(MyJob<void>(key: 'third', (ctx) async => print('third runs')));
   final running = queue.run();
   await second.cancel();
   print('second: ${await second.done}');
@@ -68,7 +69,41 @@ Future<void> runQueue() async {
   }
 }
 
-/// The same queue with a third job behind the cancelled one.
+/// The first attempt's job with one thing added: it takes itself out of
+/// the queue in `finished()`. Its `cancelWith` is the core's own.
+final class LeavingJob<T> extends MyJob<T> {
+  final MyQueue _queue;
+
+  LeavingJob(this._queue, super.body, {super.key}) {
+    _queue.add(this);
+  }
+
+  @override
+  void finished() => _queue._waiting.remove(this);
+}
+
+/// The run of the page through the queue of the first attempt, with jobs
+/// that leave it in `finished()`.
+Future<void> runQueueLeavingInFinished() async {
+  final queue = MyQueue();
+  LeavingJob<void>(queue, key: 'first', (ctx) => ctx.wait(upload));
+  final second =
+      LeavingJob<void>(queue, key: 'second', (ctx) => ctx.wait(upload));
+  LeavingJob<void>(queue, key: 'third', (ctx) async => print('third runs'));
+  final running = queue.run();
+  await second.cancel();
+  print('second: ${await second.done}');
+  try {
+    await running;
+    print('the queue is empty');
+    // ignore: avoid_catching_errors
+  } on StateError catch (error) {
+    print('the queue stopped: $error');
+  }
+}
+
+/// The queue of the page again, handing back the third job, the one
+/// behind the cancelled one.
 Job<void> queueOfThree() {
   final second = MyJob<void>(key: 'second', (ctx) => ctx.wait(upload));
   final third = MyJob<void>(key: 'third', (ctx) => ctx.wait(upload));
