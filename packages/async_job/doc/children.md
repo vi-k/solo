@@ -378,13 +378,13 @@ Job.deferred<Source>((ctx) async {
 ```
 
 Ownership is the same rule as everywhere else, and a group is where it starts
-to matter. A resource a branch keeps for itself goes to `onDispose`, and the
-end of the branch closes it whatever the outcome. A resource a branch hands out
-goes to `onDiscard`, or to the `discard` of `ctx.wait` and `ctx.join`: it then
-lives until the group succeeds in full and reaches the caller open. When the
-group ends in anything else, the branch that accepted the stop closes what it
-took, and it closes it before the group returns — so by the time the parent
-catches the error, that much is already closed.
+to matter. A resource a branch keeps for itself goes to the `dispose` of
+`ctx.wait` and `ctx.join`, or to `onDispose`, and the end of the branch closes
+it whatever the outcome. A resource a branch hands out goes to their `discard`,
+or to `onDiscard`: it then lives until the group succeeds in full and reaches
+the caller open. When the group ends in anything else, the branch that accepted
+the stop closes what it took, and it closes it before the group returns — so by
+the time the parent catches the error, that much is already closed.
 
 A branch that did not take the resource itself but got it from a child of its
 own registers it on arrival, the way every receiver does: the child ended

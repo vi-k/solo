@@ -522,3 +522,15 @@ zone that link was created in».
     ветка, которая берёт ту же блокировку сама, вешает группу. Мутация, при
     которой `ctx.run` теряет `discard`, красит второй. Сторож страницы — 57
     тестов, набор `async_job` — 1184.
+
+20. «к onDiscard добавлен discard, а к onDispose не добавлен dispose, хотя
+    в примере нет onDispose, а есть dispose» — о разделе «What a group hands
+    back». Пример раздела берёт кэш через `ctx.wait(openCache, dispose: ...)`,
+    а проза называла для своего ресурса только `onDispose`. Теперь обе половины
+    построены одинаково и начинают с того, что стоит в примере: «goes to the
+    `dispose` of `ctx.wait` and `ctx.join`, or to `onDispose`» и «goes to their
+    `discard`, or to `onDiscard`», в переводе «идёт в `dispose` у `ctx.wait`
+    и `ctx.join` или в `onDispose`» и «идёт в их `discard` или в `onDiscard`».
+    Утверждения те же; тест
+    `a branch closes what it keeps and hands out what it returns` держит оба
+    пути примера.
