@@ -1,10 +1,14 @@
 # Children, streams and chains
 
-A body can hand work to another job. A child is started by the body and waited
-for by it; a stream is processed one event at a time in a child that owns the
-subscription; a continuation made by `then` starts when the job it follows
-succeeds, and outlives it. The words for the three are close, and the wrong one
-compiles:
+A body can hand work to another job in three ways:
+
+1. A child is started by the body and waited for by it.
+2. A stream is processed one event at a time in a child that owns the
+   subscription.
+3. A continuation made by `then` starts when the job it follows succeeds, and
+   outlives it.
+
+The words for the three are close, and the wrong one compiles:
 
 ```dart
 final job = Job<void>((ctx) async {
