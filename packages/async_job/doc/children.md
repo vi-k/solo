@@ -265,7 +265,7 @@ cancellation and be lost. What comes out is decided by the final outcomes: a
 real failure if there is one, otherwise the first cancellation that arrived,
 thrown as the object that outcome carries — exactly what `await ctx.run(child)`
 would have thrown. A failure the group received and did not throw is not
-dropped; it goes where an error nobody answered for goes, and goes there once.
+dropped; it goes where an error nobody answered for goes.
 
 | Form | Waits for | Stops the others | Values of the branches that succeeded |
 | --- | --- | --- | --- |

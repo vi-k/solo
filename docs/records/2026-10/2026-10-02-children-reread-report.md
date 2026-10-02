@@ -418,3 +418,14 @@ zone that link was created in».
     `.wait: the source that came back is closed when the other fails`
     и `.wait: a branch giving up ends the parent with that cancellation` ждут
     `rows closed`.
+
+13. Два вопроса о разделе «When one failure makes the rest pointless».
+    «Бросается тот самый объект, что несёт исход — может: то самое исключение?
+    или: та самая ошибка?» Взято «то самое исключение»: группа бросает либо
+    ошибку провала, либо `Cancelled`, а «ошибка» отмену не покрывает. Оригинал,
+    «thrown as the object that outcome carries», по-английски точен
+    и не тронут. «фраза „и уходит туда один раз“ кажется здесь лишней. это наши
+    технические нюансы, потому что когда-то было иначе» — снята в обоих языках,
+    «and goes there once» тоже: для читателя одна ошибка и уходит один раз.
+    Поведение не изменилось, тесты, которые держат один отчёт, остались
+    в наборе.
