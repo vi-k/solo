@@ -1,18 +1,17 @@
 # Building on the core
 
-If your library needs its own state, queue or scheduling rules, build them on
-the core: extend `JobBase<T>` for the job and `JobContextBase` for the context
-its body gets. This page calls such a library an engine. The base classes keep
-the lifetime the other pages describe — the start, the [children](children.md),
-the [cancellation](cancellation.md), the [cleanup](cleanup.md) and the
-[outcome](outcomes.md) — while your subclasses add the library's behavior
+An engine, on this page, is a library with its own state, queue or scheduling
+rules. Build yours on the core: extend `JobBase<T>` for the job and
+`JobContextBase` for the context its body gets. The base classes keep the
+lifetime the other pages describe — the start, the [children](children.md), the
+[cancellation](cancellation.md), the [cleanup](cleanup.md) and the
+[outcome](outcomes.md) — while your subclasses add the engine's behavior
 through their protected API. The third type, `JobStatus`, says where a job is
 in its life: `created`, `running` or `finished`.
 
 The three live in `package:async_job/engine.dart`, not in the main import: an
-app that only runs jobs never needs them. An engine imports that library in
-place of `async_job.dart`: `engine.dart` exports everything `async_job.dart`
-does.
+app that only runs jobs never needs them. An engine imports that file in place
+of `async_job.dart`: `engine.dart` exports everything `async_job.dart` does.
 
 The lines under the code are what it prints when it runs. The job's observer
 prints what reaches it, `onError:` for an error; `cancel` and `sign out` are
@@ -55,10 +54,10 @@ final class MyContext extends JobContextBase {
 
 A `@protected` member is for the subclass alone, and an engine reaches a job
 from the side, from its queue. The wrappers are private, so the engine lives in
-the library of `MyJob`, and nobody else who holds the job can start it behind
-the engine's back. `whenDone` waits for the job without observing its outcome,
-so a failure nobody looked at still reaches the zone; waiting for `done` would
-count as looking.
+the Dart library of `MyJob`, and nobody else who holds the job can start it
+behind the engine's back. `whenDone` waits for the job without observing its
+outcome, so a failure nobody looked at still reaches the zone; waiting for
+`done` would count as looking.
 
 Override `started()` and `finished()` to follow the lifecycle. `started()` runs
 as the body is about to start, with the job already running. `finished()` runs
