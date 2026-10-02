@@ -183,13 +183,14 @@ third runs
 the queue is empty
 ```
 
-Taking the job out in `finished()` would let the queue go on as well:
-`finished()` runs for a job dropped before its start too. In `cancelWith` the
-engine also has a say on the cancellation itself. The core finishes a job that
-has not started whatever `cancellable` says: a job created with
-`cancellable: false` refuses a cancellation only once it runs. If a job of your
-queue may refuse one while it waits, `cancelWith` returns first of all, before
-the job leaves the queue, as `solo` does:
+Taking the job out in `finished()` would let the queue go on as well: a job
+cancelled while it waits comes through both, `cancelWith` first and
+`finished()` after it. In `cancelWith` the engine also has a say on the
+cancellation itself. The core finishes a job that has not started whatever
+`cancellable` says: a job created with `cancellable: false` refuses a
+cancellation only once it runs. If a job of your queue may refuse one while it
+waits, `cancelWith` returns first of all, before the job leaves the queue, as
+`solo` does:
 
 ```dart
     if (status == JobStatus.created && !cancellable && rejectable) return;

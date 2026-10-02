@@ -150,6 +150,12 @@ final class HookJob extends JobBase<void> {
   void finished() => hooks.add('finished');
 
   @override
+  void cancelWith(Cancelled cancelled, {bool rejectable = true}) {
+    hooks.add('cancelWith');
+    super.cancelWith(cancelled, rejectable: rejectable);
+  }
+
+  @override
   JobContextBase createContext() => MyContext(this);
 
   @override
@@ -294,7 +300,7 @@ void main() {
         final job = HookJob();
         job.cancel().ignore();
         async.flushTimers();
-        expect(job.hooks, ['finished']);
+        expect(job.hooks, ['cancelWith', 'finished']);
         expect(job.outcome, isA<Cancelled>());
       });
     });
@@ -463,6 +469,12 @@ void main() {
         'third runs',
         'the queue is empty',
       ]);
+    });
+
+    test('cancelled while it waits: cancelWith first, then finished()', () {
+      final job = HookJob();
+      job.cancel().ignore();
+      expect(job.hooks, ['cancelWith', 'finished']);
     });
 
     test('taking the job out in finished() lets the queue go on as well', () {
