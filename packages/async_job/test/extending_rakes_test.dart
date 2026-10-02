@@ -1,7 +1,7 @@
 // `doc/extending.md` runs here. This file holds the engine as the page
-// answers it: the job with its queue, the queue, the rule. The versions
-// before the answers carry classes of the same names and live in
-// libraries of their own — `support/extending_plain.dart` for the job as
+// answers it: the job that refuses while it waits, its queue, the rule.
+// The versions before the answers carry classes of the same names and live
+// in libraries of their own — `support/extending_plain.dart` for the job as
 // the page first shows it, `support/extending_first_attempts.dart` for the
 // first attempts. Every piece of code on the page is a run of lines of one
 // of these files, and every quote under it is what that code prints: a
@@ -42,7 +42,8 @@ final class MyJob<T> extends JobBase<T> {
 
   @override
   void cancelWith(Cancelled cancelled, {bool rejectable = true}) {
-    _queue?._waiting.remove(this);
+    final waits = _queue?._waiting.contains(this) ?? false;
+    if (waits && !cancellable && rejectable) return;
     super.cancelWith(cancelled, rejectable: rejectable);
   }
 }
@@ -73,7 +74,9 @@ final class MyQueue {
 
   Future<void> run() async {
     while (_waiting.isNotEmpty) {
-      final job = _waiting.removeAt(0).._launch();
+      final job = _waiting.removeAt(0);
+      if (job.isFinished) continue;
+      job._launch();
       await job._whenDone;
     }
   }
@@ -81,7 +84,11 @@ final class MyQueue {
 
 Future<void> runQueue() async {
   final first = MyJob<void>(key: 'first', (ctx) => ctx.wait(upload));
-  final second = MyJob<void>(key: 'second', (_) async => print('second runs'));
+  final second = MyJob<void>(
+    key: 'second',
+    cancellable: false,
+    (_) async => print('second runs'),
+  );
   final third = MyJob<void>(key: 'third', (_) async => print('third runs'));
   final queue = MyQueue()
     ..add(first)
@@ -89,14 +96,8 @@ Future<void> runQueue() async {
     ..add(third);
   final running = queue.run();
   await second.cancel();
+  await running;
   print('second: ${await second.done}');
-  try {
-    await running;
-    print('the queue is empty');
-    // ignore: avoid_catching_errors
-  } on StateError catch (error) {
-    print('the queue stopped: $error');
-  }
 }
 
 void runDownload(String act) {
@@ -206,18 +207,12 @@ final class CountingJob extends JobBase<int> {
   Future<int> execute(covariant MyContext ctx) => _body(ctx);
 }
 
-/// The job of the page, refusing a cancellation while it waits in the
-/// queue: the line the page gives stands first in its `cancelWith`.
+/// The job of the page created with `cancellable: false`, with a wrapper
+/// for a cancellation no job may refuse.
 final class PatientJob<T> extends MyJob<T> {
   PatientJob(super.body, {super.key}) : super(cancellable: false);
 
   void _stop(Cancelled cancelled) => cancelWith(cancelled, rejectable: false);
-
-  @override
-  void cancelWith(Cancelled cancelled, {bool rejectable = true}) {
-    if (status == JobStatus.created && !cancellable && rejectable) return;
-    super.cancelWith(cancelled, rejectable: rejectable);
-  }
 }
 
 Cancelled signedOut() => Cancelled.by(
@@ -261,6 +256,17 @@ final class ReportingJob extends JobBase<void> {
 
   @override
   Future<void> execute(covariant MyContext ctx) async {}
+}
+
+/// The lines of [file] from the line [opening] to the first line [closing]
+/// after it.
+String _declaration(String file, String opening, String closing) {
+  final lines = File(file).readAsLinesSync();
+  final from = lines.indexOf(opening);
+  if (from < 0) {
+    throw StateError('$file has no "$opening"');
+  }
+  return lines.sublist(from, lines.indexOf(closing, from) + 1).join('\n');
 }
 
 /// What [scenario] prints while fake time runs it to its end.
@@ -447,45 +453,41 @@ void main() {
   });
 
   group('A queue of your own', () {
-    test('the first attempt stops at the job cancelled while it waited', () {
+    test('the first attempt cancels a waiting job that may not be cancelled',
+        () {
       expect(printed(() => first.runQueue().ignore()), [
+        'third runs',
         'second: Cancelled(manual)',
-        'the queue stopped: Bad state: Job(second) has already finished',
       ]);
     });
 
-    test('and every job behind it waits for good', () {
+    test('a job that refuses while it waits runs when its turn comes', () {
+      expect(printed(() => runQueue().ignore()), [
+        'second runs',
+        'third runs',
+        'second: Done(null)',
+      ]);
+    });
+
+    test('the queue skips a job the user may cancel and goes on', () {
       fakeAsync((async) {
-        final third = first.queueOfThree();
+        final seen = <String>[];
+        final second = MyJob<void>((_) async => seen.add('second runs'));
+        final queue = MyQueue()
+          ..add(MyJob<void>((ctx) => ctx.wait(upload)))
+          ..add(second)
+          ..add(MyJob<void>((_) async => seen.add('third runs')));
+        var over = false;
+        queue.run().then((_) => over = true).ignore();
+        second.cancel().ignore();
+        expect('${second.outcome}', 'Cancelled(manual)', reason: 'on the spot');
         async.flushTimers();
-        expect(third.isRunning, isFalse);
-        expect(third.isFinished, isFalse);
+        expect(seen, ['third runs']);
+        expect(over, isTrue);
       });
     });
 
-    test('a job that leaves the queue on cancellation lets the rest run', () {
-      expect(printed(() => runQueue().ignore()), [
-        'second: Cancelled(manual)',
-        'third runs',
-        'the queue is empty',
-      ]);
-    });
-
-    test('cancelled while it waits: cancelWith first, then finished()', () {
-      final job = HookJob();
-      job.cancel().ignore();
-      expect(job.hooks, ['cancelWith', 'finished']);
-    });
-
-    test('taking the job out in finished() lets the queue go on as well', () {
-      expect(printed(() => first.runQueueLeavingInFinished().ignore()), [
-        'second: Cancelled(manual)',
-        'third runs',
-        'the queue is empty',
-      ]);
-    });
-
-    test('a job that refuses first of all waits on in the queue', () {
+    test('the refusal is for a cancellation the job may refuse, no other', () {
       fakeAsync((async) {
         final seen = <String>[];
         final second =
@@ -494,13 +496,17 @@ void main() {
           ..add(MyJob<void>(key: 'first', (ctx) => ctx.wait(upload)))
           ..add(second)
           ..run().ignore();
-        second.cancel().ignore();
+        var back = false;
+        second.cancel().then((_) => back = true).ignore();
         async.flushMicrotasks();
         expect(second.isFinished, isFalse);
+        expect(second.isRunning, isFalse);
         expect(queue._waiting, [second], reason: 'still waits for its turn');
+        expect(back, isFalse, reason: 'cancel() waits for the job to be over');
         async.flushTimers();
         expect(seen, ['runs']);
         expect(second.outcome, isA<Done<void>>());
+        expect(back, isTrue);
 
         final stopped = PatientJob<void>(key: 'stopped', (ctx) async {});
         queue.add(stopped);
@@ -510,8 +516,52 @@ void main() {
           'Cancelled(signed out)',
           reason: 'rejectable: false is not its to refuse',
         );
-        expect(queue._waiting, isEmpty);
       });
+    });
+
+    test('a job in no queue is left to the core: a parent turns it away', () {
+      fakeAsync((async) {
+        final child = MyJob<void>(cancellable: false, (_) async {});
+        Object? thrown;
+        final parent = MyJob<void>((ctx) async {
+          try {
+            await ctx.wait(upload);
+          } on Cancelled {
+            // Goes on after its cancellation, and runs one more child.
+          }
+          try {
+            await ctx.run(child);
+          } on Cancelled catch (error) {
+            thrown = error;
+          }
+        })
+          .._launch();
+        parent.cancel().ignore();
+        async.flushTimers();
+        expect('$thrown', 'Cancelled(manual)');
+        expect(
+          '${child.outcome}',
+          'Cancelled(parent)',
+          reason: 'refused, it would stay created, and its done would hang',
+        );
+      });
+    });
+
+    test('the answer keeps the run and the loop of the first attempt', () {
+      for (final (opening, closing) in [
+        ('Future<void> runQueue() async {', '}'),
+        ('  Future<void> run() async {', '  }'),
+      ]) {
+        expect(
+          _declaration('test/extending_rakes_test.dart', opening, closing),
+          _declaration(
+            'test/support/extending_first_attempts.dart',
+            opening,
+            closing,
+          ),
+          reason: 'the page shows them once and says "the same run"',
+        );
+      }
     });
 
     test('the cascade and cancelOwnJob arrive at cancelWith as well', () {
@@ -906,7 +956,7 @@ void main() {
   // line of a first attempt would still be found among all of them.
   final holders = {
     '### The first attempt': 'test/support/extending_first_attempts.dart',
-    '### Leaving the queue on cancellation': 'test/extending_rakes_test.dart',
+    '### Refusing while the job waits': 'test/extending_rakes_test.dart',
     "### A cancellation of the engine's own": 'test/extending_rakes_test.dart',
   };
   for (final MapEntry(key: heading, value: holder) in holders.entries) {

@@ -1,7 +1,7 @@
-// The first attempts of `doc/extending.md`, verbatim: the queue that starts
-// its jobs and nothing else, and the rule that replaces the checkpoint of
-// the core. They hold classes of the same names as the answers, so they
-// live in a library of their own.
+// The first attempts of `doc/extending.md`, verbatim: the queue whose
+// jobs leave every cancellation to the core, and the rule that replaces
+// the checkpoint of the core. They hold classes of the same names as the
+// answers, so they live in a library of their own.
 import 'dart:async';
 
 import 'package:async_job/engine.dart';
@@ -45,7 +45,9 @@ final class MyQueue {
 
   Future<void> run() async {
     while (_waiting.isNotEmpty) {
-      final job = _waiting.removeAt(0).._launch();
+      final job = _waiting.removeAt(0);
+      if (job.isFinished) continue;
+      job._launch();
       await job._whenDone;
     }
   }
@@ -53,7 +55,11 @@ final class MyQueue {
 
 Future<void> runQueue() async {
   final first = MyJob<void>(key: 'first', (ctx) => ctx.wait(upload));
-  final second = MyJob<void>(key: 'second', (_) async => print('second runs'));
+  final second = MyJob<void>(
+    key: 'second',
+    cancellable: false,
+    (_) async => print('second runs'),
+  );
   final third = MyJob<void>(key: 'third', (_) async => print('third runs'));
   final queue = MyQueue()
     ..add(first)
@@ -61,61 +67,8 @@ Future<void> runQueue() async {
     ..add(third);
   final running = queue.run();
   await second.cancel();
+  await running;
   print('second: ${await second.done}');
-  try {
-    await running;
-    print('the queue is empty');
-    // ignore: avoid_catching_errors
-  } on StateError catch (error) {
-    print('the queue stopped: $error');
-  }
-}
-
-/// The first attempt's job with one thing added: it takes itself out of
-/// the queue in `finished()`. Its `cancelWith` is the core's own.
-final class LeavingJob<T> extends MyJob<T> {
-  final MyQueue _queue;
-
-  LeavingJob(this._queue, super.body, {super.key}) {
-    _queue.add(this);
-  }
-
-  @override
-  void finished() => _queue._waiting.remove(this);
-}
-
-/// The run of the page through the queue of the first attempt, with jobs
-/// that leave it in `finished()`.
-Future<void> runQueueLeavingInFinished() async {
-  final queue = MyQueue();
-  LeavingJob<void>(queue, key: 'first', (ctx) => ctx.wait(upload));
-  final second =
-      LeavingJob<void>(queue, key: 'second', (_) async => print('second runs'));
-  LeavingJob<void>(queue, key: 'third', (_) async => print('third runs'));
-  final running = queue.run();
-  await second.cancel();
-  print('second: ${await second.done}');
-  try {
-    await running;
-    print('the queue is empty');
-    // ignore: avoid_catching_errors
-  } on StateError catch (error) {
-    print('the queue stopped: $error');
-  }
-}
-
-/// The queue of the page again, handing back the third job, the one
-/// behind the cancelled one.
-Job<void> queueOfThree() {
-  final second = MyJob<void>(key: 'second', (ctx) => ctx.wait(upload));
-  final third = MyJob<void>(key: 'third', (ctx) => ctx.wait(upload));
-  final queue = MyQueue()
-    ..add(MyJob<void>(key: 'first', (ctx) => ctx.wait(upload)))
-    ..add(second)
-    ..add(third);
-  queue.run().ignore();
-  second.cancel().ignore();
-  return third;
 }
 
 void runDownload(String act) {

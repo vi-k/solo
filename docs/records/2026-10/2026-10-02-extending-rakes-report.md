@@ -5,6 +5,7 @@
 > перевода — двенадцать мест по чтению, двенадцать находок ревью, одиннадцать
 > новых сторожей, двадцать одна мутация.
 > **Связанные записи:** `2026-10-02-extending-rakes-review-report.md`,
+> `2026-10-02-extending-queue-review-report.md`,
 > `2026-09-28-extending-page-report.md`,
 > `2026-10-01-self-give-up-callbacks-report.md`,
 > `2026-09-25-observing-rakes-report.md`,
@@ -354,3 +355,65 @@ dartdoc.
    `finished()`». Порядок — новое утверждение, и у него свой сторож:
    `cancelled while it waits: cancelWith first, then finished()`; `HookJob`
    записывает теперь и `cancelWith`. Сторож страницы — 41 тест.
+
+8. «Первая попытка очевидно ошибочная. Привычка туда не приведёт, туда может
+   привести только ошибка. Нормально разработчику учесть в цикле, что задача
+   отменена» — о разделе «A queue of your own». Так и есть. Зонд
+   `.artifacts/2026-10-02-extending-rakes/probe_queue_skip_test.dart`: строка
+   `if (job.isFinished) continue;` в цикле очереди даёт тот же вывод, что уход
+   из очереди в `cancelWith`. Требование раздела — «задачи за отменённой
+   выполняются» — решалось одной строкой, а первая попытка без неё была
+   чучелом. Заодно страница сама признавала, что и `finished()` вывел бы задачу
+   из очереди: `cancelWith` раздел показывал на задаче, которой он не нужен.
+
+   Тот же зонд показал, что умеет только `cancelWith`. Задача, созданная
+   с `cancellable: false` и отменённая в ожидании, кончается `Cancelled`
+   и не запускается: ядро заканчивает нестартовавшую задачу, что бы ни говорил
+   `cancellable`. Проверка в цикле тут не поможет — к своему черёду задача уже
+   кончена. Отклонить такую отмену можно только в `cancelWith`, до вызова
+   `super`; так делает `solo`. Раньше это стояло на странице хвостом ответа,
+   одной строкой кода.
+
+   По решению владельца раздел перестроен вокруг этого. Требование дополнено:
+   в этом движке задачу с `cancellable: false` нельзя отменить и пока она ждёт,
+   она выполняется в свой черёд. Первая попытка — очередь с проверкой в цикле;
+   вторая задача создана с `cancellable: false`, её отменяют, пока работает
+   первая, и вывод — `third runs`, `second: Cancelled(manual)`. Под ней
+   сказано, откуда берётся ошибка: у обычной `Job` время до старта — одна
+   микрозадача, в очереди оно длится, пока работают задачи впереди. Ответ под
+   заголовком «Refusing while the job waits» — `cancelWith`, который
+   возвращается до `super`, пока задача стоит в своей очереди:
+   `if (waits && !cancellable && rejectable) return;`; вывод — `second runs`,
+   `third runs`, `second: Done(null)`. Со страницы ушли уход из очереди
+   в `cancelWith`, абзац о `finished()` и перехват `StateError` в сценарии;
+   пункты 5–7 этого раздела относятся к прежнему тексту. Фраза вступления
+   о первых попытках говорит теперь «a queue that counts on
+   `cancellable: false` to protect a job while it waits».
+
+   Правку до коммита прочёл независимый ревьюер на Opus в копии дерева —
+   `2026-10-02-extending-queue-review-report.md`, девять находок, все
+   разобраны. Главная: первый вариант ответа отклонял отмену по статусу
+   `created`, и `MyJob` с `cancellable: false`, которого отменённый родитель
+   не принял в `ctx.run`, оставался `created` навсегда. Поэтому ответ смотрит
+   на членство в очереди, как `solo`, и задача снова хранит `_queue`. Ещё
+   по ревью: требование сказано от имени движка, а не как свойство ядра; пример
+   отмены с `rejectable: false` — обёртка движка вокруг `cancelWith`,
+   а не `cancelOwnJob`, которого у ждущей задачи нет; после вывода ответа
+   сказано, что future от `cancel()` ждёт конца задачи и при отказе.
+
+   Сторож: вместо пяти тестов прежнего раздела шесть новых —
+   `the first attempt cancels a waiting job that may not be cancelled`,
+   `a job that refuses while it waits runs when its turn comes`,
+   `the queue skips a job the user may cancel and goes on`,
+   `the refusal is for a cancellation the job may refuse, no other`,
+   `a job in no queue is left to the core: a parent turns it away`
+   и `the answer keeps the run and the loop of the first attempt`;
+   `LeavingJob`, `runQueueLeavingInFinished` и `queueOfThree` удалены. Сторож
+   страницы — 41 тест, `dart test` зелёный, 1054 теста. Тринадцать мутаций
+   (`.artifacts/2026-10-02-extending-rakes/mutate_queue.py`) все красные:
+   строка отказа убрана; проверка в цикле убрана в любой из двух очередей;
+   цитата без строки; ядро само отклоняет отмену ждущей задачи; строка отказа
+   без `rejectable` в тесте и на странице; сценарий страницы без
+   `cancellable: false`; отказ по статусу вместо очереди; `cancel()` в запуске
+   ответа без `await`; очередь ответа ждёт `done` вместо `_whenDone`; `add` без
+   `_queue` в тесте и на странице.

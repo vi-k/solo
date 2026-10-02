@@ -17,9 +17,9 @@ The lines under the code are what it prints when it runs. The job's observer
 prints what reaches it, `onError:` for an error; `cancel` and `sign out` are
 the moments the user cancels the job or signs out, and `outcome:` is what
 `job.done` completes with. Two parts of the page below open with the version
-habit leads to — a queue that starts its jobs in turn, a rule written into
-`check()` — and show what that code does. The version that works follows under
-its own heading.
+habit leads to — a queue that counts on `cancellable: false` to protect a job
+while it waits, a rule written into `check()` — and show what that code does.
+The version that works follows under its own heading.
 
 ## A job of your own
 
@@ -100,11 +100,14 @@ and
 
 The engine runs its jobs one at a time, in the order they came. A job may be
 cancelled while it waits for its turn, and the ones behind it still have to
-run.
+run. In this engine a job created with `cancellable: false` is not to be
+cancelled while it waits either: it runs when its turn comes, whatever was
+asked of it meanwhile.
 
 ### The first attempt
 
-The queue keeps the jobs and starts each with `_launch`:
+The queue keeps the jobs, starts each with `_launch` and skips a job cancelled
+while it waited:
 
 ```dart
 final class MyQueue {
@@ -114,18 +117,25 @@ final class MyQueue {
 
   Future<void> run() async {
     while (_waiting.isNotEmpty) {
-      final job = _waiting.removeAt(0).._launch();
+      final job = _waiting.removeAt(0);
+      if (job.isFinished) continue;
+      job._launch();
       await job._whenDone;
     }
   }
 }
 ```
 
-The user cancels the second job while the first one runs:
+The second job is created with `cancellable: false`, and the user cancels it
+while the first one runs:
 
 ```dart
 final first = MyJob<void>(key: 'first', (ctx) => ctx.wait(upload));
-final second = MyJob<void>(key: 'second', (_) async => print('second runs'));
+final second = MyJob<void>(
+  key: 'second',
+  cancellable: false,
+  (_) async => print('second runs'),
+);
 final third = MyJob<void>(key: 'third', (_) async => print('third runs'));
 final queue = MyQueue()
   ..add(first)
@@ -133,38 +143,40 @@ final queue = MyQueue()
   ..add(third);
 final running = queue.run();
 await second.cancel();
+await running;
 print('second: ${await second.done}');
-try {
-  await running;
-  print('the queue is empty');
-} on StateError catch (error) {
-  print('the queue stopped: $error');
-}
 ```
 
 ```text
+third runs
 second: Cancelled(manual)
-the queue stopped: Bad state: Job(second) has already finished
 ```
 
-A job that has not started is finished on the spot by its cancellation: there
-is no body to stop. The queue still kept it, and when its turn came, `start`
-threw. The queue stopped there, and the third job waits for good.
+The queue skipped the second job and went on to the third, as it should with a
+job the user may cancel. This one the user may not, and it was cancelled all
+the same. The core finishes a job that has not started on the spot, whatever
+`cancellable` says: a job created with `cancellable: false` refuses a
+cancellation only once it runs. A regular `Job` starts on the next microtask,
+so there the time before the start is a moment; in a queue it lasts as long as
+the jobs ahead take.
 
-### Leaving the queue on cancellation
+### Refusing while the job waits
 
 Every cancellation asked of a job arrives at `cancelWith`, among them
 `cancel()`, the cascade from a parent and the one the engine asks for itself
-through `cancelOwnJob` of the context. An override adds to it rather than
-replacing it, and the analyzer requires the override to call `super`. `MyJob`
-keeps the queue it waits in and leaves that queue in `cancelWith`:
+through `cancelOwnJob` of the context. An override passes a cancellation on to
+`super` to let it through, and the analyzer requires that call to be there. To
+refuse one, the override returns before the call. `MyJob` keeps the queue it
+was added to, and while it waits there it refuses what it would refuse while it
+runs, as `solo` does:
 
 ```dart
   MyQueue? _queue;
 
   @override
   void cancelWith(Cancelled cancelled, {bool rejectable = true}) {
-    _queue?._waiting.remove(this);
+    final waits = _queue?._waiting.contains(this) ?? false;
+    if (waits && !cancellable && rejectable) return;
     super.cancelWith(cancelled, rejectable: rejectable);
   }
 ```
@@ -175,29 +187,22 @@ The queue tells each job whose it is:
   void add(MyJob<Object?> job) => _waiting.add(job.._queue = this);
 ```
 
-The same run now reaches the third job:
+Only a job that waits in the queue refuses. A `MyJob` nobody queued is left to
+the core, such as one a cancelled parent turns away from its `ctx.run`: refused
+there, it would never start and never finish. Once the queue has taken the job
+out to start it, the core refuses for it. `rejectable` is `false` for a
+cancellation no job may refuse, such as one the engine sends through a wrapper
+around `cancelWith` to drop a job whatever `cancellable` says, and that one
+goes on to `super`. The same run now gives the second job its turn:
 
 ```text
-second: Cancelled(manual)
+second runs
 third runs
-the queue is empty
+second: Done(null)
 ```
 
-Taking the job out in `finished()` would let the queue go on as well: a job
-cancelled while it waits comes through both, `cancelWith` first and
-`finished()` after it. In `cancelWith` the engine also has a say on the
-cancellation itself. The core finishes a job that has not started whatever
-`cancellable` says: a job created with `cancellable: false` refuses a
-cancellation only once it runs. If a job of your queue may refuse one while it
-waits, `cancelWith` returns first of all, before the job leaves the queue, as
-`solo` does:
-
-```dart
-    if (status == JobStatus.created && !cancellable && rejectable) return;
-```
-
-`rejectable` is `false` for a cancellation no job may refuse, such as the one
-`cancelOwnJob` asks for.
+`cancel()` returns a future that waits for the job to be over, refused or not,
+so here it completes once the second job has run.
 
 ## A rule of your own
 
