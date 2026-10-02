@@ -211,7 +211,12 @@ does» (EN 281, RU 284–285).
 копии, `debug_test.dart` и `observer_test.dart` зелёные. Ядро в вычитку
 не входит, поэтому обе фразы страницы, как и та же фраза в dartdoc
 `JobObserver`, оставлены до решения владельца: сужать их стоит, только если
-ядро не тронут.
+ядро не тронут. Итог: владелец 2026-10-02 решил не трогать ядро и сузить
+обещание. На странице «nowhere in the core is a thrown cancellation a failure»
+снято: «A `Cancelled` thrown by a hook neither reaches the zone nor cancels the
+job»; вторая фраза говорит только о своём случае: «It is Dart that sends this
+cancellation to the zone, not the job». Dartdoc `JobObserver` сужен так же,
+перевод — тем же коммитом.
 
 **B4. «`onStart` runs only for a job whose body runs» не так для `then`.**
 Наблюдатель, который отменяет продолжение в своём `onStart`, получает вызванный

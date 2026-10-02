@@ -60,10 +60,9 @@ it; the children it runs inherit it unless they have their own, and a
 continuation made with `then` takes only the observer passed to `then`. If one
 of the observer's hooks throws, its error goes to the current zone and nothing
 else changes: the job ends as it would have, and the observer's other hooks are
-still called. A `Cancelled` thrown by a hook does not reach the zone: nowhere
-in the core is a thrown cancellation a failure. It does not cancel the job
-either. A hook that has to cancel the job calls `job.cancel()`, and the job is
-cancelled as it would be from anywhere else.
+still called. A `Cancelled` thrown by a hook neither reaches the zone nor
+cancels the job. A hook that has to cancel the job calls `job.cancel()`, and
+the job is cancelled as it would be from anywhere else.
 
 A job can be given a `key` and a `describe` callback when it is created. Its
 string representation is `Job($key)`, or `Job($key: $description)` when
@@ -284,7 +283,7 @@ Dart hands that to the zone the body runs in: for a job made with
 `Job.deferred`, the zone it was started from. The job's own cancellation goes
 there too: when the job is cancelled, a `ctx.wait` called without `await`
 throws `Cancelled` into its future, and Dart hands it to the zone like any
-other error. The job itself never sends a cancellation to the zone; Dart does.
+other error. It is Dart that sends this cancellation to the zone, not the job.
 For `ctx.wait`, all of this holds only while the body runs. If its action fails
 once the body has ended, the error takes the fifth row of the table, like that
 of an action `ctx.wait` stopped waiting for on a cancellation: `onError` hears
