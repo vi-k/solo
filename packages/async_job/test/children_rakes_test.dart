@@ -437,6 +437,27 @@ void main() {
         expect(quick.isCancelled, isTrue);
       });
     });
+
+    test('a held branch with cancellable: false refuses and ends Done', () {
+      fakeAsync((async) {
+        final quick = Job.deferred<int>(
+          key: 'quick',
+          cancellable: false,
+          (ctx) async => 1,
+        );
+        final slow = Job.deferred<int>(key: 'slow', (ctx) async {
+          await ctx.wait(() => delay(50));
+          throw StateError('disk');
+        });
+        Job<void>((ctx) async {
+          await ctx.runAll([quick, slow]);
+        }).ignore();
+
+        async.flushTimers();
+        expect(quick.outcome, isA<Done<int>>());
+        expect(quick.isCancelled, isFalse);
+      });
+    });
   });
 
   group('What a group hands back', () {

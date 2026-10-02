@@ -458,3 +458,16 @@ zone that link was created in».
     не значением, а эта принимает остановку». Сторож держал только первую
     половину; тест `a branch held for the group has no outcome yet` теперь
     проверяет и `isCancelled` после решения.
+
+16. «а эта принимает остановку — можно расписать, какую остановку она
+    принимает?» — о той же фразе, что в п. 15. Остановка — отмена с причиной
+    `SiblingCancelReason`, которой группа отменяет остальные ветки, как только
+    одна кончилась не значением; «принимает» значило, что ветка создана
+    не с `cancellable: false`. Теперь оба случая сказаны отдельно: «When
+    another branch ends in anything but a value, the group cancels this one
+    with `SiblingCancelReason`, and it ends `Cancelled`, with `isCancelled` now
+    `true`. A branch created with `cancellable: false` refuses that
+    cancellation and ends `Done`», в переводе так же. Зонд
+    `probe_owner_held_test.dart` с `cancellable: false`: после решения группы
+    `Done(1)`, `isCancelled=false`, родитель `Failed`. Сторож: новый тест
+    `a held branch with cancellable: false refuses and ends Done`, 54 теста.

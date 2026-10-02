@@ -302,8 +302,11 @@ waits for them as it waits for everything else.
 
 **The outcome of a branch is not final until the group decides.** A body that
 returned a value can still end `Cancelled`: until the group decides, the
-branch's `outcome` is `null` and its `isCancelled` is `false`, and both change
-when another branch ends in anything but a value and this one accepts the stop.
+branch's `outcome` is `null` and its `isCancelled` is `false`. When another
+branch ends in anything but a value, the group cancels this one with
+`SiblingCancelReason`, and it ends `Cancelled`, with `isCancelled` now `true`.
+A branch created with `cancellable: false` refuses that cancellation and ends
+`Done`.
 
 **A branch waiting for another branch of the same group may never end.**
 Awaiting a sibling's `Job.value` or `Job.done` hangs the group: the sibling is
