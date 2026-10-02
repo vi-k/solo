@@ -282,8 +282,8 @@ What closes a value is the registration its receiver made the moment it
 arrived. Under `ctx.run` that is the `dispose` passed with each call, as in
 [Registered on arrival, waited for in one envelope](#registered-on-arrival-waited-for-in-one-envelope)
 above. `ctx.runAll` takes no such argument, and
-[What a group hands back](#what-a-group-hands-back) shows how to register the
-list it returns.
+[The list a group returns](#the-list-a-group-returns) shows how to register
+that list.
 
 Five things `runAll` does not promise. Some of them turn on what the group does
 with a branch whose body has returned a value: the group holds that branch
@@ -415,9 +415,13 @@ try {
 }
 ```
 
-The list itself is a value like any other, and the body is its receiver: unlike
-`run`, `runAll` takes no `dispose` or `discard` of its own to register it with
-on arrival.
+## The list a group returns
+
+`ctx.runAll` hands the body a list of open sources, and the body has to close
+every one of them, whatever happens after the group returns. The list is a
+value like any other, and the body is its receiver: unlike `run`, `runAll`
+takes no `dispose` or `discard` of its own to register it with on arrival, so
+the body registers the list itself.
 
 ### The first attempt
 

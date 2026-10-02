@@ -460,7 +460,7 @@ void main() {
     });
   });
 
-  group('What a group hands back', () {
+  group('The list a group returns', () {
     test('ctx.wait throws before its action on a pending cancellation', () {
       fakeAsync((async) {
         final trace = <String>[];
