@@ -639,12 +639,10 @@ void main() {
   });
 
   group('A rule of your own', () {
-    test('the first attempt lets a cancelled job save the rows', () {
+    test('a cancelled job closes the connection and ends Cancelled', () {
       expect(printed(() => first.runDownload('cancel')), [
         'cancel',
         'close the connection',
-        'downloaded 42 rows',
-        'saved',
         'outcome: Cancelled(manual)',
       ]);
     });
@@ -913,28 +911,12 @@ void main() {
       });
     });
 
-    test(
-        'under the first attempt uncancellable begins its step, wait and run '
-        'still throw', () {
-      final seen = <String>[];
-      fakeAsync((async) {
-        first.cancelledMidway(seen);
-        async.flushTimers();
-      });
-      expect(seen, [
-        'the step began',
-        'uncancellable: 2',
-        'wait: Cancelled(manual)',
-        'run: Cancelled(manual)',
-      ]);
-    });
-
     test('mustCallSuper holds an override of check() to super', () {
       expect(
         File('lib/src/job_context.dart').readAsStringSync(),
         contains('  @override\n  @mustCallSuper\n  void check() {'),
-        reason: 'the first attempt of the page is what the analyzer points '
-            'at, and nothing else here would notice the annotation gone',
+        reason: 'the page says the analyzer requires the call, and nothing '
+            'else here would notice the annotation gone',
       );
     });
   });
@@ -956,10 +938,6 @@ void main() {
       printed(() => runQueue().ignore()),
       printed(() => first.runDownload('cancel')),
       printed(() => first.runDownload('sign out')),
-      printed(() {
-        account.signedIn = true;
-        runDownload('cancel');
-      }),
       printed(() {
         account.signedIn = true;
         runDownload('sign out');

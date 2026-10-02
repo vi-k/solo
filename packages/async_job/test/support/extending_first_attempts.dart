@@ -1,6 +1,6 @@
 // The first attempts of `doc/extending.md`, verbatim: the queue whose
-// jobs leave every cancellation to the core, and the rule that replaces
-// the checkpoint of the core. They hold classes of the same names as the
+// jobs leave every cancellation to the core, and the rule that throws an
+// error of the engine's own. They hold classes of the same names as the
 // answers, so they live in a library of their own.
 import 'dart:async';
 
@@ -29,11 +29,9 @@ final class MyJob<T> extends JobBase<T> {
 final class MyContext extends JobContextBase {
   MyContext(super.owner);
 
-  // The first attempt: the analyzer points at it, and that is the page's
-  // own point.
   @override
-  // ignore: must_call_super
   void check() {
+    super.check();
     if (!account.signedIn) throw const SignedOut();
   }
 }
@@ -99,29 +97,4 @@ Job<void> signOutWithChild(List<String> seen) {
   job.done.then((outcome) => seen.add('outcome: $outcome')).ignore();
   job._whenDone.ignore();
   return child;
-}
-
-/// A job cancelled while `join` waits, which then asks three more members.
-void cancelledMidway(List<String> seen) {
-  final job = MyJob<void>((ctx) async {
-    await ctx.join(work);
-    try {
-      final value = await ctx.uncancellable(() {
-        seen.add('the step began');
-        return 2;
-      });
-      seen.add('uncancellable: $value');
-      await ctx.wait(work);
-    } on Cancelled catch (error) {
-      seen.add('wait: $error');
-    }
-    try {
-      await ctx.run(Job.deferred<int>((child) async => 4));
-    } on Cancelled catch (error) {
-      seen.add('run: $error');
-    }
-  })
-    .._launch()
-    ..ignore();
-  Timer(const Duration(milliseconds: 5), () => unawaited(job.cancel()));
 }

@@ -18,8 +18,8 @@ prints what reaches it, `onError:` for an error; `cancel` and `sign out` are
 the moments the user cancels the job or signs out, and `outcome:` is what
 `job.done` completes with. Two parts of the page below open with the version
 habit leads to — a queue that counts on `cancellable: false` to protect a job
-while it waits, a rule written into `check()` — and show what that code does.
-The version that works follows under its own heading.
+while it waits, a rule that throws an error of its own from `check()` — and
+show what that code does. The version that works follows under its own heading.
 
 ## A job of your own
 
@@ -229,25 +229,26 @@ final job = MyJob<void>(observer: printer, (ctx) async {
   .._launch();
 ```
 
-### The first attempt
-
-`MyContext` overrides `check()` with the rule:
-
-```dart
-  @override
-  void check() {
-    if (!account.signedIn) throw const SignedOut();
-  }
-```
-
-The user cancels while the download runs:
+Cancelled while the download runs, the job closes the connection and ends
+`Cancelled`:
 
 ```text
 cancel
 close the connection
-downloaded 42 rows
-saved
 outcome: Cancelled(manual)
+```
+
+### The first attempt
+
+`MyContext` overrides `check()`. It asks `super.check()` first, the checkpoint
+of the core that the analyzer requires an override to call, and then the rule:
+
+```dart
+  @override
+  void check() {
+    super.check();
+    if (!account.signedIn) throw const SignedOut();
+  }
 ```
 
 The user signs out while the download runs:
@@ -258,19 +259,13 @@ onError: SignedOut
 outcome: Failed(SignedOut)
 ```
 
-The analyzer points at this override, and both runs show why. It replaced the
-checkpoint of the core rather than adding to it: after `cancel`, `check()` no
-longer asks for the cancellation, so `join` handed the rows to a cancelled job
-and the body saved them, and `ctx.uncancellable` would begin its step on one.
-`wait` and `run` still throw the cancellation: they read it themselves. And a
-rule that no longer holds is not a failure. The job ends `Failed` with an error
-of the engine's own, nobody closes the connection, and a child of the job would
-run on to its end.
+A rule that no longer holds is not a failure, and here the job ends `Failed`
+with an error of the engine's own. The observer hears an error, nobody closes
+the connection, and a child of the job would run on to its end.
 
 ### A cancellation of the engine's own
 
-The override asks `super.check()` first, and the rule throws a `Cancelled` with
-a reason of the engine's own:
+The rule throws a `Cancelled` with a reason of the engine's own:
 
 ```dart
 final class SignedOutReason extends CancelReason {
@@ -295,14 +290,6 @@ final class SignedOutReason extends CancelReason {
   }
 ```
 
-The user cancels while the download runs:
-
-```text
-cancel
-close the connection
-outcome: Cancelled(manual)
-```
-
 The user signs out while the download runs:
 
 ```text
@@ -311,18 +298,18 @@ close the connection
 outcome: Cancelled(signed out)
 ```
 
-A cancellation stops the job at `join` again, and a sign-out ends the job
-`Cancelled`. The body lets the rule's `Cancelled` out and gives itself up with
-it, and a job whose body gives itself up stops the way a cancelled one does:
-its `onCancel` callbacks run and its children stop. The job accepts the rule's
-cancellation as the body lets it out, not before: a body that catches it and
-goes on is not cancelled. Nobody asked the job for this cancellation, so it
-does not come through `cancelWith`. Neither `cancellable: false` nor
-`ctx.uncancellable` stands in the rule's way: they refuse or hold a
-cancellation asked of the job, and the rule's comes as a throw from the very
-step it stops. The rule is asked where `check()` is asked and nowhere else: a
-sign-out during the download is noticed when `join` comes back, and one during
-a `wait` only at the next call that asks.
+A sign-out now ends the job the way a cancellation does: the connection is
+closed, and the outcome is `Cancelled`. The body lets the rule's `Cancelled`
+out and gives itself up with it, and a job whose body gives itself up stops the
+way a cancelled one does: its `onCancel` callbacks run and its children stop.
+The job accepts the rule's cancellation as the body lets it out, not before: a
+body that catches it and goes on is not cancelled. Nobody asked the job for
+this cancellation, so it does not come through `cancelWith`. Neither
+`cancellable: false` nor `ctx.uncancellable` stands in the rule's way: they
+refuse or hold a cancellation asked of the job, and the rule's comes as a throw
+from the very step it stops. The rule is asked where `check()` is asked and
+nowhere else: a sign-out during the download is noticed when `join` comes back,
+and one during a `wait` only at the next call that asks.
 
 An engine that cannot wait for the next checkpoint, or has to stop a job
 whatever its body catches, cancels the job itself when the user signs out, with
