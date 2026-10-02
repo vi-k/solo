@@ -277,8 +277,13 @@ dropped; it goes where an error nobody answered for goes.
 Use `[ctx.run(a), ctx.run(b)].wait` when the branches are independent of each
 other's failure, or when one of them waits for another. Use `ctx.runAll` when a
 result missing one of its parts is of no use anyway. None of the forms closes
-those values: a registration does, made on arrival for `ctx.run` as above and
-for a group as in [What a group hands back](#what-a-group-hands-back).
+what the branches returned: a form only hands the values over or drops them.
+What closes a value is the registration its receiver made the moment it
+arrived. Under `ctx.run` that is the `dispose` passed with each call, as in
+[Registered on arrival, waited for in one envelope](#registered-on-arrival-waited-for-in-one-envelope)
+above. `ctx.runAll` takes no such argument, and
+[What a group hands back](#what-a-group-hands-back) shows how to register the
+list it returns.
 
 Five things `runAll` does not promise. Some of them turn on what the group does
 with a branch whose body has returned a value: the group holds that branch
