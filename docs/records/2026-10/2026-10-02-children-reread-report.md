@@ -376,3 +376,9 @@ zone that link was created in».
    так же «он гасит то, что бросает future». Оригинал: «silences the error of
    that future» и «it silences what the future throws», рядом
    с «`child.ignore()` silences it».
+
+9. «С ним постройка идёт по микротаскам — давай не „с ним“, а с „await null“».
+   Местоимение отсылало к `await null` через предложение, и между ними стояли
+   «стек» и «обвал». Теперь «С `await null` постройка идёт по микротаскам»,
+   в оригинале «With `await null`, building goes by microtasks». Утверждения
+   не изменились.

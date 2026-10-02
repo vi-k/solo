@@ -128,10 +128,11 @@ How deep a tree may go is bounded by the stack, and by two different walks of
 it. Starting a child runs the child's body up to its first `await`. Without the
 `await null` above, each level makes its own child before it suspends, and the
 whole chain is built on one stack: about a thousand levels on a desktop VM, and
-the overflow lands while the tree is still being built. With it, building goes
-by microtasks, and the limit moves to the other walk — cancellation, which
-descends the tree recursively and reaches about three thousand. Neither number
-is a promise; both follow from the size of a body's frame.
+the overflow lands while the tree is still being built. With `await null`,
+building goes by microtasks, and the limit moves to the other walk —
+cancellation, which descends the tree recursively and reaches about three
+thousand. Neither number is a promise; both follow from the size of a body's
+frame.
 
 A cascade that runs out of stack stops where the stack ran out, and the jobs
 below that depth go on running. The overflow comes out of `cancel()` itself,
