@@ -679,8 +679,8 @@ final parent = Job<void>((ctx) async {
   ctx.log(await ctx.run(child));
 });
 
-await parent.value; // Done, что бы ни делало продолжение.
-await tail.value; // Продолжение наблюдать вам.
+await parent.value; // Done, что бы ни делал tail.
+await tail.value; // tail наблюдать вам.
 ```
 
 Родитель ждёт своих детей, а не то, что на них навешано. Как только

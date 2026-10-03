@@ -678,8 +678,8 @@ final parent = Job<void>((ctx) async {
   ctx.log(await ctx.run(child));
 });
 
-await parent.value; // Done, whatever the continuation is doing.
-await tail.value; // The continuation is yours to observe.
+await parent.value; // Done, whatever tail is doing.
+await tail.value; // tail is yours to observe.
 ```
 
 The parent waits for its children, not for what hangs off them. Once

@@ -289,8 +289,8 @@ Future<void> reportedRows({required bool adoptTheTail}) async {
     });
     parent.done.then((outcome) => stage.trace.add('parent $outcome')).ignore();
 
-    await parent.value; // Done, whatever the continuation is doing.
-    await tail.value; // The continuation is yours to observe.
+    await parent.value; // Done, whatever tail is doing.
+    await tail.value; // tail is yours to observe.
   }
 }
 
