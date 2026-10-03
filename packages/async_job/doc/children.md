@@ -742,5 +742,5 @@ final parent = Job<void>((ctx) async {
 A sequence that belongs to the operation is children. The second `ctx.run`
 starts once the first has returned its value, the parent waits for both, and
 its cancellation reaches whichever of them is running. A chain is for the
-opposite case, a step that outlives the operation:
+opposite case, a step that outlives the operation or runs outside it:
 [A continuation of a child](#a-continuation-of-a-child).
