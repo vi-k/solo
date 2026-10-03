@@ -14,7 +14,8 @@ member you pick decides who releases the resource and when:
   // Taken from a call: the release goes on the call, not under it.
   final db = await ctx.join(Database.open, dispose: (db) => db.close());
 
-  // Leaves with the result, so it is released only if it reaches nobody.
+  // Leaves with the result, so it is released only if the job ends
+  // cancelled or failed.
   final file = await ctx.join(openTemp, discard: (file) => file.delete());
 
   // Handed to the state, which owns it from here on.
@@ -22,24 +23,27 @@ member you pick decides who releases the resource and when:
     ..check()
     ..disown(db)
     ..emit(Ready(db));
+
+  return file;
 }
 ```
 
 | Member | What it releases, and when |
 | --- | --- |
-| `dispose:` on `wait` or `join` | that call's value, whatever the outcome |
-| `discard:` on `wait` or `join` | that call's value, and only if it reaches nobody |
+| `dispose:` on `ctx.wait`, `ctx.join` or `ctx.run` | that call's value, whatever the outcome |
+| `discard:` on `ctx.wait`, `ctx.join` or `ctx.run` | that call's value, and only if the job ends cancelled or failed |
 | `ctx.onDispose(callback)` | whatever the callback closes, whatever the outcome |
-| `ctx.onDiscard(callback)` | whatever the callback closes, if the job hands nothing over |
-| `ctx.disown(value)` | nothing — it drops the registration a `wait` or `join` made |
+| `ctx.onDiscard(callback)` | whatever the callback closes, and only if the job ends cancelled or failed |
+| `ctx.disown(value)` | nothing — it drops the registration one of those three calls made for the value |
 
 Four sections below open with the version this vocabulary leads to — the member
 whose name matches the requirement, or the registration written where it reads
 best — and say what that version does instead of what it was meant to do. Where
 the next version repairs that and brings a fault of its own, it stands as a
 second attempt. The version that works follows under its own heading.
-`Database`, `Idle`, `Loaded(rows)` and `Ready(db)` are types from that
-application's model.
+`Database`, `device`, `openTemp` and `archive` belong to the application these
+examples come from, and `Idle`, `Loaded(rows)` and `Ready(db)` are the states
+of its controller.
 
 ## Taking a resource from a call
 
@@ -49,7 +53,7 @@ point, it must leave no database open.
 ### The first attempt
 
 ```dart
-Job<void> load() => run<Idle, void>(
+SoloJob<void> load() => run<Idle, void>(
       key: 'load',
       (ctx) async {
         final db = await ctx.join(Database.open);
@@ -75,7 +79,7 @@ empty: nothing in this job knows that a database exists.
 ### The release travels with the call
 
 ```dart
-Job<void> load() => run<Idle, void>(
+SoloJob<void> load() => run<Idle, void>(
       key: 'load',
       (ctx) async {
         final db = await ctx.join(
@@ -101,9 +105,10 @@ starts with the database already closed. Register each release once: adding
 `ctx.onDispose(db.close)` to this body would close the same database twice.
 
 A resource the body makes itself has no such gap, because there is no await
-between making it and registering its release — `ctx.onDispose(sub.cancel)`
-stands right under `listen`. That registration returns a function you can keep
-as `removeDisposer` to unregister the callback without running it.
+between making it and registering its release: in the block at the top of this
+page `ctx.onDispose(sub.cancel)` stands right under `listen`. That registration
+returns a function you can keep as `removeDisposer` to unregister the callback
+without running it.
 
 Nothing stops such a creation from riding on a call all the same:
 
@@ -116,9 +121,12 @@ final sub = await ctx.join(
 
 `wait` and `join` take an action that returns without waiting, so a synchronous
 creation registers on the call like any other. What it buys over `listen` with
-`onDispose` under it is the checkpoint the call makes before the action: with a
-cancellation already standing, the subscription is never made at all, where
-that pair makes it and cancels it during cleanup.
+`onDispose` under it is the checkpoint the call makes before its action: it
+asks first whether the job has been cancelled, and throws instead of starting.
+With a cancellation already standing — one an `uncancellable` section above has
+just let through, say — the subscription is never made at all, where that pair
+makes it and cancels it during cleanup. The page
+[Cancellation](cancellation.md) is about those checkpoints.
 
 ## Returning a resource to the caller
 
@@ -130,7 +138,7 @@ then on.
 
 ```dart
 SoloJob<Database> open() => run<Idle, Database>(
-      key: _Op.open,
+      key: 'open',
       (ctx) async {
         final db = await ctx.join(
           Database.open,
@@ -156,7 +164,7 @@ database, and only a test that uses the result afterwards sees it.
 
 ```dart
 SoloJob<Database> open() => run<Idle, Database>(
-      key: _Op.open,
+      key: 'open',
       (ctx) async {
         final db = await ctx.join(
           Database.open,
@@ -170,9 +178,10 @@ SoloJob<Database> open() => run<Idle, Database>(
 
 `discard` runs only when the job ends without handing its value over:
 cancelled, or failed. The corresponding registration member is `ctx.onDiscard`.
-A waiting call accepts either `dispose` or `discard`, never both. Everything
-the job keeps to itself — a lock, a temporary file, a subscription — stays with
-`dispose`, or it leaks on the path where no cancellation test looks.
+A call takes either `dispose` or `discard`: passing both is an `ArgumentError`,
+thrown before the call starts anything. Everything the job keeps to itself — a
+lock, a temporary file, a subscription — stays with `dispose`, or it leaks on
+the path where no cancellation test looks.
 
 The child above is why the distinction earns its keep: `ctx.run` stands between
 the database and the `return`, so the value is in hand while the job can still
@@ -181,17 +190,22 @@ value leaves — the caller receives `Cancelled` instead of the database, and
 `discard` closes it.
 
 A registration is settled by the outcome of the job that made it, and it does
-not travel with the value. Whoever takes the database owns it from that moment
-and registers its release themselves — a parent that takes it through
+not travel with the value. A job that ended `Done` has handed the database over
+whether or not anybody reads its `value`: a caller that never does leaves the
+database open. Whoever takes the database owns it from that moment and
+registers its release themselves — a parent that takes it through
 `ctx.run(child, discard: ...)` registers on the call. A line below would be too
-late: `run` checks the parent once the child's value is in hand, and a
+late: `ctx.run` checks the parent once the child's value is in hand, and a
 checkpoint that throws there takes the value with it, so the line that would
 have registered the release is never reached.
+[A resource that travels](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cleanup.md#a-resource-that-travels)
+on the cleanup page of `async_job` follows a database through such a hand-over.
 
 ## Handing a resource to the state
 
-The screen is to hold the database itself: `Ready(db)` becomes the state, and
-the controller closes it when it closes.
+The screen is to hold the database itself. The job opens it and migrates it, in
+a step that must not be cut short; then `Ready(db)` becomes the state, and from
+there the database is the controller's to close, not the job's.
 
 ### The first attempt
 
@@ -200,6 +214,7 @@ final db = await ctx.join(
   Database.open,
   dispose: (db) => db.close(),
 );
+await ctx.uncancellable(db.migrate);
 ctx.emit(Ready(db));
 ```
 
@@ -212,38 +227,50 @@ from it.
 ### The second attempt
 
 ```dart
+await ctx.uncancellable(db.migrate);
 ctx
   ..disown(db)
   ..emit(Ready(db));
 ```
 
-`disown` drops the registration the call made, so the job no longer closes what
-it is about to give away. It also drops it before anything checks whether the
-write will happen at all.
+`disown` drops the registration `join` made for the database, so the job no
+longer closes what it is about to give away. It also drops it before anything
+checks whether the write will happen at all.
 
 `emit` is a checkpoint: for a job that has accepted cancellation it throws
-`Cancelled` instead of writing. Cancellation reaching a body between a
-protected step and this cascade is ordinary — `uncancellable` holds it back and
-the checkpoint after the section is where it comes out. Here that checkpoint is
-`emit`, and by the time it throws, the registration is already gone: the state
-never received the database, the cleanup stack no longer knows about it, and
-nobody closes it.
+`Cancelled` instead of writing. Cancel this job while the migration runs. The
+`uncancellable` section holds the cancellation back until the migration is
+over, the job accepts it as the section closes, and it comes out at the first
+checkpoint after that. Here that checkpoint is `emit`, and by the time it
+throws, the registration is already gone: the state never received the
+database, the cleanup stack no longer knows about it, and nobody closes it.
 
 ### Check, disown, emit
 
 ```dart
+await ctx.uncancellable(db.migrate);
 ctx
   ..check()
   ..disown(db)
   ..emit(Ready(db));
 ```
 
-These calls are synchronous, so nothing arrives between them. `check` throws
-first if the job is cancelled or its rules no longer hold, and the database is
-still registered: cleanup closes it. If `emit` writes the state and then throws
-because a synchronous listener cancelled the job, the state already owns the
-database and the cleanup stack no longer does. Either way exactly one owner is
-left.
+The three calls of the cascade are synchronous, so nothing arrives between
+them. `check` throws first if the job is cancelled or its rules no longer hold,
+and the database is still registered: cleanup closes it. If `emit` writes the
+state and then throws because a synchronous listener cancelled the job, the
+state already owns the database and the cleanup stack no longer does. Either
+way exactly one owner is left.
+
+`disown` finds the registration by the value `join` returned. One made with
+`ctx.onDispose` is not found that way — `disown` returns `false`, and the
+callback still runs — and is dropped by the function `onDispose` returned,
+called where `disown` stands here.
+
+After the hand-over no job releases the database, and neither does `close()`.
+Closing it is the controller's own work: a method whose job closes the database
+and moves the state on, awaited before `close()`, as `dispose()` is in
+[Awaiting the disposal](camera.md#awaiting-the-disposal) of the camera example.
 
 For an asynchronous hand-over, the transfer and `disown` go inside one awaited
 `uncancellable` section:
@@ -255,13 +282,16 @@ await ctx.uncancellable(() async {
 });
 ```
 
-The transfer is awaited plainly, and both lines stay inside the section: it
-holds an ordinary cancellation back, and a rule of the controller that stops
-holding throws before the transfer starts rather than between it and `disown`.
-Split the pair — `await ctx.join(() => archive.take(file))` ahead of the
-section and `ctx.disown(file)` after it — and the checkpoint that call makes
-after its action throws with the file already in the archive and its
-registration still standing, so cleanup deletes what the archive is holding.
+Neither line of the section is a checkpoint: the transfer is awaited plainly,
+and `disown` only unregisters, so a cancellation has nowhere to come out
+between them. The section holds an ordinary cancellation back until both are
+done, and the state rules of the job, which no section holds, are asked where
+the section opens, before the transfer starts. Written without the section, as
+`await ctx.join(() => archive.take(file))` with `ctx.disown(file)` on the line
+under it, the pair comes apart: `join` checks the job again after the transfer,
+and a cancellation accepted meanwhile makes it throw with the file already in
+the archive and its registration still standing, so cleanup deletes what the
+archive is holding.
 
 ## When the release happens
 
@@ -271,17 +301,17 @@ the queue must not find it, and neither must `close()` when it returns.
 ### The first attempt
 
 ```dart
-// Abandoned on cancellation: the file can arrive after the job has
-// finished. It is still deleted, but nobody is waiting for that.
+// Deleted whatever happens: dispose runs on every outcome.
 await ctx.wait(openTemp, dispose: (file) => file.delete());
 ```
 
 The release happens either way; the waiting method decides only when. `wait`
-lets go of the call the moment cancellation is accepted: the job ends, the
-queue moves on, and the next job starts while `openTemp` is still running. The
-file appears after that, and the deletion follows it — late and alone, with
-nobody waiting for either. A late error from the call or from the disposer goes
-to the controller's error hook.
+lets go of the call the moment cancellation is accepted: the job ends, and the
+next job starts, or `close()` comes back, while `openTemp` is still running.
+The file appears after that, and the deletion follows it — late and alone, with
+nobody waiting for either. A late error from the call or from the disposer is
+told to the controller's `onError` hook and then handed to `Solo.errorHandler`,
+or to the zone when no handler is set.
 
 ### The wait that stays with it
 
@@ -302,14 +332,18 @@ release must precede the next job or controller closure.
 | Children | waits for every child to finish |
 | Cleanup stack | runs it last registration first, awaiting each callback |
 | Second pass | runs a `discard` that cancellation has since made necessary |
-| End | final state handler, outcome delivery, release of the queue |
+| End | gets its outcome, runs its state handler, lets the queue start the next job |
 
-The first three steps are the engine's, and so are the late results they can
-bring:
+The first three steps belong to the core, `async_job`, and so do the late
+results they can bring:
 [Cleanup order and late results](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cleanup.md#cleanup-order-and-late-results)
 on the cleanup page of `async_job` is where that order is described and kept. A
-controller adds the last row — the final state handler runs, the outcome is
-delivered, and the queue is released for the next job.
+controller adds the last row. The outcome is fixed first; then the state
+handler passed to `run` computes the state a failed or cancelled job leaves
+behind, as
+[State after failure or cancellation](state.md#state-after-failure-or-cancellation)
+on the state page describes; then the queue starts its next job. Code that
+awaits `done` or `value` resumes after that start.
 
 An ordinary `try`/`finally` is for what does not outlive the body: a lock held
 for one step and released before the body goes on, a temporary of one turn of a
@@ -319,12 +353,18 @@ job and pile up one registration per turn. Registered cleanup is for what must
 live that long, and it alone covers the time after the body returns and while
 its children finish.
 
-Cleanup errors go to the controller's error hook and to observers, and with no
-handler installed the error reaches the zone. A `Cancelled` thrown by cleanup
-takes the same route to the hook and the observer, and never reaches the zone:
-a cancellation is a decision somebody made, not a failure. The outcome of the
-job is not affected by either — cleanup that throws leaves a `Done` job `Done`.
+An error thrown by cleanup is told to the controller's `onError` hook and to
+`Solo.observer`, and then handed to `Solo.errorHandler`, or to the zone when no
+handler is set; [Answering for an error](errors.md#answering-for-an-error) on
+the errors page has the whole route. A `Cancelled` thrown by cleanup goes the
+same way and stops short of the zone: a cancellation is a decision somebody
+made, not a failure. Neither changes the outcome of the job — cleanup that
+throws leaves a `Done` job `Done`.
 
-Never await the same job's `done`, `value` or `cancel()` from its cleanup, or
-wait for a later job in the same queue: all of them depend on the current
-cleanup finishing, and the wait never ends.
+Never await the same job's `done`, `value` or `cancel()` from its cleanup: each
+completes only after that cleanup, so the wait never ends, and neither does a
+`close()` that waits for the job. A later job of the same queue cannot start
+until this one is over, so waiting for it holds the queue for as long as that
+job stays queued. `pending` reports such a job as `in its cleanup`;
+[What is holding the controller](errors.md#what-is-holding-the-controller) on
+the errors page shows how to read it.
