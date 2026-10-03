@@ -258,6 +258,18 @@ Job<String> loadedAwaitingParsed() {
   return loaded;
 }
 
+/// Chains: the continuation receives what its source hands out.
+(Job<Source>, Job<void>) archiveOpened() {
+  final opened = Job<Source>(
+    (ctx) => ctx.wait(openRows, discard: (source) => source.close()),
+  );
+  final archived = opened.then<void>((ctx, rows) async {
+    ctx.onDispose(rows.close);
+    await ctx.join(() => writeArchive([rows]));
+  });
+  return (opened, archived);
+}
+
 /// The first attempt of the chain, and the version where the source is the
 /// only child; [adoptTheTail] picks the first.
 Future<void> reportedRows({required bool adoptTheTail}) async {

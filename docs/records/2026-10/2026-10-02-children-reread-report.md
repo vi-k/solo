@@ -779,3 +779,18 @@ zone that link was created in».
     задачи, продолжение не становится её ребёнком, и задача его не ждёт.
     Сторож: «a continuation made in a body is a root the body does not wait
     for».
+
+39. Владелец 2026-10-03 об абзаце «A `discard` of the source is the other way
+    round»: «к этому абзацу хочется пример». Абзац разбит на три вокруг кода:
+    `opened` открывает источник через `ctx.wait` с `discard` и отдаёт его,
+    продолжение `archived` получает `rows`, первой строкой кладёт `rows.close`
+    в `ctx.onDispose` и пишет архив. Случай без получателя переписан именами
+    примера: `archived.cancel()`, пока `opened` открывает; принявшая отмену
+    `opened` закрывает источник своим `discard`, отвергшая кончается `Done`
+    с открытым источником, и его закрывают через хэндл,
+    `(await opened.value).close()`. Новых утверждений нет. Код —
+    `archiveOpened` в `test/support/children_page.dart`; сторожа в группе
+    «Chains»: «the continuation closes the source it receives», «cancelled
+    while it waited, the continuation never runs, and the discard of the source
+    closes what arrives», «a source that refuses the cancellation ends Done
+    with the source open, and the handle closes it».

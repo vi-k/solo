@@ -749,6 +749,69 @@ void main() {
       });
     });
 
+    test('the continuation closes the source it receives', () {
+      fakeAsync((async) {
+        stubs.stage = stubs.Stage();
+        final (opened, archived) = page.archiveOpened();
+
+        async.flushTimers();
+
+        expect(opened.outcome, isA<Done<stubs.Source>>());
+        expect(archived.outcome, isA<Done<void>>());
+        expect(stubs.stage.trace, ['archive of 1', 'rows closed']);
+      });
+    });
+
+    test(
+        'cancelled while it waited, the continuation never runs, and the '
+        'discard of the source closes what arrives', () {
+      fakeAsync((async) {
+        stubs.stage = stubs.Stage()..rowsTake = 50;
+        final (opened, archived) = page.archiveOpened();
+        opened.ignore();
+
+        async.elapse(const Duration(milliseconds: 10));
+        archived.cancel().ignore();
+        async.flushMicrotasks();
+        expect(archived.outcome, isA<Cancelled>());
+        expect(opened.outcome, isA<Cancelled>());
+        expect(stubs.stage.trace, isEmpty);
+
+        async.flushTimers();
+        expect(stubs.stage.trace, ['rows closed']);
+      });
+    });
+
+    test(
+        'a source that refuses the cancellation ends Done with the source '
+        'open, and the handle closes it', () {
+      fakeAsync((async) {
+        stubs.stage = stubs.Stage()..rowsTake = 50;
+        final opened = Job<stubs.Source>(
+          cancellable: false,
+          (ctx) => ctx.wait(
+            stubs.openRows,
+            discard: (source) => source.close(),
+          ),
+        );
+        final archived = opened.then<void>((ctx, rows) async {
+          ctx.onDispose(rows.close);
+        });
+
+        async.elapse(const Duration(milliseconds: 10));
+        archived.cancel().ignore();
+        async.flushTimers();
+
+        expect(opened.outcome, isA<Done<stubs.Source>>());
+        expect(archived.outcome, isA<Cancelled>());
+        expect(stubs.stage.trace, isEmpty);
+
+        opened.value.then((source) => source.close()).ignore();
+        async.flushMicrotasks();
+        expect(stubs.stage.trace, ['rows closed']);
+      });
+    });
+
     test('a source whose body awaits its continuation never finishes', () {
       fakeAsync((async) {
         final loaded = page.loadedAwaitingParsed();

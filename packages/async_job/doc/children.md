@@ -630,16 +630,31 @@ Cleanup registered by the source has already run when the continuation receives
 its value; a resource closed by the source's `onDispose` is therefore already
 closed at that point.
 
-A `discard` of the source is the other way round: the source ended `Done`, so
-it never ran and never will, and the continuation is the receiver — it takes
-the value as its argument and registers the release in its own body. One case
-has no receiver at all: a continuation cancelled while it waited finishes
-without ever calling its callback, so there is no body and no moment. A source
-that took the cancellation with it closed what it took on the way out; one that
-refused it — `cancellable: false`, or already finished when the request
-arrived — ends `Done` all the same, and the resource is then the caller's to
-close, through the source's handle, exactly as for a branch that refuses a
-group's stop.
+A `discard` of the source is the other way round. Here `opened` hands out the
+rows it opened, and `archived` receives them:
+
+```dart
+final opened = Job<Source>(
+  (ctx) => ctx.wait(openRows, discard: (source) => source.close()),
+);
+final archived = opened.then<void>((ctx, rows) async {
+  ctx.onDispose(rows.close);
+  await ctx.join(() => writeArchive([rows]));
+});
+```
+
+`opened` ended `Done`, so its `discard` did not run and never will. The
+receiver is the continuation: `rows` comes as its argument, and it registers
+the closing in its own body, on the first line.
+
+One case has no receiver at all. `archived.cancel()` while `opened` is still
+opening finishes `archived` without ever calling its callback, so there is no
+body to register anything in. The cancellation goes on to `opened`. If `opened`
+takes it, its `discard` closes the rows when they arrive. If `opened` refuses
+it — `cancellable: false`, or already finished when the request arrived — it
+ends `Done` all the same, with the rows open. The caller then closes them
+through the handle, `(await opened.value).close()`, exactly as for a branch
+that refuses a group's stop.
 
 An observer on the last link hears a failure from anywhere up the chain, as
 that link's own: the failure comes down the chain and ends every link after it.
