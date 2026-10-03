@@ -580,9 +580,24 @@ Like `run`, `each` can only start children while the parent body is active;
 calls from `unattended` or cleanup are rejected. The future returned by the
 underlying subscription's `cancel()` is not awaited; if it fails, the error
 goes to `onError` of the child's observer and, unless that observer answers for
-it, to the zone. If the source needs asynchronous cleanup, arrange to await
-that cleanup separately. Normal stream completion still depends on the source
-sending `onDone`.
+it, to the zone. Normal stream completion still depends on the source sending
+`onDone`.
+
+The future of that `cancel()` is the source's own cleanup: a connection
+shutting down, a file being flushed. The child lets go of the stream and ends
+without waiting for it, so the job can be over while the source is still
+closing. A job that must not end before the source has closed puts that closing
+on its own cleanup stack:
+
+```dart
+final feed = Feed();
+ctx.onDispose(feed.close);
+await ctx.each(feed.messages, (childCtx, message) => save(message)).value;
+```
+
+`feed.close()` here returns a future that completes when the connection is
+down. The cleanup of the job awaits it, so the job ends after it, and
+`cancel()` and a parent, which wait for the job, wait for the source as well.
 
 ### The first attempt
 

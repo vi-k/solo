@@ -1146,6 +1146,33 @@ void main() {
       });
     });
 
+    test('a cancelled each does not wait for the source to shut down', () {
+      fakeAsync((async) {
+        final job = page.feedLeftToItself();
+        job.done.then((outcome) => stubs.stage.trace.add('job $outcome'));
+        async.flushMicrotasks();
+        job.cancel().ignore();
+        async.flushTimers();
+        expect(trace(), ['job Cancelled(manual)', 'feed disconnected']);
+      });
+    });
+
+    test('onDispose with the close of the source makes the job wait', () {
+      fakeAsync((async) {
+        final job = page.feedClosedByTheJob();
+        var cancelReturned = false;
+        job.done.then((outcome) => stubs.stage.trace.add('job $outcome'));
+        async.flushMicrotasks();
+        job.cancel().then((_) => cancelReturned = true);
+        async.elapse(const Duration(milliseconds: 29));
+        expect(job.isFinished, isFalse);
+        expect(cancelReturned, isFalse);
+        async.flushTimers();
+        expect(trace(), ['feed disconnected', 'job Cancelled(manual)']);
+        expect(cancelReturned, isTrue);
+      });
+    });
+
     test('dispose in the callback keeps every draft open to the end', () {
       fakeAsync((async) {
         final parent = page.draftsOnTheStackOfTheStream();

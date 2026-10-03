@@ -716,3 +716,13 @@ zone that link was created in».
     ни создан, `cancellable: false`. Утверждения держит `each_root_test.dart`,
     код — сторож «saveAll saves one message after the other, in one job».
     Дизайн — `2026-10-03-job-each-design.md`.
+
+35. Владелец 2026-10-03: «Если источнику нужна асинхронная уборка, дождитесь её
+    отдельно. — что ты имеешь в виду? и как дождаться?» Фраза называла действие
+    и не говорила ни что это за уборка, ни чем её ждать. Заменена абзацем
+    и кодом в конце вступления «Processing streams»: future от `cancel()`
+    подписки — уборка самого источника, ребёнок её не ждёт, и задача может
+    кончиться раньше, чем источник закрылся; ждут её, положив закрытие
+    источника на стек уборки задачи — `ctx.onDispose(feed.close)`. Сторожа: «a
+    cancelled each does not wait for the source to shut down» и «onDispose with
+    the close of the source makes the job wait».

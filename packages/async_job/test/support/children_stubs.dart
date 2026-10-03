@@ -123,6 +123,28 @@ Stream<String> get messages => stage.messages.stream;
 
 Future<void> save(String event) async => stage.trace.add('saved $event');
 
+/// A source whose connection takes time to shut down.
+final class Feed {
+  final _disconnected = Completer<void>();
+  var _disconnecting = false;
+  // ignore: close_sinks
+  late final _controller = StreamController<String>(onCancel: close);
+
+  Stream<String> get messages => _controller.stream;
+
+  /// Shuts the connection down; completes when it is down.
+  Future<void> close() {
+    if (!_disconnecting) {
+      _disconnecting = true;
+      delay(30).then((_) {
+        stage.trace.add('feed disconnected');
+        _disconnected.complete();
+      });
+    }
+    return _disconnected.future;
+  }
+}
+
 /// What a message is written through; closing it is written to the trace.
 final class Draft {
   final String message;

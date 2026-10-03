@@ -259,6 +259,17 @@ Job<void> savingWithCheckpoints() => Job<void>((ctx) async {
       await processing.value;
     });
 
+Job<void> feedLeftToItself() => Job<void>((ctx) async {
+      final feed = Feed();
+      await ctx.each(feed.messages, (childCtx, message) => save(message)).value;
+    });
+
+Job<void> feedClosedByTheJob() => Job<void>((ctx) async {
+      final feed = Feed();
+      ctx.onDispose(feed.close);
+      await ctx.each(feed.messages, (childCtx, message) => save(message)).value;
+    });
+
 Job<void> draftsOnTheStackOfTheStream() => Job<void>((ctx) async {
       final processing = ctx.each(messages, (childCtx, message) async {
         final draft = await childCtx.join(
