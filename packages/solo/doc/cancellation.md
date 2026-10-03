@@ -33,14 +33,20 @@ operation behind it:
 | `ctx.wait(action)` | Throws `Cancelled` without waiting for the operation to finish. |
 | `ctx.join(action)` | Waits for the operation to finish, then throws `Cancelled` in place of a successful result. |
 | `ctx.uncancellable(action)` | Holds ordinary cancellation until the action finishes, then returns its result without throwing `Cancelled`; code after it runs until the next checkpoint, which throws it. |
+| `ctx.pause(duration)` | Throws `Cancelled` at once, and cancels its timer. |
 | `ctx.check()` | Throws `Cancelled` when the job is already cancelled or its rules no longer hold. |
 
 A running job accepts a cancellation the moment it is asked to stop, unless an
 `uncancellable` section holds the request back or the job refuses it with
 `cancellable: false`; both are taken apart below. Accepting it makes the job
-cancelled: its `onCancel` callbacks run, the cancellation passes to its
-children, and the job ends `Cancelled` whatever the body does next. The body
-itself goes on until its next checkpoint.
+cancelled: the cancellation passes to its children, the callbacks it registered
+with `ctx.onCancel` run, and the job ends `Cancelled` whatever the body does
+next. The body itself goes on until its next checkpoint.
+
+Such a request — `cancel()`, the cancellation of a parent, `close()` — is the
+ordinary cancellation of the code and the table above. The other kind comes
+from the job's own state rules, and neither a section nor `cancellable: false`
+stops it.
 
 `wait` suits a request whose result can be abandoned. The request can continue
 after the job has finished and the next job has started. `join` suits work that
@@ -52,13 +58,14 @@ call. A cancellation accepted while the device is opening comes out of `join`
 in place of the handle, and the body never reaches the next line; `dispose`
 receives the handle either way.
 [Taking a resource from a call](resources.md#taking-a-resource-from-a-call) on
-the resources page takes that first attempt apart.
+the resources page takes the version with the release on the next line apart.
 
 After a cancellation, a successful result of `join` turns into `Cancelled`, as
 the table says; a failure does not. If the operation fails, `join` throws the
 operation's own error, even after the job has accepted cancellation, so the
 cancellation does not hide the failure. The job's final outcome is still
-`Cancelled`.
+`Cancelled`, so no outcome carries that error: if the body lets it out, the
+controller's `onError` hook is told of it, and it goes no further.
 
 Four sections below open with the version this vocabulary leads to — the method
 whose name sounds like the requirement, or a plain `await` — and say what it
@@ -75,7 +82,7 @@ the position the user lands on must not wait for the ones dragged past.
 ### The first attempt
 
 ```dart
-Job<void> seek(Duration position) => run<Ready, void>(
+SoloJob<void> seek(Duration position) => run<Ready, void>(
       key: 'seek',
       policy: Policy.restart,
       (ctx) async {
@@ -97,7 +104,7 @@ asked for, whatever the device actually did.
 ### The second attempt
 
 ```dart
-Job<void> seek(Duration position) => run<Ready, void>(
+SoloJob<void> seek(Duration position) => run<Ready, void>(
       key: 'seek',
       policy: Policy.restart,
       (ctx) async {
@@ -117,7 +124,7 @@ waiting the call out does not make its result count.
 ### The token
 
 ```dart
-Job<void> seek(Duration position) => run<Ready, void>(
+SoloJob<void> seek(Duration position) => run<Ready, void>(
       key: 'seek',
       policy: Policy.restart,
       (ctx) async {
@@ -131,17 +138,28 @@ Job<void> seek(Duration position) => run<Ready, void>(
 ```
 
 `ctx.onCancel(callback)` connects job cancellation to an operation's own
-cancellation mechanism; the callback runs synchronously when the job accepts
-the cancellation. The token asks the player to stop seeking, and `join` waits
-for it to stop, so a replacement seek starts right after the one it replaces
-has stopped, not at the end of it. This depends on the player's API actually
-responding to the token. One that ignores it puts you back at the second
-attempt: the seek dragged past runs to its end, and only then does the next one
-start.
+cancellation mechanism, here the `CancelToken` of the player's API, which is
+not a type of this package; the callback runs synchronously when the job
+accepts the cancellation. The token asks the player to stop seeking, and `join`
+waits for it to stop, so a replacement seek starts right after the one it
+replaces has stopped, not at the end of it. This depends on the player's API
+actually responding to the token. One that ignores it puts you back at the
+second attempt: the seek dragged past runs to its end, and only then does the
+next one start.
 
-`ctx.onCancel` returns a function that unregisters the callback. It is a
-cancellation signal for the operation, whereas the `onCancel` parameter of
-`run` computes a final controller state after the job's cleanup.
+A player that stops its seek by throwing hands that error to `join`, and `join`
+throws it as it is. The job still ends `Cancelled`, and the controller's
+`onError` hook is told of an error for every seek dragged past. Put the call in
+a `try` and make `ctx.check()` the first line of its `catch`, and the
+cancellation comes out instead of the player's error:
+[Asking the job](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cancellation.md#asking-the-job)
+on the cancellation page of `async_job` has that `catch`.
+
+`ctx.onCancel` returns a function that unregisters the callback. Its namesake,
+the `onCancel` parameter of `run`, is a state handler: it computes the state
+the controller is left in once the cancelled job has cleaned up.
+[State after failure or cancellation](state.md#state-after-failure-or-cancellation)
+on the state page is about it.
 
 ## Protecting a step or a whole job
 
@@ -205,11 +223,11 @@ checkpoint inside the section does not throw on them — the receipt reaches the
 state — and its cancellation callbacks and child cancellation cascade are
 delayed as well.
 
-When the outermost section finishes, a held request is applied. The next
-checkpoint throws `Cancelled`; ordinary code immediately after the call can
-still execute. Keep all required work inside the section and always await it.
-An unawaited section can outlive the job and lose a held request. Sections can
-nest.
+When the outermost section finishes, the job accepts the request it held. The
+next checkpoint throws `Cancelled`; ordinary code immediately after the call
+can still execute. Keep all required work inside the section and always await
+it. An unawaited section can outlive the job and lose a held request. Sections
+can nest.
 
 ### A whole job
 
@@ -221,14 +239,20 @@ SoloJob<void> flush() => run<Ready, void>(
     );
 ```
 
-`cancellable: false` on a job refuses these requests altogether. While such a
-job waits in the queue, `queue.remove`, `queue.removeWhere`, `queue.clear` and
+`cancellable: false` on a job refuses the requests a section holds — manual
+cancellation, parent cancellation and closing — altogether. While such a job
+waits in the queue, `queue.remove`, `queue.removeWhere`, `queue.clear` and
 `cancelAll()` leave it in place; called with `force: true`, they take it out.
 `close()` drops it from the queue too, and waits for it once it is running.
 
-Neither mechanism disables state rules. A job whose `W` or `keepWhile` no
-longer matches is still cancelled. A job that must work in every state needs
-the base type `S` and no `keepWhile` restriction.
+Neither a section nor `cancellable: false` holds back the state rules of a job.
+Its working type — the first type argument of `run`, `Ready` on this page — and
+its `keepWhile` cancel it when the state stops fitting them, inside a section
+too: if the state leaves `Ready` while `commit` above waits for the payment,
+the next line of the section throws, and neither the receipt nor the entry
+follows. A job that must go on in every state takes the whole state type of the
+controller as its working type, and no `keepWhile`.
+[State and rules](state.md#state-and-rules) on the state page is about both.
 
 ## Ordinary await and context lifetime
 
@@ -250,12 +274,15 @@ SoloJob<void> upload(List<int> chunks) => run<Ready, void>((ctx) async {
 ```
 
 Each half uses the wait the other half needed. The loop waits with a plain
-`await`, which answers to nothing: `close()` during the second chunk waits for
-the third and the fourth as well. The cleanup waits with `join`, which belongs
-to the body, and the body is over by the time cleanup runs: `join` throws
-`StateError`, the error reaches the controller's `onError` hook, and the flush
-never happens. That does not depend on how the job ended — an upload that
-finished `Done` leaves the buffer unflushed as well.
+`await`, which answers to nothing: `close()` during the second of four chunks
+waits for the third and the fourth as well. The cleanup waits with `join`,
+which belongs to the body, and the body is over by the time cleanup runs:
+`join` throws `StateError`, and the flush never happens. That does not depend
+on how the job ended — an upload that finished `Done` leaves the buffer
+unflushed as well. The error is told to the controller's `onError` hook and
+then handed to `Solo.errorHandler`, or to the zone when no handler is set;
+[Answering for an error](errors.md#answering-for-an-error) on the errors page
+has the whole route.
 
 ### Each wait in its place
 
@@ -280,6 +307,14 @@ section. Cleanup runs after the body has ended, whatever the outcome, and the
 waiting methods belong to the body: in a disposer they throw `StateError` even
 for a job that ended `Done`.
 
+A delay written as `await Future.delayed(...)` is such a plain `await`: a
+cancelled job sits it out to its end, and `close()` waits with it.
+`ctx.pause(duration)` is the delay that is a checkpoint: it ends the moment the
+job accepts a cancellation, and its timer is cancelled with it.
+[Letting time pass](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cancellation.md#letting-time-pass)
+on the cancellation page of `async_job` compares the three ways to wait for
+time.
+
 `join` checks the cancellation before its operation as well as after it, so two
 of them in a row leave no gap. `ctx.check()` is for the gaps nothing else
 checks: after a plain `await` or an `uncancellable` section, when what follows
@@ -287,12 +322,13 @@ is not another checkpoint.
 
 Do not retain a context to start work after its job ends. Methods such as
 `emit`, `run`, `each`, `wait`, `join`, `pause` and `uncancellable` then throw
-`StateError`. Reads and `check` remain available after normal completion; after
-cancellation they still throw `Cancelled`. During registered cleanup, state
-reads and body operations are unavailable. Capture the resources needed for
-cleanup in its closure. `log`, `job`, cleanup registration, `disown` and
-`unattended` remain available during cleanup. `log` itself does not throw on
-cancellation or completion.
+`StateError`. Reads and `check` remain available once the job is over, and they
+remain checkpoints: after a cancellation they throw that `Cancelled`, and after
+any other outcome they still ask the rules of the job. During registered
+cleanup, state reads and body operations are unavailable. Capture the resources
+needed for cleanup in its closure. `log`, `job`, cleanup registration, `disown`
+and `unattended` remain available during cleanup. `log` itself does not throw
+on cancellation or completion.
 
 ## Cancellation details
 
@@ -316,6 +352,8 @@ throw Cancelled.by(reason: OutOfRange(position), started: true);
 
 // And on the way out:
 switch (job.outcome) {
+  case Cancelled(reason: OutOfRange(:final position)):
+    print('out of range at $position');
   case Cancelled(:final reason, :final started):
     print('cancelled by ${reason.name}, started: $started');
   case _:
@@ -324,20 +362,24 @@ switch (job.outcome) {
 
 `Cancelled` includes `reason`, `started`, an optional `description` and the
 cancellation stack trace. `started: false` means the body never ran. Reasons
-extend `CancelReason`. The built-in types include `ManualCancelReason`,
+extend `CancelReason`. The built-in types are `ManualCancelReason`,
 `ParentCancelReason`, `HandlerCancelReason`, `ChainCancelReason`,
-`RulesCancelReason`, `ClosedCancelReason` and `DuplicateCancelReason`. Inspect
-the type; `name` is a display label, not an equality key. Propagation between
-jobs retains the original cancellation in the reason's `cause`.
+`SiblingCancelReason`, `RulesCancelReason`, `ClosedCancelReason` and
+`DuplicateCancelReason`. Inspect the type, as the first case above does; `name`
+is a display label, not an equality key. Propagation between jobs retains the
+original cancellation in the reason's `cause`.
 
 `job.whenCancelled(callback)` registers a synchronous listener and returns a
-function to unregister it. It fires when a running job accepts cancellation,
-from outside or from a body that throws `Cancelled`, or when a job is dropped
-before starting. Registration made once the cancellation has been announced
-calls the listener immediately; one made while it is still cascading onto the
-children joins that announcement in its own place. Successful and failed jobs
-release these listeners without calling them. An asynchronous callback is not
-awaited; callback errors use the same reporting path as `ctx.onCancel` errors.
+function to unregister it. The listener is called when a running job accepts
+cancellation, from outside or from a body that throws `Cancelled`, or when a
+job is dropped before starting. Registered on a job that is cancelled already,
+it is called immediately; registered while the cancellation is still passing to
+the children, it is called in its turn, after the listeners registered before
+it. Successful and failed jobs release these listeners without calling them.
+What a listener throws goes the way an error of cleanup goes, to the `onError`
+hook and on to `Solo.errorHandler` or the zone, and so does what a
+`ctx.onCancel` callback throws. An `async` listener is not awaited, and an
+error of its future goes straight to the zone, past the hook.
 
 ## Cancelling and closing a controller
 
@@ -351,7 +393,7 @@ logs.send(first);
 logs.send(second);
 logs.send(third);
 
-// The screen goes away.
+// The first batch is on its way when the screen goes away.
 await logs.close();
 ```
 
@@ -364,7 +406,7 @@ batch arrived, and the outcome records that, not the delivery.
 ### Three ways to stop
 
 ```dart
-// Clear the queue and stop the running job; the controller stays open.
+// Clear the queue and cancel the running job; the controller stays open.
 await logs.cancelAll();
 
 // The same, and nothing new is accepted afterwards.
@@ -375,16 +417,20 @@ await logs.close(mode: SoloCloseMode.drain);
 ```
 
 `cancelAll()` clears cancellable queued jobs, requests cancellation of the
-running job and waits for it to finish. The controller continues accepting
-work. `cancelAll(force: true)` also removes non-cancellable queued jobs;
-`force` does not change whether the running job accepts cancellation.
+running job and waits for it to finish. The jobs it ends carry
+`Cancelled(manual)`, or the reason passed as `cancelAll(reason: ...)`. The
+controller continues accepting work. `cancelAll(force: true)` also removes
+non-cancellable queued jobs; `force` does not change whether the running job
+accepts cancellation.
 
 `close()` stops accepting work, cancels every queued job with
 `Cancelled(closed)` and requests cancellation of the running job. It waits for
-that job, including children and cleanup, even if cancellation is refused.
-Repeated calls return the same future. Later submissions return already
-cancelled jobs rather than throwing, so callers do not need an `isClosed` check
-before submitting.
+that job, including children and cleanup, even if cancellation is refused;
+`pending` says what it is waiting for, as
+[What is holding the controller](errors.md#what-is-holding-the-controller) on
+the errors page shows. Repeated calls return the same future. Later submissions
+return already cancelled jobs rather than throwing, so callers do not need an
+`isClosed` check before submitting.
 
 `SoloCloseMode.drain` closes by running the queue instead of dropping it, and
 that is the whole fix the first attempt needs: the three batches go out in
@@ -424,7 +470,9 @@ This never comes back. `close()` waits for the running job, including its
 children and cleanup, and the running job is this one, waiting for `close()`.
 `cancelAll()` waits the same way, and so does either of them awaited from the
 job's cleanup. A body that only has to end itself needs no controller call at
-all: it returns, or cancels itself by throwing `Cancelled('reason')`.
+all: it returns, or cancels itself by throwing `Cancelled('reason')`. The throw
+cancels the job the way `cancel()` does: the cancellation passes to its
+children, and its `ctx.onCancel` callbacks run.
 
 #### The second attempt
 
@@ -449,7 +497,7 @@ very line.
 
 ```dart
 Future<void> logout() async {
-  run<Ready, void>((ctx) => ctx.join(api.logout));
+  run<Ready, void>((ctx) => ctx.join(api.logout)).ignore();
   await close(mode: SoloCloseMode.drain);
 }
 ```
@@ -459,3 +507,8 @@ line onwards: a job submitted while the call is in flight comes back
 `Cancelled(closed)` without reaching the API at all. Whatever stood in the
 queue before runs in either version — the logout job goes to the end of it, and
 the method waits its turn.
+
+`ignore()` stands where the second attempt read `done`. Nobody waits for the
+outcome of this job, and without `ignore()` a logout that fails would reach the
+zone as an unhandled error. The controller's `onError` hook hears that failure
+in either version, and the controller closes all the same.
