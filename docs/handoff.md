@@ -18,7 +18,7 @@
 `packages/async_job/doc/children.md` второй раз, и каждый его вопрос правится
 в самой странице: оригинал, перевод `docs/ru/async_job/children.md`, сторож
 `packages/async_job/test/children_rakes_test.dart` и пункт раздела «По чтению
-владельца» в `2026-10-02-children-reread-report.md` — там 37 пунктов, пять
+владельца» в `2026-10-02-children-reread-report.md` — там 38 пунктов, пять
 из последних о стримах, последний о цепочках. Раздел о стримах 2026-10-03
 по слову владельца вынесен на свою страницу `packages/async_job/doc/streams.md`
 с переводом, сторож `packages/async_job/test/streams_rakes_test.dart`;
