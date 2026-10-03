@@ -1410,6 +1410,15 @@ void main() {
           ),
         ),
       );
+      expect(
+        File('lib/src/solo_stream.dart').readAsStringSync(),
+        contains(
+          RegExp(
+            r'@protected\s+@override\s+'
+            r'void publish\(S previous, S current\)',
+          ),
+        ),
+      );
       // The check of the code would not miss the line: a piece of the page
       // that lost it is still a run of lines of the support file.
       expect(

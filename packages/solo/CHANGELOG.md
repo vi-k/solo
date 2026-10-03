@@ -40,6 +40,15 @@ first group names them.
   override. See
   [Creating and scheduling jobs](doc/jobs.md#creating-and-scheduling-jobs).
 
+- **`SoloStream.publish` is `@protected`.** The override in the mixin left the
+  annotation off, and `@protected` does not carry over to an override: the
+  engine's hook was a public member of every controller with a stream, and code
+  that held the controller could publish a state nobody wrote. The analyzer now
+  reports a call from outside the class as `invalid_use_of_protected_member`;
+  the code still compiles and runs as before. **Migrating.** Write the state
+  from the controller: `externalSetState` for what a source reports, `emit` in
+  a job. See [Observing state](doc/state.md#observing-state).
+
 - **The controller's synchronous read is `currentState`, not `state`.** A job
   body is a closure inside a method of the controller, so every member of the
   controller is in scope there, and a read named `state` looked exactly like

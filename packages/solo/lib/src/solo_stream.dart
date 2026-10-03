@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:meta/meta.dart';
+
 import 'close_mode.dart';
 import 'pending.dart';
 import 'solo.dart';
@@ -67,6 +69,12 @@ mixin SoloStream<S extends Object> on Solo<S> {
       super.pending ?? (_streamClosing ? const SoloPendingStream() : null);
 
   /// Pushes [current] into [stream].
+  ///
+  /// `@protected` is repeated because Dart does not inherit it. Left off,
+  /// this override makes a hook of the engine a public member of every
+  /// controller with a stream, and code that holds the controller could
+  /// publish a state nobody wrote.
+  @protected
   @override
   void publish(S previous, S current) {
     super.publish(previous, current);
