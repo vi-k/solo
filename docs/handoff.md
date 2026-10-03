@@ -319,7 +319,8 @@ README `flutter_solo` с его `doc/mixins.md` и быстрого старта
 `jobs_rakes_test.dart`, `queue_pause_recipe_test.dart`
 и `droppable_recipe_test.dart`, всего 109. Код `cancellation.md` с 2026-10-04
 стоит в `packages/solo/test/support/cancellation_*.dart` и запускается тестом
-`cancellation_rakes_test.dart`, 146 тестов.
+`cancellation_rakes_test.dart`, 146 тестов; код `resources.md` —
+в `resources_*.dart` там же, тест `resources_rakes_test.dart`, 119.
 
 **Стенда у `state.md` тоже нет, сторожа — тестом.** Каждую первую попытку
 страницы и каждое утверждение, добавленное чтением владельца, держит
