@@ -274,6 +274,29 @@ void main() {
       expect(listening, isTrue);
     });
 
+    test('the onError of listen hears the stream, not the callback', () {
+      final zoneErrors = <Object>[];
+      final heard = <Object>[];
+      runZonedGuarded(
+        () => fakeAsync((async) {
+          final messages = StreamController<String>();
+          messages.stream.listen(
+            (message) async => throw StateError('save'),
+            onError: heard.add,
+          );
+          messages.add('m1');
+          async.flushTimers();
+          expect(heard, isEmpty, reason: 'the callback threw past onError');
+          messages.addError(ArgumentError('stream'));
+          async.flushTimers();
+          messages.close().ignore();
+        }),
+        (error, _) => zoneErrors.add(error),
+      );
+      expect(zoneErrors, [isA<StateError>()]);
+      expect(heard, [isA<ArgumentError>()]);
+    });
+
     test('saveAll saves one message after the other, in one job', () {
       fakeAsync((async) {
         final messages = StreamController<String>();

@@ -55,7 +55,9 @@ by side, and nothing says which one finishes first.
 
 And the stream calls the callback, not the body. An error thrown in it goes to
 the zone and past the job: the job stays running and subscribed, its outcome
-knows nothing of the failure, and neither does whoever awaits its `value`.
+knows nothing of the failure, and neither does whoever awaits its `value`. The
+`onError` of `listen` does not change that: it hears the errors of the stream,
+not what the callback throws.
 
 ### A child that owns the subscription
 
