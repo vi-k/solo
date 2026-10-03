@@ -3,13 +3,13 @@
 `Solo<S>` stores one immutable state of type `S`, and a job declares which
 states it may start in and which it may keep running in. Four sections below
 open with the version this API's own vocabulary leads to — what you write when
-you reach for `run` and stop there — and say what it does instead of what it
+you reach for a job and stop there — and say what it does instead of what it
 was meant to do. The version that works follows under its own heading.
 
 ## State and rules
 
 A recording needs free space before it starts, and it has to stop when the
-camera is paused.
+device reports a pause.
 
 ### The first attempt
 
@@ -18,7 +18,7 @@ Job<void> record() => run<CameraState, void>(
       key: 'record',
       (ctx) async {
         final state = ctx.state;
-        if (state is! Ready || state.paused) return;
+        if (state is! Ready || state.free == 0 || state.paused) return;
         await for (final frame in device.frames) {
           await store(frame);
         }
@@ -26,10 +26,10 @@ Job<void> record() => run<CameraState, void>(
     );
 ```
 
-The check reads well, and it runs once. Nothing brings it back: by the time
-another update sets `paused`, the body is already inside the loop, and a loop
-is not a state checkpoint. A frame that arrives before the pause and two that
-arrive after it are stored alike.
+The check reads well, and it runs once. Nothing brings it back: by the time the
+pause is reported and the state says `paused`, the body is already inside the
+loop, and a loop is not a state checkpoint. A frame that arrives before the
+pause and two that arrive after it are stored alike.
 
 The job does not end either. `await for` is no checkpoint, so the cancellation
 `close` sends never reaches the body, and closing the controller waits until
@@ -42,26 +42,31 @@ Job<void> record() => run<Ready, void>(
       key: 'record',
       canStart: (state) => state.free > 0,
       keepWhile: (state) => !state.paused,
-      (ctx) => ctx.each(
-        device.frames,
-        (child, frame) => child.join(() => store(frame)),
-      ).value,
+      (ctx) => ctx.each(device.frames, (child, frame) async {
+        await child.join(() => store(frame));
+      }).value,
     );
 ```
 
 The rules are parameters, and the engine checks them for the job. The working
-type narrows from `CameraState` to `Ready`, so the state the body reads is the
-one it needs, and the condition the first attempt checked by hand is now
-`keepWhile`.
+type narrows from `CameraState` to `Ready`, so the rules read `state.free` and
+`state.paused` with no check of the type, and the conditions the first attempt
+checked by hand are now `canStart` and `keepWhile`.
 
 The first type argument of `run<W, T>` is the job's working state type,
 `W extends S`. The engine checks it, so `run<Ready, void>` starts only in
-`Ready`; the body reads `ctx.state` as `W` for the same reason. When another
-state update sets `paused` to true, `keepWhile` cancels the recording; the body
-does not need to repeat that condition. Here `Ready`, `device` and `store`
-belong to the application, and `ctx.each` processes the stream — its full
-lifecycle is explained in
+`Ready`; the body reads `ctx.state` as `W` for the same reason. Here `Ready`,
+`device` and `store` belong to the application, and `ctx.each` processes the
+stream — its full lifecycle is explained in
 [Processing a stream](children.md#processing-a-stream) on the children page.
+
+When a state update sets `paused` to true, `keepWhile` cancels the recording;
+the body does not need to repeat that condition. That update does not come from
+another job of the queue: root jobs run one at a time, so a `pause()` written
+as a job would wait for the recording to end before it could set `paused`.
+While the recording runs, an update its rules are asked about comes from one of
+two places: from [`externalSetState`](#externalsetstate), where the controller
+reflects what the device reports, or from a child of the recording.
 
 Use separate classes when states allow different operations, and shared base
 types when an operation can span several states.
@@ -86,8 +91,8 @@ Job<void> zoomIn() => run<Ready, void>(
         // A read is a checkpoint: cancellation and the rules are checked.
         final state = ctx.state;
 
-        // The only write, and it is synchronous.
-        ctx.emit(Recording(free: state.free, zoom: state.zoom + 1));
+        // The body's only way to write, and it is synchronous.
+        ctx.emit(state.copyWith(zoom: state.zoom + 1));
       },
     );
 ```
@@ -96,10 +101,10 @@ Job<void> zoomIn() => run<Ready, void>(
 rules. The body above is `run<Ready, void>`, so `ctx.state` is a `Ready`
 already; `stateAs<T>()` is for a body whose `W` is wider than the state it
 needs at that moment, and it requires the state to be `T` rather than returning
-null -- a mismatch cancels the job. Waiting methods use state checkpoints too.
+null — a mismatch cancels the job. Waiting methods use state checkpoints too.
 
-`check()` is the same check, minus the value to read. The other members of the
-context check themselves; `check()` covers the gaps between them. A plain
+`check()` is the same check, minus the value to read. The reads and the waiting
+methods make it themselves; `check()` covers the gaps between them. A plain
 `await` and the return from `ctx.uncancellable` check nothing: a job the rules
 have already cancelled walks on until something inside asks: can it still go
 on? Those gaps are covered in
@@ -109,18 +114,22 @@ beside the waiting methods it goes with.
 
 `ctx.emit(next)` allows a job to publish a state outside its own working type:
 an initialization job may finish by emitting `Ready`. A later state checkpoint
-will reject that state if it does not match `W`, so such a transition should be
-the body's last state-dependent step. `canStart` is checked once, at the start,
-and nothing brings it back later -- this emit included.
+will reject that state if it does not match `W`, and a waiting method is such a
+checkpoint as much as a read is: `ctx.wait` or `ctx.join` after that emit ends
+the job `Cancelled` before its action starts. So such a transition comes last
+in the body, with no read and no wait through the context after it. `canStart`
+is checked once, at the start, and nothing brings it back later — this emit
+included.
 
-Other running bodies are checked after a state update. A job's own emit is
-excluded from that rule check, but still checks cancellation before and after
-writing. Both `onChange` (see
+Other running bodies are checked after a state update: a job's children run
+beside it, and each body answers to its own rules. A job's own emit is excluded
+from that rule check, but still checks cancellation before and after writing.
+Both `onChange` (see
 [Watching every controller](errors.md#watching-every-controller) on the errors
 page) and a listener run synchronously inside the write, and neither has a
 `ctx`: the only write open to either one is
-[`externalSetState`](#externalsetstate). A hook that corrects a state this way
--- turning one job's `Preparing` straight into `Working` -- can therefore
+[`externalSetState`](#externalsetstate). A hook that corrects a state this
+way — turning one job's `Preparing` straight into `Working` — can therefore
 cancel the emitting job before its own `emit` returns.
 
 Rules stop cancelling a job once its body has ended. Manual cancellation,
@@ -141,7 +150,7 @@ camera.addListener(() => print(camera.currentState));
 
 // Every update, in order, on a microtask. The initial state is not
 // replayed, and an equal state still produces an event. Needs
-// `with SoloStream` on the controller -- see the table below.
+// `with SoloStream` on the controller — see the table below.
 final subscription = camera.stream.listen(print);
 ```
 
@@ -158,7 +167,7 @@ checked `ctx.state`.
 | `Solo<S> with SoloListenable` | All of `Solo` plus Flutter's `ValueListenable<S>`. |
 
 `addListener` is the engine's own member, on `Solo` itself, so what follows
-holds for every controller -- one with a delivery of its own and one without
+holds for every controller — one with a delivery of its own and one without
 any. The listeners run synchronously, in registration order, inside the change
 itself: after the state is written, before the rules of the running jobs are
 re-evaluated, and before the next line of the code that changed the state.
@@ -201,12 +210,13 @@ which hands it to the zone unless a subclass says otherwise.
 The engine drops the listeners for good when closing finishes, not when
 `close()` is called — the same moment `isFinished` turns true. From then on
 `addListener` does nothing: the listener is neither registered nor kept, and
-nothing is thrown. The state stops at the same line: `externalSetState` past it
-throws a `StateError`.
+nothing is thrown. The state stops at the same moment: from then on
+`externalSetState` throws a `StateError`.
 
-`SoloListenable` adds Flutter's `ValueListenable` to that and nothing else. It
-is a mixin on `Solo`, the way `SoloStream` is: a widget rebuilds from `value`,
-and a controller that needs both deliveries mixes in both.
+`SoloListenable` adds Flutter's `ValueListenable` to that, and reports a
+listener's error to `FlutterError` instead of the zone. It is a mixin on
+`Solo`, the way `SoloStream` is: a widget rebuilds from `value`, and a
+controller that needs both deliveries mixes in both.
 
 ### A delivery of your own
 
@@ -220,6 +230,7 @@ class Logged<S extends Object> extends Solo<S> {
 
   Logged(super.initialState, this.write);
 
+  @protected
   @override
   void publish(S previous, S current) {
     super.publish(previous, current);
@@ -237,11 +248,12 @@ class Logged<S extends Object> extends Solo<S> {
 
 What such an override owes, and what the engine owes it back:
 
-| What it owes | Why |
+| What is owed | Why |
 | --- | --- |
 | `super.publish` comes first | It is what calls the listeners, so a delivery of your own runs after the engine's rather than instead of it. `@mustCallSuper` says so and the analyzer holds you to it. |
-| A failure must not leave `publish` | The rules of the running jobs are re-evaluated right after the call, and an error let out of here costs a job the cancellation the new state owes it. It goes back the way the write came: into the body that called `ctx.emit`, out of `externalSetState` to whoever called it, and to `Zone.current.handleUncaughtError` from `dart:async` when that caller is a hook of the engine, where a failing hook's error goes anyway. |
-| The changes behind it are published all the same | The failed change is gone -- it left the queue before the call and nothing publishes a change twice -- but the ones queued behind it are the state the controller now holds, and they go out before the failure leaves. Only the first failure of a pass is thrown; the rest go to the zone. |
+| `@protected` is repeated | Dart does not carry the annotation over to an override. Without it `publish` is a public member of the controller, and code that holds the controller can publish a state nobody wrote: the listeners are called and the delivery runs, while `currentState` stays what it was. The annotation is in `package:meta`. |
+| A failure must not leave `publish` | The rules of the running jobs are re-evaluated right after the call, and an error let out of here costs a job the cancellation the new state owes it. It goes back the way the write came: into the body that called `ctx.emit`, out of `externalSetState` to whoever called it — to `Zone.current.handleUncaughtError` from `dart:async` when that caller is a hook of the engine, where a failing hook's error goes anyway — and to the controller's `onError` and `onUnanswered` when the write is the result of a state handler. |
+| The changes behind it are published all the same | The failed change is gone — it left the publication queue before the call, and nothing publishes a change twice — but the ones queued behind it are the state the controller now holds, and they go out before the failure leaves. Of several failures only the first is thrown; the rest go to the zone. |
 
 `SoloStream` is this override with a broadcast `StreamController` behind it,
 and `SoloListenable` is the engine's listeners plus Flutter's
@@ -278,11 +290,11 @@ Camera(this.device) : super(const Ready()) {
 
 `first: true` gets the update ahead of everything that is waiting, not ahead of
 the job that is running: the queue runs one job at a time. Until the update
-starts, the controller still reports a connected state, and the running job's
-rules are asked on every change — but only ever about the state it already
-knew. Worse, that job may itself be waiting for a response the device will
-never give, so the update that would free it is standing behind the job it
-would free.
+starts, the controller still reports a connected state, and the rules of the
+running job hear nothing of the disconnection: they are asked when the state
+changes, and it has not. Worse, that job may itself be waiting for a response
+the device will never give, so the update that would free it is standing behind
+the job it would free.
 
 ### externalSetState
 
@@ -295,9 +307,7 @@ final class Camera extends Solo<CameraState> with SoloStream {
     _link = device.connection.listen((connected) {
       // The device has already disconnected: reflect the fact at once
       // instead of queueing a job that would wait behind the current one.
-      // `isFinished` is false for as long as the engine runs, a drain
-      // included, and true once the state is final.
-      if (!connected && !isFinished) {
+      if (!connected) {
         externalSetState(const Disconnected());
       }
     });
@@ -311,7 +321,7 @@ final class Camera extends Solo<CameraState> with SoloStream {
 ```
 
 The method is `@protected` and is called from inside the controller subclass,
-typically from a subscription it holds -- the one on the device above, not a
+typically from a subscription it holds — the one on the device above, not a
 listener of the controller.
 
 `externalSetState` updates state immediately and re-evaluates running jobs, so
@@ -327,21 +337,24 @@ to perform work, such as refresh data or save an incoming value, enqueue a
 normal job. An event being delivered by a stream does not by itself justify
 bypassing the queue.
 
-The subscription goes in `onClose`, which the engine calls once, when every job
-is over and the state is not final yet, whichever mode closed the controller.
-Stopping the source when `close` is called is the tidier-looking moment, and it
-costs nothing only while no running job depends on the fact. With
-`SoloCloseMode.drain` it costs the drain: the queue goes on running after the
-call, and the jobs in it are the ones that most need to hear that the device is
-gone. `SoloCloseMode.cancel` is not safe from it either — a
+The subscription is cancelled in `onClose`, which the engine calls once, when
+every job is over and the state is not final yet, whichever mode closed the
+controller. Stopping the source when `close` is called is the tidier-looking
+moment, and it costs nothing only while no running job depends on the fact.
+With `SoloCloseMode.drain` it costs the drain: the queue goes on running after
+the call, and the jobs in it are the ones that most need to hear that the
+device is gone. `SoloCloseMode.cancel` is not safe from it either — a
 `cancellable: false` job waiting for an answer the device will never give is
-freed by the disconnection, and `close` waits for that job. The subscription
-callback above is synchronous, so nothing can run between its check of
-`isFinished` and its write, and once `onClose` has run it is not called at all.
-A callback that has to await something before writing must check `isFinished`
-after its last `await`, right before `externalSetState`, because a check made
-earlier can go stale while it waits — the engine may finish in the meantime,
-and the write then throws a `StateError`.
+freed by the disconnection, and `close` waits for that job.
+
+Once `onClose` has run, the subscription callback above is not called at all,
+so its write cannot arrive after the end. A callback that has to await
+something before writing is another matter: it starts while the subscription is
+alive, and the engine may finish while it waits. Such a callback checks
+`isFinished` after its last `await`, right before `externalSetState`: a check
+made earlier can go stale, and the write then throws a `StateError`.
+`isFinished` is false for as long as the engine runs, a drain included, and
+true once the state is final.
 
 Use job bodies and their state handlers for the controller's own success,
 failure and cancellation. `externalSetState` is an exception for external
@@ -351,8 +364,10 @@ finished: the state a controller stops at is the state it keeps.
 
 ## State after failure or cancellation
 
-A load publishes `Loading` before it starts waiting. Something has to take the
-controller out of it when the load does not arrive.
+The profile controller of the
+[Quick start](https://github.com/vi-k/solo/blob/main/packages/solo/README.md#quick-start)
+in the package README publishes `Loading` before its load starts waiting.
+Something has to take the controller out of it when the load does not arrive.
 
 ### The first attempt
 
@@ -373,10 +388,11 @@ run<ProfileState, String>(
 ```
 
 On a failure this works: the `catch` writes `Initial` and passes the error on.
-The `catch` runs on a cancellation too, but there the `emit` inside it is a
-state checkpoint on a job that is already cancelled, so it throws instead of
-writing. Cancel the load and the controller stays in `Loading` for good: the
-screen shows a spinner for work that is no longer running.
+The `catch` runs on a cancellation too, but there the `emit` inside it checks
+the cancellation before it writes, and on a job that is already cancelled it
+throws instead of writing. Cancel the load and the controller stays in
+`Loading` for good: the screen shows a spinner for work that is no longer
+running.
 
 ### The handlers
 
@@ -388,7 +404,9 @@ run<ProfileState, String>(
   onCancel: (state, cancelled) => const Initial(),
   (ctx) async {
     ctx.emit(const Loading());
-    return ctx.wait(api.fetchName);
+    final name = await ctx.wait(api.fetchName);
+    ctx.emit(Loaded(name));
+    return name;
   },
 );
 ```
@@ -430,8 +448,8 @@ Job<String> load() => run<ProfileState, String>(
 ```
 
 Nothing here says the load has an opinion about `Disconnected`, so it keeps
-running through it. When the load is cancelled after that — by a duplicate, by
-a screen closing, by anything — `onCancel` does what it was written to do and
+running through it. When the load is cancelled after that — by the user, by a
+screen closing, by anything — `onCancel` does what it was written to do and
 returns `Initial`, over the fact the device reported. The controller now shows
 a profile that is merely empty, when what happened is that the connection is
 gone.
@@ -459,22 +477,23 @@ Job<String> load() => run<ProfileState, String>(
 
 The connection drops while the load is running, and the controller publishes
 `Disconnected` with `externalSetState`. `keepWhile` rejects that state,
-cancelling the load and disabling both final handlers. `Disconnected` therefore
+cancelling the load and disabling both handlers. `Disconnected` therefore
 remains visible instead of being replaced by `Initial` or `Failure`.
 
 If the load is cancelled manually while the state is still compatible,
-`onCancel` can return `Initial`. The handlers need no extra `state is Loading`
-checks: the job's rules express which states permit the operation and its final
-correction.
+`onCancel` still returns `Initial`. The handlers need no
+`state is Disconnected` check of their own: the job's rules say which states
+permit the operation and the correction after it.
 
 ### Handler eligibility and errors
 
 | What happens | What becomes of the handlers |
 | --- | --- |
-| An incompatible external update, whenever it arrives | Disabled for good; a later compatible update does not bring them back. |
+| An incompatible update the job did not make — `externalSetState`, or the `emit` of its parent, child or sibling — whenever it arrives | Disabled for good; a later compatible update does not bring them back. |
 | A parent loses its permission | Its children's handlers are blocked as well. |
 | Success, a discarded duplicate, a body that never started | Not run at all. |
-| The job's own `emit` | Nothing; it does not disable its own handlers. |
+| The job's own `emit` | Nothing by itself; it does not disable its own handlers. |
+| The job's rules cancel it at a checkpoint of its own: after its own `emit` of a state they refuse, or on a `stateAs` mismatch | Not run: a job its rules cancelled leaves the state as it is. |
 | A handler throws | The error is reported; the outcome and the queue are untouched. |
 | A rule throws while eligibility is checked | Handlers disabled and the error reported. Resource cleanup still runs. |
 

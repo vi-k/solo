@@ -393,8 +393,9 @@ cancelled is taken where the rules noticed; `Solo.traceStateChanges`, under
   [Accumulating events before a job starts](doc/accumulation.md) gained the
   recipe for commands where only the last one counts.
 - One recommendation of `0.2.0` is replaced: a source of external states is no
-  longer stopped before `close`. It is guarded with `isFinished` and stopped in
-  `onClose`, which serves both close modes.
+  longer stopped before `close`. It is stopped in `onClose`, which serves both
+  close modes, and a callback that can still arrive after that guards its write
+  with `isFinished`.
 - The runnable camera example lands a failed or cancelled opening in `Broken`
   through the `onError` and `onCancel` of `run`. `init` and `reopen` used to
   land a failure from a `catch` in the body, which a cancellation never
