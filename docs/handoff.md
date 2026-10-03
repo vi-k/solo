@@ -54,7 +54,10 @@ Workflow сценарием `page-reread` из одного вызова, пот
 `camera.md`, `accumulation.md`, `vs-bloc.md` пакета `solo`, затем README
 и `mixins.md` пакета `flutter_solo`. Перенесена `state.md`: коммит `9cafbec`,
 отчёт `2026-10-03-solo-state-reread-report.md`, 27 находок, сторож вырос с 24
-до 90 тестов, пакет `solo` — 936. Запущена вторая, `jobs.md`.
+до 90 тестов, пакет `solo` — 936. Перенесена `jobs.md`: коммит `83d2112`, отчёт
+`2026-10-03-solo-jobs-reread-report.md`, 33 находки, сторожей 109 вместо 9,
+пакет `solo` — 1036; раздел о паузе очереди перестроен в две первые попытки
+и ответ. Запущена третья, `cancellation.md`.
 
 **Что дальше.** `children.md` принята, `streams.md` владелец дочитал
 2026-10-03: пять правок по его вопросам,
@@ -64,9 +67,13 @@ Workflow сценарием `page-reread` из одного вызова, пот
 одна запись — общий отлов зависаний; по ней решено оставить рецептами, пока
 не выполнится условие, названное в самой записи.
 
-**Открытые вопросы владельцу.** Вердикт B1
-в `2026-10-02-solo-readme-reread-report.md`: тур «The dozen calls» в README
-`solo` перестроен — `play` кончается со стартом трека, и из тура ушли
+**Открытые вопросы владельцу.** Раздел «Чего ревью не нашло, но нашлось рядом»
+в `2026-10-03-solo-jobs-reread-report.md`: ошибка `add` о ключе, занятом другим
+типом результата, называет задачу приватным классом
+`_SoloJob<AppState, Ready, int>`, а `packages/solo/CHANGELOG.md` обещает
+`Job(key)`; поправить текст в `packages/solo/lib/src/solo.dart` или оставить.
+Вердикт B1 в `2026-10-02-solo-readme-reread-report.md`: тур «The dozen calls»
+в README `solo` перестроен — `play` кончается со стартом трека, и из тура ушли
 `ctx.onDispose` и `canStart`, хотя карта
 `2026-09-11[16]-docs-structure-design.md` числит `ctx.onDispose` среди
 ежедневных вызовов; конца трека тур не моделирует. Устраивает ли такой тур или
@@ -293,14 +300,13 @@ on upgrade», «Added», «Fixed», «Documentation». Счёт ломающих
 заголовком нет кода, `strayFences` ищет блоки под забором, которого проверки
 не читают. Отчёт — `2026-10-02-extending-rakes-report.md`.
 
-**Код `jobs.md` не собирается ничем.** Стенды есть только у `vs-bloc.md`
+**Стенды есть не у всех страниц.** Они есть у `vs-bloc.md`
 (`tool/doc_snippets.py`), `accumulation.md` (`tool/accumulation_snippets.py`),
 README `flutter_solo` с его `doc/mixins.md` и быстрого старта README `solo`
-(`tool/flutter_snippets.py`); у остальных страниц фрагменты не компилируются
-ни в гейте, ни перед коммитом. Фрагменты `jobs.md` собраны отдельным проектом
-вручную — компилируются все, — но на дереве такой проверки нет. Рецепт паузы
-при этом сторожит `packages/solo/test/queue_pause_recipe_test.dart`, семь
-сторожей.
+(`tool/flutter_snippets.py`). Код `jobs.md` с 2026-10-03 стоит в support-файлах
+`packages/solo/test/support/jobs_*.dart` и запускается тестами
+`jobs_rakes_test.dart`, `queue_pause_recipe_test.dart`
+и `droppable_recipe_test.dart`, всего 109.
 
 **Стенда у `state.md` тоже нет, сторожа — тестом.** Каждую первую попытку
 страницы и каждое утверждение, добавленное чтением владельца, держит
