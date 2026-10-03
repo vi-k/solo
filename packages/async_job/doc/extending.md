@@ -212,11 +212,11 @@ The jobs of the engine may run only while the user is signed in, and
 signs out stops the way a cancelled one does: its `onCancel` callbacks close
 what it opened, its children stop, and it ends `Cancelled`.
 
-`check()` is the checkpoint of the context. While the body runs, `wait`, `join`
-and `uncancellable` ask it before the action, `join` again after it, `run` once
-the child's value has arrived, and `runAll` before it hands the values back. A
-rule of the engine goes there. A job of the engine downloads rows over a
-connection and saves them:
+`check()` is the checkpoint of the context. While the body runs, `wait`,
+`join`, `pause` and `uncancellable` ask it before the action, `join` again
+after it, `run` once the child's value has arrived, and `runAll` before it
+hands the values back. A rule of the engine goes there. A job of the engine
+downloads rows over a connection and saves them:
 
 ```dart
 final job = MyJob<void>(observer: printer, (ctx) async {

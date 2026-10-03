@@ -238,3 +238,45 @@ Job<String> pageWithAThumbnail() {
   });
   return job;
 }
+
+/// The first attempt of "Letting time pass": a read every second, with a
+/// plain delay between two reads.
+Job<void> plainDelay() {
+  // #docregion
+  final job = Job<void>((ctx) async {
+    while (true) {
+      use(await ctx.wait(database.readAll));
+      await Future<void>.delayed(const Duration(seconds: 1));
+    }
+  });
+  // #enddocregion
+  return job;
+}
+
+/// The second attempt: the job of the first, with the delay under `wait`.
+Job<void> delayUnderWait() {
+  final job = Job<void>((ctx) async {
+    while (true) {
+      use(await ctx.wait(database.readAll));
+      // #docregion
+      await ctx.wait(
+        () => Future<void>.delayed(const Duration(seconds: 1)),
+      );
+      // #enddocregion
+    }
+  });
+  return job;
+}
+
+/// "A pause of the job": the same job, with `ctx.pause` in that place.
+Job<void> pauseOfTheJob() {
+  final job = Job<void>((ctx) async {
+    while (true) {
+      use(await ctx.wait(database.readAll));
+      // #docregion
+      await ctx.pause(const Duration(seconds: 1));
+      // #enddocregion
+    }
+  });
+  return job;
+}

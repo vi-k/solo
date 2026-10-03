@@ -608,6 +608,7 @@ void main() {
             'check': ctx.check,
             'wait': () => ctx.wait(() async => 1),
             'join': () => ctx.join(() async => 1),
+            'pause': ctx.pause,
             'uncancellable': () => ctx.uncancellable(() async => 1),
             'run': () => ctx.run(Job.deferred<int>((ctx) async => 1)),
             'runAll': () => ctx.runAll([Job.deferred<int>((ctx) async => 1)]),

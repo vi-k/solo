@@ -300,13 +300,14 @@ of `cancel` or `close` waited 90 ms.
 
 The number is worth watching for one mistake in particular. A body that waits
 on something slow with a bare `await` notices the cancellation only when the
-wait is over, where the same call through `ctx.wait` stops waiting at once. A
-300 ms wait, cancelled 10 ms in:
+wait is over, where the same call through `ctx.wait` stops waiting at once, and
+so does a delay written as `ctx.pause`. A 300 ms wait, cancelled 10 ms in:
 
 | how the body waits | reported delay |
 | --- | --- |
 | `await Future.delayed(...)` | 290 ms |
 | `ctx.wait(() => Future.delayed(...))` | 0 ms |
+| `ctx.pause(...)` | 0 ms |
 
 A job cancelled before it started reports nothing, because `onStart` never runs
 for it and so nothing was ever registered or stamped. There was no body to

@@ -94,6 +94,37 @@ const quoted = [
 /// "15 ms in".
 const cancelMs = 15;
 
+/// When the user cancels in "Letting time pass": the page's "500 ms in",
+/// halfway through the second between two reads.
+const pauseCancelMs = 500;
+
+/// Runs the job [start] makes, cancels it [pauseCancelMs] in, and returns
+/// how many ms after the cancellation the job ended and for how many more
+/// a timer of it was still pending.
+({int endedAfter, int timerLeftFor}) waiting(Job<Object?> Function() start) {
+  freshRun();
+  late final int endedAfter;
+  late final int timerLeftFor;
+  fakeAsync((async) {
+    Duration? ended;
+    final job = start()..ignore();
+    unawaited(job.done.then((_) => ended = async.elapsed));
+    async.elapse(const Duration(milliseconds: pauseCancelMs));
+    unawaited(job.cancel());
+    async.flushMicrotasks();
+    while (ended == null) {
+      async.elapse(const Duration(milliseconds: 1));
+    }
+    endedAfter = ended!.inMilliseconds - pauseCancelMs;
+    final finishedAt = async.elapsed;
+    while (async.pendingTimers.isNotEmpty) {
+      async.elapse(const Duration(milliseconds: 1));
+    }
+    timerLeftFor = (async.elapsed - finishedAt).inMilliseconds;
+  });
+  return (endedAfter: endedAfter, timerLeftFor: timerLeftFor);
+}
+
 /// Starts a run on fresh stubs; the stage stays as the test has set it.
 void freshRun() {
   printed.clear();
@@ -1131,6 +1162,58 @@ void main() {
     });
   });
 
+  group('Letting time pass', () {
+    String row(String how, ({int endedAfter, int timerLeftFor}) measured) {
+      final ended = measured.endedAfter == 0
+          ? 'at once'
+          : '${measured.endedAfter} ms after the cancellation';
+      final timer = measured.timerLeftFor == 0
+          ? 'none'
+          : 'for ${measured.timerLeftFor} ms more';
+      return '| $how | $ended | $timer |';
+    }
+
+    final lines = File('doc/cancellation.md').readAsLinesSync();
+
+    test('a plain delay is sat out to its end', () {
+      final measured = waiting(page.plainDelay);
+      expect(measured, (endedAfter: 510, timerLeftFor: 0));
+      expect(lines, contains(row('`await Future.delayed(...)`', measured)));
+    });
+
+    test('a delay under wait ends at once and leaves its timer', () {
+      final measured = waiting(page.delayUnderWait);
+      expect(measured, (endedAfter: 0, timerLeftFor: 510));
+      expect(
+        lines,
+        contains(row('`ctx.wait(() => Future.delayed(...))`', measured)),
+      );
+    });
+
+    test('a pause ends at once and takes its timer along', () {
+      final measured = waiting(page.pauseOfTheJob);
+      expect(measured, (endedAfter: 0, timerLeftFor: 0));
+      expect(lines, contains(row('`ctx.pause(...)`', measured)));
+    });
+
+    test('uncancelled, all three read once a second', () {
+      for (final start in [
+        page.plainDelay,
+        page.delayUnderWait,
+        page.pauseOfTheJob,
+      ]) {
+        freshRun();
+        fakeAsync((async) {
+          final job = start()..ignore();
+          async.elapse(const Duration(milliseconds: 2500));
+          expect(printed.where((line) => line == 'rows used'), hasLength(3));
+          unawaited(job.cancel());
+          async.flushTimers();
+        });
+      }
+    });
+  });
+
   group('The page', () {
     test('quotes what its code prints', () {
       final text = File('doc/cancellation.md').readAsStringSync();
@@ -1155,7 +1238,7 @@ void main() {
       ];
 
       expect(steps, ['$stepMs']);
-      expect(cancels, ['$cancelMs', '$cancelMs']);
+      expect(cancels, ['$cancelMs', '$cancelMs', '$pauseCancelMs']);
     });
 
     test('holds every block of its code in the region in its place', () {

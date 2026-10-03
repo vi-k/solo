@@ -60,6 +60,49 @@ void main() {
     expect(observer.lines, ['guarded 0']);
   });
 
+  test('a pause of the context is reported as no delay, and leaves no timer',
+      () {
+    final observer = _SlowCancellations();
+    runSolo((solo, journal, async) {
+      Solo.observer = observer;
+      solo.run<TestState, void>(
+        key: 'paused',
+        (ctx) => ctx.pause(const Duration(milliseconds: 300)),
+      );
+      async.elapse(const Duration(milliseconds: 10));
+      solo.cancelAll();
+      async.flushMicrotasks();
+      expect(async.pendingTimers, isEmpty);
+    });
+
+    expect(observer.lines, ['paused 0']);
+  });
+
+  test('a rule that breaks during a pause is asked on the way in only', () {
+    var allowed = true;
+    var asked = 0;
+    final log = <String>[];
+    runSolo((solo, journal, async) {
+      final job = solo.run<TestState, void>(
+        keepWhile: (state) {
+          asked++;
+          return allowed;
+        },
+        (ctx) async {
+          final before = asked;
+          await ctx.pause(const Duration(milliseconds: 300));
+          log.add('asked ${asked - before} time(s)');
+        },
+      );
+      async.elapse(const Duration(milliseconds: 10));
+      allowed = false;
+      async.flushTimers();
+      log.add('${job.outcome}');
+    });
+
+    expect(log, ['asked 1 time(s)', 'Done(null)']);
+  });
+
   test('a job dropped from the queue is not reported', () {
     final observer = _SlowCancellations();
     runSolo((solo, journal, async) {

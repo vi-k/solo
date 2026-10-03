@@ -321,7 +321,7 @@ search.
 | --- | --- |
 | [Jobs and the queue](doc/jobs.md) | Submitting work, outcomes, keys, queue policies |
 | [State](doc/state.md) | Emitting, rules, observing, external changes, state after failure |
-| [Cancellation](doc/cancellation.md) | `wait`, `join`, `uncancellable`, stopping the operation, closing |
+| [Cancellation](doc/cancellation.md) | `wait`, `join`, `pause`, `uncancellable`, stopping the operation, closing |
 | [Resources and cleanup](doc/resources.md) | `onDispose`, `dispose` and `discard`, transfer, ordering |
 | [Children and streams](doc/children.md) | Child jobs, streams, following another controller |
 | [Event accumulation](doc/accumulation.md) | `collect`, `accumulate`, debounce and throttle |

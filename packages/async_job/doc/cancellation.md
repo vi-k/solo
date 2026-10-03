@@ -34,6 +34,7 @@ Job<void>((ctx) async {
 | `ctx.wait(action)` | Throws `Cancelled` at once. The action continues; its result is dropped, or goes to the call's `dispose` or `discard` if it has one. |
 | `ctx.join(action)` | Waits for the action, then throws `Cancelled` instead of returning the value, or the action's own error if it failed. If the call has a `dispose` or `discard`, the value goes there first, and `join` throws once that callback has finished. |
 | `ctx.uncancellable(action)` | Holds the request until the section ends: no `onCancel`, no cascade to children while it runs. |
+| `ctx.pause(duration)` | Throws `Cancelled` at once, and cancels its timer. |
 | `ctx.check()` | Throws when the job has already accepted cancellation. |
 
 A running job accepts the request inside `cancel()` itself, unless an
@@ -41,10 +42,11 @@ A running job accepts the request inside `cancel()` itself, unless an
 `cancellable: false`. Accepting it makes the job cancelled: the cancellation
 passes to the children it has started, its `onCancel` callbacks run, and the
 job ends `Cancelled` whatever the body does next. From then on `check`, `wait`,
-`join`, `uncancellable`, `run`, `runAll` and `each` throw `Cancelled` at their
-checkpoints. `onCancel` throws too: its callbacks have already run, and one
-registered now never would. `onDispose`, `onDiscard`, `disown` and `unattended`
-remain available so the body can arrange cleanup after cancellation.
+`join`, `pause`, `uncancellable`, `run`, `runAll` and `each` throw `Cancelled`
+at their checkpoints. `onCancel` throws too: its callbacks have already run,
+and one registered now never would. `onDispose`, `onDiscard`, `disown` and
+`unattended` remain available so the body can arrange cleanup after
+cancellation.
 
 A body that gives itself up, by throwing `Cancelled` or by letting out the
 cancellation of a child, accepts the cancellation as it throws, and the job is
@@ -453,3 +455,59 @@ A clause that rethrows every `Cancelled` ends the job too. If it is a child's
 `Cancelled` an operation got from `value` of a cancelled job, the job ends with
 that job's own reason. The page on outcomes takes these reasons apart in
 [Why a job was cancelled](outcomes.md#why-a-job-was-cancelled).
+
+## Letting time pass
+
+The job reads the rows once a second.
+
+### The first attempt
+
+```dart
+final job = Job<void>((ctx) async {
+  while (true) {
+    use(await ctx.wait(database.readAll));
+    await Future<void>.delayed(const Duration(seconds: 1));
+  }
+});
+```
+
+The user cancels 500 ms in, halfway through the delay, and the job ends 510 ms
+later. A plain `await` is no checkpoint: the body sits the delay out and learns
+of the cancellation at the `ctx.wait` of the next turn. Until then `cancel()`
+has not returned, and whatever waits for the job waits with it.
+
+### The second attempt
+
+```dart
+await ctx.wait(
+  () => Future<void>.delayed(const Duration(seconds: 1)),
+);
+```
+
+Now the delay is behind a checkpoint, and the job ends the moment it is
+cancelled. `wait` ends the waiting, not the work, and the work here is a timer:
+a `Future.delayed` cannot be cancelled, so its timer runs for the 510 ms that
+are left, with nothing waiting for it. A program that has nothing else to do
+does not exit until it fires, and a test that looks for pending timers finds
+one.
+
+### A pause of the job
+
+```dart
+await ctx.pause(const Duration(seconds: 1));
+```
+
+`ctx.pause` is a checkpoint that takes time. It throws `Cancelled` at once when
+the cancellation arrives, as `ctx.wait` does, and its timer is cancelled with
+it:
+
+| How the body waits | The job ends | Timer left behind |
+| --- | --- | --- |
+| `await Future.delayed(...)` | 510 ms after the cancellation | none |
+| `ctx.wait(() => Future.delayed(...))` | at once | for 510 ms more |
+| `ctx.pause(...)` | at once | none |
+
+Without a duration, `ctx.pause()` comes back on the next turn of the event
+loop: a place for a long calculation to let other work run and to hear a
+cancellation. Inside `ctx.uncancellable` the cancellation is held like any
+other, and the pause runs its whole length.

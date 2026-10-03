@@ -286,7 +286,7 @@ checks: after a plain `await` or an `uncancellable` section, when what follows
 is not another checkpoint.
 
 Do not retain a context to start work after its job ends. Methods such as
-`emit`, `run`, `each`, `wait`, `join` and `uncancellable` then throw
+`emit`, `run`, `each`, `wait`, `join`, `pause` and `uncancellable` then throw
 `StateError`. Reads and `check` remain available after normal completion; after
 cancellation they still throw `Cancelled`. During registered cleanup, state
 reads and body operations are unavailable. Capture the resources needed for

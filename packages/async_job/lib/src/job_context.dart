@@ -3,13 +3,14 @@ part of 'job_base.dart';
 /// What a job body sees in the core: cancellation, waiting and children.
 ///
 /// Once the job has accepted a cancellation, the members that wait or start
-/// something throw that [Cancelled]: [check], [wait], [join], [uncancellable],
-/// [onCancel], [run], [runAll] and `each`. The members that only register do
-/// not — [onDispose], [onDiscard], [disown] and [unattended] go on working, so
-/// a body that has just been cancelled can still put what it holds on the
-/// cleanup stack, and still hand out a stop nobody waits for — and neither do
-/// [log] and [job]. What a cancellation arriving *during* a call does to that
-/// call is the call's own business: see [wait], [join] and [uncancellable].
+/// something throw that [Cancelled]: [check], [wait], [join], [pause],
+/// [uncancellable], [onCancel], [run], [runAll] and `each`. The members that
+/// only register do not — [onDispose], [onDiscard], [disown] and [unattended]
+/// go on working, so a body that has just been cancelled can still put what it
+/// holds on the cleanup stack, and still hand out a stop nobody waits for —
+/// and neither do [log] and [job]. What a cancellation arriving *during* a
+/// call does to that call is the call's own business: see [wait], [join],
+/// [pause] and [uncancellable].
 ///
 /// A context that outlived its job — captured by a closure nobody awaited
 /// — neither waits nor starts nor registers anything: every member throws
@@ -235,6 +236,39 @@ abstract interface class JobContext {
   /// });
   /// ```
   Future<T> uncancellable<T>(FutureOr<T> Function() action);
+
+  /// Waits for [duration], or until the job is cancelled.
+  ///
+  /// A checkpoint that takes time: it throws [Cancelled] up front if the job
+  /// is already cancelled or its rules no longer hold, and a cancellation
+  /// that arrives during the pause ends it there, with that [Cancelled].
+  /// Without a [duration] it comes back on the next turn of the event loop,
+  /// as a timer of zero length does; a negative one counts as zero.
+  ///
+  /// Use it wherever a body would write `Future.delayed`. Awaited bare, that
+  /// one is no checkpoint, and a cancelled job sits the whole delay out
+  /// before it notices. Handed to [wait], it lets the body go at once — and
+  /// leaves its timer running to the end with nothing to wait for it: a
+  /// `Future.delayed` cannot be cancelled. The timer of a pause is cancelled
+  /// together with the pause.
+  ///
+  /// ```dart
+  /// while (true) {
+  ///   await ctx.join(sync);
+  ///   await ctx.pause(const Duration(minutes: 5));
+  /// }
+  /// ```
+  ///
+  /// Inside [uncancellable] a cancellation is held until the section ends,
+  /// and the pause runs its whole length. During cleanup this throws a
+  /// [StateError], as [wait] does: a disposer that has to let time pass
+  /// awaits a plain `Future.delayed`. A callback of [onCancel] runs in a job
+  /// that is cancelled already, and a pause there throws at once.
+  ///
+  /// Only a cancellation ends a pause early. One the body walked away from
+  /// runs to its end, timer and all, when the job ends some other way, like
+  /// any call the body did not await.
+  Future<void> pause([Duration duration = Duration.zero]);
 
   /// Registers [callback] to run the moment the job accepts a cancellation,
   /// before the body itself learns about it. Returns a function that
@@ -665,13 +699,14 @@ abstract interface class JobContext {
 /// Subclass it to add a domain of your own — `solo`, for example, adds the
 /// state and its rules. [check] is the checkpoint, and it is virtual on
 /// purpose: a domain checks more than the cancellation. While the body runs,
-/// [wait], [join] and [uncancellable] ask it before the action, [join] again
-/// after it, [run] once the child's value has arrived, and [runAll] before it
-/// hands the values back. An override calls `super.check()`, and calls it
-/// first. That is where the cancellation of the job is asked: without it [join]
-/// hands a value to a job already cancelled and [uncancellable] begins its step
-/// on one. And while the core cleans up after the body it throws a
-/// [StateError]: the body is gone, and no rule is asked for it any more.
+/// [wait], [join], [pause] and [uncancellable] ask it before the action, [join]
+/// again after it, [run] once the child's value has arrived, and [runAll]
+/// before it hands the values back. An override calls `super.check()`, and
+/// calls it first. That is where the cancellation of the job is asked: without
+/// it [join] hands a value to a job already cancelled and [uncancellable]
+/// begins its step on one. And while the core cleans up after the body it
+/// throws a [StateError]: the body is gone, and no rule is asked for it any
+/// more.
 ///
 /// A rule that no longer holds throws a [Cancelled] with a reason of the
 /// engine's own. The body lets it out and gives itself up, and a job whose body
@@ -1048,6 +1083,26 @@ abstract class JobContextBase implements JobContext {
       rethrow;
     } finally {
       leaveUncancellable();
+    }
+  }
+
+  @override
+  Future<void> pause([Duration duration = Duration.zero]) async {
+    // Asked here, before `wait` asks: the message names the call made.
+    throwIfFinished('pause');
+    Timer? timer;
+    try {
+      // `wait` asks the checkpoint first, so on a job that is cancelled
+      // already no timer is made.
+      await wait<void>(() {
+        final elapsed = Completer<void>();
+        timer = Timer(duration, elapsed.complete);
+        return elapsed.future;
+      });
+    } finally {
+      // What `Future.delayed` under `wait` cannot do: the walk away from
+      // the waiting takes the timer with it.
+      timer?.cancel();
     }
   }
 

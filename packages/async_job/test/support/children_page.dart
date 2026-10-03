@@ -231,9 +231,7 @@ Future<void> watchTicks() async {
       (childCtx, tick) => print('Tick $tick'),
     );
 
-    await ctx.wait(
-      () => Future<void>.delayed(const Duration(milliseconds: 2500)),
-    );
+    await ctx.pause(const Duration(milliseconds: 2500));
     await ticks.cancel();
     print('Parent continues');
   });

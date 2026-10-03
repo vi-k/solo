@@ -274,6 +274,12 @@ cancelled is taken where the rules noticed; `Solo.traceStateChanges`, under
   for an observer of jobs of the core. See
   [A cancellation that never lands](doc/errors.md#a-cancellation-that-never-lands).
 
+- From `async_job` comes `ctx.pause(duration)`: a delay in a body that ends
+  with `Cancelled` the moment the job accepts a cancellation, and takes its
+  timer along. A bare `await Future.delayed(...)` in a body is sat out to its
+  end, and whoever cancelled the job waits for it. See
+  [Stamping the cancellation](doc/errors.md#stamping-the-cancellation).
+
 - From `async_job` comes `Job.visitErrors`: it hands each failure inside an
   error to `onFailure` on its own and each cancellation to `onCancelled`, if
   given. `Solo.errorHandler` gets each error as it came, a `Cancelled` and a

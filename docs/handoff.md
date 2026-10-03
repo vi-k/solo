@@ -9,15 +9,24 @@
 streams»: уборка одного события, `await for` в теле, `listen` в теле
 и `Job.each`; пункты 32–34 «По чтению владельца»
 в `2026-10-02-children-reread-report.md`. Клон ревьюера с прототипом
-и зондами — `.artifacts/2026-10-03-job-each/tree`, зонды автора рядом. Кроме
-того, владелец читает `packages/async_job/doc/children.md` второй раз, и каждый
-его вопрос правится в самой странице: оригинал, перевод
-`docs/ru/async_job/children.md`, сторож
+и зондами — `.artifacts/2026-10-03-job-each/tree`, зонды автора рядом.
+`ctx.pause` — пауза, которую отмена кончает сразу и вместе с таймером, —
+сделана и закоммичена в `main`, не отправлена; решения владельца 2026-10-03:
+имя `pause`, член `JobContext`, документы поправить. Дизайн —
+`2026-10-03-ctx-pause-design.md`, ревью на Opus с вердиктами —
+`2026-10-03-ctx-pause-design-review-report.md`; на странице `cancellation.md`
+раздел «Letting time pass». Открытый вопрос владельцу оттуда, находка 9:
+в `packages/async_job/doc/outcomes.md` голый `await Future.delayed` в теле
+неотменяемого ребёнка изображает работу шага и оставлен — менять ли его
+на `ctx.pause`. Кроме того, владелец читает
+`packages/async_job/doc/children.md` второй раз, и каждый его вопрос правится
+в самой странице: оригинал, перевод `docs/ru/async_job/children.md`, сторож
 `packages/async_job/test/children_rakes_test.dart` и пункт раздела «По чтению
-владельца» в `2026-10-02-children-reread-report.md` — там 34 пункта, последние
-три о стримах. Так же шли его вопросы по `packages/async_job/doc/observing.md`,
-пункт 1 в `2026-10-02-observing-reread-report.md`. Открытых находок у ревью
-нет: `async_job` — `2026-09-26-async-job-project-review.md`, `solo`
+владельца» в `2026-10-02-children-reread-report.md` — там 35 пунктов, последние
+четыре о стримах. Так же шли его вопросы
+по `packages/async_job/doc/observing.md`, пункт 1
+в `2026-10-02-observing-reread-report.md`. Открытых находок у ревью нет:
+`async_job` — `2026-09-26-async-job-project-review.md`, `solo`
 и `flutter_solo` — `2026-09-19-solo-project-review.md`. Первое чтение
 `extending.md` — `2026-10-02-extending-rakes-report.md`.
 
@@ -189,15 +198,16 @@ streams»: уборка одного события, `await for` в теле, `l
 доходит прогон только последнего. Последний прогон `site` — на `1a6a618`,
 зелёный. Проверки: `packages/async_job` после решений с `try` и `onDiscard` для
 списка группы в `children.md` — формат и анализ чистые, `dart test` зелёный,
-1191 тест, а с `Job.each` и его страницей — 1222, и `packages/solo` против него
-868; `dart doc --dry-run` чистый на коммите вычитки `children.md`;
-`packages/solo` на коммите переноса его README — формат и анализ чистые, 868
-тестов; из корня на коммите вычитки `reflow.py --check`, `check_line_width.py`,
-`check_links.py`, `check_translations.py` и `check_doc_shape.py` зелёные.
-`solo` пример 47, `flutter_solo` 85 и его пример 4, раскладки архивов на полу
-3.6.0 — на `f0ee2f7`; после него менялись только документы и dartdoc. Стенды
-`vs-bloc` и `accumulation` последний раз прогнаны 2026-09-28, их страницы с тех
-пор не менялись. Фоновых задач и расписаний у сессии нет.
+1191 тест, а с `Job.each`, `ctx.pause` и их страницами — 1240, `packages/solo`
+против него 870, `packages/flutter_solo` 85; `dart doc --dry-run` чистый
+на коммите вычитки `children.md`; `packages/solo` на коммите переноса его
+README — формат и анализ чистые, 868 тестов; из корня на коммите вычитки
+`reflow.py --check`, `check_line_width.py`, `check_links.py`,
+`check_translations.py` и `check_doc_shape.py` зелёные. `solo` пример 47,
+`flutter_solo` 85 и его пример 4, раскладки архивов на полу 3.6.0 —
+на `f0ee2f7`; после него менялись только документы и dartdoc. Стенды `vs-bloc`
+и `accumulation` последний раз прогнаны 2026-09-28, их страницы с тех пор
+не менялись. Фоновых задач и расписаний у сессии нет.
 
 ## На следующий релиз собрано у всех трёх
 

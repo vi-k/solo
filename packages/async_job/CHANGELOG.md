@@ -180,6 +180,12 @@ now reach the zone, and fail a test there.
   Adding a member to a class meant to be extended is breaking on its own: a
   subclass with a member of that name stops compiling.
 
+- **`JobContext` gains `pause`.** A context built on `JobContextBase` gets the
+  member with it. A class that implements `JobContext` by hand — a fake in a
+  test — stops compiling until it has one. **Migrating.** Add
+  `Future<void> pause([Duration duration = Duration.zero])` to the fake; one
+  that only has to let the body go on returns `Future<void>.value()`.
+
 ### Changes you will see on upgrade
 
 Errors that `0.2.0` lost, or told only to the observer, now reach the zone the
@@ -237,6 +243,15 @@ named as `Job(key)`, not by its class.
   It is a root wherever it is made, and `ctx.run` refuses it: a body follows a
   stream with `ctx.each`. See
   [A job that only follows a stream](doc/children.md#a-job-that-only-follows-a-stream).
+
+- **`ctx.pause(duration)` is a delay a cancellation ends.** A body that awaits
+  a bare `Future.delayed` sits the whole delay out before it notices a
+  cancellation. Under `ctx.wait` the body leaves at once, but a
+  `Future.delayed` cannot be cancelled, and its timer runs to the end with
+  nothing waiting for it. `ctx.pause` throws `Cancelled` the moment the job
+  accepts a cancellation and cancels its timer; without a duration it comes
+  back on the next turn of the event loop. See
+  [Letting time pass](doc/cancellation.md#letting-time-pass).
 
 - **`JobObserver.all` makes one observer of several.** Every hook goes to each
   of them in the order of the list, each call on its own, and the one among

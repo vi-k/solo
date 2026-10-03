@@ -332,7 +332,7 @@ await player.close(mode: SoloCloseMode.drain);
 | --- | --- |
 | [Задачи и очередь](../../docs/ru/solo/jobs.md) | Постановка работы, исходы, ключи, политики очереди |
 | [Состояние](../../docs/ru/solo/state.md) | Публикация, правила, наблюдение, внешние изменения, состояние после ошибки |
-| [Отмена](../../docs/ru/solo/cancellation.md) | `wait`, `join`, `uncancellable`, остановка операции, закрытие |
+| [Отмена](../../docs/ru/solo/cancellation.md) | `wait`, `join`, `pause`, `uncancellable`, остановка операции, закрытие |
 | [Ресурсы и освобождение](../../docs/ru/solo/resources.md) | `onDispose`, `dispose` и `discard`, передача, порядок |
 | [Дочерние задачи и стримы](../../docs/ru/solo/children.md) | Дочерние `Job`, стримы, слежение за другим контроллером |
 | [Накопление событий](../../docs/ru/solo/accumulation.md) | `collect`, `accumulate`, debounce и throttle |
