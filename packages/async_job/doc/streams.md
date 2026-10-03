@@ -100,8 +100,8 @@ ends after it. And an error of the stream or of the callback ends it `Failed`.
 `saving.value` completes when the stream ends and the last save finishes;
 awaiting it throws the child's failure into the body, and a `Cancelled` it
 throws follows the cancellation path: uncaught, it cancels the parent under the
-usual child outcome rules. `saving.done` hands the outcome over without
-throwing.
+usual child outcome rules. `saving.done` does not throw: awaiting it returns
+the child's `Outcome`, whether `Done`, `Failed` or `Cancelled`.
 
 The parent waits for the child even if its body returns without awaiting it. An
 open stream therefore keeps the parent alive until the stream ends or the child
