@@ -28,16 +28,17 @@ part 'queue.dart';
 /// [accumulate] where several events share one job. The five are
 /// protected: a caller sees the operations, not how they are queued.
 ///
-/// The hooks — [onStart], [onFinish], [onError], [onLog], [onChange],
-/// [onClose] and the [observer]'s — are a cross-cutting channel, so an
-/// error thrown by one goes to the current zone and changes nothing else:
-/// the job's outcome, the queue and [close] carry on as if the hook had
-/// returned. [onError] is the one with a body of its own: what reaches it
-/// and has nowhere else to go — a disposer, an `onCancel` callback, a late
-/// failure of an abandoned call or of work handed to
-/// `JobContext.unattended`, a rule that threw — goes on to the zone when
-/// nobody is listening. [publish] is not one of them: it is how a subclass
-/// delivers the state, and an error there is the subclass's own business.
+/// The hooks — [onStart], [onFinish], [onError], [onUnanswered], [onLog],
+/// [onChange], [onClose] and the [observer]'s — are a cross-cutting
+/// channel, so an error thrown by one goes to the current zone and changes
+/// nothing else: the job's outcome, the queue and [close] carry on as if
+/// the hook had returned. [onUnanswered] is the one with a body of its own:
+/// what reaches it and has nowhere else to go — a disposer, an `onCancel`
+/// callback, a late failure of an abandoned call or of work handed to
+/// `JobContext.unattended`, a rule that threw — goes on to [errorHandler],
+/// or to the zone when none is set. [publish] is not one of them: it is how
+/// a subclass delivers the state, and an error there is the subclass's own
+/// business.
 abstract class Solo<S extends Object> {
   /// A global observer for all controllers; `null` by default.
   ///

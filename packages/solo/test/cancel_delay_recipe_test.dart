@@ -1,6 +1,8 @@
 @Timeout(Duration(seconds: 5))
 library;
 
+import 'dart:io';
+
 import 'package:clock/clock.dart';
 import 'package:solo/solo.dart';
 import 'package:test/test.dart';
@@ -8,12 +10,15 @@ import 'package:test/test.dart';
 import 'support/run_solo.dart';
 import 'support/test_state.dart';
 
-/// The recipe from `doc/errors.md`, written as the page shows it.
+/// The stamping of the recipe from `doc/errors.md`, with its threshold of
+/// 50 ms taken off: every stamped job says its number, so the rows of the
+/// page's table that stay under the threshold can be read as well. The
+/// recipe as the page shows it runs in `errors_rakes_test.dart`.
 ///
-/// The page promises three things about it, and all three are promises
-/// about cancellation rather than about the observer, so they are pinned
-/// here: a change to when `whenCancelled` fires would turn the recipe
-/// into a lie without touching a line of it.
+/// The page promises three things about the number, and all three are
+/// promises about cancellation rather than about the observer, so they are
+/// pinned here: a change to when `whenCancelled` fires would turn the
+/// recipe into a lie without touching a line of it.
 final class _SlowCancellations extends SoloObserver {
   final lines = <String>[];
   final _markedAt = Expando<DateTime>('cancellation');
@@ -32,6 +37,21 @@ final class _SlowCancellations extends SoloObserver {
   }
 }
 
+/// The number the table of the page gives for [how] the body waits, in
+/// milliseconds.
+String _number(String how) {
+  final page = File('doc/errors.md').readAsLinesSync();
+  final row = page.singleWhere((line) => line.startsWith('| `$how'));
+
+  return row.split('|')[2].trim().replaceFirst(' ms', '');
+}
+
+/// Whether the page says [phrase], wherever its lines were broken.
+bool _says(String phrase) => File('doc/errors.md')
+    .readAsStringSync()
+    .replaceAll(RegExp(r'\s+'), ' ')
+    .contains(phrase);
+
 void main() {
   test('a bare await in the body is reported for its whole length', () {
     final observer = _SlowCancellations();
@@ -44,6 +64,7 @@ void main() {
       async.flushTimers();
     });
 
+    expect(observer.lines, ['bare ${_number('await Future.delayed')}']);
     expect(observer.lines, ['bare 290']);
   });
 
@@ -57,6 +78,7 @@ void main() {
       async.flushTimers();
     });
 
+    expect(observer.lines, ['guarded ${_number('ctx.wait')}']);
     expect(observer.lines, ['guarded 0']);
   });
 
@@ -75,6 +97,7 @@ void main() {
       expect(async.pendingTimers, isEmpty);
     });
 
+    expect(observer.lines, ['paused ${_number('ctx.pause')}']);
     expect(observer.lines, ['paused 0']);
   });
 
@@ -175,9 +198,17 @@ void main() {
         async.flushTimers();
       });
 
-      // The cancellation takes effect when the section ends, so the stamp
-      // and the outcome come together, while the caller sat through the
-      // rest of the section.
+      // The job accepts the cancellation when the section ends, so the
+      // stamp and the outcome come together, while the caller sat through
+      // the rest of the section.
+      expect(
+        _says(
+          'a 100 ms section cancelled 10 ms in gives 0 ms, while the caller '
+          'of `cancel` or `close` waited 90 ms',
+        ),
+        isTrue,
+        reason: 'doc/errors.md no longer says this',
+      );
       expect(observer.lines, ['section 0']);
       expect(waited, const Duration(milliseconds: 90));
     });
