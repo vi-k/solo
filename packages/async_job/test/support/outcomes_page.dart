@@ -80,7 +80,7 @@ Job<void> startSteppedReport() {
     ctx.onDispose(() => print('cleanup'));
     await ctx.run(
       Job.deferred<void>(cancellable: false, (ctx) async {
-        await Future<void>.delayed(const Duration(milliseconds: 50));
+        await ctx.pause(const Duration(milliseconds: 50));
         print('step finished');
       }),
     );

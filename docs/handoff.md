@@ -11,10 +11,10 @@
 в `main`, не отправлена; решения владельца 2026-10-03: имя `pause`, член
 `JobContext`, документы поправить. Дизайн — `2026-10-03-ctx-pause-design.md`,
 ревью на Opus с вердиктами — `2026-10-03-ctx-pause-design-review-report.md`;
-на странице `cancellation.md` раздел «Letting time pass». Открытый вопрос
-владельцу оттуда, находка 9: в `packages/async_job/doc/outcomes.md` голый
-`await Future.delayed` в теле неотменяемого ребёнка изображает работу шага
-и оставлен — менять ли его на `ctx.pause`. Кроме того, владелец читает
+на странице `cancellation.md` раздел «Letting time pass». Вопрос владельцу
+оттуда, находка 9, закрыт: в `packages/async_job/doc/outcomes.md` голый
+`await Future.delayed` в теле неотменяемого ребёнка по его слову заменён
+на `ctx.pause`. Кроме того, владелец читает
 `packages/async_job/doc/children.md` второй раз, и каждый его вопрос правится
 в самой странице: оригинал, перевод `docs/ru/async_job/children.md`, сторож
 `packages/async_job/test/children_rakes_test.dart` и пункт раздела «По чтению
