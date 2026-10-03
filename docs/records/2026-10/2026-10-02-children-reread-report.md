@@ -761,4 +761,7 @@ zone that link was created in».
     and a deferred one never starts», «a continuation waits for the job it runs
     as its child», «then does not start a deferred source, whatever the length»
     и два «a source whose body/cleanup awaits its continuation never finishes».
-    Код — `storeParsed` в `test/support/children_page.dart`.
+    Код — `storeParsed` в `test/support/children_page.dart`. Следом владелец
+    о третьем абзаце: «кого не может ждать источник? не понял» — «его» читалось
+    и как продолжение, и как источник. Абзац переписан именами из примера
+    цепочки: `loaded` не может ждать `parsed`.

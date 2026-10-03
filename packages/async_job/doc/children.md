@@ -604,10 +604,10 @@ final stored = parsed.then<void>((ctx, number) {
 unstarted, every link of it, until the source is started: by `start()`, or by
 `ctx.run(source)` in the body that adopts it.
 
-A continuation starts once its source has finished, cleanup included, so the
-source cannot wait for it. A source whose body or cleanup awaits the `value` or
-`done` of its own continuation never finishes, and the continuation never
-starts; `cancel()` of the source does not return either.
+In the chain above `parsed` starts once `loaded` has finished, cleanup
+included. So `loaded` cannot wait for `parsed`: if the body or the cleanup of
+`loaded` awaits `parsed.value` or `parsed.done`, `loaded` never finishes,
+`parsed` never starts, and `loaded.cancel()` does not return either.
 
 Each continuation is a root job of the core. It has an optional `observer`
 argument and inherits neither the source's observer nor anything an engine of a
