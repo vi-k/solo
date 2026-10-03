@@ -259,6 +259,58 @@ Job<void> savingWithCheckpoints() => Job<void>((ctx) async {
       await processing.value;
     });
 
+Job<void> draftsOnTheStackOfTheStream() => Job<void>((ctx) async {
+      final processing = ctx.each(messages, (childCtx, message) async {
+        final draft = await childCtx.join(
+          () => store.openDraft(message),
+          dispose: (draft) => draft.close(),
+        );
+        await childCtx.join(draft.write);
+      });
+      await processing.value;
+    });
+
+Job<void> draftsOnTheStackOfTheirEvent() => Job<void>((ctx) async {
+      // ignore: prefer_expression_function_bodies
+      final processing = ctx.each(messages, (childCtx, message) {
+        return childCtx.run(Job.deferred<void>((eventCtx) async {
+          final draft = await eventCtx.join(
+            () => store.openDraft(message),
+            dispose: (draft) => draft.close(),
+          );
+          await eventCtx.join(draft.write);
+          // ignore: require_trailing_commas
+        }));
+      });
+      await processing.value;
+    });
+
+Job<void> awaitForInABody() => Job<void>((ctx) async {
+      await for (final message in messages) {
+        await ctx.join(() => store.saveBody(message));
+      }
+    });
+
+Job<void> listenInABody() => Job<void>((ctx) async {
+      final subscription = messages.listen((message) async {
+        await store.saveBody(message);
+      });
+      ctx.onCancel(subscription.cancel);
+      await ctx.wait(subscription.asFuture<void>);
+    });
+
+Future<void> saveAll(
+  Stream<String> messages,
+  Future<void> Function(String message) save,
+) async {
+  // ignore: prefer_expression_function_bodies
+  final saving = Job.each(messages, (ctx, message) {
+    return ctx.join(() => save(message));
+  });
+
+  await saving.value;
+}
+
 Future<void> chain() async {
   final loaded = Job<String>((ctx) => ctx.join(loadText));
   final parsed = loaded.then<int>((ctx, text) => int.parse(text));

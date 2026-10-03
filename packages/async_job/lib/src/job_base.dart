@@ -107,8 +107,9 @@ abstract interface class Job<T> {
   ///
   /// The cleanup stack unwinds when the job ends, not after an event: a
   /// [JobContext.onDispose] registered for every event piles up for as long
-  /// as the stream lasts. What one event opens is released by a `finally` in
-  /// the callback, or belongs to a child started for that event.
+  /// as the stream lasts, and so does a `dispose` or a `discard` of
+  /// [JobContext.join]. What one event opens belongs to a child started for
+  /// that event with [JobContext.run]: its stack unwinds when it ends.
   ///
   /// The named parameters are those of [Job.new]. With `cancellable: false`
   /// there is no moment before the start to drop the job in: it refuses every

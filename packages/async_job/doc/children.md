@@ -623,6 +623,132 @@ completion: awaiting the `value` of the job `each` returned, or its `cancel()`,
 from inside the callback never finishes, because the child is already waiting
 for that callback.
 
+### What one event opens
+
+Each message is written through a draft, and the draft has to be closed. The
+callback hands the closing to `dispose`, the way a body does:
+
+```dart
+ctx.each(messages, (childCtx, message) async {
+  final draft = await childCtx.join(
+    () => store.openDraft(message),
+    dispose: (draft) => draft.close(),
+  );
+  await childCtx.join(draft.write);
+});
+```
+
+`dispose` puts the closing on the cleanup stack of the child, and that stack
+unwinds when the child ends, not when the callback returns. Two messages in,
+both drafts are written and neither is closed; they close together when the
+stream ends, and on a stream that does not end they never do. `ctx.onDispose`
+and `discard` in the callback register on the same stack.
+
+What one event opens belongs to a child started for that event:
+
+```dart
+ctx.each(messages, (childCtx, message) {
+  return childCtx.run(Job.deferred<void>((eventCtx) async {
+    final draft = await eventCtx.join(
+      () => store.openDraft(message),
+      dispose: (draft) => draft.close(),
+    );
+    await eventCtx.join(draft.write);
+  }));
+});
+```
+
+The callback returns the future of `run`, so the next message waits for this
+child, and the child's stack unwinds before it: each draft is closed before the
+next one is opened. Cancelled halfway through a write, the child still closes
+its draft before the job ends.
+
+### `await for` in a body
+
+```dart
+Job<void>((ctx) async {
+  await for (final message in messages) {
+    await ctx.join(() => store.saveBody(message));
+  }
+});
+```
+
+While a save runs, `join` is a checkpoint: a cancellation that arrives then is
+thrown when the save is done, and the loop lets go of the stream. Between two
+messages there is no checkpoint. The body is parked inside `await for`, which
+knows nothing of the job, so a job cancelled while the stream is silent goes on
+running, still subscribed, until the next message arrives — and `job.cancel()`
+does not return before that either. On a stream that has gone silent for good,
+that is never.
+
+`ctx.each` cancels the subscription the moment the job accepts the
+cancellation, whether a message is on its way or not.
+
+### `listen` in a body
+
+```dart
+Job<void>((ctx) async {
+  final subscription = messages.listen((message) async {
+    await store.saveBody(message);
+  });
+  ctx.onCancel(subscription.cancel);
+  await ctx.wait(subscription.asFuture<void>);
+});
+```
+
+The last two lines tie the subscription to the job: a cancellation cancels it,
+and the body waits for the stream to end. Two things are still missing.
+
+`listen` does not wait for an asynchronous callback. A second message arrives
+while the first is being saved, and its save starts at once: the two run side
+by side, and nothing says which one finishes first.
+
+And the stream calls the callback, not the body. An error thrown in it goes to
+the zone and past the job: the job stays running and subscribed, its outcome
+knows nothing of the failure, and neither does whoever awaits its `value`.
+
+`ctx.each` delivers the next message when the callback for the previous one has
+finished, and an error of the callback ends the child with `Failed`.
+
+### A job that only follows a stream
+
+```dart
+Future<void> saveAll(
+  Stream<String> messages,
+  Future<void> Function(String message) save,
+) async {
+  final saving = Job.each(messages, (ctx, message) {
+    return ctx.join(() => save(message));
+  });
+
+  await saving.value;
+}
+```
+
+`saveMessages` above took two jobs: a parent with nothing else to do, and the
+child that owns the subscription. `Job.each` makes one job that follows the
+stream by itself. It is a root, not a child, and the callback receives the
+context of that job. The stream is followed as `ctx.each` follows it; `key`,
+`describe`, `cancellable` and `observer` are those of `Job(...)`.
+
+Three things are different from the child:
+
+- **It starts inside the call.** A job made with `Job(...)` starts its body on
+  the next microtask. `Job.each` has subscribed by the time it returns, so an
+  event a broadcast stream sends right after the call is not lost. The
+  observer's `onStart` therefore runs before the caller has the handle, and a
+  source that hands an event over from inside `listen` reaches the callback
+  before the call returns. A callback that needs its own job reads `ctx.job`.
+- **It is a root wherever it is made.** Called in the body of another job, it
+  is not a child of that job: the body neither waits for it nor cancels it, and
+  `ctx.run` refuses it with an `ArgumentError`. Inside a body, follow the
+  stream with `ctx.each`. A failure nobody reads goes to the zone, as from any
+  root.
+- **With `cancellable: false` nothing outside stops it.** Such a job refuses
+  every cancellation, and `cancel()` does not return until the job ends by
+  itself: the stream ends or fails, or the callback throws — a `Cancelled`
+  included. On a stream that never ends, that is the only way out.
+
 ## Chains
 
 Use `then` to continue a job with its result. Each call returns a new `Job` and

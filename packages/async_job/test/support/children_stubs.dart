@@ -18,14 +18,19 @@ final class Stage {
   int archiveTake = 50;
   Object? archiveError;
   int stepTake = 20;
+  Object? stepError;
   int warmTake = 30;
   Object? warmError;
 
   bool lockHeld = false;
   final lockQueue = <Completer<void>>[];
 
+  // An `onCancel` with a future of the zone it is called in: `await for`
+  // awaits the cancellation of its subscription, and the future a controller
+  // without one hands back belongs to the root zone, which fake time never
+  // reaches.
   // ignore: close_sinks
-  final messages = StreamController<String>();
+  final messages = StreamController<String>(onCancel: () async {});
 }
 
 Stage stage = Stage();
@@ -118,8 +123,28 @@ Stream<String> get messages => stage.messages.stream;
 
 Future<void> save(String event) async => stage.trace.add('saved $event');
 
+/// What a message is written through; closing it is written to the trace.
+final class Draft {
+  final String message;
+
+  Draft(this.message);
+
+  Future<void> write() async {
+    stage.trace.add('$message: writing');
+    await delay(stage.stepTake);
+    stage.trace.add('$message: written');
+  }
+
+  void close() => stage.trace.add('$message: draft closed');
+}
+
 /// The store a message is saved to in two steps.
 final class Store {
+  Future<Draft> openDraft(String message) async {
+    stage.trace.add('$message: draft opened');
+    return Draft(message);
+  }
+
   Future<void> saveBody(String message) => _step('$message: body');
 
   Future<void> saveAttachments(String message) =>
@@ -128,6 +153,10 @@ final class Store {
   Future<void> _step(String what) async {
     stage.trace.add('$what begins');
     await delay(stage.stepTake);
+    if (stage.stepError case final error?) {
+      // ignore: only_throw_errors
+      throw error;
+    }
     stage.trace.add('$what saved');
   }
 }

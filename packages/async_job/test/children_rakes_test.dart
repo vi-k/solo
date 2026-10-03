@@ -1146,6 +1146,187 @@ void main() {
       });
     });
 
+    test('dispose in the callback keeps every draft open to the end', () {
+      fakeAsync((async) {
+        final parent = page.draftsOnTheStackOfTheStream();
+        stubs.stage.messages
+          ..add('m1')
+          ..add('m2');
+        async.flushTimers();
+        expect(
+          trace(),
+          [
+            'm1: draft opened',
+            'm1: writing',
+            'm1: written',
+            'm2: draft opened',
+            'm2: writing',
+            'm2: written',
+          ],
+          reason: 'two messages in, neither draft is closed',
+        );
+        stubs.stage.messages.close().ignore();
+        async.flushTimers();
+        expect(trace().sublist(6), ['m2: draft closed', 'm1: draft closed']);
+        expect(parent.outcome, isA<Done<void>>());
+      });
+    });
+
+    test('a child for the event closes its draft before the next event', () {
+      fakeAsync((async) {
+        final parent = page.draftsOnTheStackOfTheirEvent();
+        stubs.stage.messages
+          ..add('m1')
+          ..add('m2');
+        async.flushTimers();
+        expect(trace(), [
+          'm1: draft opened',
+          'm1: writing',
+          'm1: written',
+          'm1: draft closed',
+          'm2: draft opened',
+          'm2: writing',
+          'm2: written',
+          'm2: draft closed',
+        ]);
+        expect(parent.isFinished, isFalse, reason: 'the stream is still open');
+        stubs.stage.messages.close().ignore();
+        async.flushTimers();
+        expect(parent.outcome, isA<Done<void>>());
+      });
+    });
+
+    test('a child for the event closes its draft when cancelled mid-write', () {
+      fakeAsync((async) {
+        final parent = page.draftsOnTheStackOfTheirEvent()..ignore();
+        stubs.stage.messages.add('m1');
+        async.elapse(const Duration(milliseconds: 5));
+        parent.cancel().ignore();
+        async.flushTimers();
+        stubs.stage.messages.close().ignore();
+        expect(trace(), [
+          'm1: draft opened',
+          'm1: writing',
+          'm1: written',
+          'm1: draft closed',
+        ]);
+        expect(parent.outcome, isA<Cancelled>());
+      });
+    });
+
+    test('await for hears a cancellation only with the next event', () {
+      fakeAsync((async) {
+        final job = page.awaitForInABody()..ignore();
+        var cancelReturned = false;
+        stubs.stage.messages.add('m1');
+        async.flushTimers();
+        job.cancel().then((_) => cancelReturned = true);
+        async.elapse(const Duration(hours: 1));
+        expect(job.isRunning, isTrue, reason: 'parked between two events');
+        expect(cancelReturned, isFalse);
+        expect(stubs.stage.messages.hasListener, isTrue);
+        stubs.stage.messages.add('m2');
+        async.flushTimers();
+        expect(job.outcome, isA<Cancelled>());
+        expect(cancelReturned, isTrue);
+        expect(stubs.stage.messages.hasListener, isFalse);
+        expect(trace(), ['m1: body begins', 'm1: body saved']);
+        stubs.stage.messages.close().ignore();
+      });
+    });
+
+    test('ctx.each hears the same cancellation at once', () {
+      fakeAsync((async) {
+        final job = page.savingWithCheckpoints()..ignore();
+        stubs.stage.messages.add('m1');
+        async.flushTimers();
+        job.cancel().ignore();
+        async.flushMicrotasks();
+        expect(job.outcome, isA<Cancelled>());
+        expect(stubs.stage.messages.hasListener, isFalse);
+        stubs.stage.messages.close().ignore();
+      });
+    });
+
+    test('listen starts the second save while the first one runs', () {
+      fakeAsync((async) {
+        final job = page.listenInABody()..ignore();
+        stubs.stage.messages
+          ..add('m1')
+          ..add('m2');
+        async.flushTimers();
+        expect(trace(), [
+          'm1: body begins',
+          'm2: body begins',
+          'm1: body saved',
+          'm2: body saved',
+        ]);
+        job.cancel().ignore();
+        async.flushTimers();
+        expect(job.outcome, isA<Cancelled>());
+        expect(stubs.stage.messages.hasListener, isFalse);
+        stubs.stage.messages.close().ignore();
+      });
+    });
+
+    test('an error of a listen callback goes to the zone, past the job', () {
+      final zoneErrors = <Object>[];
+      late final Job<void> job;
+      late final bool listening;
+      runZonedGuarded(
+        () => fakeAsync((async) {
+          stubs.stage.stepError = StateError('save');
+          job = page.listenInABody()..ignore();
+          stubs.stage.messages.add('m1');
+          async.flushTimers();
+          listening = stubs.stage.messages.hasListener;
+          stubs.stage.messages.close().ignore();
+        }),
+        (error, _) => zoneErrors.add(error),
+      );
+      expect(zoneErrors, [isA<StateError>()]);
+      expect(job.isRunning, isTrue, reason: 'the job heard nothing');
+      expect(listening, isTrue);
+    });
+
+    test('the same error in a callback of ctx.each fails the job', () {
+      fakeAsync((async) {
+        stubs.stage.stepError = StateError('save');
+        final job = page.savingWithCheckpoints()..ignore();
+        stubs.stage.messages.add('m1');
+        async.flushTimers();
+        expect(job.outcome, isA<Failed>());
+        expect(stubs.stage.messages.hasListener, isFalse);
+        stubs.stage.messages.close().ignore();
+      });
+    });
+
+    test('saveAll saves one message after the other, in one job', () {
+      fakeAsync((async) {
+        final messages = StreamController<String>();
+        final started = <String>[];
+        var over = false;
+        Job.debug = (line) {
+          if (line.endsWith('started')) started.add(line);
+        };
+        addTearDown(() => Job.debug = null);
+        page.saveAll(messages.stream, (message) async {
+          stubs.stage.trace.add('$message begins');
+          await delay(10);
+          stubs.stage.trace.add('$message saved');
+        }).then((_) => over = true);
+        expect(started, ['Job(each) started'], reason: 'one job, in the call');
+        expect(messages.hasListener, isTrue, reason: 'inside the call');
+        messages
+          ..add('a')
+          ..add('b')
+          ..close().ignore();
+        async.flushTimers();
+        expect(trace(), ['a begins', 'a saved', 'b begins', 'b saved']);
+        expect(over, isTrue);
+      });
+    });
+
     test('the chain saves the parsed number', () {
       fakeAsync((async) {
         page.chain();

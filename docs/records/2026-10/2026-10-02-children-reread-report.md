@@ -681,3 +681,38 @@ zone that link was created in».
     два встроенных теста в группе сторожа «The list a group returns»: такая
     регистрация закрывает список на отмене и на ошибке; перенос её ниже
     ожидания краснит тест на отмену.
+
+32. Владелец 2026-10-03, по находке 8
+    в `2026-10-03-job-each-design-review-report.md`: дописать про
+    `ctx.onDispose` в колбэке. Новый подраздел «What one event opens». Первая
+    попытка — `dispose:` у `childCtx.join` в колбэке, к которому ведёт словарь
+    самого API: закрытие ложится на стек ребёнка `each` и ждёт конца стрима.
+    Ответ — ребёнок на событие через `childCtx.run(Job.deferred(...))`: его
+    стек разматывается до следующего события. `finally` в колбэке ответом
+    не стал: с `discard:` у `join` условная регистрация копится на том же
+    стеке. Сторожа: «dispose in the callback keeps every draft open to the
+    end», «a child for the event closes its draft before the next event»
+    и то же при отмене посреди записи.
+
+33. Владелец 2026-10-03: «я хотел бы ещё где-то в документации объяснение,
+    почему не обычный listen и await for. может быть с примерами». Два
+    подраздела, каждый открывается кодом, который пишется первым. «`await for`
+    in a body»: между событиями контрольной точки нет, задача, отменённая при
+    молчащем стриме, идёт и держит подписку до следующего события, `cancel()`
+    до него не возвращается. «`listen` in a body»,
+    с `onCancel(subscription.cancel)` и `wait(subscription.asFuture)`:
+    асинхронный колбэк не ждётся, сохранения идут внахлёст, а ошибка колбэка
+    уходит в зону мимо задачи. Зонд —
+    `.artifacts/2026-10-03-job-each/why_not_listen.dart`. Сторожа: «await for
+    hears a cancellation only with the next event», «listen starts the second
+    save while the first one runs», «an error of a listen callback goes to the
+    zone, past the job» и по парному на `ctx.each`. Контроллер стенда получил
+    `onCancel: () async {}`: `await for` ждёт future отписки, а у контроллера
+    без `onCancel` она из корневой зоны и под `FakeAsync` не приходит.
+
+34. Владелец 2026-10-03: примеры `Job.each` — подразделом в конце «Processing
+    streams». Подраздел «A job that only follows a stream»: `saveAll`
+    на `Job.each` и три отличия от ребёнка — старт внутри вызова, корень где бы
+    ни создан, `cancellable: false`. Утверждения держит `each_root_test.dart`,
+    код — сторож «saveAll saves one message after the other, in one job».
+    Дизайн — `2026-10-03-job-each-design.md`.

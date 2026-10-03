@@ -235,7 +235,8 @@ named as `Job(key)`, not by its class.
   there when the call returns and an event a broadcast stream sends right
   afterwards is not lost; `onStart` is heard before the caller has the handle.
   It is a root wherever it is made, and `ctx.run` refuses it: a body follows a
-  stream with `ctx.each`.
+  stream with `ctx.each`. See
+  [A job that only follows a stream](doc/children.md#a-job-that-only-follows-a-stream).
 
 - **`JobObserver.all` makes one observer of several.** Every hook goes to each
   of them in the order of the list, each call on its own, and the one among
