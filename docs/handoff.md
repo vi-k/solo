@@ -57,7 +57,12 @@ Workflow сценарием `page-reread` из одного вызова, пот
 до 90 тестов, пакет `solo` — 936. Перенесена `jobs.md`: коммит `83d2112`, отчёт
 `2026-10-03-solo-jobs-reread-report.md`, 33 находки, сторожей 109 вместо 9,
 пакет `solo` — 1036; раздел о паузе очереди перестроен в две первые попытки
-и ответ. Запущена третья, `cancellation.md`.
+и ответ. Перенесена `cancellation.md`: коммит `50c6c86`, отчёт
+`2026-10-03-solo-cancellation-reread-report.md`, 28 находок, сторож вырос с 27
+до 146 тестов, пакет `solo` — 1155; ответ «Queue the job and drain» получил
+`.ignore()` на задаче выхода. Вычитке `errors.md` оставлено: ветка
+`on Cancelled { rethrow; }` раздела «Letting cancellation through» пропускает
+ошибку операции, остановленной токеном. Запущена четвёртая, `resources.md`.
 
 **Что дальше.** `children.md` принята, `streams.md` владелец дочитал
 2026-10-03: пять правок по его вопросам,
@@ -308,7 +313,9 @@ README `flutter_solo` с его `doc/mixins.md` и быстрого старта
 (`tool/flutter_snippets.py`). Код `jobs.md` с 2026-10-03 стоит в support-файлах
 `packages/solo/test/support/jobs_*.dart` и запускается тестами
 `jobs_rakes_test.dart`, `queue_pause_recipe_test.dart`
-и `droppable_recipe_test.dart`, всего 109.
+и `droppable_recipe_test.dart`, всего 109. Код `cancellation.md` с 2026-10-04
+стоит в `packages/solo/test/support/cancellation_*.dart` и запускается тестом
+`cancellation_rakes_test.dart`, 146 тестов.
 
 **Стенда у `state.md` тоже нет, сторожа — тестом.** Каждую первую попытку
 страницы и каждое утверждение, добавленное чтением владельца, держит
