@@ -60,13 +60,17 @@ Workflow сценарием `page-reread` из одного вызова, пот
 и ответ. Перенесена `cancellation.md`: коммит `50c6c86`, отчёт
 `2026-10-03-solo-cancellation-reread-report.md`, 28 находок, сторож вырос с 27
 до 146 тестов, пакет `solo` — 1155; ответ «Queue the job and drain» получил
-`.ignore()` на задаче выхода. Вычитке `errors.md` оставлено: ветка
-`on Cancelled { rethrow; }` раздела «Letting cancellation through» пропускает
-ошибку операции, остановленной токеном. Перенесена `resources.md`: коммит
-`0e2acda`, отчёт `2026-10-04-solo-resources-reread-report.md`, 24 находки,
-сторож вырос с 27 до 119 тестов, пакет `solo` — 1247; блок вступления получил
+`.ignore()` на задаче выхода. Перенесена `resources.md`: коммит `0e2acda`,
+отчёт `2026-10-04-solo-resources-reread-report.md`, 24 находки, сторож вырос
+с 27 до 119 тестов, пакет `solo` — 1247; блок вступления получил
 `return file;`, а три блока раздела о передаче состоянию — шаг
-`ctx.uncancellable(db.migrate)`. Запущена пятая, `errors.md`.
+`ctx.uncancellable(db.migrate)`. Перенесена `errors.md`: коммит `c54da7b`,
+отчёт `2026-10-04-solo-errors-reread-report.md`, 32 находки, сторож вырос с 63
+до 166 тестов, пакет `solo` — 1350; ответ раздела «Letting cancellation
+through» теперь `ctx.check()` первой строкой `catch`, первая попытка раздела
+о перехвате отменяется на `hw.setZoom`, а dartdoc класса `Solo` называет
+`onUnanswered`. Агент этой страницы кончился на переполнении контекста перед
+коммитом, закоммитила основная сессия. Запущена шестая, `children.md`.
 
 **Что дальше.** `children.md` принята, `streams.md` владелец дочитал
 2026-10-03: пять правок по его вопросам,
@@ -91,7 +95,13 @@ dozen calls» в README `solo` перестроен — `play` кончаетс�
 показать передачу ресурса состоянию — решает владелец. Пункт 7 «По чтению
 владельца» в `2026-10-02-children-reread-report.md`: после переполнения стека
 на постройке дерева без `await` корень иногда не кончается вовсе — дефект ядра,
-найден зондом, не чинился; чинить ли и когда, решает владелец.
+найден зондом, не чинился; чинить ли и когда, решает владелец. Раздел «Вопросы
+владельцу» в `2026-10-04-solo-errors-reread-report.md`: хук контроллера или
+`SoloObserver`, бросивший `Cancelled`, отдаёт его в зону, а ядро с 2026-09-28
+такой бросок глушит; практический случай — ленивое сообщение лога, читающее
+`ctx.state` отменённой задачи. Оставить правило `solo` или глушить
+в `packages/solo/lib/src/call_hook.dart`, как ядро: прототип в шесть строк
+краснит один тест, который нынешнее правило и держит.
 
 **Решения владельца, которые действуют.**
 
@@ -320,7 +330,9 @@ README `flutter_solo` с его `doc/mixins.md` и быстрого старта
 и `droppable_recipe_test.dart`, всего 109. Код `cancellation.md` с 2026-10-04
 стоит в `packages/solo/test/support/cancellation_*.dart` и запускается тестом
 `cancellation_rakes_test.dart`, 146 тестов; код `resources.md` —
-в `resources_*.dart` там же, тест `resources_rakes_test.dart`, 119.
+в `resources_*.dart` там же, тест `resources_rakes_test.dart`, 119; код
+`errors.md` — в `errors_*.dart` там же, тесты `errors_rakes_test.dart`
+и `cancel_delay_recipe_test.dart`, 166.
 
 **Стенда у `state.md` тоже нет, сторожа — тестом.** Каждую первую попытку
 страницы и каждое утверждение, добавленное чтением владельца, держит
