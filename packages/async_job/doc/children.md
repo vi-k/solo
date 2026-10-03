@@ -622,11 +622,13 @@ parsed = loaded.then<int>((ctx, text) => int.parse(text));
 `parsed.done` in place of `parsed.value` changes nothing, and neither does
 moving the await into the cleanup of `loaded`.
 
-Each continuation is a root job of the core. It has an optional `observer`
-argument and inherits neither the source's observer nor anything an engine of a
-domain attaches to the source. Cleanup registered by the source has already run
-when the continuation receives its value; a resource closed by the source's
-`onDispose` is therefore already closed at that point.
+Each continuation is a root job of the core, wherever `then` is called: made in
+the body of another job, it is not that job's child, and the job does not wait
+for it. It has an optional `observer` argument and inherits neither the
+source's observer nor anything an engine of a domain attaches to the source.
+Cleanup registered by the source has already run when the continuation receives
+its value; a resource closed by the source's `onDispose` is therefore already
+closed at that point.
 
 A `discard` of the source is the other way round: the source ended `Done`, so
 it never ran and never will, and the continuation is the receiver — it takes

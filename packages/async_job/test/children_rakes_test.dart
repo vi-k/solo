@@ -728,6 +728,27 @@ void main() {
       });
     });
 
+    test('a continuation made in a body is a root the body does not wait for',
+        () {
+      fakeAsync((async) {
+        late final Job<void> tail;
+        final parent = Job<void>((ctx) async {
+          final rows = Job.deferred<int>((ctx) async => 1);
+          tail = rows.then<void>((ctx, value) => ctx.join(() => delay(50)))
+            ..ignore();
+          await ctx.run(rows);
+        });
+
+        async.elapse(const Duration(milliseconds: 10));
+
+        expect(parent.outcome, isA<Done<void>>());
+        expect(tail.isChild, isFalse);
+        expect(tail.isRunning, isTrue);
+        async.flushTimers();
+        expect(tail.outcome, isA<Done<void>>());
+      });
+    });
+
     test('a source whose body awaits its continuation never finishes', () {
       fakeAsync((async) {
         final loaded = page.loadedAwaitingParsed();
