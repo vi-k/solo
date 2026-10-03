@@ -211,7 +211,8 @@ final outcome = await job.done; // Cancelled(manual)
 | --- | --- |
 | [Исходы](../../docs/ru/async_job/outcomes.md) | `Done`, `Failed`, `Cancelled` и наблюдение за провалом |
 | [Отмена](../../docs/ru/async_job/cancellation.md) | Контрольные точки, `onCancel`, `uncancellable` |
-| [Дети, стримы и цепочки](../../docs/ru/async_job/children.md) | `Job.deferred`, `ctx.run`, `ctx.runAll`, `ctx.each`, `Job.each`, `then` |
+| [Дети, стримы и цепочки](../../docs/ru/async_job/children.md) | `Job.deferred`, `ctx.run`, `ctx.runAll`, `ctx.each`, `then` |
+| [Стримы](../../docs/ru/async_job/streams.md) | `ctx.each`, `Job.each` и что делают `await for` и `listen` в теле |
 | [Уборка](../../docs/ru/async_job/cleanup.md) | `dispose`, `discard`, `onDispose`, порядок |
 | [Наблюдение и тестирование](../../docs/ru/async_job/observing.md) | `JobObserver`, `JobAnswerer`, `Job.visitErrors`, логи, `unattended`, время под управлением теста |
 | [Своё поверх ядра](../../docs/ru/async_job/extending.md) | `JobBase`, `JobContextBase`, свой движок |

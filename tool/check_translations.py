@@ -97,6 +97,10 @@ PAIRS = [
         REPO / "docs" / "ru" / "async_job" / "children.md",
     ),
     (
+        REPO / "packages" / "async_job" / "doc" / "streams.md",
+        REPO / "docs" / "ru" / "async_job" / "streams.md",
+    ),
+    (
         REPO / "packages" / "async_job" / "doc" / "cleanup.md",
         REPO / "docs" / "ru" / "async_job" / "cleanup.md",
     ),

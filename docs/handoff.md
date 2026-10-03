@@ -4,26 +4,25 @@
 и закоммичен в `main`, не отправлен: код, dartdoc,
 `packages/async_job/test/each_root_test.dart`, запись «Added» в `CHANGELOG.md`;
 дизайн — `2026-10-03-job-each-design.md`, его ревью на Opus с вердиктами —
-`2026-10-03-job-each-design-review-report.md`. На страницу `children.md`
-и в перевод по слову владельца встали четыре подраздела в конце «Processing
-streams»: уборка одного события, `await for` в теле, `listen` в теле
-и `Job.each`; пункты 32–34 «По чтению владельца»
-в `2026-10-02-children-reread-report.md`. Клон ревьюера с прототипом
-и зондами — `.artifacts/2026-10-03-job-each/tree`, зонды автора рядом.
-`ctx.pause` — пауза, которую отмена кончает сразу и вместе с таймером, —
-сделана и закоммичена в `main`, не отправлена; решения владельца 2026-10-03:
-имя `pause`, член `JobContext`, документы поправить. Дизайн —
-`2026-10-03-ctx-pause-design.md`, ревью на Opus с вердиктами —
-`2026-10-03-ctx-pause-design-review-report.md`; на странице `cancellation.md`
-раздел «Letting time pass». Открытый вопрос владельцу оттуда, находка 9:
-в `packages/async_job/doc/outcomes.md` голый `await Future.delayed` в теле
-неотменяемого ребёнка изображает работу шага и оставлен — менять ли его
-на `ctx.pause`. Кроме того, владелец читает
+`2026-10-03-job-each-design-review-report.md`. Примеры `Job.each` живут
+на странице `streams.md`, о ней ниже. Клон ревьюера с прототипом и зондами —
+`.artifacts/2026-10-03-job-each/tree`, зонды автора рядом. `ctx.pause` — пауза,
+которую отмена кончает сразу и вместе с таймером, — сделана и закоммичена
+в `main`, не отправлена; решения владельца 2026-10-03: имя `pause`, член
+`JobContext`, документы поправить. Дизайн — `2026-10-03-ctx-pause-design.md`,
+ревью на Opus с вердиктами — `2026-10-03-ctx-pause-design-review-report.md`;
+на странице `cancellation.md` раздел «Letting time pass». Открытый вопрос
+владельцу оттуда, находка 9: в `packages/async_job/doc/outcomes.md` голый
+`await Future.delayed` в теле неотменяемого ребёнка изображает работу шага
+и оставлен — менять ли его на `ctx.pause`. Кроме того, владелец читает
 `packages/async_job/doc/children.md` второй раз, и каждый его вопрос правится
 в самой странице: оригинал, перевод `docs/ru/async_job/children.md`, сторож
 `packages/async_job/test/children_rakes_test.dart` и пункт раздела «По чтению
-владельца» в `2026-10-02-children-reread-report.md` — там 35 пунктов, последние
-четыре о стримах. Так же шли его вопросы
+владельца» в `2026-10-02-children-reread-report.md` — там 36 пунктов, последние
+пять о стримах. Раздел о стримах 2026-10-03 по слову владельца вынесен на свою
+страницу `packages/async_job/doc/streams.md` с переводом, сторож
+`packages/async_job/test/streams_rakes_test.dart`; в `children.md` остался
+короткий «Processing streams» со ссылкой. Так же шли его вопросы
 по `packages/async_job/doc/observing.md`, пункт 1
 в `2026-10-02-observing-reread-report.md`. Открытых находок у ревью нет:
 `async_job` — `2026-09-26-async-job-project-review.md`, `solo`
@@ -198,7 +197,7 @@ streams»: уборка одного события, `await for` в теле, `l
 доходит прогон только последнего. Последний прогон `site` — на `1a6a618`,
 зелёный. Проверки: `packages/async_job` после решений с `try` и `onDiscard` для
 списка группы в `children.md` — формат и анализ чистые, `dart test` зелёный,
-1191 тест, а с `Job.each`, `ctx.pause` и их страницами — 1240, `packages/solo`
+1191 тест, а с `Job.each`, `ctx.pause` и их страницами — 1242, `packages/solo`
 против него 870, `packages/flutter_solo` 85; `dart doc --dry-run` чистый
 на коммите вычитки `children.md`; `packages/solo` на коммите переноса его
 README — формат и анализ чистые, 868 тестов; из корня на коммите вычитки
@@ -250,12 +249,13 @@ on upgrade», «Added», «Fixed», «Documentation». Счёт ломающих
 У страницы без стенда утверждения держит тест пакета, и правка страницы идёт
 вместе с ним. В `async_job` это `cleanup_rakes_test.dart`,
 `outcomes_rakes_test.dart`, `cancellation_rakes_test.dart`,
-`observing_rakes_test.dart`, `children_rakes_test.dart`
-и `extending_rakes_test.dart`. В `solo` — `state_rakes_test.dart`,
-`cancellation_rakes_test.dart`, `resources_rakes_test.dart`,
-`errors_rakes_test.dart` с `cancel_delay_recipe_test.dart`,
-`testing_rakes_test.dart` и `readme_rakes_test.dart` для README; `camera.md`
-держит `camera_rakes_test.dart` пакета примера, а `children.md` —
+`observing_rakes_test.dart`, `children_rakes_test.dart`,
+`streams_rakes_test.dart` и `extending_rakes_test.dart`. В `solo` —
+`state_rakes_test.dart`, `cancellation_rakes_test.dart`,
+`resources_rakes_test.dart`, `errors_rakes_test.dart`
+с `cancel_delay_recipe_test.dart`, `testing_rakes_test.dart`
+и `readme_rakes_test.dart` для README; `camera.md` держит
+`camera_rakes_test.dart` пакета примера, а `children.md` —
 `children_test.dart`, `each_test.dart`, `each_child_test.dart`
 и `zone_test.dart`.
 
@@ -326,7 +326,7 @@ README `flutter_solo` с его `doc/mixins.md` и быстрого старта
   возможен `Done`.
 
 Число блоков кода в README больше не годится как ориентир: материал разъехался
-по страницам `doc/`. Форму держат `check_translations.py` (двадцать пар)
+по страницам `doc/`. Форму держат `check_translations.py` (двадцать одна пара)
 и `check_doc_shape.py`. Примеры `then`, его контракт и переводы обновлены
 вместе с реализацией.
 

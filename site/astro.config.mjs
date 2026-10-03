@@ -120,6 +120,7 @@ export default defineConfig({
               'Children, streams and chains',
               'Дети, стримы и цепочки',
             ),
+            page('async_job/streams', 'Streams', 'Стримы'),
             page('async_job/cleanup', 'Cleanup', 'Уборка'),
             page(
               'async_job/observing',

@@ -726,3 +726,22 @@ zone that link was created in».
     источника на стек уборки задачи — `ctx.onDispose(feed.close)`. Сторожа: «a
     cancelled each does not wait for the source to shut down» и «onDispose with
     the close of the source makes the job wait».
+
+36. Владелец 2026-10-03: первая попытка раздела о стримах стояла не за задачей,
+    а за длинным описанием `each`, а дальше шли примеры, оторванные от первых
+    двух; и «а then не потеряется во всём этом многообразии задач
+    со стримами?». Решения владельца: разбить на разделы формы «задача, первая
+    попытка, ответ» и вынести их на отдельную страницу. Новая страница
+    `packages/async_job/doc/streams.md` с переводом
+    `docs/ru/async_job/streams.md`, шесть разделов: «Processing a stream» —
+    `await for` первой попыткой, `listen` второй, `ctx.each` ответом, справка
+    о ребёнке под ответом; «A callback in several steps»; «What one event
+    opens»; «Stopping the stream alone» с `watchTicks`; «Waiting for the source
+    to close»; «A job that only follows a stream» с `Job.each`. В `children.md`
+    раздел «Processing streams» оставлен коротким: `saveMessages` и ссылка
+    на новую страницу; вступление считает три раздела с первой попыткой. Новых
+    утверждений нет. Код страницы — `test/support/streams_page.dart`, сторожа
+    переехали в `test/streams_rakes_test.dart` и стоят на стабах
+    `children_stubs.dart`; добавлены три теста на `ctx.each` в теле, которым
+    открывается ответ. Страница вписана в `tool/check_translations.py`, в меню
+    сайта, в таблицу README и в ссылку `CHANGELOG.md`.

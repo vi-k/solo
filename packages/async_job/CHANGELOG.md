@@ -242,7 +242,7 @@ named as `Job(key)`, not by its class.
   afterwards is not lost; `onStart` is heard before the caller has the handle.
   It is a root wherever it is made, and `ctx.run` refuses it: a body follows a
   stream with `ctx.each`. See
-  [A job that only follows a stream](doc/children.md#a-job-that-only-follows-a-stream).
+  [A job that only follows a stream](doc/streams.md#a-job-that-only-follows-a-stream).
 
 - **`ctx.pause(duration)` is a delay a cancellation ends.** A body that awaits
   a bare `Future.delayed` sits the whole delay out before it notices a
@@ -403,10 +403,10 @@ named as `Job(key)`, not by its class.
 
 - The README is a starting page: what a job is, why a plain `Future` does not
   cover it, `Install`, `Quick start` and a map of the guides. The reference
-  moved to six pages: [Outcomes](doc/outcomes.md),
+  moved to seven pages: [Outcomes](doc/outcomes.md),
   [Cancellation](doc/cancellation.md),
-  [Children, streams and chains](doc/children.md), [Cleanup](doc/cleanup.md),
-  [Observing and testing](doc/observing.md) and
+  [Children, streams and chains](doc/children.md), [Streams](doc/streams.md),
+  [Cleanup](doc/cleanup.md), [Observing and testing](doc/observing.md) and
   [Building on the core](doc/extending.md). Where there is a trap, a section
   opens with the version the vocabulary of the API leads to and shows what it
   does, then the one that holds. One recommendation of the `0.2.0` README is
