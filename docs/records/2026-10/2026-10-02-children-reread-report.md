@@ -793,4 +793,6 @@ zone that link was created in».
     «Chains»: «the continuation closes the source it receives», «cancelled
     while it waited, the continuation never runs, and the discard of the source
     closes what arrives», «a source that refuses the cancellation ends Done
-    with the source open, and the handle closes it».
+    with the source open, and the handle closes it». Следом владелец: параметр
+    `discard` в `opened` назвать `rows`, а не `source`, чтобы было видно, что
+    ресурс тот же. Сделано в оригинале, переводе и `archiveOpened`.

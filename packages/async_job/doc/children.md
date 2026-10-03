@@ -635,7 +635,7 @@ rows it opened, and `archived` receives them:
 
 ```dart
 final opened = Job<Source>(
-  (ctx) => ctx.wait(openRows, discard: (source) => source.close()),
+  (ctx) => ctx.wait(openRows, discard: (rows) => rows.close()),
 );
 final archived = opened.then<void>((ctx, rows) async {
   ctx.onDispose(rows.close);
