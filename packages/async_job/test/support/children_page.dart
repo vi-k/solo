@@ -235,6 +235,17 @@ Future<void> chain() async {
   await saved.value;
 }
 
+/// Chains: the continuation that waits for a job, by running it as a child.
+Job<void> storeParsed(Job<int> parsed) {
+  final stored = parsed.then<void>((ctx, number) {
+    final saving = Job.deferred<void>(
+      (ctx) => ctx.join(() => saveNumber(number)),
+    );
+    return ctx.run(saving);
+  });
+  return stored;
+}
+
 /// The first attempt of the chain, and the version where the source is the
 /// only child; [adoptTheTail] picks the first.
 Future<void> reportedRows({required bool adoptTheTail}) async {

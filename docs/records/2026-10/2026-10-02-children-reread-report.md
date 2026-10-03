@@ -745,3 +745,20 @@ zone that link was created in».
     `children_stubs.dart`; добавлены три теста на `ctx.each` в теле, которым
     открывается ответ. Страница вписана в `tool/check_translations.py`, в меню
     сайта, в таблицу README и в ссылку `CHANGELOG.md`.
+
+37. Владелец 2026-10-03 об абзаце раздела «Chains» «The callback returns a
+    value or a future. Returning another `Job` does not wait for it…»:
+    «не понятно». Абзац держал четыре правила в четырёх фразах без примера.
+    Переписан тремя абзацами. Первый: `Job` — не future, колбэк
+    `then<void>((ctx, number) => saving)` компилируется, продолжение кончается
+    `Done` сразу, а отложенная `saving` не запускается; под ним код `stored`,
+    где продолжение запускает задачу ребёнком. Второй: `then` не запускает
+    источник, цепочка на `Job.deferred` стоит, пока источник не запустят.
+    Третий: источник не может ждать своё продолжение ни в теле, ни в уборке —
+    оба не кончаются, и `cancel()` источника не возвращается. Запрет усыновлять
+    продолжение из абзаца убран: его целиком несёт первая попытка раздела.
+    Сторожа в группе «Chains»: «a job the callback returns is not waited for,
+    and a deferred one never starts», «a continuation waits for the job it runs
+    as its child», «then does not start a deferred source, whatever the length»
+    и два «a source whose body/cleanup awaits its continuation never finishes».
+    Код — `storeParsed` в `test/support/children_page.dart`.

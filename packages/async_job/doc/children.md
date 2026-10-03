@@ -585,11 +585,29 @@ failure. If a cancelled continuation cannot forward a source failure, it does
 not observe it either: for example, a source that refuses cancellation and
 later fails still needs its own error handling.
 
-The callback returns a value or a future. Returning another `Job` does not wait
-for it; return `ctx.run(child)` for a deferred child. `then` does not start a
-deferred source, and a continuation cannot be adopted through `ctx.run`. Do not
-await a continuation from its source's body or cleanup: it is waiting for that
-source to finish.
+The callback returns a value or a future, and the continuation waits for the
+future. A `Job` is not a future. A callback that returns one,
+`then<void>((ctx, number) => saving)`, compiles, and the continuation finishes
+`Done` at once without waiting for `saving`; a deferred `saving` is never even
+started. A continuation waits for a job it runs as its child:
+
+```dart
+final stored = parsed.then<void>((ctx, number) {
+  final saving = Job.deferred<void>(
+    (ctx) => ctx.join(() => saveNumber(number)),
+  );
+  return ctx.run(saving);
+});
+```
+
+`then` does not start its source. A chain hung off a `Job.deferred` stays
+unstarted, every link of it, until the source is started: by `start()`, or by
+`ctx.run(source)` in the body that adopts it.
+
+A continuation starts once its source has finished, cleanup included, so the
+source cannot wait for it. A source whose body or cleanup awaits the `value` or
+`done` of its own continuation never finishes, and the continuation never
+starts; `cancel()` of the source does not return either.
 
 Each continuation is a root job of the core. It has an optional `observer`
 argument and inherits neither the source's observer nor anything an engine of a

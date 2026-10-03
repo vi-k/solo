@@ -669,6 +669,108 @@ void main() {
         expect(tail.outcome, isA<Cancelled>());
       });
     });
+
+    test(
+        'a job the callback returns is not waited for, and a deferred one '
+        'never starts', () {
+      fakeAsync((async) {
+        var ran = false;
+        final saving = Job.deferred<void>((ctx) async {
+          ran = true;
+        });
+        final parsed = Job<int>((ctx) async => 21);
+        // The page says this compiles under `then<void>`.
+        final stored = parsed.then<void>((ctx, number) => saving);
+
+        async.flushTimers();
+
+        expect(stored.outcome, isA<Done<void>>());
+        expect(ran, isFalse);
+        expect(saving.isFinished, isFalse);
+        saving.cancel().ignore();
+        async.flushTimers();
+      });
+    });
+
+    test('a continuation waits for the job it runs as its child', () {
+      fakeAsync((async) {
+        stubs.stage = stubs.Stage();
+        final parsed = Job<int>((ctx) async => 21);
+        final stored = page.storeParsed(parsed);
+        stored.done
+            .then((outcome) => stubs.stage.trace.add('stored $outcome'))
+            .ignore();
+
+        async.flushTimers();
+
+        expect(stubs.stage.trace, ['saved number 21', 'stored Done(null)']);
+      });
+    });
+
+    test('then does not start a deferred source, whatever the length', () {
+      fakeAsync((async) {
+        var ran = false;
+        final source = Job.deferred<int>((ctx) async {
+          ran = true;
+          return 1;
+        });
+        final last = source
+            .then<int>((ctx, value) => value + 1)
+            .then<int>((ctx, value) => value + 1);
+
+        async.flushTimers();
+        expect(ran, isFalse);
+        expect(last.isFinished, isFalse);
+
+        source.start();
+        async.flushTimers();
+        expect(last.outcome, isA<Done<int>>().having((d) => d.value, 'v', 3));
+      });
+    });
+
+    test('a source whose body awaits its continuation never finishes', () {
+      fakeAsync((async) {
+        late final Job<int> tail;
+        final source = Job<int>((ctx) async {
+          await tail.value;
+          return 1;
+        });
+        tail = source.then<int>((ctx, value) => value)..ignore();
+
+        async.flushTimers();
+        expect(source.isFinished, isFalse);
+        expect(tail.isFinished, isFalse);
+
+        var back = false;
+        source.cancel().then((_) => back = true).ignore();
+        async.flushTimers();
+        expect(back, isFalse);
+        expect(source.isFinished, isFalse);
+      });
+    });
+
+    test(
+        'a source whose cleanup awaits its continuation never finishes, '
+        'and cancel() does not return', () {
+      fakeAsync((async) {
+        late final Job<int> tail;
+        final source = Job<int>((ctx) async {
+          ctx.onDispose(() => tail.done);
+          return 1;
+        });
+        tail = source.then<int>((ctx, value) => value)..ignore();
+
+        async.flushTimers();
+        expect(source.isFinished, isFalse);
+        expect(tail.isFinished, isFalse);
+
+        var back = false;
+        source.cancel().then((_) => back = true).ignore();
+        async.flushTimers();
+        expect(back, isFalse);
+        expect(source.isFinished, isFalse);
+      });
+    });
   });
 
   group('The code of the page', () {
