@@ -602,7 +602,9 @@ final stored = parsed.then<void>((ctx, number) {
 
 `then` does not start its source. A chain hung off a `Job.deferred` stays
 unstarted, every link of it, until the source is started: by `start()`, or by
-`ctx.run(source)` in the body that adopts it.
+`ctx.run(source)` in the body that adopts it. The continuation itself is never
+adopted: it starts by itself once its source finishes, and `ctx.run` refuses
+it.
 
 A continuation starts once its source has finished, cleanup included, so a
 source that waits for its own continuation waits forever:
@@ -663,10 +665,48 @@ disposer, stays with the link where it happened: it goes to that link's
 observer and, unless the observer answers for it, to the zone the link was made
 in — for a continuation, the zone `then` was called in.
 
+### A continuation of a child
+
+The parent needs the rows; the report on them may finish after the parent has:
+
+```dart
+final child = Job.deferred<int>((ctx) => ctx.wait(load));
+final tail = child.then<void>((ctx, rows) => report(rows));
+
+final parent = Job<void>((ctx) async {
+  // The source is a child: the parent starts it and waits for it.
+  ctx.log(await ctx.run(child));
+});
+
+await parent.value; // Done, whatever the continuation is doing.
+await tail.value; // The continuation is yours to observe.
+```
+
+The parent waits for its children, not for what hangs off them. Once
+`ctx.run(child)` has returned and the body ends, the parent finishes `Done`
+while a slow continuation is still running. The parent's cancellation reaches
+the continuation only while it still waits for its source: cancelling the
+parent cancels the child, and the child's cancellation travels forward to the
+continuation as `ChainCancelReason`. Once the source has finished and the
+continuation runs, nothing the parent does reaches it; only the continuation's
+own handle stops it, `tail.cancel()`, or
+`ctx.onCancel(() => tail.cancel().ignore())` in a parent body that is still
+running.
+
+A failure in the continuation is nobody's business but its own. Observe it
+through `value`, `done` or `ignore`; an unobserved one goes to the zone `then`
+was called in, after the parent has already finished. Its outcome comes back to
+you, not to the parent.
+
+## Steps in a row
+
+A job loads the rows and then reports them, and it must not end before the
+report is done.
+
 ### The first attempt
 
-A job loads the rows, a continuation reports them, and the body wants both done
-before it ends — so it adopts them both:
+`then` reads like the word for "and then", so the report becomes a
+continuation, and the body adopts both:
 
 ```dart
 final child = Job.deferred<int>((ctx) => ctx.wait(load));
@@ -696,33 +736,6 @@ final parent = Job<void>((ctx) async {
 
 A sequence that belongs to the operation is children. The second `ctx.run`
 starts once the first has returned its value, the parent waits for both, and
-its cancellation reaches whichever of them is running.
-
-A sequence that deliberately outlives the operation is a chain, and then the
-source is the only child:
-
-```dart
-final parent = Job<void>((ctx) async {
-  // The source is a child: the parent starts it and waits for it.
-  ctx.log(await ctx.run(child));
-});
-
-await parent.value; // Done, whatever the continuation is doing.
-await tail.value; // The continuation is yours to observe.
-```
-
-The parent waits for its children, not for what hangs off them. Once
-`ctx.run(child)` has returned and the body ends, the parent finishes `Done`
-while a slow continuation is still running. The parent's cancellation reaches
-the continuation only while it still waits for its source: cancelling the
-parent cancels the child, and the child's cancellation travels forward to the
-continuation as `ChainCancelReason`. Once the source has finished and the
-continuation runs, nothing the parent does reaches it; only the continuation's
-own handle stops it, `tail.cancel()`, or
-`ctx.onCancel(() => tail.cancel().ignore())` in a parent body that is still
-running.
-
-A failure in the continuation is nobody's business but its own. Observe it
-through `value`, `done` or `ignore`; an unobserved one goes to the zone `then`
-was called in, after the parent has already finished. Its outcome comes back to
-you, not to the parent.
+its cancellation reaches whichever of them is running. A chain is for the
+opposite case, a step that outlives the operation:
+[A continuation of a child](#a-continuation-of-a-child).

@@ -15,7 +15,7 @@ import 'support/page_code.dart';
 
 /// The first attempts of `doc/children.md`, and what each one costs.
 ///
-/// Four sections of the page open with the version the vocabulary of the
+/// Three sections of the page open with the version the vocabulary of the
 /// API leads to and say what that version does instead of what it was
 /// meant to do. Nothing else guards those statements: the page has no
 /// bench, so an outcome or an order quoted there rots silently. Every
