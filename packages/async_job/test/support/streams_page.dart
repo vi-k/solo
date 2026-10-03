@@ -100,6 +100,12 @@ Job<void> listenInABody() => Job<void>((ctx) async {
       await ctx.wait(subscription.asFuture<void>);
     });
 
+Job<void> asyncMapInABody() => Job<void>((ctx) async {
+      final subscription = messages.asyncMap(store.saveBody).listen((_) {});
+      ctx.onCancel(subscription.cancel);
+      await ctx.wait(subscription.asFuture<void>);
+    });
+
 Future<void> saveAll(
   Stream<String> messages,
   Future<void> Function(String message) save,

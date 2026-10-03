@@ -5,11 +5,11 @@ that child, delivers the events to a callback one at a time, and ends the
 subscription with the job. `Job.each` is the same for a job with nothing else
 to do.
 
-Three sections below open with the version habit leads to — the `await for` and
-the `listen` every Dart program already has, a plain `await`, the `dispose` a
-body would use — and say what that version does instead of what it was meant to
-do. The version that works follows under its own heading. The other sections
-have no such version, and open with the answer.
+Three sections below open with the version habit leads to — the `await for`,
+the `listen` and the `asyncMap` every Dart program already has, a plain
+`await`, the `dispose` a body would use — and say what that version does
+instead of what it was meant to do. The version that works follows under its
+own heading. The other sections have no such version, and open with the answer.
 
 ## Processing a stream
 
@@ -59,6 +59,24 @@ knows nothing of the failure, and neither does whoever awaits its `value`. The
 `onError` of `listen` does not change that: it hears the errors of the stream,
 not what the callback throws.
 
+### The third attempt
+
+```dart
+Job<void>((ctx) async {
+  final subscription = messages.asyncMap(store.saveBody).listen((_) {});
+  ctx.onCancel(subscription.cancel);
+  await ctx.wait(subscription.asFuture<void>);
+});
+```
+
+`asyncMap` waits for each save before it takes the next message, and an error
+of a save becomes an error of the stream, which fails the job. What is left is
+the cancellation. `subscription.cancel()` stops the delivery, but not the save
+that is already running, and nothing waits for that save: the job ends as
+`Cancelled`, and its `cancel()` returns, while the message is still being
+saved. The save finishes after the job has ended, and if it fails then, its
+error reaches neither the job nor the zone.
+
 ### A child that owns the subscription
 
 ```dart
@@ -75,8 +93,9 @@ child `Job<void>` that owns the subscription. The callback receives that
 child's context and an event. The child delivers the next message when the
 callback for the previous one has finished, so the saves run one after another.
 It cancels the subscription the moment it accepts a cancellation, whether a
-message is on its way or not. And an error of the stream or of the callback
-ends it `Failed`.
+message is on its way or not. A save that is running at that moment is waited
+for: `join` holds the cancellation until the save has finished, and the child
+ends after it. And an error of the stream or of the callback ends it `Failed`.
 
 `saving.value` completes when the stream ends and the last save finishes;
 awaiting it throws the child's failure into the body, and a `Cancelled` it

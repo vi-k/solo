@@ -297,6 +297,98 @@ void main() {
       expect(heard, [isA<ArgumentError>()]);
     });
 
+    test('asyncMap saves one message after the other', () {
+      fakeAsync((async) {
+        final job = page.asyncMapInABody();
+        stubs.stage.messages
+          ..add('m1')
+          ..add('m2');
+        async.flushTimers();
+        expect(trace(), [
+          'm1: body begins',
+          'm1: body saved',
+          'm2: body begins',
+          'm2: body saved',
+        ]);
+        stubs.stage.messages.close().ignore();
+        async.flushTimers();
+        expect(job.outcome, isA<Done<void>>());
+      });
+    });
+
+    test('asyncMap, a save that fails, fails the job', () {
+      final zoneErrors = <Object>[];
+      late final Job<void> job;
+      runZonedGuarded(
+        () => fakeAsync((async) {
+          stubs.stage.stepError = StateError('save');
+          job = page.asyncMapInABody()..ignore();
+          stubs.stage.messages.add('m1');
+          async.flushTimers();
+          stubs.stage.messages.close().ignore();
+        }),
+        (error, _) => zoneErrors.add(error),
+      );
+      expect(job.outcome, isA<Failed>());
+      expect(zoneErrors, isEmpty);
+    });
+
+    test('asyncMap, cancelled mid-save, ends before the save does', () {
+      fakeAsync((async) {
+        final job = page.asyncMapInABody();
+        stubs.stage.messages.add('m1');
+        async.flushMicrotasks();
+        job.cancel().then((_) => trace().add('cancel returned')).ignore();
+        async.flushMicrotasks();
+        expect(job.outcome, isA<Cancelled>());
+        expect(trace(), ['m1: body begins', 'cancel returned']);
+        async.flushTimers();
+        expect(trace().last, 'm1: body saved');
+        stubs.stage.messages.close().ignore();
+      });
+    });
+
+    test('asyncMap, a save that fails after the cancellation, is lost', () {
+      final zoneErrors = <Object>[];
+      late final Job<void> job;
+      runZonedGuarded(
+        () => fakeAsync((async) {
+          job = page.asyncMapInABody();
+          stubs.stage.messages.add('m1');
+          async.flushMicrotasks();
+          job.cancel().ignore();
+          async.flushMicrotasks();
+          stubs.stage.stepError = StateError('late save');
+          async.flushTimers();
+          stubs.stage.messages.close().ignore();
+        }),
+        (error, _) => zoneErrors.add(error),
+      );
+      expect(job.outcome, isA<Cancelled>());
+      expect(zoneErrors, isEmpty);
+    });
+
+    test('each in a body, cancelled mid-save, waits for the save', () {
+      fakeAsync((async) {
+        final job = page.eachInABody();
+        stubs.stage.messages.add('m1');
+        async.flushMicrotasks();
+        expect(trace(), ['m1: body begins']);
+        job.cancel().then((_) => trace().add('cancel returned')).ignore();
+        async.flushMicrotasks();
+        expect(job.isRunning, isTrue);
+        expect(stubs.stage.messages.hasListener, isFalse);
+        async.flushTimers();
+        expect(trace(), [
+          'm1: body begins',
+          'm1: body saved',
+          'cancel returned',
+        ]);
+        expect(job.outcome, isA<Cancelled>());
+        stubs.stage.messages.close().ignore();
+      });
+    });
+
     test('saveAll saves one message after the other, in one job', () {
       fakeAsync((async) {
         final messages = StreamController<String>();
