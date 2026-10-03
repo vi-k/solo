@@ -1314,10 +1314,11 @@ void main() {
         });
         async.flushTimers();
         final text = File('doc/children.md').readAsStringSync();
-        final quote = RegExp(r'throws `ArgumentError`:\n`([^`]*)`')
-            .firstMatch(text)!
-            .group(1)!
-            .replaceAll('\n', ' ');
+        final quoted = RegExp(
+          r'throws `ArgumentError`:\n\n```text\n(.*?)\n```',
+          dotAll: true,
+        );
+        final quote = quoted.firstMatch(text)!.group(1)!.replaceAll('\n', ' ');
         expect(thrown, isA<ArgumentError>());
         expect('$thrown', quote);
       });

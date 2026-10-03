@@ -719,11 +719,15 @@ final parent = Job<void>((ctx) async {
 ```
 
 Второй `ctx.run` бросает `ArgumentError`:
-`Invalid argument (child): is a continuation,
-which starts itself once its source finishes: "Job(then)"`. `ctx.run` принимает
-`Job`, которую никто не стартует сам, а продолжение не из таких. Длина цепочки
-ничего не меняет: `child.then(...).then(...)` вешает одно продолжение
-на другое, и `ctx.run` отказывает каждому звену одинаково.
+
+```text
+Invalid argument (child): is a continuation,
+which starts itself once its source finishes: "Job(then)"
+```
+
+`ctx.run` принимает `Job`, которую никто не стартует сам, а продолжение
+не из таких. Длина цепочки ничего не меняет: `child.then(...).then(...)` вешает
+одно продолжение на другое, и `ctx.run` отказывает каждому звену одинаково.
 
 ### Два ребёнка подряд
 
