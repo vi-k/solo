@@ -474,7 +474,7 @@ final job = Job<void>((ctx) async {
 The user cancels 500 ms in, halfway through the delay, and the job ends 510 ms
 later. A plain `await` is no checkpoint: the body sits the delay out and learns
 of the cancellation at the `ctx.wait` of the next turn. Until then `cancel()`
-has not returned, and whatever waits for the job waits with it.
+does not return, and whatever waits for the job waits with it.
 
 ### The second attempt
 
