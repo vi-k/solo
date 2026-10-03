@@ -156,7 +156,7 @@ first group names them.
   nothing gives `Job<Null>` where the call writes no types and `Job<void>`
   where the method's return type says so. Writing the arguments out —
   `run<Ready, void>` — keeps the answer from depending on how a call was
-  spelled. See [Queue and policies](doc/jobs.md#queue-and-policies).
+  spelled. See [A key for each request](doc/jobs.md#a-key-for-each-request).
 
 - **A job dropped by `Policy.droppable` ends with a reason of its own.** Its
   outcome is `Cancelled(duplicate)` and the reason a new

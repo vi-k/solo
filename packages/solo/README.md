@@ -340,7 +340,7 @@ section linked beside it.
 | --- | --- | --- |
 | Only the last of a burst of commands matters | `accumulate` with a `merge` that keeps the incoming value | [Commands where only the last one counts](doc/accumulation.md#commands-where-only-the-last-one-counts) |
 | Typing into a search box | `accumulate` with `AccumulationTiming.debounce` | [A search that fires on every keystroke](doc/accumulation.md#a-search-that-fires-on-every-keystroke) |
-| A later request must not be dropped as a duplicate of an earlier one | a record key, `(_Op.load, id)` | [Queue and policies](doc/jobs.md#queue-and-policies) |
+| A later request must not be dropped as a duplicate of an earlier one | a record key, `(_Op.load, id)` | [A key for each request](doc/jobs.md#a-key-for-each-request) |
 | Queued work is made pointless by what just arrived | `queue.removeWhere` before submitting, or `cancelAll()` if it may be running | [When they are separate jobs after all](doc/accumulation.md#when-they-are-separate-jobs-after-all) |
 | A last batch has to go out before the screen goes away | `close(mode: SoloCloseMode.drain)` | [Cancelling and closing a controller](doc/cancellation.md#cancelling-and-closing-a-controller) |
 | `close()` does not come back | `controller.pending` | [What is holding the controller](doc/errors.md#what-is-holding-the-controller) |
