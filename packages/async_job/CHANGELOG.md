@@ -227,6 +227,16 @@ named as `Job(key)`, not by its class.
 
 ### Added
 
+- **`Job.each` makes a root job that follows a stream.** A job whose whole work
+  was a stream used to take two: a root, and inside it the child of `ctx.each`.
+  `Job.each(stream, (ctx, event) { ... })` is that job alone, with `key`,
+  `describe`, `cancellable` and `observer` as `Job(...)` has them. It starts
+  inside the call rather than on the next microtask, so the subscription is
+  there when the call returns and an event a broadcast stream sends right
+  afterwards is not lost; `onStart` is heard before the caller has the handle.
+  It is a root wherever it is made, and `ctx.run` refuses it: a body follows a
+  stream with `ctx.each`.
+
 - **`JobObserver.all` makes one observer of several.** Every hook goes to each
   of them in the order of the list, each call on its own, and the one among
   them that is a `JobAnswerer` answers for all of them; with none, an error no

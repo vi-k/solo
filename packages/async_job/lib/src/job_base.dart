@@ -86,6 +86,63 @@ abstract interface class Job<T> {
         observer: observer,
       );
 
+  /// Creates a root job that follows [stream], one event at a time.
+  ///
+  /// The job is running when this returns, and the subscription is made
+  /// inside the call: an event a broadcast stream sends right afterwards is
+  /// not lost, as it would be to a job that subscribes from a body started on
+  /// the next microtask. So [JobObserver.onStart] is heard before the caller
+  /// has the handle, and so may [onData] be called: a source that hands an
+  /// event over from inside `listen` reaches the callback before this returns.
+  /// A callback that needs its own job reads [JobContext.job].
+  ///
+  /// [onData] receives the context of the job itself. An asynchronous
+  /// callback is awaited before the next event is delivered; use the
+  /// checkpoints of the context, [JobContext.wait] and [JobContext.join], to
+  /// stop for a cancellation. The job ends [Done] when the stream ends, and
+  /// an error of the stream or of the callback ends it [Failed]. A
+  /// cancellation cancels the subscription at once and waits for the callback
+  /// that is running. Do not await the job's own completion or cancellation
+  /// from the callback. The rest is what [JobContext.each] says of its child.
+  ///
+  /// The cleanup stack unwinds when the job ends, not after an event: a
+  /// [JobContext.onDispose] registered for every event piles up for as long
+  /// as the stream lasts. What one event opens is released by a `finally` in
+  /// the callback, or belongs to a child started for that event.
+  ///
+  /// The named parameters are those of [Job.new]. With `cancellable: false`
+  /// there is no moment before the start to drop the job in: it refuses every
+  /// cancellation from outside, and the future of [cancel] completes only
+  /// when the job ends by itself — the stream ends or fails, or the callback
+  /// throws, a [Cancelled] included. On a stream that never ends nothing
+  /// outside the job stops it.
+  ///
+  /// The job is a root wherever it is made: inside the body of another job
+  /// that job neither waits for it nor cancels it, and [JobContext.run]
+  /// refuses it. A body follows a stream with [JobContext.each].
+  ///
+  /// ```dart
+  /// final saving = Job.each<String>(messages, (ctx, message) {
+  ///   return ctx.join(() => save(message));
+  /// });
+  /// await saving.value;
+  /// ```
+  static Job<void> each<E>(
+    Stream<E> stream,
+    FutureOr<void> Function(JobContext ctx, E event) onData, {
+    Object? key,
+    String Function()? describe,
+    bool cancellable = true,
+    JobObserver? observer,
+  }) =>
+      _EachJob(
+        (ctx) => ctx._followStream(stream, (event) => onData(ctx, event)),
+        key: key,
+        describe: describe ?? () => 'each',
+        cancellable: cancellable,
+        observer: observer,
+      )..start();
+
   /// Tracing of the job lifecycle for debugging; `null` by default.
   ///
   /// Every job reports here, one made by an engine of a domain included: the
@@ -1920,6 +1977,20 @@ final class _AutoJob<T> extends _Job<T> {
       start();
     }
   }
+}
+
+/// The root made by [Job.each], started inside that call.
+///
+/// A class of its own so that [JobContext.run] can tell it from a job that
+/// merely happens to be running, and say what to do instead.
+final class _EachJob extends _Job<void> {
+  _EachJob(
+    super.body, {
+    super.key,
+    super.describe,
+    super.cancellable,
+    super.observer,
+  });
 }
 
 /// Waits for [start].

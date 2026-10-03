@@ -1477,6 +1477,16 @@ abstract class JobContextBase implements JobContext {
         'is a continuation, which starts itself once its source finishes',
       );
     }
+    if (child is _EachJob) {
+      // Running since the call that made it, so the status below would
+      // refuse it too — with words about a job somebody started, which say
+      // nothing to a caller who wrote `Job.each` where `ctx.each` belongs.
+      throw ArgumentError.value(
+        '$child',
+        name,
+        'follows its stream by itself; a child is made with ctx.each',
+      );
+    }
     if (child.status != JobStatus.created) {
       throw StateError(
         child.status == JobStatus.running
