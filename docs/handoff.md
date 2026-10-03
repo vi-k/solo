@@ -70,7 +70,12 @@ Workflow сценарием `page-reread` из одного вызова, пот
 through» теперь `ctx.check()` первой строкой `catch`, первая попытка раздела
 о перехвате отменяется на `hw.setZoom`, а dartdoc класса `Solo` называет
 `onUnanswered`. Агент этой страницы кончился на переполнении контекста перед
-коммитом, закоммитила основная сессия. Запущена шестая, `children.md`.
+коммитом, закоммитила основная сессия. Перенесена `children.md`: коммит
+`c960b09`, отчёт `2026-10-04-solo-children-reread-report.md`, 28 находок, новый
+сторож `children_rakes_test.dart` на 118 тестов, пакет `solo` — 1468; страница
+получила три первые попытки и раздел «Steps in a row», блок вступления следует
+за `api.progress(item)`, пересказ страниц ядра заменён ссылками. Запущена
+седьмая, `testing.md`.
 
 **Что дальше.** `children.md` принята, `streams.md` владелец дочитал
 2026-10-03: пять правок по его вопросам,
@@ -272,9 +277,9 @@ on upgrade», «Added», «Fixed», «Documentation». Счёт ломающих
 `## Unreleased`; и то и другое меняется при подготовке. Вместе с ними — строка
 про стенд во вступлении `vs-bloc` (оригинал и перевод): там названа версия
 исходников, на которых собраны фрагменты, и сейчас это `0.2.0`. И ещё тире:
-в прозе `packages/solo/doc/children.md` и `vs-bloc.md` оно написано `--`,
-а сайт покажет его двумя дефисами; привести к `—`. В `CHANGELOG.md` всех трёх
-пакетов оно уже `—`.
+в прозе `packages/solo/doc/vs-bloc.md` оно написано `--`, а сайт покажет его
+двумя дефисами; привести к `—`. В `CHANGELOG.md` всех трёх пакетов оно уже
+`—`.
 
 ## Документация: вычитка страниц doc/
 
@@ -297,8 +302,9 @@ on upgrade», «Added», «Fixed», «Documentation». Счёт ломающих
 с `cancel_delay_recipe_test.dart`, `testing_rakes_test.dart`
 и `readme_rakes_test.dart` для README; `camera.md` держит
 `camera_rakes_test.dart` пакета примера, а `children.md` —
-`children_test.dart`, `each_test.dart`, `each_child_test.dart`
-и `zone_test.dart`.
+`children_rakes_test.dart` с кодом страницы в `test/support/children_*.dart`,
+118 тестов, и прежние `children_test.dart`, `each_test.dart`,
+`each_child_test.dart` и `zone_test.dart`.
 
 `packages/async_job/doc/extending.md` вычитана 2026-10-02 в `main`. Страницу
 перестроили раньше, 2026-09-28, и форма её не менялась: раздел о своей задаче
