@@ -246,6 +246,18 @@ Job<void> storeParsed(Job<int> parsed) {
   return stored;
 }
 
+/// Chains: a source that waits for its own continuation.
+Job<String> loadedAwaitingParsed() {
+  late final Job<int> parsed;
+  final loaded = Job<String>((ctx) async {
+    final text = await ctx.join(loadText);
+    await parsed.value;
+    return text;
+  });
+  parsed = loaded.then<int>((ctx, text) => int.parse(text));
+  return loaded;
+}
+
 /// The first attempt of the chain, and the version where the source is the
 /// only child; [adoptTheTail] picks the first.
 Future<void> reportedRows({required bool adoptTheTail}) async {

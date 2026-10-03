@@ -604,10 +604,23 @@ final stored = parsed.then<void>((ctx, number) {
 unstarted, every link of it, until the source is started: by `start()`, or by
 `ctx.run(source)` in the body that adopts it.
 
-In the chain above `parsed` starts once `loaded` has finished, cleanup
-included. So `loaded` cannot wait for `parsed`: if the body or the cleanup of
-`loaded` awaits `parsed.value` or `parsed.done`, `loaded` never finishes,
-`parsed` never starts, and `loaded.cancel()` does not return either.
+A continuation starts once its source has finished, cleanup included, so a
+source that waits for its own continuation waits forever:
+
+```dart
+late final Job<int> parsed;
+final loaded = Job<String>((ctx) async {
+  final text = await ctx.join(loadText);
+  await parsed.value;
+  return text;
+});
+parsed = loaded.then<int>((ctx, text) => int.parse(text));
+```
+
+`parsed` starts once `loaded` has finished, and `loaded` is waiting for
+`parsed`. Neither ends, and `loaded.cancel()` does not return either.
+`parsed.done` in place of `parsed.value` changes nothing, and neither does
+moving the await into the cleanup of `loaded`.
 
 Each continuation is a root job of the core. It has an optional `observer`
 argument and inherits neither the source's observer nor anything an engine of a

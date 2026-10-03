@@ -605,10 +605,23 @@ final stored = parsed.then<void>((ctx, number) {
 незапущенной, каждое её звено, пока источник не запустят: вызовом `start()` или
 через `ctx.run(source)` в теле, которое его усыновляет.
 
-В цепочке выше `parsed` стартует, когда `loaded` кончилась вместе с уборкой.
-Поэтому `loaded` не может ждать `parsed`: если тело или уборка `loaded` ждёт
-`parsed.value` или `parsed.done`, то `loaded` не кончается никогда, `parsed`
-никогда не стартует, и `loaded.cancel()` тоже не возвращается.
+Продолжение стартует, когда его источник кончился вместе с уборкой, поэтому
+источник, который ждёт собственное продолжение, ждёт вечно:
+
+```dart
+late final Job<int> parsed;
+final loaded = Job<String>((ctx) async {
+  final text = await ctx.join(loadText);
+  await parsed.value;
+  return text;
+});
+parsed = loaded.then<int>((ctx, text) => int.parse(text));
+```
+
+`parsed` стартует, когда `loaded` кончилась, а `loaded` ждёт `parsed`.
+Не кончается ни одна, и `loaded.cancel()` тоже не возвращается. `parsed.done`
+на месте `parsed.value` ничего не меняет, как и перенос ожидания в уборку
+`loaded`.
 
 Каждое продолжение относится к корневым `Job` ядра. У него есть необязательный
 аргумент `observer`; оно не наследует ни наблюдателя источника, ни того, что

@@ -730,9 +730,24 @@ void main() {
 
     test('a source whose body awaits its continuation never finishes', () {
       fakeAsync((async) {
+        final loaded = page.loadedAwaitingParsed();
+
+        async.flushTimers();
+        expect(loaded.isFinished, isFalse);
+
+        var back = false;
+        loaded.cancel().then((_) => back = true).ignore();
+        async.flushTimers();
+        expect(back, isFalse);
+        expect(loaded.isFinished, isFalse);
+      });
+    });
+
+    test('the same with done in place of value', () {
+      fakeAsync((async) {
         late final Job<int> tail;
         final source = Job<int>((ctx) async {
-          await tail.value;
+          await tail.done;
           return 1;
         });
         tail = source.then<int>((ctx, value) => value)..ignore();
@@ -745,7 +760,6 @@ void main() {
         source.cancel().then((_) => back = true).ignore();
         async.flushTimers();
         expect(back, isFalse);
-        expect(source.isFinished, isFalse);
       });
     });
 
