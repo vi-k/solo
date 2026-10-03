@@ -226,8 +226,9 @@ Future<void> watchTicks() async {
 ```
 
 The output is `Tick 1`, `Tick 2`, then `Parent continues`. The stream has not
-ended when `ticks.cancel()` cancels the subscription. The call waits for the
-child to finish; cancelling that child does not itself cancel the parent.
+ended when `ticks.cancel()` cancels the subscription. `await ticks.cancel()`
+waits for the child `ticks` to finish, and only then does the body go on;
+cancelling `ticks` does not itself cancel the parent.
 
 ## Waiting for the source to close
 

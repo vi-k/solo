@@ -48,3 +48,8 @@
    ответом добавлен абзац об этом со ссылкой на «Stopping the stream alone».
    Сторожа: группа `the parent's ctx in the callback`
    и `a child cancelled alone stops after the first step of its own`.
+
+5. Владелец 2026-10-03, «Stopping the stream alone»: «Вызов ждёт завершения
+   ребёнка» — «каков вызов? что за вызов?» Фраза называет сам вызов и ребёнка
+   по имени: `await ticks.cancel()` ждёт, пока ребёнок `ticks` кончится,
+   и только потом тело идёт дальше. В обоих языках.
