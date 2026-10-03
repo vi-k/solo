@@ -153,6 +153,11 @@ completion: awaiting the `value` of the job `each` returned, or its `cancel()`,
 from inside the callback never finishes, because the child is already waiting
 for that callback.
 
+The parent's `ctx` in place of `childCtx` hears only the parent's cancellation.
+A cancellation of the parent stops the steps the same way, but a child
+cancelled alone, as in [Stopping the stream alone](#stopping-the-stream-alone),
+runs both steps to the end.
+
 ## What one event opens
 
 Each message is written through a draft, and the draft has to be closed when

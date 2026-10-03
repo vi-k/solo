@@ -117,6 +117,72 @@ void main() {
       });
     });
 
+    group("the parent's ctx in the callback", () {
+      late Job<void> child;
+      Job<void> savingWithTheParentsCtx() => Job<void>((ctx) async {
+            child = ctx.each(stubs.messages, (childCtx, message) async {
+              await ctx.join(() => stubs.store.saveBody(message));
+              await ctx.join(() => stubs.store.saveAttachments(message));
+            });
+            ctx.onDispose(() => trace().add('parent cleanup'));
+            await child.value;
+          });
+
+      test("stops the steps for the parent's cancellation", () {
+        fakeAsync((async) {
+          final parent = savingWithTheParentsCtx()..ignore();
+          stubs.stage.messages.add('m1');
+          async.elapse(const Duration(milliseconds: 5));
+          parent.cancel().ignore();
+          async.flushTimers();
+          stubs.stage.messages.close().ignore();
+          expect(trace(), [
+            'm1: body begins',
+            'm1: body saved',
+            'parent cleanup',
+          ]);
+        });
+      });
+
+      test('runs both steps of a child cancelled alone', () {
+        fakeAsync((async) {
+          savingWithTheParentsCtx().ignore();
+          stubs.stage.messages.add('m1');
+          async.elapse(const Duration(milliseconds: 5));
+          child.cancel().ignore();
+          async.flushTimers();
+          stubs.stage.messages.close().ignore();
+          expect(child.outcome, isA<Cancelled>());
+          expect(trace(), [
+            'm1: body begins',
+            'm1: body saved',
+            'm1: attachments begins',
+            'm1: attachments saved',
+            'parent cleanup',
+          ]);
+        });
+      });
+    });
+
+    test('a child cancelled alone stops after the first step of its own', () {
+      fakeAsync((async) {
+        late final Job<void> child;
+        Job<void>((ctx) async {
+          child = ctx.each(stubs.messages, (childCtx, message) async {
+            await childCtx.join(() => stubs.store.saveBody(message));
+            await childCtx.join(() => stubs.store.saveAttachments(message));
+          });
+          await child.value;
+        }).ignore();
+        stubs.stage.messages.add('m1');
+        async.elapse(const Duration(milliseconds: 5));
+        child.cancel().ignore();
+        async.flushTimers();
+        stubs.stage.messages.close().ignore();
+        expect(trace(), ['m1: body begins', 'm1: body saved']);
+      });
+    });
+
     test('a cancelled each does not wait for the source to shut down', () {
       fakeAsync((async) {
         final job = page.feedLeftToItself();

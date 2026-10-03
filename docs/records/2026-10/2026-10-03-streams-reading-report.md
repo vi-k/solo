@@ -40,3 +40,11 @@
    языках: ожидание `saving.done` возвращает `Outcome` ребёнка, будь то `Done`,
    `Failed` или `Cancelled`. По его же слову то же «без броска» заменено
    в `docs/ru/solo/accumulation.md`, только в переводе.
+
+4. Владелец 2026-10-03, «The child's own checkpoints»: «что будет, если
+   использовать `ctx` вместо `childCtx`?» Зонд: отмену родителя его `ctx`
+   слышит, и шаги останавливаются так же; ребёнка, отменённого отдельно,
+   контрольные точки родителя не слышат, и колбэк доигрывает оба шага. Под
+   ответом добавлен абзац об этом со ссылкой на «Stopping the stream alone».
+   Сторожа: группа `the parent's ctx in the callback`
+   и `a child cancelled alone stops after the first step of its own`.
