@@ -221,20 +221,20 @@ in:
 | The job's own cancellation, out of an action abandoned by `ctx.wait` or work of `ctx.unattended` | Nobody | Nobody |
 | What a context call the body did not await throws, the job's own cancellation included, and for `ctx.wait` only until the body ends | The zone the body runs in, as with any future nobody awaits | The zone the body runs in |
 
-Whether a failure came before a cancellation is decided by when it happened,
-not by when the body threw it. The failure of an operation behind `ctx.wait` or
-`ctx.join`, of a callback of `ctx.each`, of a child or of a step of
-`ctx.uncancellable` does not leave the body at once: that takes a few
-microtasks, or a child's whole cleanup. If the job accepts a cancellation in
-between, the order is: the failure happens, the job accepts the cancellation,
-the body throws the failure. The job ends `Cancelled`, but the failure came
-before the cancellation, and it takes the second row of the table, not the
-third. The body keeps the failure first by letting it through, or by catching
-it and throwing it again later; a new error thrown in its place, a wrapper
-included, comes after the cancellation. The job learns when a failure happened
-from these members and from its children: the failure of a future the body
-awaits on its own comes first only if the body throws it before the
-cancellation.
+Of a failure and a cancellation, the one the job learned of first came first.
+The job learns of a failure the moment it happens when it is the failure of an
+operation behind `ctx.wait` or `ctx.join`, of a callback of `ctx.each`, of a
+child or of a step of `ctx.uncancellable`. Such a failure does not leave the
+body at once: that takes a few microtasks, or a child's whole cleanup. If the
+job accepts a cancellation in between, the order is: the failure happens, the
+job accepts the cancellation, the body throws the failure. The job ends
+`Cancelled`, but the failure came before the cancellation, and it takes the
+second row of the table, not the third. The body keeps the failure first by
+letting it through, or by catching it and throwing it again later; a new error
+thrown in its place, a wrapper included, comes after the cancellation. A future
+the body awaits on its own is different: the job learns of its failure only
+when the body throws it, so that failure comes first only if the body throws it
+before the cancellation.
 
 A body that catches the failed open and shows it to the user before throwing it
 again:
