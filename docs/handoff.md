@@ -23,7 +23,7 @@
 по слову владельца вынесен на свою страницу `packages/async_job/doc/streams.md`
 с переводом, сторож `packages/async_job/test/streams_rakes_test.dart`;
 в `children.md` остался короткий «Processing streams» со ссылкой. Так же шли
-его вопросы по `packages/async_job/doc/observing.md`, пункты 1–6
+его вопросы по `packages/async_job/doc/observing.md`, пункты 1–7
 в `2026-10-02-observing-reread-report.md`. Открытых находок у ревью нет:
 `async_job` — `2026-09-26-async-job-project-review.md`, `solo`
 и `flutter_solo` — `2026-09-19-solo-project-review.md`. Первое чтение

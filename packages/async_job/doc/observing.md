@@ -265,10 +265,10 @@ zone: Bad state: database locked
 outcome: Cancelled(manual)
 ```
 
-The failure came before the cancellation, which is the second row: the zone
-hears it, though the job ends `Cancelled`. If the user cancels at 10 ms, before
-the open fails, the same failure takes the third row, and only the observer
-hears it:
+The failure came before the cancellation, so it must not be lost. That is the
+second row of the table, and so the zone hears it, though the job ends
+`Cancelled`. If the user cancels at 10 ms, before the open fails, the same
+failure takes the third row, and only the observer hears it:
 
 ```text
 cancel
