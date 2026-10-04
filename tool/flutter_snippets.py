@@ -41,6 +41,10 @@ The section of doc/mixins.md on a base class shows two versions of the
 same two classes, and a name declared twice in a section answers to
 neither. Its blocks are addressed by the subsection they stand in instead,
 `the-first-attempt/AppController`; the rest of the page by its sections.
+A block of that section shows two libraries, a package without Flutter and
+the app, and is built as two: the first under the imports the page shows
+and no others, so the base the page calls free of Flutter is built without
+it.
 The section of the README on listening is addressed the same way: its
 first attempt and its answer both declare `initState` and `dispose`.
 
@@ -81,6 +85,9 @@ dependencies:
     sdk: flutter
   flutter_solo:
     path: {flutter_solo}
+  # The package without Flutter of doc/mixins.md imports these two by name.
+  meta: any
+  solo: any
 
 dev_dependencies:
   flutter_lints: ^6.0.0
@@ -106,12 +113,19 @@ dependency_overrides:
 # each is about a driver rather than about a snippet: a test file names
 # its fakes without dartdoc, it prints, and it carries the states a
 # snippet needs whether or not the driver mentions every one of them.
+#
+# One rule is on that the package does not ask for. doc/mixins.md says what
+# the analyzer calls an override that only calls `super`, and what
+# `@protected` keeps out of reach; with `unnecessary_ignore` every
+# `// ignore:` of a driver is a statement the analyzer checks, and a line
+# without one is a line it has nothing to say about.
 OPTIONS = """include: flutter_rules.yaml
 
 linter:
   rules:
     avoid_print: false
     public_member_api_docs: false
+    unnecessary_ignore: true
     unreachable_from_main: false
 """
 
@@ -227,6 +241,16 @@ void main() {
 ])
 
 # ---------------------------------------------------------- both deliveries
+# The drivers of this page close a controller in `addTearDown` and wait for
+# it, where the drivers of the README go through `closing`, which does not
+# wait. Waiting is right here. A job of this page is one `ctx.emit` and
+# holds no timer, so nothing is running when a test body ends, and a red
+# driver under `testWidgets` still closes at once: probed 2026-10-04 with a
+# mounted `StreamBuilder`, a `SoloBuilder`, a subscription of the test's
+# own and a job started and not awaited. The one driver that closes inside
+# its body registers no tear-down, and must not: the future of a close made
+# under the fake clock is never delivered to a tear-down, which runs outside
+# that clock, and the test waits out its timeout.
 _session = snips['a-controller-with-both-deliver/Session']
 
 FILES['deliveries_test'] = '\n'.join([
@@ -241,6 +265,15 @@ FILES['deliveries_test'] = '\n'.join([
 /// A session without the stream, for what the section compares against.
 final class PlainSession extends Solo<SessionState> with SoloListenable {
   PlainSession(super.initialState);
+
+  Job<void> signIn(String name) =>
+      run<SessionState, void>((ctx) async => ctx.emit(SignedIn(name)));
+}
+
+/// The session of the page with its two mixins the other way round.
+final class Reversed extends Solo<SessionState>
+    with SoloListenable, SoloStream {
+  Reversed(super.initialState);
 
   Job<void> signIn(String name) =>
       run<SessionState, void>((ctx) async => ctx.emit(SignedIn(name)));
@@ -295,11 +328,63 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 20));
     expect(session.isFinished, isTrue);
     expect(closed, isFalse, reason: 'the body is still awaiting');
+    expect(
+      session.pending,
+      isA<SoloPendingStream>(),
+      reason: 'what holds the close has a name',
+    );
 
     body.complete();
     await closing;
     await loop;
     expect(closed, isTrue);
+    expect(session.pending, isNull);
+  });
+
+  test('the order of the two mixins makes no difference', () async {
+    final session = Reversed(const SignedOut());
+    final order = <String>[];
+    final flutterErrors = <Object>[];
+    final zoneErrors = <Object>[];
+    final previous = FlutterError.onError;
+    FlutterError.onError = (details) => flutterErrors.add(details.exception);
+    addTearDown(() => FlutterError.onError = previous);
+
+    session.addListener(() {
+      order.add('listener');
+      throw StateError('the listener');
+    });
+    final body = Completer<void>();
+    late Future<void> loop;
+    runZonedGuarded(
+      () {
+        session.stream.listen((_) {
+          order.add('stream');
+          throw StateError('the subscriber');
+        });
+        loop = () async {
+          await for (final _ in session.stream) {
+            await body.future;
+          }
+        }();
+      },
+      (error, stackTrace) => zoneErrors.add(error),
+    );
+    await session.signIn('Ada').done;
+    await Future<void>.delayed(Duration.zero);
+
+    expect(order, ['listener', 'stream']);
+    expect(flutterErrors.map((error) => '$error'), ['Bad state: the listener']);
+    expect(zoneErrors.map((error) => '$error'), ['Bad state: the subscriber']);
+
+    var closed = false;
+    final closing = session.close().then((_) => closed = true);
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    expect(closed, isFalse);
+    expect(session.pending, isA<SoloPendingStream>());
+    body.complete();
+    await closing;
+    await loop;
   });
 
   test('a plain SoloListenable closes without waiting for its listeners',
@@ -372,6 +457,31 @@ FILES['stream_screen_test'] = '\n'.join([
          snips['a-screen-built-on-the-stream/solobuilder-sessionstate']),
     WRAP,
     '''
+/// The second attempt with the key the page names in prose.
+Widget withInitialDataAndKey(Session session) => StreamBuilder<SessionState>(
+      key: ObjectKey(session),
+      stream: session.stream,
+      initialData: session.currentState,
+      builder: (context, snapshot) => Text(
+        switch (snapshot.requireData) {
+          SignedIn(:final name) => 'signed in as $name',
+          SignedOut() => 'signed out',
+        },
+      ),
+    );
+
+/// The builder of the framework the page says `Session` fits as well.
+Widget overTheListenable(Session session) =>
+    ValueListenableBuilder<SessionState>(
+      valueListenable: session,
+      builder: (context, state, _) => Text(
+        switch (state) {
+          SignedIn(:final name) => 'signed in as $name',
+          SignedOut() => 'signed out',
+        },
+      ),
+    );
+
 Future<Session> signedIn([String name = 'Ada']) async {
   final session = Session(const SignedOut());
   await session.signIn(name).done;
@@ -406,7 +516,7 @@ void main() {
     expect(onScreen(tester), 'signed in as Bob');
   });
 
-  testWidgets('and closing takes the last state away', (tester) async {
+  testWidgets('and closing makes the wait endless', (tester) async {
     final session = await signedIn();
 
     await tester.pumpWidget(wrap(SessionBadge(session)));
@@ -539,6 +649,27 @@ void main() {
     );
   });
 
+  testWidgets('a key made of the session repairs the second attempt',
+      (tester) async {
+    final session = await signedIn();
+    addTearDown(session.close);
+    final other = await signedIn('Cy');
+    addTearDown(other.close);
+
+    await tester.pumpWidget(wrap(withInitialDataAndKey(session)));
+    await session.signIn('Bob').done;
+    await tester.pump();
+    expect(onScreen(tester), 'signed in as Bob');
+
+    await tester.pumpWidget(wrap(withInitialDataAndKey(other)));
+    expect(
+      onScreen(tester),
+      'signed in as Cy',
+      reason: 'built anew for another session, the StreamBuilder reads '
+          'initialData again',
+    );
+  });
+
   testWidgets('a builder over the controller needs nothing passed',
       (tester) async {
     final session = await signedIn();
@@ -567,15 +698,38 @@ void main() {
       reason: 'the builder listens to the session it was handed',
     );
   });
+
+  testWidgets('ValueListenableBuilder shows the same three lines',
+      (tester) async {
+    final session = await signedIn();
+    addTearDown(session.close);
+    final other = await signedIn('Cy');
+    addTearDown(other.close);
+    final lines = <String>[];
+
+    await tester.pumpWidget(wrap(overTheListenable(session)));
+    lines.add(onScreen(tester));
+    await session.signIn('Bob').done;
+    await tester.pump();
+    lines.add(onScreen(tester));
+    await tester.pumpWidget(wrap(overTheListenable(other)));
+    lines.add(onScreen(tester));
+
+    expect(
+      lines,
+      ['signed in as Ada', 'signed in as Bob', 'signed in as Cy'],
+    );
+  });
 }
 ''',
 ])
 
 # ------------------------------------------------- a base class without Flutter
 # The page names `AppLog` as the app's own log and shows no more of it: this
-# one keeps what it was handed, for the driver to print.
-APP_LOG = """
-// The page calls `AppLog.error` statically, so the fake is all statics.
+# one keeps what it was handed, for the driver to print. It is a library of
+# its own that imports nothing, so a base that reports to it stays without
+# Flutter.
+FILES['app_log'] = """// The page calls `AppLog.error` statically, so the fake is all statics.
 // ignore: avoid_classes_with_only_static_members
 abstract final class AppLog {
   static final errors = <Object>[];
@@ -584,8 +738,27 @@ abstract final class AppLog {
 }
 """
 
-# Every version is driven the same way: a listener of the leaf throws on a
-# change, and the driver prints what reached `AppLog` and `FlutterError`.
+# A block of this section shows two libraries, the package without Flutter
+# and the app, and they are built as two. Until 2026-10-04 both stood in one
+# test file under `package:flutter/foundation.dart`: the base the page calls
+# free of Flutter was never built without it, and nothing held the page to
+# where its `@protected` comes from.
+APP = '// The app.\n'
+
+
+def without_flutter(block):
+    """(the library of the package without Flutter, the code of the app)."""
+    package, app = block.split(APP)
+    imports, body = split_imports(package)
+    assert imports and not any('flutter' in line for line in imports), imports
+    return (
+        '\n'.join([*imports, '', "import 'app_log.dart';", '', body]),
+        APP + app,
+    )
+
+
+# Every version is driven the same way: a listener of a controller throws on
+# a change, and the driver prints what reached `AppLog` and `FlutterError`.
 # `ProfileController` has no operation of its own, so a subclass in the
 # same library changes the state.
 BASE_DRIVER = """
@@ -596,16 +769,18 @@ final class DrivenProfile extends ProfileController {
 String said(Iterable<Object> errors) =>
     errors.isEmpty ? 'nothing' : errors.join(', ');
 
-/// What a listener's failure reaches: (AppLog, FlutterError).
-Future<(List<Object>, List<Object>)> failListener() async {
+/// What a failure of a listener of [profile] reaches: (AppLog, FlutterError).
+Future<(List<Object>, List<Object>)> failListener(
+  Solo<Profile> profile,
+  void Function(Profile state) set,
+) async {
   AppLog.errors.clear();
   final reports = <Object>[];
   final previous = FlutterError.onError;
   FlutterError.onError = (details) => reports.add(details.exception);
   try {
-    final profile = DrivenProfile()
-      ..addListener(() => throw StateError('the listener blew up'))
-      ..set(Loading());
+    profile.addListener(() => throw StateError('the listener blew up'));
+    set(Loading());
     await profile.close();
   } finally {
     FlutterError.onError = previous;
@@ -619,20 +794,26 @@ void show((List<Object>, List<Object>) reached) {
 }
 """
 
+# The app of the page shows no import. `package:flutter/foundation.dart` is
+# where the page says the app takes `@protected` from, and two of the three
+# drivers import nothing else of Flutter.
 BASE_IMPORTS = [
     "import 'package:flutter/foundation.dart';",
     "import 'package:flutter_solo/flutter_solo.dart';",
     "import 'package:flutter_test/flutter_test.dart';",
     '',
+    "import 'app_log.dart';",
 ]
 
-_first = base['the-first-attempt/AppController']
+FILES['base_first'], _first_app = without_flutter(
+    base['the-first-attempt/AppController'])
 
 FILES['base_first_attempt_test'] = '\n'.join([
     *BASE_IMPORTS,
+    "import 'base_first.dart';",
+    '',
     PROFILE_STATES,
-    APP_LOG,
-    _first,
+    _first_app,
     BASE_DRIVER,
     """
 /// The leaf the section says `super` does not help: `super` is the mixin.
@@ -649,26 +830,33 @@ final class SuperProfile extends AppController<Profile> with SoloListenable {
       super.onListenerError(error, stackTrace);
 }
 
+/// A controller of the same base that mixes nothing in.
+final class PlainProfile extends AppController<Profile> {
+  PlainProfile() : super(Empty());
+
+  void set(Profile state) => externalSetState(state);
+}
+
 void main() {
   test('the mixin on the leaf reports over the base', () async {
-    final reached = await failListener();
+    final profile = DrivenProfile();
+    final reached = await failListener(profile, profile.set);
     show(reached);
     expect(reached.$1, isEmpty, reason: 'the base never runs');
     expect(reached.$2.single, isA<StateError>());
   });
 
+  test('the override of the base runs where nothing is mixed in', () async {
+    final profile = PlainProfile();
+    final reached = await failListener(profile, profile.set);
+    expect(reached.$1.single, isA<StateError>());
+  });
+
   test('super in the leaf lands in the mixin', () async {
-    AppLog.errors.clear();
-    final reports = <Object>[];
-    final previous = FlutterError.onError;
-    FlutterError.onError = (details) => reports.add(details.exception);
-    addTearDown(() => FlutterError.onError = previous);
-    final profile = SuperProfile()
-      ..addListener(() => throw StateError('the listener blew up'))
-      ..set(Loading());
-    await profile.close();
-    expect(AppLog.errors, isEmpty, reason: 'the base stays out of reach');
-    expect(reports.single, isA<StateError>());
+    final profile = SuperProfile();
+    final reached = await failListener(profile, profile.set);
+    expect(reached.$1, isEmpty, reason: 'the base stays out of reach');
+    expect(reached.$2.single, isA<StateError>());
   });
 
   test('the leaf is a ValueListenable', () {
@@ -681,16 +869,19 @@ void main() {
 """,
 ])
 
-_answer = base['a-report-under-another-name/AppController']
+FILES['base_answer'], _answer_app = without_flutter(
+    base['a-report-under-another-name/AppController'])
 
 FILES['base_class_test'] = '\n'.join([
     "import 'package:flutter/widgets.dart';",
     "import 'package:flutter_solo/flutter_solo.dart';",
     "import 'package:flutter_test/flutter_test.dart';",
     '',
+    "import 'app_log.dart';",
+    "import 'base_answer.dart';",
+    '',
     PROFILE_STATES,
-    APP_LOG,
-    _answer,
+    _answer_app,
     BASE_DRIVER,
     """
 /// A controller of the same base that mixes nothing in.
@@ -714,35 +905,55 @@ final class BothReports extends AppController<Profile> with SoloListenable {
   }
 }
 
+/// A leaf that mixes the mixin in and writes no override. The analyzer has
+/// nothing to say about it, which is what the page says.
+final class Forgetful extends AppController<Profile> with SoloListenable {
+  Forgetful() : super(Empty());
+
+  void set(Profile state) => externalSetState(state);
+}
+
+/// A leaf whose override leaves `@protected` off, and a class that inherits
+/// that override: `analyzer_says.dart` calls the hook of both.
+class Unprotected extends AppController<Profile> with SoloListenable {
+  Unprotected() : super(Empty());
+
+  @override
+  void onListenerError(Object error, StackTrace stackTrace) =>
+      reportListenerError(error, stackTrace);
+}
+
+final class UnderUnprotected extends Unprotected {}
+
 void main() {
   test('the leaf calls the report of another name', () async {
-    final reached = await failListener();
+    final profile = DrivenProfile();
+    final reached = await failListener(profile, profile.set);
     show(reached);
     expect(reached.$1.single, isA<StateError>());
     expect(reached.$2, isEmpty);
   });
 
   test('the base reports for a controller that mixes nothing in', () async {
-    AppLog.errors.clear();
-    final profile = PlainProfile()
-      ..addListener(() => throw StateError('the listener blew up'))
-      ..set(Loading());
-    await profile.close();
-    expect(AppLog.errors.single, isA<StateError>());
+    final profile = PlainProfile();
+    final reached = await failListener(profile, profile.set);
+    expect(reached.$1.single, isA<StateError>());
+    expect(reached.$2, isEmpty);
   });
 
   test('super next to it reports through FlutterError as well', () async {
-    AppLog.errors.clear();
-    final reports = <Object>[];
-    final previous = FlutterError.onError;
-    FlutterError.onError = (details) => reports.add(details.exception);
-    addTearDown(() => FlutterError.onError = previous);
-    final profile = BothReports()
-      ..addListener(() => throw StateError('the listener blew up'))
-      ..set(Loading());
-    await profile.close();
-    expect(AppLog.errors.single, isA<StateError>());
-    expect(reports.single, isA<StateError>());
+    final profile = BothReports();
+    final reached = await failListener(profile, profile.set);
+    expect(reached.$1.single, isA<StateError>());
+    expect(reached.$2.single, isA<StateError>());
+  });
+
+  test('a leaf without the override reports as in the first attempt',
+      () async {
+    final profile = Forgetful();
+    final reached = await failListener(profile, profile.set);
+    expect(reached.$1, isEmpty, reason: 'the report of the base is not run');
+    expect(reached.$2.single, isA<StateError>());
   });
 
   testWidgets('the leaf drives a builder', (tester) async {
@@ -758,6 +969,121 @@ void main() {
       ),
     );
     expect(find.text('Empty'), findsOne);
+  });
+}
+""",
+])
+
+# What the page says the analyzer does about `@protected`, held by the
+# analyzer. Nothing runs this file: `flutter analyze` reads it, and with
+# `unnecessary_ignore` on, an `// ignore:` below that the analyzer does not
+# need is a finding, as is a call without one that it does not let through.
+# The calls stand in a library of their own because a protected member is
+# free to use in the library that declares it.
+FILES['analyzer_says'] = """import 'base_class_test.dart';
+
+void fromAnotherLibrary(
+  ProfileController leaf,
+  PlainProfile plain,
+  Forgetful forgetful,
+  Unprotected unprotected,
+  UnderUnprotected under,
+) {
+  final error = StateError('a listener');
+  // `@protected` is repeated on the override of the leaf, and the hook is
+  // not a public member of it.
+  // ignore: invalid_use_of_protected_member
+  leaf.onListenerError(error, StackTrace.empty);
+  // Nor is it one of a controller that has the override of the base alone,
+  // and the report under another name is annotated the same way.
+  // ignore: invalid_use_of_protected_member
+  plain.onListenerError(error, StackTrace.empty);
+  // ignore: invalid_use_of_protected_member
+  leaf.reportListenerError(error, StackTrace.empty);
+  // A leaf that writes no override has the one of the mixin, annotated too.
+  // ignore: invalid_use_of_protected_member
+  forgetful.onListenerError(error, StackTrace.empty);
+  // Left off, the hook is a public member of that class and of every class
+  // that inherits the override.
+  unprotected.onListenerError(error, StackTrace.empty);
+  under.onListenerError(error, StackTrace.empty);
+}
+"""
+
+# The last block of the section is the app alone, over the base of the
+# block above it. It quotes no trace, so the guards of the driver are all
+# that holds it.
+_shared = base['a-report-under-another-name/ListenableController']
+assert _shared.startswith(APP), _shared
+
+FILES['base_shared_test'] = '\n'.join([
+    *BASE_IMPORTS,
+    "import 'base_answer.dart';",
+    '',
+    PROFILE_STATES,
+    _shared,
+    BASE_DRIVER,
+    """
+/// A second leaf of the class between, with no override of its own either.
+final class SettingsController extends ListenableController<Profile> {
+  SettingsController() : super(Empty());
+
+  void set(Profile state) => externalSetState(state);
+}
+
+/// The mixin once more, on a leaf over the class that already has it.
+final class Twice extends ListenableController<Profile> with SoloListenable {
+  Twice() : super(Empty());
+
+  void set(Profile state) => externalSetState(state);
+}
+
+/// A base with Flutter in it, which mixes the mixin in itself.
+abstract class FlutterBase<S extends Object> extends Solo<S>
+    with SoloListenable {
+  FlutterBase(super.initialState);
+
+  @protected
+  @override
+  void onListenerError(Object error, StackTrace stackTrace) =>
+      AppLog.error(error, stackTrace);
+}
+
+final class OverFlutterBase extends FlutterBase<Profile> {
+  OverFlutterBase() : super(Empty());
+
+  void set(Profile state) => externalSetState(state);
+}
+
+void main() {
+  test('the override of the class between runs for its leaf', () async {
+    final profile = DrivenProfile();
+    final reached = await failListener(profile, profile.set);
+    expect(reached.$1.single, isA<StateError>());
+    expect(reached.$2, isEmpty);
+    expect(profile, isA<ValueListenable<Profile>>());
+  });
+
+  test('and for every other leaf that extends it', () async {
+    final settings = SettingsController();
+    final reached = await failListener(settings, settings.set);
+    expect(reached.$1.single, isA<StateError>());
+    expect(reached.$2, isEmpty);
+  });
+
+  test('a base with Flutter in it keeps its own override', () async {
+    final profile = OverFlutterBase();
+    final reached = await failListener(profile, profile.set);
+    expect(reached.$1.single, isA<StateError>());
+    expect(reached.$2, isEmpty);
+  });
+
+  test('mixed in again on a leaf, the mixin silences that override',
+      () async {
+    final profile = Twice();
+    final reached = await failListener(profile, profile.set);
+    expect(reached.$1, isEmpty);
+    expect(reached.$2.single, isA<StateError>());
   });
 }
 """,
