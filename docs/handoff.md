@@ -86,7 +86,14 @@ through» теперь `ctx.check()` первой строкой `catch`, пер
 получил `onClose`, который снимает слушателя `hw.onError`, а ответ «Awaiting
 the disposal» закрывает контроллер только в ветке `Done` и читает
 `init().value`. Третья копия `page_code.dart` легла
-в `packages/solo/example/test/support/`. Запущена девятая, `accumulation.md`.
+в `packages/solo/example/test/support/`. Перенесена `accumulation.md`: коммит
+`5224155`, отчёт `2026-10-04-solo-accumulation-reread-report.md`, 37 находок,
+новый сторож `accumulation_rakes_test.dart` на 126 тестов, пакет `solo` — 1655;
+сценарий рецепта журнала пишет четвёртую строку через две секунды, трассы
+рецепта несут время запросов, блок раздела «Start, cancellation and errors»
+переписан, рецепт поиска получил блок типов, а стенд
+`tool/accumulation_snippets.py` падает на блоке страницы, которого не собирает
+ни один драйвер. Запущена десятая, `vs-bloc.md`.
 
 **Что дальше.** `children.md` принята, `streams.md` владелец дочитал
 2026-10-03: пять правок по его вопросам,
@@ -132,7 +139,18 @@ dozen calls» в README `solo` перестроен — `play` кончаетс�
 закрытия и переписанного ответа раздела. Там же две правки на подтверждение:
 изменён код ответа «Awaiting the disposal», который владелец читал и принял,
 и в код примера `packages/solo/example/lib/src/camera_controller.dart` без его
-слова добавлен `onClose`.
+слова добавлен `onClose`. Раздел «Вопросы владельцу»
+в `2026-10-04-solo-accumulation-reread-report.md`: рецепт журнала стоит
+на `AccumulationTiming.throttle` с немедленным стартом, и всплеск из трёх строк
+уходит одним запросом, только пока написан одним синхронным проходом; с одним
+`await` между строками запросов три вместо двух. Оставить (последняя фраза
+рецепта отсылает к цене немедленного старта), перевести рецепт
+на `startAtOnce: false`, где запросов два в обоих случаях, но каждая строка
+ждёт до секунды и обычный `close()` её бросает, или показать оба режима. Там же
+три правки текста, который владелец читал: сценарий и трассы журнала (H1), блок
+о хэндле в «Start, cancellation and errors» (M2), блок типов в рецепте поиска
+(M8). В dartdoc `AccumulationTiming` и в `CHANGELOG.md` осталось «where the
+group appears», на странице оно заменено на «when»: править ли код, не решено.
 
 **Решения владельца, которые действуют.**
 
@@ -277,8 +295,10 @@ README — формат и анализ чистые, 868 тестов; из к�
 `check_translations.py` и `check_doc_shape.py` зелёные. `solo` пример 47,
 `flutter_solo` 85 и его пример 4, раскладки архивов на полу 3.6.0 —
 на `f0ee2f7`; после него менялись только документы и dartdoc. Стенды `vs-bloc`
-и `accumulation` последний раз прогнаны 2026-09-28, их страницы с тех пор
-не менялись. Фоновых задач и расписаний у сессии нет.
+и `accumulation` прогнаны 2026-10-04 на коммите вычитки `accumulation.md` так,
+как их гоняет задание `snippets`: 2 и 12 цитат трасс, все напечатаны;
+`packages/solo` там же — формат и анализ чистые, 1655 тестов. Фоновых задач
+и расписаний у сессии нет.
 
 ## На следующий релиз собрано у всех трёх
 
@@ -368,7 +388,9 @@ README `flutter_solo` с его `doc/mixins.md` и быстрого старта
 в `children_*.dart`, тест `children_rakes_test.dart`, 118; код `testing.md` —
 в `testing_*.dart`, тест `testing_rakes_test.dart`, 96; код `camera.md` —
 в `packages/solo/example/test/support/camera_*.dart`, тест
-`camera_rakes_test.dart` пакета примера, 93.
+`camera_rakes_test.dart` пакета примера, 93. Код `accumulation.md` сверх стенда
+стоит в `packages/solo/test/support/accumulation_*.dart`, тест
+`accumulation_rakes_test.dart`, 126.
 
 **Стенда у `state.md` тоже нет, сторожа — тестом.** Каждую первую попытку
 страницы и каждое утверждение, добавленное чтением владельца, держит
