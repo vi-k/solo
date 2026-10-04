@@ -8,24 +8,28 @@ and solo's — with what the library handles and what remains application code.
 
 A first attempt here is the version the API's own vocabulary suggests, and the
 states and traces quoted under it are what running that code produces. It is
-bloc code as well: what the bloc heading after it adds is a version that meets
-the requirement. Where one attempt does not get close enough to that, a second
-follows under its own heading. Reading the attempts before the answer is the
-point of the section; a reader who already knows the trap can skip to
-`### Bloc` and `### Solo`.
+written with bloc, like the answer under the bloc heading after it: that
+heading adds the version that meets the requirement. Where one attempt does not
+get close enough to that, a second follows under its own heading. Reading the
+attempts before the answer is the point of the section; a reader who already
+knows the trap can skip to the bloc heading and `### Solo`.
 
-`Bloc` processes events registered with `on<E>`. A transformer determines how
-events in that registration are scheduled. `Cubit` exposes methods that update
-state directly; it does not provide an event queue.
+`Bloc` processes events in handlers, and each `on<E>` call is one registration:
+a handler for the events of type `E` and the transformer that determines how
+those events are scheduled. `Cubit` exposes methods that update state directly;
+it does not provide an event queue.
 
 In `solo`, a controller method normally creates a `Job<T>` and adds it to the
-controller's queue. Root jobs run one at a time. The caller can await
-`job.value` for a value or exception, or `job.done` for a `Done`, `Failed` or
-`Cancelled` outcome. Queue policies apply to individual submissions.
+controller's queue. The jobs of the queue are root jobs, and they run one at a
+time. The caller can await `job.value` for a value or exception, or `job.done`
+for a `Done`, `Failed` or `Cancelled` outcome. Queue policies apply to
+individual submissions.
 
 The examples introduce other solo APIs where they are used. The
-[README](https://github.com/vi-k/solo/blob/main/packages/solo/README.md)
-provides a complete introduction and the detailed contracts.
+[README](https://github.com/vi-k/solo/blob/main/packages/solo/README.md) is the
+introduction, and the pages it lists under
+[Guides](https://github.com/vi-k/solo/blob/main/packages/solo/README.md#guides)
+hold the detailed contracts.
 
 Examples use separate application models: the player's `Ready` is not the
 report's `Ready`. Supporting state classes, event classes and fake APIs are not
@@ -40,7 +44,7 @@ The main API correspondences, for a reader who knows bloc:
 
 | bloc | solo |
 | --- | --- |
-| `Bloc<E, S>`, `Cubit<S>` | `Solo<S>`; `ValueListenable` with `SoloListenable` mixed in |
+| `Bloc<E, S>`, `Cubit<S>` | `Solo<S>`; a `ValueListenable` with `SoloListenable` from `flutter_solo` mixed in |
 | Event class, `on<E>`, `add(E())` | Method returning `Job<T>` |
 | `EventTransformer` | `Policy` on a job submission |
 | `emit(next)` | `ctx.emit(next)` |
@@ -48,16 +52,19 @@ The main API correspondences, for a reader who knows bloc:
 | `emit.onEach`, `emit.forEach` | `ctx.each(stream, onData)` |
 | `state`, `stream` | `currentState`, `addListener`; `stream` with `SoloStream` mixed in |
 | `BlocObserver` | `SoloObserver` |
-| `BlocBuilder`, `BlocSelector` | `ValueListenableBuilder`; selection is application code |
+| `BlocBuilder`, `BlocSelector` | `ValueListenableBuilder` or `SoloBuilder`, and `SoloSelector`; the last two are in `flutter_solo` |
 | `BlocListener` for an operation's result | Await that operation's `job.done` |
 | `BlocProvider` | Your chosen ownership or dependency mechanism |
 | `close()` | `close()` |
 | `blocTest` | `test` and an awaited job outcome |
 
 `sequential`, `droppable` and `restartable` correspond to `Policy.sequential`,
-`Policy.droppable` and `Policy.restart`. `Policy.replace` removes queued work
-while leaving the running job alone. There is no concurrent root-job policy;
-use children or separate controllers for independent concurrent work.
+`Policy.droppable` and `Policy.restart`, and are not the same thing renamed: a
+transformer rules every event of its registration, a policy the jobs with one
+key, and sections 5, 8 and 10 show where the two part. `Policy.replace` removes
+queued work with the same key while leaving the running job alone. There is no
+concurrent root-job policy; use children or separate controllers for
+independent concurrent work.
 
 ## 1. Ordering updates to shared state
 
@@ -92,10 +99,12 @@ class SplitNotesBloc extends Bloc<NotesEvent, NotesState> {
 }
 ```
 
-The final state is `NotesState([n0], uploading: false)`: the uploaded note is
-not in it. The order of execution says why. Below are the server's own entries
-and every publication, each with the event that made it; the local list starts
-empty because nothing has been read yet:
+The server holds one note, `n0`, and the screen adds `UploadNote(n1)` and
+`RefreshList` one right after the other. The final state is
+`NotesState([n0], uploading: false)`: the uploaded note is not in it. The order
+of execution says why. Below are the server's own entries and every
+publication, each with the event that made it; the local list starts empty
+because nothing has been read yet:
 
 ```text
 UploadNote emits [], uploading: true
@@ -120,17 +129,18 @@ describes that distinction.
 The same two registrations have another way to lose the note, and this one
 involves no transformer at all. Written in a single line,
 `emit(state.copyWith(notes: await _api.list()))` evaluates the receiver `state`
-before it awaits the argument, so it publishes a state assembled before the
-upload. That variant ends at `NotesState([n0], uploading: true)` and overwrites
-the upload flag as well.
+before it awaits the argument, so the state it publishes was read while the
+upload was still under way. That variant ends at
+`NotesState([n0], uploading: true)` and overwrites the upload flag as well.
 
 ### The second attempt
 
 The missing half is one registration for both commands. By itself it is not
-enough either. The default is one field, `Bloc.transformer`, which a program
-may assign; each `Bloc` reads it while being constructed, so an assignment
-governs the blocs made after it and leaves the ones already alive as they were.
-A registration that names no transformer runs its events concurrently:
+enough either: a registration that names no transformer gets the default one,
+and the default runs its events concurrently. That default is one field,
+`Bloc.transformer`, which a program may assign; each `Bloc` reads it while
+being constructed, so an assignment governs the blocs made after it and leaves
+the ones already alive as they were:
 
 ```dart
 class ConcurrentNotesBloc extends Bloc<NotesEvent, NotesState> {
@@ -207,7 +217,7 @@ each operation that needs this ordering has to be handled in it.
 
 ### Solo
 
-Methods submitted to the same controller share its root-job queue:
+The jobs that the methods of one controller create share its queue:
 
 ```dart
 final class NotesController extends Solo<NotesState> {
@@ -237,13 +247,14 @@ final class NotesController extends Solo<NotesState> {
 
 `ctx.join(action)` calls the operation and waits for it. After a successful
 response it checks cancellation before returning the result. Upload uses `join`
-so the next root job cannot read the server while the upload is still in
-progress. Refresh uses `ctx.wait`, which can stop waiting on cancellation
-because this example allows its read result to be abandoned.
+so that even a cancelled upload holds the queue until the server has answered:
+the next root job cannot read the server while the upload is still in progress.
+Refresh uses `ctx.wait`, which can stop waiting on cancellation because this
+example allows its read result to be abandoned.
 
 The final state is also `NotesState([n0, n1], uploading: false)`, from the same
-order as the bloc funnel above — `list reads [n0, n1]` after
-`server receives n1` — with job keys where that run has event types.
+order as the bloc above — `list reads [n0, n1]` after `server receives n1` —
+with job keys where that run has event types.
 
 There is nothing to remember here about transformers or the order events are
 processed in: there is no transformer to pass and no scheduling to choose. The
@@ -304,13 +315,14 @@ class TelemetryObserver extends BlocObserver {
 }
 ```
 
-In this run the device starts, but the state remains `Idle`. The level meter is
-never armed. The local journal is empty too, and not through an unlucky line
-order: `onChange`'s own documentation asks for `super.onChange` to be called
-first, which puts the global observer ahead of the controller's own note.
-Writing that note before `super` saves the journal — it then holds
-`[Recording]` — and saves nothing else: the state is still `Idle` and the meter
-still unarmed. The handler reports `telemetry unavailable`, and the same
+With telemetry down, so that every `send` throws, the device starts, but the
+state remains `Idle`. The level meter is never armed. The local journal is
+empty too, and not through an unlucky line order: `onChange`'s own
+documentation asks for `super.onChange` to be called first, which puts the
+global observer ahead of the controller's own note. Writing that note before
+`super` saves the journal — it then holds `[Recording]` — and saves nothing
+else: the state is still `Idle` and the meter still unarmed. The handler ends
+with `telemetry unavailable`, which lands in the zone unhandled, and the same
 observer failure in a `Cubit` method reaches the method's caller.
 
 Both `Bloc` and `Cubit` publish through `BlocBase.emit`. It calls `onChange`
@@ -343,22 +355,23 @@ class GuardedTelemetryObserver extends BlocObserver {
 }
 ```
 
-The guarded run reaches `Recording`, records `[native start, arm meter]` and
-writes `[Recording]` to the journal. The fallback logger receives the telemetry
-error. This approach works when every relevant observation callback handles its
-failures and its fallback does not throw.
+With the guard the state reaches `Recording`, the device gets both calls,
+`[native start, arm meter]`, and the journal holds `[Recording]`. The fallback
+logger receives the telemetry error. This approach works when every relevant
+observation callback handles its failures and its fallback does not throw.
 
 `onError` is not a second place to put that guard. `emit` catches the
 exception, hands it to `onError` and rethrows it, so an override there reports
 the failure without preventing it. With `onError` overridden and the observer
-still throwing, the run ends at `Idle` with the meter unarmed, exactly as the
-unguarded one did, and the failure is reported twice: once by `emit`, once by
+still throwing, the state ends at `Idle` with the meter unarmed, exactly as
+without the guard, and the failure is reported twice: once by `emit`, once by
 the handler it broke.
 
 ### Solo
 
-The observer and controller hooks are invoked independently. Each hook's
-exception is reported to the current Dart zone:
+The observer, installed as `Solo.observer`, and the controller's own hooks are
+invoked independently. Each hook's exception is reported to the current Dart
+zone:
 
 ```dart
 final class RecorderController extends Solo<RecorderState> {
@@ -395,13 +408,13 @@ final class TelemetryObserver extends SoloObserver {
 `SoloObserver` receives `Solo<Object>` because it observes controllers with
 different state types. The controller's own hook uses its specific state type.
 
-With the throwing observer, the run still reaches `Recording`, arms the meter,
-records `[Recording]` locally and finishes with `Done(null)`: the failing hook
-changes neither the job's outcome nor the queue. The telemetry error goes to
-`Zone.current.handleUncaughtError` — to whatever the application already does
-with uncaught asynchronous errors, and nowhere else. Left unhandled there it
-can still terminate the application: hook isolation keeps the operation's
-control flow, it does not take over the reporting.
+With the throwing observer, the state still reaches `Recording`, the meter is
+armed, the journal holds `[Recording]` and the job finishes with `Done(null)`:
+the failing hook changes neither the job's outcome nor the queue. The telemetry
+error goes to `Zone.current.handleUncaughtError` — to whatever the application
+already does with uncaught asynchronous errors, and nowhere else. Left
+unhandled there it can still terminate the application: hook isolation keeps
+the operation's control flow, it does not take over the reporting.
 
 ## 3. Closing and cancelling in-flight work
 
@@ -437,22 +450,23 @@ With `sequential()`, `close()` waits for the API call still in flight, and the
 state after it is `ChatState(reply to hi)`: the reply was published into a
 controller that was already closing. The follow-up `add` then throws
 `Bad state: Cannot add new events after calling close`, and that error arrives
-in the zone while `close()` is still being awaited, not at the caller of the
-handler. No read is reported to the server — but only because the `add` that
-would have reported it is the call that threw. Half the requirement holds by
-the accident that broke the other half.
+in the zone unhandled while `close()` is still being awaited: neither the code
+that sent the message nor the code that closes the bloc is handed it. No read
+is reported to the server — but only because the `add` that would have reported
+it is the call that threw. Half the requirement holds by the accident that
+broke the other half.
 
-Closing behavior depends on the transformer in these versions. With
-`sequential()`, `close()` runs the queue out: the handler in flight and every
-event waiting behind it are handled in turn, each of them can still emit, and
-`close()` returns after the last. With `concurrent` — the one a registration
-gets by default — or with `restartable` there is no queue to run: every event
-added before `close()` reaches its handler at once, since nothing holds it
-back. With `droppable` the events that arrived while a handler was busy were
-dropped on arrival. In these three cases `close()` returns before the bodies
-finish, and the cancelled emitters ignore the writes that follow. No case
-interrupts an API call or the rest of a handler body, and none drops an event
-the transformer had let through.
+Closing behavior depends on the transformer in the versions of bloc named at
+the top of this page. With `sequential()`, `close()` runs the queue out: the
+handler in flight and every event waiting behind it are handled in turn, each
+of them can still emit, and `close()` returns after the last. With
+`concurrent` — the one a registration gets by default — or with `restartable`
+there is no queue to run: every event added before `close()` reaches its
+handler at once, since nothing holds it back. With `droppable` the events that
+arrived while a handler was busy were dropped on arrival. In these three cases
+`close()` returns before the bodies finish, and the cancelled emitters ignore
+the writes that follow. No case interrupts an API call or the rest of a handler
+body, and none drops an event the transformer had let through.
 
 ### Bloc
 
@@ -530,10 +544,10 @@ reply update and `markReplyRead()` call are not reached. That method would
 submit a separate root job through the controller's `run`; it is not a child of
 `send`.
 
-With a plain await instead, closing would wait for the API response. The later
-`ctx.emit` would still reject the cancelled job. Calls made after closure
-return jobs already completed with `Cancelled(closed)`, so the call site needs
-no `isClosed` guard.
+With a plain await instead, closing would wait for the API response. The
+`ctx.emit` after it would still throw `Cancelled`, so the reply would not be
+published. Calls made after closure return jobs already completed with
+`Cancelled(closed)`, so the call site needs no `isClosed` guard.
 
 A message still queued behind the running one never reaches the API: it ends
 `Cancelled(closed)` without starting, where `sequential()` would send it. When
@@ -544,12 +558,12 @@ on the cancellation page takes it apart. The `markReplyRead()` each reply calls
 still comes back `Cancelled(closed)` there, because a closing controller takes
 no new root job.
 
-A `ctx` is valid while its job runs, and the bloc case above has a counterpart
-here: a body that starts a future and does not await it returns, and the future
-then calls `ctx.emit` on a job that is over. That call throws
-`Bad state: Job(send) has already finished, cannot emit`, in debug and release
-alike, and the state stays as it was. Where bloc has an assertion that
-disappears in release, this is an ordinary error that does not.
+A `ctx` is valid while its job runs, and the unawaited future of the bloc
+heading above has a counterpart here: a body that starts a future and does not
+await it returns, and the future then calls `ctx.emit` on a job that is over.
+That call throws `Bad state: Job(send) has already finished, cannot emit`, in
+debug and release alike, and the state stays as it was. Where bloc has an
+assertion that disappears in release, this is an ordinary error that does not.
 
 ## 4. Leaving a loading state when the work is cancelled
 
@@ -659,7 +673,9 @@ The timing differs: bloc's cancel-event handler updates state when it runs,
 while solo's state handler runs after the cancelled job's cleanup. Neither
 example stops the API operation itself. If an independent external state makes
 the solo job invalid, its final state handlers are skipped; section 9 explains
-external state and the README describes handler rules.
+external state, and
+[State after failure or cancellation](state.md#state-after-failure-or-cancellation)
+on the state page gives the rules of these handlers.
 
 ## 5. Restarting one operation within a shared queue
 
@@ -852,16 +868,20 @@ before the current job can finish and the replacement can start. If the
 operation fails after cancellation, its error reaches the body; the job's
 outcome still remains cancelled.
 
-The observed traces match the successful bloc cases above. `pause` and `play`
-remain in the same queue with their default sequential policy. The token is
-local to the `seek` body, and callers can inspect the outcome of each `seek`,
-including `Cancelled(manual)` for a replaced request.
+The traces are those of the bloc answer above: `[play, seek 3, pause]` for the
+drag, and `[seek 1 start, seek 1 stopped, seek 3 start, seek 3 end]` when
+`seek 1` is already active. `pause` and `play` remain in the same queue with
+their default sequential policy. The token is local to the `seek` body, and
+callers can inspect the outcome of each `seek`, including `Cancelled(manual)`
+for a replaced request.
 
 ## 6. Typed methods with queued execution
 
 A map exposes `moveTo` and `setZoom`. The caller should reach them as methods
 on the controller, with their own arguments and without a class per command,
-and rapid drag updates should not leave the map at an older position.
+and rapid drag updates should not leave the map at an older position. In the
+scenario below a drag sends position 1, then, while the map is still moving
+there, positions 2 and 3, and the user zooms to 4.
 
 ### The first attempt
 
@@ -889,8 +909,8 @@ class MapCubit extends Cubit<MapState> {
 These methods do not serialize calls. With unequal native-call durations the
 trace can come out like this: `[moveTo 1 start, moveTo 2 start, moveTo 3 start,
 moveTo 3 end, moveTo 2 end, moveTo 1 end]`. The state can end at any of the
-three: here it ends at `MapState(1, z1)`, the oldest request, because that call
-returned last. Nothing in the code decides which one wins.
+three positions: here it ends at `MapState(1, z4)`, the oldest request, because
+that call returned last. Nothing in the code decides which one wins.
 
 A future chain can serialize calls, with additional tracking to discard
 obsolete requests. The application must also decide how closure waits for or
@@ -974,13 +994,15 @@ final class MapController extends Solo<MapState> {
 void onMapDrag(MapController map, Point<double> point) => map.moveTo(point);
 ```
 
-The restart trace is
-`[moveTo 1 start, moveTo 1 stopped, moveTo 3 start, moveTo 3 end]`. The middle
-request does not start; the first stops before the latest one begins. Both the
-map and `MapState(3, z4)` reflect the latest request. Callers may await
-`job.value` or `job.done` to wait for the operation, or omit waiting. The
-returned job itself is not a `Future`; its error-handling rules are described
-in the README.
+The trace is
+`[moveTo 1 start, moveTo 1 stopped, moveTo 3 start, moveTo 3 end]`: the first
+request was already under way and stops before the latest one begins, and the
+middle one does not start. Both the map and `MapState(3, z4)` reflect the
+latest request. Callers may await `job.value` or `job.done` to wait for the
+operation, or omit waiting. The returned job itself is not a `Future`; what
+becomes of the failure of a job nobody waits for is in
+[Handled and unhandled failures](errors.md#handled-and-unhandled-failures) on
+the errors page.
 
 ## 7. Removing selected pending work
 
@@ -1145,11 +1167,12 @@ The device calls are the same, but the removal happens when `disconnect` is
 called. The removed read job completes with `Cancelled(manual)`; its caller can
 observe that result. Rename stays queued, and disconnect runs after it.
 `removeWhere` works on the queue alone: if the read has already started, it is
-not removed. The device then receives `[connect, battery, disconnect]`.
+not removed, and the device receives
+`[connect, battery, rename kitchen, disconnect]`.
 
 The rename carries `cancellable: false`, and that is the other half of the
 requirement. The removal in `disconnect` names the read, so the rename survives
-it by not being named -- which says nothing about a caller who later sweeps the
+it by not being named — which says nothing about code that later sweeps the
 whole queue with `cancelAll()` or `queue.clear()`. A rename the user asked for
 has to reach the device in that case too, so the guarantee belongs to the job
 rather than to a line that removes somebody else: a sweep skips such a job
@@ -1226,7 +1249,8 @@ class DroppableCheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
 }
 ```
 
-Three requests make one API call, and one caller in three is answered:
+Three requests — order A twice, then order B — make one API call, and one
+caller in three is answered:
 `[Receipt(for A), never answered, never answered]`. The other two are still
 waiting after everything else has finished, and would wait for as long as the
 process lives — `droppable()` dropped their events, and a dropped event's
@@ -1290,8 +1314,9 @@ The completer must finish on every path. The `add` catch removes the map entry
 when a closed `Bloc` refuses the event. `isCompleted` prevents double
 completion if an `emit` throws after the receipt has been delivered. Completing
 the receipt before publishing `Paid` prevents an observer error from replacing
-an already obtained receipt. The transformer stays `sequential()`: the map is
-what shares a payment, and what reaches the queue after it are distinct orders,
+an already obtained receipt, though the state then reads `PaymentFailed` for an
+order that was charged. The transformer stays `sequential()`: the map is what
+shares a payment, and what reaches the queue after it are distinct orders,
 which should run in order rather than drop one another.
 
 ### Cubit
@@ -1485,10 +1510,10 @@ class ReportBloc extends Bloc<ReportEvent, ReportState> {
 }
 ```
 
-The run ends at `SignedOut(signed out elsewhere)` without publishing the
-report. The same check now fires: the revocation no longer waits behind the
-build, and it does not cancel the build's handler or emitter either. That check
-is what the second registration buys, not something it replaces.
+The state goes straight to `SignedOut(signed out elsewhere)`, and the report is
+not published. The same check now fires: the revocation no longer waits behind
+the build, and it does not cancel the build's handler or emitter either. That
+check is what the second registration buys, not something it replaces.
 
 `Cubit` can reflect the notification directly from a subclass method, but its
 asynchronous operations still need equivalent validity checks.
@@ -1578,11 +1603,12 @@ class UnguardedFirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
 }
 ```
 
-The device receives `[0, 1, 100, 2, 101, 3, 102, 4, 103, 5, 104, 105]`: both
-loops went on writing, and the two uploads interleave on the wire.
-`restartable()` cancels the replaced handler's emitter, and a cancelled emitter
-ignores writes — but the Dart body awaiting `_ble.write` is not interrupted by
-that. The
+The first upload carries chunks `0` to `5`; a second one, chunks `100` to
+`105`, replaces it while chunk `1` is being written. The device receives
+`[0, 1, 100, 2, 101, 3, 102, 4, 103, 5, 104, 105]`: both loops went on writing,
+and the two uploads interleave on the wire. `restartable()` cancels the
+replaced handler's emitter, and a cancelled emitter ignores writes — but the
+Dart body awaiting `_ble.write` is not interrupted by that. The
 [restartable-handler discussion](https://github.com/felangel/bloc/issues/3349)
 describes why cancellation does not interrupt awaited futures.
 
@@ -1608,12 +1634,11 @@ class FirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
 }
 ```
 
-The chunks now belong to one upload: a mid-upload restart writes
-`[0, 1, 100, 101, …]`. The device still sees two writers, though. The
-replacement handler starts while the old write is pending, and the trace is
-`[write 0 start, write 0 end, write 1 start, write 100 start, write 1 end,
-write 100 end, …]` — the check governs what is published, not what the wire is
-doing.
+The old loop now stops: the same restart writes `[0, 1, 100, 101, …]`. The
+device still sees two writers, though. The replacement handler starts while the
+old write is pending, and the trace is `[write 0 start, write 0 end,
+write 1 start, write 100 start, write 1 end, write 100 end, …]` — the check
+governs what is published, not what the wire is doing.
 
 ### Bloc
 
@@ -1692,13 +1717,14 @@ final class FirmwareController extends Solo<FirmwareState> {
 `Policy.restart` requests cancellation and enqueues the replacement. `join`
 waits for the current write and throws `Cancelled` once it returns, before the
 next iteration; the replaced upload ends at `Cancelled(manual)`. The
-replacement starts after that job completes. The observed chunk sequence and
-non-overlap match the locked bloc implementation.
+replacement starts after that job completes. The device gets the chunks in the
+order of the locked bloc, `[0, 1, 100, 101, …]`, and no write starts before the
+one ahead of it has ended.
 
 An external `Broken` state also cancels this job because it no longer matches
-`NotBroken`. The failure run stops after `[0, 1, 2]` with
-`Cancelled(rules: is not NotBroken)`. The check covers both replacement and
-state invalidation.
+`NotBroken`. When the state turns `Broken` during the third write, the upload
+stops after `[0, 1, 2]` with `Cancelled(rules: is not NotBroken)`. The one
+checkpoint in `join` covers both replacement and state invalidation.
 
 If the upload starts child jobs through `ctx.run`, the parent also waits for
 those children and their cleanup. Work intentionally allowed to outlive the job
@@ -1733,9 +1759,11 @@ class PreviewBloc extends Bloc<OpenPreview, PreviewState> {
 }
 ```
 
-The state ends at `Preview(2)`, which is correct, and the stale buffer is
-released zero times: the early return leaves it to the garbage collector, which
-does not know how to release a native buffer. Nothing about the state says so.
+The user opens clip 1 and then clip 2 while the first is still decoding, and
+the decoder answers the second request first. The state ends at `Preview(2)`,
+which is correct, and the stale buffer is released zero times: the early return
+leaves it to the garbage collector, which does not know how to release a native
+buffer. Nothing about the state says so.
 
 ### Bloc
 
@@ -1804,7 +1832,7 @@ Use `dispose` here because the buffer is temporary, including on success.
 `discard` is for a resource handed to the caller as the successful result; it
 would not release this temporary buffer after a successful waveform update.
 
-The guarded bloc and solo runs both record
+The guarded bloc and this controller both go through
 `[open 1, open 2, ready 2, sample 2, release 2, ready 1, release 1]` and end at
 `Preview(2)`.
 

@@ -16,19 +16,38 @@ writes bin/v/item1..11.dart into each. Then:
     dart analyze bin/v
     dart run bin/v/item1.dart          # and so on, up to item11
 
-The traces the document quotes come from those runs. The main ten drivers
-use wall-clock fakes with timing margins. The Loading cancellation driver
-uses FakeAsync and completers, checking each state transition explicitly.
+The traces the document quotes come from those runs. Every driver runs on
+virtual time: its `main` is the one at the bottom of this script, which runs
+the driver's `scenario` under FakeAsync and elapses the clock a millisecond
+at a time until the scenario ends. A wall clock gave the same traces on a
+quiet machine and other ones on a busy one, where the tick of a fake API
+raced the tick of the driver waiting for it.
+
+Every `dart` block of the document is built: the script stops if one of them
+went into no driver, so a block added to the page is a block somebody has to
+run. And every trace the prose quotes is held. QUOTED names, per driver, the
+code spans of the document that quote that driver's output: the script stops
+if the document, or its Russian translation, does not have the span, and the
+driver fails if its run did not print it. SAID does the same for a number
+the prose gives in words, with a guard in the driver that names it.
 """
 import os
+import re
 import shutil
 import sys
 
 import doc_blocks
 
+if len(sys.argv) > 1 and sys.argv[1].startswith('-'):
+    # The first argument is a directory to write into: an option taken for
+    # one would build the bench in a directory named `--help`.
+    print(__doc__.strip())
+    sys.exit(0 if sys.argv[1] in ('-h', '--help') else 2)
+
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ROOT = sys.argv[1] if len(sys.argv) > 1 else '/tmp/solo-doc-check'
 DOC = os.path.join(REPO, 'packages', 'solo', 'doc', 'vs-bloc.md')
+RU_DOC = os.path.join(REPO, 'docs', 'ru', 'solo', 'vs-bloc.md')
 
 BLOC_PUBSPEC = """name: bloc_check
 publish_to: none
@@ -72,8 +91,187 @@ dependency_overrides:
 # -- so that inserting a block into a section does not renumber the rest.
 # The addressing itself lives in doc_blocks.py, next to this file: it is the
 # part every bench shares, and the second document uses the same one.
-snips = doc_blocks.blocks(
-    open(DOC).read(), 'dart', doc_blocks.DECLARES['dart'])
+class Blocks(dict):
+    """The blocks of the document, and which of them a driver has taken."""
+
+    def __init__(self, found):
+        super().__init__(found)
+        self.taken = set()
+
+    def __getitem__(self, key):
+        source = super().__getitem__(key)
+        if source is doc_blocks.POISONED:
+            raise KeyError(f'{key} is declared twice in its section')
+        self.taken.add(key)
+        return source
+
+    def unbuilt(self):
+        """The first line of every block no driver took by any of its keys."""
+        built = {id(dict.__getitem__(self, key)) for key in self.taken}
+        left = {}
+        for key in self:
+            source = dict.__getitem__(self, key)
+            if source is not doc_blocks.POISONED and id(source) not in built:
+                left[id(source)] = source.split('\n')[0]
+        return sorted(left.values())
+
+
+snips = Blocks(doc_blocks.blocks(
+    open(DOC).read(), 'dart', doc_blocks.DECLARES['dart']))
+
+
+def _prose(path):
+    """A document without its fenced blocks, every run of whitespace one
+    space: a quote is found wherever its lines were broken."""
+    text = re.sub(r'```.*?```', '', open(path).read(), flags=re.S)
+    return re.sub(r'\s+', ' ', text)
+
+
+PROSE = {'the document': _prose(DOC), 'its translation': _prose(RU_DOC)}
+
+# The code spans of the prose that quote what a driver prints. A span that
+# ends with `, …]` is held by what stands before the ellipsis.
+QUOTED = {
+    'bloc/item1': [
+        'NotesState([n0], uploading: false)',
+        'NotesState([n0], uploading: true)',
+        'NotesState([n0, n1], uploading: false)',
+    ],
+    'solo/item1': [
+        'NotesState([n0, n1], uploading: false)',
+        'list reads [n0, n1]',
+        'server receives n1',
+    ],
+    'bloc/item2': [
+        '[Recording]',
+        'telemetry unavailable',
+        '[native start, arm meter]',
+    ],
+    'solo/item2': ['[Recording]', 'Done(null)'],
+    'bloc/item3': [
+        'ChatState(reply to hi)',
+        'Bad state: Cannot add new events after calling close',
+    ],
+    'solo/item3': [
+        'Cancelled(closed)',
+        'Bad state: Job(send) has already finished, cannot emit',
+    ],
+    'bloc/item5': [
+        '[play start, seek 1 start, seek 2 start, pause start, seek 3 start, '
+        'play end, pause end, seek 1 end, seek 2 end, seek 3 end]',
+        'PlayerState(3ms)',
+        '[play start, play end, seek 1 start, seek 1 end, seek 2 start, '
+        'seek 2 end, seek 3 start, seek 3 end, pause start, pause end]',
+        '[play, seek 3, pause]',
+        '[seek 1 start, seek 1 stopped, seek 3 start, seek 3 end]',
+        '[play, seek 1, seek 1, pause]',
+    ],
+    'solo/item5': [
+        '[play, seek 3, pause]',
+        '[seek 1 start, seek 1 stopped, seek 3 start, seek 3 end]',
+        'Cancelled(manual)',
+    ],
+    'bloc/item6': [
+        '[moveTo 1 start, moveTo 2 start, moveTo 3 start, moveTo 3 end, '
+        'moveTo 2 end, moveTo 1 end]',
+        'MapState(1, z4)',
+        'MapState(3, z4)',
+        '(Emitter<MapState>) => Future<void>',
+    ],
+    'solo/item6': [
+        '[moveTo 1 start, moveTo 1 stopped, moveTo 3 start, moveTo 3 end]',
+        'MapState(3, z4)',
+    ],
+    'bloc/item7': [
+        '[_leaving = true, connect, rename kitchen, disconnect]',
+        '[_leaving = true, _leaving = false, connect, battery, '
+        'rename kitchen, disconnect, connect]',
+        '[_screen = 1, connect, rename kitchen, disconnect]',
+        '[_screen = 1, connect, rename kitchen, disconnect, connect]',
+        '[_screen = 1, connect, battery, rename kitchen, disconnect, '
+        'connect, battery]',
+        'Bad state: battery: not connected',
+    ],
+    'solo/item7': [
+        'Cancelled(manual)',
+        '[connect, battery, rename kitchen, disconnect]',
+        'Cancelled(rules: is not Connected)',
+    ],
+    'bloc/item8': [
+        '[Receipt(for A), never answered, never answered]',
+        'Paid(Receipt(for B))',
+        'PaymentFailed',
+        'Bad state: Cannot emit new states after calling close',
+    ],
+    'bloc/item9': [
+        '[Ready(Report(30 days)), SignedOut(signed out elsewhere)]',
+        'SignedOut(signed out elsewhere)',
+    ],
+    'solo/item9': ['Cancelled(rules: is not SignedIn)'],
+    'bloc/item10': [
+        '[0, 1, 100, 2, 101, 3, 102, 4, 103, 5, 104, 105]',
+        '[0, 1, 100, 101, …]',
+        '[write 0 start, write 0 end, write 1 start, write 100 start, '
+        'write 1 end, write 100 end, …]',
+        '[write 0 start, write 0 end, write 1 start, write 1 end, '
+        'write 100 start, write 100 end, …]',
+    ],
+    'solo/item10': [
+        'Cancelled(manual)',
+        '[0, 1, 100, 101, …]',
+        '[0, 1, 2]',
+        'Cancelled(rules: is not NotBroken)',
+    ],
+    'bloc/item11': [
+        'Preview(2)',
+        '[open 1, open 2, ready 2, sample 2, release 2, ready 1, release 1]',
+    ],
+    'solo/item11': [
+        'Preview(2)',
+        '[open 1, open 2, ready 2, sample 2, release 2, ready 1, release 1]',
+    ],
+}
+
+for driver, quotes in QUOTED.items():
+    for quote in quotes:
+        for name, prose in PROSE.items():
+            assert f'`{quote}`' in prose, (
+                f'{name} does not quote what {driver} holds: {quote}')
+
+# What the prose gives in words and a guard of a driver holds in numbers:
+# the guard names the phrase, so a phrase gone from the page is a guard left
+# with nothing to stand for.
+SAID = [
+    'make one API call, and one caller in three is answered',
+    'Three calls for two orders make two API calls',
+    'It also makes two API calls for three requests covering two orders',
+    'The three requests again make two API calls',
+    'the stale buffer is released zero times',
+    'the guarded version releases both, once each',
+    'the failure is reported twice',
+    'for each of the four commands',
+    'would not cancel `StartRefresh` by itself',
+    'leaves the ones already alive as they were',
+    'checking only before entry would let its obsolete write start later',
+    'reads `PaymentFailed` for an order that was charged',
+    'a project with `discarded_futures` enabled has nothing to say about it',
+]
+for phrase in SAID:
+    assert phrase in PROSE['the document'], (
+        f'the document no longer says: {phrase}')
+
+# The table of correspondences names three things of `flutter_solo`, a
+# package this bench does not build against: they have to be there.
+FLUTTER_SOLO = os.path.join(REPO, 'packages', 'flutter_solo', 'lib', 'src')
+for declared, source in (
+    ('mixin SoloListenable', 'solo_listenable.dart'),
+    ('class SoloBuilder', 'solo_builder.dart'),
+    ('class SoloSelector', 'solo_selector.dart'),
+):
+    assert declared in open(os.path.join(FLUTTER_SOLO, source)).read(), (
+        f'flutter_solo no longer has {declared}, which the document names')
+    assert f"`{declared.split()[1]}`" in PROSE['the document'], (
+        f'the document no longer names {declared.split()[1]}')
 
 TRACE = '''
 final trace = <String>[];
@@ -341,22 +539,26 @@ BLOC_IMPORTS = """import 'dart:async';
 
 import 'package:bloc/bloc.dart';
 import 'package:bloc_concurrency/bloc_concurrency.dart';
+import 'package:fake_async/fake_async.dart';
 """
 
 BLOC_PLAIN_IMPORTS = """import 'dart:async';
 
 import 'package:bloc/bloc.dart';
+import 'package:fake_async/fake_async.dart';
 """
 
 BLOC_MAP_IMPORTS = """import 'dart:async';
 import 'dart:math';
 
 import 'package:bloc/bloc.dart';
+import 'package:fake_async/fake_async.dart';
 """
 
 SOLO_IMPORTS = """// ignore_for_file: unreachable_from_main
 import 'dart:async';
 
+import 'package:fake_async/fake_async.dart';
 import 'package:solo/solo.dart';
 """
 
@@ -364,8 +566,87 @@ SOLO_MAP_IMPORTS = """// ignore_for_file: unreachable_from_main
 import 'dart:async';
 import 'dart:math';
 
+import 'package:fake_async/fake_async.dart';
 import 'package:solo/solo.dart';
 """
+
+# The `main` of every driver. The driver itself is `scenario`; this runs it
+# on virtual time, repeats what it prints and holds the document to it.
+RUNNER = '''
+late FakeAsync _clock;
+
+/// Milliseconds of the scenario's own clock.
+int nowMs() => _clock.elapsed.inMilliseconds;
+
+/// Runs [scenario] under fake time, a millisecond at a time until it ends,
+/// and fails if the run did not print what the document quotes of it.
+///
+/// The clock is elapsed from outside the fake zone, with a turn of the real
+/// event loop between two steps. A future of `dart:async` itself, the one a
+/// broadcast subscription returns from `cancel` for one, belongs to the
+/// root zone and completes its listeners there: a loop that never yielded
+/// would wait for it forever. The fake clock stands still while the root
+/// zone hands work back, so the detour costs the scenario no time.
+Future<void> main() async {
+  final printed = StringBuffer();
+  Object? failure;
+  StackTrace? failureTrace;
+  var ended = false;
+  _clock = FakeAsync()
+    ..run((clock) {
+      runZoned(
+        () => Future<void>.sync(scenario).then<void>(
+          (_) {
+            ended = true;
+          },
+          onError: (Object error, StackTrace stackTrace) {
+            failure = error;
+            failureTrace = stackTrace;
+            ended = true;
+          },
+        ),
+        zoneSpecification: ZoneSpecification(
+          print: (self, parent, zone, line) {
+            printed.writeln(line);
+            parent.print(zone, line);
+          },
+        ),
+      );
+    });
+  while (!ended) {
+    _clock.flushMicrotasks();
+    await Future<void>.delayed(Duration.zero);
+    if (ended || _clock.microtaskCount > 0) {
+      continue;
+    }
+    if (_clock.elapsed > const Duration(minutes: 10)) {
+      throw StateError('the scenario did not end in ten of its minutes');
+    }
+    _clock.elapse(const Duration(milliseconds: 1));
+  }
+  if (failure != null) {
+    Error.throwWithStackTrace(failure!, failureTrace!);
+  }
+  final output = printed.toString();
+  for (final quote in quoted) {
+    if (!output.contains(quote)) {
+      throw StateError('the document quotes what this run did not print: '
+          '$quote');
+    }
+  }
+}
+'''
+
+
+def quoted_list(key):
+    """The quotes of a driver as a Dart list of strings."""
+    lines = ['', '/// What the document quotes of the output of this driver.',
+             'const quoted = <String>[']
+    for quote in QUOTED.get(key, []):
+        needle = quote.split(', …')[0]
+        assert not set("'$\\") & set(needle), f'needs escaping: {needle}'
+        lines.append(f"  '{needle}',")
+    return '\n'.join(lines + ['];', ''])
 
 FILES = {}
 
@@ -578,12 +859,13 @@ Future<void> main() async {
   final started = DeviceController(Ble());
   await started.connect().done;
   final reading = started.readBattery();
+  final renaming = started.rename('kitchen');
   await tick(5);
   final leave = started.disconnect();
   await tick(100);
   print('read already running: $trace, battery ${reading.outcome}, '
-      'disconnect ${leave.outcome}');
-  if (reading.outcome is! Done) {
+      'rename ${renaming.outcome}, disconnect ${leave.outcome}');
+  if (reading.outcome is! Done || renaming.outcome is! Done) {
     throw StateError('a running read must survive removeWhere');
   }
   await started.close();
@@ -865,10 +1147,40 @@ Future<void> run(Bloc<NotesEvent, NotesState> bloc, String label) async {
 }
 
 Future<void> main() async {
-  await run(TracedSplit(Api()), 'a transformer per handler:  ');
-  await run(TracedConcurrent(Api()), 'one handler, no transformer:');
-  await run(TracedInline(Api()), 'the one-line refresh:       ');
-  await run(TracedFunnel(Api()), 'one handler, sequential:    ');
+  final split = TracedSplit(Api());
+  await run(split, 'a transformer per handler:  ');
+  final splitOrder = '$trace';
+  final concurrent = TracedConcurrent(Api());
+  await run(concurrent, 'one handler, no transformer:');
+  // "From an order identical to the one above, line for line."
+  if ('$trace' != splitOrder) {
+    throw StateError('the two attempts must fail in the same order');
+  }
+  final inline = TracedInline(Api());
+  await run(inline, 'the one-line refresh:       ');
+  final funnel = TracedFunnel(Api());
+  await run(funnel, 'one handler, sequential:    ');
+  if ('${split.state}' != 'NotesState([n0], uploading: false)' ||
+      '${concurrent.state}' != '${split.state}' ||
+      '${inline.state}' != 'NotesState([n0], uploading: true)' ||
+      '${funnel.state}' != 'NotesState([n0, n1], uploading: false)') {
+    throw StateError('each version must end where the document says');
+  }
+
+  // `Bloc.transformer` is read by each bloc as it is built: an assignment
+  // rules the ones made after it and "leaves the ones already alive as
+  // they were".
+  final alive = TracedConcurrent(Api());
+  final before = Bloc.transformer;
+  Bloc.transformer = sequential<dynamic>();
+  final made = TracedConcurrent(Api());
+  Bloc.transformer = before;
+  await run(alive, 'alive before the assignment:');
+  await run(made, 'made after the assignment:  ');
+  if ('${alive.state}' != 'NotesState([n0], uploading: false)' ||
+      '${made.state}' != 'NotesState([n0, n1], uploading: false)') {
+    throw StateError('Bloc.transformer must rule the blocs made after it');
+  }
 }
 ''')
 
@@ -969,6 +1281,41 @@ class GuardedFirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
   final Ble _ble;
 }
 
+/// The answer with its check before the lock and not inside it: what
+/// "checking only before entry would let its obsolete write start later"
+/// is about.
+class OuterCheckFirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
+  final Ble _ble;
+  final _wire = Lock();
+
+  OuterCheckFirmwareBloc(this._ble) : super(Idle()) {
+    on<Flash>((e, emit) async {
+      var written = 0;
+      for (final chunk in e.chunks) {
+        if (emit.isDone) return;
+        await _wire.protect(() => _ble.write(chunk));
+        if (emit.isDone) return;
+        emit(Flashing(++written, e.chunks.length));
+      }
+    }, transformer: restartable());
+  }
+}
+
+/// Three uploads in a row: the second is replaced while it waits for the
+/// lock the first one holds.
+Future<List<int>> thrice(
+  Ble ble,
+  Bloc<FirmwareEvent, FirmwareState> bloc,
+) async {
+  for (final from in [0, 100, 200]) {
+    bloc.add(Flash([for (var i = from; i < from + 3; i++) Chunk(i)]));
+    await tick(5);
+  }
+  await tick(300);
+  await bloc.close();
+  return ble.written;
+}
+
 Future<void> main() async {
   final ble = Ble();
   final bloc = FirmwareBloc(ble);
@@ -1010,6 +1357,16 @@ Future<void> main() async {
   print('wire under a lock: written ${ble3.written}');
   print('locked trace: ${trace.take(6).toList()}');
   await locked.close();
+
+  final ble4 = Ble();
+  final inside = await thrice(ble4, LockedFirmwareBloc(ble4));
+  final ble5 = Ble();
+  final outside = await thrice(ble5, OuterCheckFirmwareBloc(ble5));
+  print('replaced while waiting for the lock: written $inside');
+  print('with the check before the lock only: written $outside');
+  if (inside.contains(100) || !outside.contains(100)) {
+    throw StateError('only the check inside the lock stops the stale write');
+  }
 }
 ''')
 
@@ -1060,6 +1417,10 @@ Future<void> main() async {
   print('restart: written ${ble.written}, state ${firmware.currentState}');
   print('restart trace: ${trace.take(6).toList()}');
   print('first ${first.outcome}  second ${second.outcome}');
+  // "The device gets the chunks in the order of the locked bloc."
+  if ('${ble.written}' != '[0, 1, 100, 101, 102, 103, 104, 105]') {
+    throw StateError('the replaced upload must finish its write and stop');
+  }
   await firmware.close();
 
   trace.clear();
@@ -1124,6 +1485,20 @@ class PlainCheckoutCubit extends Cubit<CheckoutState> {
   }
 }
 
+/// The observer of section 2, failing on the one state the answer
+/// publishes after it has delivered the receipt.
+class ThrowOnPaid extends BlocObserver {
+  @override
+  void onChange(BlocBase<dynamic> bloc, Change<dynamic> change) {
+    super.onChange(bloc, change);
+    if (change.nextState is Paid) throw StateError('telemetry unavailable');
+  }
+}
+
+class _NoObserver extends BlocObserver {
+  const _NoObserver();
+}
+
 /// What a caller got, or that it is still waiting long after the charge.
 Future<String> answered(Future<Receipt> result) => result.then(
       (receipt) => '$receipt',
@@ -1142,6 +1517,9 @@ Future<void> main() async {
     answered(droppable.pay(const Order('B'))),
   ]);
   print('droppable: api.pay calls ${droppableApi.calls}, $dropped');
+  if (droppableApi.calls != 1) {
+    throw StateError('droppable must make one API call of three requests');
+  }
   await droppable.close();
 
   final api = Api();
@@ -1154,6 +1532,10 @@ Future<void> main() async {
   ]);
   print('bloc: api.pay calls ${api.calls}, $receipts');
   print('  state left behind: ${bloc.state}');
+  if (api.calls != 2 || '$receipts' != '[Receipt(for A), Receipt(for A), '
+          'Receipt(for B)]') {
+    throw StateError('two API calls, and both callers of A get its receipt');
+  }
   // The document quotes this state: one receipt, the last payment's.
   if ('${bloc.state}' != 'Paid(Receipt(for B))') {
     throw StateError('the state must keep only the receipt of the last order');
@@ -1186,6 +1568,9 @@ Future<void> main() async {
   ]);
   print('queued cubit: api.pay calls ${cubitApi.calls}, $cubitReceipts');
   print('  state left behind: ${cubit.state}');
+  if (cubitApi.calls != 2) {
+    throw StateError('the cubit must make two API calls of three requests');
+  }
   await cubit.close();
 
   final closingApi = Api();
@@ -1200,6 +1585,22 @@ Future<void> main() async {
   }
   await tick(60);
   print('  api.pay calls after that: ${closingApi.calls}');
+
+  // An observer error on `Paid`: the receipt is out already, and the state
+  // "reads `PaymentFailed` for an order that was charged".
+  Bloc.observer = ThrowOnPaid();
+  final observedApi = Api();
+  final observed = CheckoutBloc(observedApi);
+  final kept = await answered(observed.pay(const Order('A')));
+  await tick(50);
+  print('observer throws on Paid: the caller got $kept, '
+      'state ${observed.state.runtimeType}, '
+      'api.pay calls ${observedApi.calls}');
+  if (kept != 'Receipt(for A)' || observed.state is! PaymentFailed) {
+    throw StateError('the receipt must outlive the observer error');
+  }
+  Bloc.observer = const _NoObserver();
+  await observed.close();
 }
 ''')
 
@@ -1248,6 +1649,9 @@ Future<void> main() async {
   ]);
   print('api.pay calls: ${api.calls}, $replies');
   print('  state left behind: ${checkout.currentState}');
+  if (api.calls != 2) {
+    throw StateError('three requests for two orders must make two API calls');
+  }
   // The document quotes this state: one receipt, the last payment's.
   if ('${checkout.currentState}' != 'Paid(Receipt(for B))') {
     throw StateError('the state must keep only the receipt of the last order');
@@ -1309,25 +1713,38 @@ class _NoObserver extends BlocObserver {
 }
 
 Future<void> main() async {
+  // One drag for the three versions of the section: the first position,
+  // then, while the map is still moving there, two more and a zoom.
   final cubit = MapCubit(MapApi());
-  for (var i = 1; i <= 3; i++) {
-    unawaited(cubit.moveTo(Point<double>(i.toDouble(), 0)));
-  }
+  unawaited(cubit.moveTo(const Point<double>(1, 0)));
+  await tick(10);
+  unawaited(cubit.moveTo(const Point<double>(2, 0)));
+  unawaited(cubit.moveTo(const Point<double>(3, 0)));
+  unawaited(cubit.setZoom(4));
   await tick(300);
   print('drag: $trace  state ${cubit.state}');
+  if ('${cubit.state}' != 'MapState(1, z4)') {
+    throw StateError('the call that returned last must win');
+  }
   await cubit.close();
 
   trace.clear();
   // What an observer of this bloc is given for each command.
   Bloc.observer = _SeenEvents();
   final bloc = CommandMapBloc(MapApi());
-  for (var i = 1; i <= 3; i++) {
-    bloc.moveTo(Point<double>(i.toDouble(), 0));
-  }
-  bloc.setZoom(4);
+  bloc.moveTo(const Point<double>(1, 0));
+  await tick(10);
+  bloc
+    ..moveTo(const Point<double>(2, 0))
+    ..moveTo(const Point<double>(3, 0))
+    ..setZoom(4);
   await tick(400);
   print('typed methods, one queue: $trace  state ${bloc.state}');
   print('an observer sees: $seenEvents');
+  // "For each of the four commands."
+  if ('${bloc.state}' != 'MapState(3, z4)' || seenEvents.length != 4) {
+    throw StateError('four commands, in order, and four nameless events');
+  }
   Bloc.observer = const _NoObserver();
   await bloc.close();
 }
@@ -1396,9 +1813,9 @@ Future<void> main() async {
   final api = Api();
   final chat = ChatBloc(api)..add(const SendMessage('hi'));
   await tick(10);
-  final started = DateTime.now();
+  final started = nowMs();
   await chat.close();
-  print('close took ${DateTime.now().difference(started).inMilliseconds}ms, '
+  print('close took ${nowMs() - started}ms, '
       'state ${chat.state}, reads reported ${api.reads}');
   try {
     chat.add(const SendMessage('bye'));
@@ -1410,10 +1827,9 @@ Future<void> main() async {
     final api = Api();
     final unguarded = UnguardedChatBloc(api)..add(const SendMessage('hi'));
     await tick(10);
-    final closing = DateTime.now();
+    final closing = nowMs();
     await unguarded.close();
-    print('no guard: close took '
-        '${DateTime.now().difference(closing).inMilliseconds}ms, '
+    print('no guard: close took ${nowMs() - closing}ms, '
         'state ${unguarded.state}, reads reported ${api.reads}');
   }, (error, _) {
     print('no guard, the follow-up add: $error');
@@ -1864,6 +2280,9 @@ Future<void> handled() async {
       await tick(20);
       print('onError overridden: state ${bloc.state}, '
           'trace ${recorder.trace}, reported ${bloc.reported}');
+      if (bloc.reported.length != 2) {
+        throw StateError('the failure must be reported twice');
+      }
       await bloc.close();
     },
     (error, _) => zone.add('$error'),
@@ -2025,8 +2444,9 @@ class WatchedGuardedPreviewBloc extends GuardedPreviewBloc with Finishing {
 Future<void> go(
   String label,
   Decoder decoder,
-  Bloc<OpenPreview, PreviewState> bloc,
-) async {
+  Bloc<OpenPreview, PreviewState> bloc, {
+  required int staleReleases,
+}) async {
   const first = Clip(1);
   const second = Clip(2);
   final stale = OpenPreview(first);
@@ -2043,14 +2463,28 @@ Future<void> go(
   print('$label: state ${bloc.state}, stale releases '
       '${staleBuffer.releases}, current releases ${currentBuffer.releases}');
   print('$label trace: ${decoder.trace}');
+  if (staleBuffer.releases != staleReleases || currentBuffer.releases != 1) {
+    throw StateError('$label: the stale buffer must be released '
+        '$staleReleases times, the current one once');
+  }
   await bloc.close();
 }
 
 Future<void> main() async {
   final plain = Decoder();
-  await go('guard only', plain, WatchedPreviewBloc(plain));
+  await go(
+    'guard only',
+    plain,
+    WatchedPreviewBloc(plain),
+    staleReleases: 0,
+  );
   final guarded = Decoder();
-  await go('finally', guarded, WatchedGuardedPreviewBloc(guarded));
+  await go(
+    'finally',
+    guarded,
+    WatchedGuardedPreviewBloc(guarded),
+    staleReleases: 1,
+  );
 }
 ''')
 
@@ -2115,9 +2549,50 @@ fixed_refresh = snips['4/RefreshBloc'].replace(
     'if (event is CancelRefresh) return;', snips['4/if-event-is-cancelrefresh'].strip(),
 )
 FILES['bloc/item4'] = (
-    BLOC_IMPORTS + "import 'package:fake_async/fake_async.dart';\n"
-    + REFRESH_MODEL + snips['4/RefreshBloc'] + fixed_refresh + '''
+    BLOC_IMPORTS + REFRESH_MODEL + snips['4/RefreshBloc'] + fixed_refresh
+    + '''
+/// The cancel event under a registration of its own, which "would not
+/// cancel `StartRefresh` by itself".
+class SeparateRefreshBloc extends Bloc<RefreshEvent, RefreshState> {
+  final RefreshApi _api;
+  bool? startHandlerCancelled;
+
+  SeparateRefreshBloc(this._api) : super(const Initial()) {
+    on<StartRefresh>((event, emit) async {
+      emit(const Loading());
+      try {
+        await _api.refresh();
+      } finally {
+        startHandlerCancelled = emit.isDone;
+      }
+    }, transformer: restartable());
+    on<CancelRefresh>(
+      (event, emit) => emit(const Initial()),
+      transformer: restartable(),
+    );
+  }
+}
+
 void main() {
+  fakeAsync((clock) {
+    final separateApi = RefreshApi();
+    final separate = SeparateRefreshBloc(separateApi);
+    separate.add(StartRefresh());
+    clock.flushMicrotasks();
+    separate.add(CancelRefresh());
+    clock.flushMicrotasks();
+    separateApi.pending.complete();
+    clock.flushMicrotasks();
+    require(
+      separate.startHandlerCancelled == false,
+      'a registration of its own must not cancel the start handler',
+    );
+    print('a registration of its own: start handler cancelled '
+        '${separate.startHandlerCancelled}');
+    separate.close();
+    clock.flushMicrotasks();
+  });
+
   fakeAsync((clock) {
     final api = RefreshApi();
     final bloc = RefreshBloc(api);
@@ -2153,12 +2628,7 @@ void main() {
 ''')
 
 FILES['solo/item4'] = (
-    SOLO_IMPORTS.replace(
-        "import 'package:solo/solo.dart';",
-        "import 'package:fake_async/fake_async.dart';\n"
-        "import 'package:solo/solo.dart';",
-    )
-    + REFRESH_MODEL + snips['4/RefreshController'] + '''
+    SOLO_IMPORTS + REFRESH_MODEL + snips['4/RefreshController'] + '''
 void main() {
   fakeAsync((clock) {
     final api = RefreshApi();
@@ -2213,9 +2683,43 @@ void main() {
 }
 ''')
 
+unbuilt = snips.unbuilt()
+assert not unbuilt, f'blocks of the document no driver builds: {unbuilt}'
+assert not set(QUOTED) - set(FILES), 'quotes of a driver that is not built'
+
 for key, body in FILES.items():
     kind, name = key.split('/')
     d = f'{ROOT}/{kind}_check/bin/v'
     os.makedirs(d, exist_ok=True)
-    open(f'{d}/{name}.dart', 'w').write(body)
+    # The driver becomes `scenario`, and RUNNER brings the `main`.
+    mains = ('Future<void> main() async {', 'void main() {')
+    assert sum(body.count(main) for main in mains) == 1, key
+    for main in mains:
+        body = body.replace(main, main.replace('main', 'scenario'))
+    open(f'{d}/{name}.dart', 'w').write(body + quoted_list(key) + RUNNER)
+
+# What `discarded_futures` has to say of a caller of section 4's controller:
+# nothing. The lint is an error in this directory alone, so `dart analyze
+# bin/v` is where a `cancelRefresh()` that returned a future would show.
+# Nothing here is a driver: the gate runs `bin/v/*.dart` and no deeper.
+d = f'{ROOT}/solo_check/bin/v/lints'
+os.makedirs(d, exist_ok=True)
+open(f'{d}/analysis_options.yaml', 'w').write('''analyzer:
+  errors:
+    discarded_futures: error
+linter:
+  rules:
+    - discarded_futures
+''')
+open(f'{d}/item4_caller.dart', 'w').write(
+    "import 'dart:async';\n\nimport 'package:solo/solo.dart';\n"
+    + REFRESH_MODEL + snips['4/RefreshController'] + '''
+void onRefreshPressed(RefreshController controller) {
+  controller.refresh();
+}
+
+void onCancelPressed(RefreshController controller) {
+  controller.cancelRefresh();
+}
+''')
 print('wrote', len(FILES), 'files under', ROOT)
