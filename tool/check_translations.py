@@ -15,9 +15,15 @@ Compares:
   * the sequence of heading levels (count and order),
   * the number of fenced code blocks,
   * for each pair of code blocks, the sequence of non-comment lines
-    (lines whose trimmed form starts with // or /// are dropped).
+    (lines whose trimmed form starts with // or /// are dropped),
+  * the shape of the prose around them: under each heading, as many
+    paragraphs, list items and table rows as the original has, in the same
+    places between the code blocks.
 
 Prose and comment text are expected to differ: they are the translation.
+The last check is there because the first three let a paragraph go: the
+README of flutter_solo went without the last paragraph of its "Testing"
+section in Russian, with every heading and every block of code in place.
 """
 
 from __future__ import annotations
@@ -145,6 +151,42 @@ def parse(path: Path):
     return headings, blocks
 
 
+def shape(path: Path) -> list[str]:
+    """What the document is made of, block by block.
+
+    A heading by its level, a fenced block by its fence, a list and a table
+    by the number of their lines, and `paragraph` for the rest. Lines of one
+    block stand together; a blank line, a fence or a heading ends it.
+    """
+    blocks: list[str] = []
+    fenced = False
+    inside = False
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if fenced:
+            fenced = not line.startswith("```")
+        elif line.startswith("```"):
+            blocks.append(line.strip())
+            fenced = True
+            inside = False
+        elif not line.strip():
+            inside = False
+        elif HEADING.match(line):
+            blocks.append(line.split(" ")[0])
+            inside = False
+        elif line.startswith("|") or line.startswith("- "):
+            kind = "table" if line.startswith("|") else "list"
+            if inside and blocks[-1].startswith(kind):
+                lines = int(blocks[-1].split(" ")[-1]) + 1
+                blocks[-1] = f"{kind} of {lines}"
+            else:
+                blocks.append(f"{kind} of 1")
+            inside = True
+        elif not inside:
+            blocks.append("paragraph")
+            inside = True
+    return blocks
+
+
 def strip_trailing_comment(line: str) -> str:
     """Drop a trailing // comment that is not inside a string literal."""
     quote = None
@@ -207,6 +249,23 @@ def check(orig: Path, tran: Path) -> list[str]:
         print(f"code blocks: {len(bo)} in both files")
     for k, v in PATH_EXCEPTIONS.items():
         print(f"allowed path deviation: translation {k!r} == original {v!r}")
+
+    so = shape(orig)
+    st = shape(tran)
+    if so != st:
+        at = next(
+            (i for i, (a, b) in enumerate(zip(so, st)) if a != b),
+            min(len(so), len(st)),
+        )
+        problems.append(
+            f"{tran.relative_to(REPO)}: the prose differs in shape at block "
+            f"{at + 1} of {len(so)} (the translation has {len(st)}):\n"
+            f"  original:    {so[max(at - 2, 0):at + 2]}\n"
+            f"  translation: {st[max(at - 2, 0):at + 2]}"
+        )
+    else:
+        prose = sum(not b.startswith(("#", "```")) for b in so)
+        print(f"prose: {prose} paragraphs, lists and tables in the same places")
 
     for i, (a, b) in enumerate(zip(bo, bt), start=1):
         info_a, lines_a = a

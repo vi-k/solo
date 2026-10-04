@@ -1,8 +1,7 @@
-// `packages/solo/test/support/page_code.dart`,
-// `packages/solo/example/test/support/page_code.dart` and
-// `packages/flutter_solo/test/support/page_code.dart` are copies of this
-// file: the packages share no test code. A change to one of the four goes
-// to the other three.
+// The fourth copy of `packages/async_job/test/support/page_code.dart`,
+// after `packages/solo/test/support/page_code.dart` and
+// `packages/solo/example/test/support/page_code.dart`: the packages share
+// no test code. A change to one of the four goes to the other three.
 
 import 'dart:io';
 

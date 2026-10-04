@@ -25,8 +25,9 @@ import 'solo_selection.dart';
 /// a [SoloSelection] of its own and a `ValueListenableBuilder`.
 ///
 /// A selection earns its keep by being kept: one built in `build` and
-/// dropped at the end of it subscribes and unsubscribes every frame, and
-/// the announced value it holds notifications back with goes with it.
+/// dropped at the end of it is subscribed to and unsubscribed from on every
+/// build, and the announced value it holds notifications back with goes
+/// with it.
 /// That is what a `State` field was for, and it is what this widget
 /// carries instead — so the picking widget can be a `StatelessWidget`,
 /// and a screen that picks three values out of one controller needs no

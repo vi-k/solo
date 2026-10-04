@@ -16,16 +16,17 @@ this page and the guides of the packages below it.
 A screen has a lifecycle, and so does the work on it: a load that must be
 dropped when the user leaves, a save that must not be cut in half, a second tap
 that must not start a second request. `setState` and `ChangeNotifier` give you
-somewhere to keep the state and say nothing about the work; bloc gives you the
-work and asks for an event class per call.
+somewhere to keep the state and say nothing about the work. `Bloc` schedules
+the work and asks for an event class per call; `Cubit` keeps plain methods and
+schedules nothing.
 
 Here a method stays a method, and it hands back a handle:
 
 ```dart
-final job = profile.load();
+final job = controller.load();
 
-await job.cancel();  // returns when the job has actually stopped
-print(job.outcome);  // Cancelled(manual)
+await job.cancel(); // returns when the job has actually stopped
+print(job.outcome); // Cancelled(manual)
 ```
 
 What the engine holds to:
@@ -61,9 +62,10 @@ One dependency is all it takes: `flutter_solo` re-exports the whole of
 import 'package:flutter_solo/flutter_solo.dart';
 ```
 
-`SoloListenable` is the mixin this package is about; `SoloSelector` and
-`SoloSelection` come with it, and a second import next door adds `select` and
-`listen` as methods.
+`SoloListenable` is the mixin this package is about; `SoloBuilder`,
+`SoloSelector` and `SoloSelection` come with it, and a second import next door
+adds `select` and `listen` as methods, with the subscriptions `listen` hands
+back.
 
 ## Usage
 
@@ -135,14 +137,15 @@ class ProfileView extends StatelessWidget {
 
 `run<Profile, String>` says the job works with `Profile` states and returns a
 `String`; `save` narrows that to `Loaded`, so it does not start in any other
-state, and its body reads a `Loaded` with a `name` in it. Inside a body
-`ctx.emit` is the only way to write the state, `ctx.wait` awaits like `await`
-except that it gives up the moment the job is cancelled, and `ctx.join` waits
-its call out either way — a save is not cut in half. `onError` and `onCancel`
-are the way back: they say what state a load that failed or was cancelled
-leaves behind, and without them the screen would keep the spinner of a job that
-is no longer running. The full API — rules, the queue, children, observers — is
-documented in [solo](https://pub.dev/packages/solo).
+state — it ends `Cancelled` there — and its body reads a `Loaded` with a `name`
+in it. Inside a body `ctx.emit` is the only way to write the state, `ctx.wait`
+awaits like `await` except that it gives up the moment the job is cancelled,
+and `ctx.join` waits its call out either way — a save is not cut in half.
+`onError` and `onCancel` are the way back: they say what state a load that
+failed or was cancelled leaves behind, and without them the screen would keep
+the spinner of a job that is no longer running. The full API — rules, the
+queue, children, observers — is documented in
+[solo](https://pub.dev/packages/solo).
 
 ## Selecting one value
 
@@ -161,12 +164,14 @@ SoloSelector<Profile, bool>(
 ```
 
 Picks count as changed when they are `!=`, unless `changed:` answers that
-question itself. The pick is made from the state as it is now, so it is never
-behind; keep the selector a cheap pick that gives the same answer for the same
-state. `solo` is any controller, a `ValueListenable` or not. The selector is
-compared by identity when the parent rebuilds, so an inline closure is a new
-one on every such build and makes a new selection each time: hold it in a field
-or a `static` where the parent rebuilds often.
+question itself. The selector runs once for every change of the state, so keep
+it a cheap pick that gives the same answer for the same state. `solo` is any
+controller, a `ValueListenable` or not. The selector is compared by identity
+when the parent rebuilds, so an inline closure is a new one on every such build
+and makes a new selection each time: one `removeListener`, one `addListener`
+and one pick, and with a `changed:` of your own the value it compares against
+starts over. Hold the function in a field or a `static` where the parent
+rebuilds often.
 
 What the widget holds for you is a `SoloSelection` — a `ValueListenable` of the
 picked value — and it is an object like any other where a listenable is what
@@ -190,22 +195,23 @@ class _SaveButtonState extends State<SaveButton> {
   @override
   Widget build(BuildContext context) => ValueListenableBuilder<bool>(
         valueListenable: canSave,
-        builder: (context, canSave, _) => ElevatedButton(
-          onPressed: canSave ? widget.controller.save : null,
+        builder: (context, enabled, _) => ElevatedButton(
+          onPressed: enabled ? widget.controller.save : null,
           child: const Text('Save'),
         ),
       );
 }
 ```
 
-Hold the selection in a field, the way `canSave` is held above: one built
-inside `build` would subscribe and unsubscribe every frame, and the value it
-holds notifications back with would go with it. A field is built from the first
-widget only, though, and a parent can hand the `State` another controller:
-without `didUpdateWidget` the button would take its permission from the old
-controller and save to the new one. Both come with the field that
-`SoloSelector` spares you. The source is subscribed to only while the selection
-has listeners, and there is nothing to dispose of.
+Hold the selection in a field, the way `canSave` is held above. One built
+inside `build` is a new object on every build: the builder under it
+unsubscribes from the old one and subscribes to the new, and the value a
+selection holds notifications back with starts over each time. A field is built
+from the first widget only, though, and a parent can hand the `State` another
+controller: without `didUpdateWidget` the button would go on taking its
+permission from the old controller while its tap went to the new one. Both come
+with the field that `SoloSelector` spares you. The source is subscribed to only
+while the selection has listeners, and there is nothing to dispose of.
 
 ## Builders for any controller
 
@@ -217,22 +223,26 @@ controller itself:
 ```dart
 SoloBuilder<Profile>(
   solo: controller,
-  builder: (context, state, _) => Text('$state'),
+  builder: (context, state, _) => Text(
+    switch (state) {
+      Empty() => 'no profile',
+      Loading() => 'loading',
+      Loaded(:final name) => name,
+    },
+  ),
 )
 ```
 
 It rebuilds on every change of the state and hands `child` through untouched.
-Two things set it apart from `ValueListenableBuilder`, and both are about where
-the state comes from. It reads `currentState` in `build`, where
-`ValueListenableBuilder` builds from a copy that every notification refreshes.
-And it compares controllers by identity: handed a new controller whose `==`
-says it is the old one, `SoloBuilder` moves to it and `ValueListenableBuilder`
-stays with the old.
+Besides the controller it takes, one thing sets it apart from
+`ValueListenableBuilder`: it compares controllers by identity. Handed a new
+controller whose `==` says it is the old one, `SoloBuilder` moves to it and
+`ValueListenableBuilder` goes on listening to the old one.
 
-`SoloSelector` takes any controller already, and it keeps its selection across
-a parent rebuild, so the value the comparison answers from survives one.
-`SoloSelection.from(controller, selector)` is that selection without a widget
-around it, for a `State` field of a controller that is not a `ValueListenable`.
+Picking one value out of such a controller needs nothing new. `SoloSelector`
+takes any controller, and `SoloSelection.from(controller, selector)` is its
+selection without a widget around it, for a `State` field of a controller that
+is not a `ValueListenable`.
 
 A controller with both a `stream` and `SoloListenable`, a screen built on that
 stream, and a base class of controllers with no Flutter in it are on a page of
@@ -240,9 +250,36 @@ their own, [Mixins](doc/mixins.md).
 
 ## Listening without keeping the callback
 
-`addListener` has to be given the same callback back, so a closure needs a
-field of its own to live in. `listen` keeps it instead and hands back a
-`SoloSubscription`; `SoloSubscriptions` cancels a group of them at once:
+A `State` wants to be told of every change and handed the new state, so it
+listens with a closure that reads it.
+
+### The first attempt
+
+```dart
+@override
+void initState() {
+  super.initState();
+  widget.controller.addListener(() => _onState(widget.controller.value));
+}
+
+@override
+void dispose() {
+  widget.controller.removeListener(() => _onState(widget.controller.value));
+  super.dispose();
+}
+```
+
+The closure in `dispose()` is spelled like the one in `initState()` and is
+another object. `removeListener` has to be given the very callback
+`addListener` took; given anything else it removes nothing and says nothing.
+The first closure stays registered and goes on being called, over a `State`
+that is gone, until the controller is closed. To be given back, the closure
+would need a field of its own to live in.
+
+### A subscription that keeps the callback
+
+`listen` keeps the callback instead and hands back a `SoloSubscription`;
+`SoloSubscriptions` cancels a group of them at once:
 
 ```dart
 import 'package:flutter_solo/listenable.dart';
@@ -252,8 +289,10 @@ final _listening = SoloSubscriptions();
 @override
 void initState() {
   super.initState();
-  widget.controller.listen(_onState).addTo(_listening);
-  canSave.listen(_onCanSave).addTo(_listening);
+  widget.controller
+      .listen(() => _onState(widget.controller.value))
+      .addTo(_listening);
+  canSave.listen(() => _onCanSave(canSave.value)).addTo(_listening);
 }
 
 @override
@@ -263,18 +302,19 @@ void dispose() {
 }
 ```
 
-`listen` works on any `Listenable` — a controller, a selection, a
-`ScrollController` of the framework's own. Cancelling twice does nothing the
-second time, and a group that has been cancelled cancels what it is handed
-rather than keeping it. If one member refuses to let go, the others are
+`listen` works on any `Listenable` — a controller with `SoloListenable`, a
+selection, a `ScrollController` of the framework's own. Cancelling twice does
+nothing the second time, and a group that has been cancelled cancels what it is
+handed rather than keeping it. If one member refuses to let go, the others are
 cancelled all the same and every failure goes to `FlutterError.reportError`.
 Cancelling a group never throws: its place is `dispose()`, and an exception out
-of there leaves the rest of that frame's elements unmounted, listeners and all.
+of there costs the elements behind it in that frame their own `dispose()`,
+listeners and all.
 
 What `initState` subscribes to stays subscribed when the widget is handed
-another controller. A `State` whose source can be replaced takes its
-subscriptions again in `didUpdateWidget`, into a new group: a cancelled one
-would cancel them on the spot.
+another controller. A `State` whose source can be replaced cancels the group in
+`didUpdateWidget` and takes its subscriptions again, into a new group: the
+cancelled one would cancel them on the spot.
 
 ## Methods from a second import
 
@@ -286,7 +326,7 @@ import 'package:flutter_solo/flutter_solo.dart';
 import 'package:flutter_solo/listenable.dart';
 
 final canSave = controller.select((state) => state.canSave);
-final subscription = canSave.listen(_onCanSave);
+final subscription = canSave.listen(() => _onCanSave(canSave.value));
 ```
 
 They are extensions, and they sit on the framework's own `ValueListenable` and
@@ -295,11 +335,13 @@ extensions with the same member name on one type are ambiguous at every call
 site, so a package carrying them into every file that imports it would break a
 neighbour it never heard of. The import is the choice.
 
-Without it nothing is lost but the shorthand:
+Without it the methods are gone and what they do is not:
 `SoloSelection(controller, (state) => state.canSave)` is the same selection,
-and `SoloSelector` needs no method at all. It is also why a controller of your
-own with a `select` method keeps it — an extension always steps aside for a
-member.
+`SoloSelector` needs no method at all, and `addListener` with a callback you
+keep yourself is what `listen` does for you. `SoloSubscription` and
+`SoloSubscriptions` come with the second import only. Being extensions is also
+why a controller of your own with a `select` method keeps it: an extension
+always steps aside for a member.
 
 ## The controller's life
 
@@ -307,6 +349,8 @@ Nothing closes a controller for you. There is no `SoloProvider`: a controller
 is an object, and it lives wherever the rest of your objects live.
 
 ```dart
+import 'dart:async';
+
 class _ProfileScreenState extends State<ProfileScreen> {
   final controller = ProfileController(ProfileApi());
 
@@ -327,12 +371,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
 }
 ```
 
-`close()` cancels whatever is running — the body stops at its next context
-call, which is what makes leaving the screen cheap — drops every listener and
-stops notifying for good. It is safe on either side of `super.dispose()`.
-`SoloListenable` is not a `ChangeNotifier`: the method is `close()`, not
-`dispose()`, and it returns a `Future` that completes when the job has actually
-stopped.
+`close()` cancels whatever is queued or running — a running body stops at its
+next context call, which is what makes leaving the screen cheap — drops every
+listener and stops notifying for good. It is safe on either side of
+`super.dispose()`. `SoloListenable` is not a `ChangeNotifier`: the method is
+`close()`, not `dispose()`, and it returns a `Future` that completes when the
+job has actually stopped.
 
 A controller shared by several screens lives where your other singletons live —
 a `get_it` registration, an `InheritedWidget`, a field of the app object — and
@@ -340,7 +384,7 @@ is closed there, once.
 
 ## Outcomes
 
-A job hands back a handle, so the screen can wait for the end of the work it
+A method hands back its job, so the screen can wait for the end of the work it
 started:
 
 ```dart
@@ -356,35 +400,52 @@ Future<void> _load() async {
 }
 ```
 
-`done` never throws; `value` gives the value and rethrows the failure.
-`mounted` after an `await` is the usual Flutter rule and it applies here too. A
-job nobody looks at is not silent: an unobserved `Failed` reaches the zone that
+`done` never throws; `value` gives the value, rethrows the failure of a job
+that failed and throws the `Cancelled` of one that was cancelled. `mounted`
+after an `await` is the usual Flutter rule and it applies here too. A job
+nobody looks at is not silent: an unobserved `Failed` reaches the zone that
 created the job, so a fire-and-forget call is `controller.load().ignore()` —
 the `ignore()` is what says the outcome is nobody's business. The same road
-carries a failure of work handed to `ctx.unattended` when the controller
-neither overrides `onUnanswered` nor has a `Solo.errorHandler` to answer for
-it. A `SoloObserver` sees that failure and does not take it: watching is not
-answering.
+carries the errors no outcome holds — the failure of work a body handed to
+`ctx.unattended`, say — unless the controller overrides `onUnanswered` or a
+`Solo.errorHandler` is set to answer for them:
+[Answering for an error](https://github.com/vi-k/solo/blob/main/packages/solo/doc/errors.md#answering-for-an-error)
+on the errors page of `solo` has the list. A `SoloObserver` sees such a failure
+and does not take it: watching is not answering.
 
 What "to the zone" means in a Flutter app: the error travels the zones
-outwards, so an error zone of your own around `runApp` sees it first; past that
-it reaches `PlatformDispatcher.instance.onError` if you set one, and the
-engine's log if you did not. What happens next is that callback's business and
-the embedder's — the framework does not promise to carry on, and
-`PlatformDispatcher.onError` may end the process. What is *not* the answer here
-is the `EXIT=255` of a plain Dart program: that one is the VM's own reaction to
-an unhandled error, and it is not Flutter's.
+outwards, so an error zone of your own around `runApp` sees it first. Past that
+it reaches `PlatformDispatcher.instance.onError` if you set one. With none set,
+or when the callback returns `false`, the embedder gets the error, and its
+fallback is to print it. What comes after is the embedder's business: the
+documentation of `onError` promises nothing about the process, which may exit
+or stop responding after the callback. A plain Dart program differs in one
+thing: an unhandled error ends it, with exit code 255, and that is the
+standalone VM's own reaction, not Flutter's.
 
 ## Testing
 
-`testWidgets` runs on a fake clock: a job waiting on a timer stays there until
-the test moves time itself, and the frame is always one behind the state.
-`pumpAndSettle` does both — it runs the clock out and rebuilds:
+A widget test starts a load and looks at the screen once the load is over.
+`FakeApi` below is the test's own: it answers with the name ten milliseconds
+after the call. A plain test would await the job.
+
+### The first attempt
+
+```dart
+await controller.load().done;
+await tester.pump();
+```
+
+The test never gets past the first line: it stands there until its timeout, ten
+minutes by default. `testWidgets` runs on a fake clock, and nothing inside it
+moves that clock but the test. The ten milliseconds of the fake are a timer, so
+the job waits for the test to move time, and the test waits for the job.
+
+### Moving the clock
 
 ```dart
 testWidgets('the profile appears', (tester) async {
   final controller = ProfileController(FakeApi());
-  addTearDown(controller.close);
   await tester.pumpWidget(
     MaterialApp(home: ProfileView(controller: controller)),
   );
@@ -393,35 +454,51 @@ testWidgets('the profile appears', (tester) async {
   await tester.pumpAndSettle();
 
   expect(find.text('Ada Lovelace'), findsOneWidget);
+  await controller.close();
 });
 ```
 
-The handle is the precise version of the same thing, for a test that has to
-know the job ended rather than that the screen went quiet:
+`pumpAndSettle` pumps a frame every hundred milliseconds for as long as another
+frame is asked for. The first hundred are more than this fake needs, and a
+slower one would be waited for as well, because the spinner of `Loading` keeps
+asking for frames. It is the screen that is waited for, not the job: with
+nothing animating, `pumpAndSettle` stops after a frame or two, and a load that
+takes longer than that is still waiting.
+
+The handle waits for the job itself:
 
 ```dart
-final job = controller.load();
+final done = controller.load().done; // before the job can end
 await tester.pump(const Duration(milliseconds: 20)); // let the clock run
-await job.done;
-await tester.pump(); // the frame that shows the last state
+final outcome = await done;
 ```
 
-`await job.done` on its own is a deadlock if the work waits on a timer: nothing
-inside `testWidgets` advances the clock but the test. What also does not work
-is starting a job and pumping once — the state moves on a microtask after that
-pump, and whether the expectation sees it depends on how much was queued.
-
-One Flutter-specific trap: an unobserved `Failed` fails the test itself, and
-`tester.takeException()` does not catch it — the error goes to the zone of the
-test, not through `FlutterError.onError`. Either await the outcome or call
+`pump` with a duration moves the clock and then draws, so the frame it leaves
+shows the last state. `done` is read on the first line, before the clock moves,
+and the order matters: a `Failed` nobody has asked about is reported as the job
+ends, to the zone it was created in. Here that is the zone of the test, which
+fails the test on the spot, and `tester.takeException()` has nothing to take
+afterwards. A load that fails makes a test red even though it reads `done`, if
+it reads it after the pump. A job the test starts and drops says so with
 `ignore()`.
+
+Two more things belong to the fake clock. A `pump()` with no duration decides
+whether to draw before it runs the microtask a job starts on: after
+`controller.load()` and one `pump()` the state has moved and the screen has
+not, unless a frame was already asked for, as one is right after a
+`MaterialApp` has been pumped. A second `pump()` draws it. And the controller
+is closed in the body of the test, not in `addTearDown`: a tear-down runs after
+the fake clock has stopped, and a `close()` awaited there with a job still
+running — an expectation that failed halfway through a load is enough — never
+comes back. The test stands until its timeout, and the test after it fails with
+it.
 
 ## Notes
 
 | Question | Answer |
 | --- | --- |
 | When do listeners run? | Synchronously, in subscription order, on every state change. `value` and `currentState` are the same object. There is no `stream` unless `SoloStream` is mixed in as well: a widget rebuilds from `value`. |
-| Are equal states filtered? | No. `emit` of a state equal to the current one still notifies, the way `Solo` does. A frame may swallow several of them, a listener will not. `select` filters its own value, which is the one a widget usually cares about. |
+| Are equal states filtered? | No. `emit` of a state equal to the current one still notifies: the listeners are the engine's own, and the engine compares nothing. A frame may swallow several of them, a listener will not. A selection filters its own value, which is the one a widget usually cares about. |
 | Several controllers on one screen? | Each with its own builder, as expected. `Listenable.merge([a, b])` in a `ListenableBuilder` covers the case where one widget depends on two. |
 | Can I set `value`? | There is no setter. The state belongs to the jobs; a `ValueNotifier` face with a setter would give it away. |
 
@@ -429,6 +506,7 @@ test, not through `FlutterError.onError`. Either await the outcome or call
 
 [solo](https://pub.dev/packages/solo) is the controller itself: the queue and
 its policies, the working type of a job, `canStart` and `keepWhile`, children,
-observers, the waiting family and the rest of the API this package inherits
-whole — all but the broadcast `stream` of `SoloStream`, which a widget has no
-use for. If you are not writing widgets, take it instead — it is pure Dart.
+observers, the waiting family and the rest of the API, which this package
+re-exports whole — `SoloStream` included, whose broadcast `stream` is for what
+is not a widget. If you are not writing widgets, take it instead — it is pure
+Dart.
