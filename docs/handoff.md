@@ -80,7 +80,13 @@ through» теперь `ctx.check()` первой строкой `catch`, пер
 тестов, пакет `solo` — 1529; в `dev_dependencies` `packages/solo/pubspec.yaml`
 встал `test_api: ^0.7.7`, им сторож запускает первые попытки отдельными
 тестовыми случаями, и его нижняя граница поднимается вместе с границей `test`.
-Запущена восьмая, `camera.md`.
+Перенесена `camera.md`: коммит `a7bb898`, отчёт
+`2026-10-04-solo-camera-reread-report.md`, 20 находок, сторож
+`camera_rakes_test.dart` вырос с 38 до 93 тестов, пакет примера — 102; пример
+получил `onClose`, который снимает слушателя `hw.onError`, а ответ «Awaiting
+the disposal» закрывает контроллер только в ветке `Done` и читает
+`init().value`. Третья копия `page_code.dart` легла
+в `packages/solo/example/test/support/`. Запущена девятая, `accumulation.md`.
 
 **Что дальше.** `children.md` принята, `streams.md` владелец дочитал
 2026-10-03: пять правок по его вопросам,
@@ -117,7 +123,16 @@ dozen calls» в README `solo` перестроен — `play` кончаетс�
 фразу о настоящем времени в «Timeouts», написанную по его девятому вопросу
 (M8); убрала `.ignore()` при `job.cancel()` во фрагменте об отмене вместе
 с фразой о нём, написанной по пятому вопросу (L5); добавила dev-зависимость
-`test_api` в `packages/solo/pubspec.yaml`.
+`test_api` в `packages/solo/pubspec.yaml`. Раздел «Вопросы владельцу»
+в `2026-10-04-solo-camera-reread-report.md`: после упавшего освобождения камера
+примера остаётся в `Ready`, принимает команды, но не слышит устройство, потому
+что `dispose()` снимает слушателя `hw.onError` первой строкой и назад
+не ставит; оставить (страница говорит об этом одной фразой) или снимать
+слушателя в теле задачи перед `emit(const Disposed())`, ценой `Broken` посреди
+закрытия и переписанного ответа раздела. Там же две правки на подтверждение:
+изменён код ответа «Awaiting the disposal», который владелец читал и принял,
+и в код примера `packages/solo/example/lib/src/camera_controller.dart` без его
+слова добавлен `onClose`.
 
 **Решения владельца, которые действуют.**
 
@@ -351,7 +366,9 @@ README `flutter_solo` с его `doc/mixins.md` и быстрого старта
 `errors.md` — в `errors_*.dart` там же, тесты `errors_rakes_test.dart`
 и `cancel_delay_recipe_test.dart`, 166; код `children.md` —
 в `children_*.dart`, тест `children_rakes_test.dart`, 118; код `testing.md` —
-в `testing_*.dart`, тест `testing_rakes_test.dart`, 96.
+в `testing_*.dart`, тест `testing_rakes_test.dart`, 96; код `camera.md` —
+в `packages/solo/example/test/support/camera_*.dart`, тест
+`camera_rakes_test.dart` пакета примера, 93.
 
 **Стенда у `state.md` тоже нет, сторожа — тестом.** Каждую первую попытку
 страницы и каждое утверждение, добавленное чтением владельца, держит
