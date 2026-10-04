@@ -231,10 +231,10 @@ job accepts the cancellation, the body throws the failure. The job ends
 `Cancelled`, but the failure came before the cancellation, and it takes the
 second row of the table, not the third. The body keeps the failure first by
 letting it through, or by catching it and throwing it again later; a new error
-thrown in its place, a wrapper included, comes after the cancellation. A future
-the body awaits on its own is different: the job learns of its failure only
-when the body throws it, so that failure comes first only if the body throws it
-before the cancellation.
+thrown in its place comes after the cancellation, even one that carries the
+caught failure inside it. A future the body awaits on its own is different: the
+job learns of its failure only when the body throws it, so that failure comes
+first if the body throws it before the cancellation.
 
 A body that catches the failed open and shows it to the user before throwing it
 again:

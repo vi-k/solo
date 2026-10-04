@@ -1073,6 +1073,35 @@ void main() {
       );
     });
 
+    test('a new error in place of the caught one comes after', () {
+      // The open fails at 20 ms, the cancellation comes at 30 ms, and at 50 ms
+      // the body throws an error of its own that carries the caught one.
+      Job<Database> wrapping({JobObserver? observer}) => Job<Database>(
+            observer: observer,
+            (ctx) async {
+              try {
+                return await ctx.join(Database.open);
+              } catch (error) {
+                await delay(30);
+                throw StateError('open failed: $error');
+              }
+            },
+          );
+
+      expect(
+        quotable(play(() => wrapping(observer: Reporter()), cancelAt: 30)),
+        [
+          'cancel',
+          'onError: Bad state: open failed: Bad state: database locked',
+          'outcome: Cancelled(manual)',
+        ],
+      );
+      expect(
+        quotable(play(wrapping, cancelAt: 30)),
+        ['cancel', 'outcome: Cancelled(manual)'],
+      );
+    });
+
     Job<void> failingAfterCancel({JobObserver? observer}) => Job<void>(
           observer: observer,
           (ctx) async {
