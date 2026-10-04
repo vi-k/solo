@@ -19,13 +19,9 @@ accumulation_check, with a path dependency on packages/solo. Then:
 Timing is what this document is about, so every driver runs under FakeAsync:
 a debounce of 200 ms and a throttle of a second are elapsed, not waited for.
 
-What is not built here, and why: the document also carries sketches -- the
-`collect`/`accumulate` pair in the opening tour, the timing pair and the
-policy pair in the reference -- that name types the document never declares
-(`Ready`, `Metric`, `sink`, `store`) or call methods no controller in it
-has. They are not code that can run, and the restructure planned in
-2026-09-13[13]-accumulation-restructure-plan.md replaces them with examples
-that can.
+Every `dart` block of the document is built: the script stops if one of them
+went into no driver, so a block added to the page is a block somebody has to
+run.
 """
 import os
 import shutil
@@ -67,8 +63,30 @@ dependency_overrides:
 # lives in doc_blocks.py, next to this file, and is shared with the vs-bloc
 # bench: `accumulation.md` has unnumbered headings, so its sections are keyed
 # by a slug of the heading -- 'recipes/SettingsController'.
-snips = doc_blocks.blocks(
-    open(DOC).read(), 'dart', doc_blocks.DECLARES['dart'])
+class Blocks(dict):
+    """The blocks of the document, and which of them a driver has taken."""
+
+    def __init__(self, found):
+        super().__init__(found)
+        self.taken = set()
+
+    def __getitem__(self, key):
+        self.taken.add(key)
+        return super().__getitem__(key)
+
+    def unbuilt(self):
+        """The first line of every block no driver took by any of its keys."""
+        built = {id(dict.__getitem__(self, key)) for key in self.taken}
+        left = {}
+        for key in self:
+            source = dict.__getitem__(self, key)
+            if id(source) not in built:
+                left[id(source)] = source.split('\n')[0]
+        return sorted(left.values())
+
+
+snips = Blocks(doc_blocks.blocks(
+    open(DOC).read(), 'dart', doc_blocks.DECLARES['dart']))
 
 FAKE_ASYNC = "import 'package:fake_async/fake_async.dart';\n"
 SOLO_IMPORT = "import 'package:solo/solo.dart';"
@@ -736,17 +754,22 @@ class MutableEntry extends LogEntry {
 class RecordingLogApi implements LogApi {
   final sent = <List<String>>[];
 
+  /// When each batch of [sent] was asked for, by the driver's clock.
+  final sentAt = <int>[];
+  int Function() now = () => 0;
+
   @override
   Future<void> send(List<LogEntry> entries) {
     sent.add([for (final entry in entries) entry.message]);
+    sentAt.add(now());
     return Future<void>.delayed(const Duration(milliseconds: 100));
   }
 }
 '''
 
 LOG_DRIVE = '''
-/// Three lines written while one screen transition is handled, then one more
-/// half a second later. One scenario for both versions.
+/// Three lines written one after another, in one synchronous turn, then one
+/// more two seconds later. One scenario for both versions.
 int drive(
   String name,
   RecordingLogApi api,
@@ -755,19 +778,21 @@ int drive(
 ) {
   var burst = 0;
   fakeAsync((clock) {
+    api.now = () => clock.elapsed.inMilliseconds;
     for (final message in ['opened', 'loaded', 'shown']) {
       log(LogEntry(message));
     }
     clock.elapse(const Duration(milliseconds: 500));
     burst = api.sent.length;
+    clock.elapse(const Duration(milliseconds: 1500));
     log(const LogEntry('tapped'));
     clock.elapse(const Duration(seconds: 3));
 
     final requests = api.sent.length == 1 ? 'request' : 'requests';
     print('== $name');
     print('the server got ${api.sent.length} $requests:');
-    for (final batch in api.sent) {
-      print('  $batch');
+    for (var i = 0; i < api.sent.length; i += 1) {
+      print('  ${api.sent[i]} at ${api.sentAt[i]} ms');
     }
     print('the three lines of the transition cost $burst of them');
     print('the counter says ${counter()}');
@@ -786,7 +811,7 @@ LOG_CONTROLLER = snips['recipes/LogController']
 
 def with_trailing(name):
     body = (LOG_CONTROLLER
-            .replace('class LogController extends Solo<int> {',
+            .replace('final class LogController extends Solo<int> {',
                      f'final class {name} extends Solo<int> {{')
             .replace('LogController(this._api)', f'{name}(this._api)')
             .replace('  final LogApi _api;\n',
@@ -812,6 +837,13 @@ FILES['logs'] = (
     + snips['recipes/LogController']
     + with_trailing('TrailingLogController')
     + LOG_FAKE
+    + """
+Future<void> oneHandle(LogController logs) async {
+"""
+    + snips['reference/final-group-logs-logevent-cons'].rstrip('\n')
+    + """
+}
+"""
     + REQUIRE
     + LOG_DRIVE
     + '''
@@ -829,12 +861,17 @@ void main() {
   require(eagerApi.sent.length == 4, 'a request for every line');
   require(eagerBurst == 3, 'three of them for one screen transition');
   require(
+    eagerApi.sentAt.join(', ') == '0, 100, 200, 2000',
+    'each send starts when the one before it has finished',
+  );
+  require(
     eagerApi.sent.every((batch) => batch.length == 1),
     'and every request carries a single entry',
   );
 
   // collect: the three lines of the transition travel together, and the
-  // fourth goes on its own because the interval had already passed.
+  // fourth goes at once and on its own because the interval had already
+  // passed when it was written.
   final api = RecordingLogApi();
   final logs = LogController(api);
   final burst = drive(
@@ -847,6 +884,29 @@ void main() {
   require(api.sent.first.length == 3, 'carrying all three lines');
   require(api.sent.first.first == 'opened', 'in the order they were written');
   require(api.sent.last.single == 'tapped', 'the fourth went on its own');
+  require(api.sentAt.first == 0, 'the first group started at once');
+  require(
+    api.sentAt.last == 2000,
+    'and the fourth went the moment it was written, after the interval',
+  );
+
+  // The other side of the same sentence: a fourth line written inside the
+  // interval waits for it to end, half a second in this case.
+  fakeAsync((clock) {
+    final api = RecordingLogApi()..now = () => clock.elapsed.inMilliseconds;
+    final logs = LogController(api);
+    for (final message in ['opened', 'loaded', 'shown']) {
+      logs.logEvent(LogEntry(message));
+    }
+    clock.elapse(const Duration(milliseconds: 500));
+    logs.logEvent(const LogEntry('tapped'));
+    clock.elapse(const Duration(seconds: 3));
+    require(api.sent.length == 2, 'two requests here as well');
+    require(
+      api.sentAt.last == 1000,
+      'a line written inside the interval waits for its end',
+    );
+  });
   require(logs.currentState == 4, 'the counter saw every entry');
 
   // What starting at once costs an idle accumulator. The same four entries
@@ -878,6 +938,25 @@ void main() {
     clock.elapse(const Duration(seconds: 5));
     require(api.sent.length == 2, 'and the rest waited out the interval');
     require(api.sent.last.length == 3, 'then went together');
+  });
+
+  // And a burst that takes several turns while a job of the controller is
+  // running: the queue cannot take the group until that job ends, so the
+  // burst stays together. The job here is the batch sent before it.
+  fakeAsync((clock) {
+    final api = RecordingLogApi()..now = () => clock.elapsed.inMilliseconds;
+    final logs = LogController(api)..logEvent(const LogEntry('e0'));
+    clock.elapse(const Duration(milliseconds: 1500));
+    require(api.sent.length == 1, 'the first batch went long ago');
+
+    logs.logEvent(const LogEntry('held')); // goes at once, 100 ms to send
+    for (var i = 1; i < 4; i += 1) {
+      clock.elapse(const Duration(milliseconds: 10));
+      logs.logEvent(LogEntry('e$i'));
+    }
+    clock.elapse(const Duration(seconds: 5));
+    require(api.sent.length == 3, 'the burst cost one request');
+    require(api.sent.last.length == 3, 'carrying all three of its lines');
   });
 
   // The sentence under the heading: the snapshot copies the list, not the
@@ -998,28 +1077,32 @@ void main() {
     logs.close();
     clock.flushMicrotasks();
   });
+
+  // The reference's block about the handle, as written: two additions, one
+  // handle, and a cancellation that reaches everyone who holds it. What it
+  // prints is the trace quoted under it.
+  fakeAsync((clock) {
+    final api = RecordingLogApi();
+    final logs = LogController(api);
+    print('== one handle for the group');
+    unawaited(oneHandle(logs));
+    clock.elapse(const Duration(seconds: 3));
+    print('');
+    require(api.sent.isEmpty, 'the cancelled group sent nothing');
+
+    logs.close();
+    clock.flushMicrotasks();
+  });
 }
 ''')
 
 # -------------------------------------------------------------------- search
-# The document calls SearchState and SearchApi application types and declares
-# neither; a bench cannot leave them undeclared. The API answers 100 ms after
-# it is asked, which is what the section's traces are measured against.
-SEARCH_TYPES = """import 'dart:async';
-
-import 'package:fake_async/fake_async.dart';
-import 'package:solo/solo.dart';
-
-class SearchState {
-  final List<String> results;
-
-  const SearchState.idle() : results = const [];
-
-  const SearchState.results(this.results);
-}
-
-class SearchApi {
-  SearchApi([this.latency = 100]);
+# The document declares SearchState and SearchApi itself; the bench implements
+# the API. It answers 100 ms after it is asked, which is what the section's
+# traces are measured against.
+SEARCH_FAKE = """
+class RecordingSearchApi implements SearchApi {
+  RecordingSearchApi([this.latency = 100]);
 
   final int latency;
   final asked = <String>[];
@@ -1028,6 +1111,7 @@ class SearchApi {
   /// is invisible in [asked] alone.
   int open = 0;
 
+  @override
   Future<List<String>> search(String text) {
     asked.add(text);
     open += 1;
@@ -1040,7 +1124,6 @@ class SearchApi {
     );
   }
 }
-
 """
 
 # The second attempt is a method, and this is the class it belongs to: the
@@ -1076,18 +1159,18 @@ final class JoiningSearch extends Solo<SearchState> {
 # Same scenario as drive, reported as numbers instead of prose: how many
 # requests reached the server, and when the last screen appeared.
 PROBE = """
-(int, int) probeWait(SearchApi api) {
+(int, int) probeWait(RecordingSearchApi api) {
   final search = RestartingSearch(api);
   return probe(api, search.query, () => search.currentState.results);
 }
 
-(int, int) probeJoin(SearchApi api) {
+(int, int) probeJoin(RecordingSearchApi api) {
   final search = JoiningSearch(api);
   return probe(api, search.query, () => search.currentState.results);
 }
 
 (int, int) probe(
-  SearchApi api,
+  RecordingSearchApi api,
   SoloJob<void> Function(String) query,
   List<String> Function() state,
 ) {
@@ -1122,7 +1205,7 @@ DRIVE = """
 /// screen passes through. One scenario for all three versions.
 int drive(
   String name,
-  SearchApi api,
+  RecordingSearchApi api,
   SoloJob<void> Function(String) query,
   List<String> Function() state,
 ) {
@@ -1162,17 +1245,18 @@ int drive(
 """
 
 FILES['search'] = (
-    SEARCH_TYPES
+    with_fake_async('recipes/SearchState', dart_async=True)
     + snips['recipes/QueuedSearch']
     + RESTARTING
     + JOINING
     + snips['recipes/Search']
+    + SEARCH_FAKE
     + REQUIRE
     + DRIVE
     + PROBE
     + """
 void main() {
-  final first = SearchApi();
+  final first = RecordingSearchApi();
   final queued = QueuedSearch(first);
   final queuedScreens = drive(
     'a job per keystroke',
@@ -1183,7 +1267,7 @@ void main() {
   require(first.asked.length == 4, 'a request for every keystroke');
   require(queuedScreens == 4, 'and a screen for every answer on the way');
 
-  final second = SearchApi();
+  final second = RecordingSearchApi();
   final restarting = RestartingSearch(second);
   final restartedScreens = drive(
     'Policy.restart',
@@ -1194,7 +1278,7 @@ void main() {
   require(second.asked.length == 4, 'restart cancels jobs, not requests');
   require(restartedScreens == 1, 'but only the last answer reaches the screen');
 
-  final third = SearchApi();
+  final third = RecordingSearchApi();
   final search = Search(third);
   final debouncedScreens = drive(
     'accumulate with debounce',
@@ -1209,15 +1293,16 @@ void main() {
   // against this server and answers later, and the saving is the held slot
   // rather than a property -- against a server faster than the typing it
   // saves nothing at all.
-  final waited = probeWait(SearchApi());
-  final joined = probeJoin(SearchApi());
+  final waited = probeWait(RecordingSearchApi());
+  final joined = probeJoin(RecordingSearchApi());
   require(
     waited.$1 == 4 && joined.$1 < waited.$1,
     'ctx.join lets fewer requests out than ctx.wait against this server',
   );
   require(joined.$2 > waited.$2, 'and the answer arrives later for it');
   require(
-    probeJoin(SearchApi(40)).$1 == probeWait(SearchApi(40)).$1,
+    probeJoin(RecordingSearchApi(40)).$1 ==
+        probeWait(RecordingSearchApi(40)).$1,
     'against a server faster than the typing it saves nothing',
   );
 
@@ -1225,7 +1310,7 @@ void main() {
   // that never pauses for the window never sends anything, and the request
   // goes out only when it stops. The document's own 300 ms debounce.
   fakeAsync((clock) {
-    final api = SearchApi();
+    final api = RecordingSearchApi();
     final search = Search(api);
     for (var tap = 0; tap < 50; tap += 1) {
       search.query('q$tap');
@@ -1244,7 +1329,7 @@ void main() {
   // The sentence under the accumulator: what finishes before the next group
   // starts is the job, and a cancelled one leaves its request running.
   fakeAsync((clock) {
-    final api = SearchApi(1000);
+    final api = RecordingSearchApi(1000);
     final search = Search(api);
     final first = search.query('solo');
     clock.elapse(const Duration(milliseconds: 400));
@@ -1275,7 +1360,7 @@ CONTROLLER = snips['recipes/SettingsController']
 
 def with_policy(name, policy):
     body = (CONTROLLER
-            .replace('class SettingsController extends Solo<Settings> {',
+            .replace('final class SettingsController extends Solo<Settings> {',
                      f'final class {name} extends Solo<Settings> {{')
             .replace('SettingsController(this._api, Settings initial)',
                      f'{name}(this._api, Settings initial)')
@@ -1337,7 +1422,7 @@ FILES['policies'] = (
     + """
 void threeCalls(SettingsController settings) {
 """
-    + snips['reference/all-three-while-the-current-jo'].rstrip('\n')
+    + snips['reference/three-calls-in-a-row-the-queue'].rstrip('\n')
     + """
   require(identical(a1, a2), "join: A2 is A1's own job, joined where it is");
 }
@@ -1452,6 +1537,9 @@ void main() {
   });
 }
 ''')
+
+unbuilt = snips.unbuilt()
+assert not unbuilt, f'blocks of the document no driver builds: {unbuilt}'
 
 for key, body in FILES.items():
     d = f'{ROOT}/accumulation_check/bin/v'

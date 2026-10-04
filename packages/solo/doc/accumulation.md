@@ -6,9 +6,10 @@ Several events can share one queued job. `collect` keeps every event in a list;
 `add(event)` method from the controller's public methods.
 
 The accumulator owns the input of a queued job. Adding an event does not run
-the handler or change controller state. The group accepts events until it is
-sealed: when debounce expires, or when the queue takes the job for execution
-with other timing settings. The handler receives that input and an ordinary
+the handler or change controller state. The events that share one job are a
+group, and a group accepts events until it is sealed: when its debounce window
+expires, or, under a throttle or with no timing at all, when the queue takes
+the job to run it. The handler receives that input and an ordinary
 `SoloContext<S, W>`; it changes state through `ctx.emit`.
 
 ## Recipes
@@ -19,13 +20,30 @@ or every event in a list.
 
 Each recipe opens with the version the controller's own vocabulary leads to —
 what you write when you reach for `run` and stop there. Where the obvious fix
-is worth seeing on its own, a second attempt follows it. The traces under them
-are what that code prints when it runs.
+is worth seeing on its own, a second attempt follows it. Under each version is
+what the scenario above it leads to: what reaches the server or the device, and
+what the controller's state ends up as.
 
 ### A search that fires on every keystroke
 
 A search box asks the server for results while the user types. Every keystroke
 is an event, and only the last one is worth a request.
+
+```dart
+import 'package:solo/solo.dart';
+
+class SearchState {
+  final List<String> results;
+
+  const SearchState.idle() : results = const [];
+
+  const SearchState.results(this.results);
+}
+
+abstract interface class SearchApi {
+  Future<List<String>> search(String text);
+}
+```
 
 #### The first attempt
 
@@ -50,7 +68,7 @@ final class QueuedSearch extends Solo<SearchState> {
 Typing `solo`, one character every 50 ms, against a server that answers in 100
 ms:
 
-```
+```text
 the server was asked 4 times: [s, so, sol, solo]
 at 100 ms the screen shows [hits for s]
 at 200 ms the screen shows [hits for so]
@@ -80,7 +98,7 @@ SoloJob<void> query(String text) => run<SearchState, void>(
     );
 ```
 
-```
+```text
 the server was asked 4 times: [s, so, sol, solo]
 at 250 ms the screen shows [hits for solo]
 ```
@@ -88,9 +106,9 @@ at 250 ms the screen shows [hits for solo]
 Nothing stale reaches the screen now, and the answer comes sooner because the
 requests overlap instead of queueing. The server was still asked four times:
 cancelling a job does not unsend what it has already sent. `ctx.join` in place
-of `ctx.wait` would not unsend them either; it holds the controller's slot
-until the answer returns, so how many requests go out depends on how much
-faster the server is than the typing.
+of `ctx.wait` would not unsend them either; it holds the controller's one
+execution slot until the answer returns, so how many requests go out depends on
+how much faster the server is than the typing.
 
 #### The accumulator
 
@@ -102,7 +120,7 @@ final class Search extends Solo<SearchState> {
       final results = await ctx.wait(() => api.search(text));
       ctx.emit(SearchState.results(results));
     },
-    merge: (previous, incoming) => incoming,
+    merge: (accumulated, incoming) => incoming,
     timing: AccumulationTiming.debounce(const Duration(milliseconds: 300)),
     policy: AccumulationPolicy.join,
     key: 'query',
@@ -114,7 +132,7 @@ final class Search extends Solo<SearchState> {
 }
 ```
 
-```
+```text
 the server was asked 1 time: [solo]
 at 550 ms the screen shows [hits for solo]
 ```
@@ -122,13 +140,15 @@ at 550 ms the screen shows [hits for solo]
 One request. `merge` keeps the incoming text and drops what it had, so the
 group carries the latest query; the debounce holds the group until the typing
 stops for 300 ms. That pause is what it costs: the answer arrives later than
-either attempt above, and it is the only answer sent.
+either attempt above, and it is the only answer sent. `policy` spells out the
+default, `join`; [Choosing where events join](#choosing-where-events-join) says
+what a policy decides.
 
-`SearchApi` and `SearchState` are application types. A group that has already
-started finishes before the next one starts, and the returned job exposes the
-outcome and cancellation, like other jobs. What finishes there is the job:
-cancelling one ends its waiting, not the request it has already sent, so that
-request can still be in flight when the next group starts.
+A group that has already started finishes before the next one starts, and the
+returned job exposes the outcome and cancellation, like other jobs. What
+finishes there is the job: cancelling one ends its waiting, not the request it
+has already sent, so that request can still be in flight when the next group
+starts.
 
 ### Settings saved on every flip of a switch
 
@@ -211,7 +231,7 @@ final class EagerSettingsController extends Solo<Settings> {
 The switch, then the theme, then the language, 20 ms apart, against a server
 that takes 100 ms to write:
 
-```
+```text
 the server was written to 3 times:
   notifications: true, theme: light, language: en
   notifications: true, theme: dark, language: en
@@ -220,9 +240,9 @@ the screen ends up with notifications: true, theme: dark, language: ru
 ```
 
 The screen is right at the end, and the cost is on the wire: three round trips
-for one visit to the settings, and the two in the middle publish settings the
-user never chose. Another device reading between them finds the light theme
-after its owner has already picked the dark one.
+for one visit to the settings, and the first two publish settings the user has
+already moved on from. Another device reading between them finds the light
+theme after its owner has already picked the dark one.
 
 #### The second attempt
 
@@ -241,7 +261,7 @@ SoloJob<void> update(SettingsPatch patch) => run<Settings, void>(
     );
 ```
 
-```
+```text
 the server was written to 2 times:
   notifications: true, theme: light, language: en
   notifications: false, theme: light, language: ru
@@ -260,7 +280,7 @@ and nothing failed.
 #### The accumulator
 
 ```dart
-class SettingsController extends Solo<Settings> {
+final class SettingsController extends Solo<Settings> {
   final SettingsApi _api;
   late final _updates = accumulate<Settings, SettingsPatch, void>(
     (ctx, patch) async {
@@ -284,7 +304,7 @@ class SettingsController extends Solo<Settings> {
 }
 ```
 
-```
+```text
 the server was written to 1 time:
   notifications: true, theme: dark, language: ru
 the screen ends up with notifications: true, theme: dark, language: ru
@@ -296,8 +316,9 @@ user did is dropped, and the group carries all three changes into one write.
 The screen also reads the settings back from the server, and `reload` is an
 ordinary job rather than an accumulated one. This accumulator takes the default
 policy, `join`, so a `reload` queued between two flips is not a boundary: the
-flips are one group and one write whatever else the queue was doing. The policy
-section says when to take `adjacent` instead.
+flips are one group and one write whatever else the queue was doing.
+[Choosing where events join](#choosing-where-events-join) says when to take
+`adjacent` instead.
 
 The first event becomes the accumulated value without calling `merge`. Each
 following event calls `merge(accumulated, incoming)` synchronously from `add`,
@@ -323,28 +344,29 @@ Future<void> changeSettings(SettingsApi api, Settings initial) async {
 }
 ```
 
-```
+```text
 true
 Done(null)
 ```
 
-Its handler saves one snapshot with all three changes, then emits that snapshot
-after 200 ms without another change. State still has its initial value before
-the handler runs. Other ready jobs can run during the pause. Observing `.done`
-reports `Done`, `Failed` or `Cancelled` without throwing.
+After 200 ms without another change the handler saves one snapshot with all
+three changes, and emits it once the write has ended. Until the handler runs,
+the state keeps its initial value, and other ready jobs can run during the
+pause. Observing `.done` reports `Done`, `Failed` or `Cancelled` without
+throwing.
 
 If saving fails, the state is unchanged and the group fails. Retrying the
 failed changes is the caller's decision; a later independent patch does not
 automatically include them. This example assumes one writer and an API future
-that completes when the write has actually ended. `join` keeps the queue slot
-until that future completes, even after cancellation, and that is what stops
-the next write from starting on top of this one. A client timeout alone does
-not establish that a server has stopped writing: a `save` that completes its
-future on a timeout hands the slot back while the server is still writing, the
-next group's write goes out over an unfinished one, and which of the two the
-server keeps is no longer the queue's decision — the screen and the server can
-end up disagreeing for good. Cancellation can also prevent the final `emit`
-after the server has accepted the write.
+that completes when the write has actually ended. `ctx.join` keeps the
+execution slot until that future completes, even after cancellation, and that
+is what stops the next write from starting on top of this one. A client timeout
+alone does not establish that a server has stopped writing: a `save` that
+completes its future on a timeout hands the slot back while the server is still
+writing, the next group's write goes out over an unfinished one, and which of
+the two the server keeps is no longer the queue's decision — the screen and the
+server can end up disagreeing for good. Cancellation can also prevent the final
+`emit` after the server has accepted the write.
 
 ### One request per log line
 
@@ -385,15 +407,16 @@ final class EagerLogController extends Solo<int> {
 }
 ```
 
-Three lines written while one screen transition is handled, then one more half
-a second later, against a server that takes 100 ms per request:
+Three lines written one after another by the code that handles a screen
+transition, then one more two seconds later, against a server that takes 100 ms
+per request:
 
-```
+```text
 the server got 4 requests:
-  [opened]
-  [loaded]
-  [shown]
-  [tapped]
+  [opened] at 0 ms
+  [loaded] at 100 ms
+  [shown] at 200 ms
+  [tapped] at 2000 ms
 the three lines of the transition cost 3 of them
 the counter says 4
 ```
@@ -411,7 +434,7 @@ order it was written. The snapshot copies the list, not the entries in it, so
 an entry changed after `add` is sent changed — use immutable event objects.
 
 ```dart
-class LogController extends Solo<int> {
+final class LogController extends Solo<int> {
   final LogApi _api;
   late final _logs = collect<int, LogEntry, void>(
     (ctx, entries) async {
@@ -429,28 +452,32 @@ class LogController extends Solo<int> {
 }
 ```
 
-```
+```text
 the server got 2 requests:
-  [opened, loaded, shown]
-  [tapped]
+  [opened, loaded, shown] at 0 ms
+  [tapped] at 2000 ms
 the three lines of the transition cost 1 of them
 the counter says 4
 ```
 
-The three lines of the transition travel together. The fourth arrives after the
-throttle interval has passed, so it goes on its own rather than waiting for
-company — the interval is a floor under the rate, not a delay added to every
-entry.
+The three lines of the transition travel together. The fourth is written after
+the throttle interval has passed, so it goes at once and on its own rather than
+waiting for company — the interval is a floor under the rate, not a delay added
+to every entry.
 
 A buffer you keep yourself would batch them too. What `collect` adds is that
 the buffer is the job's input: the entries are sealed into the group the queue
-takes, the caller gets the same `SoloJob` every other addition got, and
-`close()` drops the group instead of leaving a list and a timer behind.
+takes, the caller gets the same `SoloJob` every other addition to that group
+got, and `close()` drops the group instead of leaving a list and a timer
+behind.
 
 This controller's state counts entries whose send operation completed and whose
-handler reached `emit`. The policy section explains why `join` is the default
-this example spells out, and the timing section explains what a throttle
-interval measures from.
+handler reached `emit`.
+[Choosing where events join](#choosing-where-events-join) explains why `join`
+is the default this example spells out, and
+[Choosing when a group is ready](#choosing-when-a-group-is-ready) explains what
+a throttle interval is measured from, and what starting at once costs a burst
+that takes more than one turn.
 
 Collecting entries does not guarantee delivery. A failed send, a cancelled
 group or a plain `close()` can leave them unsent; `close()` with
@@ -517,7 +544,7 @@ final class QueuedPlayer extends Solo<Playback> {
 Three taps in a row — resume, pause, resume — against a device that takes 100
 ms to obey:
 
-```
+```text
 the device heard 3 commands:
   resume at 0 ms
   pause at 100 ms
@@ -526,10 +553,9 @@ the button gave back a job for every tap
 the player settles Playing at 300 ms
 ```
 
-The player ends up where the last tap asked, and gets there by doing what no
-tap asked for: it plays, stops, and plays again, and the stop in the middle is
-something the user hears. Three round trips to the device, and 300 ms before it
-settles.
+The player ends up where the last tap asked, and gets there the long way: it
+plays, stops, and plays again, and the stop in the middle is something the user
+hears. Three round trips to the device, and 300 ms before it settles.
 
 #### The accumulator
 
@@ -566,7 +592,7 @@ final class Player extends Solo<Playback> {
 }
 ```
 
-```
+```text
 the device heard 1 command:
   resume at 0 ms
 the button gave back one job
@@ -610,17 +636,18 @@ SoloJob<void> resume() {
 
 Removing and adding gives the shape of `AccumulationPolicy.replace`: the
 command ends up at the tail, behind whatever was queued between. What differs
-is the handle — the queue has to build a new job, where the accumulator moves
+is the handle — this way a new job has to be built, where the accumulator moves
 the one it already has. The queue can remove a job and it can add one, but it
-cannot change what a queued job will do, so the place `join` keeps is not
-reachable this way — keeping it means holding the command outside the job,
-which is what an accumulator does with the input inside it.
+cannot change what a queued job will do, so the place `AccumulationPolicy.join`
+keeps is not reachable this way — keeping it means holding the command outside
+the job, where the job reads it when it starts, and that is what an accumulator
+does for its job.
 
 The queue never touches the running job: a `pause` that has already started
-runs to its end whatever is removed behind it. Reach for `cancelAll()` — it
-clears the queue and cancels the current job — or give both commands one key
-and `Policy.restart`. Jobs created with `cancellable: false` are skipped unless
-`force: true` is given.
+runs to its end whatever is removed behind it. To cancel the running job as
+well, reach for `cancelAll()` — it clears the whole queue and cancels the
+current job — or give both commands one key and `Policy.restart`. `removeWhere`
+skips jobs created with `cancellable: false` unless `force: true` is given.
 
 ## Reference
 
@@ -632,17 +659,17 @@ individual callers.
 Both factories accept an optional `timing`. The setting controls when a group
 may start; `collect` still keeps every accepted event, and `accumulate` keeps
 whatever its `merge` returns. For example,
-`merge: (previous, incoming) => incoming` keeps only the latest value.
+`merge: (accumulated, incoming) => incoming` keeps only the latest value.
 
 | | `debounce(duration)` | `throttle(duration)` | `throttle(duration, startAtOnce: false)` |
 | --- | --- | --- | --- |
 | The first group is ready | after `duration` with no new event | at once | after `duration` |
 | An addition | restarts the timer | does not extend it | does not extend it |
-| The wait is measured from | the last accepted event | the previous actual start | the previous start, or where the group appeared |
+| The wait is measured from | the last accepted event | the previous actual start | the previous start, or the moment the group appeared |
 
 `AccumulationTiming.debounce(duration)` waits for a pause after the last
 accepted event in each group. Every addition restarts the timer, even when
-`merge` returns an unchanged value. With a 200 ms interval, events at 0, 60 and
+`merge` returns an unchanged value. With a 200 ms window, events at 0, 60 and
 120 ms make the group ready at 320 ms. Continuous input can keep an open group
 waiting indefinitely. That wait is the point in the search recipe — the request
 goes out when the typing stops — and the reason the log collector takes a
@@ -659,20 +686,21 @@ needing another event. The group accepts events until the queue takes it for
 execution. No job is created for an empty interval.
 
 `startAtOnce: false` counts the interval before the first group as well. An
-accumulator with nothing of its own queued or running starts its interval where
+accumulator with nothing of its own queued or running starts its interval when
 the group appears, and the group becomes ready when the interval ends, carrying
 everything written meanwhile. That condition is the whole of it: an interval
-already running is never restarted, and neither is one restarted by a group
-that appears beside a group that is waiting in the queue or running. So a group
-that has waited its interval out and needs only the execution slot is not
-pushed back by a later event, whatever the policy does with that event.
+already running is never restarted, and a group that appears beside another of
+the same accumulator, queued or running, starts none. So a group that has
+waited its interval out and needs only the execution slot is not pushed back by
+a later event, whatever the policy does with that event.
 
-Starting at once has a price on an idle accumulator. Nothing is running, so the
-queue takes the first group on the next microtask, and a burst that does not
-fit in one synchronous turn is split: the first event goes on its own and the
-rest wait out the whole interval. While another job occupies the queue the
-burst gathers in one group instead, which is the log recipe's own scenario —
-its entries are written while a screen transition is being handled.
+Starting at once has a price when nothing is running. The queue takes the first
+group on the next microtask, so a burst that does not fit in one synchronous
+turn is split: the first event goes on its own and the rest wait out the whole
+interval. The log recipe's three lines stay together because they are written
+in one turn. A burst written while a job of the controller is running stays
+together too, however many turns it takes: the queue cannot take the group
+until that job ends.
 
 Waiting has a price of its own. A single event on an idle accumulator is held
 for the whole interval, and `close(mode: SoloCloseMode.drain)` waits with it —
@@ -683,12 +711,11 @@ event is what the user is waiting for.
 The start is the transition to running, before `onStart`. A group rejected by
 start rules consumes no throttle interval; cancellation from `onStart` does.
 With `startAtOnce: false` a refusal leaves the accumulator with nothing queued,
-so the next group to appear counts its own full interval from where it appears,
-not what was left of the refused one's. If a group starts at 0 ms with a 200 ms
-interval, but another job holds the slot until 500 ms, the next group starts at
-500 ms and the one after that cannot start before 700 ms. If the group's own
-handler, children or cleanup outlast the interval, the next group can start as
-soon as they finish.
+so the next group to appear counts a full interval of its own from the moment
+it appears. If a group starts at 0 ms with a 200 ms interval, but another job
+holds the slot until 500 ms, the next group starts at 500 ms and the one after
+that cannot start before 700 ms. If the group's own handler, children or
+cleanup outlast the interval, the next group can start as soon as they finish.
 
 Waiting groups stay visible in `queue.jobs`. The queue takes the first ready
 job in list order, allowing ready jobs to pass waiting groups. The list can
@@ -707,7 +734,7 @@ busy event loop can delay callbacks and starts.
 ### Choosing where events join
 
 ```dart
-// All three while the current job still keeps the queue occupied. Where A2
+// Three calls in a row: the queue takes nothing between them. Where A2
 // lands is the policy's decision.
 final a1 = settings.update(const SettingsPatch(theme: 'dark'));
 settings.reload(); // B, an ordinary job of its own
@@ -729,14 +756,14 @@ looking past other jobs. Those other jobs stay in the queue. In `join`, A
 retains its position before B; `replace` moves A behind B. Execution also
 depends on readiness: a ready B can pass A while A waits for timing.
 
-`join` is the default for that reason. An entry written while another job waits
-in the queue still belongs in the batch that is already there; under `adjacent`
-it would start a second group behind that job, and a throttle would hold that
-group for another interval — two requests for entries written moments apart.
-The same two events would be one group or two depending on what else the
-controller happened to be doing, which is a decision no caller made. What
-`join` gives up is the boundary: the batch keeps its place ahead of the job
-that arrived between.
+`join` is the default so that a group does not depend on what else is queued.
+An entry written while another job waits in the queue still belongs in the
+batch that is already there; under `adjacent` it would start a second group
+behind that job, and a throttle would hold that group for another interval —
+two requests for entries written moments apart. The same two events would be
+one group or two depending on what else the controller happened to be doing,
+which is a decision no caller made. What `join` gives up is the boundary: the
+batch keeps its place ahead of the job that arrived between.
 
 Take `adjacent` where that boundary is the point: where `merge` throws away
 what it replaces and a job queued between two events has to run between them,
@@ -752,9 +779,9 @@ for all three policies.
 job to the tail. The handle is the one every addition to this group got, the
 events already accepted stay in it, and a group that is already at the tail
 keeps the place it has. Nothing is cancelled on the way, so no cancellation
-callback runs in the middle of the move. The engine's debug trace says
-`move <job> to the tail`; there is no observer event, because no job started or
-finished.
+callback runs in the middle of the move. `Solo.debug`, the engine's own trace
+from [Logs](errors.md#logs) on the errors page, says `move <job> to the tail`;
+there is no observer event, because no job started or finished.
 
 The move starts a fresh debounce window and preserves the accumulator's
 throttle interval. It applies to a queued group, including one configured with
@@ -772,9 +799,15 @@ on every call prevents events from joining an existing one.
 
 ```dart
 final group = logs.logEvent(const LogEntry('checkout opened'));
+final same = logs.logEvent(const LogEntry('cart shown'));
 
 // Everyone who added to this group holds the same handle...
-switch (await group.done) {
+print(identical(group, same));
+
+// ...so cancelling it cancels the whole group, and each of them reads the
+// same outcome.
+await group.cancel();
+switch (await same.done) {
   case Done():
     print('sent');
   case Failed(:final error):
@@ -782,16 +815,18 @@ switch (await group.done) {
   case Cancelled(:final reason):
     print('cancelled: $reason');
 }
+```
 
-// ...and cancelling it cancels the whole group.
-await group.cancel();
+```text
+true
+cancelled: manual
 ```
 
 All three policies operate on queued groups. A group stops accepting events
 when debounce seals it or when it is taken from the queue, before `canStart`
 and `onStart`. Events added from either callback go to a later group. The
-handler gets the configured working type and rules, and is an ordinary
-`SoloJob` to the queue in every other way.
+handler runs with the configured working type and rules, and the group's job is
+an ordinary `SoloJob` to the queue in every other way.
 
 An accumulator creates no job until the first event. Without timing, if each
 group finishes before the next event arrives, each event starts a separate job.
@@ -813,10 +848,11 @@ committing the result.
 
 `canStart`, `keepWhile` and cancellation apply to the whole job, and the rules
 themselves are in [State and rules](state.md#state-and-rules) on the state
-page. A start rule can cancel all of its accumulated input. The handler's
-result and errors follow the ordinary `Job` contract; accepted cancellation
-still takes precedence over a later value or error. The accumulator does not
-roll back partial external effects or resend failed input automatically.
+page. A start rule that turns the job down cancels everything the group has
+accumulated. The handler's result and errors follow the ordinary `Job`
+contract; accepted cancellation still takes precedence over a later value or
+error. The accumulator does not roll back partial external effects or resend
+failed input automatically.
 
 Cancelling a queued debounce group removes its timer. Removing or clearing
 throttle groups preserves an already started interval, so adding another event
@@ -826,10 +862,10 @@ accumulator that has none of its own queued or running.
 
 `close()` cancels every timing timer, drops queued groups and cancels or waits
 for the running job under the usual rules. It sends no final batch: a group
-still waiting for its window is dropped, and the jobs it handed out complete
-with `Cancelled(closed)`. `close(mode: SoloCloseMode.drain)` is the other
-choice — it waits the accumulation window out and runs the groups already
-queued, by the rules in
+still waiting for its window is dropped, and its job, the one handle every
+addition to it got, completes with `Cancelled(closed)`.
+`close(mode: SoloCloseMode.drain)` is the other choice — it waits the
+accumulation window out and runs the groups already queued, by the rules in
 [Cancelling and closing a controller](cancellation.md#cancelling-and-closing-a-controller)
 on the cancellation page. Neither mode takes anything new: an `add` after
 `close()` returns a new job already completed with `Cancelled(closed)`; it does
