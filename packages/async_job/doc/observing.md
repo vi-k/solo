@@ -167,12 +167,14 @@ database was opening, so it ends `Cancelled` whatever the open does. `join`
 then throws the open's own error, and the body fails with it on a job that is
 already cancelled. That error is not the outcome, and the job hands it to the
 `onError` of its observer and no further: neither `onUnanswered` nor the zone
-gets it. Most often such an error is the operation stopping at the job's token,
-the way the migration throws `DatabaseStopped` in
+gets it. The job keeps it from the zone because it cannot tell what the error
+is. Here it is a real failure: the database is locked. Most often, though, an
+error thrown after a cancellation is the operation stopping at the job's token:
+the migration in
 [A token through `onCancel`](cancellation.md#a-token-through-oncancel) on the
-cancellation page, and in the zone every such cancellation would show up as a
-failure. The job cannot tell that stop from a failure like this one, so without
-an observer neither is heard.
+cancellation page throws `DatabaseStopped` that way, and in the zone every such
+cancellation would show up as a failure. So without an observer neither the
+failure nor the stop is heard.
 
 ### An observer
 
