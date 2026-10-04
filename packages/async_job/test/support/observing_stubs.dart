@@ -10,6 +10,9 @@ final class Stage {
 
   /// What `migrate` throws.
   Object migrationError = StateError('migration failed');
+
+  /// What `showError` was given.
+  final List<Object> shown = [];
 }
 
 /// The stage of the test at hand.
@@ -37,7 +40,10 @@ final class Database {
 }
 
 /// Shows [error] to the user for 30 ms.
-Future<void> showError(Object error) => delay(30);
+Future<void> showError(Object error) {
+  stage.shown.add(error);
+  return delay(30);
+}
 
 /// Migrates the database and fails with the error of the stage.
 Future<void> migrate() async {

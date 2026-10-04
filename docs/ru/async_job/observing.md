@@ -237,7 +237,7 @@ outcome: Cancelled(manual)
 когда тело её бросит: первой она будет, если тело бросит её до отмены.
 
 Тело ловит провал открытия и показывает его пользователю, прежде чем бросить
-снова:
+снова; собственную отмену оно пропускает, не показывая:
 
 ```dart
 final job = Job<Database>(
@@ -245,6 +245,8 @@ final job = Job<Database>(
   (ctx) async {
     try {
       return await ctx.join(Database.open);
+    } on Cancelled {
+      rethrow;
     } catch (error) {
       await showError(error);
       rethrow;

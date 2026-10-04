@@ -1102,6 +1102,21 @@ void main() {
       );
     });
 
+    test('the body shows the failure and not its own cancellation', () {
+      play(openingShown, cancelAt: 30);
+      expect(stage.shown.map((error) => '$error'), [
+        'Bad state: database locked',
+      ]);
+
+      stage = Stage();
+      expect(
+        quotable(play(openingShown, cancelAt: 10)),
+        ['cancel', 'outcome: Cancelled(manual)'],
+        reason: 'the open succeeds, and join throws the cancellation',
+      );
+      expect(stage.shown, isEmpty);
+    });
+
     Job<void> failingAfterCancel({JobObserver? observer}) => Job<void>(
           observer: observer,
           (ctx) async {

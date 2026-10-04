@@ -237,7 +237,7 @@ job learns of its failure only when the body throws it, so that failure comes
 first if the body throws it before the cancellation.
 
 A body that catches the failed open and shows it to the user before throwing it
-again:
+again; its own cancellation it lets through unshown:
 
 ```dart
 final job = Job<Database>(
@@ -245,6 +245,8 @@ final job = Job<Database>(
   (ctx) async {
     try {
       return await ctx.join(Database.open);
+    } on Cancelled {
+      rethrow;
     } catch (error) {
       await showError(error);
       rethrow;

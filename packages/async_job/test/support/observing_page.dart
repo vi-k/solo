@@ -95,6 +95,8 @@ Job<Database> openingShown() {
     (ctx) async {
       try {
         return await ctx.join(Database.open);
+      } on Cancelled {
+        rethrow;
         // ignore: avoid_catches_without_on_clauses
       } catch (error) {
         await showError(error);
