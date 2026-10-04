@@ -74,8 +74,13 @@ through» теперь `ctx.check()` первой строкой `catch`, пер
 `c960b09`, отчёт `2026-10-04-solo-children-reread-report.md`, 28 находок, новый
 сторож `children_rakes_test.dart` на 118 тестов, пакет `solo` — 1468; страница
 получила три первые попытки и раздел «Steps in a row», блок вступления следует
-за `api.progress(item)`, пересказ страниц ядра заменён ссылками. Запущена
-седьмая, `testing.md`.
+за `api.progress(item)`, пересказ страниц ядра заменён ссылками. Перенесена
+`testing.md`: коммит `601e351`, отчёт
+`2026-10-04-solo-testing-reread-report.md`, 29 находок, сторож вырос с 35 до 96
+тестов, пакет `solo` — 1529; в `dev_dependencies` `packages/solo/pubspec.yaml`
+встал `test_api: ^0.7.7`, им сторож запускает первые попытки отдельными
+тестовыми случаями, и его нижняя граница поднимается вместе с границей `test`.
+Запущена восьмая, `camera.md`.
 
 **Что дальше.** `children.md` принята, `streams.md` владелец дочитал
 2026-10-03: пять правок по его вопросам,
@@ -106,7 +111,13 @@ dozen calls» в README `solo` перестроен — `play` кончаетс�
 такой бросок глушит; практический случай — ленивое сообщение лога, читающее
 `ctx.state` отменённой задачи. Оставить правило `solo` или глушить
 в `packages/solo/lib/src/call_hook.dart`, как ядро: прототип в шесть строк
-краснит один тест, который нынешнее правило и держит.
+краснит один тест, который нынешнее правило и держит. Вычитка `testing.md`
+(`2026-10-04-solo-testing-reread-report.md`) вопросов не передала, но сделала
+три вещи, которые владельцу стоит подтвердить: заменила тестом под `fakeAsync`
+фразу о настоящем времени в «Timeouts», написанную по его девятому вопросу
+(M8); убрала `.ignore()` при `job.cancel()` во фрагменте об отмене вместе
+с фразой о нём, написанной по пятому вопросу (L5); добавила dev-зависимость
+`test_api` в `packages/solo/pubspec.yaml`.
 
 **Решения владельца, которые действуют.**
 
@@ -338,7 +349,9 @@ README `flutter_solo` с его `doc/mixins.md` и быстрого старта
 `cancellation_rakes_test.dart`, 146 тестов; код `resources.md` —
 в `resources_*.dart` там же, тест `resources_rakes_test.dart`, 119; код
 `errors.md` — в `errors_*.dart` там же, тесты `errors_rakes_test.dart`
-и `cancel_delay_recipe_test.dart`, 166.
+и `cancel_delay_recipe_test.dart`, 166; код `children.md` —
+в `children_*.dart`, тест `children_rakes_test.dart`, 118; код `testing.md` —
+в `testing_*.dart`, тест `testing_rakes_test.dart`, 96.
 
 **Стенда у `state.md` тоже нет, сторожа — тестом.** Каждую первую попытку
 страницы и каждое утверждение, добавленное чтением владельца, держит
