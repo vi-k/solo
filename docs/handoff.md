@@ -109,8 +109,16 @@ the disposal» закрывает контроллер только в ветк�
 и `SoloSelector` «every frame» стало «every build».
 `tool/check_translations.py` сверяет теперь и форму прозы,
 `tool/flutter_snippets.py` падает на блоке без драйвера, четвёртая копия
-`page_code.dart` легла в `packages/flutter_solo/test/support/`. Запущена
-двенадцатая, последняя: `mixins.md` пакета `flutter_solo`.
+`page_code.dart` легла в `packages/flutter_solo/test/support/`. Перенесена
+`mixins.md` пакета `flutter_solo`: коммит `48ae1e9`, отчёт
+`2026-10-04-flutter-solo-mixins-reread-report.md`, 19 находок, новый сторож
+`packages/flutter_solo/test/mixins_rakes_test.dart` на 28 тестов, пакет
+`flutter_solo` — 182, стенд `tool/flutter_snippets.py` — 42 теста; раздел
+о базе получил третий блок, `ListenableController` между базой и листьями, оба
+блока базы открываются импортами `package:meta/meta.dart`
+и `package:solo/solo.dart`, а в `dev_dependencies`
+`packages/flutter_solo/pubspec.yaml` встала `meta: ^1.15.0`. Все двенадцать
+страниц вычитаны и лежат в `main`; агентов вычитки больше нет.
 
 **Что дальше.** `children.md` принята, `streams.md` владелец дочитал
 2026-10-03: пять правок по его вопросам,
@@ -188,7 +196,12 @@ group appears», на странице оно заменено на «when»: п
 `addTearDown`, заголовки первых попыток в двух разделах, пример `SoloBuilder`,
 параметр `enabled` вместо второго `canSave`, `import 'dart:async';` в блоке
 экрана, `controller` вместо `profile` в «Why», замыкания в `listen`; и два
-предложения dartdoc в `packages/flutter_solo/lib/`.
+предложения dartdoc в `packages/flutter_solo/lib/`. Вычитка `mixins.md`
+(`2026-10-04-flutter-solo-mixins-reread-report.md`) вопросов не передала,
+на подтверждение три вещи: импорты в двух блоках базы, новый блок
+`ListenableController` и dev-зависимость `meta: ^1.15.0`
+в `packages/flutter_solo/pubspec.yaml`, нужная только support-файлам сторожа;
+вариант без неё, где импорты держит один стенд, агент тоже собрал зелёным.
 
 **Решения владельца, которые действуют.**
 
@@ -339,7 +352,9 @@ README — формат и анализ чистые, 868 тестов; из к�
 вычитки README `flutter_solo` (`5c51816`) формат, анализ и тесты прошли во всех
 пяти пакетах: `async_job` 1261, `solo` 1719, его пример 102, `flutter_solo`
 154, его пример 4; стенд `tool/flutter_snippets.py` — 33 теста, 6 цитат трасс
-`mixins.md` напечатаны. Фоновых задач и расписаний у сессии нет.
+`mixins.md` напечатаны. На коммите вычитки `mixins.md` (`48ae1e9`)
+`flutter_solo` — формат и анализ чистые, 182 теста, его пример 4, стенд — 42
+теста, те же 6 цитат. Фоновых задач и расписаний у сессии нет.
 
 ## На следующий релиз собрано у всех трёх
 
