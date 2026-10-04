@@ -165,9 +165,10 @@ Nothing reaches the zone, and the app never learns that the open failed: the
 job itself caught the error. The job accepted the cancellation while the
 database was opening, so it ends `Cancelled` whatever the open does. `join`
 then throws the open's own error, and the body fails with it on a job that is
-already cancelled. That error is not the outcome, and the job hands it to its
-observer alone. Most often such an error is the operation stopping at the job's
-token, the way the migration throws `DatabaseStopped` in
+already cancelled. That error is not the outcome, and the job hands it to the
+`onError` of its observer and no further: neither `onUnanswered` nor the zone
+gets it. Most often such an error is the operation stopping at the job's token,
+the way the migration throws `DatabaseStopped` in
 [A token through `onCancel`](cancellation.md#a-token-through-oncancel) on the
 cancellation page, and in the zone every such cancellation would show up as a
 failure. The job cannot tell that stop from a failure like this one, so without

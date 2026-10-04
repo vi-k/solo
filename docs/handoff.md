@@ -23,7 +23,7 @@
 по слову владельца вынесен на свою страницу `packages/async_job/doc/streams.md`
 с переводом, сторож `packages/async_job/test/streams_rakes_test.dart`;
 в `children.md` остался короткий «Processing streams» со ссылкой. Так же шли
-его вопросы по `packages/async_job/doc/observing.md`, пункт 1
+его вопросы по `packages/async_job/doc/observing.md`, пункты 1 и 2
 в `2026-10-02-observing-reread-report.md`. Открытых находок у ревью нет:
 `async_job` — `2026-09-26-async-job-project-review.md`, `solo`
 и `flutter_solo` — `2026-09-19-solo-project-review.md`. Первое чтение
@@ -350,8 +350,9 @@ README — формат и анализ чистые, 868 тестов; из к�
 их гоняет задание `snippets`: 2 и 12 цитат трасс, все напечатаны;
 `packages/solo` там же — формат и анализ чистые, 1719 тестов. На коммите
 вычитки README `flutter_solo` (`5c51816`) формат, анализ и тесты прошли во всех
-пяти пакетах: `async_job` 1261, `solo` 1719, его пример 102, `flutter_solo`
-154, его пример 4; стенд `tool/flutter_snippets.py` — 33 теста, 6 цитат трасс
+пяти пакетах: `async_job` 1261 (с 2026-10-04, после правки по чтению
+`observing.md`, 1262), `solo` 1719, его пример 102, `flutter_solo` 154, его
+пример 4; стенд `tool/flutter_snippets.py` — 33 теста, 6 цитат трасс
 `mixins.md` напечатаны. На коммите вычитки `mixins.md` (`48ae1e9`)
 `flutter_solo` — формат и анализ чистые, 182 теста, его пример 4, стенд — 42
 теста, те же 6 цитат. Фоновых задач и расписаний у сессии нет.

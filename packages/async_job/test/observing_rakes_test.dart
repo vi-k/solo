@@ -834,6 +834,23 @@ void main() {
       );
     });
 
+    // The page says which hook: the error stops at `onError`, an observer
+    // that answers is not asked, and the zone hears nothing.
+    test('with an observer that answers it is onError and no further', () {
+      Job<Database> answered() => Job<Database>(
+            observer: Answerer(passedOn: true),
+            (ctx) => ctx.join(
+              Database.open,
+              discard: (database) => database.close(),
+            ),
+          );
+
+      expect(
+        quotable(play(answered, cancelAt: 10, outcomeObserved: false)),
+        ['cancel', 'onError: Bad state: database locked'],
+      );
+    });
+
     test('the hooks do not observe the outcome, not even Log reading it', () {
       expect(
         play(() => failing(observer: Log()), outcomeObserved: false),

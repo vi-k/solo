@@ -497,3 +497,15 @@ API, и «сам не является `Cancelled`» — редакция вла
    если его не переопределять». Оригинал, «The default implementation of
    `onUnanswered` sends them…», по-английски однозначен и не тронут;
    утверждения и код страницы не изменились.
+
+2. «Исходом эта ошибка не становится, и задача отдаёт её только своему
+   наблюдателю. — т.е. идёт в onError, но не в onUnanswered?» — о первой
+   попытке раздела «Куда идут ошибки», 2026-10-04. Да: это строка таблицы
+   «The body's, and it happened after the job accepted a cancellation», слышит
+   `onError`, без наблюдателя никто. «Наблюдателю» хук не называло, а у
+   наблюдателя их два, и читатель спросил, который. Теперь фраза называет оба:
+   «the job hands it to the `onError` of its observer and no further: neither
+   `onUnanswered` nor the zone gets it», в переводе так же. Сторож
+   в `observing_rakes_test.dart`: та же задача с наблюдателем, который
+   отвечает и передаёт дальше в `super`, печатает `cancel` и `onError: Bad
+   state: database locked` и больше ничего; `async_job` — 1262 теста.
