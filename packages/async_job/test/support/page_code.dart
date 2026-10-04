@@ -1,5 +1,7 @@
-// `packages/solo/test/support/page_code.dart` is a copy of this file: the
-// packages share no test code. A change to one of the two goes to the other.
+// `packages/solo/test/support/page_code.dart` and
+// `packages/solo/example/test/support/page_code.dart` are copies of this
+// file: the packages share no test code. A change to one of the three goes
+// to the other two.
 
 import 'dart:io';
 

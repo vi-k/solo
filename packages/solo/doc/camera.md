@@ -56,19 +56,25 @@ final class Disposed extends CameraState {
 and `Disposed` is the one where it cannot. `Broken` is where a failure of the
 hardware lands; it is not called `Failed`, which is the name of an outcome. In
 the example every state also prints itself, and that text is what the journals
-below show.
+below show; two `Ready` states with the same fields are equal there as well.
 
 A `null` passed to `copyWith` keeps the old value, so `copyWith` cannot clear
 `focusPoint`, where `null` means automatic focus. The example's
 `resetFocusPoint` publishes a fresh `Ready` that keeps the current zoom.
 
-The hardware is `FakeCameraHardware` from the example. Every operation takes
-ten milliseconds and a capture thirty; `failures` makes a named operation fail
-after its delay, `onError` reports a failure from outside any job, and `log`
-records where each operation begins and ends. The journals below are what the
-example's observer prints for this code: a job `started`, `finished` with its
-outcome or `dropped` before it started, an `error` it reported, a `log` line,
-and every change of `state:`. A child job's lines begin with `>`.
+The hardware is `FakeCameraHardware` from the example, and the controller keeps
+it in its field `hw`. Every operation takes ten milliseconds and a capture
+thirty, and a capture returns a `Photo`. `failures` makes a named operation
+fail after its delay, `fail` reports a failure from outside any job by calling
+`onError`, the callback the controller sets, and `log` records where each
+operation begins and ends.
+
+The journals below are what the example's observer prints for this code: a job
+`started`, `finished` with its outcome or `dropped` before it started, an
+`error` it reported, a `log` line, every change of `state:`, and `closed` once
+the controller has closed. A job goes by its key, a value of the example's
+`CameraKey` enum, followed by its `describe` text where it has one:
+`[setZoom: zoom: 2.0]`. A child job's lines begin with `>`.
 
 Sections open with the version the API's vocabulary leads to — the working type
 named after the state a job starts from, the default policy, a disposal queued
@@ -142,7 +148,7 @@ opened once.
 
 The hardware can refuse to open while another app holds the camera, and a job
 can be cancelled while it opens. Either way the controller has to end in a
-state something can start from, so that the camera can be opened later.
+state the camera can be opened from later.
 
 ### The first attempt
 
@@ -171,9 +177,9 @@ state: Preparing()
 ```
 
 `join` has waited for the opening, so the hardware is open, and the state says
-it is still opening. Nothing starts from `Preparing`: `init` wants `Initial`,
-and `reopen`, the example's way back, wants `Ready` or `Broken`. It is the trap
-of
+it is still opening. Neither way of opening the camera starts from `Preparing`:
+`init` wants `Initial`, and `reopen`, the example's way back, wants `Ready` or
+`Broken`. It is the trap of
 [State after failure or cancellation](state.md#state-after-failure-or-cancellation)
 on the state page, with a device behind the spinner.
 
@@ -214,8 +220,8 @@ state: Broken(Cancelled(manual))
 ```
 
 A job dropped before its start reaches neither handler, so the second `init()`
-of the section above still ends in its one `dropped` line. `reopen` lands the
-same way.
+of the section above still ends in its one `dropped` line. `reopen` has the
+same two handlers.
 
 ## Only the last zoom
 
@@ -237,7 +243,7 @@ Job<void> setZoom(double zoom) => run<Ready, void>(
 Three calls in one turn, `setZoom(2)`, `setZoom(3)` and `setZoom(4)`, end on
 `Ready(zoom: 4.0, focusPoint: null, paused: false)`, and so does the version
 below: by the state the two cannot be told apart. The hardware can. Every
-request waits its turn and reaches the lens:
+request waits in the queue and reaches the lens:
 
 ```text
 zoom 2.0: begin
@@ -263,8 +269,8 @@ Job<void> setZoom(double zoom) => run<Ready, void>(
     );
 ```
 
-`replace` drops the queued job with the same key and takes its place, so the
-same three calls reach the hardware once:
+`replace` drops the queued job with the same key before it queues the new one,
+so the same three calls reach the hardware once:
 
 ```text
 [setZoom: zoom: 2.0] dropped Cancelled(manual)
@@ -402,7 +408,7 @@ once the operation it started is over — the table at the top of the page
 saves is the rest of the body: the zoom publishes no state for a camera about
 to close, and the disposal starts as soon as the hardware is free.
 
-The fault is in a call made after the disposal is over. It starts a job of its
+The fault is in a call made after the disposal is over. It queues a job of its
 own, and `canStart` drops that job before it starts:
 
 ```text
@@ -497,14 +503,17 @@ closed
 ```
 
 The disposal failed and the camera is still open, but the controller closed
-right after it, and a second `dispose()` comes back `Cancelled(closed)`. The
-outcome arrives when nothing can act on it any more.
+right after it, and a second `dispose()` comes back `Cancelled(closed)`. Nobody
+reads the outcome of the first one, so its failure goes to the zone as an
+unhandled error, the way
+[Handled and unhandled failures](errors.md#handled-and-unhandled-failures) on
+the errors page describes. The failure arrives where nothing can act on it.
 
 ### Awaiting the disposal
 
 ```dart
 final camera = CameraController(FakeCameraHardware());
-await camera.init().done;
+await camera.init().value;
 
 camera.setZoom(2); // no await needed, and no lint about it
 
@@ -513,37 +522,45 @@ final photo = await camera.takePhoto().value;
 switch (await camera.dispose().done) {
   case Done():
     print('disposed');
+    await camera.close();
   case Cancelled(:final reason):
     print('cancelled: $reason');
   case Failed(:final error):
     print('failed: $error');
 }
-
-await camera.close();
 ```
 
-The disposal is over before `close()` is called, and `close()` finds nothing to
-cancel.
+`close()` stands in the `Done` case: the disposal is over before it is called,
+and `close()` finds nothing to cancel.
 
 `Failed` is the case that needs handling: a close that fails is not a disposal.
 `ctx.run` throws what the child threw, the body never reaches
-`emit(Disposed())`, and the state stays where it was. The controller is still
-open, so a second `dispose()` can try again. `Cancelled` does not come back in
-this code. A disposal that has started turns every cancellation down; a queued
-one is taken out only by `close()` or a forced clear, and nothing here calls
+`emit(Disposed())`, and the state stays where it was. The code above leaves the
+controller open in that case, so a second `dispose()` can try again.
+`Cancelled` does not come back in this code. A disposal that has started turns
+every cancellation down; a queued one is taken out only by `close()` or by a
+forced removal such as `queue.clear(force: true)`, and nothing here calls
 either before the outcome arrives. The switch names the case because an outcome
 is always one of the three. It does come back when `close()` gets there first,
 as in the first attempt, or when the controller was closed before `dispose()`
 was called.
 
+`init().value` returns nothing. It is awaited because it throws when the camera
+did not open, and the code stops there with the error of the opening.
 `setZoom(2)` is not awaited: a `Job` is not a `Future`, and `unawaited_futures`
-has nothing to say about it. The shot waits behind the zoom in the queue, and
-`value` hands over its photo — or throws, if the shot fails or is cancelled.
+has nothing to say about it. Nobody reads the outcome of that zoom, so a
+failure of it would go to the zone like the failed disposal of the second
+attempt; `camera.setZoom(2).ignore()` leaves the reporting to the hooks
+instead. The shot waits behind the zoom in the queue, and `value` hands over
+its photo — or throws, if the shot fails or is cancelled.
 
 ## A failure after the disposal
 
-The hardware reports a failure on its own, and the controller turns it into
-`Broken`:
+The hardware reports a failure on its own, and the controller turns the report
+into `Broken`. Once the camera is disposed, a report must change nothing:
+`Disposed` is the state the controller ends on.
+
+### The first attempt
 
 ```dart
 CameraController(this.hw) : super(const Initial()) {
@@ -551,10 +568,10 @@ CameraController(this.hw) : super(const Initial()) {
 }
 ```
 
-### The first attempt
-
-The disposal of the section above, with the listener left in place. The
-hardware reports a failure after `Disposed` and before `close()`:
+The listener is set and never taken off. The camera is disposed and its
+controller closed as in [Awaiting the disposal](#awaiting-the-disposal), and
+the hardware reports a failure in between, after `Disposed` and before
+`close()`:
 
 ```text
 [dispose] started
@@ -569,6 +586,20 @@ The disposal decided the final state, and the next report of the hardware
 replaced it. After `close()` the same report does not change the state: the
 state of a closed controller is final, so `externalSetState` throws a
 `StateError`, and it throws into the hardware's own callback.
+
+### The second attempt
+
+```dart
+@override
+void onClose() => hw.onError = null;
+```
+
+`onClose` is where [externalSetState](state.md#externalsetstate) on the state
+page stops a source: the engine calls it once, when the last job is over and
+the controller is about to finish closing. A report that comes after `close()`
+now finds no listener, and nothing throws. The report in the journal above came
+before `close()`, and this version prints the same journal: the camera is done
+with its hardware when it is disposed, and the controller closes after that.
 
 ### Detaching the source first
 
@@ -595,8 +626,11 @@ Job<void> dispose() {
 ```
 
 The listener goes before anything else, so the disposal decides the final state
-alone, and a failure reported after it — or after `close()` — has nobody to
-tell. The camera stays `Disposed`.
+alone, and a failure reported after it has nobody to tell. The camera stays
+`Disposed`. A disposal that fails leaves the listener off as well: until a
+second `dispose()` succeeds, the controller does not hear its hardware.
+`onClose` stays in the example for a controller that is closed without a
+disposal.
 
 ## Running the example
 

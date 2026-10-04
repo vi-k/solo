@@ -51,12 +51,19 @@ final class CameraController extends Solo<CameraState> {
     hw.onError = (error) => externalSetState(Broken(error));
   }
 
+  /// Takes the listener off a controller that is closed without a disposal.
+  /// Past the end of closing, a report of the hardware would make
+  /// [externalSetState] throw, and throw into the hardware's own callback.
+  /// [dispose] takes the listener off earlier, for a reason of its own.
+  @override
+  void onClose() => hw.onError = null;
+
   /// Opens the hardware once. `W` is [NotDisposed], not [Initial]: the body
   /// emits [Preparing] and must still be allowed to read the context.
   ///
   /// An opening that fails or is cancelled lands in [Broken], the state
-  /// [reopen] starts from. Left in [Preparing], the controller could start
-  /// nothing again: `init` wants [Initial], `reopen` [Ready] or [Broken].
+  /// [reopen] starts from. Left in [Preparing], the camera could not be
+  /// opened again: `init` wants [Initial], `reopen` [Ready] or [Broken].
   Job<void> init() => run<NotDisposed, void>(
         key: CameraKey.init,
         policy: Policy.droppable,
@@ -178,9 +185,9 @@ final class CameraController extends Solo<CameraState> {
   /// controller.
   Job<void> dispose() {
     // The source of external states goes first: the disposal below decides
-    // the final state, and a `Broken` arriving in the middle of it would
-    // overwrite that decision. Past `close` such a write throws instead --
-    // the state of a closed controller is final.
+    // the final state, and a `Broken` reported after it would replace
+    // `Disposed`. `onClose` comes too late for that report: the controller
+    // is closed after the disposal, not by it.
     hw.onError = null;
     // Not `force`: an earlier disposal still in the queue is not
     // cancellable, so it survives the clear, and `droppable` below hands it
