@@ -122,7 +122,9 @@ void main() {
       final order = <String>[];
       final job = ProbeJob<void>((ctx) async {
         ctx.onDispose(() => order.add('cleanup'));
-        await ctx.wait(() => Future<void>.delayed(const Duration(seconds: 1)));
+        await ctx.abandonable(
+          () => Future<void>.delayed(const Duration(seconds: 1)),
+        );
       })
         ..launch();
       async.elapse(const Duration(milliseconds: 10));
@@ -208,7 +210,7 @@ void main() {
         key: 'job',
         observer: journal,
         (ctx) async {
-          await ctx.wait(
+          await ctx.abandonable(
             () => Future<void>.delayed(const Duration(milliseconds: 50)),
           );
           return 1;
@@ -250,7 +252,7 @@ void main() {
   test('the lifecycle hooks bracket the body', () {
     fakeAsync((async) {
       final job = ProbeJob<int>((ctx) async {
-        await ctx.wait(() => delay(10));
+        await ctx.abandonable(() => delay(10));
 
         return 1;
       })

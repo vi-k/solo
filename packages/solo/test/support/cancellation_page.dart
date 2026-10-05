@@ -23,7 +23,7 @@ final class Opening extends Solo<AppState> with OpenSolo<AppState>, Desk {
       (ctx) async {
         // The wait ends the moment cancellation is accepted. The request may
         // still be in flight; whatever it returns is dropped.
-        final name = await ctx.wait(() => api.load(id));
+        final name = await ctx.abandonable(() => api.load(id));
 
         // Waited out whatever happens, and only afterwards does the
         // cancellation come out in place of the value. The handle goes to

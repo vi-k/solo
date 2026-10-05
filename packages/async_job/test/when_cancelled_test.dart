@@ -24,7 +24,7 @@ void main() {
   test('a running job delivers the cancellation before cancel returns', () {
     fakeAsync((async) {
       final seen = <Cancelled>[];
-      final job = Job<void>((ctx) => ctx.wait(() => delay(50)))
+      final job = Job<void>((ctx) => ctx.abandonable(() => delay(50)))
         ..whenCancelled(seen.add);
       async.flushMicrotasks();
       job.cancel().ignore();
@@ -195,7 +195,7 @@ void main() {
     fakeAsync((async) {
       final seen = <Cancelled>[];
       final job = Job<void>(
-        (ctx) => ctx.wait(() => delay(50)),
+        (ctx) => ctx.abandonable(() => delay(50)),
         cancellable: false,
       )..whenCancelled(seen.add);
       async.flushMicrotasks();
@@ -357,11 +357,11 @@ void main() {
                   // that tells its listeners has not run yet.
                   parent.whenCancelled((_) => heard.add('late'));
                 });
-                await child.wait(() => delay(100));
+                await child.abandonable(() => delay(100));
               }),
             )
             .ignore();
-        await ctx.wait(() => delay(100));
+        await ctx.abandonable(() => delay(100));
       })
         ..ignore()
         ..whenCancelled((_) => heard.add('early'));

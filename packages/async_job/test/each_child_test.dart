@@ -114,7 +114,7 @@ void main() {
       final parent = Job<void>((ctx) async {
         listening = ctx.each(source.stream, (child, event) async {
           expect(child.job, same(listening));
-          await child.wait(() => waiting.future);
+          await child.abandonable(() => waiting.future);
           past = true;
         });
       });

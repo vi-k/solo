@@ -13,7 +13,8 @@
 ```dart
 final job = Job<void>((ctx) async {
   // Ребёнок: тело его запускает, дожидается и отменяет вместе с собой.
-  final rows = await ctx.run(Job.deferred<int>((c) => c.wait(loadRows)));
+  final rows =
+      await ctx.run(Job.deferred<int>((c) => c.abandonable(loadRows)));
 
   // Стрим: по одному событию, в собственном ребёнке.
   final saving = ctx.each(events, (c, e) => c.join(() => save(e)));
@@ -36,7 +37,7 @@ API: с обычного `Future.wait`, который и так есть в л�
 
 ```dart
 final parent = Job<void>((ctx) async {
-  final child = Job.deferred<int>((ctx) => ctx.wait(load));
+  final child = Job.deferred<int>((ctx) => ctx.abandonable(load));
   final rows = await ctx.run(child);
   ctx.log('$rows rows');
 });
@@ -71,8 +72,8 @@ final parent = Job<void>((ctx) async {
 
 ```dart
 final parent = Job<void>((ctx) async {
-  final rows = ctx.run(Job.deferred<int>((c) => c.wait(loadRows)));
-  final child = Job.deferred<void>((c) => c.wait(warmCache));
+  final rows = ctx.run(Job.deferred<int>((c) => c.abandonable(loadRows)));
+  final child = Job.deferred<void>((c) => c.abandonable(warmCache));
   ctx.run(child).ignore();
   ctx.log('${await rows} rows');
 });
@@ -153,10 +154,10 @@ Job<void> level(int depth) {
 ```dart
 final parent = Job<void>((ctx) async {
   final rows = Job.deferred<Source>(
-    (ctx) => ctx.wait(openRows, discard: (source) => source.close()),
+    (ctx) => ctx.abandonable(openRows, discard: (source) => source.close()),
   );
   final images = Job.deferred<Source>(
-    (ctx) => ctx.wait(openImages, discard: (source) => source.close()),
+    (ctx) => ctx.abandonable(openImages, discard: (source) => source.close()),
   );
 
   final sources = await Future.wait([ctx.run(rows), ctx.run(images)]);
@@ -204,10 +205,10 @@ final sources = await Future.wait(
 ```dart
 final parent = Job<void>((ctx) async {
   final rows = Job.deferred<Source>(
-    (ctx) => ctx.wait(openRows, discard: (source) => source.close()),
+    (ctx) => ctx.abandonable(openRows, discard: (source) => source.close()),
   );
   final images = Job.deferred<Source>(
-    (ctx) => ctx.wait(openImages, discard: (source) => source.close()),
+    (ctx) => ctx.abandonable(openImages, discard: (source) => source.close()),
   );
 
   final sources = await [
@@ -247,15 +248,15 @@ final parent = Job<void>((ctx) async {
 сама по себе, её сосед доигрывает до конца. С отменой родителя иначе: она
 каскадом доходит до каждого ребёнка, в том числе до веток `.wait`. Ресурс,
 открытый веткой для себя, всё равно освобождается вовремя, если ветка взяла его
-через `ctx.wait(() => open(), dispose: (value) => value.close())`: уборка
-принадлежит задаче, а не ожиданию.
+через `ctx.abandonable(() => open(), dispose: (value) => value.close())`:
+уборка принадлежит задаче, а не ожиданию.
 
 ### Когда один провал делает остальное бессмысленным
 
 ```dart
 final values = await ctx.runAll([
-  Job.deferred<int>((ctx) => ctx.wait(loadRows)),
-  Job.deferred<int>((ctx) => ctx.wait(loadExtra)),
+  Job.deferred<int>((ctx) => ctx.abandonable(loadRows)),
+  Job.deferred<int>((ctx) => ctx.abandonable(loadExtra)),
 ]);
 ```
 
@@ -291,7 +292,7 @@ final values = await ctx.runAll([
 с веткой, тело которой вернуло значение: группа держит такую ветку, пока
 не решит, чем кончится сама, и до тех пор у ветки нет исхода, а её уборка ждёт.
 
-**Остановка кооперативная.** Ветка, ждущая через `ctx.wait`, кончится,
+**Остановка кооперативная.** Ветка, ждущая через `ctx.abandonable`, кончится,
 а операция за ней доиграет и запишет свой результат. Чтобы остановилась сама
 работа, передайте ей отмену через `ctx.onCancel` и дождитесь её через
 `ctx.join`. Ветка, созданная с `cancellable: false`, отвергает остановку вовсе,
@@ -315,7 +316,7 @@ final values = await ctx.runAll([
 тело одной из веток кончилось не значением. Ядро такое зависание не распознаёт:
 ошибки не будет, группа просто ждёт. Отмена снимает это зависание на тех же
 условиях, что и зависание на блокировке из следующего пункта: ветка, которая
-ждёт соседа через `ctx.wait`, кончается, если только она не создана
+ждёт соседа через `ctx.abandonable`, кончается, если только она не создана
 с `cancellable: false` и не ждёт внутри `ctx.uncancellable`, а ветка в голом
 `await` не кончается. Для веток, зависящих друг от друга, выход даёт
 `[...].wait`.
@@ -334,18 +335,18 @@ final values = await ctx.runAll([
 
 Отмена, родителя или ветки, снимает зависание, только если кончает то, чего
 ветка ещё ждёт перед размоткой: её тело или её ребёнка. Кончить их она может,
-когда они ждут через `ctx.wait` или на операции, которая слышит `ctx.onCancel`.
-Застрявших в `ctx.join` на операции, глухой к отмене, в голом `await`, внутри
-`ctx.uncancellable` или в задаче с `cancellable: false` отмена не кончает.
-Отмена ветки, которая держит блокировку, ничего не даёт: её тело уже кончилось.
-Поэтому такую блокировку берите в ребёнке ветки. Он отпустит её, когда
-кончится, ещё внутри тела ветки:
+когда они ждут через `ctx.abandonable` или на операции, которая слышит
+`ctx.onCancel`. Застрявших в `ctx.join` на операции, глухой к отмене, в голом
+`await`, внутри `ctx.uncancellable` или в задаче с `cancellable: false` отмена
+не кончает. Отмена ветки, которая держит блокировку, ничего не даёт: её тело
+уже кончилось. Поэтому такую блокировку берите в ребёнке ветки. Он отпустит её,
+когда кончится, ещё внутри тела ветки:
 
 ```dart
 Job.deferred<Source>((ctx) async {
   final locked = Job.deferred<Source>((ctx) async {
     await ctx.join(Lock.acquire, dispose: (lock) => lock.release());
-    return ctx.wait(openRows, discard: (source) => source.close());
+    return ctx.abandonable(openRows, discard: (source) => source.close());
   });
 
   return ctx.run(locked, discard: (source) => source.close());
@@ -369,8 +370,10 @@ Job.deferred<Source>((ctx) async {
 
 ```dart
 Job.deferred<Source>((ctx) async {
-  final cache = await ctx.wait(openCache, dispose: (cache) => cache.close());
-  final rows = await ctx.wait(openRows, discard: (source) => source.close());
+  final cache =
+      await ctx.abandonable(openCache, dispose: (cache) => cache.close());
+  final rows =
+      await ctx.abandonable(openRows, discard: (source) => source.close());
   await ctx.join(() => cache.warm(rows));
 
   return rows;
@@ -378,7 +381,7 @@ Job.deferred<Source>((ctx) async {
 ```
 
 Владение здесь то же, что и везде, и именно в группе оно начинает быть важным.
-Ресурс, который ветка держит для себя, идёт в `dispose` у `ctx.wait`
+Ресурс, который ветка держит для себя, идёт в `dispose` у `ctx.abandonable`
 и `ctx.join` или в `onDispose` и закрывается концом ветки при любом исходе.
 Ресурс, который ветка отдаёт наружу, идёт в их `discard` или в `onDiscard`: он
 живёт до полного успеха группы и достаётся вызывающему открытым. Когда группа
@@ -638,7 +641,7 @@ parsed = loaded.then<int>((ctx, text) => int.parse(text));
 
 ```dart
 final opened = Job<Source>(
-  (ctx) => ctx.wait(openRows, discard: (rows) => rows.close()),
+  (ctx) => ctx.abandonable(openRows, discard: (rows) => rows.close()),
 );
 final archived = opened.then<void>((ctx, rows) async {
   ctx.onDispose(rows.close);
@@ -671,7 +674,7 @@ final archived = opened.then<void>((ctx, rows) async {
 Родителю нужны строки, а доклад о них может кончиться позже родителя:
 
 ```dart
-final child = Job.deferred<int>((ctx) => ctx.wait(load));
+final child = Job.deferred<int>((ctx) => ctx.abandonable(load));
 final tail = child.then<void>((ctx, rows) => report(rows));
 
 final parent = Job<void>((ctx) async {
@@ -709,7 +712,7 @@ await tail.value; // tail наблюдать вам.
 берёт обоих детьми:
 
 ```dart
-final child = Job.deferred<int>((ctx) => ctx.wait(load));
+final child = Job.deferred<int>((ctx) => ctx.abandonable(load));
 final tail = child.then<void>((ctx, rows) => report(rows));
 
 final parent = Job<void>((ctx) async {
@@ -733,7 +736,8 @@ which starts itself once its source finishes: "Job(then)"
 
 ```dart
 final parent = Job<void>((ctx) async {
-  final rows = await ctx.run(Job.deferred<int>((ctx) => ctx.wait(load)));
+  final rows =
+      await ctx.run(Job.deferred<int>((ctx) => ctx.abandonable(load)));
   await ctx.run(Job.deferred<void>((ctx) => ctx.join(() => report(rows))));
 });
 ```

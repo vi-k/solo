@@ -92,7 +92,7 @@ const outside = [
 /// Every error a job can run into outside its body, one of each: a
 /// `discard` releasing a value the cancellation kept from the body,
 /// cleanup, a callback of `onCancel` and of `whenCancelled`, unattended
-/// work, and the late failure of an action `wait` walked away from.
+/// work, and the late failure of an action `abandonable` walked away from.
 Job<void> failingOutside(JobObserver? observer) {
   final job = Job<void>(key: 'j', observer: observer, (ctx) async {
     ctx
@@ -104,7 +104,7 @@ Job<void> failingOutside(JobObserver? observer) {
       });
     // `ignore`, so the Cancelled thrown into the abandoned future does not
     // reach the zone on its own account.
-    ctx.wait(() async {
+    ctx.abandonable(() async {
       await delay(50);
       throw StateError('abandoned');
     }).ignore();
@@ -143,7 +143,9 @@ List<String> cancelledOutside(JobObserver? observer) => zoneOf((async) {
 /// failure.
 Job<int> failingFirst(String key, {JobObserver? observer}) =>
     Job.deferred<int>(key: key, observer: observer, (ctx) async {
-      ctx.run(Job.deferred<void>((ctx) => ctx.wait(() => delay(50)))).ignore();
+      ctx
+          .run(Job.deferred<void>((ctx) => ctx.abandonable(() => delay(50))))
+          .ignore();
       await delay(5);
       throw StateError('$key failed first');
     });
@@ -172,7 +174,7 @@ List<String> rootCancelled(
     zoneOf((async) {
       final root = Job<void>(observer: observer, (ctx) async {
         ctx
-            .run(Job.deferred<void>((ctx) => ctx.wait(() => delay(50))))
+            .run(Job.deferred<void>((ctx) => ctx.abandonable(() => delay(50))))
             .ignore();
         await delay(5);
         throw StateError('root failed first');
@@ -188,7 +190,7 @@ List<String> rootCancelled(
 Job<void> eachFailingFirst(JobContext ctx) =>
     ctx.each(Stream<int>.fromIterable([1]), (child, event) {
       child
-          .run(Job.deferred<void>((ctx) => ctx.wait(() => delay(50))))
+          .run(Job.deferred<void>((ctx) => ctx.abandonable(() => delay(50))))
           .ignore();
       throw StateError('each failed first');
     });
@@ -571,7 +573,7 @@ void main() {
       expectAnswered(
         (observer) => eachCancelled(
           observer,
-          (ctx, child) => ctx.wait(() => delay(100)),
+          (ctx, child) => ctx.abandonable(() => delay(100)),
         ),
         eachError,
       );
@@ -666,7 +668,7 @@ void main() {
             await ctx.runAll([
               failingFirst('branch'),
               Job.deferred<int>((ctx) async {
-                await ctx.wait(() => delay(100));
+                await ctx.abandonable(() => delay(100));
                 return 2;
               }),
             ]);
@@ -687,7 +689,7 @@ void main() {
             try {
               await ctx.runAll([
                 Job.deferred<int>((ctx) async {
-                  await ctx.wait(() => delay(5));
+                  await ctx.abandonable(() => delay(5));
                   throw StateError('first');
                 }),
                 Job.deferred<int>((ctx) async {
@@ -723,7 +725,7 @@ void main() {
                   ctx
                       .run(
                         Job.deferred<void>(
-                          (ctx) => ctx.wait(() => delay(50)),
+                          (ctx) => ctx.abandonable(() => delay(50)),
                         ),
                       )
                       .ignore();
@@ -806,7 +808,7 @@ void main() {
         (observer) => zoneOf((async) {
           final parent = Job<void>(observer: observer, (ctx) async {
             ctx.run(failingFirst('child')).ignore();
-            await ctx.wait(() => delay(100));
+            await ctx.abandonable(() => delay(100));
           });
           async.elapse(const Duration(milliseconds: 10));
           parent.cancel().ignore();
@@ -904,10 +906,13 @@ void main() {
     // failure the body threw before the cancellation came is a `Failed`
     // nobody observed, and it goes to the zone as well.
     const device = 'Bad state: device failed';
-    Future<void> viaWait(JobContext ctx, void Function(void Function()) arm) {
+    Future<void> viaAbandonable(
+      JobContext ctx,
+      void Function(void Function()) arm,
+    ) {
       final operation = Completer<void>();
       arm(() => operation.completeError(StateError('device failed')));
-      return ctx.wait(() => operation.future);
+      return ctx.abandonable(() => operation.future);
     }
 
     Future<void> viaJoin(JobContext ctx, void Function(void Function()) arm) {
@@ -917,8 +922,8 @@ void main() {
     }
 
     for (var n = 1; n <= 6; n++) {
-      test('wait, the cancellation $n microtasks after the failure', () {
-        expect(failureAndCancellation(viaWait, microtasks: n), [device]);
+      test('abandonable, the cancellation $n microtasks after the failure', () {
+        expect(failureAndCancellation(viaAbandonable, microtasks: n), [device]);
       });
     }
 
@@ -928,8 +933,12 @@ void main() {
       });
     }
 
-    test('wait, the cancellation first: the abandoned action fails late', () {
-      expect(failureAndCancellation(viaWait, cancelFirst: true), [device]);
+    test('abandonable, the cancellation first: the abandoned action fails late',
+        () {
+      expect(
+        failureAndCancellation(viaAbandonable, cancelFirst: true),
+        [device],
+      );
     });
 
     test('join, the cancellation first: the body fails after the mark', () {
@@ -1081,7 +1090,7 @@ void main() {
     }
 
     final members = <String, Future<void> Function(JobContext ctx)>{
-      'wait': (ctx) => ctx.wait(stepFailing),
+      'abandonable': (ctx) => ctx.abandonable(stepFailing),
       'join': (ctx) => ctx.join(stepFailing),
       'uncancellable': (ctx) => ctx.uncancellable(stepFailing),
       'a child of run': (ctx) =>
@@ -1111,12 +1120,12 @@ void main() {
         cancelledAt10((ctx) async {
           Object? first;
           try {
-            await ctx.wait(stepFailing);
+            await ctx.abandonable(stepFailing);
           } on Object catch (error) {
             first = error;
           }
           try {
-            await ctx.wait(() async {
+            await ctx.abandonable(() async {
               await delay(1);
               throw StateError('second');
             });
@@ -1139,7 +1148,7 @@ void main() {
           (ctx, arm) {
             final operation = Completer<void>();
             arm(() => operation.completeError('device failed'));
-            return ctx.wait(() => operation.future);
+            return ctx.abandonable(() => operation.future);
           },
         ),
         ['device failed'],
@@ -1261,7 +1270,7 @@ void main() {
         cancelledAt10((ctx) async {
           late final Object caught;
           try {
-            await ctx.wait(() async {
+            await ctx.abandonable(() async {
               await delay(1);
               Error.throwWithStackTrace(double.nan, StackTrace.current);
             });
@@ -1287,7 +1296,7 @@ void main() {
             final caught = <Object>[];
             for (final error in ['step', 'second']) {
               try {
-                await ctx.wait(() async {
+                await ctx.abandonable(() async {
                   await delay(1);
                   Error.throwWithStackTrace(error, StackTrace.current);
                 });
@@ -1419,7 +1428,7 @@ void main() {
             await ctx.runAll([
               failingFirst('branch')..ignore(),
               Job.deferred<int>((ctx) async {
-                await ctx.wait(() => delay(100));
+                await ctx.abandonable(() => delay(100));
                 return 2;
               }),
             ]);
@@ -1439,11 +1448,11 @@ void main() {
             try {
               await ctx.runAll([
                 Job.deferred<int>((ctx) async {
-                  await ctx.wait(() => delay(10));
+                  await ctx.abandonable(() => delay(10));
                   throw StateError('first');
                 }),
                 Job.deferred<int>(cancellable: false, (ctx) async {
-                  await ctx.wait(() => delay(20));
+                  await ctx.abandonable(() => delay(20));
                   throw StateError('second');
                 })
                   ..ignore(),
@@ -1552,7 +1561,9 @@ void main() {
       (observer) => zoneOf((async) {
         final root = ProbeJob<void>(observer: observer, (ctx) async {
           ctx
-              .run(Job.deferred<void>((ctx) => ctx.wait(() => delay(50))))
+              .run(
+                Job.deferred<void>((ctx) => ctx.abandonable(() => delay(50))),
+              )
               .ignore();
           await delay(5);
           throw StateError('failed first');
@@ -1580,11 +1591,11 @@ void main() {
         try {
           await ctx.runAll([
             Job.deferred<int>((ctx) async {
-              await ctx.wait(() => delay(10));
+              await ctx.abandonable(() => delay(10));
               throw StateError('first');
             }),
             Job.deferred<int>(cancellable: false, (ctx) async {
-              await ctx.wait(() => delay(20));
+              await ctx.abandonable(() => delay(20));
               throw StateError('second');
             }),
           ]);
@@ -1717,7 +1728,8 @@ void main() {
     final zone = <Object>[];
     await runZonedGuarded(
       () async {
-        // A clean envelope, the way `wait` on a list of futures builds one.
+        // A clean envelope, the way `abandonable` on a list of futures builds
+        // one.
         Object? envelope;
         try {
           await [

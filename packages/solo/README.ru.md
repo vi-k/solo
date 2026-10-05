@@ -85,7 +85,7 @@ final class ProfileController extends Solo<ProfileState> {
         onCancel: (state, cancelled) => const Initial(),
         (ctx) async {
           ctx.emit(const Loading());
-          final name = await ctx.wait(api.fetchName);
+          final name = await ctx.abandonable(api.fetchName);
           ctx.emit(Loaded(name));
           return name;
         },
@@ -100,8 +100,8 @@ final class ProfileController extends Solo<ProfileState> {
 отмены:
 
 - `ctx.emit` обновляет состояние контроллера.
-- `ctx.wait` ждёт ответ API или бросает `Cancelled`, если во время ожидания
-  `Job` принимает отмену.
+- `ctx.abandonable` ждёт ответ API или бросает `Cancelled`, если во время
+  ожидания `Job` принимает отмену.
 
 Два параметра `run` задают состояние для публикации, если `Job` не завершилась
 успехом:
@@ -197,7 +197,7 @@ Job<String> reload() => run<Loaded, String>(
         // Снимок чужого контроллера: обычное чтение, и имя об этом
         // говорит.
         final user = session.currentState.user;
-        final name = await ctx.wait(() => api.fetchName(user));
+        final name = await ctx.abandonable(() => api.fetchName(user));
         // Собственное состояние этой Job: контрольная точка, которая
         // бросит `Cancelled`, если Job отменена или состояние уже
         // не `Loaded`.
@@ -267,7 +267,7 @@ final class Player extends Solo<PlayerState> {
           // останавливается раньше, чем загрузится следующий.
           await ctx.join(device.stop);
           // Отмена прекращает это ожидание сразу; запрос может идти дальше.
-          final track = await ctx.wait(() => api.fetch(id));
+          final track = await ctx.abandonable(() => api.fetch(id));
           // Этого тоже дожидаются. `dispose` закрывает скачивание, когда
           // Job заканчивается, или сразу после возврата вызова, если Job
           // за это время отменили.
@@ -332,7 +332,7 @@ await player.close(mode: SoloCloseMode.drain);
 | --- | --- |
 | [Задачи и очередь](../../docs/ru/solo/jobs.md) | Постановка работы, исходы, ключи, политики очереди |
 | [Состояние](../../docs/ru/solo/state.md) | Публикация, правила, наблюдение, внешние изменения, состояние после ошибки |
-| [Отмена](../../docs/ru/solo/cancellation.md) | `wait`, `join`, `pause`, `uncancellable`, остановка операции, закрытие |
+| [Отмена](../../docs/ru/solo/cancellation.md) | `abandonable`, `join`, `pause`, `uncancellable`, остановка операции, закрытие |
 | [Ресурсы и освобождение](../../docs/ru/solo/resources.md) | `onDispose`, `dispose` и `discard`, передача, порядок |
 | [Дочерние задачи и стримы](../../docs/ru/solo/children.md) | Дочерние `Job`, стримы, слежение за другим контроллером |
 | [Накопление событий](../../docs/ru/solo/accumulation.md) | `collect`, `accumulate`, debounce и throttle |
@@ -358,7 +358,7 @@ await player.close(mode: SoloCloseMode.drain);
 | Журналу нужно сказать, какая операция изменила состояние | `SoloTransition` в `onChange` | [Наблюдение за всеми контроллерами](../../docs/ru/solo/errors.md#наблюдение-за-всеми-контроллерами) |
 | Вызов должен закончиться до того, как очередь пойдёт дальше | `ctx.join` | [Отмена](../../docs/ru/solo/cancellation.md) |
 | Шаг из нескольких вызовов нельзя прервать на половине | `ctx.uncancellable` | [Защита шага или всей задачи](../../docs/ru/solo/cancellation.md#защита-шага-или-всей-задачи) |
-| Ресурс, открытый вызовом, которого никто не дождался, всё равно надо закрыть | `dispose` или `discard` у `ctx.wait` и `ctx.join` | [Получение ресурса вызовом](../../docs/ru/solo/resources.md#получение-ресурса-вызовом) |
+| Ресурс, открытый вызовом, которого никто не дождался, всё равно надо закрыть | `dispose` или `discard` у `ctx.abandonable` и `ctx.join` | [Получение ресурса вызовом](../../docs/ru/solo/resources.md#получение-ресурса-вызовом) |
 | Виджет перестраивается из-за состояния, которым не пользуется | `SoloSelector` из `flutter_solo` | [Выбор одного значения](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.ru.md#выбор-одного-значения) |
 | Очередь нужно на время остановить | `Job`, которая ждёт `Completer` в голове очереди | [Пауза очереди](../../docs/ru/solo/jobs.md#пауза-очереди) |
 | Событие стрима приходит микротаской позже, и это поздно | `addListener`, который зовёт колбэк внутри изменения | [Наблюдение за состоянием](../../docs/ru/solo/state.md#наблюдение-за-состоянием) |

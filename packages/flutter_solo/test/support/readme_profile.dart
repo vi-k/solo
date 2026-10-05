@@ -33,7 +33,7 @@ final class ProfileController extends Solo<Profile> with SoloListenable {
         policy: Policy.droppable, // a second tap returns the first job
         (ctx) async {
           ctx.emit(Loading());
-          final name = await ctx.wait(api.fetchName);
+          final name = await ctx.abandonable(api.fetchName);
           ctx.emit(Loaded(name));
 
           return name;

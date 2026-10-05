@@ -1,9 +1,9 @@
-// Section 10 of `doc/vs-bloc.md`, "Finishing an in-flight write before restarting": what the page leaves out,
-// then the code under its `### Solo` heading, verbatim, then what
-// `vs_bloc_rakes_test.dart` adds on top of it. Every piece of the page's
-// blocks is a run of lines of this file. The bloc side of the section is
-// built and run by the bench, `tool/doc_snippets.py`: this package does not
-// depend on bloc.
+// Section 10 of `doc/vs-bloc.md`, "Finishing an in-flight write before
+// restarting": what the page leaves out, then the code under its `### Solo`
+// heading, verbatim, then what `vs_bloc_rakes_test.dart` adds on top of it.
+// Every piece of the page's blocks is a run of lines of this file. The bloc
+// side of the section is built and run by the bench, `tool/doc_snippets.py`:
+// this package does not depend on bloc.
 import 'dart:async';
 
 import 'package:solo/solo.dart';
@@ -105,7 +105,7 @@ final class ParentController extends Solo<FirmwareState> {
               await tick(20);
               seen.add('the cleanup of the child ended');
             });
-            await childCtx.wait(() => tick(30));
+            await childCtx.abandonable(() => tick(30));
             seen.add('the body of the child ended');
           });
           unawaited(ctx.run(child));

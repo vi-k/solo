@@ -160,6 +160,6 @@ Future<String> renderThumbnail(JobContext ctx) async {
     case Thumbnail.isCancelled:
       Timer(const Duration(milliseconds: 5), ctx.job.cancel);
   }
-  await ctx.wait(() => delay(20));
+  await ctx.abandonable(() => delay(20));
   return 'thumbnail';
 }

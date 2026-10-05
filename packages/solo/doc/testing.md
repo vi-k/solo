@@ -19,7 +19,7 @@ final class ProfileController extends Solo<ProfileState> {
         onCancel: (state, cancelled) => const Initial(),
         (ctx) async {
           ctx.emit(const Loading());
-          final name = await ctx.wait(api.fetchName);
+          final name = await ctx.abandonable(api.fetchName);
           ctx.emit(Loaded(name));
           return name;
         },
@@ -264,11 +264,11 @@ red all the same. A job the test starts and drops on purpose says so with
 
 One failure is out of reach of all three: that of a call the job has walked
 away from. Cancel a load while the fake is still answering, or close the
-controller on it, and `ctx.wait` lets go of the call. The job ends `Cancelled`;
-the call fails twenty milliseconds later, and its error belongs to no outcome.
-It goes to the zone the job was created in, the test's again, and by then the
-test is over. A test that expects such an error sets `Solo.errorHandler`, which
-takes it in place of the zone:
+controller on it, and `ctx.abandonable` lets go of the call. The job ends
+`Cancelled`; the call fails twenty milliseconds later, and its error belongs to
+no outcome. It goes to the zone the job was created in, the test's again, and
+by then the test is over. A test that expects such an error sets
+`Solo.errorHandler`, which takes it in place of the zone:
 [Answering for an error](errors.md#answering-for-an-error) on the errors page.
 
 ## The order of what happened
@@ -449,12 +449,12 @@ expect('${job.outcome}', 'Cancelled(manual)');
 ```
 
 The job accepts the cancellation inside the call, and the outcome is still a
-few microtasks away: the body has to leave its `wait`, and the `onCancel`
-handler has to run. On the line under the call the outcome is `null`, and one
-`flushMicrotasks()` carries it to `Cancelled`. The first `flushMicrotasks()` is
-the one from the section above — it lets the load leave the queue, so what gets
-cancelled is a load that is running; one still in the queue is dropped inside
-the call, with its outcome there on the next line.
+few microtasks away: the body has to leave its `abandonable` call, and the
+`onCancel` handler has to run. On the line under the call the outcome is
+`null`, and one `flushMicrotasks()` carries it to `Cancelled`. The first
+`flushMicrotasks()` is the one from the section above — it lets the load leave
+the queue, so what gets cancelled is a load that is running; one still in the
+queue is dropped inside the call, with its outcome there on the next line.
 
 `elapse` moves `clock.now()` along with the timers, so a recipe that stamps
 time — the observer of
@@ -588,7 +588,7 @@ ends on time, and what has become of the call by then.
 ### The first attempt
 
 ```dart
-final name = await ctx.wait(
+final name = await ctx.abandonable(
   () => api.fetchName().timeout(const Duration(milliseconds: 5)),
 );
 ```

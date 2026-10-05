@@ -4,10 +4,16 @@ Moving from `0.2.0`: read "Breaking changes" for what stops compiling or
 behaves differently, and "Changes you will see on upgrade" for what a test or a
 log shows with no change to the code — errors that now reach the zone, and text
 that reads differently. This package re-exports `async_job` whole, so the
-breaking changes of the core are this package's too; the last entry of the
-first group names them.
+breaking changes of the core are this package's too; the first and the last
+entries of the first group name them.
 
 ### Breaking changes
+
+- **`ctx.wait` is renamed to `ctx.abandonable`** in `async_job`, which this
+  package re-exports; `wait` stays as a deprecated alias until the next
+  breaking release. **Migrating.** Replace `ctx.wait` with `ctx.abandonable`:
+  `flutter analyze` and `dart analyze --fatal-infos` fail on the old name. See
+  [the `async_job` changelog](https://github.com/vi-k/solo/blob/main/packages/async_job/CHANGELOG.md).
 
 - **`SoloBase` is renamed to `Solo`, and the former `Solo` — the class that
   carried the broadcast stream — becomes the mixin `SoloStream`.** `Solo` is
@@ -64,13 +70,13 @@ first group names them.
 
 - **`Solo.onError` is a notice, and the new `Solo.onUnanswered` answers for an
   error no outcome carries.** Such an error — an operation abandoned by
-  `ctx.wait` failing later, a disposer, an `onCancel` callback, work handed to
-  `ctx.unattended` — went to the zone the job was created in only while nobody
-  was listening. Setting `Solo.observer` kept it out of the zone, so an
-  observer set for a log switched reporting off for the whole process, and so
-  did an override of `onError` that did not call `super`. Now watching is not
-  answering. `onError` and the observer's `onError` are told about every error
-  of the controller, once, and move it nowhere. The answer is asked of
+  `ctx.abandonable` failing later, a disposer, an `onCancel` callback, work
+  handed to `ctx.unattended` — went to the zone the job was created in only
+  while nobody was listening. Setting `Solo.observer` kept it out of the zone,
+  so an observer set for a log switched reporting off for the whole process,
+  and so did an override of `onError` that did not call `super`. Now watching
+  is not answering. `onError` and the observer's `onError` are told about every
+  error of the controller, once, and move it nowhere. The answer is asked of
   `onUnanswered`, whose default body calls the new `Solo.errorHandler` — one
   handler for the process, set once at startup — and, with no handler set,
   sends the error to the zone the job was created in. A `Cancelled` still never
@@ -258,7 +264,7 @@ is the test's, and the test fails:
   `cancel()`, when `ctx.each` lets go of a stream: `0.2.0` dropped it.
 
 One report is gone: a job that gives up through `ctx.check()` inside a call
-`ctx.wait` has let go of no longer reaches `onError` as a failure.
+`ctx.abandonable` has let go of no longer reaches `onError` as a failure.
 
 Text that reads differently, for a test that matches it:
 

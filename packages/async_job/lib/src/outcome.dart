@@ -138,7 +138,7 @@ final class Done<T> extends Outcome<T> {
 /// [Job.ignore] silences it.
 ///
 /// The errors with no outcome to carry them — a late failure of an action
-/// [JobContext.wait] walked away from, a disposer, a callback of
+/// [JobContext.abandonable] walked away from, a disposer, a callback of
 /// [JobContext.onCancel] or [Job.whenCancelled], a failure of work handed over
 /// with [JobContext.unattended], a failure an engine of a domain hands to a job
 /// already over — take the other path: [JobObserver.onError] hears them, and an

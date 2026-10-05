@@ -13,17 +13,18 @@ import 'test_solo.dart';
 
 /// The first attempt of "Stopping the underlying operation": the waiting
 /// method that ends at once.
-final class WaitingPlayer extends Solo<AppState> with OpenSolo<AppState>, Desk {
+final class AbandoningPlayer extends Solo<AppState>
+    with OpenSolo<AppState>, Desk {
   final _player = player;
 
-  WaitingPlayer() : super(const Ready());
+  AbandoningPlayer() : super(const Ready());
 
   SoloJob<void> seek(Duration position) => run<Ready, void>(
         key: 'seek',
         policy: Policy.restart,
         (ctx) async {
           // Ends the moment the next seek cancels this one.
-          await ctx.wait(() => _player.seek(position));
+          await ctx.abandonable(() => _player.seek(position));
           ctx.emit(ctx.state.copyWith(position: position));
         },
       );

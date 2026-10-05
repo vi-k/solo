@@ -98,7 +98,7 @@ final class ProfileController extends Solo<Profile> with SoloListenable {
         policy: Policy.droppable, // второе нажатие вернёт первую Job
         (ctx) async {
           ctx.emit(Loading());
-          final name = await ctx.wait(api.fetchName);
+          final name = await ctx.abandonable(api.fetchName);
           ctx.emit(Loaded(name));
 
           return name;
@@ -139,12 +139,12 @@ class ProfileView extends StatelessWidget {
 и возвращает `String`; `save` сужает это до `Loaded`, поэтому такая `Job`
 ни в каком другом состоянии не стартует, а кончается там `Cancelled`, и её тело
 читает `Loaded` с `name` внутри. Внутри тела состояние записывает только
-`ctx.emit`, `ctx.wait` ждёт так же, как `await`, но сдаётся в тот момент, когда
-`Job` отменяют, а `ctx.join` дожидается своего вызова в любом случае, так что
-сохранение не рвётся пополам. `onError` и `onCancel` ведут назад: они говорят,
-в каком состоянии остаётся упавшая или отменённая загрузка, а без них экран
-держал бы спиннер задачи, которой уже нет. Всё API целиком, с правилами,
-очередью, детьми и наблюдателями, описано
+`ctx.emit`, `ctx.abandonable` ждёт так же, как `await`, но сдаётся в тот
+момент, когда `Job` отменяют, а `ctx.join` дожидается своего вызова в любом
+случае, так что сохранение не рвётся пополам. `onError` и `onCancel` ведут
+назад: они говорят, в каком состоянии остаётся упавшая или отменённая загрузка,
+а без них экран держал бы спиннер задачи, которой уже нет. Всё API целиком,
+с правилами, очередью, детьми и наблюдателями, описано
 в [solo](https://pub.dev/packages/solo).
 
 ## Выбор одного значения

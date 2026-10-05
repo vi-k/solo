@@ -133,7 +133,7 @@ Bench _coveredFailure(
       if (window == 'a child of its own') {
         final grandchild = bench.job<Ready, void>(
           key: 'grandchild',
-          (ctx) => ctx.wait(() => stage.start<void>('grandchild', null)),
+          (ctx) => ctx.abandonable(() => stage.start<void>('grandchild', null)),
         );
         childCtx.run(grandchild).ignore();
       } else {
@@ -146,7 +146,7 @@ Bench _coveredFailure(
     }
     if (silence == 'ctx.run(child).ignore()') {
       ctx.run(child).ignore();
-      await ctx.wait(() => stage.start<void>('parent step', null));
+      await ctx.abandonable(() => stage.start<void>('parent step', null));
     } else {
       try {
         await ctx.run(child);
@@ -727,7 +727,8 @@ void main() {
         parent = bench.run<Ready, void>(key: 'parent', (ctx) async {
           child = bench.job<Ready, void>(
             key: 'child',
-            (childCtx) => childCtx.wait(() => stage.start<void>('work', null)),
+            (childCtx) =>
+                childCtx.abandonable(() => stage.start<void>('work', null)),
           );
           try {
             await ctx.run(child);
@@ -838,7 +839,8 @@ void main() {
         final parent = bench.run<AppState, void>(key: 'parent', (ctx) async {
           child = bench.job<Ready, void>(
             key: 'child',
-            (childCtx) => childCtx.wait(() => stage.start<void>('work', null)),
+            (childCtx) =>
+                childCtx.abandonable(() => stage.start<void>('work', null)),
           );
           final running = ctx.run(child);
           ctx.emit(const Off());
@@ -949,7 +951,7 @@ void main() {
             child = bench.job<Ready, void>(
               key: 'child',
               (childCtx) =>
-                  childCtx.wait(() => stage.start<void>('work', null)),
+                  childCtx.abandonable(() => stage.start<void>('work', null)),
             );
             await ctx.run(child);
           });
@@ -972,7 +974,7 @@ void main() {
             child = bench.job<Ready, void>(
               key: 'child',
               (childCtx) =>
-                  childCtx.wait(() => stage.start<void>('work', null)),
+                  childCtx.abandonable(() => stage.start<void>('work', null)),
             );
             ctx.run(child).ignore();
             throw StateError('parent failed');
@@ -1063,7 +1065,7 @@ void main() {
             key: 'parent',
             (ctx) => ctx.runAll([
               bench.job<Ready, int>(key: 'a', (childCtx) async {
-                await childCtx.wait(() => stage.start<void>('a', null));
+                await childCtx.abandonable(() => stage.start<void>('a', null));
 
                 return 1;
               }),
@@ -1644,7 +1646,7 @@ void main() {
             'for the callback in flight.');
       });
 
-      for (final waiting in ['a plain await', 'childCtx.wait']) {
+      for (final waiting in ['a plain await', 'childCtx.abandonable']) {
         test('$waiting in the callback, and close()', () {
           final errors = _zone((async) {
             final bench = Bench();
@@ -1654,8 +1656,8 @@ void main() {
               key: 'track',
               (ctx) => ctx.each(hw.positions, (childCtx, p) async {
                 try {
-                  if (waiting == 'childCtx.wait') {
-                    await childCtx.wait(() => _delay(1000));
+                  if (waiting == 'childCtx.abandonable') {
+                    await childCtx.abandonable(() => _delay(1000));
                   } else {
                     await _delay(1000);
                   }
@@ -1678,16 +1680,18 @@ void main() {
             _see('the callback returned at $returned, close() at $closed');
           });
 
-          final at = waiting == 'childCtx.wait' ? '50 ms' : '1000 ms';
-          final track =
-              waiting == 'childCtx.wait' ? 'Cancelled(closed)' : 'no outcome';
+          final at = waiting == 'childCtx.abandonable' ? '50 ms' : '1000 ms';
+          final track = waiting == 'childCtx.abandonable'
+              ? 'Cancelled(closed)'
+              : 'no outcome';
           expect(errors, isEmpty);
           expect(_seen, [
             'at 50 ms: listening false',
             'track $track, next Cancelled(closed)',
             'the callback returned at $at, close() at $at',
           ]);
-          _says('`childCtx.wait` ends with the cancellation the moment it '
+          _says(
+              '`childCtx.abandonable` ends with the cancellation the moment it '
               'arrives and leaves the action running alone, while a plain '
               '`await` ends only when its own future does');
           _says('until the callback returns, the child and the parent are '

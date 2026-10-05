@@ -63,7 +63,7 @@ final class Camera extends Solo<CameraState> with SoloStream {
           try {
             await (joined
                 ? ctx.join(() => device.answer.future)
-                : ctx.wait(() => device.answer.future));
+                : ctx.abandonable(() => device.answer.future));
           } on Cancelled {
             stage.trace.add('the body resumed');
             rethrow;

@@ -214,7 +214,8 @@ void main() {
         }
       });
       started.complete();
-      await ctx.wait(() => Future<void>.delayed(const Duration(seconds: 10)));
+      await ctx
+          .abandonable(() => Future<void>.delayed(const Duration(seconds: 10)));
     });
     await started.future;
 

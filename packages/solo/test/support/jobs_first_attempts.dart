@@ -20,7 +20,7 @@ final class SharedKeyController extends Solo<CameraState>
   SoloJob<Profile> load(String id) => run<Ready, Profile>(
         key: _Op.load,
         policy: Policy.droppable,
-        (ctx) => ctx.wait(() => api.load(id)),
+        (ctx) => ctx.abandonable(() => api.load(id)),
       );
 }
 
@@ -39,7 +39,7 @@ final class TailGateController extends Solo<CameraState>
     final gate = _gate = Completer<void>();
     run<CameraState, void>(
       key: _Op.pause,
-      (ctx) => ctx.wait(() => gate.future),
+      (ctx) => ctx.abandonable(() => gate.future),
     );
   }
 
@@ -66,7 +66,7 @@ final class BodyGateController extends Solo<CameraState>
       job<CameraState, void>(key: _Op.pause, (ctx) async {
         // Cancellation is not a resume, and a cancelled gate is not a pause.
         ctx.onCancel(() => _gate = null);
-        await ctx.wait(() => gate.future);
+        await ctx.abandonable(() => gate.future);
       }),
       first: true,
     );

@@ -504,7 +504,7 @@ final class Transport extends Solo<Playback> {
         key: 'chime',
         (ctx) async {
           rang = true;
-          await ctx.wait(
+          await ctx.abandonable(
             () => Future<void>.delayed(const Duration(milliseconds: 50)),
           );
         },
@@ -527,7 +527,7 @@ final class BusyPlayer extends Player {
   /// together.
   SoloJob<void> busy() => run<Playback, void>(
         key: 'busy',
-        (ctx) => ctx.wait(
+        (ctx) => ctx.abandonable(
           () => Future<void>.delayed(const Duration(milliseconds: 50)),
         ),
       );
@@ -1142,8 +1142,9 @@ final class RestartingSearch extends Solo<SearchState> {
 # The second attempt's own method with the waiting swapped: the sentence about
 # `ctx.join` is measured, not reasoned about. Deriving it from the document's
 # block means it cannot drift away from the attempt it talks about.
-JOINED = snips['recipes/query'].replace('ctx.wait', 'ctx.join')
-assert JOINED != snips['recipes/query'], 'the second attempt must use ctx.wait'
+JOINED = snips['recipes/query'].replace('ctx.abandonable', 'ctx.join')
+assert JOINED != snips['recipes/query'], \
+    'the second attempt must use ctx.abandonable'
 assert JOINED.count('ctx.join') == 1, 'one call to swap, no more'
 
 JOINING = """
@@ -1159,7 +1160,7 @@ final class JoiningSearch extends Solo<SearchState> {
 # Same scenario as drive, reported as numbers instead of prose: how many
 # requests reached the server, and when the last screen appeared.
 PROBE = """
-(int, int) probeWait(RecordingSearchApi api) {
+(int, int) probeAbandonable(RecordingSearchApi api) {
   final search = RestartingSearch(api);
   return probe(api, search.query, () => search.currentState.results);
 }
@@ -1289,20 +1290,21 @@ void main() {
   require(third.asked.length == 1, 'one group, one request');
   require(debouncedScreens == 1, 'and one screen, the answer to `solo`');
 
-  // The sentence about `ctx.join`: it sends fewer requests than `ctx.wait`
-  // against this server and answers later, and the saving is the held slot
-  // rather than a property -- against a server faster than the typing it
-  // saves nothing at all.
-  final waited = probeWait(RecordingSearchApi());
+  // The sentence about `ctx.join`: it sends fewer requests than
+  // `ctx.abandonable` against this server and answers later, and the saving
+  // is the held slot rather than a property -- against a server faster than
+  // the typing it saves nothing at all.
+  final abandoned = probeAbandonable(RecordingSearchApi());
   final joined = probeJoin(RecordingSearchApi());
   require(
-    waited.$1 == 4 && joined.$1 < waited.$1,
-    'ctx.join lets fewer requests out than ctx.wait against this server',
+    abandoned.$1 == 4 && joined.$1 < abandoned.$1,
+    'ctx.join lets fewer requests out than ctx.abandonable against this '
+    'server',
   );
-  require(joined.$2 > waited.$2, 'and the answer arrives later for it');
+  require(joined.$2 > abandoned.$2, 'and the answer arrives later for it');
   require(
     probeJoin(RecordingSearchApi(40)).$1 ==
-        probeWait(RecordingSearchApi(40)).$1,
+        probeAbandonable(RecordingSearchApi(40)).$1,
     'against a server faster than the typing it saves nothing',
   );
 

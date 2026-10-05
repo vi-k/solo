@@ -445,7 +445,7 @@ void main() {
         },
         (ctx) async {
           armed = true;
-          await ctx.wait(() async => started++);
+          await ctx.abandonable(() async => started++);
         },
       );
       async.flushTimers();

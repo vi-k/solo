@@ -6,10 +6,28 @@ now reach the zone, and fail a test there.
 
 ### Breaking changes
 
+- **`ctx.wait` is renamed to `ctx.abandonable`.** The behaviour and the
+  parameters are the same: a cancellation arriving during the call throws
+  `Cancelled` at once and lets go of the action, which runs on. The old name
+  said nothing of that: `Future.wait` and `.wait` on a list or a record wait to
+  the end, and letting go of the action is what sets this call apart from
+  `ctx.join`. The new name pairs with `ctx.uncancellable`, and both say what a
+  cancellation does to the action. `wait` stays on `JobContext` and
+  `JobContextBase` as a deprecated alias until the next breaking release: it
+  does what `abandonable` does, and only the `StateError` of a call on a job
+  that has finished still says `cannot wait`; the new name says
+  `cannot run an abandonable action`. **Migrating.** Replace `ctx.wait` with
+  `ctx.abandonable`. Code that keeps the old name compiles and runs as before,
+  and the analyzer marks every call with a `deprecated_member_use` info, so
+  analysis that treats infos as fatal — `flutter analyze` by default,
+  `dart analyze --fatal-infos` — fails until the calls are replaced. A class
+  that implements `JobContext` by hand, a test fake for one, implements
+  `abandonable` as well; an engine that extends `JobContextBase` gets both.
+
 - **`JobObserver.onError` is a notice, and the new `JobAnswerer` answers for an
   error no outcome carries.** Such an error — a late failure of an action
-  `ctx.wait` walked away from, a disposer, a callback of `ctx.onCancel` or
-  `job.whenCancelled`, work handed to `ctx.unattended` — used to stop at
+  `ctx.abandonable` walked away from, a disposer, a callback of `ctx.onCancel`
+  or `job.whenCancelled`, work handed to `ctx.unattended` — used to stop at
   whatever observer the job had, so an observer written for a log, overriding
   `onFinish` alone, kept every one of them out of the zone without a word. Now
   `onError` hears it, and an observer that mixes in `JobAnswerer` answers for
@@ -41,16 +59,16 @@ now reach the zone, and fail a test there.
   [Building on the core](doc/extending.md).
 
 - **`JobContextBase.check` is marked `@mustCallSuper`.** The checkpoint is
-  where the cancellation of the job is asked: while the body runs, `ctx.wait`,
-  `ctx.join` and `ctx.uncancellable` ask it before the action, `ctx.join` again
-  after it, `ctx.run` once the child's value has arrived and `ctx.runAll`
-  before it hands the values back. An engine that overrode it for a rule of its
-  own without calling `super` stopped asking: `ctx.join` handed a value to a
-  job already cancelled, and `ctx.uncancellable` began its step on one. The
-  analyzer now warns about such an override, and `dart analyze` fails on the
-  warning. **Migrating.** Call `super.check()` first; a rule that no longer
-  holds throws a `Cancelled` with a reason of the engine's own. See
-  [A rule of your own](doc/extending.md#a-rule-of-your-own).
+  where the cancellation of the job is asked: while the body runs,
+  `ctx.abandonable`, `ctx.join` and `ctx.uncancellable` ask it before the
+  action, `ctx.join` again after it, `ctx.run` once the child's value has
+  arrived and `ctx.runAll` before it hands the values back. An engine that
+  overrode it for a rule of its own without calling `super` stopped asking:
+  `ctx.join` handed a value to a job already cancelled, and `ctx.uncancellable`
+  began its step on one. The analyzer now warns about such an override, and
+  `dart analyze` fails on the warning. **Migrating.** Call `super.check()`
+  first; a rule that no longer holds throws a `Cancelled` with a reason of the
+  engine's own. See [A rule of your own](doc/extending.md#a-rule-of-your-own).
 
 - **`JobBase.finish` and `JobContextBase.startChild` are marked
   `@mustCallSuper`, and the hooks an engine overrides are marked
@@ -88,24 +106,24 @@ now reach the zone, and fail a test there.
   hears the error twice; `solo` has dropped its own. The call is safe to drop
   on a job that may be over as well: `finish` announces there too.
 
-- **`ctx.run` takes `dispose` and `discard`,** the way `ctx.wait` does, and
-  makes the registration the moment the child's value comes back. `run` checks
-  the parent once the value is in hand — for its own cancellation, and for the
-  rules of an engine — and a checkpoint that throws there takes the value with
-  it: the child ended `Done`, so its own conditional registration went with the
-  value, and the line that would have made the next one is never reached. New
-  named parameters on a member of an `abstract interface class`, so an
-  implementation of `JobContext` written by hand no longer compiles;
+- **`ctx.run` takes `dispose` and `discard`,** the way `ctx.abandonable` does,
+  and makes the registration the moment the child's value comes back. `run`
+  checks the parent once the value is in hand — for its own cancellation, and
+  for the rules of an engine — and a checkpoint that throws there takes the
+  value with it: the child ended `Done`, so its own conditional registration
+  went with the value, and the line that would have made the next one is never
+  reached. New named parameters on a member of an `abstract interface class`,
+  so an implementation of `JobContext` written by hand no longer compiles;
   `JobContextBase` gets them once and every engine built on it, `solo`
   included, gets them for nothing. **Migrating.** Nothing breaks at a call
   site: `ctx.run(child)` is unchanged, and
-  `ctx.wait(() => ctx.run(child), discard: ...)` still closes what it took on
-  every path it ever did. It does not close this one, and it never could: at
-  this checkpoint `run` throws instead of returning the value its registration
-  is made against. That wrapper and a registration written on the line after
-  `await ctx.run(child)` are both the ones to move into the call. A subclass of
-  `JobContextBase` that overrides `run` takes `dispose` and `discard` and
-  passes them to `super.run`. See
+  `ctx.abandonable(() => ctx.run(child), discard: ...)` still closes what it
+  took on every path it ever did. It does not close this one, and it never
+  could: at this checkpoint `run` throws instead of returning the value its
+  registration is made against. That wrapper and a registration written on the
+  line after `await ctx.run(child)` are both the ones to move into the call. A
+  subclass of `JobContextBase` that overrides `run` takes `dispose` and
+  `discard` and passes them to `super.run`. See
   [Registering on arrival](doc/cleanup.md#registering-on-arrival).
 
 - **`JobContext` gains `runAll`,** which runs children side by side and asks
@@ -147,15 +165,15 @@ now reach the zone, and fail a test there.
   and in `solo` the job's `onCancel` hook takes the outcome where `onError`
   used to. **Migrating.** A resource opened in a successful branch and closed
   from that outer `catch` should be taken through
-  `ctx.wait(() => open(), dispose: (value) => value.close())`: the core then
-  closes it whatever the outcome, and nothing is needed at the call site. For a
-  branch that cannot go through `ctx.wait`, catch the envelope inside the body,
-  where it still arrives as it did. An envelope built by hand is read by the
-  same rule — it cannot be told apart from the one the language builds — so
-  code that deliberately throws an aggregate with a cancellation inside should
-  wrap it in an error of its own. `Future.wait` is unchanged and cannot be
-  changed: it reports the first error to reach it and discards the rest before
-  anything else can see them. See
+  `ctx.abandonable(() => open(), dispose: (value) => value.close())`: the core
+  then closes it whatever the outcome, and nothing is needed at the call site.
+  For a branch that cannot go through `ctx.abandonable`, catch the envelope
+  inside the body, where it still arrives as it did. An envelope built by hand
+  is read by the same rule — it cannot be told apart from the one the language
+  builds — so code that deliberately throws an aggregate with a cancellation
+  inside should wrap it in an error of its own. `Future.wait` is unchanged and
+  cannot be changed: it reports the first error to reach it and discards the
+  rest before anything else can see them. See
   [Registered on arrival, waited for in one envelope](doc/children.md#registered-on-arrival-waited-for-in-one-envelope).
 
 - **A body that gives itself up is cancelled the way a cancelled job is.** A
@@ -167,7 +185,7 @@ now reach the zone, and fail a test there.
   callbacks run and `whenCancelled` fires. A token or a connection handed to
   `ctx.onCancel` is closed when the body gives up, and a listener that times a
   cancellation counts the children in. A `ctx.uncancellable` section the body
-  walked away from does not hold this cancellation: a `ctx.wait` inside it
+  walked away from does not hold this cancellation: `ctx.abandonable` inside it
   throws. **Migrating.** A callback that must not run when the body gives
   itself up is unregistered before the throw, with the function `ctx.onCancel`
   returns. See [Cancellation](doc/cancellation.md).
@@ -199,8 +217,9 @@ job was created in. In a test that zone is the test's, and the test fails:
   failure out;
 - the failure of a step of `ctx.uncancellable` while the section held a
   cancellation back, the same way;
-- the late failure of an action `ctx.wait` walked away from, through `.timeout`
-  or `Future.any`, arriving once the job is over: `0.2.0` told nobody at all;
+- the late failure of an action `ctx.abandonable` walked away from, through
+  `.timeout` or `Future.any`, arriving once the job is over: `0.2.0` told
+  nobody at all;
 - an error no outcome carries, of a job that has an observer: `0.2.0` stopped
   it there, see the first of the breaking changes;
 - the failure of a source's own cleanup, the future of the subscription's
@@ -218,9 +237,9 @@ outcome, and `ignore` does not reach it: an observer that mixes in
 See [Where errors go](doc/observing.md#where-errors-go).
 
 One report is gone: a job that gives up inside a call it walked away from — a
-helper that takes the context and calls `ctx.check()` after `ctx.wait` let go
-of it — no longer reaches `onError` as a failure. `onError` promises never to
-report the job giving up.
+helper that takes the context and calls `ctx.check()` after `ctx.abandonable`
+let go of it — no longer reaches `onError` as a failure. `onError` promises
+never to report the job giving up.
 
 A test that matches error messages by text needs the new wording. A job
 cleaning up after its body says `is cleaning up after its body` where it said
@@ -246,7 +265,7 @@ named as `Job(key)`, not by its class.
 
 - **`ctx.pause(duration)` is a delay a cancellation ends.** A body that awaits
   a bare `Future.delayed` sits the whole delay out before it notices a
-  cancellation. Under `ctx.wait` the body leaves at once, but a
+  cancellation. Under `ctx.abandonable` the body leaves at once, but a
   `Future.delayed` cannot be cancelled, and its timer runs to the end with
   nothing waiting for it. `ctx.pause` throws `Cancelled` the moment the job
   accepts a cancellation and cancels its timer; without a duration it comes
@@ -328,9 +347,9 @@ named as `Job(key)`, not by its class.
 - A `ctx.runAll` the body walked away from no longer throws the parent's
   cancellation into the zone once the branches end. It hands the values over,
   as `ctx.run` does.
-- A value that comes to a `ctx.wait` the cancellation has already ended is
-  released as soon as it arrives, and the job still ends only after that
-  release. It was held for the unwinding of the cleanup stack, after the
+- A value that comes to `ctx.abandonable` after the cancellation has already
+  ended is released as soon as it arrives, and the job still ends only after
+  that release. It was held for the unwinding of the cleanup stack, after the
   children, so a child that kept waiting for the same lock or slot of a pool
   through the cancellation, inside `ctx.uncancellable` for one, waited for it
   for good, and the job or the branch of `ctx.runAll` never ended. A branch
@@ -368,13 +387,13 @@ named as `Job(key)`, not by its class.
 - `ctx.join` releases the value through `dispose` or `discard` when the
   checkpoint after the action throws anything, not only a `Cancelled`: a rule
   of an engine that threw there cost the job the resource it already held.
-- `ctx.join` and `ctx.wait` called from work handed to `ctx.unattended` no
-  longer hand that work a resource they have already closed. A value that came
-  back after the body had ended reached the work after `dispose` or `discard`
-  had run. The work now gets it on the body's terms: registered as the call
-  asked, released with the cancellation thrown on a job that accepted one, and
-  released with a `StateError` thrown on a job that is over when there is a
-  `dispose` or `discard` to run.
+- `ctx.join` and `ctx.abandonable` called from work handed to `ctx.unattended`
+  no longer hand that work a resource they have already closed. A value that
+  came back after the body had ended reached the work after `dispose` or
+  `discard` had run. The work now gets it on the body's terms: registered as
+  the call asked, released with the cancellation thrown on a job that accepted
+  one, and released with a `StateError` thrown on a job that is over when there
+  is a `dispose` or `discard` to run.
 - A value that comes back after the body has ended no longer completes the same
   wait twice: a cancellation arriving at that moment made the core throw
   `Future already completed` and report it to `onError` as an error of the job.
@@ -393,11 +412,11 @@ named as `Job(key)`, not by its class.
   still reaches whoever cancelled. What lies below the break is still left
   running. How deep a tree may go is in [Children](doc/children.md#children).
 
-- A call of `ctx.wait` the body did not await no longer sends the job's
+- A call of `ctx.abandonable` the body did not await no longer sends the job's
   cancellation to the zone when the job accepts it after the body has ended:
   cancelled while it waits for a child, say. The table of where errors go held
-  `wait` to the zone only until the body ends, and a late error of the same
-  call already went the way of an abandoned action.
+  `abandonable` to the zone only until the body ends, and a late error of the
+  same call already went the way of an abandoned action.
 
 ### Documentation
 

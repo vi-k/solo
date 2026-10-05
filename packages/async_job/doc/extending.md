@@ -129,7 +129,7 @@ The second job is created with `cancellable: false`, and the user cancels it
 while the first one runs:
 
 ```dart
-final first = MyJob<void>(key: 'first', (ctx) => ctx.wait(upload));
+final first = MyJob<void>(key: 'first', (ctx) => ctx.abandonable(upload));
 final second = MyJob<void>(
   key: 'second',
   cancellable: false,
@@ -212,7 +212,7 @@ The jobs of the engine may run only while the user is signed in, and
 signs out stops the way a cancelled one does: its `onCancel` callbacks close
 what it opened, its children stop, and it ends `Cancelled`.
 
-`check()` is the checkpoint of the context. While the body runs, `wait`,
+`check()` is the checkpoint of the context. While the body runs, `abandonable`,
 `join`, `pause` and `uncancellable` ask it before the action, `join` again
 after it, `run` once the child's value has arrived, and `runAll` before it
 hands the values back. A rule of the engine goes there. A job of the engine
@@ -310,16 +310,16 @@ Neither `cancellable: false` nor `ctx.uncancellable` stands in the rule's way:
 they refuse or hold a cancellation asked of the job, and the rule's is an
 exception: `check()` throws it inside the call that asked the rule, here
 `join`. The rule is asked where `check()` is asked and nowhere else: a sign-out
-during the download is noticed when `join` comes back, and one during a `wait`
-only at the next call that asks.
+during the download is noticed when `join` comes back, and one during
+`abandonable` only at the next call that asks.
 
 ### Not waiting for the checkpoint
 
-With `wait` in place of the first `join`, the body goes on after the user
-signed out:
+With `abandonable` in place of the first `join`, the body goes on after the
+user signed out:
 
 ```dart
-  final rows = await ctx.wait(download);
+  final rows = await ctx.abandonable(download);
 ```
 
 ```text
@@ -329,12 +329,12 @@ close the connection
 outcome: Cancelled(signed out)
 ```
 
-`wait` asks the rule before the download and not after it, so the body had its
-rows, and the connection stayed open until `join` asked. An engine that cannot
-wait for the next checkpoint, or has to stop a job whatever its body catches,
-cancels the job itself when the user signs out, with the `Cancelled` its rule
-throws. `MyJob` gets a wrapper around `cancelWith`, as it has one around
-`start`:
+`abandonable` asks the rule before the download and not after it, so the body
+had its rows, and the connection stayed open until `join` asked. An engine that
+cannot wait for the next checkpoint, or has to stop a job whatever its body
+catches, cancels the job itself when the user signs out, with the `Cancelled`
+its rule throws. `MyJob` gets a wrapper around `cancelWith`, as it has one
+around `start`:
 
 ```dart
   void _stop(Cancelled cancelled) => cancelWith(cancelled, rejectable: false);
@@ -360,9 +360,9 @@ outcome: Cancelled(signed out)
 ```
 
 The job accepts the cancellation inside the sign-out: its `onCancel` callbacks
-run there, and `wait` throws at once. With `rejectable: false` the job cannot
-refuse that cancellation, and no `ctx.uncancellable` holds it. A wrapper around
-`cancelOwnJob` of the context does the same: it passes `false` itself.
+run there, and `abandonable` throws at once. With `rejectable: false` the job
+cannot refuse that cancellation, and no `ctx.uncancellable` holds it. A wrapper
+around `cancelOwnJob` of the context does the same: it passes `false` itself.
 
 `finish` ends a job with the outcome handed in, and it is no way to stop a
 running one: it waits for no children and stops none, runs no `onCancel`
@@ -383,7 +383,7 @@ let a queue start the job, or pass it to a parent with `ctx.run(child)`, as in
 [Children](children.md#children) on the children page.
 
 ```dart
-final job = Job.deferred<void>((ctx) => ctx.wait(work));
+final job = Job.deferred<void>((ctx) => ctx.abandonable(work));
 // ... later, or from a queue of your own
 job.start();
 ```

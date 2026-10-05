@@ -551,7 +551,7 @@ abstract class Solo<S extends Object> {
   ///       key: 'load',
   ///       policy: Policy.droppable,
   ///       (ctx) async {
-  ///         final name = await ctx.wait(api.fetchName);
+  ///         final name = await ctx.abandonable(api.fetchName);
   ///         ctx.emit(Profile(name: name));
   ///
   ///         return name;
@@ -864,7 +864,7 @@ abstract class Solo<S extends Object> {
 
   /// Something a job did threw where there was nowhere else to put it.
   ///
-  /// The body; an action abandoned by [JobContext.wait] failing later; a
+  /// The body; an action abandoned by [JobContext.abandonable] failing later; a
   /// disposer or an `onCancel` callback; and a rule of this controller —
   /// `canStart` or `keepWhile` — that threw instead of answering.
   ///
@@ -880,12 +880,12 @@ abstract class Solo<S extends Object> {
   /// holding it.
   ///
   /// The errors an outcome cannot carry: an action abandoned by
-  /// [JobContext.wait] failing later, a disposer, an `onCancel` callback, work
-  /// handed over with [JobContext.unattended], a `keepWhile` that threw
-  /// anywhere but at a checkpoint of the body, the failure of a branch of
-  /// [JobContext.runAll] that the group did not throw, and a failure of the
-  /// body that a cancellation covered afterwards — the outcome carries the
-  /// cancellation, whoever reads it: `job.value`, `ctx.run`, a group.
+  /// [JobContext.abandonable] failing later, a disposer, an `onCancel`
+  /// callback, work handed over with [JobContext.unattended], a `keepWhile`
+  /// that threw anywhere but at a checkpoint of the body, the failure of a
+  /// branch of [JobContext.runAll] that the group did not throw, and a failure
+  /// of the body that a cancellation covered afterwards — the outcome carries
+  /// the cancellation, whoever reads it: `job.value`, `ctx.run`, a group.
   /// [Job.ignore] keeps the last two from coming here. Any other failure of a
   /// body does not come here — it becomes a [Failed], where `run(onError: ...)`
   /// computes a state from it and an outcome nobody observes reaches the zone

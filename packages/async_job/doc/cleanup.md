@@ -22,9 +22,9 @@ return database;
 | `dispose` | on every outcome |
 | `discard` | when the job ends without handing its value over |
 
-`wait`, `join` and `run` take either; `ctx.onDispose` and `ctx.onDiscard`
-register a callback where there is no call to wrap. Passing a `dispose` and a
-`discard` to one call is an `ArgumentError`.
+`abandonable`, `join` and `run` take either; `ctx.onDispose` and
+`ctx.onDiscard` register a callback where there is no call to wrap. Passing a
+`dispose` and a `discard` to one call is an `ArgumentError`.
 
 Three sections below open with the version habit or the names of the API lead
 to — the same callback for two resources, a registration left with the job that
@@ -95,7 +95,7 @@ still be able to close it.
 ```dart
 final connect = Job.deferred<Database>(
   key: 'connect',
-  (ctx) => ctx.wait(Database.open, discard: (db) => db.close()),
+  (ctx) => ctx.abandonable(Database.open, discard: (db) => db.close()),
 );
 
 final ready = Job.deferred<Database>((ctx) async {
@@ -192,8 +192,8 @@ ctx.onDispose(() => sink.add(buffer.toString()));
 
 Both methods return a function that unregisters the callback. Use it when the
 resource has already been released or transferred; calling it again, or after
-cleanup has run, is safe. `wait`, `join` and `run` return the resource instead
-of an unregister function, and the registration they made is dropped by
+cleanup has run, is safe. `abandonable`, `join` and `run` return the resource
+instead of an unregister function, and the registration they made is dropped by
 `ctx.disown(value)`. It looks the value up by identity and returns whether it
 found one, so pass the very instance the call returned.
 
@@ -240,12 +240,12 @@ over, and an engine such as `solo` can wait for them while it closes.
 
 The callbacks on the cleanup stack run after the body ends, and cancellation
 does not interrupt them: neither one already accepted nor one arriving into the
-unwinding itself. `check`, `wait`, `join`, `pause`, `uncancellable`, `run`,
-`runAll`, `each` and `onCancel` are the body's and throw `StateError` here, so
-a callback must await its resource directly. It must not await its own job:
-`done`, `value` and `cancel()` all complete after the cleanup that would be
-waiting for them. Keep callbacks short, and let them wait for nothing but the
-release itself: nothing will interrupt them. An error from one goes to
+unwinding itself. `check`, `abandonable`, `join`, `pause`, `uncancellable`,
+`run`, `runAll`, `each` and `onCancel` are the body's and throw `StateError`
+here, so a callback must await its resource directly. It must not await its own
+job: `done`, `value` and `cancel()` all complete after the cleanup that would
+be waiting for them. Keep callbacks short, and let them wait for nothing but
+the release itself: nothing will interrupt them. An error from one goes to
 `onError` and, by default, on to the zone, and the remaining callbacks still
 run.
 
@@ -265,11 +265,11 @@ not at all. The value is in the caller's hands, and `discard` means the value
 went to nobody. Until the group decides, everything above holds as written: a
 cancellation reaching the branch closes what the branch took.
 
-A value returned by an action abandoned by `wait` needs cleanup whatever the
-outcome, because it never reached the body. Its callback does not wait for the
-unwinding: a child the job is still waiting for may want the same lock or slot
-of a pool, and a value held for the unwinding would keep it from that child for
-good. When the callback runs depends on when the value arrives:
+A value returned by an action abandoned by `abandonable` needs cleanup whatever
+the outcome, because it never reached the body. Its callback does not wait for
+the unwinding: a child the job is still waiting for may want the same lock or
+slot of a pool, and a value held for the unwinding would keep it from that
+child for good. When the callback runs depends on when the value arrives:
 
 - during the body, while the job waits for its children, or while a branch of
   `ctx.runAll` waits for its group: at once;
@@ -305,7 +305,7 @@ final job = Job<Database>((ctx) async {
 Cancellation arriving while `Database.open()` runs cannot interrupt it. The
 body waits the call out, registers what it opened, and the job ends
 `Cancelled` — with `onDiscard` closing the database, because the value reached
-no caller. Where the body waits through `ctx.wait`, `ctx.join` or `ctx.run`,
-hand the callback to that call, as
+no caller. Where the body waits through `ctx.abandonable`, `ctx.join` or
+`ctx.run`, hand the callback to that call, as
 [Registering on arrival](#registering-on-arrival) does: each of them is a
 checkpoint, and the line under it may never run.

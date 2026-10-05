@@ -26,7 +26,7 @@ List<String> _cleanupsOn(
       final order = <String>[];
       final job = Job<int>((ctx) async {
         register(ctx, () => order.add('cleaned'));
-        await ctx.wait(() => delay(10));
+        await ctx.abandonable(() => delay(10));
         if (scenario == 'failed') {
           throw StateError('boom');
         }
@@ -120,7 +120,7 @@ void main() {
           ..onDispose(() => order.add('first'))
           ..onDiscard(() => order.add('second'))
           ..onDispose(() => order.add('third'));
-        await ctx.wait(() => delay(10));
+        await ctx.abandonable(() => delay(10));
         throw StateError('boom');
       }).ignore();
       async.flushTimers();
@@ -142,7 +142,7 @@ void main() {
               Job.deferred<void>(
                 key: 'child',
                 (ctx) async {
-                  await ctx.wait(() => delay(30));
+                  await ctx.abandonable(() => delay(30));
                   order.add('child');
                 },
               ),
@@ -167,7 +167,7 @@ void main() {
         ctx.onDispose(() => order.add('kept'));
         final dropTwice = ctx.onDispose(() => order.add('dropped'))..call();
         dropTwice();
-        await ctx.wait(() => delay(10));
+        await ctx.abandonable(() => delay(10));
       }).ignore();
       async.flushTimers();
       expect(order, ['kept']);
@@ -255,7 +255,7 @@ void main() {
       final order = <String>[];
       final job = Job<void>((ctx) async {
         try {
-          await ctx.wait(() => delay(50));
+          await ctx.abandonable(() => delay(50));
         } on Cancelled {
           // The body is unwinding: registering a cleanup here has to work,
           // or the trap this whole mechanism removes is back.
@@ -284,7 +284,7 @@ void main() {
       final seen = <bool>[];
       Job<void>((ctx) async {
         ctx.onDispose(() => seen.add(ctx.job.isCancelled));
-        await ctx.wait(() => delay(10));
+        await ctx.abandonable(() => delay(10));
         // The body throws the cancellation itself: nothing marked the job,
         // and until now `isCancelled` lied about it during the cleanup.
         throw Cancelled.by(
@@ -307,7 +307,7 @@ void main() {
           await delay(50);
           order.add('cleanup ends');
         });
-        await ctx.wait(() => delay(10));
+        await ctx.abandonable(() => delay(10));
         throw Cancelled.by(
           reason: const ManualCancelReason(),
           started: true,
@@ -330,8 +330,8 @@ void main() {
           // The body walks away from its own wait and throws the
           // cancellation itself: filling `_pendingCancel` must not run the
           // callbacks of the race.
-          unawaited(ctx.wait(() => delay(50)));
-          await ctx.wait(() => delay(10));
+          unawaited(ctx.abandonable(() => delay(50)));
+          await ctx.abandonable(() => delay(10));
           throw Cancelled.by(
             reason: const ManualCancelReason(),
             started: true,
@@ -354,12 +354,12 @@ void main() {
                 key: 'child',
                 (ctx) async {
                   ctx.onCancel(() => order.add('child cancelled'));
-                  await ctx.wait(() => delay(100));
+                  await ctx.abandonable(() => delay(100));
                 },
               ),
             )
             .ignore();
-        await ctx.wait(() => delay(10));
+        await ctx.abandonable(() => delay(10));
         // The body ended with a cancellation of its own while the children
         // are still running: an outside `cancel()` has to reach the child.
         throw Cancelled.by(
@@ -386,7 +386,7 @@ void main() {
         // pins that the held cancellation never reaches the cleanup and
         // `Done` goes to whoever cancelled.
         unawaited(ctx.uncancellable(() => delay(100)));
-        await ctx.wait(() => delay(10));
+        await ctx.abandonable(() => delay(10));
         return 1;
       })
         ..ignore();
@@ -406,7 +406,7 @@ void main() {
         unawaited(
           ctx.uncancellable(() async {
             try {
-              await ctx.wait(() => delay(50));
+              await ctx.abandonable(() => delay(50));
               order.add('step done');
             } on Cancelled catch (error) {
               order.add('step stopped: $error');
@@ -439,7 +439,7 @@ void main() {
           },
           discard: closed.add,
         );
-        await ctx.wait(() => delay(10));
+        await ctx.abandonable(() => delay(10));
         return db;
       })
         ..ignore();
@@ -536,7 +536,7 @@ void main() {
             .run(
               Job.deferred<void>(
                 key: 'child',
-                (ctx) => ctx.wait(() => delay(80)),
+                (ctx) => ctx.abandonable(() => delay(80)),
               ),
             )
             .ignore();
@@ -592,7 +592,7 @@ void main() {
           ),
         );
         unawaited(
-          ctx.wait<String>(
+          ctx.abandonable<String>(
             () async {
               await delay(60);
               return 'waited';
@@ -626,7 +626,7 @@ void main() {
               .run(
                 Job.deferred<void>(
                   key: 'child',
-                  (ctx) => ctx.wait(() => delay(80)),
+                  (ctx) => ctx.abandonable(() => delay(80)),
                 ),
               )
               .ignore();
@@ -649,7 +649,7 @@ void main() {
           dispose: (_) => released.add('by parameter'),
         );
         final drop = ctx.onDispose(() => released.add('by member'));
-        await ctx.wait(() => delay(10));
+        await ctx.abandonable(() => delay(10));
         drop();
       })
         ..ignore();
@@ -663,14 +663,14 @@ void main() {
     fakeAsync((async) {
       final closed = <String>[];
       final job = Job<String>((ctx) async {
-        final db = await ctx.wait(
+        final db = await ctx.abandonable(
           () async {
             await delay(10);
             return 'db';
           },
           discard: closed.add,
         );
-        await ctx.wait(() => delay(10));
+        await ctx.abandonable(() => delay(10));
         return db;
       })
         ..ignore();
@@ -693,7 +693,7 @@ void main() {
           ..add(ctx.disown(db))
           ..add(ctx.disown(db))
           ..add(ctx.disown('someone else'));
-        await ctx.wait(() => delay(10));
+        await ctx.abandonable(() => delay(10));
 
         return db;
       })
@@ -743,7 +743,7 @@ void main() {
         // member's own function drops only its own. Nobody should write
         // this — the test holds the line the dartdoc draws.
         ctx.onDiscard(() => closed.add('by member'))();
-        await ctx.wait(() => delay(10));
+        await ctx.abandonable(() => delay(10));
         return db;
       })
         ..ignore();
@@ -801,7 +801,7 @@ void main() {
       final closed = <String>[];
       final job = Job<String>((ctx) async {
         final db = await ctx.join(_open, discard: closed.add);
-        await ctx.wait(() => delay(10));
+        await ctx.abandonable(() => delay(10));
 
         return db;
       });
@@ -811,12 +811,13 @@ void main() {
     });
   });
 
-  test('a discard of a wait is silent when the value reaches the body', () {
+  test('a discard of abandonable is silent when the value reaches the body',
+      () {
     fakeAsync((async) {
       final closed = <String>[];
       final job = Job<String>((ctx) async {
-        final db = await ctx.wait(_open, discard: closed.add);
-        await ctx.wait(() => delay(10));
+        final db = await ctx.abandonable(_open, discard: closed.add);
+        await ctx.abandonable(() => delay(10));
 
         return db;
       });
@@ -826,12 +827,13 @@ void main() {
     });
   });
 
-  test('a synchronous value of wait goes on the stack as any other does', () {
+  test('a synchronous value of abandonable goes on the stack as any other does',
+      () {
     fakeAsync((async) {
       final closed = <String>[];
       final job = Job<void>((ctx) async {
-        await ctx.wait(() => 'file', dispose: closed.add);
-        await ctx.wait(() => delay(10));
+        await ctx.abandonable(() => 'file', dispose: closed.add);
+        await ctx.abandonable(() => delay(10));
       });
       async.flushTimers();
       expect(job.outcome, isA<Done<void>>());
@@ -839,12 +841,12 @@ void main() {
     });
   });
 
-  test('a synchronous value of wait is discarded on a cancellation', () {
+  test('a synchronous value of abandonable is discarded on a cancellation', () {
     fakeAsync((async) {
       final closed = <String>[];
       final job = Job<void>((ctx) async {
-        await ctx.wait(() => 'file', discard: closed.add);
-        await ctx.wait(() => delay(100));
+        await ctx.abandonable(() => 'file', discard: closed.add);
+        await ctx.abandonable(() => delay(100));
       });
       async.elapse(const Duration(milliseconds: 10));
       job.cancel().ignore();
@@ -862,7 +864,7 @@ void main() {
         final db = await ctx.join(_open, dispose: (_) => closed.add('below'));
         await ctx.join(() async => db, dispose: (_) => closed.add('top'));
         dropped.add(ctx.disown(db));
-        await ctx.wait(() => delay(10));
+        await ctx.abandonable(() => delay(10));
 
         return db;
       });
@@ -906,7 +908,7 @@ void main() {
           ran.add('disown: ${ctx.disown(resource)}');
           ctx.job.cancel().ignore();
         });
-        return ctx.wait(
+        return ctx.abandonable(
           () => resource,
           discard: (value) => ran.add('discard ran'),
         );
@@ -926,12 +928,15 @@ void main() {
     final ran = <String>[];
     fakeAsync((async) {
       Job<void>((ctx) async {
-        await ctx.wait(() => resource, discard: (_) => ran.add('bottom'));
+        await ctx.abandonable(
+          () => resource,
+          discard: (_) => ran.add('bottom'),
+        );
         ctx.onDispose(() {
           ran.add('disown: ${ctx.disown(resource)}');
           ctx.job.cancel().ignore();
         });
-        await ctx.wait(() => resource, discard: (_) => ran.add('top'));
+        await ctx.abandonable(() => resource, discard: (_) => ran.add('top'));
       }).ignore();
       async.flushTimers();
     });
@@ -953,7 +958,7 @@ void main() {
     Future<void> migrate() async => throw StateError('migration');
     fakeAsync((async) {
       final connect = Job.deferred<String>(
-        (ctx) => ctx.wait(() => 'db', discard: closed.add),
+        (ctx) => ctx.abandonable(() => 'db', discard: closed.add),
       );
       ready = Job<String>((ctx) async {
         final database = await ctx.run(connect, discard: closed.add);
@@ -968,28 +973,33 @@ void main() {
     expect(closed, ['db'], reason: 'once, and by the one that received it');
   });
 
-  test('a receiver registers through wait, and the next line is too late', () {
+  test(
+      'a receiver registers through abandonable, and the next line is too late',
+      () {
     // The document promises this much: a child that refuses the stop ends
     // [Done] while its parent is already cancelled, `ctx.run` throws the
     // parent's own [Cancelled], and a registration written after it never
-    // happens. Taken through `wait`, the same value still reaches a
+    // happens. Taken through `abandonable`, the same value still reaches a
     // `discard`.
     Job<String>? lastChild;
-    List<String> run({required bool throughWait}) {
+    List<String> run({required bool throughAbandonable}) {
       final closed = <String>[];
       fakeAsync((async) {
         final child = lastChild = Job.deferred<String>(
           cancellable: false,
           (ctx) async {
-            await ctx.wait(() => delay(20));
+            await ctx.abandonable(() => delay(20));
 
-            return ctx.wait(() => 'db', discard: (db) => closed.add('inner'));
+            return ctx.abandonable(
+              () => 'db',
+              discard: (db) => closed.add('inner'),
+            );
           },
         );
         final parent = Job<String>(
           (ctx) async {
-            if (throughWait) {
-              return ctx.wait(
+            if (throughAbandonable) {
+              return ctx.abandonable(
                 () => ctx.run(child),
                 discard: (db) => closed.add('outer'),
               );
@@ -1010,12 +1020,12 @@ void main() {
     }
 
     expect(
-      run(throughWait: false),
+      run(throughAbandonable: false),
       isEmpty,
       reason: 'the child handed its value over, and the line that would '
           'have registered it was never reached',
     );
-    expect(run(throughWait: true), ['outer']);
+    expect(run(throughAbandonable: true), ['outer']);
     expect(
       lastChild?.outcome,
       isA<Done<String>>().having((outcome) => outcome.value, 'value', 'db'),
@@ -1037,7 +1047,8 @@ void main() {
         observer: FinishHook(
           (_) => rules.rules = () => throw const Cancelled('keepWhile'),
         ),
-        (ctx) => ctx.wait(() => 'db', discard: (db) => closed.add('child')),
+        (ctx) =>
+            ctx.abandonable(() => 'db', discard: (db) => closed.add('child')),
       );
       parent = CheckingJob<String>((ctx) {
         rules = ctx;
@@ -1058,7 +1069,7 @@ void main() {
 
   test('the wrapper around run does not reach that value', () {
     // The same setup, written the way the recipe used to read. The
-    // registration of the outer `wait` is made against the value that
+    // registration of the outer `abandonable` is made against the value that
     // `run` returns -- and at this checkpoint `run` throws instead of
     // returning, so there is nothing to register against and nobody
     // closes the resource. Pinned as the boundary it is: the parameter on
@@ -1071,12 +1082,13 @@ void main() {
         observer: FinishHook(
           (_) => rules.rules = () => throw const Cancelled('keepWhile'),
         ),
-        (ctx) => ctx.wait(() => 'db', discard: (db) => closed.add('child')),
+        (ctx) =>
+            ctx.abandonable(() => 'db', discard: (db) => closed.add('child')),
       );
       parent = CheckingJob<String>((ctx) {
         rules = ctx;
 
-        return ctx.wait(
+        return ctx.abandonable(
           () => ctx.run(child),
           discard: (db) => closed.add('parent'),
         );
@@ -1132,7 +1144,7 @@ void main() {
     final closed = <String>[];
     fakeAsync((async) {
       final child = Job.deferred<String>((ctx) async {
-        await ctx.wait(() => delay(20));
+        await ctx.abandonable(() => delay(20));
 
         return 'db';
       });
@@ -1167,7 +1179,7 @@ void main() {
     expect(
       (parent.outcome! as Failed).error,
       isA<ArgumentError>(),
-      reason: 'the same refusal wait gives, and before the child starts',
+      reason: 'the same refusal abandonable gives, and before the child starts',
     );
     expect(started, isFalse, reason: 'the refusal left nothing running');
     expect(child.outcome, isNull, reason: 'and nothing finished either');
@@ -1198,7 +1210,7 @@ void main() {
         final resource = Object();
         // Put off by the first pass on a `Done` and never run: the value
         // reached the caller, so there was nothing to discard.
-        return ctx.wait(() => resource, discard: (value) {});
+        return ctx.abandonable(() => resource, discard: (value) {});
       })
         ..ignore();
       async.flushTimers();

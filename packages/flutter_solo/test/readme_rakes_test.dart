@@ -377,7 +377,7 @@ void main() {
           '`Loaded` with a `name` in it');
     });
 
-    testWidgets('wait gives up at once, join waits its call out',
+    testWidgets('abandonable gives up at once, join waits its call out',
         (tester) async {
       final api = ProfileApi();
       final controller = ProfileController(api);
@@ -404,7 +404,7 @@ void main() {
       expect(api.saved, ['Ada Lovelace']);
 
       await controller.close();
-      _says('`ctx.wait` awaits like `await` except that it gives up the '
+      _says('`ctx.abandonable` awaits like `await` except that it gives up the '
           'moment the job is cancelled, and `ctx.join` waits its call out '
           'either way — a save is not cut in half');
     });

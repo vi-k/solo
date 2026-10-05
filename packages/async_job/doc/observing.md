@@ -35,7 +35,7 @@ final job = Job<int>(
   observer: Log(),
   (ctx) async {
     ctx.log('loading');
-    return ctx.wait(load);
+    return ctx.abandonable(load);
   },
 );
 ```
@@ -97,8 +97,8 @@ final class SlowCancellations extends JobObserver {
 cancellation, and `onFinish` when the outcome arrives; the time between them is
 how long the job ran past its cancellation, children and cleanup included. A
 body waiting on something slow with a bare `await` adds the rest of that wait
-to the count, where the same call through `ctx.wait` shows 0 ms. The count
-starts at acceptance, not at `cancel()`: a cancellation held back by
+to the count, where the same call through `ctx.abandonable` shows 0 ms. The
+count starts at acceptance, not at `cancel()`: a cancellation held back by
 `ctx.uncancellable` is accepted when the section ends, so a 100 ms section
 cancelled 10 ms in shows 0 ms, while the caller of `cancel` waited 90 ms. A
 body that gives itself up, throwing `Cancelled` or letting a child's
@@ -216,18 +216,18 @@ in:
 | The body's, and the job accepts a cancellation after it: one that arrives before the error leaves the body, one that arrives after the error has left it, while the job waits for its children or runs its cleanup, or one `ctx.uncancellable` held while its step failed | `onError`, then `onUnanswered` if the observer answers, the zone otherwise | The zone |
 | The body's, and it happened after the job accepted a cancellation | `onError` | Nobody |
 | The body's, in a branch of `ctx.runAll` whose group throws another failure | `onError`, then `onUnanswered` if the observer answers, the zone otherwise | The zone |
-| Outside the body: a late error of an action abandoned by `ctx.wait`, cleanup, a callback of `ctx.onCancel` or `job.whenCancelled`, work of `ctx.unattended`, the `toString` of a child's `key` or `Cancelled` when the core names the child in the parent's cancellation | `onError`, then `onUnanswered` if the observer answers, the zone otherwise | The zone |
+| Outside the body: a late error of an action abandoned by `ctx.abandonable`, cleanup, a callback of `ctx.onCancel` or `job.whenCancelled`, work of `ctx.unattended`, the `toString` of a child's `key` or `Cancelled` when the core names the child in the parent's cancellation | `onError`, then `onUnanswered` if the observer answers, the zone otherwise | The zone |
 | A `Cancelled` thrown outside the body | `onError`, then `onUnanswered` if the observer answers, nobody otherwise | Nobody |
-| The job's own cancellation, out of an action abandoned by `ctx.wait` or work of `ctx.unattended` | Nobody | Nobody |
-| What a context call the body did not await throws, the job's own cancellation included, and for `ctx.wait` only until the body ends | The zone the body runs in, as with any future nobody awaits | The zone the body runs in |
+| The job's own cancellation, out of an action abandoned by `ctx.abandonable` or work of `ctx.unattended` | Nobody | Nobody |
+| What a context call the body did not await throws, the job's own cancellation included, and for `ctx.abandonable` only until the body ends | The zone the body runs in, as with any future nobody awaits | The zone the body runs in |
 
 Of a failure and a cancellation, the one the job learned of first came first.
 The job learns of a failure the moment it happens when it is the failure of an
-operation behind `ctx.wait` or `ctx.join`, of a callback of `ctx.each`, of a
-child or of a step of `ctx.uncancellable`. Such a failure does not leave the
-body at once: that takes a few microtasks, or a child's whole cleanup. If the
-job accepts a cancellation in between, the order is: the failure happens, the
-job accepts the cancellation, the body throws the failure. The job ends
+operation behind `ctx.abandonable` or `ctx.join`, of a callback of `ctx.each`,
+of a child or of a step of `ctx.uncancellable`. Such a failure does not leave
+the body at once: that takes a few microtasks, or a child's whole cleanup. If
+the job accepts a cancellation in between, the order is: the failure happens,
+the job accepts the cancellation, the body throws the failure. The job ends
 `Cancelled`, but the failure came before the cancellation, and it takes the
 second row of the table, not the third. The body keeps the failure first by
 letting it through, or by catching it and throwing it again later; a new error
@@ -286,13 +286,14 @@ failure comes after it, and without an observer nobody hears it.
 A context call the body did not await throws into a future nobody awaits, and
 Dart hands that to the zone the body runs in: for a job made with
 `Job.deferred`, the zone it was started from. The job's own cancellation goes
-there too: when the job is cancelled, a `ctx.wait` called without `await`
+there too: when the job is cancelled, `ctx.abandonable` called without `await`
 throws `Cancelled` into its future, and Dart hands it to the zone like any
 other error. It is Dart that sends this cancellation to the zone, not the job.
-For `ctx.wait`, all of this holds only while the body runs. If its action fails
-once the body has ended, the error takes the fifth row of the table, like that
-of an action `ctx.wait` stopped waiting for on a cancellation: `onError` hears
-it, and then it goes where the other errors outside the body go.
+For `ctx.abandonable`, all of this holds only while the body runs. If its
+action fails once the body has ended, the error takes the fifth row of the
+table, like that of an action `ctx.abandonable` stopped waiting for on a
+cancellation: `onError` hears it, and then it goes where the other errors
+outside the body go.
 
 An error can reach `onError` and the zone both, and an app that reports in both
 places hears it twice. The table shows the way each error takes to the zone:

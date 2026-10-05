@@ -1,9 +1,9 @@
-// Section 11 of `doc/vs-bloc.md`, "Releasing a resource returned after cancellation": what the page leaves out,
-// then the code under its `### Solo` heading, verbatim, then what
-// `vs_bloc_rakes_test.dart` adds on top of it. Every piece of the page's
-// blocks is a run of lines of this file. The bloc side of the section is
-// built and run by the bench, `tool/doc_snippets.py`: this package does not
-// depend on bloc.
+// Section 11 of `doc/vs-bloc.md`, "Releasing a resource returned after
+// cancellation": what the page leaves out, then the code under its `### Solo`
+// heading, verbatim, then what `vs_bloc_rakes_test.dart` adds on top of it.
+// Every piece of the page's blocks is a run of lines of this file. The bloc
+// side of the section is built and run by the bench, `tool/doc_snippets.py`:
+// this package does not depend on bloc.
 import 'dart:async';
 
 import 'package:solo/solo.dart';
@@ -85,7 +85,7 @@ final class PreviewController extends Solo<PreviewState> {
         key: 'preview',
         policy: Policy.restart,
         (ctx) async {
-          final buffer = await ctx.wait(
+          final buffer = await ctx.abandonable(
             () => _decoder.open(clip),
             dispose: (buffer) => buffer.release(),
           );
@@ -97,7 +97,7 @@ final class PreviewController extends Solo<PreviewState> {
 // What the test adds.
 
 /// The `open` of the page with `discard:` where the page has `dispose:`,
-/// and with `ctx.join` where it has `ctx.wait`: the two alternatives the
+/// and with `ctx.join` where it has `ctx.abandonable`: the two alternatives the
 /// section names.
 final class OtherPreviewController extends Solo<PreviewState> {
   OtherPreviewController(this._decoder) : super(const NoPreview());
@@ -108,7 +108,7 @@ final class OtherPreviewController extends Solo<PreviewState> {
         key: 'preview',
         policy: Policy.restart,
         (ctx) async {
-          final buffer = await ctx.wait(
+          final buffer = await ctx.abandonable(
             () => _decoder.open(clip),
             discard: (buffer) => buffer.release(),
           );

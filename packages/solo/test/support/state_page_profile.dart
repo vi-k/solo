@@ -23,7 +23,7 @@ final class ProfileController extends Solo<ProfileState> {
         onCancel: (state, cancelled) => const Initial(),
         (ctx) async {
           ctx.emit(const Loading());
-          final name = await ctx.wait(api.fetchName);
+          final name = await ctx.abandonable(api.fetchName);
           ctx.emit(Loaded(name));
           return name;
         },
@@ -39,7 +39,7 @@ final class ProfileController extends Solo<ProfileState> {
         onCancel: (state, cancelled) => const Initial(),
         (ctx) async {
           ctx.emit(const Loading());
-          final name = await ctx.wait(api.fetchName);
+          final name = await ctx.abandonable(api.fetchName);
           ctx.emit(Loaded(name));
           return name;
         },

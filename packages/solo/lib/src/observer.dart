@@ -64,7 +64,7 @@ abstract class SoloObserver {
 
   /// Something a job did threw where there was nowhere else to put it.
   ///
-  /// The body; an action abandoned by `JobContext.wait` failing later; a
+  /// The body; an action abandoned by `JobContext.abandonable` failing later; a
   /// disposer or an `onCancel` callback; and a rule of the controller —
   /// `canStart` or `keepWhile` — that threw instead of answering.
   ///

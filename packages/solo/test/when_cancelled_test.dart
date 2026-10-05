@@ -34,7 +34,7 @@ void main() {
     runSolo((solo, journal, async) {
       final seen = <Cancelled>[];
       final job = solo.run<NotDisposed, void>(
-        (ctx) => ctx.wait(() => delay(50)),
+        (ctx) => ctx.abandonable(() => delay(50)),
       )..whenCancelled(seen.add);
       async.flushMicrotasks();
       solo.externalSetState(const Disposed());

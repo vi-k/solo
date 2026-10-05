@@ -207,7 +207,7 @@ void main() {
       () {
     fakeAsync((async) {
       final first = AnsweringJob<int>(key: 'a', (ctx) async {
-        await ctx.wait(() => delay(10));
+        await ctx.abandonable(() => delay(10));
         throw StateError('first');
       });
       // Refuses the stop the group asks for, runs on and fails on its own:
@@ -217,7 +217,7 @@ void main() {
         key: 'b',
         cancellable: false,
         (ctx) async {
-          await ctx.wait(() => delay(20));
+          await ctx.abandonable(() => delay(20));
           throw StateError('second');
         },
       );
@@ -252,7 +252,7 @@ void main() {
             key: 'b',
             cancellable: false,
             (ctx) async {
-              await ctx.wait(() => delay(20));
+              await ctx.abandonable(() => delay(20));
               throw StateError('second');
             },
           );
@@ -260,7 +260,7 @@ void main() {
             try {
               await ctx.runAll([
                 Job.deferred<int>(key: 'a', (ctx) async {
-                  await ctx.wait(() => delay(10));
+                  await ctx.abandonable(() => delay(10));
                   throw StateError('first');
                 }),
                 second,
@@ -288,7 +288,7 @@ void main() {
         subscription = ctx.each(controller.stream, (ctx, event) {
           seen.add(event);
         });
-        await ctx.wait(() => delay(50));
+        await ctx.abandonable(() => delay(50));
       })
         ..ignore()
         ..launch();
@@ -350,13 +350,13 @@ void main() {
     expect(caught, isEmpty);
   });
 
-  // `doc/extending.md`: `wait`, `join` and `uncancellable` begin by calling
-  // `check()`. A rule already broken stops the action before it starts;
+  // `doc/extending.md`: `abandonable`, `join` and `uncancellable` begin by
+  // calling `check()`. A rule already broken stops the action before it starts;
   // asked only after, it would let the action run for a job whose rules no
   // longer hold.
   final members = <String,
       Future<void> Function(JobContext ctx, Future<void> Function() action)>{
-    'wait': (ctx, action) => ctx.wait(action),
+    'abandonable': (ctx, action) => ctx.abandonable(action),
     'join': (ctx, action) => ctx.join(action),
     'uncancellable': (ctx, action) => ctx.uncancellable(action),
   };

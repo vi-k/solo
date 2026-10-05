@@ -23,7 +23,7 @@ void main() {
           // would start a child after the children were waited for.
           ctx
             ..onDispose(() => ctx.run(Job.deferred<void>((ctx) async {})))
-            ..onDispose(() => ctx.wait(() => delay(1)))
+            ..onDispose(() => ctx.abandonable(() => delay(1)))
             ..onDispose(() => ctx.join(() => delay(1)))
             ..onDispose(() => ctx.uncancellable(() => delay(1)))
             ..onDispose(() => ctx.onCancel(() {}))
@@ -79,7 +79,7 @@ void main() {
               stackTrace: StackTrace.current,
             ),
           );
-          await ctx.wait(() => delay(10));
+          await ctx.abandonable(() => delay(10));
         },
       )..ignore();
       async.elapse(const Duration(milliseconds: 5));
@@ -99,7 +99,7 @@ void main() {
         (ctx) async {
           final child = Job.deferred<void>(
             key: 'child',
-            (ctx) => ctx.wait(() => delay(100)),
+            (ctx) => ctx.abandonable(() => delay(100)),
           );
           ctx.run(child).ignore();
           ctx.onDispose(() async {
@@ -108,7 +108,7 @@ void main() {
             // error of this disposer.
             await child.value;
           });
-          await ctx.wait(() => delay(50));
+          await ctx.abandonable(() => delay(50));
           return 1;
         },
       )..ignore();
@@ -142,7 +142,7 @@ void main() {
       late JobContext captured;
       final job = ProbeJob<void>((ctx) async {
         captured = ctx;
-        await ctx.wait(() => delay(100));
+        await ctx.abandonable(() => delay(100));
       })
         ..launch();
       async.elapse(const Duration(milliseconds: 10));

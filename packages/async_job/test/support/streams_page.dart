@@ -97,13 +97,13 @@ Job<void> listenInABody() => Job<void>((ctx) async {
         await store.saveBody(message);
       });
       ctx.onCancel(subscription.cancel);
-      await ctx.wait(subscription.asFuture<void>);
+      await ctx.abandonable(subscription.asFuture<void>);
     });
 
 Job<void> asyncMapInABody() => Job<void>((ctx) async {
       final subscription = messages.asyncMap(store.saveBody).listen((_) {});
       ctx.onCancel(subscription.cancel);
-      await ctx.wait(subscription.asFuture<void>);
+      await ctx.abandonable(subscription.asFuture<void>);
     });
 
 Future<void> saveAll(

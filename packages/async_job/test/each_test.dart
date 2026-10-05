@@ -97,7 +97,7 @@ void main() {
       Object? thrown;
       final job = Job<void>((ctx) async {
         try {
-          await ctx.wait(
+          await ctx.abandonable(
             () => Future<void>.delayed(const Duration(milliseconds: 10)),
           );
         } on Cancelled {
@@ -161,7 +161,7 @@ void main() {
           } on Object catch (error) {
             caught = error;
           }
-          await ctx.wait(
+          await ctx.abandonable(
             () => Future<void>.delayed(const Duration(milliseconds: 50)),
           );
         },
@@ -233,7 +233,7 @@ void main() {
       final stream = _CountingStream<int>(controller.stream);
       final job = Job<void>((ctx) async {
         await ctx.each(stream, (_, event) {}).value;
-        await ctx.wait(
+        await ctx.abandonable(
           () => Future<void>.delayed(const Duration(milliseconds: 20)),
         );
       });
@@ -257,7 +257,7 @@ void main() {
       final job = Job<void>((ctx) async {
         // Returning from the body does not end an attached child.
         ctx.each(controller.stream, (_, event) {});
-        await ctx.wait(() => delay(10));
+        await ctx.abandonable(() => delay(10));
       });
       async.elapse(const Duration(milliseconds: 50));
       expect(job.outcome, isNull);
@@ -612,7 +612,7 @@ void main() {
           seen.add('start $event');
           await delay(10);
         }).ignore();
-        await ctx.wait(() => delay(5));
+        await ctx.abandonable(() => delay(5));
       })
         ..ignore();
       async.flushTimers();
@@ -922,7 +922,7 @@ void main() {
               ctx
                   .each(controller.stream, (_, event) => handler.future)
                   .ignore();
-              await ctx.wait(() => body.future);
+              await ctx.abandonable(() => body.future);
             },
           )..ignore();
           async.flushMicrotasks();

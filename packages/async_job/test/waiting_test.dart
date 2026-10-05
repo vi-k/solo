@@ -12,11 +12,11 @@ import 'support/error_observer.dart';
 import 'support/journal.dart';
 
 void main() {
-  test('wait ends the waiting, not the work', () {
+  test('abandonable ends the waiting, not the work', () {
     fakeAsync((async) {
       var finishedAt = Duration.zero;
       final job = Job<void>((ctx) async {
-        await ctx.wait(() async {
+        await ctx.abandonable(() async {
           await delay(100);
           finishedAt = async.elapsed;
         });
@@ -33,11 +33,11 @@ void main() {
     });
   });
 
-  test('wait hands a late value to the disposer', () {
+  test('abandonable hands a late value to the disposer', () {
     fakeAsync((async) {
       final closed = <String>[];
       final job = Job<void>((ctx) async {
-        await ctx.wait(
+        await ctx.abandonable(
           () async {
             await delay(100);
             return 'db';
@@ -65,7 +65,7 @@ void main() {
             key: 'job',
             observer: journal,
             (ctx) async {
-              await ctx.wait(() async {
+              await ctx.abandonable(() async {
                 await delay(100);
                 throw StateError('late');
               });
@@ -95,14 +95,14 @@ void main() {
       var began = false;
       final job = Job<void>((ctx) async {
         try {
-          await ctx.wait(() => delay(10));
+          await ctx.abandonable(() => delay(10));
         } on Cancelled {
           // Caught on purpose: the body now asks the context again, and
           // that is the path this test is about — the entry, not the
           // waiting that was cut short above.
         }
         for (final call in <Future<void> Function()>[
-          () => ctx.wait(() async => began = true),
+          () => ctx.abandonable(() async => began = true),
           () => ctx.join(() async => began = true),
           () => ctx.uncancellable(() async => began = true),
         ]) {
@@ -132,11 +132,11 @@ void main() {
     });
   });
 
-  test('wait returns a synchronous result as it is', () {
+  test('abandonable returns a synchronous result as it is', () {
     fakeAsync((async) {
       int? seen;
       final job = Job<void>((ctx) async {
-        seen = await ctx.wait(() => 7);
+        seen = await ctx.abandonable(() => 7);
       });
       async.flushMicrotasks();
       expect(seen, 7);
@@ -191,7 +191,7 @@ void main() {
         ctx
           ..onCancel(() => calls.add('first'))
           ..onCancel(() => calls.add('second'));
-        await ctx.wait(() => delay(100));
+        await ctx.abandonable(() => delay(100));
       });
       async.elapse(const Duration(milliseconds: 10));
       job.cancel().ignore();
@@ -208,7 +208,7 @@ void main() {
         final remove = ctx.onCancel(() => calls.add('gone'));
         ctx.onCancel(() => calls.add('kept'));
         remove();
-        await ctx.wait(() => delay(100));
+        await ctx.abandonable(() => delay(100));
       });
       async.elapse(const Duration(milliseconds: 10));
       job.cancel().ignore();
@@ -229,7 +229,7 @@ void main() {
       // they return, not from the call itself.
       final errors = <Object>[];
       void record(Object error, StackTrace stackTrace) => errors.add(error);
-      unawaited(leaked.wait(() async {}).then((_) {}, onError: record));
+      unawaited(leaked.abandonable(() async {}).then((_) {}, onError: record));
       unawaited(leaked.join(() async {}).then((_) {}, onError: record));
       unawaited(
         leaked.uncancellable(() async {}).then((_) {}, onError: record),
@@ -246,7 +246,7 @@ void main() {
       final seen = <String>[];
       late Job<void> job;
       job = Job<void>((ctx) async {
-        await ctx.wait(() {
+        await ctx.abandonable(() {
           // Marked while the action runs, so the callback the race
           // registers a moment later is never called: without the check
           // that follows it, the body would wait for the whole action.
@@ -271,7 +271,7 @@ void main() {
     fakeAsync((async) {
       Job<void>((ctx) async {
         try {
-          final value = await ctx.wait(
+          final value = await ctx.abandonable(
             () {
               ctx.job.cancel().ignore();
               return 'db';
@@ -308,7 +308,7 @@ void main() {
             ctx.check();
           }
 
-          await ctx.wait(helper);
+          await ctx.abandonable(helper);
         },
       );
       async.elapse(const Duration(milliseconds: 10));

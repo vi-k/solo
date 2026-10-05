@@ -9,7 +9,7 @@ operation behind it:
 (ctx) async {
   // The wait ends the moment cancellation is accepted. The request may
   // still be in flight; whatever it returns is dropped.
-  final name = await ctx.wait(() => api.load(id));
+  final name = await ctx.abandonable(() => api.load(id));
 
   // Waited out whatever happens, and only afterwards does the
   // cancellation come out in place of the value. The handle goes to
@@ -30,7 +30,7 @@ operation behind it:
 
 | Method | If the job accepts cancellation while waiting |
 | --- | --- |
-| `ctx.wait(action)` | Throws `Cancelled` without waiting for the operation to finish. |
+| `ctx.abandonable(action)` | Throws `Cancelled` without waiting for the operation to finish. |
 | `ctx.join(action)` | Waits for the operation to finish, then throws `Cancelled` in place of a successful result. |
 | `ctx.uncancellable(action)` | Holds ordinary cancellation until the action finishes, then returns its result without throwing `Cancelled`; code after it runs until the next checkpoint, which throws it. |
 | `ctx.pause(duration)` | Throws `Cancelled` at once, and cancels its timer. |
@@ -48,10 +48,10 @@ ordinary cancellation of the code and the table above. The other kind comes
 from the job's own state rules, and neither a section nor `cancellable: false`
 stops it.
 
-`wait` suits a request whose result can be abandoned. The request can continue
-after the job has finished and the next job has started. `join` suits work that
-must finish before the queue proceeds, such as a device command or opening a
-device. Neither method stops the operation itself.
+`abandonable` suits a request whose result can be abandoned. The request can
+continue after the job has finished and the next job has started. `join` suits
+work that must finish before the queue proceeds, such as a device command or
+opening a device. Neither method stops the operation itself.
 
 What `join` hands over to own goes to its `dispose`, not to a line after the
 call. A cancellation accepted while the device is opening comes out of `join`
@@ -87,19 +87,19 @@ SoloJob<void> seek(Duration position) => run<Ready, void>(
       policy: Policy.restart,
       (ctx) async {
         // Ends the moment the next seek cancels this one.
-        await ctx.wait(() => _player.seek(position));
+        await ctx.abandonable(() => _player.seek(position));
         ctx.emit(ctx.state.copyWith(position: position));
       },
     );
 ```
 
-`restart` cancels the running job, and `wait` lets go of the call at that
-moment: the job ends and the next one starts. The seek it let go of is still
-running on the device. Drag through three positions and all three seeks are on
-the device at once — three starts, then three ends. What the device makes of
-that is up to the device. The state says the last position all the same: only
-the last job gets as far as `emit`, so the screen shows the position the user
-asked for, whatever the device actually did.
+`restart` cancels the running job, and `abandonable` lets go of the call at
+that moment: the job ends and the next one starts. The seek it let go of is
+still running on the device. Drag through three positions and all three seeks
+are on the device at once — three starts, then three ends. What the device
+makes of that is up to the device. The state says the last position all the
+same: only the last job gets as far as `emit`, so the screen shows the position
+the user asked for, whatever the device actually did.
 
 ### The second attempt
 
@@ -321,14 +321,14 @@ checks: after a plain `await` or an `uncancellable` section, when what follows
 is not another checkpoint.
 
 Do not retain a context to start work after its job ends. Methods such as
-`emit`, `run`, `each`, `wait`, `join`, `pause` and `uncancellable` then throw
-`StateError`. Reads and `check` remain available once the job is over, and they
-remain checkpoints: after a cancellation they throw that `Cancelled`, and after
-any other outcome they still ask the rules of the job. During registered
-cleanup, state reads and body operations are unavailable. Capture the resources
-needed for cleanup in its closure. `log`, `job`, cleanup registration, `disown`
-and `unattended` remain available during cleanup. `log` itself does not throw
-on cancellation or completion.
+`emit`, `run`, `each`, `abandonable`, `join`, `pause` and `uncancellable` then
+throw `StateError`. Reads and `check` remain available once the job is over,
+and they remain checkpoints: after a cancellation they throw that `Cancelled`,
+and after any other outcome they still ask the rules of the job. During
+registered cleanup, state reads and body operations are unavailable. Capture
+the resources needed for cleanup in its closure. `log`, `job`, cleanup
+registration, `disown` and `unattended` remain available during cleanup. `log`
+itself does not throw on cancellation or completion.
 
 ## Cancellation details
 

@@ -120,7 +120,7 @@ void main() {
     fakeAsync((async) {
       final solo = PlainSolo<int>(0);
       final gate = Completer<void>();
-      solo.run<int, void>((ctx) => ctx.wait(() => gate.future));
+      solo.run<int, void>((ctx) => ctx.abandonable(() => gate.future));
       final source = solo.run<int, int>((ctx) async {
         fail('queued source must not run');
       });
@@ -172,7 +172,7 @@ void main() {
       final source = solo.run<int, int>((ctx) async => 1);
       final continuation = source.then<void>((ctx, value) {
         expect(ctx, isNot(isA<SoloContext<int, int>>()));
-        return ctx.wait(() => gate.future);
+        return ctx.abandonable(() => gate.future);
       });
       final next = solo.run<int, void>((ctx) async => ctx.emit(2));
       async.flushMicrotasks();

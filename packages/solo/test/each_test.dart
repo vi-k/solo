@@ -267,12 +267,14 @@ void main() {
     });
   });
 
-  test('child.wait in the callback ends the parent with the cancellation', () {
+  test(
+      'child.abandonable in the callback ends the parent with the cancellation',
+      () {
     runSolo((solo, journal, async) {
       final events = StreamController<int>();
       final parent = solo.run<TestState, void>(key: 'parent', (ctx) async {
         await ctx.each<int>(events.stream, (child, event) async {
-          await child.wait(() => delay(1000));
+          await child.abandonable(() => delay(1000));
         }).value;
       });
       async.elapse(const Duration(milliseconds: 10));

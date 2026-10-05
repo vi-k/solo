@@ -21,7 +21,7 @@ final class ProfileController extends Solo<ProfileState> {
           // Another controller's snapshot: a plain read, and the name says
           // as much.
           final user = session.currentState.user;
-          final name = await ctx.wait(() => api.fetchName(user));
+          final name = await ctx.abandonable(() => api.fetchName(user));
           // This job's own state: a checkpoint that throws `Cancelled` if
           // the job has been cancelled or the state is no longer `Loaded`.
           if (ctx.state.name != name) {

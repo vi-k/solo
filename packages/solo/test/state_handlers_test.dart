@@ -103,7 +103,7 @@ void main() {
               solo.log.add('dispose:end');
             });
           try {
-            await ctx.wait(() => operation.future);
+            await ctx.abandonable(() => operation.future);
           } finally {
             solo.log.add('finally');
           }
@@ -166,7 +166,7 @@ void main() {
             onCancel: (_, __) => 'initial',
             (ctx) async {
               ctx.emit('loading');
-              await ctx.wait(() => operation.future);
+              await ctx.abandonable(() => operation.future);
               ctx.emit('loaded');
             },
           );
@@ -220,7 +220,7 @@ void main() {
             ctx
               ..emit('loading')
               ..onDispose(() => cleanup.future);
-            await ctx.wait(() => operation.future);
+            await ctx.abandonable(() => operation.future);
           },
         )..ignore();
         clock.flushMicrotasks();
@@ -248,7 +248,7 @@ void main() {
         onCancel: (state, _) => 'cancelled:$state',
         (ctx) async {
           ctx.onDispose(() => cleanup.future);
-          await ctx.wait(() => Completer<void>().future);
+          await ctx.abandonable(() => Completer<void>().future);
         },
       );
       clock.flushMicrotasks();
@@ -266,7 +266,7 @@ void main() {
       final solo = _Controller<Object>('initial');
       final job = solo.run<String, void>(
         onCancel: (_, __) => fail('wrong working type'),
-        (ctx) => ctx.wait(() => Completer<void>().future),
+        (ctx) => ctx.abandonable(() => Completer<void>().future),
       );
       clock.flushMicrotasks();
       solo.external(42);
@@ -286,7 +286,7 @@ void main() {
         onCancel: (_, __) => fail('revoked permission restored'),
         (ctx) async {
           ctx.onDispose(() => cleanup.future);
-          await ctx.wait(() => Completer<void>().future);
+          await ctx.abandonable(() => Completer<void>().future);
         },
       );
       clock.flushMicrotasks();
@@ -308,7 +308,7 @@ void main() {
         onCancel: (_, __) => fail('transient disconnect lost'),
         (ctx) async {
           ctx.onDispose(() => cleanup.future);
-          await ctx.wait(() => Completer<void>().future);
+          await ctx.abandonable(() => Completer<void>().future);
         },
       );
       clock.flushMicrotasks();
@@ -358,7 +358,7 @@ void main() {
           child = solo.job<String, void>(
             (ctx) async {
               ctx.onDispose(() => cleanup.future);
-              await ctx.wait(() => Completer<void>().future);
+              await ctx.abandonable(() => Completer<void>().future);
             },
             onCancel: (_, __) => fail('parent permission lost'),
           );
@@ -440,7 +440,7 @@ void main() {
           ctx
             ..emit('loading')
             ..onDispose(() => cleanup.future);
-          await ctx.wait(() => Completer<void>().future);
+          await ctx.abandonable(() => Completer<void>().future);
         },
       );
       clock.flushMicrotasks();
@@ -464,7 +464,7 @@ void main() {
           return true;
         },
         onCancel: (_, __) => fail('uncertain permission'),
-        (ctx) => ctx.wait(() => Completer<void>().future),
+        (ctx) => ctx.abandonable(() => Completer<void>().future),
       );
       clock.flushMicrotasks();
       shouldThrow = true;
@@ -493,7 +493,7 @@ void main() {
               await cleanup.future;
               solo.log.add('child:disposed');
             });
-            await ctx.wait(() => Completer<void>().future);
+            await ctx.abandonable(() => Completer<void>().future);
           });
         },
       );
@@ -547,7 +547,7 @@ void main() {
         keepWhile: (state) => state != 'disconnected',
         (ctx) => ctx.run(
           solo.job<String, void>(
-            (ctx) => ctx.wait(() => Completer<void>().future),
+            (ctx) => ctx.abandonable(() => Completer<void>().future),
             onCancel: (_, __) => fail('parent rule cancellation'),
           ),
         ),
@@ -588,7 +588,7 @@ void main() {
         keepWhile: (_) => allowed,
         (ctx) => ctx.run(
           solo.job<String, void>(
-            (ctx) => ctx.wait(() => Completer<void>().future),
+            (ctx) => ctx.abandonable(() => Completer<void>().future),
             onCancel: (_, __) => fail('parent permission revoked'),
           ),
         ),
@@ -611,7 +611,7 @@ void main() {
           unawaited(
             ctx.run(
               solo.job<String, void>((ctx) async {
-                await ctx.wait(() => startGrandchild.future);
+                await ctx.abandonable(() => startGrandchild.future);
                 try {
                   await ctx.run(
                     solo.job<String, void>(
@@ -650,7 +650,7 @@ void main() {
           return true;
         },
         onCancel: (_, __) => fail('uncertain permission'),
-        (ctx) => ctx.wait(() => Completer<void>().future),
+        (ctx) => ctx.abandonable(() => Completer<void>().future),
       );
       clock.flushMicrotasks();
       solo.external('changed');
@@ -678,7 +678,7 @@ void main() {
           unawaited(
             ctx.run(
               solo.job<String, void>(
-                (ctx) => ctx.wait(() => finishChild.future),
+                (ctx) => ctx.abandonable(() => finishChild.future),
               ),
             ),
           );

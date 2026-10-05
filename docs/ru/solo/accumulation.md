@@ -60,7 +60,7 @@ final class QueuedSearch extends Solo<SearchState> {
   SoloJob<void> query(String text) => run<SearchState, void>(
         key: 'query',
         (ctx) async {
-          final results = await ctx.wait(() => api.search(text));
+          final results = await ctx.abandonable(() => api.search(text));
           ctx.emit(SearchState.results(results));
         },
       );
@@ -94,7 +94,7 @@ SoloJob<void> query(String text) => run<SearchState, void>(
       key: 'query',
       policy: Policy.restart,
       (ctx) async {
-        final results = await ctx.wait(() => api.search(text));
+        final results = await ctx.abandonable(() => api.search(text));
         ctx.emit(SearchState.results(results));
       },
     );
@@ -108,7 +108,7 @@ at 250 ms the screen shows [hits for solo]
 Устаревшее до экрана больше не доходит, и ответ приходит раньше: запросы теперь
 идут внахлёст, а не в очередь. Сервер при этом спросили те же четыре раза:
 отмена задачи не отзывает то, что она уже отправила. `ctx.join` вместо
-`ctx.wait` их тоже не отзовёт: он держит единственный слот выполнения
+`ctx.abandonable` их тоже не отзовёт: он держит единственный слот выполнения
 контроллера до ответа, и сколько запросов уйдёт, зависит от того, насколько
 сервер быстрее набора.
 
@@ -119,7 +119,7 @@ final class Search extends Solo<SearchState> {
   final SearchApi api;
   late final _queries = accumulate<SearchState, String, void>(
     (ctx, text) async {
-      final results = await ctx.wait(() => api.search(text));
+      final results = await ctx.abandonable(() => api.search(text));
       ctx.emit(SearchState.results(results));
     },
     merge: (accumulated, incoming) => incoming,
@@ -300,7 +300,7 @@ final class SettingsController extends Solo<Settings> {
 
   SoloJob<void> reload() => run<Settings, void>(
         key: 'reload',
-        (ctx) async => ctx.emit(await ctx.wait(_api.load)),
+        (ctx) async => ctx.emit(await ctx.abandonable(_api.load)),
       );
 }
 ```

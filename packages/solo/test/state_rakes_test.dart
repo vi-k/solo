@@ -143,13 +143,13 @@ final class _Any extends Solo<Object> {
           return 'child body ended';
         });
         ctx.run(ended).ignore();
-        await ctx.wait(() => gate.future);
+        await ctx.abandonable(() => gate.future);
       });
 
   /// Watches the state until [gate] opens.
   Job<void> watch(Completer<void> gate) => run<String, void>(
         keepWhile: _notBlocked,
-        (ctx) => ctx.wait(() => gate.future),
+        (ctx) => ctx.abandonable(() => gate.future),
       );
 
   /// A parent whose child writes `'blocked'` while the parent waits on a
@@ -177,7 +177,7 @@ final class _Any extends Solo<Object> {
   Job<void> emitsInCatch(Completer<void> gate) => run<Object, void>(
         (ctx) async {
           try {
-            await ctx.wait(() => gate.future);
+            await ctx.abandonable(() => gate.future);
           } on Object {
             trace.add('the catch ran');
             try {
@@ -216,7 +216,7 @@ final class _Any extends Solo<Object> {
           trace.add('onCancel: state $state, $cancelled');
           return 'corrected';
         },
-        (ctx) => ctx.wait(() => gate.future),
+        (ctx) => ctx.abandonable(() => gate.future),
       );
 
   Job<void> next() => run<Object, void>(
@@ -304,7 +304,7 @@ final class _Order extends Solo<String> {
           return kept;
         },
         onCancel: corrects ? (state, cancelled) => 'corrected' : null,
-        (ctx) => ctx.wait(() => Completer<void>().future),
+        (ctx) => ctx.abandonable(() => Completer<void>().future),
       );
 }
 
@@ -317,7 +317,7 @@ final class _LoggedNumbers extends page.Logged<int> {
 
   Job<void> watch() => run<int, void>(
         keepWhile: (state) => state < 5,
-        (ctx) => ctx.wait(() => Completer<void>().future),
+        (ctx) => ctx.abandonable(() => Completer<void>().future),
       );
 }
 
@@ -359,7 +359,7 @@ final class _Leaky extends Solo<int> {
 
   Job<void> watch() => run<int, void>(
         keepWhile: (state) => state < 5,
-        (ctx) => ctx.wait(() => Completer<void>().future),
+        (ctx) => ctx.abandonable(() => Completer<void>().future),
       );
 
   Job<String> emitter() => run<int, String>((ctx) async {
@@ -373,7 +373,7 @@ final class _Leaky extends Solo<int> {
 
   Job<void> corrected(Completer<void> gate) => run<int, void>(
         onCancel: (state, cancelled) => 4,
-        (ctx) => ctx.wait(() => gate.future),
+        (ctx) => ctx.abandonable(() => gate.future),
       );
 }
 
@@ -461,7 +461,7 @@ final class _Eligible extends Solo<String> {
               trace.add('cleanup ran');
             });
           }
-          await ctx.wait(() => gate.future);
+          await ctx.abandonable(() => gate.future);
           return 'done';
         },
       );
@@ -476,11 +476,11 @@ final class _Eligible extends Solo<String> {
           final child = job<String, void>(
             key: 'child',
             onCancel: (state, cancelled) => 'child corrected',
-            (c) => c.wait(() => gate.future),
+            (c) => c.abandonable(() => gate.future),
           );
           ctx.run(child).ignore();
           if (parentEndsEarly) return;
-          await ctx.wait(() => gate.future);
+          await ctx.abandonable(() => gate.future);
         },
       );
 
@@ -494,7 +494,7 @@ final class _Eligible extends Solo<String> {
           await ctx.run(
             job<String, void>((c) async => c.emit('bad from the child')),
           );
-          await ctx.wait(() => Completer<void>().future);
+          await ctx.abandonable(() => Completer<void>().future);
         },
       );
 
@@ -527,7 +527,7 @@ final class _Eligible extends Solo<String> {
         key: 'watcher',
         keepWhile: _keep,
         onCancel: (state, cancelled) => 'watcher corrected',
-        (c) => c.wait(() => Completer<void>().future),
+        (c) => c.abandonable(() => Completer<void>().future),
       );
 
   /// Writes a state its own rule turns down, waits on a plain `await`,
@@ -559,7 +559,7 @@ final class _Eligible extends Solo<String> {
   Job<void> handlerThrows(Completer<void> gate) => run<String, void>(
         key: 'thrower',
         onCancel: (state, cancelled) => throw StateError('handler boom'),
-        (ctx) => ctx.wait(() => gate.future),
+        (ctx) => ctx.abandonable(() => gate.future),
       );
 
   Job<void> next() => run<String, void>(
@@ -573,7 +573,7 @@ final class _Eligible extends Solo<String> {
         onError: (state, error, stackTrace) => 'corrected by onError',
         onCancel: (state, cancelled) => 'corrected by onCancel',
         (ctx) async {
-          await ctx.wait(() => gate.future);
+          await ctx.abandonable(() => gate.future);
           return 'done';
         },
       );
@@ -594,7 +594,7 @@ final class _Eligible extends Solo<String> {
           externalSetState('bad fact');
           return 'corrected from $state';
         },
-        (ctx) => ctx.wait(() => gate.future),
+        (ctx) => ctx.abandonable(() => gate.future),
       );
 }
 
@@ -854,7 +854,7 @@ void main() {
         'state': (ctx) => ctx.state,
         'stateAs': (ctx) => ctx.stateAs<String>(),
         'check': (ctx) => ctx.check(),
-        'wait': (ctx) => ctx.wait(action),
+        'abandonable': (ctx) => ctx.abandonable(action),
         'join': (ctx) => ctx.join(action),
         'uncancellable': (ctx) => ctx.uncancellable(action),
         'pause': (ctx) => ctx.pause(),
@@ -1646,7 +1646,7 @@ void main() {
         expect(
           camera.stage.trace,
           ['the body resumed', 'the next job started'],
-          reason: 'wait lets go of the call at once',
+          reason: 'abandonable lets go of the call at once',
         );
         cam.close().ignore();
         device.dispose();

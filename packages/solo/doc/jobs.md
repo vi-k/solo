@@ -109,7 +109,7 @@ SoloJob<void> save() =>
 SoloJob<Profile> load(String id) => run<Ready, Profile>(
       key: (_Op.load, id),
       policy: Policy.droppable,
-      (ctx) => ctx.wait(() => api.load(id)),
+      (ctx) => ctx.abandonable(() => api.load(id)),
     );
 
 // replace: the queued zoom goes, a running one is left alone.
@@ -159,8 +159,8 @@ job that refuses cancellation, one created with `cancellable: false`, can
 therefore delay its replacement — and so can one that has nothing to hand the
 request to: a `join` around a call the request cannot reach waits that call out
 to the end, and the outcome is `Cancelled` all the same. The token above is the
-way in; `ctx.wait` is the other, for an operation that can be left to finish on
-its own. Both are in
+way in; `ctx.abandonable` is the other, for an operation that can be left to
+finish on its own. Both are in
 [Stopping the underlying operation](cancellation.md#stopping-the-underlying-operation)
 on the cancellation page.
 
@@ -176,7 +176,7 @@ profile should get that one.
 SoloJob<Profile> load(String id) => run<Ready, Profile>(
       key: _Op.load,
       policy: Policy.droppable,
-      (ctx) => ctx.wait(() => api.load(id)),
+      (ctx) => ctx.abandonable(() => api.load(id)),
     );
 ```
 
@@ -193,7 +193,7 @@ profile, and no request for Grace's is made.
 SoloJob<Profile> load(String id) => run<Ready, Profile>(
       key: (_Op.load, id),
       policy: Policy.droppable,
-      (ctx) => ctx.wait(() => api.load(id)),
+      (ctx) => ctx.abandonable(() => api.load(id)),
     );
 ```
 
@@ -214,7 +214,7 @@ int duplicates = 0;
 SoloJob<Profile> load(String id) {
   final mine = job<Ready, Profile>(
     key: (_Op.load, id),
-    (ctx) => ctx.wait(() => api.load(id)),
+    (ctx) => ctx.abandonable(() => api.load(id)),
   );
   final taken = add(mine, policy: Policy.droppable);
   if (!identical(taken, mine)) {
@@ -296,7 +296,7 @@ void pause() {
   final gate = _gate = Completer<void>();
   run<CameraState, void>(
     key: _Op.pause,
-    (ctx) => ctx.wait(() => gate.future),
+    (ctx) => ctx.abandonable(() => gate.future),
   );
 }
 
@@ -325,7 +325,7 @@ void pause() {
     job<CameraState, void>(key: _Op.pause, (ctx) async {
       // Cancellation is not a resume, and a cancelled gate is not a pause.
       ctx.onCancel(() => _gate = null);
-      await ctx.wait(() => gate.future);
+      await ctx.abandonable(() => gate.future);
     }),
     first: true,
   );
@@ -350,7 +350,7 @@ void pause() {
   add(
     job<CameraState, void>(
       key: _Op.pause,
-      (ctx) => ctx.wait(() => gate.future),
+      (ctx) => ctx.abandonable(() => gate.future),
     ),
     first: true,
   ).whenCancelled((_) {
@@ -376,7 +376,7 @@ that. The cases:
 | `resume()` | They run, in the order they were submitted. |
 | `queue.clear()` while the gate runs | The queue empties and the pause stands: the gate is the running job, not a queued one. |
 | `queue.clear()` while the gate still waits behind the running job | The gate goes with the rest of the queue, and the field is clear: `isPaused` says `false`, and `pause()` works again. |
-| `close()` while paused | It comes back without a `resume`: the gate is cancellable, and its `ctx.wait` ends the moment the gate is cancelled. |
+| `close()` while paused | It comes back without a `resume`: the gate is cancellable, and its `ctx.abandonable` ends the moment the gate is cancelled. |
 | `close(mode: SoloCloseMode.drain)` while paused | It waits for the `resume`: a drain runs what is queued instead of cancelling it, the gate included. |
 | `cancelAll()` | The gate goes with everything else and the queue moves on, with nobody having opened it; the field is clear, so `pause()` works again. |
 | The state leaves `Ready` while paused | The pause stands: the gate works in every state of the camera. |

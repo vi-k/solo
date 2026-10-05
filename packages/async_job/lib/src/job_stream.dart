@@ -176,7 +176,7 @@ extension _JobStreamBody on JobContext {
     try {
       // Set up the cancellation-aware wait before the source can invoke
       // user code from inside `listen`.
-      final waiting = wait(() => done.future);
+      final waiting = abandonable(() => done.future);
       try {
         sub = stream.listen(
           (event) {

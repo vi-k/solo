@@ -98,7 +98,7 @@ final class ProfileController extends Solo<Profile> with SoloListenable {
         policy: Policy.droppable, // a second tap returns the first job
         (ctx) async {
           ctx.emit(Loading());
-          final name = await ctx.wait(api.fetchName);
+          final name = await ctx.abandonable(api.fetchName);
           ctx.emit(Loaded(name));
 
           return name;
@@ -138,13 +138,13 @@ class ProfileView extends StatelessWidget {
 `run<Profile, String>` says the job works with `Profile` states and returns a
 `String`; `save` narrows that to `Loaded`, so it does not start in any other
 state — it ends `Cancelled` there — and its body reads a `Loaded` with a `name`
-in it. Inside a body `ctx.emit` is the only way to write the state, `ctx.wait`
-awaits like `await` except that it gives up the moment the job is cancelled,
-and `ctx.join` waits its call out either way — a save is not cut in half.
-`onError` and `onCancel` are the way back: they say what state a load that
-failed or was cancelled leaves behind, and without them the screen would keep
-the spinner of a job that is no longer running. The full API — rules, the
-queue, children, observers — is documented in
+in it. Inside a body `ctx.emit` is the only way to write the state,
+`ctx.abandonable` awaits like `await` except that it gives up the moment the
+job is cancelled, and `ctx.join` waits its call out either way — a save is not
+cut in half. `onError` and `onCancel` are the way back: they say what state a
+load that failed or was cancelled leaves behind, and without them the screen
+would keep the spinner of a job that is no longer running. The full API —
+rules, the queue, children, observers — is documented in
 [solo](https://pub.dev/packages/solo).
 
 ## Selecting one value

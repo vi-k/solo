@@ -78,7 +78,7 @@ final class CarryingFailure implements Exception {
   return (
     Job<int>((ctx) async {
       try {
-        await ctx.wait(() => Future<void>.error(failure(payload)));
+        await ctx.abandonable(() => Future<void>.error(failure(payload)));
       } on Object catch (_) {
         // Handled: the job goes on and ends with a value.
       }
@@ -88,8 +88,8 @@ final class CarryingFailure implements Exception {
   );
 }
 
-/// Unattended work whose `ctx.wait` fails once the gate opens, with a record
-/// that holds the payload; the job itself is over by then.
+/// Unattended work whose `ctx.abandonable` fails once the gate opens, with a
+/// record that holds the payload; the job itself is over by then.
 (Job<int>, WeakReference<Payload>, Completer<void>, Future<void>)
     failureOfWorkAfterTheJob() {
   final payload = Payload();
@@ -99,7 +99,7 @@ final class CarryingFailure implements Exception {
     Job<int>((ctx) async {
       ctx.unattended(() async {
         try {
-          await ctx.wait<void>(() async {
+          await ctx.abandonable<void>(() async {
             await gate.future;
             Error.throwWithStackTrace((payload,), StackTrace.current);
           });
@@ -116,10 +116,10 @@ final class CarryingFailure implements Exception {
   );
 }
 
-/// A job an engine finishes by hand while its body waits on a `ctx.wait`
-/// that fails, after that, with a record holding a payload. The payload is
-/// made inside the action and handed out weakly through [made]: a
-/// [ProbeJob] keeps its body function, which must not capture it.
+/// A job an engine finishes by hand while its body waits on a `ctx.abandonable`
+/// call that fails, after that, with a record holding a payload. The payload is
+/// made inside the action and handed out weakly through [made]: a [ProbeJob]
+/// keeps its body function, which must not capture it.
 (ProbeJob<int>, Completer<void>, Future<void>) failureAfterAHandFinish(
   List<WeakReference<Payload>> made,
 ) {
@@ -128,7 +128,7 @@ final class CarryingFailure implements Exception {
   return (
     ProbeJob<int>((ctx) async {
       try {
-        await ctx.wait<void>(() async {
+        await ctx.abandonable<void>(() async {
           await gate.future;
           final payload = Payload();
           made.add(WeakReference(payload));

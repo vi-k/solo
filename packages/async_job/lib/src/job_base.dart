@@ -96,14 +96,14 @@ abstract interface class Job<T> {
   /// event over from inside `listen` reaches the callback before this returns.
   /// A callback that needs its own job reads [JobContext.job].
   ///
-  /// [onData] receives the context of the job itself. An asynchronous
-  /// callback is awaited before the next event is delivered; use the
-  /// checkpoints of the context, [JobContext.wait] and [JobContext.join], to
-  /// stop for a cancellation. The job ends [Done] when the stream ends, and
-  /// an error of the stream or of the callback ends it [Failed]. A
-  /// cancellation cancels the subscription at once and waits for the callback
-  /// that is running. Do not await the job's own completion or cancellation
-  /// from the callback. The rest is what [JobContext.each] says of its child.
+  /// [onData] receives the context of the job itself. An asynchronous callback
+  /// is awaited before the next event is delivered; use the checkpoints of the
+  /// context, [JobContext.abandonable] and [JobContext.join], to stop for a
+  /// cancellation. The job ends [Done] when the stream ends, and an error of
+  /// the stream or of the callback ends it [Failed]. A cancellation cancels the
+  /// subscription at once and waits for the callback that is running. Do not
+  /// await the job's own completion or cancellation from the callback. The rest
+  /// is what [JobContext.each] says of its child.
   ///
   /// The cleanup stack unwinds when the job ends, not after an event: a
   /// [JobContext.onDispose] registered for every event piles up for as long
@@ -398,7 +398,10 @@ abstract interface class Job<T> {
   /// handled elsewhere, by a [JobObserver] of your own.
   ///
   /// ```dart
-  /// Job<void>(observer: reporter, (ctx) => ctx.wait(device.close)).ignore();
+  /// Job<void>(
+  ///   observer: reporter,
+  ///   (ctx) => ctx.abandonable(device.close),
+  /// ).ignore();
   /// ```
   ///
   /// Waiting for [done] or [value] observes a [Failed] too: the one waiting has
@@ -450,8 +453,8 @@ enum JobStatus {
 ///
 /// [always] tells the two kinds apart: a `dispose` registration runs whatever
 /// the outcome, a `discard` one only when the value reached nobody. [value] is
-/// set for registrations made by `wait`, `join` and `run`, and it is what
-/// `disown` looks up.
+/// set for registrations made by `abandonable`, `join` and `run`, and it is
+/// what `disown` looks up.
 final class _Cleanup {
   final FutureOr<void> Function() run;
   final bool always;
@@ -573,17 +576,17 @@ abstract class JobBase<T> implements Job<T> {
   /// The failures on their way to the body that happened before anything
   /// marked the job, held weakly.
   ///
-  /// The core reads the order at the throw, and a failure takes time to
-  /// travel there: a microtask out of [JobContext.wait], several out of the
+  /// The core reads the order at the throw, and a failure takes time to travel
+  /// there: a microtask out of [JobContext.abandonable], several out of the
   /// callback or the source of [JobContext.each], all the time a child that
   /// failed spends on its own children and its cleanup, and
-  /// [JobContext.uncancellable] lands the cancellation it was holding on
-  /// the failure's way out. A cancellation arriving in that time would look
-  /// first, and a failure that came first is a diagnosis it must not
-  /// swallow. So every place a failure bound for the body passes through
-  /// says so here, at the moment it happens. Every such failure and not
-  /// only the latest: [JobContext.runAll] throws the first failure of its
-  /// branches, and another branch may fail after it and before the mark.
+  /// [JobContext.uncancellable] lands the cancellation it was holding on the
+  /// failure's way out. A cancellation arriving in that time would look first,
+  /// and a failure that came first is a diagnosis it must not swallow. So every
+  /// place a failure bound for the body passes through says so here, at the
+  /// moment it happens. Every such failure and not only the latest:
+  /// [JobContext.runAll] throws the first failure of its branches, and another
+  /// branch may fail after it and before the mark.
   ///
   /// It names the error and not just the fact: a body that caught one of
   /// these and went on may fail again after the job accepted a
@@ -1367,7 +1370,7 @@ abstract class JobBase<T> implements Job<T> {
   /// Announces [error] and asks for an answer to it.
   ///
   /// For the errors that have nowhere else to go: an action abandoned by
-  /// [JobContext.wait] failing later, a disposer, a callback of
+  /// [JobContext.abandonable] failing later, a disposer, a callback of
   /// [JobContext.onCancel] or [Job.whenCancelled], work handed over with
   /// [JobContext.unattended]. The observer hears it through
   /// [JobObserver.onError], and one that is a [JobAnswerer] answers for it

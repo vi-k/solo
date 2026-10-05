@@ -28,7 +28,7 @@ abstract interface class SoloContext<S extends Object, W extends S>
   ///
   /// ```dart
   /// ctx.emit(ctx.state.copyWith(loading: true));
-  /// final name = await ctx.wait(api.fetchName);
+  /// final name = await ctx.abandonable(api.fetchName);
   /// ctx.emit(Profile(name: name));
   /// ```
   void emit(S next);

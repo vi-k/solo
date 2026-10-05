@@ -26,7 +26,7 @@ void main() {
               await delay(10);
               throw StateError('abandoned boom');
             });
-            await ctx.wait(() => delay(1));
+            await ctx.abandonable(() => delay(1));
           });
           async.flushTimers();
         });
@@ -59,7 +59,7 @@ void main() {
               await delay(10);
               throw StateError('abandoned boom');
             });
-            await ctx.wait(() => delay(1));
+            await ctx.abandonable(() => delay(1));
           });
           async.flushTimers();
         });
@@ -77,7 +77,7 @@ void main() {
           await delay(10);
           throw StateError('abandoned boom');
         });
-        await ctx.wait(() => delay(1));
+        await ctx.abandonable(() => delay(1));
       });
       async.elapse(const Duration(milliseconds: 5));
       expect(journal.take(), ['[j] started', '[j] finished Done(null)']);
@@ -94,7 +94,7 @@ void main() {
     fakeAsync((async) {
       job = Job<void>(key: 'j', observer: journal, (ctx) async {
         ctx.unattended(() => throw StateError('sync boom'));
-        await ctx.wait(() => delay(1));
+        await ctx.abandonable(() => delay(1));
       });
       async.flushTimers();
       expect(job.outcome, isA<Done<void>>());
@@ -111,9 +111,9 @@ void main() {
     fakeAsync((async) {
       final job = Job<void>(key: 'j', observer: journal, (ctx) async {
         ctx.unattended(() async {
-          await ctx.wait(() => delay(50));
+          await ctx.abandonable(() => delay(50));
         });
-        await ctx.wait(() => delay(100));
+        await ctx.abandonable(() => delay(100));
       });
       async.elapse(const Duration(milliseconds: 5));
       job.cancel();
@@ -127,7 +127,7 @@ void main() {
     fakeAsync((async) {
       Job<void>(key: 'j', observer: journal, (ctx) async {
         ctx.unattended(() async {
-          await ctx.wait(() => delay(50));
+          await ctx.abandonable(() => delay(50));
           ctx.check();
         });
         await delay(5);
@@ -144,7 +144,7 @@ void main() {
     fakeAsync((async) {
       job = Job<void>(key: 'j', observer: journal, (ctx) async {
         ctx.unattended(() => throw const Cancelled('mine'));
-        await ctx.wait(() => delay(1));
+        await ctx.abandonable(() => delay(1));
       });
       async.flushTimers();
       expect(job.outcome, isA<Done<void>>());
@@ -164,7 +164,7 @@ void main() {
       fakeAsync((async) {
         final job = Job<void>(key: 'j', observer: journal, (ctx) async {
           final child = Job.deferred<void>(key: 'child', (c) async {
-            await c.wait(() => delay(own ? 10 : 100));
+            await c.abandonable(() => delay(own ? 10 : 100));
             if (own) {
               throw const Cancelled('child quits');
             }
@@ -173,7 +173,7 @@ void main() {
           ctx.unattended(() async {
             await child.value;
           });
-          await ctx.wait(() => delay(own ? 100 : 30));
+          await ctx.abandonable(() => delay(own ? 100 : 30));
         });
         if (!own) {
           async.elapse(const Duration(milliseconds: 5));
@@ -195,17 +195,17 @@ void main() {
       late final Job<void> c;
       final b = Job<void>(key: 'b', observer: journalB, (ctx) async {
         c = Job.deferred<void>(key: 'c', (cc) async {
-          await cc.wait(() => delay(100));
+          await cc.abandonable(() => delay(100));
         });
         ctx.run(c).ignore();
-        await ctx.wait(() => delay(100));
+        await ctx.abandonable(() => delay(100));
       });
       async.flushMicrotasks();
       final a = Job<void>(key: 'a', observer: journalA, (ctx) async {
         ctx.unattended(() async {
           await c.value;
         });
-        await ctx.wait(() => delay(100));
+        await ctx.abandonable(() => delay(100));
       });
       async.elapse(const Duration(milliseconds: 5));
       a.cancel();
@@ -245,7 +245,7 @@ void main() {
             throw StateError('late');
           }),
         );
-        await ctx.wait(() => delay(1));
+        await ctx.abandonable(() => delay(1));
       });
       async.flushTimers();
     });
@@ -261,7 +261,7 @@ void main() {
     fakeAsync((async) {
       final job = Job<void>(key: 'j', (ctx) async {
         try {
-          await ctx.wait(() => delay(100));
+          await ctx.abandonable(() => delay(100));
         } finally {
           ctx.unattended(() => ran = true);
         }
@@ -279,19 +279,19 @@ void main() {
     fakeAsync((async) {
       final job = Job<void>(key: 'j', observer: journal, (ctx) async {
         ctx.unattended(() async {
-          await ctx.wait(() async {
+          await ctx.abandonable(() async {
             await delay(50);
             throw StateError('the action failed on its own');
           });
         });
-        await ctx.wait(() => delay(100));
+        await ctx.abandonable(() => delay(100));
       });
       async.elapse(const Duration(milliseconds: 5));
       job.cancel();
       async.flushTimers();
     });
     // The filter covers what the work leaves uncaught, and nothing else: a
-    // `wait` made in here keeps its own rules, and an action it was left
+    // `abandonable` made in here keeps its own rules, and an action it was left
     // holding reports its late failure as it does anywhere. Pinned so the
     // two rules are not confused for one.
     expect(journal.take(), [
@@ -306,14 +306,14 @@ void main() {
     fakeAsync((async) {
       final job = Job<void>(key: 'j', observer: journal, (ctx) async {
         ctx.unattended(() async {
-          await ctx.wait(() async {
+          await ctx.abandonable(() async {
             await delay(50);
             // Back into the context of a job that is over: what comes out
             // is the very cancellation that became its outcome.
             ctx.check();
           });
         });
-        await ctx.wait(() => delay(100));
+        await ctx.abandonable(() => delay(100));
       });
       async.elapse(const Duration(milliseconds: 5));
       job.cancel();
@@ -343,7 +343,7 @@ void main() {
             // throws one without tripping `only_throw_errors`.
             Error.throwWithStackTrace(ctx.job.outcome!, StackTrace.current);
           });
-          await ctx.wait(() => delay(100));
+          await ctx.abandonable(() => delay(100));
         },
       )..launch();
       async.elapse(const Duration(milliseconds: 5));
@@ -366,7 +366,7 @@ void main() {
             await delay(30);
             Error.throwWithStackTrace(ctx.job.outcome!, StackTrace.current);
           });
-          await ctx.wait(() => delay(100));
+          await ctx.abandonable(() => delay(100));
         },
       )..launch();
       async.elapse(const Duration(milliseconds: 5));
@@ -391,7 +391,7 @@ void main() {
             throw StateError('device.stop failed');
           }),
         );
-        await ctx.wait(() => delay(100));
+        await ctx.abandonable(() => delay(100));
       });
       async.elapse(const Duration(milliseconds: 5));
       job.cancel();
@@ -417,7 +417,7 @@ void main() {
             caught = error;
           }
         });
-        await ctx.wait(() => delay(1));
+        await ctx.abandonable(() => delay(1));
       });
       async.flushTimers();
       expect(

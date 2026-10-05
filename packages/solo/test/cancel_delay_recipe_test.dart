@@ -78,7 +78,7 @@ void main() {
       async.flushTimers();
     });
 
-    expect(observer.lines, ['guarded ${_number('ctx.wait')}']);
+    expect(observer.lines, ['guarded ${_number('ctx.abandonable')}']);
     expect(observer.lines, ['guarded 0']);
   });
 

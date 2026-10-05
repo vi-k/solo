@@ -1,9 +1,9 @@
-// Section 9 of `doc/vs-bloc.md`, "Reacting to an independent external state change": what the page leaves out,
-// then the code under its `### Solo` heading, verbatim, then what
-// `vs_bloc_rakes_test.dart` adds on top of it. Every piece of the page's
-// blocks is a run of lines of this file. The bloc side of the section is
-// built and run by the bench, `tool/doc_snippets.py`: this package does not
-// depend on bloc.
+// Section 9 of `doc/vs-bloc.md`, "Reacting to an independent external state
+// change": what the page leaves out, then the code under its `### Solo`
+// heading, verbatim, then what `vs_bloc_rakes_test.dart` adds on top of it.
+// Every piece of the page's blocks is a run of lines of this file. The bloc
+// side of the section is built and run by the bench, `tool/doc_snippets.py`:
+// this package does not depend on bloc.
 import 'package:solo/solo.dart';
 
 import 'vs_bloc_stubs.dart';
@@ -157,7 +157,7 @@ final class HandledReportController extends Solo<ReportState> {
           handlers.add('onCancel');
           return const SignedIn();
         },
-        (ctx) => ctx.wait(() => tick(1000)),
+        (ctx) => ctx.abandonable(() => tick(1000)),
       );
 }
 

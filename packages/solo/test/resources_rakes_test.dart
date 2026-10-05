@@ -133,7 +133,7 @@ SoloJob<Database> _connect(Bench bench, {bool cancellable = true}) =>
     );
 
 /// The three calls of the table, by the name the page gives them.
-const _calls = ['ctx.wait', 'ctx.join', 'ctx.run'];
+const _calls = ['ctx.abandonable', 'ctx.join', 'ctx.run'];
 
 /// A job that takes a database through [call] with [dispose] or [discard],
 /// and then waits out a step named `step`.
@@ -145,8 +145,12 @@ SoloJob<void> _take(
 }) =>
     bench.run<Idle, void>(key: 'take', (ctx) async {
       switch (call) {
-        case 'ctx.wait':
-          await ctx.wait(Database.open, dispose: dispose, discard: discard);
+        case 'ctx.abandonable':
+          await ctx.abandonable(
+            Database.open,
+            dispose: dispose,
+            discard: discard,
+          );
         case 'ctx.join':
           await ctx.join(Database.open, dispose: dispose, discard: discard);
         default:
@@ -284,9 +288,9 @@ void main() {
   group('The table', () {
     test('has the five rows these tests run', () {
       expect(_rows('| Member | What it releases, and when |'), {
-        '`dispose:` on `ctx.wait`, `ctx.join` or `ctx.run`':
+        '`dispose:` on `ctx.abandonable`, `ctx.join` or `ctx.run`':
             "that call's value, whatever the outcome",
-        '`discard:` on `ctx.wait`, `ctx.join` or `ctx.run`':
+        '`discard:` on `ctx.abandonable`, `ctx.join` or `ctx.run`':
             "that call's value, and only if the job ends cancelled or failed",
         '`ctx.onDispose(callback)`':
             'whatever the callback closes, whatever the outcome',
@@ -388,7 +392,8 @@ void main() {
           final job = bench.run<Idle, void>((ctx) async {
             FutureOr<void> close(Database db) => db.close();
             final db = switch (call) {
-              'ctx.wait' => await ctx.wait(Database.open, dispose: close),
+              'ctx.abandonable' =>
+                await ctx.abandonable(Database.open, dispose: close),
               'ctx.join' => await ctx.join(Database.open, dispose: close),
               _ => await ctx.run(_connect(bench), dispose: close),
             };
@@ -632,9 +637,12 @@ void main() {
       });
     });
 
-    test('wait releases a value that did not reach the body as it arrives', () {
+    test(
+        'abandonable releases a value that did not reach the body as it '
+        'arrives', () {
       fakeAsync((async) {
-        final job = _take(Bench(), 'ctx.wait', dispose: (db) => db.close());
+        final job =
+            _take(Bench(), 'ctx.abandonable', dispose: (db) => db.close());
         async.flushMicrotasks();
         unawaited(job.cancel());
         async.flushMicrotasks();
@@ -726,10 +734,12 @@ void main() {
       });
     });
 
-    test('wait takes an action that returns without waiting just as well', () {
+    test(
+        'abandonable takes an action that returns without waiting just as well',
+        () {
       fakeAsync((async) {
         final job = Bench().run<Idle, void>((ctx) async {
-          await ctx.wait(
+          await ctx.abandonable(
             () => device.events.listen(onEvent),
             dispose: (sub) => sub.cancel(),
           );
@@ -895,8 +905,12 @@ void main() {
             FutureOr<void> close(Database db) => db.close();
             try {
               switch (call) {
-                case 'ctx.wait':
-                  await ctx.wait(Database.open, dispose: close, discard: close);
+                case 'ctx.abandonable':
+                  await ctx.abandonable(
+                    Database.open,
+                    dispose: close,
+                    discard: close,
+                  );
                 case 'ctx.join':
                   await ctx.join(Database.open, dispose: close, discard: close);
                 default:
@@ -1412,7 +1426,7 @@ void main() {
         );
         fakeAsync((async) {
           stage.endsByItself.remove('delete');
-          final keeper = first.TempWaiter();
+          final keeper = first.TempAbandoner();
           final job = keeper.write();
           final next = keeper.next();
           async.flushMicrotasks();
@@ -1439,7 +1453,7 @@ void main() {
 
       test('closed, lets close() come back while the file still opens', () {
         fakeAsync((async) {
-          final keeper = first.TempWaiter();
+          final keeper = first.TempAbandoner();
           final job = keeper.write();
           async.flushMicrotasks();
           var back = false;
@@ -1457,7 +1471,7 @@ void main() {
 
       test('nobody cancels: the file is deleted when the job ends', () {
         fakeAsync((async) {
-          final job = first.TempWaiter().write();
+          final job = first.TempAbandoner().write();
           async.flushMicrotasks();
           _end(async, 'openTemp');
 
@@ -1472,9 +1486,9 @@ void main() {
           "controller's `onError` hook and then handed to `Solo.errorHandler`, "
           'or to the zone when no handler is set',
         );
-        late first.TempWaiter keeper;
+        late first.TempAbandoner keeper;
         final errors = _zone((async) {
-          keeper = first.TempWaiter();
+          keeper = first.TempAbandoner();
           final job = keeper.write();
           async.flushMicrotasks();
           unawaited(job.cancel());
@@ -1487,10 +1501,10 @@ void main() {
       });
 
       test('a late error from the disposer goes the same way', () {
-        late first.TempWaiter keeper;
+        late first.TempAbandoner keeper;
         final errors = _zone((async) {
           stage.endsByItself.remove('delete');
-          keeper = first.TempWaiter();
+          keeper = first.TempAbandoner();
           final job = keeper.write();
           async.flushMicrotasks();
           unawaited(job.cancel());
@@ -1507,9 +1521,9 @@ void main() {
         final handled = <Object>[];
         Solo.errorHandler =
             (solo, job, error, stackTrace) => handled.add(error);
-        late first.TempWaiter keeper;
+        late first.TempAbandoner keeper;
         final errors = _zone((async) {
-          keeper = first.TempWaiter();
+          keeper = first.TempAbandoner();
           final job = keeper.write();
           async.flushMicrotasks();
           unawaited(job.cancel());

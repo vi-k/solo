@@ -38,7 +38,7 @@ final class Player extends Solo<PlayerState> {
           // before another one loads.
           await ctx.join(device.stop);
           // Cancellation ends this wait at once; the request may go on.
-          final track = await ctx.wait(() => api.fetch(id));
+          final track = await ctx.abandonable(() => api.fetch(id));
           // Waited out as well. `dispose` closes the download when the
           // job ends, or as soon as the call returns if the job was
           // cancelled meanwhile.

@@ -134,8 +134,9 @@ void main() {
       final solo = _Closing(journal.lines);
       try {
         solo.run<TestState, void>(key: 'job', (ctx) async {
-          await ctx
-              .wait(() => Future<void>.delayed(const Duration(seconds: 1)));
+          await ctx.abandonable(
+            () => Future<void>.delayed(const Duration(seconds: 1)),
+          );
         });
         async.flushMicrotasks();
         solo

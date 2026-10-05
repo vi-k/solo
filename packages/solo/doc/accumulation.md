@@ -58,7 +58,7 @@ final class QueuedSearch extends Solo<SearchState> {
   SoloJob<void> query(String text) => run<SearchState, void>(
         key: 'query',
         (ctx) async {
-          final results = await ctx.wait(() => api.search(text));
+          final results = await ctx.abandonable(() => api.search(text));
           ctx.emit(SearchState.results(results));
         },
       );
@@ -92,7 +92,7 @@ SoloJob<void> query(String text) => run<SearchState, void>(
       key: 'query',
       policy: Policy.restart,
       (ctx) async {
-        final results = await ctx.wait(() => api.search(text));
+        final results = await ctx.abandonable(() => api.search(text));
         ctx.emit(SearchState.results(results));
       },
     );
@@ -106,9 +106,9 @@ at 250 ms the screen shows [hits for solo]
 Nothing stale reaches the screen now, and the answer comes sooner because the
 requests overlap instead of queueing. The server was still asked four times:
 cancelling a job does not unsend what it has already sent. `ctx.join` in place
-of `ctx.wait` would not unsend them either; it holds the controller's one
-execution slot until the answer returns, so how many requests go out depends on
-how much faster the server is than the typing.
+of `ctx.abandonable` would not unsend them either; it holds the controller's
+one execution slot until the answer returns, so how many requests go out
+depends on how much faster the server is than the typing.
 
 #### The accumulator
 
@@ -117,7 +117,7 @@ final class Search extends Solo<SearchState> {
   final SearchApi api;
   late final _queries = accumulate<SearchState, String, void>(
     (ctx, text) async {
-      final results = await ctx.wait(() => api.search(text));
+      final results = await ctx.abandonable(() => api.search(text));
       ctx.emit(SearchState.results(results));
     },
     merge: (accumulated, incoming) => incoming,
@@ -299,7 +299,7 @@ final class SettingsController extends Solo<Settings> {
 
   SoloJob<void> reload() => run<Settings, void>(
         key: 'reload',
-        (ctx) async => ctx.emit(await ctx.wait(_api.load)),
+        (ctx) async => ctx.emit(await ctx.abandonable(_api.load)),
       );
 }
 ```

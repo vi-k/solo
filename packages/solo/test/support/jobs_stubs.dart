@@ -130,7 +130,7 @@ mixin Workbench on Solo<CameraState> {
   SoloJob<void> work(String name, {int take = 100, bool inReady = false}) {
     Future<void> body(SoloContext<CameraState, CameraState> ctx) async {
       stage.trace.add('$name starts');
-      await ctx.wait(() => _delay(take));
+      await ctx.abandonable(() => _delay(take));
       stage.trace.add('$name ends');
     }
 

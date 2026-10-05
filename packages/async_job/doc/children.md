@@ -13,7 +13,8 @@ The words for the three are close, and the wrong one compiles:
 ```dart
 final job = Job<void>((ctx) async {
   // A child: the body starts it, waits for it, and cancels along with it.
-  final rows = await ctx.run(Job.deferred<int>((c) => c.wait(loadRows)));
+  final rows =
+      await ctx.run(Job.deferred<int>((c) => c.abandonable(loadRows)));
 
   // A stream: one event at a time, in a child of its own.
   final saving = ctx.each(events, (c, e) => c.join(() => save(e)));
@@ -35,7 +36,7 @@ A body delegates work to another job by registering it as a child:
 
 ```dart
 final parent = Job<void>((ctx) async {
-  final child = Job.deferred<int>((ctx) => ctx.wait(load));
+  final child = Job.deferred<int>((ctx) => ctx.abandonable(load));
   final rows = await ctx.run(child);
   ctx.log('$rows rows');
 });
@@ -70,8 +71,8 @@ parent ends with `HandlerCancelReason` and a description naming the child.
 
 ```dart
 final parent = Job<void>((ctx) async {
-  final rows = ctx.run(Job.deferred<int>((c) => c.wait(loadRows)));
-  final child = Job.deferred<void>((c) => c.wait(warmCache));
+  final rows = ctx.run(Job.deferred<int>((c) => c.abandonable(loadRows)));
+  final child = Job.deferred<void>((c) => c.abandonable(warmCache));
   ctx.run(child).ignore();
   ctx.log('${await rows} rows');
 });
@@ -150,10 +151,10 @@ truth about it, and nothing may stay open.
 ```dart
 final parent = Job<void>((ctx) async {
   final rows = Job.deferred<Source>(
-    (ctx) => ctx.wait(openRows, discard: (source) => source.close()),
+    (ctx) => ctx.abandonable(openRows, discard: (source) => source.close()),
   );
   final images = Job.deferred<Source>(
-    (ctx) => ctx.wait(openImages, discard: (source) => source.close()),
+    (ctx) => ctx.abandonable(openImages, discard: (source) => source.close()),
   );
 
   final sources = await Future.wait([ctx.run(rows), ctx.run(images)]);
@@ -201,10 +202,10 @@ still lost with the values.
 ```dart
 final parent = Job<void>((ctx) async {
   final rows = Job.deferred<Source>(
-    (ctx) => ctx.wait(openRows, discard: (source) => source.close()),
+    (ctx) => ctx.abandonable(openRows, discard: (source) => source.close()),
   );
   final images = Job.deferred<Source>(
-    (ctx) => ctx.wait(openImages, discard: (source) => source.close()),
+    (ctx) => ctx.abandonable(openImages, discard: (source) => source.close()),
   );
 
   final sources = await [
@@ -244,15 +245,15 @@ one branch fails or is cancelled on its own, its sibling runs to its end. A
 cancellation of the parent is another matter — it cascades to every child, the
 branches of `.wait` included. A resource a branch opened for itself is still
 released on time when the branch took it through
-`ctx.wait(() => open(), dispose: (value) => value.close())`: the cleanup
+`ctx.abandonable(() => open(), dispose: (value) => value.close())`: the cleanup
 belongs to the job, not to the waiting.
 
 ### When one failure makes the rest pointless
 
 ```dart
 final values = await ctx.runAll([
-  Job.deferred<int>((ctx) => ctx.wait(loadRows)),
-  Job.deferred<int>((ctx) => ctx.wait(loadExtra)),
+  Job.deferred<int>((ctx) => ctx.abandonable(loadRows)),
+  Job.deferred<int>((ctx) => ctx.abandonable(loadExtra)),
 ]);
 ```
 
@@ -289,9 +290,9 @@ with a branch whose body has returned a value: the group holds that branch
 until its own end is decided, and until then the branch has no outcome and its
 cleanup waits.
 
-**The stop is cooperative.** A branch waiting through `ctx.wait` ends, and the
-operation behind it plays on and writes its result. To stop the work itself,
-hand the cancellation to it with `ctx.onCancel` and wait for it with
+**The stop is cooperative.** A branch waiting through `ctx.abandonable` ends,
+and the operation behind it plays on and writes its result. To stop the work
+itself, hand the cancellation to it with `ctx.onCancel` and wait for it with
 `ctx.join`. A branch created with `cancellable: false` refuses the stop
 outright, and the group waits for it.
 
@@ -313,10 +314,10 @@ held until the group decides, and the group decides only once every branch is
 held, or once the body of one of them has ended in anything but a value. The
 core does not detect such a hang: no error comes out, and the group simply
 waits. A cancellation unties it on the same terms as the lock of the next
-point: a branch awaiting the sibling through `ctx.wait` ends, unless it was
-created with `cancellable: false` or waits inside `ctx.uncancellable`; one in a
-bare `await` does not. For branches that depend on each other, `[...].wait` is
-the way out.
+point: a branch awaiting the sibling through `ctx.abandonable` ends, unless it
+was created with `cancellable: false` or waits inside `ctx.uncancellable`; one
+in a bare `await` does not. For branches that depend on each other,
+`[...].wait` is the way out.
 
 **The same goes for a branch waiting for what another one releases in its
 cleanup.** A branch starts unwinding only when every branch has ended its body
@@ -333,8 +334,8 @@ anything but a value.
 
 A cancellation, of the parent or of a branch, unties it only when it ends what
 a branch still waits on before it unwinds: its body, or a child of it, waiting
-through `ctx.wait` or on an operation that hears `ctx.onCancel`. It does not
-end one stuck in `ctx.join` on an operation deaf to it, in a bare `await`,
+through `ctx.abandonable` or on an operation that hears `ctx.onCancel`. It does
+not end one stuck in `ctx.join` on an operation deaf to it, in a bare `await`,
 inside `ctx.uncancellable`, or in a job created with `cancellable: false`.
 Cancelling the branch that holds the lock does nothing: its body is over. Take
 such a lock in a child of the branch instead, which releases it when the child
@@ -344,7 +345,7 @@ ends, still inside the body of the branch:
 Job.deferred<Source>((ctx) async {
   final locked = Job.deferred<Source>((ctx) async {
     await ctx.join(Lock.acquire, dispose: (lock) => lock.release());
-    return ctx.wait(openRows, discard: (source) => source.close());
+    return ctx.abandonable(openRows, discard: (source) => source.close());
   });
 
   return ctx.run(locked, discard: (source) => source.close());
@@ -368,8 +369,10 @@ registers the release with:
 
 ```dart
 Job.deferred<Source>((ctx) async {
-  final cache = await ctx.wait(openCache, dispose: (cache) => cache.close());
-  final rows = await ctx.wait(openRows, discard: (source) => source.close());
+  final cache =
+      await ctx.abandonable(openCache, dispose: (cache) => cache.close());
+  final rows =
+      await ctx.abandonable(openRows, discard: (source) => source.close());
   await ctx.join(() => cache.warm(rows));
 
   return rows;
@@ -378,12 +381,13 @@ Job.deferred<Source>((ctx) async {
 
 Ownership is the same rule as everywhere else, and a group is where it starts
 to matter. A resource a branch keeps for itself goes to the `dispose` of
-`ctx.wait` and `ctx.join`, or to `onDispose`, and the end of the branch closes
-it whatever the outcome. A resource a branch hands out goes to their `discard`,
-or to `onDiscard`: it then lives until the group succeeds in full and reaches
-the caller open. When the group ends in anything else, the branch that accepted
-the stop closes what it took, and it closes it before the group returns — so by
-the time the parent catches the error, that resource is already closed.
+`ctx.abandonable` and `ctx.join`, or to `onDispose`, and the end of the branch
+closes it whatever the outcome. A resource a branch hands out goes to their
+`discard`, or to `onDiscard`: it then lives until the group succeeds in full
+and reaches the caller open. When the group ends in anything else, the branch
+that accepted the stop closes what it took, and it closes it before the group
+returns — so by the time the parent catches the error, that resource is already
+closed.
 
 A branch can also get the resource from a child of its own, as the branch with
 the child `locked` does in the section above. The child's own `discard` does
@@ -637,7 +641,7 @@ rows it opened, and `archived` receives them:
 
 ```dart
 final opened = Job<Source>(
-  (ctx) => ctx.wait(openRows, discard: (rows) => rows.close()),
+  (ctx) => ctx.abandonable(openRows, discard: (rows) => rows.close()),
 );
 final archived = opened.then<void>((ctx, rows) async {
   ctx.onDispose(rows.close);
@@ -670,7 +674,7 @@ in — for a continuation, the zone `then` was called in.
 The parent needs the rows; the report on them may finish after the parent has:
 
 ```dart
-final child = Job.deferred<int>((ctx) => ctx.wait(load));
+final child = Job.deferred<int>((ctx) => ctx.abandonable(load));
 final tail = child.then<void>((ctx, rows) => report(rows));
 
 final parent = Job<void>((ctx) async {
@@ -709,7 +713,7 @@ report is done.
 continuation, and the body adopts both:
 
 ```dart
-final child = Job.deferred<int>((ctx) => ctx.wait(load));
+final child = Job.deferred<int>((ctx) => ctx.abandonable(load));
 final tail = child.then<void>((ctx, rows) => report(rows));
 
 final parent = Job<void>((ctx) async {
@@ -734,7 +738,8 @@ way.
 
 ```dart
 final parent = Job<void>((ctx) async {
-  final rows = await ctx.run(Job.deferred<int>((ctx) => ctx.wait(load)));
+  final rows =
+      await ctx.run(Job.deferred<int>((ctx) => ctx.abandonable(load)));
   await ctx.run(Job.deferred<void>((ctx) => ctx.join(() => report(rows))));
 });
 ```

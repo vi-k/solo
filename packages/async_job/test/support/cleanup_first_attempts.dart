@@ -22,7 +22,7 @@ Future<Database> sameCallback(JobContext ctx) async {
 DeferredJob<Database> connecting() {
   final connect = Job.deferred<Database>(
     key: 'connect',
-    (ctx) => ctx.wait(Database.open, discard: (db) => db.close()),
+    (ctx) => ctx.abandonable(Database.open, discard: (db) => db.close()),
   );
   return connect;
 }

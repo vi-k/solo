@@ -42,7 +42,7 @@ Job<void>((ctx) async {
     await store.saveBody(message);
   });
   ctx.onCancel(subscription.cancel);
-  await ctx.wait(subscription.asFuture<void>);
+  await ctx.abandonable(subscription.asFuture<void>);
 });
 ```
 
@@ -65,7 +65,7 @@ not what the callback throws.
 Job<void>((ctx) async {
   final subscription = messages.asyncMap(store.saveBody).listen((_) {});
   ctx.onCancel(subscription.cancel);
-  await ctx.wait(subscription.asFuture<void>);
+  await ctx.abandonable(subscription.asFuture<void>);
 });
 ```
 
@@ -147,8 +147,8 @@ The callback gets the child's context precisely so its steps can stop for a
 cancellation. `childCtx.join` waits for the step it wraps — a save halfway
 through is still a save — and then lets the cancellation out in place of the
 value, so the second step never starts and the parent's cleanup runs as soon as
-the first one is done. `childCtx.wait` is the other choice, for a step whose
-result can be abandoned. What must not go in there is the child's own
+the first one is done. `childCtx.abandonable` is the other choice, for a step
+whose result can be abandoned. What must not go in there is the child's own
 completion: awaiting the `value` of the job `each` returned, or its `cancel()`,
 from inside the callback never finishes, because the child is already waiting
 for that callback.

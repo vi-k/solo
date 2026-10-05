@@ -218,7 +218,7 @@ void main() {
   });
 
   group('Stopping the operation', () {
-    test('wait closes the database under a running migration', () {
+    test('abandonable closes the database under a running migration', () {
       expect(watch(page.waitForTheMigration, cancelAt: cancelMs), quoted[0]);
     });
 
@@ -271,15 +271,15 @@ void main() {
     // The page names both parameters, so each test runs with either one.
     for (final kind in ['dispose', 'discard']) {
       test(
-          'a late value of wait is released at once while the body still '
-          'runs ($kind)', () {
+          'a late value of abandonable is released at once while the body '
+          'still runs ($kind)', () {
         fakeAsync((async) {
           final seen = <String>[];
           String at() => '${async.elapsed.inMilliseconds} ms';
           void cleanup(String value) => seen.add('${at()}: $kind $value');
           final job = Job<void>((ctx) async {
             try {
-              await ctx.wait(
+              await ctx.abandonable(
                 () async {
                   await delay(20);
                   return 'connection';
@@ -309,7 +309,7 @@ void main() {
       });
 
       test(
-          'a late value of wait is released at once while a child still '
+          'a late value of abandonable is released at once while a child still '
           'runs, and the job waits for it ($kind)', () {
         fakeAsync((async) {
           final seen = <String>[];
@@ -329,7 +329,7 @@ void main() {
               cancellable: false,
             );
             ctx.run(child).ignore();
-            await ctx.wait(
+            await ctx.abandonable(
               () async {
                 await delay(20);
                 return 'connection';
@@ -355,7 +355,7 @@ void main() {
       });
 
       test(
-          'a late value of wait joins the stack while the job finishes '
+          'a late value of abandonable joins the stack while the job finishes '
           '($kind)', () {
         fakeAsync((async) {
           final seen = <String>[];
@@ -366,7 +366,7 @@ void main() {
               await delay(30);
               seen.add('${async.elapsed.inMilliseconds} ms: slow disposer');
             });
-            await ctx.wait(
+            await ctx.abandonable(
               () async {
                 await delay(20);
                 return 'connection';
@@ -394,14 +394,14 @@ void main() {
       });
 
       test(
-          'a late value of wait runs alone once the job has finished '
+          'a late value of abandonable runs alone once the job has finished '
           '($kind)', () {
         fakeAsync((async) {
           final seen = <String>[];
           void cleanup(String value) =>
               seen.add('${async.elapsed.inMilliseconds} ms: $kind $value');
           final job = Job<void>((ctx) async {
-            await ctx.wait(
+            await ctx.abandonable(
               () async {
                 await delay(20);
                 return 'connection';
@@ -468,7 +468,7 @@ void main() {
           ctx.onCancel(() async {
             await device.stop();
           });
-          await ctx.wait(() => delay(50));
+          await ctx.abandonable(() => delay(50));
         },
         cancelAt: 5,
       );
@@ -491,7 +491,7 @@ void main() {
             ctx.onCancel(() async {
               throw StateError('device did not stop');
             });
-            await ctx.wait(() => delay(50));
+            await ctx.abandonable(() => delay(50));
           },
           observer: printing,
         )..ignore(),
@@ -514,7 +514,7 @@ void main() {
       final lines = play(
         (ctx) async {
           ctx.onCancel(() => throw StateError('device did not stop'));
-          await ctx.wait(() => delay(50));
+          await ctx.abandonable(() => delay(50));
         },
         cancelAt: 5,
       );
@@ -673,7 +673,7 @@ void main() {
             ctx.onCancel(
               () => seen.add('${async.elapsed.inMilliseconds} ms: child'),
             );
-            await ctx.wait(() => delay(100));
+            await ctx.abandonable(() => delay(100));
           });
           final running = ctx.run(child);
           await ctx.uncancellable(() => delay(20));
@@ -712,7 +712,7 @@ void main() {
       fakeAsync((async) {
         final job = Job<void>((ctx) async {
           unawaited(ctx.uncancellable(() => delay(20)));
-          await ctx.wait(() => delay(2));
+          await ctx.abandonable(() => delay(2));
         });
         async.elapse(const Duration(milliseconds: 1));
         var returned = false;
@@ -736,7 +736,7 @@ void main() {
           ctx.uncancellable(() async {
             open = true;
             try {
-              await ctx.wait(() => delay(20));
+              await ctx.abandonable(() => delay(20));
             } on Cancelled catch (error) {
               seen.add('the wait in the section threw $error');
             } finally {
@@ -967,7 +967,7 @@ void main() {
     test('an operation waiting for a cancelled job passes check', () {
       final lines = play((ctx) async {
         final other = Job<String>((ctx) async {
-          await ctx.wait(() => delay(20));
+          await ctx.abandonable(() => delay(20));
           return 'rows';
         });
         Timer(const Duration(milliseconds: 5), other.cancel);
@@ -991,7 +991,7 @@ void main() {
         fakeAsync((async) {
           final job = Job<String>((ctx) async {
             final thumbnail = Job.deferred<String>((ctx) async {
-              await ctx.wait(() => delay(20));
+              await ctx.abandonable(() => delay(20));
               return 'thumbnail';
             });
             Timer(const Duration(milliseconds: 5), thumbnail.cancel);
@@ -1018,7 +1018,7 @@ void main() {
         ctx.onCancel(() => seen.add('job onCancel'));
         final child = Job.deferred<void>((ctx) async {
           ctx.onCancel(() => seen.add('child onCancel'));
-          await ctx.wait(() => delay(50));
+          await ctx.abandonable(() => delay(50));
         });
         ctx.run(child).ignore();
         await delay(20);
@@ -1045,7 +1045,7 @@ void main() {
       final seen = <String>[];
       final threw = Job<void>((ctx) async {
         ctx.onCancel(() => seen.add('threw: onCancel'));
-        await ctx.wait(() => delay(5));
+        await ctx.abandonable(() => delay(5));
         throw const Cancelled('why');
       })
         ..ignore();
@@ -1054,16 +1054,17 @@ void main() {
         ctx.onCancel(() => seen.add('with child: onCancel'));
         left = Job.deferred<void>((ctx) async {
           ctx.onCancel(() => seen.add('with child: the child onCancel'));
-          await ctx.wait(() => delay(50));
+          await ctx.abandonable(() => delay(50));
         });
         ctx.run(left).ignore();
-        await ctx.wait(() => delay(10));
+        await ctx.abandonable(() => delay(10));
         throw const Cancelled('why');
       })
         ..ignore();
       final letOut = Job<void>((ctx) async {
         ctx.onCancel(() => seen.add('let out: onCancel'));
-        final child = Job.deferred<void>((ctx) => ctx.wait(() => delay(20)));
+        final child =
+            Job.deferred<void>((ctx) => ctx.abandonable(() => delay(20)));
         Timer(const Duration(milliseconds: 15), child.cancel);
         await ctx.run(child);
       })
@@ -1098,7 +1099,7 @@ void main() {
       final branch = Job.deferred<int>((ctx) async => 1);
       final job = Job<void>((ctx) async {
         try {
-          await ctx.wait(() => delay(50));
+          await ctx.abandonable(() => delay(50));
         } on Cancelled {
           Future<void> probe(
             String name,
@@ -1113,7 +1114,7 @@ void main() {
           }
 
           await probe('check', ctx.check);
-          await probe('wait', () => ctx.wait(() => 1));
+          await probe('abandonable', () => ctx.abandonable(() => 1));
           await probe('join', () => ctx.join(() => 1));
           await probe('uncancellable', () => ctx.uncancellable(() => 1));
           await probe('run', () => ctx.run(Job.deferred((ctx) async => 1)));
@@ -1137,7 +1138,7 @@ void main() {
 
       expect(seen, [
         'check throws',
-        'wait throws',
+        'abandonable throws',
         'join throws',
         'uncancellable throws',
         'run throws',
@@ -1181,12 +1182,12 @@ void main() {
       expect(lines, contains(row('`await Future.delayed(...)`', measured)));
     });
 
-    test('a delay under wait ends at once and leaves its timer', () {
-      final measured = waiting(page.delayUnderWait);
+    test('a delay under abandonable ends at once and leaves its timer', () {
+      final measured = waiting(page.delayUnderAbandonable);
       expect(measured, (endedAfter: 0, timerLeftFor: 510));
       expect(
         lines,
-        contains(row('`ctx.wait(() => Future.delayed(...))`', measured)),
+        contains(row('`ctx.abandonable(() => Future.delayed(...))`', measured)),
       );
     });
 
@@ -1199,7 +1200,7 @@ void main() {
     test('uncancelled, all three read once a second', () {
       for (final start in [
         page.plainDelay,
-        page.delayUnderWait,
+        page.delayUnderAbandonable,
         page.pauseOfTheJob,
       ]) {
         freshRun();

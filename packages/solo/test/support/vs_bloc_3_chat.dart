@@ -1,7 +1,7 @@
-// Section 3 of `doc/vs-bloc.md`, "Closing and cancelling in-flight work": what the page leaves out,
-// then the code under its `### Solo` heading, verbatim, then what
-// `vs_bloc_rakes_test.dart` adds on top of it. Every piece of the page's
-// blocks is a run of lines of this file. The bloc side of the section is
+// Section 3 of `doc/vs-bloc.md`, "Closing and cancelling in-flight work": what
+// the page leaves out, then the code under its `### Solo` heading, verbatim,
+// then what `vs_bloc_rakes_test.dart` adds on top of it. Every piece of the
+// page's blocks is a run of lines of this file. The bloc side of the section is
 // built and run by the bench, `tool/doc_snippets.py`: this package does not
 // depend on bloc.
 import 'dart:async';
@@ -53,14 +53,14 @@ final class ChatController extends Solo<ChatState> {
   Job<void> send(String text) => run<ChatState, void>(
         key: 'send',
         (ctx) async {
-          final reply = await ctx.wait(() => _api.send(text));
+          final reply = await ctx.abandonable(() => _api.send(text));
           ctx.emit(ctx.state.withReply(reply));
           markReplyRead();
         },
       );
 
   Job<void> markReplyRead() =>
-      run<ChatState, void>((ctx) => ctx.wait(_api.markRead));
+      run<ChatState, void>((ctx) => ctx.abandonable(_api.markRead));
 }
 
 Future<void> onScreenClosed(ChatController chat) async {
@@ -71,7 +71,7 @@ Future<void> onScreenClosed(ChatController chat) async {
 // What the test adds.
 
 /// The `send` of the page with a plain `await` where the page has
-/// `ctx.wait`: "With a plain await instead".
+/// `ctx.abandonable`: "With a plain await instead".
 final class PlainAwaitChatController extends Solo<ChatState> {
   PlainAwaitChatController(this._api) : super(const ChatState());
 

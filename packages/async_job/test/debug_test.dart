@@ -17,7 +17,8 @@ void main() {
     final traces = <String>[];
     Job.debug = traces.add;
     fakeAsync((async) {
-      final job = Job<void>(key: 'job', (ctx) => ctx.wait(() => delay(50)));
+      final job =
+          Job<void>(key: 'job', (ctx) => ctx.abandonable(() => delay(50)));
       async.elapse(const Duration(milliseconds: 10));
       job.cancel().ignore();
       async.flushTimers();
@@ -37,7 +38,7 @@ void main() {
       final stubborn = Job<void>(
         key: 'stubborn',
         cancellable: false,
-        (ctx) => ctx.wait(() => delay(20)),
+        (ctx) => ctx.abandonable(() => delay(20)),
       );
       async.elapse(const Duration(milliseconds: 5));
       stubborn.cancel().ignore();
@@ -65,7 +66,7 @@ void main() {
             key: 'job',
             (ctx) async {
               ctx.onCancel(() => throw StateError('onCancel'));
-              await ctx.wait(() => delay(50));
+              await ctx.abandonable(() => delay(50));
             },
           )..ignore();
           async.elapse(const Duration(milliseconds: 10));
@@ -95,7 +96,7 @@ void main() {
             observer: _RecordingObserver(seen),
             (ctx) async {
               ctx.onCancel(() => throw StateError('onCancel'));
-              await ctx.wait(() => delay(50));
+              await ctx.abandonable(() => delay(50));
             },
           );
           async.elapse(const Duration(milliseconds: 10));
@@ -130,7 +131,7 @@ void main() {
     fakeAsync((async) {
       final job = ProbeJob<void>((ctx) async {
         ctx.onDispose(() {});
-        await ctx.wait(() => delay(1000));
+        await ctx.abandonable(() => delay(1000));
       })
         ..launch();
       async.elapse(const Duration(milliseconds: 10));
@@ -159,7 +160,7 @@ void main() {
               Job.deferred<void>((ctx) => ctx.uncancellable(() => delay(30))),
             )
             .ignore();
-        await ctx.wait(
+        await ctx.abandonable(
           () => delay(10).then((_) => 'db'),
           dispose: released.add,
         );
@@ -189,7 +190,7 @@ void main() {
     fakeAsync((async) {
       final opener = Job.deferred<String>(
         key: 'opener',
-        (ctx) => ctx.wait(() => 'db', discard: (db) {}),
+        (ctx) => ctx.abandonable(() => 'db', discard: (db) {}),
       );
       // The registration of the child is settled by the child's own
       // outcome, so nothing closes `db` when the wrapper fails. The trace
@@ -216,7 +217,7 @@ void main() {
       Job.debug = handedOver.add;
       final two = Job.deferred<String>(key: 'two', (ctx) async {
         ctx.onDiscard(() {});
-        return ctx.wait(() => 'db', discard: (db) {});
+        return ctx.abandonable(() => 'db', discard: (db) {});
       });
       Job<String>(key: 'taker', (ctx) async {
         await ctx.run(two);
@@ -250,7 +251,7 @@ void main() {
     late ProbeJob<String> job;
     fakeAsync((async) {
       job = ProbeJob<String>(key: 'j', (ctx) async {
-        final db = await ctx.wait(() => 'db', discard: closed.add);
+        final db = await ctx.abandonable(() => 'db', discard: closed.add);
         // The unwinding is inside this disposer when an engine of a domain
         // ends the job, so the loop carries on with an outcome that is no
         // longer the one it is reading.
@@ -290,7 +291,7 @@ void main() {
         (ctx) => ctx.runAll([
           Job.deferred<String>(
             key: 'branch',
-            (ctx) => ctx.wait(() => 'db', discard: (db) {}),
+            (ctx) => ctx.abandonable(() => 'db', discard: (db) {}),
           ),
         ]),
       ).ignore();
@@ -312,7 +313,7 @@ void main() {
     late ProbeJob<String> branch;
     fakeAsync((async) {
       branch = ProbeJob<String>(key: 'branch', (ctx) async {
-        final db = await ctx.wait(() => 'db', discard: closed.add);
+        final db = await ctx.abandonable(() => 'db', discard: closed.add);
         // On top of the stack, so it unwinds first -- while the group
         // still holds the branch. The conditional registration under it
         // is put aside, and by the time the second barrier lets go the
@@ -326,7 +327,7 @@ void main() {
           branch,
           Job.deferred<String>(
             key: 'slow',
-            (ctx) => ctx.wait(() => delay(20).then((_) => 'other')),
+            (ctx) => ctx.abandonable(() => delay(20).then((_) => 'other')),
           ),
         ]),
       ).ignore();
@@ -357,7 +358,8 @@ void main() {
     runZonedGuarded(
       () {
         fakeAsync((async) {
-          final job = Job<void>(key: 'job', (ctx) => ctx.wait(() => delay(10)));
+          final job =
+              Job<void>(key: 'job', (ctx) => ctx.abandonable(() => delay(10)));
           job.done.then((result) {
             doneSeen = true;
             outcome = result;
@@ -388,7 +390,7 @@ void main() {
           final job = Job<void>(
             key: 'job',
             describe: () => throw StateError('describe'),
-            (ctx) => ctx.wait(() => delay(10)),
+            (ctx) => ctx.abandonable(() => delay(10)),
           );
           job.done.then((_) => doneSeen = true).ignore();
           async.flushTimers();

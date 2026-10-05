@@ -115,11 +115,11 @@ beside the waiting methods it goes with.
 `ctx.emit(next)` allows a job to publish a state outside its own working type:
 an initialization job may finish by emitting `Ready`. A later state checkpoint
 will reject that state if it does not match `W`, and a waiting method is such a
-checkpoint as much as a read is: `ctx.wait` or `ctx.join` after that emit ends
-the job `Cancelled` before its action starts. So such a transition comes last
-in the body, with no read and no wait through the context after it. `canStart`
-is checked once, at the start, and nothing brings it back later — this emit
-included.
+checkpoint as much as a read is: `ctx.abandonable` or `ctx.join` after that
+emit ends the job `Cancelled` before its action starts. So such a transition
+comes last in the body, with no read and no wait through the context after it.
+`canStart` is checked once, at the start, and nothing brings it back later —
+this emit included.
 
 Other running bodies are checked after a state update: a job's children run
 beside it, and each body answers to its own rules. A job's own emit is excluded
@@ -376,7 +376,7 @@ run<ProfileState, String>(
   (ctx) async {
     ctx.emit(const Loading());
     try {
-      final name = await ctx.wait(api.fetchName);
+      final name = await ctx.abandonable(api.fetchName);
       ctx.emit(Loaded(name));
       return name;
     } on Object {
@@ -404,7 +404,7 @@ run<ProfileState, String>(
   onCancel: (state, cancelled) => const Initial(),
   (ctx) async {
     ctx.emit(const Loading());
-    final name = await ctx.wait(api.fetchName);
+    final name = await ctx.abandonable(api.fetchName);
     ctx.emit(Loaded(name));
     return name;
   },
@@ -440,7 +440,7 @@ Job<String> load() => run<ProfileState, String>(
       onCancel: (state, cancelled) => const Initial(),
       (ctx) async {
         ctx.emit(const Loading());
-        final name = await ctx.wait(api.fetchName);
+        final name = await ctx.abandonable(api.fetchName);
         ctx.emit(Loaded(name));
         return name;
       },
@@ -468,7 +468,7 @@ Job<String> load() => run<ProfileState, String>(
       onCancel: (state, cancelled) => const Initial(),
       (ctx) async {
         ctx.emit(const Loading());
-        final name = await ctx.wait(api.fetchName);
+        final name = await ctx.abandonable(api.fetchName);
         ctx.emit(Loaded(name));
         return name;
       },

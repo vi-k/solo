@@ -86,7 +86,7 @@ final class MyQueue {
 }
 
 Future<void> runQueue() async {
-  final first = MyJob<void>(key: 'first', (ctx) => ctx.wait(upload));
+  final first = MyJob<void>(key: 'first', (ctx) => ctx.abandonable(upload));
   final second = MyJob<void>(
     key: 'second',
     cancellable: false,
@@ -115,12 +115,12 @@ void runDownload(String act) {
   userDoes(act, job);
 }
 
-/// The download with `wait` in place of the first `join`, signed out of
+/// The download with `abandonable` in place of the first `join`, signed out of
 /// while it runs; with [engineStops] the engine cancels the job itself.
-void runWaitingDownload({required bool engineStops}) {
+void runAbandonableDownload({required bool engineStops}) {
   final job = MyJob<void>(observer: printer, (ctx) async {
     ctx.onCancel(() => print('close the connection'));
-    final rows = await ctx.wait(download);
+    final rows = await ctx.abandonable(download);
     print('downloaded $rows rows');
     await ctx.join(() => save(rows));
     print('saved');
@@ -142,8 +142,9 @@ void runWaitingDownload({required bool engineStops}) {
 Job<void> signOutWithChild(List<String> seen) {
   final child = Job.deferred<void>((ctx) async {
     ctx.onCancel(() => seen.add('child told to stop'));
-    await ctx
-        .wait(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await ctx.abandonable(
+      () => Future<void>.delayed(const Duration(milliseconds: 50)),
+    );
   });
   final job = MyJob<void>((ctx) async {
     ctx.onCancel(() => seen.add('parent told to stop'));
@@ -186,7 +187,7 @@ final class HookJob extends JobBase<void> {
   JobContextBase createContext() => MyContext(this);
 
   @override
-  Future<void> execute(covariant MyContext ctx) => ctx.wait(work);
+  Future<void> execute(covariant MyContext ctx) => ctx.abandonable(work);
 }
 
 /// A job of the engine created with `cancellable: false`.
@@ -501,7 +502,7 @@ void main() {
         final seen = <String>[];
         final second = MyJob<void>((_) async => seen.add('second runs'));
         final queue = MyQueue()
-          ..add(MyJob<void>((ctx) => ctx.wait(upload)))
+          ..add(MyJob<void>((ctx) => ctx.abandonable(upload)))
           ..add(second)
           ..add(MyJob<void>((_) async => seen.add('third runs')));
         var over = false;
@@ -543,7 +544,7 @@ void main() {
         final second =
             PatientJob<void>(key: 'second', (ctx) async => seen.add('runs'));
         final queue = MyQueue()
-          ..add(MyJob<void>(key: 'first', (ctx) => ctx.wait(upload)))
+          ..add(MyJob<void>(key: 'first', (ctx) => ctx.abandonable(upload)))
           ..add(second)
           ..run().ignore();
         var back = false;
@@ -576,7 +577,7 @@ void main() {
         Object? thrown;
         final parent = MyJob<void>((ctx) async {
           try {
-            await ctx.wait(upload);
+            await ctx.abandonable(upload);
           } on Cancelled {
             // Goes on after its cancellation, and runs one more child.
           }
@@ -620,7 +621,7 @@ void main() {
         late MyContext context;
         final child = CountingJob((ctx) async {
           context = ctx;
-          await ctx.wait(work);
+          await ctx.abandonable(work);
           return 1;
         });
         final parent = MyJob<void>((ctx) => ctx.run(child))
@@ -655,7 +656,8 @@ void main() {
         async.flushTimers();
         expect(waiting.outcome, isA<Cancelled>());
 
-        final running = StubbornJob<void>((ctx) => ctx.wait(work))..launch();
+        final running = StubbornJob<void>((ctx) => ctx.abandonable(work))
+          ..launch();
         async.flushMicrotasks();
         running.cancel().ignore();
         async.flushTimers();
@@ -732,7 +734,7 @@ void main() {
           try {
             await ctx.run(
               Job.deferred<int>((child) async {
-                await child.wait(work);
+                await child.abandonable(work);
                 account.signedIn = false;
                 return 1;
               }),
@@ -757,7 +759,7 @@ void main() {
           try {
             await ctx.runAll([
               Job.deferred<int>((child) async {
-                await child.wait(work);
+                await child.abandonable(work);
                 account.signedIn = false;
                 return 1;
               }),
@@ -808,7 +810,7 @@ void main() {
         final seen = <String>[];
         final job = StubbornJob<void>((ctx) async {
           ctx.onCancel(() => seen.add('told to stop'));
-          await ctx.wait(work);
+          await ctx.abandonable(work);
           account.signedIn = false;
           await ctx.join(work);
         })
@@ -862,7 +864,7 @@ void main() {
       fakeAsync((async) {
         final seen = <String>[];
         final job = MyJob<void>((ctx) async {
-          await ctx.wait(download);
+          await ctx.abandonable(download);
           seen.add('the wait came back');
           ctx.check();
           seen.add('the body went on');
@@ -877,8 +879,9 @@ void main() {
       });
     });
 
-    test('with wait the body goes on with the rows after a sign-out', () {
-      expect(printed(() => runWaitingDownload(engineStops: false)), [
+    test('with abandonable the body goes on with the rows after a sign-out',
+        () {
+      expect(printed(() => runAbandonableDownload(engineStops: false)), [
         'sign out',
         'downloaded 42 rows',
         'close the connection',
@@ -887,7 +890,7 @@ void main() {
     });
 
     test('the engine that cancels the job itself stops it at the sign-out', () {
-      expect(printed(() => runWaitingDownload(engineStops: true)), [
+      expect(printed(() => runAbandonableDownload(engineStops: true)), [
         'sign out',
         'close the connection',
         'outcome: Cancelled(signed out)',
@@ -899,7 +902,7 @@ void main() {
         final seen = <String>[];
         final job = MyJob<void>((ctx) async {
           ctx.onCancel(() => seen.add('${async.elapsed.inMilliseconds} ms'));
-          await ctx.wait(download);
+          await ctx.abandonable(download);
         })
           .._launch()
           ..ignore();
@@ -911,7 +914,7 @@ void main() {
         expect(
           '${job.outcome}',
           'Cancelled(signed out)',
-          reason: 'wait threw at once, 10 ms before the download ends',
+          reason: 'abandonable threw at once, 10 ms before the download ends',
         );
       });
     });
@@ -958,7 +961,7 @@ void main() {
         final seen = <String>[];
         final child = Job.deferred<void>((ctx) async {
           ctx.onCancel(() => seen.add('child told to stop'));
-          await ctx.wait(work);
+          await ctx.abandonable(work);
           seen.add('child ran to its end');
         });
         final job = StubbornJob<void>((ctx) async {
@@ -988,7 +991,7 @@ void main() {
 
   test('Deferred start', () {
     fakeAsync((async) {
-      final job = Job.deferred<void>((ctx) => ctx.wait(work));
+      final job = Job.deferred<void>((ctx) => ctx.abandonable(work));
       // ... later, or from a queue of your own
       // ignore: cascade_invocations
       job.start();
@@ -1009,11 +1012,11 @@ void main() {
       }),
       printed(() {
         account.signedIn = true;
-        runWaitingDownload(engineStops: false);
+        runAbandonableDownload(engineStops: false);
       }),
       printed(() {
         account.signedIn = true;
-        runWaitingDownload(engineStops: true);
+        runAbandonableDownload(engineStops: true);
       }),
     ].map((lines) => lines.join('\n')).toList();
     final quotes = [

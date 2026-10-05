@@ -10,7 +10,7 @@ Job<void>((ctx) async {
   ctx.onCancel(stop.cancel);
 
   // The wait ends at once; the read goes on, and its value is dropped.
-  final rows = await ctx.wait(database.readAll);
+  final rows = await ctx.abandonable(database.readAll);
 
   // Waited for until the migration ends or stops at the token, and
   // only then does the job give up.
@@ -31,7 +31,7 @@ Job<void>((ctx) async {
 
 | Method | If cancellation arrives while it waits |
 | --- | --- |
-| `ctx.wait(action)` | Stops waiting and throws `Cancelled` at once. The action continues; its result is dropped, or goes to the call's `dispose` or `discard` if it has one. |
+| `ctx.abandonable(action)` | Stops waiting and throws `Cancelled` at once. The action continues; its result is dropped, or goes to the call's `dispose` or `discard` if it has one. |
 | `ctx.join(action)` | Keeps waiting until the action ends, then throws `Cancelled` instead of returning the value, or the action's own error if it failed. If the call has a `dispose` or `discard`, the value goes there first, and `join` throws once that callback has finished. |
 | `ctx.uncancellable(action)` | Holds the request until the section ends: no `onCancel`, no cascade to children while it runs. |
 | `ctx.pause(duration)` | Throws `Cancelled` at once, and cancels its timer. |
@@ -41,12 +41,12 @@ A running job accepts the request inside `cancel()` itself, unless an
 `uncancellable` section holds it back or the job was created with
 `cancellable: false`. Accepting it makes the job cancelled: the cancellation
 passes to the children it has started, its `onCancel` callbacks run, and the
-job ends `Cancelled` whatever the body does next. From then on `check`, `wait`,
-`join`, `pause`, `uncancellable`, `run`, `runAll` and `each` throw `Cancelled`
-at their checkpoints. `onCancel` throws too: its callbacks have already run,
-and one registered now never would. `onDispose`, `onDiscard`, `disown` and
-`unattended` remain available so the body can arrange cleanup after
-cancellation.
+job ends `Cancelled` whatever the body does next. From then on `check`,
+`abandonable`, `join`, `pause`, `uncancellable`, `run`, `runAll` and `each`
+throw `Cancelled` at their checkpoints. `onCancel` throws too: its callbacks
+have already run, and one registered now never would. `onDispose`, `onDiscard`,
+`disown` and `unattended` remain available so the body can arrange cleanup
+after cancellation.
 
 A body that gives itself up, by throwing `Cancelled` or by letting out the
 cancellation of a child, accepts the cancellation as it throws, and the job is
@@ -61,11 +61,11 @@ The lines under the code are what it prints when it runs. The database says
 what it writes, and `printing`, the observer of every job below, prints what
 reaches it: `log:` for `ctx.log`, `onError:` for an error. `cancel` is the
 moment the user cancels, and `outcome:` is what `job.done` completes with. Each
-part of the page below opens with the version the names lead to — `wait` to
-wait for an operation, `join` to see a step through, a clause for `Cancelled`
-to let the cancellation pass — and shows what that code does. Where the version
-that repairs it still falls short, it stands as a second attempt, and the
-version that works follows under its own heading.
+part of the page below opens with the version the names lead to — `abandonable`
+to wait for an operation, `join` to see a step through, a clause for
+`Cancelled` to let the cancellation pass — and shows what that code does. Where
+the version that repairs it still falls short, it stands as a second attempt,
+and the version that works follows under its own heading.
 
 ## Stopping the operation
 
@@ -79,7 +79,7 @@ second step, 15 ms in.
 
 ### The first attempt
 
-`wait` waits for the migration:
+The body waits for the migration through `abandonable`:
 
 ```dart
 final job = Job<Database>(observer: printing, (ctx) async {
@@ -89,7 +89,7 @@ final job = Job<Database>(observer: printing, (ctx) async {
   );
   final stop = CancelToken();
 
-  await ctx.wait(() => database.migrate(stop));
+  await ctx.abandonable(() => database.migrate(stop));
 
   return database;
 });
@@ -104,16 +104,17 @@ step 2 on a closed database
 step 3 on a closed database
 ```
 
-`wait` ends the waiting, not the migration. The cancellation comes out of
-`wait` at once, the job ends, and `discard` closes the database with two steps
-of the migration still to write. Whatever the migration throws afterwards goes
-to `onError` and, by default, on to the zone. `wait` is for an operation the
-job may walk away from, such as a read whose result nobody needs any more.
+`abandonable` ends the waiting, not the migration. The cancellation comes out
+of `abandonable` at once, the job ends, and `discard` closes the database with
+two steps of the migration still to write. Whatever the migration throws
+afterwards goes to `onError` and, by default, on to the zone. `abandonable` is
+for an operation the job may walk away from, such as a read whose result nobody
+needs any more.
 
 A result arriving that late is dropped, or goes to the `dispose` or `discard`
-passed to `wait`. While the body or the job's children still run, that callback
-runs at once and the job awaits it; if the job is already running its cleanup
-stack, the callback joins the stack, and once the job has finished, the
+passed to `abandonable`. While the body or the job's children still run, that
+callback runs at once and the job awaits it; if the job is already running its
+cleanup stack, the callback joins the stack, and once the job has finished, the
 callback runs on its own.
 [Cleanup order and late results](cleanup.md#cleanup-order-and-late-results) on
 the cleanup page takes this order apart.
@@ -325,7 +326,7 @@ outcome is `Done`. If the body goes on without awaiting the section and then
 gives itself up, by throwing `Cancelled` or by letting out the cancellation of
 a child, the job accepts that cancellation at once: a section holds back a
 request, not a cancellation the body throws itself. `onCancel` runs while the
-section is still open, and a `wait` inside it throws.
+section is still open, and `abandonable` inside it throws.
 
 To protect the entire body instead of one section, create
 `Job(body, cancellable: false)`. It refuses ordinary cancellation once the body
@@ -465,7 +466,7 @@ The job reads the rows once a second.
 ```dart
 final job = Job<void>((ctx) async {
   while (true) {
-    use(await ctx.wait(database.readAll));
+    use(await ctx.abandonable(database.readAll));
     await Future<void>.delayed(const Duration(seconds: 1));
   }
 });
@@ -473,22 +474,22 @@ final job = Job<void>((ctx) async {
 
 The user cancels 500 ms in, halfway through the delay, and the job ends 510 ms
 later. A plain `await` is no checkpoint: the body sits the delay out and learns
-of the cancellation at the `ctx.wait` of the next turn. Until then `cancel()`
-does not return, and whatever waits for the job waits with it.
+of the cancellation at the `ctx.abandonable` of the next turn. Until then
+`cancel()` does not return, and whatever waits for the job waits with it.
 
 ### The second attempt
 
 ```dart
-await ctx.wait(
+await ctx.abandonable(
   () => Future<void>.delayed(const Duration(seconds: 1)),
 );
 ```
 
 Now the delay is behind a checkpoint, and the job ends the moment it is
-cancelled. `wait` ends the waiting, not the work, and the work here is a timer:
-a `Future.delayed` cannot be cancelled, so its timer runs for the 510 ms that
-are left, with nothing waiting for it. A program that has nothing else to do
-does not exit until it fires, and a test that looks for pending timers finds
+cancelled. `abandonable` ends the waiting, not the work, and the work here is a
+timer: a `Future.delayed` cannot be cancelled, so its timer runs for the 510 ms
+that are left, with nothing waiting for it. A program that has nothing else to
+do does not exit until it fires, and a test that looks for pending timers finds
 one.
 
 ### A pause of the job
@@ -498,13 +499,13 @@ await ctx.pause(const Duration(seconds: 1));
 ```
 
 `ctx.pause` is a checkpoint that takes time. It throws `Cancelled` at once when
-the cancellation arrives, as `ctx.wait` does, and its timer is cancelled with
-it:
+the cancellation arrives, as `ctx.abandonable` does, and its timer is cancelled
+with it:
 
 | How the body waits | The job ends | Timer left behind |
 | --- | --- | --- |
 | `await Future.delayed(...)` | 510 ms after the cancellation | none |
-| `ctx.wait(() => Future.delayed(...))` | at once | for 510 ms more |
+| `ctx.abandonable(() => Future.delayed(...))` | at once | for 510 ms more |
 | `ctx.pause(...)` | at once | none |
 
 Without a duration, `ctx.pause()` comes back on the next turn of the event

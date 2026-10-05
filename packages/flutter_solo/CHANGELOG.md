@@ -3,10 +3,16 @@
 Moving from `0.2.0`: read "Breaking changes" for what stops compiling or
 behaves differently, and "Changes you will see on upgrade" for what a test
 shows with no change to the code. This package re-exports `solo` and, through
-it, `async_job`, so their breaking changes are its own; the last entry of the
-first group names them.
+it, `async_job`, so their breaking changes are its own; the first and the last
+entries of the first group name them.
 
 ### Breaking changes
+
+- **`ctx.wait` is renamed to `ctx.abandonable`** in `async_job`, which this
+  package re-exports through `solo`; `wait` stays as a deprecated alias until
+  the next breaking release. **Migrating.** Replace `ctx.wait` with
+  `ctx.abandonable`: `flutter analyze` fails on the old name. See
+  [the `async_job` changelog](https://github.com/vi-k/solo/blob/main/packages/async_job/CHANGELOG.md).
 
 - **`SoloListenable` is a mixin on `Solo`,** the way `solo`'s `SoloStream` is:
   `mixin SoloListenable<S extends Object> on Solo<S> implements

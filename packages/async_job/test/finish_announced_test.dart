@@ -53,7 +53,7 @@ void main() {
           key: 'j',
           observer: hearing,
           (ctx) async {
-            await ctx.wait(() => delay(100));
+            await ctx.abandonable(() => delay(100));
             return 1;
           },
         )..launch();
@@ -94,7 +94,7 @@ void main() {
           key: 'j',
           observer: hearing,
           (ctx) async {
-            await ctx.wait(() => delay(100));
+            await ctx.abandonable(() => delay(100));
             return 1;
           },
         )
@@ -189,7 +189,7 @@ void main() {
           key: 'j',
           observer: hearing,
           (ctx) async {
-            await ctx.wait(() => delay(100));
+            await ctx.abandonable(() => delay(100));
             throw error;
           },
         )..launch();
@@ -282,7 +282,7 @@ void main() {
         key: 'j',
         observer: hearing,
         (ctx) async {
-          await ctx.wait(() => delay(100));
+          await ctx.abandonable(() => delay(100));
           throw StateError('body');
         },
       )..launch();
@@ -322,7 +322,7 @@ void main() {
     final hearing = Hearing();
     final zone = zoneOf((async) {
       Job<int>(key: 'j', observer: hearing, (ctx) async {
-        await ctx.wait(() => delay(10));
+        await ctx.abandonable(() => delay(10));
         throw StateError('body');
       });
       async.flushTimers();
@@ -335,7 +335,7 @@ void main() {
     final hearing = Hearing();
     final zone = zoneOf((async) {
       Job<int>(key: 'source', (ctx) async {
-        await ctx.wait(() => delay(10));
+        await ctx.abandonable(() => delay(10));
         throw StateError('source');
       }).then<int>(observer: hearing, (ctx, value) => value);
       async.flushTimers();

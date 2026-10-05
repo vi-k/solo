@@ -49,7 +49,7 @@
 | Класс события, `on<E>`, `add(E())` | Метод, возвращающий `Job<T>` |
 | `EventTransformer` | `Policy` при добавлении `Job` |
 | `emit(next)` | `ctx.emit(next)` |
-| `if (emit.isDone) return;` | Контрольные точки отмены, например `ctx.wait` и `ctx.check` |
+| `if (emit.isDone) return;` | Контрольные точки отмены, например `ctx.abandonable` и `ctx.check` |
 | `emit.onEach`, `emit.forEach` | `ctx.each(stream, onData)` |
 | `state`, `stream` | `currentState`, `addListener`; `stream` с подмешанным `SoloStream` |
 | `BlocObserver` | `SoloObserver` |
@@ -237,7 +237,7 @@ final class NotesController extends Solo<NotesState> {
   Job<void> refresh() => run<NotesState, void>(
         key: 'refresh',
         (ctx) async {
-          final serverNotes = await ctx.wait(_api.list);
+          final serverNotes = await ctx.abandonable(_api.list);
           ctx.emit(ctx.state.copyWith(notes: serverNotes));
         },
       );
@@ -248,8 +248,8 @@ final class NotesController extends Solo<NotesState> {
 ответа он проверяет отмену перед возвратом результата. Отправка использует
 `join`, чтобы даже отменённая отправка держала очередь, пока сервер не ответит:
 следующая корневая `Job` не читает сервер, пока отправка продолжается.
-Обновление использует `ctx.wait`, который может прекратить ожидание при отмене:
-в этом примере результат чтения разрешено отбросить.
+Обновление использует `ctx.abandonable`, который может прекратить ожидание при
+отмене: в этом примере результат чтения разрешено отбросить.
 
 Итоговое состояние тоже `NotesState([n0, n1], uploading: false)`, и порядок
 тот же, что у bloc выше: `list reads [n0, n1]` стоит после
@@ -524,14 +524,14 @@ final class ChatController extends Solo<ChatState> {
   Job<void> send(String text) => run<ChatState, void>(
         key: 'send',
         (ctx) async {
-          final reply = await ctx.wait(() => _api.send(text));
+          final reply = await ctx.abandonable(() => _api.send(text));
           ctx.emit(ctx.state.withReply(reply));
           markReplyRead();
         },
       );
 
   Job<void> markReplyRead() =>
-      run<ChatState, void>((ctx) => ctx.wait(_api.markRead));
+      run<ChatState, void>((ctx) => ctx.abandonable(_api.markRead));
 }
 
 Future<void> onScreenClosed(ChatController chat) async {
@@ -540,8 +540,8 @@ Future<void> onScreenClosed(ChatController chat) async {
 }
 ```
 
-В этом теле `ctx.wait` бросает `Cancelled`, когда закрытие отменяет `Job`.
-Обновление ответа и вызов `markReplyRead()` не выполняются. Этот метод
+В этом теле `ctx.abandonable` бросает `Cancelled`, когда закрытие отменяет
+`Job`. Обновление ответа и вызов `markReplyRead()` не выполняются. Этот метод
 поставил бы отдельную корневую `Job` через `run` контроллера; ребёнком `send`
 она не становится.
 
@@ -641,7 +641,7 @@ final class RefreshController extends Solo<RefreshState> {
         onCancel: (state, cancelled) => const Initial(),
         (ctx) async {
           ctx.emit(const Loading());
-          await ctx.wait(_api.refresh);
+          await ctx.abandonable(_api.refresh);
           ctx.emit(const Initial());
         },
       );
@@ -667,7 +667,7 @@ final class RefreshController extends Solo<RefreshState> {
 `Job`, то есть отвечает ожидающим обновлением, если оно есть. Этому методу
 нужен именно такой порядок: обновление оказывается в очереди только потому, что
 `refresh()` вызвали второй раз, а `Policy.restart` в тот же момент отменила
-работающее. `ctx.wait` прекращает ожидание API, а `onCancel` возвращает
+работающее. `ctx.abandonable` прекращает ожидание API, а `onCancel` возвращает
 `Initial` до продвижения очереди. Успешное обновление публикует `Initial`
 из тела; `onError` сбрасывает индикатор при ошибке, при этом `Job` по-прежнему
 сообщает `Failed`.
@@ -1422,17 +1422,17 @@ Future<Map<String, Object?>> handlePayRequest(
 того же ключа заказа. Оба вызова получают общую квитанцию, а другой заказ
 создаёт другую `Job`. Три запроса снова дают два обращения к API.
 
-Списание ждёт обычный `await`. `ctx.wait`, `ctx.join` и `ctx.uncancellable`
-нужны там, где `Job` можно отменить, и различаются тем, что каждый делает
-с отменой, пришедшей во время вызова: `wait` отпускает вызов, `join` остаётся
-с ним до ответа, `uncancellable` придерживает отмену до конца шага. Эту `Job`
-во время работы отменить нельзя. `keepWhile` у неё не задан, а принимает она
-базовый `CheckoutState`, поэтому отбить её не может ни одно правило состояния,
-и важна здесь именно эта ширина, потому что правило состояния отменяет даже
-неотменяемую `Job`: более узкий тип допустил бы отмену между отправкой списания
-и записью его результата. Всякая другая отмена отклоняема,
-и `cancellable: false` её отклоняет: `Job.cancel` с экрана, закрытие
-контроллера.
+Списание ждёт обычный `await`. `ctx.abandonable`, `ctx.join`
+и `ctx.uncancellable` нужны там, где `Job` можно отменить, и различаются тем,
+что каждый делает с отменой, пришедшей во время вызова: `abandonable` отпускает
+вызов, `join` остаётся с ним до ответа, `uncancellable` придерживает отмену
+до конца шага. Эту `Job` во время работы отменить нельзя. `keepWhile` у неё
+не задан, а принимает она базовый `CheckoutState`, поэтому отбить её не может
+ни одно правило состояния, и важна здесь именно эта ширина, потому что правило
+состояния отменяет даже неотменяемую `Job`: более узкий тип допустил бы отмену
+между отправкой списания и записью его результата. Всякая другая отмена
+отклоняема, и `cancellable: false` её отклоняет: `Job.cancel` с экрана,
+закрытие контроллера.
 
 Тело публикует `Paid` до завершения с квитанцией, а `close()` ждёт этого
 завершения. Ошибки API по-прежнему дают `Failed`; состояние ошибки можно задать
@@ -1820,7 +1820,7 @@ final class PreviewController extends Solo<PreviewState> {
         key: 'preview',
         policy: Policy.restart,
         (ctx) async {
-          final buffer = await ctx.wait(
+          final buffer = await ctx.abandonable(
             () => _decoder.open(clip),
             dispose: (buffer) => buffer.release(),
           );
@@ -1830,10 +1830,10 @@ final class PreviewController extends Solo<PreviewState> {
 }
 ```
 
-`ctx.wait` может закончить отменённую `Job` до конца декодирования. Поздний
-буфер всё равно передаётся в `dispose`; буфер, полученный при активной `Job`,
-освобождается во время её уборки. Поэтому новая `Job` может начаться, не ожидая
-устаревшее декодирование, а каждый буфер будет освобождён.
+`ctx.abandonable` может закончить отменённую `Job` до конца декодирования.
+Поздний буфер всё равно передаётся в `dispose`; буфер, полученный при активной
+`Job`, освобождается во время её уборки. Поэтому новая `Job` может начаться,
+не ожидая устаревшее декодирование, а каждый буфер будет освобождён.
 
 Здесь нужен `dispose`, поскольку буфер временный, в том числе при успехе.
 `discard` предназначен для ресурса, передаваемого вызывающему коду как успешный

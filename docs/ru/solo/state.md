@@ -117,10 +117,11 @@ Job<void> zoomIn() => run<Ready, void>(
 рабочего типа: например, инициализация может закончиться публикацией `Ready`.
 Следующая контрольная точка состояния отклонит такое состояние, если оно
 не соответствует `W`, а метод ожидания служит такой точкой наравне с чтением:
-`ctx.wait` или `ctx.join` после этого `emit` заканчивает `Job` отменой раньше,
-чем начнётся действие. Поэтому такой переход стоит в теле последним, и после
-него нет ни чтений, ни ожиданий через контекст. `canStart` проверяется один
-раз, при запуске, и больше не возвращается, в том числе после этого `emit`.
+`ctx.abandonable` или `ctx.join` после этого `emit` заканчивает `Job` отменой
+раньше, чем начнётся действие. Поэтому такой переход стоит в теле последним,
+и после него нет ни чтений, ни ожиданий через контекст. `canStart` проверяется
+один раз, при запуске, и больше не возвращается, в том числе после этого
+`emit`.
 
 После обновления состояния проверяются другие работающие тела: дочерние задачи
 выполняются рядом с родительской, и каждое тело отвечает своим правилам.
@@ -379,7 +380,7 @@ run<ProfileState, String>(
   (ctx) async {
     ctx.emit(const Loading());
     try {
-      final name = await ctx.wait(api.fetchName);
+      final name = await ctx.abandonable(api.fetchName);
       ctx.emit(Loaded(name));
       return name;
     } on Object {
@@ -406,7 +407,7 @@ run<ProfileState, String>(
   onCancel: (state, cancelled) => const Initial(),
   (ctx) async {
     ctx.emit(const Loading());
-    final name = await ctx.wait(api.fetchName);
+    final name = await ctx.abandonable(api.fetchName);
     ctx.emit(Loaded(name));
     return name;
   },
@@ -442,7 +443,7 @@ Job<String> load() => run<ProfileState, String>(
       onCancel: (state, cancelled) => const Initial(),
       (ctx) async {
         ctx.emit(const Loading());
-        final name = await ctx.wait(api.fetchName);
+        final name = await ctx.abandonable(api.fetchName);
         ctx.emit(Loaded(name));
         return name;
       },
@@ -470,7 +471,7 @@ Job<String> load() => run<ProfileState, String>(
       onCancel: (state, cancelled) => const Initial(),
       (ctx) async {
         ctx.emit(const Loading());
-        final name = await ctx.wait(api.fetchName);
+        final name = await ctx.abandonable(api.fetchName);
         ctx.emit(Loaded(name));
         return name;
       },

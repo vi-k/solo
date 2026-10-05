@@ -1,7 +1,7 @@
 // The first attempt of "Timeouts" in `doc/testing.md`, verbatim: the three
 // lines of the deadline in the body of `load`, and the test that sees what
 // they do. The controller is the page's with those lines in place of its
-// `wait`, under the page's own name, which is why it has a library to
+// `abandonable`, under the page's own name, which is why it has a library to
 // itself.
 import 'package:fake_async/fake_async.dart';
 import 'package:solo/solo.dart';
@@ -22,7 +22,7 @@ final class ProfileController extends Solo<ProfileState> {
         onCancel: (state, cancelled) => const Initial(),
         (ctx) async {
           ctx.emit(const Loading());
-          final name = await ctx.wait(
+          final name = await ctx.abandonable(
             () => api.fetchName().timeout(const Duration(milliseconds: 5)),
           );
           ctx.emit(Loaded(name));

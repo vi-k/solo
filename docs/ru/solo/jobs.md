@@ -108,7 +108,7 @@ SoloJob<void> save() =>
 SoloJob<Profile> load(String id) => run<Ready, Profile>(
       key: (_Op.load, id),
       policy: Policy.droppable,
-      (ctx) => ctx.wait(() => api.load(id)),
+      (ctx) => ctx.abandonable(() => api.load(id)),
     );
 
 // replace: ожидающий зум уходит, работающий остаётся нетронутым.
@@ -158,7 +158,7 @@ SoloJob<void> seek(Duration position) => run<Ready, void>(
 свою замену. Так же её задержит та, которой отмену некому передать: `join`
 вокруг вызова, до которого запрос не доходит, дождётся его до конца, а исход
 всё равно будет `Cancelled`. Токен выше и передаёт отмену операции. Второй
-способ даёт `ctx.wait`: он годится для операции, которую можно оставить
+способ даёт `ctx.abandonable`: он годится для операции, которую можно оставить
 доигрывать самой. Оба разобраны в разделе
 [«Остановка самой операции»](cancellation.md#остановка-самой-операции) страницы
 об отмене.
@@ -175,7 +175,7 @@ SoloJob<void> seek(Duration position) => run<Ready, void>(
 SoloJob<Profile> load(String id) => run<Ready, Profile>(
       key: _Op.load,
       policy: Policy.droppable,
-      (ctx) => ctx.wait(() => api.load(id)),
+      (ctx) => ctx.abandonable(() => api.load(id)),
     );
 ```
 
@@ -192,7 +192,7 @@ SoloJob<Profile> load(String id) => run<Ready, Profile>(
 SoloJob<Profile> load(String id) => run<Ready, Profile>(
       key: (_Op.load, id),
       policy: Policy.droppable,
-      (ctx) => ctx.wait(() => api.load(id)),
+      (ctx) => ctx.abandonable(() => api.load(id)),
     );
 ```
 
@@ -214,7 +214,7 @@ int duplicates = 0;
 SoloJob<Profile> load(String id) {
   final mine = job<Ready, Profile>(
     key: (_Op.load, id),
-    (ctx) => ctx.wait(() => api.load(id)),
+    (ctx) => ctx.abandonable(() => api.load(id)),
   );
   final taken = add(mine, policy: Policy.droppable);
   if (!identical(taken, mine)) {
@@ -298,7 +298,7 @@ void pause() {
   final gate = _gate = Completer<void>();
   run<CameraState, void>(
     key: _Op.pause,
-    (ctx) => ctx.wait(() => gate.future),
+    (ctx) => ctx.abandonable(() => gate.future),
   );
 }
 
@@ -328,7 +328,7 @@ void pause() {
     job<CameraState, void>(key: _Op.pause, (ctx) async {
       // Отмена ещё не resume, а отменённые ворота уже не пауза.
       ctx.onCancel(() => _gate = null);
-      await ctx.wait(() => gate.future);
+      await ctx.abandonable(() => gate.future);
     }),
     first: true,
   );
@@ -353,7 +353,7 @@ void pause() {
   add(
     job<CameraState, void>(
       key: _Op.pause,
-      (ctx) => ctx.wait(() => gate.future),
+      (ctx) => ctx.abandonable(() => gate.future),
     ),
     first: true,
   ).whenCancelled((_) {
@@ -378,7 +378,7 @@ void pause() {
 | `resume()` | Идут в том порядке, в каком добавлены. |
 | `queue.clear()`, пока ворота работают | Очередь пустеет, пауза остаётся: ворота сейчас текущая задача, а не стоящая в очереди. |
 | `queue.clear()`, пока ворота ещё ждут за работающей задачей | Ворота уходят вместе с остальной очередью, и поле сброшено: `isPaused` отвечает `false`, и `pause()` снова работает. |
-| `close()` под паузой | Возвращается без `resume`: ворота отменяемы, и их `ctx.wait` кончается в момент отмены. |
+| `close()` под паузой | Возвращается без `resume`: ворота отменяемы, и их `ctx.abandonable` кончается в момент отмены. |
 | `close(mode: SoloCloseMode.drain)` под паузой | Ждёт `resume`: дренаж не отменяет то, что стоит в очереди, а выполняет, и ворота тоже. |
 | `cancelAll()` | Ворота уезжают вместе со всем остальным, и очередь идёт дальше, хотя их никто не открывал. Поле сброшено, и `pause()` снова работает. |
 | Состояние уходит из `Ready` под паузой | Пауза остаётся: ворота работают в любом состоянии камеры. |

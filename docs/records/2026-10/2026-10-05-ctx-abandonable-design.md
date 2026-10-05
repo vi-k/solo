@@ -1,11 +1,13 @@
-> **Состояние на 2026-10-05:** дизайн написан и прошёл независимое ревью
-> (`2026-10-05-ctx-abandonable-design-review-report.md`), семь находок внесены;
-> кода нет.
+> **Состояние на 2026-10-05:** сделано в клоне
+> `.artifacts/2026-10-05-ctx-abandonable/tree/` по этому дизайну с семью
+> находками ревью (`2026-10-05-ctx-abandonable-design-review-report.md`);
+> в `main` не перенесено. Расхождения и проверки —
+> `2026-10-05-ctx-abandonable-report.md`.
 > **Что это:** переименование `ctx.wait` в `ctx.abandonable` — имя, решение
 > владельца, устаревший псевдоним, объём волны правок и порядок проверки.
 > **Связанные записи:** `2026-10-05-ctx-abandonable-design-review-report.md`,
 > `2026-10-02-cancellation-reread-report.md`,
-> `2026-10-03-ctx-pause-design.md`.
+> `2026-10-03-ctx-pause-design.md`, `2026-10-05-ctx-abandonable-report.md`.
 
 # `ctx.wait` становится `ctx.abandonable`
 

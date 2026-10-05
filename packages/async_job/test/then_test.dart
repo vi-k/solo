@@ -221,8 +221,9 @@ void main() {
       // stack on the way out.
       final closedByTheSource = <String>[];
       final taking = Job<String>((ctx) async {
-        final db = await ctx.wait(() => 'db', discard: closedByTheSource.add);
-        await ctx.wait(() => Completer<void>().future);
+        final db =
+            await ctx.abandonable(() => 'db', discard: closedByTheSource.add);
+        await ctx.abandonable(() => Completer<void>().future);
 
         return db;
       });
@@ -241,8 +242,9 @@ void main() {
       final refusing = Job<String>(
         cancellable: false,
         (ctx) async {
-          final db = await ctx.wait(() => 'db', discard: closedByTheChain.add);
-          await ctx.wait(() => gate.future);
+          final db =
+              await ctx.abandonable(() => 'db', discard: closedByTheChain.add);
+          await ctx.abandonable(() => gate.future);
 
           return db;
         },
@@ -278,7 +280,8 @@ void main() {
       final gate = Completer<void>();
       final a = Job<int>((ctx) async => 1);
       final b = a.then<int>((ctx, value) => value + 1);
-      final c = b.then<void>((ctx, value) => ctx.wait(() => gate.future));
+      final c =
+          b.then<void>((ctx, value) => ctx.abandonable(() => gate.future));
       async.flushMicrotasks();
       final firstOutcome = a.outcome;
       final secondOutcome = b.outcome;
@@ -399,7 +402,7 @@ void main() {
   test('forwarded cancellation preserves the adjacent cause and stack', () {
     fakeAsync((async) {
       final gate = Completer<int>();
-      final a = Job<int>((ctx) => ctx.wait(() => gate.future));
+      final a = Job<int>((ctx) => ctx.abandonable(() => gate.future));
       final b = a.then<int>((ctx, value) => value);
       final c = b.then<int>((ctx, value) => value);
       async.flushMicrotasks();
@@ -547,7 +550,7 @@ void main() {
   test('cancelling one branch cancels the shared source and its sibling', () {
     fakeAsync((async) {
       final gate = Completer<int>();
-      final a = Job<int>((ctx) => ctx.wait(() => gate.future));
+      final a = Job<int>((ctx) => ctx.abandonable(() => gate.future));
       final b = a.then<int>((ctx, value) => mustNotRun('must not run'));
       final c = a.then<int>((ctx, value) => mustNotRun('must not run'));
       async.flushMicrotasks();
@@ -565,7 +568,7 @@ void main() {
     test('a 5000-link cascade from the ${cancelTail ? 'tail' : 'source'}', () {
       fakeAsync((async) {
         final gate = Completer<int>();
-        final source = Job<int>((ctx) => ctx.wait(() => gate.future));
+        final source = Job<int>((ctx) => ctx.abandonable(() => gate.future));
         final jobs = <Job<int>>[source];
         for (var i = 0; i < 5000; i++) {
           jobs.add(jobs.last.then<int>((ctx, value) => value));

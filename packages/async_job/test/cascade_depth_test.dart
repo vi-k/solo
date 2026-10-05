@@ -326,7 +326,7 @@ void main() {
         ctx
           ..onCancel(() => _forever(0))
           ..onCancel(() => second = true);
-        await ctx.wait(() => Completer<void>().future);
+        await ctx.abandonable(() => Completer<void>().future);
       },
       observer: ErrorObserver.answering(errors),
     );

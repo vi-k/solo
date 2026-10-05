@@ -27,7 +27,7 @@ void main() {
             .run(
               Job.deferred<void>(
                 key: 'child',
-                (ctx) => ctx.wait(() => delay(100)),
+                (ctx) => ctx.abandonable(() => delay(100)),
               ),
             )
             .ignore();
@@ -57,7 +57,7 @@ void main() {
                 key: 'child',
                 cancellable: false,
                 (ctx) async {
-                  await ctx.wait(() => delay(50));
+                  await ctx.abandonable(() => delay(50));
                   order.add('child');
                 },
               ),
@@ -89,7 +89,7 @@ void main() {
                   .run(
                     Job.deferred<void>(
                       key: 'child',
-                      (ctx) => ctx.wait(() => delay(100)),
+                      (ctx) => ctx.abandonable(() => delay(100)),
                     ),
                   )
                   .ignore();
@@ -126,7 +126,9 @@ void main() {
             ctx.onDiscard(() => throw StateError('close failed'));
             ctx
                 .run(
-                  Job.deferred<void>((ctx) => ctx.wait(() => delay(100))),
+                  Job.deferred<void>(
+                    (ctx) => ctx.abandonable(() => delay(100)),
+                  ),
                 )
                 .ignore();
             return 'db';
@@ -148,11 +150,11 @@ void main() {
     fakeAsync((async) {
       final order = <String>[];
       final job = Job<void>((ctx) async {
-        // Walked away from: the cancellation ends the wait, and the value
-        // turns up later, while the engine is still unwinding the stack.
-        // `ignore`, not `unawaited`: a `wait` left behind still completes
+        // Walked away from: the cancellation ends the wait, and the value turns
+        // up later, while the engine is still unwinding the stack. `ignore`,
+        // not `unawaited`: an `abandonable` call left behind still completes
         // with the job's cancellation, and nobody is there to catch it.
-        ctx.wait<String>(
+        ctx.abandonable<String>(
           () => delay(50).then((_) => 'db'),
           discard: (value) async {
             order.add('discard starts');
@@ -165,7 +167,7 @@ void main() {
           await delay(50);
           order.add('dispose ends');
         });
-        await ctx.wait(() => delay(200));
+        await ctx.abandonable(() => delay(200));
       })
         ..ignore();
       async.elapse(const Duration(milliseconds: 10));
@@ -194,7 +196,9 @@ void main() {
         (ctx) async {
           // Walked away from: the body ends while the action is still in
           // flight, so the value comes back to a job whose body is gone.
-          ctx.wait<String>(() => action.future, dispose: disposed.add).ignore();
+          ctx
+              .abandonable<String>(() => action.future, dispose: disposed.add)
+              .ignore();
           // And a child, so the job is still running when it does. Without
           // one the job would be over by then, and the window this test is
           // about would not exist.
@@ -233,7 +237,10 @@ void main() {
       final action = Completer<String>();
       final job = ProbeJob<void>(key: 'job', (ctx) async {
         try {
-          await ctx.wait<String>(() => action.future, dispose: released.add);
+          await ctx.abandonable<String>(
+            () => action.future,
+            dispose: released.add,
+          );
         } on Object catch (error) {
           caught = error;
         }
@@ -270,7 +277,7 @@ void main() {
         fakeAsync((async) {
           job = Job<String>(
             observer: ErrorObserver(errors),
-            (ctx) => ctx.wait<String>(() async {
+            (ctx) => ctx.abandonable<String>(() async {
               await delay(50);
               throw StateError('the action failed late');
             }).timeout(
@@ -306,7 +313,7 @@ void main() {
       final journal = JobJournal(answers: true);
       Job<void>(key: 'j', observer: journal, (ctx) async {
         ctx.unattended(() async {
-          await ctx.wait<void>(() async {
+          await ctx.abandonable<void>(() async {
             await delay(50);
             throw StateError('late');
           });
@@ -337,8 +344,8 @@ void main() {
     })>{
       'join': (ctx, open, {dispose, discard}) =>
           ctx.join(open, dispose: dispose, discard: discard),
-      'wait': (ctx, open, {dispose, discard}) =>
-          ctx.wait(open, dispose: dispose, discard: discard),
+      'abandonable': (ctx, open, {dispose, discard}) =>
+          ctx.abandonable(open, dispose: dispose, discard: discard),
     };
 
     /// The body hands `take` to unattended work and returns, or gives
@@ -466,7 +473,7 @@ void main() {
     }
     for (final givesUp in [true, false]) {
       final how = givesUp ? 'the body gave itself up' : 'cancelled outside';
-      test('wait, the job ended by hand in the cascade, $how', () {
+      test('abandonable, the job ended by hand in the cascade, $how', () {
         // A callback of the child reaches the engine, and it ends the parent
         // by hand: the mark is on, and the callbacks that would have told
         // this race are gone with `finish`.
@@ -478,12 +485,12 @@ void main() {
             ctx.run(
               Job.deferred<void>((ctx) async {
                 ctx.onCancel(() => parent.drop(const Cancelled('by hand')));
-                await ctx.wait(() => delay(50));
+                await ctx.abandonable(() => delay(50));
               }),
             ).ignore();
             ctx.unattended(() async {
               try {
-                final resource = await ctx.wait(
+                final resource = await ctx.abandonable(
                   () async {
                     await delay(20);
                     return made = _Resource();
@@ -515,7 +522,8 @@ void main() {
         expect(seen, ['cancelled', 'in the end closed: true']);
       });
     }
-    test('wait, a raw callback before it threw, the body gave itself up', () {
+    test('abandonable, a raw callback before it threw, the body gave itself up',
+        () {
       // The pass over the callbacks stops at the throw, and the race of the
       // call never hears the cancellation from it.
       final seen = <String>[];
@@ -527,7 +535,7 @@ void main() {
             (ctx as ProbeContext).onCancelRaw(() => throw StateError('boom'));
             ctx.unattended(() async {
               try {
-                final resource = await ctx.wait(
+                final resource = await ctx.abandonable(
                   () async {
                     await delay(20);
                     return made = _Resource();
@@ -552,13 +560,14 @@ void main() {
       expect(seen, ['cancelled', 'in the end closed: true']);
       expect(errors, ['Bad state: boom']);
     });
-    test('wait with a value at hand, on a job still waiting for a child', () {
+    test('abandonable with a value at hand, on a job still waiting for a child',
+        () {
       expect(
         scenario(
           childFor: 30,
           (ctx, open, make) async {
             await delay(10);
-            return ctx.wait(make, discard: close);
+            return ctx.abandonable(make, discard: close);
           },
         ),
         ['got it, closed: false', 'in the end closed: false'],
@@ -581,7 +590,7 @@ void main() {
     void holdUntil20(Future<_Slot> Function(String) take) {
       Job<void>((ctx) async {
         final held = await ctx.join(() => take('x'));
-        await ctx.wait(() => delay(20));
+        await ctx.abandonable(() => delay(20));
         held.give('x');
       }).ignore();
     }
@@ -596,13 +605,13 @@ void main() {
             // holds on through the cancellation of `a`.
             ctx.run(
               Job.deferred<void>((ctx) async {
-                await ctx.wait(() => delay(1));
+                await ctx.abandonable(() => delay(1));
                 await ctx.uncancellable(() async {
                   (await take('child')).give('child');
                 });
               }),
             ).ignore();
-            await ctx.wait(() => take('a'), dispose: (s) => s.give('a'));
+            await ctx.abandonable(() => take('a'), dispose: (s) => s.give('a'));
             return 0;
           });
           final parent = Job<void>((ctx) async {
@@ -647,7 +656,9 @@ void main() {
           final (:log, :take) = slot();
           holdUntil20(take);
           final a = Job.deferred<int>(key: 'a', (ctx) async {
-            ctx.wait(() => take('a'), dispose: (s) => s.give('a')).ignore();
+            ctx
+                .abandonable(() => take('a'), dispose: (s) => s.give('a'))
+                .ignore();
             return 1;
           });
           // Its cleanup keeps the group at the second barrier, `a` with it.
@@ -655,7 +666,7 @@ void main() {
             ctx.onDispose(() async {
               (await take('b cleanup')).give('b cleanup');
             });
-            await ctx.wait(() => delay(1));
+            await ctx.abandonable(() => delay(1));
             return 2;
           });
           final group = Job<List<int>>((ctx) => ctx.runAll([a, b]))..ignore();
@@ -701,7 +712,7 @@ void main() {
                 ),
               )
               .ignore();
-          await ctx.wait(
+          await ctx.abandonable(
             () => delay(10).then((_) => 'db'),
             dispose: (db) async {
               at('release starts');
@@ -729,7 +740,7 @@ void main() {
             seen.add('${async.elapsed.inMilliseconds} ms: $what');
         final job = Job<void>((ctx) async {
           try {
-            await ctx.wait(
+            await ctx.abandonable(
               () => delay(20).then((_) => 'db'),
               // Outlives the body: the job waits for it all the same.
               dispose: (db) async {
@@ -765,7 +776,7 @@ void main() {
         void at(String what) =>
             order.add('${async.elapsed.inMilliseconds} ms: $what');
         final a = Job.deferred<void>((ctx) async {
-          ctx.wait<String>(
+          ctx.abandonable<String>(
             () => delay(50).then((_) => 'db'),
             discard: (value) async {
               at('discard starts');
@@ -778,7 +789,7 @@ void main() {
             await delay(50);
             at('dispose ends');
           });
-          await ctx.wait(() => delay(200));
+          await ctx.abandonable(() => delay(200));
         });
         Job<void>(
           (ctx) => ctx.runAll([a, Job.deferred<void>((ctx) async {})]),
@@ -818,7 +829,7 @@ void main() {
                         ),
                       )
                       .ignore();
-                  await ctx.wait(
+                  await ctx.abandonable(
                     () => delay(10).then((_) => 'db'),
                     dispose: (db) => how == 'throws'
                         ? throw StateError('close failed')
@@ -859,7 +870,7 @@ void main() {
                       ),
                     )
                     .ignore();
-                await ctx.wait(
+                await ctx.abandonable(
                   () => delay(10).then((_) => 'db'),
                   dispose: (db) => job.drop(const Cancelled('by hand')),
                 );
@@ -888,7 +899,7 @@ void main() {
         final released = <String>[];
         final a = Job.deferred<int>(key: 'a', (ctx) async {
           ctx
-              .wait(
+              .abandonable(
                 () => delay(100).then((_) => 'db'),
                 dispose: (db) =>
                     released.add('${async.elapsed.inMilliseconds} ms: $db'),
@@ -934,7 +945,7 @@ void main() {
             dispose: (_) => released.add('by the body'),
           );
           try {
-            await ctx.wait(
+            await ctx.abandonable(
               () => delay(10).then((_) => token),
               // Slow, so that it is still under way when the body disowns.
               dispose: (_) async {
@@ -965,7 +976,7 @@ void main() {
   });
 
   group('a value that came to a future the body handed on', () {
-    for (final how in ['wait', 'join', 'run']) {
+    for (final how in ['abandonable', 'join', 'run']) {
       test('reaches its holder open, $how', () {
         fakeAsync((async) {
           final log = <String>[];
@@ -977,7 +988,7 @@ void main() {
             }
 
             final resource = switch (how) {
-              'wait' => ctx.wait(open, dispose: close),
+              'abandonable' => ctx.abandonable(open, dispose: close),
               'join' => ctx.join(open, dispose: close),
               _ => ctx.run(
                   Job.deferred<_Resource>((ctx) => open()),
@@ -987,7 +998,7 @@ void main() {
             ctx.run(
               Job.deferred<void>((ctx) async {
                 final taken = await resource;
-                await ctx.wait(() => delay(5));
+                await ctx.abandonable(() => delay(5));
                 log.add('used, closed: ${taken.closed}');
               }),
             ).ignore();

@@ -1,9 +1,9 @@
-// Section 4 of `doc/vs-bloc.md`, "Leaving a loading state when the work is cancelled": what the page leaves out,
-// then the code under its `### Solo` heading, verbatim, then what
-// `vs_bloc_rakes_test.dart` adds on top of it. Every piece of the page's
-// blocks is a run of lines of this file. The bloc side of the section is
-// built and run by the bench, `tool/doc_snippets.py`: this package does not
-// depend on bloc.
+// Section 4 of `doc/vs-bloc.md`, "Leaving a loading state when the work is
+// cancelled": what the page leaves out, then the code under its `### Solo`
+// heading, verbatim, then what `vs_bloc_rakes_test.dart` adds on top of it.
+// Every piece of the page's blocks is a run of lines of this file. The bloc
+// side of the section is built and run by the bench, `tool/doc_snippets.py`:
+// this package does not depend on bloc.
 import 'dart:async';
 
 import 'package:solo/solo.dart';
@@ -51,7 +51,7 @@ final class RefreshController extends Solo<RefreshState> {
         onCancel: (state, cancelled) => const Initial(),
         (ctx) async {
           ctx.emit(const Loading());
-          await ctx.wait(_api.refresh);
+          await ctx.abandonable(_api.refresh);
           ctx.emit(const Initial());
         },
       );
@@ -85,7 +85,7 @@ final class SlowCleanupRefreshController extends Solo<RefreshState> {
               seen.add('cleanup ends in $currentState');
             })
             ..emit(const Loading());
-          await ctx.wait(_api.refresh);
+          await ctx.abandonable(_api.refresh);
         },
       );
 
@@ -104,7 +104,7 @@ final class SlowCleanupRefreshController extends Solo<RefreshState> {
           seen.add('onCancel ran');
           return const Loading();
         },
-        (ctx) => ctx.wait(_api.refresh),
+        (ctx) => ctx.abandonable(_api.refresh),
       );
 
   void outside(RefreshState state) => externalSetState(state);

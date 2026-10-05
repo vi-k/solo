@@ -43,7 +43,7 @@ DeferredJob<Database> nextLine(Job<Database> connect) {
 DeferredJob<Database> stubborn() => Job.deferred<Database>(
       key: 'connect',
       cancellable: false,
-      (ctx) => ctx.wait(Database.open, discard: (db) => db.close()),
+      (ctx) => ctx.abandonable(Database.open, discard: (db) => db.close()),
     );
 
 /// Opens a database at once, under the name the trace will show.
@@ -606,7 +606,7 @@ void main() {
         ctx.onDispose(() async {
           final members = <String, FutureOr<Object?> Function()>{
             'check': ctx.check,
-            'wait': () => ctx.wait(() async => 1),
+            'abandonable': () => ctx.abandonable(() async => 1),
             'join': () => ctx.join(() async => 1),
             'pause': ctx.pause,
             'uncancellable': () => ctx.uncancellable(() async => 1),
@@ -740,13 +740,17 @@ void main() {
         final values = await ctx.runAll(<Job<Database>>[
           Job.deferred<Database>(
             key: 'left',
-            (branch) =>
-                branch.wait(() => open('left'), discard: (db) => db.close()),
+            (branch) => branch.abandonable(
+              () => open('left'),
+              discard: (db) => db.close(),
+            ),
           ),
           Job.deferred<Database>(
             key: 'right',
-            (branch) =>
-                branch.wait(() => open('right'), discard: (db) => db.close()),
+            (branch) => branch.abandonable(
+              () => open('right'),
+              discard: (db) => db.close(),
+            ),
           ),
         ]);
         trace.add('group handed over ${values.length} values');
@@ -766,7 +770,7 @@ void main() {
       final job = Job<void>(key: 'group', (ctx) async {
         await ctx.runAll(<Job<Database>>[
           Job.deferred<Database>(key: 'left', (branch) async {
-            final db = await branch.wait(
+            final db = await branch.abandonable(
               () => open('left'),
               discard: (db) => db.close(),
             );
@@ -775,8 +779,10 @@ void main() {
           }),
           Job.deferred<Database>(
             key: 'right',
-            (branch) =>
-                branch.wait(() => open('right'), discard: (db) => db.close()),
+            (branch) => branch.abandonable(
+              () => open('right'),
+              discard: (db) => db.close(),
+            ),
           ),
         ]);
       })
@@ -811,7 +817,7 @@ void main() {
               .run(Job.deferred<void>((c) => c.uncancellable(() => delay(30))))
               .ignore();
           try {
-            await ctx.wait(
+            await ctx.abandonable(
               () => delay(10).then((_) => 'slot'),
               dispose: (slot) async {
                 at('the slot release starts');
@@ -833,7 +839,7 @@ void main() {
       return seen;
     }
 
-    test('a value wait abandoned is released alongside the body', () {
+    test('a value abandonable let go of is released alongside the body', () {
       final seen = slotRelease(
         (ctx, at) {},
         caught: (ctx, at) async {
@@ -883,7 +889,7 @@ void main() {
             seen.add('${async.elapsed.inMilliseconds} ms: $what');
         final branch = Job.deferred<int>((ctx) async {
           ctx.onDispose(() => at('the pool closes'));
-          ctx.wait(
+          ctx.abandonable(
             () => delay(20).then((_) => 'slot'),
             dispose: (slot) async {
               at('the slot release starts');
@@ -911,7 +917,7 @@ void main() {
         'a branch waiting for its group before the unwinding: an earlier '
         'callback waits for the release', () {
       final seen = branchRelease((ctx, at) async {
-        await ctx.wait(() => delay(30));
+        await ctx.abandonable(() => delay(30));
         at('the other body ends');
         return 2;
       });
@@ -932,7 +938,7 @@ void main() {
           await delay(50);
           at('the other cleanup ends');
         });
-        await ctx.wait(() => delay(1));
+        await ctx.abandonable(() => delay(1));
         return 2;
       });
       expect(seen, [
@@ -944,7 +950,7 @@ void main() {
       ]);
     });
 
-    test('two values wait abandoned are released side by side', () {
+    test('two values abandonable let go of are released side by side', () {
       final seen = <String>[];
       fakeAsync((async) {
         void at(String what) =>
@@ -960,8 +966,14 @@ void main() {
               .run(Job.deferred<void>((c) => c.uncancellable(() => delay(30))))
               .ignore();
           await Future.wait([
-            ctx.wait(() => delay(10).then((_) => 'one'), dispose: release),
-            ctx.wait(() => delay(15).then((_) => 'two'), dispose: release),
+            ctx.abandonable(
+              () => delay(10).then((_) => 'one'),
+              dispose: release,
+            ),
+            ctx.abandonable(
+              () => delay(15).then((_) => 'two'),
+              dispose: release,
+            ),
           ]);
         })
           ..ignore();
@@ -979,11 +991,12 @@ void main() {
       ]);
     });
 
-    fakeAsyncTest('a value abandoned by wait is released after the job ended',
+    fakeAsyncTest(
+        'a value abandoned by abandonable is released after the job ended',
         () async {
       final gate = Gate();
       final job = Job<void>(key: 'abandon', (ctx) async {
-        await ctx.wait(
+        await ctx.abandonable(
           () async {
             await gate.wait();
             return open('late');

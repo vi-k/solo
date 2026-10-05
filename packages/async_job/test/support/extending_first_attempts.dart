@@ -52,7 +52,7 @@ final class MyQueue {
 }
 
 Future<void> runQueue() async {
-  final first = MyJob<void>(key: 'first', (ctx) => ctx.wait(upload));
+  final first = MyJob<void>(key: 'first', (ctx) => ctx.abandonable(upload));
   final second = MyJob<void>(
     key: 'second',
     cancellable: false,
@@ -85,8 +85,9 @@ void runDownload(String act) {
 Job<void> signOutWithChild(List<String> seen) {
   final child = Job.deferred<void>((ctx) async {
     ctx.onCancel(() => seen.add('child told to stop'));
-    await ctx
-        .wait(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await ctx.abandonable(
+      () => Future<void>.delayed(const Duration(milliseconds: 50)),
+    );
   });
   final job = MyJob<void>((ctx) async {
     ctx.onCancel(() => seen.add('parent told to stop'));

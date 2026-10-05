@@ -751,7 +751,7 @@ void main() {
         );
         solo.run<TestState, void>(
           key: 'busy',
-          (ctx) => ctx.wait(
+          (ctx) => ctx.abandonable(
             () => Future<void>.delayed(const Duration(milliseconds: 1500)),
           ),
         );
@@ -785,7 +785,7 @@ void main() {
         );
         solo.run<TestState, void>(
           key: 'busy',
-          (ctx) => ctx.wait(
+          (ctx) => ctx.abandonable(
             () => Future<void>.delayed(const Duration(milliseconds: 1500)),
           ),
         );
@@ -824,7 +824,7 @@ void main() {
       );
       solo.run<TestState, void>(
         key: 'busy',
-        (ctx) => ctx.wait(
+        (ctx) => ctx.abandonable(
           () => Future<void>.delayed(const Duration(milliseconds: 1500)),
         ),
       );
@@ -858,7 +858,7 @@ void main() {
       final events = solo.collect<TestState, int, void>(
         (ctx, values) async {
           calls.add('${async.elapsed}:start $values');
-          await ctx.wait(
+          await ctx.abandonable(
             () => Future<void>.delayed(const Duration(milliseconds: 2500)),
           );
         },

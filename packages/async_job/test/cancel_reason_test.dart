@@ -24,7 +24,7 @@ void main() {
         final reason =
             TestCancelReason('network', error: error, stackTrace: stack);
         Cancelled? event;
-        final job = Job<void>((ctx) => ctx.wait(() => delay(50)))
+        final job = Job<void>((ctx) => ctx.abandonable(() => delay(50)))
           ..whenCancelled((cancelled) => event = cancelled);
         if (started) async.flushMicrotasks();
         job.cancel(reason: reason).ignore();
@@ -90,9 +90,9 @@ void main() {
       final reason = TestCancelReason('network', error: StateError('failed'));
       late Job<void> child;
       final parent = Job<void>((ctx) async {
-        child = Job.deferred<void>((ctx) => ctx.wait(() => delay(50)));
+        child = Job.deferred<void>((ctx) => ctx.abandonable(() => delay(50)));
         ctx.run(child).ignore();
-        await ctx.wait(() => delay(50));
+        await ctx.abandonable(() => delay(50));
       });
       async.flushMicrotasks();
       parent.cancel(reason: reason).ignore();
@@ -110,9 +110,9 @@ void main() {
     fakeAsync((async) {
       late Job<void> child;
       final parent = Job<void>((ctx) async {
-        child = Job.deferred<void>((ctx) => ctx.wait(() => delay(50)));
+        child = Job.deferred<void>((ctx) => ctx.abandonable(() => delay(50)));
         ctx.run(child).ignore();
-        await ctx.wait(() => delay(50));
+        await ctx.abandonable(() => delay(50));
       })
         ..ignore();
       async.flushMicrotasks();
@@ -128,9 +128,9 @@ void main() {
     fakeAsync((async) {
       late Job<void> child;
       final parent = Job<void>((ctx) async {
-        child = Job.deferred<void>((ctx) => ctx.wait(() => delay(50)));
+        child = Job.deferred<void>((ctx) => ctx.abandonable(() => delay(50)));
         ctx.run(child).ignore();
-        await ctx.wait(() => delay(10));
+        await ctx.abandonable(() => delay(10));
         throw const Cancelled('gave up');
       })
         ..ignore();
@@ -146,7 +146,7 @@ void main() {
       final child = Job.deferred<void>((ctx) async {});
       final parent = Job<void>((ctx) async {
         try {
-          await ctx.wait(() => delay(50));
+          await ctx.abandonable(() => delay(50));
         } on Cancelled {
           ctx.run(child).ignore();
           rethrow;
@@ -185,7 +185,7 @@ void main() {
       final reason = TestCancelReason('network', error: StateError('failed'));
       late Job<void> child;
       final parent = Job<void>((ctx) async {
-        child = Job.deferred<void>((ctx) => ctx.wait(() => delay(50)));
+        child = Job.deferred<void>((ctx) => ctx.abandonable(() => delay(50)));
         await ctx.run(child);
       });
       async.flushMicrotasks();
@@ -203,10 +203,10 @@ void main() {
       final errors = <Object>[];
       late Job<void> child;
       final parent = Job<void>(observer: ErrorObserver(errors), (ctx) async {
-        child = Job.deferred<void>((ctx) => ctx.wait(() => delay(50)));
+        child = Job.deferred<void>((ctx) => ctx.abandonable(() => delay(50)));
         ctx.run(child).ignore();
         ctx.unattended(() => child.value);
-        await ctx.wait(() => delay(100));
+        await ctx.abandonable(() => delay(100));
       });
       async.flushMicrotasks();
       child.cancel(reason: const TestCancelReason('parent')).ignore();
@@ -226,7 +226,7 @@ void main() {
       final parent =
           Job<void>(observer: ErrorObserver.answering(errors), (ctx) async {
         ctx.onDispose(() => disposed = true);
-        child = Job.deferred<void>((ctx) => ctx.wait(() => delay(50)));
+        child = Job.deferred<void>((ctx) => ctx.abandonable(() => delay(50)));
         await ctx.run(child);
       });
       async.flushMicrotasks();
@@ -254,7 +254,7 @@ void main() {
         });
         ctx.run(child).ignore();
         ctx.unattended(() => child.value);
-        await ctx.wait(() => delay(50));
+        await ctx.abandonable(() => delay(50));
       });
       async.flushTimers();
       expect(errors, [same(child.outcome)]);

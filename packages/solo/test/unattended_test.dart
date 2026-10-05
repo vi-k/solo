@@ -53,7 +53,7 @@ void main() {
               (c) async => throw StateError('stray boom'),
             );
           });
-          await ctx.wait(() => delay(1));
+          await ctx.abandonable(() => delay(1));
         });
       });
       async.flushTimers();
@@ -76,7 +76,7 @@ void main() {
               await delay(30);
               throw StateError('late boom');
             });
-            await ctx.wait(() => delay(5));
+            await ctx.abandonable(() => delay(5));
           });
         async.elapse(const Duration(milliseconds: 10));
         solo.close();
@@ -107,7 +107,7 @@ void main() {
             );
             ctx.onDispose(timer.cancel);
           });
-          await ctx.wait(() => delay(5));
+          await ctx.abandonable(() => delay(5));
         });
       async.elapse(const Duration(milliseconds: 100));
       expect(ticks, 0, reason: 'the cleanup stopped the timer with the job');
@@ -128,7 +128,7 @@ void main() {
               (_) => ticks++,
             );
           });
-          await ctx.wait(() => delay(5));
+          await ctx.abandonable(() => delay(5));
         });
       async.elapse(const Duration(milliseconds: 50));
       final beforeClose = ticks;
@@ -176,9 +176,9 @@ void main() {
           keepWhile: (state) => state is! Working,
           (ctx) async {
             ctx.unattended(() async {
-              await ctx.wait(() => delay(50));
+              await ctx.abandonable(() => delay(50));
             });
-            await ctx.wait(() => delay(100));
+            await ctx.abandonable(() => delay(100));
           },
         );
       async.elapse(const Duration(milliseconds: 5));

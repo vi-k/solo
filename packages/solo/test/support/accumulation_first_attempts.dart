@@ -14,7 +14,7 @@ final class QueuedSearch extends Solo<SearchState> {
   SoloJob<void> query(String text) => run<SearchState, void>(
         key: 'query',
         (ctx) async {
-          final results = await ctx.wait(() => api.search(text));
+          final results = await ctx.abandonable(() => api.search(text));
           ctx.emit(SearchState.results(results));
         },
       );

@@ -125,7 +125,7 @@ void main() {
             observer: _ThrowingObserver(),
             (ctx) async {
               ctx.onDispose(() => throw StateError('disposer'));
-              await ctx.wait(() => delay(100));
+              await ctx.abandonable(() => delay(100));
             },
           );
           async.elapse(const Duration(milliseconds: 10));
@@ -166,7 +166,7 @@ void main() {
           // Nothing makes a line out of it, so a `toString` of the
           // caller's that throws cannot end a job that only asked to log.
           ..log(_Unspeakable());
-        await ctx.wait(() => delay(10));
+        await ctx.abandonable(() => delay(10));
       });
       async.flushTimers();
       expect(job.outcome, isA<Done<void>>());

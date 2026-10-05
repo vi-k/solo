@@ -64,7 +64,7 @@ final class CameraController extends Solo<CameraState>
   SoloJob<Profile> load(String id) => run<Ready, Profile>(
         key: (_Op.load, id),
         policy: Policy.droppable,
-        (ctx) => ctx.wait(() => api.load(id)),
+        (ctx) => ctx.abandonable(() => api.load(id)),
       );
 
   // replace: the queued zoom goes, a running one is left alone.
@@ -94,11 +94,11 @@ final class CameraController extends Solo<CameraState>
         (ctx) => ctx.join(() => camera.seek(position)),
       );
 
-  /// Not on the page: the other way in the page names, `ctx.wait`.
+  /// Not on the page: the other way in the page names, `ctx.abandonable`.
   SoloJob<void> seekLetGo(Duration position) => run<Ready, void>(
         key: _Op.seek,
         policy: Policy.restart,
-        (ctx) => ctx.wait(() => camera.seek(position)),
+        (ctx) => ctx.abandonable(() => camera.seek(position)),
       );
 
   /// Not on the page: a seek that refuses to be cancelled.
@@ -130,7 +130,7 @@ final class CameraController extends Solo<CameraState>
     add(
       job<CameraState, void>(
         key: _Op.pause,
-        (ctx) => ctx.wait(() => gate.future),
+        (ctx) => ctx.abandonable(() => gate.future),
       ),
       first: true,
     ).whenCancelled((_) {
@@ -161,7 +161,7 @@ final class CountingController extends Solo<CameraState>
   SoloJob<Profile> load(String id) {
     final mine = job<Ready, Profile>(
       key: (_Op.load, id),
-      (ctx) => ctx.wait(() => api.load(id)),
+      (ctx) => ctx.abandonable(() => api.load(id)),
     );
     final taken = add(mine, policy: Policy.droppable);
     if (!identical(taken, mine)) {

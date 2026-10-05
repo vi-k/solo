@@ -1,9 +1,9 @@
-// Section 1 of `doc/vs-bloc.md`, "Ordering updates to shared state": what the page leaves out,
-// then the code under its `### Solo` heading, verbatim, then what
-// `vs_bloc_rakes_test.dart` adds on top of it. Every piece of the page's
-// blocks is a run of lines of this file. The bloc side of the section is
-// built and run by the bench, `tool/doc_snippets.py`: this package does not
-// depend on bloc.
+// Section 1 of `doc/vs-bloc.md`, "Ordering updates to shared state": what the
+// page leaves out, then the code under its `### Solo` heading, verbatim, then
+// what `vs_bloc_rakes_test.dart` adds on top of it. Every piece of the page's
+// blocks is a run of lines of this file. The bloc side of the section is built
+// and run by the bench, `tool/doc_snippets.py`: this package does not depend on
+// bloc.
 import 'dart:async';
 
 import 'package:solo/solo.dart';
@@ -76,7 +76,7 @@ final class NotesController extends Solo<NotesState> {
   Job<void> refresh() => run<NotesState, void>(
         key: 'refresh',
         (ctx) async {
-          final serverNotes = await ctx.wait(_api.list);
+          final serverNotes = await ctx.abandonable(_api.list);
           ctx.emit(ctx.state.copyWith(notes: serverNotes));
         },
       );
@@ -103,10 +103,10 @@ final class TracedNotesController extends NotesController {
   }
 }
 
-/// The upload of the page with `ctx.wait` where the page has `ctx.join`:
+/// The upload of the page with `ctx.abandonable` where the page has `ctx.join`:
 /// what the paragraph under the code says `join` is there for.
-final class WaitingNotesController extends Solo<NotesState> {
-  WaitingNotesController(this._api) : super(const NotesState());
+final class AbandoningNotesController extends Solo<NotesState> {
+  AbandoningNotesController(this._api) : super(const NotesState());
 
   final Api _api;
 
@@ -114,7 +114,7 @@ final class WaitingNotesController extends Solo<NotesState> {
         key: 'upload',
         (ctx) async {
           ctx.emit(ctx.state.copyWith(uploading: true));
-          await ctx.wait(() => _api.upload(note));
+          await ctx.abandonable(() => _api.upload(note));
           final merged = [...ctx.state.notes, note];
           ctx.emit(ctx.state.copyWith(notes: merged, uploading: false));
         },
@@ -123,7 +123,7 @@ final class WaitingNotesController extends Solo<NotesState> {
   Job<void> refresh() => run<NotesState, void>(
         key: 'refresh',
         (ctx) async {
-          final serverNotes = await ctx.wait(_api.list);
+          final serverNotes = await ctx.abandonable(_api.list);
           ctx.emit(ctx.state.copyWith(notes: serverNotes));
         },
       );

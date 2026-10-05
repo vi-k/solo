@@ -86,7 +86,7 @@ void main() {
   test('value throws the Cancelled of a cancelled job', () {
     fakeAsync((async) {
       final job = Job<int>((ctx) async {
-        await ctx.wait(
+        await ctx.abandonable(
           () => Future<void>.delayed(const Duration(milliseconds: 50)),
         );
         return 1;
@@ -109,7 +109,7 @@ void main() {
     fakeAsync((async) {
       final seen = <int>[];
       Job<int>((ctx) async {
-        await ctx.wait(() => delay(10));
+        await ctx.abandonable(() => delay(10));
 
         return 7;
       }).value.then(seen.add).ignore();

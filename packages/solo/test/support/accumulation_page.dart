@@ -22,7 +22,7 @@ final class Search extends Solo<SearchState> {
   final SearchApi api;
   late final _queries = accumulate<SearchState, String, void>(
     (ctx, text) async {
-      final results = await ctx.wait(() => api.search(text));
+      final results = await ctx.abandonable(() => api.search(text));
       ctx.emit(SearchState.results(results));
     },
     merge: (accumulated, incoming) => incoming,
@@ -97,7 +97,7 @@ final class SettingsController extends Solo<Settings> {
 
   SoloJob<void> reload() => run<Settings, void>(
         key: 'reload',
-        (ctx) async => ctx.emit(await ctx.wait(_api.load)),
+        (ctx) async => ctx.emit(await ctx.abandonable(_api.load)),
       );
 }
 
@@ -201,7 +201,7 @@ final class BusyPlayer extends Player {
 
   SoloJob<void> busy() => run<Playback, void>(
         key: 'busy',
-        (ctx) => ctx.wait(
+        (ctx) => ctx.abandonable(
           () => Future<void>.delayed(const Duration(milliseconds: 50)),
         ),
       );

@@ -2239,7 +2239,7 @@ void main() {
       final top = under('cancellation.md', '# Cancellation');
 
       expect(top, contains('| `ctx.join(action)` | Waits for the operation'));
-      expect(top, contains('| `ctx.wait(action)` |'));
+      expect(top, contains('| `ctx.abandonable(action)` |'));
     });
 
     test('the state page has the trap the catch falls into', () {

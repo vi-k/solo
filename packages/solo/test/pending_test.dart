@@ -232,7 +232,7 @@ void main() {
         solo.run<TestState, void>(
           key: 'ready',
           describe: () => 'gate',
-          (ctx) => ctx.wait(() => gate.future),
+          (ctx) => ctx.abandonable(() => gate.future),
         );
         solo
             .collect<TestState, int, void>(

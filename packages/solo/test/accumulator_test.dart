@@ -1482,7 +1482,7 @@ List<String> _rulesTrace(
     if (busy) {
       solo.run<int, void>(
         key: 'busy',
-        (ctx) => ctx.wait(
+        (ctx) => ctx.abandonable(
           () => Future<void>.delayed(const Duration(milliseconds: 100)),
         ),
       );
@@ -1529,7 +1529,7 @@ List<String> _defaultTrace({
     );
     solo.run<int, void>(
       key: 'busy',
-      (ctx) => ctx.wait(
+      (ctx) => ctx.abandonable(
         () => Future<void>.delayed(const Duration(milliseconds: 100)),
       ),
     );

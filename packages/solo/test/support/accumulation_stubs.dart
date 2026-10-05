@@ -192,7 +192,7 @@ final class JoiningPlayer extends Solo<Playback> {
 
   SoloJob<void> busy() => run<Playback, void>(
         key: 'busy',
-        (ctx) => ctx.wait(() => Future<void>.delayed(ms(50))),
+        (ctx) => ctx.abandonable(() => Future<void>.delayed(ms(50))),
       );
 
   SoloJob<void> chime() => run<Playback, void>(

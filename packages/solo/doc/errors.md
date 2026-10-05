@@ -33,10 +33,10 @@ final class ProfileController extends Solo<ProfileState> {
 ```
 
 The hook is told about every error its jobs run into — the failure of a body,
-an error from cleanup or from an operation abandoned by `wait`, a rule that
-threw instead of answering — and it is told once for each job. An error a child
-throws and its parent lets through is the failure of both: the hook hears it
-twice, and the `job` it is given tells the two calls apart. It reports and
+an error from cleanup or from an operation abandoned by `abandonable`, a rule
+that threw instead of answering — and it is told once for each job. An error a
+child throws and its parent lets through is the failure of both: the hook hears
+it twice, and the `job` it is given tells the two calls apart. It reports and
 returns, which is all it is for: the hook answers for nothing, and overriding
 it moves no error anywhere.
 
@@ -57,7 +57,7 @@ where `run(onError: ...)` computes a state from it, and an outcome nobody
 observes reaches the job's creation zone by itself. What no outcome carries is
 the rest:
 
-- an operation abandoned by `wait` that fails later;
+- an operation abandoned by `abandonable` that fails later;
 - what the job calls outside its body: a disposer, a `ctx.onCancel` callback, a
   `whenCancelled` listener, a state handler of `run`;
 - a `keepWhile` that throws when a change of state re-checks it;
@@ -245,11 +245,11 @@ opens a camera may fairly take longer, and the number is the one this
 application is willing to call late.
 
 The snapshot reports and does not diagnose. A long wait does not prove a
-forgotten `ctx.wait`: a body inside an external call it has to see through
-looks the same, and a resource that takes its time to release holds the job as
-long, in its `cleanup` phase. The phase says where the job is, not why: while
-the body runs the phase is `body`, whatever it waits on, and the engine does
-not guess.
+forgotten `ctx.abandonable`: a body inside an external call it has to see
+through looks the same, and a resource that takes its time to release holds the
+job as long, in its `cleanup` phase. The phase says where the job is, not why:
+while the body runs the phase is `body`, whatever it waits on, and the engine
+does not guess.
 
 ## Why cancellation was slow
 
@@ -321,13 +321,14 @@ the caller of `cancel` or `close` waited 90 ms.
 
 The number is worth watching for one mistake in particular. A body that waits
 on something slow with a bare `await` notices the cancellation only when the
-wait is over, where the same call through `ctx.wait` stops waiting at once, and
-so does a delay written as `ctx.pause`. A 300 ms wait, cancelled 10 ms in:
+wait is over, where the same call through `ctx.abandonable` stops waiting at
+once, and so does a delay written as `ctx.pause`. A 300 ms wait, cancelled 10
+ms in:
 
 | how the body waits | the number |
 | --- | --- |
 | `await Future.delayed(...)` | 290 ms |
-| `ctx.wait(() => Future.delayed(...))` | 0 ms |
+| `ctx.abandonable(() => Future.delayed(...))` | 0 ms |
 | `ctx.pause(...)` | 0 ms |
 
 Only the first row is a line in the log: the other two stay under the 50 ms the
@@ -438,9 +439,9 @@ children of its own or runs its cleanup, `await job.value` throws the
 `Cancelled`, and the failure goes to `onUnanswered` like the errors below.
 `ignore()` silences that one too.
 
-Errors from cleanup, cancellation callbacks and operations abandoned by `wait`
-go to the reporting hooks, and the controller is asked to answer for them
-through `onUnanswered`. Without an override of it or an installed
+Errors from cleanup, cancellation callbacks and operations abandoned by
+`abandonable` go to the reporting hooks, and the controller is asked to answer
+for them through `onUnanswered`. Without an override of it or an installed
 `Solo.errorHandler`, they fall back to the job's creation zone. Such an error
 can arrive after the job has already completed. It does not replace an existing
 cancellation outcome. A `Cancelled` that arrives this way — an abandoned action

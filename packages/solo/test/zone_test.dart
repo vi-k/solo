@@ -209,7 +209,7 @@ void main() {
             return true;
           },
           (ctx) async {
-            await ctx.wait(
+            await ctx.abandonable(
               () => Future<void>.delayed(const Duration(milliseconds: 100)),
             );
           },
@@ -245,7 +245,7 @@ void main() {
               return true;
             },
             (ctx) async {
-              await ctx.wait(
+              await ctx.abandonable(
                 () => Future<void>.delayed(const Duration(milliseconds: 100)),
               );
             },
@@ -330,7 +330,7 @@ void main() {
               unawaited(Future<void>.error(StateError('leak')));
             });
           });
-          await ctx.wait(
+          await ctx.abandonable(
             () => Future<void>.delayed(const Duration(milliseconds: 1)),
           );
         });
@@ -500,7 +500,7 @@ void _coveredRoot(
           .run(
             solo.job<TestState, void>(
               key: 'child',
-              (ctx) => ctx.wait(
+              (ctx) => ctx.abandonable(
                 () => Future<void>.delayed(const Duration(milliseconds: 50)),
               ),
             ),
@@ -540,7 +540,7 @@ void _coveredEach(
             .run(
               solo.job<TestState, void>(
                 key: 'grandchild',
-                (ctx) => ctx.wait(
+                (ctx) => ctx.abandonable(
                   () => Future<void>.delayed(const Duration(milliseconds: 50)),
                 ),
               ),
@@ -575,7 +575,7 @@ void _coveredChild(
             .run(
               solo.job<TestState, void>(
                 key: 'grandchild',
-                (ctx) => ctx.wait(
+                (ctx) => ctx.abandonable(
                   () => Future<void>.delayed(const Duration(milliseconds: 50)),
                 ),
               ),

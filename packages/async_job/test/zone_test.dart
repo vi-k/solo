@@ -131,12 +131,12 @@ void main() {
           final job = Job<void>((ctx) async {
             ctx.onCancel(() => throw StateError('onCancel'));
             unawaited(
-              ctx.wait(() async {
+              ctx.abandonable(() async {
                 await delay(20);
                 throw StateError('late action');
               }),
             );
-            await ctx.wait(() => delay(100));
+            await ctx.abandonable(() => delay(100));
           });
           async.elapse(const Duration(milliseconds: 5));
           job.cancel().ignore();
@@ -149,15 +149,15 @@ void main() {
       caught.map((error) => '$error').toList(),
       const <String>[
         'Bad state: onCancel',
-        // The abandoned `wait` returned a future nobody awaits, and Dart
+        // The abandoned `abandonable` returned a future nobody awaits, and Dart
         // reports that one itself. Named here rather than left out of a
         // `containsAll`: this is the whole of what the zone hears, and a
         // second copy of any of it would be a defect.
         'Cancelled(manual)',
         'Bad state: late action',
       ],
-      // The abandoned `wait` also throws its own Cancelled into the zone:
-      // nobody awaits the future it returned.
+      // The abandoned `abandonable` also throws its own Cancelled into the
+      // zone: nobody awaits the future it returned.
       reason: 'both errors have nowhere else to go',
     );
   });
@@ -177,11 +177,11 @@ void main() {
               ctx.onCancel(() => throw StateError('onCancel'));
               // `ignore`, so the Cancelled thrown into the abandoned
               // future does not reach the zone on its own account.
-              ctx.wait(() async {
+              ctx.abandonable(() async {
                 await delay(20);
                 throw StateError('late action');
               }).ignore();
-              await ctx.wait(() => delay(100));
+              await ctx.abandonable(() => delay(100));
             },
           );
           async.elapse(const Duration(milliseconds: 5));
@@ -216,7 +216,7 @@ void main() {
                 .run(
                   Job.deferred<void>(
                     key: 'child',
-                    (child) => child.wait(() => delay(50)),
+                    (child) => child.abandonable(() => delay(50)),
                   ),
                 )
                 .ignore();
@@ -247,7 +247,7 @@ void main() {
                   .run(
                     Job.deferred<void>(
                       key: 'child',
-                      (child) => child.wait(() => delay(50)),
+                      (child) => child.abandonable(() => delay(50)),
                     ),
                   )
                   .ignore();
@@ -310,11 +310,11 @@ void main() {
                 // Outlives the body, so the parent really waits for it: a
                 // child that finished earlier is not on the waiting list
                 // at all.
-                await child.wait(() => delay(20));
+                await child.abandonable(() => delay(20));
                 throw StateError('child boom');
               }),
             );
-            await ctx.wait(() => delay(10));
+            await ctx.abandonable(() => delay(10));
           }).ignore();
           async.elapse(const Duration(milliseconds: 50));
         });
@@ -335,7 +335,7 @@ void main() {
         fakeAsync((async) {
           Job<void>((ctx) async {
             final child = Job.deferred<void>(key: 'child', (child) async {
-              await child.wait(() => delay(20));
+              await child.abandonable(() => delay(20));
               throw StateError('child boom');
               // Quenching the job says nothing about the Future below: it
               // is the report of an unobserved outcome that this turns
@@ -344,7 +344,7 @@ void main() {
               ..ignore();
             // ignore: unawaited_futures
             ctx.run(child);
-            await ctx.wait(() => delay(10));
+            await ctx.abandonable(() => delay(10));
           }).ignore();
           async.elapse(const Duration(milliseconds: 50));
         });
@@ -367,12 +367,12 @@ void main() {
             ctx
                 .run(
                   Job.deferred<void>(key: 'child', (child) async {
-                    await child.wait(() => delay(20));
+                    await child.abandonable(() => delay(20));
                     throw StateError('child boom');
                   }),
                 )
                 .ignore();
-            await ctx.wait(() => delay(10));
+            await ctx.abandonable(() => delay(10));
           }).ignore();
           async.elapse(const Duration(milliseconds: 50));
         });
@@ -389,14 +389,14 @@ void main() {
         fakeAsync((async) {
           Job<void>((ctx) async {
             final child = Job.deferred<void>(key: 'child', (child) async {
-              await child.wait(() => delay(20));
+              await child.abandonable(() => delay(20));
             })
               ..ignore();
             // ignore: unawaited_futures
             ctx.run(child);
-            await ctx.wait(() => delay(5));
+            await ctx.abandonable(() => delay(5));
             child.cancel().ignore();
-            await ctx.wait(() => delay(10));
+            await ctx.abandonable(() => delay(10));
           }).ignore();
           async.elapse(const Duration(milliseconds: 50));
         });
@@ -416,7 +416,7 @@ void main() {
       () {
         fakeAsync((async) {
           final job = Job<void>(cancellable: false, (ctx) async {
-            await ctx.wait(() => delay(10));
+            await ctx.abandonable(() => delay(10));
             throw StateError('boom');
           });
           async.elapse(const Duration(milliseconds: 5));
@@ -459,7 +459,7 @@ void main() {
         fakeAsync((async) {
           job = Job<void>((ctx) async {
             try {
-              await ctx.wait(() => delay(100));
+              await ctx.abandonable(() => delay(100));
             } on Cancelled {
               // The device said no in its own words, as a real one does
               // through the token it was handed.
@@ -491,7 +491,7 @@ void main() {
                 .run(
                   Job.deferred<void>(
                     key: 'child',
-                    (child) => child.wait(() => delay(50)),
+                    (child) => child.abandonable(() => delay(50)),
                   ),
                 )
                 .ignore();
@@ -528,11 +528,11 @@ void main() {
               // `ignore`, so the cancellation the abandoned future itself
               // carries does not reach the zone on its own account: that
               // one is Dart's doing, not the engine's.
-              ..wait(() async {
+              ..abandonable(() async {
                 await delay(20);
                 throw const Cancelled('late action');
               }).ignore();
-            await ctx.wait(() => delay(100));
+            await ctx.abandonable(() => delay(100));
           });
           async.elapse(const Duration(milliseconds: 5));
           job.cancel().ignore();
@@ -570,11 +570,11 @@ void main() {
                   await delay(10);
                   throw const Cancelled('unattended');
                 })
-                ..wait(() async {
+                ..abandonable(() async {
                   await delay(20);
                   throw const Cancelled('late action');
                 }).ignore();
-              await ctx.wait(() => delay(100));
+              await ctx.abandonable(() => delay(100));
             },
           );
           async.elapse(const Duration(milliseconds: 5));
@@ -680,7 +680,7 @@ void main() {
                       // parent's, and its finish would take the outcome of the
                       // parent through the closure long before this is about.
                       observer: _Quiet(),
-                      (child) => child.wait(() => delay(50)),
+                      (child) => child.abandonable(() => delay(50)),
                     ),
                   )
                   .ignore();
@@ -718,7 +718,7 @@ void main() {
                     Job.deferred<void>(
                       key: 'child',
                       observer: _Quiet(),
-                      (child) => child.wait(() => delay(50)),
+                      (child) => child.abandonable(() => delay(50)),
                     ),
                   )
                   .ignore();
@@ -856,7 +856,7 @@ void main() {
             // Not awaited, against the doctrine of the member, and this is
             // what that costs. `join` has no future of its own to quieten
             // -- it is the future -- so the error goes where Dart sends an
-            // unawaited one. Pinned as the boundary it is; `wait`, which
+            // unawaited one. Pinned as the boundary it is; `abandonable`, which
             // holds a completer, announces this case to the observer.
             unawaited(
               ctx.join<void>(() async {
@@ -864,7 +864,7 @@ void main() {
                 throw StateError('the step failed');
               }),
             );
-            await ctx.wait(() => delay(10));
+            await ctx.abandonable(() => delay(10));
           }).ignore();
           async.flushTimers();
         });

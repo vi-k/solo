@@ -1,9 +1,8 @@
-// Section 8 of `doc/vs-bloc.md`, "Awaiting a particular request": what the page leaves out,
-// then the code under its `### Solo` heading, verbatim, then what
-// `vs_bloc_rakes_test.dart` adds on top of it. Every piece of the page's
-// blocks is a run of lines of this file. The bloc side of the section is
-// built and run by the bench, `tool/doc_snippets.py`: this package does not
-// depend on bloc.
+// Section 8 of `doc/vs-bloc.md`, "Awaiting a particular request": what the page
+// leaves out, then the code under its `### Solo` heading, verbatim, then what
+// `vs_bloc_rakes_test.dart` adds on top of it. Every piece of the page's blocks
+// is a run of lines of this file. The bloc side of the section is built and run
+// by the bench, `tool/doc_snippets.py`: this package does not depend on bloc.
 import 'package:solo/solo.dart';
 
 import 'vs_bloc_stubs.dart';
@@ -163,11 +162,14 @@ final class WaitingCheckoutController extends Solo<CheckoutState> {
   /// Where each body was when it ended: the receipt it got or what it met.
   final met = <String>[];
 
-  Job<void> viaWait(Order order) => run<CheckoutState, void>((ctx) async {
+  Job<void> viaAbandonable(Order order) =>
+      run<CheckoutState, void>((ctx) async {
         try {
-          met.add('wait got ${await ctx.wait(() => _api.pay(order))}');
+          met.add(
+            'abandonable got ${await ctx.abandonable(() => _api.pay(order))}',
+          );
         } on Cancelled {
-          met.add('wait threw Cancelled');
+          met.add('abandonable threw Cancelled');
           rethrow;
         }
       });

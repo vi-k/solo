@@ -18,7 +18,7 @@ void main() {
       final parent = Job<void>((ctx) async {
         final child = Job.deferred<void>(
           key: 'child',
-          (ctx) => ctx.wait(() => delay(10)),
+          (ctx) => ctx.abandonable(() => delay(10)),
         );
         final result = ctx.run(child);
         atRun = (
@@ -47,7 +47,7 @@ void main() {
               .run(
                 Job.deferred<void>(
                   key: 'child',
-                  (ctx) => ctx.wait(() => delay(50)),
+                  (ctx) => ctx.abandonable(() => delay(50)),
                 ),
               )
               .ignore();
@@ -75,12 +75,12 @@ void main() {
                 .run(
                   Job.deferred<void>(
                     key: 'child$i',
-                    (ctx) => ctx.wait(() => delay(100)),
+                    (ctx) => ctx.abandonable(() => delay(100)),
                   ),
                 )
                 .ignore();
           }
-          await ctx.wait(() => delay(100));
+          await ctx.abandonable(() => delay(100));
         },
       );
       async.elapse(const Duration(milliseconds: 10));
@@ -107,12 +107,12 @@ void main() {
           key: 'child',
           cancellable: false,
           (ctx) async {
-            await ctx.wait(() => delay(50));
+            await ctx.abandonable(() => delay(50));
             childEndedAt = async.elapsed;
           },
         );
         ctx.run(child).ignore();
-        await ctx.wait(() => delay(100));
+        await ctx.abandonable(() => delay(100));
       });
       async.elapse(const Duration(milliseconds: 10));
       parent.cancel().ignore();
@@ -132,7 +132,7 @@ void main() {
       final log = <String>[];
       int? valueReadSeparately;
       final child = Job.deferred<int>(
-        (ctx) => ctx.wait(() => gate.future),
+        (ctx) => ctx.abandonable(() => gate.future),
         cancellable: false,
       );
       final parent = Job<void>((ctx) async {
@@ -197,7 +197,7 @@ void main() {
       final log = <String>[];
       late final Job<void> parent;
       final child = Job.deferred<int>(
-        (ctx) => ctx.wait(() => gate.future),
+        (ctx) => ctx.abandonable(() => gate.future),
         observer: _OnStartObserver(() => parent.cancel().ignore()),
         cancellable: false,
       );
@@ -230,7 +230,7 @@ void main() {
         });
         ctx.run(
           Job.deferred<void>((grandchild) async {
-            await grandchild.wait(() => delay(20));
+            await grandchild.abandonable(() => delay(20));
             order.add('grandchild');
           }),
         ).ignore();
@@ -281,7 +281,7 @@ void main() {
       int? runValue;
       int? childValue;
       final child = Job.deferred<int>(
-        (ctx) => ctx.wait(() => gate.future),
+        (ctx) => ctx.abandonable(() => gate.future),
         cancellable: false,
       );
       final parent = Job<void>((ctx) async {
@@ -309,7 +309,7 @@ void main() {
       final parent = Job<void>((ctx) async {
         final child = Job.deferred<void>(
           key: 'child',
-          (ctx) => ctx.wait(() => delay(50)),
+          (ctx) => ctx.abandonable(() => delay(50)),
         );
         final result = ctx.run(child);
         child.cancel().ignore();
@@ -325,7 +325,8 @@ void main() {
   test('a child without a key still shows in the parent outcome', () {
     fakeAsync((async) {
       final parent = Job<void>((ctx) async {
-        final child = Job.deferred<void>((ctx) => ctx.wait(() => delay(50)));
+        final child =
+            Job.deferred<void>((ctx) => ctx.abandonable(() => delay(50)));
         final result = ctx.run(child);
         child.cancel().ignore();
         await result;
@@ -347,7 +348,7 @@ void main() {
           await ctx.run(
             Job.deferred<void>(
               key: 'child$i',
-              (ctx) => ctx.wait(() => delay(10)),
+              (ctx) => ctx.abandonable(() => delay(10)),
             ),
           );
           counts.add(parent.childCount);
@@ -382,7 +383,7 @@ void main() {
       Object? thrown;
       final parent = Job<void>((ctx) async {
         try {
-          await ctx.wait(() => delay(50));
+          await ctx.abandonable(() => delay(50));
         } on Cancelled {
           // The wait gives up first; the body walks on to `run` anyway.
         }
@@ -477,15 +478,15 @@ void main() {
                       .run(
                         Job.deferred<void>(
                           key: 'grandchild',
-                          (ctx) => ctx.wait(() => delay(100)),
+                          (ctx) => ctx.abandonable(() => delay(100)),
                         ),
                       )
                       .ignore();
-                  await ctx.wait(() => delay(100));
+                  await ctx.abandonable(() => delay(100));
                 }),
               )
               .ignore();
-          await ctx.wait(() => delay(100));
+          await ctx.abandonable(() => delay(100));
         },
       );
       async.elapse(const Duration(milliseconds: 10));
@@ -627,10 +628,10 @@ void main() {
       final parent = Job<void>((ctx) async {
         child = Job.deferred<void>(
           key: 'child',
-          (c) => c.wait(() => delay(100)),
+          (c) => c.abandonable(() => delay(100)),
         );
         ctx.run(child).ignore();
-        await ctx.wait(() => delay(10));
+        await ctx.abandonable(() => delay(10));
         throw const Cancelled('enough');
       });
       async.elapse(const Duration(milliseconds: 20));
@@ -645,10 +646,10 @@ void main() {
       final parent = Job<void>((ctx) async {
         child = Job.deferred<void>(
           key: 'child',
-          (c) => c.wait(() => delay(100)),
+          (c) => c.abandonable(() => delay(100)),
         );
         ctx.run(child).ignore();
-        await ctx.wait(() => delay(10));
+        await ctx.abandonable(() => delay(10));
         throw StateError('boom');
       })
         ..ignore();
@@ -681,18 +682,18 @@ void main() {
                     ctx.run(
                       Job.deferred<void>(
                         key: 'late',
-                        (late) => late.wait(() => delay(50)),
+                        (late) => late.abandonable(() => delay(50)),
                       ),
                     );
                   } on Object catch (error) {
                     thrown = error;
                   }
                 });
-                await child.wait(() => delay(100));
+                await child.abandonable(() => delay(100));
               }),
             )
             .ignore();
-        await ctx.wait(() => delay(10));
+        await ctx.abandonable(() => delay(10));
         throw const Cancelled('enough');
       })
         ..ignore();
@@ -712,7 +713,7 @@ void main() {
         // waits for: the rule turns it away, and it is dropped instead.
         child = Job.deferred<void>(key: 'ghost', (c) async {
           log.add('ghost started');
-          await c.wait(() => delay(50));
+          await c.abandonable(() => delay(50));
         });
         try {
           ctx.run(child).ignore();
@@ -752,7 +753,7 @@ void main() {
       final parent = SelfCancellingRulesJob<void>((ctx) async {
         final child = Job.deferred<void>(
           key: 'child',
-          (c) => c.wait(() => delay(1000)),
+          (c) => c.abandonable(() => delay(1000)),
         );
         try {
           ctx.run(child).ignore();
@@ -760,7 +761,7 @@ void main() {
           thrown = error;
         }
         child.done.then((outcome) => childOutcome = outcome).ignore();
-        await ctx.wait(() => delay(50));
+        await ctx.abandonable(() => delay(50));
       })
         ..launch();
       parent.done.then((outcome) => parentOutcome = outcome).ignore();
@@ -825,7 +826,7 @@ void main() {
       // it must stay.
       Object? refusal;
       final live = KeyedJob<int>(key: 'twin', (ctx) async {
-        await ctx.wait(() => delay(100));
+        await ctx.abandonable(() => delay(100));
         return 1;
       });
       final parent = _SwitchableRulesJob<void>((ctx) async {
@@ -860,7 +861,7 @@ void main() {
       // already, and its own context is what throws.
       Object? refusal;
       final live = KeyedJob<int>(key: 'twin', (ctx) async {
-        await ctx.wait(() => delay(100));
+        await ctx.abandonable(() => delay(100));
         return 1;
       });
       final parent = ProbeJob<void>((ctx) async {
@@ -894,7 +895,7 @@ void main() {
       Object? caught;
       final parent = ThrowingRulesJob<int>((ctx) async {
         try {
-          await ctx.wait(() => delay(50));
+          await ctx.abandonable(() => delay(50));
         } on Cancelled {
           // Marked now, and the rule of this domain throws when asked. It
           // must not be asked: the mark turns the child away first, or

@@ -443,14 +443,14 @@ void main() {
         () => Job<int>(
           key: 'thrown',
           observer: ThrowingCancellation(),
-          (ctx) => ctx.wait(load),
+          (ctx) => ctx.abandonable(load),
         ),
       );
       final called = play(
         () => Job<int>(
           key: 'called',
           observer: CallingCancel(),
-          (ctx) => ctx.wait(load),
+          (ctx) => ctx.abandonable(load),
         ),
       );
 
@@ -523,8 +523,8 @@ void main() {
       ]);
     });
 
-    test('the same call through ctx.wait shows 0 ms', () {
-      final lines = timed((ctx) => ctx.wait(() => delay(300)));
+    test('the same call through ctx.abandonable shows 0 ms', () {
+      final lines = timed((ctx) => ctx.abandonable(() => delay(300)));
 
       expect(lines, [
         'cancel',
@@ -550,7 +550,7 @@ void main() {
     test('a held cancellation counts from the end of the section', () {
       final lines = timed((ctx) async {
         await ctx.uncancellable(() => delay(100));
-        await ctx.wait(() => delay(300));
+        await ctx.abandonable(() => delay(300));
       });
 
       expect(lines, [
@@ -592,7 +592,7 @@ void main() {
         () {
           final child = Job.deferred<void>(
             key: 'child',
-            (ctx) => ctx.wait(() => delay(50)),
+            (ctx) => ctx.abandonable(() => delay(50)),
           );
           unawaited(
             Future<void>.delayed(
@@ -680,10 +680,10 @@ void main() {
     );
 
     test(
-      'the same call through ctx.wait shows next to nothing',
+      'the same call through ctx.abandonable shows next to nothing',
       () async {
         final lines = await timed(
-          (ctx) => ctx.wait(() => delay(300)),
+          (ctx) => ctx.abandonable(() => delay(300)),
           cancelAt: 10,
         );
 
@@ -698,7 +698,7 @@ void main() {
         final lines = await timed(
           (ctx) async {
             await ctx.uncancellable(() => delay(100));
-            await ctx.wait(() => delay(300));
+            await ctx.abandonable(() => delay(300));
           },
           cancelAt: 10,
         );
@@ -911,7 +911,11 @@ void main() {
           observer: observer,
           (ctx) async {
             ctx
-                .run(Job.deferred<void>((ctx) => ctx.wait(() => delay(50))))
+                .run(
+                  Job.deferred<void>(
+                    (ctx) => ctx.abandonable(() => delay(50)),
+                  ),
+                )
                 .ignore();
             await delay(10);
             throw StateError('disk full');
@@ -1025,7 +1029,9 @@ void main() {
               Job.deferred<void>((ctx) async {
                 ctx
                     .run(
-                      Job.deferred<void>((ctx) => ctx.wait(() => delay(50))),
+                      Job.deferred<void>(
+                        (ctx) => ctx.abandonable(() => delay(50)),
+                      ),
                     )
                     .ignore();
                 await delay(10);
@@ -1121,7 +1127,7 @@ void main() {
           observer: observer,
           (ctx) async {
             try {
-              await ctx.wait(() => delay(20));
+              await ctx.abandonable(() => delay(20));
             } on Cancelled {
               throw StateError('cleanup step failed');
             }
@@ -1198,7 +1204,7 @@ void main() {
                 await delay(5);
                 throw StateError('unattended');
               });
-            await ctx.wait(() async {
+            await ctx.abandonable(() async {
               await delay(30);
               throw StateError('late wait');
             });
@@ -1279,7 +1285,7 @@ void main() {
           () {
             final child = Job.deferred<void>(
               key: key,
-              (ctx) => ctx.wait(() => delay(50)),
+              (ctx) => ctx.abandonable(() => delay(50)),
             );
             unawaited(
               Future<void>.delayed(
@@ -1342,7 +1348,7 @@ void main() {
 
     test("the job's own cancellation out of work left behind: nobody", () {
       // Both checkpoints run after the job accepted the cancellation: one in
-      // work of unattended, one in the action `wait` let go of.
+      // work of unattended, one in the action `abandonable` let go of.
       Job<void> checking({JobObserver? observer}) => Job<void>(
             observer: observer,
             (ctx) async {
@@ -1350,7 +1356,7 @@ void main() {
                 await delay(20);
                 ctx.check();
               });
-              await ctx.wait(() async {
+              await ctx.abandonable(() async {
                 await delay(20);
                 ctx.check();
               });
@@ -1368,9 +1374,10 @@ void main() {
     });
 
     test('the same cancellation thrown by a callback: onError', () {
-      Job<void> rethrowing({JobObserver? observer}) =>
-          Job<void>(observer: observer, (ctx) => ctx.wait(() => delay(50)))
-            ..whenCancelled((cancelled) => throw cancelled);
+      Job<void> rethrowing({JobObserver? observer}) => Job<void>(
+            observer: observer,
+            (ctx) => ctx.abandonable(() => delay(50)),
+          )..whenCancelled((cancelled) => throw cancelled);
 
       expect(
         quotable(play(() => rethrowing(observer: Answerer()), cancelAt: 10)),
@@ -1420,14 +1427,17 @@ void main() {
       expect(
         quotable(
           play(
-            () => walkingOn(Answerer(), (ctx) => ctx.wait(() => delay(30))),
+            () => walkingOn(
+              Answerer(),
+              (ctx) => ctx.abandonable(() => delay(30)),
+            ),
             cancelAt: 10,
           ),
         ),
         ['cancel', 'zone: Cancelled(manual)', 'outcome: Cancelled(manual)'],
       );
       for (final call in <Future<void> Function(JobContext ctx)>[
-        (ctx) => ctx.wait(pay),
+        (ctx) => ctx.abandonable(pay),
         (ctx) => ctx.uncancellable(pay),
       ]) {
         expect(
@@ -1440,7 +1450,7 @@ void main() {
     test('a wait left behind by a body that ended: an abandoned action', () {
       Job<void> leaving({JobObserver? observer}) => Job<void>(
             observer: observer,
-            (ctx) async => unawaited(ctx.wait(pay)),
+            (ctx) async => unawaited(ctx.abandonable(pay)),
           );
 
       expect(play(() => leaving(observer: Answerer())), [
@@ -1456,13 +1466,13 @@ void main() {
 
     test("a wait left behind, the job's cancellation after the body: nobody",
         () {
-      // The table holds `wait` to the zone only until the body ends. A body
-      // that gives itself up ends as the job accepts its cancellation, and
+      // The table holds `abandonable` to the zone only until the body ends. A
+      // body that gives itself up ends as the job accepts its cancellation, and
       // one from outside may arrive while the job waits for a child.
       expect(
         play(
           () => Job<void>(observer: Answerer(), (ctx) async {
-            unawaited(ctx.wait(() => delay(30)));
+            unawaited(ctx.abandonable(() => delay(30)));
             await delay(10);
             throw const Cancelled('gave up');
           }),
@@ -1474,9 +1484,13 @@ void main() {
           play(
             () => Job<void>(observer: Answerer(), (ctx) async {
               ctx
-                  .run(Job.deferred<void>((ctx) => ctx.wait(() => delay(50))))
+                  .run(
+                    Job.deferred<void>(
+                      (ctx) => ctx.abandonable(() => delay(50)),
+                    ),
+                  )
                   .ignore();
-              unawaited(ctx.wait(() => delay(30)));
+              unawaited(ctx.abandonable(() => delay(30)));
             }),
             cancelAt: 10,
           ),
@@ -1519,7 +1533,7 @@ void main() {
           observer: observer,
           (ctx) async {
             final second = Job.deferred<int>(cancellable: false, (ctx) async {
-              await ctx.wait(() => delay(20));
+              await ctx.abandonable(() => delay(20));
               throw StateError('second');
             });
             if (secondIgnored) {
@@ -1528,7 +1542,7 @@ void main() {
             try {
               await ctx.runAll([
                 Job.deferred<int>((ctx) async {
-                  await ctx.wait(() => delay(10));
+                  await ctx.abandonable(() => delay(10));
                   throw StateError('first');
                 }),
                 second,
@@ -1599,7 +1613,7 @@ void main() {
             await delay(50);
             print('the work ends at $now ms');
           });
-          await ctx.wait(() => delay(100));
+          await ctx.abandonable(() => delay(100));
         }),
         cancelAt: 10,
       );
@@ -1642,7 +1656,7 @@ void main() {
             sending = analytics.send('loaded');
           });
           try {
-            await ctx.wait(() => sending);
+            await ctx.abandonable(() => sending);
           } on Object catch (error) {
             print('caught: $error');
           }
@@ -1674,7 +1688,7 @@ void main() {
           runZonedGuarded(
             () => Job<void>(observer: Answerer(), (ctx) async {
               ctx.unattended(job.start);
-              await ctx.wait(() => delay(1));
+              await ctx.abandonable(() => delay(1));
             }),
             (error, stackTrace) => caught.add('work started from: $error'),
           );
@@ -1758,7 +1772,7 @@ void main() {
                     ctx
                         .run(
                           Job.deferred<void>(
-                            (ctx) => ctx.wait(() => delay(50)),
+                            (ctx) => ctx.abandonable(() => delay(50)),
                           ),
                         )
                         .ignore();

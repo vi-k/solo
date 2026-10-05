@@ -45,7 +45,7 @@ export default defineConfig({
               '`select`, `listen`. Re-exports `solo`.',
             '',
             'Cancellation is cooperative: `cancel()` requests it and the ' +
-              'body answers at a checkpoint -- `ctx.wait`, `ctx.join`, ' +
+              'body answers at a checkpoint -- `ctx.abandonable`, `ctx.join`, ' +
               '`ctx.uncancellable` or `ctx.check` -- and which one it is ' +
               'decides what happens to the operation behind it.',
           ].join('\n'),

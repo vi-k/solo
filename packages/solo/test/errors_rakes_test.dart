@@ -275,7 +275,7 @@ final class _Traced extends Solo<int> with OpenSolo<int>, Desk<int> {
   void checksTheJob(SoloContext<int, int> ctx) => ctx.check();
 
   Future<void> waitsOnTheContext(SoloContext<int, int> ctx) =>
-      ctx.wait(() => stage.start<void>('after', null));
+      ctx.abandonable(() => stage.start<void>('after', null));
 }
 
 String _page() => File('doc/errors.md').readAsStringSync();
@@ -372,10 +372,10 @@ List<String> _frames(StackTrace? trace) => [
           line.replaceFirst(RegExp(r'^#\d+\s+'), '').split(' (').first,
     ];
 
-/// A job that waits on a call named `op` through `ctx.wait`.
+/// A job that waits on a call named `op` through `ctx.abandonable`.
 SoloJob<void> _waits(Bench bench, String key) => bench.run<int, void>(
       key: key,
-      (ctx) => ctx.wait(() => stage.start<void>('op', null)),
+      (ctx) => ctx.abandonable(() => stage.start<void>('op', null)),
     );
 
 /// A job that waits on a call named `op` with a bare `await`.
@@ -477,8 +477,8 @@ void main() {
       _says(
         'The hook is told about every error its jobs run into — the failure '
         'of a body, an error from cleanup or from an operation abandoned by '
-        '`wait`, a rule that threw instead of answering — and it is told '
-        'once for each job',
+        '`abandonable`, a rule that threw instead of answering — and it is '
+        'told once for each job',
       );
       late Bench bench;
       _run((async) {
@@ -647,7 +647,7 @@ void main() {
           RegExp('^- ', multiLine: true).allMatches(_page()),
           hasLength(6),
         );
-        _says('- an operation abandoned by `wait` that fails later;');
+        _says('- an operation abandoned by `abandonable` that fails later;');
         _says(
           '- what the job calls outside its body: a disposer, a '
           '`ctx.onCancel` callback, a `whenCancelled` listener, a state '
@@ -673,7 +673,7 @@ void main() {
         );
       });
 
-      test('an operation abandoned by wait that fails later', () {
+      test('an operation abandoned by abandonable that fails later', () {
         late Bench bench;
         late Job<void> job;
         final ran = _run((async) {
@@ -711,7 +711,7 @@ void main() {
           bench = Bench();
           final job = bench.run<int, void>(key: 'cancelled', (ctx) async {
             ctx.onCancel(() => throw StateError('the callback'));
-            await ctx.wait(() => stage.start<void>('op', null));
+            await ctx.abandonable(() => stage.start<void>('op', null));
           })
             ..whenCancelled((_) => throw StateError('the listener'))
             ..ignore();
@@ -803,13 +803,14 @@ void main() {
               await ctx.runAll([
                 bench.job<int, void>(
                   key: 'first',
-                  (child) => child.wait(() => stage.start<void>('first', null)),
+                  (child) =>
+                      child.abandonable(() => stage.start<void>('first', null)),
                 ),
                 bench.job<int, void>(
                   key: 'second',
                   cancellable: false,
-                  (child) =>
-                      child.wait(() => stage.start<void>('second', null)),
+                  (child) => child
+                      .abandonable(() => stage.start<void>('second', null)),
                 ),
               ]);
             } on Object catch (error) {
@@ -1230,7 +1231,7 @@ void main() {
         final cancelled = journal.run<int, void>(
           key: 'cancelled',
           onCancel: (state, cancelled) => -2,
-          (ctx) => ctx.wait(() => stage.start<void>('op', null)),
+          (ctx) => ctx.abandonable(() => stage.start<void>('op', null)),
         )..ignore();
         async.flushMicrotasks();
         unawaited(cancelled.cancel());
@@ -1314,7 +1315,7 @@ void main() {
         where['the job was created'] = _zoneOf(
           () => controller.run<int, void>(
             key: 'job',
-            (ctx) => ctx.wait(() => stage.start<void>('op', null)),
+            (ctx) => ctx.abandonable(() => stage.start<void>('op', null)),
           ),
         );
         where['the state changed'] = _zoneOf(() {
@@ -1567,13 +1568,13 @@ void main() {
                   .run(
                     bench.job<int, void>(
                       key: name,
-                      (child) =>
-                          child.wait(() => stage.start<void>(name, null)),
+                      (child) => child
+                          .abandonable(() => stage.start<void>(name, null)),
                     ),
                   )
                   .ignore();
             }
-            await ctx.wait(() => stage.start<void>('body', null));
+            await ctx.abandonable(() => stage.start<void>('body', null));
           });
           async.flushMicrotasks();
           final inBody = bench.pending! as SoloPendingJob;
@@ -1719,7 +1720,8 @@ void main() {
             await ctx.run(
               bench.job<int, void>(
                 key: 'child',
-                (child) => child.wait(() => stage.start<void>('op', null)),
+                (child) =>
+                    child.abandonable(() => stage.start<void>('op', null)),
               ),
             );
           });
@@ -1781,7 +1783,7 @@ void main() {
       fakeAsync((async) {
         final snapshots = <String>[];
         for (final body in <Future<void> Function(SoloContext<int, int> ctx)>[
-          (ctx) => ctx.wait(() => stage.start<void>('op', null)),
+          (ctx) => ctx.abandonable(() => stage.start<void>('op', null)),
           (ctx) => stage.start<void>('op', null),
           (ctx) => ctx.join(() => stage.start<void>('op', null)),
         ]) {
@@ -1831,7 +1833,7 @@ void main() {
           final bench = Bench();
           honest = bench.run<int, void>(
             key: 'honest',
-            (ctx) => ctx.wait(() => _delay(300)),
+            (ctx) => ctx.abandonable(() => _delay(300)),
           );
           async.elapse(const Duration(seconds: 1));
           late_ = bench.run<int, void>(key: 'late', (ctx) => _delay(300))
@@ -1867,7 +1869,7 @@ void main() {
       test('the three rows of the table', () {
         expect(rows, {
           '`await Future.delayed(...)`': '290 ms',
-          '`ctx.wait(() => Future.delayed(...))`': '0 ms',
+          '`ctx.abandonable(() => Future.delayed(...))`': '0 ms',
           '`ctx.pause(...)`': '0 ms',
         });
         _says('A 300 ms wait, cancelled 10 ms in');
@@ -1891,10 +1893,10 @@ void main() {
         expect(stage.lines, ['bare ran $number past its cancellation']);
       });
 
-      test('the same wait through ctx.wait and as ctx.pause', () {
+      test('the same wait through ctx.abandonable and as ctx.pause', () {
         _says(
-          'the same call through `ctx.wait` stops waiting at once, and so '
-          'does a delay written as `ctx.pause`',
+          'the same call through `ctx.abandonable` stops waiting at once, and '
+          'so does a delay written as `ctx.pause`',
         );
         _says(
           'Only the first row is a line in the log: the other two stay under '
@@ -1904,7 +1906,7 @@ void main() {
         _run((async) {
           Solo.observer = page.SlowCancellations();
           for (final body in <Future<void> Function(SoloContext<int, int> ctx)>[
-            (ctx) => ctx.wait(() => _delay(300)),
+            (ctx) => ctx.abandonable(() => _delay(300)),
             (ctx) => ctx.pause(const Duration(milliseconds: 300)),
           ]) {
             final job = Bench().run<int, void>(key: 'waits', body)..ignore();
@@ -1988,7 +1990,7 @@ void main() {
                   ),
                 )
                 .ignore();
-            await ctx.wait(() => _delay(1000));
+            await ctx.abandonable(() => _delay(1000));
           })
             ..ignore();
           async.elapse(const Duration(milliseconds: 10));
@@ -2015,7 +2017,10 @@ void main() {
             _Saying('observer', started),
           ]);
           final bench = Bench()
-            ..run<int, void>(key: 'runs', (ctx) => ctx.wait(() => _delay(9)));
+            ..run<int, void>(
+              key: 'runs',
+              (ctx) => ctx.abandonable(() => _delay(9)),
+            );
           queued = bench.run<int, void>(key: 'queued', (ctx) => _delay(300));
           refused = bench.run<int, void>(
             key: 'refused',
@@ -2310,9 +2315,9 @@ void main() {
         expect(ran.errors, ['outcome'], reason: 'reading outcome observes not');
       });
 
-      /// Cancels [job] one microtask after the call behind its `ctx.wait`
-      /// fails: the job has seen the failure, and the body has not thrown it
-      /// yet.
+      /// Cancels [job] one microtask after the call behind its
+      /// `ctx.abandonable` fails: the job has seen the failure, and the body
+      /// has not thrown it yet.
       void failThenCancel(FakeAsync async, Job<Object?> job) {
         stage.fail('fetchName', StateError('no network'));
         scheduleMicrotask(job.cancel);
@@ -2371,8 +2376,8 @@ void main() {
     test('an abandoned call that fails once its job has completed', () {
       _says(
         'Errors from cleanup, cancellation callbacks and operations abandoned '
-        'by `wait` go to the reporting hooks, and the controller is asked to '
-        'answer for them through `onUnanswered`',
+        'by `abandonable` go to the reporting hooks, and the controller is '
+        'asked to answer for them through `onUnanswered`',
       );
       _says(
         'Without an override of it or an installed `Solo.errorHandler`, they '
@@ -2456,7 +2461,7 @@ void main() {
         bench = Bench();
         job = bench.run<int, void>(
           key: 'abandons',
-          (ctx) => ctx.wait(() async {
+          (ctx) => ctx.abandonable(() async {
             await stage.start<void>('op', null);
             ctx.check();
           }),
@@ -2501,7 +2506,7 @@ void main() {
         job = bench.run<int, void>(key: 'parent', (ctx) async {
           child = bench.job<int, void>(
             key: 'child',
-            (c) => c.wait(() => stage.start<void>('op', null)),
+            (c) => c.abandonable(() => stage.start<void>('op', null)),
           );
           unawaited(ctx.run(child));
           await ctx.join(() => stage.start<void>('body', null));
@@ -2882,7 +2887,7 @@ void main() {
         final bench = Bench();
         final job = bench.run<int, int>(key: 'swallows', (ctx) async {
           try {
-            await ctx.wait(() => stage.start<void>('op', null));
+            await ctx.abandonable(() => stage.start<void>('op', null));
           } on Cancelled {
             // caught and not rethrown
           }
@@ -3044,7 +3049,7 @@ void main() {
       SoloJob<void> kept(_Traced traced) => traced.run<int, void>(
             key: 'kept',
             keepWhile: (state) => state < 5,
-            (ctx) => ctx.wait(() => stage.start<void>('op', null)),
+            (ctx) => ctx.abandonable(() => stage.start<void>('op', null)),
           )..ignore();
 
       Cancelled outcomeOf(Job<void> job) => job.outcome! as Cancelled;
@@ -3518,7 +3523,7 @@ void main() {
             camera = first.BroadCamera(Hardware())
               ..run<CameraState, void>(
                 key: 'first',
-                (ctx) => ctx.wait(() => stage.start<void>('op', null)),
+                (ctx) => ctx.abandonable(() => stage.start<void>('op', null)),
               );
           });
           where['the second job was created'] = _zoneOf(() {
@@ -3586,7 +3591,7 @@ void main() {
             camera = page.Camera(Hardware())
               ..run<CameraState, void>(
                 key: 'first',
-                (ctx) => ctx.wait(() => stage.start<void>('op', null)),
+                (ctx) => ctx.abandonable(() => stage.start<void>('op', null)),
               );
           });
           where['the second job was created'] = _zoneOf(() {
@@ -3615,7 +3620,7 @@ void main() {
           final camera = page.Camera(Hardware());
           final job = camera.run<CameraState, void>(key: 'zoom', (ctx) async {
             page.sendZoom(ctx, 2);
-            await ctx.wait(() => stage.start<void>('op', null));
+            await ctx.abandonable(() => stage.start<void>('op', null));
           })
             ..ignore();
           async.flushMicrotasks();
@@ -3654,7 +3659,8 @@ void main() {
                     ctx.each(const Stream<int>.empty(), (c, event) {}),
                 'ctx.uncancellable': () async =>
                     ctx.uncancellable<void>(() async {}),
-                'ctx.wait': () async => ctx.wait<void>(() async {}),
+                'ctx.abandonable': () async =>
+                    ctx.abandonable<void>(() async {}),
                 'ctx.join': () async => ctx.join<void>(() async {}),
                 'ctx.pause': () async => ctx.pause(),
                 'ctx.emit': () async => ctx.emit(1),
@@ -3668,7 +3674,7 @@ void main() {
                 }
               }
             });
-            await ctx.wait(() => stage.start<void>('op', null));
+            await ctx.abandonable(() => stage.start<void>('op', null));
           });
           async.flushTimers();
           _end(async, 'op');
@@ -3683,7 +3689,7 @@ void main() {
               'Job(work) cannot run an uncancellable action inside unattended '
                   'work',
         });
-        expect(let, ['ctx.wait', 'ctx.join', 'ctx.pause', 'ctx.emit']);
+        expect(let, ['ctx.abandonable', 'ctx.join', 'ctx.pause', 'ctx.emit']);
         expect(bench.currentState, 1);
       });
 
@@ -3731,7 +3737,7 @@ void main() {
 
           bench.run<int, void>(key: 'active', (ctx) async {
             captured = ctx;
-            await ctx.wait(() => stage.start<void>('op', null));
+            await ctx.abandonable(() => stage.start<void>('op', null));
           });
           async.flushMicrotasks();
           final whileActive = emit(1);
@@ -3837,7 +3843,7 @@ void main() {
             ctx
               ..emit(1)
               ..onDispose(() async => throw StateError('disposer'));
-            await ctx.wait(() => stage.start<void>('op', null));
+            await ctx.abandonable(() => stage.start<void>('op', null));
           })
             ..ignore();
           async.flushMicrotasks();

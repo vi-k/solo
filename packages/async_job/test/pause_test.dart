@@ -50,7 +50,7 @@ void main() {
   test('the same wait written with Future.delayed leaves its timer', () {
     fakeAsync((async) {
       final job = Job<void>(
-        (ctx) => ctx.wait(() => Future<void>.delayed(second)),
+        (ctx) => ctx.abandonable(() => Future<void>.delayed(second)),
       );
       async.elapse(const Duration(milliseconds: 500));
       job.cancel().ignore();
@@ -128,7 +128,7 @@ void main() {
       final job = runZonedGuarded(
         () => Job<void>((ctx) async {
           await ctx.pause(second);
-          await ctx.wait(() => Completer<void>().future);
+          await ctx.abandonable(() => Completer<void>().future);
         }),
         (error, _) => errors.add(error),
       )!;
@@ -193,7 +193,7 @@ void main() {
             },
           );
         });
-        await ctx.wait(() => Completer<void>().future);
+        await ctx.abandonable(() => Completer<void>().future);
       });
       async.flushMicrotasks();
       job.cancel().ignore();
@@ -215,7 +215,7 @@ void main() {
             log.add('cancelled');
           }
         });
-        await ctx.wait(() => Completer<void>().future);
+        await ctx.abandonable(() => Completer<void>().future);
       });
       async.elapse(const Duration(milliseconds: 500));
       job.cancel().ignore();

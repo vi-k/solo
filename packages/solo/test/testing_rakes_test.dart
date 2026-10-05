@@ -166,7 +166,7 @@ final class _Plain extends Solo<ProfileState> {
         (ctx) async {
           ctx.emit(const Loading());
           final limit = this.limit;
-          final name = await ctx.wait(
+          final name = await ctx.abandonable(
             () => limit == null
                 ? api.fetchName()
                 : api.fetchName().timeout(limit),
@@ -702,8 +702,8 @@ void main() {
 
         expect(whenOver, '$_passed, []');
         expect(_errors(run), ['StateError: no network', _tooLate]);
-        _says('or close the controller on it, and `ctx.wait` lets go of the '
-            'call');
+        _says('or close the controller on it, and `ctx.abandonable` lets go of '
+            'the call');
       });
 
       test('Solo.errorHandler takes it in place of the zone', () async {

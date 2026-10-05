@@ -35,7 +35,7 @@ void main() {
             Job.deferred<void>(key: 'child', (c) async => childRan = true),
           );
         });
-        await ctx.wait(() => delay(1));
+        await ctx.abandonable(() => delay(1));
       });
       async.flushTimers();
       expect(job.outcome, isA<Done<void>>());
@@ -62,7 +62,7 @@ void main() {
             Job.deferred<void>(key: 'branch', (c) async => branchRan = true),
           ]);
         });
-        await ctx.wait(() => delay(1));
+        await ctx.abandonable(() => delay(1));
       });
       async.flushTimers();
       expect(job.outcome, isA<Done<void>>());
@@ -87,7 +87,7 @@ void main() {
             await delay(50);
           }),
         );
-        await ctx.wait(() => delay(100));
+        await ctx.abandonable(() => delay(100));
       });
       async.elapse(const Duration(milliseconds: 5));
       job.cancel();
@@ -103,19 +103,19 @@ void main() {
     expect(actionRan, isFalse);
   });
 
-  test('wait inside unattended work is allowed', () {
+  test('abandonable inside unattended work is allowed', () {
     final journal = JobJournal();
     var reached = false;
     fakeAsync((async) {
       Job<void>(key: 'j', observer: journal, (ctx) async {
         ctx.unattended(() async {
-          await ctx.wait(() => delay(5));
+          await ctx.abandonable(() => delay(5));
           // The line after the wait, not just the wait itself: a refusal
           // is thrown *into* the work, and without this the test would
           // not tell a ban from a permission.
           reached = true;
         });
-        await ctx.wait(() => delay(50));
+        await ctx.abandonable(() => delay(50));
       });
       async.flushTimers();
     });
@@ -132,7 +132,7 @@ void main() {
           await ctx.join(() => delay(5));
           reached = true;
         });
-        await ctx.wait(() => delay(50));
+        await ctx.abandonable(() => delay(50));
       });
       async.flushTimers();
     });
@@ -152,10 +152,10 @@ void main() {
                   Job.deferred<void>(key: 'c', (c) async => childRan = true),
                 )
                 .ignore();
-            await inner.wait(() => delay(1));
+            await inner.abandonable(() => delay(1));
           });
         });
-        await ctx.wait(() => delay(30));
+        await ctx.abandonable(() => delay(30));
       });
       async.flushTimers();
     });
@@ -172,11 +172,11 @@ void main() {
     fakeAsync((async) {
       a = Job<void>(key: 'a', observer: journal, (ctx) async {
         ctxA = ctx;
-        await ctx.wait(() => delay(100));
+        await ctx.abandonable(() => delay(100));
       });
       Job<void>(key: 'b', observer: journal, (ctx) async {
         ctxB = ctx;
-        await ctx.wait(() => delay(100));
+        await ctx.abandonable(() => delay(100));
       });
       async.elapse(const Duration(milliseconds: 5));
       ctxA.unattended(
@@ -208,7 +208,7 @@ void main() {
             ctx.unattended(() {
               Job<void>(key: 'stray', (c) async => throw StateError('stray'));
             });
-            await ctx.wait(() => delay(1));
+            await ctx.abandonable(() => delay(1));
           });
           async.flushTimers();
         });
@@ -236,7 +236,7 @@ void main() {
                 );
               }),
             );
-            await ctx.wait(() => delay(1));
+            await ctx.abandonable(() => delay(1));
           });
           async.flushTimers();
         });
@@ -271,7 +271,7 @@ void main() {
                   Job<void>(key: 'stray', leak);
                 }
               });
-              await ctx.wait(() => delay(1));
+              await ctx.abandonable(() => delay(1));
             });
             async.flushTimers();
           });
@@ -324,7 +324,7 @@ void main() {
               ctx.unattended(
                 nested ? () => ctx.unattended(startIt) : startIt,
               );
-              await ctx.wait(() => delay(1));
+              await ctx.abandonable(() => delay(1));
             });
             async.flushTimers();
           });
@@ -352,7 +352,7 @@ void main() {
           runZonedGuarded(
             () => Job<void>(key: 'b', observer: journal, (ctx) async {
               ctxB = ctx;
-              await ctx.wait(() => delay(100));
+              await ctx.abandonable(() => delay(100));
             }),
             (error, stackTrace) => caught.add('zone of b: $error'),
           );
@@ -368,7 +368,7 @@ void main() {
                 ).start(),
               ),
             );
-            await ctx.wait(() => delay(1));
+            await ctx.abandonable(() => delay(1));
           });
           async.flushTimers();
         });
@@ -393,11 +393,11 @@ void main() {
       fakeAsync((async) {
         a = Job<void>(key: 'a', observer: journal, (ctx) async {
           ctxA = ctx;
-          await ctx.wait(() => delay(100));
+          await ctx.abandonable(() => delay(100));
         });
         Job<void>(key: 'b', observer: journal, (ctx) async {
           ctxB = ctx;
-          await ctx.wait(() => delay(100));
+          await ctx.abandonable(() => delay(100));
         });
         async.elapse(const Duration(milliseconds: 5));
         ctxA.unattended(
@@ -443,7 +443,7 @@ void main() {
             thrown = error;
           }
         });
-        await ctx.wait(() => delay(10));
+        await ctx.abandonable(() => delay(10));
       })
         ..ignore()
         ..launch();

@@ -429,7 +429,7 @@ void main() {
           final job = Job<void>(cancellable: cancellable, (ctx) async {
             ctx.onCancel(() => trace.add('onCancel'));
             for (final checkpoint in <Future<void> Function()>[
-              () => ctx.wait(() => delay(50)),
+              () => ctx.abandonable(() => delay(50)),
               () async => ctx.check(),
             ]) {
               try {
@@ -598,11 +598,11 @@ void main() {
     });
 
     test(
-        'ctx.wait stops the waiting as they do, and still hands that '
+        'ctx.abandonable stops the waiting as they do, and still hands that '
         'database to its dispose after the job has ended', () {
       fakeAsync((async) {
         final job = Job<void>((ctx) async {
-          await ctx.wait(Database.open, dispose: (db) => db.close());
+          await ctx.abandonable(Database.open, dispose: (db) => db.close());
         });
         async.elapse(const Duration(milliseconds: 10));
         job.cancel().then((_) => Database.events.add('job ended')).ignore();

@@ -27,7 +27,7 @@ void _afterMicrotasks(int depth, void Function() action) {
 void main() {
   test('cancel is idempotent', () {
     fakeAsync((async) {
-      final job = Job<void>((ctx) => ctx.wait(() => delay(50)));
+      final job = Job<void>((ctx) => ctx.abandonable(() => delay(50)));
       async.elapse(const Duration(milliseconds: 10));
       job.cancel().ignore();
       final first = job.outcome;
@@ -56,7 +56,7 @@ void main() {
       var settled = false;
       final job = Job<void>(
         cancellable: false,
-        (ctx) => ctx.wait(() => delay(50)),
+        (ctx) => ctx.abandonable(() => delay(50)),
       );
       async.elapse(const Duration(milliseconds: 10));
       job.cancel().then((_) => settled = true).ignore();
@@ -72,19 +72,19 @@ void main() {
   test('uncancellable holds the cancellation until the step is over', () {
     fakeAsync((async) {
       var stepEnded = false;
-      var afterWait = false;
+      var afterAbandonable = false;
       final job = Job<void>((ctx) async {
         await ctx.uncancellable(() => delay(50));
         stepEnded = true;
-        await ctx.wait(() => delay(10));
-        afterWait = true;
+        await ctx.abandonable(() => delay(10));
+        afterAbandonable = true;
       });
       async.elapse(const Duration(milliseconds: 10));
       job.cancel().ignore();
       async.flushTimers();
       expect(stepEnded, isTrue, reason: 'the step ran to its end');
       expect(
-        afterWait,
+        afterAbandonable,
         isFalse,
         reason: 'the held cancellation lands at the next context call',
       );
@@ -101,7 +101,7 @@ void main() {
       job = Job<void>((ctx) async {
         ctx.onCancel(() => callbackFired = true);
         child = Job.deferred<void>(
-          (childCtx) => childCtx.wait(() => delay(200)),
+          (childCtx) => childCtx.abandonable(() => delay(200)),
         );
         ctx.run(child).ignore();
         await ctx.uncancellable(() async {
@@ -158,7 +158,7 @@ void main() {
         } on FormatException {
           caught = true;
         }
-        await ctx.wait(() => delay(10));
+        await ctx.abandonable(() => delay(10));
       });
       async.elapse(const Duration(milliseconds: 10));
       job.cancel().ignore();
@@ -175,7 +175,7 @@ void main() {
         cancellable: false,
         (ctx) async {
           await ctx.uncancellable(() => delay(10));
-          await ctx.wait(() => delay(50));
+          await ctx.abandonable(() => delay(50));
           reached = true;
         },
       );
@@ -193,7 +193,7 @@ void main() {
   test('whenCancelled notifies before the job finishes', () {
     fakeAsync((async) {
       final order = <String>[];
-      final job = Job<void>((ctx) => ctx.wait(() => delay(50)))
+      final job = Job<void>((ctx) => ctx.abandonable(() => delay(50)))
         ..whenCancelled((_) => order.add('cancelled'));
       job.done.then((_) => order.add('done')).ignore();
       async.elapse(const Duration(milliseconds: 10));
@@ -230,7 +230,7 @@ void main() {
     fakeAsync((async) {
       late final Job<void> child;
       final parent = Job<void>((ctx) async {
-        child = Job.deferred<void>((ctx) => ctx.wait(() => delay(100)));
+        child = Job.deferred<void>((ctx) => ctx.abandonable(() => delay(100)));
         await ctx.run(child);
       });
       async.elapse(const Duration(milliseconds: 10));
@@ -244,7 +244,7 @@ void main() {
   test('the future of cancel completes after the job', () {
     fakeAsync((async) {
       final order = <String>[];
-      final job = Job<void>((ctx) => ctx.wait(() => delay(50)));
+      final job = Job<void>((ctx) => ctx.abandonable(() => delay(50)));
       job.done.then((_) => order.add('done')).ignore();
       async.elapse(const Duration(milliseconds: 10));
       job.cancel().then((_) => order.add('cancel')).ignore();
@@ -264,7 +264,7 @@ void main() {
       fakeAsync((async) {
         late final Job<int> job;
         job = Job<int>((ctx) async {
-          await ctx.wait(() => delay(10));
+          await ctx.abandonable(() => delay(10));
           _afterMicrotasks(depth, () => job.cancel().ignore());
           return 42;
         });
@@ -294,7 +294,7 @@ void main() {
         } on FormatException {
           // Caught: the section is over, and the job is cancellable again.
         }
-        await ctx.wait(() => delay(50));
+        await ctx.abandonable(() => delay(50));
         reached = true;
       });
       async.elapse(const Duration(milliseconds: 20));
@@ -317,11 +317,11 @@ void main() {
             .run(
               Job.deferred<void>(key: 'child', (child) async {
                 child.onCancel(() => parent.cancel().ignore());
-                await child.wait(() => delay(100));
+                await child.abandonable(() => delay(100));
               }),
             )
             .ignore();
-        await ctx.wait(() => delay(100));
+        await ctx.abandonable(() => delay(100));
       });
       async.elapse(const Duration(milliseconds: 10));
       try {
@@ -343,7 +343,7 @@ void main() {
       Object? thrown;
       final late_ = Job.deferred<void>(
         key: 'late',
-        (late) => late.wait(() => delay(50)),
+        (late) => late.abandonable(() => delay(50)),
       );
       late Job<void> parent;
       parent = Job<void>((ctx) async {
@@ -357,11 +357,11 @@ void main() {
                     thrown = error;
                   }
                 });
-                await child.wait(() => delay(100));
+                await child.abandonable(() => delay(100));
               }),
             )
             .ignore();
-        await ctx.wait(() => delay(100));
+        await ctx.abandonable(() => delay(100));
       })
         ..ignore();
       async.elapse(const Duration(milliseconds: 10));
@@ -396,7 +396,7 @@ void main() {
           removeSecond();
         });
         removeSecond = ctx.onCancel(() => seen.add('second'));
-        await ctx.wait(() => delay(100));
+        await ctx.abandonable(() => delay(100));
       })
         ..ignore();
       async.elapse(const Duration(milliseconds: 10));
@@ -416,7 +416,7 @@ void main() {
           );
       final job = ProbeJob<void>((ctx) async {
         await ctx.uncancellable(() => delay(50));
-        await ctx.wait(() => delay(50));
+        await ctx.abandonable(() => delay(50));
       })
         ..ignore()
         ..launch();
@@ -451,7 +451,7 @@ void main() {
     fakeAsync((async) {
       final job = RulesJob<void>(cancellable: false, (ctx) async {
         ctx.breakRule('is not Ready');
-        await ctx.wait(() => delay(100));
+        await ctx.abandonable(() => delay(100));
       })
         ..ignore()
         ..launch();
@@ -480,11 +480,11 @@ void main() {
                     ),
                   ),
                 );
-                await child.wait(() => delay(100));
+                await child.abandonable(() => delay(100));
               }),
             )
             .ignore();
-        await ctx.wait(() => delay(100));
+        await ctx.abandonable(() => delay(100));
       })
         ..ignore()
         ..launch();
@@ -517,7 +517,7 @@ void main() {
           await delay(50);
           order.add('section ends');
         });
-        await ctx.wait(() => delay(20));
+        await ctx.abandonable(() => delay(20));
         order.add('body ends');
       })
         ..ignore();
@@ -603,7 +603,7 @@ void main() {
       final job = ProbeJob<void>(
         key: 'job',
         observer: journal,
-        (ctx) async => ctx.wait(() => delay(50)),
+        (ctx) async => ctx.abandonable(() => delay(50)),
       )..launch();
       async.elapse(const Duration(milliseconds: 10));
       // An engine of a domain builds its own cancellation, and it may
@@ -629,7 +629,7 @@ void main() {
   test('a job finished by hand ends with the cancellation it accepted', () {
     fakeAsync((async) {
       final job = ProbeJob<int>(key: 'job', (ctx) async {
-        await ctx.wait(() => delay(100));
+        await ctx.abandonable(() => delay(100));
         return 1;
       })
         ..launch();
@@ -655,7 +655,7 @@ void main() {
       () {
         fakeAsync((async) {
           final job = ProbeJob<int>(key: 'job', (ctx) async {
-            await ctx.wait(() => delay(100));
+            await ctx.abandonable(() => delay(100));
             return 1;
           })
             ..launch();

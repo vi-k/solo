@@ -31,7 +31,7 @@ void main() {
         leaked = ctx;
       });
       async.flushTimers();
-      expect(errorFrom(leaked.wait(action), async), isStateError);
+      expect(errorFrom(leaked.abandonable(action), async), isStateError);
       expect(errorFrom(leaked.join(action), async), isStateError);
       expect(errorFrom(leaked.uncancellable(action), async), isStateError);
       expect(began, isFalse, reason: 'none of them begins the action');
@@ -52,7 +52,10 @@ void main() {
       async.elapse(const Duration(milliseconds: 50));
       job.cancel();
       async.flushTimers();
-      expect(errorFrom(leaked.wait(() => delay(10)), async), isStateError);
+      expect(
+        errorFrom(leaked.abandonable(() => delay(10)), async),
+        isStateError,
+      );
       expect(errorFrom(leaked.join(() => delay(10)), async), isStateError);
       expect(
         errorFrom(leaked.uncancellable(() => delay(10)), async),

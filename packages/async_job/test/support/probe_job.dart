@@ -56,7 +56,7 @@ final class ProbeContext extends JobContextBase {
   /// protected door, with nobody looking at its outcome.
   void adopt(Job<Object?> child) => startChild(child);
 
-  /// Registers [callback] raw, unguarded, the way the race inside `wait`
+  /// Registers [callback] raw, unguarded, the way the race inside `abandonable`
   /// does.
   void Function() onCancelRaw(void Function() callback) =>
       addCancelCallback(callback);

@@ -168,15 +168,15 @@ the zone, as in
 the errors page. `ignore()` on the child keeps it out of the zone.
 
 Events are delivered one at a time, and a cancellation waits for the callback
-in flight. That is why waits belong to the callback's context: `childCtx.wait`
-ends with the cancellation the moment it arrives and leaves the action running
-alone, while a plain `await` ends only when its own future does — and until the
-callback returns, the child and the parent are still running, the queue is held
-and `close()` does not come back. Do not await the child's own completion or
-its `cancel()` inside an event callback: that is a deadlock. The child waits
-for the callback to return, the callback waits for the child, and the parent
-waits for the child — nothing moves again. To stop the subscription from inside
-a callback, call `cancel()` and do not await it.
+in flight. That is why waits belong to the callback's context:
+`childCtx.abandonable` ends with the cancellation the moment it arrives and
+leaves the action running alone, while a plain `await` ends only when its own
+future does — and until the callback returns, the child and the parent are
+still running, the queue is held and `close()` does not come back. Do not await
+the child's own completion or its `cancel()` inside an event callback: that is
+a deadlock. The child waits for the callback to return, the callback waits for
+the child, and the parent waits for the child — nothing moves again. To stop
+the subscription from inside a callback, call `cancel()` and do not await it.
 
 The child does not wait for the source: the future the subscription's
 `cancel()` returns is the cleanup of the source, which this job does not own.

@@ -11,7 +11,8 @@ import 'children_stubs.dart';
 Job<void> overview() {
   final job = Job<void>((ctx) async {
     // A child: the body starts it, waits for it, and cancels along with it.
-    final rows = await ctx.run(Job.deferred<int>((c) => c.wait(loadRows)));
+    final rows =
+        await ctx.run(Job.deferred<int>((c) => c.abandonable(loadRows)));
 
     // A stream: one event at a time, in a child of its own.
     final saving = ctx.each(events, (c, e) => c.join(() => save(e)));
@@ -26,7 +27,7 @@ Job<void> overview() {
 
 Job<void> children() {
   final parent = Job<void>((ctx) async {
-    final child = Job.deferred<int>((ctx) => ctx.wait(load));
+    final child = Job.deferred<int>((ctx) => ctx.abandonable(load));
     final rows = await ctx.run(child);
     ctx.log('$rows rows');
   });
@@ -35,8 +36,8 @@ Job<void> children() {
 
 Job<void> childNotAwaited() {
   final parent = Job<void>((ctx) async {
-    final rows = ctx.run(Job.deferred<int>((c) => c.wait(loadRows)));
-    final child = Job.deferred<void>((c) => c.wait(warmCache));
+    final rows = ctx.run(Job.deferred<int>((c) => c.abandonable(loadRows)));
+    final child = Job.deferred<void>((c) => c.abandonable(warmCache));
     ctx.run(child).ignore();
     ctx.log('${await rows} rows');
   });
@@ -57,10 +58,10 @@ Job<void> level(int depth) {
 Job<void> exportWithFutureWait() {
   final parent = Job<void>((ctx) async {
     final rows = Job.deferred<Source>(
-      (ctx) => ctx.wait(openRows, discard: (source) => source.close()),
+      (ctx) => ctx.abandonable(openRows, discard: (source) => source.close()),
     );
     final images = Job.deferred<Source>(
-      (ctx) => ctx.wait(openImages, discard: (source) => source.close()),
+      (ctx) => ctx.abandonable(openImages, discard: (source) => source.close()),
     );
 
     final sources = await Future.wait([ctx.run(rows), ctx.run(images)]);
@@ -74,10 +75,10 @@ Job<void> exportWithFutureWait() {
 Job<void> exportWithEagerError() {
   final parent = Job<void>((ctx) async {
     final rows = Job.deferred<Source>(
-      (ctx) => ctx.wait(openRows, discard: (source) => source.close()),
+      (ctx) => ctx.abandonable(openRows, discard: (source) => source.close()),
     );
     final images = Job.deferred<Source>(
-      (ctx) => ctx.wait(openImages, discard: (source) => source.close()),
+      (ctx) => ctx.abandonable(openImages, discard: (source) => source.close()),
     );
 
     try {
@@ -97,10 +98,10 @@ Job<void> exportWithEagerError() {
 Job<void> exportWithWait() {
   final parent = Job<void>((ctx) async {
     final rows = Job.deferred<Source>(
-      (ctx) => ctx.wait(openRows, discard: (source) => source.close()),
+      (ctx) => ctx.abandonable(openRows, discard: (source) => source.close()),
     );
     final images = Job.deferred<Source>(
-      (ctx) => ctx.wait(openImages, discard: (source) => source.close()),
+      (ctx) => ctx.abandonable(openImages, discard: (source) => source.close()),
     );
 
     final sources = await [
@@ -114,16 +115,18 @@ Job<void> exportWithWait() {
 
 Job<List<int>> loadAll() => Job<List<int>>((ctx) async {
       final values = await ctx.runAll([
-        Job.deferred<int>((ctx) => ctx.wait(loadRows)),
-        Job.deferred<int>((ctx) => ctx.wait(loadExtra)),
+        Job.deferred<int>((ctx) => ctx.abandonable(loadRows)),
+        Job.deferred<int>((ctx) => ctx.abandonable(loadExtra)),
       ]);
       return values;
     });
 
 Job<Source> warmingBranch() {
   final branch = Job.deferred<Source>((ctx) async {
-    final cache = await ctx.wait(openCache, dispose: (cache) => cache.close());
-    final rows = await ctx.wait(openRows, discard: (source) => source.close());
+    final cache =
+        await ctx.abandonable(openCache, dispose: (cache) => cache.close());
+    final rows =
+        await ctx.abandonable(openRows, discard: (source) => source.close());
     await ctx.join(() => cache.warm(rows));
 
     return rows;
@@ -135,7 +138,7 @@ Job<Source> lockedBranch() {
   final branch = Job.deferred<Source>((ctx) async {
     final locked = Job.deferred<Source>((ctx) async {
       await ctx.join(Lock.acquire, dispose: (lock) => lock.release());
-      return ctx.wait(openRows, discard: (source) => source.close());
+      return ctx.abandonable(openRows, discard: (source) => source.close());
     });
 
     return ctx.run(locked, discard: (source) => source.close());
@@ -146,7 +149,7 @@ Job<Source> lockedBranch() {
 Job<void> refusingBranch() {
   final parent = Job<void>((ctx) async {
     final images = Job.deferred<Source>(
-      (ctx) => ctx.wait(openImages, discard: (source) => source.close()),
+      (ctx) => ctx.abandonable(openImages, discard: (source) => source.close()),
     );
     final rows = Job.deferred<Source>(cancellable: false, (ctx) => openRows());
     try {
@@ -261,7 +264,7 @@ Job<String> loadedAwaitingParsed() {
 /// Chains: the continuation receives what its source hands out.
 (Job<Source>, Job<void>) archiveOpened() {
   final opened = Job<Source>(
-    (ctx) => ctx.wait(openRows, discard: (rows) => rows.close()),
+    (ctx) => ctx.abandonable(openRows, discard: (rows) => rows.close()),
   );
   final archived = opened.then<void>((ctx, rows) async {
     ctx.onDispose(rows.close);
@@ -273,7 +276,7 @@ Job<String> loadedAwaitingParsed() {
 /// The first attempt of the chain, and the version where the source is the
 /// only child; [adoptTheTail] picks the first.
 Future<void> reportedRows({required bool adoptTheTail}) async {
-  final child = Job.deferred<int>((ctx) => ctx.wait(load));
+  final child = Job.deferred<int>((ctx) => ctx.abandonable(load));
   final tail = child.then<void>((ctx, rows) => report(rows));
 
   if (adoptTheTail) {
@@ -296,7 +299,8 @@ Future<void> reportedRows({required bool adoptTheTail}) async {
 
 Job<void> twoChildrenInARow() {
   final parent = Job<void>((ctx) async {
-    final rows = await ctx.run(Job.deferred<int>((ctx) => ctx.wait(load)));
+    final rows =
+        await ctx.run(Job.deferred<int>((ctx) => ctx.abandonable(load)));
     await ctx.run(Job.deferred<void>((ctx) => ctx.join(() => report(rows))));
   });
   return parent;

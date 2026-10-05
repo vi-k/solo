@@ -90,15 +90,15 @@ final class HandoverDisowning extends Solo<AppState>
 
 /// The first attempt of "When the release happens": the wait that lets go
 /// of the call.
-final class TempWaiter extends Solo<AppState> with OpenSolo<AppState>, Desk {
-  TempWaiter() : super(const Idle());
+final class TempAbandoner extends Solo<AppState> with OpenSolo<AppState>, Desk {
+  TempAbandoner() : super(const Idle());
 
   /// Not on the page: the method around the statement.
   SoloJob<void> write() => run<Idle, void>(
         key: 'temp',
         (ctx) async {
           // Deleted whatever happens: dispose runs on every outcome.
-          await ctx.wait(openTemp, dispose: (file) => file.delete());
+          await ctx.abandonable(openTemp, dispose: (file) => file.delete());
         },
       );
 }

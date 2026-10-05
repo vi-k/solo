@@ -50,7 +50,7 @@ sealed class SoloPending {
 /// engine knows.
 ///
 /// It says what the engine knows and stops there. A long cancellation
-/// does not prove a forgotten `JobContext.wait`: the same wait happens
+/// does not prove a forgotten `JobContext.abandonable`: the same wait happens
 /// while a resource is being released or inside a section the body asked
 /// not to be interrupted in, and it happens for reasons outside the
 /// engine altogether.

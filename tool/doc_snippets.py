@@ -2089,7 +2089,7 @@ Future<void> main() async {
   auth.revoke('signed out elsewhere');
   await job.done;
   // What `join` buys: the job ends after the build it cannot stop returns,
-  // not at the cancellation. With `ctx.wait` the count here would be 0.
+  // not at the cancellation. With `ctx.abandonable` the count here would be 0.
   if (reports.built != 1) {
     throw StateError('join must end the job only after the build returns');
   }

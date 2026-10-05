@@ -86,8 +86,8 @@ catch it, a value that arrives once the waiting has stopped goes to nobody, and
 a database that opens late stays open. `ctx.join` hands a database that opens
 after the job's cancellation to its `dispose` all the same, with no code
 written for the cancellation, and the job ends once the database is closed.
-`ctx.wait` stops the waiting as they do and still hands that database to its
-`dispose` when it opens, even after the job has ended.
+`ctx.abandonable` stops the waiting as they do and still hands that database to
+its `dispose` when it opens, even after the job has ended.
 
 `async_job` does not provide state management, a task queue or scheduling
 rules: [solo](#solo) adds them.
@@ -167,8 +167,8 @@ final outcome = await job.done; // Cancelled(manual)
 - **`ctx.join(() => database.migrate(stop))`** waits for the migration to
   finish. On cancellation, the token asks the migration to stop, and `join`
   waits for it to stop before the job closes the database. If you need to stop
-  waiting immediately on cancellation, use `ctx.wait`. It stops the waiting
-  without stopping the operation itself.
+  waiting immediately on cancellation, use `ctx.abandonable`. It stops the
+  waiting without stopping the operation itself.
 - **`ctx.uncancellable(() async { ... })`** keeps the last step whole. The step
   writes the schema version and then runs `database.readyFlag()` as a child.
   Once the job has accepted a cancellation, `ctx.run` throws that cancellation

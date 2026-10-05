@@ -132,7 +132,7 @@ void main() {
         neighbor = Job.deferred<void>((childContext) async {});
         final thirdGate = Completer<void>();
         third = Job.deferred<void>((childContext) async {
-          await childContext.wait(() => thirdGate.future);
+          await childContext.abandonable(() => thirdGate.future);
         });
         ctx.run(child).ignore();
         ctx.run(neighbor).ignore();
@@ -422,7 +422,7 @@ void main() {
       final job = ProbeJob<void>(
         observer: ErrorObserver(errors),
         (ctx) async {
-          await [ctx.wait(Future<void>.value)].wait;
+          await [ctx.abandonable(Future<void>.value)].wait;
         },
       )
         ..whenCancelled((value) => expect(value, same(cancellation)))
@@ -827,7 +827,7 @@ void main() {
         (ctx) async {
           await [
             Future<void>.error(failure, StackTrace.current),
-            ctx.wait(() => pending.future),
+            ctx.abandonable(() => pending.future),
           ].wait;
         },
       )..launch();
@@ -858,7 +858,7 @@ void main() {
           final job = ProbeJob<void>((ctx) async {
             await [
               Future<void>.error(failure, StackTrace.current),
-              ctx.wait(() => pending.future),
+              ctx.abandonable(() => pending.future),
             ].wait;
           })
             ..launch();
@@ -915,9 +915,9 @@ void main() {
           (ctx) async => throw StateError('q'),
         );
         final late = Job.deferred<String>((ctx) async {
-          await ctx.wait(() => slow.future);
+          await ctx.abandonable(() => slow.future);
 
-          return ctx.wait(() => 'db', discard: closed.add);
+          return ctx.abandonable(() => 'db', discard: closed.add);
         });
         final job = Job<void>(observer: ErrorObserver(<Object>[]), (ctx) async {
           final branches = [ctx.run(quick), ctx.run(late)];
@@ -1009,12 +1009,13 @@ void main() {
       expect(called, isFalse);
     });
 
-    fakeAsyncTest('wait disposal runs once before the job finishes', () async {
+    fakeAsyncTest('abandonable disposal runs once before the job finishes',
+        () async {
       final resource = Object();
       var closed = 0;
       const cancelled = Cancelled('dispose');
       final job = Job<void>((ctx) async {
-        await ctx.wait(
+        await ctx.abandonable(
           () async => resource,
           dispose: (value) {
             expect(value, same(resource));

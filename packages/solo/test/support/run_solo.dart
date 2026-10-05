@@ -58,6 +58,6 @@ void runSoloStream(
 Future<void> delay(int milliseconds) =>
     Future<void>.delayed(Duration(milliseconds: milliseconds));
 
-/// A cancellation-aware delay: [JobContext.wait] around [delay].
+/// A cancellation-aware delay: [JobContext.abandonable] around [delay].
 Future<void> pause(SoloContext<TestState, TestState> ctx, int milliseconds) =>
-    ctx.wait(() => delay(milliseconds));
+    ctx.abandonable(() => delay(milliseconds));

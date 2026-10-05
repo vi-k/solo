@@ -421,7 +421,8 @@ void main() {
 
     final job = controller.perform(
       keepWhile: (state) => state.progress < 10,
-      (ctx) => ctx.wait(() => Future<void>.delayed(const Duration(days: 1))),
+      (ctx) =>
+          ctx.abandonable(() => Future<void>.delayed(const Duration(days: 1))),
     )..ignore();
     await Future<void>.delayed(Duration.zero);
 

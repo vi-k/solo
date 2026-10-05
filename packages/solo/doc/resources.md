@@ -30,8 +30,8 @@ member you pick decides who releases the resource and when:
 
 | Member | What it releases, and when |
 | --- | --- |
-| `dispose:` on `ctx.wait`, `ctx.join` or `ctx.run` | that call's value, whatever the outcome |
-| `discard:` on `ctx.wait`, `ctx.join` or `ctx.run` | that call's value, and only if the job ends cancelled or failed |
+| `dispose:` on `ctx.abandonable`, `ctx.join` or `ctx.run` | that call's value, whatever the outcome |
+| `discard:` on `ctx.abandonable`, `ctx.join` or `ctx.run` | that call's value, and only if the job ends cancelled or failed |
 | `ctx.onDispose(callback)` | whatever the callback closes, whatever the outcome |
 | `ctx.onDiscard(callback)` | whatever the callback closes, and only if the job ends cancelled or failed |
 | `ctx.disown(value)` | nothing — it drops the registration one of those three calls made for the value |
@@ -93,12 +93,13 @@ SoloJob<void> load() => run<Idle, void>(
     );
 ```
 
-`wait` and `join` take a `dispose` callback for a resource that belongs to the
-job, and the rule is one: a value that did not reach the body is released on
-the spot; a value that did goes on the cleanup stack and is released when the
-job ends. Here the database belongs to the load operation and only its rows
-become controller state, so `dispose` closes it on success, on failure and on
-cancellation — including the cancellation that keeps the value from the body.
+`abandonable` and `join` take a `dispose` callback for a resource that belongs
+to the job, and the rule is one: a value that did not reach the body is
+released on the spot; a value that did goes on the cleanup stack and is
+released when the job ends. Here the database belongs to the load operation and
+only its rows become controller state, so `dispose` closes it on success, on
+failure and on cancellation — including the cancellation that keeps the value
+from the body.
 
 `join` awaits that release before it throws, so the next job in the queue
 starts with the database already closed. Register each release once: adding
@@ -119,13 +120,13 @@ final sub = await ctx.join(
 );
 ```
 
-`wait` and `join` take an action that returns without waiting, so a synchronous
-creation registers on the call like any other. What it buys over `listen` with
-`onDispose` under it is the checkpoint the call makes before its action: it
-asks first whether the job has been cancelled, and throws instead of starting.
-With a cancellation already standing — one an `uncancellable` section above has
-just let through, say — the subscription is never made at all, where that pair
-makes it and cancels it during cleanup. The page
+`abandonable` and `join` take an action that returns without waiting, so a
+synchronous creation registers on the call like any other. What it buys over
+`listen` with `onDispose` under it is the checkpoint the call makes before its
+action: it asks first whether the job has been cancelled, and throws instead of
+starting. With a cancellation already standing — one an `uncancellable` section
+above has just let through, say — the subscription is never made at all, where
+that pair makes it and cancels it during cleanup. The page
 [Cancellation](cancellation.md) is about those checkpoints.
 
 ## Returning a resource to the caller
@@ -302,16 +303,16 @@ the queue must not find it, and neither must `close()` when it returns.
 
 ```dart
 // Deleted whatever happens: dispose runs on every outcome.
-await ctx.wait(openTemp, dispose: (file) => file.delete());
+await ctx.abandonable(openTemp, dispose: (file) => file.delete());
 ```
 
-The release happens either way; the waiting method decides only when. `wait`
-lets go of the call the moment cancellation is accepted: the job ends, and the
-next job starts, or `close()` comes back, while `openTemp` is still running.
-The file appears after that, and the deletion follows it — late and alone, with
-nobody waiting for either. A late error from the call or from the disposer is
-told to the controller's `onError` hook and then handed to `Solo.errorHandler`,
-or to the zone when no handler is set.
+The release happens either way; the waiting method decides only when.
+`abandonable` lets go of the call the moment cancellation is accepted: the job
+ends, and the next job starts, or `close()` comes back, while `openTemp` is
+still running. The file appears after that, and the deletion follows it — late
+and alone, with nobody waiting for either. A late error from the call or from
+the disposer is told to the controller's `onError` hook and then handed to
+`Solo.errorHandler`, or to the zone when no handler is set.
 
 ### The wait that stays with it
 

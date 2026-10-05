@@ -29,7 +29,7 @@ void main() {
           fakeAsync((async) {
             final job = Job<void>((ctx) async {
               final child = Job.deferred<int>(cancellable: false, (ctx) async {
-                await ctx.wait(() => delay(50));
+                await ctx.abandonable(() => delay(50));
                 return 1;
               });
               if (group) {
@@ -58,7 +58,7 @@ void main() {
         values = await ctx.runAll([
           // The second one finishes first; the list still decides.
           Job.deferred<int>(key: 'a', (ctx) async {
-            await ctx.wait(() => delay(50));
+            await ctx.abandonable(() => delay(50));
             return 1;
           }),
           Job.deferred<int>(key: 'b', (ctx) async => 2),
@@ -86,7 +86,7 @@ void main() {
             fromUnattended = error;
           }
         });
-        await ctx.wait(() => delay(50));
+        await ctx.abandonable(() => delay(50));
       })
         ..launch();
       async.elapse(const Duration(milliseconds: 10));
@@ -134,7 +134,7 @@ void main() {
         throw StateError('boom');
       });
       final neighbour = Job.deferred<int>(key: 'b', (ctx) async {
-        await ctx.wait(() => delay(1000));
+        await ctx.abandonable(() => delay(1000));
         return 2;
       });
       Job<void>((ctx) async {
@@ -266,14 +266,14 @@ void main() {
         final journal = JobJournal();
         final selected = StateError('selected');
         final cancelled = Job.deferred<int>(key: 'b', (ctx) async {
-          await ctx.wait(() => delay(1000));
+          await ctx.abandonable(() => delay(1000));
           return 2;
         });
         final failing = Job.deferred<int>(
           key: 'a',
           cancellable: false,
           (ctx) async {
-            await ctx.wait(() => delay(50));
+            await ctx.abandonable(() => delay(50));
             throw selected;
           },
         );
@@ -329,7 +329,7 @@ void main() {
         fakeAsync((async) {
           final accepting = Job.deferred<int>(key: 'a', (ctx) async {
             try {
-              await ctx.wait(() => delay(1000));
+              await ctx.abandonable(() => delay(1000));
               return 1;
             } finally {
               // The point of the run: a failure after the mark is the body
@@ -339,7 +339,7 @@ void main() {
             }
           });
           final foreign = Job.deferred<int>(key: 'b', (ctx) async {
-            await ctx.wait(() => delay(1000));
+            await ctx.abandonable(() => delay(1000));
             return 2;
           });
           Job<void>(key: 'parent', observer: journal, (ctx) async {
@@ -426,7 +426,7 @@ void main() {
       // core classifies it, finds the branch behind it and says so.
       var heardCancelled = 0;
       final branch = Job.deferred<int>(key: 'b', (ctx) async {
-        await ctx.wait(() => delay(1000));
+        await ctx.abandonable(() => delay(1000));
         return 1;
       });
       final parent = Job<void>(key: 'parent', (ctx) async {
@@ -542,7 +542,7 @@ void main() {
       // plays out.
       var written = false;
       final neighbour = Job.deferred<void>(key: 'b', (ctx) async {
-        await ctx.wait(() async {
+        await ctx.abandonable(() async {
           await delay(100);
           written = true;
         });
@@ -577,12 +577,12 @@ void main() {
           // else cancelled finishes last. Without the filter the first one
           // would be chosen.
           final stopped = Job.deferred<int>(key: 'a', (ctx) async {
-            await ctx.wait(() => delay(1000));
+            await ctx.abandonable(() => delay(1000));
             return 1;
           });
           final foreign = Job.deferred<int>(key: 'b', (ctx) async {
             ctx.onDispose(() => tail.future);
-            await ctx.wait(() => delay(1000));
+            await ctx.abandonable(() => delay(1000));
             return 2;
           });
           Job<void>(
@@ -622,12 +622,12 @@ void main() {
       // and anyone may build one.
       var neighbourFinishedItsWork = false;
       final neighbour = Job.deferred<int>(key: 'a', (ctx) async {
-        await ctx.wait(() => delay(1000));
+        await ctx.abandonable(() => delay(1000));
         neighbourFinishedItsWork = true;
         return 1;
       });
       final foreign = Job.deferred<int>(key: 'b', (ctx) async {
-        await ctx.wait(() => delay(1000));
+        await ctx.abandonable(() => delay(1000));
         return 2;
       });
       Object? thrown;
@@ -669,14 +669,14 @@ void main() {
     fakeAsync((async) {
       final opener = Job.deferred<String>(
         key: 'opener',
-        (ctx) => ctx.wait(() => 'db', discard: closed.add),
+        (ctx) => ctx.abandonable(() => 'db', discard: closed.add),
       );
       final taker = Job.deferred<String>(
         key: 'taker',
-        (ctx) => ctx.wait(() => ctx.run(opener), discard: closed.add),
+        (ctx) => ctx.abandonable(() => ctx.run(opener), discard: closed.add),
       );
       final bad = Job.deferred<String>(key: 'bad', (ctx) async {
-        await ctx.wait(() => delay(10));
+        await ctx.abandonable(() => delay(10));
         throw StateError('boom');
       });
       group = Job<void>(
@@ -710,7 +710,7 @@ void main() {
       });
       final source = Job.deferred<int>(key: 'a', (ctx) async {
         ctx.onDispose(() => tail.future);
-        await ctx.wait(() => delay(10));
+        await ctx.abandonable(() => delay(10));
         throw const Cancelled('a gave up');
       });
       Object? thrown;
@@ -823,7 +823,7 @@ void main() {
               key: 'b',
               cancellable: false,
               (ctx) async {
-                await ctx.wait(() => delay(50));
+                await ctx.abandonable(() => delay(50));
                 throw other;
               },
             ),
@@ -854,7 +854,7 @@ void main() {
                   key: 'b',
                   cancellable: false,
                   (ctx) async {
-                    await ctx.wait(() => delay(50));
+                    await ctx.abandonable(() => delay(50));
                     throw other;
                   },
                 ),
@@ -1061,11 +1061,11 @@ void main() {
     fakeAsync((async) {
       final started = <Job<int>>[
         Job.deferred<int>(key: 'a', (ctx) async {
-          await ctx.wait(() => delay(1000));
+          await ctx.abandonable(() => delay(1000));
           return 1;
         }),
         Job.deferred<int>(key: 'b', (ctx) async {
-          await ctx.wait(() => delay(1000));
+          await ctx.abandonable(() => delay(1000));
           return 2;
         }),
       ];
@@ -1114,7 +1114,7 @@ void main() {
             key: 'a',
             cancellable: false,
             (ctx) async {
-              await ctx.wait(() => delay(50));
+              await ctx.abandonable(() => delay(50));
               throw other;
             },
           );
@@ -1146,7 +1146,7 @@ void main() {
       final branches = [
         for (final key in ['a', 'b'])
           Job.deferred<int>(key: key, (ctx) async {
-            await ctx.wait(() => delay(1000));
+            await ctx.abandonable(() => delay(1000));
             return 1;
           }),
       ];
@@ -1186,7 +1186,7 @@ void main() {
           Job.deferred<int>(key: 'a', (ctx) async => throw StateError('boom')),
           Job.deferred<int>(key: 'b', (ctx) async {
             ctx.onDispose(() => held.future);
-            await ctx.wait(() => delay(1000));
+            await ctx.abandonable(() => delay(1000));
             return 2;
           }),
         ]),
@@ -1207,10 +1207,11 @@ void main() {
           for (final key in ['a', 'b'])
             Job.deferred<String>(
               key: key,
-              (ctx) => ctx.wait(() async => key, discard: (_) => closes++),
+              (ctx) =>
+                  ctx.abandonable(() async => key, discard: (_) => closes++),
             ),
         ]);
-        await ctx.wait(() => delay(1000));
+        await ctx.abandonable(() => delay(1000));
       })
         ..ignore();
       async.elapse(const Duration(milliseconds: 10));
@@ -1237,11 +1238,11 @@ void main() {
               key: key,
               cancellable: trigger == 'reentrant',
               (ctx) async {
-                await ctx.wait(() => delay(50));
+                await ctx.abandonable(() => delay(50));
                 // A resource taken for the caller: on every one of these
                 // paths the caller gets an error instead, so the branch
                 // has to close it itself.
-                return ctx.wait(() async => 1, discard: (_) => closes++);
+                return ctx.abandonable(() async => 1, discard: (_) => closes++);
               },
             ),
         ];
@@ -1296,11 +1297,11 @@ void main() {
   test('a cancellation from outside a branch comes out as it is', () {
     fakeAsync((async) {
       final outside = Job.deferred<int>(key: 'b', (ctx) async {
-        await ctx.wait(() => delay(1000));
+        await ctx.abandonable(() => delay(1000));
         return 2;
       });
       final neighbour = Job.deferred<int>(key: 'a', (ctx) async {
-        await ctx.wait(() => delay(1000));
+        await ctx.abandonable(() => delay(1000));
         return 1;
       });
       final parent = Job<void>(
@@ -1340,14 +1341,14 @@ void main() {
       final closed = <Object>[];
       final holder = Job.deferred<Object>(
         key: 'db',
-        (ctx) => ctx.wait(() async => resource, discard: closed.add),
+        (ctx) => ctx.abandonable(() async => resource, discard: closed.add),
       );
       Job<void>(observer: ErrorObserver(<Object>[]), (ctx) async {
         try {
           await ctx.runAll([
             holder,
             Job.deferred<Object>(key: 'bad', (ctx) async {
-              await ctx.wait(() => delay(50));
+              await ctx.abandonable(() => delay(50));
               throw StateError('late');
             }),
           ]);
@@ -1375,7 +1376,7 @@ void main() {
         values = await ctx.runAll([
           Job.deferred<Object>(
             key: 'db',
-            (ctx) => ctx.wait(() async => resource, discard: closed.add),
+            (ctx) => ctx.abandonable(() async => resource, discard: closed.add),
           ),
           Job.deferred<Object>(key: 'x', (ctx) async => 'x'),
         ]);
@@ -1394,10 +1395,11 @@ void main() {
           await ctx.runAll([
             Job.deferred<Object>(
               key: 'db',
-              (ctx) => ctx.wait(() async => Object(), discard: closed.add),
+              (ctx) =>
+                  ctx.abandonable(() async => Object(), discard: closed.add),
             ),
             Job.deferred<Object>(key: 'bad', (ctx) async {
-              await ctx.wait(() => delay(50));
+              await ctx.abandonable(() => delay(50));
               throw StateError('late');
             }),
           ]);
@@ -1416,14 +1418,14 @@ void main() {
       final stubborn = Job.deferred<Object>(
         key: 'db',
         cancellable: false,
-        (ctx) => ctx.wait(() async => Object(), discard: closed.add),
+        (ctx) => ctx.abandonable(() async => Object(), discard: closed.add),
       );
       Job<void>(observer: ErrorObserver(<Object>[]), (ctx) async {
         try {
           await ctx.runAll([
             stubborn,
             Job.deferred<Object>(key: 'bad', (ctx) async {
-              await ctx.wait(() => delay(50));
+              await ctx.abandonable(() => delay(50));
               throw StateError('late');
             }),
           ]);
@@ -1459,7 +1461,7 @@ void main() {
           await ctx.runAll([
             holder,
             Job.deferred<int>(key: 'bad', (ctx) async {
-              await ctx.wait(() => delay(50));
+              await ctx.abandonable(() => delay(50));
               throw StateError('late');
             }),
           ]);
@@ -1500,7 +1502,7 @@ void main() {
               return 2;
             }),
             Job.deferred<int>(key: 'bad', (ctx) async {
-              await ctx.wait(() => delay(50));
+              await ctx.abandonable(() => delay(50));
               throw chosen;
             }),
           ]);
@@ -1531,7 +1533,7 @@ void main() {
                 return 1;
               }),
             Job.deferred<int>(key: 'bad', (ctx) async {
-              await ctx.wait(() => delay(50));
+              await ctx.abandonable(() => delay(50));
               throw StateError('late');
             }),
           ]);
@@ -1556,13 +1558,13 @@ void main() {
     fakeAsync((async) {
       final inner = StateError('inner');
       final outerNeighbour = Job.deferred<int>(key: 'outer-b', (ctx) async {
-        await ctx.wait(() => delay(1000));
+        await ctx.abandonable(() => delay(1000));
         return 2;
       });
       late Job<int> innerNeighbour;
       final branch = Job.deferred<int>(key: 'outer-a', (ctx) async {
         innerNeighbour = Job.deferred<int>(key: 'inner-b', (ctx) async {
-          await ctx.wait(() => delay(1000));
+          await ctx.abandonable(() => delay(1000));
           return 20;
         });
         final values = await ctx.runAll([
@@ -1770,7 +1772,7 @@ void main() {
         ctx
           ..onDispose(() => disposed++)
           ..onDiscard(() => discarded++);
-        await ctx.wait(() => delay(1000));
+        await ctx.abandonable(() => delay(1000));
         return 1;
       });
       final refused = UnadoptableJob<int>(key: 'c', (ctx) async => 3);
@@ -1804,7 +1806,7 @@ void main() {
               key: key,
               (ctx) async {
                 if (key == 'b') ctx.onDispose(() => unwinding.future);
-                return ctx.wait(
+                return ctx.abandonable(
                   () async => key,
                   discard: (_) => closes[key] = closes[key]! + 1,
                 );
@@ -1850,11 +1852,11 @@ void main() {
       var heardCancelled = 0;
       final a = Job.deferred<String>(
         key: 'a',
-        (ctx) => ctx.wait(() async => 'a', discard: (_) => closes++),
+        (ctx) => ctx.abandonable(() async => 'a', discard: (_) => closes++),
       );
       b = Job.deferred<String>(
         key: 'b',
-        (ctx) => ctx.wait(() async => 'b', discard: (_) => closes++),
+        (ctx) => ctx.abandonable(() async => 'b', discard: (_) => closes++),
       );
       Job<void>(
         key: 'parent',
@@ -2023,7 +2025,7 @@ void main() {
     fakeAsync((async) {
       final journal = JobJournal();
       final started = Job.deferred<int>(key: 'a', (ctx) async {
-        await ctx.wait(() => delay(1000));
+        await ctx.abandonable(() => delay(1000));
         return 1;
       });
       // Its own context refuses to be built: the child ends [Failed]
@@ -2066,11 +2068,11 @@ void main() {
       // took for a caller that gets an error is closed by nobody.
       var closes = 0;
       final shared = Job.deferred<String>(key: 'shared', (ctx) async {
-        await ctx.wait(() => delay(40));
-        return ctx.wait(() async => 'db', discard: (_) => closes++);
+        await ctx.abandonable(() => delay(40));
+        return ctx.abandonable(() async => 'db', discard: (_) => closes++);
       });
       final bad = Job.deferred<String>(key: 'bad', (ctx) async {
-        await ctx.wait(() => delay(80));
+        await ctx.abandonable(() => delay(80));
         throw StateError('boom');
       });
       Job<void>(key: 'first', observer: ErrorObserver(<Object>[]), (ctx) async {
@@ -2126,7 +2128,7 @@ void main() {
     fakeAsync((async) {
       int? seen;
       final source = Job.deferred<int>(key: 'source', (ctx) async {
-        await ctx.wait(() => delay(20));
+        await ctx.abandonable(() => delay(20));
         return 7;
       });
       final reader = Job.deferred<void>(key: 'reader', (ctx) async {
@@ -2149,7 +2151,7 @@ void main() {
       Duration? endedAt;
       Object? caught;
       final b = Job.deferred<void>(key: 'b', (ctx) async {
-        await ctx.wait(() => delay(300));
+        await ctx.abandonable(() => delay(300));
         ran.add('b reached its end');
       });
       Job<void>((ctx) async {
@@ -2217,22 +2219,22 @@ void main() {
             trace.add('${async.elapsed.inMilliseconds}: $what');
         final early = Job.deferred<int>(key: 'early', (ctx) async {
           ctx.onDispose(() => at('early disposed'));
-          await ctx.wait(() => delay(10));
+          await ctx.abandonable(() => delay(10));
           return 1;
         });
         final childOfLate = Job.deferred<void>((ctx) async {
-          await ctx.wait(() => delay(80));
+          await ctx.abandonable(() => delay(80));
           at('child of late ends');
         });
         final late = Job.deferred<int>(key: 'late', (ctx) async {
           ctx.run(childOfLate).ignore();
-          await ctx.wait(() => delay(40));
+          await ctx.abandonable(() => delay(40));
           at('late body ends');
           if (path == 'failure') throw StateError('late');
           return 2;
         });
         final slow = Job.deferred<int>(key: 'slow', (ctx) async {
-          await ctx.wait(() => delay(60));
+          await ctx.abandonable(() => delay(60));
           return 3;
         });
         Job<void>((ctx) async {
@@ -2253,7 +2255,7 @@ void main() {
     });
   }
 
-  for (final through in ['join', 'bare await', 'wait']) {
+  for (final through in ['join', 'bare await', 'abandonable']) {
     test(
         'a lock the branches share through dispose hangs the group, '
         'through: $through', () {
@@ -2272,12 +2274,12 @@ void main() {
                   await lock.acquire(name);
                   ctx.onDispose(() => lock.release(name));
                 case _:
-                  await ctx.wait(
+                  await ctx.abandonable(
                     () => lock.acquire(name),
                     dispose: (_) => lock.release(name),
                   );
               }
-              await ctx.wait(() => delay(10));
+              await ctx.abandonable(() => delay(10));
               return 1;
             });
         final parent = Job<List<int>>(
@@ -2294,7 +2296,7 @@ void main() {
         var returned = false;
         parent.cancel().then((_) => returned = true).ignore();
         async.elapse(const Duration(seconds: 1));
-        if (through == 'wait') {
+        if (through == 'abandonable') {
           expect(returned, isTrue);
           expect(parent.outcome, isA<Cancelled>());
           expect(trace, [
@@ -2333,7 +2335,7 @@ void main() {
                 () => pool.acquire(name),
                 dispose: (_) => pool.release(name),
               );
-              await ctx.wait(() => delay(10));
+              await ctx.abandonable(() => delay(10));
               return 1;
             });
         final parent = Job<List<int>>((ctx) async {
@@ -2373,14 +2375,15 @@ void main() {
     const cases = {
       // case: untied
       'parent; b joins an acquire that hears ctx.onCancel': true,
-      'parent; b joins, a third branch waits through ctx.wait': true,
-      "parent; b's body is over, its child waits through ctx.wait": true,
+      'parent; b joins, a third branch waits through ctx.abandonable': true,
+      "parent; b's body is over, its child waits through ctx.abandonable": true,
       "parent; b's body is over, its child awaits bare": false,
-      'parent; b is cancellable: false and waits through ctx.wait': false,
-      'parent; b waits through ctx.wait inside ctx.uncancellable': false,
-      'b itself; b waits through ctx.wait': true,
+      'parent; b is cancellable: false and waits through ctx.abandonable':
+          false,
+      'parent; b waits through ctx.abandonable inside ctx.uncancellable': false,
+      'b itself; b waits through ctx.abandonable': true,
       'b itself; b joins': false,
-      'a, which holds the lock; b waits through ctx.wait': false,
+      'a, which holds the lock; b waits through ctx.abandonable': false,
     };
     for (final MapEntry(key: name, value: untied) in cases.entries) {
       test(name, () {
@@ -2400,13 +2403,13 @@ void main() {
               );
             } else if (name.contains('uncancellable')) {
               await ctx.uncancellable(
-                () => ctx.wait(
+                () => ctx.abandonable(
                   () => lock.acquire(who),
                   dispose: (_) => lock.release(who),
                 ),
               );
             } else {
-              await ctx.wait(
+              await ctx.abandonable(
                 () => lock.acquire(who),
                 dispose: (_) => lock.release(who),
               );
@@ -2440,7 +2443,7 @@ void main() {
             },
           );
           final third = Job.deferred<int>(key: 'c', (ctx) async {
-            await ctx.wait(() => delay(60000));
+            await ctx.abandonable(() => delay(60000));
             return 3;
           });
           final parent = Job<List<int>>(
@@ -2483,7 +2486,7 @@ void main() {
             () => lock.acquire(name),
             dispose: (_) => lock.release(name),
           );
-          await ctx.wait(() => delay(10));
+          await ctx.abandonable(() => delay(10));
           return 1;
         }
 
@@ -2524,19 +2527,20 @@ void main() {
       'parent; b awaits a.done bare': false,
       'parent; b joins a.value': false,
       'parent; b joins a.value with an abort that hears ctx.onCancel': true,
-      'parent; b waits for a.value through ctx.wait': true,
-      'parent; b waits for a.done through ctx.wait': true,
-      'parent; b is cancellable: false and waits through ctx.wait': false,
-      'parent; b waits through ctx.wait inside ctx.uncancellable': false,
-      'parent; b awaits a.value bare, a third branch waits through ctx.wait':
-          true,
-      'c fails; b awaits a.value bare, a third branch waits through ctx.wait':
-          true,
-      'c itself; b awaits a.value bare, a third branch waits through ctx.wait':
-          true,
+      'parent; b waits for a.value through ctx.abandonable': true,
+      'parent; b waits for a.done through ctx.abandonable': true,
+      'parent; b is cancellable: false and waits through ctx.abandonable':
+          false,
+      'parent; b waits through ctx.abandonable inside ctx.uncancellable': false,
+      'parent; b awaits a.value bare, a third branch waits through '
+          'ctx.abandonable': true,
+      'c fails; b awaits a.value bare, a third branch waits through '
+          'ctx.abandonable': true,
+      'c itself; b awaits a.value bare, a third branch waits through '
+          'ctx.abandonable': true,
       'b itself; b awaits a.value bare': false,
-      'b itself; b waits for a.value through ctx.wait': true,
-      'a itself; b waits for a.value through ctx.wait': false,
+      'b itself; b waits for a.value through ctx.abandonable': true,
+      'a itself; b waits for a.value through ctx.abandonable': false,
     };
     for (final MapEntry(key: name, value: untied) in cases.entries) {
       test(name, () {
@@ -2560,14 +2564,14 @@ void main() {
               if (name.contains('bare')) return await sibling() + 1;
               if (name.contains('joins')) return ctx.join(sibling);
               if (name.contains('uncancellable')) {
-                return ctx.uncancellable(() => ctx.wait(sibling));
+                return ctx.uncancellable(() => ctx.abandonable(sibling));
               }
-              return await ctx.wait(sibling) + 1;
+              return await ctx.abandonable(sibling) + 1;
             },
           );
           final release = Completer<void>();
           final c = Job.deferred<int>(key: 'c', (ctx) async {
-            await ctx.wait(() => release.future);
+            await ctx.abandonable(() => release.future);
             return 3;
           });
           final parent = Job<List<int>>(

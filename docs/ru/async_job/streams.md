@@ -43,7 +43,7 @@ Job<void>((ctx) async {
     await store.saveBody(message);
   });
   ctx.onCancel(subscription.cancel);
-  await ctx.wait(subscription.asFuture<void>);
+  await ctx.abandonable(subscription.asFuture<void>);
 });
 ```
 
@@ -65,7 +65,7 @@ Job<void>((ctx) async {
 Job<void>((ctx) async {
   final subscription = messages.asyncMap(store.saveBody).listen((_) {});
   ctx.onCancel(subscription.cancel);
-  await ctx.wait(subscription.asFuture<void>);
+  await ctx.abandonable(subscription.asFuture<void>);
 });
 ```
 
@@ -146,10 +146,10 @@ ctx.each(messages, (childCtx, message) async {
 остановиться по отмене. `childCtx.join` дожидается того шага, который обёрнут
 (сохранение на полпути всё равно сохранение), а затем выпускает отмену вместо
 значения, поэтому второй шаг не начинается вовсе, а уборка родителя идёт сразу,
-как только кончился первый. `childCtx.wait` остаётся другим выбором, для шага,
-результат которого можно бросить. Чего внутрь класть нельзя, так это завершения
-самого ребёнка: ожидание `value` задачи, которую вернул `each`, или её
-`cancel()` из колбэка не кончится никогда, потому что ребёнок уже ждёт этот
+как только кончился первый. `childCtx.abandonable` остаётся другим выбором, для
+шага, результат которого можно бросить. Чего внутрь класть нельзя, так это
+завершения самого ребёнка: ожидание `value` задачи, которую вернул `each`, или
+её `cancel()` из колбэка не кончится никогда, потому что ребёнок уже ждёт этот
 колбэк.
 
 Родительский `ctx` на месте `childCtx` слышит только отмену родителя. Отмена

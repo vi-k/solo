@@ -284,7 +284,7 @@ void main() {
       // the cancellation 20 ms in arrives before the job has ended.
       Future<void> uploadWithChild(JobContext ctx) async {
         ctx
-            .run(Job.deferred<void>((ctx) => ctx.wait(() => delay(50))))
+            .run(Job.deferred<void>((ctx) => ctx.abandonable(() => delay(50))))
             .ignore();
         await upload(ctx);
       }
@@ -385,9 +385,9 @@ void main() {
       fakeAsync((async) {
         late Job<void> child;
         final parent = Job<void>((ctx) async {
-          child = Job.deferred<void>((ctx) => ctx.wait(() => delay(50)));
+          child = Job.deferred<void>((ctx) => ctx.abandonable(() => delay(50)));
           ctx.run(child).ignore();
-          await ctx.wait(() => delay(50));
+          await ctx.abandonable(() => delay(50));
         })
           ..ignore();
         async.elapse(const Duration(milliseconds: 5));
@@ -432,11 +432,11 @@ void main() {
       fakeAsync((async) {
         final error = StateError('boom');
         final failing = Job.deferred<int>((ctx) async {
-          await ctx.wait(() => delay(10));
+          await ctx.abandonable(() => delay(10));
           throw error;
         });
         final neighbour = Job.deferred<int>((ctx) async {
-          await ctx.wait(() => delay(100));
+          await ctx.abandonable(() => delay(100));
           return 2;
         });
         Job<List<int>>((ctx) => ctx.runAll([failing, neighbour])).ignore();
@@ -451,7 +451,7 @@ void main() {
     test('a group that refused a job gives the others its ArgumentError', () {
       fakeAsync((async) {
         final first = Job.deferred<int>((ctx) async {
-          await ctx.wait(() => delay(50));
+          await ctx.abandonable(() => delay(50));
           return 1;
         });
         // Refused by its engine, at the adoption: the core asks everything
@@ -486,7 +486,8 @@ void main() {
         () {
       fakeAsync((async) {
         final waiting = Job.deferred<void>((ctx) async {});
-        final running = Job<void>((ctx) => ctx.wait(() => delay(50)))..ignore();
+        final running = Job<void>((ctx) => ctx.abandonable(() => delay(50)))
+          ..ignore();
         async.elapse(const Duration(milliseconds: 5));
         waiting.cancel().ignore();
         running.cancel().ignore();
@@ -616,12 +617,12 @@ void main() {
             ..run(
               Job.deferred<void>((child) async {
                 child.onCancel(() => order.add('child onCancel'));
-                await child.wait(() => delay(100));
+                await child.abandonable(() => delay(100));
               }),
             ).ignore();
           // Throws the Cancelled the job accepted; the listener has heard
           // it already and does not hear it again.
-          await ctx.wait(() => delay(100));
+          await ctx.abandonable(() => delay(100));
         })
           ..ignore()
           ..whenCancelled((cancelled) => order.add('listener'));
@@ -687,7 +688,7 @@ void main() {
       fakeAsync((async) {
         final order = <String>[];
         final fetch = Job.deferred<int>((ctx) async {
-          await ctx.wait(() => delay(50));
+          await ctx.abandonable(() => delay(50));
           return 1;
         });
         Job<int>((ctx) async {
@@ -727,7 +728,7 @@ void main() {
       fakeAsync((async) {
         final order = <String>[];
         final shared = Job<int>((ctx) async {
-          await ctx.wait(() => delay(50));
+          await ctx.abandonable(() => delay(50));
           return 1;
         })
           ..ignore();
@@ -765,7 +766,8 @@ void main() {
     test('a listener registered inside the call runs ahead of the waiting', () {
       fakeAsync((async) {
         final seen = <String>[];
-        final job = Job<void>((ctx) => ctx.wait(() => delay(50)))..ignore();
+        final job = Job<void>((ctx) => ctx.abandonable(() => delay(50)))
+          ..ignore();
         job
           ..whenCancelled((_) {
             seen.add('first');
@@ -792,10 +794,10 @@ void main() {
                 child.onCancel(
                   () => job.whenCancelled((_) => heard.add('cascade')),
                 );
-                await child.wait(() => delay(100));
+                await child.abandonable(() => delay(100));
               }),
             ).ignore();
-          await ctx.wait(() => delay(100));
+          await ctx.abandonable(() => delay(100));
         })
           ..ignore()
           ..whenCancelled((_) => heard.add('before'));
@@ -812,17 +814,17 @@ void main() {
         final heard = <String>[];
         final refusing = Job<void>(
           cancellable: false,
-          (ctx) => ctx.wait(() => delay(20)),
+          (ctx) => ctx.abandonable(() => delay(20)),
         )..whenCancelled((_) => heard.add('refused'));
         final held = Job<void>((ctx) async {
           await ctx.uncancellable(() => delay(20));
-          await ctx.wait(() => delay(50));
+          await ctx.abandonable(() => delay(50));
         })
           ..ignore()
           ..whenCancelled(
             (_) => heard.add('held, at ${async.elapsed.inMilliseconds} ms'),
           );
-        final done = Job<void>((ctx) => ctx.wait(() => delay(10)))
+        final done = Job<void>((ctx) => ctx.abandonable(() => delay(10)))
           ..whenCancelled((_) => heard.add('done'));
         async.elapse(const Duration(milliseconds: 5));
         refusing.cancel().ignore();
@@ -868,7 +870,7 @@ void main() {
         runZonedGuarded(
           () => job = Job<void>(
             observer: observer(heard),
-            (ctx) => ctx.wait(() => delay(50)),
+            (ctx) => ctx.abandonable(() => delay(50)),
           )..ignore(),
           (error, stackTrace) => heard.add('creation zone: $error'),
         );
@@ -932,7 +934,7 @@ void main() {
           () => job = Job<void>((ctx) async {
             if (path == 'a section held it') {
               await ctx.uncancellable(() => delay(20));
-              await ctx.wait(() => delay(50));
+              await ctx.abandonable(() => delay(50));
             } else {
               await givingUp(ctx);
             }
@@ -1008,7 +1010,7 @@ void main() {
               );
               handedOver.complete();
             });
-            await ctx.wait(() => delay(30));
+            await ctx.abandonable(() => delay(30));
           }).ignore(),
           (error, stackTrace) => heard.add('where it started: $error'),
         );
@@ -1039,7 +1041,7 @@ void main() {
             );
             handedOver.complete();
           });
-          await ctx.wait(() => delay(30));
+          await ctx.abandonable(() => delay(30));
         }).ignore(),
         (error, stackTrace) => heard.add('where the work started: $error'),
       );
@@ -1060,7 +1062,7 @@ void main() {
       late Job<void> job;
       runZonedGuarded(
         () => job = Job<void>(
-          (ctx) => ctx.wait(() => delay(50)),
+          (ctx) => ctx.abandonable(() => delay(50)),
           observer: Hearing(heard),
         )..ignore(),
         (error, stackTrace) => zones.add('creation: $error'),
@@ -1085,7 +1087,8 @@ void main() {
       final zones = <String>[];
       late Job<void> job;
       runZonedGuarded(
-        () => job = Job<void>((ctx) => ctx.wait(() => delay(50)))..ignore(),
+        () => job = Job<void>((ctx) => ctx.abandonable(() => delay(50)))
+          ..ignore(),
         (error, stackTrace) => zones.add('creation: $error'),
       );
       runZonedGuarded(

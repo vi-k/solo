@@ -17,7 +17,7 @@ Job<void> opening() {
     ctx.onCancel(stop.cancel);
 
     // The wait ends at once; the read goes on, and its value is dropped.
-    final rows = await ctx.wait(database.readAll);
+    final rows = await ctx.abandonable(database.readAll);
 
     // Waited for until the migration ends or stops at the token, and
     // only then does the job give up.
@@ -48,7 +48,7 @@ Job<Database> waitForTheMigration() {
     );
     final stop = CancelToken();
 
-    await ctx.wait(() => database.migrate(stop));
+    await ctx.abandonable(() => database.migrate(stop));
 
     return database;
   });
@@ -57,7 +57,7 @@ Job<Database> waitForTheMigration() {
 }
 
 /// The second attempt: the job of the first, with `join` in place of
-/// `wait`.
+/// `abandonable`.
 Job<Database> joinTheMigration() {
   final job = Job<Database>(observer: printing, (ctx) async {
     final database = await ctx.join(
@@ -76,7 +76,7 @@ Job<Database> joinTheMigration() {
 }
 
 /// "A token through `onCancel`": the job of the first attempt, with the
-/// token wired and `join` in place of `wait`.
+/// token wired and `join` in place of `abandonable`.
 Job<Database> stopTheMigration() {
   final job = Job<Database>(observer: printing, (ctx) async {
     final database = await ctx.join(
@@ -105,7 +105,7 @@ Job<void> stopTheDevice() {
     // #enddocregion
     // The job records until it is cancelled and walks away from the
     // recording: nothing here waits for the stop.
-    await ctx.wait(device.record);
+    await ctx.abandonable(device.record);
   });
   return job;
 }
@@ -245,7 +245,7 @@ Job<void> plainDelay() {
   // #docregion
   final job = Job<void>((ctx) async {
     while (true) {
-      use(await ctx.wait(database.readAll));
+      use(await ctx.abandonable(database.readAll));
       await Future<void>.delayed(const Duration(seconds: 1));
     }
   });
@@ -253,13 +253,14 @@ Job<void> plainDelay() {
   return job;
 }
 
-/// The second attempt: the job of the first, with the delay under `wait`.
-Job<void> delayUnderWait() {
+/// The second attempt: the job of the first, with the delay under
+/// `abandonable`.
+Job<void> delayUnderAbandonable() {
   final job = Job<void>((ctx) async {
     while (true) {
-      use(await ctx.wait(database.readAll));
+      use(await ctx.abandonable(database.readAll));
       // #docregion
-      await ctx.wait(
+      await ctx.abandonable(
         () => Future<void>.delayed(const Duration(seconds: 1)),
       );
       // #enddocregion
@@ -272,7 +273,7 @@ Job<void> delayUnderWait() {
 Job<void> pauseOfTheJob() {
   final job = Job<void>((ctx) async {
     while (true) {
-      use(await ctx.wait(database.readAll));
+      use(await ctx.abandonable(database.readAll));
       // #docregion
       await ctx.pause(const Duration(seconds: 1));
       // #enddocregion

@@ -36,7 +36,7 @@ Job<int> loading() {
     observer: Log(),
     (ctx) async {
       ctx.log('loading');
-      return ctx.wait(load);
+      return ctx.abandonable(load);
     },
   );
   return job;

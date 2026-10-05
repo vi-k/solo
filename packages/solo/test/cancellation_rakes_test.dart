@@ -150,7 +150,7 @@ Map<String, String> _tryEverything(
     'each',
     () => ctx.each(const Stream<int>.empty(), (child, event) {}),
   );
-  _attempt(came, 'wait', () => ctx.wait(() async => 1));
+  _attempt(came, 'abandonable', () => ctx.abandonable(() async => 1));
   _attempt(came, 'join', () => ctx.join(() async => 1));
   _attempt(came, 'pause', ctx.pause);
   _attempt(came, 'uncancellable', () => ctx.uncancellable(() async => 1));
@@ -286,12 +286,12 @@ void main() {
   });
 
   group('The table', () {
-    test('wait throws Cancelled without waiting for the operation', () {
+    test('abandonable throws Cancelled without waiting for the operation', () {
       fakeAsync((async) {
         Object? thrown;
         final job = Bench().run<Ready, void>((ctx) async {
           try {
-            await ctx.wait(() => stage.start<void>('call', null));
+            await ctx.abandonable(() => stage.start<void>('call', null));
           } on Cancelled catch (cancelled) {
             thrown = cancelled;
             rethrow;
@@ -417,7 +417,7 @@ void main() {
           .allMatches(_page())
           .map((row) => row.group(1));
       expect(rows, [
-        'ctx.wait(action)',
+        'ctx.abandonable(action)',
         'ctx.join(action)',
         'ctx.uncancellable(action)',
         'ctx.pause(duration)',
@@ -435,7 +435,7 @@ void main() {
           ctx.run(
             bench.job<Ready, void>((child) async {
               child.onCancel(() => stage.trace.add('child ctx.onCancel'));
-              await child.wait(() => stage.start<void>('child', null));
+              await child.abandonable(() => stage.start<void>('child', null));
             }),
           ).ignore();
           await stage.start<void>('step', null);
@@ -485,11 +485,13 @@ void main() {
       expect(left.errors, isEmpty);
     });
 
-    test('a request that wait let go of outlives the job and the next one', () {
+    test(
+        'a request that abandonable let go of outlives the job and the next '
+        'one', () {
       fakeAsync((async) {
         final bench = Bench();
         final job = bench.run<Ready, void>(
-          (ctx) => ctx.wait(() => stage.start<void>('request', null)),
+          (ctx) => ctx.abandonable(() => stage.start<void>('request', null)),
         );
         final next = bench.work('next');
         async.flushMicrotasks();
@@ -550,10 +552,11 @@ void main() {
   });
 
   group('Stopping the underlying operation', () {
-    test('the first attempt: by wait, three seeks are on the device at once',
-        () {
+    test(
+        'the first attempt: by abandonable, three seeks are on the device at '
+        'once', () {
       fakeAsync((async) {
-        final player = first.WaitingPlayer();
+        final player = first.AbandoningPlayer();
         final one = player.seek(_s(1));
         async.flushMicrotasks();
         final two = player.seek(_s(2));
@@ -965,7 +968,7 @@ void main() {
           ctx.run(
             bench.job<Ready, void>((child) async {
               child.onCancel(() => stage.trace.add('child ctx.onCancel'));
-              await child.wait(() => stage.start<void>('child', null));
+              await child.abandonable(() => stage.start<void>('child', null));
             }),
           ).ignore();
           await ctx.uncancellable(() async {
@@ -1432,7 +1435,7 @@ void main() {
         'each': 'StateError',
         'onCancel': 'StateError',
         // the waiting methods among them.
-        'wait': 'StateError',
+        'abandonable': 'StateError',
         'join': 'StateError',
         'pause': 'StateError',
         'uncancellable': 'StateError',
@@ -1513,7 +1516,15 @@ void main() {
       ];
       expect(
         members,
-        ['emit', 'run', 'each', 'wait', 'join', 'pause', 'uncancellable'],
+        [
+          'emit',
+          'run',
+          'each',
+          'abandonable',
+          'join',
+          'pause',
+          'uncancellable',
+        ],
       );
       for (final member in members) {
         expect(came[member], 'StateError', reason: member);
@@ -1554,7 +1565,7 @@ void main() {
         late SoloContext<AppState, Ready> kept;
         final job = bench.run<Ready, void>((ctx) async {
           kept = ctx;
-          await ctx.wait(() => stage.start<void>('call', null));
+          await ctx.abandonable(() => stage.start<void>('call', null));
         });
         async.flushMicrotasks();
         unawaited(job.cancel());
@@ -1710,7 +1721,8 @@ void main() {
           late Job<void> child;
           final job = bench.run<Ready, void>((ctx) {
             child = bench.job<Ready, void>(
-              (child) => child.wait(() => stage.start<void>('child', null)),
+              (child) =>
+                  child.abandonable(() => stage.start<void>('child', null)),
             );
 
             return ctx.run(child);
@@ -1751,7 +1763,8 @@ void main() {
           late Job<void> child;
           final job = bench.run<Ready, void>((ctx) {
             child = bench.job<Ready, void>(
-              (child) => child.wait(() => stage.start<void>('child', null)),
+              (child) =>
+                  child.abandonable(() => stage.start<void>('child', null)),
             );
 
             return ctx.run(child);
@@ -1803,7 +1816,8 @@ void main() {
           final bench = Bench();
           group = bench.run<Ready, void>((ctx) {
             slow = bench.job<Ready, void>(
-              (child) => child.wait(() => stage.start<void>('slow', null)),
+              (child) =>
+                  child.abandonable(() => stage.start<void>('slow', null)),
             );
 
             return ctx.runAll([
@@ -2035,7 +2049,7 @@ void main() {
                     (_) => heard.add('registered in between'),
                   ),
                 );
-                await child.wait(() => stage.start<void>('child', null));
+                await child.abandonable(() => stage.start<void>('child', null));
               }),
             ),
           )..whenCancelled((_) => heard.add('registered before'));
@@ -2632,7 +2646,7 @@ void main() {
           ctx.onCancel(() => stage.trace.add('ctx.onCancel'));
           child = bench.job<Ready, void>((child) async {
             child.onCancel(() => stage.trace.add('child ctx.onCancel'));
-            await child.wait(() => stage.start<void>('child', null));
+            await child.abandonable(() => stage.start<void>('child', null));
           });
           ctx.run(child).ignore();
           await ctx.join(api.logout);

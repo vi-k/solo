@@ -57,7 +57,7 @@ void main() {
               cancellable: cancellable,
               (ctx) async {
                 ctx.onCancel(() => trace.add('child onCancel'));
-                await ctx.wait(() => delay(50));
+                await ctx.abandonable(() => delay(50));
                 trace.add('child ran to its end');
                 return 1;
               },
@@ -65,10 +65,10 @@ void main() {
             final parent = Job<void>((ctx) async {
               ctx.run(child).ignore();
               if (!fromOutside) {
-                await ctx.wait(() => delay(5));
+                await ctx.abandonable(() => delay(5));
                 throw const Cancelled('gives up');
               }
-              await ctx.wait(() => delay(100));
+              await ctx.abandonable(() => delay(100));
             });
             parent.done.then((_) => trace.add('parent finished')).ignore();
             async.elapse(const Duration(milliseconds: 10));
@@ -106,7 +106,7 @@ void main() {
         runZonedGuarded(
           () => fakeAsync((async) {
             child = Job.deferred<int>((ctx) async {
-              await ctx.wait(() => delay(50));
+              await ctx.abandonable(() => delay(50));
               if (fails) {
                 throw StateError('disk');
               }
@@ -115,11 +115,11 @@ void main() {
             Job<void>((ctx) async {
               // ignore: unawaited_futures
               ctx.run(child);
-              await ctx.wait(() => delay(10));
+              await ctx.abandonable(() => delay(10));
               if (!fails) {
                 child.cancel().ignore();
               }
-              await ctx.wait(() => delay(100));
+              await ctx.abandonable(() => delay(100));
             });
             async.flushTimers();
           }),
@@ -142,12 +142,12 @@ void main() {
       runZonedGuarded(
         () => fakeAsync((async) {
           final child = Job.deferred<int>(key: 'child', (ctx) async {
-            await ctx.wait(() => delay(50));
+            await ctx.abandonable(() => delay(50));
             throw StateError('disk');
           });
           Job<void>(observer: observer, (ctx) async {
             ctx.run(child).ignore();
-            await ctx.wait(() => delay(100));
+            await ctx.abandonable(() => delay(100));
           });
           async.flushTimers();
         }),
@@ -169,11 +169,11 @@ void main() {
         runZonedGuarded(
           () => fakeAsync((async) {
             final fails = Job.deferred<int>(key: 'fails', (ctx) async {
-              await ctx.wait(() => delay(80));
+              await ctx.abandonable(() => delay(80));
               throw StateError('disk');
             });
             final stops = Job.deferred<int>(key: 'stops', (ctx) async {
-              await ctx.wait(() => delay(200));
+              await ctx.abandonable(() => delay(200));
               return 2;
             });
             Job<void>(observer: observed ? observer : null, (ctx) async {
@@ -205,13 +205,13 @@ void main() {
         final trace = <String>[];
         final opens = Job.deferred<Source>(
           key: 'opens',
-          (ctx) => ctx.wait(
+          (ctx) => ctx.abandonable(
             () async => Source('rows', trace),
             discard: (source) => source.close(),
           ),
         );
         final stops = Job.deferred<Source>(key: 'stops', (ctx) async {
-          await ctx.wait(() => delay(80));
+          await ctx.abandonable(() => delay(80));
           return Source('images', trace);
         });
         Object? caught;
@@ -265,11 +265,12 @@ void main() {
 
       final rows = Job.deferred<Source>(
         key: 'rows',
-        (ctx) => ctx.wait(openRows, discard: (source) => source.close()),
+        (ctx) => ctx.abandonable(openRows, discard: (source) => source.close()),
       );
       final images = Job.deferred<Source>(
         key: 'images',
-        (ctx) => ctx.wait(openImages, discard: (source) => source.close()),
+        (ctx) =>
+            ctx.abandonable(openImages, discard: (source) => source.close()),
       );
       final parent = closeTheEnvelope
           ? Job<void>((ctx) async {
@@ -313,13 +314,13 @@ void main() {
       fakeAsync((async) {
         final trace = <String>[];
         final rows = Job.deferred<Source>(
-          (ctx) => ctx.wait(
+          (ctx) => ctx.abandonable(
             () async => Source('rows', trace),
             discard: (source) => source.close(),
           ),
         );
         final images = Job.deferred<Source>((ctx) async {
-          await ctx.wait(() => delay(10));
+          await ctx.abandonable(() => delay(10));
           throw StateError('disk');
         });
         final parent = Job<void>((ctx) async {
@@ -379,11 +380,11 @@ void main() {
 
         for (final failureFirst in [true, false]) {
           final fails = Job.deferred<int>(key: 'fails', (ctx) async {
-            await ctx.wait(() => delay(failureFirst ? 20 : 80));
+            await ctx.abandonable(() => delay(failureFirst ? 20 : 80));
             throw StateError('disk');
           });
           final stops = Job.deferred<int>(key: 'stops', (ctx) async {
-            await ctx.wait(() => delay(200));
+            await ctx.abandonable(() => delay(200));
             return 2;
           });
           final parent = Job<void>((ctx) async {
@@ -420,7 +421,7 @@ void main() {
       fakeAsync((async) {
         final quick = Job.deferred<int>(key: 'quick', (ctx) async => 1);
         final slow = Job.deferred<int>(key: 'slow', (ctx) async {
-          await ctx.wait(() => delay(50));
+          await ctx.abandonable(() => delay(50));
           throw StateError('disk');
         });
         Job<void>((ctx) async {
@@ -446,7 +447,7 @@ void main() {
           (ctx) async => 1,
         );
         final slow = Job.deferred<int>(key: 'slow', (ctx) async {
-          await ctx.wait(() => delay(50));
+          await ctx.abandonable(() => delay(50));
           throw StateError('disk');
         });
         Job<void>((ctx) async {
@@ -578,7 +579,7 @@ void main() {
         'for its source', () {
       fakeAsync((async) {
         final head = Job.deferred<int>((ctx) async {
-          await ctx.wait(() => delay(50));
+          await ctx.abandonable(() => delay(50));
           return 1;
         });
         final tail = head.then<void>((ctx, rows) async {})..ignore();
@@ -601,11 +602,11 @@ void main() {
       fakeAsync((async) {
         final head = Job.deferred<int>((ctx) async => 1);
         final tail = head.then<void>((ctx, rows) async {
-          await ctx.wait(() => delay(80));
+          await ctx.abandonable(() => delay(80));
         });
         final parent = Job<void>((ctx) async {
           await ctx.run(head);
-          await ctx.wait(() => delay(50));
+          await ctx.abandonable(() => delay(50));
         })
           ..ignore();
 
@@ -625,7 +626,7 @@ void main() {
         final head = Job.deferred<int>((ctx) async => 1);
         final tail = head.then<void>((ctx, rows) async {
           trace.add('the tail starts');
-          await ctx.wait(() => delay(80));
+          await ctx.abandonable(() => delay(80));
           trace.add('the tail ends');
         });
         final parent = Job<void>((ctx) async {
@@ -651,13 +652,13 @@ void main() {
       fakeAsync((async) {
         final head = Job.deferred<int>((ctx) async => 1);
         final tail = head.then<void>((ctx, rows) async {
-          await ctx.wait(() => delay(80));
+          await ctx.abandonable(() => delay(80));
         })
           ..ignore();
         final parent = Job<void>((ctx) async {
           ctx.onCancel(() => tail.cancel().ignore());
           await ctx.run(head);
-          await ctx.wait(() => delay(50));
+          await ctx.abandonable(() => delay(50));
         })
           ..ignore();
 
@@ -789,7 +790,7 @@ void main() {
         stubs.stage = stubs.Stage()..rowsTake = 50;
         final opened = Job<stubs.Source>(
           cancellable: false,
-          (ctx) => ctx.wait(
+          (ctx) => ctx.abandonable(
             stubs.openRows,
             discard: (source) => source.close(),
           ),
@@ -1060,7 +1061,7 @@ void main() {
         'branch closes the source after the child released the lock', () {
       fakeAsync((async) {
         final fails = Job.deferred<stubs.Source>((ctx) async {
-          await ctx.wait(() => delay(50));
+          await ctx.abandonable(() => delay(50));
           throw StateError('disk');
         });
         final parent = Job<void>((ctx) async {
@@ -1092,7 +1093,7 @@ void main() {
                 stubs.Lock.acquire,
                 dispose: (lock) => lock.release(),
               );
-              return ctx.wait(
+              return ctx.abandonable(
                 stubs.openRows,
                 discard: (source) => source.close(),
               );
@@ -1140,7 +1141,7 @@ void main() {
             await ctx.runAll([
               page.warmingBranch(),
               Job.deferred<stubs.Source>((ctx) async {
-                await ctx.wait(() => delay(20));
+                await ctx.abandonable(() => delay(20));
                 throw StateError('disk');
               }),
             ]);

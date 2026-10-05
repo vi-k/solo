@@ -614,7 +614,7 @@ void main() {
             ForeignJob<void>(
               key: 'child$i',
               (ctx) async {
-                await ctx.wait(() => delay(10));
+                await ctx.abandonable(() => delay(10));
               },
             ),
           );
@@ -753,7 +753,7 @@ void main() {
       final order = <String>[];
       final source = solo.run<TestState, void>(key: 'sync', (ctx) async {
         order.add('sync');
-        await ctx.wait(() => delay(10));
+        await ctx.abandonable(() => delay(10));
       });
       source.then<void>((ctx, _) async {
         order.add('then');

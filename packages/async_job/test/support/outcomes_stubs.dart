@@ -23,13 +23,13 @@ final class Report {
 
 /// Downloads the data in 50 ms.
 Future<Data> download(JobContext ctx) async {
-  await ctx.wait(() => delay(50));
+  await ctx.abandonable(() => delay(50));
   return const Data();
 }
 
 /// Uploads for 10 ms and fails: the disk is full.
 Future<void> upload(JobContext ctx) async {
-  await ctx.wait(() => delay(10));
+  await ctx.abandonable(() => delay(10));
   throw StateError('disk full');
 }
 
@@ -39,6 +39,6 @@ Future<void> refreshToken() async => throw StateError('token expired');
 /// The report of the first section: it takes 50 ms, and the user may
 /// cancel it on the way.
 Job<Report> userReport() => Job<Report>((ctx) async {
-      await ctx.wait(() => delay(50));
+      await ctx.abandonable(() => delay(50));
       return const Report(Data());
     });

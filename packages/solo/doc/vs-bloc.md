@@ -48,7 +48,7 @@ The main API correspondences, for a reader who knows bloc:
 | Event class, `on<E>`, `add(E())` | Method returning `Job<T>` |
 | `EventTransformer` | `Policy` on a job submission |
 | `emit(next)` | `ctx.emit(next)` |
-| `if (emit.isDone) return;` | Cancellation checkpoints such as `ctx.wait` and `ctx.check` |
+| `if (emit.isDone) return;` | Cancellation checkpoints such as `ctx.abandonable` and `ctx.check` |
 | `emit.onEach`, `emit.forEach` | `ctx.each(stream, onData)` |
 | `state`, `stream` | `currentState`, `addListener`; `stream` with `SoloStream` mixed in |
 | `BlocObserver` | `SoloObserver` |
@@ -238,7 +238,7 @@ final class NotesController extends Solo<NotesState> {
   Job<void> refresh() => run<NotesState, void>(
         key: 'refresh',
         (ctx) async {
-          final serverNotes = await ctx.wait(_api.list);
+          final serverNotes = await ctx.abandonable(_api.list);
           ctx.emit(ctx.state.copyWith(notes: serverNotes));
         },
       );
@@ -249,8 +249,8 @@ final class NotesController extends Solo<NotesState> {
 response it checks cancellation before returning the result. Upload uses `join`
 so that even a cancelled upload holds the queue until the server has answered:
 the next root job cannot read the server while the upload is still in progress.
-Refresh uses `ctx.wait`, which can stop waiting on cancellation because this
-example allows its read result to be abandoned.
+Refresh uses `ctx.abandonable`, which can stop waiting on cancellation because
+this example allows its read result to be abandoned.
 
 The final state is also `NotesState([n0, n1], uploading: false)`, from the same
 order as the bloc above — `list reads [n0, n1]` after `server receives n1` —
@@ -523,14 +523,14 @@ final class ChatController extends Solo<ChatState> {
   Job<void> send(String text) => run<ChatState, void>(
         key: 'send',
         (ctx) async {
-          final reply = await ctx.wait(() => _api.send(text));
+          final reply = await ctx.abandonable(() => _api.send(text));
           ctx.emit(ctx.state.withReply(reply));
           markReplyRead();
         },
       );
 
   Job<void> markReplyRead() =>
-      run<ChatState, void>((ctx) => ctx.wait(_api.markRead));
+      run<ChatState, void>((ctx) => ctx.abandonable(_api.markRead));
 }
 
 Future<void> onScreenClosed(ChatController chat) async {
@@ -539,10 +539,10 @@ Future<void> onScreenClosed(ChatController chat) async {
 }
 ```
 
-In this body, `ctx.wait` throws `Cancelled` when closing cancels the job. The
-reply update and `markReplyRead()` call are not reached. That method would
-submit a separate root job through the controller's `run`; it is not a child of
-`send`.
+In this body, `ctx.abandonable` throws `Cancelled` when closing cancels the
+job. The reply update and `markReplyRead()` call are not reached. That method
+would submit a separate root job through the controller's `run`; it is not a
+child of `send`.
 
 With a plain await instead, closing would wait for the API response. The
 `ctx.emit` after it would still throw `Cancelled`, so the reply would not be
@@ -638,7 +638,7 @@ final class RefreshController extends Solo<RefreshState> {
         onCancel: (state, cancelled) => const Initial(),
         (ctx) async {
           ctx.emit(const Loading());
-          await ctx.wait(_api.refresh);
+          await ctx.abandonable(_api.refresh);
           ctx.emit(const Initial());
         },
       );
@@ -664,10 +664,10 @@ nothing to cancel.
 job, so it answers with the queued refresh when one is waiting. That order is
 the one this method needs: a refresh can only be queued behind another because
 a second `refresh()` was called, and `Policy.restart` cancelled the running one
-at that moment. `ctx.wait` ends the wait for the API, and `onCancel` returns
-`Initial` before the queue proceeds. A successful refresh publishes `Initial`
-from the body; `onError` resets the indicator on failure while the job still
-reports `Failed`.
+at that moment. `ctx.abandonable` ends the wait for the API, and `onCancel`
+returns `Initial` before the queue proceeds. A successful refresh publishes
+`Initial` from the body; `onError` resets the indicator on failure while the
+job still reports `Failed`.
 
 The timing differs: bloc's cancel-event handler updates state when it runs,
 while solo's state handler runs after the cancelled job's cleanup. Neither
@@ -1413,17 +1413,17 @@ Future<Map<String, Object?>> handlePayRequest(
 order key. Both callers share its receipt, while another order creates another
 job. The three requests again make two API calls.
 
-The charge is a plain `await`. `ctx.wait`, `ctx.join` and `ctx.uncancellable`
-are for a job that can be cancelled, and they differ in what each does with a
-cancellation arriving during a call: `wait` lets go of the call, `join` stays
-with it until it answers, `uncancellable` holds the cancellation back until the
-step ends. This job cannot be cancelled while it runs. It sets no `keepWhile`
-and accepts the base `CheckoutState`, so no state rule can reject it — and that
-is the width that matters, because a state rule cancels even a non-cancellable
-job: a narrower type would allow cancellation after a charge was sent but
-before it was recorded. Every other cancellation is rejectable, and
-`cancellable: false` rejects it: `Job.cancel` from a screen, a closing
-controller.
+The charge is a plain `await`. `ctx.abandonable`, `ctx.join` and
+`ctx.uncancellable` are for a job that can be cancelled, and they differ in
+what each does with a cancellation arriving during a call: `abandonable` lets
+go of the call, `join` stays with it until it answers, `uncancellable` holds
+the cancellation back until the step ends. This job cannot be cancelled while
+it runs. It sets no `keepWhile` and accepts the base `CheckoutState`, so no
+state rule can reject it — and that is the width that matters, because a state
+rule cancels even a non-cancellable job: a narrower type would allow
+cancellation after a charge was sent but before it was recorded. Every other
+cancellation is rejectable, and `cancellable: false` rejects it: `Job.cancel`
+from a screen, a closing controller.
 
 The body publishes `Paid` before completing with the receipt, and `close()`
 waits for that completion. API failures still produce `Failed`; a failure state
@@ -1813,7 +1813,7 @@ final class PreviewController extends Solo<PreviewState> {
         key: 'preview',
         policy: Policy.restart,
         (ctx) async {
-          final buffer = await ctx.wait(
+          final buffer = await ctx.abandonable(
             () => _decoder.open(clip),
             dispose: (buffer) => buffer.release(),
           );
@@ -1823,10 +1823,10 @@ final class PreviewController extends Solo<PreviewState> {
 }
 ```
 
-`ctx.wait` can end the cancelled job before the decoder finishes. A late buffer
-is still passed to `dispose`; one returned while the job is active is released
-during its cleanup. The replacement job may therefore start without waiting for
-the obsolete decode, while each buffer is released.
+`ctx.abandonable` can end the cancelled job before the decoder finishes. A late
+buffer is still passed to `dispose`; one returned while the job is active is
+released during its cleanup. The replacement job may therefore start without
+waiting for the obsolete decode, while each buffer is released.
 
 Use `dispose` here because the buffer is temporary, including on success.
 `discard` is for a resource handed to the caller as the successful result; it

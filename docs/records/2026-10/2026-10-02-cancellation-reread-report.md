@@ -11,7 +11,10 @@
 > `2026-09-28-cancellation-outcomes-pages-report.md`,
 > `2026-10-02-children-reread-report.md`,
 > `2026-10-02-extending-rakes-report.md`,
-> `2026-09-26-async-job-project-review.md`.
+> `2026-09-26-async-job-project-review.md`,
+> `2026-10-05-ctx-abandonable-design.md`,
+> `2026-10-05-ctx-abandonable-design-review-report.md`,
+> `2026-10-05-ctx-abandonable-report.md`.
 
 # Повторная вычитка cancellation.md
 
@@ -436,3 +439,12 @@ K8a эквивалентна: принятую отмену `run` проверя
    the action ends, then throws `Cancelled`»; в переводе «Перестаёт ждать
    и сразу бросает» и «Ждёт дальше, пока действие не кончится, затем бросает».
    Утверждения те же, сторожа прежние.
+2. Оставлять ли имена `wait` и `join` — вопрос владельца, 2026-10-05, вслед
+   за первым пунктом. `join` остаётся: действие, которое тело ждёт до конца
+   и после отмены, он называет. `wait` по выбору владельца становится
+   `abandonable`: имя `wait` ничего не говорит о том, что при отмене действие
+   бросают, а `Future.wait` приучил читать его как «дождаться всего». Дизайн —
+   `2026-10-05-ctx-abandonable-design.md`, его ревью —
+   `2026-10-05-ctx-abandonable-design-review-report.md`, волна правок —
+   `2026-10-05-ctx-abandonable-report.md`. Строки таблицы вступления сохранили
+   свои слова, имя в них теперь `abandonable`.

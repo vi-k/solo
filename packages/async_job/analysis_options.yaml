@@ -135,6 +135,7 @@ linter:
     # curly_braces_in_flow_control_structures: true # [core]
     dangling_library_doc_comments: true
     deprecated_consistency: true
+    deprecated_member_use_from_same_package: true
     directives_ordering: true
     # do_not_use_environment: true
     # empty_catches: true # [core]

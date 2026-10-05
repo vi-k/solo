@@ -301,12 +301,13 @@ void main() {
       _says('`ctx.join(action)` calls the operation and waits for it.');
     });
 
-    test('under wait the refresh reads a server that has not the note', () {
+    test('under abandonable the refresh reads a server that has not the note',
+        () {
       late notes.Api api;
-      late notes.WaitingNotesController controller;
+      late notes.AbandoningNotesController controller;
       final errors = _zone((async) {
         api = notes.Api();
-        controller = notes.WaitingNotesController(api);
+        controller = notes.AbandoningNotesController(api);
         final job = controller.upload(notes.Note('n1'));
         controller.refresh();
         async.elapse(_ms(10));
@@ -337,8 +338,9 @@ void main() {
       expect(errors, isEmpty);
       expect('$atTen', 'Cancelled(manual)');
       expect(controller.currentState.notes, isEmpty);
-      _says('Refresh uses `ctx.wait`, which can stop waiting on cancellation '
-          'because this example allows its read result to be abandoned.');
+      _says('Refresh uses `ctx.abandonable`, which can stop waiting on '
+          'cancellation because this example allows its read result to be '
+          'abandoned.');
     });
 
     test('root jobs run one at a time, in the order they were added', () {
@@ -506,7 +508,7 @@ void main() {
         async.elapse(_ms(100));
       });
       expect(errors, isEmpty);
-      // `ctx.wait` let the call go: closing did not wait for the API.
+      // `ctx.abandonable` let the call go: closing did not wait for the API.
       expect(closedAtOnce, isTrue);
       expect('$running', 'Cancelled(closed)');
       expect('$queued', 'Cancelled(closed)');
@@ -515,7 +517,7 @@ void main() {
       expect('${controller.currentState}', 'ChatState(null)');
       _says('`close()` stops accepting jobs, cancels queued jobs, requests '
           'cancellation of the running job and waits for its completion');
-      _says('In this body, `ctx.wait` throws `Cancelled` when closing '
+      _says('In this body, `ctx.abandonable` throws `Cancelled` when closing '
           'cancels the job.');
       _says('A message still queued behind the running one never reaches '
           'the API: it ends `Cancelled(closed)` without starting');
@@ -738,7 +740,8 @@ void main() {
         'cleanup ends in Loading',
         'the next job starts in Initial',
       ]);
-      _says('`ctx.wait` ends the wait for the API, and `onCancel` returns '
+      _says(
+          '`ctx.abandonable` ends the wait for the API, and `onCancel` returns '
           '`Initial` before the queue proceeds.');
     });
 
@@ -1303,15 +1306,17 @@ void main() {
           'it was recorded');
     });
 
-    test('wait lets go, join stays, uncancellable holds the cancellation', () {
+    test(
+        'abandonable lets go, join stays, uncancellable holds the cancellation',
+        () {
       final atTen = <String, String>{};
       final atLast = <String, List<String>>{};
       final errors = _zone((async) {
-        for (final member in ['wait', 'join', 'uncancellable']) {
+        for (final member in ['abandonable', 'join', 'uncancellable']) {
           final controller = checkout.WaitingCheckoutController(checkout.Api());
           const order = checkout.Order('A');
           final job = switch (member) {
-            'wait' => controller.viaWait(order),
+            'abandonable' => controller.viaAbandonable(order),
             'join' => controller.viaJoin(order),
             _ => controller.viaUncancellable(order),
           };
@@ -1325,12 +1330,12 @@ void main() {
       });
       expect(errors, isEmpty);
       expect(atTen, {
-        'wait': 'Cancelled(manual), cancelled true',
+        'abandonable': 'Cancelled(manual), cancelled true',
         'join': 'null, cancelled true',
         'uncancellable': 'null, cancelled false',
       });
       expect(atLast, {
-        'wait': ['Cancelled(manual)', 'wait threw Cancelled'],
+        'abandonable': ['Cancelled(manual)', 'abandonable threw Cancelled'],
         'join': ['Cancelled(manual)', 'join threw Cancelled'],
         'uncancellable': [
           'Cancelled(manual)',
@@ -1338,7 +1343,7 @@ void main() {
           'the next checkpoint threw Cancelled',
         ],
       });
-      _says('`wait` lets go of the call, `join` stays with it until it '
+      _says('`abandonable` lets go of the call, `join` stays with it until it '
           'answers, `uncancellable` holds the cancellation back until the '
           'step ends.');
       _says('The charge is a plain `await`.');
@@ -1697,7 +1702,7 @@ void main() {
       );
       expect('${controller.currentState}', 'Preview(2)');
       expect([current.releases, stale.releases], [1, 1]);
-      _says('`ctx.wait` can end the cancelled job before the decoder '
+      _says('`ctx.abandonable` can end the cancelled job before the decoder '
           'finishes. A late buffer is still passed to `dispose`');
       _says('The replacement job may therefore start without waiting for '
           'the obsolete decode, while each buffer is released.');

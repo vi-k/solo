@@ -20,7 +20,7 @@ final class ProfileController extends Solo<ProfileState> {
         onCancel: (state, cancelled) => const Initial(),
         (ctx) async {
           ctx.emit(const Loading());
-          final name = await ctx.wait(api.fetchName);
+          final name = await ctx.abandonable(api.fetchName);
           ctx.emit(Loaded(name));
           return name;
         },
@@ -266,8 +266,8 @@ test('a failed load shows the failure', () async {
 
 Одна ошибка не достаётся ни одному из трёх: ошибка вызова, от которого задача
 ушла. Отмените загрузку, пока фейк ещё отвечает, или закройте на ней
-контроллер, и `ctx.wait` отпускает вызов. Задача кончается `Cancelled`; вызов
-падает через двадцать миллисекунд, и его ошибка не принадлежит ни одному
+контроллер, и `ctx.abandonable` отпускает вызов. Задача кончается `Cancelled`;
+вызов падает через двадцать миллисекунд, и его ошибка не принадлежит ни одному
 исходу. Она уходит в зону, в которой задача создана, снова в зону теста, а тест
 к этому времени уже закончился. Тест, который такую ошибку ждёт, ставит
 `Solo.errorHandler`, и ошибка приходит ему вместо зоны: об этом раздел
@@ -452,9 +452,9 @@ expect('${job.outcome}', 'Cancelled(manual)');
 ```
 
 Задача принимает отмену внутри самого вызова, а до исхода остаётся ещё
-несколько микротасок: тело должно выйти из своего `wait`, а обработчик
-`onCancel` должен отработать. Строкой под вызовом исход ещё `null`,
-и до `Cancelled` его доводит один `flushMicrotasks()`. Первый
+несколько микротасок: тело должно выйти из своего вызова `abandonable`,
+а обработчик `onCancel` должен отработать. Строкой под вызовом исход ещё
+`null`, и до `Cancelled` его доводит один `flushMicrotasks()`. Первый
 `flushMicrotasks()` тот же, что в разделе выше: он выпускает загрузку
 из очереди, так что отменяется уже работающая загрузка; ту, что ещё стоит
 в очереди, вызов отбрасывает сам, и её исход есть уже на следующей строке.
@@ -589,7 +589,7 @@ test('a failure nobody read reaches the zone', () async {
 ### Первая попытка
 
 ```dart
-final name = await ctx.wait(
+final name = await ctx.abandonable(
   () => api.fetchName().timeout(const Duration(milliseconds: 5)),
 );
 ```

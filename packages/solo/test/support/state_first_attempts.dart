@@ -56,7 +56,7 @@ final class Camera extends Solo<CameraState> {
           ruleAsked++;
           return state is! Disconnected;
         },
-        (ctx) => ctx.wait(() => device.answer.future),
+        (ctx) => ctx.abandonable(() => device.answer.future),
       );
 
   /// Not on the page: work that waits its turn.
@@ -82,7 +82,7 @@ final class ProfileController extends Solo<ProfileState> {
         (ctx) async {
           ctx.emit(const Loading());
           try {
-            final name = await ctx.wait(api.fetchName);
+            final name = await ctx.abandonable(api.fetchName);
             ctx.emit(Loaded(name));
             return name;
           } on Object {
@@ -100,7 +100,7 @@ final class ProfileController extends Solo<ProfileState> {
         onCancel: (state, cancelled) => const Initial(),
         (ctx) async {
           ctx.emit(const Loading());
-          final name = await ctx.wait(api.fetchName);
+          final name = await ctx.abandonable(api.fetchName);
           ctx.emit(Loaded(name));
           return name;
         },

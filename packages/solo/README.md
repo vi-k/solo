@@ -83,7 +83,7 @@ final class ProfileController extends Solo<ProfileState> {
         onCancel: (state, cancelled) => const Initial(),
         (ctx) async {
           ctx.emit(const Loading());
-          final name = await ctx.wait(api.fetchName);
+          final name = await ctx.abandonable(api.fetchName);
           ctx.emit(Loaded(name));
           return name;
         },
@@ -98,8 +98,8 @@ body receives a context, `ctx`, which provides state updates and
 cancellation-aware waiting:
 
 - `ctx.emit` updates the controller's state.
-- `ctx.wait` waits for the API response, or throws `Cancelled` if the job
-  accepts cancellation while waiting.
+- `ctx.abandonable` waits for the API response, or throws `Cancelled` if the
+  job accepts cancellation while waiting.
 
 Two parameters of `run` give the state to publish when the job does not
 succeed:
@@ -191,7 +191,7 @@ Job<String> reload() => run<Loaded, String>(
         // Another controller's snapshot: a plain read, and the name says
         // as much.
         final user = session.currentState.user;
-        final name = await ctx.wait(() => api.fetchName(user));
+        final name = await ctx.abandonable(() => api.fetchName(user));
         // This job's own state: a checkpoint that throws `Cancelled` if
         // the job has been cancelled or the state is no longer `Loaded`.
         if (ctx.state.name != name) {
@@ -257,7 +257,7 @@ final class Player extends Solo<PlayerState> {
           // before another one loads.
           await ctx.join(device.stop);
           // Cancellation ends this wait at once; the request may go on.
-          final track = await ctx.wait(() => api.fetch(id));
+          final track = await ctx.abandonable(() => api.fetch(id));
           // Waited out as well. `dispose` closes the download when the
           // job ends, or as soon as the call returns if the job was
           // cancelled meanwhile.
@@ -321,7 +321,7 @@ search.
 | --- | --- |
 | [Jobs and the queue](doc/jobs.md) | Submitting work, outcomes, keys, queue policies |
 | [State](doc/state.md) | Emitting, rules, observing, external changes, state after failure |
-| [Cancellation](doc/cancellation.md) | `wait`, `join`, `pause`, `uncancellable`, stopping the operation, closing |
+| [Cancellation](doc/cancellation.md) | `abandonable`, `join`, `pause`, `uncancellable`, stopping the operation, closing |
 | [Resources and cleanup](doc/resources.md) | `onDispose`, `dispose` and `discard`, transfer, ordering |
 | [Children and streams](doc/children.md) | Child jobs, streams, following another controller |
 | [Event accumulation](doc/accumulation.md) | `collect`, `accumulate`, debounce and throttle |
@@ -347,7 +347,7 @@ section linked beside it.
 | A journal needs to say which operation changed the state | `SoloTransition` in `onChange` | [Watching every controller](doc/errors.md#watching-every-controller) |
 | A call must finish before the queue goes on | `ctx.join` | [Cancellation](doc/cancellation.md) |
 | A step of several calls must not be interrupted halfway | `ctx.uncancellable` | [Protecting a step or a whole job](doc/cancellation.md#protecting-a-step-or-a-whole-job) |
-| A resource opened by a call nobody waited for still has to close | `dispose` or `discard` on `ctx.wait` and `ctx.join` | [Taking a resource from a call](doc/resources.md#taking-a-resource-from-a-call) |
+| A resource opened by a call nobody waited for still has to close | `dispose` or `discard` on `ctx.abandonable` and `ctx.join` | [Taking a resource from a call](doc/resources.md#taking-a-resource-from-a-call) |
 | A widget rebuilds for state it does not use | `SoloSelector` from `flutter_solo` | [Selecting one value](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.md#selecting-one-value) |
 | The queue has to stand still for a while | a job waiting on a `Completer` at the head of it | [Pausing the queue](doc/jobs.md#pausing-the-queue) |
 | A stream event arrives a microtask late, and that is too late | `addListener`, which calls back inside the change | [Observing state](doc/state.md#observing-state) |

@@ -961,7 +961,8 @@ void main() {
       });
     });
 
-    test('ctx.wait lets go of an operation that finishes on its own', () {
+    test('ctx.abandonable lets go of an operation that finishes on its own',
+        () {
       fakeAsync((async) {
         final camera = page.CameraController();
         final replaced = camera.seekLetGo(const Duration(seconds: 1));
