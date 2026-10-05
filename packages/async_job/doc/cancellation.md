@@ -56,6 +56,9 @@ callbacks run, and it ends `Cancelled`.
 Inside an action passed to the context, a plain `await` is right: the context
 adds no checkpoint between the steps of that action, and a step that needs a
 check of its own takes a context call of its own.
+[A step that must finish](#a-step-that-must-finish) puts two writes in a `join`
+each and then in one `join`, and shows what each form does when the
+cancellation comes during the first write.
 
 The lines under the code are what it prints when it runs. The database says
 what it writes, and `printing`, the observer of every job below, prints what
