@@ -15,7 +15,8 @@ import 'support/page_code.dart';
 
 /// The first attempts of `doc/cancellation.md`, and what each one costs.
 ///
-/// Every section of the page opens with the version the names lead to and
+/// Every section of the page opens with the version habit or the names of
+/// the API lead to and
 /// shows what that version prints. The page has no bench: its code stands
 /// verbatim in `support/cancellation_page.dart`, each block in a region of
 /// its own, and the tests below run it; the variants next to them hold what

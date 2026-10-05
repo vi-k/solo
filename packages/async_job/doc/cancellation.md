@@ -64,11 +64,12 @@ The lines under the code are what it prints when it runs. The database says
 what it writes, and `printing`, the observer of every job below, prints what
 reaches it: `log:` for `ctx.log`, `onError:` for an error. `cancel` is the
 moment the user cancels, and `outcome:` is what `job.done` completes with. Each
-part of the page below opens with the version the names lead to — `abandonable`
-to answer a cancellation at once, `join` to see a step through, a clause for
-`Cancelled` to let the cancellation pass — and shows what that code does. Where
-the version that repairs it still falls short, it stands as a second attempt,
-and the version that works follows under its own heading.
+part of the page below opens with the version habit or the names of the API
+lead to — `abandonable` to answer a cancellation at once, `join` to see a step
+through, a clause for `Cancelled` to let the cancellation pass, a plain
+`Future.delayed` between two reads — and shows what that code does. Where the
+version that repairs it still falls short, it stands as a second attempt, and
+the version that works follows under its own heading.
 
 ## Stopping the operation
 
@@ -266,9 +267,8 @@ passes no checkpoint of the context.
 ## A step that runs a child
 
 The step is the same, and the flag is written by a job of its own now:
-`database.readyFlag()` returns a job made with `Job.deferred`, because
-`ctx.run` refuses a job that starts itself, and the step runs it as a child.
-The user cancels while the version is being written.
+`database.readyFlag()` returns it, and the step runs it as a child with
+`ctx.run`. The user cancels while the version is being written.
 
 ### The first attempt
 
@@ -329,8 +329,8 @@ finishes first, the held cancellation is lost: `cancel()` completes, and the
 outcome is `Done`. If the body goes on without awaiting the section and then
 gives itself up, by throwing `Cancelled` or by letting out the cancellation of
 a child, the job accepts that cancellation at once: a section holds back a
-request, not a cancellation the body throws itself. `onCancel` runs while the
-section is still open, and `abandonable` inside it throws.
+cancellation request, not a cancellation the body throws itself. `onCancel`
+runs while the section is still open, and `abandonable` inside it throws.
 
 To protect the entire body instead of one section, create
 `Job(body, cancellable: false)`. It refuses ordinary cancellation once the body
