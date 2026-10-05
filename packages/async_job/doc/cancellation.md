@@ -31,7 +31,7 @@ Job<void>((ctx) async {
 
 | Method | If cancellation arrives while it waits |
 | --- | --- |
-| `ctx.abandonable(action)` | Stops waiting and throws `Cancelled` at once. The action continues; its result is dropped, or goes to the call's `dispose` or `discard` if it has one. |
+| `ctx.abandonable(action)` | Abandons the action: stops waiting for it and throws `Cancelled` at once, while the action goes on. Its result is dropped, or goes to the call's `dispose` or `discard` if it has one. |
 | `ctx.join(action)` | Keeps waiting until the action ends, then throws `Cancelled` instead of returning the value, or the action's own error if it failed. If the call has a `dispose` or `discard`, the value goes there first, and `join` throws once that callback has finished. |
 | `ctx.uncancellable(action)` | Holds the request until the section ends: no `onCancel`, no cascade to children while it runs. |
 | `ctx.pause(duration)` | Throws `Cancelled` at once, and cancels its timer. |
@@ -62,7 +62,7 @@ what it writes, and `printing`, the observer of every job below, prints what
 reaches it: `log:` for `ctx.log`, `onError:` for an error. `cancel` is the
 moment the user cancels, and `outcome:` is what `job.done` completes with. Each
 part of the page below opens with the version the names lead to — `abandonable`
-to wait for an operation, `join` to see a step through, a clause for
+to answer a cancellation at once, `join` to see a step through, a clause for
 `Cancelled` to let the cancellation pass — and shows what that code does. Where
 the version that repairs it still falls short, it stands as a second attempt,
 and the version that works follows under its own heading.
@@ -79,7 +79,8 @@ second step, 15 ms in.
 
 ### The first attempt
 
-The body waits for the migration through `abandonable`:
+The body waits for the migration through `abandonable`, so that a cancellation
+ends the job at once:
 
 ```dart
 final job = Job<Database>(observer: printing, (ctx) async {
