@@ -1,7 +1,8 @@
 > **Состояние на 2026-10-05:** сделано в клоне
 > `.artifacts/2026-10-05-ctx-abandonable/tree/` одним коммитом
-> `refactor(async_job)!: rename ctx.wait to ctx.abandonable`; в `main`
-> не перенесено, `docs/handoff.md` не обновлён.
+> `refactor(async_job)!: rename ctx.wait to ctx.abandonable` и перенесено
+> в `main` как `200cfe3`; основная сессия повторила проверки, кроме пола
+> и сборки сайта.
 > **Что это:** отчёт о волне переименования `ctx.wait` в `ctx.abandonable` —
 > что изменилось и сколько, решение о линте, расхождения с дизайном, проверки.
 > **Связанные записи:** `2026-10-05-ctx-abandonable-design.md`,
