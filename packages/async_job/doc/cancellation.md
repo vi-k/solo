@@ -31,8 +31,8 @@ Job<void>((ctx) async {
 
 | Method | If cancellation arrives while it waits |
 | --- | --- |
-| `ctx.wait(action)` | Throws `Cancelled` at once. The action continues; its result is dropped, or goes to the call's `dispose` or `discard` if it has one. |
-| `ctx.join(action)` | Waits for the action, then throws `Cancelled` instead of returning the value, or the action's own error if it failed. If the call has a `dispose` or `discard`, the value goes there first, and `join` throws once that callback has finished. |
+| `ctx.wait(action)` | Stops waiting and throws `Cancelled` at once. The action continues; its result is dropped, or goes to the call's `dispose` or `discard` if it has one. |
+| `ctx.join(action)` | Keeps waiting until the action ends, then throws `Cancelled` instead of returning the value, or the action's own error if it failed. If the call has a `dispose` or `discard`, the value goes there first, and `join` throws once that callback has finished. |
 | `ctx.uncancellable(action)` | Holds the request until the section ends: no `onCancel`, no cascade to children while it runs. |
 | `ctx.pause(duration)` | Throws `Cancelled` at once, and cancels its timer. |
 | `ctx.check()` | Throws when the job has already accepted cancellation. |
