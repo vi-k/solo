@@ -1737,6 +1737,12 @@ void main() {
         play(() => leaving(sendAnalytics)),
         ['outcome: Done(null)', 'zone: Bad state: analytics offline'],
       );
+      expect(
+        play(() => leaving(() async => throw const Cancelled('alone'))),
+        ['outcome: Done(null)'],
+        reason: 'a Cancelled that comes alone goes to onCancelled, which the '
+            'observer of the page leaves out',
+      );
     });
 
     test('the override answers for a child of a child, the zone for the app',
