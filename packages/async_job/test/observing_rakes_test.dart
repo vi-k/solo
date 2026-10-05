@@ -1723,6 +1723,22 @@ void main() {
       ]);
     });
 
+    test('an error that comes alone reaches onFailure as it is', () {
+      Job<void> leaving(Future<void> Function() work) =>
+          Job<void>(observer: DatabaseErrors(), (ctx) async {
+            ctx.unattended(work);
+          });
+
+      expect(
+        play(() => leaving(saveDraft)),
+        ['outcome: Done(null)', 'onUnanswered: DatabaseException'],
+      );
+      expect(
+        play(() => leaving(sendAnalytics)),
+        ['outcome: Done(null)', 'zone: Bad state: analytics offline'],
+      );
+    });
+
     test('the override answers for a child of a child, the zone for the app',
         () {
       // The observer is the root's; the child and the child's child

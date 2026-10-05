@@ -449,7 +449,9 @@ zone: Bad state: analytics offline
 ```
 
 `super` now gets the failures one at a time, so the zone hears the analytics
-error on its own instead of the whole `ParallelWaitError`. Each uncaught
+error on its own instead of the whole `ParallelWaitError`. An error that is not
+a `ParallelWaitError` goes to `onFailure` as it is, with its own stack trace: a
+database error that comes alone is answered as before. Each uncaught
 `Cancelled` inside a `ParallelWaitError` goes to `onCancelled`, which this
 observer does not pass, and is dropped. A check for `error is Cancelled` would
 not drop them all: a `ParallelWaitError` carrying nothing but `Cancelled` is

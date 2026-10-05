@@ -572,3 +572,14 @@ API, и «сам не является `Cancelled`» — редакция вла
    пускает провал дальше. В оригинале: «so it must not be lost. That is the
    second row of the table, and so the zone hears it». Утверждения и сторожа
    прежние.
+
+8. «`Job.visitErrors` отдаёт наблюдателю ошибки из `ParallelWaitError`
+   по одной: — стоит сказать, что в visitErrors будет с обычной ошибкой?» —
+   о подразделе «Each failure on its own», 2026-10-05. Стоит: первая попытка
+   на одиночную ошибку отвечала, и ответ не говорил, что это сохранилось. После
+   разбора трассы добавлена фраза: «An error that is not a `ParallelWaitError`
+   goes to `onFailure` as it is, with its own stack trace: a database error
+   that comes alone is answered as before». Сторож
+   в `observing_rakes_test.dart`, группа «Answering for errors»: наблюдатель
+   страницы на одиночный `DatabaseException` отвечает, одиночный `StateError`
+   передаёт в зону. `async_job` — 1265 тестов.
