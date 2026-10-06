@@ -366,15 +366,16 @@ zone, unless the observer answers for it, as
 [Where errors go](observing.md#where-errors-go) on the observing page shows.
 Without an observer, it goes straight to that zone. A thrown `Cancelled` is
 never forwarded to the zone. Listener errors do not change cancellation or
-prevent other listeners from running. The job does not wait for the future of
-an `async` callback, and none of the callback's errors reaches `onError`: an
-`async` function never throws synchronously, and even an error before its first
-`await` goes into the future it returns. The error is an uncaught one of the
-zone the listener was called in. For a cancellation accepted inside `cancel()`,
-that is the zone of the code that called it. For a cancellation an
-`uncancellable` section held, and for a body that gave itself up, it is the
-zone the body runs in. A job made with `Job(...)` runs its body in the zone it
-was created in, and one made with `Job.deferred` in the zone it was started
-from. If a job made with `Job(...)` was created, or one made with
+prevent other listeners from running. `whenCancelled` is made for a synchronous
+callback, though Dart lets an `async` one be passed. The job does not wait for
+the future of such a callback, and none of the callback's errors reaches
+`onError`: an `async` function never throws synchronously, and even an error
+before its first `await` goes into the future it returns. The error is an
+uncaught one of the zone the listener was called in. For a cancellation
+accepted inside `cancel()`, that is the zone of the code that called it. For a
+cancellation an `uncancellable` section held, and for a body that gave itself
+up, it is the zone the body runs in. A job made with `Job(...)` runs its body
+in the zone it was created in, and one made with `Job.deferred` in the zone it
+was started from. If a job made with `Job(...)` was created, or one made with
 `Job.deferred` started, inside work handed to `ctx.unattended`, its body runs
 in the zone that work was started from.

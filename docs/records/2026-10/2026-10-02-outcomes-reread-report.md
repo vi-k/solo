@@ -496,4 +496,11 @@ C16 — единственная зелёная, и для этой страни
    ядро. «The job does not wait for the future of an `async` callback, and none
    of the callback's errors reaches `onError`», в переводе «Future
    `async`-колбэка задача не ждёт, и ни одна его ошибка не доходит
-   до `onError`». Утверждение то же, сторожа прежние.
+   до `onError`». Утверждение то же, сторожа прежние. Вторым заходом владелец
+   предложил начало: «хотя whenCancelled ждёт синхронный колбэк, dart допускает
+   передать туда async-колбэк. но future такого колбэка задача не ждёт».
+   Принято: «`whenCancelled` is made for a synchronous callback, though Dart
+   lets an `async` one be passed. The job does not wait for the future of such
+   a callback…», в переводе «`whenCancelled` рассчитан на синхронный колбэк,
+   хотя Dart позволяет передать и `async`-колбэк. Future такого колбэка задача
+   не ждёт…». «Рассчитан», а не «ждёт»: в следующей фразе «ждёт» значит другое.
