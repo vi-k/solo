@@ -233,7 +233,8 @@ data, and `origin` follows them to the end: `cause` is `null` where nothing
 stands behind the reason, as for a body that threw `Cancelled('why')` itself.
 `SiblingCancelReason` has a `cause` too, but that is what the group of
 `ctx.runAll` stopped for — the error or the cancellation another branch ended
-with, or an error of the group itself — and `origin` stops at it.
+with, or an error of the group itself. So `origin` does not follow that
+`cause`: it returns the `SiblingCancelReason` itself.
 
 A body that awaits `value` of a job it does not own gets no
 `HandlerCancelReason` for it: that job's cancellation goes through with its

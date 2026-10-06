@@ -470,3 +470,10 @@ C16 — единственная зелёная, и для этой страни
    `backed up`, `backup failed`, `backup cancelled`), так же в переводе,
    в `test/support/outcomes_page.dart`, `outcomes_first_attempts.dart`
    и в стороже; тело `upload` осталось. Поведение то же.
+2. «На `SiblingCancelReason` `origin` и останавливается — переформулируй» —
+   о разделе «Following the cause», 2026-10-06. Фраза не говорила, что значит
+   «останавливается», и два имени стояли в ней подряд. Теперь сказано, что
+   делает функция страницы: «So `origin` does not follow that `cause`: it
+   returns the `SiblingCancelReason` itself», в переводе «Поэтому `origin`
+   по этому `cause` не идёт: он возвращает сам `SiblingCancelReason`».
+   Утверждение то же.
