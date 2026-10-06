@@ -564,3 +564,15 @@ already has» (R8), тест о `join` вокруг шага в «the Quick star
    отмену проверяет каждый `ctx.join`, закрытие базы регистрируется один раз.
    В `test/readme_recipe_test.dart` тесты флага теперь ждут закрытия: после
    открытия, после чтения и в конце, когда флаг никто не поднял.
+3. «если `onCancel` не написан так, чтобы это забрать, значение … остаётся
+   открытой — если это про CancelableOperation, то хорошо бы показать это
+   на примере» — об абзаце «Dart can already stop the waiting», 2026-10-06.
+   Оговорка про `onCancel` касалась одной `CancelableOperation`, а стояла
+   во фразе про обе. Теперь фраза говорит про обе без оговорки, а следом:
+   «`CancelableOperation` can catch such a database, but only in an `onCancel`
+   written for it, one that holds on to the future of the open», и блок с таким
+   `onCancel`. Тест «an onCancel written to catch the late database closes it»
+   в `test/readme_recipe_test.dart` уже проверял это своей копией; теперь он
+   берёт блок из функции `lateOpenCaught`, где тот стоит между метками
+   `README: begin` и `README: end`. Без строки `onCancel` в копии краснеют три
+   теста: этот и оба, что сверяют блоки README с файлом.

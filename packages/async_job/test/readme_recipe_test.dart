@@ -146,6 +146,20 @@ Future<void> openingJob() async {
   // README: end
 }
 
+/// The operation of the README that catches a late database, as it is
+/// written there.
+CancelableOperation<Database> lateOpenCaught() {
+  // README: begin
+  final open = Database.open();
+  final operation = CancelableOperation.fromFuture(
+    open,
+    // cancel() stops the waiting; this closes the database once it opens.
+    onCancel: () async => (await open).close(),
+  );
+  // README: end
+  return operation;
+}
+
 /// The Quick start of the README, as it is written there.
 Future<void> quickStart() async {
   // README: begin
@@ -580,11 +594,7 @@ void main() {
 
     test('an onCancel written to catch the late database closes it', () {
       fakeAsync((async) {
-        final open = Database.open();
-        final operation = CancelableOperation.fromFuture(
-          open,
-          onCancel: () async => (await open).close(),
-        );
+        final operation = lateOpenCaught();
         async.elapse(const Duration(milliseconds: 10));
         operation.cancel().ignore();
         async.flushTimers();

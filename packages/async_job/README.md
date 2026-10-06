@@ -92,13 +92,25 @@ context adds no checkpoint between the awaits of that action.
 Dart can already stop the waiting. `Future.timeout` stops it after a time
 limit, and `CancelableOperation` from `package:async` stops delivering its
 value on `cancel()`, running its `onCancel`, which can ask the work to stop.
-Neither holds on to what the work opens: unless an `onCancel` is written to
-catch it, a value that arrives once the waiting has stopped goes to nobody, and
-a database that opens late stays open. `ctx.join` hands a database that opens
-after the job's cancellation to its `dispose` all the same, with no code
-written for the cancellation, and the job ends once the database is closed.
-`ctx.abandonable` stops the waiting as they do and still hands that database to
-its `dispose` when it opens, even after the job has ended.
+Neither holds on to what the work opens: a value that arrives once the waiting
+has stopped goes to nobody, and a database that opens late stays open.
+`CancelableOperation` can catch such a database, but only in an `onCancel`
+written for it, one that holds on to the future of the open:
+
+```dart
+final open = Database.open();
+final operation = CancelableOperation.fromFuture(
+  open,
+  // cancel() stops the waiting; this closes the database once it opens.
+  onCancel: () async => (await open).close(),
+);
+```
+
+`ctx.join` hands a database that opens after the job's cancellation to its
+`dispose` all the same, with no code written for the cancellation, and the job
+ends once the database is closed. `ctx.abandonable` stops the waiting as they
+do and still hands that database to its `dispose` when it opens, even after the
+job has ended.
 
 `async_job` does not provide state management, a task queue or scheduling
 rules: [solo](#solo) adds them.
