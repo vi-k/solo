@@ -189,10 +189,11 @@ stackTrace: creation))`, где `creation` — трасса, снятая в к�
 но выражается через ребёнка:
 `await ctx.run(Job.deferred(step, key: 'step', timeout: d))`. Ребёнок кончается
 `Cancelled(timeout)`, `ctx.run` бросает эту отмену в тело родителя, и родитель
-либо ловит её (`on Cancelled catch (c) when c.reason is TimeoutCancelReason`),
-либо отпускает и кончается `Cancelled(handler)` с этой отменой в `cause`.
-Родитель при этом не отменён: срок вышел у ребёнка. Ключ в примере затем, что
-ребёнок без ключа печатается в исходе родителя как `child null`.
+либо ловит её (`on Cancelled catch (c)`, а внутри
+`if (c.reason is! TimeoutCancelReason) rethrow;`: охранного `when` у `catch`
+в Dart нет), либо отпускает и кончается `Cancelled(handler)` с этой отменой
+в `cause`. Родитель при этом не отменён: срок вышел у ребёнка. Ключ в примере
+затем, что ребёнок без ключа печатается в исходе родителя как `child null`.
 
 **Зона.** Таймер создаётся в зоне старта задачи, поэтому `fakeAsync` его видит
 и двигает, а работа `unattended` задач, стартующих из неё, не держит: `start`
