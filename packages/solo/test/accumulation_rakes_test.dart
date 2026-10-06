@@ -252,6 +252,27 @@ AccumulationTiming _throttle(int milliseconds, {bool startAtOnce = true}) =>
   );
 }
 
+/// The controller of the settings with a deadline on its accumulator: what
+/// the page says of `timeout` next to the client timeout.
+final class _TimedSettings extends Solo<Settings> {
+  final SettingsApi _api;
+  late final _updates = accumulate<Settings, SettingsPatch, void>(
+    (ctx, patch) async {
+      final next = patch.apply(ctx.state);
+      await ctx.join(() => _api.save(next));
+      ctx.emit(next);
+    },
+    merge: (accumulated, incoming) => accumulated.merge(incoming),
+    key: 'settings',
+    timeout: const Duration(milliseconds: 100),
+    timing: AccumulationTiming.debounce(const Duration(milliseconds: 200)),
+  );
+
+  _TimedSettings(this._api, super.initial);
+
+  SoloJob<void> update(SettingsPatch patch) => _updates.add(patch);
+}
+
 void main() {
   tearDown(() {
     Solo.observer = null;
@@ -793,6 +814,44 @@ void main() {
       expect(writing, 2);
       expect(api.sentAt, [200, 550]);
       expect(api.landedAt, [700, 1050]);
+    });
+
+    test(
+        'a deadline keeps the slot, and costs the emit that the next group '
+        'writes back over', () {
+      _says('A deadline given to the accumulator with `timeout` is a '
+          'cancellation, not a client timeout: `ctx.join` keeps the slot until '
+          '`save` completes, so the next write still waits for this one to '
+          'end');
+      _says('the next group applies its patch to them and writes the old '
+          'values back over the change');
+      _says('A group past its deadline is cancelled while the server is still '
+          'writing, ends `Cancelled(timeout)` once the write is stored, and '
+          'never reaches its `emit`');
+      final api = FakeSettingsApi(latency: 500);
+      final seen = <String>[];
+      _zone((async) {
+        final settings = _TimedSettings(api, _off);
+        final first = settings.update(const SettingsPatch(theme: 'dark'));
+        async.elapse(ms(350));
+        final second = settings.update(const SettingsPatch(language: 'ru'));
+        async.elapse(ms(250));
+        seen.add('at 600: ${first.outcome}, cancelled ${first.isCancelled}, '
+            '${api.writing} writing');
+        async.elapse(ms(2000));
+        seen
+          ..add('${first.outcome}, ${second.outcome}')
+          ..add('server ${describe(api.stored)}')
+          ..add('screen ${describe(settings.currentState)}');
+      });
+      expect(api.sentAt, [200, 700]);
+      expect(api.landedAt, [700, 1200]);
+      expect(seen, [
+        'at 600: null, cancelled true, 1 writing',
+        'Cancelled(timeout), Cancelled(timeout)',
+        'server notifications: false, theme: light, language: ru',
+        'screen notifications: false, theme: light, language: en',
+      ]);
     });
 
     test('a cancellation can keep the emit from a write the server accepted',

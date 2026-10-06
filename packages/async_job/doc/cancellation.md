@@ -67,9 +67,10 @@ moment the user cancels, and `outcome:` is what `job.done` completes with. Each
 part of the page below opens with the version habit or the names of the API
 lead to — `abandonable` to answer a cancellation at once, `join` to see a step
 through, a clause for `Cancelled` to let the cancellation pass, a plain
-`Future.delayed` between two reads — and shows what that code does. Where the
-version that repairs it still falls short, it stands as a second attempt, and
-the version that works follows under its own heading.
+`Future.delayed` between two reads, a `Timer` that calls `cancel` at the
+limit — and shows what that code does. Where the version that repairs it still
+falls short, it stands as a second attempt, and the version that works follows
+under its own heading.
 
 ## Stopping the operation
 
@@ -518,3 +519,153 @@ Without a duration, `ctx.pause()` comes back on the next turn of the event
 loop: a place for a long calculation to let other work run and to hear a
 cancellation. Inside `ctx.uncancellable` the cancellation is held like any
 other, and the pause runs its whole length.
+
+## A deadline
+
+The migration is given 15 ms. Past that, the job should stop the way it stops
+when the user cancels: the token stops the migration, and `discard` closes the
+database. Nobody cancels by hand here.
+
+### The first attempt
+
+`cancel` is what stops a job, so a timer calls it once the limit has run out:
+
+```dart
+const limit = Duration(milliseconds: 15);
+
+final job = Job<Database>(observer: printing, (ctx) async {
+  final database = await ctx.join(
+    Database.open,
+    discard: (database) => database.close(),
+  );
+  final stop = CancelToken();
+  ctx.onCancel(stop.cancel);
+
+  await ctx.join(() => database.migrate(stop));
+
+  return database;
+});
+Timer(limit, job.cancel);
+```
+
+```text
+step 1
+step 2
+migration stopped
+onError: DatabaseStopped
+database closed
+outcome: Cancelled(manual)
+```
+
+The job stops as it does for the user in
+[A token through `onCancel`](#a-token-through-oncancel), and a job that has
+already finished is left as it is: `cancel()` does nothing to it. But the timer
+lives until the limit, whether the job is over or not. A migration that fails
+on a bad schema ends the job `Failed` at once, and the timer runs for the 15 ms
+that are left with nothing to cancel. A program that has nothing else to do
+does not exit until it fires, and a test that looks for pending timers finds
+one.
+
+### The second attempt
+
+The timer is cancelled when the job ends:
+
+```dart
+final timer = Timer(limit, job.cancel);
+job.done.whenComplete(timer.cancel);
+```
+
+No timer is left behind now, but reading `job.done` observes the outcome. The
+failure on the bad schema still reaches the observer as `onError` and no longer
+reaches the zone: without an observer nobody hears it, and the code that
+cancels the timer has to report it itself.
+
+### A deadline of the job
+
+```dart
+final job = Job<Database>(observer: printing, timeout: limit, (ctx) async {
+  final database = await ctx.join(
+    Database.open,
+    discard: (database) => database.close(),
+  );
+  final stop = CancelToken();
+  ctx.onCancel(stop.cancel);
+
+  await ctx.join(() => database.migrate(stop));
+
+  return database;
+});
+```
+
+```text
+step 1
+step 2
+migration stopped
+onError: DatabaseStopped
+database closed
+outcome: Cancelled(timeout)
+```
+
+`timeout` gives the job a deadline of its own. The core starts the timer when
+the body starts, so the time before the start is not counted, such as the wait
+of a `Job.deferred` for its `start()` or for the `ctx.run` of a parent. When
+the deadline runs out, the job is cancelled with `TimeoutCancelReason`, whose
+`timeout` is the limit, and the outcome says so: `Cancelled(timeout)`, where
+the timer of the first attempt left `Cancelled(manual)`, the same as the
+user's. The deadline is a cancellation like that of `cancel()`, not the
+`TimeoutException` of `Future.timeout`: the body stops at its next checkpoint,
+an `uncancellable` section holds the request until it closes, a job cancelled
+already keeps its own reason, and the children hear the deadline as the cause
+of their `ParentCancelReason`. If the body and the children it waits for are
+over while the section still holds the request, the request goes with the
+timer, and the job ends with what the body returned.
+
+The deadline bounds the body and the children the job waits for after it, not
+the cleanup stack. The core cancels the timer before the stack unwinds: a
+cancellation arriving there would turn a job that did its work into a cancelled
+one and close its value through `discard`. It cancels the timer however else
+the job ends, and observes nothing as it does:
+
+| How the job gets its limit | Timer left behind | A failure of the job |
+| --- | --- | --- |
+| `Timer(limit, job.cancel)` | for 15 ms more | reaches the zone |
+| `job.done.whenComplete(timer.cancel)` | none | reaches no zone |
+| `timeout: limit` | none | reaches the zone |
+
+A job still running when a test ends holds its timer like any other: a test
+under `fakeAsync` or `testWidgets` ends such a job, by cancelling it or waiting
+for it, before the test itself ends. A deadline that is zero or negative throws
+`ArgumentError`, and so does one that comes with `cancellable: false`: the
+deadline is a cancellation the job may refuse, and such a job would refuse it.
+
+### A deadline for one step
+
+A page goes out without its thumbnail if the thumbnail takes longer than 15 ms;
+`renderThumbnail` takes 20. One step gets a deadline as a child of its own:
+
+```dart
+final thumbnail = Job.deferred<String>(
+  renderThumbnail,
+  key: 'thumbnail',
+  timeout: const Duration(milliseconds: 15),
+);
+try {
+  return 'page with ${await ctx.run(thumbnail)}';
+} on Cancelled catch (cancelled) {
+  if (cancelled.reason is! TimeoutCancelReason) rethrow;
+  return 'page without a thumbnail';
+}
+```
+
+```text
+outcome: Done(page without a thumbnail)
+```
+
+The child ends `Cancelled(timeout)`, and `ctx.run` throws that cancellation
+into the body of the parent. The parent itself is not cancelled: the deadline
+ran out for the child. A `catch` in Dart has no `when`, so the clause takes
+every `Cancelled` and rethrows what is not the deadline: the job's own
+cancellation, and a thumbnail somebody else cancelled. Let out, the child's
+deadline ends the parent
+`Cancelled(handler: child thumbnail: Cancelled(timeout))`. The key is there for
+that line: a child without one prints as `child null`.

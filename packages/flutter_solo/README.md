@@ -493,6 +493,13 @@ running — an expectation that failed halfway through a load is enough — neve
 comes back. The test stands until its timeout, and the test after it fails with
 it.
 
+A job given a `timeout` brings a timer of its own, which the core holds until
+the job ends. Left running when the body of a `testWidgets` ends, such a job
+fails the test with
+`A Timer is still pending even after the widget tree was disposed`, where the
+same job without a deadline lets the test pass. Closing the controller in the
+body, as above, ends the job and takes its timer along.
+
 ## Notes
 
 | Question | Answer |

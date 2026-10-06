@@ -49,6 +49,7 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
   final bool Function(W)? _canStart;
   final bool Function(W)? _keepWhile;
   final bool _cancellable;
+  final Duration? _timeout;
   final String Function()? _describe;
   var _merging = false;
   Timer? _throttleTimer;
@@ -65,8 +66,10 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
     required bool Function(W)? canStart,
     required bool Function(W)? keepWhile,
     required bool cancellable,
+    required Duration? timeout,
     required String Function()? describe,
-  })  : _seed = seed,
+  })  : _timeout = _checkTimeout(timeout, cancellable: cancellable),
+        _seed = seed,
         _merge = merge,
         _snapshot = snapshot,
         _key = key,
@@ -76,6 +79,30 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
         _keepWhile = keepWhile,
         _cancellable = cancellable,
         _describe = describe;
+
+  /// The check `JobBase` makes of every job, made once here, when the
+  /// accumulator is created: its jobs are built on [add], and a mistake of
+  /// the configuration would otherwise surface on the first event. The
+  /// texts are those of the core.
+  static Duration? _checkTimeout(
+    Duration? timeout, {
+    required bool cancellable,
+  }) {
+    if (timeout == null) {
+      return null;
+    }
+    if (timeout <= Duration.zero) {
+      throw ArgumentError('must be positive, not $timeout', 'timeout');
+    }
+    if (!cancellable) {
+      throw ArgumentError(
+        'needs a cancellable job, and cancellable: false refuses the '
+            'cancellation the deadline makes',
+        'timeout',
+      );
+    }
+    return timeout;
+  }
 
   _SoloJob<S, W, T>? _candidate() {
     final jobs = _solo._queue._jobs;
@@ -101,6 +128,7 @@ final class _SoloAccumulator<S extends Object, W extends S, E, V, T>
         canStart: _canStart,
         keepWhile: _keepWhile,
         cancellable: _cancellable,
+        timeout: _timeout,
         describe: _describe,
         observer: _solo._jobObserver,
       ).._accumulation = group;

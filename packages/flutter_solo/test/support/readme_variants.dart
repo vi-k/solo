@@ -180,6 +180,27 @@ class SilentApi extends ProfileApi {
   Future<String> fetchName() => Completer<String>().future;
 }
 
+/// The load of `ProfileController` with a deadline: "a job given a
+/// `timeout`".
+final class TimedLoad extends Solo<Profile> with SoloListenable {
+  final ProfileApi api;
+
+  TimedLoad(this.api) : super(Empty());
+
+  Job<String> load() => run<Profile, String>(
+        key: 'load',
+        timeout: const Duration(seconds: 5),
+        (ctx) async {
+          ctx.emit(Loading());
+          final name = await ctx.abandonable(api.fetchName);
+          ctx.emit(Loaded(name));
+
+          return name;
+        },
+        onCancel: (state, cancelled) => Empty(),
+      );
+}
+
 /// An observer that writes down the errors it is told of.
 final class Watching extends SoloObserver {
   /// Every error `onError` was given.

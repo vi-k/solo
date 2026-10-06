@@ -125,13 +125,10 @@ opens, even after the job has ended.
 rules: [solo](#solo) adds them.
 
 Neither package provides retries or a task pool; applications can add these as
-needed. A job has no timeout of its own either: `Timer(limit, job.cancel)`
-cancels it once the limit has run out, and does nothing to a job that has
-already finished. The timer itself lives until the limit: a program with
-nothing else to do does not exit before it fires. Cancelling it when the job
-ends, `job.done.whenComplete(timer.cancel)`, observes the outcome: a failure of
-the job then no longer reaches the zone, and the code that cancels the timer
-has to report it.
+needed. A deadline is built in: `Job(body, timeout: limit)` cancels the job
+once the limit has run out, and it ends `Cancelled(timeout)`.
+[A deadline](doc/cancellation.md#a-deadline) on the cancellation page tells it
+from a `Timer` that calls `cancel`.
 
 ## Install
 
@@ -234,7 +231,7 @@ search.
 | Page | What it covers |
 | --- | --- |
 | [Outcomes](doc/outcomes.md) | `Done`, `Failed`, `Cancelled`, and observing a failure |
-| [Cancellation](doc/cancellation.md) | Checkpoints, `onCancel`, `uncancellable` |
+| [Cancellation](doc/cancellation.md) | Checkpoints, `onCancel`, `uncancellable`, `timeout` |
 | [Children, streams and chains](doc/children.md) | `Job.deferred`, `ctx.run`, `ctx.runAll`, `ctx.each`, `then` |
 | [Streams](doc/streams.md) | `ctx.each`, `Job.each`, and what `await for` and `listen` do in a body |
 | [Cleanup](doc/cleanup.md) | `dispose`, `discard`, `onDispose`, ordering |

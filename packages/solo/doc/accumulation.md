@@ -368,6 +368,14 @@ the two the server keeps is no longer the queue's decision — the screen and th
 server can end up disagreeing for good. Cancellation can also prevent the final
 `emit` after the server has accepted the write.
 
+A deadline given to the accumulator with `timeout` is a cancellation, not a
+client timeout: `ctx.join` keeps the slot until `save` completes, so the next
+write still waits for this one to end. What the deadline costs is the final
+`emit`. A group past its deadline is cancelled while the server is still
+writing, ends `Cancelled(timeout)` once the write is stored, and never reaches
+its `emit`: the state keeps the old settings, and the next group applies its
+patch to them and writes the old values back over the change.
+
 ### One request per log line
 
 An application writes log entries one at a time and the server takes them in

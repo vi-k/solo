@@ -67,6 +67,29 @@ final class TokenPlayer extends Solo<AppState> with OpenSolo<AppState>, Desk {
       );
 }
 
+/// "A deadline of a job": the seek of "The token" with a deadline, and a
+/// state for the deadline of its own.
+final class DeadlinePlayer extends Solo<AppState>
+    with OpenSolo<AppState>, Desk {
+  final _player = player;
+
+  DeadlinePlayer() : super(const Ready());
+
+  SoloJob<void> seek(Duration position) => run<Ready, void>(
+        key: 'seek',
+        policy: Policy.restart,
+        timeout: const Duration(seconds: 2),
+        onCancel: (state, cancelled) =>
+            cancelled.reason is TimeoutCancelReason ? const Offline() : state,
+        (ctx) async {
+          final token = CancelToken();
+          ctx.onCancel(token.cancel);
+          await ctx.join(() => _player.seek(position, cancelToken: token));
+          ctx.emit(ctx.state.copyWith(position: position));
+        },
+      );
+}
+
 /// "One section for the step" and "A whole job".
 final class Till extends Solo<AppState> with OpenSolo<AppState>, Desk {
   Till() : super(const Ready());

@@ -623,51 +623,50 @@ fake has been called and has not returned. It returns at its twentieth
 millisecond, fifteen after the job was over, with nobody waiting for it. The
 deadline is five milliseconds only because the fake answers in twenty: against
 this fake a deadline of seconds never fires, and the job ends `Done`. For a
-result that can be abandoned this is the whole story, and `timeout` alone is
-enough.
+result that can be abandoned this is the whole story, and `Future.timeout`
+alone is enough.
 
-### A timer wired to the device
+### A deadline of the job
 
-For a device operation that must stop before the next job, connect a timer to
-the device's cancellation mechanism and await the operation with `join`. The
-example is the controller of a camera rather than of the profile: `hw` is the
-device, `CancelToken` is the token of its API and not a type of this package,
-and `Idle` and `Connected` are the states. The hardware API completes with an
-error when its token is cancelled, so a timeout fails the job:
+For a device operation that must stop before the next job, give the job the
+deadline with `timeout` and hand the device's cancellation mechanism to
+`ctx.onCancel`. The example is the controller of a camera rather than of the
+profile: `hw` is the device, `CancelToken` is the token of its API and not a
+type of this package, and `Idle` and `Connected` are the states:
 
 ```dart
 Job<void> connect() => run<Idle, void>(
       key: 'connect',
+      timeout: const Duration(seconds: 5),
       (ctx) async {
         final token = CancelToken();
-        final timer = Timer(const Duration(seconds: 5), token.cancel);
         ctx.onCancel(token.cancel);
-        try {
-          await ctx.join(() => hw.open(cancelToken: token));
-        } finally {
-          timer.cancel();
-        }
+        await ctx.join(() => hw.open(cancelToken: token));
         ctx.emit(const Connected());
       },
     );
 ```
 
-The `finally` block cancels the timer on every exit, and `ctx.onCancel` hands
-the same token to a cancellation that comes from outside, so a cancelled job
-stops the device as well. Whether the device actually stops, and which error it
-returns, depends on that device's API. The five seconds cost the test nothing;
-its `FakeCamera` is a device that never answers on its own, so the deadline is
-what ends the call:
+Five seconds after the body starts, the job is cancelled the way `cancel()`
+cancels it: `ctx.onCancel` cancels the token, and `join` waits for the device
+to stop, so the next job starts after it. A cancellation that comes from
+outside takes the same way, so a cancelled job stops the device as well.
+Whether the device actually stops depends on that device's API. The hardware
+API completes with an error when its token is cancelled, and `join` throws that
+error, but the job is cancelled by then: it ends `Cancelled(timeout)`, not
+`Failed`, nothing reaches the zone, and the test needs no `ignore()`. The five
+seconds cost the test nothing; its `FakeCamera` is a device that never answers
+on its own, so the deadline is what ends the call:
 
 ```dart
 test('connect gives up after five seconds', () {
   fakeAsync((async) {
     final camera = CameraController(FakeCamera());
 
-    final job = camera.connect()..ignore();
+    final job = camera.connect();
     async.elapse(const Duration(seconds: 5));
 
-    expect(job.outcome, isA<Failed>());
+    expect('${job.outcome}', 'Cancelled(timeout)');
     expect(camera.currentState, isA<Idle>());
 
     camera.close();
@@ -675,3 +674,10 @@ test('connect gives up after five seconds', () {
   });
 });
 ```
+
+`connect()` gives `run` no state handlers, so the state stays `Idle`. A `run`
+with `onCancel` gets the deadline there, not in `onError`. The timer the core
+keeps for it is gone as soon as the job ends: `async.pendingTimers` is empty
+after the five seconds.
+[A deadline of a job](cancellation.md#a-deadline-of-a-job) on the cancellation
+page tells a deadline from the other cancellations in that handler.

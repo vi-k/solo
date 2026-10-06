@@ -1903,6 +1903,7 @@ void main() {
             'RulesCancelReason',
             'ClosedCancelReason',
             'DuplicateCancelReason',
+            'TimeoutCancelReason',
           ],
         );
       });
@@ -2194,6 +2195,165 @@ void main() {
         expect(bench.heard, isEmpty, reason: 'past the hook');
         expect(left.errors, ['Bad state: the async listener failed']);
       });
+    });
+  });
+
+  group('A deadline of a job', () {
+    test(
+        'a seek past its deadline stops at the token, and the player is '
+        'offline', () {
+      fakeAsync((async) {
+        final player = page.DeadlinePlayer();
+        final job = player.seek(_s(1));
+        async.elapse(const Duration(milliseconds: 1999));
+        expect(job.isFinished, isFalse);
+        async.elapse(const Duration(milliseconds: 1));
+
+        expect(stage.trace, [
+          'seek 1 start',
+          'token cancelled',
+          'seek 1 stopped',
+        ]);
+        expect('${job.outcome}', 'Cancelled(timeout)');
+        expect(
+          _reason(job),
+          isA<TimeoutCancelReason>()
+              .having((reason) => reason.timeout, 'timeout', _s(2)),
+        );
+        expect('${player.currentState}', 'Offline');
+        expect(player.heard, isEmpty, reason: 'onError hears no deadline');
+      });
+      expect(
+        _prose(),
+        contains(
+          'a deadline that runs out reaches the `onCancel` state handler, '
+          'not `onError`',
+        ),
+      );
+    });
+
+    test('a seek dragged past leaves the state as it is', () {
+      fakeAsync((async) {
+        final player = page.DeadlinePlayer();
+        final one = player.seek(_s(1));
+        async.flushMicrotasks();
+        final two = player.seek(_s(2));
+        async.flushMicrotasks();
+
+        expect('${one.outcome}', 'Cancelled(manual)');
+        expect('${player.currentState}', 'Ready(0 s, null)');
+        _end(async, 'seek 2');
+        expect('${two.outcome}', 'Done(null)');
+        expect('${player.currentState}', 'Ready(2 s, null)');
+      });
+    });
+
+    test('value throws the Cancelled, and on TimeoutException catches nothing',
+        () {
+      final caught = <String>[];
+      fakeAsync((async) {
+        final job = page.DeadlinePlayer().seek(_s(1));
+        Future<void> wait() async {
+          try {
+            await job.value;
+          } on TimeoutException {
+            caught.add('TimeoutException');
+          } on Cancelled catch (cancelled) {
+            caught.add('$cancelled');
+          }
+        }
+
+        unawaited(wait());
+        async.elapse(_s(2));
+      });
+
+      expect(caught, ['Cancelled(timeout)']);
+      expect(
+        _prose(),
+        contains(
+          '`value` of such a job throws that `Cancelled`, and a clause '
+          '`on TimeoutException` around it catches nothing',
+        ),
+      );
+    });
+
+    test('the deadline is counted from the start of the body, not the call',
+        () {
+      fakeAsync((async) {
+        final player = page.DeadlinePlayer()..work('hold');
+        final job = player.seek(_s(1));
+        async.elapse(_s(5));
+        expect(stage.trace, ['hold start']);
+        _end(async, 'hold');
+        async.elapse(const Duration(milliseconds: 1999));
+        expect(job.isFinished, isFalse);
+        async.elapse(const Duration(milliseconds: 1));
+
+        expect('${job.outcome}', 'Cancelled(timeout)');
+      });
+      expect(
+        _prose(),
+        contains(
+          'The deadline is counted from the start of the body, not from the '
+          'call: the time a job waits in the queue does not count',
+        ),
+      );
+    });
+
+    test('the jobs queued behind it stay, and the next one starts', () {
+      fakeAsync((async) {
+        final player = page.DeadlinePlayer();
+        final seek = player.seek(_s(1));
+        // In the whole state type: the deadline leaves the player offline.
+        final next = player.run<AppState, void>(
+          (ctx) => ctx.join(() => stage.start<void>('next', null)),
+        );
+        async.elapse(_s(2));
+
+        expect('${seek.outcome}', 'Cancelled(timeout)');
+        expect(stage.trace, [
+          'seek 1 start',
+          'token cancelled',
+          'seek 1 stopped',
+          'next start',
+        ]);
+        _end(async, 'next');
+        expect('${next.outcome}', 'Done(null)');
+      });
+      expect(
+        _prose(),
+        contains(
+          'A deadline cancels its own job alone: the jobs queued behind it '
+          'stay',
+        ),
+      );
+    });
+
+    test('a droppable call that finds a live job loses its own timeout', () {
+      fakeAsync((async) {
+        final player = page.DeadlinePlayer();
+        final live = player.seek(_s(1));
+        async.flushMicrotasks();
+        final taken = player.run<Ready, void>(
+          key: 'seek',
+          policy: Policy.droppable,
+          timeout: const Duration(milliseconds: 500),
+          (ctx) async {},
+        );
+
+        expect(taken, same(live));
+        async.elapse(const Duration(milliseconds: 1999));
+        expect(live.isFinished, isFalse);
+        async.elapse(const Duration(milliseconds: 1));
+        expect('${live.outcome}', 'Cancelled(timeout)');
+      });
+      expect(
+        _prose(),
+        contains(
+          'returns that job, and the `timeout` of the call is lost with the '
+          'rest of the call',
+        ),
+      );
     });
   });
 
@@ -2873,6 +3033,7 @@ void main() {
       '### A whole job': answers,
       '### Each wait in its place': answers,
       '## Cancellation details': answers,
+      '## A deadline of a job': answers,
       '### Three ways to stop': answers,
       '#### The first attempt': attempts,
       '#### The second attempt': attempts,

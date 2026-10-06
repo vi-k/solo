@@ -13,6 +13,7 @@ mixin OpenSolo<S extends Object> on Solo<S> {
     bool Function(W state)? canStart,
     bool Function(W state)? keepWhile,
     bool cancellable = true,
+    Duration? timeout,
     String Function()? describe,
     S Function(S state, Object error, StackTrace stackTrace)? onError,
     S Function(S state, Cancelled cancelled)? onCancel,
@@ -23,6 +24,7 @@ mixin OpenSolo<S extends Object> on Solo<S> {
         canStart: canStart,
         keepWhile: keepWhile,
         cancellable: cancellable,
+        timeout: timeout,
         describe: describe,
         onError: onError,
         onCancel: onCancel,
@@ -37,6 +39,7 @@ mixin OpenSolo<S extends Object> on Solo<S> {
     bool Function(W state)? canStart,
     bool Function(W state)? keepWhile,
     bool cancellable = true,
+    Duration? timeout,
     String Function()? describe,
   }) =>
       super.collect<W, E, T>(
@@ -47,6 +50,7 @@ mixin OpenSolo<S extends Object> on Solo<S> {
         canStart: canStart,
         keepWhile: keepWhile,
         cancellable: cancellable,
+        timeout: timeout,
         describe: describe,
       );
 
@@ -60,6 +64,7 @@ mixin OpenSolo<S extends Object> on Solo<S> {
     bool Function(W state)? canStart,
     bool Function(W state)? keepWhile,
     bool cancellable = true,
+    Duration? timeout,
     String Function()? describe,
   }) =>
       super.accumulate<W, E, T>(
@@ -71,6 +76,7 @@ mixin OpenSolo<S extends Object> on Solo<S> {
         canStart: canStart,
         keepWhile: keepWhile,
         cancellable: cancellable,
+        timeout: timeout,
         describe: describe,
       );
 
@@ -89,6 +95,7 @@ mixin OpenSolo<S extends Object> on Solo<S> {
     bool Function(W state)? canStart,
     bool Function(W state)? keepWhile,
     bool cancellable = true,
+    Duration? timeout,
     String Function()? describe,
     Policy policy = Policy.sequential,
     S Function(S state, Object error, StackTrace stackTrace)? onError,
@@ -100,6 +107,7 @@ mixin OpenSolo<S extends Object> on Solo<S> {
         canStart: canStart,
         keepWhile: keepWhile,
         cancellable: cancellable,
+        timeout: timeout,
         describe: describe,
         policy: policy,
         onError: onError,

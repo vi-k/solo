@@ -25,6 +25,11 @@ enum Policy {
   /// The two jobs are compared with each other rather than matched against
   /// the type argument of the call, which would let a `SoloJob<void>` take
   /// any job at all. Give every result type its own key.
+  ///
+  /// The new job goes with all it was given: the `timeout` of a call that
+  /// found a live duplicate is lost along with it, and the job handed back
+  /// keeps the deadline it was made with, or none. Once that job has ended
+  /// — by its own deadline too — the next call queues a job of its own.
   droppable,
 
   /// Remove queued jobs with the same key, then append. The running root

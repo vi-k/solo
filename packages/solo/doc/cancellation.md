@@ -43,10 +43,10 @@ cancelled: the cancellation passes to its children, the callbacks it registered
 with `ctx.onCancel` run, and the job ends `Cancelled` whatever the body does
 next. The body itself goes on until its next checkpoint.
 
-Such a request — `cancel()`, the cancellation of a parent, `close()` — is the
-ordinary cancellation of the code and the table above. The other kind comes
-from the job's own state rules, and neither a section nor `cancellable: false`
-stops it.
+Such a request — `cancel()`, the cancellation of a parent, `close()`, a
+deadline given with `timeout` — is the ordinary cancellation of the code and
+the table above. The other kind comes from the job's own state rules, and
+neither a section nor `cancellable: false` stops it.
 
 `abandonable` suits a request whose result can be abandoned. The request can
 continue after the job has finished and the next job has started. `join` suits
@@ -364,10 +364,11 @@ switch (job.outcome) {
 cancellation stack trace. `started: false` means the body never ran. Reasons
 extend `CancelReason`. The built-in types are `ManualCancelReason`,
 `ParentCancelReason`, `HandlerCancelReason`, `ChainCancelReason`,
-`SiblingCancelReason`, `RulesCancelReason`, `ClosedCancelReason` and
-`DuplicateCancelReason`. Inspect the type, as the first case above does; `name`
-is a display label, not an equality key. Propagation between jobs retains the
-original cancellation in the reason's `cause`.
+`SiblingCancelReason`, `RulesCancelReason`, `ClosedCancelReason`,
+`DuplicateCancelReason` and `TimeoutCancelReason`. Inspect the type, as the
+first case above does; `name` is a display label, not an equality key.
+Propagation between jobs retains the original cancellation in the reason's
+`cause`.
 
 `job.whenCancelled(callback)` registers a synchronous listener and returns a
 function to unregister it. The listener is called when a running job accepts
@@ -380,6 +381,48 @@ What a listener throws goes the way an error of cleanup goes, to the `onError`
 hook and on to `Solo.errorHandler` or the zone, and so does what a
 `ctx.onCancel` callback throws. An `async` listener is not awaited, and an
 error of its future goes straight to the zone, past the hook.
+
+## A deadline of a job
+
+A seek the device has not finished in two seconds should stop, and the screen
+should show the player offline. A seek the user dragged past leaves the state
+as it is.
+
+```dart
+SoloJob<void> seek(Duration position) => run<Ready, void>(
+      key: 'seek',
+      policy: Policy.restart,
+      timeout: const Duration(seconds: 2),
+      onCancel: (state, cancelled) =>
+          cancelled.reason is TimeoutCancelReason ? const Offline() : state,
+      (ctx) async {
+        final token = CancelToken();
+        ctx.onCancel(token.cancel);
+        await ctx.join(() => _player.seek(position, cancelToken: token));
+        ctx.emit(ctx.state.copyWith(position: position));
+      },
+    );
+```
+
+`timeout` gives the job a deadline of its own, and when it runs out the job is
+cancelled the way `restart` cancels it: the token stops the seek, `join` waits
+for the device, and the job ends `Cancelled(timeout)`. The deadline is a
+cancellation of `async_job` with a `TimeoutCancelReason`, and
+[A deadline](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cancellation.md#a-deadline)
+on the cancellation page of `async_job` takes it apart.
+
+So a deadline that runs out reaches the `onCancel` state handler, not
+`onError`, and a handler that is to tell it from a seek dragged past branches
+on the reason, as the one above does. `value` of such a job throws that
+`Cancelled`, and a clause `on TimeoutException` around it catches nothing.
+
+The deadline is counted from the start of the body, not from the call: the time
+a job waits in the queue does not count, and neither does the window of a
+`collect` or an `accumulate`, whose deadline is one of each job they queue. A
+deadline cancels its own job alone: the jobs queued behind it stay, and the
+next one starts once this one has cleaned up. A call with `Policy.droppable`
+that finds a live job with its key returns that job, and the `timeout` of the
+call is lost with the rest of the call.
 
 ## Cancelling and closing a controller
 

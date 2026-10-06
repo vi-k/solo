@@ -128,13 +128,10 @@ final operation = CancelableOperation.fromFuture(
 добавляет [solo](#solo).
 
 Повторы и пул задач не входят ни в один из пакетов; их можно добавить
-в приложении. Своего таймаута у `Job` тоже нет: `Timer(limit, job.cancel)`
-отменяет её, когда время вышло, и ничего не делает с задачей, которая уже
-завершилась. Сам таймер живёт до конца лимита: программа, которой больше нечего
-делать, не закончит работу, пока он не сработает. Снять его, когда задача
-завершилась, через `job.done.whenComplete(timer.cancel)` значит наблюдать
-исход: провал задачи тогда до зоны не доходит, и сообщить о нём должен код,
-который снимает таймер.
+в приложении. Срок встроен: `Job(body, timeout: limit)` отменяет задачу, когда
+предел вышел, и она кончается `Cancelled(timeout)`. Чем он отличается
+от `Timer`, который вызывает `cancel`, показывает раздел
+[«Срок»](../../docs/ru/async_job/cancellation.md#срок) на странице об отмене.
 
 ## Установка
 
@@ -240,7 +237,7 @@ final outcome = await job.done; // Cancelled(manual)
 | Страница | О чём |
 | --- | --- |
 | [Исходы](../../docs/ru/async_job/outcomes.md) | `Done`, `Failed`, `Cancelled` и наблюдение за провалом |
-| [Отмена](../../docs/ru/async_job/cancellation.md) | Контрольные точки, `onCancel`, `uncancellable` |
+| [Отмена](../../docs/ru/async_job/cancellation.md) | Контрольные точки, `onCancel`, `uncancellable`, `timeout` |
 | [Дети, стримы и цепочки](../../docs/ru/async_job/children.md) | `Job.deferred`, `ctx.run`, `ctx.runAll`, `ctx.each`, `then` |
 | [Стримы](../../docs/ru/async_job/streams.md) | `ctx.each`, `Job.each` и что делают `await for` и `listen` в теле |
 | [Уборка](../../docs/ru/async_job/cleanup.md) | `dispose`, `discard`, `onDispose`, порядок |

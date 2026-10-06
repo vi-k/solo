@@ -79,8 +79,11 @@ entries of the first group name them.
   the two jobs and throws `ArgumentError` when they differ, and the job it
   drops ends with a `DuplicateCancelReason` instead of a `ManualCancelReason`;
   `SoloQueue.lastWhere` is gone; `cancelAll` and the removing methods of
-  `SoloQueue` take a `reason`; a subclass member named like a new member of
-  `Solo` stops compiling or overrides it, `isFinished` silently. From
+  `SoloQueue` take a `reason`; `job`, `run`, `collect` and `accumulate` take a
+  `timeout`, so an override of any of them that does not take it stops
+  compiling, and one that takes it passes it on to `super`, or
+  `run(timeout: ...)` loses its deadline; a subclass member named like a new
+  member of `Solo` stops compiling or overrides it, `isFinished` silently. From
   `async_job`, through `solo`: a cancellation inside a `ParallelWaitError` is a
   cancellation again, so the job's `onCancel` handler takes the outcome where
   `onError` used to; a body that throws `Cancelled` runs its `ctx.onCancel`

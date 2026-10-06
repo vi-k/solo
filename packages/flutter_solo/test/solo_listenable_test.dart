@@ -20,8 +20,9 @@ final class _Counter extends Solo<int> with SoloListenable {
   SoloJob<void> perform(
     Future<void> Function(SoloContext<int, int> ctx) body, {
     bool Function(int state)? keepWhile,
+    Duration? timeout,
   }) =>
-      run<int, void>(body, keepWhile: keepWhile);
+      run<int, void>(body, keepWhile: keepWhile, timeout: timeout);
 }
 
 final class _ObjectController extends Solo<Object> with SoloListenable {
@@ -127,6 +128,34 @@ void main() {
     await tester.pump();
     expect(built, [0, 1, 2]);
     expect(find.text('2'), findsOneWidget);
+  });
+
+  testWidgets('a job that ends within its deadline leaves no timer behind',
+      (tester) async {
+    final counter = _Counter();
+    addTearDown(counter.close);
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: ValueListenableBuilder<int>(
+          valueListenable: counter,
+          builder: (context, value, _) => Text('$value'),
+        ),
+      ),
+    );
+
+    final job = counter.perform(timeout: const Duration(hours: 1), (ctx) async {
+      await ctx.abandonable(
+        () => Future<void>.delayed(const Duration(milliseconds: 10)),
+      );
+      ctx.emit(1);
+    });
+    await tester.pump(const Duration(milliseconds: 20));
+
+    expect(job.outcome, isA<Done<void>>());
+    expect(find.text('1'), findsOneWidget);
+    // The hour is not waited for: had the timer outlived the job, the test
+    // would fail on its end with "A Timer is still pending".
   });
 
   testWidgets('controller drives ListenableBuilder and AnimatedBuilder',

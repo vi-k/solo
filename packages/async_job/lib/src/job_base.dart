@@ -39,6 +39,29 @@ abstract interface class Job<T> {
   /// the cleanup stack of the context — see [JobContext.onDispose] and
   /// [JobContext.onDiscard].
   ///
+  /// [timeout] gives the job a deadline of its own, counted from the start of
+  /// the body: the time before the start is not counted. It bounds the body and
+  /// the children the job waits for after the body, and not the cleanup stack —
+  /// a cancellation arriving there would turn a job that did its work into a
+  /// cancelled one. When the deadline runs out first, the job is cancelled with
+  /// a [TimeoutCancelReason] and ends `Cancelled(timeout)`: unlike
+  /// `Future.timeout` there is no `TimeoutException`, and the request is a
+  /// cancellation like that of [cancel]. The body stops at its next checkpoint,
+  /// a section of [JobContext.uncancellable] holds the request until the
+  /// section closes, a job cancelled already keeps its own reason, and the
+  /// children hear it as the cause of their [ParentCancelReason]. If the body
+  /// and its children are over while a section still holds the request, the
+  /// request goes with the timer, and the job ends with what the body returned.
+  /// The timer is cancelled once the body and its children are over, or
+  /// whenever else the job ends, and cancelling it observes nothing: a failure
+  /// goes where it would go without a deadline. A job still running when a test
+  /// ends — under `fakeAsync` or in `testWidgets` — still holds that timer: end
+  /// the job or wait for it.
+  ///
+  /// Throws [ArgumentError] when [timeout] is zero or negative, and when it
+  /// comes with `cancellable: false`: the deadline is a cancellation the
+  /// job may refuse, and such a job would refuse it.
+  ///
   /// ```dart
   /// final job = Job<Database>((ctx) async {
   ///   final database = await ctx.join(
@@ -55,6 +78,7 @@ abstract interface class Job<T> {
     Object? key,
     String Function()? describe,
     bool cancellable = true,
+    Duration? timeout,
     JobObserver? observer,
   }) =>
       _AutoJob<T>(
@@ -62,6 +86,7 @@ abstract interface class Job<T> {
         key: key,
         describe: describe,
         cancellable: cancellable,
+        timeout: timeout,
         observer: observer,
       );
 
@@ -71,11 +96,19 @@ abstract interface class Job<T> {
   /// through [DeferredJob.start], or a parent through [JobContext.run] or
   /// [JobContext.runAll]. Cancelled before that, it ends [Cancelled] with
   /// `started: false`, and its body never runs.
+  ///
+  /// The named parameters are those of [Job.new]. The deadline of [timeout]
+  /// is counted from the start, so the time the job waits for it is not
+  /// counted; and a child with a deadline is how one step of a body gets
+  /// one: `await ctx.run(Job.deferred(step, key: 'step', timeout: limit))`
+  /// throws the child's `Cancelled(timeout)` into the body of the parent,
+  /// which catches it or lets it out.
   static DeferredJob<T> deferred<T>(
     Future<T> Function(JobContext ctx) body, {
     Object? key,
     String Function()? describe,
     bool cancellable = true,
+    Duration? timeout,
     JobObserver? observer,
   }) =>
       _DeferredJob<T>(
@@ -83,6 +116,7 @@ abstract interface class Job<T> {
         key: key,
         describe: describe,
         cancellable: cancellable,
+        timeout: timeout,
         observer: observer,
       );
 
@@ -111,7 +145,8 @@ abstract interface class Job<T> {
   /// [JobContext.join]. What one event opens belongs to a child started for
   /// that event with [JobContext.run]: its stack unwinds when it ends.
   ///
-  /// The named parameters are those of [Job.new]. With `cancellable: false`
+  /// The named parameters are those of [Job.new] but `timeout`: a deadline on
+  /// following a stream is set from outside. With `cancellable: false`
   /// there is no moment before the start to drop the job in: it refuses every
   /// cancellation from outside, and the future of [cancel] completes only
   /// when the job ends by itself — the stream ends or fails, or the callback
@@ -543,6 +578,36 @@ abstract class JobBase<T> implements Job<T> {
   var _uncancellableDepth = 0;
   Cancelled? _heldCancel;
 
+  /// The deadline given with `timeout`, or `null` for a job without one.
+  final Duration? _timeout;
+
+  /// Where the job with a deadline was created: the cancellation the
+  /// deadline makes carries it. Taken when the timer fires, it would be a
+  /// bare event loop; taken at the start, it would lead to a queue or to
+  /// `ctx.run`. The constructor leads to the code that set the deadline.
+  final StackTrace? _timeoutTrace;
+
+  /// The timer of the deadline, from the start until the body and the
+  /// children are over or the job ends.
+  Timer? _timeoutTimer;
+
+  /// The reason the timer cancelled this job with, once it has fired.
+  ///
+  /// The request of the deadline is told apart by this very instance, not
+  /// by the [Cancelled] that carries it: an engine of a domain may wrap a
+  /// cancellation into a new [Cancelled] with the same reason before it
+  /// calls `super`.
+  TimeoutCancelReason? _timeoutReason;
+
+  /// A rejectable cancellation that arrived while a section held the
+  /// deadline in [_heldCancel].
+  ///
+  /// `??=` keeps the first request held, and the deadline is lifted at the
+  /// end of the body and the children: a request made after it would be
+  /// lifted with it. It takes the place of the deadline there instead.
+  /// Cleared wherever [_heldCancel] is cleared.
+  Cancelled? _heldBehindTimeout;
+
   /// Whether anyone observed the outcome, directly or by forwarding it.
   bool _observed = false;
 
@@ -683,16 +748,46 @@ abstract class JobBase<T> implements Job<T> {
   bool _committedByGroup = false;
 
   /// Creates a job that has not started yet.
+  ///
+  /// The named parameters are those of [Job.new], [timeout] included, and
+  /// so are the errors: [ArgumentError] for a [timeout] that is zero or
+  /// negative, or that comes with `cancellable: false`.
   JobBase({
     Object? key,
     String Function()? describe,
     bool cancellable = true,
+    Duration? timeout,
     JobObserver? observer,
-  })  : _key = key,
+  })  : _timeout = _checkTimeout(timeout, cancellable: cancellable),
+        _timeoutTrace = timeout == null ? null : StackTrace.current,
+        _key = key,
         _describe = describe,
         _cancellable = cancellable,
         _observer = observer {
     _builtOnCore[this] = true;
+  }
+
+  /// Returns [timeout] if a job may have it, and throws otherwise.
+  ///
+  /// Before anything else is set: a job refused here never exists.
+  static Duration? _checkTimeout(
+    Duration? timeout, {
+    required bool cancellable,
+  }) {
+    if (timeout == null) {
+      return null;
+    }
+    if (timeout <= Duration.zero) {
+      throw ArgumentError('must be positive, not $timeout', 'timeout');
+    }
+    if (!cancellable) {
+      throw ArgumentError(
+        'needs a cancellable job, and cancellable: false refuses the '
+            'cancellation the deadline makes',
+        'timeout',
+      );
+    }
+    return timeout;
   }
 
   /// The jobs that went through this constructor.
@@ -933,6 +1028,13 @@ abstract class JobBase<T> implements Job<T> {
           // callbacks and the cascade onto children would stop the very
           // step this section protects.
           _debug(() => 'cancel $this: held until the step ends: $marked');
+          // A request behind a held deadline is kept apart: the deadline is
+          // lifted at the end of the body and the children, and this one
+          // must not be lifted with it.
+          final held = _heldCancel;
+          if (held != null && _isOwnTimeout(held) && !_isOwnTimeout(marked)) {
+            _heldBehindTimeout ??= marked;
+          }
           _heldCancel ??= marked;
           return;
         }
@@ -941,6 +1043,7 @@ abstract class JobBase<T> implements Job<T> {
         // section, and it is accepted over the one the section holds: that
         // one would never land, and `heldCancel` must not keep showing it.
         _heldCancel = null;
+        _heldBehindTimeout = null;
         // Marked before the cascade, and only marked: a callback of a child
         // may come back for this job, and the early return above is the only
         // thing that stops it from cascading and marking a second time.
@@ -1090,7 +1193,10 @@ abstract class JobBase<T> implements Job<T> {
   /// job accepts it at once, and the one held until then is dropped and
   /// cleared here. So is one a section the body walked away from still
   /// holds when the body gives itself up or the job ends: it would land on
-  /// a job already cancelled or over.
+  /// a job already cancelled or over. And so is the request of the job's
+  /// own deadline once the body and the children are over: the deadline
+  /// ends there, and a rejectable request that arrived behind it shows here
+  /// in its place.
   @protected
   Cancelled? get heldCancel => _heldCancel;
 
@@ -1114,6 +1220,7 @@ abstract class JobBase<T> implements Job<T> {
       return;
     }
     _heldCancel = null;
+    _heldBehindTimeout = null;
     cancelWith(held);
   }
 
@@ -1180,6 +1287,13 @@ abstract class JobBase<T> implements Job<T> {
       return;
     }
     _status = JobStatus.running;
+    // Armed before `started`, in the zone of the start: an engine that ends
+    // the job by hand from there goes through `finish`, which lifts it, and
+    // one armed after that would wait for a job already over.
+    final timeout = _timeout;
+    if (timeout != null) {
+      _timeoutTimer = Timer(timeout, _timeoutRanOut);
+    }
     // Guarded as `finished` is: the job is running by now, and an error of
     // the engine's bookkeeping left to escape would leave it running with
     // no body, and nothing would ever finish it.
@@ -1190,6 +1304,51 @@ abstract class JobBase<T> implements Job<T> {
     }
     _notifyStart();
     unawaited(_execute(ctx));
+  }
+
+  /// The deadline ran out: an ordinary rejectable cancellation, with a
+  /// reason of its own and the trace of the constructor.
+  void _timeoutRanOut() {
+    _timeoutTimer = null;
+    final reason = TimeoutCancelReason(_timeout!);
+    _timeoutReason = reason;
+    // Caught: the cascade is recursive and an engine of a domain may throw
+    // from its `cancelWith`, and nobody called this callback to hand the
+    // error to. Left to escape, it would reach the zone of the start and no
+    // observer; caught, it goes out the door `_execute` sends such an error
+    // through after a cascade: the observer, else the zone of the job.
+    try {
+      cancelWith(
+        Cancelled.by(
+          reason: reason,
+          started: true,
+          stackTrace: _timeoutTrace,
+        ),
+      );
+    } on Object catch (error, stackTrace) {
+      notifyError(error, stackTrace);
+    }
+  }
+
+  /// Whether [cancelled] is the request of this job's own deadline.
+  bool _isOwnTimeout(Cancelled cancelled) {
+    final reason = _timeoutReason;
+    return reason != null && identical(cancelled.reason, reason);
+  }
+
+  /// Lifts the deadline: the body and the children are over.
+  ///
+  /// The request of the deadline a section still holds goes too — a section
+  /// the body left running would otherwise land it in the cleanup or at a
+  /// barrier of a group — and a request that came behind it takes its place.
+  void _liftTimeout() {
+    _timeoutTimer?.cancel();
+    _timeoutTimer = null;
+    final held = _heldCancel;
+    if (held != null && _isOwnTimeout(held)) {
+      _heldCancel = _heldBehindTimeout;
+      _heldBehindTimeout = null;
+    }
   }
 
   /// Ends the job with [outcome].
@@ -1270,6 +1429,11 @@ abstract class JobBase<T> implements Job<T> {
     // A section the body walked away from may still hold a cancellation;
     // it would land on a job that is over, which drops it.
     _heldCancel = null;
+    _heldBehindTimeout = null;
+    // However the job ended — the core's route has lifted the deadline
+    // already, an engine of a domain ending it by hand has not.
+    _timeoutTimer?.cancel();
+    _timeoutTimer = null;
     // The list of children is a waiting list, so it shrinks; the link from
     // an outcome to the child that carried it lives on, in the parent's
     // `Expando`. Both happen here, where they are observable: in `finished`
@@ -1598,6 +1762,7 @@ abstract class JobBase<T> implements Job<T> {
       // cancelled, and `cancelWith` turns such a one around: it never
       // lands, so `heldCancel` stops naming it.
       _heldCancel = null;
+      _heldBehindTimeout = null;
     }
     // The early word of a branch to its group: the siblings are asked to
     // stop while this one is still waiting for its own descendants. It
@@ -1641,6 +1806,11 @@ abstract class JobBase<T> implements Job<T> {
       // for, and the stack stays where it is.
       return;
     }
+    // The deadline bounds the body and the children, and ends here. Past
+    // this point come the cleanup stack and the barriers of a group, and a
+    // cancellation landing there turns the outcome of a job that did its
+    // work into `Cancelled` and closes its value through `discard`.
+    _liftTimeout();
     // The outcome is decided, and the mark is already on: the body either
     // caught the one that was there or gave itself up and was marked
     // above. Asserted rather than assigned, so a path that ever arrives
@@ -1937,6 +2107,7 @@ class _Job<T> extends JobBase<T> {
     super.key,
     super.describe,
     super.cancellable,
+    super.timeout,
     super.observer,
   }) : _body = body;
 
@@ -1959,6 +2130,7 @@ final class _AutoJob<T> extends _Job<T> {
     super.key,
     super.describe,
     super.cancellable,
+    super.timeout,
     super.observer,
   }) {
     // `scheduleMicrotask`, not `Future(...)`: that one schedules a timer,
@@ -2004,6 +2176,7 @@ final class _DeferredJob<T> extends _Job<T> implements DeferredJob<T> {
     super.key,
     super.describe,
     super.cancellable,
+    super.timeout,
     super.observer,
   });
 

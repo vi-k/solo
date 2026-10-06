@@ -80,6 +80,29 @@ final class SiblingCancelReason extends CancelReason {
   String get name => 'sibling';
 }
 
+/// The job ran out of the time it was given with `timeout`.
+///
+/// The core cancels a job with this reason when the deadline set by the
+/// `timeout` of [Job.new] or [Job.deferred] runs out before the body and the
+/// children it waits for are over. The request is an ordinary rejectable
+/// cancellation: an uncancellable section holds it, and a job already
+/// cancelled for another reason keeps that one. A request a section still
+/// holds when the body and the children are over goes with the timer. Its
+/// children hear it as the cause of their [ParentCancelReason].
+///
+/// Each deadline that runs out makes a reason of its own, so a reason is
+/// told apart by identity as well as by type.
+final class TimeoutCancelReason extends CancelReason {
+  /// The limit that ran out.
+  final Duration timeout;
+
+  /// Creates a timeout reason for [timeout].
+  const TimeoutCancelReason(this.timeout);
+
+  @override
+  String get name => 'timeout';
+}
+
 /// The body gave up, directly or by letting a child's cancellation escape.
 final class HandlerCancelReason extends CancelReason {
   /// The child's cancellation when it escaped through the parent's body.

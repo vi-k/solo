@@ -1733,6 +1733,61 @@ void main() {
           'expectation that failed halfway through a load is enough — never '
           'comes back.');
     });
+
+    for (final timed in [true, false]) {
+      test(
+          'a job ${timed ? 'with' : 'without'} a deadline left running when '
+          'the body ends', () async {
+        late Solo<Profile> controller;
+        final reported = await _asWidgetTest((binding) async {
+          if (timed) {
+            final load = TimedLoad(SilentApi());
+            controller = load;
+            load.load().ignore();
+          } else {
+            final load = ProfileController(SilentApi());
+            controller = load;
+            load.load().ignore();
+          }
+          await binding.pump();
+          expect(controller.currentState, isA<Loading>());
+        });
+
+        expect(
+          [for (final details in reported) '${details.exception}'],
+          [
+            if (timed)
+              contains(
+                'A Timer is still pending even after the widget tree was '
+                'disposed',
+              ),
+          ],
+        );
+        _says('Left running when the body of a `testWidgets` ends, such a job '
+            'fails the test with '
+            '`A Timer is still pending even after the widget tree was '
+            'disposed`, where the same job without a deadline lets the test '
+            'pass.');
+        unawaited(controller.close());
+      });
+    }
+
+    test('closed in the body, a job with a deadline takes its timer along',
+        () async {
+      late TimedLoad controller;
+      final reported = await _asWidgetTest((binding) async {
+        controller = TimedLoad(SilentApi());
+        final job = controller.load()..ignore();
+        await binding.pump();
+        await controller.close();
+        expect('${job.outcome}', 'Cancelled(closed)');
+      });
+
+      expect(reported, isEmpty);
+      expect(controller.isFinished, isTrue);
+      _says('Closing the controller in the body, as above, ends the job and '
+          'takes its timer along.');
+    });
   });
 
   group('Notes', () {

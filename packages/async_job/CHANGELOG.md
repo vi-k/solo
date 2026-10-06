@@ -252,6 +252,24 @@ named as `Job(key)`, not by its class.
 
 ### Added
 
+- **`timeout` gives a job a deadline of its own.** `Job(...)` and
+  `Job.deferred(...)` take it, and so does the constructor of `JobBase`, for an
+  engine to pass on. The deadline is counted from the start of the body, not
+  from the creation or a queue, and bounds the body and the children the job
+  waits for after it, not the cleanup stack. When it runs out, the job is
+  cancelled with the new `TimeoutCancelReason` and ends `Cancelled(timeout)`: a
+  cancellation like that of `cancel()`, which a section of `ctx.uncancellable`
+  holds, and drops with the timer when the body and the children are over
+  first, and which a job cancelled already turns away, and not the
+  `TimeoutException` of `Future.timeout`. The core cancels the timer however
+  the job ends, observing nothing; `Timer(limit, job.cancel)` lived until the
+  limit, and cancelling it at the end took `job.done`, which observes the
+  outcome. A step of a body gets a deadline as a child:
+  `await ctx.run(Job.deferred(step, key: 'step', timeout: limit))`. A deadline
+  that is zero or negative, or that comes with `cancellable: false`, throws
+  `ArgumentError`. `Job.each` and `then` take none. See
+  [A deadline](doc/cancellation.md#a-deadline).
+
 - **`Job.each` makes a root job that follows a stream.** A job whose whole work
   was a stream used to take two: a root, and inside it the child of `ctx.each`.
   `Job.each(stream, (ctx, event) { ... })` is that job alone, with `key`,

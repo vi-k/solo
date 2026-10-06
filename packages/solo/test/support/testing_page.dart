@@ -1,6 +1,6 @@
 // The code of `doc/testing.md` that works, verbatim: the tests under every
 // heading but "The first attempt", and the controller of the camera around
-// the `connect` of "A timer wired to the device". `test` is the one of
+// the `connect` of "A deadline of the job". `test` is the one of
 // `testing_stubs.dart`, and `testing_rakes_test` runs each of these as a
 // test of its suite. Where the page shows a few lines of a test, the test
 // around them is this file's own.
@@ -196,15 +196,11 @@ final class CameraController extends Solo<CameraState> {
 
   Job<void> connect() => run<Idle, void>(
         key: 'connect',
+        timeout: const Duration(seconds: 5),
         (ctx) async {
           final token = CancelToken();
-          final timer = Timer(const Duration(seconds: 5), token.cancel);
           ctx.onCancel(token.cancel);
-          try {
-            await ctx.join(() => hw.open(cancelToken: token));
-          } finally {
-            timer.cancel();
-          }
+          await ctx.join(() => hw.open(cancelToken: token));
           ctx.emit(const Connected());
         },
       );
@@ -214,15 +210,15 @@ final class CameraController extends Solo<CameraState> {
   Job<void> next() => run<CameraState, void>(key: 'next', (ctx) async {});
 }
 
-/// `### A timer wired to the device`: the five seconds under fake time.
+/// `### A deadline of the job`: the five seconds under fake time.
 final connectGivesUp = test('connect gives up after five seconds', () {
   fakeAsync((async) {
     final camera = CameraController(FakeCamera());
 
-    final job = camera.connect()..ignore();
+    final job = camera.connect();
     async.elapse(const Duration(seconds: 5));
 
-    expect(job.outcome, isA<Failed>());
+    expect('${job.outcome}', 'Cancelled(timeout)');
     expect(camera.currentState, isA<Idle>());
 
     camera.close();

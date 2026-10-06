@@ -1752,6 +1752,38 @@ void main() {
         );
       });
 
+      test('Hangs only reports, and a deadline stops the job', () {
+        _says('`Hangs` only reports: the job it names goes on running');
+        _says('A job that must stop at its limit takes the limit itself, '
+            '`run(timeout: ...)`, and ends `Cancelled(timeout)`');
+        late SoloJob<void> reported;
+        late SoloJob<void> limited;
+        var runningAtSix = false;
+        _run((async) {
+          Solo.observer = page.Hangs();
+          final bench = Bench();
+          reported = _waits(bench, 'stuck')..ignore();
+          async.elapse(const Duration(seconds: 6));
+          runningAtSix = !reported.isFinished;
+          _end(async, 'op');
+
+          limited = bench.run<int, void>(
+            key: 'limited',
+            timeout: const Duration(seconds: 3),
+            (ctx) => ctx.abandonable(() => stage.start<void>('op', null)),
+          );
+          async.elapse(const Duration(seconds: 6));
+        });
+
+        expect(
+          stage.lines,
+          ['stuck is still running: SoloPending([stuck] in its body)'],
+        );
+        expect(runningAtSix, isTrue);
+        expect('${reported.outcome}', 'Done(null)');
+        expect('${limited.outcome}', 'Cancelled(timeout)');
+      });
+
       test('the two recipes that read onFinish say nothing about a hang', () {
         _says(
           '`onFinish` never comes for a job that never finishes. The recipe '

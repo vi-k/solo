@@ -315,6 +315,28 @@ abstract class Solo<S extends Object> {
   /// [JobContext.onDispose] or [JobContext.onDiscard]. The [onCancel]
   /// parameter runs at completion; [JobContext.onCancel] instead delivers
   /// the cancellation signal immediately to the operation being stopped.
+  ///
+  /// [timeout] gives the job a deadline counted from the start of its body,
+  /// not from [add]: the time in the queue is not counted. What it bounds
+  /// and how it lands are what [Job.new] says of its own `timeout`. The
+  /// deadline is a cancellation, not an error: [onCancel] receives a
+  /// `Cancelled(timeout)` whose reason is a [TimeoutCancelReason], [onError]
+  /// is not called, and [Job.value] throws that [Cancelled], which
+  /// `on TimeoutException` does not catch. A handler that rolls back a
+  /// cancellation and reports an error tells the two apart by the reason:
+  ///
+  /// ```dart
+  /// onCancel: (state, cancelled) => cancelled.reason is TimeoutCancelReason
+  ///     ? const Failure('timed out')
+  ///     : const Initial(),
+  /// ```
+  ///
+  /// The queue is not cleared after a deadline: the next job starts once
+  /// this one has cleaned up, as after any cancellation.
+  ///
+  /// Throws [ArgumentError] when [timeout] is zero or negative, or comes
+  /// with `cancellable: false`: the deadline is a cancellation the job may
+  /// refuse, and such a job would refuse it.
   @protected
   SoloJob<T> job<W extends S, T>(
     Future<T> Function(SoloContext<S, W> ctx) body, {
@@ -322,6 +344,7 @@ abstract class Solo<S extends Object> {
     bool Function(W state)? canStart,
     bool Function(W state)? keepWhile,
     bool cancellable = true,
+    Duration? timeout,
     String Function()? describe,
     S Function(S state, Object error, StackTrace stackTrace)? onError,
     S Function(S state, Cancelled cancelled)? onCancel,
@@ -333,6 +356,7 @@ abstract class Solo<S extends Object> {
         canStart: canStart,
         keepWhile: keepWhile,
         cancellable: cancellable,
+        timeout: timeout,
         describe: describe,
         observer: _jobObserver,
         onError: onError,
@@ -353,6 +377,19 @@ abstract class Solo<S extends Object> {
   /// [timing]
   /// can debounce each group or throttle starts across this accumulator;
   /// ready jobs later in the queue can bypass a group waiting for its window.
+  ///
+  /// [timeout] is a deadline for each job the accumulator queues, not for
+  /// the accumulator, and it lands as the `timeout` of [job] does. It is
+  /// counted from the start of the handler, after the window of [timing]:
+  /// the window is time in the queue. The jobs are made lazily, by
+  /// [SoloAccumulator.add], so the cancellation a deadline makes carries the
+  /// trace of the `add` that made the job — the event the group came about
+  /// for — and not of this call.
+  ///
+  /// Throws [ArgumentError] when the accumulator is created, not on its
+  /// first event, if [timeout] is zero or negative, or comes with
+  /// `cancellable: false`. A `late final` field creates it on its first
+  /// read, which is the first `add` when nothing reads it before.
   @protected
   SoloAccumulator<E, T> collect<W extends S, E, T>(
     Future<T> Function(SoloContext<S, W> ctx, List<E> events) handler, {
@@ -362,6 +399,7 @@ abstract class Solo<S extends Object> {
     bool Function(W state)? canStart,
     bool Function(W state)? keepWhile,
     bool cancellable = true,
+    Duration? timeout,
     String Function()? describe,
   }) =>
       _SoloAccumulator<S, W, E, List<E>, T>(
@@ -376,6 +414,7 @@ abstract class Solo<S extends Object> {
         canStart: canStart,
         keepWhile: keepWhile,
         cancellable: cancellable,
+        timeout: timeout,
         describe: describe,
       );
 
@@ -389,6 +428,12 @@ abstract class Solo<S extends Object> {
   /// The handler, rules, key and policy follow [collect]. No job is created
   /// until the first event, and no state changes before the handler runs.
   /// [timing] has the same group readiness behavior as it does for [collect].
+  ///
+  /// [timeout] is a deadline for each job, as for [collect]: counted from
+  /// the start of the handler, after the window of [timing], and the
+  /// cancellation it makes carries the trace of the [SoloAccumulator.add]
+  /// that made the job. Throws [ArgumentError] when the accumulator is
+  /// created, as [collect] does.
   @protected
   SoloAccumulator<E, T> accumulate<W extends S, E, T>(
     Future<T> Function(SoloContext<S, W> ctx, E value) handler, {
@@ -399,6 +444,7 @@ abstract class Solo<S extends Object> {
     bool Function(W state)? canStart,
     bool Function(W state)? keepWhile,
     bool cancellable = true,
+    Duration? timeout,
     String Function()? describe,
   }) =>
       _SoloAccumulator<S, W, E, E, T>(
@@ -413,6 +459,7 @@ abstract class Solo<S extends Object> {
         canStart: canStart,
         keepWhile: keepWhile,
         cancellable: cancellable,
+        timeout: timeout,
         describe: describe,
       );
 
@@ -544,7 +591,20 @@ abstract class Solo<S extends Object> {
   /// `Cancelled(closed)` rather than throwing. It does throw what [add]
   /// throws for a job it cannot take: [ArgumentError] for a policy that
   /// needs a key without one, and another from [Policy.droppable] when one
-  /// key is shared by jobs with different result types.
+  /// key is shared by jobs with different result types. And it throws what
+  /// [job] throws, before anything is queued: [ArgumentError] for a
+  /// [timeout] that is zero or negative or comes with `cancellable: false`.
+  ///
+  /// A [timeout] that runs out reaches [onCancel], not [onError]: the
+  /// deadline is a cancellation with a [TimeoutCancelReason], counted from
+  /// the start of the body and not from this call. To show it as a failure,
+  /// branch on the reason:
+  ///
+  /// ```dart
+  /// onCancel: (state, cancelled) => cancelled.reason is TimeoutCancelReason
+  ///     ? const Failure('timed out')
+  ///     : const Initial(),
+  /// ```
   ///
   /// ```dart
   /// Job<String> load() => run<Profile, String>(
@@ -565,6 +625,7 @@ abstract class Solo<S extends Object> {
     bool Function(W state)? canStart,
     bool Function(W state)? keepWhile,
     bool cancellable = true,
+    Duration? timeout,
     String Function()? describe,
     Policy policy = Policy.sequential,
     S Function(S state, Object error, StackTrace stackTrace)? onError,
@@ -577,6 +638,7 @@ abstract class Solo<S extends Object> {
           canStart: canStart,
           keepWhile: keepWhile,
           cancellable: cancellable,
+          timeout: timeout,
           describe: describe,
           onError: onError,
           onCancel: onCancel,

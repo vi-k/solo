@@ -216,6 +216,13 @@ entries of the first group name them.
   override of `cancelAll` and an implementation of `SoloQueue` of its own take
   the parameter too.
 
+- **`job`, `run`, `collect` and `accumulate` take `timeout`.** An override of
+  any of the four without the new parameter no longer compiles:
+  `invalid_override`. **Migrating.** Add `Duration? timeout` to the override
+  and pass `timeout` on to `super`. Taking the parameter is not enough: `run`
+  calls the virtual `job`, so an override of `job` that takes `timeout` and
+  drops it makes `run(timeout: ...)` lose its deadline without a word.
+
 - **Inherited from `async_job`.** Four of the core's breaking changes reach an
   ordinary job body. A cancellation that travels inside a `ParallelWaitError`
   is a cancellation again: a child cancelled under
@@ -279,6 +286,20 @@ cancelled is taken where the rules noticed; `Solo.traceStateChanges`, under
 "Added", turns the record back on.
 
 ### Added
+
+- **`timeout` gives a job of the controller a deadline of its own.** `job`,
+  `run`, `collect` and `accumulate` take it. The deadline is counted from the
+  start of the body, so time in the queue and the window of a `collect` or an
+  `accumulate` do not count, and for an accumulator it is a deadline of each
+  job it queues. When it runs out, the job ends `Cancelled(timeout)` with the
+  new `TimeoutCancelReason` of `async_job`: `onCancel` takes it, `onError` does
+  not, and the queue is not cleared, so the next job starts once this one has
+  cleaned up. A `Policy.droppable` call that finds a live job returns it, and
+  the `timeout` of the call is lost with the rest of it. A deadline that is
+  zero or negative, or that comes with `cancellable: false`, throws
+  `ArgumentError` at the call; for an accumulator, when it is created, which
+  for a `late final` field is its first read. See
+  [A deadline of a job](doc/cancellation.md#a-deadline-of-a-job).
 
 - **`SoloObserver.all` makes one observer of several** for `Solo.observer`.
   Every hook goes to each of them in the order of the list, each call on its

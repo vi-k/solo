@@ -3,6 +3,8 @@
 // `// #enddocregion`, and `cancellation_rakes_test.dart` runs it. Around a
 // region stands what the page leaves to the reader: the job the block goes
 // into.
+import 'dart:async';
+
 import 'package:async_job/async_job.dart';
 
 import 'cancellation_stubs.dart';
@@ -277,6 +279,96 @@ Job<void> pauseOfTheJob() {
       await ctx.pause(const Duration(seconds: 1));
       // #enddocregion
     }
+  });
+  return job;
+}
+
+/// The limit of "A deadline", the page's "given 15 ms".
+const limit = Duration(milliseconds: 15);
+
+/// The first attempt of "A deadline": a timer that cancels the job of "A
+/// token through `onCancel`" once the limit has run out.
+Job<Database> timerOnTheJob() {
+  // #docregion
+  const limit = Duration(milliseconds: 15);
+
+  final job = Job<Database>(observer: printing, (ctx) async {
+    final database = await ctx.join(
+      Database.open,
+      discard: (database) => database.close(),
+    );
+    final stop = CancelToken();
+    ctx.onCancel(stop.cancel);
+
+    await ctx.join(() => database.migrate(stop));
+
+    return database;
+  });
+  Timer(limit, job.cancel);
+  // #enddocregion
+  return job;
+}
+
+/// The job of the first attempt, without its timer.
+Job<Database> migration() => Job<Database>(observer: printing, (ctx) async {
+      final database = await ctx.join(
+        Database.open,
+        discard: (database) => database.close(),
+      );
+      final stop = CancelToken();
+      ctx.onCancel(stop.cancel);
+
+      await ctx.join(() => database.migrate(stop));
+
+      return database;
+    });
+
+/// The second attempt: the timer is cancelled when the job ends.
+Job<Database> timerCancelledAtTheEnd() {
+  final job = migration();
+  // #docregion
+  final timer = Timer(limit, job.cancel);
+  job.done.whenComplete(timer.cancel);
+  // #enddocregion
+  return job;
+}
+
+/// "A deadline of the job": the same job with `timeout`.
+Job<Database> deadlineOfTheJob() {
+  // #docregion
+  final job = Job<Database>(observer: printing, timeout: limit, (ctx) async {
+    final database = await ctx.join(
+      Database.open,
+      discard: (database) => database.close(),
+    );
+    final stop = CancelToken();
+    ctx.onCancel(stop.cancel);
+
+    await ctx.join(() => database.migrate(stop));
+
+    return database;
+  });
+  // #enddocregion
+  return job;
+}
+
+/// "A deadline for one step": the thumbnail is a child with a deadline, and
+/// the page goes out without it when the deadline runs out.
+Job<String> thumbnailWithADeadline() {
+  final job = Job<String>(observer: printing, (ctx) async {
+    // #docregion
+    final thumbnail = Job.deferred<String>(
+      renderThumbnail,
+      key: 'thumbnail',
+      timeout: const Duration(milliseconds: 15),
+    );
+    try {
+      return 'page with ${await ctx.run(thumbnail)}';
+    } on Cancelled catch (cancelled) {
+      if (cancelled.reason is! TimeoutCancelReason) rethrow;
+      return 'page without a thumbnail';
+    }
+    // #enddocregion
   });
   return job;
 }

@@ -403,6 +403,50 @@ void main() {
       });
     });
 
+    test('origin follows a cascade from the deadline of the parent', () {
+      fakeAsync((async) {
+        late Job<void> child;
+        const limit = Duration(milliseconds: 5);
+        final parent = Job<void>(timeout: limit, (ctx) async {
+          child = Job.deferred<void>((ctx) => ctx.abandonable(() => delay(50)));
+          ctx.run(child).ignore();
+          await ctx.abandonable(() => delay(50));
+        })
+          ..ignore();
+        async.flushTimers();
+
+        expect('${parent.outcome}', 'Cancelled(timeout)');
+        final cancelled = child.outcome! as Cancelled;
+        expect(cancelled.reason, isA<ParentCancelReason>());
+        expect(
+          page.origin(cancelled),
+          isA<TimeoutCancelReason>()
+              .having((reason) => reason.timeout, 'timeout', limit),
+        );
+      });
+    });
+
+    test('the page names every built-in reason, the deadline included', () {
+      final text = File('doc/outcomes.md').readAsStringSync();
+      final list = RegExp(
+        r'built-in\s+reason\s+classes\s+are\s+(.*?)\.\s',
+        dotAll: true,
+      ).firstMatch(text)!.group(1)!;
+      final named = [
+        for (final match in RegExp('`([A-Za-z]+)`').allMatches(list))
+          match.group(1),
+      ];
+
+      expect(named, [
+        '$ManualCancelReason',
+        '$ParentCancelReason',
+        '$HandlerCancelReason',
+        '$ChainCancelReason',
+        '$SiblingCancelReason',
+        '$TimeoutCancelReason',
+      ]);
+    });
+
     test('origin follows a chain of then', () {
       fakeAsync((async) {
         final source = userReport()..ignore();

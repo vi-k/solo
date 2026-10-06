@@ -681,48 +681,31 @@ void main() {
     });
 
     test(
-        'Timer(limit, job.cancel) cancels a job still running and leaves a '
-        'finished one be', () {
+        'Job(body, timeout: limit) cancels a job still running once the '
+        'limit has run out, and leaves no timer behind', () {
+      for (final page in readmes) {
+        expect(read(page), contains('`Job(body, timeout: limit)`'));
+        expect(read(page), contains('`Cancelled(timeout)`'));
+      }
       fakeAsync((async) {
         const limit = Duration(milliseconds: 30);
-        final slow = Job<void>((ctx) async {
+        final slow = Job<void>(timeout: limit, (ctx) async {
           final db = await ctx.join(Database.open, dispose: (db) => db.close());
           use(await ctx.join(db.readAll));
         });
-        Timer(limit, slow.cancel);
-        final quick = Job<int>((ctx) async => 1);
-        Timer(limit, quick.cancel);
         async.flushTimers();
 
-        expect(slow.outcome.toString(), 'Cancelled(manual)');
+        expect(slow.outcome.toString(), 'Cancelled(timeout)');
         expect(Database.events, ['opened', 'read', 'closed']);
-        expect(quick.outcome.toString(), 'Done(1)');
       });
-    });
+      fakeAsync((async) {
+        final quick =
+            Job<int>(timeout: const Duration(hours: 1), (ctx) async => 1);
+        async.flushMicrotasks();
 
-    test(
-        'the timer lives until the limit, and cancelling it when the job '
-        'ends observes the outcome', () {
-      // The call the README gives for it.
-      expect(
-        read('README.md'),
-        contains('`job.done.whenComplete(timer.cancel)`'),
-      );
-      for (final cancelledAtTheEnd in [false, true]) {
-        var timers = -1;
-        final zone = zoneErrorsOf((async) {
-          final job = Job<int>((ctx) async => throw StateError('failed'));
-          final timer = Timer(const Duration(seconds: 1), job.cancel);
-          if (cancelledAtTheEnd) {
-            job.done.whenComplete(timer.cancel).ignore();
-          }
-          async.elapse(const Duration(milliseconds: 5));
-          timers = async.pendingTimers.length;
-        });
-
-        expect(timers, cancelledAtTheEnd ? 0 : 1);
-        expect(zone, cancelledAtTheEnd ? isEmpty : ['Bad state: failed']);
-      }
+        expect(quick.outcome.toString(), 'Done(1)');
+        expect(async.pendingTimers, isEmpty);
+      });
     });
   });
 

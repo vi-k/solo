@@ -321,7 +321,7 @@ search.
 | --- | --- |
 | [Jobs and the queue](doc/jobs.md) | Submitting work, outcomes, keys, queue policies |
 | [State](doc/state.md) | Emitting, rules, observing, external changes, state after failure |
-| [Cancellation](doc/cancellation.md) | `abandonable`, `join`, `pause`, `uncancellable`, stopping the operation, closing |
+| [Cancellation](doc/cancellation.md) | `abandonable`, `join`, `pause`, `uncancellable`, `timeout`, stopping the operation, closing |
 | [Resources and cleanup](doc/resources.md) | `onDispose`, `dispose` and `discard`, transfer, ordering |
 | [Children and streams](doc/children.md) | Child jobs, chains, steps in a row |
 | [Streams](doc/streams.md) | `ctx.each` in a controller, following another controller |
@@ -360,8 +360,8 @@ policy is selected per call, and all root jobs share one queue.
 [solo and bloc, side by side](doc/vs-bloc.md) holds the API correspondences and
 compares eleven application scenarios with implementations in both packages.
 
-The package does not include retry policies, built-in timeouts, worker pools,
-dependency injection, persistence or state equality filtering. If work needs
-cancellation and cleanup but no state rules or controller queue,
+The package does not include retry policies, worker pools, dependency
+injection, persistence or state equality filtering. If work needs cancellation
+and cleanup but no state rules or controller queue,
 [async_job](https://pub.dev/packages/async_job) can be used directly. For a
 value with no asynchronous lifecycle, a `ValueNotifier` may suffice.

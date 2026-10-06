@@ -197,6 +197,34 @@ const _failed = nested.State.failed;
 const _passed = nested.State.passed;
 const _tooLate = 'This test failed after it had already completed.';
 
+/// The `connect` of "A deadline of the job" with both state handlers of
+/// `run`, each saying it was called.
+final class _HandledCamera extends Solo<CameraState> {
+  final FakeCamera hw;
+  final List<String> seen;
+
+  _HandledCamera(this.hw, this.seen) : super(const Idle());
+
+  Job<void> connect() => run<Idle, void>(
+        key: 'connect',
+        timeout: const Duration(seconds: 5),
+        onError: (state, error, stackTrace) {
+          seen.add('onError: $error');
+          return state;
+        },
+        onCancel: (state, cancelled) {
+          seen.add('onCancel: ${cancelled.reason.name}');
+          return state;
+        },
+        (ctx) async {
+          final token = CancelToken();
+          ctx.onCancel(token.cancel);
+          await ctx.join(() => hw.open(cancelToken: token));
+          ctx.emit(const Connected());
+        },
+      );
+}
+
 void main() {
   tearDown(() {
     Solo.observer = null;
@@ -1456,11 +1484,11 @@ void main() {
       });
     });
 
-    group('a timer wired to the device, as the page writes it:', () {
+    group('a deadline of the job, as the page writes it:', () {
       _asWritten(page.connectGivesUp);
     });
 
-    group('a timer wired to the device', () {
+    group('a deadline of the job', () {
       test('the fake camera never answers on its own', () {
         fakeAsync((async) {
           var answered = false;
@@ -1475,23 +1503,44 @@ void main() {
         });
       });
 
-      test('the timer stops the device at five seconds, and not before', () {
+      test('the deadline stops the device at five seconds, and not before', () {
         fakeAsync((async) {
           final hw = FakeCamera();
           final camera = page.CameraController(hw);
-          final job = camera.connect()..ignore();
+          final job = camera.connect();
 
           async.elapse(const Duration(milliseconds: 4999));
           final before = '${_how(job)}, refused ${hw.refused}';
           async.elapse(const Duration(milliseconds: 1));
 
           expect(before, 'no outcome, refused 0');
-          expect(_how(job), 'Failed(Bad state: open cancelled)');
+          expect(_how(job), 'Cancelled(timeout)');
           expect(hw.refused, 1);
           expect(_state(camera), 'Idle');
           expect(async.pendingTimers, isEmpty);
           _says('The hardware API completes with an error when its token is '
-              'cancelled, so a timeout fails the job');
+              'cancelled, and `join` throws that error, but the job is '
+              'cancelled by then: it ends `Cancelled(timeout)`, not `Failed`');
+          _says('`async.pendingTimers` is empty after the five seconds');
+
+          camera.close();
+          async.flushTimers();
+        });
+      });
+
+      test('the deadline is counted from the start of the body', () {
+        fakeAsync((async) {
+          final camera = page.CameraController(FakeCamera())
+            ..connect().ignore();
+          final second = camera.connect();
+
+          async.elapse(const Duration(milliseconds: 9999));
+          final before = _how(second);
+          async.elapse(const Duration(milliseconds: 1));
+
+          expect(before, 'no outcome');
+          expect(_how(second), 'Cancelled(timeout)');
+          _says('Five seconds after the body starts, the job is cancelled');
 
           camera.close();
           async.flushTimers();
@@ -1502,16 +1551,18 @@ void main() {
         fakeAsync((async) {
           final hw = FakeCamera();
           final camera = page.CameraController(hw);
-          final job = camera.connect()..ignore();
+          final job = camera.connect();
 
           async.elapse(const Duration(seconds: 1));
+          expect(async.pendingTimers, hasLength(1));
           hw.answer();
           async.flushMicrotasks();
 
           expect(_how(job), 'Done(null)');
           expect(_state(camera), 'Connected');
           expect(async.pendingTimers, isEmpty);
-          _says('The `finally` block cancels the timer on every exit');
+          _says('The timer the core keeps for it is gone as soon as the job '
+              'ends');
 
           camera.close();
           async.flushTimers();
@@ -1541,14 +1592,13 @@ void main() {
         expect(underTheCall, 'refused 1');
         expect(afterTheFlush, 'Cancelled(manual), 0 timers');
         expect(errors, isEmpty);
-        _says('`ctx.onCancel` hands the same token to a cancellation that '
-            'comes from outside, so a cancelled job stops the device as well');
+        _says('A cancellation that comes from outside takes the same way, so '
+            'a cancelled job stops the device as well');
       });
 
       test('the next job waits for the device to stop', () {
         fakeAsync((async) {
-          final camera = page.CameraController(FakeCamera())
-            ..connect().ignore();
+          final camera = page.CameraController(FakeCamera())..connect();
           async.flushMicrotasks();
           final next = camera.next();
 
@@ -1559,13 +1609,15 @@ void main() {
           expect(before, 'no outcome');
           expect(_how(next), 'Done(null)');
           _says('For a device operation that must stop before the next job');
+          _says('`join` waits for the device to stop, so the next job starts '
+              'after it');
 
           camera.close();
           async.flushTimers();
         });
       });
 
-      test('without ignore() the failure of connect reaches the zone', () {
+      test('without ignore() nothing reaches the zone', () {
         final errors = _fakeZoned((async, errors) {
           final camera = page.CameraController(FakeCamera())..connect();
           async.elapse(const Duration(seconds: 5));
@@ -1573,7 +1625,25 @@ void main() {
           async.flushTimers();
         });
 
-        expect(errors, ['StateError: open cancelled']);
+        expect(errors, isEmpty);
+        _says('nothing reaches the zone, and the test needs no `ignore()`');
+      });
+
+      test('the deadline reaches onCancel of run, not onError', () {
+        final seen = <String>[];
+        fakeAsync((async) {
+          final camera = _HandledCamera(FakeCamera(), seen);
+          final job = camera.connect();
+          async.elapse(const Duration(seconds: 5));
+
+          expect(_how(job), 'Cancelled(timeout)');
+          camera.close();
+          async.flushTimers();
+        });
+
+        expect(seen, ['onCancel: timeout']);
+        _says('A `run` with `onCancel` gets the deadline there, not in '
+            '`onError`');
       });
     });
   });
@@ -1647,7 +1717,7 @@ void main() {
       '### Elapsing instead of awaiting': [answers],
       '### addTearDown': [answers],
       '### Collecting in the zone, asserting outside': [answers],
-      '### A timer wired to the device': [answers],
+      '### A deadline of the job': [answers],
     };
     for (final MapEntry(key: heading, value: files) in holders.entries) {
       test('the code under "$heading" is a run of lines of ${files.first}', () {

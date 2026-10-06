@@ -230,11 +230,13 @@ parent's `HandlerCancelReason.cause` holds the child's `Cancelled`. In a chain
 of `then`, a job cancelled by its neighbour holds the neighbour's `Cancelled`
 in `ChainCancelReason.cause`. These links preserve the original reason and its
 data, and `origin` follows them to the end: `cause` is `null` where nothing
-stands behind the reason, as for a body that threw `Cancelled('why')` itself.
-`SiblingCancelReason` has a `cause` too, but that is what the group of
-`ctx.runAll` stopped for — the error or the cancellation another branch ended
-with, or an error of the group itself. So `origin` does not follow that
-`cause`: it returns the `SiblingCancelReason` itself.
+stands behind the reason, as for a body that threw `Cancelled('why')` itself. A
+child cancelled because the deadline of its parent ran out follows the same
+link: its `origin` is the parent's `TimeoutCancelReason`. `SiblingCancelReason`
+has a `cause` too, but that is what the group of `ctx.runAll` stopped for — the
+error or the cancellation another branch ended with, or an error of the group
+itself. So `origin` does not follow that `cause`: it returns the
+`SiblingCancelReason` itself.
 
 A body that awaits `value` of a job it does not own gets no
 `HandlerCancelReason` for it: that job's cancellation goes through with its
@@ -245,8 +247,11 @@ Besides the `reason`, `Cancelled` contains a `started` flag, an optional
 `description` and the stack trace of the cancellation. `started` tells you
 whether the body ran or was cancelled before start. The built-in reason classes
 are `ManualCancelReason`, `ParentCancelReason`, `HandlerCancelReason`,
-`ChainCancelReason` and `SiblingCancelReason` — the last one is what a group of
-`ctx.runAll` gives its branches when it fails. All extend `CancelReason`.
+`ChainCancelReason`, `SiblingCancelReason` and `TimeoutCancelReason`.
+`SiblingCancelReason` is what a group of `ctx.runAll` gives its branches when
+it fails, and `TimeoutCancelReason` is what a job gets when the deadline given
+with `timeout` runs out, as [A deadline](cancellation.md#a-deadline) shows. All
+extend `CancelReason`.
 
 Check reasons by type, for example `reason is ParentCancelReason`. The `name`
 property is a label for logs and does not determine equality. Reasons use

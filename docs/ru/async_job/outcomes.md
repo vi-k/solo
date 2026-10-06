@@ -229,11 +229,12 @@ request failed: Bad state: token expired
 `then` задача, отменённая соседом, хранит `Cancelled` соседа
 в `ChainCancelReason.cause`. Эти ссылки сохраняют исходную причину и её данные,
 и `origin` проходит по ним до конца: `cause` равен `null` там, где за причиной
-ничего нет, как у тела, которое само бросило `Cancelled('why')`.
-У `SiblingCancelReason` тоже есть `cause`, но это то, из-за чего остановилась
-группа `ctx.runAll`: ошибка или отмена, которой кончилась другая ветка, или
-ошибка самой группы. Поэтому `origin` по этому `cause` не идёт: он возвращает
-сам `SiblingCancelReason`.
+ничего нет, как у тела, которое само бросило `Cancelled('why')`. Дочерняя
+задача, отменённая потому, что вышел срок родителя, идёт по той же ссылке: её
+`origin` даёт `TimeoutCancelReason` родителя. У `SiblingCancelReason` тоже есть
+`cause`, но в нём лежит то, из-за чего остановилась группа `ctx.runAll`: ошибка
+или отмена, которой кончилась другая ветка, или ошибка самой группы. Поэтому
+`origin` по этому `cause` не идёт: он возвращает сам `SiblingCancelReason`.
 
 Тело, которое ждёт `value` чужой задачи, `HandlerCancelReason` для неё
 не получает: её отмена проходит с причиной как есть, и исход читается как
@@ -243,9 +244,11 @@ request failed: Bad state: token expired
 описание `description` и стектрейс отмены. Флаг `started` показывает, успело ли
 тело запуститься или отмена произошла до запуска. Встроенные классы причин:
 `ManualCancelReason`, `ParentCancelReason`, `HandlerCancelReason`,
-`ChainCancelReason` и `SiblingCancelReason`; все они наследуют `CancelReason`.
-`SiblingCancelReason` выдаёт своим веткам группа `ctx.runAll`, когда
-проваливается.
+`ChainCancelReason`, `SiblingCancelReason` и `TimeoutCancelReason`; все они
+наследуют `CancelReason`. `SiblingCancelReason` выдаёт своим веткам группа
+`ctx.runAll`, когда проваливается, а `TimeoutCancelReason` получает задача,
+у которой вышел срок, заданный через `timeout`, как показывает раздел
+[«Срок»](cancellation.md#срок).
 
 Проверяйте причину по типу, например `reason is ParentCancelReason`. Свойство
 `name` служит меткой для лога и не определяет равенство. По умолчанию причины
