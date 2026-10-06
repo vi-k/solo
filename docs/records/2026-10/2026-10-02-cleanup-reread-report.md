@@ -611,3 +611,15 @@ the database».
    блоках раздела «в конце курсор закрывается», в оригинале «closes the cursor
    at the end»; так же в `test/support/cleanup_first_attempts.dart`
    и `cleanup_page.dart`. Поведение то же.
+3. «движок вроде `solo` может дождаться их при закрытии — при закрытии чего?» —
+   о фразе под таблицей шагов завершения, 2026-10-06. Закрывается контроллер
+   `solo`, но фраза его не называла, и «может дождаться» звучало как
+   возможность, а не как то, что происходит. Теперь: «and so does the waiting
+   of whoever waits for the job: a `solo` controller completes `close()` only
+   once the cleanup of the job it cancelled has run», в переводе «Того же
+   дожидается всякий, кто ждёт задачу: контроллер `solo` завершает `close()`
+   только после уборки задачи, которую отменил». Утверждение о `solo` держат
+   его тесты `close waits for cleanup and applies cancellation state`
+   в `packages/solo/test/state_handlers_test.dart`
+   и `close waits for the cleanup of the job it cancels`
+   в `vs_bloc_rakes_test.dart`; сторожу `async_job` до `solo` не дотянуться.

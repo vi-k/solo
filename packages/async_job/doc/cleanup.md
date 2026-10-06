@@ -242,7 +242,8 @@ belongs where ownership changes, not on the line after it.
 | End | the outcome, and the release of whatever an engine holds |
 
 Because each callback is awaited, the job ends only after the last of them is
-over, and an engine such as `solo` can wait for them while it closes.
+over, and so does the waiting of whoever waits for the job: a `solo` controller
+completes `close()` only once the cleanup of the job it cancelled has run.
 
 The callbacks on the cleanup stack run after the body ends, and cancellation
 does not interrupt them: neither one already accepted nor one arriving into the
