@@ -114,13 +114,16 @@ var cancelled = false;
 Future<void> load() async {
   final db = await Database.open();
   if (cancelled) {
-    return; // the database stays open
+    await db.close();
+    return;
   }
   final rows = await db.readAll();
   if (cancelled) {
-    return; // and here as well
+    await db.close();
+    return;
   }
   use(rows);
+  await db.close();
 }
 // README: end
 
@@ -237,25 +240,34 @@ void main() {
   });
 
   group('the flag the README starts from', () {
-    test('leaves the database open when it is set during the open', () {
+    test('closes the database at the check after the open', () {
       fakeAsync((async) {
         unawaited(load());
         async.elapse(const Duration(milliseconds: 10));
         cancelled = true;
         async.flushTimers();
 
-        expect(Database.events, ['opened']);
+        expect(Database.events, ['opened', 'closed']);
       });
     });
 
-    test('and when it is set during the read', () {
+    test('and at the check after the read', () {
       fakeAsync((async) {
         unawaited(load());
         async.elapse(const Duration(milliseconds: 50));
         cancelled = true;
         async.flushTimers();
 
-        expect(Database.events, ['opened', 'read']);
+        expect(Database.events, ['opened', 'read', 'closed']);
+      });
+    });
+
+    test('and once more at the end when nobody sets the flag', () {
+      fakeAsync((async) {
+        unawaited(load());
+        async.flushTimers();
+
+        expect(Database.events, ['opened', 'read', 'used 1', 'closed']);
       });
     });
   });

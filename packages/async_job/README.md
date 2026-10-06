@@ -11,8 +11,8 @@ unawaited futures leave it alone.
 
 ## Why
 
-A plain `Future` has no cancellation. A flag can ask work to stop, but nothing
-looks after what the work has already opened:
+A plain `Future` has no cancellation. A flag can ask work to stop, but the work
+has to ask the flag after every `await` and close what it has opened each time:
 
 ```dart
 var cancelled = false;
@@ -20,17 +20,26 @@ var cancelled = false;
 Future<void> load() async {
   final db = await Database.open();
   if (cancelled) {
-    return; // the database stays open
+    await db.close();
+    return;
   }
   final rows = await db.readAll();
   if (cancelled) {
-    return; // and here as well
+    await db.close();
+    return;
   }
   use(rows);
+  await db.close();
 }
 ```
 
-A job looks after it:
+Every new `await` needs a check of its own, and every new resource adds its
+cleanup to each check. Once the cleanup grows, checks start to be left out, and
+a check left out lets the work go on after the cancellation, with nothing
+pointing at the place.
+
+A job checks for cancellation at each `ctx.join`, and the closing of the
+database is registered once:
 
 ```dart
 final job = Job<void>((ctx) async {
