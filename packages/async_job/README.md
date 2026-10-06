@@ -5,7 +5,9 @@ Dart code. The package works in pure Dart and depends only on `meta`.
 
 A `Job<T>` runs a function called its body and records how it ended. Use
 `await job.done` to get its outcome or `await job.value` to get the value
-returned by the body. `Job` itself does not implement `Future`.
+returned by the body. `Job` itself does not implement `Future`: a job started
+without `await` is ordinary use rather than a forgotten wait, and the lints for
+unawaited futures leave it alone.
 
 ## Why
 

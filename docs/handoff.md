@@ -433,12 +433,12 @@ on upgrade», «Added», «Fixed», «Documentation». Счёт ломающих
 вместе с ним. В `async_job` это `cleanup_rakes_test.dart`,
 `outcomes_rakes_test.dart`, `cancellation_rakes_test.dart`,
 `observing_rakes_test.dart`, `children_rakes_test.dart`,
-`streams_rakes_test.dart` и `extending_rakes_test.dart`. В `solo` —
-`state_rakes_test.dart`, `cancellation_rakes_test.dart`,
-`resources_rakes_test.dart`, `errors_rakes_test.dart`
-с `cancel_delay_recipe_test.dart`, `testing_rakes_test.dart`
-и `readme_rakes_test.dart` для README; `camera.md` держит
-`camera_rakes_test.dart` пакета примера, а `children.md` —
+`streams_rakes_test.dart`, `extending_rakes_test.dart`
+и `readme_recipe_test.dart` для README. В `solo` — `state_rakes_test.dart`,
+`cancellation_rakes_test.dart`, `resources_rakes_test.dart`,
+`errors_rakes_test.dart` с `cancel_delay_recipe_test.dart`,
+`testing_rakes_test.dart` и `readme_rakes_test.dart` для README; `camera.md`
+держит `camera_rakes_test.dart` пакета примера, а `children.md` —
 `children_rakes_test.dart` с кодом страницы в `test/support/children_*.dart`,
 118 тестов, и прежние `children_test.dart`, `each_test.dart`,
 `each_child_test.dart` и `zone_test.dart`.

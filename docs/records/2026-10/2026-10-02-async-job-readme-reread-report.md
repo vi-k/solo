@@ -537,3 +537,17 @@ already has» (R8), тест о `join` вокруг шага в «the Quick star
 страницу меняли три коммита: `917ad65` и `a136c19` в таблице «Guides», где
 `Job.each` появился и ушёл на свою страницу «Streams», и `200cfe3`, где
 `ctx.wait` стал `ctx.abandonable`.
+
+1. «может, я был не прав, и надо реализовать интерфейс Future?» — о последней
+   фразе вступления, 2026-10-06. Решение оставлено: владелец выбрал
+   не реализовывать `Future`. Доводы зондом на Dart из PATH: вызов, который
+   возвращает задачу, без `await` в `async`-функции сразу даёт
+   `unawaited_futures`, а линт включён во всех трёх пакетах; цепочка `Job.then`
+   с колбэком `(ctx, value)` не может переопределить `Future.then`
+   и не собирается (`invalid_override`). Фраза называла факт без причины
+   и читалась как недоделка. Теперь: «`Job` itself does not implement `Future`:
+   a job started without `await` is ordinary use rather than a forgotten wait,
+   and the lints for unawaited futures leave it alone», в переводе «Сама `Job`
+   не реализует `Future`: задачу можно запустить без `await`, это обычное дело,
+   а не забытое ожидание, и линты о неожидаемых future её не трогают».
+   Поведение то же.
