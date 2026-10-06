@@ -1,8 +1,8 @@
-// What the code of `doc/children.md` takes for granted: the states of the
-// application, its API, its hardware and its analytics, and the session a
-// screen follows. Every call of a stub runs until the test ends it, so the
-// order of what happened is the test's to set. `Desk` is what the tests need
-// of a controller of the page beside the page's own members.
+// What the code of `doc/children.md` and `doc/streams.md` takes for granted:
+// the states of the application, its API, its hardware and its analytics, and
+// the session a screen follows. Every call of a stub runs until the test ends
+// it, so the order of what happened is the test's to set. `Desk` is what the
+// tests need of a controller of the page beside the page's own members.
 import 'dart:async';
 
 import 'package:solo/solo.dart';

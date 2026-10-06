@@ -334,7 +334,8 @@ await player.close(mode: SoloCloseMode.drain);
 | [Состояние](../../docs/ru/solo/state.md) | Публикация, правила, наблюдение, внешние изменения, состояние после ошибки |
 | [Отмена](../../docs/ru/solo/cancellation.md) | `abandonable`, `join`, `pause`, `uncancellable`, остановка операции, закрытие |
 | [Ресурсы и освобождение](../../docs/ru/solo/resources.md) | `onDispose`, `dispose` и `discard`, передача, порядок |
-| [Дочерние задачи и стримы](../../docs/ru/solo/children.md) | Дочерние `Job`, стримы, слежение за другим контроллером |
+| [Дочерние задачи и стримы](../../docs/ru/solo/children.md) | Дочерние `Job`, цепочки, шаги подряд |
+| [Стримы](../../docs/ru/solo/streams.md) | `ctx.each` в контроллере, слежение за другим контроллером |
 | [Накопление событий](../../docs/ru/solo/accumulation.md) | `collect`, `accumulate`, debounce и throttle |
 | [Ошибки и наблюдение](../../docs/ru/solo/errors.md) | `SoloObserver`, `errorHandler`, `pending`, логи |
 | [Тестирование](../../docs/ru/solo/testing.md) | Ожидание исходов, фейковое время, таймауты |

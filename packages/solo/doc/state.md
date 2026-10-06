@@ -58,7 +58,7 @@ The first type argument of `run<W, T>` is the job's working state type,
 `Ready`; the body reads `ctx.state` as `W` for the same reason. Here `Ready`,
 `device` and `store` belong to the application, and `ctx.each` processes the
 stream — its full lifecycle is explained in
-[Processing a stream](children.md#processing-a-stream) on the children page.
+[Processing a stream](streams.md#processing-a-stream) on the streams page.
 
 When a state update sets `paused` to true, `keepWhile` cancels the recording;
 the body does not need to repeat that condition. That update does not come from

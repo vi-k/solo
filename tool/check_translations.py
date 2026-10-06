@@ -75,6 +75,10 @@ PAIRS = [
         REPO / "docs" / "ru" / "solo" / "children.md",
     ),
     (
+        REPO / "packages" / "solo" / "doc" / "streams.md",
+        REPO / "docs" / "ru" / "solo" / "streams.md",
+    ),
+    (
         REPO / "packages" / "solo" / "doc" / "errors.md",
         REPO / "docs" / "ru" / "solo" / "errors.md",
     ),

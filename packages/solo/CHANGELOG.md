@@ -397,7 +397,7 @@ cancelled is taken where the rules noticed; `Solo.traceStateChanges`, under
   moved to `doc/`, one page per subject: [Jobs and the queue](doc/jobs.md),
   [State](doc/state.md), [Cancellation](doc/cancellation.md),
   [Resources and cleanup](doc/resources.md),
-  [Children and streams](doc/children.md),
+  [Children and streams](doc/children.md), [Streams](doc/streams.md),
   [Errors and observation](doc/errors.md), [Testing](doc/testing.md) and
   [Camera example](doc/camera.md). The Flutter section went to the package it
   is about, `flutter_solo`.

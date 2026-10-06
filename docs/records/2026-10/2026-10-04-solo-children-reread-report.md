@@ -616,3 +616,27 @@ new job», а мутация правит обе проверки `isClosed` в 
 в оригинале, переводе и, если меняется утверждение, в стороже
 `children_rakes_test.dart`. После вычитки страницу тронул один коммит,
 `200cfe3`, где `ctx.wait` стал `ctx.abandonable`.
+
+1. «посмотри сразу, не нужно ли делать отдельный файл streams, как мы сделали
+   в async_job» — до начала чтения, 2026-10-06. Сделано: разделы «Processing a
+   stream» и «Following another controller», 145 строк из 365, переехали
+   на новую страницу `packages/solo/doc/streams.md` с переводом
+   `docs/ru/solo/streams.md` без правок текста, кроме двух мест. Вступление
+   страницы новое, по образцу `streams.md` ядра: что к ребёнку `ctx.each`
+   добавляет контроллер, и обе первые попытки названы. Ссылка «`_sync` at the
+   top of this page» стала ссылкой на страницу `children.md`. В `children.md`
+   вступление говорит теперь об одном разделе с первой попыткой, `then`,
+   а абзацем перед ним — что такое `ctx.each` для контроллера и где об этом
+   страница. Раздела-указателя, как «Processing streams» в ядре, не вышло:
+   `check_doc_shape.py` требует кода в каждом разделе, а повторять ответ
+   страницы стримов незачем. Заголовок «Children and streams» оставлен, как
+   «Children, streams and chains» в ядре. Тронуты ещё ссылка из `state.md`
+   на «Processing a stream», таблица «Guides» README `solo` и перевода, меню
+   сайта, пары `tool/check_translations.py` и список страниц в `CHANGELOG.md`
+   `solo`. Сторож разделён так же: `streams_rakes_test.dart` взял две группы
+   и свою группу «The page», код страницы лёг в `support/streams_page.dart`
+   и `support/streams_first_attempts.dart`, заглушки остались общими
+   в `children_stubs.dart`. Тест о прогрессе `_sync` гоняет блок начала
+   `children.md`. Две мутации нового сторожа — убранное чтение `currentState`
+   в ответе и переписанная ссылка на `_sync` — ловятся, три и один тест. Пакет
+   `solo` — 1724 теста, сайт собирается.

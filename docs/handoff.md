@@ -153,11 +153,14 @@ README — `2026-10-02-async-job-readme-reread-report.md`. `extending.md`
 прочитана 2026-10-02, после этого её тронул только `ctx.pause`, пять строк.
 Второй круг `async_job` на этом закончен. Дальше вычитанные заново страницы
 `solo`. 2026-10-06 владелец начал с `children.md`, сильнее всех изменившейся
-с его первого чтения, отчёт — `2026-10-04-solo-children-reread-report.md`;
-дальше `state.md` и остальные. Вопросы владельца правятся в странице, переводе
-и стороже и идут пунктами раздела «По чтению владельца» в отчёте страницы.
-В `docs/backlog.md` одна запись — общий отлов зависаний; по ней решено оставить
-рецептами, пока не выполнится условие, названное в самой записи.
+с его первого чтения, отчёт — `2026-10-04-solo-children-reread-report.md`.
+По его слову разделы о стримах вынесены на свою страницу
+`packages/solo/doc/streams.md`, сторож `streams_rakes_test.dart`; её владелец
+читает вместе с `children.md`, вопросы — в том же отчёте; дальше `state.md`
+и остальные. Вопросы владельца правятся в странице, переводе и стороже и идут
+пунктами раздела «По чтению владельца» в отчёте страницы. В `docs/backlog.md`
+одна запись — общий отлов зависаний; по ней решено оставить рецептами, пока
+не выполнится условие, названное в самой записи.
 
 **Срок задачи.** 2026-10-06 владелец решил добавить в ядро параметр `timeout` —
 срок задачи от старта тела с причиной `TimeoutCancelReason` — отдельной
@@ -451,8 +454,9 @@ on upgrade», «Added», «Fixed», «Documentation». Счёт ломающих
 `testing_rakes_test.dart` и `readme_rakes_test.dart` для README; `camera.md`
 держит `camera_rakes_test.dart` пакета примера, а `children.md` —
 `children_rakes_test.dart` с кодом страницы в `test/support/children_*.dart`,
-118 тестов, и прежние `children_test.dart`, `each_test.dart`,
-`each_child_test.dart` и `zone_test.dart`.
+и прежние `children_test.dart`, `each_test.dart`, `each_child_test.dart`
+и `zone_test.dart`; `streams.md` — `streams_rakes_test.dart` с кодом
+в `test/support/streams_*.dart` и заглушками `children_stubs.dart`.
 
 `packages/async_job/doc/extending.md` вычитана 2026-10-02 в `main`. Страницу
 перестроили раньше, 2026-09-28, и форма её не менялась: раздел о своей задаче

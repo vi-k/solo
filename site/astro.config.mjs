@@ -90,6 +90,7 @@ export default defineConfig({
               'Children and streams',
               'Дочерние задачи и стримы',
             ),
+            page('solo/streams', 'Streams', 'Стримы'),
             page(
               'solo/accumulation',
               'Event accumulation',

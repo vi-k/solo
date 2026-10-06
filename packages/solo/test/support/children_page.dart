@@ -45,14 +45,6 @@ base class Syncer extends Solo<AppState> with OpenSolo<AppState>, Desk {
   /// Not on the page: `_sync` made and handed out, started by nobody.
   SoloJob<String> made(int item) => _sync(item);
 
-  /// "A child that owns the subscription".
-  Job<void> track() => run<Ready, void>(
-        key: 'track',
-        (ctx) => ctx.each(hw.positions, (childCtx, p) {
-          childCtx.emit(childCtx.state.copyWith(position: p));
-        }).value,
-      );
-
   // Runs after `sync` succeeds, outside the queue, with a plain JobContext.
   Job<void> syncAndReport(int item) =>
       sync(item).then((ctx, path) => analytics.send(path));
@@ -77,31 +69,5 @@ final class Together extends Syncer {
           final path = await ctx.run(_sync(item));
           await ctx.run(_recordPath(path));
         },
-      );
-}
-
-/// "The state first, then the stream".
-final class ScreenController extends Solo<Screen> {
-  /// Not on the page here: the field and the constructor, which the page
-  /// shows in the first attempt.
-  final SoloStream<Session> session;
-
-  ScreenController(this.session) : super(const Screen());
-
-  Job<void> follow() => run<Screen, void>(
-        key: 'follow',
-        (ctx) async {
-          void take(SoloContext<Screen, Screen> target, Session next) =>
-              target.emit(target.state.copyWith(signedIn: next.signedIn));
-
-          take(ctx, session.currentState); // what has already happened
-          await ctx.each(session.stream, take).value; // what happens next
-        },
-      );
-
-  /// Not on the page: another job of the same controller.
-  Job<void> other() => run<Screen, void>(
-        key: 'other',
-        (ctx) async => stage.trace.add('other ran'),
       );
 }

@@ -323,7 +323,8 @@ search.
 | [State](doc/state.md) | Emitting, rules, observing, external changes, state after failure |
 | [Cancellation](doc/cancellation.md) | `abandonable`, `join`, `pause`, `uncancellable`, stopping the operation, closing |
 | [Resources and cleanup](doc/resources.md) | `onDispose`, `dispose` and `discard`, transfer, ordering |
-| [Children and streams](doc/children.md) | Child jobs, streams, following another controller |
+| [Children and streams](doc/children.md) | Child jobs, chains, steps in a row |
+| [Streams](doc/streams.md) | `ctx.each` in a controller, following another controller |
 | [Event accumulation](doc/accumulation.md) | `collect`, `accumulate`, debounce and throttle |
 | [Errors and observation](doc/errors.md) | `SoloObserver`, `errorHandler`, `pending`, logs |
 | [Testing](doc/testing.md) | Awaiting outcomes, fake time, timeouts |

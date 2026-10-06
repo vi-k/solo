@@ -11,33 +11,6 @@ import 'children_stubs.dart';
 /// Not on the page: the keys of the page's jobs.
 enum _Op { syncAndRecord }
 
-/// "Processing a stream", the first attempt.
-final class Listening extends page.Syncer {
-  @override
-  Job<void> track() => run<Ready, void>(
-        key: 'track',
-        (ctx) async {
-          hw.positions.listen(
-            (p) => ctx.emit(ctx.state.copyWith(position: p)),
-          );
-        },
-      );
-}
-
-/// "Following another controller", the first attempt.
-final class ScreenController extends Solo<Screen> {
-  final SoloStream<Session> session;
-
-  ScreenController(this.session) : super(const Screen());
-
-  Job<void> follow() => run<Screen, void>(
-        key: 'follow',
-        (ctx) => ctx.each(session.stream, (childCtx, next) {
-          childCtx.emit(childCtx.state.copyWith(signedIn: next.signedIn));
-        }).value,
-      );
-}
-
 /// "Steps in a row", the first attempt.
 final class Chained extends page.Syncer {
   Job<void> syncAndRecord(int item) =>
