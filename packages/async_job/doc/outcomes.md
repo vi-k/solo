@@ -304,18 +304,13 @@ getter again.
 
 To react when cancellation is accepted, without waiting for the final outcome,
 register a listener with `job.whenCancelled(callback)`. It runs synchronously
-and receives the `Cancelled` with its reason and details. The registration
-method returns a function to unregister the listener:
+and receives the `Cancelled` with its reason and details:
 
 ```dart
 // Runs when the cancellation is accepted; the job may still be finishing.
 final unregister = report.whenCancelled((cancelled) {
   print('cancelling: ${cancelled.reason}');
 });
-
-await report.done;
-// Safe after completion; call earlier to stop listening sooner.
-unregister();
 ```
 
 ```text
@@ -323,6 +318,23 @@ cancelling: manual
 step finished
 cleanup
 ```
+
+The registration returns a function that unregisters the listener. A screen
+that closes while the report is still running calls it, and a cancellation that
+comes afterwards tells the screen nothing:
+
+```dart
+// The screen closes; the report goes on.
+unregister();
+```
+
+```text
+step finished
+cleanup
+```
+
+Once the job has finished there is nothing to unregister: every listener has
+either run or been released, and calling the function then does nothing.
 
 When the listener runs depends on how the job is cancelled:
 

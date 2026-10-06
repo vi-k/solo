@@ -37,6 +37,7 @@ const quoted = [
   ['request failed: Bad state: token expired'],
   ['step finished', 'cleanup', 'cancelling: manual'],
   ['cancelling: manual', 'step finished', 'cleanup'],
+  ['step finished', 'cleanup'],
 ];
 
 /// What the code of a test prints, and what reaches its zone uncaught.
@@ -596,7 +597,7 @@ void main() {
       late bool finished;
       final lines = printed((async) {
         final report = page.startSteppedReport();
-        unawaited(page.showCancelling(report));
+        page.showCancelling(report);
         async.elapse(const Duration(milliseconds: 10));
         report.cancel().ignore();
         atCancel = [...journal];
@@ -606,6 +607,37 @@ void main() {
 
       expect(atCancel, ['cancelling: manual'], reason: 'at acceptance');
       expect(finished, isFalse);
+      expect(lines, quoted[7]);
+    });
+
+    test('a listener unregistered while the job runs hears nothing', () {
+      late bool finished;
+      final lines = printed((async) {
+        final report = page.startSteppedReport();
+        final unregister = page.showCancelling(report);
+        async.elapse(const Duration(milliseconds: 10));
+        page.closeScreen(unregister);
+        finished = report.isFinished;
+        report.cancel().ignore();
+        async.flushTimers();
+      });
+
+      expect(finished, isFalse, reason: 'the report goes on');
+      expect(lines, quoted[8]);
+    });
+
+    test('unregistering after the job has finished does nothing', () {
+      final lines = printed((async) {
+        final report = page.startSteppedReport();
+        final unregister = page.showCancelling(report);
+        async.elapse(const Duration(milliseconds: 10));
+        report.cancel().ignore();
+        async.flushTimers();
+        expect(report.isFinished, isTrue);
+        unregister();
+        unregister();
+      });
+
       expect(lines, quoted[7]);
     });
 

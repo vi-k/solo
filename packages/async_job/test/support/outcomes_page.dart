@@ -88,14 +88,18 @@ Job<void> startSteppedReport() {
   return report;
 }
 
-/// Listening for the cancellation: the screen says it at once.
-Future<void> showCancelling(Job<void> report) async {
+/// Listening for the cancellation: the screen says it at once. Returns the
+/// function that unregisters the listener.
+void Function() showCancelling(Job<void> report) {
   // Runs when the cancellation is accepted; the job may still be finishing.
   final unregister = report.whenCancelled((cancelled) {
     print('cancelling: ${cancelled.reason}');
   });
+  return unregister;
+}
 
-  await report.done;
-  // Safe after completion; call earlier to stop listening sooner.
+/// The screen stops listening with the function [showCancelling] returned.
+void closeScreen(void Function() unregister) {
+  // The screen closes; the report goes on.
   unregister();
 }
