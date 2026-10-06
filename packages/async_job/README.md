@@ -214,9 +214,9 @@ final outcome = await job.done; // Cancelled(manual)
   [Holding the cancellation back](doc/cancellation.md#holding-the-cancellation-back)
   on the cancellation page.
 - **`ctx.run(database.readyFlag())`** starts, as a child, the job that writes
-  the ready flag. `readyFlag()` makes that job with `Job.deferred`, which
-  leaves its start to `ctx.run`; a job made with `Job(...)` starts on its own,
-  and `ctx.run` refuses it with an `ArgumentError`.
+  the ready flag; `readyFlag()` makes it with `Job.deferred`, which leaves its
+  start to `ctx.run`. See [Children](doc/children.md#children) on the children
+  page.
 - **`await job.cancel()`** requests cancellation and waits for the job to
   finish, including its cleanup. The outcome on the next line is therefore
   ready. You can omit `await` if you only need to request cancellation.

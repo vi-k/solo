@@ -774,7 +774,7 @@ void main() {
       });
     });
 
-    test('a join around the step would leave a version with no flag', () {
+    test('without the section a cancellation comes between the two', () {
       fakeAsync((async) {
         Object? thrown;
         Job<void>? flag;
@@ -803,19 +803,6 @@ void main() {
         expect('$thrown', 'Cancelled(manual)');
         expect((flag!.outcome! as Cancelled).started, isFalse);
         expect(job.outcome.toString(), 'Cancelled(manual)');
-      });
-    });
-
-    test('a child made with Job(...) is refused by ctx.run', () {
-      fakeAsync((async) {
-        final job = Job<void>((ctx) => ctx.run(Job<void>((ctx) async {})))
-          ..ignore();
-        async.flushTimers();
-
-        expect(
-          job.outcome,
-          isA<Failed>().having((f) => f.error, 'error', isA<ArgumentError>()),
-        );
       });
     });
   });

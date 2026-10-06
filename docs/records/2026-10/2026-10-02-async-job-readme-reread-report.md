@@ -600,3 +600,15 @@ already has» (R8), тест о `join` вокруг шага в «the Quick star
    назначение секции: шаг пишет версию и запускает ребёнка, «and the section
    keeps a cancellation from coming between the two», в переводе «и секция
    не даёт отмене встать между ними». Поведение то же.
+6. «**`ctx.run(database.readyFlag())`** — не надо отправить в children.md?» —
+   о пункте под быстрым стартом, 2026-10-06. Пункт объяснял, что задача,
+   созданная через `Job(...)`, запускается сама и `ctx.run` отвергает её
+   с `ArgumentError`, а это уже говорят раздел «Children» и таблица «When
+   `ctx.run` refuses a child» в `children.md`. Теперь пункт говорит, что делает
+   строка, и ссылается на «Children» (в переводе на «Дети»), как соседние
+   пункты ссылаются на свои страницы. Тест «a child made with Job(...) is
+   refused by ctx.run» в `test/readme_recipe_test.dart` держал ушедшую фразу
+   и убран: отказ держит «a job that already started itself cannot be a child
+   either» в `lifecycle_test.dart`. Тест «a join around the step would leave a
+   version with no flag» держит теперь фразу пункта 5 и называется «without the
+   section a cancellation comes between the two». Поведение то же.
