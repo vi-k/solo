@@ -604,6 +604,51 @@ void main() {
     });
 
     test(
+        'the same onCancel covers one wait: once the database is handed '
+        'over, cancel() does nothing and the read runs on', () {
+      fakeAsync((async) {
+        final operation = lateOpenCaught();
+        operation.value.then((db) async => use(await db.readAll())).ignore();
+        async.elapse(const Duration(milliseconds: 50));
+        operation.cancel().ignore();
+        async.flushTimers();
+
+        expect(operation.isCanceled, isFalse);
+        expect(Database.events, ['opened', 'read', 'used 1']);
+      });
+    });
+
+    test('a cancelled operation never completes its value', () {
+      fakeAsync((async) {
+        final operation = lateOpenCaught();
+        var completed = false;
+        operation.value.whenComplete(() => completed = true).ignore();
+        async.elapse(const Duration(milliseconds: 10));
+        operation.cancel().ignore();
+        async.flushTimers();
+
+        expect(operation.isCanceled, isTrue);
+        expect(completed, isFalse);
+      });
+    });
+
+    test(
+        'the registration of ctx.join covers the rest of the job: an '
+        'error after it closes the database too', () {
+      fakeAsync((async) {
+        final job = Job<void>((ctx) async {
+          await ctx.join(Database.open, dispose: (db) => db.close());
+          throw StateError('the read failed');
+        })
+          ..ignore();
+        async.flushTimers();
+
+        expect(Database.events, ['opened', 'closed']);
+        expect(job.outcome, isA<Failed>());
+      });
+    });
+
+    test(
         'ctx.join hands a database that opens after the cancellation to '
         'its dispose, and the job ends once the database is closed', () {
       fakeAsync((async) {

@@ -106,11 +106,20 @@ final operation = CancelableOperation.fromFuture(
 );
 ```
 
+Such an `onCancel` covers one wait. Once the database has been handed over,
+`cancel()` does nothing: the read that follows runs on, and closing the
+database is up to the code after every `await` again, as with the flag. A
+cancelled operation never completes its `value` either, so whoever awaits it
+waits for good.
+
 `ctx.join` hands a database that opens after the job's cancellation to its
 `dispose` all the same, with no code written for the cancellation, and the job
-ends once the database is closed. `ctx.abandonable` stops the waiting as they
-do and still hands that database to its `dispose` when it opens, even after the
-job has ended.
+ends once the database is closed. The registration covers the rest of the job
+as well: a cancellation at a later `ctx.join`, an error or the end of the body
+closes the database the same way, and the job ends `Cancelled`, `Failed` or
+`Done`. `ctx.abandonable` stops the waiting as `Future.timeout` and
+`CancelableOperation` do and still hands that database to its `dispose` when it
+opens, even after the job has ended.
 
 `async_job` does not provide state management, a task queue or scheduling
 rules: [solo](#solo) adds them.
