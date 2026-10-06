@@ -264,13 +264,15 @@ skipped on the successful path runs in a second pass, which puts it after
 callbacks registered before it rather than in the strict reverse order of
 registration.
 
-A branch of `ctx.runAll` is the one exception, and it is why a group holds its
-branches until it decides. A branch gets no outcome before that, and once the
-group has handed the values to the caller, a `discard` of that branch no longer
-runs — not in a second pass, not on a cancellation arriving into the unwinding,
-not at all. The value is in the caller's hands, and `discard` means the value
-went to nobody. Until the group decides, everything above holds as written: a
-cancellation reaching the branch closes what the branch took.
+A branch of `ctx.runAll` is the one exception, and it is why a group holds a
+branch whose body has returned a value until every branch has returned one, or
+until the body of one of them ends in anything but a value. A branch gets no
+outcome before that, and once the group has handed the values to the caller, a
+`discard` of that branch no longer runs — not in a second pass, not on a
+cancellation arriving into the unwinding, not at all. The value is in the
+caller's hands, and `discard` means the value went to nobody. While the group
+holds the branch, everything above applies as written: a cancellation reaching
+the branch closes what the branch took.
 
 A value returned by an action abandoned by `abandonable` needs cleanup whatever
 the outcome, because it never reached the body. Its callback does not wait for

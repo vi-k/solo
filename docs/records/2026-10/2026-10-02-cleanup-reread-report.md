@@ -623,3 +623,12 @@ the database».
    в `packages/solo/test/state_handlers_test.dart`
    и `close waits for the cleanup of the job it cancels`
    в `vs_bloc_rakes_test.dart`; сторожу `async_job` до `solo` не дотянуться.
+4. «группа держит свои ветки, пока не решит — переформулируй фразу „пока
+   не решит“» — о первом абзаце после «Cancellation after the body returns»,
+   2026-10-06. Что значит «решит», страница не говорила: это сказано только
+   в `children.md`. Теперь условие названо прямо: группа держит ветку, тело
+   которой вернуло значение, «пока значения не вернут все ветки или тело одной
+   из них не кончится чем-то другим», в оригинале «until every branch has
+   returned one, or until the body of one of them ends in anything but a
+   value». Второе «пока группа не решила» в том же абзаце стало «пока группа
+   держит ветку». Поведение то же.
