@@ -95,7 +95,10 @@ still be able to close it.
 ```dart
 final connect = Job.deferred<Database>(
   key: 'connect',
-  (ctx) => ctx.abandonable(Database.open, discard: (db) => db.close()),
+  (ctx) => ctx.abandonable(
+    Database.open,
+    discard: (database) => database.close(),
+  ),
 );
 
 final ready = Job.deferred<Database>((ctx) async {
@@ -146,7 +149,10 @@ database.
 
 ```dart
 final ready = Job.deferred<Database>((ctx) async {
-  final database = await ctx.run(connect, discard: (db) => db.close());
+  final database = await ctx.run(
+    connect,
+    discard: (database) => database.close(),
+  );
   await ctx.join(() => database.migrate());
 
   return database;

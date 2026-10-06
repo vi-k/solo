@@ -36,7 +36,10 @@ Future<Database> keeping(JobContext ctx) async {
 
 DeferredJob<Database> onArrival(Job<Database> connect) {
   final ready = Job.deferred<Database>((ctx) async {
-    final database = await ctx.run(connect, discard: (db) => db.close());
+    final database = await ctx.run(
+      connect,
+      discard: (database) => database.close(),
+    );
     // ignore: unnecessary_lambdas
     await ctx.join(() => database.migrate());
 
