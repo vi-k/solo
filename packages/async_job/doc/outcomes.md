@@ -366,8 +366,8 @@ zone, unless the observer answers for it, as
 [Where errors go](observing.md#where-errors-go) on the observing page shows.
 Without an observer, it goes straight to that zone. A thrown `Cancelled` is
 never forwarded to the zone. Listener errors do not change cancellation or
-prevent other listeners from running. An `async` callback is allowed, but the
-job does not wait for its future, and none of its errors reaches `onError`: an
+prevent other listeners from running. The job does not wait for the future of
+an `async` callback, and none of the callback's errors reaches `onError`: an
 `async` function never throws synchronously, and even an error before its first
 `await` goes into the future it returns. The error is an uncaught one of the
 zone the listener was called in. For a cancellation accepted inside `cancel()`,
