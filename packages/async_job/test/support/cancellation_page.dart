@@ -173,14 +173,13 @@ Job<void> holdTheCancellationBack() {
   return job;
 }
 
-/// The first attempt of "Catching errors of the operation", with the token
-/// wired through `onCancel` as in "Stopping the operation".
+/// The first attempt of "Catching errors of the operation".
 Job<void> catchCancelledFirst() {
   final job = Job<void>(observer: printing, (ctx) async {
+    // #docregion
     final stop = CancelToken();
     ctx.onCancel(stop.cancel);
 
-    // #docregion
     try {
       await ctx.join(() => database.migrate(stop));
     } on Cancelled {

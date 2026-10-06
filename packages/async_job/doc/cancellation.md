@@ -359,14 +359,16 @@ a section nor `cancellable: false` holds that cancellation back.
 
 A failed migration is not fatal here: the body logs it and goes on to mark the
 database ready. A cancelled job should still stop, and the log should hold
-failures, not cancellations. The token is wired through `onCancel` as above,
-and the user cancels 15 ms in.
+failures, not cancellations. The user cancels 15 ms in.
 
 ### The first attempt
 
 A cancellation throws `Cancelled`, so a clause for it comes first and rethrows:
 
 ```dart
+final stop = CancelToken();
+ctx.onCancel(stop.cancel);
+
 try {
   await ctx.join(() => database.migrate(stop));
 } on Cancelled {
