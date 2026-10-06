@@ -17,20 +17,20 @@ Future<void> printReport(Job<Report> report) async {
   }
 }
 
-/// A failure nobody waits for: nothing awaits `sync`.
-Job<void> startSync() {
-  final sync = Job<void>(upload);
-  return sync;
+/// A failure nobody waits for: nothing awaits `backup`.
+Job<void> startBackup() {
+  final backup = Job<void>(upload);
+  return backup;
 }
 
 /// The status line, drawn whenever it is drawn.
-void drawStatus(Job<void> sync) {
+void drawStatus(Job<void> backup) {
   // Wherever the status line is drawn:
-  final status = switch (sync.outcome) {
-    null => 'syncing',
-    Done() => 'synced',
-    Failed(:final error) => 'sync failed: $error',
-    Cancelled() => 'sync cancelled',
+  final status = switch (backup.outcome) {
+    null => 'backing up',
+    Done() => 'backed up',
+    Failed(:final error) => 'backup failed: $error',
+    Cancelled() => 'backup cancelled',
   };
   print('status: $status');
 }

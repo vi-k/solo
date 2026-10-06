@@ -66,7 +66,7 @@ all, call `report.ignore()` to acknowledge that choice.
 
 ## A failure nobody waits for
 
-`sync` uploads in the background, and nothing awaits it. A status line reads
+`backup` uploads in the background, and nothing awaits it. A status line reads
 how it went whenever the line is drawn.
 
 ### The first attempt
@@ -74,14 +74,14 @@ how it went whenever the line is drawn.
 `outcome` is how the job went, and `null` while it runs:
 
 ```dart
-final sync = Job<void>(upload);
+final backup = Job<void>(upload);
 
 // Wherever the status line is drawn:
-final status = switch (sync.outcome) {
-  null => 'syncing',
-  Done() => 'synced',
-  Failed(:final error) => 'sync failed: $error',
-  Cancelled() => 'sync cancelled',
+final status = switch (backup.outcome) {
+  null => 'backing up',
+  Done() => 'backed up',
+  Failed(:final error) => 'backup failed: $error',
+  Cancelled() => 'backup cancelled',
 };
 print('status: $status');
 ```
@@ -91,7 +91,7 @@ uncaught one, and the status line drawn after that says the same:
 
 ```text
 zone: Bad state: disk full
-status: sync failed: Bad state: disk full
+status: backup failed: Bad state: disk full
 ```
 
 A failure nobody observes goes to the job's creation zone on the microtask
@@ -105,11 +105,11 @@ all the same.
 ### Telling the core it is handled
 
 ```dart
-final sync = Job<void>(upload)..ignore();
+final backup = Job<void>(upload)..ignore();
 ```
 
 ```text
-status: sync failed: Bad state: disk full
+status: backup failed: Bad state: disk full
 ```
 
 `ignore()` tells the core that the failure is handled elsewhere, here by the
@@ -120,11 +120,11 @@ the waiting code gets the error itself and has to handle it, as with any
 `Future`. Forwarding a failure through `then` observes it too; the continuation
 takes responsibility for it.
 
-Waiting does not observe a failure a cancellation covers: the body of `sync`
+Waiting does not observe a failure a cancellation covers: the body of `backup`
 fails, and a cancellation arrives after it — while the job still waits for its
 children or runs its cleanup, say. The job ends `Cancelled`: the code waiting
 for it gets the cancellation, not the error, and the status line says
-`sync cancelled`. The error goes the way of an error no outcome carries —
+`backup cancelled`. The error goes the way of an error no outcome carries —
 [Where errors go](observing.md#where-errors-go) on the observing page shows it.
 `ignore()` keeps it out of the zone, and then only an observer's `onError`
 hears it.

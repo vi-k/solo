@@ -30,9 +30,9 @@ const quoted = [
   ['cancelled: manual'],
   [
     'zone: Bad state: disk full',
-    'status: sync failed: Bad state: disk full',
+    'status: backup failed: Bad state: disk full',
   ],
-  ['status: sync failed: Bad state: disk full'],
+  ['status: backup failed: Bad state: disk full'],
   ['cancelled: handler'],
   ['request failed: Bad state: token expired'],
   ['step finished', 'cleanup', 'cancelling: manual'],
@@ -150,20 +150,20 @@ void main() {
   group('A failure nobody waits for', () {
     test('reading outcome leaves the failure to the zone', () {
       final lines = printed((async) {
-        final sync = first.startSync();
-        first.drawStatus(sync);
+        final backup = first.startBackup();
+        first.drawStatus(backup);
         async.flushTimers();
-        first.drawStatus(sync);
+        first.drawStatus(backup);
       });
 
-      expect(lines, ['status: syncing', ...quoted[2]]);
+      expect(lines, ['status: backing up', ...quoted[2]]);
     });
 
     test('ignore keeps the zone quiet while the status line reads it', () {
       final lines = printed((async) {
-        final sync = page.startSync();
+        final backup = page.startBackup();
         async.flushTimers();
-        first.drawStatus(sync);
+        first.drawStatus(backup);
       });
 
       expect(lines, quoted[3]);
@@ -201,12 +201,12 @@ void main() {
         () {
       var cancelReturned = false;
       final lines = printed((async) {
-        final sync = Job<void>(cancellable: false, upload)
+        final backup = Job<void>(cancellable: false, upload)
           ..whenCancelled((_) {});
         async.elapse(const Duration(milliseconds: 5));
         // Awaited for real: the future of `cancel` completes, and the
         // failure still goes to the zone.
-        sync.cancel().then((_) => cancelReturned = true).ignore();
+        backup.cancel().then((_) => cancelReturned = true).ignore();
         async.flushTimers();
       });
 
@@ -217,16 +217,16 @@ void main() {
     test('the failure waits one microtask after the finish for an observer',
         () {
       List<String> observedAfter(int microtasks) => printed((async) {
-            late Job<void> sync;
+            late Job<void> backup;
             void observe(int left) {
               if (left == 0) {
-                sync.done.ignore();
+                backup.done.ignore();
               } else {
                 scheduleMicrotask(() => observe(left - 1));
               }
             }
 
-            sync = Job<void>(
+            backup = Job<void>(
               observer: Finishing((_) => observe(microtasks)),
               upload,
             );
@@ -238,8 +238,8 @@ void main() {
     });
 
     for (final (name, touch) in <(String, void Function(Job<void>))>[
-      ('done', (sync) => sync.done.ignore()),
-      ('value', (sync) => sync.value.ignore()),
+      ('done', (backup) => backup.done.ignore()),
+      ('value', (backup) => backup.value.ignore()),
     ]) {
       test('accessing $name observes the failure', () {
         final lines = printed((async) {
@@ -294,28 +294,29 @@ void main() {
         JobObserver? Function()? observer,
       }) =>
           printed((async) {
-            final sync = Job<void>(observer: observer?.call(), uploadWithChild);
+            final backup =
+                Job<void>(observer: observer?.call(), uploadWithChild);
             if (ignored) {
-              sync.ignore();
+              backup.ignore();
             } else {
-              sync.done.then((outcome) => print('done: $outcome')).ignore();
+              backup.done.then((outcome) => print('done: $outcome')).ignore();
             }
             async.elapse(const Duration(milliseconds: 20));
-            sync.cancel().ignore();
+            backup.cancel().ignore();
             async.flushTimers();
-            first.drawStatus(sync);
+            first.drawStatus(backup);
           });
 
       test('the waiting code gets the cancellation, the zone the error', () {
         expect(covered(ignored: false), [
           'zone: Bad state: disk full',
           'done: Cancelled(manual)',
-          'status: sync cancelled',
+          'status: backup cancelled',
         ]);
       });
 
       test('ignore keeps it out of the zone', () {
-        expect(covered(ignored: true), ['status: sync cancelled']);
+        expect(covered(ignored: true), ['status: backup cancelled']);
       });
 
       test('and then only the onError of an observer hears it', () {
@@ -325,7 +326,7 @@ void main() {
         ]) {
           expect(covered(ignored: true, observer: observer), [
             'onError: Bad state: disk full',
-            'status: sync cancelled',
+            'status: backup cancelled',
           ]);
         }
       });

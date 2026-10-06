@@ -66,7 +66,7 @@ cancelled: manual
 
 ## Ошибка, которую никто не ждёт
 
-`sync` загружает данные в фоне, и никто её не ждёт. Строка статуса при каждой
+`backup` загружает данные в фоне, и никто её не ждёт. Строка статуса при каждой
 отрисовке читает, чем кончилась задача.
 
 ### Первая попытка
@@ -74,14 +74,14 @@ cancelled: manual
 `outcome` хранит то, чем кончилась задача, и равен `null`, пока она идёт:
 
 ```dart
-final sync = Job<void>(upload);
+final backup = Job<void>(upload);
 
 // Там, где рисуется строка статуса:
-final status = switch (sync.outcome) {
-  null => 'syncing',
-  Done() => 'synced',
-  Failed(:final error) => 'sync failed: $error',
-  Cancelled() => 'sync cancelled',
+final status = switch (backup.outcome) {
+  null => 'backing up',
+  Done() => 'backed up',
+  Failed(:final error) => 'backup failed: $error',
+  Cancelled() => 'backup cancelled',
 };
 print('status: $status');
 ```
@@ -91,7 +91,7 @@ print('status: $status');
 
 ```text
 zone: Bad state: disk full
-status: sync failed: Bad state: disk full
+status: backup failed: Bad state: disk full
 ```
 
 Ошибка, которую никто не наблюдал, передаётся в зону создания задачи
@@ -104,11 +104,11 @@ status: sync failed: Bad state: disk full
 ### Сказать ядру, что она обработана
 
 ```dart
-final sync = Job<void>(upload)..ignore();
+final backup = Job<void>(upload)..ignore();
 ```
 
 ```text
-status: sync failed: Bad state: disk full
+status: backup failed: Bad state: disk full
 ```
 
 `ignore()` говорит ядру, что ошибку обрабатывают в другом месте (здесь это
@@ -119,10 +119,10 @@ status: sync failed: Bad state: disk full
 как у любой `Future`. Передача ошибки через `then` тоже наблюдает её:
 ответственность переходит к продолжению.
 
-Ожидание не наблюдает ошибку, которую накрыла отмена: тело `sync` падает,
+Ожидание не наблюдает ошибку, которую накрыла отмена: тело `backup` падает,
 а после этого приходит отмена, например пока задача ещё ждёт своих дочерних
 задач или идёт её уборка. Задача кончается `Cancelled`: код, который её ждёт,
-получает отмену, а не ошибку, и строка статуса пишет `sync cancelled`. Ошибка
+получает отмену, а не ошибку, и строка статуса пишет `backup cancelled`. Ошибка
 идёт путём ошибки, которой не несёт ни один исход; этот путь показывает раздел
 [«Куда уходят ошибки»](observing.md#куда-уходят-ошибки) страницы о наблюдении.
 `ignore()` не пускает её в зону, и тогда её слышит только `onError`
