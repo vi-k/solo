@@ -202,16 +202,15 @@ final outcome = await job.done; // Cancelled(manual)
   waiting immediately on cancellation, use `ctx.abandonable`. It stops the
   waiting without stopping the operation itself.
 - **`ctx.uncancellable(() async { ... })`** keeps the last step whole. The step
-  writes the schema version and then runs `database.readyFlag()` as a child.
-  Once the job has accepted a cancellation, `ctx.run` throws that cancellation
-  instead of starting the child, so a `join` around the step would leave a
-  version with no flag. Inside the section the job does not accept the
-  cancellation: the child starts, and `onCancel` does not fire. The job accepts
-  it when the section closes, and the body goes on to `return database`, yet
-  the job ends `Cancelled` all the same, and `discard` closes the database: the
-  section keeps the step whole, not the result. A step of plain code, one that
-  makes no context call and takes no token that `onCancel` cancels, needs no
-  section: one `join` around it is enough. See
+  writes the schema version and then runs `database.readyFlag()` as a child,
+  and the section keeps a cancellation from coming between the two. Inside the
+  section the job does not accept the cancellation: the child starts, and
+  `onCancel` does not fire. The job accepts it when the section closes, and the
+  body goes on to `return database`, yet the job ends `Cancelled` all the same,
+  and `discard` closes the database: the section keeps the step whole, not the
+  result. A step of plain code, one that makes no context call and takes no
+  token that `onCancel` cancels, needs no section: one `join` around it is
+  enough. See
   [Holding the cancellation back](doc/cancellation.md#holding-the-cancellation-back)
   on the cancellation page.
 - **`ctx.run(database.readyFlag())`** starts, as a child, the job that writes
