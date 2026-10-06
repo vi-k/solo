@@ -27,8 +27,10 @@
 в `2026-10-02-observing-reread-report.md`; 2026-10-05 страницу он принял.
 Так же шли вопросы по `packages/async_job/doc/cancellation.md`, пункты 1–10
 в `2026-10-02-cancellation-reread-report.md`; 2026-10-06 страницу он принял.
-В тот же день прочитана и принята `packages/async_job/doc/outcomes.md`, пункты
-1–4 в `2026-10-02-outcomes-reread-report.md`. Открытых находок у ревью нет:
+В тот же день прочитаны и приняты `packages/async_job/doc/outcomes.md`, пункты
+1–4 в `2026-10-02-outcomes-reread-report.md`,
+и `packages/async_job/doc/cleanup.md`, пункты 1–5
+в `2026-10-02-cleanup-reread-report.md`. Открытых находок у ревью нет:
 `async_job` — `2026-09-26-async-job-project-review.md`, `solo`
 и `flutter_solo` — `2026-09-19-solo-project-review.md`. Первое чтение
 `extending.md` — `2026-10-02-extending-rakes-report.md`.
@@ -145,11 +147,11 @@ the disposal» закрывает контроллер только в ветк�
 2026-10-03: пять правок по его вопросам,
 `2026-10-03-streams-reading-report.md`. `observing.md` принята 2026-10-05,
 `cancellation.md` — 2026-10-06, десять пунктов
-в `2026-10-02-cancellation-reread-report.md`. 2026-10-06 владелец начал
-`cleanup.md`, вопросы идут пунктами в `2026-10-02-cleanup-reread-report.md`;
-после неё в `async_job` остаётся README. Обе вычитаны заново 2026-10-02; после
-вычитки их тронуло переименование `ctx.wait`. `outcomes.md` принята 2026-10-06,
-четыре пункта в `2026-10-02-outcomes-reread-report.md`. Вопросы идут пунктами
+в `2026-10-02-cancellation-reread-report.md`. `outcomes.md` и `cleanup.md`
+приняты 2026-10-06, четыре и пять пунктов в их отчётах. В `async_job` остаётся
+README, вопросы по нему пойдут пунктами
+в `2026-10-02-async-job-readme-reread-report.md`; вычитан заново 2026-10-02,
+после вычитки его тронуло переименование `ctx.wait`. Вопросы идут пунктами
 раздела «По чтению владельца» в отчёте страницы; `extending.md` прочитана
 2026-10-02, после этого её тронул только `ctx.pause`, пять строк. Потом
 вычитанные заново страницы `solo`, первой `state.md`; вопросы правятся
