@@ -492,11 +492,11 @@ await ctx.abandonable(
 ```
 
 Now the delay is behind a checkpoint, and the job ends the moment it is
-cancelled. `abandonable` ends the waiting, not the work, and the work here is a
-timer: a `Future.delayed` cannot be cancelled, so its timer runs for the 510 ms
-that are left, with nothing waiting for it. A program that has nothing else to
-do does not exit until it fires, and a test that looks for pending timers finds
-one.
+cancelled. But `abandonable` ends the waiting, not the work, and the work here
+is a timer: a `Future.delayed` cannot be cancelled, so its timer runs for the
+510 ms that are left, with nothing waiting for it. A program that has nothing
+else to do does not exit until it fires, and a test that looks for pending
+timers finds one.
 
 ### A pause of the job
 
