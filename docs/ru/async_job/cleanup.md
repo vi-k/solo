@@ -208,7 +208,7 @@ ctx.onDispose(() => sink.add(buffer.toString()));
 
 ```dart
 final removeDisposer = ctx.onDispose(cursor.close);
-await ctx.join(() => cursor.readAll()); // в конце закрывает его
+await ctx.join(() => cursor.readAll()); // в конце курсор закрывается
 removeDisposer();
 ```
 
@@ -223,7 +223,7 @@ removeDisposer();
 ```dart
 final removeDisposer = ctx.onDispose(cursor.close);
 await ctx.join(() async {
-  await cursor.readAll(); // в конце закрывает его
+  await cursor.readAll(); // в конце курсор закрывается
   removeDisposer();
 });
 ```

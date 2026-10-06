@@ -207,7 +207,7 @@ found one, so pass the very instance the call returned.
 
 ```dart
 final removeDisposer = ctx.onDispose(cursor.close);
-await ctx.join(() => cursor.readAll()); // closes it at the end
+await ctx.join(() => cursor.readAll()); // closes the cursor at the end
 removeDisposer();
 ```
 
@@ -222,7 +222,7 @@ action, and cleanup closes it a second time.
 ```dart
 final removeDisposer = ctx.onDispose(cursor.close);
 await ctx.join(() async {
-  await cursor.readAll(); // closes it at the end
+  await cursor.readAll(); // closes the cursor at the end
   removeDisposer();
 });
 ```

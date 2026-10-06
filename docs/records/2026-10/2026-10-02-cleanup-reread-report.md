@@ -605,3 +605,9 @@ the database».
    перестали влезать в строку и стоят так, как их ставит `dart format`. Так же
    в переводе и в `test/support/cleanup_first_attempts.dart`
    и `cleanup_page.dart`. Поведение то же.
+2. «// в конце закрывает его — может так: // в конце курсор закрывается» —
+   о комментарии к `readAll` в разделе «Registering without a call»,
+   2026-10-06. «Его» отсылало к курсору через всю строку кода. Теперь в обоих
+   блоках раздела «в конце курсор закрывается», в оригинале «closes the cursor
+   at the end»; так же в `test/support/cleanup_first_attempts.dart`
+   и `cleanup_page.dart`. Поведение то же.

@@ -44,6 +44,6 @@ DeferredJob<Database> unregistered(Job<Database> connect) {
 Future<void> unregisteringAfter(JobContext ctx) async {
   final removeDisposer = ctx.onDispose(cursor.close);
   // ignore: unnecessary_lambdas
-  await ctx.join(() => cursor.readAll()); // closes it at the end
+  await ctx.join(() => cursor.readAll()); // closes the cursor at the end
   removeDisposer();
 }

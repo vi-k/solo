@@ -58,7 +58,7 @@ Future<void> flushing(JobContext ctx) async {
 Future<void> unregisteringInside(JobContext ctx) async {
   final removeDisposer = ctx.onDispose(cursor.close);
   await ctx.join(() async {
-    await cursor.readAll(); // closes it at the end
+    await cursor.readAll(); // closes the cursor at the end
     removeDisposer();
   });
 }
