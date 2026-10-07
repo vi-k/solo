@@ -1056,10 +1056,10 @@ void main() {
 
     test('the hook and the handler get one failure at a time', () {
       _says(
-        'The hook and the handler get one failure at a time. When the error '
-        'is a `ParallelWaitError` that `[a, b].wait` throws with several '
-        'errors in it, each failure comes in a call of its own, with its own '
-        'stack trace',
+        '`onUnanswered` and `Solo.unansweredHandler` get one failure at a '
+        'time. When the error is a `ParallelWaitError` that `[a, b].wait` '
+        'throws with several errors in it, each failure comes in a call of '
+        'its own, with its own stack trace',
       );
       _says(
         'An uncaught `Cancelled`, alone or inside one, does not come at all',

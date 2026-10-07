@@ -88,11 +88,12 @@ controller decides for its own jobs whether the application-wide handler hears
 them at all. An override keeps that route as well by calling
 `super.onUnanswered(job, error, stackTrace)`.
 
-The hook and the handler get one failure at a time. When the error is a
-`ParallelWaitError` that `[a, b].wait` throws with several errors in it, each
-failure comes in a call of its own, with its own stack trace. An uncaught
-`Cancelled`, alone or inside one, does not come at all. The reporting hook
-`onError` hears them the same way, one at a time, and each `Cancelled` too.
+`onUnanswered` and `Solo.unansweredHandler` get one failure at a time. When the
+error is a `ParallelWaitError` that `[a, b].wait` throws with several errors in
+it, each failure comes in a call of its own, with its own stack trace. An
+uncaught `Cancelled`, alone or inside one, does not come at all. The reporting
+hook `onError` hears them the same way, one at a time, and each `Cancelled`
+too.
 
 One error no outcome carries is missing from that list, and nobody is asked to
 answer for it: the failure of a body that comes after its job has accepted a
