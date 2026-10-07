@@ -172,7 +172,7 @@ unawaited(controller.close().timeout(
 | `heldCancellation` | отмена, которую держит открытая секция `ctx.uncancellable` |
 | `children` | сколько детей она ещё ждёт |
 | `inUncancellableSection` | открыта ли такая секция |
-| `cancellable` | `false`, когда она создана с `cancellable: false` |
+| `cancellable` | принимает ли она отмену, которую может отклонить |
 | `closing` | позвали ли у контроллера `close()` |
 | `draining` | дренаж ли этот `close()`: тогда `Job` доработает до конца |
 

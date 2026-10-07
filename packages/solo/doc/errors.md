@@ -173,7 +173,7 @@ While a job holds it, `pending` is a `SoloPendingJob`, a snapshot of that job:
 | `heldCancellation` | the one an open `ctx.uncancellable` section holds back |
 | `children` | how many children it is still waiting for |
 | `inUncancellableSection` | whether such a section is open |
-| `cancellable` | `false` when it was created with `cancellable: false` |
+| `cancellable` | whether it accepts a cancellation it may refuse |
 | `closing` | whether `close()` was called on the controller |
 | `draining` | whether that `close()` is a drain, which lets the job run to its end |
 
