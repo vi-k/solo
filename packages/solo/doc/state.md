@@ -2,9 +2,11 @@
 
 `Solo<S>` stores one immutable state of type `S`, and a job declares which
 states it may start in and which it may keep running in. Four sections below
-open with the version this API's own vocabulary leads to — what you write when
-you reach for a job and stop there — and say what it does instead of what it
-was meant to do. The version that works follows under its own heading.
+open with the version habit or this API's own vocabulary leads to — a check at
+the top of the body and a `catch` that puts the state back, a job sent first in
+the queue and a handler with one answer for every case — and say what it does
+instead of what it was meant to do. The version that works follows under its
+own heading.
 
 ## State and rules
 
