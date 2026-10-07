@@ -153,9 +153,9 @@ A job that `replace` or `restart` removes ends `Cancelled(replaced)`, whose
 reason is a `ReplacedCancelReason`: the queued zoom that `replace` takes out,
 the running seek that `restart` cancels. `droppable` drops the new job, and
 that one ends `Cancelled(duplicate)`, as shown below. For `droppable` the
-running job counts only while it is still going to do the work: one that has
-already accepted a cancellation is on its way out, and a call that finds it
-queues a job of its own.
+running job is the existing one for as long as it has not been cancelled. One
+that has already accepted a cancellation is on its way out and will not do the
+work, so a call that finds it queues a job of its own.
 
 `restart` requests cancellation when the new job is submitted. The new job goes
 to the tail of the queue like any other, behind what was queued before it, and
