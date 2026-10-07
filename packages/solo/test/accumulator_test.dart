@@ -726,7 +726,6 @@ void main() {
             case 'self cancel':
               throw const Cancelled.by(
                 reason: ManualCancelReason(),
-                started: true,
               );
             case 'cancel then throw':
               unawaited(first.cancel());

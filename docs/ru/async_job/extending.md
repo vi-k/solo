@@ -292,7 +292,6 @@ final class SignedOutReason extends CancelReason {
     if (!account.signedIn) {
       throw Cancelled.by(
         reason: const SignedOutReason(),
-        started: true,
         stackTrace: StackTrace.current,
       );
     }
@@ -357,7 +356,6 @@ outcome: Cancelled(signed out)
 account.onSignOut = () => job._stop(
       Cancelled.by(
         reason: const SignedOutReason(),
-        started: true,
         stackTrace: StackTrace.current,
       ),
     );

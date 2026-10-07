@@ -267,7 +267,6 @@ final class RulesContext extends JobContextBase {
   void breakRule(String description) => cancelOwnJob(
         Cancelled.by(
           reason: const TestCancelReason('rules'),
-          started: true,
           description: description,
           stackTrace: StackTrace.current,
         ),

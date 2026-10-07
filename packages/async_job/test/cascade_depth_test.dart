@@ -69,7 +69,6 @@ void main() {
         // engine, and there is no caller to hand a failure of that to.
         throw Cancelled.by(
           reason: const TestCancelReason('handler'),
-          started: true,
           stackTrace: StackTrace.current,
         );
       },
@@ -106,7 +105,6 @@ void main() {
           await chain.bottom.future;
           throw Cancelled.by(
             reason: const TestCancelReason('handler'),
-            started: true,
             stackTrace: StackTrace.current,
           );
         },
@@ -182,7 +180,6 @@ void main() {
             parent.drop(
               Cancelled.by(
                 reason: const TestCancelReason('rules'),
-                started: true,
                 stackTrace: StackTrace.current,
               ),
             );
@@ -236,7 +233,6 @@ void main() {
         await chain.bottom.future;
         throw Cancelled.by(
           reason: const TestCancelReason('handler'),
-          started: true,
           stackTrace: StackTrace.current,
         );
       },
@@ -257,7 +253,6 @@ void main() {
     head.drop(
       Cancelled.by(
         reason: const TestCancelReason('rules'),
-        started: true,
         stackTrace: StackTrace.current,
       ),
     );
@@ -300,7 +295,6 @@ void main() {
         await null;
         throw Cancelled.by(
           reason: const TestCancelReason('probe'),
-          started: true,
           stackTrace: StackTrace.current,
         );
       },

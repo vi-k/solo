@@ -289,7 +289,6 @@ void main() {
         // and until now `isCancelled` lied about it during the cleanup.
         throw Cancelled.by(
           reason: const ManualCancelReason(),
-          started: true,
           stackTrace: StackTrace.current,
         );
       }).ignoreFailure();
@@ -310,7 +309,6 @@ void main() {
         await ctx.abandonable(() => delay(10));
         throw Cancelled.by(
           reason: const ManualCancelReason(),
-          started: true,
           stackTrace: StackTrace.current,
         );
       })
@@ -334,7 +332,6 @@ void main() {
           await ctx.abandonable(() => delay(10));
           throw Cancelled.by(
             reason: const ManualCancelReason(),
-            started: true,
             stackTrace: StackTrace.current,
           );
         },
@@ -364,7 +361,6 @@ void main() {
         // are still running: an outside `cancel()` has to reach the child.
         throw Cancelled.by(
           reason: const ManualCancelReason(),
-          started: true,
           stackTrace: StackTrace.current,
         );
       })

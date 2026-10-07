@@ -257,9 +257,9 @@ Check reasons by type, for example `reason is ParentCancelReason`. The `name`
 property is a label for logs and does not determine equality. Reasons use
 identity equality unless their class defines value equality.
 
-The body can throw `Cancelled.by(reason: reason, started: true)` to use an
-explicit reason, or `Cancelled('why')` to use `HandlerCancelReason`. An error's
-stack trace stored in a reason is separate from the cancellation's stack trace:
+The body can throw `Cancelled.by(reason: reason)` to use an explicit reason, or
+`Cancelled('why')` to use `HandlerCancelReason`. An error's stack trace stored
+in a reason is separate from the cancellation's stack trace:
 `RequestCancelReason.stackTrace` is where the request failed, and
 `Cancelled.stackTrace` is where the cancellation came from.
 

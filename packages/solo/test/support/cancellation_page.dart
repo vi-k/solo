@@ -118,7 +118,7 @@ final class BoundedPlayer extends Solo<AppState> with OpenSolo<AppState>, Desk {
   Job<void> seek(Duration position) => run<Ready, void>((ctx) async {
         if (position > end) {
           // From inside its body:
-          throw Cancelled.by(reason: OutOfRange(position), started: true);
+          throw Cancelled.by(reason: OutOfRange(position));
         }
         await ctx.join(() => player.seek(position));
       });

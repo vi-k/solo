@@ -264,6 +264,13 @@ named as `Job(key)`, not by its class.
 
 ### Added
 
+- **`started` of `Cancelled.by` is optional and defaults to `true`.** A body
+  that throws `Cancelled.by(reason: reason)` ends with `started: true` whatever
+  it passes, so the argument said nothing there; an engine that drops a job
+  before its body runs still passes `started: false`. Calls that pass
+  `started: true` keep compiling, and `avoid_redundant_argument_values` names
+  them.
+
 - **`timeout` gives a job a deadline of its own.** `Job(...)` and
   `Job.deferred(...)` take it, and so does the constructor of `JobBase`, for an
   engine to pass on. The deadline is counted from the start of the body, not

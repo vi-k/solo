@@ -303,7 +303,7 @@ final class OutOfRange extends CancelReason {
 await job.cancel(reason: OutOfRange(position));
 
 // From inside its body:
-throw Cancelled.by(reason: OutOfRange(position), started: true);
+throw Cancelled.by(reason: OutOfRange(position));
 
 // And on the way out:
 switch (job.outcome) {

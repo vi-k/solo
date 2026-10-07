@@ -69,7 +69,6 @@ final class Engine<T> extends JobBase<T> {
   void cancelHard() => cancelWith(
         Cancelled.by(
           reason: const ManualCancelReason(),
-          started: true,
           stackTrace: StackTrace.current,
         ),
         rejectable: false,

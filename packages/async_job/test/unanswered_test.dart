@@ -306,7 +306,6 @@ List<String> rootDroppedOverTheMark(
 Failed builtCancellation() => Failed(
       Cancelled.by(
         reason: const ManualCancelReason(),
-        started: true,
         description: 'built on purpose',
         stackTrace: StackTrace.current,
       ),
@@ -1580,7 +1579,6 @@ void main() {
         root.drop(
           Cancelled.by(
             reason: const ManualCancelReason(),
-            started: true,
             description: 'by hand',
             stackTrace: StackTrace.current,
           ),

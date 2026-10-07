@@ -348,7 +348,7 @@ void main() {
       )..launch();
       async.elapse(const Duration(milliseconds: 5));
       job.drop(
-        const Cancelled.by(reason: ManualCancelReason(), started: true),
+        const Cancelled.by(reason: ManualCancelReason()),
       );
       async.flushTimers();
     });

@@ -212,7 +212,6 @@ void main() {
       final seen = <Cancelled>[];
       const first = Cancelled.by(
         reason: ManualCancelReason(),
-        started: true,
         description: 'first request',
       );
       final job = ProbeJob<void>(

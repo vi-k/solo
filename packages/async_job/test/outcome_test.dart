@@ -30,7 +30,6 @@ void main() {
   test('Cancelled.by carries a reason of its own', () {
     const cancelled = Cancelled.by(
       reason: TestCancelReason('rules'),
-      started: true,
       description: 'is not Ready',
     );
     expect(cancelled.toString(), 'Cancelled(rules: is not Ready)');

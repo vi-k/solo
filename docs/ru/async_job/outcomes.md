@@ -254,9 +254,9 @@ request failed: Bad state: token expired
 `name` служит меткой для лога и не определяет равенство. По умолчанию причины
 сравниваются по идентичности, но класс может определить равенство по данным.
 
-Тело может бросить `Cancelled.by(reason: reason, started: true)` с явной
-причиной или `Cancelled('why')` с причиной `HandlerCancelReason`. Стектрейс
-ошибки, сохранённый в причине, отделён от стектрейса отмены:
+Тело может бросить `Cancelled.by(reason: reason)` с явной причиной или
+`Cancelled('why')` с причиной `HandlerCancelReason`. Стектрейс ошибки,
+сохранённый в причине, отделён от стектрейса отмены:
 `RequestCancelReason.stackTrace` указывает, где упал запрос,
 а `Cancelled.stackTrace` указывает, откуда пришла отмена.
 

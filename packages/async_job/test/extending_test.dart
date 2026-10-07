@@ -64,7 +64,7 @@ final class DomainContext extends JobContextBase {
 
   /// A rule of the domain: a cancellation the job cannot refuse.
   void breakRule() => cancelOwnJob(
-        const Cancelled.by(reason: RuleReason(), started: true),
+        const Cancelled.by(reason: RuleReason()),
       );
 }
 

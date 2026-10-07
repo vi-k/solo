@@ -95,7 +95,6 @@ void main() {
       parent.cancelBy(
         Cancelled.by(
           reason: const TestCancelReason('manual'),
-          started: true,
           stackTrace: StackTrace.current,
         ),
       );
@@ -762,7 +761,6 @@ void main() {
           for (final name in ['a', 'b'])
             name: Cancelled.by(
               reason: TestCancelReason('dropped-$name'),
-              started: true,
               stackTrace: StackTrace.current,
             ),
         };
@@ -1265,7 +1263,6 @@ void main() {
             parent.cancelBy(
               Cancelled.by(
                 reason: const TestCancelReason('outside'),
-                started: true,
                 stackTrace: StackTrace.current,
               ),
             );
@@ -1956,7 +1953,6 @@ void main() {
               bare.cancelBy(
                 Cancelled.by(
                   reason: const TestCancelReason('late'),
-                  started: true,
                   stackTrace: StackTrace.current,
                 ),
               );
@@ -1990,7 +1986,6 @@ void main() {
             bare.cancelBy(
               Cancelled.by(
                 reason: const TestCancelReason('outside'),
-                started: true,
                 stackTrace: StackTrace.current,
               ),
             );

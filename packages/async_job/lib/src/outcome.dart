@@ -225,12 +225,13 @@ final class Cancelled extends Outcome<Never> implements Exception {
   /// else, wrap it by hand or catch it.
   ///
   /// [started] matters only where the cancellation becomes an outcome as
-  /// it is, through `JobBase.finish`: on the way through `cancelWith` the
+  /// it is, through `JobBase.finish`: an engine passes `false` there for a
+  /// job it drops before the body runs. On the way through `cancelWith` the
   /// core sets it by the status of the job and whatever was passed here
   /// is replaced.
   const Cancelled.by({
     required this.reason,
-    required this.started,
+    this.started = true,
     this.description,
     this.stackTrace,
   });

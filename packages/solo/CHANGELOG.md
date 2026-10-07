@@ -319,6 +319,11 @@ cancelled is taken where the rules noticed; `Solo.traceStateChanges`, under
 
 ### Added
 
+- **`started` of `Cancelled.by` is optional and defaults to `true`**, from
+  `async_job`: a body throws `Cancelled.by(reason: reason)`. Calls that pass
+  `started: true` keep compiling, and `avoid_redundant_argument_values` names
+  them.
+
 - **`timeout` gives a job of the controller a deadline of its own.** `job`,
   `run`, `collect` and `accumulate` take it. The deadline is counted from the
   start of the body, so time in the queue and the window of a `collect` or an

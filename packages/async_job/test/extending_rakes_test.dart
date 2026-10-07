@@ -63,7 +63,6 @@ final class MyContext extends JobContextBase {
     if (!account.signedIn) {
       throw Cancelled.by(
         reason: const SignedOutReason(),
-        started: true,
         stackTrace: StackTrace.current,
       );
     }
@@ -130,7 +129,6 @@ void runAbandonableDownload({required bool engineStops}) {
     account.onSignOut = () => job._stop(
           Cancelled.by(
             reason: const SignedOutReason(),
-            started: true,
             stackTrace: StackTrace.current,
           ),
         );
@@ -241,7 +239,6 @@ final class PatientJob<T> extends MyJob<T> {
 
 Cancelled signedOut() => Cancelled.by(
       reason: const SignedOutReason(),
-      started: true,
       stackTrace: StackTrace.current,
     );
 
@@ -433,7 +430,6 @@ void main() {
           ..report(
             Cancelled.by(
               reason: const ManualCancelReason(),
-              started: true,
               stackTrace: StackTrace.current,
             ),
           )

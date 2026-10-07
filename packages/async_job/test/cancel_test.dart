@@ -410,7 +410,6 @@ void main() {
     fakeAsync((async) {
       Cancelled held(String description) => Cancelled.by(
             reason: const ManualCancelReason(),
-            started: true,
             description: description,
             stackTrace: StackTrace.current,
           );
@@ -474,7 +473,6 @@ void main() {
                   () => parent.drop(
                     Cancelled.by(
                       reason: const ManualCancelReason(),
-                      started: true,
                       description: 'by the engine',
                       stackTrace: StackTrace.current,
                     ),
@@ -552,7 +550,6 @@ void main() {
         Error.throwWithStackTrace(
           Cancelled.by(
             reason: const TestCancelReason('the body gave up'),
-            started: true,
             stackTrace: StackTrace.current,
           ),
           StackTrace.current,

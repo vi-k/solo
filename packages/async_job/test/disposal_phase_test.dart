@@ -75,7 +75,6 @@ void main() {
           ctx.onDispose(
             () => throw Cancelled.by(
               reason: const ManualCancelReason(),
-              started: true,
               stackTrace: StackTrace.current,
             ),
           );
@@ -149,7 +148,6 @@ void main() {
       job.drop(
         Cancelled.by(
           reason: const ManualCancelReason(),
-          started: true,
           stackTrace: StackTrace.current,
         ),
       );

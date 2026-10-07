@@ -98,7 +98,6 @@ final class _SoloContext<S extends Object, W extends S, R>
     if (rejection != null) {
       final cancelled = Cancelled.by(
         reason: const RulesCancelReason(),
-        started: true,
         description: rejection,
         stackTrace: _solo._lastChange ?? StackTrace.current,
       );
@@ -122,7 +121,6 @@ final class _SoloContext<S extends Object, W extends S, R>
     if (current is! T) {
       final cancelled = Cancelled.by(
         reason: const RulesCancelReason(),
-        started: true,
         description: 'is not $T',
         stackTrace: StackTrace.current,
       );

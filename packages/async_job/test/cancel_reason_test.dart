@@ -67,7 +67,7 @@ void main() {
       final reason = TestCancelReason('request', error: StateError('failed'));
       Cancelled? event;
       final job = Job<void>((ctx) async {
-        throw Cancelled.by(reason: reason, started: true);
+        throw Cancelled.by(reason: reason);
       })
         ..whenCancelled((cancelled) => event = cancelled);
       Object? valueError;
@@ -169,7 +169,6 @@ void main() {
         ..cancelBy(
           Cancelled.by(
             reason: const TestCancelReason('engine'),
-            started: true,
             stackTrace: trace,
           ),
         );
@@ -249,7 +248,6 @@ void main() {
         child = Job.deferred<void>((ctx) async {
           throw const Cancelled.by(
             reason: ParentCancelReason(),
-            started: true,
           );
         });
         ctx.run(child).ignore();

@@ -577,7 +577,6 @@ void main() {
             await delay(10);
             throw const Cancelled.by(
               reason: ManualCancelReason(),
-              started: true,
             );
           },
         ),
@@ -1322,7 +1321,6 @@ void main() {
             ctx.onDispose(
               () => throw const Cancelled.by(
                 reason: ManualCancelReason(),
-                started: true,
               ),
             );
           },

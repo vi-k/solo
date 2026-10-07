@@ -859,7 +859,6 @@ abstract class Solo<S extends Object> {
       current._cancelWith(
         Cancelled.by(
           reason: const ClosedCancelReason(),
-          started: true,
           stackTrace: stackTrace,
         ),
       );
@@ -1144,7 +1143,6 @@ abstract class Solo<S extends Object> {
         job._cancelWith(
           Cancelled.by(
             reason: const RulesCancelReason(),
-            started: true,
             description: rejection,
             // Taken here when the change took none: this is still inside
             // the change, so the trace leads back to whoever made it.

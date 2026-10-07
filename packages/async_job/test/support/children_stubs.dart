@@ -193,6 +193,5 @@ Future<void> saveNumber(int number) async =>
 /// What a branch throws to give itself up.
 Cancelled givenUp() => Cancelled.by(
       reason: const ManualCancelReason(),
-      started: true,
       stackTrace: StackTrace.current,
     );

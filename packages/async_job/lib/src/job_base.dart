@@ -972,7 +972,6 @@ abstract class JobBase<T> implements Job<T> {
     cancelWith(
       Cancelled.by(
         reason: reason,
-        started: true,
         stackTrace: StackTrace.current,
       ),
     );
@@ -1321,7 +1320,6 @@ abstract class JobBase<T> implements Job<T> {
       cancelWith(
         Cancelled.by(
           reason: reason,
-          started: true,
           stackTrace: _timeoutTrace,
         ),
       );
@@ -1986,14 +1984,12 @@ abstract class JobBase<T> implements Job<T> {
       }
       return Cancelled.by(
         reason: HandlerCancelReason(cause: thrown),
-        started: true,
         description: description,
         stackTrace: stackTrace,
       );
     }
     return Cancelled.by(
       reason: thrown.reason,
-      started: true,
       description: thrown.description,
       stackTrace: stackTrace,
     );

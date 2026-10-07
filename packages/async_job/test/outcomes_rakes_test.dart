@@ -550,7 +550,7 @@ void main() {
       fakeAsync((async) {
         final reason = page.RequestCancelReason('offline', StackTrace.current);
         final job = Job<void>(
-          (ctx) async => throw Cancelled.by(reason: reason, started: true),
+          (ctx) async => throw Cancelled.by(reason: reason),
         )..ignoreFailure();
         async.flushTimers();
 

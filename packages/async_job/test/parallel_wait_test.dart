@@ -416,7 +416,6 @@ void main() {
       final errors = <Object>[];
       final cancellation = Cancelled.by(
         reason: const ManualCancelReason(),
-        started: true,
         stackTrace: StackTrace.current,
       );
       final job = ProbeJob<void>(
@@ -819,7 +818,6 @@ void main() {
       final pending = Completer<void>();
       final cancellation = Cancelled.by(
         reason: const ManualCancelReason(),
-        started: true,
         stackTrace: StackTrace.current,
       );
       final job = ProbeJob<void>(
@@ -852,7 +850,6 @@ void main() {
           final pending = Completer<void>();
           final cancellation = Cancelled.by(
             reason: const ManualCancelReason(),
-            started: true,
             stackTrace: StackTrace.current,
           );
           final job = ProbeJob<void>((ctx) async {
