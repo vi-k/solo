@@ -277,9 +277,6 @@ Job<void> upload(List<int> chunks) => run<Ready, void>((ctx) async {
 [«Дать времени пройти»](../async_job/cancellation.md#дать-времени-пройти)
 страницы об отмене пакета `async_job`.
 
-`join` проверяет отмену и до своей операции, и после неё, поэтому два `join`
-подряд не оставляют промежутка.
-
 Не сохраняйте контекст для запуска работы после конца `Job`. Методы `emit`,
 `run`, `each`, `abandonable`, `join`, `pause` и `uncancellable` тогда бросят
 `StateError`. Чтения и `check` остаются доступны, когда `Job` закончилась,

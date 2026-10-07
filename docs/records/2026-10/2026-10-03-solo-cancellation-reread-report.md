@@ -831,3 +831,11 @@ changed)»; `dart analyze` — «No issues found!»; `dart test --concurrency=4`
    Абзац держат тесты «each wait in its place: stops after the chunk in flight,
    flushes» и «each wait in its place: an upload nobody cancels flushes too»
    и новая цитата в стороже. Перевод следом.
+6. «эта фраза теперь кажется какой-то оторванной от всего», 2026-10-07,
+   о предложении «`join` checks the cancellation before its operation as well
+   as after it, so two of them in a row leave no gap». Так и есть: в цикле
+   примера между двумя `join` нет ни одного ожидания, отмене прийти некуда,
+   и промежутка, о котором говорит фраза, в примере нет. Фраза убрана. Что
+   `join` проверяет и до операции, по-прежнему говорит комментарий в коде
+   ответа, и его держит тест «a join checks before its operation as well as
+   after it». Перевод следом.

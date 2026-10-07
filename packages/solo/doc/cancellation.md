@@ -275,9 +275,6 @@ job accepts a cancellation, and its timer is cancelled with it.
 on the cancellation page of `async_job` compares the three ways to wait for
 time.
 
-`join` checks the cancellation before its operation as well as after it, so two
-of them in a row leave no gap.
-
 Do not retain a context to start work after its job ends. Methods such as
 `emit`, `run`, `each`, `abandonable`, `join`, `pause` and `uncancellable` then
 throw `StateError`. Reads and `check` remain available once the job is over,
