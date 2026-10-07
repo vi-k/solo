@@ -98,7 +98,7 @@ too.
 One error no outcome carries is missing from that list, and nobody is asked to
 answer for it: the failure of a body that comes after its job has accepted a
 cancellation — a call that `ctx.join` is still waiting out fails, say. The job
-ends `Cancelled`, the reporting hook is told of the error, and it goes no
+ends `Cancelled`, the hook `onError` is told of the error, and it goes no
 further. Most often it is the operation the cancellation stopped, throwing as
 it stops, and the engine cannot tell a failure of the operation from that. A
 body that catches such an error asks the job, not the error:

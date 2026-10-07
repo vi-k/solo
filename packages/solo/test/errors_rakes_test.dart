@@ -920,7 +920,7 @@ void main() {
         'its job has accepted a cancellation',
       );
       _says(
-        'The job ends `Cancelled`, the reporting hook is told of the error, '
+        'The job ends `Cancelled`, the hook `onError` is told of the error, '
         'and it goes no further',
       );
       final handled = <String>[];
