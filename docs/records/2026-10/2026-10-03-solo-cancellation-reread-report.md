@@ -855,3 +855,13 @@ changed)»; `dart analyze` — «No issues found!»; `dart test --concurrency=4`
    и в двух блоках `packages/async_job/doc/extending.md`. Запись в «Added»
    CHANGELOG `async_job` и `solo`. Наборы `async_job` (1333 теста) и `solo`
    (1762 теста) зелёные. Переводы следом.
+8. «у collect и accumulate срок тоже считается от старта тела,
+   а не от вызова?», 2026-10-07, о хвосте фразы «and neither does the window of
+   a `collect` or an `accumulate`, whose deadline is one of each job they
+   queue» раздела «A deadline of a job». Да: `timeout` у них задаёт срок каждой
+   задаче, которую они ставят в очередь, и считается от старта обработчика,
+   после окна; это держит тест «an accumulated job waiting out its window»
+   в `packages/solo/test/timeout_test.dart`. Фраза говорила это придаточным,
+   которое читалось с трудом, и разбита на две: вторая называет `timeout`
+   у `collect` и `accumulate`, говорит, чей это срок и откуда он считается.
+   Перевод следом.

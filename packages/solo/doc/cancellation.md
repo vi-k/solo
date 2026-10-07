@@ -377,12 +377,13 @@ throws that `Cancelled`, and a clause `on TimeoutException` around it catches
 nothing.
 
 The deadline is counted from the start of the body, not from the call: the time
-a job waits in the queue does not count, and neither does the window of a
-`collect` or an `accumulate`, whose deadline is one of each job they queue. A
-deadline cancels its own job alone: the jobs queued behind it stay, and the
-next one starts once this one has cleaned up. A call with `Policy.droppable`
-that finds a live job with its key returns that job, and the `timeout` of the
-call is lost with the rest of the call.
+a job waits in the queue does not count. With `collect` and `accumulate` the
+`timeout` is a deadline for each job they queue, counted the same way, from the
+start of the handler: the window a group waits out before it does not count
+either. A deadline cancels its own job alone: the jobs queued behind it stay,
+and the next one starts once this one has cleaned up. A call with
+`Policy.droppable` that finds a live job with its key returns that job, and the
+`timeout` of the call is lost with the rest of the call.
 
 ## Cancelling and closing a controller
 
