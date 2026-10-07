@@ -127,10 +127,10 @@ final class ScreenController extends Solo<Screen> {
 }
 ```
 
-The stream of a controller carries the changes of its state, not the state it
-is in. A session that is already signed in when `follow()` starts sends
-nothing, and the screen goes on showing `signedIn: false` until the session
-changes.
+The stream of a controller sends only changes of the state: a subscriber is not
+sent the current state when it subscribes. A session that is already signed in
+when `follow()` starts sends nothing, and the screen goes on showing
+`signedIn: false` until the session changes.
 
 ### The state first, then the stream
 
