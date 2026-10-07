@@ -28,11 +28,11 @@ and a job created with `cancellable: false` refuses it. The other kind comes
 from the job's own state rules, and neither a section nor `cancellable: false`
 stops it. Both are taken apart below.
 
-Three sections below open with the version this vocabulary leads to — the
-method whose name sounds like the requirement, or a plain `await` — and say
-what it does instead of what it was meant to do. Where the next version repairs
-that and brings a fault of its own, it stands as a second attempt. The version
-that works follows under its own heading.
+Four sections below open with the version this vocabulary leads to — the method
+whose name sounds like the requirement, or a plain `await` — and say what it
+does instead of what it was meant to do. Where the next version repairs that
+and brings a fault of its own, it stands as a second attempt. The version that
+works follows under its own heading.
 
 ## Stopping the underlying operation
 
@@ -128,6 +128,43 @@ A payment, its receipt on the screen and its journal entry go together: once
 the payment has gone through, the receipt has to be shown and the entry
 written, whatever the job is asked in the meantime.
 
+### The first attempt
+
+```dart
+Job<void> commit(String entry) => run<Ready, void>((ctx) async {
+      // Each call waited out, whatever happens.
+      final receipt = await ctx.join(() => payment.commit());
+      ctx.emit(ctx.state.copyWith(receipt: receipt));
+      await ctx.join(() => journal.write(entry));
+    });
+```
+
+`join` does wait the payment out, and then, as the table above says, throws
+`Cancelled` in place of the result. Cancel the job during the payment: the
+payment goes through, and neither the receipt nor the entry follows. The money
+is taken with nothing to show for it.
+
+Plain `await` on the calls fares no better: the `emit` between them is a
+checkpoint, and on the cancelled job it throws.
+
+### The second attempt
+
+```dart
+Job<void> commit(String entry) => run<Ready, void>((ctx) async {
+      // The whole step waited out as one call.
+      await ctx.join(() async {
+        final receipt = await payment.commit();
+        ctx.emit(ctx.state.copyWith(receipt: receipt));
+        await journal.write(entry);
+      });
+    });
+```
+
+Both calls are now inside what `join` waits out, but the job accepts the
+cancellation the moment it arrives, not when the step is over. The step goes on
+as the code of a cancelled job: the `emit` inside it is a checkpoint and
+throws, and the entry is lost once more.
+
 ### One section for the step
 
 ```dart
@@ -152,14 +189,6 @@ next checkpoint throws `Cancelled`; ordinary code immediately after the call
 can still execute. Keep all required work inside the section and always await
 it. An unawaited section can outlive the job and lose a held request. Sections
 can nest.
-
-One `join` around the three lines is not enough here, though it is the answer
-of
-[A step that must finish](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cancellation.md#a-step-that-must-finish)
-on the cancellation page of `async_job`. The job accepts a cancellation the
-moment it arrives, and `emit` is a checkpoint: inside the `join` it throws on
-the cancelled job, so the payment goes through, and neither the receipt nor the
-entry follows.
 
 ### A whole job
 

@@ -633,6 +633,45 @@ void main() {
   });
 
   group('Protecting a step or a whole job', () {
+    test('the first attempt: the payment goes through, nothing follows', () {
+      fakeAsync((async) {
+        final till = first.JoiningTill();
+        final job = till.commit('entry');
+        async.flushMicrotasks();
+        unawaited(job.cancel());
+        expect(job.isCancelled, isTrue, reason: 'join holds nothing back');
+        async.flushMicrotasks();
+
+        _end(async, 'payment');
+        expect(
+          stage.trace,
+          ['payment start', 'payment end'],
+          reason: 'join waited the payment out and threw Cancelled',
+        );
+        expect('${till.currentState}', 'Ready(0 s, null)');
+        expect('${job.outcome}', 'Cancelled(manual)');
+      });
+    });
+
+    test('a plain await on the calls: the emit between them throws', () {
+      fakeAsync((async) {
+        final bench = Bench();
+        final job = bench.run<Ready, void>((ctx) async {
+          final receipt = await payment.commit();
+          ctx.emit(ctx.state.copyWith(receipt: receipt));
+          await journal.write('entry');
+        });
+        async.flushMicrotasks();
+        unawaited(job.cancel());
+        async.flushMicrotasks();
+
+        _end(async, 'payment');
+        expect(stage.trace, ['payment start', 'payment end']);
+        expect('${bench.currentState}', 'Ready(0 s, null)');
+        expect('${job.outcome}', 'Cancelled(manual)');
+      });
+    });
+
     test(
         'emit is a checkpoint: on a cancelled job it throws and writes '
         'nothing', () {
@@ -659,16 +698,10 @@ void main() {
       });
     });
 
-    test('one join around the step: the emit inside it throws', () {
+    test('the second attempt: the emit inside the join throws', () {
       fakeAsync((async) {
-        final till = Bench();
-        final job = till.run<Ready, void>((ctx) async {
-          await ctx.join(() async {
-            final receipt = await payment.commit();
-            ctx.emit(ctx.state.copyWith(receipt: receipt));
-            await journal.write('entry');
-          });
-        });
+        final till = first.OneJoinTill();
+        final job = till.commit('entry');
         async.flushMicrotasks();
         unawaited(job.cancel());
         expect(
@@ -2820,13 +2853,13 @@ void main() {
   });
 
   group('The page', () {
-    test('three sections open with a first attempt, as the introduction says',
+    test('four sections open with a first attempt, as the introduction says',
         () {
       expect(
         RegExp(r'^### The first attempt$', multiLine: true).allMatches(_page()),
-        hasLength(3),
+        hasLength(4),
       );
-      expect(_prose(), contains('Three sections below open with the version'));
+      expect(_prose(), contains('Four sections below open with the version'));
     });
 
     test('one subsection opens with a first attempt of its own', () {
@@ -2837,11 +2870,11 @@ void main() {
       );
     });
 
-    test('two of them go on to a second attempt', () {
+    test('three of them go on to a second attempt', () {
       expect(
         RegExp(r'^#{3,4} The second attempt$', multiLine: true)
             .allMatches(_page()),
-        hasLength(2),
+        hasLength(3),
       );
     });
 
