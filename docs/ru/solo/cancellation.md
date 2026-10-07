@@ -85,7 +85,7 @@
 ### Первая попытка
 
 ```dart
-SoloJob<void> seek(Duration position) => run<Ready, void>(
+Job<void> seek(Duration position) => run<Ready, void>(
       key: 'seek',
       policy: Policy.restart,
       (ctx) async {
@@ -108,7 +108,7 @@ SoloJob<void> seek(Duration position) => run<Ready, void>(
 ### Вторая попытка
 
 ```dart
-SoloJob<void> seek(Duration position) => run<Ready, void>(
+Job<void> seek(Duration position) => run<Ready, void>(
       key: 'seek',
       policy: Policy.restart,
       (ctx) async {
@@ -129,7 +129,7 @@ SoloJob<void> seek(Duration position) => run<Ready, void>(
 ### Токен
 
 ```dart
-SoloJob<void> seek(Duration position) => run<Ready, void>(
+Job<void> seek(Duration position) => run<Ready, void>(
       key: 'seek',
       policy: Policy.restart,
       (ctx) async {
@@ -176,7 +176,7 @@ SoloJob<void> seek(Duration position) => run<Ready, void>(
 ### Первая попытка
 
 ```dart
-SoloJob<void> commit(String entry) => run<Ready, void>((ctx) async {
+Job<void> commit(String entry) => run<Ready, void>((ctx) async {
       // Каждого вызова дожидаются, что бы ни случилось.
       final receipt = await ctx.join(() => payment.commit());
       ctx.emit(ctx.state.copyWith(receipt: receipt));
@@ -195,7 +195,7 @@ SoloJob<void> commit(String entry) => run<Ready, void>((ctx) async {
 ### Вторая попытка
 
 ```dart
-SoloJob<void> commit(String entry) => run<Ready, void>((ctx) async {
+Job<void> commit(String entry) => run<Ready, void>((ctx) async {
       // Дождаться всего шага как одного вызова.
       await ctx.join(() async {
         final receipt = await payment.commit();
@@ -213,7 +213,7 @@ SoloJob<void> commit(String entry) => run<Ready, void>((ctx) async {
 ### Шаг одной секцией
 
 ```dart
-SoloJob<void> commit(String entry) => run<Ready, void>((ctx) async {
+Job<void> commit(String entry) => run<Ready, void>((ctx) async {
       await ctx.uncancellable(() async {
         final receipt = await payment.commit();
         ctx.emit(ctx.state.copyWith(receipt: receipt));
@@ -238,7 +238,7 @@ SoloJob<void> commit(String entry) => run<Ready, void>((ctx) async {
 
 ```dart
 // Job, отклоняющая все запросы, которые ей позволено отклонить.
-SoloJob<void> flush() => run<Ready, void>(
+Job<void> flush() => run<Ready, void>(
       cancellable: false,
       (ctx) => device.flush(),
     );
@@ -269,7 +269,7 @@ SoloJob<void> flush() => run<Ready, void>(
 ### Первая попытка
 
 ```dart
-SoloJob<void> upload(List<int> chunks) => run<Ready, void>((ctx) async {
+Job<void> upload(List<int> chunks) => run<Ready, void>((ctx) async {
       ctx.onDispose(() async {
         // Сброс должен закончиться до продвижения очереди.
         await ctx.join(() => device.flush());
@@ -293,7 +293,7 @@ SoloJob<void> upload(List<int> chunks) => run<Ready, void>((ctx) async {
 ### Каждое ожидание на своём месте
 
 ```dart
-SoloJob<void> upload(List<int> chunks) => run<Ready, void>((ctx) async {
+Job<void> upload(List<int> chunks) => run<Ready, void>((ctx) async {
       ctx.onDispose(() async {
         // Уборка идёт после тела, где методов ожидания уже нет:
         // здесь работает обычный await.
@@ -394,7 +394,7 @@ switch (job.outcome) {
 проскочил, оставляет состояние как есть.
 
 ```dart
-SoloJob<void> seek(Duration position) => run<Ready, void>(
+Job<void> seek(Duration position) => run<Ready, void>(
       key: 'seek',
       policy: Policy.restart,
       timeout: const Duration(seconds: 2),
@@ -512,7 +512,7 @@ await logs.close(mode: SoloCloseMode.drain);
 #### Первая попытка
 
 ```dart
-SoloJob<void> logout() => run<Ready, void>((ctx) async {
+Job<void> logout() => run<Ready, void>((ctx) async {
       await ctx.join(api.logout);
       await close();
     });

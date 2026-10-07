@@ -266,7 +266,7 @@ void main() {
     test('a listener cancelling from inside emit: the state keeps it', () {
       fakeAsync((async) {
         final opening = page.Opening();
-        late final SoloJob<TempFile> job;
+        late final Job<TempFile> job;
         opening.addListener(() {
           if (opening.currentState is Ready) {
             unawaited(job.cancel());
@@ -1166,7 +1166,7 @@ void main() {
         _says('Either way exactly one owner is left');
         fakeAsync((async) {
           final handover = page.Handover();
-          late final SoloJob<void> job;
+          late final Job<void> job;
           handover.addListener(() {
             if (handover.currentState is Ready) {
               unawaited(job.cancel());

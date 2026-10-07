@@ -229,7 +229,7 @@ SETTINGS_DRIVE = '''
 void drive(
   String name,
   RecordingSettingsApi api,
-  SoloJob<void> Function(SettingsPatch) update,
+  Job<void> Function(SettingsPatch) update,
   Settings Function() state,
 ) {
   fakeAsync((clock) {
@@ -546,8 +546,8 @@ PLAYER_DRIVE = '''
 void drive(
   String name,
   RecordingDevice device,
-  SoloJob<void> Function() resume,
-  SoloJob<void> Function() pause,
+  Job<void> Function() resume,
+  Job<void> Function() pause,
   Playback Function() state,
 ) {
   fakeAsync((clock) {
@@ -773,7 +773,7 @@ LOG_DRIVE = '''
 int drive(
   String name,
   RecordingLogApi api,
-  SoloJob<void> Function(LogEntry) log,
+  Job<void> Function(LogEntry) log,
   int Function() counter,
 ) {
   var burst = 0;
@@ -1172,7 +1172,7 @@ PROBE = """
 
 (int, int) probe(
   RecordingSearchApi api,
-  SoloJob<void> Function(String) query,
+  Job<void> Function(String) query,
   List<String> Function() state,
 ) {
   var settled = 0;
@@ -1207,7 +1207,7 @@ DRIVE = """
 int drive(
   String name,
   RecordingSearchApi api,
-  SoloJob<void> Function(String) query,
+  Job<void> Function(String) query,
   List<String> Function() state,
 ) {
   final shown = <String>[];
@@ -1402,8 +1402,8 @@ class OrderedSettingsApi implements SettingsApi {
 /// The same three additions for every row of the table.
 List<Object?> threeAdditions(
   OrderedSettingsApi api,
-  SoloJob<void> Function() reload,
-  SoloJob<void> Function(SettingsPatch) update,
+  Job<void> Function() reload,
+  Job<void> Function(SettingsPatch) update,
 ) {
   final busy = reload();
   final a1 = update(const SettingsPatch(theme: 'dark'));

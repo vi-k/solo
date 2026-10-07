@@ -55,7 +55,7 @@ final class QueuedSearch extends Solo<SearchState> {
 
   QueuedSearch(this.api) : super(const SearchState.idle());
 
-  SoloJob<void> query(String text) => run<SearchState, void>(
+  Job<void> query(String text) => run<SearchState, void>(
         key: 'query',
         (ctx) async {
           final results = await ctx.abandonable(() => api.search(text));
@@ -88,7 +88,7 @@ queue's own policies are in [Queue and policies](jobs.md#queue-and-policies) on
 the jobs page. Only the method changes:
 
 ```dart
-SoloJob<void> query(String text) => run<SearchState, void>(
+Job<void> query(String text) => run<SearchState, void>(
       key: 'query',
       policy: Policy.restart,
       (ctx) async {
@@ -128,7 +128,7 @@ final class Search extends Solo<SearchState> {
 
   Search(this.api) : super(const SearchState.idle());
 
-  SoloJob<void> query(String text) => _queries.add(text);
+  Job<void> query(String text) => _queries.add(text);
 }
 ```
 
@@ -217,7 +217,7 @@ final class EagerSettingsController extends Solo<Settings> {
 
   EagerSettingsController(this._api, Settings initial) : super(initial);
 
-  SoloJob<void> update(SettingsPatch patch) => run<Settings, void>(
+  Job<void> update(SettingsPatch patch) => run<Settings, void>(
         key: 'settings',
         (ctx) async {
           final next = patch.apply(ctx.state);
@@ -250,7 +250,7 @@ theme after its owner has already picked the dark one.
 one to stop. Only the method changes:
 
 ```dart
-SoloJob<void> update(SettingsPatch patch) => run<Settings, void>(
+Job<void> update(SettingsPatch patch) => run<Settings, void>(
       key: 'settings',
       policy: Policy.restart,
       (ctx) async {
@@ -295,9 +295,9 @@ final class SettingsController extends Solo<Settings> {
 
   SettingsController(this._api, Settings initial) : super(initial);
 
-  SoloJob<void> update(SettingsPatch patch) => _updates.add(patch);
+  Job<void> update(SettingsPatch patch) => _updates.add(patch);
 
-  SoloJob<void> reload() => run<Settings, void>(
+  Job<void> reload() => run<Settings, void>(
         key: 'reload',
         (ctx) async => ctx.emit(await ctx.abandonable(_api.load)),
       );
@@ -405,7 +405,7 @@ final class EagerLogController extends Solo<int> {
 
   EagerLogController(this._api) : super(0);
 
-  SoloJob<void> logEvent(LogEntry entry) => run<int, void>(
+  Job<void> logEvent(LogEntry entry) => run<int, void>(
         key: 'logs',
         (ctx) async {
           await ctx.join(() => _api.send([entry]));
@@ -456,7 +456,7 @@ final class LogController extends Solo<int> {
 
   LogController(this._api) : super(0);
 
-  SoloJob<void> logEvent(LogEntry entry) => _logs.add(entry);
+  Job<void> logEvent(LogEntry entry) => _logs.add(entry);
 }
 ```
 
@@ -475,9 +475,8 @@ to every entry.
 
 A buffer you keep yourself would batch them too. What `collect` adds is that
 the buffer is the job's input: the entries are sealed into the group the queue
-takes, the caller gets the same `SoloJob` every other addition to that group
-got, and `close()` drops the group instead of leaving a list and a timer
-behind.
+takes, the caller gets the same `Job` every other addition to that group got,
+and `close()` drops the group instead of leaving a list and a timer behind.
 
 This controller's state counts entries whose send operation completed and whose
 handler reached `emit`.
@@ -531,7 +530,7 @@ final class QueuedPlayer extends Solo<Playback> {
 
   QueuedPlayer(this.device) : super(const Paused());
 
-  SoloJob<void> resume() => run<Playback, void>(
+  Job<void> resume() => run<Playback, void>(
         key: Command.resume,
         (ctx) async {
           await ctx.join(device.resume);
@@ -539,7 +538,7 @@ final class QueuedPlayer extends Solo<Playback> {
         },
       );
 
-  SoloJob<void> pause() => run<Playback, void>(
+  Job<void> pause() => run<Playback, void>(
         key: Command.pause,
         (ctx) async {
           await ctx.join(device.pause);
@@ -594,9 +593,9 @@ final class Player extends Solo<Playback> {
 
   Player(this.device) : super(const Paused());
 
-  SoloJob<void> resume() => _transport.add(Command.resume);
+  Job<void> resume() => _transport.add(Command.resume);
 
-  SoloJob<void> pause() => _transport.add(Command.pause);
+  Job<void> pause() => _transport.add(Command.pause);
 }
 ```
 
@@ -630,7 +629,7 @@ command with a value, they are ordinary jobs with keys of their own, and
 two do not share one. The controller's own queue is what removes them:
 
 ```dart
-SoloJob<void> resume() {
+Job<void> resume() {
   queue.removeWhere(
     (job) => job.key == Command.resume || job.key == Command.pause,
   );
@@ -834,7 +833,7 @@ All three policies operate on queued groups. A group stops accepting events
 when debounce seals it or when it is taken from the queue, before `canStart`
 and `onStart`. Events added from either callback go to a later group. The
 handler runs with the configured working type and rules, and the group's job is
-an ordinary `SoloJob` to the queue in every other way.
+an ordinary job to the queue in every other way.
 
 An accumulator creates no job until the first event. Without timing, if each
 group finishes before the next event arrives, each event starts a separate job.

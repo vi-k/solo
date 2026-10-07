@@ -53,7 +53,7 @@
 ### Первая попытка
 
 ```dart
-SoloJob<void> load() => run<Idle, void>(
+Job<void> load() => run<Idle, void>(
       key: 'load',
       (ctx) async {
         final db = await ctx.join(Database.open);
@@ -79,7 +79,7 @@ SoloJob<void> load() => run<Idle, void>(
 ### Освобождение едет на вызове
 
 ```dart
-SoloJob<void> load() => run<Idle, void>(
+Job<void> load() => run<Idle, void>(
       key: 'load',
       (ctx) async {
         final db = await ctx.join(
@@ -139,7 +139,7 @@ final sub = await ctx.join(
 ### Первая попытка
 
 ```dart
-SoloJob<Database> open() => run<Idle, Database>(
+Job<Database> open() => run<Idle, Database>(
       key: 'open',
       (ctx) async {
         final db = await ctx.join(
@@ -165,7 +165,7 @@ SoloJob<Database> open() => run<Idle, Database>(
 ### `discard` для значения, которое уходит
 
 ```dart
-SoloJob<Database> open() => run<Idle, Database>(
+Job<Database> open() => run<Idle, Database>(
       key: 'open',
       (ctx) async {
         final db = await ctx.join(

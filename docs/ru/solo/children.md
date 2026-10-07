@@ -5,7 +5,7 @@
 ```dart
 // Создан контроллером, но ещё никем не запущен: очередь возьмёт его
 // через `sync` ниже, родитель через `ctx.run`.
-SoloJob<String> _sync(int item) => job<Ready, String>(
+Job<String> _sync(int item) => job<Ready, String>(
       key: _Op.sync,
       (ctx) async {
         // Ребёнок на стриме: прогресс загрузки, который API закрывает,
@@ -27,7 +27,7 @@ SoloJob<String> _sync(int item) => job<Ready, String>(
       },
     );
 
-SoloJob<String> sync(int item) => add(_sync(item));
+Job<String> sync(int item) => add(_sync(item));
 ```
 
 `job(...)` создаёт задачу и ничего не запускает. `add` даёт ей место в очереди,
@@ -71,7 +71,7 @@ SoloJob<String> sync(int item) => add(_sync(item));
 
 ```dart
 // Родитель сам отвечает за упавшую загрузку.
-SoloJob<bool> trySync(int item) => run<Ready, bool>(
+Job<bool> trySync(int item) => run<Ready, bool>(
       key: _Op.trySync,
       (ctx) async {
         try {
@@ -105,7 +105,7 @@ SoloJob<bool> trySync(int item) => run<Ready, bool>(
 ## Работа рядом с ребёнком
 
 ```dart
-SoloJob<String> syncAndAnnounce(int item) => run<Ready, String>(
+Job<String> syncAndAnnounce(int item) => run<Ready, String>(
       key: _Op.syncAndAnnounce,
       (ctx) async {
         // Сохранена, но не ожидается: загрузка идёт, пока родитель работает.
@@ -152,7 +152,7 @@ SoloJob<String> syncAndAnnounce(int item) => run<Ready, String>(
 ## Ребёнок, которого отвернули правила
 
 ```dart
-SoloJob<String> resend(int item) => run<Ready, String>(
+Job<String> resend(int item) => run<Ready, String>(
       key: _Op.resend,
       (ctx) {
         // Ребёнок со своим правилом: на паузе загрузки нет.
@@ -238,12 +238,12 @@ Invalid argument (job): was not created by this Solo: "Job(then)"
 
 ```dart
 // То же разделение, что у `sync`: сам шаг и вход через очередь.
-SoloJob<void> _recordPath(String path) => job<Ready, void>(
+Job<void> _recordPath(String path) => job<Ready, void>(
       key: _Op.record,
       (ctx) async => ctx.emit(ctx.state.copyWith(path: path)),
     );
 
-SoloJob<void> recordPath(String path) => add(_recordPath(path));
+Job<void> recordPath(String path) => add(_recordPath(path));
 ```
 
 ### Первая попытка
@@ -267,7 +267,7 @@ Job<void> syncAndRecord(int item) =>
 ### Вторая попытка
 
 ```dart
-SoloJob<void> syncAndRecord(int item) => run<Ready, void>(
+Job<void> syncAndRecord(int item) => run<Ready, void>(
       key: _Op.syncAndRecord,
       (ctx) async {
         final path = await sync(item).value;
@@ -290,7 +290,7 @@ SoloJob<void> syncAndRecord(int item) => run<Ready, void>(
 // Снова `_sync` и `_recordPath`, теперь детьми. Родитель держит очередь,
 // пока не закончат дети, поэтому `save()`, поставленная тем временем,
 // ждёт обоих шагов.
-SoloJob<void> syncAndRecord(int item) => run<Ready, void>(
+Job<void> syncAndRecord(int item) => run<Ready, void>(
       key: _Op.syncAndRecord,
       (ctx) async {
         final path = await ctx.run(_sync(item));

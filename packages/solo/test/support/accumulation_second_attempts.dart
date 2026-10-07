@@ -11,7 +11,7 @@ final class RestartingSearch extends Solo<SearchState> {
 
   RestartingSearch(this.api) : super(const SearchState.idle());
 
-  SoloJob<void> query(String text) => run<SearchState, void>(
+  Job<void> query(String text) => run<SearchState, void>(
         key: 'query',
         policy: Policy.restart,
         (ctx) async {
@@ -28,7 +28,7 @@ final class JoiningSearch extends Solo<SearchState> {
 
   JoiningSearch(this.api) : super(const SearchState.idle());
 
-  SoloJob<void> query(String text) => run<SearchState, void>(
+  Job<void> query(String text) => run<SearchState, void>(
         key: 'query',
         policy: Policy.restart,
         (ctx) async {
@@ -44,7 +44,7 @@ final class RestartingSettingsController extends Solo<Settings> {
 
   RestartingSettingsController(this._api, Settings initial) : super(initial);
 
-  SoloJob<void> update(SettingsPatch patch) => run<Settings, void>(
+  Job<void> update(SettingsPatch patch) => run<Settings, void>(
         key: 'settings',
         policy: Policy.restart,
         (ctx) async {

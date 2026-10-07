@@ -18,7 +18,7 @@ final class Opening extends Solo<AppState> with OpenSolo<AppState>, Desk {
   /// Not on the page: the call that takes the body. The body is an element
   /// of a list, where a closure ends on a line of its own as it does on the
   /// page.
-  SoloJob<TempFile> start() {
+  Job<TempFile> start() {
     final bodies = <Future<TempFile> Function(SoloContext<AppState, Idle> ctx)>[
       (ctx) async {
         // Made here, on the spot: nothing arrives between the two lines.
@@ -50,7 +50,7 @@ final class Opening extends Solo<AppState> with OpenSolo<AppState>, Desk {
 final class Loader extends Solo<AppState> with OpenSolo<AppState>, Desk {
   Loader() : super(const Idle());
 
-  SoloJob<void> load() => run<Idle, void>(
+  Job<void> load() => run<Idle, void>(
         key: 'load',
         (ctx) async {
           final db = await ctx.join(
@@ -70,7 +70,7 @@ final class Watcher extends Solo<AppState> with OpenSolo<AppState>, Desk {
 
   /// Not on the page: a body around the statement, after a step named
   /// [step] that a cancellation waits out.
-  SoloJob<void> watch(String step) => run<Idle, void>(
+  Job<void> watch(String step) => run<Idle, void>(
         key: 'watch',
         (ctx) async {
           await ctx.uncancellable(() => stage.start<void>(step, null));
@@ -87,7 +87,7 @@ final class Watcher extends Solo<AppState> with OpenSolo<AppState>, Desk {
 final class Opener extends Solo<AppState> with OpenSolo<AppState>, Desk {
   Opener() : super(const Idle());
 
-  SoloJob<Database> open() => run<Idle, Database>(
+  Job<Database> open() => run<Idle, Database>(
         key: 'open',
         (ctx) async {
           final db = await ctx.join(
@@ -106,7 +106,7 @@ final class Handover extends Solo<AppState> with OpenSolo<AppState>, Desk {
 
   /// Not on the page: the method and the call that opens the database,
   /// which the page shows in the first attempt.
-  SoloJob<void> hand() => run<Idle, void>(
+  Job<void> hand() => run<Idle, void>(
         key: 'hand',
         (ctx) async {
           final db = await ctx.join(
@@ -123,7 +123,7 @@ final class Handover extends Solo<AppState> with OpenSolo<AppState>, Desk {
 
   /// Not on the page: the method, the call that makes the file, and a step
   /// named [step] before the section, when the test wants one.
-  SoloJob<void> store({String? step}) => run<Idle, void>(
+  Job<void> store({String? step}) => run<Idle, void>(
         key: 'store',
         (ctx) async {
           final file = await ctx.join(
@@ -146,7 +146,7 @@ final class TempKeeper extends Solo<AppState> with OpenSolo<AppState>, Desk {
   TempKeeper() : super(const Idle());
 
   /// Not on the page: the method around the statement.
-  SoloJob<void> write() => run<Idle, void>(
+  Job<void> write() => run<Idle, void>(
         key: 'temp',
         (ctx) async {
           // Deleted before the next job starts and before close() comes back.

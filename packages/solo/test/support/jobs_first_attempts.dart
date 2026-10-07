@@ -17,7 +17,7 @@ final class SharedKeyController extends Solo<CameraState>
     with OpenSolo<CameraState>, Workbench {
   SharedKeyController() : super(const Ready());
 
-  SoloJob<Profile> load(String id) => run<Ready, Profile>(
+  Job<Profile> load(String id) => run<Ready, Profile>(
         key: _Op.load,
         policy: Policy.droppable,
         (ctx) => ctx.abandonable(() => api.load(id)),

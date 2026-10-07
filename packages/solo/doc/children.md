@@ -5,7 +5,7 @@ A root job can split its work into child jobs:
 ```dart
 // Made by the controller and started by nobody yet: the queue takes it
 // through `sync` below, a parent takes it through `ctx.run`.
-SoloJob<String> _sync(int item) => job<Ready, String>(
+Job<String> _sync(int item) => job<Ready, String>(
       key: _Op.sync,
       (ctx) async {
         // A stream child: the progress of the upload, which the API
@@ -27,7 +27,7 @@ SoloJob<String> _sync(int item) => job<Ready, String>(
       },
     );
 
-SoloJob<String> sync(int item) => add(_sync(item));
+Job<String> sync(int item) => add(_sync(item));
 ```
 
 `job(...)` makes a job and starts nothing. `add` gives it a place in the queue,
@@ -73,7 +73,7 @@ come from, and `Ready` is the state its controller works in, with the fields
 
 ```dart
 // The parent answers for a failed upload itself.
-SoloJob<bool> trySync(int item) => run<Ready, bool>(
+Job<bool> trySync(int item) => run<Ready, bool>(
       key: _Op.trySync,
       (ctx) async {
         try {
@@ -107,7 +107,7 @@ errors page shows what that costs and what a broad clause has to do first.
 ## Working beside a child
 
 ```dart
-SoloJob<String> syncAndAnnounce(int item) => run<Ready, String>(
+Job<String> syncAndAnnounce(int item) => run<Ready, String>(
       key: _Op.syncAndAnnounce,
       (ctx) async {
         // Kept, not awaited: the upload runs while the parent goes on.
@@ -155,7 +155,7 @@ throws, and the future throws the cancellation.
 ## A child the rules turn away
 
 ```dart
-SoloJob<String> resend(int item) => run<Ready, String>(
+Job<String> resend(int item) => run<Ready, String>(
       key: _Op.resend,
       (ctx) {
         // A child with a rule of its own: no upload while paused.
@@ -241,12 +241,12 @@ the way `sync` is:
 
 ```dart
 // The same split as `sync`: the step itself, and the queue's way in.
-SoloJob<void> _recordPath(String path) => job<Ready, void>(
+Job<void> _recordPath(String path) => job<Ready, void>(
       key: _Op.record,
       (ctx) async => ctx.emit(ctx.state.copyWith(path: path)),
     );
 
-SoloJob<void> recordPath(String path) => add(_recordPath(path));
+Job<void> recordPath(String path) => add(_recordPath(path));
 ```
 
 ### The first attempt
@@ -270,7 +270,7 @@ path is never recorded, and the continuation ends `Cancelled(closed)`.
 ### The second attempt
 
 ```dart
-SoloJob<void> syncAndRecord(int item) => run<Ready, void>(
+Job<void> syncAndRecord(int item) => run<Ready, void>(
       key: _Op.syncAndRecord,
       (ctx) async {
         final path = await sync(item).value;
@@ -292,7 +292,7 @@ trap: what it queues runs after this job and after everything queued before it.
 // `_sync` and `_recordPath` again, now children. The parent holds the
 // queue until its children are done, so a `save()` queued meanwhile
 // waits for both steps.
-SoloJob<void> syncAndRecord(int item) => run<Ready, void>(
+Job<void> syncAndRecord(int item) => run<Ready, void>(
       key: _Op.syncAndRecord,
       (ctx) async {
         final path = await ctx.run(_sync(item));

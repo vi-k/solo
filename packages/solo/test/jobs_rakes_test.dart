@@ -392,8 +392,8 @@ void main() {
       final watcher = _Watcher();
       Solo.observer = watcher;
       late page.CameraController camera;
-      late SoloJob<void> failed;
-      late SoloJob<void> next;
+      late Job<void> failed;
+      late Job<void> next;
       final zone = _zone((async) {
         camera = page.CameraController();
         stage.saveError = StateError('disk full');
@@ -1179,7 +1179,7 @@ void main() {
         async.flushMicrotasks();
         final save = camera.save();
         final queued = camera.setZoom(2);
-        late SoloJob<void> stop;
+        late Job<void> stop;
         final lines = _printed(() => stop = camera.stop());
 
         expect(lines, ['2'], reason: 'a save and a zoom were waiting');
@@ -1592,4 +1592,10 @@ void main() {
       expect(withCode.toSet(), holders.keys.toSet());
     });
   });
+}
+
+extension on Job<Object?> {
+  /// The methods of the page declare `Job<T>`; whether the job still waits
+  /// in the queue is on the `SoloJob<T>` the controller made.
+  bool get isQueued => (this as SoloJob<Object?>).isQueued;
 }

@@ -82,7 +82,7 @@ the position the user lands on must not wait for the ones dragged past.
 ### The first attempt
 
 ```dart
-SoloJob<void> seek(Duration position) => run<Ready, void>(
+Job<void> seek(Duration position) => run<Ready, void>(
       key: 'seek',
       policy: Policy.restart,
       (ctx) async {
@@ -104,7 +104,7 @@ the user asked for, whatever the device actually did.
 ### The second attempt
 
 ```dart
-SoloJob<void> seek(Duration position) => run<Ready, void>(
+Job<void> seek(Duration position) => run<Ready, void>(
       key: 'seek',
       policy: Policy.restart,
       (ctx) async {
@@ -124,7 +124,7 @@ waiting the call out does not make its result count.
 ### The token
 
 ```dart
-SoloJob<void> seek(Duration position) => run<Ready, void>(
+Job<void> seek(Duration position) => run<Ready, void>(
       key: 'seek',
       policy: Policy.restart,
       (ctx) async {
@@ -170,7 +170,7 @@ written, whatever the job is asked in the meantime.
 ### The first attempt
 
 ```dart
-SoloJob<void> commit(String entry) => run<Ready, void>((ctx) async {
+Job<void> commit(String entry) => run<Ready, void>((ctx) async {
       // Each call waited out, whatever happens.
       final receipt = await ctx.join(() => payment.commit());
       ctx.emit(ctx.state.copyWith(receipt: receipt));
@@ -189,7 +189,7 @@ checkpoint, and on the cancelled job it throws.
 ### The second attempt
 
 ```dart
-SoloJob<void> commit(String entry) => run<Ready, void>((ctx) async {
+Job<void> commit(String entry) => run<Ready, void>((ctx) async {
       // The whole step waited out as one call.
       await ctx.join(() async {
         final receipt = await payment.commit();
@@ -207,7 +207,7 @@ throws, and the entry is lost once more.
 ### One section for the step
 
 ```dart
-SoloJob<void> commit(String entry) => run<Ready, void>((ctx) async {
+Job<void> commit(String entry) => run<Ready, void>((ctx) async {
       await ctx.uncancellable(() async {
         final receipt = await payment.commit();
         ctx.emit(ctx.state.copyWith(receipt: receipt));
@@ -233,7 +233,7 @@ can nest.
 
 ```dart
 // A job that turns down every request it is allowed to turn down.
-SoloJob<void> flush() => run<Ready, void>(
+Job<void> flush() => run<Ready, void>(
       cancellable: false,
       (ctx) => device.flush(),
     );
@@ -262,7 +262,7 @@ chunk in flight, and however it ends, the device buffer has to be flushed.
 ### The first attempt
 
 ```dart
-SoloJob<void> upload(List<int> chunks) => run<Ready, void>((ctx) async {
+Job<void> upload(List<int> chunks) => run<Ready, void>((ctx) async {
       ctx.onDispose(() async {
         // The flush must finish before the queue moves on.
         await ctx.join(() => device.flush());
@@ -287,7 +287,7 @@ has the whole route.
 ### Each wait in its place
 
 ```dart
-SoloJob<void> upload(List<int> chunks) => run<Ready, void>((ctx) async {
+Job<void> upload(List<int> chunks) => run<Ready, void>((ctx) async {
       ctx.onDispose(() async {
         // Cleanup runs after the body, where the waiting methods are
         // gone: a plain await is the wait that works here.
@@ -389,7 +389,7 @@ should show the player offline. A seek the user dragged past leaves the state
 as it is.
 
 ```dart
-SoloJob<void> seek(Duration position) => run<Ready, void>(
+Job<void> seek(Duration position) => run<Ready, void>(
       key: 'seek',
       policy: Policy.restart,
       timeout: const Duration(seconds: 2),
@@ -508,7 +508,7 @@ closes.
 #### The first attempt
 
 ```dart
-SoloJob<void> logout() => run<Ready, void>((ctx) async {
+Job<void> logout() => run<Ready, void>((ctx) async {
       await ctx.join(api.logout);
       await close();
     });

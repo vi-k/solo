@@ -98,7 +98,7 @@ AccumulationTiming _throttle(int milliseconds, {bool startAtOnce = true}) =>
 ({String trace, FakeSearchApi api, List<int> shownAt})
     _type<C extends Solo<SearchState>>(
   C Function(SearchApi api) make,
-  SoloJob<void> Function(C controller, String text) query, {
+  Job<void> Function(C controller, String text) query, {
   int latency = 100,
 }) {
   final api = FakeSearchApi(latency);
@@ -140,7 +140,7 @@ AccumulationTiming _throttle(int milliseconds, {bool startAtOnce = true}) =>
   List<String> errors,
 }) _flip<C extends Solo<Settings>>(
   C Function(SettingsApi api) make,
-  SoloJob<void> Function(C controller, SettingsPatch patch) update,
+  Job<void> Function(C controller, SettingsPatch patch) update,
 ) {
   final api = FakeSettingsApi();
   final outcomes = <String>[];
@@ -148,7 +148,7 @@ AccumulationTiming _throttle(int milliseconds, {bool startAtOnce = true}) =>
   var end = '';
   final errors = _zone((async) {
     final controller = make(api)..addListener(() => shownAt.add(now()));
-    final jobs = <SoloJob<void>>[];
+    final jobs = <Job<void>>[];
     for (final patch in const [
       SettingsPatch(notifications: true),
       SettingsPatch(theme: 'dark'),
@@ -180,7 +180,7 @@ AccumulationTiming _throttle(int milliseconds, {bool startAtOnce = true}) =>
 /// then one more [later] ms after them.
 ({String trace, FakeLogApi api, int counter}) _write<C extends Solo<int>>(
   C Function(LogApi api) make,
-  SoloJob<void> Function(C controller, LogEntry entry) log, {
+  Job<void> Function(C controller, LogEntry entry) log, {
   int later = 2000,
 }) {
   final api = FakeLogApi();
@@ -218,8 +218,8 @@ AccumulationTiming _throttle(int milliseconds, {bool startAtOnce = true}) =>
 ({String trace, FakeDevice device, List<String> heard})
     _tap<C extends Solo<Playback>>(
   C Function(PlayerDevice device) make,
-  SoloJob<void> Function(C controller) resume,
-  SoloJob<void> Function(C controller) pause,
+  Job<void> Function(C controller) resume,
+  Job<void> Function(C controller) pause,
 ) {
   final device = FakeDevice();
   final hears = Hears();
@@ -553,7 +553,7 @@ void main() {
       _says('the returned job exposes the outcome and cancellation, like '
           'other jobs');
       final api = FakeSearchApi();
-      final jobs = <SoloJob<void>>{};
+      final jobs = <Job<void>>{};
       var outcome = '';
       _zone((async) {
         final search = Search(api);
@@ -943,9 +943,9 @@ void main() {
     });
 
     test('every addition to a group gets the same job', () {
-      _says('the caller gets the same `SoloJob` every other addition to that '
+      _says('the caller gets the same `Job` every other addition to that '
           'group got');
-      final jobs = <SoloJob<void>>{};
+      final jobs = <Job<void>>{};
       _zone((async) {
         final logs = LogController(FakeLogApi());
         for (final message in ['one', 'two', 'three']) {
@@ -2277,7 +2277,7 @@ void main() {
 
     test('the handler runs with the working type it was given', () {
       _says('The handler runs with the configured working type and rules, '
-          "and the group's job is an ordinary `SoloJob` to the queue");
+          "and the group's job is an ordinary job to the queue");
       final seen = <String>[];
       _zone((async) {
         final typed = Typed();
@@ -2621,4 +2621,10 @@ void main() {
       ]);
     });
   });
+}
+
+extension on Job<Object?> {
+  /// The methods of the page declare `Job<T>`; whether the job still waits
+  /// in the queue is on the `SoloJob<T>` the controller made.
+  bool get isQueued => (this as SoloJob<Object?>).isQueued;
 }

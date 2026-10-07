@@ -19,7 +19,7 @@ final class AbandoningPlayer extends Solo<AppState>
 
   AbandoningPlayer() : super(const Ready());
 
-  SoloJob<void> seek(Duration position) => run<Ready, void>(
+  Job<void> seek(Duration position) => run<Ready, void>(
         key: 'seek',
         policy: Policy.restart,
         (ctx) async {
@@ -37,7 +37,7 @@ final class JoiningPlayer extends Solo<AppState> with OpenSolo<AppState>, Desk {
 
   JoiningPlayer() : super(const Ready());
 
-  SoloJob<void> seek(Duration position) => run<Ready, void>(
+  Job<void> seek(Duration position) => run<Ready, void>(
         key: 'seek',
         policy: Policy.restart,
         (ctx) async {
@@ -53,7 +53,7 @@ final class JoiningPlayer extends Solo<AppState> with OpenSolo<AppState>, Desk {
 final class JoiningTill extends Solo<AppState> with OpenSolo<AppState>, Desk {
   JoiningTill() : super(const Ready());
 
-  SoloJob<void> commit(String entry) => run<Ready, void>((ctx) async {
+  Job<void> commit(String entry) => run<Ready, void>((ctx) async {
         // Each call waited out, whatever happens.
         // ignore: unnecessary_lambdas
         final receipt = await ctx.join(() => payment.commit());
@@ -66,7 +66,7 @@ final class JoiningTill extends Solo<AppState> with OpenSolo<AppState>, Desk {
 final class OneJoinTill extends Solo<AppState> with OpenSolo<AppState>, Desk {
   OneJoinTill() : super(const Ready());
 
-  SoloJob<void> commit(String entry) => run<Ready, void>((ctx) async {
+  Job<void> commit(String entry) => run<Ready, void>((ctx) async {
         // The whole step waited out as one call.
         await ctx.join(() async {
           final receipt = await payment.commit();
@@ -82,7 +82,7 @@ final class InvertedUploader extends Solo<AppState>
     with OpenSolo<AppState>, Desk {
   InvertedUploader() : super(const Ready());
 
-  SoloJob<void> upload(List<int> chunks) => run<Ready, void>((ctx) async {
+  Job<void> upload(List<int> chunks) => run<Ready, void>((ctx) async {
         ctx.onDispose(() async {
           // The flush must finish before the queue moves on.
           // ignore: unnecessary_lambdas
@@ -115,7 +115,7 @@ final class SelfClosingSession extends Solo<AppState>
     with OpenSolo<AppState>, Desk {
   SelfClosingSession() : super(const Ready());
 
-  SoloJob<void> logout() => run<Ready, void>((ctx) async {
+  Job<void> logout() => run<Ready, void>((ctx) async {
         await ctx.join(api.logout);
         await close();
       });

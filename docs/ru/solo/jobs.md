@@ -37,7 +37,7 @@ switch (await profile.load().done) {
 | `job.done` | Дождаться `Outcome<T>` без исключения. |
 | `job.outcome` | Прочитать исход синхронно; `null`, пока `Job` не закончилась. |
 | `job.cancel()` | Запросить отмену и дождаться завершения. |
-| `job.ignoreFailure()` | Пометить исход обработанным без ожидания. |
+| `job.ignoreFailure()` | Не сообщать об ошибке как о необработанной, когда исхода `Job` никто не ждёт. |
 | `job.whenCancelled(callback)` | Узнать об отмене в тот момент, когда `Job` её приняла, работает она или ещё стоит в очереди. |
 
 Ошибка `Job` не останавливает очередь. Ошибка передаётся обработчикам, после
@@ -69,7 +69,7 @@ final saving = job<Ready, void>(
 add(saving);
 
 // Либо всё сразу: так обычно и делает метод контроллера.
-SoloJob<void> setZoom(double zoom) => run<Ready, void>(
+Job<void> setZoom(double zoom) => run<Ready, void>(
       key: _Op.zoom,
       // Лениво и только для диагностики: строится, когда спросит лог.
       describe: () => 'zoom: $zoom',
@@ -80,7 +80,10 @@ SoloJob<void> setZoom(double zoom) => run<Ready, void>(
 `job`, `add` и `run` возвращают `SoloJob<T>`, который реализует `Job<T>`
 и добавляет `isQueued`. Все три защищённые, как и `collect` с `accumulate`:
 контроллер предоставляет предметные методы вроде `load()` или `setZoom()`,
-и вызывающий код видит их, а не члены, из которых они собраны.
+и вызывающий код видит их, а не члены, из которых они собраны. Предметный метод
+объявляет `Job<T>`, как `setZoom` выше: вызывающему коду этого хватает, чтобы
+дождаться результата или отменить `Job`. `SoloJob<T>` он объявляет только для
+вызывающего кода, который читает `isQueued`.
 
 Код этого раздела и следующих принадлежит одному контроллеру камеры,
 `Solo<CameraState>`. Два аргумента типа у `job` и `run` задают рабочий тип
@@ -101,25 +104,25 @@ SoloJob<void> setZoom(double zoom) => run<Ready, void>(
 
 ```dart
 // sequential, по умолчанию: одна за другой, в порядке обращения.
-SoloJob<void> save() =>
+Job<void> save() =>
     run<Ready, void>(key: _Op.save, (ctx) => ctx.join(store.save));
 
 // droppable: повторная загрузка того же профиля вернёт первую Job.
-SoloJob<Profile> load(String id) => run<Ready, Profile>(
+Job<Profile> load(String id) => run<Ready, Profile>(
       key: (_Op.load, id),
       policy: Policy.droppable,
       (ctx) => ctx.abandonable(() => api.load(id)),
     );
 
 // replace: ожидающий зум уходит, работающий остаётся нетронутым.
-SoloJob<void> setZoom(double zoom) => run<Ready, void>(
+Job<void> setZoom(double zoom) => run<Ready, void>(
       key: _Op.zoom,
       policy: Policy.replace,
       (ctx) => ctx.join(() => camera.zoom(zoom)),
     );
 
 // restart: то же самое, и работающую просят остановиться.
-SoloJob<void> seek(Duration position) => run<Ready, void>(
+Job<void> seek(Duration position) => run<Ready, void>(
       key: _Op.seek,
       policy: Policy.restart,
       (ctx) async {
@@ -172,7 +175,7 @@ SoloJob<void> seek(Duration position) => run<Ready, void>(
 #### Первая попытка
 
 ```dart
-SoloJob<Profile> load(String id) => run<Ready, Profile>(
+Job<Profile> load(String id) => run<Ready, Profile>(
       key: _Op.load,
       policy: Policy.droppable,
       (ctx) => ctx.abandonable(() => api.load(id)),
@@ -189,7 +192,7 @@ SoloJob<Profile> load(String id) => run<Ready, Profile>(
 #### Ключ-запись
 
 ```dart
-SoloJob<Profile> load(String id) => run<Ready, Profile>(
+Job<Profile> load(String id) => run<Ready, Profile>(
       key: (_Op.load, id),
       policy: Policy.droppable,
       (ctx) => ctx.abandonable(() => api.load(id)),
@@ -211,7 +214,7 @@ SoloJob<Profile> load(String id) => run<Ready, Profile>(
 ```dart
 int duplicates = 0;
 
-SoloJob<Profile> load(String id) {
+Job<Profile> load(String id) {
   final mine = job<Ready, Profile>(
     key: (_Op.load, id),
     (ctx) => ctx.abandonable(() => api.load(id)),
@@ -242,7 +245,7 @@ SoloJob<Profile> load(String id) {
 Сама очередь принадлежит контроллеру, и метод может работать с ней напрямую:
 
 ```dart
-SoloJob<void> stop() {
+Job<void> stop() {
   // Что ждёт прямо сейчас.
   print(queue.length);
   // Убрать то, что эта команда обесценила...

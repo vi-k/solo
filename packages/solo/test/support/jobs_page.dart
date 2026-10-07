@@ -32,7 +32,7 @@ final class Assembling extends Solo<CameraState>
   Assembling() : super(const Ready());
 
   /// The two steps of the page; the job they make is handed back.
-  SoloJob<void> saveInTwoSteps() {
+  Job<void> saveInTwoSteps() {
     // Assembled now, queued after: two steps, for a job to hold on to.
     final saving = job<Ready, void>(
       key: _Op.save,
@@ -43,7 +43,7 @@ final class Assembling extends Solo<CameraState>
   }
 
   // Or both at once, which is what a controller method normally does.
-  SoloJob<void> setZoom(double zoom) => run<Ready, void>(
+  Job<void> setZoom(double zoom) => run<Ready, void>(
         key: _Op.zoom,
         // Lazy, and only for diagnostics: built when a log asks for it.
         describe: () => 'zoom: $zoom',
@@ -57,25 +57,25 @@ final class CameraController extends Solo<CameraState>
   CameraController([super.initialState = const Ready()]);
 
   // sequential, the default: one after another, in the order asked for.
-  SoloJob<void> save() =>
+  Job<void> save() =>
       run<Ready, void>(key: _Op.save, (ctx) => ctx.join(store.save));
 
   // droppable: a second load of the same profile returns the first job.
-  SoloJob<Profile> load(String id) => run<Ready, Profile>(
+  Job<Profile> load(String id) => run<Ready, Profile>(
         key: (_Op.load, id),
         policy: Policy.droppable,
         (ctx) => ctx.abandonable(() => api.load(id)),
       );
 
   // replace: the queued zoom goes, a running one is left alone.
-  SoloJob<void> setZoom(double zoom) => run<Ready, void>(
+  Job<void> setZoom(double zoom) => run<Ready, void>(
         key: _Op.zoom,
         policy: Policy.replace,
         (ctx) => ctx.join(() => camera.zoom(zoom)),
       );
 
   // restart: the same, and the running one is asked to stop as well.
-  SoloJob<void> seek(Duration position) => run<Ready, void>(
+  Job<void> seek(Duration position) => run<Ready, void>(
         key: _Op.seek,
         policy: Policy.restart,
         (ctx) async {
@@ -88,27 +88,27 @@ final class CameraController extends Solo<CameraState>
 
   /// Not on the page: the seek the page warns about, a `join` around a call
   /// the request cannot reach.
-  SoloJob<void> seekWithoutToken(Duration position) => run<Ready, void>(
+  Job<void> seekWithoutToken(Duration position) => run<Ready, void>(
         key: _Op.seek,
         policy: Policy.restart,
         (ctx) => ctx.join(() => camera.seek(position)),
       );
 
   /// Not on the page: the other way in the page names, `ctx.abandonable`.
-  SoloJob<void> seekLetGo(Duration position) => run<Ready, void>(
+  Job<void> seekLetGo(Duration position) => run<Ready, void>(
         key: _Op.seek,
         policy: Policy.restart,
         (ctx) => ctx.abandonable(() => camera.seek(position)),
       );
 
   /// Not on the page: a seek that refuses to be cancelled.
-  SoloJob<void> seekToTheEnd(Duration position) => run<Ready, void>(
+  Job<void> seekToTheEnd(Duration position) => run<Ready, void>(
         key: _Op.seek,
         cancellable: false,
         (ctx) => ctx.join(() => camera.seek(position)),
       );
 
-  SoloJob<void> stop() {
+  Job<void> stop() {
     // What is waiting right now.
     print(queue.length);
     // Drop what this command makes pointless...
@@ -158,7 +158,7 @@ final class CountingController extends Solo<CameraState>
 
   int duplicates = 0;
 
-  SoloJob<Profile> load(String id) {
+  Job<Profile> load(String id) {
     final mine = job<Ready, Profile>(
       key: (_Op.load, id),
       (ctx) => ctx.abandonable(() => api.load(id)),

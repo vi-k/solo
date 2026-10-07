@@ -39,7 +39,7 @@ error and stack trace, `Cancelled` the cancellation reason.
 | `job.done` | Await an `Outcome<T>` without throwing. |
 | `job.outcome` | Read the outcome synchronously; `null` until the job has finished. |
 | `job.cancel()` | Request cancellation and wait for completion. |
-| `job.ignoreFailure()` | Mark the outcome as handled without waiting. |
+| `job.ignoreFailure()` | Keep the failure of a job nobody awaits from being reported as unhandled. |
 | `job.whenCancelled(callback)` | Hear the cancellation the moment the job accepts it, running or still queued. |
 
 A failed job does not stop the queue. Its error is reported and the next job
@@ -70,7 +70,7 @@ final saving = job<Ready, void>(
 add(saving);
 
 // Or both at once, which is what a controller method normally does.
-SoloJob<void> setZoom(double zoom) => run<Ready, void>(
+Job<void> setZoom(double zoom) => run<Ready, void>(
       key: _Op.zoom,
       // Lazy, and only for diagnostics: built when a log asks for it.
       describe: () => 'zoom: $zoom',
@@ -81,7 +81,10 @@ SoloJob<void> setZoom(double zoom) => run<Ready, void>(
 `job`, `add` and `run` all return `SoloJob<T>`, which implements `Job<T>` and
 adds `isQueued`. All three are protected, as are `collect` and `accumulate`: a
 controller exposes domain methods such as `load()` or `setZoom()`, and callers
-see those, not the members they are built from.
+see those, not the members they are built from. A domain method declares
+`Job<T>`, as `setZoom` above does: that is all its caller needs to await the
+result or cancel the job. It declares `SoloJob<T>` only for a caller that reads
+`isQueued`.
 
 The code of this section and of the ones below belongs to one controller of a
 camera, a `Solo<CameraState>`. The two type arguments of `job` and `run` are
@@ -102,25 +105,25 @@ still queued or running, the policy decides which of the two survives:
 
 ```dart
 // sequential, the default: one after another, in the order asked for.
-SoloJob<void> save() =>
+Job<void> save() =>
     run<Ready, void>(key: _Op.save, (ctx) => ctx.join(store.save));
 
 // droppable: a second load of the same profile returns the first job.
-SoloJob<Profile> load(String id) => run<Ready, Profile>(
+Job<Profile> load(String id) => run<Ready, Profile>(
       key: (_Op.load, id),
       policy: Policy.droppable,
       (ctx) => ctx.abandonable(() => api.load(id)),
     );
 
 // replace: the queued zoom goes, a running one is left alone.
-SoloJob<void> setZoom(double zoom) => run<Ready, void>(
+Job<void> setZoom(double zoom) => run<Ready, void>(
       key: _Op.zoom,
       policy: Policy.replace,
       (ctx) => ctx.join(() => camera.zoom(zoom)),
     );
 
 // restart: the same, and the running one is asked to stop as well.
-SoloJob<void> seek(Duration position) => run<Ready, void>(
+Job<void> seek(Duration position) => run<Ready, void>(
       key: _Op.seek,
       policy: Policy.restart,
       (ctx) async {
@@ -173,7 +176,7 @@ profile should get that one.
 #### The first attempt
 
 ```dart
-SoloJob<Profile> load(String id) => run<Ready, Profile>(
+Job<Profile> load(String id) => run<Ready, Profile>(
       key: _Op.load,
       policy: Policy.droppable,
       (ctx) => ctx.abandonable(() => api.load(id)),
@@ -190,7 +193,7 @@ profile, and no request for Grace's is made.
 #### The record key
 
 ```dart
-SoloJob<Profile> load(String id) => run<Ready, Profile>(
+Job<Profile> load(String id) => run<Ready, Profile>(
       key: (_Op.load, id),
       policy: Policy.droppable,
       (ctx) => ctx.abandonable(() => api.load(id)),
@@ -211,7 +214,7 @@ know assembles the job first and compares it with what `add` gives back:
 ```dart
 int duplicates = 0;
 
-SoloJob<Profile> load(String id) {
+Job<Profile> load(String id) {
   final mine = job<Ready, Profile>(
     key: (_Op.load, id),
     (ctx) => ctx.abandonable(() => api.load(id)),
@@ -241,7 +244,7 @@ both checks work in release builds.
 The queue itself is the controller's own, and a method can work it directly:
 
 ```dart
-SoloJob<void> stop() {
+Job<void> stop() {
   // What is waiting right now.
   print(queue.length);
   // Drop what this command makes pointless...

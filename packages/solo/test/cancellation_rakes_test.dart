@@ -3109,3 +3109,9 @@ void main() {
     });
   });
 }
+
+extension on Job<Object?> {
+  /// The methods of the page declare `Job<T>`; whether the job still waits
+  /// in the queue is on the `SoloJob<T>` the controller made.
+  bool get isQueued => (this as SoloJob<Object?>).isQueued;
+}

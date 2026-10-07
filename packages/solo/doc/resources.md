@@ -53,7 +53,7 @@ point, it must leave no database open.
 ### The first attempt
 
 ```dart
-SoloJob<void> load() => run<Idle, void>(
+Job<void> load() => run<Idle, void>(
       key: 'load',
       (ctx) async {
         final db = await ctx.join(Database.open);
@@ -79,7 +79,7 @@ empty: nothing in this job knows that a database exists.
 ### The release travels with the call
 
 ```dart
-SoloJob<void> load() => run<Idle, void>(
+Job<void> load() => run<Idle, void>(
       key: 'load',
       (ctx) async {
         final db = await ctx.join(
@@ -138,7 +138,7 @@ then on.
 ### The first attempt
 
 ```dart
-SoloJob<Database> open() => run<Idle, Database>(
+Job<Database> open() => run<Idle, Database>(
       key: 'open',
       (ctx) async {
         final db = await ctx.join(
@@ -164,7 +164,7 @@ database, and only a test that uses the result afterwards sees it.
 ### Discard, for a value that leaves
 
 ```dart
-SoloJob<Database> open() => run<Idle, Database>(
+Job<Database> open() => run<Idle, Database>(
       key: 'open',
       (ctx) async {
         final db = await ctx.join(

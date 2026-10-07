@@ -33,7 +33,7 @@ final class Search extends Solo<SearchState> {
 
   Search(this.api) : super(const SearchState.idle());
 
-  SoloJob<void> query(String text) => _queries.add(text);
+  Job<void> query(String text) => _queries.add(text);
 }
 
 class Settings {
@@ -93,9 +93,9 @@ final class SettingsController extends Solo<Settings> {
 
   SettingsController(this._api, Settings initial) : super(initial);
 
-  SoloJob<void> update(SettingsPatch patch) => _updates.add(patch);
+  Job<void> update(SettingsPatch patch) => _updates.add(patch);
 
-  SoloJob<void> reload() => run<Settings, void>(
+  Job<void> reload() => run<Settings, void>(
         key: 'reload',
         (ctx) async => ctx.emit(await ctx.abandonable(_api.load)),
       );
@@ -142,7 +142,7 @@ final class LogController extends Solo<int> {
 
   LogController(this._api) : super(0);
 
-  SoloJob<void> logEvent(LogEntry entry) => _logs.add(entry);
+  Job<void> logEvent(LogEntry entry) => _logs.add(entry);
 }
 
 enum Command { resume, pause }
@@ -186,9 +186,9 @@ final class Player extends Solo<Playback> {
 
   Player(this.device) : super(const Paused());
 
-  SoloJob<void> resume() => _transport.add(Command.resume);
+  Job<void> resume() => _transport.add(Command.resume);
 
-  SoloJob<void> pause() => _transport.add(Command.pause);
+  Job<void> pause() => _transport.add(Command.pause);
 }
 
 /// Not on the page: [Player] with a job of another kind for a test to put
@@ -199,14 +199,14 @@ final class BusyPlayer extends Player {
 
   BusyPlayer(super.device, this.note);
 
-  SoloJob<void> busy() => run<Playback, void>(
+  Job<void> busy() => run<Playback, void>(
         key: 'busy',
         (ctx) => ctx.abandonable(
           () => Future<void>.delayed(const Duration(milliseconds: 50)),
         ),
       );
 
-  SoloJob<void> chime() => run<Playback, void>(
+  Job<void> chime() => run<Playback, void>(
         key: 'chime',
         (ctx) async => note('chime'),
       );
@@ -220,7 +220,7 @@ final class Transport extends Solo<Playback> {
 
   Transport(this.device) : super(const Paused());
 
-  SoloJob<void> resume() {
+  Job<void> resume() {
     queue.removeWhere(
       (job) => job.key == Command.resume || job.key == Command.pause,
     );
@@ -232,7 +232,7 @@ final class Transport extends Solo<Playback> {
   }
 
   /// Not on the page.
-  SoloJob<void> pause({bool cancellable = true}) => run<Playback, void>(
+  Job<void> pause({bool cancellable = true}) => run<Playback, void>(
         key: Command.pause,
         cancellable: cancellable,
         (ctx) async {
@@ -242,7 +242,7 @@ final class Transport extends Solo<Playback> {
       );
 
   /// Not on the page: a job of another kind, 50 ms long.
-  SoloJob<void> chime() => run<Playback, void>(
+  Job<void> chime() => run<Playback, void>(
         key: 'chime',
         (ctx) => ctx.join(
           () => Future<void>.delayed(const Duration(milliseconds: 50)),
@@ -261,7 +261,7 @@ final class Transport extends Solo<Playback> {
 
 /// "Choosing where events join": the three lines of the page, and the two
 /// handles they made.
-List<SoloJob<void>> threeCalls(SettingsController settings) {
+List<Job<void>> threeCalls(SettingsController settings) {
   // Three calls in a row: the queue takes nothing between them. Where A2
   // lands is the policy's decision.
   final a1 = settings.update(const SettingsPatch(theme: 'dark'));

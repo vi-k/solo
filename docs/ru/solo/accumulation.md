@@ -57,7 +57,7 @@ final class QueuedSearch extends Solo<SearchState> {
 
   QueuedSearch(this.api) : super(const SearchState.idle());
 
-  SoloJob<void> query(String text) => run<SearchState, void>(
+  Job<void> query(String text) => run<SearchState, void>(
         key: 'query',
         (ctx) async {
           final results = await ctx.abandonable(() => api.search(text));
@@ -90,7 +90,7 @@ at 400 ms the screen shows [hits for solo]
 только метод:
 
 ```dart
-SoloJob<void> query(String text) => run<SearchState, void>(
+Job<void> query(String text) => run<SearchState, void>(
       key: 'query',
       policy: Policy.restart,
       (ctx) async {
@@ -130,7 +130,7 @@ final class Search extends Solo<SearchState> {
 
   Search(this.api) : super(const SearchState.idle());
 
-  SoloJob<void> query(String text) => _queries.add(text);
+  Job<void> query(String text) => _queries.add(text);
 }
 ```
 
@@ -218,7 +218,7 @@ final class EagerSettingsController extends Solo<Settings> {
 
   EagerSettingsController(this._api, Settings initial) : super(initial);
 
-  SoloJob<void> update(SettingsPatch patch) => run<Settings, void>(
+  Job<void> update(SettingsPatch patch) => run<Settings, void>(
         key: 'settings',
         (ctx) async {
           final next = patch.apply(ctx.state);
@@ -251,7 +251,7 @@ the screen ends up with notifications: true, theme: dark, language: ru
 остановиться ту, что идёт. Меняется только метод:
 
 ```dart
-SoloJob<void> update(SettingsPatch patch) => run<Settings, void>(
+Job<void> update(SettingsPatch patch) => run<Settings, void>(
       key: 'settings',
       policy: Policy.restart,
       (ctx) async {
@@ -296,9 +296,9 @@ final class SettingsController extends Solo<Settings> {
 
   SettingsController(this._api, Settings initial) : super(initial);
 
-  SoloJob<void> update(SettingsPatch patch) => _updates.add(patch);
+  Job<void> update(SettingsPatch patch) => _updates.add(patch);
 
-  SoloJob<void> reload() => run<Settings, void>(
+  Job<void> reload() => run<Settings, void>(
         key: 'reload',
         (ctx) async => ctx.emit(await ctx.abandonable(_api.load)),
       );
@@ -408,7 +408,7 @@ final class EagerLogController extends Solo<int> {
 
   EagerLogController(this._api) : super(0);
 
-  SoloJob<void> logEvent(LogEntry entry) => run<int, void>(
+  Job<void> logEvent(LogEntry entry) => run<int, void>(
         key: 'logs',
         (ctx) async {
           await ctx.join(() => _api.send([entry]));
@@ -459,7 +459,7 @@ final class LogController extends Solo<int> {
 
   LogController(this._api) : super(0);
 
-  SoloJob<void> logEvent(LogEntry entry) => _logs.add(entry);
+  Job<void> logEvent(LogEntry entry) => _logs.add(entry);
 }
 ```
 
@@ -477,9 +477,9 @@ the counter says 4
 
 Буфер, который вы держите сами, тоже собрал бы их в пачку. `collect` добавляет
 к этому то, что буфер и есть вход задачи: события запечатываются в группу,
-которую берёт очередь, вызывающий получает ту же `SoloJob`, что и все
-добавлявшие в эту группу, а `close()` сбрасывает группу вместо того, чтобы
-оставить после себя список и таймер.
+которую берёт очередь, вызывающий получает ту же `Job`, что и все добавлявшие
+в эту группу, а `close()` сбрасывает группу вместо того, чтобы оставить после
+себя список и таймер.
 
 Состояние этого контроллера считает записи, отправка которых завершилась,
 а обработчик дошёл до `emit`. Раздел
@@ -534,7 +534,7 @@ final class QueuedPlayer extends Solo<Playback> {
 
   QueuedPlayer(this.device) : super(const Paused());
 
-  SoloJob<void> resume() => run<Playback, void>(
+  Job<void> resume() => run<Playback, void>(
         key: Command.resume,
         (ctx) async {
           await ctx.join(device.resume);
@@ -542,7 +542,7 @@ final class QueuedPlayer extends Solo<Playback> {
         },
       );
 
-  SoloJob<void> pause() => run<Playback, void>(
+  Job<void> pause() => run<Playback, void>(
         key: Command.pause,
         (ctx) async {
           await ctx.join(device.pause);
@@ -598,9 +598,9 @@ final class Player extends Solo<Playback> {
 
   Player(this.device) : super(const Paused());
 
-  SoloJob<void> resume() => _transport.add(Command.resume);
+  Job<void> resume() => _transport.add(Command.resume);
 
-  SoloJob<void> pause() => _transport.add(Command.pause);
+  Job<void> pause() => _transport.add(Command.pause);
 }
 ```
 
@@ -635,7 +635,7 @@ the player settles Playing at 100 ms
 Убирает их собственная очередь контроллера:
 
 ```dart
-SoloJob<void> resume() {
+Job<void> resume() {
   queue.removeWhere(
     (job) => job.key == Command.resume || job.key == Command.pause,
   );
@@ -844,7 +844,7 @@ cancelled: manual
 событий, когда её запечатывает debounce или когда очередь её берёт,
 до `canStart` и `onStart`. События из этих колбэков идут в последующую группу.
 Обработчик выполняется с заданным рабочим типом и правилами, а задача группы
-во всём остальном для очереди обычная `SoloJob`.
+во всём остальном для очереди обычная `Job`.
 
 До первого события накопитель не создаёт задач. Без `timing`, если каждая
 группа завершается до прихода следующего события, каждое событие запускает
