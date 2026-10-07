@@ -634,8 +634,8 @@ final class RefreshController extends Solo<RefreshState> {
   Job<void> refresh() => run<RefreshState, void>(
         key: 'refresh',
         policy: Policy.restart,
-        onError: (state, error, stackTrace) => const Initial(),
-        onCancel: (state, cancelled) => const Initial(),
+        ifFailed: (state, error, stackTrace) => const Initial(),
+        ifCancelled: (state, cancelled) => const Initial(),
         (ctx) async {
           ctx.emit(const Loading());
           await ctx.abandonable(_api.refresh);
@@ -664,9 +664,9 @@ nothing to cancel.
 job, so it answers with the queued refresh when one is waiting. That order is
 the one this method needs: a refresh can only be queued behind another because
 a second `refresh()` was called, and `Policy.restart` cancelled the running one
-at that moment. `ctx.abandonable` ends the wait for the API, and `onCancel`
+at that moment. `ctx.abandonable` ends the wait for the API, and `ifCancelled`
 returns `Initial` before the queue proceeds. A successful refresh publishes
-`Initial` from the body; `onError` resets the indicator on failure while the
+`Initial` from the body; `ifFailed` resets the indicator on failure while the
 job still reports `Failed`.
 
 The timing differs: bloc's cancel-event handler updates state when it runs,
@@ -1427,7 +1427,7 @@ from a screen, a closing controller.
 
 The body publishes `Paid` before completing with the receipt, and `close()`
 waits for that completion. API failures still produce `Failed`; a failure state
-can be supplied with `run(onError: ...)`. No waiting method could retract a
+can be supplied with `run(ifFailed: ...)`. No waiting method could retract a
 charge anyway: this API provides no cancellation mechanism.
 
 The flag also refuses manual cancellation while the payment is queued. If users
@@ -1572,7 +1572,7 @@ requiring the working type to cover continued work.
 The build already in progress still finishes in both examples. `join` waits for
 it before allowing another root job to start. Work that can be stopped can
 additionally be reached through `ctx.onCancel`, as in section 5. Final
-`onError` and `onCancel` state handlers, if supplied, are disabled by an
+`ifFailed` and `ifCancelled` state handlers, if supplied, are disabled by an
 incompatible external update, so they do not overwrite `SignedOut` during
 cleanup.
 

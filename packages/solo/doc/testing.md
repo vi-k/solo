@@ -15,8 +15,8 @@ final class ProfileController extends Solo<ProfileState> {
   Job<String> load() => run<ProfileState, String>(
         key: 'load',
         policy: Policy.droppable,
-        onError: (state, error, stackTrace) => Failure(error),
-        onCancel: (state, cancelled) => const Initial(),
+        ifFailed: (state, error, stackTrace) => Failure(error),
+        ifCancelled: (state, cancelled) => const Initial(),
         (ctx) async {
           ctx.emit(const Loading());
           final name = await ctx.abandonable(api.fetchName);
@@ -27,8 +27,8 @@ final class ProfileController extends Solo<ProfileState> {
 }
 ```
 
-`onError` and `onCancel` are the state handlers of `load`: the first turns a
-failure into `Failure`, the second puts the state back to `Initial`.
+`ifFailed` and `ifCancelled` are the state handlers of `load`: the first turns
+a failure into `Failure`, the second puts the state back to `Initial`.
 `key: 'load'` with `Policy.droppable` is what makes a second call join the load
 already in flight. The tests below read all three. The API the controller calls
 is faked: twenty milliseconds after the call it answers with the name, or
@@ -147,9 +147,9 @@ test('a cancelled load ends Cancelled', () async {
 line below it. `done` hands it over like any other, while `value` would throw
 it — a test expecting a cancellation would be reading it out of a `throwsA`.
 `started: false` is why the state is untouched here: the job was still in the
-queue, its body never ran, and its `onCancel` handler was not called at all. A
-load cancelled while it runs ends `Cancelled` as well, with `started: true`,
-and the state it ends in is the one its `onCancel` handler published.
+queue, its body never ran, and its `ifCancelled` handler was not called at all.
+A load cancelled while it runs ends `Cancelled` as well, with `started: true`,
+and the state it ends in is the one its `ifCancelled` handler published.
 
 ## Closing the controller
 
@@ -174,8 +174,8 @@ test('load fills in the name', () async {
 here never leaves the queue: both lines run in the same turn, so `close` drops
 it with `Cancelled(closed)` before the body starts, and the state is still the
 one the controller was built with. A load that had started would end the same
-way, cancelled where it was waiting, and its `onCancel` handler would publish
-`Initial` over the `Loading` its body had emitted.
+way, cancelled where it was waiting, and its `ifCancelled` handler would
+publish `Initial` over the `Loading` its body had emitted.
 
 ### Letting the work finish
 
@@ -341,13 +341,13 @@ The test is right that a duplicate was dropped and wrong about the case its
 name describes: nothing was running.
 
 That first line is the `onFinish` of the dropped job, and the only line it ever
-gets: its body never ran, so there was no `onStart` for it, and its `onCancel`
-handler was not called either — which is why no state of its own stands next to
-it. The key in the line is the key the policy matched on, the same `load` the
-other job carries, so it is the outcome that tells the two apart. In that
-outcome `duplicate` is the reason, a `DuplicateCancelReason`, which
-`Policy.droppable` gives to the job it drops; a `cancel()` from outside says
-`manual` in the same place.
+gets: its body never ran, so there was no `onStart` for it, and its
+`ifCancelled` handler was not called either — which is why no state of its own
+stands next to it. The key in the line is the key the policy matched on, the
+same `load` the other job carries, so it is the outcome that tells the two
+apart. In that outcome `duplicate` is the reason, a `DuplicateCancelReason`,
+which `Policy.droppable` gives to the job it drops; a `cancel()` from outside
+says `manual` in the same place.
 
 ### Letting the first job start
 
@@ -450,7 +450,7 @@ expect('${job.outcome}', 'Cancelled(manual)');
 
 The job accepts the cancellation inside the call, and the outcome is still a
 few microtasks away: the body has to leave its `abandonable` call, and the
-`onCancel` handler has to run. On the line under the call the outcome is
+`ifCancelled` handler has to run. On the line under the call the outcome is
 `null`, and one `flushMicrotasks()` carries it to `Cancelled`. The first
 `flushMicrotasks()` is the one from the section above — it lets the load leave
 the queue, so what gets cancelled is a load that is running; one still in the
@@ -676,8 +676,8 @@ test('connect gives up after five seconds', () {
 ```
 
 `connect()` gives `run` no state handlers, so the state stays `Idle`. A `run`
-with `onCancel` gets the deadline there, not in `onError`. The timer the core
-keeps for it is gone as soon as the job ends: `async.pendingTimers` is empty
-after the five seconds.
+with `ifCancelled` gets the deadline there, not in `ifFailed`. The timer the
+core keeps for it is gone as soon as the job ends: `async.pendingTimers` is
+empty after the five seconds.
 [A deadline of a job](cancellation.md#a-deadline-of-a-job) on the cancellation
 page tells a deadline from the other cancellations in that handler.

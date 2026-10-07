@@ -22,6 +22,18 @@ entries of the first group name them.
   the analyzer names every such call. `ignore()` on a future stays. See
   [the `async_job` changelog](https://github.com/vi-k/solo/blob/main/packages/async_job/CHANGELOG.md).
 
+- **The state handlers of `run` and `job` are renamed: `onError` to `ifFailed`,
+  `onCancel` to `ifCancelled`**, with no deprecated alias. The old names were
+  also those of the controller's `onError` hook and of `ctx.onCancel`, which do
+  other things at other moments. **Migrating.** Rename the two arguments
+  wherever `run` or `job` is called —
+  `onError: (state, error, stackTrace) => Failure(error)` becomes
+  `ifFailed: (state, error, stackTrace) => Failure(error)`,
+  `onCancel: (state, cancelled) => const Initial()` becomes
+  `ifCancelled: (state, cancelled) => const Initial()`; the analyzer names
+  every such call. The hooks `Solo.onError` and `SoloObserver.onError` and
+  `ctx.onCancel` keep their names.
+
 - **`SoloBase` is renamed to `Solo`, and the former `Solo` — the class that
   carried the broadcast stream — becomes the mixin `SoloStream`.** `Solo` is
   the class every controller extends, and a stream is part of the controllers
@@ -69,10 +81,11 @@ entries of the first group name them.
   job that had lost the state, no `keepWhile` check, and the whole of `S`
   instead of the job's working type `W`. Under the new name that mistake is a
   compile error. Reads through the context, the `state` parameters of
-  `canStart`, `keepWhile`, `onError` and `onCancel`, and `externalSetState` are
-  unchanged. No deprecated alias is kept: one that still compiled inside a body
-  would leave the hole open. **Migrating.** Outside a body, `controller.state`
-  becomes `controller.currentState`; inside one, read `ctx.state`. See
+  `canStart`, `keepWhile`, `ifFailed` and `ifCancelled`, and `externalSetState`
+  are unchanged. No deprecated alias is kept: one that still compiled inside a
+  body would leave the hole open. **Migrating.** Outside a body,
+  `controller.state` becomes `controller.currentState`; inside one, read
+  `ctx.state`. See
   [Why `currentState` and not `state`](README.md#why-currentstate-and-not-state).
 
 - **`Solo.onError` is a notice, and the new `Solo.onUnanswered` answers for an
@@ -134,7 +147,7 @@ entries of the first group name them.
   to, `null` for an `externalSetState`, and a child rather than the root it
   belongs to — and `revision`, which grows by one per change and orders two
   transitions even when a hook changed the state again from inside the first. A
-  state returned by a job's `onError` or `onCancel` handler is that job's
+  state returned by a job's `ifFailed` or `ifCancelled` handler is that job's
   change as well. **Migrating.** `previous` becomes `transition.previous`,
   `current` becomes `transition.current`.
 
@@ -244,8 +257,8 @@ entries of the first group name them.
   ordinary job body. A cancellation that travels inside a `ParallelWaitError`
   is a cancellation again: a child cancelled under
   `[ctx.run(a), ctx.run(b)].wait` ends the job `Cancelled` where it used to end
-  it `Failed`, so the job's `onCancel` handler takes the outcome instead of
-  `onError`, `job.value` throws the `Cancelled`, and a
+  it `Failed`, so the job's `ifCancelled` handler takes the outcome instead of
+  `ifFailed`, `job.value` throws the `Cancelled`, and a
   `catch (ParallelWaitError)` around it no longer runs. `JobContext` gains
   `runAll`, and an extension of that name on `JobContext` is shadowed by it.
   `ctx.run` takes `dispose` and `discard`: no call site breaks, but a
@@ -311,10 +324,10 @@ cancelled is taken where the rules noticed; `Solo.traceStateChanges`, under
   start of the body, so time in the queue and the window of a `collect` or an
   `accumulate` do not count, and for an accumulator it is a deadline of each
   job it queues. When it runs out, the job ends `Cancelled(timeout)` with the
-  new `TimeoutCancelReason` of `async_job`: `onCancel` takes it, `onError` does
-  not, and the queue is not cleared, so the next job starts once this one has
-  cleaned up. A `Policy.droppable` call that finds a live job returns it, and
-  the `timeout` of the call is lost with the rest of it. A deadline that is
+  new `TimeoutCancelReason` of `async_job`: `ifCancelled` takes it, `ifFailed`
+  does not, and the queue is not cleared, so the next job starts once this one
+  has cleaned up. A `Policy.droppable` call that finds a live job returns it,
+  and the `timeout` of the call is lost with the rest of it. A deadline that is
   zero or negative, or that comes with `cancellable: false`, throws
   `ArgumentError` at the call; for an accumulator, when it is created, which
   for a `late final` field is its first read. See
@@ -452,8 +465,8 @@ cancelled is taken where the rules noticed; `Solo.traceStateChanges`, under
   close modes, and a callback that can still arrive after that guards its write
   with `isFinished`.
 - The runnable camera example lands a failed or cancelled opening in `Broken`
-  through the `onError` and `onCancel` of `run`. `init` and `reopen` used to
-  land a failure from a `catch` in the body, which a cancellation never
+  through the `ifFailed` and `ifCancelled` of `run`. `init` and `reopen` used
+  to land a failure from a `catch` in the body, which a cancellation never
   reaches: an opening cancelled half way left the camera in `Preparing`, where
   neither of them could start again.
 

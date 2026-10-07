@@ -22,8 +22,8 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   /// for as long as anyone holds this handle. A handle is held exactly to
   /// be read later.
   Future<T> Function(SoloContext<S, W> ctx)? _body;
-  S Function(S, Object, StackTrace)? _onError;
-  S Function(S, Cancelled)? _onCancel;
+  S Function(S, Object, StackTrace)? _ifFailed;
+  S Function(S, Cancelled)? _ifCancelled;
 
   /// The rules outlive the job on purpose: a context that leaked out of a
   /// body reads the state through them long after the outcome, and the
@@ -56,14 +56,14 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     required super.timeout,
     required super.describe,
     required super.observer,
-    S Function(S, Object, StackTrace)? onError,
-    S Function(S, Cancelled)? onCancel,
+    S Function(S, Object, StackTrace)? ifFailed,
+    S Function(S, Cancelled)? ifCancelled,
   })  : _body = body,
         _canStart = canStart,
         _keepWhile = keepWhile,
-        _onError = onError,
-        _onCancel = onCancel,
-        _hasStateHandlers = onError != null || onCancel != null;
+        _ifFailed = ifFailed,
+        _ifCancelled = ifCancelled,
+        _hasStateHandlers = ifFailed != null || ifCancelled != null;
 
   @override
   bool get isQueued => _solo._queue._jobs.contains(this);
@@ -193,8 +193,8 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
       // parent through `_mayCorrectState`, and the line above takes this
       // job out of `_running` and out of `_current`.
       _body = null;
-      _onError = null;
-      _onCancel = null;
+      _ifFailed = null;
+      _ifCancelled = null;
       _parentJob = null;
     }
   }
@@ -222,11 +222,11 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     final S next;
     switch (outcome) {
       case Failed(:final error, :final stackTrace):
-        final handler = _onError;
+        final handler = _ifFailed;
         if (handler == null) return;
         next = handler(_solo._state, error, stackTrace);
       case final Cancelled cancelled:
-        final handler = _onCancel;
+        final handler = _ifCancelled;
         if (handler == null) return;
         next = handler(_solo._state, cancelled);
       default:

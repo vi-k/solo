@@ -118,12 +118,7 @@ Job<void> seek(Duration position) => run<Ready, void>(
 [«Спросить задачу»](../async_job/cancellation.md#спросить-задачу) страницы
 об отмене пакета `async_job`.
 
-`ctx.onCancel` возвращает функцию удаления колбэка. У `run` есть параметр
-с тем же именем, `onCancel`, и занят он другим: как обработчик состояния он
-вычисляет состояние, в котором контроллер останется, когда отменённая `Job`
-закончит уборку. О нём говорит раздел
-[«Состояние после ошибки или отмены»](state.md#состояние-после-ошибки-или-отмены)
-страницы о состоянии.
+`ctx.onCancel` возвращает функцию удаления колбэка.
 
 ## Защита шага или всей задачи
 
@@ -357,7 +352,7 @@ Job<void> seek(Duration position) => run<Ready, void>(
       key: 'seek',
       policy: Policy.restart,
       timeout: const Duration(seconds: 2),
-      onCancel: (state, cancelled) =>
+      ifCancelled: (state, cancelled) =>
           cancelled.reason is TimeoutCancelReason ? const Offline() : state,
       (ctx) async {
         final token = CancelToken();
@@ -377,12 +372,12 @@ Job<void> seek(Duration position) => run<Ready, void>(
 
 Вышедший срок отличается от `TimeoutException`, который бросает
 `Future.timeout`. С `.timeout(...)` на вызове `_player.seek` исключение
-бросается в тело, задача кончается `Failed`, и состояние отображает `onError:`
+бросается в тело, задача кончается `Failed`, и состояние отображает `ifFailed:`
 у `run`. `timeout:` у `run` кончает задачу `Cancelled`, поэтому состояние
-отображает `onCancel:`, а `onError:` не вызывается. `onCancel:` получает любую
-отмену, и обработчик, которому надо отличить срок от проскоченной перемотки,
-ветвится по причине, как тот, что выше. `value` такой задачи бросает этот
-`Cancelled`, и ветка `on TimeoutException` вокруг него ничего не ловит.
+отображает `ifCancelled:`, а `ifFailed:` не вызывается. `ifCancelled:` получает
+любую отмену, и обработчик, которому надо отличить срок от проскоченной
+перемотки, ветвится по причине, как тот, что выше. `value` такой задачи бросает
+этот `Cancelled`, и ветка `on TimeoutException` вокруг него ничего не ловит.
 
 Срок считается от старта тела, а не от вызова: время, которое задача ждёт
 в очереди, не считается, как и окно `collect` или `accumulate`, у которых срок

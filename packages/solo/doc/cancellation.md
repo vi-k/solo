@@ -116,11 +116,7 @@ cancellation comes out instead of the player's error:
 [Asking the job](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cancellation.md#asking-the-job)
 on the cancellation page of `async_job` has that `catch`.
 
-`ctx.onCancel` returns a function that unregisters the callback. Its namesake,
-the `onCancel` parameter of `run`, is a state handler: it computes the state
-the controller is left in once the cancelled job has cleaned up.
-[State after failure or cancellation](state.md#state-after-failure-or-cancellation)
-on the state page is about it.
+`ctx.onCancel` returns a function that unregisters the callback.
 
 ## Protecting a step or a whole job
 
@@ -354,7 +350,7 @@ Job<void> seek(Duration position) => run<Ready, void>(
       key: 'seek',
       policy: Policy.restart,
       timeout: const Duration(seconds: 2),
-      onCancel: (state, cancelled) =>
+      ifCancelled: (state, cancelled) =>
           cancelled.reason is TimeoutCancelReason ? const Offline() : state,
       (ctx) async {
         final token = CancelToken();
@@ -374,9 +370,9 @@ on the cancellation page of `async_job` takes it apart.
 
 A deadline that runs out is not the `TimeoutException` of `Future.timeout`.
 With `.timeout(...)` on the call of `_player.seek` the exception is thrown into
-the body, the job ends `Failed`, and it is the `onError:` of `run` that maps
-the state. The `timeout:` of `run` ends the job `Cancelled`, so `onCancel:`
-maps the state and `onError:` is not called. `onCancel:` takes every
+the body, the job ends `Failed`, and it is the `ifFailed:` of `run` that maps
+the state. The `timeout:` of `run` ends the job `Cancelled`, so `ifCancelled:`
+maps the state and `ifFailed:` is not called. `ifCancelled:` takes every
 cancellation, and a handler that is to tell the deadline from a seek dragged
 past branches on the reason, as the one above does. `value` of such a job
 throws that `Cancelled`, and a clause `on TimeoutException` around it catches

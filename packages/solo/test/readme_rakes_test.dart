@@ -65,7 +65,7 @@ final class _Ordered extends Solo<int> {
   _Ordered() : super(0);
 
   Job<void> first() => run<int, void>(
-        onError: (state, error, stackTrace) {
+        ifFailed: (state, error, stackTrace) {
           trace.add('state handler');
           return state;
         },
@@ -267,7 +267,7 @@ void main() {
       expect(_printed(quick.cancelLoading), [quote]);
     });
 
-    test('the job cancelled there is still queued, and onCancel never runs',
+    test('the job cancelled there is still queued, and ifCancelled never runs',
         () {
       fakeAsync((async) {
         final api = _TracingApi();
@@ -279,7 +279,7 @@ void main() {
         job.cancel().ignore();
         async.flushTimers();
         expect('${job.outcome}', 'Cancelled(manual)');
-        expect(heard, isEmpty, reason: 'neither the body nor onCancel ran');
+        expect(heard, isEmpty, reason: 'neither the body nor ifCancelled ran');
         expect(api.trace, isEmpty);
         profile.close().ignore();
         async.flushTimers();

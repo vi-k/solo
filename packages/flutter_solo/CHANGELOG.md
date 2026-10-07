@@ -21,6 +21,13 @@ last entries of the first group name them.
   `ignore()` on a future stays. See
   [the `async_job` changelog](https://github.com/vi-k/solo/blob/main/packages/async_job/CHANGELOG.md).
 
+- **The state handlers of `run` and `job` are renamed in `solo`: `onError` to
+  `ifFailed`, `onCancel` to `ifCancelled`**, with no deprecated alias.
+  **Migrating.** Rename the two arguments wherever a controller calls `run` or
+  `job`; the analyzer names every such call. `Solo.onError` and `ctx.onCancel`
+  keep their names. See
+  [the `solo` changelog](https://github.com/vi-k/solo/blob/main/packages/solo/CHANGELOG.md).
+
 - **`SoloListenable` is a mixin on `Solo`,** the way `solo`'s `SoloStream` is:
   `mixin SoloListenable<S extends Object> on Solo<S> implements
   ValueListenable<S>`. It rides on `solo`'s rename — `SoloBase` becomes `Solo`,
@@ -94,16 +101,16 @@ last entries of the first group name them.
   `run(timeout: ...)` loses its deadline; a subclass member named like a new
   member of `Solo` stops compiling or overrides it, `isFinished` silently. From
   `async_job`, through `solo`: a cancellation inside a `ParallelWaitError` is a
-  cancellation again, so the job's `onCancel` handler takes the outcome where
-  `onError` used to; a body that throws `Cancelled` runs its `ctx.onCancel`
-  callbacks, and `whenCancelled` fires as it throws; `JobContext` gains
-  `runAll` and `ctx.run` takes `dispose` and `discard`, so a class that
-  implements `JobContext` or `SoloContext` by hand, a test fake for one, needs
-  both; `JobObserver.onError` is a notice and the new `JobAnswerer` answers for
-  an error no outcome carries; the core's debug switch `JobBase.debug` is
-  `Job.debug`; `JobBase`, `JobContextBase` and `JobStatus` move to
-  `package:async_job/engine.dart` and are no longer visible through this
-  package. **Migrating.** Read the entries of both:
+  cancellation again, so the job's `ifCancelled` handler takes the outcome
+  where `ifFailed` used to; a body that throws `Cancelled` runs its
+  `ctx.onCancel` callbacks, and `whenCancelled` fires as it throws;
+  `JobContext` gains `runAll` and `ctx.run` takes `dispose` and `discard`, so a
+  class that implements `JobContext` or `SoloContext` by hand, a test fake for
+  one, needs both; `JobObserver.onError` is a notice and the new `JobAnswerer`
+  answers for an error no outcome carries; the core's debug switch
+  `JobBase.debug` is `Job.debug`; `JobBase`, `JobContextBase` and `JobStatus`
+  move to `package:async_job/engine.dart` and are no longer visible through
+  this package. **Migrating.** Read the entries of both:
   [the `solo` changelog](https://github.com/vi-k/solo/blob/main/packages/solo/CHANGELOG.md)
   and
   [the `async_job` changelog](https://github.com/vi-k/solo/blob/main/packages/async_job/CHANGELOG.md).

@@ -133,12 +133,12 @@ final class HandledReportController extends Solo<ReportState> {
   Job<void> build(Range range, {bool readsAfterEmit = false}) =>
       run<SignedIn, void>(
         key: 'report',
-        onError: (state, error, stackTrace) {
-          handlers.add('onError');
+        ifFailed: (state, error, stackTrace) {
+          handlers.add('ifFailed');
           return const SignedIn();
         },
-        onCancel: (state, cancelled) {
-          handlers.add('onCancel');
+        ifCancelled: (state, cancelled) {
+          handlers.add('ifCancelled');
           return const SignedIn();
         },
         (ctx) async {
@@ -153,8 +153,8 @@ final class HandledReportController extends Solo<ReportState> {
   /// A job the handlers do stand for: cancelled by hand, nothing external.
   Job<void> stall() => run<SignedIn, void>(
         key: 'stall',
-        onCancel: (state, cancelled) {
-          handlers.add('onCancel');
+        ifCancelled: (state, cancelled) {
+          handlers.add('ifCancelled');
           return const SignedIn();
         },
         (ctx) => ctx.abandonable(() => tick(1000)),

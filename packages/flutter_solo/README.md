@@ -105,8 +105,8 @@ final class ProfileController extends Solo<Profile> with SoloListenable {
         },
         // Without these a load that fails or is cancelled leaves the state
         // on Loading: a spinner, and nothing on the screen to tap.
-        onError: (state, error, stackTrace) => Empty(),
-        onCancel: (state, cancelled) => Empty(),
+        ifFailed: (state, error, stackTrace) => Empty(),
+        ifCancelled: (state, cancelled) => Empty(),
       );
 
   Job<void> save() => run<Loaded, void>(
@@ -141,8 +141,8 @@ state — it ends `Cancelled` there — and its body reads a `Loaded` with a `na
 in it. Inside a body `ctx.emit` is the only way to write the state,
 `ctx.abandonable` awaits like `await` except that it gives up the moment the
 job is cancelled, and `ctx.join` waits its call out either way — a save is not
-cut in half. `onError` and `onCancel` are the way back: they say what state a
-load that failed or was cancelled leaves behind, and without them the screen
+cut in half. `ifFailed` and `ifCancelled` are the way back: they say what state
+a load that failed or was cancelled leaves behind, and without them the screen
 would keep the spinner of a job that is no longer running. The full API —
 rules, the queue, children, observers — is documented in
 [solo](https://pub.dev/packages/solo).

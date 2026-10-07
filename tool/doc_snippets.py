@@ -2648,7 +2648,7 @@ void main() {
     clock.flushMicrotasks();
     require(cancelled, 'cancel must finish before abandoned API response');
     require(job.outcome is Cancelled, 'job must report cancellation');
-    require(controller.currentState is Initial, 'onCancel must reset state');
+    require(controller.currentState is Initial, 'ifCancelled must reset state');
     print('cancelRefresh: ${controller.currentState.runtimeType}, '
         'and the job it handed back says ${same?.outcome}');
     api.pending.complete();

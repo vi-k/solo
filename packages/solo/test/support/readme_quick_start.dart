@@ -44,8 +44,8 @@ final class ProfileController extends Solo<ProfileState> {
   Job<String> load() => run<ProfileState, String>(
         key: 'load',
         policy: Policy.droppable,
-        onError: (state, error, stackTrace) => Failure(error),
-        onCancel: (state, cancelled) => const Initial(),
+        ifFailed: (state, error, stackTrace) => Failure(error),
+        ifCancelled: (state, cancelled) => const Initial(),
         (ctx) async {
           ctx.emit(const Loading());
           final name = await ctx.abandonable(api.fetchName);

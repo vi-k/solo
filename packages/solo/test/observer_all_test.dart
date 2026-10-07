@@ -36,7 +36,7 @@ final class Recording extends SoloObserver {
     Object error,
     StackTrace stackTrace,
   ) =>
-      seen.add('$name onError: $error');
+      seen.add('$name ifFailed: $error');
 
   @override
   void onChange(Solo<Object> solo, SoloTransition<Object> transition) =>
@@ -120,8 +120,8 @@ void main() {
         'b onChange',
         'a onLog: hello',
         'b onLog: hello',
-        'a onError: Bad state: boom',
-        'b onError: Bad state: boom',
+        'a ifFailed: Bad state: boom',
+        'b ifFailed: Bad state: boom',
         'a onFinish',
         'b onFinish',
         'a onClose',
@@ -139,7 +139,7 @@ void main() {
         'a onStart',
         'zone: Cancelled(handler: from onLog)',
         'a onLog: hello',
-        'a onError: Bad state: boom',
+        'a ifFailed: Bad state: boom',
         'a onFinish',
       ],
       reason: 'a Cancelled goes to the zone, as one thrown by a single '

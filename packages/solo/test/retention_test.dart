@@ -47,7 +47,7 @@ final class Counter extends Solo<int> with OpenSolo<int> {
   return (
     solo.run<int, void>(
       (ctx) => ctx.abandonable(() => Future<void>.delayed(Duration.zero)),
-      onCancel: (state, cancelled) => payload.bytes.length,
+      ifCancelled: (state, cancelled) => payload.bytes.length,
     ),
     WeakReference(payload),
   );

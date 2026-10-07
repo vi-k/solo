@@ -87,7 +87,7 @@ final class ThrowingPool extends Solo<Slots> with OpenSolo<Slots>, Desk<Slots> {
   /// Not on the page: the method around the rule, and a state handler for
   /// the tests to see whether it runs.
   SoloJob<void> take({
-    Slots Function(Slots state, Object error, StackTrace stackTrace)? onError,
+    Slots Function(Slots state, Object error, StackTrace stackTrace)? ifFailed,
   }) =>
       run<Slots, void>(
         key: 'take',
@@ -96,7 +96,7 @@ final class ThrowingPool extends Solo<Slots> with OpenSolo<Slots>, Desk<Slots> {
 
           return true;
         },
-        onError: onError,
+        ifFailed: ifFailed,
         (ctx) async => stage.trace.add('take ran'),
       );
 }

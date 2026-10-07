@@ -79,8 +79,8 @@ final class ProfileController extends Solo<ProfileState> {
   Job<String> load() => run<ProfileState, String>(
         key: 'load',
         policy: Policy.droppable,
-        onError: (state, error, stackTrace) => Failure(error),
-        onCancel: (state, cancelled) => const Initial(),
+        ifFailed: (state, error, stackTrace) => Failure(error),
+        ifCancelled: (state, cancelled) => const Initial(),
         (ctx) async {
           ctx.emit(const Loading());
           final name = await ctx.abandonable(api.fetchName);
@@ -104,8 +104,8 @@ cancellation-aware waiting:
 Two parameters of `run` give the state to publish when the job does not
 succeed:
 
-- `onError` returns the state to publish if the job fails.
-- `onCancel` returns the state to publish if a started job is cancelled.
+- `ifFailed` returns the state to publish if the job fails.
+- `ifCancelled` returns the state to publish if a started job is cancelled.
 
 The state handlers run after the body and its cleanup. In this example, the
 state becomes `Loaded` on success, `Failure` on error, or `Initial` on
@@ -170,10 +170,10 @@ Future<void> cancelLoading() async {
 ```
 
 `cancel()` waits for the job to finish, including cleanup if it started. A job
-cancelled before its body starts does not call `onCancel`. Jobs can start child
-jobs as part of their work; the starting job is their parent and waits for them
-before finishing. The next queued job starts only after the previous job
-finishes its body, children, cleanup and state handler.
+cancelled before its body starts does not call `ifCancelled`. Jobs can start
+child jobs as part of their work; the starting job is their parent and waits
+for them before finishing. The next queued job starts only after the previous
+job finishes its body, children, cleanup and state handler.
 
 The guides below explain results, queue policies and cancellation in more
 detail. In particular, cancellation of a job does not automatically stop an API
@@ -248,8 +248,8 @@ final class Player extends Solo<PlayerState> {
         keepWhile: (state) => state is! Disconnected,
         // The state to publish when the job fails or is cancelled. A
         // cancellation by the rule publishes nothing: `Disconnected` stays.
-        onError: (state, error, stackTrace) => const Idle(),
-        onCancel: (state, cancelled) => const Idle(),
+        ifFailed: (state, error, stackTrace) => const Idle(),
+        ifCancelled: (state, cancelled) => const Idle(),
         (ctx) async {
           // The body's way to change state. There is no setter outside.
           ctx.emit(const Loading());

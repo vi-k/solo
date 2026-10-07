@@ -57,8 +57,8 @@ final class ProfileController extends Solo<Profile> with SoloListenable {
         },
         // Without these a load that fails or is cancelled leaves the state
         // on Loading: a spinner, and nothing on the screen to tap.
-        onError: (state, error, stackTrace) => Empty(),
-        onCancel: (state, cancelled) => Empty(),
+        ifFailed: (state, error, stackTrace) => Empty(),
+        ifCancelled: (state, cancelled) => Empty(),
       );
 }
 

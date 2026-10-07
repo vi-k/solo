@@ -1616,7 +1616,7 @@ void main() {
     /// discard registered last.
     SoloJob<Database> steps(Bench bench) => bench.run<Idle, Database>(
           key: 'steps',
-          onCancel: (state, cancelled) {
+          ifCancelled: (state, cancelled) {
             stage.trace.add('state handler');
 
             return state;
@@ -1716,7 +1716,7 @@ void main() {
           final bench = Bench();
           late final SoloJob<void> job;
           job = bench.run<Idle, void>(
-            onError: (state, error, stackTrace) {
+            ifFailed: (state, error, stackTrace) {
               seen = job.outcome;
               stage.trace.add('state handler');
 

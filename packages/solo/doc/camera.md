@@ -190,8 +190,8 @@ Job<void> init() => run<NotDisposed, void>(
       key: CameraKey.init,
       policy: Policy.droppable,
       canStart: (state) => state is Initial,
-      onError: (state, error, stackTrace) => Broken(error),
-      onCancel: (state, cancelled) => Broken(cancelled),
+      ifFailed: (state, error, stackTrace) => Broken(error),
+      ifCancelled: (state, cancelled) => Broken(cancelled),
       (ctx) async {
         ctx.emit(const Preparing());
         await ctx.join(hw.open);

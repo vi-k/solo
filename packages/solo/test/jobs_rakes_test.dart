@@ -795,7 +795,7 @@ void main() {
         final camera = page.CameraController();
         final holder = camera.run<Ready, void>(
           key: 'holder',
-          onError: (state, error, stackTrace) {
+          ifFailed: (state, error, stackTrace) {
             stage.trace.add('the state handler runs');
             return state;
           },

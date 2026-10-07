@@ -740,9 +740,8 @@ void main() {
         'cleanup ends in Loading',
         'the next job starts in Initial',
       ]);
-      _says(
-          '`ctx.abandonable` ends the wait for the API, and `onCancel` returns '
-          '`Initial` before the queue proceeds.');
+      _says('`ctx.abandonable` ends the wait for the API, and `ifCancelled` '
+          'returns `Initial` before the queue proceeds.');
     });
 
     test('a refresh that succeeds or fails leaves Initial as well', () {
@@ -775,7 +774,7 @@ void main() {
       expect('$failed', 'Failed(Bad state: offline)');
       expect('${controller.currentState}', 'Initial');
       _says('A successful refresh publishes `Initial` from the body; '
-          '`onError` resets the indicator on failure while the job still '
+          '`ifFailed` resets the indicator on failure while the job still '
           'reports `Failed`.');
     });
 
@@ -808,7 +807,7 @@ void main() {
       expect(afterBrokenSeen, isEmpty);
       // The same job cancelled by hand does get its handler.
       expect('$byHand', 'Cancelled(manual)');
-      expect(controller.seen, ['onCancel ran']);
+      expect(controller.seen, ['ifCancelled ran']);
       _says('If an independent external state makes the solo job invalid, '
           'its final state handlers are skipped');
     });
@@ -1265,7 +1264,7 @@ void main() {
       // No `onError` was supplied, so the state stays where the body left it.
       expect('${controller.currentState}', 'Paying(A)');
       _says('API failures still produce `Failed`; a failure state can be '
-          'supplied with `run(onError: ...)`.');
+          'supplied with `run(ifFailed: ...)`.');
     });
 
     test('a narrower type lets a state rule cancel a charge that was sent', () {
@@ -1484,8 +1483,8 @@ void main() {
       expect('${revoked.currentState}', 'SignedOut(signed out elsewhere)');
       // The handler does run for a cancellation nothing external caused.
       expect('$cancelled', 'Cancelled(manual)');
-      expect(byHand.handlers, ['onCancel']);
-      _says('Final `onError` and `onCancel` state handlers, if supplied, '
+      expect(byHand.handlers, ['ifCancelled']);
+      _says('Final `ifFailed` and `ifCancelled` state handlers, if supplied, '
           'are disabled by an incompatible external update, so they do not '
           'overwrite `SignedOut` during cleanup.');
     });

@@ -803,7 +803,8 @@ void main() {
 
   // Inherited from `async_job` and named in this package's changelog: a
   // controller's job reads the envelope the way the core does.
-  test('a child cancelled under [...].wait takes the parent to onCancel', () {
+  test('a child cancelled under [...].wait takes the parent to ifCancelled',
+      () {
     runSolo((solo, journal, async) {
       final handled = <String>[];
       final a = solo.job<TestState, void>(key: 'a', (ctx) => pause(ctx, 100));
@@ -811,12 +812,12 @@ void main() {
       solo.run<TestState, void>(
         key: 'parent',
         (ctx) async => [ctx.run(a), ctx.run(b)].wait,
-        onError: (state, error, stackTrace) {
-          handled.add('onError ${error.runtimeType}');
+        ifFailed: (state, error, stackTrace) {
+          handled.add('ifFailed ${error.runtimeType}');
           return state;
         },
-        onCancel: (state, cancelled) {
-          handled.add('onCancel $cancelled');
+        ifCancelled: (state, cancelled) {
+          handled.add('ifCancelled $cancelled');
           return state;
         },
       );
@@ -825,7 +826,7 @@ void main() {
       async.flushTimers();
 
       expect(handled, [
-        'onCancel Cancelled(handler: child a: Cancelled(manual))',
+        'ifCancelled Cancelled(handler: child a: Cancelled(manual))',
       ]);
       expect(
         journal.take(),

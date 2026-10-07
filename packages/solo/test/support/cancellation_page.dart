@@ -42,7 +42,7 @@ final class DeadlinePlayer extends Solo<AppState>
         key: 'seek',
         policy: Policy.restart,
         timeout: const Duration(seconds: 2),
-        onCancel: (state, cancelled) =>
+        ifCancelled: (state, cancelled) =>
             cancelled.reason is TimeoutCancelReason ? const Offline() : state,
         (ctx) async {
           final token = CancelToken();

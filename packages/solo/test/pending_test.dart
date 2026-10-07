@@ -177,7 +177,7 @@ void main() {
       solo.run<TestState, void>(
         key: 'job',
         (ctx) async => throw StateError('gone'),
-        onError: (state, error, stackTrace) {
+        ifFailed: (state, error, stackTrace) {
           phases.add((solo.pending as SoloPendingJob?)?.phase);
           return state;
         },

@@ -26,8 +26,8 @@ final class ProfileController extends Solo<ProfileState> {
   Job<String> load() => run<ProfileState, String>(
         key: 'load',
         policy: Policy.droppable,
-        onError: (state, error, stackTrace) => Failure(error),
-        onCancel: (state, cancelled) => const Initial(),
+        ifFailed: (state, error, stackTrace) => Failure(error),
+        ifCancelled: (state, cancelled) => const Initial(),
         (ctx) async {
           ctx.emit(const Loading());
           final name = await ctx.abandonable(api.fetchName);
@@ -212,13 +212,13 @@ final class Pool extends Solo<Slots> with OpenSolo<Slots>, Desk<Slots> {
   /// Not on the page: the method around the rule, and a state handler for
   /// the tests to see whether it runs.
   SoloJob<void> take({
-    Slots Function(Slots state, Cancelled cancelled)? onCancel,
+    Slots Function(Slots state, Cancelled cancelled)? ifCancelled,
   }) =>
       run<Slots, void>(
         key: 'take',
         // A rule answers; it does not throw to refuse.
         canStart: (state) => state.free > 0,
-        onCancel: onCancel,
+        ifCancelled: ifCancelled,
         (ctx) async => stage.trace.add('take ran'),
       );
 }

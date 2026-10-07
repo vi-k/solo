@@ -197,7 +197,7 @@ final class TimedLoad extends Solo<Profile> with SoloListenable {
 
           return name;
         },
-        onCancel: (state, cancelled) => Empty(),
+        ifCancelled: (state, cancelled) => Empty(),
       );
 }
 

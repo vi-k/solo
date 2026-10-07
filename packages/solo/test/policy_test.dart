@@ -219,7 +219,7 @@ void main() {
         key: 'droppable',
         describe: () => '1',
         policy: Policy.droppable,
-        onError: (state, error, stackTrace) {
+        ifFailed: (state, error, stackTrace) {
           second = droppable(solo, 2);
 
           return state;

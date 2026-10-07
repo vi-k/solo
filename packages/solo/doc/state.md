@@ -404,8 +404,8 @@ running.
 run<ProfileState, String>(
   // Both compute a state and nothing else. They run after the body,
   // children and cleanup, and the outcome is already fixed.
-  onError: (state, error, stackTrace) => Failure(error),
-  onCancel: (state, cancelled) => const Initial(),
+  ifFailed: (state, error, stackTrace) => Failure(error),
+  ifCancelled: (state, cancelled) => const Initial(),
   (ctx) async {
     ctx.emit(const Loading());
     final name = await ctx.abandonable(api.fetchName);
@@ -415,7 +415,7 @@ run<ProfileState, String>(
 );
 ```
 
-The `onError` and `onCancel` parameters of `run` and `job` let a controller
+The `ifFailed` and `ifCancelled` parameters of `run` and `job` let a controller
 leave a temporary state such as `Loading` when an operation fails or is
 cancelled. They receive the current state of type `S`, plus the error and stack
 trace or the `Cancelled` outcome, and return the next state synchronously.
@@ -440,8 +440,8 @@ final class Disconnected extends ProfileState {
 Job<String> load() => run<ProfileState, String>(
       key: 'load',
       policy: Policy.droppable,
-      onError: (state, error, stackTrace) => Failure(error),
-      onCancel: (state, cancelled) => const Initial(),
+      ifFailed: (state, error, stackTrace) => Failure(error),
+      ifCancelled: (state, cancelled) => const Initial(),
       (ctx) async {
         ctx.emit(const Loading());
         final name = await ctx.abandonable(api.fetchName);
@@ -453,7 +453,7 @@ Job<String> load() => run<ProfileState, String>(
 
 Nothing here says the load has an opinion about `Disconnected`, so it keeps
 running through it. When the load is cancelled after that — by the user, by a
-screen closing, by anything — `onCancel` does what it was written to do and
+screen closing, by anything — `ifCancelled` does what it was written to do and
 returns `Initial`, over the fact the device reported. The controller now shows
 a profile that is merely empty, when what happened is that the connection is
 gone.
@@ -468,8 +468,8 @@ Job<String> load() => run<ProfileState, String>(
       key: 'load',
       policy: Policy.droppable,
       keepWhile: (state) => state is! Disconnected,
-      onError: (state, error, stackTrace) => Failure(error),
-      onCancel: (state, cancelled) => const Initial(),
+      ifFailed: (state, error, stackTrace) => Failure(error),
+      ifCancelled: (state, cancelled) => const Initial(),
       (ctx) async {
         ctx.emit(const Loading());
         final name = await ctx.abandonable(api.fetchName);
@@ -485,7 +485,7 @@ cancelling the load and disabling both handlers. `Disconnected` therefore
 remains visible instead of being replaced by `Initial` or `Failure`.
 
 If the load is cancelled manually while the state is still compatible,
-`onCancel` still returns `Initial`. The handlers need no
+`ifCancelled` still returns `Initial`. The handlers need no
 `state is Disconnected` check of their own: the job's rules say which states
 permit the operation and the correction after it.
 

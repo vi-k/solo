@@ -105,8 +105,8 @@ final class ProfileController extends Solo<Profile> with SoloListenable {
         },
         // Без них упавшая или отменённая загрузка оставляет состояние
         // на Loading: спиннер, и нажать на экране нечего.
-        onError: (state, error, stackTrace) => Empty(),
-        onCancel: (state, cancelled) => Empty(),
+        ifFailed: (state, error, stackTrace) => Empty(),
+        ifCancelled: (state, cancelled) => Empty(),
       );
 
   Job<void> save() => run<Loaded, void>(
@@ -141,7 +141,7 @@ class ProfileView extends StatelessWidget {
 читает `Loaded` с `name` внутри. Внутри тела состояние записывает только
 `ctx.emit`, `ctx.abandonable` ждёт так же, как `await`, но сдаётся в тот
 момент, когда `Job` отменяют, а `ctx.join` дожидается своего вызова в любом
-случае, так что сохранение не рвётся пополам. `onError` и `onCancel` ведут
+случае, так что сохранение не рвётся пополам. `ifFailed` и `ifCancelled` ведут
 назад: они говорят, в каком состоянии остаётся упавшая или отменённая загрузка,
 а без них экран держал бы спиннер задачи, которой уже нет. Всё API целиком,
 с правилами, очередью, детьми и наблюдателями, описано

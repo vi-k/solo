@@ -618,7 +618,7 @@ void main() {
 
     test('the failure of a body: the outcome carries it', () {
       _says(
-        'The failure of a body becomes `Failed`, where `run(onError: ...)` '
+        'The failure of a body becomes `Failed`, where `run(ifFailed: ...)` '
         'computes a state from it, and an outcome nobody observes reaches '
         "the job's creation zone by itself",
       );
@@ -631,7 +631,7 @@ void main() {
         bench = Bench();
         job = bench.run<int, void>(
           key: 'body',
-          onError: (state, error, stackTrace) => -1,
+          ifFailed: (state, error, stackTrace) => -1,
           (ctx) async => throw StateError('the body'),
         );
       });
@@ -737,7 +737,7 @@ void main() {
           bench = Bench();
           job = bench.run<int, void>(
             key: 'handled',
-            onError: (state, error, stackTrace) =>
+            ifFailed: (state, error, stackTrace) =>
                 throw StateError('the handler'),
             (ctx) async => throw StateError('the body'),
           )..ignoreFailure();
@@ -1220,7 +1220,7 @@ void main() {
         journal = _Journal()..externalSetState(1);
         journal.run<int, void>(
           key: 'root',
-          onError: (state, error, stackTrace) => -1,
+          ifFailed: (state, error, stackTrace) => -1,
           (ctx) async {
             ctx.emit(2);
             await ctx.run(
@@ -1234,7 +1234,7 @@ void main() {
         ).ignoreFailure();
         final cancelled = journal.run<int, void>(
           key: 'cancelled',
-          onCancel: (state, cancelled) => -2,
+          ifCancelled: (state, cancelled) => -2,
           (ctx) => ctx.abandonable(() => stage.start<void>('op', null)),
         )..ignoreFailure();
         async.flushMicrotasks();
@@ -2940,15 +2940,15 @@ void main() {
       });
     });
 
-    test('the failure state through the onError parameter of run', () {
+    test('the failure state through the ifFailed parameter of run', () {
       _says(
-        'For a final failure state, prefer the `onError` parameter of `run` '
+        'For a final failure state, prefer the `ifFailed` parameter of `run` '
         'rather than writing that correction inside a broad catch',
       );
       fakeAsync((async) {
         SoloJob<void> open(Bench bench) => bench.run<int, void>(
               key: 'open',
-              onError: (state, error, stackTrace) => -1,
+              ifFailed: (state, error, stackTrace) => -1,
               (ctx) => ctx.join(() => stage.start<void>('op', null)),
             )..ignoreFailure();
 
@@ -2981,7 +2981,7 @@ void main() {
           'creation zone as well unless somebody observes that outcome',
         );
         _says(
-          'The state handler passed as `onError` to that same `run` is not '
+          'The state handler passed as `ifFailed` to that same `run` is not '
           'called for it: a state handler computes the state after a job '
           'that ran, and this one never started',
         );
@@ -2994,7 +2994,7 @@ void main() {
           Solo.observer = _Saying('observer', started);
           pool = first.ThrowingPool(const Slots(0));
           job = pool.take(
-            onError: (state, error, stackTrace) {
+            ifFailed: (state, error, stackTrace) {
               stage.trace.add('the state handler ran');
 
               return const Slots(-1);
@@ -3051,7 +3051,7 @@ void main() {
         final ran = _run((async) {
           pool = page.Pool(const Slots(0));
           job = pool.take(
-            onCancel: (state, cancelled) {
+            ifCancelled: (state, cancelled) {
               stage.trace.add('the state handler ran');
 
               return const Slots(-2);
@@ -3363,7 +3363,7 @@ void main() {
             key: 'reevaluated',
             keepWhile: (state) =>
                 state == 0 ? true : throw StateError('the rule'),
-            onError: handled
+            ifFailed: handled
                 ? (state, error, stackTrace) {
                     stage.trace.add('the state handler ran');
 
@@ -3426,7 +3426,7 @@ void main() {
           bench.run<int, void>(
             key: 'handled',
             keepWhile: (state) => true,
-            onError: (state, error, stackTrace) => 99,
+            ifFailed: (state, error, stackTrace) => 99,
             (ctx) async {
               await stage.start<void>('op', null);
               throw StateError('the body');
@@ -3453,7 +3453,7 @@ void main() {
             key: 'ended',
             keepWhile: (state) =>
                 state == 0 ? true : throw StateError('the rule'),
-            onError: (state, error, stackTrace) => 99,
+            ifFailed: (state, error, stackTrace) => 99,
             (ctx) async {
               ctx.onDispose(() => stage.start<void>('release', null));
               throw StateError('the body');

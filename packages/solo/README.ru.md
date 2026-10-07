@@ -81,8 +81,8 @@ final class ProfileController extends Solo<ProfileState> {
   Job<String> load() => run<ProfileState, String>(
         key: 'load',
         policy: Policy.droppable,
-        onError: (state, error, stackTrace) => Failure(error),
-        onCancel: (state, cancelled) => const Initial(),
+        ifFailed: (state, error, stackTrace) => Failure(error),
+        ifCancelled: (state, cancelled) => const Initial(),
         (ctx) async {
           ctx.emit(const Loading());
           final name = await ctx.abandonable(api.fetchName);
@@ -106,8 +106,8 @@ final class ProfileController extends Solo<ProfileState> {
 Два параметра `run` задают состояние для публикации, если `Job` не завершилась
 успехом:
 
-- `onError` возвращает состояние для публикации при ошибке `Job`.
-- `onCancel` возвращает состояние для публикации при отмене начатой `Job`.
+- `ifFailed` возвращает состояние для публикации при ошибке `Job`.
+- `ifCancelled` возвращает состояние для публикации при отмене начатой `Job`.
 
 Обработчики состояния вызываются после тела и освобождения его ресурсов. В этом
 примере состояние становится `Loaded` при успехе, `Failure` при ошибке или
@@ -175,7 +175,7 @@ Future<void> cancelLoading() async {
 ```
 
 `cancel()` ждёт завершения `Job`, включая освобождение ресурсов, если она
-успела начаться. При отмене до запуска тела `onCancel` не вызывается. `Job`
+успела начаться. При отмене до запуска тела `ifCancelled` не вызывается. `Job`
 может запускать дочерние `Job` как часть своей работы; запустившая их `Job`
 является родителем и ждёт их перед собственным завершением. Следующая `Job`
 из очереди запускается только после завершения тела, дочерних `Job`,
@@ -258,8 +258,8 @@ final class Player extends Solo<PlayerState> {
         keepWhile: (state) => state is! Disconnected,
         // Состояние для публикации, если Job упала или её отменили. Отмена
         // правилом ничего не публикует, и `Disconnected` остаётся.
-        onError: (state, error, stackTrace) => const Idle(),
-        onCancel: (state, cancelled) => const Idle(),
+        ifFailed: (state, error, stackTrace) => const Idle(),
+        ifCancelled: (state, cancelled) => const Idle(),
         (ctx) async {
           // Так тело меняет состояние. Сеттера снаружи нет.
           ctx.emit(const Loading());

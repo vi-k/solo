@@ -180,8 +180,11 @@ README — `2026-10-02-async-job-readme-reread-report.md`. `extending.md`
 2026-10-07 по его же слову `Job.ignore()` переименован в `Job.ignoreFailure()`
 без псевдонима, во всех трёх пакетах, страницах и переводах, отчёт —
 `2026-10-07-ignore-failure-rename-report.md`; `ignore()` на future остался
-`Future.ignore()`. Вопросы владельца правятся в странице, переводе и стороже
-и идут пунктами раздела «По чтению владельца» в отчёте страницы.
+`Future.ignore()`. Тогда же параметры `onError` и `onCancel` у `run` и `job`
+переименованы в `ifFailed` и `ifCancelled` без псевдонима, отчёт —
+`2026-10-07-if-failed-rename-report.md`; хуки `Solo.onError` и `ctx.onCancel`
+называются как раньше. Вопросы владельца правятся в странице, переводе
+и стороже и идут пунктами раздела «По чтению владельца» в отчёте страницы.
 В `docs/backlog.md` одна запись — общий отлов зависаний; по ней решено оставить
 рецептами, пока не выполнится условие, названное в самой записи.
 
@@ -200,14 +203,14 @@ job a deadline of its own»: параметр `timeout` у `Job(...)`,
 «A deadline» в `cancellation_rakes_test.dart`. Вопросы владельца о сроке —
 пунктами раздела «По чтению владельца» того же отчёта, на 2026-10-07 их три,
 третий — шаблон в `if` в примере того же раздела вместо `is!`; первые два:
-абзац о `onCancel:` и `onError:` в `packages/solo/doc/cancellation.md` называет
-`Future.timeout`, с которым сравнивает, а абзац о ветке `catch` в «A deadline
-for one step» `async_job` говорит, что она отбирает только по типу. Раздел «A
-deadline» в `packages/async_job/doc/cancellation.md` и добавленное о сроке
-в `outcomes.md` и README владелец принял 2026-10-07; из добавленного о сроке
-в `async_job` ему осталась запись CHANGELOG, и CHANGELOG по его слову читается
-в самом конце, после страниц `solo`. Клон и копии ревью в `.artifacts/` больше
-не нужны.
+абзац о `ifCancelled:` и `ifFailed:` в `packages/solo/doc/cancellation.md`
+называет `Future.timeout`, с которым сравнивает, а абзац о ветке `catch` в «A
+deadline for one step» `async_job` говорит, что она отбирает только по типу.
+Раздел «A deadline» в `packages/async_job/doc/cancellation.md` и добавленное
+о сроке в `outcomes.md` и README владелец принял 2026-10-07; из добавленного
+о сроке в `async_job` ему осталась запись CHANGELOG, и CHANGELOG по его слову
+читается в самом конце, после страниц `solo`. Клон и копии ревью
+в `.artifacts/` больше не нужны.
 
 **Открытые вопросы владельцу.** По слову владельца 2026-10-03 вопросы вычитки
 копятся здесь: он разберёт их позже, вычитка из-за них не останавливается,

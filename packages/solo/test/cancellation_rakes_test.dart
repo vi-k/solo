@@ -49,8 +49,8 @@ final class _CallDeadline extends Solo<AppState> with OpenSolo<AppState>, Desk {
   SoloJob<void> seek(Duration position) => run<Ready, void>(
         key: 'seek',
         policy: Policy.restart,
-        onError: (state, error, stackTrace) => const Offline(),
-        onCancel: (state, cancelled) => state,
+        ifFailed: (state, error, stackTrace) => const Offline(),
+        ifCancelled: (state, cancelled) => state,
         (ctx) async {
           await ctx.join(
             () => player.seek(position).timeout(const Duration(seconds: 2)),
@@ -598,7 +598,7 @@ void main() {
       fakeAsync((async) {
         final bench = Bench();
         final job = bench.run<Ready, void>(
-          onCancel: (state, cancelled) {
+          ifCancelled: (state, cancelled) {
             stage.trace.add('the onCancel of run');
 
             return const Ready(receipt: 'corrected');
@@ -2069,13 +2069,13 @@ void main() {
       expect(
         _prose(),
         contains(
-          'The `timeout:` of `run` ends the job `Cancelled`, so `onCancel:` '
-          'maps the state and `onError:` is not called.',
+          'The `timeout:` of `run` ends the job `Cancelled`, so `ifCancelled:` '
+          'maps the state and `ifFailed:` is not called.',
         ),
       );
     });
 
-    test('Future.timeout on the call fails the job, and onError: maps', () {
+    test('Future.timeout on the call fails the job, and ifFailed: maps', () {
       fakeAsync((async) {
         final player = _CallDeadline();
         final job = player.seek(_s(1))..ignoreFailure();
@@ -2092,7 +2092,7 @@ void main() {
           'A deadline that runs out is not the `TimeoutException` of '
           '`Future.timeout`. With `.timeout(...)` on the call of '
           '`_player.seek` the exception is thrown into the body, the job '
-          'ends `Failed`, and it is the `onError:` of `run` that maps the '
+          'ends `Failed`, and it is the `ifFailed:` of `run` that maps the '
           'state.',
         ),
       );
@@ -2466,7 +2466,8 @@ void main() {
         fakeAsync((async) {
           final bench = Bench()
             ..run<Ready, void>(
-              onCancel: (state, cancelled) => const Ready(receipt: 'corrected'),
+              ifCancelled: (state, cancelled) =>
+                  const Ready(receipt: 'corrected'),
               (ctx) => ctx.join(() => stage.start<void>('call', null)),
             );
           async.flushMicrotasks();

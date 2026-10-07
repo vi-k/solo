@@ -405,8 +405,8 @@ run<ProfileState, String>(
 run<ProfileState, String>(
   // Оба только вычисляют состояние. Они выполняются после тела, детей
   // и уборки, и исход к этому моменту уже определён.
-  onError: (state, error, stackTrace) => Failure(error),
-  onCancel: (state, cancelled) => const Initial(),
+  ifFailed: (state, error, stackTrace) => Failure(error),
+  ifCancelled: (state, cancelled) => const Initial(),
   (ctx) async {
     ctx.emit(const Loading());
     final name = await ctx.abandonable(api.fetchName);
@@ -416,10 +416,11 @@ run<ProfileState, String>(
 );
 ```
 
-Параметры `onError` и `onCancel` у `run` и `job` позволяют контроллеру покинуть
-временное состояние вроде `Loading`, когда операция завершилась ошибкой или
-была отменена. Они получают текущее состояние типа `S`, плюс ошибку со стеком
-вызовов или исход `Cancelled`, и синхронно возвращают следующее состояние.
+Параметры `ifFailed` и `ifCancelled` у `run` и `job` позволяют контроллеру
+покинуть временное состояние вроде `Loading`, когда операция завершилась
+ошибкой или была отменена. Они получают текущее состояние типа `S`, плюс ошибку
+со стеком вызовов или исход `Cancelled`, и синхронно возвращают следующее
+состояние.
 
 Подходящий обработчик выполняется перед следующей `Job` из очереди и перед
 хуком `onFinish`. Изменение состояния не превращает `Failed` или `Cancelled`
@@ -441,8 +442,8 @@ final class Disconnected extends ProfileState {
 Job<String> load() => run<ProfileState, String>(
       key: 'load',
       policy: Policy.droppable,
-      onError: (state, error, stackTrace) => Failure(error),
-      onCancel: (state, cancelled) => const Initial(),
+      ifFailed: (state, error, stackTrace) => Failure(error),
+      ifCancelled: (state, cancelled) => const Initial(),
       (ctx) async {
         ctx.emit(const Loading());
         final name = await ctx.abandonable(api.fetchName);
@@ -454,7 +455,7 @@ Job<String> load() => run<ProfileState, String>(
 
 Здесь ничто не говорит, что у загрузки есть мнение о `Disconnected`, поэтому
 она продолжает идти сквозь него. А когда её отменят (пользователь, закрытый
-экран, что угодно), `onCancel` сделает то, ради чего написан, и вернёт
+экран, что угодно), `ifCancelled` сделает то, ради чего написан, и вернёт
 `Initial` поверх факта, о котором сообщило устройство. Контроллер показывает
 просто пустой профиль, хотя случилось другое: связи нет.
 
@@ -469,8 +470,8 @@ Job<String> load() => run<ProfileState, String>(
       key: 'load',
       policy: Policy.droppable,
       keepWhile: (state) => state is! Disconnected,
-      onError: (state, error, stackTrace) => Failure(error),
-      onCancel: (state, cancelled) => const Initial(),
+      ifFailed: (state, error, stackTrace) => Failure(error),
+      ifCancelled: (state, cancelled) => const Initial(),
       (ctx) async {
         ctx.emit(const Loading());
         final name = await ctx.abandonable(api.fetchName);
@@ -485,7 +486,7 @@ Job<String> load() => run<ProfileState, String>(
 и отключая оба обработчика. Поэтому `Disconnected` остаётся видимым,
 а не заменяется на `Initial` или `Failure`.
 
-Если загрузку отменили вручную, пока состояние ещё совместимо, `onCancel`
+Если загрузку отменили вручную, пока состояние ещё совместимо, `ifCancelled`
 по-прежнему возвращает `Initial`. Своя проверка `state is Disconnected`
 обработчикам не нужна: правила `Job` уже говорят, какие состояния допускают
 операцию и поправку после неё.

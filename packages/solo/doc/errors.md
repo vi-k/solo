@@ -1,7 +1,7 @@
 # Errors and observation
 
 State handlers and reporting hooks have different responsibilities.
-`run(onError: ...)` computes a state after a job fails. The controller's
+`run(ifFailed: ...)` computes a state after a job fails. The controller's
 `onError` method and `SoloObserver.onError` receive errors for logging or
 reporting, including errors from cleanup and abandoned operations, and
 `onUnanswered` answers for the ones no outcome carries.
@@ -53,7 +53,7 @@ final class ProfileController extends Solo<ProfileState> {
 ```
 
 Most errors are carried by an outcome. The failure of a body becomes `Failed`,
-where `run(onError: ...)` computes a state from it, and an outcome nobody
+where `run(ifFailed: ...)` computes a state from it, and an outcome nobody
 observes reaches the job's creation zone by itself. What no outcome carries is
 the rest:
 
@@ -532,7 +532,7 @@ hears of the failure. On a cancelled job the catch only lets the cancellation
 out.
 
 Once a job has accepted cancellation, its outcome remains `Cancelled` even if
-the body catches it. For a final failure state, prefer the `onError` parameter
+the body catches it. For a final failure state, prefer the `ifFailed` parameter
 of `run` rather than writing that correction inside a broad catch.
 
 ## Errors in state rules
@@ -552,7 +552,7 @@ canStart: (state) {
 A throw reads like a refusal and is a failure. The error goes to the reporting
 hooks — a crash report for an ordinary "not now" — and the job ends `Failed`,
 which reaches the creation zone as well unless somebody observes that outcome.
-The state handler passed as `onError` to that same `run` is not called for it:
+The state handler passed as `ifFailed` to that same `run` is not called for it:
 a state handler computes the state after a job that ran, and this one never
 started. The queue goes on to the next job.
 

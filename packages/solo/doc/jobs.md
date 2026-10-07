@@ -144,7 +144,7 @@ Job<void> seek(Duration position) => run<Ready, void>(
 | `Policy.restart` | Do the same as `replace` and request cancellation of the running root job with that key. |
 
 A root job holds the queue until its body, its children, its cleanup and its
-state handler — the `onError` or `onCancel` of `run` — have finished. Until
+state handler — the `ifFailed` or `ifCancelled` of `run` — have finished. Until
 then no other root job starts. The children it waits for are its own: they run
 inside it and never stand in the queue; they are described on the page
 [Children and streams](children.md). A policy does not apply to child jobs.

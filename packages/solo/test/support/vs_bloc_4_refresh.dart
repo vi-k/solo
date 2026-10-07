@@ -47,8 +47,8 @@ final class RefreshController extends Solo<RefreshState> {
   Job<void> refresh() => run<RefreshState, void>(
         key: 'refresh',
         policy: Policy.restart,
-        onError: (state, error, stackTrace) => const Initial(),
-        onCancel: (state, cancelled) => const Initial(),
+        ifFailed: (state, error, stackTrace) => const Initial(),
+        ifCancelled: (state, cancelled) => const Initial(),
         (ctx) async {
           ctx.emit(const Loading());
           await ctx.abandonable(_api.refresh);
@@ -76,7 +76,7 @@ final class SlowCleanupRefreshController extends Solo<RefreshState> {
 
   Job<void> refresh() => run<RefreshState, void>(
         key: 'refresh',
-        onCancel: (state, cancelled) => const Initial(),
+        ifCancelled: (state, cancelled) => const Initial(),
         (ctx) async {
           ctx
             ..onDispose(() async {
@@ -96,12 +96,12 @@ final class SlowCleanupRefreshController extends Solo<RefreshState> {
 
   Job<void> narrow() => run<Loading, void>(
         key: 'narrow',
-        onError: (state, error, stackTrace) {
-          seen.add('onError ran');
+        ifFailed: (state, error, stackTrace) {
+          seen.add('ifFailed ran');
           return const Initial();
         },
-        onCancel: (state, cancelled) {
-          seen.add('onCancel ran');
+        ifCancelled: (state, cancelled) {
+          seen.add('ifCancelled ran');
           return const Loading();
         },
         (ctx) => ctx.abandonable(_api.refresh),

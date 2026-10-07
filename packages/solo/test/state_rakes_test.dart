@@ -193,8 +193,8 @@ final class _Any extends Solo<Object> {
   /// Fails with a child still running and a cleanup registered.
   Job<void> failsLeavingWork() => run<Object, void>(
         key: 'first',
-        onError: (state, error, stackTrace) {
-          trace.add('onError: state $state, $error, ${current?.outcome}');
+        ifFailed: (state, error, stackTrace) {
+          trace.add('ifFailed: state $state, $error, ${current?.outcome}');
           return 'corrected';
         },
         (ctx) async {
@@ -212,8 +212,8 @@ final class _Any extends Solo<Object> {
       );
 
   Job<void> cancelledWithHandler(Completer<void> gate) => run<Object, void>(
-        onCancel: (state, cancelled) {
-          trace.add('onCancel: state $state, $cancelled');
+        ifCancelled: (state, cancelled) {
+          trace.add('ifCancelled: state $state, $cancelled');
           return 'corrected';
         },
         (ctx) => ctx.abandonable(() => gate.future),
@@ -261,7 +261,7 @@ final class _Order extends Solo<String> {
   /// Whether the listener sets [blocked] once it hears C.
   final bool blockOnC;
 
-  /// Whether the job has an `onCancel` that corrects the state to
+  /// Whether the job has an `ifCancelled` that corrects the state to
   /// `corrected`.
   final bool corrects;
 
@@ -303,7 +303,7 @@ final class _Order extends Solo<String> {
           answers.add('$state: ${kept ? 'keep' : 'reject'}');
           return kept;
         },
-        onCancel: corrects ? (state, cancelled) => 'corrected' : null,
+        ifCancelled: corrects ? (state, cancelled) => 'corrected' : null,
         (ctx) => ctx.abandonable(() => Completer<void>().future),
       );
 }
@@ -351,7 +351,7 @@ final class _Leaky extends Solo<int> {
 
   @override
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
-      trace.add('onError: $error');
+      trace.add('ifFailed: $error');
 
   @override
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
@@ -372,7 +372,7 @@ final class _Leaky extends Solo<int> {
       });
 
   Job<void> corrected(Completer<void> gate) => run<int, void>(
-        onCancel: (state, cancelled) => 4,
+        ifCancelled: (state, cancelled) => 4,
         (ctx) => ctx.abandonable(() => gate.future),
       );
 }
@@ -449,8 +449,8 @@ final class _Eligible extends Solo<String> {
       run<String, String>(
         key: 'guarded',
         keepWhile: _keep,
-        onError: (state, error, stackTrace) => 'corrected by onError',
-        onCancel: (state, cancelled) => 'corrected by onCancel',
+        ifFailed: (state, error, stackTrace) => 'corrected by ifFailed',
+        ifCancelled: (state, cancelled) => 'corrected by ifCancelled',
         (ctx) async {
           if (child != null) {
             ctx.run(job<String, void>((c) => child.future)).ignore();
@@ -471,11 +471,11 @@ final class _Eligible extends Solo<String> {
       run<String, void>(
         key: 'parent',
         keepWhile: _keep,
-        onCancel: handlers ? (state, cancelled) => 'parent corrected' : null,
+        ifCancelled: handlers ? (state, cancelled) => 'parent corrected' : null,
         (ctx) async {
           final child = job<String, void>(
             key: 'child',
-            onCancel: (state, cancelled) => 'child corrected',
+            ifCancelled: (state, cancelled) => 'child corrected',
             (c) => c.abandonable(() => gate.future),
           );
           ctx.run(child).ignore();
@@ -489,7 +489,7 @@ final class _Eligible extends Solo<String> {
   Job<void> parentOfWriter() => run<String, void>(
         key: 'parent',
         keepWhile: _keep,
-        onCancel: (state, cancelled) => 'parent corrected',
+        ifCancelled: (state, cancelled) => 'parent corrected',
         (ctx) async {
           await ctx.run(
             job<String, void>((c) async => c.emit('bad from the child')),
@@ -526,7 +526,7 @@ final class _Eligible extends Solo<String> {
   Job<void> _watcher() => watcher = job<String, void>(
         key: 'watcher',
         keepWhile: _keep,
-        onCancel: (state, cancelled) => 'watcher corrected',
+        ifCancelled: (state, cancelled) => 'watcher corrected',
         (c) => c.abandonable(() => Completer<void>().future),
       );
 
@@ -536,8 +536,8 @@ final class _Eligible extends Solo<String> {
       run<String, void>(
         key: 'own',
         keepWhile: _keep,
-        onError: (state, error, stackTrace) => 'corrected by onError',
-        onCancel: (state, cancelled) => 'corrected by onCancel',
+        ifFailed: (state, error, stackTrace) => 'corrected by ifFailed',
+        ifCancelled: (state, cancelled) => 'corrected by ifCancelled',
         (ctx) async {
           ctx.emit('bad from the job itself');
           await gate.future;
@@ -548,7 +548,7 @@ final class _Eligible extends Solo<String> {
 
   Job<void> stateAsMismatch() => run<String, void>(
         key: 'stateAs',
-        onCancel: (state, cancelled) => 'corrected by onCancel',
+        ifCancelled: (state, cancelled) => 'corrected by ifCancelled',
         (ctx) async {
           ctx
             ..emit('loading')
@@ -558,7 +558,7 @@ final class _Eligible extends Solo<String> {
 
   Job<void> handlerThrows(Completer<void> gate) => run<String, void>(
         key: 'thrower',
-        onCancel: (state, cancelled) => throw StateError('handler boom'),
+        ifCancelled: (state, cancelled) => throw StateError('handler boom'),
         (ctx) => ctx.abandonable(() => gate.future),
       );
 
@@ -570,8 +570,8 @@ final class _Eligible extends Solo<String> {
   Job<String> droppable(Completer<void> gate) => run<String, String>(
         key: 'droppable',
         policy: Policy.droppable,
-        onError: (state, error, stackTrace) => 'corrected by onError',
-        onCancel: (state, cancelled) => 'corrected by onCancel',
+        ifFailed: (state, error, stackTrace) => 'corrected by ifFailed',
+        ifCancelled: (state, cancelled) => 'corrected by ifCancelled',
         (ctx) async {
           await ctx.abandonable(() => gate.future);
           return 'done';
@@ -581,7 +581,7 @@ final class _Eligible extends Solo<String> {
   Job<String> refused() => run<String, String>(
         key: 'refused',
         canStart: (state) => false,
-        onCancel: (state, cancelled) => 'corrected by onCancel',
+        ifCancelled: (state, cancelled) => 'corrected by ifCancelled',
         (ctx) async => 'done',
       );
 
@@ -590,7 +590,7 @@ final class _Eligible extends Solo<String> {
       run<String, void>(
         key: 'writer',
         keepWhile: rule ? _keep : null,
-        onCancel: (state, cancelled) {
+        ifCancelled: (state, cancelled) {
           externalSetState('bad fact');
           return 'corrected from $state';
         },
@@ -1531,7 +1531,7 @@ void main() {
       expect('${job.outcome}', 'Cancelled(manual)');
       expect(leaky.currentState, 4);
       expect(leaky.trace, [
-        'onError: Bad state: delivery boom on 4',
+        'ifFailed: Bad state: delivery boom on 4',
         'onUnanswered: Bad state: delivery boom on 4',
       ]);
       expect(zone, isEmpty, reason: 'onUnanswered answered for it');
@@ -1845,7 +1845,7 @@ void main() {
         'body',
         'child',
         'cleanup',
-        'onError: state initial, Bad state: boom, Failed(Bad state: boom)',
+        'ifFailed: state initial, Bad state: boom, Failed(Bad state: boom)',
         'onFinish of first in corrected',
         'the next job in corrected',
         'onFinish of next in corrected',
@@ -1853,7 +1853,7 @@ void main() {
       expect(zone, ['Bad state: boom']);
     });
 
-    test('onCancel is handed the current state and the cancellation', () {
+    test('ifCancelled is handed the current state and the cancellation', () {
       fakeAsync((async) {
         final any = _Any();
         final job = any.cancelledWithHandler(Completer<void>());
@@ -1864,7 +1864,7 @@ void main() {
 
         expect(
           any.trace,
-          ['onCancel: state changed meanwhile, Cancelled(manual)'],
+          ['ifCancelled: state changed meanwhile, Cancelled(manual)'],
         );
         expect(any.currentState, 'corrected');
         any.close().ignore();
@@ -1912,7 +1912,7 @@ void main() {
       });
     });
 
-    test('the first attempt: cancelled, onCancel writes over the fact', () {
+    test('the first attempt: cancelled, ifCancelled writes over the fact', () {
       fakeAsync((async) {
         for (final what in ['the user', 'a screen closing']) {
           final controller = withoutRule();
@@ -2005,8 +2005,9 @@ void main() {
       );
     });
 
-    test('the rules: cancelled in a compatible state, onCancel still corrects',
-        () {
+    test(
+        'the rules: cancelled in a compatible state, ifCancelled still '
+        'corrects', () {
       fakeAsync((async) {
         final controller = withRule();
         final job = controller.load();
@@ -2089,7 +2090,7 @@ void main() {
         eligible.reflect('ok again');
         job.cancel().ignore();
         async.flushMicrotasks();
-        expect(eligible.currentState, 'corrected by onCancel');
+        expect(eligible.currentState, 'corrected by ifCancelled');
         eligible.close().ignore();
         async.flushTimers();
       });
@@ -2193,7 +2194,7 @@ void main() {
           ..ignoreFailure();
         async.flushMicrotasks();
         expect(failed.outcome, isA<Failed>());
-        expect(failing.currentState, 'corrected by onError');
+        expect(failing.currentState, 'corrected by ifFailed');
 
         final cancelling = _Eligible();
         final gate = Completer<void>();
@@ -2204,7 +2205,7 @@ void main() {
         gate.complete();
         async.flushMicrotasks();
         expect('${cancelled.outcome}', 'Cancelled(manual)');
-        expect(cancelling.currentState, 'corrected by onCancel');
+        expect(cancelling.currentState, 'corrected by ifCancelled');
         failing.close().ignore();
         cancelling.close().ignore();
         async.flushTimers();

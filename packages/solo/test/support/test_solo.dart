@@ -15,8 +15,8 @@ mixin OpenSolo<S extends Object> on Solo<S> {
     bool cancellable = true,
     Duration? timeout,
     String Function()? describe,
-    S Function(S state, Object error, StackTrace stackTrace)? onError,
-    S Function(S state, Cancelled cancelled)? onCancel,
+    S Function(S state, Object error, StackTrace stackTrace)? ifFailed,
+    S Function(S state, Cancelled cancelled)? ifCancelled,
   }) =>
       super.job<W, T>(
         body,
@@ -26,8 +26,8 @@ mixin OpenSolo<S extends Object> on Solo<S> {
         cancellable: cancellable,
         timeout: timeout,
         describe: describe,
-        onError: onError,
-        onCancel: onCancel,
+        ifFailed: ifFailed,
+        ifCancelled: ifCancelled,
       );
 
   @override
@@ -98,8 +98,8 @@ mixin OpenSolo<S extends Object> on Solo<S> {
     Duration? timeout,
     String Function()? describe,
     Policy policy = Policy.sequential,
-    S Function(S state, Object error, StackTrace stackTrace)? onError,
-    S Function(S state, Cancelled cancelled)? onCancel,
+    S Function(S state, Object error, StackTrace stackTrace)? ifFailed,
+    S Function(S state, Cancelled cancelled)? ifCancelled,
   }) =>
       super.run<W, T>(
         body,
@@ -110,8 +110,8 @@ mixin OpenSolo<S extends Object> on Solo<S> {
         timeout: timeout,
         describe: describe,
         policy: policy,
-        onError: onError,
-        onCancel: onCancel,
+        ifFailed: ifFailed,
+        ifCancelled: ifCancelled,
       );
 
   @override

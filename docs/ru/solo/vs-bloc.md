@@ -637,8 +637,8 @@ final class RefreshController extends Solo<RefreshState> {
   Job<void> refresh() => run<RefreshState, void>(
         key: 'refresh',
         policy: Policy.restart,
-        onError: (state, error, stackTrace) => const Initial(),
-        onCancel: (state, cancelled) => const Initial(),
+        ifFailed: (state, error, stackTrace) => const Initial(),
+        ifCancelled: (state, cancelled) => const Initial(),
         (ctx) async {
           ctx.emit(const Loading());
           await ctx.abandonable(_api.refresh);
@@ -667,10 +667,10 @@ final class RefreshController extends Solo<RefreshState> {
 `Job`, то есть отвечает ожидающим обновлением, если оно есть. Этому методу
 нужен именно такой порядок: обновление оказывается в очереди только потому, что
 `refresh()` вызвали второй раз, а `Policy.restart` в тот же момент отменила
-работающее. `ctx.abandonable` прекращает ожидание API, а `onCancel` возвращает
-`Initial` до продвижения очереди. Успешное обновление публикует `Initial`
-из тела; `onError` сбрасывает индикатор при ошибке, при этом `Job` по-прежнему
-сообщает `Failed`.
+работающее. `ctx.abandonable` прекращает ожидание API, а `ifCancelled`
+возвращает `Initial` до продвижения очереди. Успешное обновление публикует
+`Initial` из тела; `ifFailed` сбрасывает индикатор при ошибке, при этом `Job`
+по-прежнему сообщает `Failed`.
 
 Момент обновления различается: обработчик события отмены в bloc меняет
 состояние при своём выполнении, а обработчик состояния solo вызывается после
@@ -1436,8 +1436,8 @@ Future<Map<String, Object?>> handlePayRequest(
 
 Тело публикует `Paid` до завершения с квитанцией, а `close()` ждёт этого
 завершения. Ошибки API по-прежнему дают `Failed`; состояние ошибки можно задать
-через `run(onError: ...)`. Отозвать списание всё равно не смог бы ни один метод
-ожидания: это API не предоставляет механизма отмены.
+через `run(ifFailed: ...)`. Отозвать списание всё равно не смог бы ни один
+метод ожидания: это API не предоставляет механизма отмены.
 
 Флаг также отклоняет ручную отмену, пока оплата стоит в очереди. Если
 пользователь должен иметь возможность отменить оплату до начала списания,
@@ -1578,7 +1578,7 @@ final class ReportController extends Solo<ReportState> with SoloStream {
 Уже начатая сборка завершается в обоих примерах. `join` ждёт её, прежде чем
 разрешить старт другой корневой `Job`. До работы, которую можно остановить,
 дополнительно дотягивается `ctx.onCancel`, как в разделе 5. Итоговые
-обработчики состояния `onError` и `onCancel`, если они заданы, запрещаются
+обработчики состояния `ifFailed` и `ifCancelled`, если они заданы, запрещаются
 несовместимым внешним обновлением, поэтому не перезаписывают `SignedOut` при
 уборке.
 

@@ -176,19 +176,20 @@ void main() {
     });
   });
 
-  test('a deadline reaching onCancel, not onError', () {
+  test('a deadline reaching ifCancelled, not ifFailed', () {
     runSolo((solo, journal, async) {
       var errors = 0;
       final job = solo.run<TestState, void>(
         key: 'load',
         timeout: ms(10),
-        onError: (state, error, stackTrace) {
+        ifFailed: (state, error, stackTrace) {
           errors++;
           return state;
         },
-        onCancel: (state, cancelled) => cancelled.reason is TimeoutCancelReason
-            ? const Working(a: 1)
-            : const Initial(),
+        ifCancelled: (state, cancelled) =>
+            cancelled.reason is TimeoutCancelReason
+                ? const Working(a: 1)
+                : const Initial(),
         (ctx) => pause(ctx, 50),
       );
       async.elapse(ms(100));
@@ -208,9 +209,10 @@ void main() {
       final job = solo.run<TestState, void>(
         key: 'load',
         timeout: ms(10),
-        onCancel: (state, cancelled) => cancelled.reason is TimeoutCancelReason
-            ? const Preparing(progress: 9)
-            : state,
+        ifCancelled: (state, cancelled) =>
+            cancelled.reason is TimeoutCancelReason
+                ? const Preparing(progress: 9)
+                : state,
         (ctx) async {
           ctx
             ..emit(const Working(a: 1))

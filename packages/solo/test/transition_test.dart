@@ -72,7 +72,7 @@ void main() {
       Solo.observer = _TransitionObserver(seen);
       final job = solo.run<TestState, void>(
         key: 'job',
-        onCancel: (state, cancelled) => const Disposed(),
+        ifCancelled: (state, cancelled) => const Disposed(),
         (ctx) async => pause(ctx, 100),
       );
       async.elapse(const Duration(milliseconds: 10));

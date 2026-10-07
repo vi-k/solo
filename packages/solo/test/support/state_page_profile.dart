@@ -19,8 +19,8 @@ final class ProfileController extends Solo<ProfileState> {
   Job<String> loadWithHandlers() => run<ProfileState, String>(
         // Both compute a state and nothing else. They run after the body,
         // children and cleanup, and the outcome is already fixed.
-        onError: (state, error, stackTrace) => Failure(error),
-        onCancel: (state, cancelled) => const Initial(),
+        ifFailed: (state, error, stackTrace) => Failure(error),
+        ifCancelled: (state, cancelled) => const Initial(),
         (ctx) async {
           ctx.emit(const Loading());
           final name = await ctx.abandonable(api.fetchName);
@@ -35,8 +35,8 @@ final class ProfileController extends Solo<ProfileState> {
         key: 'load',
         policy: Policy.droppable,
         keepWhile: (state) => state is! Disconnected,
-        onError: (state, error, stackTrace) => Failure(error),
-        onCancel: (state, cancelled) => const Initial(),
+        ifFailed: (state, error, stackTrace) => Failure(error),
+        ifCancelled: (state, cancelled) => const Initial(),
         (ctx) async {
           ctx.emit(const Loading());
           final name = await ctx.abandonable(api.fetchName);

@@ -19,8 +19,8 @@ mixin CameraParts on Solo<CameraState> {
         key: CameraKey.init,
         policy: Policy.droppable,
         canStart: (state) => state is Initial,
-        onError: (state, error, stackTrace) => Broken(error),
-        onCancel: (state, cancelled) => Broken(cancelled),
+        ifFailed: (state, error, stackTrace) => Broken(error),
+        ifCancelled: (state, cancelled) => Broken(cancelled),
         (ctx) async {
           ctx.emit(const Preparing());
           await ctx.join(hw.open);
@@ -32,8 +32,8 @@ mixin CameraParts on Solo<CameraState> {
         key: CameraKey.reopen,
         policy: Policy.droppable,
         canStart: (state) => state is Ready || state is Broken,
-        onError: (state, error, stackTrace) => Broken(error),
-        onCancel: (state, cancelled) => Broken(cancelled),
+        ifFailed: (state, error, stackTrace) => Broken(error),
+        ifCancelled: (state, cancelled) => Broken(cancelled),
         (ctx) async {
           final zoom = switch (ctx.state) {
             Ready(:final zoom) => zoom,

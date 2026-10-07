@@ -288,7 +288,7 @@ abstract class Solo<S extends Object> {
   /// ask. Running, it turns down all four. [JobContext.uncancellable] says
   /// the same about one step of the body rather than about the whole job.
   ///
-  /// [onError] and [onCancel] synchronously map the current state to the
+  /// [ifFailed] and [ifCancelled] synchronously map the current state to the
   /// state after a failed or cancelled body. They run after children and
   /// resource cleanup, with the outcome fixed, before [Solo.onFinish]
   /// and before the next queued job. They do not change or observe the
@@ -312,21 +312,21 @@ abstract class Solo<S extends Object> {
   /// value: if the job's rules accept it, the handler's result lands on
   /// top of it, computed from the state before it; if they refuse it,
   /// the handler's result is dropped. Cleanup belongs in
-  /// [JobContext.onDispose] or [JobContext.onDiscard]. The [onCancel]
-  /// parameter runs at completion; [JobContext.onCancel] instead delivers
-  /// the cancellation signal immediately to the operation being stopped.
+  /// [JobContext.onDispose] or [JobContext.onDiscard]. [ifCancelled] runs at
+  /// completion; the signal to the operation being stopped belongs in
+  /// [JobContext.onCancel], which delivers it immediately.
   ///
   /// [timeout] gives the job a deadline counted from the start of its body,
   /// not from [add]: the time in the queue is not counted. What it bounds
   /// and how it lands are what [Job.new] says of its own `timeout`. The
-  /// deadline is a cancellation, not an error: [onCancel] receives a
-  /// `Cancelled(timeout)` whose reason is a [TimeoutCancelReason], [onError]
+  /// deadline is a cancellation, not an error: [ifCancelled] receives a
+  /// `Cancelled(timeout)` whose reason is a [TimeoutCancelReason], [ifFailed]
   /// is not called, and [Job.value] throws that [Cancelled], which
   /// `on TimeoutException` does not catch. A handler that rolls back a
   /// cancellation and reports an error tells the two apart by the reason:
   ///
   /// ```dart
-  /// onCancel: (state, cancelled) => cancelled.reason is TimeoutCancelReason
+  /// ifCancelled: (state, cancelled) => cancelled.reason is TimeoutCancelReason
   ///     ? const Failure('timed out')
   ///     : const Initial(),
   /// ```
@@ -346,8 +346,8 @@ abstract class Solo<S extends Object> {
     bool cancellable = true,
     Duration? timeout,
     String Function()? describe,
-    S Function(S state, Object error, StackTrace stackTrace)? onError,
-    S Function(S state, Cancelled cancelled)? onCancel,
+    S Function(S state, Object error, StackTrace stackTrace)? ifFailed,
+    S Function(S state, Cancelled cancelled)? ifCancelled,
   }) =>
       _SoloJob<S, W, T>(
         this,
@@ -359,8 +359,8 @@ abstract class Solo<S extends Object> {
         timeout: timeout,
         describe: describe,
         observer: _jobObserver,
-        onError: onError,
-        onCancel: onCancel,
+        ifFailed: ifFailed,
+        ifCancelled: ifCancelled,
       );
 
   /// Creates an accumulator that collects events into an immutable list.
@@ -601,13 +601,13 @@ abstract class Solo<S extends Object> {
   /// [job] throws, before anything is queued: [ArgumentError] for a
   /// [timeout] that is zero or negative or comes with `cancellable: false`.
   ///
-  /// A [timeout] that runs out reaches [onCancel], not [onError]: the
+  /// A [timeout] that runs out reaches [ifCancelled], not [ifFailed]: the
   /// deadline is a cancellation with a [TimeoutCancelReason], counted from
   /// the start of the body and not from this call. To show it as a failure,
   /// branch on the reason:
   ///
   /// ```dart
-  /// onCancel: (state, cancelled) => cancelled.reason is TimeoutCancelReason
+  /// ifCancelled: (state, cancelled) => cancelled.reason is TimeoutCancelReason
   ///     ? const Failure('timed out')
   ///     : const Initial(),
   /// ```
@@ -634,8 +634,8 @@ abstract class Solo<S extends Object> {
     Duration? timeout,
     String Function()? describe,
     Policy policy = Policy.sequential,
-    S Function(S state, Object error, StackTrace stackTrace)? onError,
-    S Function(S state, Cancelled cancelled)? onCancel,
+    S Function(S state, Object error, StackTrace stackTrace)? ifFailed,
+    S Function(S state, Cancelled cancelled)? ifCancelled,
   }) =>
       add(
         job<W, T>(
@@ -646,8 +646,8 @@ abstract class Solo<S extends Object> {
           cancellable: cancellable,
           timeout: timeout,
           describe: describe,
-          onError: onError,
-          onCancel: onCancel,
+          ifFailed: ifFailed,
+          ifCancelled: ifCancelled,
         ),
         policy: policy,
       );
@@ -955,7 +955,7 @@ abstract class Solo<S extends Object> {
   /// of the body that a cancellation covered afterwards — the outcome carries
   /// the cancellation, whoever reads it: `job.value`, `ctx.run`, a group.
   /// [Job.ignoreFailure] keeps the last two from coming here. Any other failure
-  /// of a body does not come here — it becomes a [Failed], where `run(onError:
+  /// of a body does not come here — it becomes a [Failed], where `run(ifFailed:
   /// ...)` computes a state from it and an outcome nobody observes reaches the
   /// zone by itself — and neither does a `canStart` that threw, for the same
   /// reason. Every error that comes here has been through [onError] already:

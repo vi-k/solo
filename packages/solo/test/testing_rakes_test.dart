@@ -208,12 +208,12 @@ final class _HandledCamera extends Solo<CameraState> {
   Job<void> connect() => run<Idle, void>(
         key: 'connect',
         timeout: const Duration(seconds: 5),
-        onError: (state, error, stackTrace) {
-          seen.add('onError: $error');
+        ifFailed: (state, error, stackTrace) {
+          seen.add('ifFailed: $error');
           return state;
         },
-        onCancel: (state, cancelled) {
-          seen.add('onCancel: ${cancelled.reason.name}');
+        ifCancelled: (state, cancelled) {
+          seen.add('ifCancelled: ${cancelled.reason.name}');
           return state;
         },
         (ctx) async {
@@ -443,7 +443,8 @@ void main() {
         expect(journal.lines, ['load Cancelled(manual)']);
         expect(api.started, 0);
         _says('`cancel()` completes when the job has finished');
-        _says('its body never ran, and its `onCancel` handler was not called '
+        _says(
+            'its body never ran, and its `ifCancelled` handler was not called '
             'at all');
 
         await profile.close();
@@ -529,7 +530,7 @@ void main() {
           'started ${api.started}, finished ${api.finished}',
           'started 1, finished 0',
         );
-        _says('its `onCancel` handler would publish `Initial` over the '
+        _says('its `ifCancelled` handler would publish `Initial` over the '
             '`Loading` its body had emitted');
       });
     });
@@ -1119,7 +1120,7 @@ void main() {
           );
           _says('The job accepts the cancellation inside the call, and the '
               'outcome is still a few microtasks away');
-          _says('the `onCancel` handler has to run');
+          _says('the `ifCancelled` handler has to run');
 
           profile.close();
           async.flushTimers();
@@ -1642,7 +1643,7 @@ void main() {
         );
       });
 
-      test('the deadline reaches onCancel of run, not onError', () {
+      test('the deadline reaches ifCancelled of run, not ifFailed', () {
         final seen = <String>[];
         fakeAsync((async) {
           final camera = _HandledCamera(FakeCamera(), seen);
@@ -1654,9 +1655,9 @@ void main() {
           async.flushTimers();
         });
 
-        expect(seen, ['onCancel: timeout']);
-        _says('A `run` with `onCancel` gets the deadline there, not in '
-            '`onError`');
+        expect(seen, ['ifCancelled: timeout']);
+        _says('A `run` with `ifCancelled` gets the deadline there, not in '
+            '`ifFailed`');
       });
     });
   });
