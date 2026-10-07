@@ -273,7 +273,8 @@ void main() {
           'state Ready(sent: 0, position: 2, path: ) by Job(each)',
           'Ready(sent: 0, position: 2, path: )',
         ]);
-        _says('Observers see it as a separate job, `Job(each)`.');
+        _says('Observers see it as a separate job, and the name is one '
+            '`ctx.each` gives it: `Job(each)`.');
       });
 
       test('the callback gets a SoloContext, and the child is a SoloJob', () {
