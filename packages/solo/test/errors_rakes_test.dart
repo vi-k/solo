@@ -994,8 +994,9 @@ void main() {
 
     test('each controller decides whether the handler hears its jobs', () {
       _says(
-        'The error arrives at the hook, and the hook calls the handler, so '
-        'each controller decides for its own jobs whether the '
+        'The error arrives at the hook, and the hook calls the handler '
+        '`Solo.unansweredHandler`, so each controller decides for its own '
+        'jobs whether the '
         'application-wide handler hears them at all',
       );
       final served = <String>[];
