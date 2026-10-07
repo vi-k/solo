@@ -357,10 +357,11 @@ cancelled is taken where the rules noticed; `Solo.traceStateChanges`, under
 
 - From `async_job` comes `Job.visitErrors`: it hands each failure inside an
   error to `onFailure` on its own and each cancellation to `onCancelled`, if
-  given. `Solo.onError` and `SoloObserver.onError` hear an error as it came, a
-  `Cancelled` and a `ParallelWaitError` of `[a, b].wait` included, and it is
-  the walk for them; `Solo.onUnanswered` and `Solo.errorHandler` are asked by
-  that walk already. See
+  given. An outcome keeps a `ParallelWaitError` of `[a, b].wait` as it was
+  thrown, and it is the walk for whoever reads one. The hooks need no such
+  call: `Solo.onError` and `SoloObserver.onError` are told about each failure
+  and each `Cancelled` inside it in a call of its own, and `Solo.onUnanswered`
+  and `Solo.errorHandler` are asked about each failure. See
   [Answering for an error](doc/errors.md#answering-for-an-error).
 
 - `Solo` carries its own listeners: `addListener` and `removeListener`, and the

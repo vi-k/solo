@@ -73,7 +73,9 @@ abstract class SoloObserver {
   /// after cancellation, or an abandoned action that fails later. The
   /// job's own cancellation is not an error and never comes here; a
   /// [Cancelled] thrown by an abandoned action does, because for an
-  /// observer that is a late failure like any other.
+  /// observer that is a late failure like any other. One error at a time:
+  /// each failure and each cancellation inside a `ParallelWaitError` comes
+  /// in a call of its own.
   ///
   /// Watching changes nothing about where the error then goes: an error
   /// with nowhere else to go reaches the zone the job was created in

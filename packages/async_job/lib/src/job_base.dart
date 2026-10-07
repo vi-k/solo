@@ -196,22 +196,23 @@ abstract interface class Job<T> {
   /// Walks [error] and hands each failure in it to [onFailure] and each
   /// cancellation to [onCancelled], one at a time.
   ///
-  /// [JobObserver.onError] is handed an error whole. That error can be a
-  /// `ParallelWaitError`: `[a, b].wait` throws one when any of its futures
-  /// fails, and it holds failures and cancellations side by side, other such
-  /// errors too. A check for `error is Cancelled` lets a cancellation inside
-  /// it through, and a report of the whole error names none of its failures.
-  /// To report each failure and drop the cancellations:
+  /// An outcome keeps an error as it was thrown, and so does a `catch`. That
+  /// error can be a `ParallelWaitError`: `[a, b].wait` throws one when any of
+  /// its futures fails, and it holds failures and cancellations side by side,
+  /// other such errors too. A check for `error is Cancelled` lets a
+  /// cancellation inside it through, and a report of the whole error names
+  /// none of its failures. To report each failure and drop the cancellations:
   ///
   /// ```dart
-  /// @override
-  /// void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
-  ///     Job.visitErrors(error, stackTrace, onFailure: report);
+  /// if (outcome case Failed(:final error, :final stackTrace)) {
+  ///   Job.visitErrors(error, stackTrace, onFailure: report);
+  /// }
   /// ```
   ///
-  /// [JobAnswerer.onUnanswered] needs no such walk: the job walks the error
-  /// this way itself and asks about each failure on its own, and that is how
-  /// `Solo.errorHandler` in `solo` gets them.
+  /// The hooks of an observer need no such walk: the job walks the error this
+  /// way itself. [JobObserver.onError] is told about each failure and each
+  /// cancellation on its own, [JobAnswerer.onUnanswered] is asked about each
+  /// failure, and that is how `Solo.errorHandler` in `solo` gets them.
   ///
   /// The rules:
   ///
@@ -1522,10 +1523,37 @@ abstract class JobBase<T> implements Job<T> {
   /// answers for it. A [Failed] an engine of a domain hands to [finish] needs
   /// no call here: [finish] announces it itself. [notifyError] starts here too,
   /// and goes on to the answer.
+  ///
+  /// The observer is told about one error at a time: a `ParallelWaitError` is
+  /// walked as [Job.visitErrors] walks it, and each failure and each
+  /// cancellation inside it gets a call of its own, with its own stack trace.
+  /// The job's own cancellation inside one is left out: the outcome says it.
   @protected
   void notifyObserver(Object error, StackTrace stackTrace) {
     _debug(() => '$this error: $error');
-    _notify(() => _observer?.onError(this, error, stackTrace));
+    final observer = _observer;
+    if (observer == null) {
+      return;
+    }
+    // One call for each error, each guarded on its own. A cancellation is
+    // told like a failure: this hook is the only place that hears one.
+    void tell(Object error, StackTrace stackTrace) =>
+        _notify(() => observer.onError(this, error, stackTrace));
+    _visitErrors(
+      error,
+      stackTrace,
+      onFailure: tell,
+      onCancelled: (cancelled, cancelledStackTrace) {
+        // The job's own cancellation inside an envelope is not news: the
+        // outcome says it. One that comes alone was thrown by a callback,
+        // and that is told.
+        if (identical(cancelled, error) ||
+            (!identical(cancelled, _pendingCancel) &&
+                !identical(cancelled, _outcome))) {
+          tell(cancelled, cancelledStackTrace);
+        }
+      },
+    );
   }
 
   /// Announces [error] and asks for an answer to it.
@@ -1538,9 +1566,9 @@ abstract class JobBase<T> implements Job<T> {
   /// through [JobAnswerer.onUnanswered], whose default body sends it to the
   /// zone the job was created in; without such an observer the error goes to
   /// that zone directly. Two calls, each guarded on its own: an `onError` that
-  /// throws does not cost the error its answer. `onError` hears [error] as it
-  /// came; the answer is asked for each failure inside a `ParallelWaitError`
-  /// on its own, by the walk of [Job.visitErrors].
+  /// throws does not cost the error its answer. Both go by the walk of
+  /// [Job.visitErrors]: `onError` is told about each error inside a
+  /// `ParallelWaitError` on its own, and the answer is asked for each failure.
   ///
   /// A cancellation — a [Cancelled], or a `ParallelWaitError` carrying
   /// nothing but cancellations — never reaches the zone from here, and

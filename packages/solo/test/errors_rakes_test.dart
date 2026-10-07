@@ -1077,8 +1077,11 @@ void main() {
       expect(ran.errors, isEmpty);
     });
 
-    test('the reporting hook hears the error as it came', () {
-      _says('The reporting hook `onError` hears the error as it came');
+    test('the reporting hook hears them one at a time, each Cancelled too', () {
+      _says(
+        'The reporting hook `onError` hears them the same way, one at a time, '
+        'and each `Cancelled` too',
+      );
       late Bench bench;
       _run((async) {
         Solo.errorHandler = (solo, job, error, stackTrace) {};
@@ -1086,7 +1089,16 @@ void main() {
         handsWorkOver(bench);
       });
 
-      expect(bench.heard, hasLength(3), reason: 'two envelopes and one alone');
+      expect(
+        bench.heard,
+        unorderedEquals([
+          'waits: a failure',
+          'waits: Cancelled(handler: a)',
+          'waits: Cancelled(handler: b)',
+          'waits: Cancelled(handler: c)',
+          'waits: Cancelled(handler: alone)',
+        ]),
+      );
     });
 
     test('the handler of the page: each failure on its own, no Cancelled', () {

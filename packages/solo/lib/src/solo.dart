@@ -929,7 +929,10 @@ abstract class Solo<S extends Object> {
   /// `canStart` or `keepWhile` — that threw instead of answering.
   ///
   /// Called once for every such error, to be seen: this hook reports and
-  /// nothing else, and overriding it changes nowhere the error goes.
+  /// nothing else, and overriding it changes nowhere the error goes. One
+  /// error at a time: each failure and each cancellation inside a
+  /// `ParallelWaitError` comes in a call of its own, with its own stack
+  /// trace.
   /// [onUnanswered] is the hook that answers. The job's own cancellation
   /// is not an error and never comes here; a [Cancelled] thrown by an
   /// abandoned action does, because for an observer that is a late failure
@@ -959,9 +962,9 @@ abstract class Solo<S extends Object> {
   /// goes there instead, and nowhere else. Setting an [observer] changes
   /// neither: watching is not answering.
   ///
-  /// **One failure at a time.** [onError] heard the error as it came; this
-  /// hook is called for each failure inside a `ParallelWaitError` on its
-  /// own, with the stack trace of that failure. An uncaught [Cancelled],
+  /// **One failure at a time.** This hook is called for each failure inside
+  /// a `ParallelWaitError` on its own, with the stack trace of that
+  /// failure. An uncaught [Cancelled],
   /// alone or inside one, does not come here: a cancellation is a decision
   /// somebody made, not a failure.
   ///

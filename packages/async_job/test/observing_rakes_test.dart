@@ -1706,22 +1706,37 @@ void main() {
         play(() => leaving(observer: Reporter())),
         [
           'outcome: Done(null)',
-          'onError: ParallelWaitError(2 errors): DatabaseException',
-          'zone: DatabaseException',
-          'zone: Bad state: analytics offline',
-        ],
-        reason: 'onError hears the error as it came',
-      );
-      expect(
-        play(() => leaving(observer: Failures())),
-        [
-          'outcome: Done(null)',
           'onError: DatabaseException',
           'onError: Bad state: analytics offline',
           'zone: DatabaseException',
           'zone: Bad state: analytics offline',
         ],
-        reason: 'Job.visitErrors walks it for onError',
+        reason: 'onError hears them one at a time as well',
+      );
+    });
+
+    test('the outcome keeps the envelope, and Job.visitErrors walks it', () {
+      late Job<void> job;
+      final printed = play(
+        () {
+          job = Job<void>(observer: Reporter(), (ctx) async {
+            await [saveDraft(), sendAnalytics()].wait;
+          });
+          unawaited(readingTheOutcome(job));
+          return job;
+        },
+        outcomeObserved: false,
+      );
+
+      expect(printed, [
+        'onError: DatabaseException',
+        'onError: Bad state: analytics offline',
+        'failed: DatabaseException',
+        'failed: Bad state: analytics offline',
+      ]);
+      expect(
+        (job.outcome! as Failed).error,
+        isA<ParallelWaitError<Object?, Object?>>(),
       );
     });
 

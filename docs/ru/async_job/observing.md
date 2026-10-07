@@ -417,19 +417,19 @@ zone: Bad state: analytics offline
 слышит отдельно. Неперехваченный `Cancelled` не провал, и о нём не спрашивают
 никого, пришёл ли он один или внутри `ParallelWaitError`.
 
-`onError` слышит ошибку такой, какой она пришла: `ParallelWaitError` целиком,
-и `Cancelled` тоже. `Job.visitErrors` делает тот же обход для `onError`,
-который сообщает о каждом провале:
+`onError` тоже слышит их по одной, и `Cancelled` внутри `ParallelWaitError`
+отдельным вызовом. Исход хранит ошибку такой, какой её бросили: тело, упавшее
+с `ParallelWaitError`, кончается `Failed` с этой ошибкой, и `Job.visitErrors`
+делает тот же обход для того, кто читает исход:
 
 ```dart
-final class Failures extends JobObserver {
-  @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
-      Job.visitErrors(
-        error,
-        stackTrace,
-        onFailure: (failure, failureStackTrace) => print('onError: $failure'),
-      );
+final outcome = await job.done;
+if (outcome case Failed(:final error, :final stackTrace)) {
+  Job.visitErrors(
+    error,
+    stackTrace,
+    onFailure: (failure, failureStackTrace) => print('failed: $failure'),
+  );
 }
 ```
 

@@ -418,19 +418,19 @@ hears the analytics error on its own. An uncaught `Cancelled` is not a failure,
 and nobody is asked about it, whether it comes alone or inside a
 `ParallelWaitError`.
 
-`onError` hears the error as it came: a `ParallelWaitError` whole, and a
-`Cancelled` too. `Job.visitErrors` is the same walk for an `onError` that
-reports each failure:
+`onError` hears them one at a time as well, and a `Cancelled` inside a
+`ParallelWaitError` in a call of its own. The outcome keeps the error as it was
+thrown: a body that fails with a `ParallelWaitError` ends `Failed` with that
+error, and `Job.visitErrors` is the same walk for whoever reads the outcome:
 
 ```dart
-final class Failures extends JobObserver {
-  @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
-      Job.visitErrors(
-        error,
-        stackTrace,
-        onFailure: (failure, failureStackTrace) => print('onError: $failure'),
-      );
+final outcome = await job.done;
+if (outcome case Failed(:final error, :final stackTrace)) {
+  Job.visitErrors(
+    error,
+    stackTrace,
+    onFailure: (failure, failureStackTrace) => print('failed: $failure'),
+  );
 }
 ```
 

@@ -142,14 +142,16 @@ Job<void> saving() {
   return job;
 }
 
-final class Failures extends JobObserver {
-  @override
-  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
-      Job.visitErrors(
-        error,
-        stackTrace,
-        onFailure: (failure, failureStackTrace) => print('onError: $failure'),
-      );
+/// Not on the page: the function around the block that reads the outcome.
+Future<void> readingTheOutcome(Job<void> job) async {
+  final outcome = await job.done;
+  if (outcome case Failed(:final error, :final stackTrace)) {
+    Job.visitErrors(
+      error,
+      stackTrace,
+      onFailure: (failure, failureStackTrace) => print('failed: $failure'),
+    );
+  }
 }
 
 final class Crashes extends JobObserver with JobAnswerer {

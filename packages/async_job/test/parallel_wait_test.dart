@@ -541,8 +541,7 @@ void main() {
         (error, stackTrace) => zone.add(error),
       )!;
 
-      expect(errors, hasLength(1));
-      expect(errors.single, isA<ParallelWaitError<Object?, Object?>>());
+      expect(errors, [same(cancelled)], reason: 'not the envelope around it');
       expect(zone, isEmpty);
     });
 
@@ -612,8 +611,11 @@ void main() {
         (error, stackTrace) => zone.add(error),
       )!;
 
-      expect(errors, hasLength(1));
-      expect(errors.single, isA<ParallelWaitError<Object?, Object?>>());
+      expect(
+        errors,
+        [same(boom), isA<Cancelled>()],
+        reason: 'each error of the envelope on its own',
+      );
       expect(
         zone,
         hasLength(2),
@@ -715,13 +717,17 @@ void main() {
       final outcome = await parent.done;
 
       expect(outcome, isA<Failed>());
-      final envelopes =
-          errors.whereType<ParallelWaitError<Object?, Object?>>().toList();
-      expect(errors, hasLength(2));
-      expect(errors.first, same(handlerError));
-      expect(envelopes, hasLength(1));
-      final envelope = envelopes.single;
-      final errorList = envelope.errors! as List<AsyncError?>;
+      // The child hears its handler fail; the parent hears each error of the
+      // envelope its body threw, the child's cancellation among them.
+      expect(errors, [
+        same(handlerError),
+        isA<Cancelled>(),
+        same(handlerError),
+        same(cancellation),
+      ]);
+      final failure = (outcome as Failed).error;
+      final errorList = (failure as ParallelWaitError<Object?, Object?>).errors!
+          as List<AsyncError?>;
       expect(
         errorList.any((error) => identical(error?.error, handlerError)),
         isTrue,
@@ -730,7 +736,6 @@ void main() {
         errorList.any((error) => identical(error?.error, cancellation)),
         isTrue,
       );
-      expect(errors, contains(same(handlerError)));
       expect(controller.hasListener, isFalse);
       // Not awaited: the subscription is cancelled by now, and `close` then
       // hands back a future of the root zone, which fake time does not run.
@@ -839,8 +844,11 @@ void main() {
 
       expect(outcome, isA<Cancelled>());
       expect((outcome as Cancelled).reason, isA<ManualCancelReason>());
-      expect(errors, hasLength(1));
-      expect(errors.single, isA<ParallelWaitError<Object?, Object?>>());
+      expect(
+        errors,
+        [same(failure)],
+        reason: "the failure alone: the job's own cancellation is not news",
+      );
       expect(outcome, same(cancellation));
     });
 

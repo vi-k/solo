@@ -90,7 +90,10 @@ abstract mixin class JobObserver {
   /// cancellation callback, work handed over with [JobContext.unattended], a
   /// failure while formatting a child's cancellation description, or a failure
   /// an engine of a domain handed to a job already over. Each is told here
-  /// once.
+  /// once, and one error at a time: when the error is a `ParallelWaitError`,
+  /// each failure and each cancellation inside it comes in a call of its
+  /// own, with its own stack trace, as [Job.visitErrors] walks it. The
+  /// outcome keeps the error as it was thrown.
   ///
   /// Notification only: overriding it changes nothing about where the error
   /// goes. The errors with no outcome go on to [JobAnswerer.onUnanswered] of an
@@ -168,12 +171,11 @@ mixin JobAnswerer on JobObserver {
   /// here: it has an outcome, and one nobody observes reaches the zone by
   /// itself. Every error that comes here has been through [onError] already.
   ///
-  /// **One failure at a time.** [onError] heard the error as it came; here
-  /// the job walks a `ParallelWaitError` the way [Job.visitErrors] does and
-  /// asks about each failure inside it in a call of its own, with the stack
-  /// trace of that failure. A cancellation does not come here — a
-  /// [Cancelled], alone or inside a `ParallelWaitError`: it is a decision
-  /// somebody made, not a failure.
+  /// **One failure at a time.** The job walks a `ParallelWaitError` the way
+  /// [Job.visitErrors] does and asks about each failure inside it in a call
+  /// of its own, with the stack trace of that failure. A cancellation does
+  /// not come here — a [Cancelled], alone or inside a `ParallelWaitError`:
+  /// it is a decision somebody made, not a failure.
   ///
   /// **What the default body does.** It hands the error to the zone the
   /// job was created in — where the error goes when the job has no

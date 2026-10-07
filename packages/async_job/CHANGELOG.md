@@ -323,13 +323,15 @@ named as `Job(key)`, not by its class.
 
 - **`Job.visitErrors` hands each failure and each cancellation inside an error
   to a callback of its own.** A `ParallelWaitError` that `[a, b].wait` throws
-  holds several errors, other such errors too. `JobObserver.onError` hears such
-  an error whole: a check for `error is Cancelled` lets a cancellation inside
-  it through, and a report of the whole error names none of its failures.
-  `Job.visitErrors(error, stackTrace, onFailure: report)` reports each failure
-  and drops each uncaught `Cancelled`. `JobAnswerer.onUnanswered` needs no such
-  call: the job asks it by the same walk. See
-  [Answering for errors](doc/observing.md#answering-for-errors).
+  holds several errors, other such errors too. An outcome keeps such an error
+  as it was thrown, and so does a `catch`: a check for `error is Cancelled`
+  lets a cancellation inside it through, and a report of the whole error names
+  none of its failures. `Job.visitErrors(error, stackTrace, onFailure: report)`
+  reports each failure and drops each uncaught `Cancelled`. The hooks of an
+  observer need no such call, the job walks the error for them:
+  `JobObserver.onError` is told about each failure and each cancellation in a
+  call of its own, and `JobAnswerer.onUnanswered` is asked about each failure.
+  See [Answering for errors](doc/observing.md#answering-for-errors).
 
 - The debug channel names a job that handed its value over and dropped the
   conditional registrations that went with it:
