@@ -1,10 +1,12 @@
 # Streams
 
 A job of a controller follows a stream in a child that owns the subscription:
-`ctx.each` starts that child, hands its callback each event with the child's
-context, and ends the subscription with the job. This page is about what a
-controller adds to such a child: the queue it holds, `close()`, the start
-rules, and the stream of another controller.
+`ctx.each` starts that child and hands its callback each event with the child's
+context. The subscription lives exactly as long as the child: the child ends
+when the stream is done, and cancelling the child or the job cancels the
+subscription. This page is about what a controller adds to such a child: the
+queue it holds, `close()`, the start rules, and the stream of another
+controller.
 
 Both sections below open with the version habit or the names of this API lead
 to — the `listen` every Dart program already has, the stream that is there to
