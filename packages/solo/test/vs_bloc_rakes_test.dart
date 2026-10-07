@@ -711,7 +711,7 @@ void main() {
       });
       expect(errors, isEmpty);
       expect(foundQueued, isTrue);
-      expect('$first', 'Cancelled(manual)');
+      expect('$first', 'Cancelled(replaced)');
       expect('$second', 'Cancelled(manual)');
       expect('${controller.currentState}', 'Initial');
       _says('`lastJobWhere` searches the queue from the end and falls back '
@@ -843,8 +843,8 @@ void main() {
       expect('${controller.currentState}', 'Ready(3ms)');
       expect(outcomes, [
         'Done(null)',
-        'Cancelled(manual)',
-        'Cancelled(manual)',
+        'Cancelled(replaced)',
+        'Cancelled(replaced)',
         'Done(null)',
         'Done(null)',
       ]);
@@ -855,7 +855,7 @@ void main() {
       _says('`pause` and `play` remain in the same queue with their default '
           'sequential policy.');
       _says('callers can inspect the outcome of each `seek`, including '
-          '`Cancelled(manual)` for a replaced request');
+          '`Cancelled(replaced)` for a replaced request');
     });
 
     test('a seek in flight is stopped before its replacement starts', () {
@@ -886,7 +886,7 @@ void main() {
         '${device.trace}',
         '[seek 1 start, seek 1 stopped, seek 3 start, seek 3 end]',
       );
-      expect('$stale', 'Cancelled(manual)');
+      expect('$stale', 'Cancelled(replaced)');
       expect('$fresh', 'Done(null)');
       _says('`[seek 1 start, seek 1 stopped, seek 3 start, seek 3 end]` '
           'when `seek 1` is already active');
@@ -916,7 +916,7 @@ void main() {
         controller.met,
         ['join threw StateError: Bad state: seek 1 interrupted'],
       );
-      expect('$stale', 'Cancelled(manual)');
+      expect('$stale', 'Cancelled(replaced)');
       expect('$fresh', 'Done(null)');
       _says('If the operation fails after cancellation, its error reaches '
           "the body; the job's outcome still remains cancelled.");
@@ -951,8 +951,8 @@ void main() {
       );
       expect('${controller.currentState}', 'MapState(3, z4)');
       expect(outcomes, [
-        'Cancelled(manual)',
-        'Cancelled(manual)',
+        'Cancelled(replaced)',
+        'Cancelled(replaced)',
         'Done(null)',
         'Done(null)',
       ]);
@@ -1579,7 +1579,7 @@ void main() {
           ble.trace[index].replaceFirst('start', 'end'),
         );
       }
-      expect('$first', 'Cancelled(manual)');
+      expect('$first', 'Cancelled(replaced)');
       expect('$second', 'Done(null)');
       expect('${controller.currentState}', 'Flashing(6/6)');
       _says('The device gets the chunks in the order of the locked bloc, '
@@ -1587,7 +1587,7 @@ void main() {
           'of it has ended.');
       _says('`join` waits for the current write and throws `Cancelled` once '
           'it returns, before the next iteration; the replaced upload ends '
-          'at `Cancelled(manual)`.');
+          'at `Cancelled(replaced)`.');
     });
 
     test('a Broken state from outside stops the upload after its write', () {
@@ -1693,7 +1693,7 @@ void main() {
         async.flushMicrotasks();
       });
       expect(errors, isEmpty);
-      expect('$staleBeforeAnyBuffer', 'Cancelled(manual)');
+      expect('$staleBeforeAnyBuffer', 'Cancelled(replaced)');
       expect(startedWithoutWaiting, isTrue);
       expect(closedBeforeTheLateBuffer, isTrue);
       expect(
@@ -1764,7 +1764,7 @@ void main() {
       // The second decode never began: the first one held the queue.
       expect(decoder.trace, ['open 1', 'ready 1', 'release 1']);
       expect(buffer.releases, 1);
-      expect(outcomes, ['Cancelled(manual)', 'Cancelled(closed)']);
+      expect(outcomes, ['Cancelled(replaced)', 'Cancelled(closed)']);
       _says('Use `join` when both the operation and its resource release '
           'must finish before the queue or controller proceeds.');
     });

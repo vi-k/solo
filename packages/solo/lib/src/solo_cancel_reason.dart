@@ -39,3 +39,17 @@ final class DuplicateCancelReason extends SoloCancelReason {
   @override
   String get name => 'duplicate';
 }
+
+/// [Solo.add] under `Policy.replace` or `Policy.restart` put a newer job
+/// with the same key in this one's place: took it out of the queue, or,
+/// under `restart`, cancelled it while it ran.
+///
+/// A reason of its own, apart from [ManualCancelReason]: nobody asked for
+/// this job to stop, a later call with its key stands in for it.
+final class ReplacedCancelReason extends SoloCancelReason {
+  /// Creates a replacement reason.
+  const ReplacedCancelReason();
+
+  @override
+  String get name => 'replaced';
+}

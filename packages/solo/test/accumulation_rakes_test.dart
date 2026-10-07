@@ -618,7 +618,7 @@ void main() {
       expect(run.errors, isEmpty);
       expect(
         run.outcomes,
-        ['Cancelled(manual)', 'Cancelled(manual)', 'Done(null)'],
+        ['Cancelled(replaced)', 'Cancelled(replaced)', 'Done(null)'],
       );
     });
 
@@ -1262,7 +1262,7 @@ void main() {
           '${player.currentState.runtimeType}',
         ]);
       });
-      expect(seen, ['Cancelled(manual)', 'Done(null)', 'Playing']);
+      expect(seen, ['Cancelled(replaced)', 'Done(null)', 'Playing']);
     });
 
     test('removeWhere skips a protected job unless force is given', () {
@@ -2227,7 +2227,7 @@ void main() {
         );
         seen.add('${one.outcome}, ${two.outcome}, ${bench.queued}');
       });
-      expect(seen, ['Cancelled(manual), Cancelled(manual), [k]']);
+      expect(seen, ['Cancelled(replaced), Cancelled(replaced), [k]']);
     });
 
     test('a new accumulator on every call joins nothing', () {

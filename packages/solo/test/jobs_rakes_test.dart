@@ -698,8 +698,8 @@ void main() {
         expect(
           queued.outcome,
           isA<Cancelled>()
-              .having((c) => '$c', 'text', 'Cancelled(manual)')
-              .having((c) => c.reason, 'reason', isA<ManualCancelReason>())
+              .having((c) => '$c', 'text', 'Cancelled(replaced)')
+              .having((c) => c.reason, 'reason', isA<ReplacedCancelReason>())
               .having((c) => c.started, 'started', isFalse),
           reason: 'removed inside the call',
         );
@@ -736,7 +736,7 @@ void main() {
         );
 
         expect(kept.isQueued, isTrue);
-        expect('${removed.outcome}', 'Cancelled(manual)');
+        expect('${removed.outcome}', 'Cancelled(replaced)');
         async.flushTimers();
         expect('${kept.outcome}', 'Done(null)');
         expect('${replacement.outcome}', 'Done(null)');
@@ -758,7 +758,11 @@ void main() {
         final queued = camera.seek(const Duration(seconds: 2));
         final last = camera.seek(const Duration(seconds: 3));
 
-        expect('${queued.outcome}', 'Cancelled(manual)', reason: 'as replace');
+        expect(
+          '${queued.outcome}',
+          'Cancelled(replaced)',
+          reason: 'as replace',
+        );
         expect(running.isCancelled, isTrue, reason: 'asked as it is submitted');
         expect(running.isFinished, isFalse, reason: 'and not over yet');
         expect(last.isQueued, isTrue);
@@ -767,8 +771,8 @@ void main() {
         expect(
           running.outcome,
           isA<Cancelled>()
-              .having((c) => '$c', 'text', 'Cancelled(manual)')
-              .having((c) => c.reason, 'reason', isA<ManualCancelReason>()),
+              .having((c) => '$c', 'text', 'Cancelled(replaced)')
+              .having((c) => c.reason, 'reason', isA<ReplacedCancelReason>()),
         );
         expect('${last.outcome}', 'Done(null)');
         // The token stopped the device, and the next seek began after that:
@@ -949,7 +953,7 @@ void main() {
         expect(next.isRunning, isFalse);
 
         async.flushTimers();
-        expect('${replaced.outcome}', 'Cancelled(manual)');
+        expect('${replaced.outcome}', 'Cancelled(replaced)');
         expect(stage.trace, [
           'seek 1 begins',
           'seek 1 ends',
@@ -970,7 +974,7 @@ void main() {
         final next = camera.seekLetGo(const Duration(seconds: 2));
         async.flushMicrotasks();
 
-        expect('${replaced.outcome}', 'Cancelled(manual)', reason: 'at once');
+        expect('${replaced.outcome}', 'Cancelled(replaced)', reason: 'at once');
         expect(next.isRunning, isTrue);
         async.flushTimers();
         // The first seek ran to its end on the device, beside the second.

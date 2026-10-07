@@ -131,7 +131,7 @@ void main() {
       async.flushTimers();
       expect(journal.take(), [
         '[replace: 1] started',
-        '[replace: 2] dropped Cancelled(manual)',
+        '[replace: 2] dropped Cancelled(replaced)',
         'state: Special(sequential: 1)',
         '[replace: 1] finished Done(null)',
         '[replace: 3] started',
@@ -147,7 +147,7 @@ void main() {
       restartable(solo, 2);
       async.flushTimers();
       expect(journal.take(), [
-        '[restartable: 1] dropped Cancelled(manual)',
+        '[restartable: 1] dropped Cancelled(replaced)',
         '[restartable: 2] started',
         'state: Special(restartable: 1)',
         'state: Special(restartable: 2)',
@@ -167,7 +167,7 @@ void main() {
       expect(journal.take(), [
         '[restartable: 1] started',
         'state: Special(restartable: 1)',
-        '[restartable: 1] finished Cancelled(manual)',
+        '[restartable: 1] finished Cancelled(replaced)',
         '[restartable: 2] started',
         'state: Special(restartable: 2)',
         'state: Special(restartable: 3)',

@@ -169,7 +169,7 @@ QUOTED = {
     'solo/item5': [
         '[play, seek 3, pause]',
         '[seek 1 start, seek 1 stopped, seek 3 start, seek 3 end]',
-        'Cancelled(manual)',
+        'Cancelled(replaced)',
     ],
     'bloc/item6': [
         '[moveTo 1 start, moveTo 2 start, moveTo 3 start, moveTo 3 end, '
@@ -217,7 +217,7 @@ QUOTED = {
         'write 100 start, write 100 end, …]',
     ],
     'solo/item10': [
-        'Cancelled(manual)',
+        'Cancelled(replaced)',
         '[0, 1, 100, 101, …]',
         '[0, 1, 2]',
         'Cancelled(rules: is not NotBroken)',

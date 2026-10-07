@@ -872,7 +872,7 @@ The traces are those of the bloc answer above: `[play, seek 3, pause]` for the
 drag, and `[seek 1 start, seek 1 stopped, seek 3 start, seek 3 end]` when
 `seek 1` is already active. `pause` and `play` remain in the same queue with
 their default sequential policy. The token is local to the `seek` body, and
-callers can inspect the outcome of each `seek`, including `Cancelled(manual)`
+callers can inspect the outcome of each `seek`, including `Cancelled(replaced)`
 for a replaced request.
 
 ## 6. Typed methods with queued execution
@@ -1716,7 +1716,7 @@ final class FirmwareController extends Solo<FirmwareState> {
 
 `Policy.restart` requests cancellation and enqueues the replacement. `join`
 waits for the current write and throws `Cancelled` once it returns, before the
-next iteration; the replaced upload ends at `Cancelled(manual)`. The
+next iteration; the replaced upload ends at `Cancelled(replaced)`. The
 replacement starts after that job completes. The device gets the chunks in the
 order of the locked bloc, `[0, 1, 100, 101, …]`, and no write starts before the
 one ahead of it has ended.

@@ -149,8 +149,10 @@ then no other root job starts. The children it waits for are its own: they run
 inside it and never stand in the queue; they are described on the page
 [Children and streams](children.md). A policy does not apply to child jobs.
 
-What a policy takes out ends `Cancelled(manual)`: the queued zoom that
-`replace` removes, the running seek that `restart` cancels. For `droppable` the
+A job that `replace` or `restart` removes ends `Cancelled(replaced)`, whose
+reason is a `ReplacedCancelReason`: the queued zoom that `replace` takes out,
+the running seek that `restart` cancels. `droppable` drops the new job, and
+that one ends `Cancelled(duplicate)`, as shown below. For `droppable` the
 running job counts only while it is still going to do the work: one that has
 already accepted a cancellation is on its way out, and a call that finds it
 queues a job of its own.

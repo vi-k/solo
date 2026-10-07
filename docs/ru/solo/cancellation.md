@@ -371,9 +371,10 @@ switch (job.outcome) {
 наследуют `CancelReason`. Встроенные типы: `ManualCancelReason`,
 `ParentCancelReason`, `HandlerCancelReason`, `ChainCancelReason`,
 `SiblingCancelReason`, `RulesCancelReason`, `ClosedCancelReason`,
-`DuplicateCancelReason` и `TimeoutCancelReason`. Проверяйте тип, как первая
-ветка `switch` выше; `name` служит подписью, а не ключом для сравнения. При
-передаче отмены между `Job` исходная отмена сохраняется в поле `cause` причины.
+`DuplicateCancelReason`, `ReplacedCancelReason` и `TimeoutCancelReason`.
+Проверяйте тип, как первая ветка `switch` выше; `name` служит подписью,
+а не ключом для сравнения. При передаче отмены между `Job` исходная отмена
+сохраняется в поле `cause` причины.
 
 `job.whenCancelled(callback)` регистрирует синхронный слушатель и возвращает
 функцию его удаления. Слушатель вызывается, когда работающая `Job` принимает

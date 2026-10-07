@@ -760,3 +760,30 @@ gate», предметное слово рецепта.
    собственные, работают внутри неё и в очередь не встают. Конец абзаца
    о политике по слову владельца сокращён до «A policy does not apply to child
    jobs»: остальное сказано фразой выше. Перевод следом.
+
+5. «нормально, что у нас политика отменяет задачи с причиной manual?»,
+   2026-10-07. Не нормально: `droppable` уже отдавала свою причину
+   `DuplicateCancelReason`, потому что её `Job` никто не просил остановить,
+   а `replace` и `restart` снимали `Job` причиной по умолчанию,
+   `ManualCancelReason`, и вызывающий код не отличал вытеснение следующим
+   вызовом от `cancel()`. По слову владельца заведена `ReplacedCancelReason`
+   с именем `replaced` в `packages/solo/lib/src/solo_cancel_reason.dart`: её
+   получает и `Job`, убранная из очереди, и работающая, которую отменяет
+   `restart`. `manual` остался за `cancel()`, `cancelAll` и удаляющими методами
+   `SoloQueue`. Следом: dartdoc `Policy`, фраза под таблицей политик
+   в `jobs.md`, трасса `replace` в `camera.md`, две фразы в `vs-bloc.md`,
+   список встроенных причин в `cancellation.md`, переводы, `QUOTED`
+   в `tool/doc_snippets.py`, записи в CHANGELOG `solo` и `flutter_solo`.
+   В тестах `solo` и его примера ожидание `Cancelled(manual)` заменено
+   на `Cancelled(replaced)` там, где `Job` снимает политика,
+   в `cancellation_rakes_test.dart` добавлен тест на новую причину и её имя
+   в списке, который сверяется со страницей. Накопители своей причины не дают:
+   вытесненную группу они не отменяют.
+
+6. «а как заканчивается Job, отменённая Policy.droppable?», 2026-10-07, о фразе
+   «What a policy takes out ends `Cancelled(replaced)`». Фраза говорила
+   о политике вообще, а `droppable` отбрасывает новую `Job`
+   с `Cancelled(duplicate)`. Теперь подлежащим стоят `replace` и `restart`,
+   а про `droppable` сказано следующей фразой со ссылкой вниз, где это
+   показано. Фраза «`manual` stays the reason of a cancellation somebody asked
+   for», дописанная пунктом 5, по слову владельца убрана.

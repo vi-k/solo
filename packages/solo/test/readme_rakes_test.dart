@@ -529,7 +529,7 @@ void main() {
         async.elapse(const Duration(milliseconds: 20));
         final second = player.play('t-2');
         async.flushTimers();
-        expect('${first.outcome}', 'Cancelled(manual)');
+        expect('${first.outcome}', 'Cancelled(replaced)');
         expect('${second.outcome}', 'Done(Track(t-2))');
         expect(trace(), contains('download of Track(t-1) closed'));
         expect(trace(), isNot(contains('device loads Track(t-1)')));

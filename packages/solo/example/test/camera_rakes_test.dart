@@ -1068,7 +1068,7 @@ void main() {
         expect(running.outcome, isA<Done<void>>());
         expect(
           journal.take(),
-          contains('[setZoom: zoom: 3.0] dropped Cancelled(manual)'),
+          contains('[setZoom: zoom: 3.0] dropped Cancelled(replaced)'),
         );
         expect(hw.log, [
           'zoom 2.0: begin',

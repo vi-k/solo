@@ -549,12 +549,18 @@ abstract class Solo<S extends Object> {
           return duplicate as SoloJob<T>;
         }
       case Policy.replace:
-        _queue.removeWhere((other) => other.key == impl.key);
+        _queue.removeWhere(
+          (other) => other.key == impl.key,
+          reason: const ReplacedCancelReason(),
+        );
       case Policy.restart:
-        _queue.removeWhere((other) => other.key == impl.key);
+        _queue.removeWhere(
+          (other) => other.key == impl.key,
+          reason: const ReplacedCancelReason(),
+        );
         final current = _current;
         if (current != null && current.key == impl.key) {
-          unawaited(current.cancel());
+          unawaited(current.cancel(reason: const ReplacedCancelReason()));
         }
     }
     if (isClosed) {

@@ -35,11 +35,13 @@ enum Policy {
   /// Remove queued jobs with the same key, then append. The running root
   /// job is left alone, and so is a queued job created with
   /// `cancellable: false` — the removal is the one `SoloQueue.removeWhere`
-  /// does without `force`.
+  /// does without `force`. A removed job ends `Cancelled(replaced)`, whose
+  /// reason is a `ReplacedCancelReason`.
   replace,
 
   /// Like [replace], and also cancel the running root job with the same
   /// key without waiting for it — unless that one was created with
-  /// `cancellable: false`, which refuses.
+  /// `cancellable: false`, which refuses. The reason of that cancellation
+  /// is a `ReplacedCancelReason` as well.
   restart,
 }

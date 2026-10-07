@@ -588,8 +588,8 @@ void main() {
           ['seek 1 start', 'seek 2 start', 'seek 3 start'],
           reason: 'the wait lets go of the call, and the call goes on',
         );
-        expect('${one.outcome}', 'Cancelled(manual)');
-        expect('${two.outcome}', 'Cancelled(manual)');
+        expect('${one.outcome}', 'Cancelled(replaced)');
+        expect('${two.outcome}', 'Cancelled(replaced)');
 
         // What the device makes of that is up to the device: here the last
         // seek comes back first.
@@ -621,7 +621,7 @@ void main() {
         expect(one.outcome, isNull, reason: 'nothing told the device');
         expect(
           _how(two),
-          'Cancelled(manual), started: false',
+          'Cancelled(replaced), started: false',
           reason: 'restart removed the queued one before it started',
         );
 
@@ -631,7 +631,7 @@ void main() {
           ['seek 1 start', 'seek 1 end', 'seek 3 start'],
           reason: 'only then does the last seek begin',
         );
-        expect('${one.outcome}', 'Cancelled(manual)');
+        expect('${one.outcome}', 'Cancelled(replaced)');
         expect(
           '${player.currentState}',
           'Ready(0 s, null)',
@@ -663,7 +663,7 @@ void main() {
           'seek 2 stopped',
           'seek 3 start',
         ]);
-        expect('${one.outcome}', 'Cancelled(manual)');
+        expect('${one.outcome}', 'Cancelled(replaced)');
 
         _end(async, 'seek 3');
         expect('${three.outcome}', 'Done(null)');
@@ -709,7 +709,7 @@ void main() {
           ['seek 1 start', 'token cancelled', 'seek 1 end', 'seek 3 start'],
           reason: 'the seek dragged past ran to its end',
         );
-        expect('${one.outcome}', 'Cancelled(manual)');
+        expect('${one.outcome}', 'Cancelled(replaced)');
         _end(async, 'seek 3');
       });
     });
@@ -732,7 +732,7 @@ void main() {
 
       expect(
         [for (final job in jobs) '${job.outcome}'],
-        ['Cancelled(manual)', 'Cancelled(manual)', 'Done(null)'],
+        ['Cancelled(replaced)', 'Cancelled(replaced)', 'Done(null)'],
       );
       expect(player.heard, [isA<SeekStopped>(), isA<SeekStopped>()]);
       expect(player.unanswered, isEmpty);
@@ -1904,6 +1904,25 @@ void main() {
         });
       });
 
+      test('ReplacedCancelReason: a job a newer one takes the place of', () {
+        fakeAsync((async) {
+          final bench = Bench();
+          final running = bench.work('load');
+          async.flushMicrotasks();
+          final queued = bench.add(
+            bench.job<Ready, void>(key: 'load', (ctx) async {}),
+          );
+          bench.add(
+            bench.job<Ready, void>(key: 'load', (ctx) async {}),
+            policy: Policy.restart,
+          );
+
+          expect(_reason(queued), isA<ReplacedCancelReason>());
+          _end(async, 'load');
+          expect(_reason(running), isA<ReplacedCancelReason>());
+        });
+      });
+
       test('are the ones the page names', () {
         final named = RegExp(r'The built-in types are (.+?)\. Inspect')
             .firstMatch(_prose())!
@@ -1922,6 +1941,7 @@ void main() {
             'RulesCancelReason',
             'ClosedCancelReason',
             'DuplicateCancelReason',
+            'ReplacedCancelReason',
             'TimeoutCancelReason',
           ],
         );
@@ -2282,7 +2302,7 @@ void main() {
         final two = player.seek(_s(2));
         async.flushMicrotasks();
 
-        expect('${one.outcome}', 'Cancelled(manual)');
+        expect('${one.outcome}', 'Cancelled(replaced)');
         expect('${player.currentState}', 'Ready(0 s, null)');
         _end(async, 'seek 2');
         expect('${two.outcome}', 'Done(null)');

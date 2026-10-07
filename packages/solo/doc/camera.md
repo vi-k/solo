@@ -273,8 +273,8 @@ Job<void> setZoom(double zoom) => run<Ready, void>(
 so the same three calls reach the hardware once:
 
 ```text
-[setZoom: zoom: 2.0] dropped Cancelled(manual)
-[setZoom: zoom: 3.0] dropped Cancelled(manual)
+[setZoom: zoom: 2.0] dropped Cancelled(replaced)
+[setZoom: zoom: 3.0] dropped Cancelled(replaced)
 [setZoom: zoom: 4.0] started
 state: Ready(zoom: 4.0, focusPoint: null, paused: false)
 [setZoom: zoom: 4.0] finished Done(null)

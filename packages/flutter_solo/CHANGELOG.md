@@ -85,6 +85,8 @@ last entries of the first group name them.
   job instead of cancelling it; `Policy.droppable` compares the result types of
   the two jobs and throws `ArgumentError` when they differ, and the job it
   drops ends with a `DuplicateCancelReason` instead of a `ManualCancelReason`;
+  a job replaced under `Policy.replace` or `Policy.restart` ends with a
+  `ReplacedCancelReason` instead of a `ManualCancelReason`;
   `SoloQueue.lastWhere` is gone; `cancelAll` and the removing methods of
   `SoloQueue` take a `reason`; `job`, `run`, `collect` and `accumulate` take a
   `timeout`, so an override of any of them that does not take it stops

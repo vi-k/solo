@@ -180,6 +180,16 @@ entries of the first group name them.
   every `ManualCancelReason` for a cancellation somebody asked for no longer
   counts duplicates among them.
 
+- **A job that `Policy.replace` or `Policy.restart` puts a newer one in place
+  of ends with a reason of its own.** Its outcome is `Cancelled(replaced)` and
+  the reason a new `ReplacedCancelReason`, where it used to be
+  `Cancelled(manual)`, the `ManualCancelReason` of a `cancel()`: the job taken
+  out of the queue, and the running one `restart` cancels. **Migrating.** Code
+  that looked for a `ManualCancelReason` in the outcome of a replaced job
+  checks for `ReplacedCancelReason` instead; `manual` is now the reason only of
+  a cancellation somebody asked for — `cancel()`, `cancelAll` and the removing
+  methods of `SoloQueue`.
+
 - **`collect` and `accumulate` default to `AccumulationPolicy.join`, not
   `adjacent`.** A job of another kind queued between two events is no longer a
   boundary: the events are one group, where the group already stands in the
@@ -283,6 +293,8 @@ One report is gone: a job that gives up through `ctx.check()` inside a call
 Text that reads differently, for a test that matches it:
 
 - a dropped duplicate prints `Cancelled(duplicate)`;
+- a job replaced under `Policy.replace` or `Policy.restart` prints
+  `Cancelled(replaced)`;
 - some error messages: a job cleaning up after its body says
   `is cleaning up after its body` where it said `is disposing`, and a job of
   another controller refused by `add` is named as `Job(key)`, not by its class.
