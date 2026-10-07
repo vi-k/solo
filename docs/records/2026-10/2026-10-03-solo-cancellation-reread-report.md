@@ -819,3 +819,15 @@ changed)»; `dart analyze` — «No issues found!»; `dart test --concurrency=4`
    секции ещё может выполниться, и `ctx.check()` первой строкой после неё его
    останавливает. Это держит тест «uncancellable returns its result, and the
    next checkpoint throws». Перевод следом.
+5. «ожидаешь, что будет объяснение про отличие, а не про промежутки»,
+   2026-10-07, о тексте под ответом того же раздела: первая попытка пишет
+   `await device.write(chunk)`, ответ —
+   `await ctx.join(() => device.write(chunk))`, а что от этого изменилось, под
+   ответом сказано не было. Дописан абзац сразу под кодом: каждая запись стала
+   контрольной точкой, `close()` во время второго куска из четырёх ждёт только
+   его, `join` бросает `Cancelled`, третий и четвёртый не пишутся, а уборка
+   обычным `await` сбрасывает буфер при любом исходе. Предложение о том, что
+   два `join` подряд не оставляют промежутка, осталось ниже как дополнение.
+   Абзац держат тесты «each wait in its place: stops after the chunk in flight,
+   flushes» и «each wait in its place: an upload nobody cancels flushes too»
+   и новая цитата в стороже. Перевод следом.

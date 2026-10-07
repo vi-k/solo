@@ -1198,6 +1198,14 @@ void main() {
         expect(closed, isTrue);
         expect('${job.outcome}', 'Cancelled(closed)');
         expect(uploader.heard, isEmpty);
+        expect(
+          _prose(),
+          contains(
+            '`close()` during the second of four chunks waits for that chunk, '
+            '`join` throws `Cancelled` in place of its result, and the third '
+            'and the fourth are never written',
+          ),
+        );
       });
     });
 

@@ -258,6 +258,12 @@ Job<void> upload(List<int> chunks) => run<Ready, void>((ctx) async {
     });
 ```
 
+The loop now waits with `join`, and every write is a checkpoint: `close()`
+during the second of four chunks waits for that chunk, `join` throws
+`Cancelled` in place of its result, and the third and the fourth are never
+written. The cleanup waits with a plain `await`, and the buffer is flushed
+however the upload ended.
+
 A plain `await` is the right wait where waiting through cancellation is the
 point: inside cleanup and inside an `uncancellable` section.
 
