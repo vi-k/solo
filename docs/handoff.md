@@ -170,12 +170,14 @@ README — `2026-10-02-async-job-readme-reread-report.md`. `extending.md`
 `packages/solo/doc/cancellation.md` он прочитал и принял в тот же день: восемь
 пунктов в разделе «По чтению владельца» отчёта
 `2026-10-03-solo-cancellation-reread-report.md`, вступление сокращено до того,
-что добавляет контроллер, за механикой оно ссылается на страницу ядра. Дальше
-`resources.md` и остальные страницы `solo` в порядке вычитки. С того же дня
-в примерах действует правило: предметный метод контроллера объявляет `Job<T>`,
-а `SoloJob<T>` пишется только там, где читают `isQueued`; оно записано
-в `packages/solo/doc/jobs.md`. Тогда же `Job`, которую вытесняют
-`Policy.replace` и `Policy.restart`, получила свою причину отмены
+что добавляет контроллер, за механикой оно ссылается на страницу ядра.
+С того же дня он читает `packages/solo/doc/resources.md`, правки по его
+вопросам идут в раздел «По чтению владельца» отчёта
+`2026-10-04-solo-resources-reread-report.md`; за ней остальные страницы `solo`
+в порядке вычитки. С того же дня в примерах действует правило: предметный метод
+контроллера объявляет `Job<T>`, а `SoloJob<T>` пишется только там, где читают
+`isQueued`; оно записано в `packages/solo/doc/jobs.md`. Тогда же `Job`, которую
+вытесняют `Policy.replace` и `Policy.restart`, получила свою причину отмены
 `ReplacedCancelReason` (`Cancelled(replaced)`) вместо `ManualCancelReason`:
 пункт 5 того же раздела отчёта, запись в «Breaking changes» CHANGELOG `solo`.
 2026-10-07 по его же слову `Job.ignore()` переименован в `Job.ignoreFailure()`
