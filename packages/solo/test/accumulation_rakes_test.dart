@@ -763,7 +763,7 @@ void main() {
       final api = FakeSettingsApi()..failure = StateError('disk full');
       _zone((async) {
         final settings = SettingsController(api, _off)
-          ..update(const SettingsPatch(theme: 'dark')).ignore();
+          ..update(const SettingsPatch(theme: 'dark')).ignoreFailure();
         async.elapse(ms(400));
         api.failure = null;
         settings.update(const SettingsPatch(language: 'ru'));

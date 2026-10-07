@@ -61,9 +61,9 @@ A `Job` finishes with one of three outcomes: `Done`, `Failed` or `Cancelled`
 with a reason. It waits for its children and runs registered cleanup before
 completing. An unobserved `Failed` is reported to the zone that created the
 job, just as Dart reports an unhandled `Future` error. A failure is observed by
-accessing the job's `done` or `value`, or by calling `ignore()`; awaiting
-`cancel()` and reading `outcome`, as the block above does, do not observe it,
-and neither does the job's observer (`JobObserver`).
+accessing the job's `done` or `value`, or by calling `ignoreFailure()`;
+awaiting `cancel()` and reading `outcome`, as the block above does, do not
+observe it, and neither does the job's observer (`JobObserver`).
 
 An error that does not become the outcome, such as one from cleanup, goes to
 the zone as well, unless the job's observer answers for it (`JobAnswerer`). But

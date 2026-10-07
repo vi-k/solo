@@ -136,7 +136,7 @@ void installAll() {
 /// "Observing the outcome". Not on the page: the function around the
 /// statement.
 void loadAndIgnore(ProfileController profile) {
-  profile.load().ignore(); // the counterpart of Future.ignore
+  profile.load().ignoreFailure(); // the counterpart of Future.ignore
 }
 
 /// "Letting cancellation through", and the log hook of "Logs".

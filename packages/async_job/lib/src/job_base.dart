@@ -19,8 +19,8 @@ part 'run_all.dart';
 ///
 /// A job that ends with [Failed] and is never observed hands its error to
 /// the zone that created the job, the way Dart reports an unhandled
-/// `Future` error. Touching [done], [value] or [ignore], or forwarding a
-/// failure through [then], counts as observing it; see [ignore].
+/// `Future` error. Touching [done], [value] or [ignoreFailure], or forwarding a
+/// failure through [then], counts as observing it; see [ignoreFailure].
 abstract interface class Job<T> {
   /// Creates a job and starts it on the next microtask.
   ///
@@ -436,7 +436,7 @@ abstract interface class Job<T> {
   /// Job<void>(
   ///   observer: reporter,
   ///   (ctx) => ctx.abandonable(device.close),
-  /// ).ignore();
+  /// ).ignoreFailure();
   /// ```
   ///
   /// Waiting for [done] or [value] observes a [Failed] too: the one waiting has
@@ -463,7 +463,7 @@ abstract interface class Job<T> {
   /// A job is not background work: it has an outcome and an observer of
   /// its own, and this is how it is quenched. Work with neither goes to
   /// [JobContext.unattended] instead.
-  void ignore();
+  void ignoreFailure();
 }
 
 /// Where a job is in its life.
@@ -527,7 +527,7 @@ abstract class JobBase<T> implements Job<T> {
   /// was started from, not the fork: the failure is the new job's own, and
   /// it must not arrive at the observer of the job that started the work.
   /// A job is not unattended work — it has an outcome and an observer of
-  /// its own, and `ignore()` is how it is quenched.
+  /// its own, and `ignoreFailure()` is how it is quenched.
   final Zone _zone = _creationZone();
 
   static Zone _creationZone() =>
@@ -611,7 +611,7 @@ abstract class JobBase<T> implements Job<T> {
   /// Whether anyone observed the outcome, directly or by forwarding it.
   bool _observed = false;
 
-  /// Whether [Job.ignore] was called: nobody wants this job's failure.
+  /// Whether [Job.ignoreFailure] was called: nobody wants this job's failure.
   ///
   /// More than [_observed]. Whoever reads the outcome has the failure the
   /// outcome carries. A failure a cancellation covered is in no outcome, and
@@ -896,7 +896,7 @@ abstract class JobBase<T> implements Job<T> {
   }
 
   @override
-  void ignore() {
+  void ignoreFailure() {
     _observed = true;
     _ignored = true;
   }
@@ -1359,7 +1359,7 @@ abstract class JobBase<T> implements Job<T> {
   /// outcome to carry it, and it goes where the errors with no outcome go: to
   /// [JobObserver.onError] and to the answer of the observer — the zone unless
   /// it is a [JobAnswerer] — or to [JobObserver.onError] alone once
-  /// [Job.ignore] was called.
+  /// [Job.ignoreFailure] was called.
   ///
   /// Ending a job that is still running is not a way to cancel it: this
   /// waits for no children and unwinds no cleanup stack, so everything the
@@ -1521,10 +1521,10 @@ abstract class JobBase<T> implements Job<T> {
   /// zone through that outcome, if nobody observes it, and shouting twice about
   /// one error is worse than once. When a cancellation covers it afterwards,
   /// the outcome no longer carries it, and it is answered later without being
-  /// announced again — unless [Job.ignore] was called, and then nobody answers
-  /// for it. A [Failed] an engine of a domain hands to [finish] needs no call
-  /// here: [finish] announces it itself. [notifyError] starts here too, and
-  /// goes on to the answer.
+  /// announced again — unless [Job.ignoreFailure] was called, and then nobody
+  /// answers for it. A [Failed] an engine of a domain hands to [finish] needs
+  /// no call here: [finish] announces it itself. [notifyError] starts here too,
+  /// and goes on to the answer.
   @protected
   void notifyObserver(Object error, StackTrace stackTrace) {
     _debug(() => '$this error: $error');
@@ -1574,8 +1574,8 @@ abstract class JobBase<T> implements Job<T> {
   /// in when the observer does not answer or there is none. [notifyError] ends
   /// here, and so do two failures of a body: that of a branch of
   /// [JobContext.runAll] the group did not throw, and one a cancellation
-  /// covered afterwards, unless [Job.ignore] was called on the job. The job
-  /// told its observer itself, where its body was caught, and one error is
+  /// covered afterwards, unless [Job.ignoreFailure] was called on the job. The
+  /// job told its observer itself, where its body was caught, and one error is
   /// announced once — but an error nobody answered for still has to reach
   /// somebody.
   ///
@@ -1916,7 +1916,7 @@ abstract class JobBase<T> implements Job<T> {
     finish(decided);
     // After `finish`, not before, and on the spot. `finished` and
     // `onFinish` run first, and an engine of a domain may still call
-    // [Job.ignore] there; a parent's body hears the cancellation only
+    // [Job.ignoreFailure] there; a parent's body hears the cancellation only
     // after the answer. Reading the outcome settles nothing here, so there
     // is no window to wait for.
     if (failedFirst && outcome is Failed && !identical(decided, outcome)) {
@@ -1940,10 +1940,10 @@ abstract class JobBase<T> implements Job<T> {
   /// told where it was caught, one an engine of a domain handed to [finish] was
   /// told nowhere.
   ///
-  /// [Job.ignore] takes the answer away and leaves the notice: one handed
-  /// to [finish] is still told to [JobObserver.onError], once. An uncovered
-  /// [Failed] needs no notice to be seen — the outcome shows it; this one
-  /// the outcome does not show, and without the notice it would vanish.
+  /// [Job.ignoreFailure] takes the answer away and leaves the notice: one
+  /// handed to [finish] is still told to [JobObserver.onError], once. An
+  /// uncovered [Failed] needs no notice to be seen — the outcome shows it; this
+  /// one the outcome does not show, and without the notice it would vanish.
   ///
   /// A job an engine of a domain ends by hand while a body that failed
   /// first waits for its children never comes here: the engine decided the

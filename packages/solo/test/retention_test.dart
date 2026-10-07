@@ -67,7 +67,7 @@ final class Counter extends Solo<int> with OpenSolo<int> {
     await ctx.run(child);
 
     return payload;
-  }).ignore();
+  }).ignoreFailure();
 
   return (child, WeakReference(payload));
 }

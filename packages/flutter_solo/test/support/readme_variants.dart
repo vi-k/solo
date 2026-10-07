@@ -402,7 +402,7 @@ class _LateCloseScreenState extends State<LateCloseScreen> {
   @override
   void initState() {
     super.initState();
-    widget.controller.load().ignore();
+    widget.controller.load().ignoreFailure();
   }
 
   @override

@@ -203,7 +203,7 @@ outcome: Cancelled(manual)
 An observer hears through `onError` the errors its job catches, all but its own
 cancellation, and only hears them: overriding `onError` moves no error
 anywhere. The outcome counts as observed when somebody reads `done` or `value`,
-continues the job with `then` or calls `ignore()`, as
+continues the job with `then` or calls `ignoreFailure()`, as
 [A failure nobody waits for](outcomes.md#a-failure-nobody-waits-for) on the
 outcomes page shows; the observer's hooks do not observe it, even a hook that
 reads `job.outcome`, as the `onFinish` of `Log` above does. Where each error
@@ -304,9 +304,9 @@ answers (`with JobAnswerer`) closes the second.
 A failure of a body the outcome does not carry goes to `onUnanswered` or the
 zone even when the outcome is observed. The table has two: the job failed and
 then accepted a cancellation, so the outcome carries the cancellation; or a
-branch of `ctx.runAll` failed and its group threw another error. `ignore()` on
-the job whose body failed lets such a failure go: `onError` still hears it, and
-it reaches neither `onUnanswered` nor the zone.
+branch of `ctx.runAll` failed and its group threw another error.
+`ignoreFailure()` on the job whose body failed lets such a failure go:
+`onError` still hears it, and it reaches neither `onUnanswered` nor the zone.
 
 ## Work the job does not wait for
 

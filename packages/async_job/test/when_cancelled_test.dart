@@ -116,7 +116,7 @@ void main() {
       final seen = <Cancelled>[];
       final success = Job<int>((ctx) async => 42);
       final failure = Job<int>((ctx) async => throw StateError('body'))
-        ..ignore();
+        ..ignoreFailure();
       success.whenCancelled(seen.add);
       failure.whenCancelled(seen.add);
       async.flushMicrotasks();
@@ -182,7 +182,7 @@ void main() {
         await ctx.run(child);
       })
         ..whenCancelled(heard.add)
-        ..ignore();
+        ..ignoreFailure();
       key.onFormat = () => parent.cancel(reason: const TestCancelReason('key'));
       async.flushTimers();
       expect(heard, hasLength(1));
@@ -363,7 +363,7 @@ void main() {
             .ignore();
         await ctx.abandonable(() => delay(100));
       })
-        ..ignore()
+        ..ignoreFailure()
         ..whenCancelled((_) => heard.add('early'));
       async.elapse(const Duration(milliseconds: 10));
       parent.cancel().ignore();

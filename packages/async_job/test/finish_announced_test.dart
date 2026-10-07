@@ -158,7 +158,7 @@ void main() {
       final hearing = Hearing();
       final zone = zoneOf((async) {
         ProbeJob<int>(key: 'j', observer: hearing, (ctx) async => 1)
-          ..ignore()
+          ..ignoreFailure()
           ..cancel().ignore()
           ..drop(Failed(StateError('late'), StackTrace.current));
         async.flushTimers();

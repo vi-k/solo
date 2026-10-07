@@ -75,7 +75,7 @@ List<String> heard(JobObserver Function(List<String> seen) observer) {
   final seen = <String>[];
   runZonedGuarded(
     () => fakeAsync((async) {
-      leavingAnError(observer(seen)).ignore();
+      leavingAnError(observer(seen)).ignoreFailure();
       async.flushTimers();
     }),
     (error, stackTrace) => seen.add('zone: $error'),
@@ -295,8 +295,8 @@ void main() {
     final walkedOnce = JobObserver.all(lazy);
     source.add(Recording('added later', seen));
     fakeAsync((async) {
-      Job<void>(observer: copied, (ctx) async {}).ignore();
-      Job<void>(observer: walkedOnce, (ctx) async {}).ignore();
+      Job<void>(observer: copied, (ctx) async {}).ignoreFailure();
+      Job<void>(observer: walkedOnce, (ctx) async {}).ignoreFailure();
       async.flushTimers();
     });
     expect(made, 2, reason: 'one walk of two, at creation');
@@ -319,7 +319,7 @@ void main() {
               ctx.unattended(() => throw StateError('child'));
             }),
           ),
-        ).ignore();
+        ).ignoreFailure();
         async.flushTimers();
       }),
       (error, stackTrace) => seen.add('zone: $error'),

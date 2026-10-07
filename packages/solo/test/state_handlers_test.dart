@@ -71,7 +71,7 @@ void main() {
           return 'failure';
         },
         onCancel: (_, __) => fail('unexpected cancellation'),
-      )..ignore();
+      )..ignoreFailure();
       clock.flushMicrotasks();
       expect(solo.currentState, 'failure');
       expect(
@@ -108,7 +108,7 @@ void main() {
             solo.log.add('finally');
           }
         },
-      )..ignore();
+      )..ignoreFailure();
       solo.run<String, void>(key: 'next', (ctx) async {
         solo.log.add('next:${ctx.state}');
       });
@@ -198,7 +198,7 @@ void main() {
             canStart: (_) => throw StateError('start rule'),
             onError: (_, __, ___) => fail('start error callback'),
           )
-          .ignore();
+          .ignoreFailure();
       clock.flushMicrotasks();
       expect(solo.currentState, 'initial');
       expect(solo.errors, hasLength(1));
@@ -222,7 +222,7 @@ void main() {
               ..onDispose(() => cleanup.future);
             await ctx.abandonable(() => operation.future);
           },
-        )..ignore();
+        )..ignoreFailure();
         clock.flushMicrotasks();
         if (failBody) {
           operation.completeError(StateError('request failed'));
@@ -338,7 +338,7 @@ void main() {
           ctx.emit(42);
           throw StateError('after transition');
         },
-      )..ignore();
+      )..ignoreFailure();
       clock.flushMicrotasks();
       expect(starts, 1);
       expect(solo.currentState, 'failure');
@@ -364,7 +364,7 @@ void main() {
           );
           return ctx.run(child);
         },
-      ).ignore();
+      ).ignoreFailure();
       clock.flushMicrotasks();
       child.cancel();
       clock.flushMicrotasks();
@@ -382,7 +382,7 @@ void main() {
       final job = solo.run<String, void>(
         (_) async => throw failure,
         onError: (_, __, ___) => throw correctionFailure,
-      )..ignore();
+      )..ignoreFailure();
       solo.run<String, void>((ctx) async => ctx.emit('next'));
       clock.flushMicrotasks();
       expect(
@@ -405,7 +405,7 @@ void main() {
         (_) async => throw StateError('body'),
         onError: (_, __, ___) => 'failure',
         onCancel: (_, __) => fail('second correction'),
-      )..ignore();
+      )..ignoreFailure();
       clock.flushMicrotasks();
       expect(job.outcome, isA<Failed>());
       expect(solo.currentState, 'failure');
@@ -421,7 +421,7 @@ void main() {
           solo.external('disconnected');
           return 'failure';
         },
-      )..ignore();
+      )..ignoreFailure();
       clock.flushMicrotasks();
       expect(solo.currentState, 'disconnected');
       expect(job.outcome, isA<Failed>());

@@ -280,7 +280,7 @@ void main() {
       })
           // The journal below is the whole assertion; keep the parent's
           // failure out of the zone.
-          .ignore();
+          .ignoreFailure();
       async.flushTimers();
       expect(journal.take(), [
         '[parent] started',
@@ -572,7 +572,7 @@ void main() {
         (ctx) async {
           ctx.run(ForeignJob<void>((_) async => foreignRan = true)).ignore();
         },
-      )..ignore();
+      )..ignoreFailure();
       async.flushTimers();
       expect(foreignRan, isFalse);
       expect(parent.outcome, isA<Failed>());
@@ -593,7 +593,7 @@ void main() {
             refusals.add((error as ArgumentError).message.toString());
           }
         }
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
       expect(refusals, [
         'was not created by this Solo',
@@ -767,10 +767,10 @@ void main() {
               ),
             )
             .value;
-      }).ignore();
+      }).ignoreFailure();
       solo
           .run<TestState, void>(key: 'save', (ctx) async => order.add('save'))
-          .ignore();
+          .ignoreFailure();
       async.flushTimers();
       expect(
         order,

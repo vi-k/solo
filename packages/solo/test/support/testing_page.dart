@@ -127,7 +127,7 @@ final elapsed = test('load fills in the name', () {
   fakeAsync((async) {
     final profile = ProfileController(FakeProfileApi());
 
-    final job = profile.load()..ignore();
+    final job = profile.load()..ignoreFailure();
     async.elapse(const Duration(milliseconds: 20));
 
     expect(job.outcome, isA<Done<String>>());

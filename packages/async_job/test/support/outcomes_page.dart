@@ -19,7 +19,7 @@ Future<void> printReport(Job<Report> report) async {
 
 /// A failure nobody waits for: the core is told it is handled.
 Job<void> startBackup() {
-  final backup = Job<void>(upload)..ignore();
+  final backup = Job<void>(upload)..ignoreFailure();
   return backup;
 }
 

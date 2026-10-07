@@ -77,7 +77,7 @@ void main() {
             .each(controller.stream, (_, event) => throw StateError('onData'))
             .value;
       })
-        ..ignore();
+        ..ignoreFailure();
       async.flushMicrotasks();
       controller.add(1);
       async.elapse(const Duration(milliseconds: 10));
@@ -300,7 +300,7 @@ void main() {
           throw StateError('boom');
         }).value;
       })
-        ..ignore();
+        ..ignoreFailure();
       async.flushMicrotasks();
       controller.add(1);
       async.elapse(const Duration(milliseconds: 100));
@@ -317,7 +317,7 @@ void main() {
       final job = Job<void>((ctx) async {
         await ctx.each(controller.stream, (_, event) => seen.add(event)).value;
       })
-        ..ignore();
+        ..ignoreFailure();
       async.flushMicrotasks();
       controller
         ..addError(StateError('boom'))
@@ -377,7 +377,7 @@ void main() {
           seen.add('end $event');
         }).value;
       })
-        ..ignore();
+        ..ignoreFailure();
       async.elapse(const Duration(milliseconds: 5));
       controller.add(3);
       unawaited(controller.close());
@@ -411,7 +411,7 @@ void main() {
           throw StateError('boom');
         }).value;
       })
-        ..ignore();
+        ..ignoreFailure();
       async.flushTimers();
       expect(seen, [1]);
       expect(job.outcome, isA<Failed>());
@@ -438,7 +438,7 @@ void main() {
         }).value;
         seen.add('each returned');
       })
-        ..ignore();
+        ..ignoreFailure();
       async.flushTimers();
       expect(seen, ['start 1'], reason: 'the wait does not end before it');
       expect(job.outcome, isA<Failed>());
@@ -466,7 +466,7 @@ void main() {
           rethrow;
         }
       })
-        ..ignore();
+        ..ignoreFailure();
       async.flushTimers();
       expect(
         seen,
@@ -490,7 +490,7 @@ void main() {
           throw StateError('boom');
         }).value;
       })
-        ..ignore();
+        ..ignoreFailure();
       async.flushMicrotasks();
       controller
         ..add(1)
@@ -520,7 +520,7 @@ void main() {
           seen.add('end $event');
         }).value;
       })
-        ..ignore();
+        ..ignoreFailure();
       async.elapse(const Duration(milliseconds: 5));
       job.cancel().ignore();
       async.flushTimers();
@@ -551,7 +551,7 @@ void main() {
       job = Job<void>((ctx) async {
         await ctx.each(controller.stream, (_, event) => seen.add(event)).value;
       })
-        ..ignore();
+        ..ignoreFailure();
       async.flushTimers();
       expect(
         seen,
@@ -582,7 +582,7 @@ void main() {
           job = Job<void>((ctx) async {
             await ctx.each(controller.stream, (_, event) {}).value;
           })
-            ..ignore();
+            ..ignoreFailure();
           async.flushTimers();
           controller.close().ignore();
         });
@@ -611,10 +611,10 @@ void main() {
         ctx.each(controller.stream, (_, event) async {
           seen.add('start $event');
           await delay(10);
-        }).ignore();
+        }).ignoreFailure();
         await ctx.abandonable(() => delay(5));
       })
-        ..ignore();
+        ..ignoreFailure();
       async.flushTimers();
       expect(seen, ['start 1', 'start 2', 'start 3']);
       expect(job.outcome, isNull);
@@ -640,7 +640,7 @@ void main() {
           thrown = error;
         }
       })
-        ..ignore();
+        ..ignoreFailure();
       async.flushMicrotasks();
       controller.addError(StateError('source boom'));
       async.elapse(const Duration(milliseconds: 10));
@@ -670,7 +670,7 @@ void main() {
             key: 'job',
             observer: journal,
             (ctx) async => ctx.each(controller.stream, (_, event) {}).value,
-          )..ignore();
+          )..ignoreFailure();
           async.flushTimers();
           controller.close().ignore();
         });
@@ -706,7 +706,7 @@ void main() {
       job = Job<void>(
         (ctx) async =>
             ctx.each(controller.stream, (_, event) => seen.add(event)).value,
-      )..ignore();
+      )..ignoreFailure();
       async.flushTimers();
       expect(seen, isEmpty);
       expect(job.outcome, isA<Cancelled>());
@@ -730,7 +730,7 @@ void main() {
       final job = Job<void>((ctx) async {
         await ctx.each(controller.stream, (_, event) => seen.add(event)).value;
       })
-        ..ignore();
+        ..ignoreFailure();
       async.flushTimers();
       expect(seen, [1]);
       expect(job.outcome, isA<Failed>());
@@ -752,7 +752,7 @@ void main() {
             key: 'job',
             observer: journal,
             (ctx) async => ctx.each(controller.stream, (_, event) {}).value,
-          )..ignore();
+          )..ignoreFailure();
           async.flushMicrotasks();
           job.cancel().ignore();
           async.flushTimers();
@@ -788,7 +788,7 @@ void main() {
                 caught = error;
               }
             },
-          ).ignore();
+          ).ignoreFailure();
           async.flushTimers();
           expect(
             caught,
@@ -822,7 +822,7 @@ void main() {
           caught = error;
         }
       })
-        ..ignore();
+        ..ignoreFailure();
       async.flushTimers();
       expect(
         seen,
@@ -845,7 +845,7 @@ void main() {
         await ctx.each(controller.stream, (_, event) => seen.add(event)).value;
         returned = true;
       })
-        ..ignore();
+        ..ignoreFailure();
       async.flushMicrotasks();
       controller
         ..add(1)
@@ -885,7 +885,7 @@ void main() {
               await delay(20);
               throw StateError('late boom');
             }).value,
-          )..ignore();
+          )..ignoreFailure();
           async.flushMicrotasks();
           controller.add(1);
           async.elapse(const Duration(milliseconds: 5));
@@ -921,10 +921,10 @@ void main() {
             (ctx) async {
               ctx
                   .each(controller.stream, (_, event) => handler.future)
-                  .ignore();
+                  .ignoreFailure();
               await ctx.abandonable(() => body.future);
             },
-          )..ignore();
+          )..ignoreFailure();
           async.flushMicrotasks();
           controller.add(1);
           async.flushMicrotasks();
@@ -979,7 +979,7 @@ void main() {
                 caught = error;
               }
             },
-          )..ignore();
+          )..ignoreFailure();
           async.flushMicrotasks();
           controller.add(1);
           async.flushTimers();
@@ -1027,7 +1027,7 @@ void main() {
             key: 'job',
             observer: journal,
             (ctx) async => ctx.each(controller.stream, (_, event) {}).value,
-          )..ignore();
+          )..ignoreFailure();
           async.flushTimers();
           expect(job.outcome, isA<Cancelled>());
           controller.close().ignore();
@@ -1055,7 +1055,7 @@ void main() {
         await ctx.each(controller.stream, (_, event) {}).value;
         returned = true;
       })
-        ..ignore();
+        ..ignoreFailure();
       async.flushTimers();
       expect(returned, isTrue, reason: 'the call comes back, it does not hang');
       expect(job.outcome, isA<Done<void>>());
@@ -1080,7 +1080,7 @@ void main() {
         } on Object catch (error) {
           caught = error;
         }
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
       expect(
         (caught! as StateError).message,
@@ -1109,7 +1109,7 @@ void main() {
           caught = stackTrace;
         }
       })
-        ..ignore();
+        ..ignoreFailure();
       async.flushTimers();
       expect(caught.toString(), contains('the source said so'));
       expect(job.outcome, isA<Done<void>>());
@@ -1132,7 +1132,7 @@ void main() {
       );
       final stream = _CountingStream<int>(controller.stream);
       job = Job<void>((ctx) async => ctx.each(stream, (_, event) {}).value)
-        ..ignore();
+        ..ignoreFailure();
       async.flushTimers();
       expect(stream.log, isNot(contains('resume')));
       expect(job.outcome, isA<Cancelled>());
@@ -1156,7 +1156,7 @@ void main() {
       final seen = <int>[];
       final job = Job<void>(
         (ctx) async => ctx.each(stream, (_, event) => seen.add(event)).value,
-      )..ignore();
+      )..ignoreFailure();
       async.flushTimers();
       expect(seen, [1, 2]);
       expect(stream.log, isNot(contains('resume')));
@@ -1170,7 +1170,7 @@ void main() {
       final stream = _CountingStream<int>(controller.stream);
       final job =
           Job<void>((ctx) async => ctx.each(stream, (_, event) {}).value)
-            ..ignore();
+            ..ignoreFailure();
       async.flushMicrotasks();
       controller
         ..add(1)
@@ -1220,7 +1220,7 @@ void main() {
           last = event;
           seen++;
         }).value;
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
     });
     watch.stop();

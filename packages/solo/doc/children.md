@@ -46,9 +46,9 @@ core's, and
 [Children](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/children.md#children)
 on the children page of `async_job` has it — that a cancellation the parent
 accepts passes to its children, that a body that fails lets them finish and
-waits for them, and why `child.ignore()` is no substitute for handling the
-future of `ctx.run`. Several children side by side are a group of `ctx.runAll`,
-under
+waits for them, and why `child.ignoreFailure()` is no substitute for handling
+the future of `ctx.run`. Several children side by side are a group of
+`ctx.runAll`, under
 [Waiting for several children](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/children.md#waiting-for-several-children)
 on the same page. Where that page makes a child with `Job.deferred`, a
 controller makes it with `job(...)`: its `ctx.run` and `ctx.runAll` take no
@@ -137,20 +137,20 @@ where it hands the future on.
 | In the parent | An error the future of `ctx.run` throws | A failure of the child that a cancellation covered |
 | --- | --- | --- |
 | `ctx.run(child).ignore()` | handled | goes to `onUnanswered` |
-| `child.ignore()` | not handled, goes to the zone | silenced |
+| `child.ignoreFailure()` | not handled, goes to the zone | silenced |
 
 `ctx.run(child).ignore()` explicitly ignores that future's result while the
-parent still waits for its children. `child.ignore()` alone does not handle
-errors of the future returned by `run`.
+parent still waits for its children. `child.ignoreFailure()` alone does not
+handle errors of the future returned by `run`.
 
 If the child's body fails and a cancellation reaches the child afterwards,
 whether before the error leaves the body or while the child still waits for
 children of its own or runs its cleanup, its error is not thrown into the
 parent body. The child ends `Cancelled`, `await ctx.run(child)` throws
 `Cancelled`, and the error goes to the controller's `onUnanswered` — by default
-to `Solo.errorHandler`, or to the zone without one. `child.ignore()` silences
-it. `ctx.run(child).ignore()` does not: it handles what the future throws, and
-the future throws the cancellation.
+to `Solo.errorHandler`, or to the zone without one. `child.ignoreFailure()`
+silences it. `ctx.run(child).ignore()` does not: it handles what the future
+throws, and the future throws the cancellation.
 
 ## A child the rules turn away
 

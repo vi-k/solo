@@ -138,7 +138,7 @@ void main() {
         key: 'first',
         canStart: (state) => throw StateError('rule boom'),
         (ctx) async {},
-      )..ignore();
+      )..ignoreFailure();
       final next = solo.job<Initial, void>(key: 'next', (ctx) async {});
       solo
         ..add(first)
@@ -301,7 +301,7 @@ void main() {
         canStart: (state) =>
             ++asked == 1 ? throw StateError('rule boom') : true,
         (ctx) async {},
-      )..ignore();
+      )..ignoreFailure();
       final second = solo.job<Initial, void>(key: 'second', (ctx) async {});
       solo
         ..add(first)

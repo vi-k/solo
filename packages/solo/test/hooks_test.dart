@@ -46,7 +46,7 @@ void main() {
             ..emit(const Preparing())
             ..log('x');
           throw StateError('boom');
-        }).ignore();
+        }).ignoreFailure();
         async.flushMicrotasks();
         expect(journal.take(), [
           '[job] started',
@@ -395,7 +395,7 @@ void main() {
           ctx.log('hello');
           throw StateError('boom');
         },
-      ).ignore();
+      ).ignoreFailure();
       async.flushTimers();
       expect(journal.take(), [
         '[job] started',

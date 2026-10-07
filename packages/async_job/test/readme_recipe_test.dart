@@ -379,11 +379,12 @@ void main() {
       }
     });
 
-    test('accessing done or value, or calling ignore(), observes it', () {
+    test('accessing done or value, or calling ignoreFailure(), observes it',
+        () {
       final ways = <String, void Function(Job<void> job)>{
         'done': (job) => job.done.ignore(),
         'value': (job) => job.value.ignore(),
-        'ignore()': (job) => job.ignore(),
+        'ignoreFailure()': (job) => job.ignoreFailure(),
       };
       for (final MapEntry(key: way, value: observe) in ways.entries) {
         final zone = zoneErrorsOf((async) {
@@ -640,7 +641,7 @@ void main() {
           await ctx.join(Database.open, dispose: (db) => db.close());
           throw StateError('the read failed');
         })
-          ..ignore();
+          ..ignoreFailure();
         async.flushTimers();
 
         expect(Database.events, ['opened', 'closed']);

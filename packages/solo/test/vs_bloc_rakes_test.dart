@@ -761,7 +761,7 @@ void main() {
         succeeded = ok.outcome;
         afterSuccess = '${controller.currentState}';
         api.pending = Completer<void>();
-        final bad = controller.refresh()..ignore();
+        final bad = controller.refresh()..ignoreFailure();
         async.flushMicrotasks();
         whileLoading = '${controller.currentState}';
         api.pending.completeError(StateError('offline'));
@@ -1285,7 +1285,7 @@ void main() {
 
         narrowApi = checkout.Api();
         final other = checkout.NarrowCheckoutController(narrowApi);
-        final cut = other.pay(const checkout.Order('A'))..ignore();
+        final cut = other.pay(const checkout.Order('A'))..ignoreFailure();
         async.elapse(_ms(10));
         other.suspend();
         async.elapse(_ms(100));

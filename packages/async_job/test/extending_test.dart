@@ -228,7 +228,7 @@ void main() {
         } on Object catch (error) {
           thrown = error;
         }
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
       expect('$thrown', 'Bad state: first');
       expect(first.answered, isEmpty, reason: 'this one reached the caller');
@@ -268,7 +268,7 @@ void main() {
             } on Object catch (error) {
               thrown = error;
             }
-          }).ignore();
+          }).ignoreFailure();
           async.flushTimers();
         });
       },
@@ -290,7 +290,7 @@ void main() {
         });
         await ctx.abandonable(() => delay(50));
       })
-        ..ignore()
+        ..ignoreFailure()
         ..launch();
       async.flushMicrotasks();
       controller.add(1);
@@ -485,7 +485,7 @@ void main() {
         await ctx.uncancellable(() => delay(100));
         return 7;
       })
-        ..ignore()
+        ..ignoreFailure()
         ..launch();
       async.elapse(const Duration(milliseconds: 5));
       unawaited(job.cancel());
@@ -531,7 +531,7 @@ void main() {
         await delay(20);
         return 7;
       })
-        ..ignore()
+        ..ignoreFailure()
         ..launch();
       async.elapse(const Duration(milliseconds: 5));
       unawaited(job.cancel());

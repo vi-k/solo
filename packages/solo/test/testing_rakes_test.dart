@@ -613,11 +613,18 @@ void main() {
     });
 
     group('reading the outcome', () {
-      test('done, value and ignore() mark the job observed, outcome does not',
-          () async {
+      test(
+          'done, value and ignoreFailure() mark the job observed, '
+          'outcome does not', () async {
         final reached = <String, List<String>>{};
 
-        for (final read in ['nothing', 'done', 'value', 'ignore', 'outcome']) {
+        for (final read in [
+          'nothing',
+          'done',
+          'value',
+          'ignoreFailure',
+          'outcome',
+        ]) {
           reached[read] = await _zoned(() async {
             final profile = ProfileController(
               FakeProfileApi(error: StateError('no network')),
@@ -628,8 +635,8 @@ void main() {
                 unawaited(job.done);
               case 'value':
                 job.value.ignore();
-              case 'ignore':
-                job.ignore();
+              case 'ignoreFailure':
+                job.ignoreFailure();
               case 'outcome':
                 job.outcome;
             }
@@ -641,12 +648,14 @@ void main() {
           'nothing': ['StateError: no network'],
           'done': isEmpty,
           'value': isEmpty,
-          'ignore': isEmpty,
+          'ignoreFailure': isEmpty,
           'outcome': ['StateError: no network'],
         });
         _says('Reading `done` or `value` marks the job observed');
-        _says('`job.ignore()`, which marks it observed without waiting for '
-            'it');
+        _says(
+          '`job.ignoreFailure()`, which marks it observed without waiting '
+          'for it',
+        );
         _says('Reading `job.outcome` does not mark anything');
       });
 
@@ -674,7 +683,7 @@ void main() {
       test('the field is null until the job has finished', () {
         fakeAsync((async) {
           final profile = ProfileController(FakeProfileApi());
-          final job = profile.load()..ignore();
+          final job = profile.load()..ignoreFailure();
 
           async.elapse(const Duration(milliseconds: 19));
           expect(job.outcome, isNull);
@@ -694,7 +703,7 @@ void main() {
           final profile = ProfileController(
             FakeProfileApi(error: StateError('no network')),
           );
-          final job = profile.load()..ignore();
+          final job = profile.load()..ignoreFailure();
           await pumpEventQueue();
 
           await job.cancel();
@@ -719,7 +728,7 @@ void main() {
         final run = await _run(() async {
           final profile = ProfileController(
             FakeProfileApi(error: StateError('no network')),
-          )..load().ignore();
+          )..load().ignoreFailure();
           await pumpEventQueue();
 
           await profile.close();
@@ -877,8 +886,8 @@ void main() {
             ..load()
             ..load();
           final running = _Plain(FakeProfileApi())
-            ..load().ignore()
-            ..load().ignore();
+            ..load().ignoreFailure()
+            ..load().ignoreFailure();
 
           async.elapse(const Duration(milliseconds: 40));
 
@@ -998,7 +1007,7 @@ void main() {
       test('microtasks alone leave the job with no outcome, on Loading', () {
         fakeAsync((async) {
           final profile = ProfileController(FakeProfileApi());
-          final job = profile.load()..ignore();
+          final job = profile.load()..ignoreFailure();
 
           async.flushMicrotasks();
 
@@ -1011,8 +1020,9 @@ void main() {
         });
       });
 
-      test('a failure reaches the zone unless ignore() stands in for the read',
-          () {
+      test(
+          'a failure reaches the zone unless ignoreFailure() stands in for '
+          'the read', () {
         final reached = <bool, List<String>>{};
 
         for (final ignored in [false, true]) {
@@ -1021,7 +1031,7 @@ void main() {
               FakeProfileApi(error: StateError('no network')),
             );
             final job = profile.load();
-            if (ignored) job.ignore();
+            if (ignored) job.ignoreFailure();
             async.elapse(const Duration(milliseconds: 20));
             job.outcome;
             profile.close();
@@ -1033,7 +1043,7 @@ void main() {
           false: ['StateError: no network'],
           true: isEmpty,
         });
-        _says('`ignore()` is what stands in for that read');
+        _says('`ignoreFailure()` is what stands in for that read');
       });
 
       test('the test as written ends with an empty clock', () {
@@ -1052,7 +1062,7 @@ void main() {
 
         final run = await _run(() {
           fakeAsync((async) {
-            ProfileController(FakeProfileApi()).load().ignore();
+            ProfileController(FakeProfileApi()).load().ignoreFailure();
             async.flushMicrotasks();
             timers = async.pendingTimers.length;
           });
@@ -1242,7 +1252,7 @@ void main() {
             () async {
               final profile = ProfileController(
                 FakeProfileApi(error: StateError('no network')),
-              )..load().ignore();
+              )..load().ignoreFailure();
               await profile.close(mode: SoloCloseMode.drain);
 
               expect(profile.currentState, isA<Failure>());
@@ -1377,7 +1387,7 @@ void main() {
           () {
         fakeAsync((async) {
           final profile = deadline.ProfileController(FakeProfileApi());
-          final job = profile.load()..ignore();
+          final job = profile.load()..ignoreFailure();
 
           async.elapse(const Duration(milliseconds: 4));
           final before = _how(job);
@@ -1404,7 +1414,8 @@ void main() {
       test('the queue moves on while the call is still in flight', () {
         fakeAsync((async) {
           final api = _CountingApi();
-          final profile = deadline.ProfileController(api)..load().ignore();
+          final profile = deadline.ProfileController(api)
+            ..load().ignoreFailure();
           final next = profile.next();
 
           async.elapse(const Duration(milliseconds: 5));
@@ -1429,7 +1440,7 @@ void main() {
 
         final errors = _fakeZoned((async, errors) {
           final profile = deadline.ProfileController(failing);
-          final job = profile.load()..ignore();
+          final job = profile.load()..ignoreFailure();
           async.elapse(const Duration(milliseconds: 19));
           at19 = 'finished ${failing.finished}';
           async.elapse(const Duration(milliseconds: 1));
@@ -1450,7 +1461,7 @@ void main() {
 
       test('a call that never answers holds the queue', () {
         fakeAsync((async) {
-          final profile = _Plain(_HungApi())..load().ignore();
+          final profile = _Plain(_HungApi())..load().ignoreFailure();
           async.flushMicrotasks();
           final next = profile.next();
 
@@ -1531,7 +1542,7 @@ void main() {
       test('the deadline is counted from the start of the body', () {
         fakeAsync((async) {
           final camera = page.CameraController(FakeCamera())
-            ..connect().ignore();
+            ..connect().ignoreFailure();
           final second = camera.connect();
 
           async.elapse(const Duration(milliseconds: 9999));
@@ -1617,7 +1628,7 @@ void main() {
         });
       });
 
-      test('without ignore() nothing reaches the zone', () {
+      test('without ignoreFailure() nothing reaches the zone', () {
         final errors = _fakeZoned((async, errors) {
           final camera = page.CameraController(FakeCamera())..connect();
           async.elapse(const Duration(seconds: 5));
@@ -1626,7 +1637,9 @@ void main() {
         });
 
         expect(errors, isEmpty);
-        _says('nothing reaches the zone, and the test needs no `ignore()`');
+        _says(
+          'nothing reaches the zone, and the test needs no `ignoreFailure()`',
+        );
       });
 
       test('the deadline reaches onCancel of run, not onError', () {

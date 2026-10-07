@@ -357,7 +357,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    controller.load().ignore();
+    controller.load().ignoreFailure();
   }
 
   @override
@@ -404,11 +404,12 @@ Future<void> _load() async {
 that failed and throws the `Cancelled` of one that was cancelled. `mounted`
 after an `await` is the usual Flutter rule and it applies here too. A job
 nobody looks at is not silent: an unobserved `Failed` reaches the zone that
-created the job, so a fire-and-forget call is `controller.load().ignore()` —
-the `ignore()` is what says the outcome is nobody's business. The same road
-carries the errors no outcome holds — the failure of work a body handed to
-`ctx.unattended`, say — unless the controller overrides `onUnanswered` or a
-`Solo.errorHandler` is set to answer for them:
+created the job, so a fire-and-forget call is
+`controller.load().ignoreFailure()` — the `ignoreFailure()` is what says the
+outcome is nobody's business. The same road carries the errors no outcome
+holds — the failure of work a body handed to `ctx.unattended`, say — unless the
+controller overrides `onUnanswered` or a `Solo.errorHandler` is set to answer
+for them:
 [Answering for an error](https://github.com/vi-k/solo/blob/main/packages/solo/doc/errors.md#answering-for-an-error)
 on the errors page of `solo` has the list. A `SoloObserver` sees such a failure
 and does not take it: watching is not answering.
@@ -480,7 +481,7 @@ ends, to the zone it was created in. Here that is the zone of the test, which
 fails the test on the spot, and `tester.takeException()` has nothing to take
 afterwards. A load that fails makes a test red even though it reads `done`, if
 it reads it after the pump. A job the test starts and drops says so with
-`ignore()`.
+`ignoreFailure()`.
 
 Two more things belong to the fake clock. A `pump()` with no duration decides
 whether to draw before it runs the microtask a job starts on: after

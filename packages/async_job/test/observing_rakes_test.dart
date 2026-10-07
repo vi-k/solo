@@ -861,13 +861,13 @@ void main() {
       );
     });
 
-    test('done, value, then and ignore() observe the outcome', () {
+    test('done, value, then and ignoreFailure() observe the outcome', () {
       // A continuation takes the failure on, so it is ignored in its turn.
       final ways = <String, void Function(Job<void> job)>{
         'done': (job) => job.done.ignore(),
         'value': (job) => job.value.ignore(),
-        'then': (job) => job.then<void>((ctx, _) async {}).ignore(),
-        'ignore()': (job) => job.ignore(),
+        'then': (job) => job.then<void>((ctx, _) async {}).ignoreFailure(),
+        'ignoreFailure()': (job) => job.ignoreFailure(),
       };
       for (final MapEntry(key: way, value: observe) in ways.entries) {
         final lines = play(
@@ -1537,7 +1537,7 @@ void main() {
               throw StateError('second');
             });
             if (secondIgnored) {
-              second.ignore();
+              second.ignoreFailure();
             }
             try {
               await ctx.runAll([
@@ -1570,12 +1570,13 @@ void main() {
       );
     });
 
-    test('ignore closes the second way for a failure no outcome carries', () {
+    test('ignoreFailure closes the second way for a failure no outcome carries',
+        () {
       expect(
         quotable(
           play(
             () => failingBeforeCancel(observer: Answerer(passedOn: true))
-              ..ignore(),
+              ..ignoreFailure(),
             cancelAt: 20,
             outcomeObserved: false,
           ),

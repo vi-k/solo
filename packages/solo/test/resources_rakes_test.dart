@@ -334,7 +334,7 @@ void main() {
         test('when the job ends failed', () {
           fakeAsync((async) {
             final job = _take(Bench(), call, dispose: (db) => db.close())
-              ..ignore();
+              ..ignoreFailure();
             async.flushMicrotasks();
             _end(async, 'open');
             _fail(async, 'step', StateError('the step failed'));
@@ -374,7 +374,7 @@ void main() {
         test('releases the value when the job ends failed', () {
           fakeAsync((async) {
             final job = _take(Bench(), call, discard: (db) => db.close())
-              ..ignore();
+              ..ignoreFailure();
             async.flushMicrotasks();
             _end(async, 'open');
             _fail(async, 'step', StateError('the step failed'));
@@ -414,7 +414,7 @@ void main() {
     for (final outcome in ['done', 'cancelled', 'failed']) {
       test('ctx.onDispose runs its callback when the job ends $outcome', () {
         fakeAsync((async) {
-          final job = _register(Bench(), 'ctx.onDispose')..ignore();
+          final job = _register(Bench(), 'ctx.onDispose')..ignoreFailure();
           async.flushMicrotasks();
           _end(async, 'open');
           if (outcome == 'cancelled') {
@@ -462,7 +462,7 @@ void main() {
 
     test('ctx.onDiscard runs its callback when the job ends failed', () {
       fakeAsync((async) {
-        final job = _register(Bench(), 'ctx.onDiscard')..ignore();
+        final job = _register(Bench(), 'ctx.onDiscard')..ignoreFailure();
         async.flushMicrotasks();
         _end(async, 'open');
         _fail(async, 'step', StateError('the step failed'));
@@ -587,7 +587,7 @@ void main() {
       test('closes it on failure', () {
         fakeAsync((async) {
           final loader = page.Loader();
-          final job = loader.load()..ignore();
+          final job = loader.load()..ignoreFailure();
           async.flushMicrotasks();
           _end(async, 'open');
           _fail(async, 'readAll', StateError('the read failed'));
@@ -1679,7 +1679,7 @@ void main() {
     test('a discard made necessary mid-cleanup runs in a second pass', () {
       fakeAsync((async) {
         final bench = Bench();
-        final job = steps(bench)..ignore();
+        final job = steps(bench)..ignoreFailure();
         final next = bench.next();
         async.flushMicrotasks();
         _end(async, 'open');
@@ -1726,7 +1726,7 @@ void main() {
               ctx.onDispose(() async => stage.trace.add('cleanup'));
               throw StateError('the body failed');
             },
-          )..ignore();
+          )..ignoreFailure();
           bench.next();
           async.flushMicrotasks();
 

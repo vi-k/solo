@@ -258,7 +258,7 @@ the test's business rather than the zone's. The read has to come before the job
 ends: a failure nobody has asked about is reported as the job finishes, so a
 test that holds the job, drains the controller and reads `done` afterwards is
 red all the same. A job the test starts and drops on purpose says so with
-`job.ignore()`, which marks it observed without waiting for it. Reading
+`job.ignoreFailure()`, which marks it observed without waiting for it. Reading
 `job.outcome` does not mark anything: it is a look at a field, and the field is
 `null` until the job has finished.
 
@@ -412,7 +412,7 @@ test('load fills in the name', () {
   fakeAsync((async) {
     final profile = ProfileController(FakeProfileApi());
 
-    final job = profile.load()..ignore();
+    final job = profile.load()..ignoreFailure();
     async.elapse(const Duration(milliseconds: 20));
 
     expect(job.outcome, isA<Done<String>>());
@@ -425,7 +425,7 @@ test('load fills in the name', () {
 ```
 
 The callback stays synchronous and reads `job.outcome` where the test above
-awaited `done` — and `ignore()` is what stands in for that read: inside
+awaited `done` — and `ignoreFailure()` is what stands in for that read: inside
 `fakeAsync` nothing can be awaited, so a failure would reach the zone with no
 one having observed it. The fake's twenty milliseconds are a `Future.delayed`,
 that is a timer, and `elapse` is what gets past it: `flushMicrotasks()` alone
@@ -603,7 +603,7 @@ test('the deadline ends the job, not the call', () {
   fakeAsync((async) {
     final profile = ProfileController(FakeProfileApi());
 
-    final job = profile.load()..ignore();
+    final job = profile.load()..ignoreFailure();
     async.elapse(const Duration(milliseconds: 5));
 
     expect(job.outcome, isA<Failed>());
@@ -654,9 +654,9 @@ outside takes the same way, so a cancelled job stops the device as well.
 Whether the device actually stops depends on that device's API. The hardware
 API completes with an error when its token is cancelled, and `join` throws that
 error, but the job is cancelled by then: it ends `Cancelled(timeout)`, not
-`Failed`, nothing reaches the zone, and the test needs no `ignore()`. The five
-seconds cost the test nothing; its `FakeCamera` is a device that never answers
-on its own, so the deadline is what ends the call:
+`Failed`, nothing reaches the zone, and the test needs no `ignoreFailure()`.
+The five seconds cost the test nothing; its `FakeCamera` is a device that never
+answers on its own, so the deadline is what ends the call:
 
 ```dart
 test('connect gives up after five seconds', () {

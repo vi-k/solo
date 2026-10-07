@@ -436,7 +436,7 @@ void main() {
           final inner = KeyedJob<void>(key: 'same', (inner) async {
             await inner.uncancellable(() async => ranTheStep = true);
           })
-            ..ignore();
+            ..ignoreFailure();
           try {
             inner.launch();
           } on Object catch (error) {
@@ -445,7 +445,7 @@ void main() {
         });
         await ctx.abandonable(() => delay(10));
       })
-        ..ignore()
+        ..ignoreFailure()
         ..launch();
       async.flushTimers();
       expect(thrown, isNull);

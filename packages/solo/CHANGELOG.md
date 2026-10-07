@@ -4,7 +4,7 @@ Moving from `0.2.0`: read "Breaking changes" for what stops compiling or
 behaves differently, and "Changes you will see on upgrade" for what a test or a
 log shows with no change to the code — errors that now reach the zone, and text
 that reads differently. This package re-exports `async_job` whole, so the
-breaking changes of the core are this package's too; the first and the last
+breaking changes of the core are this package's too; the first two and the last
 entries of the first group name them.
 
 ### Breaking changes
@@ -13,6 +13,13 @@ entries of the first group name them.
   package re-exports; `wait` stays as a deprecated alias until the next
   breaking release. **Migrating.** Replace `ctx.wait` with `ctx.abandonable`:
   `flutter analyze` and `dart analyze --fatal-infos` fail on the old name. See
+  [the `async_job` changelog](https://github.com/vi-k/solo/blob/main/packages/async_job/CHANGELOG.md).
+
+- **`Job.ignore()` is renamed to `Job.ignoreFailure()`** in `async_job`, with
+  no deprecated alias: the old name read as `Future.ignore()`, which does
+  another thing. **Migrating.** Replace `ignore()` with `ignoreFailure()` where
+  the receiver is a `Job` — `load().ignore()` becomes `load().ignoreFailure()`;
+  the analyzer names every such call. `ignore()` on a future stays. See
   [the `async_job` changelog](https://github.com/vi-k/solo/blob/main/packages/async_job/CHANGELOG.md).
 
 - **`SoloBase` is renamed to `Solo`, and the former `Solo` — the class that
@@ -261,8 +268,8 @@ is the test's, and the test fails:
 - the failure of a body when a cancellation reaches the job afterwards, while
   the job waits for children of its own or runs its cleanup. Whoever reads the
   outcome gets the cancellation. In `0.2.0` reading it kept the failure to
-  `onError`; now it reaches the zone read or not. `job.ignore()` on that job
-  silences it, and `onError` still hears it;
+  `onError`; now it reaches the zone read or not. `job.ignoreFailure()` on that
+  job silences it, and `onError` still hears it;
 - the failure of a step of `ctx.uncancellable` while the section held a
   cancellation back, the same way: `0.2.0` told `onError` and nobody else;
 - the late failure of an action the body walked away from, through `.timeout`

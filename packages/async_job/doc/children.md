@@ -82,13 +82,14 @@ Both children start at once. `rows` is the future `ctx.run` returned, kept and
 awaited later; a future kept this way must be awaited or have its errors
 handled. `child` warms a cache nobody reads here, and `ctx.run(child).ignore()`
 says the result is not wanted. The parent still waits for both before
-finishing. `child.ignore()` is no substitute for `ctx.run(child).ignore()`.
-`child.ignore()` quenches the core's report of a failure nobody looked at, and
-here `run` looks — it waits for the child's value. If `child` fails, its error
-arrives through the future `run` returned, an ordinary Dart future: left
-unhandled, it goes to the zone, and so does the child's `Cancelled`.
-`ctx.run(child).ignore()` silences the error of that future and nothing more:
-the child's observer still hears the error through `onError`.
+finishing. `child.ignoreFailure()` is no substitute for
+`ctx.run(child).ignore()`. `child.ignoreFailure()` quenches the core's report
+of a failure nobody looked at, and here `run` looks — it waits for the child's
+value. If `child` fails, its error arrives through the future `run` returned,
+an ordinary Dart future: left unhandled, it goes to the zone, and so does the
+child's `Cancelled`. `ctx.run(child).ignore()` silences the error of that
+future and nothing more: the child's observer still hears the error through
+`onError`.
 
 If the child's body fails and a cancellation reaches the child afterwards —
 while it still waits for children of its own or runs its cleanup, say — its
@@ -96,10 +97,10 @@ error does not arrive through that future. The child ends `Cancelled`,
 `await ctx.run(child)` throws `Cancelled`, and the error goes where an error
 nobody handled goes: to the child's observer and, unless that observer answers
 for it, to the zone, as in [Where errors go](observing.md#where-errors-go) on
-the observing page. `child.ignore()` silences it. `ctx.run(child).ignore()`
-does not: it silences what the future throws, and the future throws the
-cancellation. To answer for the error differently, give the child an observer
-that answers: a `JobAnswerer` with `onUnanswered` overridden.
+the observing page. `child.ignoreFailure()` silences it.
+`ctx.run(child).ignore()` does not: it silences what the future throws, and the
+future throws the cancellation. To answer for the error differently, give the
+child an observer that answers: a `JobAnswerer` with `onUnanswered` overridden.
 
 ### When `ctx.run` refuses a child
 
@@ -584,9 +585,9 @@ source, then finishes without calling its callback. While waiting, it can be
 it was cancelled while waiting for its source.
 
 A failed predecessor forwards its error and stack without calling the callback.
-Observe the continuation through `value`, `done` or `ignore` to handle that
-failure. If a cancelled continuation cannot forward a source failure, it does
-not observe it either: for example, a source that refuses cancellation and
+Observe the continuation through `value`, `done` or `ignoreFailure` to handle
+that failure. If a cancelled continuation cannot forward a source failure, it
+does not observe it either: for example, a source that refuses cancellation and
 later fails still needs its own error handling.
 
 The callback returns a value or a future, and the continuation waits for the
@@ -698,9 +699,9 @@ own handle stops it, `tail.cancel()`, or
 running.
 
 A failure in the continuation is nobody's business but its own. Observe it
-through `value`, `done` or `ignore`; an unobserved one goes to the zone `then`
-was called in, after the parent has already finished. Its outcome comes back to
-you, not to the parent.
+through `value`, `done` or `ignoreFailure`; an unobserved one goes to the zone
+`then` was called in, after the parent has already finished. Its outcome comes
+back to you, not to the parent.
 
 ## Steps in a row
 

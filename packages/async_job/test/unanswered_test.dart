@@ -210,8 +210,8 @@ List<String> eachCancelled(
       async.flushTimers();
     });
 
-/// Hands both hooks on to [inner], and without one answers the default
-/// way; with [ignoresOnFinish], calls `ignore` on the job from `onFinish`,
+/// Hands both hooks on to [inner], and without one answers the default way;
+/// with [ignoresOnFinish], calls `ignoreFailure` on the job from `onFinish`,
 /// the way an engine of a domain that routes failures itself would.
 class Forwarding extends JobObserver with JobAnswerer {
   final JobObserver? inner;
@@ -236,7 +236,7 @@ class Forwarding extends JobObserver with JobAnswerer {
   @override
   void onFinish(Job<Object?> job) {
     if (ignoresOnFinish) {
-      job.ignore();
+      job.ignoreFailure();
     }
   }
 }
@@ -256,7 +256,7 @@ final class CancellingOnError extends Forwarding {
 /// A continuation of a source that fails 5 ms in, cancelled by its own
 /// observer while that observer hears the failure. [read] takes the
 /// continuation as soon as it is created; with [ignoredOnFinish], the
-/// observer calls `ignore` on it from `onFinish`.
+/// observer calls `ignoreFailure` on it from `onFinish`.
 List<String> continuationCancelled(
   JobObserver? observer, {
   void Function(Job<int> tail)? read,
@@ -279,7 +279,8 @@ List<String> continuationCancelled(
     });
 
 /// A root an engine of a domain ends by hand with [outcome], 10 ms after a
-/// cancellation marked it. With [ignored], `ignore` was called on it first.
+/// cancellation marked it. With [ignored], `ignoreFailure` was called on it
+/// first.
 List<String> rootDroppedOverTheMark(
   JobObserver? observer,
   Outcome<int> Function() outcome, {
@@ -291,7 +292,7 @@ List<String> rootDroppedOverTheMark(
         return 1;
       });
       if (ignored) {
-        root.ignore();
+        root.ignoreFailure();
       }
       root.launch();
       async.elapse(const Duration(milliseconds: 10));
@@ -613,7 +614,7 @@ void main() {
           final child = failingFirst('child');
           Job<void>(observer: observer, (ctx) async {
             await ctx.run(child);
-          }).ignore();
+          }).ignoreFailure();
           async.elapse(const Duration(milliseconds: 10));
           child.cancel().ignore();
           async.flushTimers();
@@ -635,7 +636,7 @@ void main() {
               rethrow;
             }
           })
-            ..ignore();
+            ..ignoreFailure();
           async.elapse(const Duration(milliseconds: 10));
           (cancelParent ? parent.cancel() : child.cancel()).ignore();
           async.flushTimers();
@@ -704,7 +705,7 @@ void main() {
               // The group throws the first failure; the one under test is
               // the other.
             }
-          }).ignore();
+          }).ignoreFailure();
           async.flushTimers();
         }),
         'Bad state: held',
@@ -736,7 +737,7 @@ void main() {
             } on Object catch (_) {
               // The refusal is what comes out of the group.
             }
-          }).ignore();
+          }).ignoreFailure();
           async.flushTimers();
         }),
         'Bad state: failed at once',
@@ -818,13 +819,14 @@ void main() {
       );
     });
 
-    test('ignore from a listener of done comes too late', () {
+    test('ignoreFailure from a listener of done comes too late', () {
       // The answer follows the end of the job on the spot, and `done`
       // completes with that end: its listener runs afterwards.
       expectAnswered(
         (observer) => rootCancelled(
           observer,
-          read: (root) => unawaited(root.done.then((_) => root.ignore())),
+          read: (root) =>
+              unawaited(root.done.then((_) => root.ignoreFailure())),
         ),
         rootError,
       );
@@ -1388,14 +1390,15 @@ void main() {
     });
   });
 
-  group('ignore silences a failure no outcome carries', () {
+  group('ignoreFailure silences a failure no outcome carries', () {
     // Nobody wants the job's failure: `onError` has heard it, and nobody
     // answers for it.
     const rootError = 'Bad state: root failed first';
 
     test('on a root', () {
       expectOnlyTold(
-        (observer) => rootCancelled(observer, read: (root) => root.ignore()),
+        (observer) =>
+            rootCancelled(observer, read: (root) => root.ignoreFailure()),
         rootError,
       );
     });
@@ -1406,7 +1409,7 @@ void main() {
           observer,
           read: (root) {
             root.value.ignore();
-            root.ignore();
+            root.ignoreFailure();
           },
         ),
         rootError,
@@ -1415,8 +1418,10 @@ void main() {
 
     test('on a child of run', () {
       expectOnlyTold(
-        (observer) =>
-            runCancelled(observer, () => failingFirst('child')..ignore()),
+        (observer) => runCancelled(
+          observer,
+          () => failingFirst('child')..ignoreFailure(),
+        ),
         'Bad state: child failed first',
       );
     });
@@ -1426,7 +1431,7 @@ void main() {
         (observer) => zoneOf((async) {
           final parent = Job<void>(observer: observer, (ctx) async {
             await ctx.runAll([
-              failingFirst('branch')..ignore(),
+              failingFirst('branch')..ignoreFailure(),
               Job.deferred<int>((ctx) async {
                 await ctx.abandonable(() => delay(100));
                 return 2;
@@ -1455,12 +1460,12 @@ void main() {
                   await ctx.abandonable(() => delay(20));
                   throw StateError('second');
                 })
-                  ..ignore(),
+                  ..ignoreFailure(),
               ]);
             } on Object catch (_) {
               // The group throws the first one.
             }
-          }).ignore();
+          }).ignoreFailure();
           async.flushTimers();
         }),
         'Bad state: second',
@@ -1479,7 +1484,7 @@ void main() {
         (observer) => zoneOf((async) {
           final first = ProbeJob<int>((ctx) async => 1);
           final second = ProbeJob<int>(cancellable: false, (ctx) async => 2)
-            ..ignore();
+            ..ignoreFailure();
           final gate = Completer<void>();
           final slow = Job.deferred<int>((ctx) async {
             ctx.onDispose(() => gate.future);
@@ -1491,7 +1496,7 @@ void main() {
             } on Object catch (_) {
               // The group throws the first one.
             }
-          }).ignore();
+          }).ignoreFailure();
           async.flushMicrotasks();
           first.drop(Failed(StateError('first'), StackTrace.current));
           second.drop(Failed(StateError('second'), StackTrace.current));
@@ -1505,8 +1510,10 @@ void main() {
 
     test('on a continuation its observer cancels', () {
       expectOnlyTold(
-        (observer) =>
-            continuationCancelled(observer, read: (tail) => tail.ignore()),
+        (observer) => continuationCancelled(
+          observer,
+          read: (tail) => tail.ignoreFailure(),
+        ),
         'Bad state: source failed',
       );
     });
@@ -1515,7 +1522,7 @@ void main() {
       expectOnlyTold(
         (observer) => rootCancelled(
           observer,
-          read: (root) => root.whenCancelled((_) => root.ignore()),
+          read: (root) => root.whenCancelled((_) => root.ignoreFailure()),
         ),
         rootError,
       );
@@ -1602,7 +1609,7 @@ void main() {
         } on Object catch (_) {
           // The group throws the first one.
         }
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
     });
     expect(observer.seen, [
@@ -1626,7 +1633,7 @@ void main() {
               ].wait;
             });
           await delay(10);
-        }).ignore();
+        }).ignoreFailure();
         async.flushTimers();
       });
       expect(
@@ -1652,7 +1659,7 @@ void main() {
             ctx.onDispose(() => throw StateError('child cleanup'));
           }),
         );
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
     });
     expect(observer.seen, contains('onUnanswered: Bad state: child cleanup'));
@@ -1678,7 +1685,7 @@ void main() {
     final zone = zoneOf((async) {
       Job<void>(observer: observer, (ctx) async {
         ctx.onDispose(() => throw StateError('cleanup'));
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
     });
     expect(observer.answered.map((error) => '$error'), ['Bad state: cleanup']);
@@ -1689,7 +1696,7 @@ void main() {
     final zone = zoneOf((async) {
       Job<void>(observer: Mixed(), (ctx) async {
         ctx.onDispose(() => throw StateError('cleanup'));
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
     });
     expect(zone, ['Bad state: cleanup']);

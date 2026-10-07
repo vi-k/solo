@@ -324,7 +324,7 @@ void main() {
         late page.Tracker solo;
         final errors = _zone((async) {
           solo = page.Tracker();
-          final job = solo.track()..ignore();
+          final job = solo.track()..ignoreFailure();
           async.flushMicrotasks();
           stage.positions.addError(StateError('hardware broke'));
           async.flushMicrotasks();
@@ -355,7 +355,7 @@ void main() {
               }
               childCtx.emit(childCtx.state.copyWith(position: p));
             }).value,
-          )..ignore();
+          )..ignoreFailure();
           async.flushMicrotasks();
           stage.positions
             ..add(1)
@@ -642,14 +642,15 @@ void main() {
             '`_sync` at the top of [Children and streams](children.md)');
       });
 
-      test('ignore() on the child keeps its failure out of the zone', () {
+      test('ignoreFailure() on the child keeps its failure out of the zone',
+          () {
         late Bench bench;
         final errors = _zone((async) {
           bench = Bench()
             ..run<Ready, void>(key: 'track', (ctx) async {
               ctx.each(hw.positions, (childCtx, p) {
                 throw StateError('callback failed');
-              }).ignore();
+              }).ignoreFailure();
             });
           async.flushMicrotasks();
           stage.positions.add(1);
@@ -658,7 +659,7 @@ void main() {
 
         expect(errors, isEmpty);
         expect(bench.heard, ['Job(each): Bad state: callback failed']);
-        _says('`ignore()` on the child keeps it out of the zone.');
+        _says('`ignoreFailure()` on the child keeps it out of the zone.');
       });
 
       test('events are delivered one at a time', () {

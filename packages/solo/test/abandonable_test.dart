@@ -136,7 +136,7 @@ void main() {
       });
       solo.run<TestState, void>(key: 'bad', (ctx) async {
         await ctx.abandonable(() => throw StateError('boom'));
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
       expect((job.outcome! as Done<int>).value, 3);
       expect(journal.take(), [
@@ -170,7 +170,7 @@ void main() {
         await ctx.abandonable(
           () => delay(100).timeout(const Duration(milliseconds: 10)),
         );
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
       const errorLine = '[job] error TimeoutException after '
           '0:00:00.010000: Future not completed';

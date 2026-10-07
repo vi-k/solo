@@ -196,7 +196,7 @@ final class DrainingSession extends Solo<AppState>
   DrainingSession() : super(const Ready());
 
   Future<void> logout() async {
-    run<Ready, void>((ctx) => ctx.join(api.logout)).ignore();
+    run<Ready, void>((ctx) => ctx.join(api.logout)).ignoreFailure();
     await close(mode: SoloCloseMode.drain);
   }
 }

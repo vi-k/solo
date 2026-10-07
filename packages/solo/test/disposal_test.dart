@@ -74,7 +74,7 @@ void main() {
             ..disown(db)
             ..emit(Working(a: db.length));
         },
-      )..ignore();
+      )..ignoreFailure();
       async.flushTimers();
       expect(closed, isEmpty, reason: 'the database went into the state');
       expect(job.outcome, isA<Cancelled>(), reason: 'the hook cancelled it');
@@ -98,7 +98,7 @@ void main() {
             ctx.disown(tx);
           });
         },
-      )..ignore();
+      )..ignoreFailure();
       async.elapse(const Duration(milliseconds: 5));
       solo.externalSetState(const Working(a: 1));
       async.flushTimers();
@@ -147,7 +147,7 @@ void main() {
           });
           await pause(ctx, 10);
         },
-      ).ignore();
+      ).ignoreFailure();
       async.elapse(const Duration(milliseconds: 5));
       // The next job of the same queue starts only after `finish`, and
       // that waits for the cleanup.
@@ -157,7 +157,7 @@ void main() {
             policy: Policy.restart,
             (ctx) async => order.add('second starts'),
           )
-          .ignore();
+          .ignoreFailure();
       async.flushTimers();
       expect(order, ['cleanup starts', 'cleanup ends', 'second starts']);
     });
@@ -171,7 +171,7 @@ void main() {
             key: 'load',
             (ctx) async => leaked = ctx,
           )
-          .ignore();
+          .ignoreFailure();
       async.flushTimers();
       expect(() => leaked.state, returnsNormally);
       expect(leaked.check, returnsNormally);

@@ -32,7 +32,7 @@ void main() {
     runZonedGuarded(
       () {
         fakeAsync((async) {
-          Job<void>((ctx) async => throw StateError('boom')).ignore();
+          Job<void>((ctx) async => throw StateError('boom')).ignoreFailure();
           async.flushMicrotasks();
         });
       },
@@ -109,7 +109,7 @@ void main() {
             key: 'job',
             observer: journal,
             (ctx) async => throw StateError('boom'),
-          ).ignore();
+          ).ignoreFailure();
           async.flushMicrotasks();
         });
       },
@@ -120,7 +120,11 @@ void main() {
       '[job] error Bad state: boom',
       '[job] finished Failed(Bad state: boom)',
     ]);
-    expect(caught, isEmpty, reason: 'the outcome was observed by ignore');
+    expect(
+      caught,
+      isEmpty,
+      reason: 'the outcome was observed by ignoreFailure',
+    );
   });
 
   test('the homeless errors go to the zone without an observer', () {
@@ -287,7 +291,7 @@ void main() {
               ),
             );
             throw const Cancelled('enough');
-          }).ignore();
+          }).ignoreFailure();
           async.elapse(const Duration(milliseconds: 200));
         });
       },
@@ -315,7 +319,7 @@ void main() {
               }),
             );
             await ctx.abandonable(() => delay(10));
-          }).ignore();
+          }).ignoreFailure();
           async.elapse(const Duration(milliseconds: 50));
         });
       },
@@ -341,11 +345,11 @@ void main() {
               // is the report of an unobserved outcome that this turns
               // off, and run observes the child anyway.
             })
-              ..ignore();
+              ..ignoreFailure();
             // ignore: unawaited_futures
             ctx.run(child);
             await ctx.abandonable(() => delay(10));
-          }).ignore();
+          }).ignoreFailure();
           async.elapse(const Duration(milliseconds: 50));
         });
       },
@@ -354,7 +358,7 @@ void main() {
     expect(
       caught.map((error) => '$error').toList(),
       ['Bad state: child boom'],
-      reason: 'the same failure arrives as with no ignore at all',
+      reason: 'the same failure arrives as with no ignoreFailure at all',
     );
   });
 
@@ -373,7 +377,7 @@ void main() {
                 )
                 .ignore();
             await ctx.abandonable(() => delay(10));
-          }).ignore();
+          }).ignoreFailure();
           async.elapse(const Duration(milliseconds: 50));
         });
       },
@@ -391,13 +395,13 @@ void main() {
             final child = Job.deferred<void>(key: 'child', (child) async {
               await child.abandonable(() => delay(20));
             })
-              ..ignore();
+              ..ignoreFailure();
             // ignore: unawaited_futures
             ctx.run(child);
             await ctx.abandonable(() => delay(5));
             child.cancel().ignore();
             await ctx.abandonable(() => delay(10));
-          }).ignore();
+          }).ignoreFailure();
           async.elapse(const Duration(milliseconds: 50));
         });
       },
@@ -406,7 +410,8 @@ void main() {
     expect(
       caught,
       [isA<Cancelled>()],
-      reason: 'ignore has no effect on a cancellation, the Future carries it',
+      reason: 'ignoreFailure has no effect on a cancellation, '
+          'the Future carries it',
     );
   });
 
@@ -481,7 +486,7 @@ void main() {
     expect(job.outcome, isA<Cancelled>());
   });
 
-  test('ignore silences a failure a late cancellation covered', () {
+  test('ignoreFailure silences a failure a late cancellation covered', () {
     final caught = <Object>[];
     runZonedGuarded(
       () {
@@ -497,7 +502,7 @@ void main() {
                 .ignore();
             throw StateError('boom');
           })
-            ..ignore();
+            ..ignoreFailure();
           async.elapse(const Duration(milliseconds: 10));
           job.cancel().ignore();
           async.flushTimers();
@@ -663,7 +668,7 @@ void main() {
     );
   });
 
-  test('ignore from onFinish still silences a covered error', () {
+  test('ignoreFailure from onFinish still silences a covered error', () {
     final order = <String>[];
     runZonedGuarded(
       () {
@@ -697,7 +702,8 @@ void main() {
     expect(
       order,
       ['onFinish job'],
-      reason: 'an engine of a domain calling ignore at finish is in time: '
+      reason:
+          'an engine of a domain calling ignoreFailure at finish is in time: '
           'the answer follows onFinish',
     );
   });
@@ -865,7 +871,7 @@ void main() {
               }),
             );
             await ctx.abandonable(() => delay(10));
-          }).ignore();
+          }).ignoreFailure();
           async.flushTimers();
         });
       },
@@ -930,7 +936,7 @@ final class _IgnoreOnFinish extends JobObserver {
   @override
   void onFinish(Job<Object?> job) {
     order.add('onFinish ${job.key}');
-    job.ignore();
+    job.ignoreFailure();
   }
 }
 

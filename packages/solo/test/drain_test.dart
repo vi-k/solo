@@ -106,8 +106,8 @@ void main() {
         timing: AccumulationTiming.debounce(const Duration(milliseconds: 40)),
         (ctx, events) async => ctx.log('sent $events'),
       );
-      metrics.add(1).ignore();
-      metrics.add(2).ignore();
+      metrics.add(1).ignoreFailure();
+      metrics.add(2).ignoreFailure();
       async.elapse(const Duration(milliseconds: 10));
       solo.close(mode: SoloCloseMode.drain).ignore();
       async.flushTimers();
@@ -181,7 +181,7 @@ void main() {
         timing: AccumulationTiming.debounce(const Duration(milliseconds: 40)),
         (ctx, events) async => ctx.log('sent $events'),
       );
-      metrics.add(1).ignore();
+      metrics.add(1).ignoreFailure();
       async.flushMicrotasks();
       expect(solo.queue.length, 1, reason: 'waiting for its window');
       expect(solo.current, isNull, reason: 'and nothing is running');
@@ -213,7 +213,7 @@ void main() {
         timing: AccumulationTiming.debounce(const Duration(milliseconds: 40)),
         (ctx, events) async => ctx.log('sent $events'),
       );
-      final group = metrics.add(1)..ignore();
+      final group = metrics.add(1)..ignoreFailure();
       async.flushMicrotasks();
 
       var closed = false;
@@ -239,7 +239,7 @@ void main() {
         timing: AccumulationTiming.throttle(const Duration(seconds: 10)),
         (ctx, events) async => ctx.log('sent $events'),
       );
-      metrics.add(1).ignore();
+      metrics.add(1).ignoreFailure();
 
       var closed = false;
       solo.close(mode: SoloCloseMode.drain).then((_) => closed = true).ignore();

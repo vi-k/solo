@@ -30,7 +30,7 @@ void main() {
             ..onDispose(ctx.check);
           return 1;
         },
-      ).ignore();
+      ).ignoreFailure();
       async.flushTimers();
       expect(errors, hasLength(6));
       expect(errors.every((error) => error is StateError), isTrue);
@@ -59,7 +59,7 @@ void main() {
           });
           return 1;
         },
-      ).ignore();
+      ).ignoreFailure();
       async.flushTimers();
       expect(order, ['outer', 'nested']);
       expect(errors, isEmpty);
@@ -81,7 +81,7 @@ void main() {
           );
           await ctx.abandonable(() => delay(10));
         },
-      )..ignore();
+      )..ignoreFailure();
       async.elapse(const Duration(milliseconds: 5));
       job.cancel().ignore();
       async.flushTimers();
@@ -111,7 +111,7 @@ void main() {
           await ctx.abandonable(() => delay(50));
           return 1;
         },
-      )..ignore();
+      )..ignoreFailure();
       async.elapse(const Duration(milliseconds: 10));
       job.cancel().ignore();
       async.flushTimers();
@@ -129,7 +129,7 @@ void main() {
         // and this test would say nothing about it being lowered again.
         ctx.onDispose(() {});
       })
-        ..ignore();
+        ..ignoreFailure();
       async.flushTimers();
       expect(job.isFinished, isTrue);
       expect(leaked.check, returnsNormally);

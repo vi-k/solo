@@ -470,7 +470,7 @@ void main() {
         expect(checked, 0);
         expect(identical(a, b), isTrue);
         if (rule == 'type') solo.externalSetState(const Disposed());
-        a.ignore();
+        a.ignoreFailure();
         async.flushMicrotasks();
         expect(called, isFalse);
         if (rule == 'throw') {
@@ -735,7 +735,7 @@ void main() {
         });
         first = events.add(1);
         final shared = events.add(2);
-        first.ignore();
+        first.ignoreFailure();
         async.flushMicrotasks();
         expect(identical(shared, first), isTrue);
         expect(
@@ -828,13 +828,13 @@ void main() {
                   canStart: (_) => ending != 'rules',
                   policy: AccumulationPolicy.replace,
                 );
-          final job = events.add(event)..ignore();
+          final job = events.add(event)..ignoreFailure();
           // Inspect ownership directly instead of relying on GC timing.
           // Retain the former storage itself as well as the completed handle.
           final storage = _privateField(job, '_accumulation')!;
           expect(_privateField(storage, '_value'), isNotNull);
           if (ending == 'cancel') job.cancel();
-          if (ending == 'replace') events.add(Object()).ignore();
+          if (ending == 'replace') events.add(Object()).ignoreFailure();
           async.flushMicrotasks();
           expect(job.isFinished, isTrue);
           expect(_privateField(storage, '_value'), isNull);

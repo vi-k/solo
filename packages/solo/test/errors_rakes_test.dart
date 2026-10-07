@@ -446,7 +446,7 @@ void main() {
       late page.ProfileController profile;
       final ran = _run((async) {
         profile = page.ProfileController(ProfileApi());
-        job = profile.load()..ignore();
+        job = profile.load()..ignoreFailure();
         async.flushMicrotasks();
         _fail(async, 'fetchName', StateError('no network'));
       });
@@ -454,14 +454,18 @@ void main() {
       expect(stage.crashes, ['no network'], reason: 'told once');
       expect('${job.outcome}', 'Failed(Bad state: no network)');
       expect('${profile.currentState}', 'Failure(Bad state: no network)');
-      expect(ran.errors, isEmpty, reason: 'ignore() observed the outcome');
+      expect(
+        ran.errors,
+        isEmpty,
+        reason: 'ignoreFailure() observed the outcome',
+      );
     });
 
     test('the hook of the page: the call it let go of fails later', () {
       late Job<String> job;
       final ran = _run((async) {
         final profile = page.ProfileController(ProfileApi());
-        job = profile.load()..ignore();
+        job = profile.load()..ignoreFailure();
         async.flushMicrotasks();
         unawaited(job.cancel());
         async.flushMicrotasks();
@@ -488,16 +492,16 @@ void main() {
               key: 'body',
               (ctx) async => throw StateError('the body'),
             )
-            .ignore();
+            .ignoreFailure();
         _dirtyCleanup(bench);
-        final abandons = _waits(bench, 'abandons')..ignore();
+        final abandons = _waits(bench, 'abandons')..ignoreFailure();
         bench
             .run<int, void>(
               key: 'rule',
               canStart: (state) => throw StateError('the rule'),
               (ctx) async {},
             )
-            .ignore();
+            .ignoreFailure();
         async.flushMicrotasks();
         unawaited(abandons.cancel());
         async.flushMicrotasks();
@@ -530,7 +534,7 @@ void main() {
             ),
           );
         })
-          ..ignore();
+          ..ignoreFailure();
       });
 
       expect(bench.heard, ['child: the child', 'parent: the child']);
@@ -599,7 +603,7 @@ void main() {
         Solo.errorHandler =
             (solo, job, error, stackTrace) => handled.add(text(error));
         profile = answering.ProfileController(ProfileApi());
-        final job = profile.load()..ignore();
+        final job = profile.load()..ignoreFailure();
         async.flushMicrotasks();
         unawaited(job.cancel());
         async.flushMicrotasks();
@@ -678,7 +682,7 @@ void main() {
         late Job<void> job;
         final ran = _run((async) {
           bench = Bench();
-          job = _waits(bench, 'abandons')..ignore();
+          job = _waits(bench, 'abandons')..ignoreFailure();
           async.flushMicrotasks();
           unawaited(job.cancel());
           async.flushMicrotasks();
@@ -714,7 +718,7 @@ void main() {
             await ctx.abandonable(() => stage.start<void>('op', null));
           })
             ..whenCancelled((_) => throw StateError('the listener'))
-            ..ignore();
+            ..ignoreFailure();
           async.flushMicrotasks();
           unawaited(job.cancel());
         });
@@ -736,7 +740,7 @@ void main() {
             onError: (state, error, stackTrace) =>
                 throw StateError('the handler'),
             (ctx) async => throw StateError('the body'),
-          )..ignore();
+          )..ignoreFailure();
           next = bench.run<int, void>(key: 'next', (ctx) async {});
         });
 
@@ -758,7 +762,7 @@ void main() {
             keepWhile: (state) =>
                 state == 0 ? true : throw StateError('the rule'),
             (ctx) => stage.start<void>('op', null),
-          )..ignore();
+          )..ignoreFailure();
           async.flushMicrotasks();
           bench.reflect(1);
           async.flushMicrotasks();
@@ -926,8 +930,8 @@ void main() {
         Solo.errorHandler =
             (solo, job, error, stackTrace) => handled.add(text(error));
         bench = Bench();
-        // Not ignored: ignore() would silence a failure that asked for an
-        // answer, and this one asks for none.
+        // Not ignored: ignoreFailure() would silence a failure that asked for
+        // an answer, and this one asks for none.
         job = bench.run<int, void>(
           key: 'stopped',
           (ctx) => ctx.join(() => stage.start<void>('op', null)),
@@ -1121,7 +1125,7 @@ void main() {
       final ran = _run((async) {
         page.main();
         final profile = page.ProfileController(ProfileApi());
-        job = profile.load()..ignore();
+        job = profile.load()..ignoreFailure();
         async.flushMicrotasks();
         _end(async, 'fetchName');
       });
@@ -1227,12 +1231,12 @@ void main() {
             );
             throw StateError('the body');
           },
-        ).ignore();
+        ).ignoreFailure();
         final cancelled = journal.run<int, void>(
           key: 'cancelled',
           onCancel: (state, cancelled) => -2,
           (ctx) => ctx.abandonable(() => stage.start<void>('op', null)),
-        )..ignore();
+        )..ignoreFailure();
         async.flushMicrotasks();
         unawaited(cancelled.cancel());
       });
@@ -1471,7 +1475,7 @@ void main() {
       test('a job nobody asked to stop, then one that accepted it', () {
         fakeAsync((async) {
           final bench = Bench();
-          final job = _ignores(bench, 'bare')..ignore();
+          final job = _ignores(bench, 'bare')..ignoreFailure();
           async.flushMicrotasks();
           final before = bench.pending! as SoloPendingJob;
           unawaited(job.cancel());
@@ -1504,7 +1508,7 @@ void main() {
         );
         fakeAsync((async) {
           final bench = Bench();
-          final job = _holds(bench, 'held')..ignore();
+          final job = _holds(bench, 'held')..ignoreFailure();
           async.flushMicrotasks();
           final before = bench.pending! as SoloPendingJob;
           unawaited(job.cancel());
@@ -1680,7 +1684,7 @@ void main() {
       test('a job that holds a cancellation, as the page quotes it', () {
         _run((async) {
           Solo.observer = page.Hangs();
-          final job = _holds(Bench(), 'held')..ignore();
+          final job = _holds(Bench(), 'held')..ignoreFailure();
           async.elapse(const Duration(seconds: 1));
           unawaited(job.cancel());
           async.elapse(const Duration(seconds: 6));
@@ -1762,7 +1766,7 @@ void main() {
         _run((async) {
           Solo.observer = page.Hangs();
           final bench = Bench();
-          reported = _waits(bench, 'stuck')..ignore();
+          reported = _waits(bench, 'stuck')..ignoreFailure();
           async.elapse(const Duration(seconds: 6));
           runningAtSix = !reported.isFinished;
           _end(async, 'op');
@@ -1796,7 +1800,7 @@ void main() {
             first.SlowJobs(),
             page.SlowCancellations(),
           ]);
-          final job = _ignores(Bench(), 'stuck')..ignore();
+          final job = _ignores(Bench(), 'stuck')..ignoreFailure();
           async.elapse(const Duration(seconds: 1));
           unawaited(job.cancel());
           async.elapse(const Duration(hours: 1));
@@ -1869,7 +1873,7 @@ void main() {
           );
           async.elapse(const Duration(seconds: 1));
           late_ = bench.run<int, void>(key: 'late', (ctx) => _delay(300))
-            ..ignore();
+            ..ignoreFailure();
           async.elapse(const Duration(milliseconds: 10));
           unawaited(late_.cancel());
           async.elapse(const Duration(seconds: 1));
@@ -1915,7 +1919,7 @@ void main() {
         _run((async) {
           Solo.observer = page.SlowCancellations();
           final job = Bench().run<int, void>(key: 'bare', (ctx) => _delay(300))
-            ..ignore();
+            ..ignoreFailure();
           async.elapse(const Duration(milliseconds: 10));
           unawaited(job.cancel());
           async.elapse(const Duration(seconds: 1));
@@ -1941,7 +1945,8 @@ void main() {
             (ctx) => ctx.abandonable(() => _delay(300)),
             (ctx) => ctx.pause(const Duration(milliseconds: 300)),
           ]) {
-            final job = Bench().run<int, void>(key: 'waits', body)..ignore();
+            final job = Bench().run<int, void>(key: 'waits', body)
+              ..ignoreFailure();
             async.elapse(const Duration(milliseconds: 10));
             unawaited(job.cancel());
             async.flushMicrotasks();
@@ -1984,7 +1989,7 @@ void main() {
             final job = bench.run<int, void>(
               key: 'section',
               (ctx) => ctx.uncancellable(() => _delay(100)),
-            )..ignore();
+            )..ignoreFailure();
             async.elapse(const Duration(milliseconds: 10));
             final calledAt = clock.now();
             job.whenCancelled(
@@ -2024,7 +2029,7 @@ void main() {
                 .ignore();
             await ctx.abandonable(() => _delay(1000));
           })
-            ..ignore();
+            ..ignoreFailure();
           async.elapse(const Duration(milliseconds: 10));
           unawaited(job.cancel());
           async.elapse(const Duration(seconds: 2));
@@ -2058,7 +2063,7 @@ void main() {
             key: 'refused',
             canStart: (state) => false,
             (ctx) => _delay(300),
-          )..ignore();
+          )..ignoreFailure();
           async.flushMicrotasks();
           unawaited(queued.cancel());
           async.elapse(const Duration(seconds: 1));
@@ -2100,7 +2105,7 @@ void main() {
       test('a job that ignores its cancellation, as the page quotes it', () {
         _run((async) {
           Solo.observer = page.StuckCancellations();
-          final job = _ignores(Bench(), 'ignores')..ignore();
+          final job = _ignores(Bench(), 'ignores')..ignoreFailure();
           async.elapse(const Duration(seconds: 1));
           unawaited(job.cancel());
           async.elapse(const Duration(seconds: 6));
@@ -2129,8 +2134,8 @@ void main() {
           final holds = Bench().run<int, void>(
             key: 'holds',
             (ctx) => ctx.uncancellable(() => stage.start<void>('held', null)),
-          )..ignore();
-          final stops = _waits(Bench(), 'stops')..ignore();
+          )..ignoreFailure();
+          final stops = _waits(Bench(), 'stops')..ignoreFailure();
           async.elapse(const Duration(seconds: 1));
           timers.add(async.pendingTimers.length);
           unawaited(holds.cancel());
@@ -2162,7 +2167,7 @@ void main() {
               ),
             );
           })
-            ..ignore();
+            ..ignoreFailure();
           async.elapse(const Duration(seconds: 1));
           unawaited(job.cancel());
           async.elapse(const Duration(seconds: 6));
@@ -2187,8 +2192,8 @@ void main() {
         final ran = _run((async) {
           page.installAll();
           final bare = Bench().run<int, void>(key: 'bare', (ctx) => _delay(300))
-            ..ignore();
-          final stuck = _ignores(Bench(), 'ignores')..ignore();
+            ..ignoreFailure();
+          final stuck = _ignores(Bench(), 'ignores')..ignoreFailure();
           async.elapse(const Duration(milliseconds: 10));
           unawaited(bare.cancel());
           unawaited(stuck.cancel());
@@ -2289,7 +2294,7 @@ void main() {
         final ran = _run((async) {
           Solo.observer = first.Failures();
           final bench = Bench()..run<int, void>(key: 'fine', (ctx) async {});
-          final cancelled = _waits(bench, 'cancelled')..ignore();
+          final cancelled = _waits(bench, 'cancelled')..ignoreFailure();
           async.flushMicrotasks();
           unawaited(cancelled.cancel());
         });
@@ -2300,9 +2305,9 @@ void main() {
     });
 
     group('observing the outcome:', () {
-      test('the line of the page: load() and ignore()', () {
+      test('the line of the page: load() and ignoreFailure()', () {
         _says(
-          '`ignore()` is for the caller that needs no result and leaves '
+          '`ignoreFailure()` is for the caller that needs no result and leaves '
           'reporting to the hooks',
         );
         late page.ProfileController profile;
@@ -2321,8 +2326,8 @@ void main() {
       test('done, value with the error caught, outcome read and nothing more',
           () {
         _says(
-          'Accessing `job.done` or `job.value`, or calling `job.ignore()`, '
-          'marks the outcome as observed',
+          'Accessing `job.done` or `job.value`, or calling '
+          '`job.ignoreFailure()`, marks the outcome as observed',
         );
         final caught = <String>[];
         String? read;
@@ -2386,14 +2391,14 @@ void main() {
         expect(ran.errors, isEmpty);
       });
 
-      test('the same with ignore() on the job', () {
-        _says('`ignore()` silences that one too');
+      test('the same with ignoreFailure() on the job', () {
+        _says('`ignoreFailure()` silences that one too');
         final handled = <String>[];
         late Job<String> job;
         final ran = _run((async) {
           Solo.errorHandler =
               (solo, job, error, stackTrace) => handled.add(text(error));
-          job = page.ProfileController(ProfileApi()).load()..ignore();
+          job = page.ProfileController(ProfileApi()).load()..ignoreFailure();
           async.flushMicrotasks();
           failThenCancel(async, job);
         });
@@ -2422,7 +2427,7 @@ void main() {
       var heardBefore = -1;
       final ran = _run((async) {
         bench = Bench();
-        job = _waits(bench, 'abandons')..ignore();
+        job = _waits(bench, 'abandons')..ignoreFailure();
         async.flushMicrotasks();
         unawaited(job.cancel());
         async.flushMicrotasks();
@@ -2461,7 +2466,7 @@ void main() {
                 (solo, job, error, stackTrace) => handled.add(text(error));
           }
           bench = Bench();
-          final job = _waits(bench, 'abandons')..ignore();
+          final job = _waits(bench, 'abandons')..ignoreFailure();
           async.flushMicrotasks();
           unawaited(job.cancel());
           async.flushMicrotasks();
@@ -2497,7 +2502,7 @@ void main() {
             await stage.start<void>('op', null);
             ctx.check();
           }),
-        )..ignore();
+        )..ignoreFailure();
         async.flushMicrotasks();
         unawaited(job.cancel());
         async.flushMicrotasks();
@@ -2553,11 +2558,11 @@ void main() {
       expect('${job.outcome}', 'Done(null)');
     });
 
-    test('job.ignore() on a job whose value is already taken', () {
+    test('job.ignoreFailure() on a job whose value is already taken', () {
       _says(
         'Handle those futures like any other: `await` them where the error '
         'is caught, or give them `onError` or `Future.ignore()`. '
-        '`job.ignore()` does nothing for a future already taken',
+        '`job.ignoreFailure()` does nothing for a future already taken',
       );
       final caught = <String>[];
       final ran = _run((async) {
@@ -2569,9 +2574,9 @@ void main() {
         }
 
         final taken = cancelled(Bench());
-        // Taken, and Job.ignore after it: the future is still nobody's.
+        // Taken, and Job.ignoreFailure after it: the future is still nobody's.
         final value = taken.value;
-        taken.ignore();
+        taken.ignoreFailure();
         expect(value, isA<Future<void>>());
         async.flushMicrotasks();
 
@@ -2635,7 +2640,7 @@ void main() {
           final ran = _run((async) {
             final (controller, started) = start();
             camera = controller as Desk<CameraState>;
-            job = started..ignore();
+            job = started..ignoreFailure();
             async.flushMicrotasks();
             _end(async, 'open');
             unawaited(job.cancel());
@@ -2662,7 +2667,7 @@ void main() {
           String? whileItOpens;
           _run((async) {
             final (_, started) = start();
-            job = started..ignore();
+            job = started..ignoreFailure();
             async.flushMicrotasks();
             unawaited(job.cancel());
             async.flushMicrotasks();
@@ -2689,7 +2694,7 @@ void main() {
           _run((async) {
             stage.endsByItself.remove('reset');
             final (camera, started) = start();
-            started.ignore();
+            started.ignoreFailure();
             async.flushMicrotasks();
             _end(async, 'open');
             var back = false;
@@ -2711,7 +2716,7 @@ void main() {
           _run((async) {
             final (controller, started) = start();
             camera = controller as Desk<CameraState>;
-            job = started..ignore();
+            job = started..ignoreFailure();
             async.flushMicrotasks();
             _fail(async, 'open', StateError('no camera'));
           });
@@ -2733,7 +2738,7 @@ void main() {
           _run((async) {
             final (controller, started) = start();
             camera = controller as Desk<CameraState>;
-            job = started..ignore();
+            job = started..ignoreFailure();
             async.flushMicrotasks();
             _end(async, 'open');
             _fail(async, 'setZoom', StateError('no zoom'));
@@ -2757,7 +2762,7 @@ void main() {
           final ran = _run((async) {
             final (controller, started) = start();
             camera = controller as Desk<CameraState>;
-            job = started..ignore();
+            job = started..ignoreFailure();
             async.flushMicrotasks();
             unawaited(job.cancel());
             async.flushMicrotasks();
@@ -2826,7 +2831,7 @@ void main() {
             rethrow;
           }
         })
-          ..ignore();
+          ..ignoreFailure();
         async.flushMicrotasks();
         unawaited(job.cancel());
         async.flushMicrotasks();
@@ -2855,7 +2860,7 @@ void main() {
         late Job<void> job;
         _run((async) {
           camera = _TokenCamera();
-          job = camera.open(clause)..ignore();
+          job = camera.open(clause)..ignoreFailure();
           async.flushMicrotasks();
           unawaited(job.cancel());
           async.flushMicrotasks();
@@ -2878,7 +2883,7 @@ void main() {
         late Job<void> job;
         _run((async) {
           camera = _TokenCamera();
-          job = camera.open(clause)..ignore();
+          job = camera.open(clause)..ignoreFailure();
           async.flushMicrotasks();
           _fail(async, 'open', StateError('no camera'));
         });
@@ -2898,7 +2903,7 @@ void main() {
       late Job<void> job;
       _run((async) {
         camera = _TokenCamera();
-        job = camera.open('ctx.check()')..ignore();
+        job = camera.open('ctx.check()')..ignoreFailure();
         async.flushMicrotasks();
         unawaited(job.cancel());
         async.flushMicrotasks();
@@ -2926,7 +2931,7 @@ void main() {
 
           return 42;
         })
-          ..ignore();
+          ..ignoreFailure();
         async.flushMicrotasks();
         unawaited(job.cancel());
         async.flushMicrotasks();
@@ -2945,7 +2950,7 @@ void main() {
               key: 'open',
               onError: (state, error, stackTrace) => -1,
               (ctx) => ctx.join(() => stage.start<void>('op', null)),
-            )..ignore();
+            )..ignoreFailure();
 
         final failing = Bench();
         final failed = open(failing);
@@ -3016,7 +3021,7 @@ void main() {
         late first.ThrowingPool pool;
         final ran = _run((async) {
           pool = first.ThrowingPool(const Slots(0));
-          pool.take().ignore();
+          pool.take().ignoreFailure();
         });
 
         expect(pool.heard, ['take: no free slot']);
@@ -3082,7 +3087,7 @@ void main() {
             key: 'kept',
             keepWhile: (state) => state < 5,
             (ctx) => ctx.abandonable(() => stage.start<void>('op', null)),
-          )..ignore();
+          )..ignoreFailure();
 
       Cancelled outcomeOf(Job<void> job) => job.outcome! as Cancelled;
 
@@ -3153,7 +3158,7 @@ void main() {
                 ),
               );
             },
-          )..ignore();
+          )..ignoreFailure();
           async.flushMicrotasks();
 
           expect('${job.outcome}', 'Cancelled(rules: keepWhile)');
@@ -3195,7 +3200,7 @@ void main() {
                   await traced.waitsOnTheContext(ctx);
               }
             },
-          )..ignore();
+          )..ignoreFailure();
 
       const checkpoints = {
         'ctx.state': '_Traced.readsTheState',
@@ -3248,7 +3253,7 @@ void main() {
               key: 'big',
               canStart: (state) => state < 5,
               (ctx) async {},
-            )..ignore();
+            )..ignoreFailure();
             async.flushMicrotasks();
 
             final frames = _frames(outcomeOf(job).stackTrace);
@@ -3286,7 +3291,7 @@ void main() {
               canStart: rule == 'canStart' ? throws : null,
               keepWhile: rule == 'keepWhile' ? throws : null,
               (ctx) async {},
-            )..ignore();
+            )..ignoreFailure();
             next = bench.run<int, void>(key: 'next', (ctx) async {});
           });
 
@@ -3340,7 +3345,7 @@ void main() {
               await stage.start<void>('op', null);
               ctx.state;
             },
-          )..ignore();
+          )..ignoreFailure();
           async.flushMicrotasks();
           broken = true;
           _end(async, 'op');
@@ -3370,7 +3375,7 @@ void main() {
               stage.trace.add('the body went on');
               throw StateError('the body');
             },
-          )..ignore();
+          )..ignoreFailure();
 
       test('a rule throws on re-evaluation after a state update', () {
         late Bench bench;
@@ -3426,7 +3431,7 @@ void main() {
               await stage.start<void>('op', null);
               throw StateError('the body');
             },
-          ).ignore();
+          ).ignoreFailure();
           async.flushMicrotasks();
           bench.reflect(1);
           _end(async, 'op');
@@ -3453,7 +3458,7 @@ void main() {
               ctx.onDispose(() => stage.start<void>('release', null));
               throw StateError('the body');
             },
-          ).ignore();
+          ).ignoreFailure();
           async.flushMicrotasks();
           bench.reflect(1);
           _end(async, 'release');
@@ -3654,7 +3659,7 @@ void main() {
             page.sendZoom(ctx, 2);
             await ctx.abandonable(() => stage.start<void>('op', null));
           })
-            ..ignore();
+            ..ignoreFailure();
           async.flushMicrotasks();
           unawaited(job.cancel());
           var back = false;
@@ -3780,7 +3785,7 @@ void main() {
             captured = ctx;
             await stage.start<void>('op', null);
           })
-            ..ignore();
+            ..ignoreFailure();
           async.flushMicrotasks();
           unawaited(cancelled.cancel());
           async.flushMicrotasks();
@@ -3877,7 +3882,7 @@ void main() {
               ..onDispose(() async => throw StateError('disposer'));
             await ctx.abandonable(() => stage.start<void>('op', null));
           })
-            ..ignore();
+            ..ignoreFailure();
           async.flushMicrotasks();
           unawaited(job.cancel());
           async.flushMicrotasks();

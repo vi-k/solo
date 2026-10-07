@@ -256,7 +256,7 @@ void main() {
         });
         seen.add('after');
       })
-        ..ignore();
+        ..ignoreFailure();
       async.elapse(const Duration(milliseconds: 1));
       expect(job.outcome, isA<Cancelled>());
       async.flushTimers();
@@ -282,7 +282,7 @@ void main() {
         } on Cancelled {
           ran.add('cancelled');
         }
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
     });
     expect(

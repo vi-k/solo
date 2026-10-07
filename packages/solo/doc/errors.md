@@ -432,18 +432,18 @@ sent.
 ### Observing the outcome
 
 ```dart
-profile.load().ignore(); // the counterpart of Future.ignore
+profile.load().ignoreFailure(); // the counterpart of Future.ignore
 ```
 
-Accessing `job.done` or `job.value`, or calling `job.ignore()`, marks the
-outcome as observed. `ignore()` is for the caller that needs no result and
-leaves reporting to the hooks; a caller that needs the result takes it with
-`await job.value` and answers for the error by catching it. One failure it
-cannot catch: if the load fails and a cancellation reaches the job afterwards,
-whether before the error leaves the body or while the job still waits for
-children of its own or runs its cleanup, `await job.value` throws the
+Accessing `job.done` or `job.value`, or calling `job.ignoreFailure()`, marks
+the outcome as observed. `ignoreFailure()` is for the caller that needs no
+result and leaves reporting to the hooks; a caller that needs the result takes
+it with `await job.value` and answers for the error by catching it. One failure
+it cannot catch: if the load fails and a cancellation reaches the job
+afterwards, whether before the error leaves the body or while the job still
+waits for children of its own or runs its cleanup, `await job.value` throws the
 `Cancelled`, and the failure goes to `onUnanswered` like the errors below.
-`ignore()` silences that one too.
+`ignoreFailure()` silences that one too.
 
 Errors from cleanup, cancellation callbacks and operations abandoned by
 `abandonable` go to the reporting hooks, and the controller is asked to answer
@@ -461,7 +461,8 @@ An unhandled error of `job.value` or `ctx.run(child)` is still an unhandled
 Future error under Dart's rules, even if that error is `Cancelled`: that route
 to the zone is Dart's own, not the engine's. Handle those futures like any
 other: `await` them where the error is caught, or give them `onError` or
-`Future.ignore()`. `job.ignore()` does nothing for a future already taken.
+`Future.ignore()`. `job.ignoreFailure()` does nothing for a future already
+taken.
 
 ## Catching errors inside a body
 

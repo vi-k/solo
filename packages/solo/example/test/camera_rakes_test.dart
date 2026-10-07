@@ -192,7 +192,7 @@ void opened(
   JournalObserver journal,
   FakeAsync async,
 ) {
-  open().ignore();
+  open().ignoreFailure();
   async.elapse(const Duration(milliseconds: 10));
   journal.take();
   hw.log.clear();
@@ -414,15 +414,15 @@ void main() {
       );
       camera(CameraController.new, (camera, hw, journal, async) {
         opened(camera.init, hw, journal, async);
-        camera.setZoom(2).ignore();
-        camera.setFocusPoint(const Point(0.5, 0.5)).ignore();
+        camera.setZoom(2).ignoreFailure();
+        camera.setFocusPoint(const Point(0.5, 0.5)).ignoreFailure();
         async.elapse(const Duration(milliseconds: 20));
         expect(
           camera.currentState,
           const Ready(zoom: 2, focusPoint: Point(0.5, 0.5)),
         );
 
-        camera.resetFocusPoint().ignore();
+        camera.resetFocusPoint().ignoreFailure();
         async.elapse(const Duration(milliseconds: 10));
 
         expect(camera.currentState, const Ready(zoom: 2));
@@ -559,17 +559,17 @@ void main() {
       camera(CameraController.new, (camera, hw, journal, async) {
         opened(camera.init, hw, journal, async);
 
-        camera.setZoom(2).ignore();
+        camera.setZoom(2).ignoreFailure();
         async.elapse(const Duration(milliseconds: 5));
-        final waiting = camera.setZoom(3)..ignore();
+        final waiting = camera.setZoom(3)..ignoreFailure();
         waiting.cancel().ignore();
         async.elapse(const Duration(milliseconds: 5));
-        camera.takePhoto().ignore();
+        camera.takePhoto().ignoreFailure();
         async.elapse(const Duration(milliseconds: 30));
         hw.failures['capture'] = StateError('shutter stuck');
-        camera.takePhoto().ignore();
+        camera.takePhoto().ignoreFailure();
         async.elapse(const Duration(milliseconds: 30));
-        camera.reopen().ignore();
+        camera.reopen().ignoreFailure();
         async.elapse(const Duration(milliseconds: 30));
         camera.close().ignore();
         async.flushTimers();
@@ -609,14 +609,14 @@ void main() {
 
       late List<String> taken;
       camera(CameraController.new, (camera, hw, journal, async) {
-        camera.init().ignore();
+        camera.init().ignoreFailure();
         async.elapse(const Duration(milliseconds: 10));
         camera
-          ..setZoom(2).ignore()
-          ..setFocusPoint(const Point(0.5, 0.5)).ignore()
-          ..takePhoto().ignore();
+          ..setZoom(2).ignoreFailure()
+          ..setFocusPoint(const Point(0.5, 0.5)).ignoreFailure()
+          ..takePhoto().ignoreFailure();
         async.elapse(const Duration(milliseconds: 35));
-        camera.dispose().ignore();
+        camera.dispose().ignoreFailure();
         async.flushTimers();
         camera.close().ignore();
         async.flushTimers();
@@ -643,7 +643,7 @@ void main() {
         CameraController.new,
       ]) {
         camera(create, (camera, hw, journal, async) {
-          _init(camera)().ignore();
+          _init(camera)().ignoreFailure();
           async.elapse(const Duration(milliseconds: 5));
           expect(hw.log, ['open: begin']);
           async.elapse(const Duration(milliseconds: 5));
@@ -673,7 +673,7 @@ void main() {
         'longer be opened at all.',
       );
       camera(NarrowInit.new, (camera, hw, journal, async) {
-        final job = camera.init()..ignore();
+        final job = camera.init()..ignoreFailure();
         async.elapse(const Duration(milliseconds: 20));
 
         expect(journal.take(), _quoted(attempt).single);
@@ -681,7 +681,7 @@ void main() {
         expect(hw.log, isEmpty);
         expect(camera.currentState, isA<Preparing>());
 
-        camera.init().ignore();
+        camera.init().ignoreFailure();
         async.elapse(const Duration(milliseconds: 20));
 
         expect(journal.take(), [
@@ -699,9 +699,9 @@ void main() {
         'runs again and opens the hardware a second time.',
       );
       camera(Variants.new, (camera, hw, journal, async) {
-        camera.initWithoutCanStart().ignore();
+        camera.initWithoutCanStart().ignoreFailure();
         async.elapse(const Duration(milliseconds: 20));
-        camera.initWithoutCanStart().ignore();
+        camera.initWithoutCanStart().ignoreFailure();
         async.elapse(const Duration(milliseconds: 20));
 
         expect(hw.log.where((line) => line == 'open: begin'), hasLength(2));
@@ -720,7 +720,7 @@ void main() {
           final open = _init(camera);
           opened(open, hw, journal, async);
 
-          final second = open()..ignore();
+          final second = open()..ignoreFailure();
           async.elapse(const Duration(milliseconds: 20));
 
           expect(journal.take(), _quoted(answer).single);
@@ -744,9 +744,9 @@ void main() {
       ]) {
         camera(create, (camera, hw, journal, async) {
           final open = _init(camera);
-          final first = open()..ignore();
+          final first = open()..ignoreFailure();
           async.elapse(const Duration(milliseconds: 5));
-          final second = open()..ignore();
+          final second = open()..ignoreFailure();
           async.elapse(const Duration(milliseconds: 20));
 
           expect(identical(first, second), isTrue);
@@ -771,7 +771,7 @@ void main() {
       final hw = FakeCameraHardware()
         ..failures['open'] = StateError('camera in use');
       camera(CatchingInit.new, hardware: hw, (camera, hw, journal, async) {
-        final job = camera.init()..ignore();
+        final job = camera.init()..ignoreFailure();
         async.elapse(const Duration(milliseconds: 20));
 
         expect(job.outcome, isA<Failed>());
@@ -796,7 +796,7 @@ void main() {
         'the state says it is still opening.',
       );
       camera(CatchingInit.new, (camera, hw, journal, async) {
-        final job = camera.init()..ignore();
+        final job = camera.init()..ignoreFailure();
         async.elapse(const Duration(milliseconds: 5));
         job.cancel().ignore();
         async.elapse(const Duration(milliseconds: 20));
@@ -814,7 +814,7 @@ void main() {
         'throws `Cancelled` instead:',
       );
       camera(Variants.new, (camera, hw, journal, async) {
-        final job = camera.initWatchingTheCatch()..ignore();
+        final job = camera.initWatchingTheCatch()..ignoreFailure();
         async.elapse(const Duration(milliseconds: 5));
         job.cancel().ignore();
         async.elapse(const Duration(milliseconds: 20));
@@ -832,7 +832,7 @@ void main() {
         '`Ready` or `Broken`.',
       );
       camera(CatchingInit.new, (camera, hw, journal, async) {
-        final job = camera.init()..ignore();
+        final job = camera.init()..ignoreFailure();
         async.elapse(const Duration(milliseconds: 5));
         job.cancel().ignore();
         async.elapse(const Duration(milliseconds: 20));
@@ -840,8 +840,8 @@ void main() {
         hw.log.clear();
 
         camera
-          ..init().ignore()
-          ..reopen().ignore();
+          ..init().ignoreFailure()
+          ..reopen().ignoreFailure();
         async.elapse(const Duration(milliseconds: 40));
 
         expect(journal.take(), [
@@ -855,18 +855,18 @@ void main() {
 
     test('the reopen of the example wants Ready or Broken', () {
       camera(CameraController.new, (camera, hw, journal, async) {
-        final early = camera.reopen()..ignore();
+        final early = camera.reopen()..ignoreFailure();
         async.elapse(const Duration(milliseconds: 40));
         expect('${early.outcome}', 'Cancelled(rules: canStart)');
 
         opened(camera.init, hw, journal, async);
-        final fromReady = camera.reopen()..ignore();
+        final fromReady = camera.reopen()..ignoreFailure();
         async.elapse(const Duration(milliseconds: 40));
         expect(fromReady.outcome, isA<Done<void>>());
 
         hw.fail(StateError('cable pulled'));
         expect(camera.currentState, isA<Broken>());
-        final fromBroken = camera.reopen()..ignore();
+        final fromBroken = camera.reopen()..ignoreFailure();
         async.elapse(const Duration(milliseconds: 40));
         expect(fromBroken.outcome, isA<Done<void>>());
         expect(camera.currentState, const Ready());
@@ -883,7 +883,7 @@ void main() {
       final hw = FakeCameraHardware()
         ..failures['open'] = StateError('camera in use');
       camera(CameraController.new, hardware: hw, (camera, hw, journal, async) {
-        final job = camera.init()..ignore();
+        final job = camera.init()..ignoreFailure();
         async.elapse(const Duration(milliseconds: 20));
 
         expect(journal.take(), _quoted(answer).first);
@@ -891,7 +891,7 @@ void main() {
 
         // The other app lets go of the camera.
         hw.failures.remove('open');
-        final rescue = camera.reopen()..ignore();
+        final rescue = camera.reopen()..ignoreFailure();
         async.elapse(const Duration(milliseconds: 40));
 
         expect(rescue.outcome, isA<Done<void>>());
@@ -908,7 +908,7 @@ void main() {
       );
       expect(_quoted(answer), hasLength(2));
       camera(CameraController.new, (camera, hw, journal, async) {
-        final job = camera.init()..ignore();
+        final job = camera.init()..ignoreFailure();
         async.elapse(const Duration(milliseconds: 5));
         job.cancel().ignore();
         async.elapse(const Duration(milliseconds: 20));
@@ -916,7 +916,7 @@ void main() {
         expect(journal.take(), _quoted(answer).last);
         expect(hw.log, ['open: begin', 'open: end']);
 
-        final rescue = camera.reopen()..ignore();
+        final rescue = camera.reopen()..ignoreFailure();
         async.elapse(const Duration(milliseconds: 40));
 
         expect(rescue.outcome, isA<Done<void>>());
@@ -934,14 +934,14 @@ void main() {
       camera(CameraController.new, (camera, hw, journal, async) {
         // Cancelled while it waits: no handler, and the camera can still be
         // opened.
-        final early = camera.init()..ignore();
+        final early = camera.init()..ignoreFailure();
         early.cancel().ignore();
         async.elapse(const Duration(milliseconds: 20));
         expect(journal.take(), ['[init] dropped Cancelled(manual)']);
         expect(camera.currentState, isA<Initial>());
 
         opened(camera.init, hw, journal, async);
-        camera.init().ignore();
+        camera.init().ignoreFailure();
         async.elapse(const Duration(milliseconds: 20));
 
         expect(journal.take(), ['[init] dropped Cancelled(rules: canStart)']);
@@ -957,7 +957,7 @@ void main() {
       camera(CameraController.new, (camera, hw, journal, async) {
         opened(camera.init, hw, journal, async);
 
-        final cancelled = camera.reopen()..ignore();
+        final cancelled = camera.reopen()..ignoreFailure();
         async.elapse(const Duration(milliseconds: 15));
         cancelled.cancel().ignore();
         async.elapse(const Duration(milliseconds: 40));
@@ -966,7 +966,7 @@ void main() {
         expect('${camera.currentState}', 'Broken(Cancelled(manual))');
 
         hw.failures['open'] = StateError('camera in use');
-        final failed = camera.reopen()..ignore();
+        final failed = camera.reopen()..ignoreFailure();
         async.elapse(const Duration(milliseconds: 40));
 
         expect(failed.outcome, isA<Failed>());
@@ -991,9 +991,9 @@ void main() {
         opened(camera.init, hw, journal, async);
 
         camera
-          ..setZoom(2).ignore()
-          ..setZoom(3).ignore()
-          ..setZoom(4).ignore();
+          ..setZoom(2).ignoreFailure()
+          ..setZoom(3).ignoreFailure()
+          ..setZoom(4).ignoreFailure();
         async.elapse(const Duration(milliseconds: 50));
 
         expect('${camera.currentState}', state);
@@ -1012,9 +1012,9 @@ void main() {
         opened(camera.init, hw, journal, async);
 
         camera
-          ..setZoom(2).ignore()
-          ..setZoom(3).ignore()
-          ..setZoom(4).ignore();
+          ..setZoom(2).ignoreFailure()
+          ..setZoom(3).ignoreFailure()
+          ..setZoom(4).ignoreFailure();
         async.elapse(const Duration(milliseconds: 50));
 
         expect(journal.take(), _quoted(answer).single);
@@ -1027,12 +1027,12 @@ void main() {
       camera(CameraController.new, (camera, hw, journal, async) {
         opened(camera.init, hw, journal, async);
 
-        camera.setZoom(2).ignore();
+        camera.setZoom(2).ignoreFailure();
         async.elapse(const Duration(milliseconds: 5));
         camera
-          ..setZoom(3).ignore()
-          ..setFocusPoint(const Point(0.5, 0.5)).ignore()
-          ..setZoom(4).ignore();
+          ..setZoom(3).ignoreFailure()
+          ..setFocusPoint(const Point(0.5, 0.5)).ignoreFailure()
+          ..setZoom(4).ignoreFailure();
         async.elapse(const Duration(milliseconds: 60));
 
         // Not in the place of the zoom it dropped: behind the focus.
@@ -1058,11 +1058,11 @@ void main() {
       camera(CameraController.new, (camera, hw, journal, async) {
         opened(camera.init, hw, journal, async);
 
-        final running = camera.setZoom(2)..ignore();
+        final running = camera.setZoom(2)..ignoreFailure();
         async.elapse(const Duration(milliseconds: 5));
         camera
-          ..setZoom(3).ignore()
-          ..setZoom(4).ignore();
+          ..setZoom(3).ignoreFailure()
+          ..setZoom(4).ignoreFailure();
         async.elapse(const Duration(milliseconds: 50));
 
         expect(running.outcome, isA<Done<void>>());
@@ -1086,11 +1086,11 @@ void main() {
       );
       camera(CameraController.new, (camera, hw, journal, async) {
         opened(camera.init, hw, journal, async);
-        camera.pause().ignore();
+        camera.pause().ignoreFailure();
         async.elapse(const Duration(milliseconds: 10));
         journal.take();
 
-        camera.setZoom(2).ignore();
+        camera.setZoom(2).ignoreFailure();
         async.elapse(const Duration(milliseconds: 20));
 
         expect(journal.take(), [
@@ -1122,9 +1122,9 @@ void main() {
       camera(CameraController.new, (camera, hw, journal, async) {
         opened(camera.init, hw, journal, async);
 
-        final shot = camera.takePhoto()..ignore();
+        final shot = camera.takePhoto()..ignoreFailure();
         async.elapse(const Duration(milliseconds: 5));
-        camera.setZoom(3).ignore();
+        camera.setZoom(3).ignoreFailure();
         async.elapse(const Duration(milliseconds: 20));
         // Still waiting: the shot has not cleared the queue yet.
         expect(journal.take(), ['[takePhoto] started']);
@@ -1147,9 +1147,9 @@ void main() {
       camera(Variants.new, (camera, hw, journal, async) {
         opened(camera.init, hw, journal, async);
 
-        camera.takePhotoKeepingQueue().ignore();
+        camera.takePhotoKeepingQueue().ignoreFailure();
         async.elapse(const Duration(milliseconds: 5));
-        camera.setZoom(3).ignore();
+        camera.setZoom(3).ignoreFailure();
         async.elapse(const Duration(milliseconds: 60));
 
         expect(hw.log, [
@@ -1170,10 +1170,10 @@ void main() {
       camera(QueuedDisposal.new, (camera, hw, journal, async) {
         opened(camera.init, hw, journal, async);
 
-        camera.takePhoto().ignore();
+        camera.takePhoto().ignoreFailure();
         async.elapse(const Duration(milliseconds: 5));
-        camera.setZoom(3).ignore();
-        final disposal = camera.dispose()..ignore();
+        camera.setZoom(3).ignoreFailure();
+        final disposal = camera.dispose()..ignoreFailure();
         async.elapse(const Duration(milliseconds: 60));
 
         expect(
@@ -1195,9 +1195,9 @@ void main() {
       );
       // While it opens: the opening is cancelled and lands in Broken first.
       camera(CameraController.new, (camera, hw, journal, async) {
-        final opening = camera.init()..ignore();
+        final opening = camera.init()..ignoreFailure();
         async.elapse(const Duration(milliseconds: 5));
-        final disposal = camera.dispose()..ignore();
+        final disposal = camera.dispose()..ignoreFailure();
         async.elapse(const Duration(milliseconds: 40));
 
         expect('${opening.outcome}', 'Cancelled(manual)');
@@ -1212,7 +1212,7 @@ void main() {
       });
       // Never opened: nothing to close.
       camera(CameraController.new, (camera, hw, journal, async) {
-        final disposal = camera.dispose()..ignore();
+        final disposal = camera.dispose()..ignoreFailure();
         async.elapse(const Duration(milliseconds: 20));
 
         expect(disposal.outcome, isA<Done<void>>());
@@ -1223,7 +1223,7 @@ void main() {
       camera(CameraController.new, (camera, hw, journal, async) {
         opened(camera.init, hw, journal, async);
         hw.fail(StateError('cable pulled'));
-        final disposal = camera.dispose()..ignore();
+        final disposal = camera.dispose()..ignoreFailure();
         async.elapse(const Duration(milliseconds: 20));
 
         expect(disposal.outcome, isA<Done<void>>());
@@ -1247,11 +1247,11 @@ void main() {
       camera(QueuedDisposal.new, (camera, hw, journal, async) {
         opened(camera.init, hw, journal, async);
 
-        camera.setZoom(2).ignore();
+        camera.setZoom(2).ignoreFailure();
         async.elapse(const Duration(milliseconds: 5));
         camera
-          ..takePhoto().ignore()
-          ..dispose().ignore();
+          ..takePhoto().ignoreFailure()
+          ..dispose().ignoreFailure();
         async.elapse(const Duration(milliseconds: 100));
 
         expect(journal.take(), _quoted(attempt).single);
@@ -1282,7 +1282,7 @@ void main() {
           final dispose = _dispose(camera);
           opened(open, hw, journal, async);
 
-          final job = dispose()..ignore();
+          final job = dispose()..ignoreFailure();
           async.elapse(const Duration(milliseconds: 5));
           job.cancel().ignore();
           async.elapse(const Duration(milliseconds: 20));
@@ -1300,7 +1300,7 @@ void main() {
       camera(CameraController.new, (camera, hw, journal, async) {
         opened(camera.init, hw, journal, async);
 
-        final job = camera.reopen()..ignore();
+        final job = camera.reopen()..ignoreFailure();
         async.elapse(const Duration(milliseconds: 5));
         job.cancel().ignore();
         async.elapse(const Duration(milliseconds: 40));
@@ -1320,9 +1320,9 @@ void main() {
       camera(CameraController.new, (camera, hw, journal, async) {
         opened(camera.init, hw, journal, async);
 
-        camera.takePhoto().ignore();
+        camera.takePhoto().ignoreFailure();
         async.elapse(const Duration(milliseconds: 5));
-        final job = camera.dispose()..ignore();
+        final job = camera.dispose()..ignoreFailure();
         job.cancel().ignore();
         async.elapse(const Duration(milliseconds: 60));
 
@@ -1359,10 +1359,10 @@ void main() {
         camera(create, (camera, hw, journal, async) {
           opened(_init(camera), hw, journal, async);
 
-          _setZoom(camera)(2).ignore();
+          _setZoom(camera)(2).ignoreFailure();
           async.elapse(const Duration(milliseconds: 5));
-          _takePhoto(camera)().ignore();
-          _dispose(camera)().ignore();
+          _takePhoto(camera)().ignoreFailure();
+          _dispose(camera)().ignoreFailure();
           async.elapse(const Duration(milliseconds: 4));
           // The zoom is waited out before the disposal starts.
           expect(journal.lines, isNot(contains('[dispose] started')));
@@ -1399,13 +1399,13 @@ void main() {
       expect(_quoted(attempt), hasLength(2));
       camera(ClearingDisposal.new, (camera, hw, journal, async) {
         opened(camera.init, hw, journal, async);
-        final first = camera.dispose()..ignore();
+        final first = camera.dispose()..ignoreFailure();
         async.elapse(const Duration(milliseconds: 20));
         expect(first.outcome, isA<Done<void>>());
         expect(camera.currentState, isA<Disposed>());
         journal.take();
 
-        final again = camera.dispose()..ignore();
+        final again = camera.dispose()..ignoreFailure();
         async.elapse(const Duration(milliseconds: 20));
 
         expect(journal.take(), _quoted(attempt).last);
@@ -1428,12 +1428,12 @@ void main() {
           final open = _init(camera);
           final dispose = _dispose(camera);
           opened(open, hw, journal, async);
-          dispose().ignore();
+          dispose().ignoreFailure();
           async.elapse(const Duration(milliseconds: 20));
           journal.take();
           hw.log.clear();
 
-          final again = dispose()..ignore();
+          final again = dispose()..ignoreFailure();
           async.elapse(const Duration(milliseconds: 20));
 
           expect(journal.take(), _quoted(answer).single);
@@ -1460,8 +1460,8 @@ void main() {
           final dispose = _dispose(camera);
           opened(open, hw, journal, async);
 
-          final first = dispose()..ignore();
-          final second = dispose()..ignore();
+          final first = dispose()..ignoreFailure();
+          final second = dispose()..ignoreFailure();
           async.elapse(const Duration(milliseconds: 40));
 
           expect(identical(first, second), isTrue);
@@ -1481,8 +1481,8 @@ void main() {
       camera(Variants.new, (camera, hw, journal, async) {
         opened(camera.init, hw, journal, async);
 
-        final first = camera.disposeForced()..ignore();
-        final second = camera.disposeForced()..ignore();
+        final first = camera.disposeForced()..ignoreFailure();
+        final second = camera.disposeForced()..ignoreFailure();
         async.elapse(const Duration(milliseconds: 40));
 
         expect(identical(first, second), isFalse);
@@ -1557,7 +1557,7 @@ void main() {
       camera(CameraController.new, (camera, hw, journal, async) {
         opened(camera.init, hw, journal, async);
 
-        final job = camera.dispose()..ignore();
+        final job = camera.dispose()..ignoreFailure();
         async.elapse(const Duration(milliseconds: 5));
         var closed = false;
         camera.close().then((_) => closed = true).ignore();
@@ -1719,7 +1719,7 @@ void main() {
         state = made.currentState;
 
         made.hw.failures.remove('close');
-        final second = made.dispose()..ignore();
+        final second = made.dispose()..ignoreFailure();
         async.flushTimers();
         again = '${second.outcome}';
         after = made.currentState;
@@ -1767,7 +1767,7 @@ void main() {
         _part(_closing, '### Awaiting the disposal'),
         'Nobody reads the outcome of that zoom, so a failure of it would go '
         'to the zone like the failed disposal of the second attempt; '
-        '`camera.setZoom(2).ignore()` leaves the reporting to the hooks '
+        '`camera.setZoom(2).ignoreFailure()` leaves the reporting to the hooks '
         'instead.',
       );
       late CameraController made;
@@ -1790,7 +1790,7 @@ void main() {
           ..failures['zoom'] = StateError('lens stuck');
         final camera = CameraController(hw);
         opened(camera.init, hw, journal, async);
-        camera.setZoom(2).ignore();
+        camera.setZoom(2).ignoreFailure();
         async.flushTimers();
         lines = journal.take();
       });
@@ -1831,7 +1831,7 @@ void main() {
           cancelled = error;
         }).ignore();
         async.elapse(const Duration(milliseconds: 5));
-        camera.dispose().ignore();
+        camera.dispose().ignoreFailure();
         async.elapse(const Duration(milliseconds: 60));
 
         expect(cancelled, isA<Cancelled>());
@@ -1850,7 +1850,7 @@ void main() {
         camera.close().ignore();
         async.flushTimers();
 
-        final job = camera.dispose()..ignore();
+        final job = camera.dispose()..ignoreFailure();
         async.flushTimers();
 
         expect('${job.outcome}', 'Cancelled(closed)');
@@ -1867,9 +1867,9 @@ void main() {
       camera(Variants.new, (camera, hw, journal, async) {
         opened(camera.init, hw, journal, async);
         // A shot that keeps the queue, so the disposal waits behind it.
-        camera.takePhotoKeepingQueue().ignore();
+        camera.takePhotoKeepingQueue().ignoreFailure();
         async.elapse(const Duration(milliseconds: 5));
-        final disposal = camera.queueLikeADisposal()..ignore();
+        final disposal = camera.queueLikeADisposal()..ignoreFailure();
         expect(camera.queued, ['dispose']);
 
         disposal.cancel().ignore();
@@ -1888,9 +1888,9 @@ void main() {
       ]) {
         camera(Variants.new, (camera, hw, journal, async) {
           opened(camera.init, hw, journal, async);
-          camera.takePhotoKeepingQueue().ignore();
+          camera.takePhotoKeepingQueue().ignoreFailure();
           async.elapse(const Duration(milliseconds: 5));
-          final disposal = camera.queueLikeADisposal()..ignore();
+          final disposal = camera.queueLikeADisposal()..ignoreFailure();
 
           remove(camera);
 
@@ -1918,7 +1918,7 @@ void main() {
         contains('  camera.setZoom(2); // no await needed'),
       );
       camera(CameraController.new, (camera, hw, journal, async) {
-        final Object job = camera.setZoom(2)..ignore();
+        final Object job = camera.setZoom(2)..ignoreFailure();
         expect(job, isNot(isA<Future<void>>()));
       });
     });
@@ -1954,7 +1954,7 @@ void main() {
       camera(listener.CameraController.new, (camera, hw, journal, async) {
         opened(camera.init, hw, journal, async);
 
-        camera.dispose().ignore();
+        camera.dispose().ignoreFailure();
         async.elapse(const Duration(milliseconds: 20));
         hw.fail(StateError('cable pulled'));
         async.flushMicrotasks();
@@ -1973,7 +1973,7 @@ void main() {
       );
       camera(listener.CameraController.new, (camera, hw, journal, async) {
         opened(camera.init, hw, journal, async);
-        camera.dispose().ignore();
+        camera.dispose().ignoreFailure();
         async.elapse(const Duration(milliseconds: 20));
         camera.close().ignore();
         async.flushTimers();
@@ -1996,7 +1996,7 @@ void main() {
       camera(listener.ClosingCameraController.new,
           (camera, hw, journal, async) {
         opened(camera.init, hw, journal, async);
-        camera.dispose().ignore();
+        camera.dispose().ignoreFailure();
         async.elapse(const Duration(milliseconds: 20));
         expect(hw.onError, isNotNull);
         camera.close().ignore();
@@ -2018,7 +2018,7 @@ void main() {
         opened(camera.init, hw, journal, async);
 
         // A drain: the disposal still runs after the call of `close`.
-        camera.dispose().ignore();
+        camera.dispose().ignoreFailure();
         camera.close(mode: SoloCloseMode.drain).ignore();
         async.elapse(const Duration(milliseconds: 5));
         expect(camera.closes, 0);
@@ -2050,7 +2050,7 @@ void main() {
           (camera, hw, journal, async) {
         opened(camera.init, hw, journal, async);
 
-        camera.dispose().ignore();
+        camera.dispose().ignoreFailure();
         async.elapse(const Duration(milliseconds: 20));
         hw.fail(StateError('cable pulled'));
         async.flushMicrotasks();
@@ -2069,7 +2069,7 @@ void main() {
       camera(CameraController.new, (camera, hw, journal, async) {
         opened(camera.init, hw, journal, async);
 
-        camera.dispose().ignore();
+        camera.dispose().ignoreFailure();
         // Inside the call, before the job has started.
         expect(hw.onError, isNull);
         async.elapse(const Duration(milliseconds: 5));
@@ -2104,7 +2104,7 @@ void main() {
         opened(camera.init, hw, journal, async);
         hw.failures['close'] = StateError('close timed out');
 
-        final job = camera.dispose()..ignore();
+        final job = camera.dispose()..ignoreFailure();
         async.elapse(const Duration(milliseconds: 20));
         expect(job.outcome, isA<Failed>());
         journal.take();
@@ -2115,7 +2115,7 @@ void main() {
         expect(camera.currentState, const Ready());
 
         hw.failures.remove('close');
-        final again = camera.dispose()..ignore();
+        final again = camera.dispose()..ignoreFailure();
         async.elapse(const Duration(milliseconds: 20));
         expect(again.outcome, isA<Done<void>>());
         expect(camera.currentState, isA<Disposed>());

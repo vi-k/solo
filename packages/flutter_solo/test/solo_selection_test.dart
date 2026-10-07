@@ -423,7 +423,7 @@ void main() {
       keepWhile: (state) => state.progress < 10,
       (ctx) =>
           ctx.abandonable(() => Future<void>.delayed(const Duration(days: 1))),
-    )..ignore();
+    )..ignoreFailure();
     await Future<void>.delayed(Duration.zero);
 
     controller.set(const _Screen(progress: 42));

@@ -145,9 +145,9 @@ void main() {
       journal.take();
 
       hw.failures['open'] = StateError('no device');
-      // `ignore`: nobody waits for this job, and its failure is already
+      // `ignoreFailure`: nobody waits for this job, and its failure is already
       // told through the state and the observer.
-      final reopen = camera.reopen()..ignore();
+      final reopen = camera.reopen()..ignoreFailure();
       async.elapse(const Duration(milliseconds: 30));
       expect(journal.take(), [
         '[reopen] started',
@@ -237,9 +237,9 @@ void main() {
       camera.init();
       async.flushTimers();
       hw.failures['close'] = StateError('close-failed');
-      // `ignore` and not a bare read: an outcome nobody observed reaches
+      // `ignoreFailure` and not a bare read: an outcome nobody observed reaches
       // the zone, and reading `outcome` is not observing it.
-      final disposal = camera.dispose()..ignore();
+      final disposal = camera.dispose()..ignoreFailure();
       async.flushTimers();
       expect(disposal.outcome, isA<Failed>());
       expect(
@@ -253,7 +253,7 @@ void main() {
   test('a first open that fails leaves a state reopen can start from', () {
     runCamera((camera, hw, journal, async) {
       hw.failures['open'] = StateError('open-failed');
-      final first = camera.init()..ignore();
+      final first = camera.init()..ignoreFailure();
       async.flushTimers();
       expect(first.outcome, isA<Failed>());
       expect(camera.currentState, isA<Broken>());

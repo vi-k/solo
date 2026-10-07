@@ -141,7 +141,7 @@ void main() {
     runSolo((solo, journal, async) {
       var cancelled = false;
       final events = StreamController<int>(onCancel: () => cancelled = true);
-      // `ignore`, because an unobserved `Failed` goes to the zone.
+      // `ignoreFailure`, because an unobserved `Failed` goes to the zone.
       final job = solo.run<TestState, void>(key: 'job', (ctx) async {
         await ctx.each(events.stream, (child, p) {
           if (p == 2) {
@@ -150,7 +150,7 @@ void main() {
           child.emit(Preparing(progress: p));
         }).value;
       })
-        ..ignore();
+        ..ignoreFailure();
       async.flushMicrotasks();
       events
         ..add(1)

@@ -43,7 +43,7 @@ final class Payload {
   Job<Object?>((ctx) async {
     await ctx.run(child);
     return payload;
-  }).ignore();
+  }).ignoreFailure();
   return (child, WeakReference(payload));
 }
 
@@ -55,7 +55,7 @@ final class Payload {
   final second = Job.deferred<Object?>((ctx) async => payload);
   Job<void>((ctx) async {
     await ctx.runAll([first, second]);
-  }).ignore();
+  }).ignoreFailure();
   return (first, WeakReference(payload));
 }
 

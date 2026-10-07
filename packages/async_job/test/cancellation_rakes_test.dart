@@ -127,7 +127,7 @@ const pauseCancelMs = 500;
   late final int timerLeftFor;
   fakeAsync((async) {
     Duration? ended;
-    final job = start()..ignore();
+    final job = start()..ignoreFailure();
     unawaited(job.done.then((_) => ended = async.elapsed));
     async.elapse(const Duration(milliseconds: pauseCancelMs));
     unawaited(job.cancel());
@@ -542,7 +542,7 @@ void main() {
             await ctx.abandonable(() => delay(50));
           },
           observer: printing,
-        )..ignore(),
+        )..ignoreFailure(),
         (error, stackTrace) => zones.add('creation: $error'),
       );
       await delay(5);
@@ -1096,7 +1096,7 @@ void main() {
         await ctx.abandonable(() => delay(5));
         throw const Cancelled('why');
       })
-        ..ignore();
+        ..ignoreFailure();
       late Job<void> left;
       final threwWithChild = Job<void>((ctx) async {
         ctx.onCancel(() => seen.add('with child: onCancel'));
@@ -1108,7 +1108,7 @@ void main() {
         await ctx.abandonable(() => delay(10));
         throw const Cancelled('why');
       })
-        ..ignore();
+        ..ignoreFailure();
       final letOut = Job<void>((ctx) async {
         ctx.onCancel(() => seen.add('let out: onCancel'));
         final child =
@@ -1116,7 +1116,7 @@ void main() {
         Timer(const Duration(milliseconds: 15), child.cancel);
         await ctx.run(child);
       })
-        ..ignore();
+        ..ignoreFailure();
       async.flushTimers();
 
       expect(seen, [
@@ -1253,7 +1253,7 @@ void main() {
       ]) {
         freshRun();
         fakeAsync((async) {
-          final job = start()..ignore();
+          final job = start()..ignoreFailure();
           async.elapse(const Duration(milliseconds: 2500));
           expect(printed.where((line) => line == 'rows used'), hasLength(3));
           unawaited(job.cancel());
@@ -1385,7 +1385,7 @@ void main() {
 
     test('a running job holds its timer until it ends', () {
       fakeAsync((async) {
-        final job = page.deadlineOfTheJob()..ignore();
+        final job = page.deadlineOfTheJob()..ignoreFailure();
         async.elapse(const Duration(milliseconds: 5));
 
         expect(job.isFinished, isFalse);
@@ -1413,7 +1413,7 @@ void main() {
 
     test('a job cancelled already keeps its own reason', () {
       fakeAsync((async) {
-        final job = page.deadlineOfTheJob()..ignore();
+        final job = page.deadlineOfTheJob()..ignoreFailure();
         async.elapse(const Duration(milliseconds: 5));
         unawaited(job.cancel());
         async.flushTimers();

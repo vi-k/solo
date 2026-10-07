@@ -333,7 +333,7 @@ void main() {
       )>[
         ('done', (job) => job.done.ignore(), true),
         ('value', (job) => job.value.ignore(), true),
-        ('ignore()', (job) => job.ignore(), true),
+        ('ignoreFailure()', (job) => job.ignoreFailure(), true),
         ('outcome', (job) => job.outcome, false),
         ('whenCancelled', (job) => job.whenCancelled((_) {}), false),
         ('nothing at all', (job) {}, false),
@@ -812,7 +812,7 @@ void main() {
             stage.trace.add('the body ends');
             throw StateError('failed');
           },
-        )..ignore();
+        )..ignoreFailure();
         camera.work('next');
         async.flushTimers();
 

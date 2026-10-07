@@ -334,7 +334,8 @@ void main() {
             (ctx) => ctx.join(() => body.future),
             cancellable: false,
           );
-          b = a.then<int>((ctx, value) => mustNotRun('must not run'))..ignore();
+          b = a.then<int>((ctx, value) => mustNotRun('must not run'))
+            ..ignoreFailure();
         },
         (error, stack) => errors.add(error),
       );
@@ -377,7 +378,7 @@ void main() {
         Error.throwWithStackTrace(error, stack);
       });
       final c = b.then<int>((ctx, value) => mustNotRun('must not run'))
-        ..ignore();
+        ..ignoreFailure();
       async.flushMicrotasks();
       final failed = c.outcome! as Failed;
       expect(failed.error, same(error));
@@ -607,7 +608,7 @@ void main() {
                 expect(errors, isEmpty);
                 continuation = source.then<int>(
                   (ctx, value) => mustNotRun('must not run'),
-                )..ignore();
+                )..ignoreFailure();
                 if (cancelContinuation) continuation.cancel().ignore();
               }),
             );

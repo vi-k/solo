@@ -52,7 +52,7 @@ void main() {
               )
               .ignore();
         },
-      ).ignore();
+      ).ignoreFailure();
       async.flushTimers();
       expect(journal.take(), [
         '[parent] started',
@@ -450,7 +450,7 @@ void main() {
             ),
           );
         },
-      ).ignore();
+      ).ignoreFailure();
       async.flushMicrotasks();
       expect(
         parentJournal.take(),
@@ -514,7 +514,7 @@ void main() {
           thrown = error;
         }
       })
-        ..ignore();
+        ..ignoreFailure();
       async.flushMicrotasks();
       expect(thrown, isA<ArgumentError>());
       expect(child.statusNow, JobStatus.created);
@@ -652,7 +652,7 @@ void main() {
         await ctx.abandonable(() => delay(10));
         throw StateError('boom');
       })
-        ..ignore();
+        ..ignoreFailure();
       async.elapse(const Duration(milliseconds: 20));
       expect(child.outcome, isNull);
       async.elapse(const Duration(milliseconds: 200));
@@ -696,7 +696,7 @@ void main() {
         await ctx.abandonable(() => delay(10));
         throw const Cancelled('enough');
       })
-        ..ignore();
+        ..ignoreFailure();
       async.flushTimers();
       expect(thrown, isA<StateError>());
       expect(parent.outcome, isA<Cancelled>());

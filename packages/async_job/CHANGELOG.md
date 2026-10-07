@@ -24,6 +24,18 @@ now reach the zone, and fail a test there.
   that implements `JobContext` by hand, a test fake for one, implements
   `abandonable` as well; an engine that extends `JobContextBase` gets both.
 
+- **`Job.ignore()` is renamed to `Job.ignoreFailure()`.** The behaviour is the
+  same: the call marks the outcome observed, and a failure of the job that
+  nobody reads stays out of the zone. The old name was the name of
+  `Future.ignore()`, and the two stood side by side on one line —
+  `child.ignore()` and `ctx.run(child).ignore()` — while doing different
+  things: the first is about the report of the job's failure, the second about
+  the error of one future. There is no deprecated alias: the old name is gone.
+  **Migrating.** Replace `ignore()` with `ignoreFailure()` where the receiver
+  is a `Job`; the analyzer names every such call with `undefined_method`.
+  `ignore()` on a future — of `ctx.run`, of `cancel()`, of `value` or `done` —
+  is `Future.ignore()` and stays as it is.
+
 - **`JobObserver.onError` is a notice, and the new `JobAnswerer` answers for an
   error no outcome carries.** Such an error — a late failure of an action
   `ctx.abandonable` walked away from, a disposer, a callback of `ctx.onCancel`
@@ -99,12 +111,12 @@ now reach the zone, and fail a test there.
   as well. A `Failed` handed to a job that is already over used to vanish:
   `finish` did nothing. The outcome still stays, and the error goes to
   `onError` and `onUnanswered` — by default the zone — as any error with no
-  outcome does; `ignore` keeps it to `onError`. One error object is announced
-  once, however many routes bring it: a body that throws what the engine has
-  already ended the job with is not heard twice. **Migrating.** An engine that
-  called `notifyObserver` before `finish` drops that call, or the observer
-  hears the error twice; `solo` has dropped its own. The call is safe to drop
-  on a job that may be over as well: `finish` announces there too.
+  outcome does; `ignoreFailure` keeps it to `onError`. One error object is
+  announced once, however many routes bring it: a body that throws what the
+  engine has already ended the job with is not heard twice. **Migrating.** An
+  engine that called `notifyObserver` before `finish` drops that call, or the
+  observer hears the error twice; `solo` has dropped its own. The call is safe
+  to drop on a job that may be over as well: `finish` announces there too.
 
 - **`ctx.run` takes `dispose` and `discard`,** the way `ctx.abandonable` does,
   and makes the registration the moment the child's value comes back. `run`
@@ -229,12 +241,12 @@ job was created in. In a test that zone is the test's, and the test fails:
 To keep such an error out of the zone, find which of the two it is. A failure
 of the job's own body or step that a cancellation covered, and the failure of a
 branch of `ctx.runAll` that the group did not throw, are silenced by
-`job.ignore()` on that job, called before the job ends — or at the latest from
-`onFinish` or a callback of `whenCancelled` registered before it ends; on a
-child of `ctx.run` as well. `onError` still hears it. The rest belongs to no
-outcome, and `ignore` does not reach it: an observer that mixes in
-`JobAnswerer` and overrides `onUnanswered` answers for it in place of the zone.
-See [Where errors go](doc/observing.md#where-errors-go).
+`job.ignoreFailure()` on that job, called before the job ends — or at the
+latest from `onFinish` or a callback of `whenCancelled` registered before it
+ends; on a child of `ctx.run` as well. `onError` still hears it. The rest
+belongs to no outcome, and `ignoreFailure` does not reach it: an observer that
+mixes in `JobAnswerer` and overrides `onUnanswered` answers for it in place of
+the zone. See [Where errors go](doc/observing.md#where-errors-go).
 
 One report is gone: a job that gives up inside a call it walked away from — a
 helper that takes the context and calls `ctx.check()` after `ctx.abandonable`

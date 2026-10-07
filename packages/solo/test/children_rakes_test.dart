@@ -118,7 +118,7 @@ Never _throwFromChild() => throw StateError('child failed');
 /// A child whose body fails while it still waits for [window] — a child of
 /// its own or its cleanup — under a parent that is cancelled afterwards.
 /// [silence] is what the parent does about the child: nothing,
-/// `child.ignore()` or `ctx.run(child).ignore()`.
+/// `child.ignoreFailure()` or `ctx.run(child).ignore()`.
 Bench _coveredFailure(
   FakeAsync async,
   String window, {
@@ -138,8 +138,8 @@ Bench _coveredFailure(
       }
       throw StateError('child failed first');
     });
-    if (silence == 'child.ignore()') {
-      child.ignore();
+    if (silence == 'child.ignoreFailure()') {
+      child.ignoreFailure();
     }
     if (silence == 'ctx.run(child).ignore()') {
       ctx.run(child).ignore();
@@ -342,7 +342,7 @@ void main() {
     test('an upload that fails leaves sync waiting for the progress to close',
         () {
       final errors = _zone((async) {
-        final job = page.Syncer().sync(1)..ignore();
+        final job = page.Syncer().sync(1)..ignoreFailure();
         async.flushMicrotasks();
         _fail(async, 'push 1', StateError('push failed'));
         _see('the upload failed: sync ${_how(job)}');
@@ -499,7 +499,7 @@ void main() {
             await ctx.join(() => analytics.send('started 7'));
             return uploading;
           })
-            ..ignore();
+            ..ignoreFailure();
           async.flushMicrotasks();
           _fail(async, 'push 7', const ApiException());
           _see('the upload failed: ${_how(parent)}');
@@ -522,7 +522,7 @@ void main() {
     test('the page code hears a failed upload once, at the return', () {
       final errors = _zone((async) {
         final syncer = page.Announcing();
-        final job = syncer.syncAndAnnounce(7)..ignore();
+        final job = syncer.syncAndAnnounce(7)..ignoreFailure();
         async.flushMicrotasks();
         _fail(async, 'push 7', const ApiException());
         unawaited(stage.progress.close());
@@ -541,7 +541,7 @@ void main() {
     test('paused, the upload never starts and resend ends with the drop', () {
       final errors = _zone((async) {
         final syncer = page.Resending(const Ready(paused: true));
-        final job = syncer.resend(7)..ignore();
+        final job = syncer.resend(7)..ignoreFailure();
         async.flushMicrotasks();
         _see('${stage.trace}; ${_how(job)}');
       });
@@ -1062,17 +1062,21 @@ void main() {
               'one');
         });
 
-        test('child.ignore() silences it', () {
+        test('child.ignoreFailure() silences it', () {
           late Bench bench;
           final errors = _zone((async) {
-            bench = _coveredFailure(async, window, silence: 'child.ignore()');
+            bench = _coveredFailure(
+              async,
+              window,
+              silence: 'child.ignoreFailure()',
+            );
           });
 
           expect(bench.heard, ['Job(child): Bad state: child failed first']);
           expect(bench.unanswered, isEmpty);
           expect(errors, isEmpty);
-          _says('`child.ignore()` silences it.');
-          _says('| `child.ignore()` | not handled, goes to the zone | '
+          _says('`child.ignoreFailure()` silences it.');
+          _says('| `child.ignoreFailure()` | not handled, goes to the zone | '
               'silenced |');
         });
 
@@ -1137,7 +1141,7 @@ void main() {
             ctx.run(child).ignore();
             throw StateError('parent failed');
           })
-            ..ignore();
+            ..ignoreFailure();
           async.flushMicrotasks();
           _see('the body failed: parent ${_how(parent)}, '
               'child ${_how(child)}');
@@ -1153,7 +1157,10 @@ void main() {
         _says('a body that fails lets them finish and waits for them');
       });
 
-      for (final silence in ['child.ignore()', 'ctx.run(child).ignore()']) {
+      for (final silence in [
+        'child.ignoreFailure()',
+        'ctx.run(child).ignore()',
+      ]) {
         test('a child that fails under $silence', () {
           final errors = _zone((async) {
             final bench = Bench();
@@ -1163,8 +1170,8 @@ void main() {
                 (childCtx) =>
                     childCtx.join(() => stage.start<void>('work', null)),
               );
-              if (silence == 'child.ignore()') {
-                child.ignore();
+              if (silence == 'child.ignoreFailure()') {
+                child.ignoreFailure();
                 unawaited(ctx.run(child));
               } else {
                 ctx.run(child).ignore();
@@ -1176,9 +1183,11 @@ void main() {
 
           expect(
             errors,
-            silence == 'child.ignore()' ? ['Bad state: child failed'] : isEmpty,
+            silence == 'child.ignoreFailure()'
+                ? ['Bad state: child failed']
+                : isEmpty,
           );
-          _says('`child.ignore()` alone does not handle errors of the '
+          _says('`child.ignoreFailure()` alone does not handle errors of the '
               'future returned by `run`.');
           _says("`ctx.run(child).ignore()` explicitly ignores that future's "
               'result while the parent still waits for its children.');
@@ -1412,7 +1421,7 @@ void main() {
         solo
             .sync(1)
             .then((ctx, path) => analytics.send(path), observer: own)
-            .ignore();
+            .ignoreFailure();
         async.flushMicrotasks();
         _end(async, 'push 1');
         _fail(async, 'send path/1', StateError('send failed'));
@@ -1774,7 +1783,9 @@ void main() {
           Solo.observer = _Watch();
           final bench = Bench();
           bench.run<Ready, void>(key: 'caller', (ctx) async {
-            bench.run<Ready, void>(key: 'called', (ctx) async {}).ignore();
+            bench
+                .run<Ready, void>(key: 'called', (ctx) async {})
+                .ignoreFailure();
           });
           bench.save();
           async.flushMicrotasks();

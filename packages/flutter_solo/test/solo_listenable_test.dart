@@ -316,7 +316,7 @@ void main() {
       keepWhile: (state) => state < 10,
       (ctx) =>
           ctx.abandonable(() => Future<void>.delayed(const Duration(days: 1))),
-    )..ignore();
+    )..ignoreFailure();
     await Future<void>.delayed(Duration.zero);
 
     counter

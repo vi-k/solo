@@ -39,7 +39,7 @@ error and stack trace, `Cancelled` the cancellation reason.
 | `job.done` | Await an `Outcome<T>` without throwing. |
 | `job.outcome` | Read the outcome synchronously; `null` until the job has finished. |
 | `job.cancel()` | Request cancellation and wait for completion. |
-| `job.ignore()` | Mark the outcome as handled without waiting. |
+| `job.ignoreFailure()` | Mark the outcome as handled without waiting. |
 | `job.whenCancelled(callback)` | Hear the cancellation the moment the job accepts it, running or still queued. |
 
 A failed job does not stop the queue. Its error is reported and the next job
@@ -49,11 +49,11 @@ queued job or a state the job's rules do not accept can all end work
 
 Every failure reaches the `onError` hook of the controller and of
 `Solo.observer`. A failed job whose outcome nobody has accessed through `done`,
-`value` or `ignore()` by the time it ends also reports an unhandled error to
-the Dart zone in which it was created; an access after that comes too late. Use
-`ignore()` when error reporting elsewhere is sufficient: leaving a job
-unawaited does not by itself mark the error as handled, and neither does
-reading `outcome`. See
+`value` or `ignoreFailure()` by the time it ends also reports an unhandled
+error to the Dart zone in which it was created; an access after that comes too
+late. Use `ignoreFailure()` when error reporting elsewhere is sufficient:
+leaving a job unawaited does not by itself mark the error as handled, and
+neither does reading `outcome`. See
 [Handled and unhandled failures](errors.md#handled-and-unhandled-failures) on
 the errors page.
 

@@ -33,7 +33,7 @@ void main() {
             .ignore();
         return resource;
       })
-        ..ignore();
+        ..ignoreFailure();
       async.elapse(const Duration(milliseconds: 30));
       job.cancel().ignore();
       async.flushTimers();
@@ -169,7 +169,7 @@ void main() {
         });
         await ctx.abandonable(() => delay(200));
       })
-        ..ignore();
+        ..ignoreFailure();
       async.elapse(const Duration(milliseconds: 10));
       job
         ..cancel().ignore()
@@ -322,7 +322,7 @@ void main() {
         // before the action fails. The work is still holding that future,
         // so the fork is what announces -- announcing from the core as
         // well would say one error twice.
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
       expect(
         journal.take().where((line) => line.contains('error')).toList(),
@@ -510,7 +510,7 @@ void main() {
             }
             await delay(100);
           })
-            ..ignore()
+            ..ignoreFailure()
             ..launch();
           if (!givesUp) {
             async.elapse(const Duration(milliseconds: 5));
@@ -550,7 +550,7 @@ void main() {
             await delay(5);
             throw const Cancelled('gave up');
           })
-            ..ignore()
+            ..ignoreFailure()
             ..launch();
           async.flushTimers();
           seen.add('in the end closed: ${made?.closed}');
@@ -592,7 +592,7 @@ void main() {
         final held = await ctx.join(() => take('x'));
         await ctx.abandonable(() => delay(20));
         held.give('x');
-      }).ignore();
+      }).ignoreFailure();
     }
 
     for (final how in ['plain child', 'runAll branch']) {
@@ -624,7 +624,7 @@ void main() {
               await ctx.run(a);
             }
           })
-            ..ignore();
+            ..ignoreFailure();
           async.elapse(const Duration(milliseconds: 5));
           a.cancel().ignore();
           async.flushTimers();
@@ -669,7 +669,8 @@ void main() {
             await ctx.abandonable(() => delay(1));
             return 2;
           });
-          final group = Job<List<int>>((ctx) => ctx.runAll([a, b]))..ignore();
+          final group = Job<List<int>>((ctx) => ctx.runAll([a, b]))
+            ..ignoreFailure();
           async.elapse(const Duration(milliseconds: 10));
           if (how == 'by itself') {
             a.cancel().ignore();
@@ -793,7 +794,7 @@ void main() {
         });
         Job<void>(
           (ctx) => ctx.runAll([a, Job.deferred<void>((ctx) async {})]),
-        ).ignore();
+        ).ignoreFailure();
         async.elapse(const Duration(milliseconds: 10));
         a.cancel().ignore();
         async.flushTimers();
@@ -837,7 +838,7 @@ void main() {
                             .then((_) => throw StateError('close failed')),
                   );
                 },
-              )..ignore();
+              )..ignoreFailure();
               async.elapse(const Duration(milliseconds: 5));
               job.cancel().ignore();
               async.flushTimers();
@@ -877,7 +878,7 @@ void main() {
               },
             )
               ..launch()
-              ..ignore();
+              ..ignoreFailure();
             async.elapse(const Duration(milliseconds: 5));
             job.cancel().ignore();
             async.flushTimers();
@@ -918,7 +919,8 @@ void main() {
           ctx.onDispose(() => delay(70));
           return 2;
         });
-        final group = Job<List<int>>((ctx) => ctx.runAll([a, b]))..ignore();
+        final group = Job<List<int>>((ctx) => ctx.runAll([a, b]))
+          ..ignoreFailure();
         async.elapse(const Duration(milliseconds: 80));
         a.cancel().ignore();
         async.flushTimers();
@@ -960,7 +962,7 @@ void main() {
             rethrow;
           }
         })
-          ..ignore();
+          ..ignoreFailure();
         async.elapse(const Duration(milliseconds: 5));
         job.cancel().ignore();
         async.flushTimers();
@@ -1002,7 +1004,7 @@ void main() {
                 log.add('used, closed: ${taken.closed}');
               }),
             ).ignore();
-          }).ignore();
+          }).ignoreFailure();
           async.flushTimers();
           expect(
             log,

@@ -388,7 +388,7 @@ void main() {
       expect(caught, ['Bad state: child failed first']);
     });
 
-    test('in a child of run that ignore was called on is only told', () {
+    test('in a child of run that ignoreFailure was called on is only told', () {
       final caught = <String>[];
       final answered = <String>[];
       final solo = _Loud();
@@ -585,7 +585,7 @@ void _coveredChild(
         throw StateError('child failed first');
       });
       if (ignored) {
-        child.ignore();
+        child.ignoreFailure();
       }
       try {
         await ctx.run(child);

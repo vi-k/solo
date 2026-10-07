@@ -181,7 +181,7 @@ void main() {
           phases.add((solo.pending as SoloPendingJob?)?.phase);
           return state;
         },
-      ).ignore();
+      ).ignoreFailure();
       async.flushTimers();
       expect(phases, [SoloPhase.cleanup]);
     });
@@ -358,7 +358,7 @@ void main() {
               canStart: (state) => false,
               (ctx) async {},
             )
-            .ignore();
+            .ignoreFailure();
         rejected.close(mode: SoloCloseMode.drain);
         async.flushMicrotasks();
 
@@ -373,7 +373,7 @@ void main() {
             return true;
           },
           (ctx) async {},
-        )..ignore();
+        )..ignoreFailure();
         async.flushMicrotasks();
 
         expect(

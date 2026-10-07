@@ -78,7 +78,7 @@ A child whose outcome nobody reads, like the progress in `_sync` at the top of
 not the parent's: the parent ends `Done`, and the failure goes where a failure
 nobody read goes, to the zone, as in
 [Handled and unhandled failures](errors.md#handled-and-unhandled-failures) on
-the errors page. `ignore()` on the child keeps it out of the zone.
+the errors page. `ignoreFailure()` on the child keeps it out of the zone.
 
 Events are delivered one at a time, and a cancellation waits for the callback
 in flight. That is why waits belong to the callback's context:

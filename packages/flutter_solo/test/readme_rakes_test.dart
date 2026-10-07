@@ -70,7 +70,7 @@ List<String?> _texts(WidgetTester tester) =>
 /// A controller of the page with its profile loaded.
 Future<ProfileController> _loaded(WidgetTester tester) async {
   final controller = ProfileController(ProfileApi());
-  controller.load().ignore();
+  controller.load().ignoreFailure();
   await tester.pump(const Duration(milliseconds: 10));
   expect(controller.value, isA<Loaded>());
   return controller;
@@ -176,9 +176,9 @@ void main() {
             log.add('$name ends');
           });
 
-      step('a').ignore();
-      step('b').ignore();
-      step('c').ignore();
+      step('a').ignoreFailure();
+      step('b').ignoreFailure();
+      step('c').ignoreFailure();
       await tester.pump(const Duration(milliseconds: 15));
 
       expect(
@@ -257,7 +257,7 @@ void main() {
       final failed = ProfileController(
         ProfileApi(error: StateError('no network')),
       ).load()
-        ..ignore();
+        ..ignoreFailure();
       final cancelled = ProfileController(ProfileApi()).load();
       unawaited(cancelled.cancel());
       await tester.pump(const Duration(milliseconds: 10));
@@ -321,7 +321,7 @@ void main() {
       final failing = ProfileController(
         ProfileApi(error: StateError('no network')),
       );
-      failing.load().ignore();
+      failing.load().ignoreFailure();
       await tester.pump(const Duration(milliseconds: 10));
       expect(failing.value, isA<Empty>());
 
@@ -338,7 +338,7 @@ void main() {
 
     testWidgets('without them the state stays on Loading', (tester) async {
       final failing = Handlerless(ProfileApi(error: StateError('no network')));
-      failing.load().ignore();
+      failing.load().ignoreFailure();
       await tester.pump(const Duration(milliseconds: 10));
       expect(failing.value, isA<Loading>());
 
@@ -365,7 +365,7 @@ void main() {
 
       // Asked for while the load is ahead of it, it starts once the state
       // is Loaded.
-      controller.load().ignore();
+      controller.load().ignoreFailure();
       final queued = controller.save();
       await tester.pump(const Duration(milliseconds: 20));
       expect(queued.outcome, isA<Done<void>>());
@@ -390,7 +390,7 @@ void main() {
       expect(api.trace, ['fetch begins']);
       await tester.pump(const Duration(milliseconds: 10));
 
-      controller.load().ignore();
+      controller.load().ignoreFailure();
       await tester.pump(const Duration(milliseconds: 10));
       api.trace.clear();
       final save = controller.save();
@@ -417,7 +417,7 @@ void main() {
       await tester.pumpWidget(_app(saveSelector(controller)));
       expect(_save(tester), isNull);
 
-      controller.load().ignore();
+      controller.load().ignoreFailure();
       await tester.pump();
       await tester.pump();
       expect(controller.value, isA<Loading>());
@@ -876,10 +876,10 @@ void main() {
       );
       await tester.pumpWidget(const SizedBox());
 
-      controller.save().ignore();
+      controller.save().ignoreFailure();
       await tester.pump(const Duration(milliseconds: 10));
       heard.clear();
-      controller.load().ignore();
+      controller.load().ignoreFailure();
       await tester.pump(const Duration(milliseconds: 10));
       expect(
         heard,
@@ -901,7 +901,7 @@ void main() {
       final heard = <String>[];
       await tester.pumpWidget(Listening(controller: controller, heard: heard));
 
-      controller.load().ignore();
+      controller.load().ignoreFailure();
       await tester.pump(const Duration(milliseconds: 10));
       expect(
         heard,
@@ -910,7 +910,7 @@ void main() {
 
       await tester.pumpWidget(const SizedBox());
       heard.clear();
-      controller.load().ignore();
+      controller.load().ignoreFailure();
       await tester.pump(const Duration(milliseconds: 10));
       expect(heard, isEmpty);
 
@@ -1037,10 +1037,10 @@ void main() {
       await tester.pumpWidget(Listening(controller: first, heard: heard));
       await tester.pumpWidget(Listening(controller: second, heard: heard));
 
-      second.load().ignore();
+      second.load().ignoreFailure();
       await tester.pump(const Duration(milliseconds: 10));
       expect(heard, isEmpty, reason: 'nobody listens to the new controller');
-      first.load().ignore();
+      first.load().ignoreFailure();
       await tester.pump(const Duration(milliseconds: 10));
       expect(heard, isNotEmpty, reason: 'the old one is still listened to');
 
@@ -1065,10 +1065,10 @@ void main() {
         await tester.pumpWidget(over(first));
         await tester.pumpWidget(over(second));
 
-        first.load().ignore();
+        first.load().ignoreFailure();
         await tester.pump(const Duration(milliseconds: 10));
         expect(heard, isEmpty, reason: 'the old controller was let go');
-        second.load().ignore();
+        second.load().ignoreFailure();
         await tester.pump(const Duration(milliseconds: 10));
 
         await tester.pumpWidget(const SizedBox());
@@ -1231,7 +1231,7 @@ void main() {
         log.add('second step');
         await ctx.pause(const Duration(milliseconds: 10));
         log.add('third step');
-      }).ignore();
+      }).ignoreFailure();
       await tester.pump(const Duration(milliseconds: 3));
 
       var closed = false;
@@ -1253,7 +1253,7 @@ void main() {
       final heard = <String>[];
       controller
         ..addListener(() => heard.add(show(controller.value)))
-        ..load().ignore();
+        ..load().ignoreFailure();
       await tester.pump(const Duration(milliseconds: 3));
       await controller.close();
       expect(heard, ['Loading', 'Empty']);
@@ -1369,14 +1369,17 @@ void main() {
       expect(await inZone((controller) => controller.load()), [
         isA<StateError>(),
       ]);
-      expect(await inZone((controller) => controller.load().ignore()), isEmpty);
+      expect(
+        await inZone((controller) => controller.load().ignoreFailure()),
+        isEmpty,
+      );
       expect(
         await inZone((controller) => unawaited(controller.load().done)),
         isEmpty,
       );
       expect(tester.takeException(), isNull);
       _says('an unobserved `Failed` reaches the zone that created the job, so '
-          'a fire-and-forget call is `controller.load().ignore()`');
+          'a fire-and-forget call is `controller.load().ignoreFailure()`');
     });
 
     testWidgets('unattended work that fails takes the same road',
@@ -1384,7 +1387,7 @@ void main() {
       Future<List<Object>> inZone(Background controller) async {
         final errors = <Object>[];
         runZonedGuarded(
-          () => controller.ping().ignore(),
+          () => controller.ping().ignoreFailure(),
           (error, stackTrace) => errors.add(error),
         );
         await tester.pump(const Duration(milliseconds: 5));
@@ -1419,7 +1422,7 @@ void main() {
       final errors = <Object>[];
       final controller = Background();
       runZonedGuarded(
-        () => controller.ping().ignore(),
+        () => controller.ping().ignoreFailure(),
         (error, stackTrace) => errors.add(error),
       );
       await tester.pump(const Duration(milliseconds: 5));
@@ -1632,16 +1635,17 @@ void main() {
           'if it reads it after the pump.');
     });
 
-    testWidgets('a job the test drops says so with ignore()', (tester) async {
+    testWidgets('a job the test drops says so with ignoreFailure()',
+        (tester) async {
       final controller = ProfileController(
         FakeApi(error: StateError('no network')),
       );
-      controller.load().ignore();
+      controller.load().ignoreFailure();
       await tester.pump(const Duration(milliseconds: 20));
 
       expect(controller.value, isA<Empty>());
       await controller.close();
-      _says('A job the test starts and drops says so with `ignore()`.');
+      _says('A job the test starts and drops says so with `ignoreFailure()`.');
     });
 
     testWidgets('one pump after load() moves the state and not the screen',
@@ -1654,7 +1658,7 @@ void main() {
       await tester.pump();
       expect(tester.binding.hasScheduledFrame, isFalse);
 
-      controller.load().ignore();
+      controller.load().ignoreFailure();
       await tester.pump();
       expect(controller.value, isA<Loading>());
       expect(find.text('Load'), findsOneWidget);
@@ -1678,7 +1682,7 @@ void main() {
       );
       expect(tester.binding.hasScheduledFrame, isTrue);
 
-      controller.load().ignore();
+      controller.load().ignoreFailure();
       await tester.pump();
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
@@ -1715,7 +1719,7 @@ void main() {
         // when the body ends, as it is when an expectation fails halfway
         // through one.
         controller = ProfileController(SilentApi());
-        controller.load().ignore();
+        controller.load().ignoreFailure();
         await binding.pump();
         expect(controller.value, isA<Loading>());
       });
@@ -1743,11 +1747,11 @@ void main() {
           if (timed) {
             final load = TimedLoad(SilentApi());
             controller = load;
-            load.load().ignore();
+            load.load().ignoreFailure();
           } else {
             final load = ProfileController(SilentApi());
             controller = load;
-            load.load().ignore();
+            load.load().ignoreFailure();
           }
           await binding.pump();
           expect(controller.currentState, isA<Loading>());
@@ -1777,7 +1781,7 @@ void main() {
       late TimedLoad controller;
       final reported = await _asWidgetTest((binding) async {
         controller = TimedLoad(SilentApi());
-        final job = controller.load()..ignore();
+        final job = controller.load()..ignoreFailure();
         await binding.pump();
         await controller.close();
         expect('${job.outcome}', 'Cancelled(closed)');
@@ -1844,7 +1848,7 @@ void main() {
           ..emit(same)
           ..emit(Loaded('Ada'))
           ..emit(Loaded('Bob'));
-      }).ignore();
+      }).ignoreFailure();
       await tester.pump();
       await tester.pump();
 

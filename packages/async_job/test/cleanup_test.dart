@@ -33,7 +33,7 @@ List<String> _cleanupsOn(
 
         return 1;
       })
-        ..ignore();
+        ..ignoreFailure();
       // Five milliseconds so the body starts and registers: a job cancelled
       // before that never runs its body at all.
       async.elapse(const Duration(milliseconds: 5));
@@ -122,7 +122,7 @@ void main() {
           ..onDispose(() => order.add('third'));
         await ctx.abandonable(() => delay(10));
         throw StateError('boom');
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
       expect(order, ['third', 'second', 'first']);
     });
@@ -168,7 +168,7 @@ void main() {
         final dropTwice = ctx.onDispose(() => order.add('dropped'))..call();
         dropTwice();
         await ctx.abandonable(() => delay(10));
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
       expect(order, ['kept']);
     });
@@ -182,7 +182,7 @@ void main() {
           order.add('outer');
           ctx.onDispose(() => order.add('nested'));
         });
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
       expect(order, ['outer', 'nested']);
     });
@@ -241,7 +241,7 @@ void main() {
           ..onDiscard(() => order.add('discarded'));
         return 7;
       })
-        ..ignore();
+        ..ignoreFailure();
       async.elapse(const Duration(milliseconds: 50));
       job.cancel().ignore();
       async.flushTimers();
@@ -263,7 +263,7 @@ void main() {
           rethrow;
         }
       })
-        ..ignore();
+        ..ignoreFailure();
       async.elapse(const Duration(milliseconds: 10));
       job.cancel().ignore();
       async.flushTimers();
@@ -274,7 +274,7 @@ void main() {
   test('registering on a job that has finished is a StateError', () {
     fakeAsync((async) {
       late JobContext leaked;
-      Job<void>((ctx) async => leaked = ctx).ignore();
+      Job<void>((ctx) async => leaked = ctx).ignoreFailure();
       async.flushTimers();
       expect(() => leaked.onDispose(() {}), throwsStateError);
     });
@@ -292,7 +292,7 @@ void main() {
           started: true,
           stackTrace: StackTrace.current,
         );
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
       expect(seen, [true]);
     });
@@ -314,7 +314,7 @@ void main() {
           stackTrace: StackTrace.current,
         );
       })
-        ..ignore()
+        ..ignoreFailure()
         ..whenCancelled((_) => order.add('whenCancelled'));
       async.flushTimers();
       expect(order, ['whenCancelled', 'cleanup starts', 'cleanup ends']);
@@ -338,7 +338,7 @@ void main() {
             stackTrace: StackTrace.current,
           );
         },
-      ).ignore();
+      ).ignoreFailure();
       async.flushTimers();
       expect(errors, isEmpty);
     });
@@ -368,7 +368,7 @@ void main() {
           stackTrace: StackTrace.current,
         );
       })
-        ..ignore();
+        ..ignoreFailure();
       async.elapse(const Duration(milliseconds: 30));
       job.cancel().ignore();
       async.flushTimers();
@@ -389,7 +389,7 @@ void main() {
         await ctx.abandonable(() => delay(10));
         return 1;
       })
-        ..ignore();
+        ..ignoreFailure();
       async.elapse(const Duration(milliseconds: 20));
       job.cancel().ignore();
       async.flushTimers();
@@ -416,7 +416,7 @@ void main() {
         await delay(5);
         throw const Cancelled('gave up');
       })
-        ..ignore();
+        ..ignoreFailure();
       async.flushTimers();
       expect(
         order,
@@ -442,7 +442,7 @@ void main() {
         await ctx.abandonable(() => delay(10));
         return db;
       })
-        ..ignore();
+        ..ignoreFailure();
       async.elapse(const Duration(milliseconds: 15));
       job.cancel().ignore();
       async.flushTimers();
@@ -472,7 +472,7 @@ void main() {
           rethrow;
         }
       })
-        ..ignore();
+        ..ignoreFailure();
       async.elapse(const Duration(milliseconds: 10));
       job.cancel().ignore();
       async.flushTimers();
@@ -497,7 +497,7 @@ void main() {
         );
       })
         ..launch()
-        ..ignore();
+        ..ignoreFailure();
       async.flushTimers();
       expect(
         closed,
@@ -542,7 +542,7 @@ void main() {
             .ignore();
         return 1;
       })
-        ..ignore();
+        ..ignoreFailure();
       async.flushTimers();
       expect(job.outcome, isA<Done<int>>());
       expect(closed, ['db'], reason: 'on Done as well');
@@ -570,7 +570,7 @@ void main() {
           ctx.onDispose(() => delay(100));
           return 1;
         },
-      )..ignore();
+      )..ignoreFailure();
       async.flushTimers();
       expect(job.outcome, isA<Done<int>>());
       expect(closed, ['db']);
@@ -601,7 +601,7 @@ void main() {
           ),
         );
         return 1;
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
       expect(closed, ['joined', 'waited'], reason: 'both of the family');
     });
@@ -632,7 +632,7 @@ void main() {
               .ignore();
           return 1;
         },
-      ).ignore();
+      ).ignoreFailure();
       async.flushTimers();
       expect(errors, isEmpty, reason: 'no StateError, no cancellation');
     });
@@ -652,7 +652,7 @@ void main() {
         await ctx.abandonable(() => delay(10));
         drop();
       })
-        ..ignore();
+        ..ignoreFailure();
       async.flushTimers();
       expect(job.outcome, isA<Done<void>>());
       expect(released, ['by parameter']);
@@ -673,7 +673,7 @@ void main() {
         await ctx.abandonable(() => delay(10));
         return db;
       })
-        ..ignore();
+        ..ignoreFailure();
       // The cancellation lands exactly when the action returned its value:
       // the registration is synchronous, so the cleanup is not lost.
       async.elapse(const Duration(milliseconds: 10));
@@ -697,7 +697,7 @@ void main() {
 
         return db;
       })
-        ..ignore();
+        ..ignoreFailure();
       async.flushTimers();
       expect(job.outcome, isA<Done<String>>());
       expect(dropped, [true, false, false], reason: 'one per call, then none');
@@ -714,7 +714,7 @@ void main() {
         ctx.onDispose(() => closed.add(db));
         dropped.add(ctx.disown(db));
       })
-        ..ignore();
+        ..ignoreFailure();
       async.flushTimers();
       expect(job.outcome, isA<Done<void>>());
       expect(dropped, [false]);
@@ -725,7 +725,7 @@ void main() {
   test('disown after the job has finished is a StateError', () {
     fakeAsync((async) {
       late JobContext leaked;
-      Job<void>((ctx) async => leaked = ctx).ignore();
+      Job<void>((ctx) async => leaked = ctx).ignoreFailure();
       async.flushTimers();
       expect(() => leaked.disown('anything'), throwsStateError);
     });
@@ -746,7 +746,7 @@ void main() {
         await ctx.abandonable(() => delay(10));
         return db;
       })
-        ..ignore();
+        ..ignoreFailure();
       async.elapse(const Duration(milliseconds: 5));
       job.cancel().ignore();
       async.flushTimers();
@@ -763,7 +763,7 @@ void main() {
           discard: (_) {},
         );
       })
-        ..ignore();
+        ..ignoreFailure();
       async.flushTimers();
       expect(job.outcome, isA<Failed>());
       expect((job.outcome! as Failed).error, isA<ArgumentError>());
@@ -888,7 +888,7 @@ void main() {
         });
         unregister = ctx.onDiscard(() => ran.add('discard ran'));
         return ran;
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
     });
     expect(
@@ -912,7 +912,7 @@ void main() {
           () => resource,
           discard: (value) => ran.add('discard ran'),
         );
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
     });
     expect(
@@ -937,7 +937,7 @@ void main() {
           ctx.job.cancel().ignore();
         });
         await ctx.abandonable(() => resource, discard: (_) => ran.add('top'));
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
     });
     expect(
@@ -966,7 +966,7 @@ void main() {
 
         return database;
       })
-        ..ignore();
+        ..ignoreFailure();
       async.flushTimers();
     });
     expect(ready.outcome, isA<Failed>());
@@ -1010,7 +1010,7 @@ void main() {
 
             return db;
           },
-        )..ignore();
+        )..ignoreFailure();
         async.elapse(const Duration(milliseconds: 5));
         parent.cancel().ignore();
         async.flushTimers();
@@ -1056,7 +1056,7 @@ void main() {
         return ctx.run(child, discard: (db) => closed.add('parent'));
       })
         ..launch()
-        ..ignore();
+        ..ignoreFailure();
       async.flushTimers();
     });
     expect(parent.outcome, isA<Cancelled>(), reason: 'the rule still rules');
@@ -1094,7 +1094,7 @@ void main() {
         );
       })
         ..launch()
-        ..ignore();
+        ..ignoreFailure();
       async.flushTimers();
     });
     expect(parent.outcome, isA<Cancelled>(), reason: 'the rule still rules');
@@ -1123,7 +1123,7 @@ void main() {
           }
 
           return db;
-        }).ignore();
+        }).ignoreFailure();
         async.flushTimers();
       });
 
@@ -1152,7 +1152,7 @@ void main() {
         // Walked away from: the body ends while the child is still going,
         // and the value comes back to nobody.
         ctx.run(child, discard: closed.add).ignore();
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
     });
     expect(closed, ['db']);
@@ -1172,7 +1172,7 @@ void main() {
         // Synchronous, and so is the refusal: no future is ever made.
         unawaited(ctx.run(child, dispose: (db) {}, discard: (db) {}));
       })
-        ..ignore();
+        ..ignoreFailure();
       async.flushTimers();
     });
     expect(parent.outcome, isA<Failed>());
@@ -1196,7 +1196,7 @@ void main() {
         ctx.disown(db);
         throw StateError('boom');
       })
-        ..ignore();
+        ..ignoreFailure();
       async.flushTimers();
     });
     expect(parent.outcome, isA<Failed>());
@@ -1212,7 +1212,7 @@ void main() {
         // reached the caller, so there was nothing to discard.
         return ctx.abandonable(() => resource, discard: (value) {});
       })
-        ..ignore();
+        ..ignoreFailure();
       async.flushTimers();
     });
     expect(job.outcome, isA<Done<Object>>());

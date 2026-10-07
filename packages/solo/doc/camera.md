@@ -550,7 +550,7 @@ did not open, and the code stops there with the error of the opening.
 `setZoom(2)` is not awaited: a `Job` is not a `Future`, and `unawaited_futures`
 has nothing to say about it. Nobody reads the outcome of that zoom, so a
 failure of it would go to the zone like the failed disposal of the second
-attempt; `camera.setZoom(2).ignore()` leaves the reporting to the hooks
+attempt; `camera.setZoom(2).ignoreFailure()` leaves the reporting to the hooks
 instead. The shot waits behind the zoom in the queue, and `value` hands over
 its photo — or throws, if the shot fails or is cancelled.
 

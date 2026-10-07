@@ -46,7 +46,7 @@ void main() {
 
     test('each in a body, cancelled while the stream is silent', () {
       fakeAsync((async) {
-        final job = page.eachInABody()..ignore();
+        final job = page.eachInABody()..ignoreFailure();
         stubs.stage.messages.add('m1');
         async.flushTimers();
         job.cancel().ignore();
@@ -60,7 +60,7 @@ void main() {
     test('each in a body, a save that fails', () {
       fakeAsync((async) {
         stubs.stage.stepError = StateError('save');
-        final job = page.eachInABody()..ignore();
+        final job = page.eachInABody()..ignoreFailure();
         stubs.stage.messages.add('m1');
         async.flushTimers();
         expect(job.outcome, isA<Failed>());
@@ -85,7 +85,7 @@ void main() {
 
     test('a plain await runs the whole callback after the cancellation', () {
       fakeAsync((async) {
-        final parent = page.savingInSteps()..ignore();
+        final parent = page.savingInSteps()..ignoreFailure();
         stubs.stage.messages.add('m1');
         async.elapse(const Duration(milliseconds: 5));
         parent.cancel().ignore();
@@ -103,7 +103,7 @@ void main() {
 
     test("the child's join lets the cancellation out after the first step", () {
       fakeAsync((async) {
-        final parent = page.savingWithCheckpoints()..ignore();
+        final parent = page.savingWithCheckpoints()..ignoreFailure();
         stubs.stage.messages.add('m1');
         async.elapse(const Duration(milliseconds: 5));
         parent.cancel().ignore();
@@ -130,7 +130,7 @@ void main() {
 
       test("stops the steps for the parent's cancellation", () {
         fakeAsync((async) {
-          final parent = savingWithTheParentsCtx()..ignore();
+          final parent = savingWithTheParentsCtx()..ignoreFailure();
           stubs.stage.messages.add('m1');
           async.elapse(const Duration(milliseconds: 5));
           parent.cancel().ignore();
@@ -146,7 +146,7 @@ void main() {
 
       test('runs both steps of a child cancelled alone', () {
         fakeAsync((async) {
-          savingWithTheParentsCtx().ignore();
+          savingWithTheParentsCtx().ignoreFailure();
           stubs.stage.messages.add('m1');
           async.elapse(const Duration(milliseconds: 5));
           child.cancel().ignore();
@@ -173,7 +173,7 @@ void main() {
             await childCtx.join(() => stubs.store.saveAttachments(message));
           });
           await child.value;
-        }).ignore();
+        }).ignoreFailure();
         stubs.stage.messages.add('m1');
         async.elapse(const Duration(milliseconds: 5));
         child.cancel().ignore();
@@ -262,7 +262,7 @@ void main() {
 
     test('a child for the event closes its draft when cancelled mid-write', () {
       fakeAsync((async) {
-        final parent = page.draftsOnTheStackOfTheirEvent()..ignore();
+        final parent = page.draftsOnTheStackOfTheirEvent()..ignoreFailure();
         stubs.stage.messages.add('m1');
         async.elapse(const Duration(milliseconds: 5));
         parent.cancel().ignore();
@@ -280,7 +280,7 @@ void main() {
 
     test('await for hears a cancellation only with the next event', () {
       fakeAsync((async) {
-        final job = page.awaitForInABody()..ignore();
+        final job = page.awaitForInABody()..ignoreFailure();
         var cancelReturned = false;
         stubs.stage.messages.add('m1');
         async.flushTimers();
@@ -301,7 +301,7 @@ void main() {
 
     test('listen starts the second save while the first one runs', () {
       fakeAsync((async) {
-        final job = page.listenInABody()..ignore();
+        final job = page.listenInABody()..ignoreFailure();
         stubs.stage.messages
           ..add('m1')
           ..add('m2');
@@ -327,7 +327,7 @@ void main() {
       runZonedGuarded(
         () => fakeAsync((async) {
           stubs.stage.stepError = StateError('save');
-          job = page.listenInABody()..ignore();
+          job = page.listenInABody()..ignoreFailure();
           stubs.stage.messages.add('m1');
           async.flushTimers();
           listening = stubs.stage.messages.hasListener;
@@ -388,7 +388,7 @@ void main() {
       runZonedGuarded(
         () => fakeAsync((async) {
           stubs.stage.stepError = StateError('save');
-          job = page.asyncMapInABody()..ignore();
+          job = page.asyncMapInABody()..ignoreFailure();
           stubs.stage.messages.add('m1');
           async.flushTimers();
           stubs.stage.messages.close().ignore();

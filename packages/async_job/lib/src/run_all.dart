@@ -424,12 +424,12 @@ final class _RunAllGroup<T> {
         continue;
       }
       // Received and not chosen. Every [Failed] a branch ends with has been
-      // announced already — a failure the body threw where it was caught,
-      // one an engine of a domain handed in by [JobBase.finish] — so only
-      // the route for an error nobody answered for is left, and the group is
-      // the last one holding it. A branch that [Job.ignore] was called on
-      // wants no answer: the notice stays, as it does for a failure a
-      // cancellation covered.
+      // announced already — a failure the body threw where it was caught, one
+      // an engine of a domain handed in by [JobBase.finish] — so only the route
+      // for an error nobody answered for is left, and the group is the last one
+      // holding it. A branch that [Job.ignoreFailure] was called on wants no
+      // answer: the notice stays, as it does for a failure a cancellation
+      // covered.
       if (!branch.job._ignored) {
         branch.job._handleUnanswered(outcome.error, outcome.stackTrace);
       }

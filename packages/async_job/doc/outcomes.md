@@ -62,7 +62,7 @@ cancelled: manual
 `done` hands the outcome over instead of throwing it, and each case gets its
 own line. `value` fits code for which a cancellation is a failure like any
 other, such as a test that expects the value. If you do not need the result at
-all, call `report.ignore()` to acknowledge that choice.
+all, call `report.ignoreFailure()` to acknowledge that choice.
 
 ## A failure nobody waits for
 
@@ -105,20 +105,20 @@ all the same.
 ### Telling the core it is handled
 
 ```dart
-final backup = Job<void>(upload)..ignore();
+final backup = Job<void>(upload)..ignoreFailure();
 ```
 
 ```text
 status: backup failed: Bad state: disk full
 ```
 
-`ignore()` tells the core that the failure is handled elsewhere, here by the
-status line, and nothing reaches the zone. Accessing `done` or `value` observes
-a failure as well, so code that waits for the job — to redraw the status line
-when it is over, say — needs no `ignore()`. `done` never throws; with `value`
-the waiting code gets the error itself and has to handle it, as with any
-`Future`. Forwarding a failure through `then` observes it too; the continuation
-takes responsibility for it.
+`ignoreFailure()` tells the core that the failure is handled elsewhere, here by
+the status line, and nothing reaches the zone. Accessing `done` or `value`
+observes a failure as well, so code that waits for the job — to redraw the
+status line when it is over, say — needs no `ignoreFailure()`. `done` never
+throws; with `value` the waiting code gets the error itself and has to handle
+it, as with any `Future`. Forwarding a failure through `then` observes it too;
+the continuation takes responsibility for it.
 
 Waiting does not observe a failure a cancellation covers: the body of `backup`
 fails, and a cancellation arrives after it — while the job still waits for its
@@ -126,8 +126,8 @@ children or runs its cleanup, say. The job ends `Cancelled`: the code waiting
 for it gets the cancellation, not the error, and the status line says
 `backup cancelled`. The error goes the way of an error no outcome carries —
 [Where errors go](observing.md#where-errors-go) on the observing page shows it.
-`ignore()` keeps it out of the zone, and then only an observer's `onError`
-hears it.
+`ignoreFailure()` keeps it out of the zone, and then only an observer's
+`onError` hears it.
 
 ## Why a job was cancelled
 

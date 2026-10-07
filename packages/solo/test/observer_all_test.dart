@@ -87,7 +87,7 @@ List<String> heard(SoloObserver Function(List<String> seen) observer) {
             ..emit(const Preparing())
             ..log('hello');
           throw StateError('boom');
-        }).ignore();
+        }).ignoreFailure();
         async.flushTimers();
         solo.close();
         async.flushTimers();

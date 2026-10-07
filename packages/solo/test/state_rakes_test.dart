@@ -1709,7 +1709,7 @@ void main() {
     test('the first attempt: on a failure the catch writes the state back', () {
       fakeAsync((async) {
         final controller = byHand();
-        final job = controller.loadWithCatch()..ignore();
+        final job = controller.loadWithCatch()..ignoreFailure();
         async.flushMicrotasks();
         api.fail(StateError('offline'));
         async.flushMicrotasks();
@@ -1959,7 +1959,7 @@ void main() {
     test('the first attempt: a failure writes over the fact as well', () {
       fakeAsync((async) {
         final controller = withoutRule();
-        final job = controller.load()..ignore();
+        final job = controller.load()..ignoreFailure();
         async.flushMicrotasks();
         controller.reflect(const stubs.Disconnected());
         api.fail(StateError('offline'));
@@ -2024,7 +2024,7 @@ void main() {
     test('the rules: a failure and an answer end where they did before', () {
       fakeAsync((async) {
         final failing = withRule();
-        final failed = failing.load()..ignore();
+        final failed = failing.load()..ignoreFailure();
         async.flushMicrotasks();
         api.fail(StateError('offline'));
         async.flushMicrotasks();
@@ -2189,7 +2189,8 @@ void main() {
     test("the job's own emit does not disable its handlers", () {
       fakeAsync((async) {
         final failing = _Eligible();
-        final failed = failing.ownEmit(Completer<void>()..complete())..ignore();
+        final failed = failing.ownEmit(Completer<void>()..complete())
+          ..ignoreFailure();
         async.flushMicrotasks();
         expect(failed.outcome, isA<Failed>());
         expect(failing.currentState, 'corrected by onError');

@@ -70,13 +70,13 @@ void main() {
     });
   });
 
-  test('ignore keeps the zone quiet', () {
+  test('ignoreFailure keeps the zone quiet', () {
     runSolo((solo, journal, async) {
       final errors = <String>[];
       _inZone(errors, () {
         solo.run<TestState, void>(key: 'bad', (ctx) async {
           throw StateError('boom');
-        }).ignore();
+        }).ignoreFailure();
       });
       async.flushMicrotasks();
       expect(errors, isEmpty);

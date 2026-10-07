@@ -1307,7 +1307,7 @@ void closing(Solo<Object> controller) =>
 Future<ProfileController> loaded(WidgetTester tester) async {
   final controller = ProfileController(ProfileApi());
   closing(controller);
-  controller.load().ignore();
+  controller.load().ignoreFailure();
   await tester.pump(const Duration(milliseconds: 20));
 
   return controller;
@@ -1411,7 +1411,7 @@ void main() {
     expect(early.outcome, isA<Cancelled>(), reason: 'Empty is no Loaded');
     expect(api.saved, isEmpty);
 
-    controller.load().ignore();
+    controller.load().ignoreFailure();
     await tester.pump(const Duration(milliseconds: 20));
     final save = controller.save();
     await tester.pump(const Duration(milliseconds: 20));
@@ -1427,7 +1427,7 @@ void main() {
     await tester.pumpWidget(app(saveSelector(controller)));
     expect(pressable(tester), isNull);
 
-    controller.load().ignore();
+    controller.load().ignoreFailure();
     await tester.pumpAndSettle();
     expect(pressable(tester), isNotNull);
   });
@@ -1457,7 +1457,7 @@ void main() {
     await tester.pumpWidget(app(anyBuilder(controller)));
     expect(find.text('no profile'), findsOne);
 
-    controller.load().ignore();
+    controller.load().ignoreFailure();
     await tester.pump();
     await tester.pump();
     expect(find.text('loading'), findsOne);
@@ -1473,7 +1473,7 @@ void main() {
     await tester.pumpWidget(Leaking(controller: controller, heard: heard));
     await tester.pumpWidget(const SizedBox());
 
-    controller.load().ignore();
+    controller.load().ignoreFailure();
     await tester.pump(const Duration(milliseconds: 10));
     expect(
       heard,
@@ -1490,12 +1490,12 @@ void main() {
     final heard = <String>[];
     await tester.pumpWidget(Listening(controller: controller, heard: heard));
 
-    controller.load().ignore();
+    controller.load().ignoreFailure();
     await tester.pumpAndSettle();
     expect(heard, ['state Loading', 'state Loaded', 'canSave true']);
 
     await tester.pumpWidget(const SizedBox());
-    controller.load().ignore();
+    controller.load().ignoreFailure();
     await tester.pumpAndSettle();
     expect(
       heard,
@@ -1509,7 +1509,7 @@ void main() {
     closing(controller);
     final (canSave, subscription) = secondImport(controller);
 
-    controller.load().ignore();
+    controller.load().ignoreFailure();
     await tester.pumpAndSettle();
     expect(canSave.value, isTrue);
     expect(_heardBySecondImport, [true]);

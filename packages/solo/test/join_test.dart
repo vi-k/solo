@@ -205,7 +205,7 @@ void main() {
           );
           ctx.emit(const Preparing());
         },
-      )..ignore();
+      )..ignoreFailure();
       async.flushTimers();
       expect(
         job.outcome,

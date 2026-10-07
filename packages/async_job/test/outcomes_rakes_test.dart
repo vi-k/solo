@@ -160,7 +160,8 @@ void main() {
       expect(lines, ['status: backing up', ...quoted[2]]);
     });
 
-    test('ignore keeps the zone quiet while the status line reads it', () {
+    test('ignoreFailure keeps the zone quiet while the status line reads it',
+        () {
       final lines = printed((async) {
         final backup = page.startBackup();
         async.flushTimers();
@@ -268,7 +269,7 @@ void main() {
         async.flushTimers();
       });
       final ignored = printed((async) {
-        Job<void>(upload).then<int>((ctx, _) => 1).ignore();
+        Job<void>(upload).then<int>((ctx, _) => 1).ignoreFailure();
         async.flushTimers();
       });
 
@@ -298,7 +299,7 @@ void main() {
             final backup =
                 Job<void>(observer: observer?.call(), uploadWithChild);
             if (ignored) {
-              backup.ignore();
+              backup.ignoreFailure();
             } else {
               backup.done.then((outcome) => print('done: $outcome')).ignore();
             }
@@ -316,7 +317,7 @@ void main() {
         ]);
       });
 
-      test('ignore keeps it out of the zone', () {
+      test('ignoreFailure keeps it out of the zone', () {
         expect(covered(ignored: true), ['status: backup cancelled']);
       });
 
@@ -373,7 +374,7 @@ void main() {
     test('the outcome of fetch holds the very reason passed to cancel', () {
       fakeAsync((async) {
         final (:fetch, :report) = page.startReport();
-        report.ignore();
+        report.ignoreFailure();
         async.elapse(const Duration(milliseconds: 5));
         final reason = page.RequestCancelReason('offline', StackTrace.current);
         fetch.cancel(reason: reason).ignore();
@@ -391,7 +392,7 @@ void main() {
           ctx.run(child).ignore();
           await ctx.abandonable(() => delay(50));
         })
-          ..ignore();
+          ..ignoreFailure();
         async.elapse(const Duration(milliseconds: 5));
         final reason = page.RequestCancelReason('offline', StackTrace.current);
         parent.cancel(reason: reason).ignore();
@@ -412,7 +413,7 @@ void main() {
           ctx.run(child).ignore();
           await ctx.abandonable(() => delay(50));
         })
-          ..ignore();
+          ..ignoreFailure();
         async.flushTimers();
 
         expect('${parent.outcome}', 'Cancelled(timeout)');
@@ -449,8 +450,8 @@ void main() {
 
     test('origin follows a chain of then', () {
       fakeAsync((async) {
-        final source = userReport()..ignore();
-        final tail = source.then<int>((ctx, report) => 1)..ignore();
+        final source = userReport()..ignoreFailure();
+        final tail = source.then<int>((ctx, report) => 1)..ignoreFailure();
         async.elapse(const Duration(milliseconds: 5));
         final reason = page.RequestCancelReason('offline', StackTrace.current);
         tail.cancel(reason: reason).ignore();
@@ -465,7 +466,7 @@ void main() {
     test('origin stops where a body threw Cancelled itself', () {
       fakeAsync((async) {
         final job = Job<void>((ctx) async => throw const Cancelled('why'))
-          ..ignore();
+          ..ignoreFailure();
         async.flushTimers();
 
         final reason = page.origin(job.outcome! as Cancelled);
@@ -485,7 +486,8 @@ void main() {
           await ctx.abandonable(() => delay(100));
           return 2;
         });
-        Job<List<int>>((ctx) => ctx.runAll([failing, neighbour])).ignore();
+        Job<List<int>>((ctx) => ctx.runAll([failing, neighbour]))
+            .ignoreFailure();
         async.flushTimers();
 
         final reason = page.origin(neighbour.outcome! as Cancelled);
@@ -503,7 +505,7 @@ void main() {
         // Refused by its engine, at the adoption: the core asks everything
         // else before the first branch starts.
         final refused = UnadoptableJob<int>((ctx) async => 2);
-        Job<List<int>>((ctx) => ctx.runAll([first, refused])).ignore();
+        Job<List<int>>((ctx) => ctx.runAll([first, refused])).ignoreFailure();
         async.flushTimers();
 
         final reason = page.origin(first.outcome! as Cancelled);
@@ -517,8 +519,8 @@ void main() {
           .firstMatch(File('doc/outcomes.md').readAsStringSync())!
           .group(1);
       fakeAsync((async) {
-        final other = userReport()..ignore();
-        final job = Job<Report>((ctx) async => other.value)..ignore();
+        final other = userReport()..ignoreFailure();
+        final job = Job<Report>((ctx) async => other.value)..ignoreFailure();
         async.elapse(const Duration(milliseconds: 5));
         other.cancel().ignore();
         async.flushTimers();
@@ -533,7 +535,7 @@ void main() {
       fakeAsync((async) {
         final waiting = Job.deferred<void>((ctx) async {});
         final running = Job<void>((ctx) => ctx.abandonable(() => delay(50)))
-          ..ignore();
+          ..ignoreFailure();
         async.elapse(const Duration(milliseconds: 5));
         waiting.cancel().ignore();
         running.cancel().ignore();
@@ -549,7 +551,7 @@ void main() {
         final reason = page.RequestCancelReason('offline', StackTrace.current);
         final job = Job<void>(
           (ctx) async => throw Cancelled.by(reason: reason, started: true),
-        )..ignore();
+        )..ignoreFailure();
         async.flushTimers();
 
         expect((job.outcome! as Cancelled).reason, same(reason));
@@ -559,7 +561,7 @@ void main() {
     test('the stack trace of the reason is not the one of the cancellation',
         () {
       fakeAsync((async) {
-        final job = userReport()..ignore();
+        final job = userReport()..ignoreFailure();
         async.elapse(const Duration(milliseconds: 5));
         final failedAt = StackTrace.current;
         job
@@ -622,7 +624,7 @@ void main() {
       late bool after;
       late bool finished;
       printed((async) {
-        final report = page.startSteppedReport()..ignore();
+        final report = page.startSteppedReport()..ignoreFailure();
         async.elapse(const Duration(milliseconds: 10));
         before = report.isCancelled;
         report.cancel().ignore();
@@ -701,7 +703,7 @@ void main() {
           // it already and does not hear it again.
           await ctx.abandonable(() => delay(100));
         })
-          ..ignore()
+          ..ignoreFailure()
           ..whenCancelled((cancelled) => order.add('listener'));
         async.elapse(const Duration(milliseconds: 10));
         job.cancel().ignore();
@@ -808,7 +810,7 @@ void main() {
           await ctx.abandonable(() => delay(50));
           return 1;
         })
-          ..ignore();
+          ..ignoreFailure();
         Job<int>((ctx) async {
           ctx
             ..onCancel(() => order.add('own onCancel'))
@@ -844,7 +846,7 @@ void main() {
       fakeAsync((async) {
         final seen = <String>[];
         final job = Job<void>((ctx) => ctx.abandonable(() => delay(50)))
-          ..ignore();
+          ..ignoreFailure();
         job
           ..whenCancelled((_) {
             seen.add('first');
@@ -876,7 +878,7 @@ void main() {
             ).ignore();
           await ctx.abandonable(() => delay(100));
         })
-          ..ignore()
+          ..ignoreFailure()
           ..whenCancelled((_) => heard.add('before'));
         async.elapse(const Duration(milliseconds: 5));
         job.cancel().ignore();
@@ -897,7 +899,7 @@ void main() {
           await ctx.uncancellable(() => delay(20));
           await ctx.abandonable(() => delay(50));
         })
-          ..ignore()
+          ..ignoreFailure()
           ..whenCancelled(
             (_) => heard.add('held, at ${async.elapsed.inMilliseconds} ms'),
           );
@@ -948,7 +950,7 @@ void main() {
           () => job = Job<void>(
             observer: observer(heard),
             (ctx) => ctx.abandonable(() => delay(50)),
-          )..ignore(),
+          )..ignoreFailure(),
           (error, stackTrace) => heard.add('creation zone: $error'),
         );
         job
@@ -1016,7 +1018,7 @@ void main() {
               await givingUp(ctx);
             }
           })
-            ..ignore(),
+            ..ignoreFailure(),
           (error, stackTrace) => zones.add('creation: $error'),
         );
         job.whenCancelled((cancelled) async {
@@ -1042,7 +1044,7 @@ void main() {
       late DeferredJob<void> job;
       runZonedGuarded(
         () => job = Job.deferred<void>(givingUp)
-          ..ignore()
+          ..ignoreFailure()
           ..whenCancelled((cancelled) async {
             throw StateError('save failed');
           }),
@@ -1078,7 +1080,7 @@ void main() {
                     inner = deferred..start();
                   }
                   inner
-                    ..ignore()
+                    ..ignoreFailure()
                     ..whenCancelled((cancelled) async {
                       throw StateError('save failed');
                     });
@@ -1088,7 +1090,7 @@ void main() {
               handedOver.complete();
             });
             await ctx.abandonable(() => delay(30));
-          }).ignore(),
+          }).ignoreFailure(),
           (error, stackTrace) => heard.add('where it started: $error'),
         );
         await handedOver.future;
@@ -1110,7 +1112,7 @@ void main() {
           ctx.unattended(() {
             runZonedGuarded(
               () => inner = Job.deferred<void>(givingUp)
-                ..ignore()
+                ..ignoreFailure()
                 ..whenCancelled((cancelled) async {
                   throw StateError('save failed');
                 }),
@@ -1119,7 +1121,7 @@ void main() {
             handedOver.complete();
           });
           await ctx.abandonable(() => delay(30));
-        }).ignore(),
+        }).ignoreFailure(),
         (error, stackTrace) => heard.add('where the work started: $error'),
       );
       await handedOver.future;
@@ -1141,7 +1143,7 @@ void main() {
         () => job = Job<void>(
           (ctx) => ctx.abandonable(() => delay(50)),
           observer: Hearing(heard),
-        )..ignore(),
+        )..ignoreFailure(),
         (error, stackTrace) => zones.add('creation: $error'),
       );
       job.whenCancelled((cancelled) async {
@@ -1165,7 +1167,7 @@ void main() {
       late Job<void> job;
       runZonedGuarded(
         () => job = Job<void>((ctx) => ctx.abandonable(() => delay(50)))
-          ..ignore(),
+          ..ignoreFailure(),
         (error, stackTrace) => zones.add('creation: $error'),
       );
       runZonedGuarded(

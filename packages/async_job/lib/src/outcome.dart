@@ -146,10 +146,10 @@ final class Done<T> extends Outcome<T> {
 /// it by hand.
 ///
 /// The core hands it to [JobObserver.onError] first, once. If nobody then
-/// observes the job through [Job.done], [Job.value], [Job.ignore] or failure
-/// forwarding by [Job.then], it hands [error] to the job's creation zone
-/// through [Zone.handleUncaughtError]. The check runs on the microtask after
-/// completion; a continuation attached within that grace period gets a
+/// observes the job through [Job.done], [Job.value], [Job.ignoreFailure] or
+/// failure forwarding by [Job.then], it hands [error] to the job's creation
+/// zone through [Zone.handleUncaughtError]. The check runs on the microtask
+/// after completion; a continuation attached within that grace period gets a
 /// chance to receive the outcome first.
 ///
 /// This is the error that has an outcome of its own. A body that throws
@@ -158,7 +158,7 @@ final class Done<T> extends Outcome<T> {
 /// arrives — the job still waits for its children or runs its cleanup,
 /// say — ends [Cancelled] as well. Whoever reads that outcome gets the
 /// cancellation, and the error goes on the way of the errors below;
-/// [Job.ignore] silences it.
+/// [Job.ignoreFailure] silences it.
 ///
 /// The errors with no outcome to carry them — a late failure of an action
 /// [JobContext.abandonable] walked away from, a disposer, a callback of

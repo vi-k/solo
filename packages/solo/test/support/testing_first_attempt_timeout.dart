@@ -41,7 +41,7 @@ final deadlineOnTheCall = test('the deadline ends the job, not the call', () {
   fakeAsync((async) {
     final profile = ProfileController(FakeProfileApi());
 
-    final job = profile.load()..ignore();
+    final job = profile.load()..ignoreFailure();
     async.elapse(const Duration(milliseconds: 5));
 
     expect(job.outcome, isA<Failed>());

@@ -243,7 +243,7 @@ void main() {
 
     test('a handle that reached the body is closed when the job fails', () {
       fakeAsync((async) {
-        final job = page.Opening().start('7')..ignore();
+        final job = page.Opening().start('7')..ignoreFailure();
         async.flushMicrotasks();
         _end(async, 'load 7');
         _end(async, 'open');
@@ -1564,7 +1564,7 @@ void main() {
               throw StateError('the body failed');
             }
           })
-            ..ignore();
+            ..ignoreFailure();
           async.flushMicrotasks();
           came = _tryEverything(kept, bench);
           async.flushMicrotasks();
@@ -1846,7 +1846,7 @@ void main() {
               ),
             ]);
           })
-            ..ignore();
+            ..ignoreFailure();
           async.flushMicrotasks();
           _fail(async, 'quick', error);
         });
@@ -2093,7 +2093,7 @@ void main() {
             (ctx) async => throw StateError('failed'),
           )
             ..whenCancelled((_) => heard.add('failed'))
-            ..ignore();
+            ..ignoreFailure();
           async.flushMicrotasks();
           _end(async, 'work');
           unawaited(done.cancel());
@@ -2254,7 +2254,7 @@ void main() {
     test('Future.timeout on the call fails the job, and onError: maps', () {
       fakeAsync((async) {
         final player = _CallDeadline();
-        final job = player.seek(_s(1))..ignore();
+        final job = player.seek(_s(1))..ignoreFailure();
         async.elapse(_s(2));
 
         expect(stage.trace, ['seek 1 start']);
@@ -2741,7 +2741,7 @@ void main() {
           bench = Bench()..work('running');
           failing = bench.run<Ready, void>(
             (ctx) async => throw StateError('the send failed'),
-          )..ignore();
+          )..ignoreFailure();
           ruled = bench.run<Ready, void>(
             canStart: (state) => state.receipt != null,
             (ctx) async {},
@@ -2995,7 +2995,8 @@ void main() {
         expect(left.errors, isEmpty);
       });
 
-      test('queue the job and drain: ignore() keeps it out of the zone', () {
+      test('queue the job and drain: ignoreFailure() keeps it out of the zone',
+          () {
         late page.DrainingSession session;
         var done = false;
         final left = _zone((async) {
@@ -3011,7 +3012,8 @@ void main() {
         expect(left.errors, isEmpty);
       });
 
-      test('without ignore() it reaches the zone as an unhandled error', () {
+      test('without ignoreFailure() it reaches the zone as an unhandled error',
+          () {
         late Bench bench;
         final left = _zone((async) {
           bench = Bench()..run<Ready, void>((ctx) => ctx.join(api.logout));

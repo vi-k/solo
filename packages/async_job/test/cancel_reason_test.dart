@@ -114,7 +114,7 @@ void main() {
         ctx.run(child).ignore();
         await ctx.abandonable(() => delay(50));
       })
-        ..ignore();
+        ..ignoreFailure();
       async.flushMicrotasks();
       parent.cancel().ignore();
       async.flushTimers();
@@ -133,7 +133,7 @@ void main() {
         await ctx.abandonable(() => delay(10));
         throw const Cancelled('gave up');
       })
-        ..ignore();
+        ..ignoreFailure();
       async.flushTimers();
       final cause = parent.outcome! as Cancelled;
       expect(cause.stackTrace, isNotNull);
@@ -152,7 +152,7 @@ void main() {
           rethrow;
         }
       })
-        ..ignore();
+        ..ignoreFailure();
       async.flushMicrotasks();
       parent.cancel().ignore();
       async.flushTimers();

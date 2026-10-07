@@ -400,12 +400,12 @@ abstract interface class JobContext {
   /// context.
   ///
   /// Once the child starts, this method observes its [Job.value]. Handle the
-  /// future returned here even when [Job.ignore] was called on [child]: that
-  /// ignores the job's own reporting, not an error carried by this future. A
-  /// failure of the child's body that a cancellation covered afterwards does
+  /// future returned here even when [Job.ignoreFailure] was called on [child]:
+  /// that ignores the job's own reporting, not an error carried by this future.
+  /// A failure of the child's body that a cancellation covered afterwards does
   /// not come through the future: the future throws the [Cancelled], and the
   /// child answers for the failure through [JobAnswerer.onUnanswered] of its
-  /// observer, otherwise in the zone, unless [Job.ignore] was called on
+  /// observer, otherwise in the zone, unless [Job.ignoreFailure] was called on
   /// [child].
   ///
   /// A child is a job nobody starts by itself: [Job.deferred], or a job of
@@ -454,21 +454,20 @@ abstract interface class JobContext {
   /// change the list it was built from. The same handle twice is refused with
   /// an [ArgumentError] before anything starts.
   ///
-  /// As soon as the body of any branch ends in anything but a value, the
-  /// other branches are asked to stop with [SiblingCancelReason] — the
-  /// branch the trouble came from is not, or its own error would turn into
-  /// a cancellation and be lost. What comes out is decided by the final
-  /// outcomes, not by that early word: a real failure if there is one,
-  /// otherwise the first cancellation that arrived. The object thrown is
-  /// the one the outcome carries — exactly what `await ctx.run(child)`
-  /// would have thrown — so a cancellation arrives as a cancellation and
-  /// there is no envelope to take apart. A failure the group received and
-  /// did not throw is not lost either: it goes the way an error nobody
-  /// answered for goes, once. Nor is a failure of a branch's body that a
-  /// cancellation covered afterwards: the outcome carries the cancellation,
-  /// and the branch answers for the failure the same way. [Job.ignore] on a
-  /// branch silences both: [JobObserver.onError] hears them, and nobody
-  /// answers for them.
+  /// As soon as the body of any branch ends in anything but a value, the other
+  /// branches are asked to stop with [SiblingCancelReason] — the branch the
+  /// trouble came from is not, or its own error would turn into a cancellation
+  /// and be lost. What comes out is decided by the final outcomes, not by that
+  /// early word: a real failure if there is one, otherwise the first
+  /// cancellation that arrived. The object thrown is the one the outcome
+  /// carries — exactly what `await ctx.run(child)` would have thrown — so a
+  /// cancellation arrives as a cancellation and there is no envelope to take
+  /// apart. A failure the group received and did not throw is not lost either:
+  /// it goes the way an error nobody answered for goes, once. Nor is a failure
+  /// of a branch's body that a cancellation covered afterwards: the outcome
+  /// carries the cancellation, and the branch answers for the failure the same
+  /// way. [Job.ignoreFailure] on a branch silences both: [JobObserver.onError]
+  /// hears them, and nobody answers for them.
   ///
   /// **When which.** `[ctx.run(a), ctx.run(b)].wait` and [Future.wait] wait
   /// for every branch and stop none, so a branch whose sibling has already
@@ -685,11 +684,11 @@ abstract interface class JobContext {
   ///
   /// A job created in here is not this work: it has an outcome and an observer
   /// of its own. Its unobserved failure goes to the zone this work was started
-  /// from rather than to this job's observer, and a job that starts itself
-  /// runs its body there. So does a job started in here by hand, wherever it
-  /// was made: it starts in that zone, past any zone forked inside the work.
-  /// When the work of one job runs inside the work of another, that zone is
-  /// the one the outer work was started from. Quench it with [Job.ignore].
+  /// from rather than to this job's observer, and a job that starts itself runs
+  /// its body there. So does a job started in here by hand, wherever it was
+  /// made: it starts in that zone, past any zone forked inside the work. When
+  /// the work of one job runs inside the work of another, that zone is the one
+  /// the outer work was started from. Quench it with [Job.ignoreFailure].
   ///
   /// Legal on a job that has already accepted a cancellation, and legal while
   /// the core unwinds the cleanup stack — a disposer starting work nobody waits
@@ -1579,16 +1578,16 @@ abstract class JobContextBase implements JobContext {
 
   /// Asks the rule of the domain and starts [child], adopted already.
   void _startAdopted<T>(JobBase<T> child) {
-    // Everything that can refuse the child happens before it joins the
-    // waiting list, and a refusal that arrives as a throw — a rule of a
-    // domain, a context that would not be built — ends the child rather
-    // than leaving it be. By now it has a parent, a level and an observer,
-    // and a job like that, left alive, would sit half-adopted: parented,
-    // levelled, never started and waited for by nobody. `finish` tells the
-    // child's observer, as it does for every failure handed in, and a child
-    // the rule has already ended is told too. `ignore` first: the error is
-    // already on its way to the body through the rethrow, and the body is
-    // where it is answered for, not the zone.
+    // Everything that can refuse the child happens before it joins the waiting
+    // list, and a refusal that arrives as a throw — a rule of a domain, a
+    // context that would not be built — ends the child rather than leaving it
+    // be. By now it has a parent, a level and an observer, and a job like that,
+    // left alive, would sit half-adopted: parented, levelled, never started and
+    // waited for by nobody. `finish` tells the child's observer, as it does for
+    // every failure handed in, and a child the rule has already ended is told
+    // too. `ignoreFailure` first: the error is already on its way to the body
+    // through the rethrow, and the body is where it is answered for, not the
+    // zone.
     Cancelled? markedWhileAsking;
     try {
       final rejection = beforeChildStart(child);
@@ -1614,7 +1613,7 @@ abstract class JobContextBase implements JobContext {
       // and a plain `remove` would take a sibling equal by `==` instead.
       _owner._children.removeWhere((each) => identical(each, child));
       child
-        ..ignore()
+        ..ignoreFailure()
         ..finish(Failed(error, stackTrace));
       rethrow;
     }

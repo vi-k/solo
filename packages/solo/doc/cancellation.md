@@ -545,7 +545,7 @@ very line.
 
 ```dart
 Future<void> logout() async {
-  run<Ready, void>((ctx) => ctx.join(api.logout)).ignore();
+  run<Ready, void>((ctx) => ctx.join(api.logout)).ignoreFailure();
   await close(mode: SoloCloseMode.drain);
 }
 ```
@@ -556,7 +556,7 @@ line onwards: a job submitted while the call is in flight comes back
 queue before runs in either version — the logout job goes to the end of it, and
 the method waits its turn.
 
-`ignore()` stands where the second attempt read `done`. Nobody waits for the
-outcome of this job, and without `ignore()` a logout that fails would reach the
-zone as an unhandled error. The controller's `onError` hook hears that failure
-in either version, and the controller closes all the same.
+`ignoreFailure()` stands where the second attempt read `done`. Nobody waits for
+the outcome of this job, and without `ignoreFailure()` a logout that fails
+would reach the zone as an unhandled error. The controller's `onError` hook
+hears that failure in either version, and the controller closes all the same.

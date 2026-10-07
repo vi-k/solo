@@ -84,9 +84,9 @@ void main() {
     fakeAsync((async) {
       final early = Job<void>((ctx) async {});
       async.flushMicrotasks();
-      // `ignore` before the microtasks run: an unobserved Failed would
+      // `ignoreFailure` before the microtasks run: an unobserved Failed would
       // otherwise reach the zone and fail the test on its own.
-      final parent = Job<void>((ctx) async => ctx.run(early))..ignore();
+      final parent = Job<void>((ctx) async => ctx.run(early))..ignoreFailure();
       async.flushMicrotasks();
       expect(parent.outcome, isA<Failed>());
       // The same answer as in the stripe above: which of the two got
@@ -133,7 +133,7 @@ void main() {
       // is — as the dartdoc of `finish` promises.
       job
         ..drop(const Done(null))
-        ..ignore();
+        ..ignoreFailure();
       async.flushTimers();
       expect(order, isEmpty);
       expect(job.outcome, isA<Done<void>>());

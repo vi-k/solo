@@ -232,7 +232,7 @@ void main() {
             late Job<void> listening;
             final parent = Job<void>((ctx) async {
               listening = ctx.each(source.stream, (_, event) => active.future)
-                ..ignore();
+                ..ignoreFailure();
             });
             async.flushMicrotasks();
             if (!early) source.add(1);

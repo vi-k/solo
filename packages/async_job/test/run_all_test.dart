@@ -63,7 +63,7 @@ void main() {
           }),
           Job.deferred<int>(key: 'b', (ctx) async => 2),
         ]);
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
       expect(values, [1, 2]);
     });
@@ -144,7 +144,7 @@ void main() {
           thrown = error;
         }
         groupReturned = true;
-      }).ignore();
+      }).ignoreFailure();
       async.elapse(const Duration(milliseconds: 20));
       expect(
         neighbour.outcome,
@@ -175,7 +175,7 @@ void main() {
       List<int>? values;
       Job<void>((ctx) async {
         values = await ctx.runAll(twice());
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
       expect(values, [1, 2]);
       expect(passes, 1);
@@ -196,7 +196,7 @@ void main() {
       List<int>? values;
       Job<void>((ctx) async {
         values = await ctx.runAll(source);
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
       expect(values, [1, 2]);
       expect(extra.outcome, isNull);
@@ -219,7 +219,7 @@ void main() {
         } on Object catch (error) {
           thrown = error;
         }
-      }).ignore();
+      }).ignoreFailure();
       async.flushMicrotasks();
       expect(thrown, same(boom));
       expect(first.outcome, isNull);
@@ -237,7 +237,7 @@ void main() {
         } on Object catch (error) {
           thrown = error;
         }
-      }).ignore();
+      }).ignoreFailure();
       async.flushMicrotasks();
       expect(thrown, isA<ArgumentError>());
       expect(child.outcome, isNull);
@@ -252,7 +252,7 @@ void main() {
           KeyedJob<int>(key: 'twin', (ctx) async => 1),
           KeyedJob<int>(key: 'twin', (ctx) async => 2),
         ]);
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
       expect(values, [1, 2]);
     });
@@ -292,7 +292,7 @@ void main() {
               thrown = error;
             }
           },
-        )..ignore();
+        )..ignoreFailure();
         async.elapse(const Duration(milliseconds: 10));
         cancelled.cancel().ignore();
         async.flushTimers();
@@ -348,7 +348,7 @@ void main() {
             } on Object catch (error) {
               thrown = error;
             }
-          }).ignore();
+          }).ignoreFailure();
           async.elapse(const Duration(milliseconds: 10));
           foreign.cancel().ignore();
           async.flushTimers();
@@ -403,7 +403,7 @@ void main() {
         } on Object catch (error) {
           thrown = error;
         }
-      }).ignore();
+      }).ignoreFailure();
       async.elapse(const Duration(milliseconds: 10));
       // The outcome of the branch is replaced while it waits for its own
       // child: the outcome the early seam saw is not the one that ends it,
@@ -432,7 +432,7 @@ void main() {
       final parent = Job<void>(key: 'parent', (ctx) async {
         await ctx.runAll([branch]);
       })
-        ..ignore()
+        ..ignoreFailure()
         ..whenCancelled((_) => heardCancelled++);
       async.elapse(const Duration(milliseconds: 10));
       branch.cancel(reason: const TestCancelReason('outside')).ignore();
@@ -488,7 +488,7 @@ void main() {
             } on Object catch (error) {
               thrown = error;
             }
-          }).ignore();
+          }).ignoreFailure();
           async.flushMicrotasks();
           // The test decides the order the group learns the outcomes in.
           gates[finishOrder[0]]!.complete();
@@ -532,7 +532,7 @@ void main() {
         } on Object catch (_) {
           // The failure is the point of the run, not what it checks.
         }
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
       expect(written, isFalse, reason: 'the operation was handed the stop');
     });
@@ -556,7 +556,7 @@ void main() {
         } on Object catch (_) {
           // As above.
         }
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
       expect(written, isTrue);
     });
@@ -595,7 +595,7 @@ void main() {
                 thrown = error;
               }
             },
-          ).ignore();
+          ).ignoreFailure();
           async.elapse(const Duration(milliseconds: 10));
           foreign.cancel(reason: const TestCancelReason('outside')).ignore();
           async.elapse(const Duration(milliseconds: 10));
@@ -637,7 +637,7 @@ void main() {
         } on Object catch (error) {
           thrown = error;
         }
-      }).ignore();
+      }).ignoreFailure();
       async.elapse(const Duration(milliseconds: 10));
       foreign
           .cancel(reason: const SiblingCancelReason(cause: 'another group'))
@@ -685,7 +685,7 @@ void main() {
         (ctx) async {
           await ctx.runAll([taker, bad]);
         },
-      )..ignore();
+      )..ignoreFailure();
       async.flushTimers();
     });
     expect(group.outcome, isA<Failed>());
@@ -720,7 +720,7 @@ void main() {
         } on Object catch (error) {
           thrown = error;
         }
-      }).ignore();
+      }).ignoreFailure();
       async.elapse(const Duration(milliseconds: 5));
       // Held, not accepted: the branch is inside an uncancellable step.
       stopped.cancel(reason: const TestCancelReason('outside')).ignore();
@@ -783,7 +783,7 @@ void main() {
           } on Object catch (error) {
             thrown = error;
           }
-        }).ignore();
+        }).ignoreFailure();
         async.flushMicrotasks();
         expect(dropped['a']!.isFinished, isFalse, reason: 'both are held');
         dropped[dropOrder[0]]!.drop(cancellations[dropOrder[0]]!);
@@ -831,7 +831,7 @@ void main() {
         } on Object catch (_) {
           // Checked through the journal below.
         }
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
       expect(
         journal.take().where((line) => line.contains('error')).toList(),
@@ -862,7 +862,7 @@ void main() {
             } on Object catch (_) {
               // Checked through the zone below.
             }
-          }).ignore();
+          }).ignoreFailure();
           async.flushTimers();
         });
       },
@@ -912,7 +912,7 @@ void main() {
                   // Which one comes out is settled by the arrival order.
                 }
               },
-            ).ignore();
+            ).ignoreFailure();
             async.flushMicrotasks();
             dropped['a']!.drop(Failed(chosen, StackTrace.current));
             dropped['b']!.drop(Failed(other, StackTrace.current));
@@ -945,7 +945,7 @@ void main() {
         Job.deferred<int>(key: 'b', (ctx) async => 2),
       ];
       // The third handle starts itself: that needs no adoption to see.
-      final refused = Job<int>(key: 'c', (ctx) async => 3)..ignore();
+      final refused = Job<int>(key: 'c', (ctx) async => 3)..ignoreFailure();
       Object? thrown;
       Job<void>((ctx) async {
         try {
@@ -953,7 +953,7 @@ void main() {
         } on Object catch (error) {
           thrown = error;
         }
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
       expect(thrown, isA<ArgumentError>());
       expect('$thrown', contains('Job(c)'), reason: 'named, not its class');
@@ -978,7 +978,7 @@ void main() {
         } on Object catch (error) {
           thrown = error;
         }
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
       expect(thrown, isA<Cancelled>());
       for (final branch in branches) {
@@ -1007,7 +1007,7 @@ void main() {
         } on Object catch (error) {
           thrown = error;
         }
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
       expect(thrown, isA<ArgumentError>(), reason: 'what run would give');
       expect(turnedAway.outcome, isA<Cancelled>());
@@ -1033,7 +1033,7 @@ void main() {
         } on Object catch (error) {
           thrown = error;
         }
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
       expect(thrown, isA<Cancelled>());
       expect(tail.outcome, isA<Cancelled>(), reason: 'nobody would start it');
@@ -1050,7 +1050,7 @@ void main() {
         } on Object catch (error) {
           thrown = error;
         }
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
       expect(thrown, isA<ArgumentError>());
       expect('$thrown', contains('Job(a)'));
@@ -1083,7 +1083,7 @@ void main() {
             } on Object catch (error) {
               thrown = error;
             }
-          }).ignore();
+          }).ignoreFailure();
           async.flushTimers();
         },
         (error, stackTrace) => zone.add(error),
@@ -1126,7 +1126,7 @@ void main() {
             } on Object catch (error) {
               thrown = error;
             }
-          }).ignore();
+          }).ignoreFailure();
           async.flushTimers();
           refusal = thrown;
           stubbornOutcome = stubborn.outcome;
@@ -1156,7 +1156,7 @@ void main() {
         observer: ErrorObserver(errors),
         (ctx) async => ctx.runAll(branches),
       )
-        ..ignore()
+        ..ignoreFailure()
         ..whenCancelled((cancelled) => accepted = cancelled);
       async.elapse(const Duration(milliseconds: 10));
       parent.cancel().ignore();
@@ -1190,7 +1190,7 @@ void main() {
             return 2;
           }),
         ]),
-      )..ignore();
+      )..ignoreFailure();
       async.elapse(const Duration(milliseconds: 10));
       parent.cancel().ignore();
       held.complete();
@@ -1213,7 +1213,7 @@ void main() {
         ]);
         await ctx.abandonable(() => delay(1000));
       })
-        ..ignore();
+        ..ignoreFailure();
       async.elapse(const Duration(milliseconds: 10));
       expect(values, ['a', 'b']);
       parent.cancel().ignore();
@@ -1307,7 +1307,7 @@ void main() {
       final parent = Job<void>(
         key: 'parent',
         (ctx) async => ctx.runAll([neighbour, outside]),
-      )..ignore();
+      )..ignoreFailure();
       async.elapse(const Duration(milliseconds: 10));
       outside.cancel(reason: const TestCancelReason('outside')).ignore();
       async.flushTimers();
@@ -1355,7 +1355,7 @@ void main() {
         } on Object catch (_) {
           // The closing is what this checks.
         }
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
       expect(closed, [same(resource)]);
       expect(
@@ -1380,7 +1380,7 @@ void main() {
           ),
           Job.deferred<Object>(key: 'x', (ctx) async => 'x'),
         ]);
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
       expect(values, [same(resource), 'x']);
       expect(closed, isEmpty);
@@ -1406,7 +1406,7 @@ void main() {
         } on Object catch (_) {
           closedAtCatch = closed.length;
         }
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
       expect(closedAtCatch, 1);
     });
@@ -1432,7 +1432,7 @@ void main() {
         } on Object catch (_) {
           // The closing is what this checks.
         }
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
       expect(stubborn.outcome, isA<Done<Object>>());
       expect(closed, isEmpty);
@@ -1469,7 +1469,7 @@ void main() {
           // The order below is what this checks.
         }
         groupReturned = true;
-      }).ignore();
+      }).ignoreFailure();
       async.elapse(const Duration(milliseconds: 100));
       expect(
         order,
@@ -1509,7 +1509,7 @@ void main() {
         } on Object catch (error) {
           thrown = error;
         }
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
       expect(thrown, same(chosen));
       expect(closed, ['b']);
@@ -1541,7 +1541,7 @@ void main() {
           // The waiting is what this checks.
         }
         groupReturned = true;
-      }).ignore();
+      }).ignoreFailure();
       async.elapse(const Duration(milliseconds: 100));
       expect(groupReturned, isFalse);
       gates['b']!.complete();
@@ -1580,7 +1580,7 @@ void main() {
         } on Object catch (error) {
           thrown = error;
         }
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
       expect(thrown, same(inner));
       for (final stopped in [innerNeighbour, outerNeighbour]) {
@@ -1620,7 +1620,7 @@ void main() {
           }),
           Job.deferred<int>(key: 'outer-b', (ctx) async => 2),
         ]);
-      }).ignore();
+      }).ignoreFailure();
       async.elapse(const Duration(milliseconds: 20));
       expect(values, isNull);
       held.complete();
@@ -1662,7 +1662,7 @@ void main() {
               // What the group throws is other criteria's business.
             }
           },
-        )..ignore();
+        )..ignoreFailure();
         async.elapse(const Duration(milliseconds: 10));
         // First half: the branch is in the hold. Its body is over, it
         // registered its cleanups, and none of them has run.
@@ -1783,7 +1783,7 @@ void main() {
         } on Object catch (error) {
           thrown = error;
         }
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
       expect(thrown, isA<ArgumentError>());
       expect(started.isFinished, isTrue);
@@ -1823,7 +1823,7 @@ void main() {
             thrown = error;
           }
         })
-          ..ignore();
+          ..ignoreFailure();
         async.elapse(const Duration(milliseconds: 10));
         expect(closes, {'a': 0, 'b': 0}, reason: 'nothing is decided yet');
         if (trigger == 'branch') {
@@ -1868,7 +1868,7 @@ void main() {
         (ctx) async {
           values = await ctx.runAll([a, b]);
         },
-      ).ignore();
+      ).ignoreFailure();
       b.whenCancelled((_) => heardCancelled++);
       async.flushTimers();
       expect(values, ['a', 'b'], reason: 'the group still returned success');
@@ -1897,7 +1897,7 @@ void main() {
       final parent = Job<void>(key: 'parent', (ctx) async {
         values = await ctx.runAll([slow, bare]);
       })
-        ..ignore();
+        ..ignoreFailure();
       async.flushMicrotasks();
       Timer.run(() {
         // Registered at the second barrier and not in the body: a tail
@@ -1969,7 +1969,7 @@ void main() {
               // What comes out is other criteria's business.
             }
           },
-        ).ignore();
+        ).ignoreFailure();
         async.flushMicrotasks();
         Timer.run(() {
           // The branch stands at the second barrier, and it stands there
@@ -2039,7 +2039,7 @@ void main() {
         } on Object catch (error) {
           thrown = error;
         }
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
       expect(thrown, isA<StateError>());
       expect(unstartable.outcome, isA<Failed>());
@@ -2081,7 +2081,7 @@ void main() {
         } on Object catch (_) {
           // The closing below is what this checks.
         }
-      }).ignore();
+      }).ignoreFailure();
       async.elapse(const Duration(milliseconds: 10));
       Object? refused;
       Job<void>(key: 'second', (ctx) async {
@@ -2090,7 +2090,7 @@ void main() {
         } on Object catch (error) {
           refused = error;
         }
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
       expect(refused, isA<StateError>());
       expect(
@@ -2117,7 +2117,7 @@ void main() {
         });
         await ctx.run(child);
         finishedAtReturn = child.isFinished;
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
       expect(finishedAtReturn, isTrue);
       expect(discarded, 0);
@@ -2137,7 +2137,7 @@ void main() {
       Job<void>((ctx) async {
         final running = [ctx.run(source), ctx.run(reader)];
         await running.wait;
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
       expect(seen, 7);
       expect(source.outcome, isA<Done<int>>());
@@ -2166,7 +2166,7 @@ void main() {
           caught = error;
           endedAt = async.elapsed;
         }
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
       expect(caught, isA<StateError>());
       expect(
@@ -2243,7 +2243,7 @@ void main() {
           } on Object catch (_) {
             // The failure is the path under test, not its subject.
           }
-        }).ignore();
+        }).ignoreFailure();
         if (path == 'cancellation') {
           async.elapse(const Duration(milliseconds: 20));
           at('late cancelled');
@@ -2284,7 +2284,7 @@ void main() {
             });
         final parent = Job<List<int>>(
           (ctx) => ctx.runAll([branch('a'), branch('b')]),
-        )..ignore();
+        )..ignoreFailure();
         async.elapse(const Duration(seconds: 1));
         expect(trace, ['a holds', 'b waits'], reason: through);
         expect(parent.isFinished, isFalse, reason: through);
@@ -2348,7 +2348,7 @@ void main() {
           );
           return ctx.runAll([branch('a'), branch('b')]);
         })
-          ..ignore();
+          ..ignoreFailure();
         async.elapse(const Duration(seconds: 1));
         expect(
           trace,
@@ -2452,7 +2452,7 @@ void main() {
               waiter,
               if (name.contains('third branch')) third,
             ]),
-          )..ignore();
+          )..ignoreFailure();
           async.elapse(const Duration(seconds: 1));
           expect(parent.isFinished, isFalse, reason: 'hung before: $name');
           if (name.startsWith('parent')) {
@@ -2502,7 +2502,7 @@ void main() {
           (ctx) => form == '.wait'
               ? [ctx.run(branch('a')), ctx.run(branch('b'))].wait
               : ctx.runAll([branch('a'), branch('b')]),
-        )..ignore();
+        )..ignoreFailure();
         async.flushTimers();
         expect(parent.outcome, isA<Done<List<int>>>(), reason: form);
         expect(
@@ -2576,7 +2576,7 @@ void main() {
           });
           final parent = Job<List<int>>(
             (ctx) => ctx.runAll([a, b, if (name.contains('third')) c]),
-          )..ignore();
+          )..ignoreFailure();
           async.elapse(const Duration(seconds: 1));
           expect(parent.isFinished, isFalse, reason: 'hung before: $name');
           expect(async.pendingTimers, isEmpty, reason: 'nothing ticks: $name');

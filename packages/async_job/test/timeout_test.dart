@@ -217,7 +217,7 @@ void main() {
           await ctx.abandonable(() => gate.future);
           throw StateError('boom');
         })
-          ..ignore();
+          ..ignoreFailure();
         async.flushMicrotasks();
         expect(async.pendingTimers, hasLength(1));
         gate.complete();

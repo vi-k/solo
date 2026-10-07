@@ -363,7 +363,7 @@ void main() {
             .ignore();
         await ctx.abandonable(() => delay(100));
       })
-        ..ignore();
+        ..ignoreFailure();
       async.elapse(const Duration(milliseconds: 10));
       parent.cancel().ignore();
       async.flushTimers();
@@ -398,7 +398,7 @@ void main() {
         removeSecond = ctx.onCancel(() => seen.add('second'));
         await ctx.abandonable(() => delay(100));
       })
-        ..ignore();
+        ..ignoreFailure();
       async.elapse(const Duration(milliseconds: 10));
       job.cancel().ignore();
       async.elapse(const Duration(milliseconds: 10));
@@ -418,7 +418,7 @@ void main() {
         await ctx.uncancellable(() => delay(50));
         await ctx.abandonable(() => delay(50));
       })
-        ..ignore()
+        ..ignoreFailure()
         ..launch();
       async.elapse(const Duration(milliseconds: 10));
       job
@@ -439,7 +439,7 @@ void main() {
           await delay(10);
         });
       })
-        ..ignore()
+        ..ignoreFailure()
         ..launch();
       async.flushTimers();
       expect(marks, [true], reason: 'a section holds no rule of a domain');
@@ -453,7 +453,7 @@ void main() {
         ctx.breakRule('is not Ready');
         await ctx.abandonable(() => delay(100));
       })
-        ..ignore()
+        ..ignoreFailure()
         ..launch();
       async.flushTimers();
       expect(job.outcome, isA<Cancelled>());
@@ -486,7 +486,7 @@ void main() {
             .ignore();
         await ctx.abandonable(() => delay(100));
       })
-        ..ignore()
+        ..ignoreFailure()
         ..launch();
       async.elapse(const Duration(milliseconds: 10));
       try {
@@ -520,7 +520,7 @@ void main() {
         await ctx.abandonable(() => delay(20));
         order.add('body ends');
       })
-        ..ignore();
+        ..ignoreFailure();
       async.elapse(const Duration(milliseconds: 10));
       job.cancel().then((_) => order.add('cancel returned')).ignore();
       async.flushTimers();

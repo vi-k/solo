@@ -178,7 +178,7 @@ void main() {
             });
             Job<void>(observer: observed ? observer : null, (ctx) async {
               await Future.wait([ctx.run(fails), ctx.run(stops)]);
-            }).ignore();
+            }).ignoreFailure();
 
             async.elapse(const Duration(milliseconds: 20));
             stops.cancel().ignore();
@@ -221,7 +221,7 @@ void main() {
           } on Object catch (error) {
             caught = error;
           }
-        }).ignore();
+        }).ignoreFailure();
 
         async.elapse(const Duration(milliseconds: 20));
         stops.cancel().ignore();
@@ -297,7 +297,7 @@ void main() {
               ].wait;
               await ctx.join(() => writeArchive(sources));
             })
-        ..ignore();
+        ..ignoreFailure();
       return (parent, rows, images);
     }
 
@@ -329,7 +329,7 @@ void main() {
             ctx.run(images, dispose: (source) => source.close()),
           ]);
         })
-          ..ignore();
+          ..ignoreFailure();
 
         async.flushTimers();
         // The registration closes what the first attempt lost; what
@@ -390,7 +390,7 @@ void main() {
           final parent = Job<void>((ctx) async {
             await [ctx.run(fails), ctx.run(stops)].wait;
           })
-            ..ignore();
+            ..ignoreFailure();
 
           async.elapse(Duration(milliseconds: failureFirst ? 40 : 30));
           stops.cancel().ignore();
@@ -426,7 +426,7 @@ void main() {
         });
         Job<void>((ctx) async {
           await ctx.runAll([quick, slow]);
-        }).ignore();
+        }).ignoreFailure();
 
         async.elapse(const Duration(milliseconds: 10));
         // Its body returned a value, and the group has not decided.
@@ -452,7 +452,7 @@ void main() {
         });
         Job<void>((ctx) async {
           await ctx.runAll([quick, slow]);
-        }).ignore();
+        }).ignoreFailure();
 
         async.flushTimers();
         expect(quick.outcome, isA<Done<int>>());
@@ -480,7 +480,7 @@ void main() {
 
     test('onDispose on the next line closes the list on a stop', () {
       fakeAsync((async) {
-        final parent = onDisposeOnTheNextLine()..ignore();
+        final parent = onDisposeOnTheNextLine()..ignoreFailure();
         async.elapse(const Duration(milliseconds: 20));
         parent.cancel().ignore();
         async.flushTimers();
@@ -491,7 +491,7 @@ void main() {
 
     test('onDispose on the next line closes the list on an error', () {
       fakeAsync((async) {
-        final parent = onDisposeOnTheNextLine()..ignore();
+        final parent = onDisposeOnTheNextLine()..ignoreFailure();
         async.flushTimers();
         expect(parent.outcome, isA<Failed>());
         expect(closed, ['rows closed']);
@@ -535,7 +535,7 @@ void main() {
             } on Object catch (error) {
               thrown = error;
             }
-          }).ignore();
+          }).ignoreFailure();
 
           async.flushTimers();
 
@@ -561,7 +561,7 @@ void main() {
           );
           await ctx.run(second);
         })
-          ..ignore();
+          ..ignoreFailure();
 
         async.elapse(const Duration(milliseconds: 10));
         parent.cancel().ignore();
@@ -582,11 +582,11 @@ void main() {
           await ctx.abandonable(() => delay(50));
           return 1;
         });
-        final tail = head.then<void>((ctx, rows) async {})..ignore();
+        final tail = head.then<void>((ctx, rows) async {})..ignoreFailure();
         final parent = Job<void>((ctx) async {
           await ctx.run(head);
         })
-          ..ignore();
+          ..ignoreFailure();
 
         async.elapse(const Duration(milliseconds: 10));
         parent.cancel().ignore();
@@ -608,7 +608,7 @@ void main() {
           await ctx.run(head);
           await ctx.abandonable(() => delay(50));
         })
-          ..ignore();
+          ..ignoreFailure();
 
         async.elapse(const Duration(milliseconds: 10));
         expect(tail.isRunning, isTrue);
@@ -632,7 +632,7 @@ void main() {
         final parent = Job<void>((ctx) async {
           await ctx.run(head);
         })
-          ..ignore();
+          ..ignoreFailure();
 
         async.elapse(const Duration(milliseconds: 20));
 
@@ -654,13 +654,13 @@ void main() {
         final tail = head.then<void>((ctx, rows) async {
           await ctx.abandonable(() => delay(80));
         })
-          ..ignore();
+          ..ignoreFailure();
         final parent = Job<void>((ctx) async {
           ctx.onCancel(() => tail.cancel().ignore());
           await ctx.run(head);
           await ctx.abandonable(() => delay(50));
         })
-          ..ignore();
+          ..ignoreFailure();
 
         async.elapse(const Duration(milliseconds: 10));
         expect(tail.isRunning, isTrue);
@@ -736,7 +736,7 @@ void main() {
         final parent = Job<void>((ctx) async {
           final rows = Job.deferred<int>((ctx) async => 1);
           tail = rows.then<void>((ctx, value) => ctx.join(() => delay(50)))
-            ..ignore();
+            ..ignoreFailure();
           await ctx.run(rows);
         });
 
@@ -769,7 +769,7 @@ void main() {
       fakeAsync((async) {
         stubs.stage = stubs.Stage()..rowsTake = 50;
         final (opened, archived) = page.archiveOpened();
-        opened.ignore();
+        opened.ignoreFailure();
 
         async.elapse(const Duration(milliseconds: 10));
         archived.cancel().ignore();
@@ -835,7 +835,7 @@ void main() {
           await tail.done;
           return 1;
         });
-        tail = source.then<int>((ctx, value) => value)..ignore();
+        tail = source.then<int>((ctx, value) => value)..ignoreFailure();
 
         async.flushTimers();
         expect(source.isFinished, isFalse);
@@ -857,7 +857,7 @@ void main() {
           ctx.onDispose(() => tail.done);
           return 1;
         });
-        tail = source.then<int>((ctx, value) => value)..ignore();
+        tail = source.then<int>((ctx, value) => value)..ignoreFailure();
 
         async.flushTimers();
         expect(source.isFinished, isFalse);
@@ -933,7 +933,7 @@ void main() {
           ..rowsError = StateError('disk')
           ..imagesTake = 40
           ..imagesError = stubs.givenUp();
-        final parent = page.exportWithFutureWait()..ignore();
+        final parent = page.exportWithFutureWait()..ignoreFailure();
         async.flushTimers();
         expect(parent.outcome, isA<Failed>());
         expect((parent.outcome! as Failed).error, isA<StateError>());
@@ -948,7 +948,7 @@ void main() {
           ..rowsError = StateError('disk')
           ..imagesTake = 20
           ..imagesError = stubs.givenUp();
-        final parent = page.exportWithFutureWait()..ignore();
+        final parent = page.exportWithFutureWait()..ignoreFailure();
         async.flushTimers();
         // The failure of `rows` is nowhere in the outcome.
         expect(parent.outcome, isA<Cancelled>());
@@ -965,7 +965,7 @@ void main() {
         stubs.stage
           ..imagesTake = 20
           ..imagesError = StateError('disk');
-        final parent = page.exportWithFutureWait()..ignore();
+        final parent = page.exportWithFutureWait()..ignoreFailure();
         async.flushTimers();
         expect(parent.outcome, isA<Failed>());
         expect(trace(), isEmpty);
@@ -1000,7 +1000,7 @@ void main() {
     test('.wait: the source that came back is closed when the other fails', () {
       fakeAsync((async) {
         stubs.stage.imagesError = StateError('disk');
-        final parent = page.exportWithWait()..ignore();
+        final parent = page.exportWithWait()..ignoreFailure();
         async.flushTimers();
         expect(parent.outcome, isA<Failed>());
         expect(trace(), ['rows closed']);
@@ -1011,7 +1011,7 @@ void main() {
         () {
       fakeAsync((async) {
         stubs.stage.imagesError = stubs.givenUp();
-        final parent = page.exportWithWait()..ignore();
+        final parent = page.exportWithWait()..ignoreFailure();
         async.flushTimers();
         expect(parent.outcome, isA<Cancelled>());
         expect(trace(), ['rows closed']);
@@ -1067,7 +1067,7 @@ void main() {
         final parent = Job<void>((ctx) async {
           await ctx.runAll([page.lockedBranch(), fails]);
         })
-          ..ignore();
+          ..ignoreFailure();
         async.flushTimers();
         expect(parent.outcome, isA<Failed>());
         expect(trace(), ['lock acquired', 'lock released', 'rows closed']);
@@ -1079,7 +1079,7 @@ void main() {
         'and the body closes its value through the job it passed', () {
       fakeAsync((async) {
         stubs.stage.imagesError = StateError('disk');
-        final parent = page.refusingBranch()..ignore();
+        final parent = page.refusingBranch()..ignoreFailure();
         async.flushTimers();
         expect(parent.outcome, isA<Failed>());
         expect(trace(), ['rows closed']);
@@ -1101,7 +1101,7 @@ void main() {
         final parent = Job<void>((ctx) async {
           await ctx.runAll([branch(), branch()]);
         })
-          ..ignore();
+          ..ignoreFailure();
         async.flushTimers();
         expect(parent.isFinished, isFalse);
         expect(trace(), ['lock acquired', 'lock waits']);
@@ -1180,7 +1180,7 @@ void main() {
         'the first attempt of the group leaks the list on a stop during '
         'the archive', () {
       fakeAsync((async) {
-        final parent = page.groupFirstAttempt(branches())..ignore();
+        final parent = page.groupFirstAttempt(branches())..ignoreFailure();
         async.elapse(const Duration(milliseconds: 20));
         parent.cancel().ignore();
         async.flushTimers();
@@ -1195,7 +1195,7 @@ void main() {
         () {
       fakeAsync((async) {
         stubs.stage.archiveError = StateError('disk');
-        final parent = page.groupFirstAttempt(branches())..ignore();
+        final parent = page.groupFirstAttempt(branches())..ignoreFailure();
         async.flushTimers();
         expect(parent.outcome, isA<Failed>());
         expect(trace(), isEmpty);
@@ -1204,7 +1204,7 @@ void main() {
 
     test('the try closes the list on a stop during the archive', () {
       fakeAsync((async) {
-        final parent = page.groupTry(branches())..ignore();
+        final parent = page.groupTry(branches())..ignoreFailure();
         async.elapse(const Duration(milliseconds: 20));
         parent.cancel().ignore();
         async.flushTimers();
@@ -1216,7 +1216,7 @@ void main() {
     test('the try closes the list on a failing archive', () {
       fakeAsync((async) {
         stubs.stage.archiveError = StateError('disk');
-        final parent = page.groupTry(branches())..ignore();
+        final parent = page.groupTry(branches())..ignoreFailure();
         async.flushTimers();
         expect(parent.outcome, isA<Failed>());
         expect(trace(), ['rows closed', 'images closed']);
@@ -1239,7 +1239,7 @@ void main() {
       fakeAsync((async) {
         stubs.stage.archiveError = StateError('disk');
         final exported = page.handedOutCatch(branches());
-        final parent = beside(exported)..ignore();
+        final parent = beside(exported)..ignoreFailure();
         async.flushTimers();
         expect(parent.outcome, isA<Failed>());
         expect(trace(), ['rows closed', 'images closed']);
@@ -1249,7 +1249,7 @@ void main() {
     test('catch leaks a handed-out list a failing sibling takes away', () {
       fakeAsync((async) {
         final exported = page.handedOutCatch(branches());
-        final parent = beside(exported)..ignore();
+        final parent = beside(exported)..ignoreFailure();
         async.flushTimers();
         // The body returned at 50, the sibling fails at 80: the branch is
         // cancelled with its value in hand, and nothing closes the list.
@@ -1262,7 +1262,7 @@ void main() {
     test('onDiscard closes a handed-out list a failing sibling takes away', () {
       fakeAsync((async) {
         final exported = page.handedOutDiscard(branches());
-        final parent = beside(exported)..ignore();
+        final parent = beside(exported)..ignoreFailure();
         async.flushTimers();
         expect(exported.outcome, isA<Cancelled>());
         expect(parent.outcome, isA<Failed>());

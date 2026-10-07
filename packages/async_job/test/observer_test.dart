@@ -21,7 +21,7 @@ void main() {
           ctx.log('hello');
           throw StateError('boom');
         },
-      ).ignore();
+      ).ignoreFailure();
       async.flushMicrotasks();
       expect(journal.take(), [
         '[job] started',
@@ -41,7 +41,7 @@ void main() {
         (ctx) async {
           await ctx.run(Job.deferred<void>(key: 'child', (ctx) async {}));
         },
-      ).ignore();
+      ).ignoreFailure();
       async.flushMicrotasks();
       expect(journal.take(), [
         '[parent] started',
@@ -93,7 +93,7 @@ void main() {
               ctx.log('spoken to a hook that throws');
               throw StateError('boom');
             },
-          )..ignore();
+          )..ignoreFailure();
           async.flushMicrotasks();
           outcome = job.outcome;
         });

@@ -68,7 +68,7 @@ void main() {
               ctx.onCancel(() => throw StateError('onCancel'));
               await ctx.abandonable(() => delay(50));
             },
-          )..ignore();
+          )..ignoreFailure();
           async.elapse(const Duration(milliseconds: 10));
           // No observer here, so the error of the callback goes to the
           // zone — and the trace has to show it all the same.
@@ -140,7 +140,7 @@ void main() {
       // cleanups left behind is all there is.
       job
         ..drop(const Done(null))
-        ..ignore();
+        ..ignoreFailure();
       async.flushTimers();
     });
     expect(
@@ -166,7 +166,7 @@ void main() {
         );
       })
         ..launch()
-        ..ignore();
+        ..ignoreFailure();
       async.elapse(const Duration(milliseconds: 5));
       job.cancel().ignore();
       async.elapse(const Duration(milliseconds: 15));
@@ -198,7 +198,7 @@ void main() {
       Job<String>(key: 'wrapper', (ctx) async {
         await ctx.run(opener);
         throw StateError('boom');
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
     });
     expect(
@@ -222,13 +222,13 @@ void main() {
       Job<String>(key: 'taker', (ctx) async {
         await ctx.run(two);
         throw StateError('boom');
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
       Job.debug = ranThem.add;
       Job<String>(key: 'failing', (ctx) async {
         ctx.onDiscard(() {});
         throw StateError('boom');
-      }).ignore();
+      }).ignoreFailure();
       async.flushTimers();
     });
     expect(
@@ -263,7 +263,7 @@ void main() {
         return db;
       })
         ..launch()
-        ..ignore();
+        ..ignoreFailure();
       async.flushTimers();
     });
     expect(job.outcome, isA<Cancelled>());
@@ -294,7 +294,7 @@ void main() {
             (ctx) => ctx.abandonable(() => 'db', discard: (db) {}),
           ),
         ]),
-      ).ignore();
+      ).ignoreFailure();
       async.flushTimers();
     });
     expect(
@@ -330,7 +330,7 @@ void main() {
             (ctx) => ctx.abandonable(() => delay(20).then((_) => 'other')),
           ),
         ]),
-      ).ignore();
+      ).ignoreFailure();
       async.flushTimers();
     });
     expect(

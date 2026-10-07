@@ -113,7 +113,7 @@ void main() {
         calls++;
         throw StateError('onData');
       })
-        ..ignore();
+        ..ignoreFailure();
       controller
         ..add(1)
         ..add(2);
@@ -191,7 +191,7 @@ void main() {
     fakeAsync((async) {
       final controller = StreamController<int>();
       controller.stream.listen((_) {});
-      final job = Job.each(controller.stream, (ctx, event) {})..ignore();
+      final job = Job.each(controller.stream, (ctx, event) {})..ignoreFailure();
       async.flushMicrotasks();
       expect(
         job.outcome,

@@ -381,7 +381,7 @@ void main() {
           );
         })
           .._launch()
-          ..ignore();
+          ..ignoreFailure();
       });
       expect(answer.answered, ['Bad state: plain child']);
       expect(own.answered, ['Bad state: own child']);
@@ -473,7 +473,7 @@ void main() {
           );
         })
           .._launch()
-          ..ignore();
+          ..ignoreFailure();
       });
       expect(answer.answered, ['FormatException: known']);
       expect(errors, ['Bad state: of MyJob', 'Bad state: of a plain child']);
@@ -626,7 +626,7 @@ void main() {
         });
         final parent = MyJob<void>((ctx) => ctx.run(child))
           .._launch()
-          ..ignore();
+          ..ignoreFailure();
         async.flushMicrotasks();
         parent.cancel().ignore();
         expect(child.cancelsAsked, ['Cancelled(parent)']);
@@ -745,7 +745,7 @@ void main() {
           }
         })
           .._launch()
-          ..ignore();
+          ..ignoreFailure();
         async.flushTimers();
         expect('$thrown', 'Cancelled(signed out)');
         expect('${job.outcome}', 'Cancelled(signed out)');
@@ -770,7 +770,7 @@ void main() {
           }
         })
           .._launch()
-          ..ignore();
+          ..ignoreFailure();
         async.flushTimers();
         expect('$thrown', 'Cancelled(signed out)');
         expect('${job.outcome}', 'Cancelled(signed out)');
@@ -794,7 +794,7 @@ void main() {
           });
         })
           .._launch()
-          ..ignore();
+          ..ignoreFailure();
         async.flushTimers();
         expect(
           seen,
@@ -815,7 +815,7 @@ void main() {
           await ctx.join(work);
         })
           ..launch()
-          ..ignore();
+          ..ignoreFailure();
         async.flushTimers();
         expect(seen, ['told to stop'], reason: 'given up, not refused');
         expect('${job.outcome}', 'Cancelled(signed out)');
@@ -836,7 +836,7 @@ void main() {
           return 1;
         })
           .._launch()
-          ..ignore();
+          ..ignoreFailure();
         async.flushTimers();
         expect(seen, ['caught Cancelled(signed out)']);
         expect(job.outcome, isA<Done<int>>());
@@ -852,7 +852,7 @@ void main() {
           return 1;
         })
           .._launch()
-          ..ignore();
+          ..ignoreFailure();
         async.flushTimers();
         expect('${job.outcome}', 'Cancelled(signed out)');
         expect(job.cancelsAsked, isEmpty);
@@ -870,7 +870,7 @@ void main() {
           seen.add('the body went on');
         })
           .._launch()
-          ..ignore();
+          ..ignoreFailure();
         async.elapse(const Duration(milliseconds: 10));
         account.signedIn = false;
         async.flushTimers();
@@ -905,7 +905,7 @@ void main() {
           await ctx.abandonable(download);
         })
           .._launch()
-          ..ignore();
+          ..ignoreFailure();
         account.onSignOut = () => job._stop(signedOut());
         async.elapse(const Duration(milliseconds: 10));
         account.signOut();
@@ -937,7 +937,7 @@ void main() {
             }
           })
             ..launch()
-            ..ignore();
+            ..ignoreFailure();
           async.elapse(const Duration(milliseconds: 10));
           // The user is still signed in for `check()`: the rule is not what
           // stops the job here.
@@ -969,7 +969,7 @@ void main() {
           await ctx.run(child);
         })
           ..launch()
-          ..ignore();
+          ..ignoreFailure();
         async.flushMicrotasks();
         job.end(signedOut());
         expect('${job.outcome}', 'Cancelled(signed out)');

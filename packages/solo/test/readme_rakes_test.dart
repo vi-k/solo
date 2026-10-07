@@ -306,7 +306,7 @@ void main() {
     test('the next job starts after body, children, cleanup and handler', () {
       fakeAsync((async) {
         final ordered = _Ordered();
-        ordered.first().ignore();
+        ordered.first().ignoreFailure();
         ordered.second();
         async.flushTimers();
         expect(ordered.trace, [
@@ -613,7 +613,7 @@ void main() {
       fakeAsync((async) {
         stubs.stage.fetchError = StateError('offline');
         open();
-        final job = player.play('t-1')..ignore();
+        final job = player.play('t-1')..ignoreFailure();
         async.flushTimers();
         expect('${job.outcome}', 'Failed(Bad state: offline)');
         expect(states, ['Loading', 'Idle']);

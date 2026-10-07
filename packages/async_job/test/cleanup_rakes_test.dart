@@ -117,7 +117,7 @@ void main() {
   group('Cleanup', () {
     test('a success releases the lock and returns the database open', () {
       fakeAsync((async) {
-        final job = Job<Database>(page.opening)..ignore();
+        final job = Job<Database>(page.opening)..ignoreFailure();
         async.flushTimers();
         expect(job.outcome, isA<Done<Database>>());
         expect(trace, [
@@ -132,7 +132,7 @@ void main() {
     test('a failed migration closes the database, then releases the lock', () {
       fakeAsync((async) {
         stage.migrateError = StateError('migration');
-        final job = Job<Database>(page.opening)..ignore();
+        final job = Job<Database>(page.opening)..ignoreFailure();
         async.flushTimers();
         expect(job.outcome, isA<Failed>());
         // The stack unwinds from the last registration.
@@ -150,7 +150,7 @@ void main() {
   group('Choosing the callback', () {
     test('the first attempt keeps the lock held when the job succeeds', () {
       fakeAsync((async) {
-        final job = Job<Database>(first.sameCallback)..ignore();
+        final job = Job<Database>(first.sameCallback)..ignoreFailure();
         async.flushTimers();
         expect(job.outcome, isA<Done<Database>>());
         expect(trace, ['lock acquired', 'db opened']);
@@ -159,7 +159,7 @@ void main() {
 
     test('the first attempt releases both when the job is cancelled', () {
       fakeAsync((async) {
-        final job = Job<Database>(first.sameCallback)..ignore();
+        final job = Job<Database>(first.sameCallback)..ignoreFailure();
         async.elapse(const Duration(milliseconds: 5));
         job.cancel().ignore();
         async.flushTimers();
@@ -176,7 +176,7 @@ void main() {
     test('the first attempt releases the lock when the job fails', () {
       fakeAsync((async) {
         stage.openError = StateError('no database');
-        final job = Job<Database>(first.sameCallback)..ignore();
+        final job = Job<Database>(first.sameCallback)..ignoreFailure();
         async.flushTimers();
         expect(job.outcome, isA<Failed>());
         expect(trace, ['lock acquired', 'lock released']);
@@ -185,7 +185,7 @@ void main() {
 
     test('dispose releases the lock of a job that succeeds', () {
       fakeAsync((async) {
-        final job = Job<Database>(page.keeping)..ignore();
+        final job = Job<Database>(page.keeping)..ignoreFailure();
         async.flushTimers();
         expect(job.outcome, isA<Done<Database>>());
         expect(trace, ['lock acquired', 'db opened', 'lock released']);
@@ -194,7 +194,7 @@ void main() {
 
     test('dispose and discard release both when the job is cancelled', () {
       fakeAsync((async) {
-        final job = Job<Database>(page.keeping)..ignore();
+        final job = Job<Database>(page.keeping)..ignoreFailure();
         async.elapse(const Duration(milliseconds: 5));
         job.cancel().ignore();
         async.flushTimers();
@@ -217,7 +217,7 @@ void main() {
             Job.deferred<Database>(page.keeping),
             Job.deferred<Database>(page.keeping),
           ]),
-        )..ignore();
+        )..ignoreFailure();
         async.flushTimers();
         expect(group.isFinished, isFalse);
         expect(trace, ['lock acquired', 'lock waits', 'db opened']);
@@ -238,7 +238,7 @@ void main() {
         stage.migrateError = StateError('migration');
         final connect = first.connecting();
         final ready = first.unregistered(connect)
-          ..ignore()
+          ..ignoreFailure()
           ..start();
         async.flushTimers();
         expect(connect.outcome, isA<Done<Database>>());
@@ -275,7 +275,7 @@ void main() {
       fakeAsync((async) {
         stage.migrateError = StateError('migration');
         final ready = nextLine(first.connecting())
-          ..ignore()
+          ..ignoreFailure()
           ..start();
         async.flushTimers();
         expect(ready.outcome, isA<Failed>());
@@ -298,7 +298,7 @@ void main() {
           'of run', () {
         fakeAsync((async) {
           final connect = first.connecting();
-          final ready = version(connect)..ignore();
+          final ready = version(connect)..ignoreFailure();
           cancelOnceDone(connect, ready);
           ready.start();
           async.flushTimers();
@@ -312,7 +312,7 @@ void main() {
         fakeAsync((async) {
           final connect = first.connecting();
           final ready = version(connect)
-            ..ignore()
+            ..ignoreFailure()
             ..start();
           async.elapse(const Duration(milliseconds: 5));
           ready.cancel().ignore();
@@ -332,7 +332,7 @@ void main() {
         fakeAsync((async) {
           final connect = stubborn();
           final ready = version(connect)
-            ..ignore()
+            ..ignoreFailure()
             ..start();
           async.elapse(const Duration(milliseconds: 5));
           ready.cancel().ignore();
@@ -348,7 +348,7 @@ void main() {
       fakeAsync((async) {
         stage.migrateError = StateError('migration');
         final ready = page.onArrival(first.connecting())
-          ..ignore()
+          ..ignoreFailure()
           ..start();
         async.flushTimers();
         expect(ready.outcome, isA<Failed>());
@@ -359,7 +359,7 @@ void main() {
     test('registering on arrival hands the database on open on a success', () {
       fakeAsync((async) {
         final ready = page.onArrival(first.connecting())
-          ..ignore()
+          ..ignoreFailure()
           ..start();
         async.flushTimers();
         expect(ready.outcome, isA<Done<Database>>());
@@ -372,7 +372,7 @@ void main() {
         stage.migrateError = StateError('migration');
         final connect = first.connecting();
         page.onArrival(connect)
-          ..ignore()
+          ..ignoreFailure()
           ..start();
         Database? reached;
         connect.value.then((database) => reached = database).ignore();
@@ -389,7 +389,7 @@ void main() {
   group('Registering without a call', () {
     test('a callback flushes the buffer when the job finishes', () {
       fakeAsync((async) {
-        Job<void>(page.flushing).ignore();
+        Job<void>(page.flushing).ignoreFailure();
         async.flushTimers();
         expect(stage.sink, ['rows']);
       });
@@ -398,7 +398,7 @@ void main() {
     test('the first attempt closes the cursor once when nothing cancels it',
         () {
       fakeAsync((async) {
-        final job = Job<void>(first.unregisteringAfter)..ignore();
+        final job = Job<void>(first.unregisteringAfter)..ignoreFailure();
         async.flushTimers();
         expect(job.outcome, isA<Done<void>>());
         expect(stage.cursor.closes, 1);
@@ -407,7 +407,7 @@ void main() {
 
     test('the first attempt closes the cursor twice on a cancellation', () {
       fakeAsync((async) {
-        final job = Job<void>(first.unregisteringAfter)..ignore();
+        final job = Job<void>(first.unregisteringAfter)..ignoreFailure();
         async.elapse(const Duration(milliseconds: 5));
         job.cancel().ignore();
         async.flushTimers();
@@ -420,7 +420,7 @@ void main() {
     test('unregistering inside the action closes it once on a cancellation',
         () {
       fakeAsync((async) {
-        final job = Job<void>(page.unregisteringInside)..ignore();
+        final job = Job<void>(page.unregisteringInside)..ignoreFailure();
         async.elapse(const Duration(milliseconds: 5));
         job.cancel().ignore();
         async.flushTimers();
@@ -437,7 +437,7 @@ void main() {
         removeDisposer();
         removeDisposer();
       })
-        ..ignore();
+        ..ignoreFailure();
       await job.done;
       removeDisposer();
 
@@ -451,7 +451,7 @@ void main() {
       final job = Job<void>(key: 'ran', (ctx) async {
         removeDisposer = ctx.onDispose(() async => trace.add('disposer ran'));
       })
-        ..ignore();
+        ..ignoreFailure();
       await job.done;
       removeDisposer();
       removeDisposer();
@@ -475,7 +475,7 @@ void main() {
           ..add(ctx.disown(address))
           ..add(ctx.disown(address));
       })
-        ..ignore();
+        ..ignoreFailure();
       await job.done;
 
       expect(
@@ -497,7 +497,7 @@ void main() {
           ..add(ctx.disown(8080))
           ..add(ctx.disown(port));
       })
-        ..ignore();
+        ..ignoreFailure();
       await job.done;
 
       expect(
@@ -527,7 +527,7 @@ void main() {
         );
         await pump();
       })
-        ..ignore();
+        ..ignoreFailure();
       await pump();
       await gate.release();
       await job.done;
@@ -548,7 +548,7 @@ void main() {
           })
           ..onDispose(() async => trace.add('second'));
       })
-        ..ignore();
+        ..ignoreFailure();
       await job.done;
 
       expect(trace, <String>['second', 'first']);
@@ -566,7 +566,7 @@ void main() {
             ..onDispose(() async => trace.add('under it'))
             ..onDispose(() async => throw StateError('cleanup failed'));
         },
-      )..ignore();
+      )..ignoreFailure();
       await job.done;
 
       expect(errors, <Matcher>[isStateError]);
@@ -586,7 +586,7 @@ void main() {
             trace.add('released');
           });
       })
-        ..ignore();
+        ..ignoreFailure();
       await pump();
       // It lands while the first callback is awaiting its resource.
       job.cancel().ignore();
@@ -630,7 +630,7 @@ void main() {
           }
         });
       })
-        ..ignore();
+        ..ignoreFailure();
       await job.done;
 
       expect(caught.keys.toSet(), bodyMembers());
@@ -654,7 +654,7 @@ void main() {
             });
             return 1;
           })
-            ..ignore();
+            ..ignoreFailure();
           async.flushTimers();
           expect(job.isFinished, isFalse);
           expect(returned, isFalse);
@@ -681,7 +681,7 @@ void main() {
         await pump();
         return db;
       })
-        ..ignore();
+        ..ignoreFailure();
       unawaited(job.value.onError((_, __) => Database('none')));
       await pump();
       await pump();
@@ -709,7 +709,7 @@ void main() {
         ctx.onDispose(() async => trace.add('disposer D'));
         return db;
       })
-        ..ignore();
+        ..ignoreFailure();
       unawaited(job.value.onError((_, __) => Database('none')));
       await pump();
       await pump();
@@ -755,7 +755,7 @@ void main() {
         ]);
         trace.add('group handed over ${values.length} values');
       })
-        ..ignore();
+        ..ignoreFailure();
       await job.done;
 
       expect(job.outcome, isA<Done<void>>());
@@ -786,7 +786,7 @@ void main() {
           ),
         ]);
       })
-        ..ignore();
+        ..ignoreFailure();
       await pump();
       job.cancel().ignore();
       await gate.release();
@@ -830,7 +830,7 @@ void main() {
             rethrow;
           }
         })
-          ..ignore();
+          ..ignoreFailure();
         job.done.then((_) => at('the job ends')).ignore();
         async.elapse(const Duration(milliseconds: 5));
         job.cancel().ignore();
@@ -904,7 +904,7 @@ void main() {
             branch,
             Job.deferred<int>((ctx) => other(ctx, at)),
           ]),
-        ).ignore();
+        ).ignoreFailure();
         branch.done.then((_) => at('the branch ends')).ignore();
         async.elapse(const Duration(milliseconds: 10));
         branch.cancel().ignore();
@@ -976,7 +976,7 @@ void main() {
             ),
           ]);
         })
-          ..ignore();
+          ..ignoreFailure();
         job.done.then((_) => at('the job ends')).ignore();
         async.elapse(const Duration(milliseconds: 5));
         job.cancel().ignore();
@@ -1004,7 +1004,7 @@ void main() {
           dispose: (db) => db.close(),
         );
       })
-        ..ignore();
+        ..ignoreFailure();
       await pump();
       job.cancel().ignore();
       await job.done;
@@ -1025,7 +1025,7 @@ void main() {
     test('a plain await: a cancellation while it opens closes the database',
         () {
       fakeAsync((async) {
-        final job = page.plainAwait()..ignore();
+        final job = page.plainAwait()..ignoreFailure();
         async.elapse(const Duration(milliseconds: 5));
         job.cancel().ignore();
         async.flushTimers();
@@ -1037,7 +1037,7 @@ void main() {
 
     test('a plain await: a success hands the database over open', () {
       fakeAsync((async) {
-        final job = page.plainAwait()..ignore();
+        final job = page.plainAwait()..ignoreFailure();
         async.flushTimers();
         expect(job.outcome, isA<Done<Database>>());
         expect(trace, ['db opened']);
