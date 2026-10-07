@@ -98,7 +98,9 @@ answer for it: the failure of a body that comes after its job has accepted a
 cancellation — a call that `ctx.join` is still waiting out fails, say. The job
 ends `Cancelled`, the reporting hook is told of the error, and it goes no
 further. Most often it is the operation the cancellation stopped, throwing as
-it stops, and the engine cannot tell a failure of the operation from that.
+it stops, and the engine cannot tell a failure of the operation from that. A
+body that catches such an error asks the job, not the error:
+[Letting cancellation through](#letting-cancellation-through) has the `catch`.
 
 Answering for an error is a responsibility somebody takes, not a side effect of
 switching a log on. Setting a `SoloObserver` is not it either — watching is not
