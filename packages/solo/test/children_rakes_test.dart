@@ -359,6 +359,157 @@ void main() {
     });
   });
 
+  group('The future of ctx.run', () {
+    test('a failed upload comes into the parent once the progress is closed',
+        () {
+      final errors = _zone((async) {
+        final syncer = page.Trying();
+        final job = syncer.trySync(7);
+        async.flushMicrotasks();
+        _fail(async, 'push 7', const ApiException());
+        _see('the upload failed: ${_how(job)}');
+        unawaited(stage.progress.close());
+        async.flushMicrotasks();
+        _see('the progress closed: ${_how(job)}');
+        _see('${syncer.currentState}');
+      });
+
+      expect(errors, isEmpty);
+      expect(_seen, [
+        'the upload failed: no outcome',
+        'the progress closed: Done(false)',
+        'Ready(sent: 0, position: 0, path: )',
+      ]);
+      _says('the `catch` above runs once the API has closed the progress '
+          '`_sync` follows');
+    });
+
+    test('an upload that succeeds leaves its path in the state', () {
+      final errors = _zone((async) {
+        final syncer = page.Trying();
+        final job = syncer.trySync(7);
+        async.flushMicrotasks();
+        _end(async, 'push 7');
+        unawaited(stage.progress.close());
+        async.flushMicrotasks();
+        _see('${_how(job)}; ${syncer.currentState}');
+      });
+
+      expect(errors, isEmpty);
+      expect(_seen, [
+        'Done(true)',
+        'Ready(sent: 0, position: 0, path: path/7)',
+      ]);
+    });
+  });
+
+  group('Working beside a child', () {
+    test('the upload runs while the parent sends, and its writes come in', () {
+      final errors = _zone((async) {
+        final syncer = page.Announcing();
+        final job = syncer.syncAndAnnounce(7);
+        async.flushMicrotasks();
+        _see('${stage.trace}');
+        stage.progress.add(40);
+        async.flushMicrotasks();
+        _see('${syncer.currentState}');
+        _end(async, 'send started 7');
+        _end(async, 'push 7');
+        unawaited(stage.progress.close());
+        async.flushMicrotasks();
+        _see(_how(job));
+      });
+
+      expect(errors, isEmpty);
+      expect(_seen, [
+        '[push 7 start, send started 7 start]',
+        'Ready(sent: 40, position: 0, path: )',
+        'Done(path/7)',
+      ]);
+    });
+
+    for (final listener in ['ignore()', 'nothing']) {
+      test(
+          'an upload that fails before the await, with $listener on the future',
+          () {
+        final errors = _zone((async) {
+          final bench = Bench();
+          final parent = bench.run<Ready, String>(key: 'parent', (ctx) async {
+            final child = bench.job<Ready, String>(
+              key: 'child',
+              (childCtx) => childCtx.join(() => api.push(7)),
+            );
+            final uploading = ctx.run(child);
+            if (listener == 'ignore()') {
+              uploading.ignore();
+            }
+            await ctx.join(() => analytics.send('started 7'));
+            return uploading;
+          })
+            ..ignore();
+          async.flushMicrotasks();
+          _fail(async, 'push 7', const ApiException());
+          _see('the upload failed: ${_how(parent)}');
+          _end(async, 'send started 7');
+          _see(_how(parent));
+        });
+
+        expect(errors, listener == 'ignore()' ? isEmpty : ['ApiException']);
+        expect(_seen, [
+          'the upload failed: no outcome',
+          'Failed(ApiException)',
+        ]);
+        _says('A future kept this way has no listener until the `await`');
+        _says('`ignore()` on the kept future gives it a listener and takes '
+            'nothing from the `return`, which throws the error all the same');
+      });
+    }
+
+    test('the page code hears a failed upload once, at the return', () {
+      final errors = _zone((async) {
+        final syncer = page.Announcing();
+        final job = syncer.syncAndAnnounce(7)..ignore();
+        async.flushMicrotasks();
+        _fail(async, 'push 7', const ApiException());
+        unawaited(stage.progress.close());
+        async.flushMicrotasks();
+        _see('the upload failed: ${_how(job)}');
+        _end(async, 'send started 7');
+        _see(_how(job));
+      });
+
+      expect(errors, isEmpty);
+      expect(_seen, ['the upload failed: no outcome', 'Failed(ApiException)']);
+    });
+  });
+
+  group('A child the rules turn away', () {
+    test('paused, the upload never starts and resend ends with the drop', () {
+      final errors = _zone((async) {
+        final syncer = page.Resending(const Ready(paused: true));
+        final job = syncer.resend(7)..ignore();
+        async.flushMicrotasks();
+        _see('${stage.trace}; ${_how(job)}');
+      });
+
+      expect(errors, isEmpty);
+      expect(_seen, ['[]', _quotes().first]);
+      _says('With the state paused, nothing is uploaded and `resend` ends:');
+    });
+
+    test('not paused, the upload runs', () {
+      final errors = _zone((async) {
+        final job = page.Resending().resend(7);
+        async.flushMicrotasks();
+        _end(async, 'push 7');
+        _see('${stage.trace}; ${_how(job)}');
+      });
+
+      expect(errors, isEmpty);
+      expect(_seen, ['[push 7 start, push 7 end]', 'Done(path/7)']);
+    });
+  });
+
   group('A child of ctx.run', () {
     for (final rule in ['canStart', 'keepWhile', 'the working type']) {
       test('a child turned away by $rule never runs', () {
@@ -467,7 +618,8 @@ void main() {
         'parent Done(null)',
       ]);
       _says('It joins no waiting list, so the parent waits for nothing; the '
-          'future of `ctx.run` carries that cancellation all the same.');
+          'future of `ctx.run` carries that cancellation all the same');
+      _says('and it is what ends `resend` above.');
     });
 
     for (final rule in ['canStart', 'keepWhile']) {
@@ -537,7 +689,7 @@ void main() {
         'its child ended: [grandchild start, grandchild end, cleanup start]',
       ]);
       expect(stage.trace.last, 'run returned 7');
-      _says("It waits for the child, the child's children and cleanup.");
+      _says("It waits for the child, the child's children and cleanup");
     });
 
     test('after a child that succeeds, ctx.run throws the parent cancellation',
@@ -866,6 +1018,8 @@ void main() {
           expect(bench.unanswered, isEmpty);
           expect(errors, isEmpty);
           _says('`child.ignore()` silences it.');
+          _says('| `child.ignore()` | not handled, goes to the zone | '
+              'silenced |');
         });
 
         test('ctx.run(child).ignore() does not', () {
@@ -884,6 +1038,8 @@ void main() {
             ['Job(child): Bad state: child failed first'],
           );
           expect(errors, ['Bad state: child failed first']);
+          _says('| `ctx.run(child).ignore()` | handled | goes to '
+              '`onUnanswered` |');
           _says('`ctx.run(child).ignore()` does not: it handles what the '
               'future throws, and the future throws the cancellation.');
         });
@@ -1380,7 +1536,7 @@ void main() {
         _quotes().last,
         'Invalid argument (job): was not created by this Solo: "Job(then)"',
       );
-      expect(_quotes(), hasLength(1));
+      expect(_quotes(), hasLength(2));
       _says('The controller refuses it with an `ArgumentError`:');
       _says('A job of the core made by hand is refused in the same words.');
     });
@@ -1662,6 +1818,9 @@ void main() {
     const attempts = 'test/support/children_first_attempts.dart';
     const holders = {
       '# Children and streams': answers,
+      '## The future of `ctx.run`': answers,
+      '## Working beside a child': answers,
+      '## A child the rules turn away': answers,
       '### The first attempt': attempts,
       '### The second attempt': attempts,
       '## Chaining completed work': answers,

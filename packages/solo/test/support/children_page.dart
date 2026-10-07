@@ -9,7 +9,15 @@ import 'children_stubs.dart';
 import 'test_solo.dart';
 
 /// Not on the page: the keys of the page's jobs.
-enum _Op { sync, upload, record, syncAndRecord }
+enum _Op {
+  sync,
+  upload,
+  trySync,
+  syncAndAnnounce,
+  resend,
+  record,
+  syncAndRecord,
+}
 
 /// The controller the page opens with, and what its other sections add to
 /// it.
@@ -56,6 +64,55 @@ base class Syncer extends Solo<AppState> with OpenSolo<AppState>, Desk {
       );
 
   SoloJob<void> recordPath(String path) => add(_recordPath(path));
+}
+
+/// "The future of `ctx.run`".
+final class Trying extends Syncer {
+  // The parent answers for a failed upload itself.
+  SoloJob<bool> trySync(int item) => run<Ready, bool>(
+        key: _Op.trySync,
+        (ctx) async {
+          try {
+            final path = await ctx.run(_sync(item));
+            ctx.emit(ctx.state.copyWith(path: path));
+            return true;
+          } on ApiException {
+            return false;
+          }
+        },
+      );
+}
+
+/// "Working beside a child".
+final class Announcing extends Syncer {
+  SoloJob<String> syncAndAnnounce(int item) => run<Ready, String>(
+        key: _Op.syncAndAnnounce,
+        (ctx) async {
+          // Kept, not awaited: the upload runs while the parent goes on.
+          // `ignore()` gives its failure a listener whenever it comes.
+          final uploading = ctx.run(_sync(item))..ignore();
+          await ctx.join(() => analytics.send('started $item'));
+          return uploading;
+        },
+      );
+}
+
+/// "A child the rules turn away".
+final class Resending extends Syncer {
+  Resending([super.initialState]);
+
+  SoloJob<String> resend(int item) => run<Ready, String>(
+        key: _Op.resend,
+        (ctx) {
+          // A child with a rule of its own: no upload while paused.
+          final upload = job<Ready, String>(
+            key: _Op.upload,
+            canStart: (state) => !state.paused,
+            (childCtx) => childCtx.join(() => api.push(item)),
+          );
+          return ctx.run(upload);
+        },
+      );
 }
 
 /// "Two children in a row".

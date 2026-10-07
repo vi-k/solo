@@ -83,7 +83,7 @@ final class Ready extends AppState {
   /// Where the last upload went.
   final String path;
 
-  /// A fact for the rules of the tests' own jobs.
+  /// Whether uploads are paused.
   final bool paused;
 
   const Ready({
@@ -112,6 +112,14 @@ final class Off extends AppState {
 
   @override
   String toString() => 'Off';
+}
+
+/// What the API fails with.
+final class ApiException implements Exception {
+  const ApiException();
+
+  @override
+  String toString() => 'ApiException';
 }
 
 final class Api {

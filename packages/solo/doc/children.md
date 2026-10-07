@@ -41,44 +41,8 @@ the queue occupied until all its children finish, even if its body returns
 earlier: `sync` is over once the upload has returned its path and the API has
 closed the progress.
 
-`ctx.run(child)` returns a `Future<T>` of the child's result. It waits for the
-child, the child's children and cleanup. On success, it checks the parent's
-cancellation and state rules before returning the value, so a value the parent
-has to release is registered on the call, `ctx.run(child, dispose: ...)`, and
-not on the line after it:
-[Discard, for a value that leaves](resources.md#discard-for-a-value-that-leaves)
-on the resources page says why. A child error or cancellation is thrown into
-the parent body with its stack trace.
-
-To work in the parent while a child runs, keep the future `ctx.run` returned
-and await it later. The state writes of the two can then interleave, and each
-job answers to its own rules for every one of them: a write of the child that
-the parent's working type or `keepWhile` does not accept cancels the parent,
-and the child with it. `ctx.run(child).ignore()` explicitly ignores that
-future's result while the parent still waits for its children. `child.ignore()`
-alone does not handle errors of the future returned by `run`.
-
-If the child's body fails and a cancellation reaches the child afterwards,
-whether before the error leaves the body or while the child still waits for
-children of its own or runs its cleanup, its error is not thrown into the
-parent body. The child ends `Cancelled`, `await ctx.run(child)` throws
-`Cancelled`, and the error goes to the controller's `onUnanswered` — by default
-to `Solo.errorHandler`, or to the zone without one. `child.ignore()` silences
-it. `ctx.run(child).ignore()` does not: it handles what the future throws, and
-the future throws the cancellation.
-
-A child the start rules turn away never runs. It is adopted first — parent and
-level — and only then finished `Cancelled` with a `RulesCancelReason`: the
-observer hears the drop as an outcome of this tree, with `job.level` telling it
-how deep under the parent the job stands, and `child.done` holds the
-cancellation. It joins no waiting list, so the parent waits for nothing; the
-future of `ctx.run` carries that cancellation all the same.
-
-The rules `canStart` and `keepWhile`, when they throw themselves, are the other
-case. The error is the rule's own, the child ends `Failed` with it, and
-`ctx.run` throws it synchronously — the line after the call never runs.
-
-The rest of what passes between a parent and its child is the core's, and
+What passes between a parent and its child beyond what this page shows is the
+core's, and
 [Children](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/children.md#children)
 on the children page of `async_job` has it — that a cancellation the parent
 accepts passes to its children, that a body that fails lets them finish and
@@ -103,7 +67,116 @@ what it was meant to do. The next version repairs that and brings a fault of
 its own, so it stands as a second attempt. The version that works follows under
 its own heading. `api` and `analytics` belong to the application these examples
 come from, and `Ready` is the state its controller works in, with the fields
-`sent` and `path`.
+`sent`, `path` and `paused`.
+
+## The future of `ctx.run`
+
+```dart
+// The parent answers for a failed upload itself.
+SoloJob<bool> trySync(int item) => run<Ready, bool>(
+      key: _Op.trySync,
+      (ctx) async {
+        try {
+          final path = await ctx.run(_sync(item));
+          ctx.emit(ctx.state.copyWith(path: path));
+          return true;
+        } on ApiException {
+          return false;
+        }
+      },
+    );
+```
+
+`ctx.run(child)` returns a `Future<T>` of the child's result. It waits for the
+child, the child's children and cleanup: the `catch` above runs once the API
+has closed the progress `_sync` follows. On success, it checks the parent's
+cancellation and state rules before returning the value, so a value the parent
+has to release is registered on the call, `ctx.run(child, dispose: ...)`, and
+not on the line after it:
+[Discard, for a value that leaves](resources.md#discard-for-a-value-that-leaves)
+on the resources page says why. A child error or cancellation is thrown into
+the parent body with its stack trace.
+
+## Working beside a child
+
+```dart
+SoloJob<String> syncAndAnnounce(int item) => run<Ready, String>(
+      key: _Op.syncAndAnnounce,
+      (ctx) async {
+        // Kept, not awaited: the upload runs while the parent goes on.
+        // `ignore()` gives its failure a listener whenever it comes.
+        final uploading = ctx.run(_sync(item))..ignore();
+        await ctx.join(() => analytics.send('started $item'));
+        return uploading;
+      },
+    );
+```
+
+To work in the parent while a child runs, keep the future `ctx.run` returned
+and await it later. The state writes of the two can then interleave, and each
+job answers to its own rules for every one of them: a write of the child that
+the parent's working type or `keepWhile` does not accept cancels the parent,
+and the child with it.
+
+A future kept this way has no listener until the `await`: an upload that fails
+while the parent is still sending would hand its error to the zone as an
+unhandled one. `ignore()` on the kept future gives it a listener and takes
+nothing from the `return`, which throws the error all the same.
+
+## Two ways to ignore a child
+
+| In the parent | An error the future of `ctx.run` throws | A failure of the child that a cancellation covered |
+| --- | --- | --- |
+| `ctx.run(child).ignore()` | handled | goes to `onUnanswered` |
+| `child.ignore()` | not handled, goes to the zone | silenced |
+
+`ctx.run(child).ignore()` explicitly ignores that future's result while the
+parent still waits for its children. `child.ignore()` alone does not handle
+errors of the future returned by `run`.
+
+If the child's body fails and a cancellation reaches the child afterwards,
+whether before the error leaves the body or while the child still waits for
+children of its own or runs its cleanup, its error is not thrown into the
+parent body. The child ends `Cancelled`, `await ctx.run(child)` throws
+`Cancelled`, and the error goes to the controller's `onUnanswered` — by default
+to `Solo.errorHandler`, or to the zone without one. `child.ignore()` silences
+it. `ctx.run(child).ignore()` does not: it handles what the future throws, and
+the future throws the cancellation.
+
+## A child the rules turn away
+
+```dart
+SoloJob<String> resend(int item) => run<Ready, String>(
+      key: _Op.resend,
+      (ctx) {
+        // A child with a rule of its own: no upload while paused.
+        final upload = job<Ready, String>(
+          key: _Op.upload,
+          canStart: (state) => !state.paused,
+          (childCtx) => childCtx.join(() => api.push(item)),
+        );
+        return ctx.run(upload);
+      },
+    );
+```
+
+With the state paused, nothing is uploaded and `resend` ends:
+
+```text
+Cancelled(handler: child _Op.upload: Cancelled(rules: canStart))
+```
+
+A child the start rules turn away never runs. It is adopted first — parent and
+level — and only then finished `Cancelled` with a `RulesCancelReason`: the
+observer hears the drop as an outcome of this tree, with `job.level` telling it
+how deep under the parent the job stands, and `child.done` holds the
+cancellation. It joins no waiting list, so the parent waits for nothing; the
+future of `ctx.run` carries that cancellation all the same, and it is what ends
+`resend` above.
+
+The rules `canStart` and `keepWhile`, when they throw themselves, are the other
+case. The error is the rule's own, the child ends `Failed` with it, and
+`ctx.run` throws it synchronously — the line after the call never runs.
 
 ## Chaining completed work
 
