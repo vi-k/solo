@@ -257,14 +257,14 @@ Job<void> syncAndRecord(int item) =>
 
 `then` reads like the word for "and then". Its callback gets a plain core
 `JobContext`, with no `emit` on it and no state behind it, so a continuation
-cannot write controller state itself: it asks the controller for another job,
-and that job takes its turn at the back of the controller's queue. The end of
-the source does two things at once: it frees the slot and it starts the
-continuation. So whatever was queued while the source ran stands ahead of the
-new job: with another method of the controller, `save()`, called while `sync`
-was still running, the order is `sync`, `save`, `recordPath`. And a controller
-that is draining takes no new job at all: the path is never recorded, and the
-continuation ends `Cancelled(closed)`.
+cannot write controller state itself. It calls `recordPath`, an ordinary job of
+the controller: that job does the `emit`, and it takes its turn at the back of
+the controller's queue. The end of the source does two things at once: it frees
+the slot and it starts the continuation. So whatever was queued while the
+source ran stands ahead of the new job: with another method of the controller,
+`save()`, called while `sync` was still running, the order is `sync`, `save`,
+`recordPath`. And a controller that is draining takes no new job at all: the
+path is never recorded, and the continuation ends `Cancelled(closed)`.
 
 ### The second attempt
 
