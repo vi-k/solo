@@ -198,8 +198,8 @@ Job<void> syncAndReport(int item) =>
 `job.then((ctx, value) => ...)` creates a continuation: a job that runs after
 its source succeeds, including children and cleanup — for `sync`, once the API
 has closed the progress. Its callback receives the result and a new core
-`JobContext`, and may return a value or future. A source failure propagates
-without calling the callback.
+`JobContext`, and may return a value or future. If `sync` fails, the callback
+is not called, and the job `then` returned ends `Failed` with the same error.
 
 A continuation does not inherit the controller's state context, rules, observer
 or queue position. It has its own optional observer. It belongs to whoever

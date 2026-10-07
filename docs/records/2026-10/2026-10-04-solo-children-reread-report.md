@@ -696,3 +696,12 @@ new job», а мутация правит обе проверки `isClosed` в 
    `child.ignoreFailure()` теперь стоит рядом с `ctx.run(child).ignore()`,
    и по написанию видно, что это два разных вызова. Подробности —
    `2026-10-07-ignore-failure-rename-report.md`.
+
+6. «в данном случае then один… не совсем понятно на примере, куда ошибка дальше
+   передаётся», 2026-10-07, о «Chaining completed work». Фраза «A source
+   failure propagates without calling the callback» говорила о цепочке,
+   а в примере один `then`, и «дальше» там некуда. Теперь сказано примером:
+   если `sync` упала, колбэк не вызывается, а задача, которую вернул `then`,
+   кончается `Failed` с той же ошибкой. Перевод следом, цитата сторожа
+   поправлена; держит это прежний тест «a failure of sync comes down the chain
+   to whoever reads it».

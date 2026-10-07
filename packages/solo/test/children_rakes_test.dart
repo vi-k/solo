@@ -1367,7 +1367,8 @@ void main() {
         'report Failed(Bad state: push failed)',
         '[push 1 start, push 1 failed]',
       ]);
-      _says('A source failure propagates without calling the callback.');
+      _says('If `sync` fails, the callback is not called, and the job `then` '
+          'returned ends `Failed` with the same error.');
       _says('A failure reaches whoever reads its outcome, the failure of '
           '`sync` passed down the chain included');
     });
