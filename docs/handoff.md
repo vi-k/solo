@@ -171,28 +171,28 @@ README — `2026-10-02-async-job-readme-reread-report.md`. `extending.md`
 пунктов в разделе «По чтению владельца» отчёта
 `2026-10-03-solo-cancellation-reread-report.md`, вступление сокращено до того,
 что добавляет контроллер, за механикой оно ссылается на страницу ядра.
-С того же дня он читает `packages/solo/doc/resources.md`, правки по его
-вопросам идут в раздел «По чтению владельца» отчёта
-`2026-10-04-solo-resources-reread-report.md`; за ней остальные страницы `solo`
-в порядке вычитки. С того же дня в примерах действует правило: предметный метод
-контроллера объявляет `Job<T>`, а `SoloJob<T>` пишется только там, где читают
-`isQueued`; оно записано в `packages/solo/doc/jobs.md`. Тогда же `Job`, которую
-вытесняют `Policy.replace` и `Policy.restart`, получила свою причину отмены
-`ReplacedCancelReason` (`Cancelled(replaced)`) вместо `ManualCancelReason`:
-пункт 5 того же раздела отчёта, запись в «Breaking changes» CHANGELOG `solo`.
-2026-10-07 по его же слову `Job.ignore()` переименован в `Job.ignoreFailure()`
-без псевдонима, во всех трёх пакетах, страницах и переводах, отчёт —
-`2026-10-07-ignore-failure-rename-report.md`; `ignore()` на future остался
-`Future.ignore()`. Тогда же параметры `onError` и `onCancel` у `run` и `job`
-переименованы в `ifFailed` и `ifCancelled` без псевдонима, отчёт —
-`2026-10-07-if-failed-rename-report.md`; хуки `Solo.onError` и `ctx.onCancel`
-называются как раньше. Тогда же `started` у `Cancelled.by` стал необязательным
-со значением `true`: пункт 7 раздела «По чтению владельца» отчёта
-`2026-10-03-solo-cancellation-reread-report.md`. Вопросы владельца правятся
-в странице, переводе и стороже и идут пунктами раздела «По чтению владельца»
-в отчёте страницы. В `docs/backlog.md` одна запись — общий отлов зависаний;
-по ней решено оставить рецептами, пока не выполнится условие, названное в самой
-записи.
+`packages/solo/doc/resources.md` он прочитал и принял в тот же день: один пункт
+в разделе «По чтению владельца» отчёта
+`2026-10-04-solo-resources-reread-report.md`. Дальше `errors.md` и остальные
+страницы `solo` в порядке вычитки. С того же дня в примерах действует правило:
+предметный метод контроллера объявляет `Job<T>`, а `SoloJob<T>` пишется только
+там, где читают `isQueued`; оно записано в `packages/solo/doc/jobs.md`.
+Тогда же `Job`, которую вытесняют `Policy.replace` и `Policy.restart`, получила
+свою причину отмены `ReplacedCancelReason` (`Cancelled(replaced)`) вместо
+`ManualCancelReason`: пункт 5 того же раздела отчёта, запись в «Breaking
+changes» CHANGELOG `solo`. 2026-10-07 по его же слову `Job.ignore()`
+переименован в `Job.ignoreFailure()` без псевдонима, во всех трёх пакетах,
+страницах и переводах, отчёт — `2026-10-07-ignore-failure-rename-report.md`;
+`ignore()` на future остался `Future.ignore()`. Тогда же параметры `onError`
+и `onCancel` у `run` и `job` переименованы в `ifFailed` и `ifCancelled` без
+псевдонима, отчёт — `2026-10-07-if-failed-rename-report.md`; хуки
+`Solo.onError` и `ctx.onCancel` называются как раньше. Тогда же `started`
+у `Cancelled.by` стал необязательным со значением `true`: пункт 7 раздела
+«По чтению владельца» отчёта `2026-10-03-solo-cancellation-reread-report.md`.
+Вопросы владельца правятся в странице, переводе и стороже и идут пунктами
+раздела «По чтению владельца» в отчёте страницы. В `docs/backlog.md` одна
+запись — общий отлов зависаний; по ней решено оставить рецептами, пока
+не выполнится условие, названное в самой записи.
 
 **Срок задачи.** 2026-10-06 сделан и перенесён в `main` коммитом «feat: give a
 job a deadline of its own»: параметр `timeout` у `Job(...)`,
@@ -443,23 +443,23 @@ Dart у этой беты 3.14. Поэтому цена перехода — н�
 с 2026-10-03: `Job.each`, `ctx.pause`, срок задачи, `Job.ignoreFailure()`,
 `ReplacedCancelReason`, имена `ifFailed` и `ifCancelled` у `run` и `job`,
 `started` по умолчанию у `Cancelled.by`, вычитка страниц `solo`
-и `flutter_solo` и правки по чтению владельца. CI на коммите с этой строкой
-на момент записи не проверен; последний известный зелёный `gate` всеми пятью
-заданиями — `dart`, `flutter`, `floor`, `snippets` и `docs` — на `b4c3b7b`,
-там же зелёный и последний прогон `site`. У `gate` стоит `cancel-in-progress`,
-поэтому из коммитов, отправленных подряд, до конца доходит прогон только
-последнего. Проверки: `packages/async_job` после решений с `try` и `onDiscard`
-для списка группы в `children.md` — формат и анализ чистые, `dart test`
-зелёный, 1191 тест, а с `Job.each`, `ctx.pause` и их страницами — 1242,
-`packages/solo` против него 870, `packages/flutter_solo` 85;
-`dart doc --dry-run` чистый на коммите вычитки `children.md`; `packages/solo`
-на коммите переноса его README — формат и анализ чистые, 868 тестов; из корня
-на коммите вычитки `reflow.py --check`, `check_line_width.py`,
-`check_links.py`, `check_translations.py` и `check_doc_shape.py` зелёные.
-`solo` пример 47, `flutter_solo` 85 и его пример 4, раскладки архивов на полу
-3.6.0 — на `f0ee2f7`; после него менялись только документы и dartdoc. Стенды
-`vs-bloc` и `accumulation` прогнаны 2026-10-04 на коммите вычитки `vs-bloc.md`
-так, как их гоняет задание `snippets`: 2 и 12 цитат трасс, все напечатаны;
+и `flutter_solo` и правки по чтению владельца. Третья отправка кончилась
+на `4ea6c4d`: на нём зелёный `gate` всеми пятью заданиями — `dart`, `flutter`,
+`floor`, `snippets` и `docs` — и зелёный `site`. Коммиты после него, приёмка
+`resources.md`, не отправлены. У `gate` стоит `cancel-in-progress`, поэтому
+из коммитов, отправленных подряд, до конца доходит прогон только последнего.
+Проверки: `packages/async_job` после решений с `try` и `onDiscard` для списка
+группы в `children.md` — формат и анализ чистые, `dart test` зелёный, 1191
+тест, а с `Job.each`, `ctx.pause` и их страницами — 1242, `packages/solo`
+против него 870, `packages/flutter_solo` 85; `dart doc --dry-run` чистый
+на коммите вычитки `children.md`; `packages/solo` на коммите переноса его
+README — формат и анализ чистые, 868 тестов; из корня на коммите вычитки
+`reflow.py --check`, `check_line_width.py`, `check_links.py`,
+`check_translations.py` и `check_doc_shape.py` зелёные. `solo` пример 47,
+`flutter_solo` 85 и его пример 4, раскладки архивов на полу 3.6.0 —
+на `f0ee2f7`; после него менялись только документы и dartdoc. Стенды `vs-bloc`
+и `accumulation` прогнаны 2026-10-04 на коммите вычитки `vs-bloc.md` так, как
+их гоняет задание `snippets`: 2 и 12 цитат трасс, все напечатаны;
 `packages/solo` там же — формат и анализ чистые, 1719 тестов. На коммите
 вычитки README `flutter_solo` (`5c51816`) формат, анализ и тесты прошли во всех
 пяти пакетах: `async_job` 1261 (с 2026-10-04, после правок по чтению
