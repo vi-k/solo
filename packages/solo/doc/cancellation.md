@@ -67,7 +67,7 @@ cancellation does not hide the failure. The job's final outcome is still
 `Cancelled`, so no outcome carries that error: if the body lets it out, the
 controller's `onError` hook is told of it, and it goes no further.
 
-Two sections below open with the version this vocabulary leads to — the method
+Four sections below open with the version this vocabulary leads to — the method
 whose name sounds like the requirement, or a plain `await` — and say what it
 does instead of what it was meant to do. Where the next version repairs that
 and brings a fault of its own, it stands as a second attempt. The version that
@@ -78,6 +78,48 @@ works follows under its own heading.
 A player seeks while the user drags the slider, and every new position replaces
 the last. The device has to be done with one seek before the next starts, and
 the position the user lands on must not wait for the ones dragged past.
+
+### The first attempt
+
+```dart
+Job<void> seek(Duration position) => run<Ready, void>(
+      key: 'seek',
+      policy: Policy.restart,
+      (ctx) async {
+        // Ends the moment the next seek cancels this one.
+        await ctx.abandonable(() => _player.seek(position));
+        ctx.emit(ctx.state.copyWith(position: position));
+      },
+    );
+```
+
+`restart` cancels the running job, and `abandonable` lets go of the call at
+that moment: the job ends and the next one starts. The seek it let go of is
+still running on the device. Drag through three positions and all three seeks
+are on the device at once — three starts, then three ends. What the device
+makes of that is up to the device. The state says the last position all the
+same: only the last job gets as far as `emit`, so the screen shows the position
+the user asked for, whatever the device actually did.
+
+### The second attempt
+
+```dart
+Job<void> seek(Duration position) => run<Ready, void>(
+      key: 'seek',
+      policy: Policy.restart,
+      (ctx) async {
+        // Waited out, so the device never runs two seeks at once.
+        await ctx.join(() => _player.seek(position));
+        ctx.emit(ctx.state.copyWith(position: position));
+      },
+    );
+```
+
+The device no longer gets two seeks at once, but nothing tells it that a seek
+is obsolete. The seek the user dragged past runs to its end; the job queued
+behind it is removed by `restart` before it starts; only then does the last
+seek begin. The job that waited the first seek out still ends `Cancelled`:
+waiting the call out does not make its result count.
 
 ### The token
 
@@ -95,22 +137,15 @@ Job<void> seek(Duration position) => run<Ready, void>(
     );
 ```
 
-`Policy.restart` cancels the running seek when the next one is submitted, and
-the new job starts once the old one has ended. `ctx.onCancel(callback)`
-connects job cancellation to an operation's own cancellation mechanism, here
-the `CancelToken` of the player's API, which is not a type of this package; the
-callback runs synchronously when the job accepts the cancellation. The token
-asks the player to stop seeking, and `join` waits for it to stop, so a
-replacement seek starts right after the one it replaces has stopped, not at the
-end of it. This depends on the player's API actually responding to the token.
-With one that ignores it, the seek dragged past runs to its end, and only then
-does the next one start.
-
-Neither wait does this without the token: `ctx.abandonable` lets go of a seek
-that goes on running on the device, and `ctx.join` alone waits out a seek
-nobody told to stop.
-[Stopping the operation](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cancellation.md#stopping-the-operation)
-on the cancellation page of `async_job` takes both versions apart.
+`ctx.onCancel(callback)` connects job cancellation to an operation's own
+cancellation mechanism, here the `CancelToken` of the player's API, which is
+not a type of this package; the callback runs synchronously when the job
+accepts the cancellation. The token asks the player to stop seeking, and `join`
+waits for it to stop, so a replacement seek starts right after the one it
+replaces has stopped, not at the end of it. This depends on the player's API
+actually responding to the token. One that ignores it puts you back at the
+second attempt: the seek dragged past runs to its end, and only then does the
+next one start.
 
 A player that stops its seek by throwing hands that error to `join`, and `join`
 throws it as it is. The job still ends `Cancelled`, and the controller's
@@ -131,6 +166,43 @@ on the state page is about it.
 A payment, its receipt on the screen and its journal entry go together: once
 the payment has gone through, the receipt has to be shown and the entry
 written, whatever the job is asked in the meantime.
+
+### The first attempt
+
+```dart
+Job<void> commit(String entry) => run<Ready, void>((ctx) async {
+      // Each call waited out, whatever happens.
+      final receipt = await ctx.join(() => payment.commit());
+      ctx.emit(ctx.state.copyWith(receipt: receipt));
+      await ctx.join(() => journal.write(entry));
+    });
+```
+
+`join` does wait the payment out, and then, as the table above says, throws
+`Cancelled` in place of the result. Cancel the job during the payment: the
+payment goes through, and neither the receipt nor the entry follows. The money
+is taken with nothing to show for it.
+
+Plain `await` on the calls fares no better: the `emit` between them is a
+checkpoint, and on the cancelled job it throws.
+
+### The second attempt
+
+```dart
+Job<void> commit(String entry) => run<Ready, void>((ctx) async {
+      // The whole step waited out as one call.
+      await ctx.join(() async {
+        final receipt = await payment.commit();
+        ctx.emit(ctx.state.copyWith(receipt: receipt));
+        await journal.write(entry);
+      });
+    });
+```
+
+Both calls are now inside what `join` waits out, but the job accepts the
+cancellation the moment it arrives, not when the step is over. The step goes on
+as the code of a cancelled job: the `emit` inside it is a checkpoint and
+throws, and the entry is lost once more.
 
 ### One section for the step
 
@@ -156,14 +228,6 @@ next checkpoint throws `Cancelled`; ordinary code immediately after the call
 can still execute. Keep all required work inside the section and always await
 it. An unawaited section can outlive the job and lose a held request. Sections
 can nest.
-
-One `join` around the three lines is not enough here, though it is the answer
-of
-[A step that must finish](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cancellation.md#a-step-that-must-finish)
-on the cancellation page of `async_job`. The job accepts a cancellation the
-moment it arrives, and `emit` is a checkpoint: inside the `join` it throws on
-the cancelled job, so the payment goes through, and neither the receipt nor the
-entry follows.
 
 ### A whole job
 

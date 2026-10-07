@@ -571,6 +571,79 @@ void main() {
   });
 
   group('Stopping the underlying operation', () {
+    test(
+        'the first attempt: by abandonable, three seeks are on the device at '
+        'once', () {
+      fakeAsync((async) {
+        final player = first.AbandoningPlayer();
+        final one = player.seek(_s(1));
+        async.flushMicrotasks();
+        final two = player.seek(_s(2));
+        async.flushMicrotasks();
+        final three = player.seek(_s(3));
+        async.flushMicrotasks();
+
+        expect(
+          stage.trace,
+          ['seek 1 start', 'seek 2 start', 'seek 3 start'],
+          reason: 'the wait lets go of the call, and the call goes on',
+        );
+        expect('${one.outcome}', 'Cancelled(replaced)');
+        expect('${two.outcome}', 'Cancelled(replaced)');
+
+        // What the device makes of that is up to the device: here the last
+        // seek comes back first.
+        _end(async, 'seek 3');
+        _end(async, 'seek 2');
+        _end(async, 'seek 1');
+        expect('${three.outcome}', 'Done(null)');
+        expect(
+          '${player.currentState}',
+          'Ready(3 s, null)',
+          reason: 'only the last job gets as far as emit',
+        );
+      });
+    });
+
+    test('the second attempt: by join, the seek dragged past runs to its end',
+        () {
+      fakeAsync((async) {
+        final player = first.JoiningPlayer();
+        final one = player.seek(_s(1));
+        async.flushMicrotasks();
+        final two = player.seek(_s(2));
+        async.flushMicrotasks();
+        final three = player.seek(_s(3));
+        async.flushMicrotasks();
+
+        expect(stage.trace, ['seek 1 start']);
+        expect(one.isCancelled, isTrue);
+        expect(one.outcome, isNull, reason: 'nothing told the device');
+        expect(
+          _how(two),
+          'Cancelled(replaced), started: false',
+          reason: 'restart removed the queued one before it started',
+        );
+
+        _end(async, 'seek 1');
+        expect(
+          stage.trace,
+          ['seek 1 start', 'seek 1 end', 'seek 3 start'],
+          reason: 'only then does the last seek begin',
+        );
+        expect('${one.outcome}', 'Cancelled(replaced)');
+        expect(
+          '${player.currentState}',
+          'Ready(0 s, null)',
+          reason: 'waiting the call out does not make its result count',
+        );
+
+        _end(async, 'seek 3');
+        expect('${three.outcome}', 'Done(null)');
+        expect('${player.currentState}', 'Ready(3 s, null)');
+      });
+    });
+
     test('the token: each seek stops before the next one starts', () {
       fakeAsync((async) {
         final player = page.TokenPlayer();
@@ -617,8 +690,8 @@ void main() {
     });
 
     test(
-        'a player that ignores the token runs the seek dragged past to its '
-        'end', () {
+        'a player that ignores the token puts the seek back at the second '
+        'attempt', () {
       fakeAsync((async) {
         stage.hearsTokens = false;
         final player = page.TokenPlayer();
@@ -756,6 +829,45 @@ void main() {
   });
 
   group('Protecting a step or a whole job', () {
+    test('the first attempt: the payment goes through, nothing follows', () {
+      fakeAsync((async) {
+        final till = first.JoiningTill();
+        final job = till.commit('entry');
+        async.flushMicrotasks();
+        unawaited(job.cancel());
+        expect(job.isCancelled, isTrue, reason: 'join holds nothing back');
+        async.flushMicrotasks();
+
+        _end(async, 'payment');
+        expect(
+          stage.trace,
+          ['payment start', 'payment end'],
+          reason: 'join waited the payment out and threw Cancelled',
+        );
+        expect('${till.currentState}', 'Ready(0 s, null)');
+        expect('${job.outcome}', 'Cancelled(manual)');
+      });
+    });
+
+    test('a plain await on the calls: the emit between them throws', () {
+      fakeAsync((async) {
+        final bench = Bench();
+        final job = bench.run<Ready, void>((ctx) async {
+          final receipt = await payment.commit();
+          ctx.emit(ctx.state.copyWith(receipt: receipt));
+          await journal.write('entry');
+        });
+        async.flushMicrotasks();
+        unawaited(job.cancel());
+        async.flushMicrotasks();
+
+        _end(async, 'payment');
+        expect(stage.trace, ['payment start', 'payment end']);
+        expect('${bench.currentState}', 'Ready(0 s, null)');
+        expect('${job.outcome}', 'Cancelled(manual)');
+      });
+    });
+
     test(
         'emit is a checkpoint: on a cancelled job it throws and writes '
         'nothing', () {
@@ -782,16 +894,10 @@ void main() {
       });
     });
 
-    test('one join around the step: the emit inside it throws', () {
+    test('the second attempt: the emit inside the join throws', () {
       fakeAsync((async) {
-        final till = Bench();
-        final job = till.run<Ready, void>((ctx) async {
-          await ctx.join(() async {
-            final receipt = await payment.commit();
-            ctx.emit(ctx.state.copyWith(receipt: receipt));
-            await journal.write('entry');
-          });
-        });
+        final till = first.OneJoinTill();
+        final job = till.commit('entry');
         async.flushMicrotasks();
         unawaited(job.cancel());
         expect(
@@ -2943,13 +3049,13 @@ void main() {
   });
 
   group('The page', () {
-    test('two sections open with a first attempt, as the introduction says',
+    test('four sections open with a first attempt, as the introduction says',
         () {
       expect(
         RegExp(r'^### The first attempt$', multiLine: true).allMatches(_page()),
-        hasLength(2),
+        hasLength(4),
       );
-      expect(_prose(), contains('Two sections below open with the version'));
+      expect(_prose(), contains('Four sections below open with the version'));
     });
 
     test('one subsection opens with a first attempt of its own', () {
@@ -2960,15 +3066,16 @@ void main() {
       );
     });
 
-    test('the subsection goes on to a second attempt', () {
+    test('three of them go on to a second attempt', () {
       expect(
         RegExp(r'^#{3,4} The second attempt$', multiLine: true)
             .allMatches(_page()),
-        hasLength(1),
+        hasLength(3),
       );
     });
 
     test('names the numbers the tests use', () {
+      expect(_prose(), contains('Drag through three positions'));
       expect(_prose(), contains('the second of four chunks'));
       expect(_prose(), contains('the three batches go out in order'));
     });
@@ -2984,6 +3091,7 @@ void main() {
     const holders = {
       '# Cancellation': answers,
       '### The first attempt': attempts,
+      '### The second attempt': attempts,
       '### The token': answers,
       '### One section for the step': answers,
       '### A whole job': answers,
