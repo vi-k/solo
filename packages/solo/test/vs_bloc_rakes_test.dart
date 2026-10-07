@@ -124,7 +124,7 @@ List<firmware.Chunk> _chunks(int from) =>
 void main() {
   tearDown(() {
     Solo.observer = null;
-    Solo.errorHandler = null;
+    Solo.unansweredHandler = null;
   });
 
   group('The page', () {
@@ -456,7 +456,7 @@ void main() {
           recorder.TelemetryObserver(recorder.Telemetry()),
           watcher,
         ]);
-        Solo.errorHandler =
+        Solo.unansweredHandler =
             (solo, job, error, stackTrace) => handled.add('$error');
         recorder.RecorderController(recorder.Recorder(), recorder.Journal())
             .start();

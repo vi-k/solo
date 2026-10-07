@@ -337,7 +337,7 @@ await player.close(mode: SoloCloseMode.drain);
 | [Дочерние задачи и стримы](../../docs/ru/solo/children.md) | Дочерние `Job`, цепочки, шаги подряд |
 | [Стримы](../../docs/ru/solo/streams.md) | `ctx.each` в контроллере, слежение за другим контроллером |
 | [Накопление событий](../../docs/ru/solo/accumulation.md) | `collect`, `accumulate`, debounce и throttle |
-| [Ошибки и наблюдение](../../docs/ru/solo/errors.md) | `SoloObserver`, `errorHandler`, `pending`, логи |
+| [Ошибки и наблюдение](../../docs/ru/solo/errors.md) | `SoloObserver`, `unansweredHandler`, `pending`, логи |
 | [Тестирование](../../docs/ru/solo/testing.md) | Ожидание исходов, фейковое время, таймауты |
 | [Flutter](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.ru.md) | Пакет `flutter_solo`: `SoloListenable`, владение контроллером, перестроение экрана |
 | [Пример камеры](../../docs/ru/solo/camera.md) | Один контроллер с правилами, освобождением ресурсов и устройством |

@@ -182,7 +182,7 @@ void main() {
   tearDown(() {
     stage.dispose();
     Solo.observer = null;
-    Solo.errorHandler = null;
+    Solo.unansweredHandler = null;
   });
 
   group('The opening block', () {
@@ -1043,11 +1043,11 @@ void main() {
               '`onUnanswered`');
         });
 
-        test('with Solo.errorHandler set, the error goes there', () {
+        test('with Solo.unansweredHandler set, the error goes there', () {
           final handled = <String>[];
           late Bench bench;
           final errors = _zone((async) {
-            Solo.errorHandler =
+            Solo.unansweredHandler =
                 (solo, job, error, stackTrace) => handled.add('$job: $error');
             bench = _coveredFailure(async, window);
           });
@@ -1058,7 +1058,8 @@ void main() {
             ['Job(child): Bad state: child failed first'],
           );
           expect(errors, isEmpty);
-          _says('by default to `Solo.errorHandler`, or to the zone without '
+          _says(
+              'by default to `Solo.unansweredHandler`, or to the zone without '
               'one');
         });
 

@@ -98,7 +98,8 @@ void main() {
       () {
     runSolo((solo, journal, async) {
       final answered = <Object>[];
-      Solo.errorHandler = (solo, job, error, stackTrace) => answered.add(error);
+      Solo.unansweredHandler =
+          (solo, job, error, stackTrace) => answered.add(error);
       final chosen = StateError('chosen');
       final other = StateError('other');
       Object? thrown;

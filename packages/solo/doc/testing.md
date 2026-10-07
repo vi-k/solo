@@ -268,7 +268,7 @@ controller on it, and `ctx.abandonable` lets go of the call. The job ends
 `Cancelled`; the call fails twenty milliseconds later, and its error belongs to
 no outcome. It goes to the zone the job was created in, the test's again, and
 by then the test is over. A test that expects such an error sets
-`Solo.errorHandler`, which takes it in place of the zone:
+`Solo.unansweredHandler`, which takes it in place of the zone:
 [Answering for an error](errors.md#answering-for-an-error) on the errors page.
 
 ## The order of what happened
@@ -494,13 +494,13 @@ addTearDown(() => Solo.observer = null);
 
 `addTearDown` runs whether the test passed or failed. Five statics belong to
 the process rather than to a controller, and each of them outlives a test the
-same way: `Solo.observer`, `Solo.errorHandler`, `Solo.debug`, the `Job.debug`
-of the core that is set next to it, and `Solo.traceStateChanges`. The first
-four start as `null`, and `null` is what the tear-down above puts back. The
-fifth has a default of its own: `traceStateChanges` is on wherever assertions
-are — in development and in tests — and off in a release build, so a tear-down
-that writes `true` is guessing at how the program was compiled. Read the value
-before changing it, and put back what was read:
+same way: `Solo.observer`, `Solo.unansweredHandler`, `Solo.debug`, the
+`Job.debug` of the core that is set next to it, and `Solo.traceStateChanges`.
+The first four start as `null`, and `null` is what the tear-down above puts
+back. The fifth has a default of its own: `traceStateChanges` is on wherever
+assertions are — in development and in tests — and off in a release build, so a
+tear-down that writes `true` is guessing at how the program was compiled. Read
+the value before changing it, and put back what was read:
 
 ```dart
 final tracing = Solo.traceStateChanges;

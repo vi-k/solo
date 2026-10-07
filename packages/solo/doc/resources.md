@@ -312,7 +312,7 @@ ends, and the next job starts, or `close()` comes back, while `openTemp` is
 still running. The file appears after that, and the deletion follows it — late
 and alone, with nobody waiting for either. A late error from the call or from
 the disposer is told to the controller's `onError` hook and then handed to
-`Solo.errorHandler`, or to the zone when no handler is set.
+`Solo.unansweredHandler`, or to the zone when no handler is set.
 
 ### The wait that stays with it
 
@@ -355,12 +355,13 @@ live that long, and it alone covers the time after the body returns and while
 its children finish.
 
 An error thrown by cleanup is told to the controller's `onError` hook and to
-`Solo.observer`, and then handed to `Solo.errorHandler`, or to the zone when no
-handler is set; [Answering for an error](errors.md#answering-for-an-error) on
-the errors page has the whole route. A `Cancelled` thrown by cleanup is told to
-the same two and goes no further: a cancellation is a decision somebody made,
-not a failure. Neither changes the outcome of the job — cleanup that throws
-leaves a `Done` job `Done`.
+`Solo.observer`, and then handed to `Solo.unansweredHandler`, or to the zone
+when no handler is set;
+[Answering for an error](errors.md#answering-for-an-error) on the errors page
+has the whole route. A `Cancelled` thrown by cleanup is told to the same two
+and goes no further: a cancellation is a decision somebody made, not a failure.
+Neither changes the outcome of the job — cleanup that throws leaves a `Done`
+job `Done`.
 
 Never await the same job's `done`, `value` or `cancel()` from its cleanup: each
 completes only after that cleanup, so the wait never ends, and neither does a

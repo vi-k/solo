@@ -82,7 +82,7 @@ void main() {
   test('an error handler takes the default route over', () {
     final caught = <String>[];
     final answered = <String>[];
-    Solo.errorHandler =
+    Solo.unansweredHandler =
         (solo, job, error, stackTrace) => answered.add('${job.key}: $error');
     try {
       fakeAsync((async) {
@@ -100,7 +100,7 @@ void main() {
         async.flushTimers();
       });
     } finally {
-      Solo.errorHandler = null;
+      Solo.unansweredHandler = null;
     }
     expect(answered, ['j: Bad state: abandoned boom']);
     expect(caught, isEmpty, reason: 'the handler answered for it');
@@ -108,7 +108,7 @@ void main() {
 
   test('an error handler that throws reaches the zone', () {
     final caught = <String>[];
-    Solo.errorHandler =
+    Solo.unansweredHandler =
         (solo, job, error, stackTrace) => throw StateError('handler boom');
     try {
       fakeAsync((async) {
@@ -126,7 +126,7 @@ void main() {
         async.flushTimers();
       });
     } finally {
-      Solo.errorHandler = null;
+      Solo.unansweredHandler = null;
     }
     expect(caught, ['Bad state: handler boom']);
   });
@@ -360,12 +360,12 @@ void main() {
     test('in a child of run reaches the error handler behind it', () {
       final caught = <String>[];
       final answered = <String>[];
-      Solo.errorHandler =
+      Solo.unansweredHandler =
           (solo, job, error, stackTrace) => answered.add('${job.key}: $error');
       try {
         fakeAsync((async) => _coveredChild(TestSolo(), async, caught));
       } finally {
-        Solo.errorHandler = null;
+        Solo.unansweredHandler = null;
       }
       expect(answered, ['child: Bad state: child failed first']);
       expect(caught, isEmpty, reason: 'the handler answered for it');
@@ -392,12 +392,12 @@ void main() {
       final caught = <String>[];
       final answered = <String>[];
       final solo = _Loud();
-      Solo.errorHandler =
+      Solo.unansweredHandler =
           (solo, job, error, stackTrace) => answered.add('${job.key}: $error');
       try {
         fakeAsync((async) => _coveredChild(solo, async, caught, ignored: true));
       } finally {
-        Solo.errorHandler = null;
+        Solo.unansweredHandler = null;
       }
       expect(solo.errors, ['Bad state: child failed first']);
       expect(answered, isEmpty, reason: 'nobody answers for it');
@@ -447,7 +447,7 @@ void main() {
         final caught = <String>[];
         final answered = <String>[];
         final readers = <String>[];
-        Solo.errorHandler = (solo, job, error, stackTrace) =>
+        Solo.unansweredHandler = (solo, job, error, stackTrace) =>
             answered.add('${job.key}: $error');
         try {
           fakeAsync(
@@ -459,7 +459,7 @@ void main() {
             ),
           );
         } finally {
-          Solo.errorHandler = null;
+          Solo.unansweredHandler = null;
         }
         expect(answered, ['root: Bad state: root failed first']);
         expect(caught, isEmpty, reason: 'the handler answered for it');
@@ -471,12 +471,12 @@ void main() {
         () {
       final caught = <String>[];
       final answered = <String>[];
-      Solo.errorHandler =
+      Solo.unansweredHandler =
           (solo, job, error, stackTrace) => answered.add('$error');
       try {
         fakeAsync((async) => _coveredEach(TestSolo(), async, caught));
       } finally {
-        Solo.errorHandler = null;
+        Solo.unansweredHandler = null;
       }
       expect(answered, ['Bad state: each failed first']);
       expect(caught, isEmpty, reason: 'the handler answered for it');

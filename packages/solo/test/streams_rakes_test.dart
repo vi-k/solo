@@ -164,7 +164,7 @@ void main() {
   tearDown(() {
     stage.dispose();
     Solo.observer = null;
-    Solo.errorHandler = null;
+    Solo.unansweredHandler = null;
   });
 
   group('Processing a stream', () {

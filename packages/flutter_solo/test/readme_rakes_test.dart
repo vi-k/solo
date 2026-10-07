@@ -1402,16 +1402,17 @@ void main() {
       expect(answering.answered, [isA<StateError>()]);
 
       final handled = <Object>[];
-      addTearDown(() => Solo.errorHandler = null);
-      Solo.errorHandler = (solo, job, error, stackTrace) => handled.add(error);
+      addTearDown(() => Solo.unansweredHandler = null);
+      Solo.unansweredHandler =
+          (solo, job, error, stackTrace) => handled.add(error);
       expect(await inZone(Background()), isEmpty);
       expect(handled, [isA<StateError>()]);
-      Solo.errorHandler = null;
+      Solo.unansweredHandler = null;
 
       _says('The same road carries the errors no outcome holds — the failure '
           'of work a body handed to `ctx.unattended`, say — unless the '
-          'controller overrides `onUnanswered` or a `Solo.errorHandler` is '
-          'set to answer for them');
+          'controller overrides `onUnanswered` or a `Solo.unansweredHandler` '
+          'is set to answer for them');
     });
 
     testWidgets('an observer sees such a failure and does not take it',

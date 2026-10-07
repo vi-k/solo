@@ -238,7 +238,7 @@ which belongs to the body, and the body is over by the time cleanup runs:
 `join` throws `StateError`, and the flush never happens. That does not depend
 on how the job ended — an upload that finished `Done` leaves the buffer
 unflushed as well. The error is told to the controller's `onError` hook and
-then handed to `Solo.errorHandler`, or to the zone when no handler is set;
+then handed to `Solo.unansweredHandler`, or to the zone when no handler is set;
 [Answering for an error](errors.md#answering-for-an-error) on the errors page
 has the whole route.
 
@@ -333,7 +333,7 @@ it is called immediately; registered while the cancellation is still passing to
 the children, it is called in its turn, after the listeners registered before
 it. Successful and failed jobs release these listeners without calling them.
 What a listener throws goes the way an error of cleanup goes, to the `onError`
-hook and on to `Solo.errorHandler` or the zone, and so does what a
+hook and on to `Solo.unansweredHandler` or the zone, and so does what a
 `ctx.onCancel` callback throws. An `async` listener is not awaited, and an
 error of its future goes straight to the zone, past the hook.
 

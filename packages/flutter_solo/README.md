@@ -408,8 +408,8 @@ created the job, so a fire-and-forget call is
 `controller.load().ignoreFailure()` — the `ignoreFailure()` is what says the
 outcome is nobody's business. The same road carries the errors no outcome
 holds — the failure of work a body handed to `ctx.unattended`, say — unless the
-controller overrides `onUnanswered` or a `Solo.errorHandler` is set to answer
-for them:
+controller overrides `onUnanswered` or a `Solo.unansweredHandler` is set to
+answer for them:
 [Answering for an error](https://github.com/vi-k/solo/blob/main/packages/solo/doc/errors.md#answering-for-an-error)
 on the errors page of `solo` has the list. A `SoloObserver` sees such a failure
 and does not take it: watching is not answering.

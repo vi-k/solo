@@ -43,7 +43,7 @@ final class ProfileController extends Solo<ProfileState> {
 
 /// Not on the page: the function around the statement, called once at
 /// startup.
-void installErrorHandler() {
-  Solo.errorHandler = (solo, job, error, stackTrace) =>
+void installUnansweredHandler() {
+  Solo.unansweredHandler = (solo, job, error, stackTrace) =>
       Sentry.captureException(error, stackTrace: stackTrace);
 }

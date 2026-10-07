@@ -228,7 +228,7 @@ final class _HandledCamera extends Solo<CameraState> {
 void main() {
   tearDown(() {
     Solo.observer = null;
-    Solo.errorHandler = null;
+    Solo.unansweredHandler = null;
   });
 
   // First in the file: nothing has touched a static yet.
@@ -236,7 +236,7 @@ void main() {
     test('four of the five start as null, and tracing is on with assertions',
         () {
       expect(Solo.observer, isNull);
-      expect(Solo.errorHandler, isNull);
+      expect(Solo.unansweredHandler, isNull);
       expect(Solo.debug, isNull);
       expect(Job.debug, isNull);
       expect(Solo.traceStateChanges, isTrue, reason: 'assertions are on');
@@ -744,9 +744,9 @@ void main() {
             'the call');
       });
 
-      test('Solo.errorHandler takes it in place of the zone', () async {
+      test('Solo.unansweredHandler takes it in place of the zone', () async {
         final answered = Completer<Object>();
-        Solo.errorHandler =
+        Solo.unansweredHandler =
             (solo, job, error, stackTrace) => answered.complete(error);
 
         final run = await _run(() async {
@@ -765,7 +765,9 @@ void main() {
         expect(_what(error), 'StateError: no network');
         expect(run.state, _passed);
         expect(_errors(run), isEmpty);
-        _says('sets `Solo.errorHandler`, which takes it in place of the zone');
+        _says(
+          'sets `Solo.unansweredHandler`, which takes it in place of the zone',
+        );
       });
 
       test('a call that answers after the job is over reports nothing',

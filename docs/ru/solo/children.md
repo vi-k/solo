@@ -145,7 +145,7 @@ Job<String> syncAndAnnounce(int item) => run<Ready, String>(
 ошибка вышла из тела или пока он ещё ждал своих дочерних задач или шла его
 уборка, эта ошибка в тело родителя не бросается. Ребёнок кончается `Cancelled`,
 `await ctx.run(child)` бросает `Cancelled`, а ошибка уходит в `onUnanswered`
-контроллера: по умолчанию в `Solo.errorHandler`, а без него в зону.
+контроллера: по умолчанию в `Solo.unansweredHandler`, а без него в зону.
 `child.ignoreFailure()` её гасит, а `ctx.run(child).ignore()` нет: он
 обрабатывает то, что бросает future, а она бросает отмену.
 

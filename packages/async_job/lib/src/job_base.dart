@@ -212,7 +212,7 @@ abstract interface class Job<T> {
   /// The hooks of an observer need no such walk: the job walks the error this
   /// way itself. [JobObserver.onError] is told about each failure and each
   /// cancellation on its own, [JobAnswerer.onUnanswered] is asked about each
-  /// failure, and that is how `Solo.errorHandler` in `solo` gets them.
+  /// failure, and that is how `Solo.unansweredHandler` in `solo` gets them.
   ///
   /// The rules:
   ///
@@ -1586,8 +1586,8 @@ abstract class JobBase<T> implements Job<T> {
   ///
   /// For an engine of a domain whose own answer for an error with nowhere to go
   /// ends with the zone: `solo`, for example, sends one here when neither an
-  /// override of `Solo.onUnanswered` nor `Solo.errorHandler` took it. The core
-  /// reaches the zone by itself, through the default body of
+  /// override of `Solo.onUnanswered` nor `Solo.unansweredHandler` took it.
+  /// The core reaches the zone by itself, through the default body of
   /// [JobAnswerer.onUnanswered], through [notifyError] without an observer that
   /// answers and through an unobserved [Failed]. A cancellation is held back
   /// here as it is there, so an engine of a domain does not write that rule

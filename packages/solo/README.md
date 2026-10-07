@@ -326,7 +326,7 @@ search.
 | [Children and streams](doc/children.md) | Child jobs, chains, steps in a row |
 | [Streams](doc/streams.md) | `ctx.each` in a controller, following another controller |
 | [Event accumulation](doc/accumulation.md) | `collect`, `accumulate`, debounce and throttle |
-| [Errors and observation](doc/errors.md) | `SoloObserver`, `errorHandler`, `pending`, logs |
+| [Errors and observation](doc/errors.md) | `SoloObserver`, `unansweredHandler`, `pending`, logs |
 | [Testing](doc/testing.md) | Awaiting outcomes, fake time, timeouts |
 | [Flutter](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.md) | The `flutter_solo` package: `SoloListenable`, owning a controller, rebuilding a screen |
 | [Camera example](doc/camera.md) | One controller with rules, cleanup and a device |

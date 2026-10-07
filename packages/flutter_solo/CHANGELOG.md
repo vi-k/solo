@@ -87,17 +87,17 @@ last entries of the first group name them.
   and `onClose` is where a controller stops its source; `Solo` carries its own
   listeners; `Solo.onError` is a notice, the new `Solo.onUnanswered` answers
   for an error no outcome carries, and an observer no longer keeps such an
-  error out of `Solo.errorHandler` and the zone; `collect` and `accumulate`
-  default to `AccumulationPolicy.join`, and `replace` moves the waiting group's
-  job instead of cancelling it; `Policy.droppable` compares the result types of
-  the two jobs and throws `ArgumentError` when they differ, and the job it
-  drops ends with a `DuplicateCancelReason` instead of a `ManualCancelReason`;
-  a job replaced under `Policy.replace` or `Policy.restart` ends with a
-  `ReplacedCancelReason` instead of a `ManualCancelReason`;
-  `SoloQueue.lastWhere` is gone; `cancelAll` and the removing methods of
-  `SoloQueue` take a `reason`; `job`, `run`, `collect` and `accumulate` take a
-  `timeout`, so an override of any of them that does not take it stops
-  compiling, and one that takes it passes it on to `super`, or
+  error out of `Solo.unansweredHandler` and the zone; `collect` and
+  `accumulate` default to `AccumulationPolicy.join`, and `replace` moves the
+  waiting group's job instead of cancelling it; `Policy.droppable` compares the
+  result types of the two jobs and throws `ArgumentError` when they differ, and
+  the job it drops ends with a `DuplicateCancelReason` instead of a
+  `ManualCancelReason`; a job replaced under `Policy.replace` or
+  `Policy.restart` ends with a `ReplacedCancelReason` instead of a
+  `ManualCancelReason`; `SoloQueue.lastWhere` is gone; `cancelAll` and the
+  removing methods of `SoloQueue` take a `reason`; `job`, `run`, `collect` and
+  `accumulate` take a `timeout`, so an override of any of them that does not
+  take it stops compiling, and one that takes it passes it on to `super`, or
   `run(timeout: ...)` loses its deadline; a subclass member named like a new
   member of `Solo` stops compiling or overrides it, `isFinished` silently. From
   `async_job`, through `solo`: a cancellation inside a `ParallelWaitError` is a
@@ -122,8 +122,8 @@ last entries of the first group name them.
   the `externalSetState` that made the change. The job whose `emit` it was ends
   `Done` where it used to end `Failed`, and a widget test fails on the reported
   error instead.
-- Errors that `0.2.0` kept to the hooks reach `Solo.errorHandler` or the zone:
-  the first section of
+- Errors that `0.2.0` kept to the hooks reach `Solo.unansweredHandler` or the
+  zone: the first section of
   [the `solo` changelog](https://github.com/vi-k/solo/blob/main/packages/solo/CHANGELOG.md)
   under the same heading.
 

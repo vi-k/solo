@@ -401,7 +401,7 @@ void main() {
 
   tearDown(() {
     Solo.observer = null;
-    Solo.errorHandler = null;
+    Solo.unansweredHandler = null;
     Solo.debug = null;
     Job.debug = null;
     Solo.traceStateChanges = traceStateChanges;
@@ -577,11 +577,11 @@ void main() {
         );
         final handled = <String>[];
         final ran = _run((async) {
-          Solo.errorHandler =
+          Solo.unansweredHandler =
               (solo, job, error, stackTrace) => handled.add(text(error));
           _dirtyCleanup(make());
           async.flushMicrotasks();
-          Solo.errorHandler = null;
+          Solo.unansweredHandler = null;
           _dirtyCleanup(make());
         });
 
@@ -600,7 +600,7 @@ void main() {
       final handled = <String>[];
       late answering.ProfileController profile;
       final ran = _run((async) {
-        Solo.errorHandler =
+        Solo.unansweredHandler =
             (solo, job, error, stackTrace) => handled.add(text(error));
         profile = answering.ProfileController(ProfileApi());
         final job = profile.load()..ignoreFailure();
@@ -626,7 +626,7 @@ void main() {
       late Bench bench;
       late Job<void> job;
       final ran = _run((async) {
-        Solo.errorHandler =
+        Solo.unansweredHandler =
             (solo, job, error, stackTrace) => handled.add(text(error));
         bench = Bench();
         job = bench.run<int, void>(
@@ -927,7 +927,7 @@ void main() {
       late Bench bench;
       late Job<void> job;
       final ran = _run((async) {
-        Solo.errorHandler =
+        Solo.unansweredHandler =
             (solo, job, error, stackTrace) => handled.add(text(error));
         bench = Bench();
         // Not ignored: ignoreFailure() would silence a failure that asked for
@@ -955,7 +955,7 @@ void main() {
       );
       final served = <String>[];
       final ran = _run((async) {
-        Solo.errorHandler = (solo, job, error, stackTrace) =>
+        Solo.unansweredHandler = (solo, job, error, stackTrace) =>
             served.add('${solo.runtimeType}: ${text(error)}');
         _dirtyCleanup(Bench());
         _dirtyCleanup(_ReportsAndReturns());
@@ -1000,7 +1000,7 @@ void main() {
       );
       final served = <String>[];
       final ran = _run((async) {
-        Solo.errorHandler =
+        Solo.unansweredHandler =
             (solo, job, error, stackTrace) => served.add('${solo.runtimeType}');
         _dirtyCleanup(_AnswersInSilence());
         _dirtyCleanup(Bench());
@@ -1018,12 +1018,12 @@ void main() {
       final handled = <String>[];
       late _AnswersAndCallsSuper controller;
       final ran = _run((async) {
-        Solo.errorHandler =
+        Solo.unansweredHandler =
             (solo, job, error, stackTrace) => handled.add(text(error));
         controller = _AnswersAndCallsSuper();
         _dirtyCleanup(controller);
         async.flushMicrotasks();
-        Solo.errorHandler = null;
+        Solo.unansweredHandler = null;
         _dirtyCleanup(controller);
       });
 
@@ -1066,7 +1066,7 @@ void main() {
       final got = <String>[];
       late Bench bench;
       final ran = _run((async) {
-        Solo.errorHandler =
+        Solo.unansweredHandler =
             (solo, job, error, stackTrace) => got.add(text(error));
         bench = Bench();
         handsWorkOver(bench);
@@ -1084,7 +1084,7 @@ void main() {
       );
       late Bench bench;
       _run((async) {
-        Solo.errorHandler = (solo, job, error, stackTrace) {};
+        Solo.unansweredHandler = (solo, job, error, stackTrace) {};
         bench = Bench();
         handsWorkOver(bench);
       });
@@ -1103,7 +1103,7 @@ void main() {
 
     test('the handler of the page: each failure on its own, no Cancelled', () {
       final ran = _run((async) {
-        answering.installErrorHandler();
+        answering.installUnansweredHandler();
         handsWorkOver(Bench());
       });
 
@@ -2393,7 +2393,7 @@ void main() {
         late Job<String> job;
         late page.ProfileController profile;
         final ran = _run((async) {
-          Solo.errorHandler =
+          Solo.unansweredHandler =
               (solo, job, error, stackTrace) => handled.add(text(error));
           profile = page.ProfileController(ProfileApi());
           job = profile.load();
@@ -2415,7 +2415,7 @@ void main() {
         final handled = <String>[];
         late Job<String> job;
         final ran = _run((async) {
-          Solo.errorHandler =
+          Solo.unansweredHandler =
               (solo, job, error, stackTrace) => handled.add(text(error));
           job = page.ProfileController(ProfileApi()).load()..ignoreFailure();
           async.flushMicrotasks();
@@ -2436,8 +2436,8 @@ void main() {
         'asked to answer for them through `onUnanswered`',
       );
       _says(
-        'Without an override of it or an installed `Solo.errorHandler`, they '
-        "fall back to the job's creation zone",
+        'Without an override of it or an installed `Solo.unansweredHandler`, '
+        "they fall back to the job's creation zone",
       );
       _says('Such an error can arrive after the job has already completed');
       _says('It does not replace an existing cancellation outcome');
@@ -2469,7 +2469,7 @@ void main() {
           'A `Cancelled` that arrives this way — an abandoned action that '
           'ended in the cancellation of another job, say — is told to the '
           'reporting hooks, and nobody is asked to answer for it: it reaches '
-          'neither `onUnanswered` nor `Solo.errorHandler` nor the zone',
+          'neither `onUnanswered` nor `Solo.unansweredHandler` nor the zone',
         );
         final handled = <String>[];
         final watching = _Watching();
@@ -2477,7 +2477,7 @@ void main() {
         final ran = _run((async) {
           Solo.observer = watching;
           if (withHandler) {
-            Solo.errorHandler =
+            Solo.unansweredHandler =
                 (solo, job, error, stackTrace) => handled.add(text(error));
           }
           bench = Bench();
@@ -3505,8 +3505,8 @@ void main() {
       test('the zone of last resort for a rule that throws on a change', () {
         _says(
           "Re-evaluation errors fall back to the job's creation zone when "
-          'neither an override of `onUnanswered` nor a `Solo.errorHandler` '
-          'answers for them',
+          'neither an override of `onUnanswered` nor a '
+          '`Solo.unansweredHandler` answers for them',
         );
         final where = <String, List<String>>{};
         fakeAsync((async) {
@@ -3536,13 +3536,13 @@ void main() {
       test('the send fails once the job is over', () {
         _says(
           "The future's error belongs to nobody in the job: the hooks never "
-          'see it, `Solo.errorHandler` is never asked',
+          'see it, `Solo.unansweredHandler` is never asked',
         );
         final handled = <String>[];
         late first.BroadCamera camera;
         late Job<void> job;
         final ran = _run((async) {
-          Solo.errorHandler =
+          Solo.unansweredHandler =
               (solo, job, error, stackTrace) => handled.add(text(error));
           camera = first.BroadCamera(Hardware());
           job = camera.zoomTo(2);
@@ -3621,7 +3621,7 @@ void main() {
       test('the same with a handler set', () {
         final handled = <String>[];
         final ran = _run((async) {
-          Solo.errorHandler =
+          Solo.unansweredHandler =
               (solo, job, error, stackTrace) => handled.add(text(error));
           page.Camera(Hardware()).zoomTo(2, page.sendZoom);
           async.flushMicrotasks();

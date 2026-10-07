@@ -35,7 +35,7 @@ part 'queue.dart';
 /// the hook had returned. [onUnanswered] is the one with a body of its own:
 /// what reaches it and has nowhere else to go — a disposer, an `onCancel`
 /// callback, a late failure of an abandoned call or of work handed to
-/// `JobContext.unattended`, a rule that threw — goes on to [errorHandler],
+/// `JobContext.unattended`, a rule that threw — goes on to [unansweredHandler],
 /// or to the zone when none is set. [publish] is not one of them: it is how
 /// a subclass delivers the state, and an error there is the subclass's own
 /// business.
@@ -43,7 +43,7 @@ abstract class Solo<S extends Object> {
   /// A global observer for all controllers; `null` by default.
   ///
   /// Watching only. Setting one changes nothing about where an error then
-  /// goes; [errorHandler] is what takes that over.
+  /// goes; [unansweredHandler] is what takes that over.
   static SoloObserver? observer;
 
   /// Where an error with nowhere else to go goes instead of the zone;
@@ -62,7 +62,7 @@ abstract class Solo<S extends Object> {
   /// on. An error it throws itself goes to the zone.
   ///
   /// ```dart
-  /// Solo.errorHandler = (solo, job, error, stackTrace) =>
+  /// Solo.unansweredHandler = (solo, job, error, stackTrace) =>
   ///     Sentry.captureException(error, stackTrace: stackTrace);
   /// ```
   ///
@@ -70,7 +70,7 @@ abstract class Solo<S extends Object> {
   /// `ParallelWaitError` that `[a, b].wait` throws comes in a call of its
   /// own, with its own stack trace. An uncaught [Cancelled], alone or inside
   /// one, does not come.
-  static SoloErrorHandler? errorHandler;
+  static SoloUnansweredHandler? unansweredHandler;
 
   /// Engine tracing for debugging the engine itself; `null` by default.
   ///
@@ -956,7 +956,7 @@ abstract class Solo<S extends Object> {
   /// reason. Every error that comes here has been through [onError] already:
   /// one error is announced once.
   ///
-  /// **What the default body does.** With no [errorHandler] set, the error
+  /// **What the default body does.** With no [unansweredHandler] set, the error
   /// goes to the zone the job was created in — the same thing the core does
   /// by default, with an observer or without one. With a handler set it
   /// goes there instead, and nowhere else. Setting an [observer] changes
@@ -974,7 +974,7 @@ abstract class Solo<S extends Object> {
   /// out of the zone; call `super.onUnanswered(job, error, stackTrace)` to
   /// keep the default route as well.
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
-    final handler = errorHandler;
+    final handler = unansweredHandler;
     if (handler == null) {
       // Every job that reaches this hook is one of this controller's.
       (job as _SoloJob)._reportToZone(error, stackTrace);
@@ -1329,8 +1329,8 @@ final class _SoloJobObserver<S extends Object>
   }
 
   /// The controller answers for its jobs: [Solo.onUnanswered], and the
-  /// [Solo.errorHandler] behind it. [Solo.observer] is not asked — watching
-  /// every controller is not answering for any of them.
+  /// [Solo.unansweredHandler] behind it. [Solo.observer] is not asked —
+  /// watching every controller is not answering for any of them.
   @override
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
     Solo._callHook(() => _solo.onUnanswered(job, error, stackTrace));

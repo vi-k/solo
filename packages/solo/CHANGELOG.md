@@ -97,13 +97,13 @@ entries of the first group name them.
   and so did an override of `onError` that did not call `super`. Now watching
   is not answering. `onError` and the observer's `onError` are told about every
   error of the controller, once, and move it nowhere. The answer is asked of
-  `onUnanswered`, whose default body calls the new `Solo.errorHandler` — one
-  handler for the process, set once at startup — and, with no handler set,
+  `onUnanswered`, whose default body calls the new `Solo.unansweredHandler` —
+  one handler for the process, set once at startup — and, with no handler set,
   sends the error to the zone the job was created in. The hook and the handler
   get one failure at a time: each failure inside a `ParallelWaitError` in a
   call of its own, and a `Cancelled`, alone or inside one, not at all.
   **Migrating.** An application that set an observer and relied on the silence
-  sets `Solo.errorHandler` as well. An override of `onError` that called
+  sets `Solo.unansweredHandler` as well. An override of `onError` that called
   `super` keeps working: the call runs an empty body, and the route stands
   without it. One that did not call `super` no longer keeps these errors
   anywhere: move its body to `onUnanswered`, where an override answers for them
@@ -283,9 +283,9 @@ entries of the first group name them.
 
 ### Changes you will see on upgrade
 
-Errors that `0.2.0` lost, or kept to the hooks, now reach `Solo.errorHandler`,
-or, with no handler set, the zone the job was created in. In a test that zone
-is the test's, and the test fails:
+Errors that `0.2.0` lost, or kept to the hooks, now reach
+`Solo.unansweredHandler`, or, with no handler set, the zone the job was created
+in. In a test that zone is the test's, and the test fails:
 
 - an error no outcome carries, in an application that sets `Solo.observer` or
   overrides `onError` without calling `super`: the entry on `onUnanswered`
@@ -361,7 +361,7 @@ cancelled is taken where the rules noticed; `Solo.traceStateChanges`, under
   thrown, and it is the walk for whoever reads one. The hooks need no such
   call: `Solo.onError` and `SoloObserver.onError` are told about each failure
   and each `Cancelled` inside it in a call of its own, and `Solo.onUnanswered`
-  and `Solo.errorHandler` are asked about each failure. See
+  and `Solo.unansweredHandler` are asked about each failure. See
   [Answering for an error](doc/errors.md#answering-for-an-error).
 
 - `Solo` carries its own listeners: `addListener` and `removeListener`, and the

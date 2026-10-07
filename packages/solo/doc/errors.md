@@ -74,10 +74,10 @@ Somebody has to answer for those, and the one asked is always the same:
 The override above answers for them here, and they reach nothing else: this
 controller owns what its jobs failed at and has said so. A controller that
 writes no such override keeps the default body, which hands them to
-`Solo.errorHandler`. The application sets that handler:
+`Solo.unansweredHandler`. The application sets that handler:
 
 ```dart
-Solo.errorHandler = (solo, job, error, stackTrace) =>
+Solo.unansweredHandler = (solo, job, error, stackTrace) =>
     Sentry.captureException(error, stackTrace: stackTrace);
 ```
 
@@ -445,13 +445,14 @@ waits for children of its own or runs its cleanup, `await job.value` throws the
 Errors from cleanup, cancellation callbacks and operations abandoned by
 `abandonable` go to the reporting hooks, and the controller is asked to answer
 for them through `onUnanswered`. Without an override of it or an installed
-`Solo.errorHandler`, they fall back to the job's creation zone. Such an error
-can arrive after the job has already completed. It does not replace an existing
-cancellation outcome. A `Cancelled` that arrives this way — an abandoned action
-that ended in the cancellation of another job, say — is told to the reporting
-hooks, and nobody is asked to answer for it: it reaches neither `onUnanswered`
-nor `Solo.errorHandler` nor the zone. The job's own cancellation, thrown back
-by such an action, is news to nobody and is not reported at all.
+`Solo.unansweredHandler`, they fall back to the job's creation zone. Such an
+error can arrive after the job has already completed. It does not replace an
+existing cancellation outcome. A `Cancelled` that arrives this way — an
+abandoned action that ended in the cancellation of another job, say — is told
+to the reporting hooks, and nobody is asked to answer for it: it reaches
+neither `onUnanswered` nor `Solo.unansweredHandler` nor the zone. The job's own
+cancellation, thrown back by such an action, is news to nobody and is not
+reported at all.
 
 An unhandled error of `job.value` or `ctx.run(child)` is still an unhandled
 Future error under Dart's rules, even if that error is `Cancelled`: that route
@@ -588,9 +589,9 @@ A job with a state handler is re-evaluated after its body has ended as well;
 [Handler eligibility and errors](state.md#handler-eligibility-and-errors) on
 the state page is about that. Re-evaluation errors fall back to the job's
 creation zone when neither an override of `onUnanswered` nor a
-`Solo.errorHandler` answers for them. In the root Dart zone, an unhandled error
-can terminate the application. Install error reporting and observe job outcomes
-according to your application's needs.
+`Solo.unansweredHandler` answers for them. In the root Dart zone, an unhandled
+error can terminate the application. Install error reporting and observe job
+outcomes according to your application's needs.
 
 ## Background work and logs
 
@@ -605,9 +606,9 @@ unawaited(analytics.send('zoom'));
 
 `unawaited` says what is meant — this caller does not wait — and that is all it
 says. The future's error belongs to nobody in the job: the hooks never see it,
-`Solo.errorHandler` is never asked, and it surfaces as an unhandled error in
-whatever zone the body happened to run in, with nothing there to name the job
-it came from.
+`Solo.unansweredHandler` is never asked, and it surfaces as an unhandled error
+in whatever zone the body happened to run in, with nothing there to name the
+job it came from.
 
 ### Work with a life of its own
 

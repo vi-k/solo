@@ -80,7 +80,7 @@ abstract class SoloObserver {
   /// Watching changes nothing about where the error then goes: an error
   /// with nowhere else to go reaches the zone the job was created in
   /// whether an observer is set or not. To take that route over, set
-  /// [Solo.errorHandler] — answering for an error is a job of its own,
+  /// [Solo.unansweredHandler] — answering for an error is a job of its own,
   /// and setting up a log must not quietly turn reporting off. See
   /// [Failed] for the errors that also reach the zone.
   void onError(
@@ -107,8 +107,8 @@ abstract class SoloObserver {
 }
 
 /// Answers for an error that has nowhere else to go; see
-/// [Solo.errorHandler].
-typedef SoloErrorHandler = void Function(
+/// [Solo.unansweredHandler].
+typedef SoloUnansweredHandler = void Function(
   Solo<Object> solo,
   Job<Object?> job,
   Object error,

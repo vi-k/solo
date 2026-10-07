@@ -56,7 +56,7 @@ final class JournalObserver extends SoloObserver {
   void onClose(Solo<Object> solo) => lines.add('closed');
 
   /// Answers for an error with nowhere else to go, so the journal above is
-  /// the only place it shows up; see `Solo.errorHandler`.
+  /// the only place it shows up; see `Solo.unansweredHandler`.
   void answerForErrors(
     Solo<Object> solo,
     Job<Object?> job,

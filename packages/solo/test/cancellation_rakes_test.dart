@@ -189,7 +189,7 @@ void main() {
 
   tearDown(() {
     Solo.observer = null;
-    Solo.errorHandler = null;
+    Solo.unansweredHandler = null;
     Solo.debug = null;
   });
 
@@ -1139,12 +1139,13 @@ void main() {
       );
     });
 
-    test('with Solo.errorHandler set the error goes there, not to the zone',
+    test(
+        'with Solo.unansweredHandler set the error goes there, not to the zone',
         () {
       final handled = <Object>[];
       late first.InvertedUploader uploader;
       final left = _zone((async) {
-        Solo.errorHandler = (solo, job, error, stackTrace) {
+        Solo.unansweredHandler = (solo, job, error, stackTrace) {
           handled.add(error);
         };
         uploader = first.InvertedUploader()..upload([1]);
@@ -1955,7 +1956,7 @@ void main() {
       });
 
       for (final handler in [false, true]) {
-        final where = handler ? 'Solo.errorHandler' : 'the zone';
+        final where = handler ? 'Solo.unansweredHandler' : 'the zone';
 
         test('what a listener throws goes to onError and on to $where', () {
           final handled = <Object>[];
@@ -1963,7 +1964,7 @@ void main() {
           late Job<void> job;
           final left = _zone((async) {
             if (handler) {
-              Solo.errorHandler = (solo, job, error, stackTrace) {
+              Solo.unansweredHandler = (solo, job, error, stackTrace) {
                 handled.add(error);
               };
             }
@@ -1994,7 +1995,7 @@ void main() {
           late Bench bench;
           final left = _zone((async) {
             if (handler) {
-              Solo.errorHandler = (solo, job, error, stackTrace) {
+              Solo.unansweredHandler = (solo, job, error, stackTrace) {
                 handled.add(error);
               };
             }

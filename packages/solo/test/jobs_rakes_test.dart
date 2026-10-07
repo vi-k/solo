@@ -137,7 +137,7 @@ void main() {
 
   tearDown(() {
     Solo.observer = null;
-    Solo.errorHandler = null;
+    Solo.unansweredHandler = null;
     Solo.debug = null;
   });
 

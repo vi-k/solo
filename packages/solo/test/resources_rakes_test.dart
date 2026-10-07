@@ -178,7 +178,7 @@ void main() {
   tearDown(() {
     stage.dispose();
     Solo.observer = null;
-    Solo.errorHandler = null;
+    Solo.unansweredHandler = null;
   });
 
   group('The opening block', () {
@@ -1483,8 +1483,8 @@ void main() {
       test('a late error from the call is told to onError, then the zone', () {
         _says(
           'A late error from the call or from the disposer is told to the '
-          "controller's `onError` hook and then handed to `Solo.errorHandler`, "
-          'or to the zone when no handler is set',
+          "controller's `onError` hook and then handed to "
+          '`Solo.unansweredHandler`, or to the zone when no handler is set',
         );
         late first.TempAbandoner keeper;
         final errors = _zone((async) {
@@ -1517,9 +1517,10 @@ void main() {
         expect(errors, ['Bad state: the file is busy']);
       });
 
-      test('with Solo.errorHandler set the late error goes there instead', () {
+      test('with Solo.unansweredHandler set the late error goes there instead',
+          () {
         final handled = <Object>[];
-        Solo.errorHandler =
+        Solo.unansweredHandler =
             (solo, job, error, stackTrace) => handled.add(error);
         late first.TempAbandoner keeper;
         final errors = _zone((async) {
@@ -1938,7 +1939,7 @@ void main() {
         _says(
           "An error thrown by cleanup is told to the controller's `onError` "
           'hook and to `Solo.observer`, and then handed to '
-          '`Solo.errorHandler`, or to the zone when no handler is set',
+          '`Solo.unansweredHandler`, or to the zone when no handler is set',
         );
         _says('cleanup that throws leaves a `Done` job `Done`');
         final watching = _Watching();
@@ -1957,9 +1958,10 @@ void main() {
         expect('${job.outcome}', 'Done(null)', reason: 'Done stays Done');
       });
 
-      test('goes to Solo.errorHandler instead of the zone when one is set', () {
+      test('goes to Solo.unansweredHandler instead of the zone when one is set',
+          () {
         final handled = <Object>[];
-        Solo.errorHandler =
+        Solo.unansweredHandler =
             (solo, job, error, stackTrace) => handled.add(error);
         late Bench bench;
         final errors = _zone((async) {
@@ -1995,9 +1997,10 @@ void main() {
         expect('${job.outcome}', 'Done(null)');
       });
 
-      test('a Cancelled stays out of Solo.errorHandler when one is set', () {
+      test('a Cancelled stays out of Solo.unansweredHandler when one is set',
+          () {
         final handled = <Object>[];
-        Solo.errorHandler =
+        Solo.unansweredHandler =
             (solo, job, error, stackTrace) => handled.add(error);
         final errors = _zone((async) {
           cleanupThrows(Bench(), const Cancelled('from cleanup'));
