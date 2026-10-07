@@ -365,8 +365,11 @@ Job<String> thumbnailWithADeadline() {
     try {
       return 'page with ${await ctx.run(thumbnail)}';
     } on Cancelled catch (cancelled) {
-      if (cancelled.reason is! TimeoutCancelReason) rethrow;
-      return 'page without a thumbnail';
+      if (cancelled.reason case TimeoutCancelReason(:final timeout)) {
+        return 'page without a thumbnail after ${timeout.inMilliseconds} ms';
+      } else {
+        rethrow;
+      }
     }
     // #enddocregion
   });

@@ -650,19 +650,24 @@ final thumbnail = Job.deferred<String>(
 try {
   return 'page with ${await ctx.run(thumbnail)}';
 } on Cancelled catch (cancelled) {
-  if (cancelled.reason is! TimeoutCancelReason) rethrow;
-  return 'page without a thumbnail';
+  if (cancelled.reason case TimeoutCancelReason(:final timeout)) {
+    return 'page without a thumbnail after ${timeout.inMilliseconds} ms';
+  } else {
+    rethrow;
+  }
 }
 ```
 
 ```text
-outcome: Done(page without a thumbnail)
+outcome: Done(page without a thumbnail after 15 ms)
 ```
 
 Ребёнок кончается `Cancelled(timeout)`, и `ctx.run` бросает эту отмену в тело
 родителя. Сам родитель не отменён: срок вышел у ребёнка. Ветка `catch` в Dart
 отбирает только по типу, без шаблона и без `when`, поэтому она ловит любой
-`Cancelled` и бросает дальше всё, что не относится к сроку: отмену самой задачи
-и миниатюру, которую отменил кто-то другой. Если ветки нет, срок ребёнка
-кончает родителя `Cancelled(handler: child thumbnail: Cancelled(timeout))`.
-Ключ нужен ради этой строки: ребёнок без ключа печатается как `child null`.
+`Cancelled`, а шаблон стоит в `if` внутри неё: он узнаёт причину срока
+и достаёт его длительность. `else` бросает дальше всё, что не относится
+к сроку: отмену самой задачи и миниатюру, которую отменил кто-то другой. Если
+ветки нет, срок ребёнка кончает родителя
+`Cancelled(handler: child thumbnail: Cancelled(timeout))`. Ключ нужен ради этой
+строки: ребёнок без ключа печатается как `child null`.

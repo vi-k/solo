@@ -175,7 +175,8 @@ job a deadline of its own»: параметр `timeout` у `Job(...)`,
 в `accumulation.md`: срок задачи `accumulate` не накладывает записи, а теряет
 финальный `emit`. Сторожа: `timeout_test.dart` в `async_job` и `solo`, раздел
 «A deadline» в `cancellation_rakes_test.dart`. Вопросы владельца о сроке —
-пунктами раздела «По чтению владельца» того же отчёта, на 2026-10-07 их два:
+пунктами раздела «По чтению владельца» того же отчёта, на 2026-10-07 их три,
+третий — шаблон в `if` в примере того же раздела вместо `is!`; первые два:
 абзац о `onCancel:` и `onError:` в `packages/solo/doc/cancellation.md` называет
 `Future.timeout`, с которым сравнивает, а абзац о ветке `catch` в «A deadline
 for one step» `async_job` говорит, что она отбирает только по типу. Клон

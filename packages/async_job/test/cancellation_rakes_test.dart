@@ -106,7 +106,7 @@ const quoted = [
     'outcome: Cancelled(timeout)',
   ],
   [
-    'outcome: Done(page without a thumbnail)',
+    'outcome: Done(page without a thumbnail after 15 ms)',
   ],
 ];
 
