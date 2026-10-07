@@ -50,10 +50,11 @@ queued job or a state the job's rules do not accept can all end work
 Every failure reaches the `onError` hook of the controller and of
 `Solo.observer`. A failed job whose outcome nobody has accessed through `done`,
 `value` or `ignoreFailure()` by the time it ends also reports an unhandled
-error to the Dart zone in which it was created; an access after that comes too
-late. Use `ignoreFailure()` when error reporting elsewhere is sufficient:
-leaving a job unawaited does not by itself mark the error as handled, and
-neither does reading `outcome`. See
+error to the Dart zone in which it was created. The job decides this once, as
+it ends: `done` read after that still returns the `Failed`, but the error is
+already in the zone. Use `ignoreFailure()` when error reporting elsewhere is
+sufficient: leaving a job unawaited does not by itself mark the error as
+handled, and neither does reading `outcome`. See
 [Handled and unhandled failures](errors.md#handled-and-unhandled-failures) on
 the errors page.
 
