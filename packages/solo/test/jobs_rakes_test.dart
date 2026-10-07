@@ -1101,6 +1101,30 @@ void main() {
       });
     });
 
+    test('a method that returns its own job hands back the dropped one', () {
+      fakeAsync((async) {
+        final camera = page.CameraController();
+        Job<void> own() {
+          final mine = camera.job<Ready, void>(
+            key: _named('own'),
+            (ctx) async {},
+          );
+          camera.add(mine, policy: Policy.droppable);
+          return mine;
+        }
+
+        final first = own();
+        final second = own();
+
+        expect(second, isNot(same(first)));
+        expect('${second.outcome}', 'Cancelled(duplicate)');
+        async.flushTimers();
+        expect('${first.outcome}', 'Done(null)');
+        camera.close().ignore();
+        async.flushTimers();
+      });
+    });
+
     test('a key held by another result type throws before the job is taken',
         () {
       fakeAsync((async) {

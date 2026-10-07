@@ -230,6 +230,10 @@ Job<Profile> load(String id) {
 }
 ```
 
+`load` hands back `taken`, and both callers await one profile. A method that
+returns `mine` instead tells the second caller that its call was dropped: that
+caller gets `Cancelled(duplicate)`, not the result of the first call.
+
 Use a distinct key for each operation and result type. A `Job<int>` handed to
 `droppable` under a key a `Job<String>` already holds throws `ArgumentError`,
 and it throws before the job is taken: nothing was queued and nothing was
