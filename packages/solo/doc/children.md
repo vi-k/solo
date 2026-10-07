@@ -97,6 +97,13 @@ not on the line after it:
 on the resources page says why. A child error or cancellation is thrown into
 the parent body with its stack trace.
 
+The clause above names `ApiException` on purpose. `Cancelled` implements
+`Exception`, so `on Exception` or `on Object` in its place would take a
+cancellation along with the failures of the API, that of the child and that of
+`trySync` itself.
+[Catching errors inside a body](errors.md#catching-errors-inside-a-body) on the
+errors page shows what that costs and what a broad clause has to do first.
+
 ## Working beside a child
 
 ```dart

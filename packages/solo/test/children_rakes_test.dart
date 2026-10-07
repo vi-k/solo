@@ -403,6 +403,59 @@ void main() {
     });
   });
 
+  group('The future of ctx.run, a broad clause', () {
+    for (final clause in ['on ApiException', 'on Exception', 'on Object']) {
+      test('$clause and a cancellation of the job', () {
+        final errors = _zone((async) {
+          final bench = Bench();
+          final parent = bench.run<Ready, bool>(key: 'parent', (ctx) async {
+            final child = bench.job<Ready, String>(
+              key: 'child',
+              (childCtx) => childCtx.join(() => api.push(7)),
+            );
+            switch (clause) {
+              case 'on ApiException':
+                try {
+                  await ctx.run(child);
+                } on ApiException {
+                  _see('the clause ran');
+                }
+              case 'on Exception':
+                try {
+                  await ctx.run(child);
+                } on Exception catch (error) {
+                  _see('the clause ran with $error');
+                }
+              default:
+                try {
+                  await ctx.run(child);
+                } on Object catch (error) {
+                  _see('the clause ran with $error');
+                }
+            }
+
+            return false;
+          });
+          async.flushMicrotasks();
+          parent.cancel().ignore();
+          async.flushMicrotasks();
+          _end(async, 'push 7');
+          _see(_how(parent));
+        });
+
+        expect(errors, isEmpty);
+        expect(_seen, [
+          if (clause != 'on ApiException')
+            'the clause ran with Cancelled(parent)',
+          'Cancelled(manual)',
+        ]);
+        _says('`Cancelled` implements `Exception`, so `on Exception` or '
+            '`on Object` in its place would take a cancellation along with '
+            'the failures of the API');
+      });
+    }
+  });
+
   group('Working beside a child', () {
     test('the upload runs while the parent sends, and its writes come in', () {
       final errors = _zone((async) {
