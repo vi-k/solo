@@ -28,10 +28,10 @@ Job<void> record() => run<CameraState, void>(
     );
 ```
 
-The check reads well, and it runs once. Nothing brings it back: by the time the
-pause is reported and the state says `paused`, the body is already inside the
-loop, and a loop is not a state checkpoint. A frame that arrives before the
-pause and two that arrive after it are stored alike.
+The check runs once, when the body starts. The pause is reported later, when
+the body is already inside the loop, and the loop never looks at the state
+again. A frame that arrives before the pause and two that arrive after it are
+stored alike.
 
 The job does not end either. `await for` is no checkpoint, so the cancellation
 `close` sends never reaches the body, and closing the controller waits until
