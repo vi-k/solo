@@ -167,11 +167,14 @@ README — `2026-10-02-async-job-readme-reread-report.md`. `extending.md`
 и с того же дня тире в переводах ловит `tool/check_translations.py`.
 `packages/solo/doc/jobs.md` он прочитал и принял 2026-10-07: десять пунктов
 в разделе «По чтению владельца» отчёта `2026-10-03-solo-jobs-reread-report.md`.
-Дальше `cancellation.md` и остальные страницы `solo` в порядке вычитки.
-С того же дня в примерах действует правило: предметный метод контроллера
-объявляет `Job<T>`, а `SoloJob<T>` пишется только там, где читают `isQueued`;
-оно записано в `packages/solo/doc/jobs.md`. Тогда же `Job`, которую вытесняют
-`Policy.replace` и `Policy.restart`, получила свою причину отмены
+Дальше `cancellation.md`, владелец читает её с 2026-10-07, пункты — в разделе
+«По чтению владельца» отчёта `2026-10-03-solo-cancellation-reread-report.md`:
+первые два раздела страницы сокращены до того, что добавляет контроллер,
+за механикой они ссылаются на страницу ядра. За ней остальные страницы `solo`
+в порядке вычитки. С того же дня в примерах действует правило: предметный метод
+контроллера объявляет `Job<T>`, а `SoloJob<T>` пишется только там, где читают
+`isQueued`; оно записано в `packages/solo/doc/jobs.md`. Тогда же `Job`, которую
+вытесняют `Policy.replace` и `Policy.restart`, получила свою причину отмены
 `ReplacedCancelReason` (`Cancelled(replaced)`) вместо `ManualCancelReason`:
 пункт 5 того же раздела отчёта, запись в «Breaking changes» CHANGELOG `solo`.
 2026-10-07 по его же слову `Job.ignore()` переименован в `Job.ignoreFailure()`
