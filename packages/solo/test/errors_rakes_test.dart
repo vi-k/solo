@@ -1055,34 +1055,43 @@ void main() {
             ..unattended(() => throw const Cancelled('alone'));
         });
 
-    test('the handler gets each error as it came, cancellations included', () {
+    test('the hook and the handler get one failure at a time', () {
       _says(
-        'The handler gets each error as it came, cancellations included: a '
-        '`Cancelled`, and a `ParallelWaitError` that `[a, b].wait` throws '
-        'with several errors in it',
+        'The hook and the handler get one failure at a time. When the error '
+        'is a `ParallelWaitError` that `[a, b].wait` throws with several '
+        'errors in it, each failure comes in a call of its own, with its own '
+        'stack trace',
+      );
+      _says(
+        'An uncaught `Cancelled`, alone or inside one, does not come at all',
       );
       final got = <String>[];
+      late Bench bench;
       final ran = _run((async) {
-        Solo.errorHandler = (solo, job, error, stackTrace) => got.add(
-              error is ParallelWaitError ? 'ParallelWaitError' : '$error',
-            );
-        handsWorkOver(Bench());
+        Solo.errorHandler =
+            (solo, job, error, stackTrace) => got.add(text(error));
+        bench = Bench();
+        handsWorkOver(bench);
       });
 
-      expect(got, [
-        'Cancelled(handler: alone)',
-        'ParallelWaitError',
-        'ParallelWaitError',
-      ]);
+      expect(got, ['a failure']);
+      expect(bench.unanswered, ['waits: a failure']);
       expect(ran.errors, isEmpty);
     });
 
+    test('the reporting hook hears the error as it came', () {
+      _says('The reporting hook hears the error as it came');
+      late Bench bench;
+      _run((async) {
+        Solo.errorHandler = (solo, job, error, stackTrace) {};
+        bench = Bench();
+        handsWorkOver(bench);
+      });
+
+      expect(bench.heard, hasLength(3), reason: 'two envelopes and one alone');
+    });
+
     test('the handler of the page: each failure on its own, no Cancelled', () {
-      _says(
-        '`Job.visitErrors` hands `onFailure` each failure inside a '
-        '`ParallelWaitError` on its own and drops each uncaught `Cancelled`, '
-        'alone or inside one',
-      );
       final ran = _run((async) {
         answering.installErrorHandler();
         handsWorkOver(Bench());
@@ -1092,15 +1101,15 @@ void main() {
       expect(ran.errors, isEmpty);
     });
 
-    test('with no handler the zone drops the same cancellations', () {
+    test('with no handler the zone gets the same failure', () {
       late Bench bench;
       final ran = _run((async) {
         bench = Bench();
         handsWorkOver(bench);
       });
 
-      expect(bench.unanswered, hasLength(3), reason: 'all three were asked');
-      expect(ran.errors, ['ParallelWaitError'], reason: 'the one that failed');
+      expect(bench.unanswered, ['waits: a failure']);
+      expect(ran.errors, ['a failure'], reason: 'the one that failed');
     });
 
     test('a SoloObserver set, and still nobody answers', () {
@@ -2448,13 +2457,9 @@ void main() {
           '${withHandler ? 'a handler set' : 'no handler'}', () {
         _says(
           'A `Cancelled` that arrives this way — an abandoned action that '
-          'ended in the cancellation of another job, say — is a late failure '
-          'like any other to the hooks: they see it, and so does '
-          '`Solo.errorHandler`',
-        );
-        _says(
-          'The zone does not: the default body of `onUnanswered` never hands '
-          'a `Cancelled` to it',
+          'ended in the cancellation of another job, say — is told to the '
+          'reporting hooks, and nobody is asked to answer for it: it reaches '
+          'neither `onUnanswered` nor `Solo.errorHandler` nor the zone',
         );
         final handled = <String>[];
         final watching = _Watching();
@@ -2476,11 +2481,8 @@ void main() {
         const line = 'abandons: Cancelled(handler: of another job)';
         expect(bench.heard, [line]);
         expect(watching.heard, [line]);
-        expect(bench.unanswered, [line]);
-        expect(
-          handled,
-          withHandler ? ['Cancelled(handler: of another job)'] : isEmpty,
-        );
+        expect(bench.unanswered, isEmpty);
+        expect(handled, isEmpty);
         expect(ran.errors, isEmpty);
       });
     }

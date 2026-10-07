@@ -44,18 +44,20 @@ now reach the zone, and fail a test there.
   `onFinish` alone, kept every one of them out of the zone without a word. Now
   `onError` hears it, and an observer that mixes in `JobAnswerer` answers for
   it in `onUnanswered`; without one the error goes to the zone the job was
-  created in, where it goes without an observer too, and a cancellation is
-  dropped. The default body of `onUnanswered` does the same. `JobAnswerer` is a
-  mixin on `JobObserver`, and `JobObserver` is a mixin class now: a class that
-  extends another one mixes it in with `with JobObserver`, or
-  `with JobObserver, JobAnswerer`, and keeps the default bodies. **Migrating.**
-  An observer from `0.2.0` compiles unchanged, and the errors it used to
-  swallow reach the zone; one that mixes in `JobAnswerer` and overrides
-  `onUnanswered` with an empty body keeps the old behaviour. An `onUnanswered`
-  written on an observer without `JobAnswerer` is never called: the analyzer
-  says so where it carries `@override`, and nowhere else. An engine built on
-  the core answers for these errors through the observer it puts on its jobs,
-  the way `solo` does. See
+  created in, where it goes without an observer too. The answer is asked for
+  one failure at a time: each failure inside a `ParallelWaitError` in a call of
+  its own, with its own stack trace, and a cancellation, alone or inside one,
+  not at all. The default body of `onUnanswered` sends the failure to that
+  zone. `JobAnswerer` is a mixin on `JobObserver`, and `JobObserver` is a mixin
+  class now: a class that extends another one mixes it in with
+  `with JobObserver`, or `with JobObserver, JobAnswerer`, and keeps the default
+  bodies. **Migrating.** An observer from `0.2.0` compiles unchanged, and the
+  errors it used to swallow reach the zone; one that mixes in `JobAnswerer` and
+  overrides `onUnanswered` with an empty body keeps the old behaviour. An
+  `onUnanswered` written on an observer without `JobAnswerer` is never called:
+  the analyzer says so where it carries `@override`, and nowhere else. An
+  engine built on the core answers for these errors through the observer it
+  puts on its jobs, the way `solo` does. See
   [Answering for errors](doc/observing.md#answering-for-errors).
 
 - **`JobBase`, `JobContextBase` and `JobStatus` moved to
@@ -321,13 +323,13 @@ named as `Job(key)`, not by its class.
 
 - **`Job.visitErrors` hands each failure and each cancellation inside an error
   to a callback of its own.** A `ParallelWaitError` that `[a, b].wait` throws
-  holds several errors, other such errors too. A check for `error is Cancelled`
-  lets a cancellation inside it through, and a report of the whole error names
-  none of its failures. `Job.visitErrors(error, stackTrace, onFailure: report)`
-  reports each failure and drops each uncaught `Cancelled`. It calls
-  `onFailure` not at all exactly when a job drops the error as a cancellation:
-  the job decides by the same walk. See
-  [Each failure on its own](doc/observing.md#each-failure-on-its-own).
+  holds several errors, other such errors too. `JobObserver.onError` hears such
+  an error whole: a check for `error is Cancelled` lets a cancellation inside
+  it through, and a report of the whole error names none of its failures.
+  `Job.visitErrors(error, stackTrace, onFailure: report)` reports each failure
+  and drops each uncaught `Cancelled`. `JobAnswerer.onUnanswered` needs no such
+  call: the job asks it by the same walk. See
+  [Answering for errors](doc/observing.md#answering-for-errors).
 
 - The debug channel names a job that handed its value over and dropped the
   conditional registrations that went with it:

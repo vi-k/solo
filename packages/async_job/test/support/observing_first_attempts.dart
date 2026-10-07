@@ -1,8 +1,7 @@
 // The first attempts of `doc/observing.md`, verbatim: the versions its
 // sections open with. They live apart from the answers in
-// `observing_page.dart`, because the first `DatabaseErrors` has the name of
-// the second, and because a line of an answer turned into a line of a first
-// attempt must not be found among the answers.
+// `observing_page.dart`, because a line of an answer turned into a line of a
+// first attempt must not be found among the answers.
 import 'dart:async';
 
 import 'package:async_job/async_job.dart';
@@ -43,27 +42,6 @@ Job<void> sendingUnawaited() => Job<void>(
         unawaited(analytics.send('loaded'));
       },
     );
-
-final class DatabaseErrors extends JobObserver with JobAnswerer {
-  @override
-  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
-    if (error is DatabaseException) {
-      print('onUnanswered: $error');
-    } else {
-      super.onUnanswered(job, error, stackTrace);
-    }
-  }
-}
-
-Job<void> saving() {
-  final job = Job<void>(
-    observer: DatabaseErrors(),
-    (ctx) async {
-      ctx.unattended(() => [saveDraft(), sendAnalytics()].wait);
-    },
-  );
-  return job;
-}
 
 final class Both extends JobObserver with JobAnswerer {
   final _reporter = Reporter();

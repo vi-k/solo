@@ -619,7 +619,11 @@ void main() {
         hasLength(2),
         reason: 'with an observer that only watches, and without one',
       );
-      expect(zone, everyElement(isA<ParallelWaitError<Object?, Object?>>()));
+      expect(
+        zone,
+        everyElement(same(boom)),
+        reason: 'the zone hears the failure, not the envelope around it',
+      );
     });
 
     fakeAsyncTest(

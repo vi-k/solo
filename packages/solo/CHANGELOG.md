@@ -99,15 +99,17 @@ entries of the first group name them.
   error of the controller, once, and move it nowhere. The answer is asked of
   `onUnanswered`, whose default body calls the new `Solo.errorHandler` — one
   handler for the process, set once at startup — and, with no handler set,
-  sends the error to the zone the job was created in. A `Cancelled` still never
-  goes to the zone. **Migrating.** An application that set an observer and
-  relied on the silence sets `Solo.errorHandler` as well. An override of
-  `onError` that called `super` keeps working: the call runs an empty body, and
-  the route stands without it. One that did not call `super` no longer keeps
-  these errors anywhere: move its body to `onUnanswered`, where an override
-  answers for them and stops them, and
-  `super.onUnanswered(job, error, stackTrace)` keeps the default route as well.
-  See [Answering for an error](doc/errors.md#answering-for-an-error).
+  sends the error to the zone the job was created in. The hook and the handler
+  get one failure at a time: each failure inside a `ParallelWaitError` in a
+  call of its own, and a `Cancelled`, alone or inside one, not at all.
+  **Migrating.** An application that set an observer and relied on the silence
+  sets `Solo.errorHandler` as well. An override of `onError` that called
+  `super` keeps working: the call runs an empty body, and the route stands
+  without it. One that did not call `super` no longer keeps these errors
+  anywhere: move its body to `onUnanswered`, where an override answers for them
+  and stops them, and `super.onUnanswered(job, error, stackTrace)` keeps the
+  default route as well. See
+  [Answering for an error](doc/errors.md#answering-for-an-error).
 
 - **The state of a closed controller is final.** Once the engine has finished
   closing, `externalSetState` throws a `StateError`, where it used to change
@@ -355,9 +357,10 @@ cancelled is taken where the rules noticed; `Solo.traceStateChanges`, under
 
 - From `async_job` comes `Job.visitErrors`: it hands each failure inside an
   error to `onFailure` on its own and each cancellation to `onCancelled`, if
-  given. `Solo.errorHandler` gets each error as it came, a `Cancelled` and a
-  `ParallelWaitError` of `[a, b].wait` included, and the example in its dartdoc
-  and on the errors page goes through `Job.visitErrors`. See
+  given. `Solo.onError` and `SoloObserver.onError` hear an error as it came, a
+  `Cancelled` and a `ParallelWaitError` of `[a, b].wait` included, and it is
+  the walk for them; `Solo.onUnanswered` and `Solo.errorHandler` are asked by
+  that walk already. See
   [Answering for an error](doc/errors.md#answering-for-an-error).
 
 - `Solo` carries its own listeners: `addListener` and `removeListener`, and the

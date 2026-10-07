@@ -62,21 +62,14 @@ abstract class Solo<S extends Object> {
   /// on. An error it throws itself goes to the zone.
   ///
   /// ```dart
-  /// Solo.errorHandler = (solo, job, error, stackTrace) => Job.visitErrors(
-  ///       error,
-  ///       stackTrace,
-  ///       onFailure: (failure, failureStackTrace) => Sentry.captureException(
-  ///         failure,
-  ///         stackTrace: failureStackTrace,
-  ///       ),
-  ///     );
+  /// Solo.errorHandler = (solo, job, error, stackTrace) =>
+  ///     Sentry.captureException(error, stackTrace: stackTrace);
   /// ```
   ///
-  /// The handler gets each error as it came, cancellations included: a
-  /// [Cancelled], and a `ParallelWaitError` that `[a, b].wait` throws with
-  /// several errors in it. [Job.visitErrors] hands `onFailure` each failure
-  /// inside a `ParallelWaitError` on its own and drops each uncaught
-  /// [Cancelled], alone or inside one.
+  /// The handler gets one failure at a time: each failure inside a
+  /// `ParallelWaitError` that `[a, b].wait` throws comes in a call of its
+  /// own, with its own stack trace. An uncaught [Cancelled], alone or inside
+  /// one, does not come.
   static SoloErrorHandler? errorHandler;
 
   /// Engine tracing for debugging the engine itself; `null` by default.
@@ -964,10 +957,13 @@ abstract class Solo<S extends Object> {
   /// goes to the zone the job was created in — the same thing the core does
   /// by default, with an observer or without one. With a handler set it
   /// goes there instead, and nowhere else. Setting an [observer] changes
-  /// neither: watching is not answering. A [Cancelled] is the one exception
-  /// and never goes to the zone: a cancellation is a decision somebody
-  /// made, not a failure, and the core keeps one out of the zone whatever
-  /// route leads there.
+  /// neither: watching is not answering.
+  ///
+  /// **One failure at a time.** [onError] heard the error as it came; this
+  /// hook is called for each failure inside a `ParallelWaitError` on its
+  /// own, with the stack trace of that failure. An uncaught [Cancelled],
+  /// alone or inside one, does not come here: a cancellation is a decision
+  /// somebody made, not a failure.
   ///
   /// **Override it to answer here instead** — a controller that owns what
   /// its jobs failed at reports to its own system and stops there. An

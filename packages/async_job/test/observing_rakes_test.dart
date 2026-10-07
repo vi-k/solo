@@ -228,16 +228,6 @@ final class HandedOn extends JobObserver with JobAnswerer {
       print('onUnanswered: $error');
 }
 
-/// A check for `error is Cancelled`, which the page says does not drop them
-/// all.
-final class AllButCancelled extends JobObserver with JobAnswerer {
-  @override
-  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
-    if (error is Cancelled) return;
-    print('onUnanswered: ${error.runtimeType}');
-  }
-}
-
 /// The error of the log section; it counts how often it is put into words.
 final class MigrationFailed implements Exception {
   int formatted = 0;
@@ -301,7 +291,6 @@ void main() {
         quotable(play(openingShown, cancelAt: 10)),
         play(first.sendingUnawaited),
         play(() => sendingHandedOver(Reporter())),
-        play(first.saving),
         play(saving),
         play(first.sendingWithBoth),
         play(sendingToTheList),
@@ -328,7 +317,6 @@ void main() {
       '### An observer': page,
       '### Work handed to the job': page,
       '## Answering for errors': page,
-      '### Each failure on its own': page,
       '## Several observers': page,
       '### Observers in one list': page,
       '### Time moved by the test': page,
@@ -1334,12 +1322,8 @@ void main() {
       );
       expect(
         play(() => cancelledOutside(observer: Answerer())),
-        [
-          'onError: Cancelled(manual)',
-          'onUnanswered: Cancelled(manual)',
-          'outcome: Done(null)',
-        ],
-        reason: 'an override is asked about it all the same',
+        ['onError: Cancelled(manual)', 'outcome: Done(null)'],
+        reason: 'an override is not asked about it either',
       );
       expect(play(cancelledOutside), ['outcome: Done(null)']);
     });
@@ -1379,12 +1363,7 @@ void main() {
 
       expect(
         quotable(play(() => rethrowing(observer: Answerer()), cancelAt: 10)),
-        [
-          'cancel',
-          'onError: Cancelled(manual)',
-          'onUnanswered: Cancelled(manual)',
-          'outcome: Cancelled(manual)',
-        ],
+        ['cancel', 'onError: Cancelled(manual)', 'outcome: Cancelled(manual)'],
       );
     });
 
@@ -1704,9 +1683,49 @@ void main() {
   });
 
   group('Answering for errors', () {
-    test(
-        'Job.visitErrors drops what the default implementation drops, '
-        'and a check for Cancelled does not', () {
+    test('each failure of an envelope is asked about on its own', () {
+      expect(play(saving), [
+        'outcome: Done(null)',
+        'onUnanswered: DatabaseException',
+        'zone: Bad state: analytics offline',
+      ]);
+      Job<void> leaving({JobObserver? observer}) =>
+          Job<void>(observer: observer, (ctx) async {
+            ctx.unattended(() => [saveDraft(), sendAnalytics()].wait);
+          });
+      expect(
+        play(leaving),
+        [
+          'outcome: Done(null)',
+          'zone: DatabaseException',
+          'zone: Bad state: analytics offline',
+        ],
+        reason: 'without an observer the zone hears them one at a time too',
+      );
+      expect(
+        play(() => leaving(observer: Reporter())),
+        [
+          'outcome: Done(null)',
+          'onError: ParallelWaitError(2 errors): DatabaseException',
+          'zone: DatabaseException',
+          'zone: Bad state: analytics offline',
+        ],
+        reason: 'onError hears the error as it came',
+      );
+      expect(
+        play(() => leaving(observer: Failures())),
+        [
+          'outcome: Done(null)',
+          'onError: DatabaseException',
+          'onError: Bad state: analytics offline',
+          'zone: DatabaseException',
+          'zone: Bad state: analytics offline',
+        ],
+        reason: 'Job.visitErrors walks it for onError',
+      );
+    });
+
+    test('nobody is asked about a cancellation, alone or in an envelope', () {
       Job<void> leaving(JobObserver observer) =>
           Job<void>(observer: observer, (ctx) async {
             ctx
@@ -1725,18 +1744,10 @@ void main() {
           });
 
       expect(play(() => leaving(DatabaseErrors())), ['outcome: Done(null)']);
-      expect(
-        play(() => leaving(first.DatabaseErrors())),
-        ['outcome: Done(null)'],
-      );
-      expect(play(() => leaving(AllButCancelled())), [
-        'onUnanswered: ParallelWaitError<List<void>, List<AsyncError?>>',
-        'onUnanswered: ParallelWaitError<List<void>, List<AsyncError?>>',
-        'outcome: Done(null)',
-      ]);
+      expect(play(() => leaving(Answering())), ['outcome: Done(null)']);
     });
 
-    test('an error that comes alone reaches onFailure as it is', () {
+    test('an error that comes alone is asked about as it is', () {
       Job<void> leaving(Future<void> Function() work) =>
           Job<void>(observer: DatabaseErrors(), (ctx) async {
             ctx.unattended(work);
@@ -1753,8 +1764,7 @@ void main() {
       expect(
         play(() => leaving(() async => throw const Cancelled('alone'))),
         ['outcome: Done(null)'],
-        reason: 'a Cancelled that comes alone goes to onCancelled, which the '
-            'observer of the page leaves out',
+        reason: 'nobody is asked about a Cancelled that comes alone',
       );
     });
 

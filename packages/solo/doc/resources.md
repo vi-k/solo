@@ -357,10 +357,10 @@ its children finish.
 An error thrown by cleanup is told to the controller's `onError` hook and to
 `Solo.observer`, and then handed to `Solo.errorHandler`, or to the zone when no
 handler is set; [Answering for an error](errors.md#answering-for-an-error) on
-the errors page has the whole route. A `Cancelled` thrown by cleanup goes the
-same way and stops short of the zone: a cancellation is a decision somebody
-made, not a failure. Neither changes the outcome of the job — cleanup that
-throws leaves a `Done` job `Done`.
+the errors page has the whole route. A `Cancelled` thrown by cleanup is told to
+the same two and goes no further: a cancellation is a decision somebody made,
+not a failure. Neither changes the outcome of the job — cleanup that throws
+leaves a `Done` job `Done`.
 
 Never await the same job's `done`, `value` or `cancel()` from its cleanup: each
 completes only after that cleanup, so the wait never ends, and neither does a

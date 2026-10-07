@@ -867,8 +867,8 @@ void main() {
     });
 
     test('a cancellation an engine handed in as a failure is dropped', () {
-      // Asked like any other, and the default answer drops a cancellation
-      // -- without an observer as well; in a child of run and in a root.
+      // Nobody is asked about a cancellation -- with an observer and
+      // without one; in a child of run and in a root.
       const cancelled = 'Cancelled(manual: built on purpose)';
       List<String> inChild(JobObserver? observer) => zoneOf((async) {
             final child = ProbeJob<int>((ctx) async {
@@ -889,10 +889,7 @@ void main() {
       for (final scenario in [inChild, inRoot]) {
         final watching = Counting();
         expect(scenario(watching), isEmpty);
-        expect(
-          watching.seen,
-          ['onError: $cancelled', 'onUnanswered: $cancelled'],
-        );
+        expect(watching.seen, ['onError: $cancelled']);
         expect(scenario(null), isEmpty);
       }
     });
@@ -1617,7 +1614,57 @@ void main() {
     ]);
   });
 
-  test('a cancellation is asked about, and the default body drops it', () {
+  test('each failure of an envelope is asked about on its own', () {
+    for (final answers in [true, false]) {
+      final observer = Counting(answers: answers);
+      final zone = zoneOf((async) {
+        Job<void>(observer: observer, (ctx) async {
+          ctx.unattended(() async {
+            await [
+              Future<void>.error(StateError('a'), StackTrace.empty),
+              Future<void>.error(const Cancelled('between'), StackTrace.empty),
+              Future<void>.error(StateError('b'), StackTrace.empty),
+            ].wait;
+          });
+          await delay(10);
+        }).ignoreFailure();
+        async.flushTimers();
+      });
+      expect(
+        observer.seen,
+        [
+          startsWith('onError: ParallelWaitError'),
+          'onUnanswered: Bad state: a',
+          'onUnanswered: Bad state: b',
+        ],
+        reason: 'answers: $answers',
+      );
+      expect(
+        zone,
+        answers ? isEmpty : ['Bad state: a', 'Bad state: b'],
+        reason: 'answers: $answers',
+      );
+    }
+  });
+
+  test('an answer that throws does not cost the next failure its own', () {
+    final observer = ThrowingAnswer();
+    final zone = zoneOf((async) {
+      Job<void>(observer: observer, (ctx) async {
+        ctx.unattended(() async {
+          await [
+            Future<void>.error(StateError('a'), StackTrace.empty),
+            Future<void>.error(StateError('b'), StackTrace.empty),
+          ].wait;
+        });
+        await delay(10);
+      }).ignoreFailure();
+      async.flushTimers();
+    });
+    expect(zone, ['Bad state: onUnanswered', 'Bad state: onUnanswered']);
+  });
+
+  test('nobody is asked about a cancellation', () {
     for (final answers in [true, false]) {
       final observer = Counting(answers: answers);
       final zone = zoneOf((async) {
@@ -1636,12 +1683,12 @@ void main() {
       });
       expect(
         observer.seen.where((line) => line.startsWith('onUnanswered')),
-        hasLength(2),
+        isEmpty,
         reason: 'answers: $answers',
       );
       expect(
-        observer.seen,
-        contains(startsWith('onUnanswered: ParallelWaitError')),
+        observer.seen.where((line) => line.startsWith('onError')),
+        hasLength(2),
         reason: 'answers: $answers',
       );
       expect(zone, isEmpty, reason: 'answers: $answers');

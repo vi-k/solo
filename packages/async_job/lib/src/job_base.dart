@@ -196,8 +196,7 @@ abstract interface class Job<T> {
   /// Walks [error] and hands each failure in it to [onFailure] and each
   /// cancellation to [onCancelled], one at a time.
   ///
-  /// [JobAnswerer.onUnanswered] and [JobObserver.onError] are handed an error
-  /// whole, and so is `Solo.errorHandler` in `solo`. That error can be a
+  /// [JobObserver.onError] is handed an error whole. That error can be a
   /// `ParallelWaitError`: `[a, b].wait` throws one when any of its futures
   /// fails, and it holds failures and cancellations side by side, other such
   /// errors too. A check for `error is Cancelled` lets a cancellation inside
@@ -206,13 +205,13 @@ abstract interface class Job<T> {
   ///
   /// ```dart
   /// @override
-  /// void onUnanswered(
-  ///   Job<Object?> job,
-  ///   Object error,
-  ///   StackTrace stackTrace,
-  /// ) =>
+  /// void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
   ///     Job.visitErrors(error, stackTrace, onFailure: report);
   /// ```
+  ///
+  /// [JobAnswerer.onUnanswered] needs no such walk: the job walks the error
+  /// this way itself and asks about each failure on its own, and that is how
+  /// `Solo.errorHandler` in `solo` gets them.
   ///
   /// The rules:
   ///
@@ -1539,12 +1538,15 @@ abstract class JobBase<T> implements Job<T> {
   /// through [JobAnswerer.onUnanswered], whose default body sends it to the
   /// zone the job was created in; without such an observer the error goes to
   /// that zone directly. Two calls, each guarded on its own: an `onError` that
-  /// throws does not cost the error its answer.
+  /// throws does not cost the error its answer. `onError` hears [error] as it
+  /// came; the answer is asked for each failure inside a `ParallelWaitError`
+  /// on its own, by the walk of [Job.visitErrors].
   ///
   /// A cancellation — a [Cancelled], or a `ParallelWaitError` carrying
-  /// nothing but cancellations — never reaches the zone from here: it is a
-  /// decision somebody made, not a failure. An observer hears it through
-  /// `onError`; without one, nobody does.
+  /// nothing but cancellations — never reaches the zone from here, and
+  /// nobody is asked to answer for it: it is a decision somebody made, not a
+  /// failure. An observer hears it through `onError`; without one, nobody
+  /// does.
   @protected
   void notifyError(Object error, StackTrace stackTrace) {
     notifyObserver(error, stackTrace);
@@ -1577,16 +1579,31 @@ abstract class JobBase<T> implements Job<T> {
   /// announced once — but an error nobody answered for still has to reach
   /// somebody.
   ///
+  /// The answer is asked for one failure at a time: a `ParallelWaitError` is
+  /// walked as [Job.visitErrors] walks it, each failure in it goes to the
+  /// observer or to the zone with its own stack trace, and a cancellation
+  /// goes to neither.
+  ///
   /// An engine of a domain answers through the observer it puts on its
   /// jobs, as `solo` does: there is no second door.
   void _handleUnanswered(Object error, StackTrace stackTrace) {
     _debug(() => '$this error nobody answered for: $error');
     final observer = _observer;
-    if (observer is! JobAnswerer) {
-      _toZone(error, stackTrace);
-      return;
-    }
-    _notify(() => observer.onUnanswered(this, error, stackTrace));
+    // One answer for each failure, each guarded on its own: an answer that
+    // throws does not cost the next failure its own.
+    _visitErrors(
+      error,
+      stackTrace,
+      onFailure: (failure, failureStackTrace) {
+        if (observer is JobAnswerer) {
+          _notify(
+            () => observer.onUnanswered(this, failure, failureStackTrace),
+          );
+        } else {
+          _toZone(failure, failureStackTrace);
+        }
+      },
+    );
   }
 
   /// Whether [error] is a cancellation and stays out of the zone: a

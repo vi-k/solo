@@ -77,14 +77,8 @@ writes no such override keeps the default body, which hands them to
 `Solo.errorHandler`. The application sets that handler:
 
 ```dart
-Solo.errorHandler = (solo, job, error, stackTrace) => Job.visitErrors(
-      error,
-      stackTrace,
-      onFailure: (failure, failureStackTrace) => Sentry.captureException(
-        failure,
-        stackTrace: failureStackTrace,
-      ),
-    );
+Solo.errorHandler = (solo, job, error, stackTrace) =>
+    Sentry.captureException(error, stackTrace: stackTrace);
 ```
 
 One handler for the whole process, set once at startup; it takes `solo` because
@@ -94,10 +88,11 @@ so each controller decides for its own jobs whether the process-wide handler
 hears them at all. An override keeps that route as well by calling
 `super.onUnanswered(job, error, stackTrace)`.
 
-The handler gets each error as it came, cancellations included: a `Cancelled`,
-and a `ParallelWaitError` that `[a, b].wait` throws with several errors in it.
-`Job.visitErrors` hands `onFailure` each failure inside a `ParallelWaitError`
-on its own and drops each uncaught `Cancelled`, alone or inside one.
+The hook and the handler get one failure at a time. When the error is a
+`ParallelWaitError` that `[a, b].wait` throws with several errors in it, each
+failure comes in a call of its own, with its own stack trace. An uncaught
+`Cancelled`, alone or inside one, does not come at all. The reporting hook
+hears the error as it came, and `Job.visitErrors` is the same walk for it.
 
 One error no outcome carries is missing from that list, and nobody is asked to
 answer for it: the failure of a body that comes after its job has accepted a
@@ -452,11 +447,10 @@ for them through `onUnanswered`. Without an override of it or an installed
 `Solo.errorHandler`, they fall back to the job's creation zone. Such an error
 can arrive after the job has already completed. It does not replace an existing
 cancellation outcome. A `Cancelled` that arrives this way — an abandoned action
-that ended in the cancellation of another job, say — is a late failure like any
-other to the hooks: they see it, and so does `Solo.errorHandler`. The zone does
-not: the default body of `onUnanswered` never hands a `Cancelled` to it. The
-job's own cancellation, thrown back by such an action, is news to nobody and is
-not reported at all.
+that ended in the cancellation of another job, say — is told to the reporting
+hooks, and nobody is asked to answer for it: it reaches neither `onUnanswered`
+nor `Solo.errorHandler` nor the zone. The job's own cancellation, thrown back
+by such an action, is news to nobody and is not reported at all.
 
 An unhandled error of `job.value` or `ctx.run(child)` is still an unhandled
 Future error under Dart's rules, even if that error is `Cancelled`: that route

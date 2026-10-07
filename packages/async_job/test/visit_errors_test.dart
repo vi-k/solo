@@ -477,7 +477,9 @@ void main() {
       ),
     );
     await done.future;
-    expect(calls, ['failure @a']);
+    // The job asks about each failure in a call of its own, so the second
+    // answer is not lost with the first.
+    expect(calls, ['failure @a', 'failure @b']);
     expect(zone, isEmpty);
   });
 }
@@ -498,13 +500,8 @@ final class _Answering extends JobObserver with JobAnswerer {
   _Answering(this.calls);
 
   @override
-  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
-      Job.visitErrors(
-        error,
-        stackTrace,
-        onFailure: (error, stackTrace) {
-          calls.add('failure @$stackTrace');
-          throw cancelled;
-        },
-      );
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
+    calls.add('failure @$stackTrace');
+    throw cancelled;
+  }
 }

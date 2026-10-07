@@ -1,10 +1,9 @@
 // The code of `doc/observing.md` as the page answers it, verbatim: every
 // block of the page but its first attempts is a run of lines of this file,
 // and `observing_rakes_test.dart` runs it. The first attempts live in
-// `observing_first_attempts.dart`: the first `DatabaseErrors` has the name
-// of the second, and a line of an answer turned into a line of a first
-// attempt must not be found among the answers. A block that declares names
-// another block declares too lives in a function of its own.
+// `observing_first_attempts.dart`: a line of an answer turned into a line of
+// a first attempt must not be found among the answers. A block that declares
+// names another block declares too lives in a function of its own.
 import 'package:async_job/async_job.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart' show isA;
@@ -124,21 +123,15 @@ final class Answering extends JobObserver with JobAnswerer {
 
 final class DatabaseErrors extends JobObserver with JobAnswerer {
   @override
-  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
-      Job.visitErrors(
-        error,
-        stackTrace,
-        onFailure: (failure, failureStackTrace) {
-          if (failure is DatabaseException) {
-            print('onUnanswered: $failure');
-          } else {
-            super.onUnanswered(job, failure, failureStackTrace);
-          }
-        },
-      );
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
+    if (error is DatabaseException) {
+      print('onUnanswered: $error');
+    } else {
+      super.onUnanswered(job, error, stackTrace);
+    }
+  }
 }
 
-/// The job of the first attempt, with the answer in place of its observer.
 Job<void> saving() {
   final job = Job<void>(
     observer: DatabaseErrors(),
@@ -147,6 +140,16 @@ Job<void> saving() {
     },
   );
   return job;
+}
+
+final class Failures extends JobObserver {
+  @override
+  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      Job.visitErrors(
+        error,
+        stackTrace,
+        onFailure: (failure, failureStackTrace) => print('onError: $failure'),
+      );
 }
 
 final class Crashes extends JobObserver with JobAnswerer {

@@ -1973,10 +1973,10 @@ void main() {
         expect(errors, isEmpty);
       });
 
-      test('a Cancelled goes the same way and stops short of the zone', () {
+      test('a Cancelled is told to the same two and goes no further', () {
         _says(
-          'A `Cancelled` thrown by cleanup goes the same way and stops short '
-          'of the zone',
+          'A `Cancelled` thrown by cleanup is told to the same two and goes '
+          'no further',
         );
         final watching = _Watching();
         Solo.observer = watching;
@@ -1990,12 +1990,12 @@ void main() {
 
         expect(bench.heard, [isA<Cancelled>()]);
         expect(watching.heard, [isA<Cancelled>()]);
-        expect(bench.unanswered, [isA<Cancelled>()]);
+        expect(bench.unanswered, isEmpty);
         expect(errors, isEmpty);
         expect('${job.outcome}', 'Done(null)');
       });
 
-      test('a Cancelled reaches Solo.errorHandler when one is set', () {
+      test('a Cancelled stays out of Solo.errorHandler when one is set', () {
         final handled = <Object>[];
         Solo.errorHandler =
             (solo, job, error, stackTrace) => handled.add(error);
@@ -2004,7 +2004,7 @@ void main() {
           async.flushMicrotasks();
         });
 
-        expect(handled, [isA<Cancelled>()]);
+        expect(handled, isEmpty);
         expect(errors, isEmpty);
       });
     });

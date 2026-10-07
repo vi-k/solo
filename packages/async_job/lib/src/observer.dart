@@ -140,7 +140,7 @@ abstract mixin class JobObserver {
 ///     Object error,
 ///     StackTrace stackTrace,
 ///   ) =>
-///       Job.visitErrors(error, stackTrace, onFailure: report);
+///       report(error, stackTrace);
 /// }
 /// ```
 ///
@@ -148,9 +148,9 @@ abstract mixin class JobObserver {
 /// `onUnanswered` written on an observer that does not mix this in is a
 /// method of its own: the job never calls it.
 ///
-/// [Job.visitErrors] hands `report` each failure inside a
-/// `ParallelWaitError` on its own and drops each uncaught [Cancelled], alone
-/// or inside one.
+/// The job asks about one failure at a time: each failure inside a
+/// `ParallelWaitError` on its own, with its own stack trace. About an
+/// uncaught [Cancelled], alone or inside one, it does not ask.
 mixin JobAnswerer on JobObserver {
   /// Nobody answered for this error, and this observer is the last one
   /// holding it.
@@ -168,19 +168,21 @@ mixin JobAnswerer on JobObserver {
   /// here: it has an outcome, and one nobody observes reaches the zone by
   /// itself. Every error that comes here has been through [onError] already.
   ///
+  /// **One failure at a time.** [onError] heard the error as it came; here
+  /// the job walks a `ParallelWaitError` the way [Job.visitErrors] does and
+  /// asks about each failure inside it in a call of its own, with the stack
+  /// trace of that failure. A cancellation does not come here — a
+  /// [Cancelled], alone or inside a `ParallelWaitError`: it is a decision
+  /// somebody made, not a failure.
+  ///
   /// **What the default body does.** It hands the error to the zone the
   /// job was created in — where the error goes when the job has no
-  /// observer, or one that does not answer. A cancellation is the exception
-  /// and goes nowhere: a [Cancelled], and a `ParallelWaitError` carrying
-  /// nothing but cancellations. A cancellation is a decision somebody made,
-  /// not a failure.
+  /// observer, or one that does not answer.
   ///
   /// **Override it to answer here instead** — an observer that reports to
   /// its own system and stops there. An override that says nothing keeps
   /// these errors out of the zone. Call
   /// `super.onUnanswered(job, error, stackTrace)` to keep the zone as well.
-  /// [Job.visitErrors] tells each uncaught [Cancelled] from the failures,
-  /// those inside a `ParallelWaitError` too.
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
     if (job is JobBase<Object?>) {
       job._toZone(error, stackTrace);

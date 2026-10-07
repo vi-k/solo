@@ -9,10 +9,10 @@
 когда пользователь отменяет, `outcome:` с тем, чем завершается `job.done`,
 `onError:` с тем, что дошло до наблюдателя, `onUnanswered:` с ошибкой,
 за которую наблюдатель ответил, и `zone:` с ошибкой, дошедшей до зоны
-неперехваченной. Первый раздел, о самом наблюдателе, открывается работающим
-кодом. Остальные открываются версией, к которой ведёт привычка, и показывают,
-что этот код делает. Следом под своим заголовком идёт версия, которая работает,
-а там, где первая уже работает, версия проще.
+неперехваченной. Разделы о самом наблюдателе и об ответе за ошибки открываются
+работающим кодом. Остальные открываются версией, к которой ведёт привычка,
+и показывают, что этот код делает. Следом под своим заголовком идёт версия,
+которая работает, а там, где первая уже работает, версия проще.
 
 ## Наблюдатель
 
@@ -220,7 +220,7 @@ outcome: Cancelled(manual)
 | Ошибка тела, случившаяся после того, как задача приняла отмену | `onError` | Никто |
 | Ошибка тела в ветке `ctx.runAll`, чья группа бросает другой провал | `onError`, затем `onUnanswered`, если наблюдатель отвечает, иначе зона | Зона |
 | Вне тела: поздняя ошибка действия, ожидание которого прервал `ctx.abandonable`, ошибка уборки, колбэка `ctx.onCancel` или `job.whenCancelled`, работы `ctx.unattended`, `toString` ключа дочерней задачи или её `Cancelled`, когда ядро называет её в отмене родителя | `onError`, затем `onUnanswered`, если наблюдатель отвечает, иначе зона | Зона |
-| `Cancelled`, брошенный вне тела | `onError`, затем `onUnanswered`, если наблюдатель отвечает, иначе никто | Никто |
+| `Cancelled`, брошенный вне тела | `onError` | Никто |
 | Собственная отмена задачи из действия, ожидание которого прервал `ctx.abandonable`, или из работы `ctx.unattended` | Никто | Никто |
 | То, что бросает вызов контекста, сделанный телом без `await`, в том числе собственная отмена задачи, а у `ctx.abandonable` только пока тело не кончилось | Зона, где идёт тело, как у любой future, которую никто не ждёт | Зона, где идёт тело |
 
@@ -359,11 +359,10 @@ zone: Bad state: analytics offline
 
 Ошибки, которых не несёт ни один исход, идут от `onError` дальше, к ответу.
 Наблюдатель, который только смотрит, например `Reporter`, ответа не даёт, и они
-уходят туда же, куда ушли бы без наблюдателя: в зону, а неперехваченный
-`Cancelled` отбрасывается, сам по себе или в `ParallelWaitError`, в котором
-одни `Cancelled`. Поэтому то, что наблюдатель слышит ошибку, не меняет, куда
-она уходит. Наблюдатель, который отвечает за эти ошибки сам, подмешивает
-`JobAnswerer` и переопределяет его `onUnanswered`:
+уходят туда же, куда ушли бы без наблюдателя: в зону. Поэтому то, что
+наблюдатель слышит ошибку, не меняет, куда она уходит. Наблюдатель, который
+отвечает за эти ошибки сам, подмешивает `JobAnswerer` и переопределяет его
+`onUnanswered`:
 
 ```dart
 final class Answering extends JobObserver with JobAnswerer {
@@ -374,15 +373,10 @@ final class Answering extends JobObserver with JobAnswerer {
 ```
 
 Там ошибки и останавливаются, до зоны они не доходят. Если `onUnanswered`
-не переопределять, он отправляет их в зону, где задача создана,
-а неперехваченный `Cancelled` отбрасывает, как и без ответа. Поэтому вызов
-`super.onUnanswered(job, error, stackTrace)` отправляет ошибку ещё и в зону.
-Наблюдатель, который отвечает только за знакомые ему ошибки базы данных, отдаёт
-остальное `super`.
-
-### Первая попытка
-
-`onUnanswered` принимает одну ошибку, поэтому наблюдатель проверяет её тип:
+не переопределять, он отправляет их в зону, где задача создана, как и без
+ответа. Поэтому вызов `super.onUnanswered(job, error, stackTrace)` отправляет
+ошибку ещё и в зону. Наблюдатель, который отвечает только за знакомые ему
+ошибки базы данных, отдаёт остальное `super`:
 
 ```dart
 final class DatabaseErrors extends JobObserver with JobAnswerer {
@@ -397,11 +391,10 @@ final class DatabaseErrors extends JobObserver with JobAnswerer {
 }
 ```
 
-Ошибку базы данных, пришедшую вместе с другой, он пропускает. Задача отдаёт
-`ctx.unattended` две операции, которых ждут вместе: `saveDraft` падает
-с `DatabaseException`, а `sendAnalytics` со `StateError`.
+Задача отдаёт `ctx.unattended` две операции, которых ждут вместе: `saveDraft`
+падает с `DatabaseException`, а `sendAnalytics` со `StateError`.
 `[saveDraft(), sendAnalytics()].wait` бросает `ParallelWaitError`, в котором
-лежат оба провала, и наблюдатель получает эту одну ошибку:
+лежат оба провала:
 
 ```dart
 final job = Job<void>(
@@ -414,53 +407,31 @@ final job = Job<void>(
 
 ```text
 outcome: Done(null)
-zone: ParallelWaitError(2 errors): DatabaseException
-```
-
-Ошибка базы данных ушла в зону без ответа, а ошибка аналитики не названа вовсе.
-
-### Каждый провал отдельно
-
-`Job.visitErrors` отдаёт наблюдателю ошибки из `ParallelWaitError` по одной:
-
-```dart
-final class DatabaseErrors extends JobObserver with JobAnswerer {
-  @override
-  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
-      Job.visitErrors(
-        error,
-        stackTrace,
-        onFailure: (failure, failureStackTrace) {
-          if (failure is DatabaseException) {
-            print('onUnanswered: $failure');
-          } else {
-            super.onUnanswered(job, failure, failureStackTrace);
-          }
-        },
-      );
-}
-```
-
-```text
-outcome: Done(null)
 onUnanswered: DatabaseException
 zone: Bad state: analytics offline
 ```
 
-Теперь `super` получает провалы по одному, и зона слышит ошибку аналитики
-отдельно, а не весь `ParallelWaitError`. Ошибку, которая
-не `ParallelWaitError`, `Job.visitErrors` отдаёт в `onFailure` как есть, с её
-стеком: на ошибку базы данных, пришедшую одну, наблюдатель отвечает как раньше.
+`onUnanswered` спрашивают об одном провале за раз. Задача обходит
+`ParallelWaitError` и спрашивает о каждом провале внутри него, со стеком этого
+провала: за ошибку базы данных отвечает наблюдатель, а ошибку аналитики зона
+слышит отдельно. Неперехваченный `Cancelled` не провал, и о нём не спрашивают
+никого, пришёл ли он один или внутри `ParallelWaitError`.
 
-`Cancelled` не провал, и в `onFailure` он не попадает: для него
-у `Job.visitErrors` есть второй колбэк, `onCancelled`. Он необязательный,
-и здесь не передан. В него уходит `Cancelled`, пришедший один, и каждый
-`Cancelled`, с которым завершилась future внутри `ParallelWaitError`. Раз
-колбэка нет, они отбрасываются, как отбрасывает их и `onUnanswered`, если его
-не переопределять. Проверка `error is Cancelled` отбросила бы не все:
-`ParallelWaitError`, в котором одни `Cancelled`, сам не является `Cancelled`,
-а `[a, b].wait` бросает именно его, когда future, которые он ждёт, завершаются
-с `Cancelled`.
+`onError` слышит ошибку такой, какой она пришла: `ParallelWaitError` целиком,
+и `Cancelled` тоже. `Job.visitErrors` делает тот же обход для `onError`,
+который сообщает о каждом провале:
+
+```dart
+final class Failures extends JobObserver {
+  @override
+  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      Job.visitErrors(
+        error,
+        stackTrace,
+        onFailure: (failure, failureStackTrace) => print('onError: $failure'),
+      );
+}
+```
 
 Переопределение отвечает за задачу, которой передали наблюдателя, и за дочерние
 задачи, которые его наследуют, на любой глубине. За все задачи сразу приложение
