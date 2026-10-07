@@ -82,10 +82,10 @@ Solo.unansweredHandler = (solo, job, error, stackTrace) =>
 ```
 
 One handler for the whole application, set once at startup. With none set,
-these errors go to the zone the job was created in. The error arrives at the
-hook, and the hook calls the handler `Solo.unansweredHandler`, so each
-controller decides for its own jobs whether the application-wide handler hears
-them at all. An override keeps that route as well by calling
+these errors go to the zone the job was created in. The error arrives at
+`onUnanswered`, and `onUnanswered` calls the handler `Solo.unansweredHandler`,
+so each controller decides for its own jobs whether the application-wide
+handler hears them at all. An override keeps that route as well by calling
 `super.onUnanswered(job, error, stackTrace)`.
 
 The hook and the handler get one failure at a time. When the error is a
