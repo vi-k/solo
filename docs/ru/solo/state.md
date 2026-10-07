@@ -167,7 +167,7 @@ final subscription = camera.stream.listen(print);
 | --- | --- |
 | `Solo<S>` | Состояние, `Job`, очередь, правила и слушателей. |
 | `Solo<S> with SoloStream` | Всё из `Solo` и broadcast-стрим `stream`. |
-| `Solo<S> with SoloListenable` | Всё из `Solo` и интерфейс Flutter `ValueListenable<S>`. |
+| `Solo<S> with SoloListenable` | Всё из `Solo` и интерфейс Flutter `ValueListenable<S>`. Миксин лежит в пакете [`flutter_solo`](https://pub.dev/packages/flutter_solo). |
 
 `addListener` принадлежит самому движку и стоит на самом `Solo`, поэтому
 сказанное ниже верно для любого контроллера: и со своей доставкой, и без

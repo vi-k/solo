@@ -166,7 +166,7 @@ checked `ctx.state`.
 | --- | --- |
 | `Solo<S>` | State, jobs, queue, rules and listeners. |
 | `Solo<S> with SoloStream` | All of `Solo` plus a broadcast `stream`. |
-| `Solo<S> with SoloListenable` | All of `Solo` plus Flutter's `ValueListenable<S>`. |
+| `Solo<S> with SoloListenable` | All of `Solo` plus Flutter's `ValueListenable<S>`. The mixin comes from [`flutter_solo`](https://pub.dev/packages/flutter_solo). |
 
 `addListener` is the engine's own member, on `Solo` itself, so what follows
 holds for every controller — one with a delivery of its own and one without
