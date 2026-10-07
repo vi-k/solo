@@ -620,6 +620,39 @@ void main() {
       });
     });
 
+    test('cancelling a finished link leaves the running one alone', () {
+      fakeAsync((async) {
+        final loaded = Job<String>((ctx) async => '1');
+        final parsed = loaded.then<int>((ctx, text) async {
+          await ctx.abandonable(() => delay(50));
+          return int.parse(text);
+        });
+        final saved = parsed.then<int>((ctx, number) async {
+          await ctx.abandonable(() => delay(50));
+          return number;
+        });
+
+        async.elapse(const Duration(milliseconds: 10));
+        expect('${loaded.outcome}', 'Done(1)');
+        expect(parsed.isFinished, isFalse);
+        loaded.cancel().ignore();
+        async.flushMicrotasks();
+        expect(parsed.isCancelled, isFalse);
+        expect(saved.isCancelled, isFalse);
+
+        async.elapse(const Duration(milliseconds: 50));
+        expect('${parsed.outcome}', 'Done(1)');
+        expect(saved.isFinished, isFalse);
+        loaded.cancel().ignore();
+        parsed.cancel().ignore();
+        async.flushMicrotasks();
+        expect(saved.isCancelled, isFalse);
+
+        async.flushTimers();
+        expect('${saved.outcome}', 'Done(1)');
+      });
+    });
+
     test('the parent ends Done while the continuation is still running', () {
       fakeAsync((async) {
         final trace = <String>[];

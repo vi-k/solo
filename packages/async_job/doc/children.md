@@ -576,6 +576,13 @@ Each forwarded request carries `ChainCancelReason` with the adjacent job's
 several continuations to one job, cancelling one can cancel their shared source
 and the others too.
 
+A continuation starts only when its source has finished, so a link that is
+running has nothing unfinished behind it. Once `parsed` works, `loaded` is over
+and `loaded.cancel()` does nothing: `parsed` goes on, and `saved` after it. The
+same holds one link down: with `saved` running, cancelling `loaded` or `parsed`
+leaves it alone. To stop a link that is running, cancel that link or one after
+it.
+
 `await saved.cancel()` waits for the unfinished predecessors, their children
 and cleanup, and any work and cleanup already started by `saved`. Sources
 retain their normal cancellation rules: `cancellable: false` refuses a request,
