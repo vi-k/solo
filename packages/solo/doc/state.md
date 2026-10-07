@@ -340,15 +340,16 @@ to perform work, such as refresh data or save an incoming value, enqueue a
 normal job. An event being delivered by a stream does not by itself justify
 bypassing the queue.
 
-The subscription is cancelled in `onClose`, which the engine calls once, when
-every job is over and the state is not final yet, whichever mode closed the
-controller. Stopping the source when `close` is called is the tidier-looking
-moment, and it costs nothing only while no running job depends on the fact.
-With `SoloCloseMode.drain` it costs the drain: the queue goes on running after
-the call, and the jobs in it are the ones that most need to hear that the
-device is gone. `SoloCloseMode.cancel` is not safe from it either — a
-`cancellable: false` job waiting for an answer the device will never give is
-freed by the disconnection, and `close` waits for that job.
+The subscription is cancelled in `onClose`, not when `close` is called: the
+engine calls `onClose` once and later, when every job is over and the state is
+not final yet, whichever mode closed the controller. Stopping the source when
+`close` is called is the tidier-looking moment, and it costs nothing only while
+no running job depends on the fact. With `close(mode: SoloCloseMode.drain)` it
+costs the drain: the queue goes on running after the call, and the jobs in it
+are the ones that most need to hear that the device is gone.
+`SoloCloseMode.cancel` is not safe from it either — a `cancellable: false` job
+waiting for an answer the device will never give is freed by the disconnection,
+and `close` waits for that job.
 
 Once `onClose` has run, the subscription callback above is not called at all,
 so its write cannot arrive after the end. A callback that has to await
