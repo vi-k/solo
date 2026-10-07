@@ -512,9 +512,10 @@ void main() {
           'the upload failed: no outcome',
           'Failed(ApiException)',
         ]);
-        _says('A future kept this way has no listener until the `await`');
-        _says('`ignore()` on the kept future gives it a listener and takes '
-            'nothing from the `return`, which throws the error all the same');
+        _says('Nobody waits for a future kept this way until the `await`');
+        _says('`ignore()` on the kept future says that the error is not to '
+            'be reported there. The `return` asks for the future afterwards '
+            'and throws that error all the same.');
       });
     }
 

@@ -89,7 +89,7 @@ final class Announcing extends Syncer {
         key: _Op.syncAndAnnounce,
         (ctx) async {
           // Kept, not awaited: the upload runs while the parent goes on.
-          // `ignore()` gives its failure a listener whenever it comes.
+          // A failure of the upload is ignored until the `return` asks.
           final uploading = ctx.run(_sync(item))..ignore();
           await ctx.join(() => analytics.send('started $item'));
           return uploading;

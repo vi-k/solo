@@ -111,7 +111,7 @@ SoloJob<String> syncAndAnnounce(int item) => run<Ready, String>(
       key: _Op.syncAndAnnounce,
       (ctx) async {
         // Kept, not awaited: the upload runs while the parent goes on.
-        // `ignore()` gives its failure a listener whenever it comes.
+        // A failure of the upload is ignored until the `return` asks.
         final uploading = ctx.run(_sync(item))..ignore();
         await ctx.join(() => analytics.send('started $item'));
         return uploading;
@@ -125,10 +125,11 @@ job answers to its own rules for every one of them: a write of the child that
 the parent's working type or `keepWhile` does not accept cancels the parent,
 and the child with it.
 
-A future kept this way has no listener until the `await`: an upload that fails
+Nobody waits for a future kept this way until the `await`: an upload that fails
 while the parent is still sending would hand its error to the zone as an
-unhandled one. `ignore()` on the kept future gives it a listener and takes
-nothing from the `return`, which throws the error all the same.
+unhandled one. `ignore()` on the kept future says that the error is not to be
+reported there. The `return` asks for the future afterwards and throws that
+error all the same.
 
 ## Two ways to ignore a child
 
