@@ -1,52 +1,15 @@
 // The code of `doc/cancellation.md`, verbatim, less the first and second
 // attempts: every piece of those blocks is a run of lines of this file, and
-// `cancellation_rakes_test.dart` runs it. The page shows a body, the methods
-// of controllers and a few statements on their own; here each stands in a
-// class or a function, and a method the page writes more than once has a
-// class for each version.
+// `cancellation_rakes_test.dart` runs it. The page shows the methods of
+// controllers and a few statements on their own; here each stands in a class
+// or a function, and a method the page writes more than once has a class for
+// each version.
 import 'dart:async';
 
 import 'package:solo/solo.dart';
 
 import 'cancellation_stubs.dart';
 import 'test_solo.dart';
-
-/// The body the page opens with, and the job that runs it.
-final class Opening extends Solo<AppState> with OpenSolo<AppState>, Desk {
-  Opening() : super(const Ready());
-
-  /// Not on the page: the call that takes the body. The body is an element
-  /// of a list, where a closure ends on a line of its own as it does on the
-  /// page.
-  Job<void> start(String id) {
-    final bodies = <Future<void> Function(SoloContext<AppState, Ready> ctx)>[
-      (ctx) async {
-        // The wait ends the moment cancellation is accepted. The request may
-        // still be in flight; whatever it returns is dropped.
-        final name = await ctx.abandonable(() => api.load(id));
-
-        // Waited out whatever happens, and only afterwards does the
-        // cancellation come out in place of the value. The handle goes to
-        // dispose all the same, so it is closed whatever the outcome.
-        // ignore: unused_local_variable
-        final handle = await ctx.join(
-          device.open,
-          dispose: (handle) => handle.close(),
-        );
-
-        // An ordinary cancellation waits for this to end.
-        // ignore: unnecessary_lambdas
-        await ctx.uncancellable(() => payment.commit());
-
-        // Nothing to wrap: a checkpoint standing on its own.
-        ctx.check();
-        print(name);
-      }
-    ];
-
-    return run<Ready, void>(bodies.single);
-  }
-}
 
 /// "The token": the cancellation reaches the call.
 final class TokenPlayer extends Solo<AppState> with OpenSolo<AppState>, Desk {

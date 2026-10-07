@@ -1,32 +1,10 @@
 # Cancellation
 
-Cancellation is cooperative. Dart cannot interrupt an arbitrary `await`, and
-cancelling a job does not stop its underlying I/O. The context gives the body
-checkpoints to answer at, and the one you pick decides what happens to the
-operation behind it:
-
-```dart
-(ctx) async {
-  // The wait ends the moment cancellation is accepted. The request may
-  // still be in flight; whatever it returns is dropped.
-  final name = await ctx.abandonable(() => api.load(id));
-
-  // Waited out whatever happens, and only afterwards does the
-  // cancellation come out in place of the value. The handle goes to
-  // dispose all the same, so it is closed whatever the outcome.
-  final handle = await ctx.join(
-    device.open,
-    dispose: (handle) => handle.close(),
-  );
-
-  // An ordinary cancellation waits for this to end.
-  await ctx.uncancellable(() => payment.commit());
-
-  // Nothing to wrap: a checkpoint standing on its own.
-  ctx.check();
-  print(name);
-}
-```
+Cancellation is cooperative: the body of a job stops at a checkpoint of its
+context, and the checkpoint you pick decides what happens to the operation
+behind it. The checkpoints are those of `async_job`, and
+[its cancellation page](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cancellation.md)
+takes each of them apart.
 
 | Method | If the job accepts cancellation while waiting |
 | --- | --- |
@@ -36,42 +14,25 @@ operation behind it:
 | `ctx.pause(duration)` | Throws `Cancelled` at once, and cancels its timer. |
 | `ctx.check()` | Throws `Cancelled` when the job is already cancelled or its rules no longer hold. |
 
-A running job accepts a cancellation the moment it is asked to stop, unless an
-`uncancellable` section holds the request back or the job refuses it with
-`cancellable: false`; both are taken apart below. Accepting it makes the job
-cancelled: the cancellation passes to its children, the callbacks it registered
-with `ctx.onCancel` run, and the job ends `Cancelled` whatever the body does
-next. The body itself goes on until its next checkpoint.
-
-Such a request — `cancel()`, the cancellation of a parent, `close()`, a
-deadline given with `timeout` — is the ordinary cancellation of the code and
-the table above. The other kind comes from the job's own state rules, and
-neither a section nor `cancellable: false` stops it.
-
-`abandonable` suits a request whose result can be abandoned. The request can
+A controller adds two things. Its queue waits for the running job, so the
+choice of a checkpoint is also a choice of when the next job starts.
+`abandonable` suits a request whose result can be abandoned: the request can
 continue after the job has finished and the next job has started. `join` suits
 work that must finish before the queue proceeds, such as a device command or
-opening a device. Neither method stops the operation itself.
+opening a device.
 
-What `join` hands over to own goes to its `dispose`, not to a line after the
-call. A cancellation accepted while the device is opening comes out of `join`
-in place of the handle, and the body never reaches the next line; `dispose`
-receives the handle either way.
-[Taking a resource from a call](resources.md#taking-a-resource-from-a-call) on
-the resources page takes the version with the release on the next line apart.
+And a job of a controller is cancelled in two ways. A request — `cancel()`, the
+cancellation of a parent, `close()`, a deadline given with `timeout` — is the
+ordinary cancellation of the table: an `uncancellable` section holds it back,
+and a job created with `cancellable: false` refuses it. The other kind comes
+from the job's own state rules, and neither a section nor `cancellable: false`
+stops it. Both are taken apart below.
 
-After a cancellation, a successful result of `join` turns into `Cancelled`, as
-the table says; a failure does not. If the operation fails, `join` throws the
-operation's own error, even after the job has accepted cancellation, so the
-cancellation does not hide the failure. The job's final outcome is still
-`Cancelled`, so no outcome carries that error: if the body lets it out, the
-controller's `onError` hook is told of it, and it goes no further.
-
-Four sections below open with the version this vocabulary leads to — the method
-whose name sounds like the requirement, or a plain `await` — and say what it
-does instead of what it was meant to do. Where the next version repairs that
-and brings a fault of its own, it stands as a second attempt. The version that
-works follows under its own heading.
+Three sections below open with the version this vocabulary leads to — the
+method whose name sounds like the requirement, or a plain `await` — and say
+what it does instead of what it was meant to do. Where the next version repairs
+that and brings a fault of its own, it stands as a second attempt. The version
+that works follows under its own heading.
 
 ## Stopping the underlying operation
 
@@ -167,43 +128,6 @@ A payment, its receipt on the screen and its journal entry go together: once
 the payment has gone through, the receipt has to be shown and the entry
 written, whatever the job is asked in the meantime.
 
-### The first attempt
-
-```dart
-Job<void> commit(String entry) => run<Ready, void>((ctx) async {
-      // Each call waited out, whatever happens.
-      final receipt = await ctx.join(() => payment.commit());
-      ctx.emit(ctx.state.copyWith(receipt: receipt));
-      await ctx.join(() => journal.write(entry));
-    });
-```
-
-`join` does wait the payment out, and then, as the table above says, throws
-`Cancelled` in place of the result. Cancel the job during the payment: the
-payment goes through, and neither the receipt nor the entry follows. The money
-is taken with nothing to show for it.
-
-Plain `await` on the calls fares no better: the `emit` between them is a
-checkpoint, and on the cancelled job it throws.
-
-### The second attempt
-
-```dart
-Job<void> commit(String entry) => run<Ready, void>((ctx) async {
-      // The whole step waited out as one call.
-      await ctx.join(() async {
-        final receipt = await payment.commit();
-        ctx.emit(ctx.state.copyWith(receipt: receipt));
-        await journal.write(entry);
-      });
-    });
-```
-
-Both calls are now inside what `join` waits out, but the job accepts the
-cancellation the moment it arrives, not when the step is over. The step goes on
-as the code of a cancelled job: the `emit` inside it is a checkpoint and
-throws, and the entry is lost once more.
-
 ### One section for the step
 
 ```dart
@@ -228,6 +152,14 @@ next checkpoint throws `Cancelled`; ordinary code immediately after the call
 can still execute. Keep all required work inside the section and always await
 it. An unawaited section can outlive the job and lose a held request. Sections
 can nest.
+
+One `join` around the three lines is not enough here, though it is the answer
+of
+[A step that must finish](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cancellation.md#a-step-that-must-finish)
+on the cancellation page of `async_job`. The job accepts a cancellation the
+moment it arrives, and `emit` is a checkpoint: inside the `join` it throws on
+the cancelled job, so the payment goes through, and neither the receipt nor the
+entry follows.
 
 ### A whole job
 

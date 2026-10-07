@@ -193,117 +193,6 @@ void main() {
     Solo.debug = null;
   });
 
-  group('The opening block', () {
-    test('the wait ends the moment the cancellation is accepted', () {
-      fakeAsync((async) {
-        final job = page.Opening().start('7');
-        async.flushMicrotasks();
-        unawaited(job.cancel());
-        async.flushMicrotasks();
-
-        expect('${job.outcome}', 'Cancelled(manual)');
-        expect(
-          stage.isRunning('load 7'),
-          isTrue,
-          reason: 'the request is still in flight',
-        );
-
-        _end(async, 'load 7');
-        expect(
-          stage.trace,
-          ['load 7 start', 'load 7 end'],
-          reason: 'whatever it returns is dropped',
-        );
-      });
-    });
-
-    test('the open is waited out, and dispose closes the handle on the spot',
-        () {
-      fakeAsync((async) {
-        final job = page.Opening().start('7');
-        job.done.then((_) => stage.trace.add('the job is over')).ignore();
-        async.flushMicrotasks();
-        _end(async, 'load 7');
-        unawaited(job.cancel());
-        async.flushMicrotasks();
-        expect(job.outcome, isNull, reason: 'join stays with the call');
-
-        _end(async, 'open');
-        expect(stage.trace, [
-          'load 7 start',
-          'load 7 end',
-          'open start',
-          'open end',
-          'handle closed',
-          'the job is over',
-        ]);
-        expect('${job.outcome}', 'Cancelled(manual)');
-      });
-    });
-
-    test('a handle that reached the body is closed when the job fails', () {
-      fakeAsync((async) {
-        final job = page.Opening().start('7')..ignoreFailure();
-        async.flushMicrotasks();
-        _end(async, 'load 7');
-        _end(async, 'open');
-        expect(stage.trace.last, 'payment start');
-
-        _fail(async, 'payment', StateError('declined'));
-        expect(stage.trace.last, 'handle closed');
-        expect(job.outcome, isA<Failed>());
-      });
-    });
-
-    test('an ordinary cancellation waits for the uncancellable call', () {
-      late Job<void> job;
-      late bool acceptedInside;
-      final left = _zone((async) {
-        job = page.Opening().start('7');
-        async.flushMicrotasks();
-        _end(async, 'load 7');
-        _end(async, 'open');
-        unawaited(job.cancel());
-        async.flushMicrotasks();
-        acceptedInside = job.isCancelled;
-        _end(async, 'payment');
-      });
-
-      expect(acceptedInside, isFalse);
-      expect(
-        stage.trace,
-        containsAllInOrder(['payment start', 'payment end', 'handle closed']),
-      );
-      expect('${job.outcome}', 'Cancelled(manual)');
-      expect(left.printed, isEmpty, reason: 'the check after it threw');
-    });
-
-    test('nobody cancels: every call is waited for and the name is printed',
-        () {
-      late Job<void> job;
-      final left = _zone((async) {
-        job = page.Opening().start('7');
-        async.flushMicrotasks();
-        _end(async, 'load 7');
-        _end(async, 'open');
-        _end(async, 'payment');
-      });
-
-      expect(left.printed, ['name of 7']);
-      expect('${job.outcome}', 'Done(null)');
-      expect(stage.trace, [
-        'load 7 start',
-        'load 7 end',
-        'open start',
-        'open end',
-        'payment start',
-        'payment end',
-        'handle closed',
-      ]);
-      expect(left.errors, isEmpty);
-    });
-  });
-
   group('The table', () {
     test('abandonable throws Cancelled without waiting for the operation', () {
       fakeAsync((async) {
@@ -445,65 +334,7 @@ void main() {
     });
   });
 
-  group('Accepting a cancellation', () {
-    test('happens inside cancel(): the children first, then ctx.onCancel', () {
-      fakeAsync((async) {
-        final bench = Bench();
-        final job = bench.run<Ready, int>((ctx) async {
-          ctx.onCancel(() => stage.trace.add('ctx.onCancel'));
-          ctx.run(
-            bench.job<Ready, void>((child) async {
-              child.onCancel(() => stage.trace.add('child ctx.onCancel'));
-              await child.abandonable(() => stage.start<void>('child', null));
-            }),
-          ).ignore();
-          await stage.start<void>('step', null);
-
-          return 42;
-        });
-        async.flushMicrotasks();
-        unawaited(job.cancel());
-        stage.trace.add('cancel() returned');
-        expect(job.isCancelled, isTrue);
-
-        _end(async, 'step');
-        expect(stage.trace, [
-          'child start',
-          'step start',
-          'child ctx.onCancel',
-          'ctx.onCancel',
-          'cancel() returned',
-          'step end',
-        ]);
-        expect(
-          '${job.outcome}',
-          'Cancelled(manual)',
-          reason: 'the body returned 42',
-        );
-      });
-    });
-
-    test('whatever the body throws next, the hook alone is told of it', () {
-      late Bench bench;
-      late Job<int> job;
-      final left = _zone((async) {
-        bench = Bench();
-        job = bench.run<Ready, int>((ctx) async {
-          await stage.start<void>('step', null);
-          throw StateError('after the cancellation');
-        });
-        async.flushMicrotasks();
-        unawaited(job.cancel());
-        async.flushMicrotasks();
-        _end(async, 'step');
-      });
-
-      expect('${job.outcome}', 'Cancelled(manual)');
-      expect(bench.heard, [isA<StateError>()]);
-      expect(bench.unanswered, isEmpty);
-      expect(left.errors, isEmpty);
-    });
-
+  group('The queue and a checkpoint', () {
     test(
         'a request that abandonable let go of outlives the job and the next '
         'one', () {
@@ -540,33 +371,6 @@ void main() {
         expect(stage.trace, ['command start', 'command end', 'next start']);
         _end(async, 'next');
       });
-    });
-
-    test('a join whose call fails throws that error, and the hook is told', () {
-      late Bench bench;
-      late Job<void> job;
-      Object? seen;
-      final left = _zone((async) {
-        bench = Bench();
-        job = bench.run<Ready, void>((ctx) async {
-          try {
-            await ctx.join(() => stage.start<void>('write', null));
-          } on Object catch (error) {
-            seen = error;
-            rethrow;
-          }
-        });
-        async.flushMicrotasks();
-        unawaited(job.cancel());
-        async.flushMicrotasks();
-        _fail(async, 'write', StateError('the device said no'));
-      });
-
-      expect(seen, isA<StateError>(), reason: 'the failure is not hidden');
-      expect('${job.outcome}', 'Cancelled(manual)');
-      expect(bench.heard, [same(seen)]);
-      expect(bench.unanswered, isEmpty, reason: 'it goes no further');
-      expect(left.errors, isEmpty);
     });
   });
 
@@ -829,45 +633,6 @@ void main() {
   });
 
   group('Protecting a step or a whole job', () {
-    test('the first attempt: the payment goes through, nothing follows', () {
-      fakeAsync((async) {
-        final till = first.JoiningTill();
-        final job = till.commit('entry');
-        async.flushMicrotasks();
-        unawaited(job.cancel());
-        expect(job.isCancelled, isTrue, reason: 'join holds nothing back');
-        async.flushMicrotasks();
-
-        _end(async, 'payment');
-        expect(
-          stage.trace,
-          ['payment start', 'payment end'],
-          reason: 'join waited the payment out and threw Cancelled',
-        );
-        expect('${till.currentState}', 'Ready(0 s, null)');
-        expect('${job.outcome}', 'Cancelled(manual)');
-      });
-    });
-
-    test('a plain await on the calls: the emit between them throws', () {
-      fakeAsync((async) {
-        final bench = Bench();
-        final job = bench.run<Ready, void>((ctx) async {
-          final receipt = await payment.commit();
-          ctx.emit(ctx.state.copyWith(receipt: receipt));
-          await journal.write('entry');
-        });
-        async.flushMicrotasks();
-        unawaited(job.cancel());
-        async.flushMicrotasks();
-
-        _end(async, 'payment');
-        expect(stage.trace, ['payment start', 'payment end']);
-        expect('${bench.currentState}', 'Ready(0 s, null)');
-        expect('${job.outcome}', 'Cancelled(manual)');
-      });
-    });
-
     test(
         'emit is a checkpoint: on a cancelled job it throws and writes '
         'nothing', () {
@@ -894,10 +659,16 @@ void main() {
       });
     });
 
-    test('the second attempt: the emit inside the join throws', () {
+    test('one join around the step: the emit inside it throws', () {
       fakeAsync((async) {
-        final till = first.OneJoinTill();
-        final job = till.commit('entry');
+        final till = Bench();
+        final job = till.run<Ready, void>((ctx) async {
+          await ctx.join(() async {
+            final receipt = await payment.commit();
+            ctx.emit(ctx.state.copyWith(receipt: receipt));
+            await journal.write('entry');
+          });
+        });
         async.flushMicrotasks();
         unawaited(job.cancel());
         expect(
@@ -3049,13 +2820,13 @@ void main() {
   });
 
   group('The page', () {
-    test('four sections open with a first attempt, as the introduction says',
+    test('three sections open with a first attempt, as the introduction says',
         () {
       expect(
         RegExp(r'^### The first attempt$', multiLine: true).allMatches(_page()),
-        hasLength(4),
+        hasLength(3),
       );
-      expect(_prose(), contains('Four sections below open with the version'));
+      expect(_prose(), contains('Three sections below open with the version'));
     });
 
     test('one subsection opens with a first attempt of its own', () {
@@ -3066,11 +2837,11 @@ void main() {
       );
     });
 
-    test('three of them go on to a second attempt', () {
+    test('two of them go on to a second attempt', () {
       expect(
         RegExp(r'^#{3,4} The second attempt$', multiLine: true)
             .allMatches(_page()),
-        hasLength(3),
+        hasLength(2),
       );
     });
 
@@ -3089,7 +2860,6 @@ void main() {
     const answers = 'test/support/cancellation_page.dart';
     const attempts = 'test/support/cancellation_first_attempts.dart';
     const holders = {
-      '# Cancellation': answers,
       '### The first attempt': attempts,
       '### The second attempt': attempts,
       '### The token': answers,

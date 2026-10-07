@@ -48,34 +48,6 @@ final class JoiningPlayer extends Solo<AppState> with OpenSolo<AppState>, Desk {
       );
 }
 
-/// The first attempt of "Protecting a step or a whole job": each call waited
-/// out on its own.
-final class JoiningTill extends Solo<AppState> with OpenSolo<AppState>, Desk {
-  JoiningTill() : super(const Ready());
-
-  Job<void> commit(String entry) => run<Ready, void>((ctx) async {
-        // Each call waited out, whatever happens.
-        // ignore: unnecessary_lambdas
-        final receipt = await ctx.join(() => payment.commit());
-        ctx.emit(ctx.state.copyWith(receipt: receipt));
-        await ctx.join(() => journal.write(entry));
-      });
-}
-
-/// The second attempt of the same section: one join around the whole step.
-final class OneJoinTill extends Solo<AppState> with OpenSolo<AppState>, Desk {
-  OneJoinTill() : super(const Ready());
-
-  Job<void> commit(String entry) => run<Ready, void>((ctx) async {
-        // The whole step waited out as one call.
-        await ctx.join(() async {
-          final receipt = await payment.commit();
-          ctx.emit(ctx.state.copyWith(receipt: receipt));
-          await journal.write(entry);
-        });
-      });
-}
-
 /// The first attempt of "Ordinary await and context lifetime": each wait is
 /// the one the other place needed.
 final class InvertedUploader extends Solo<AppState>
