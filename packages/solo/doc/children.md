@@ -202,11 +202,12 @@ has closed the progress. Its callback receives the result and a new core
 is not called, and the job `then` returned ends `Failed` with the same error.
 
 A continuation does not inherit the controller's state context, rules, observer
-or queue position. It has its own optional observer. It belongs to whoever
-called `then`, not to the controller: the controller's hooks and
-`Solo.observer` do not hear it. A failure reaches whoever reads its outcome,
-the failure of `sync` passed down the chain included, and one nobody reads goes
-to the zone. An error with no outcome goes to the zone where `then` was called.
+or queue position. It has its own optional observer, and its name is one `then`
+gives it: `Job(then)`. It belongs to whoever called `then`, not to the
+controller: the controller's hooks and `Solo.observer` do not hear it. A
+failure reaches whoever reads its outcome, the failure of `sync` passed down
+the chain included, and one nobody reads goes to the zone. An error with no
+outcome goes to the zone where `then` was called.
 
 The queue does not wait for what comes after a job: the slot is freed when the
 root job finishes, and the next queued job starts while the continuation still

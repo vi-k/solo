@@ -1430,7 +1430,8 @@ void main() {
 
       expect(errors, isEmpty);
       expect(own.heard, ['Job(then): Bad state: send failed']);
-      _says('It has its own optional observer.');
+      _says('It has its own optional observer, and its name is one `then` '
+          'gives it: `Job(then)`.');
     });
 
     test('an error with no outcome goes to the zone where then was called', () {
