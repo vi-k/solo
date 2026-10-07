@@ -949,11 +949,10 @@ void main() {
       expect(ran.errors, isEmpty);
     });
 
-    test('the handler of the page: one for the process, given the controller',
-        () {
+    test('the handler of the page: one for the app, given the controller', () {
       _says(
-        'One handler for the whole process, set once at startup; it takes '
-        '`solo` because it serves every controller',
+        'One handler for the whole application, set once at startup; it '
+        'takes `solo` because it serves every controller',
       );
       final served = <String>[];
       final ran = _run((async) {
@@ -997,8 +996,8 @@ void main() {
     test('each controller decides whether the handler hears its jobs', () {
       _says(
         'The error arrives at the hook, and the hook calls the handler, so '
-        'each controller decides for its own jobs whether the process-wide '
-        'handler hears them at all',
+        'each controller decides for its own jobs whether the '
+        'application-wide handler hears them at all',
       );
       final served = <String>[];
       final ran = _run((async) {
