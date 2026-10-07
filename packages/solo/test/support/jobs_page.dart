@@ -135,7 +135,8 @@ final class CameraController extends Solo<CameraState>
       first: true,
     ).whenCancelled((_) {
       // Cancellation is not a resume, and a cancelled gate is not a pause.
-      // The field may hold a newer gate by now, and that one stays.
+      // After a `resume()` and another `pause()` the field holds a newer
+      // gate, and that one stays.
       if (identical(_gate, gate)) _gate = null;
     });
   }

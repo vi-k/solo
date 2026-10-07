@@ -812,3 +812,13 @@ gate», предметное слово рецепта.
    вызывающих ждут один профиль, а метод, который возвращает `mine`, отдаёт
    второму вызывающему `Cancelled(duplicate)`. Сторож — тест «a method that
    returns its own job hands back the dropped one». Перевод следом.
+
+10. «как могут встать новые ворота, если у нас есть проверка
+    `if (_gate != null) return`?», 2026-10-07, о комментарии «The field may
+    hold a newer gate by now, and that one stays» в рецепте паузы. Встают они
+    после `resume()`: он очищает поле, следующий `pause()` ставит новые ворота,
+    а старые в этот момент ещё заканчиваются и могут быть отменены. Проза под
+    кодом это говорила, комментарий нет. Комментарий теперь называет путь:
+    «After a `resume()` and another `pause()` the field holds a newer gate, and
+    that one stays». То же в `packages/solo/test/support/jobs_page.dart`
+    и в переводе.
