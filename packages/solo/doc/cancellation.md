@@ -182,9 +182,10 @@ delayed as well.
 
 When the outermost section finishes, the job accepts the request it held. The
 next checkpoint throws `Cancelled`; ordinary code immediately after the call
-can still execute. Keep all required work inside the section and always await
-it. An unawaited section can outlive the job and lose a held request. Sections
-can nest.
+can still execute, and `ctx.check()` as the first line after the section stops
+it there. Keep all required work inside the section and always await it. An
+unawaited section can outlive the job and lose a held request. Sections can
+nest.
 
 ### A whole job
 
@@ -269,9 +270,7 @@ on the cancellation page of `async_job` compares the three ways to wait for
 time.
 
 `join` checks the cancellation before its operation as well as after it, so two
-of them in a row leave no gap. `ctx.check()` is for the gaps nothing else
-checks: after a plain `await` or an `uncancellable` section, when what follows
-is not another checkpoint.
+of them in a row leave no gap.
 
 Do not retain a context to start work after its job ends. Methods such as
 `emit`, `run`, `each`, `abandonable`, `join`, `pause` and `uncancellable` then
