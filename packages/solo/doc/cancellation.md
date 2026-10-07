@@ -257,12 +257,10 @@ Job<void> upload(List<int> chunks) => run<Ready, void>((ctx) async {
     });
 ```
 
-A plain `await` does not respond to job cancellation and can delay completion
-and `close()` indefinitely. It is the right wait where waiting through
-cancellation is the point: inside cleanup and inside an `uncancellable`
-section. Cleanup runs after the body has ended, whatever the outcome, and the
-waiting methods belong to the body: in a disposer they throw `StateError` even
-for a job that ended `Done`.
+A plain `await` is the right wait where waiting through cancellation is the
+point: inside cleanup and inside an `uncancellable` section. Cleanup runs after
+the body has ended, whatever the outcome, and the waiting methods belong to the
+body: in a disposer they throw `StateError` even for a job that ended `Done`.
 
 A delay written as `await Future.delayed(...)` is such a plain `await`: a
 cancelled job sits it out to its end, and `close()` waits with it.

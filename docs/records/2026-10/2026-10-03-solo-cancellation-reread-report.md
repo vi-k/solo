@@ -797,3 +797,10 @@ changed)»; `dart analyze` — «No issues found!»; `dart test --concurrency=4`
    из сторожа ушли группа «The opening block» и три теста группы о принятии
    отмены, чьи фразы ушли со страницы. Набор `solo` — 1762 теста. Перевод
    следом.
+2. «в предыдущей попытке, кажется, мы это показали», 2026-10-07, о фразе «A
+   plain `await` does not respond to job cancellation and can delay completion
+   and `close()` indefinitely» под ответом раздела «Ordinary await and context
+   lifetime». Показали: первая попытка того же раздела говорит, что обычный
+   `await` ни на что не отвечает и `close()` во время второго куска ждёт
+   третьего и четвёртого. Фраза убрана, абзац начинается с того, где обычный
+   `await` уместен. Перевод следом.
