@@ -18,12 +18,18 @@ Compares:
     (lines whose trimmed form starts with // or /// are dropped),
   * the shape of the prose around them: under each heading, as many
     paragraphs, list items and table rows as the original has, in the same
-    places between the code blocks.
+    places between the code blocks,
+  * dashes in the translation: there are to be none, in the prose or in the
+    comments of its code.
 
 Prose and comment text are expected to differ: they are the translation.
 The last check is there because the first three let a paragraph go: the
 README of flutter_solo went without the last paragraph of its "Testing"
 section in Russian, with every heading and every block of code in place.
+
+The translations are written without dashes, and nothing but attention held
+that: the Russian state page of solo kept twenty of them through two rounds
+of reading.
 """
 
 from __future__ import annotations
@@ -126,6 +132,11 @@ PAIRS = [
 
 FENCE = re.compile(r"^\s*```")
 HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
+# An em dash anywhere; an en dash unless it stands in a range of numbers.
+DASH = re.compile(r"\u2014|(?<!\d)\u2013|\u2013(?!\d)")
+# A hyphen between spaces, which is a dash typed on the keyboard.
+HYPHEN_DASH = re.compile(r"(?<=\S) - (?=\S)")
+CODE_SPAN = re.compile(r"`[^`]*`")
 
 
 def parse(path: Path):
@@ -189,6 +200,26 @@ def shape(path: Path) -> list[str]:
             blocks.append("paragraph")
             inside = True
     return blocks
+
+
+def dashes(path: Path) -> list[str]:
+    """The lines of a translation that carry a dash, as `path:line: text`.
+
+    A dash counts wherever it stands, a comment in a code block included: the
+    comments are translated too. A hyphen between spaces counts in the prose
+    only, outside code spans, where it cannot be a minus.
+    """
+    found: list[str] = []
+    fenced = False
+    lines = path.read_text(encoding="utf-8").splitlines()
+    for number, line in enumerate(lines, start=1):
+        if FENCE.match(line):
+            fenced = not fenced
+            continue
+        prose = "" if fenced else CODE_SPAN.sub("``", line)
+        if DASH.search(line) or HYPHEN_DASH.search(prose):
+            found.append(f"{path.relative_to(REPO)}:{number}: {line.strip()}")
+    return found
 
 
 def strip_trailing_comment(line: str) -> str:
@@ -270,6 +301,15 @@ def check(orig: Path, tran: Path) -> list[str]:
     else:
         prose = sum(not b.startswith(("#", "```")) for b in so)
         print(f"prose: {prose} paragraphs, lists and tables in the same places")
+
+    dashed = dashes(tran)
+    if dashed:
+        problems.append(
+            f"{len(dashed)} lines of the translation carry a dash:\n    "
+            + "\n    ".join(dashed)
+        )
+    else:
+        print("dashes: none in the translation")
 
     for i, (a, b) in enumerate(zip(bo, bt), start=1):
         info_a, lines_a = a
