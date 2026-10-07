@@ -118,10 +118,10 @@ beside the waiting methods it goes with.
 an initialization job may finish by emitting `Ready`. A later state checkpoint
 will reject that state if it does not match `W`, and a waiting method is such a
 checkpoint as much as a read is: `ctx.abandonable` or `ctx.join` after that
-emit ends the job `Cancelled` before its action starts. So such a transition
-comes last in the body, with no read and no wait through the context after it.
-`canStart` is checked once, at the start, and nothing brings it back later —
-this emit included.
+emit ends the job `Cancelled` before its action starts. So put such a
+transition last in the body, with no read and no wait through the context after
+it. `canStart` is checked once, at the start, and nothing brings it back
+later — this emit included.
 
 Other running bodies are checked after a state update: a job's children run
 beside it, and each body answers to its own rules. A job's own emit is excluded
