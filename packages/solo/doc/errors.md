@@ -250,11 +250,11 @@ its limit takes the limit itself, `run(timeout: ...)`, and ends
 page shows it.
 
 The snapshot reports and does not diagnose. A long wait does not prove a
-forgotten `ctx.abandonable`: a body inside an external call it has to see
-through looks the same, and a resource that takes its time to release holds the
-job as long, in its `cleanup` phase. The phase says where the job is, not why:
-while the body runs the phase is `body`, whatever it waits on, and the engine
-does not guess.
+forgotten `ctx.abandonable`. A body inside an external call it has to see
+through gives the same snapshot, with the phase `body`. A resource that takes
+its time to release holds the job as long, and the phase is then `cleanup`. The
+phase says where the job is, not why: while the body runs the phase is `body`,
+whatever it waits on, and the engine does not guess.
 
 ## Why cancellation was slow
 

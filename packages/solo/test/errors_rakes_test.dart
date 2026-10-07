@@ -1855,8 +1855,8 @@ void main() {
 
     test('a resource that takes its time to release', () {
       _says(
-        'a resource that takes its time to release holds the job as long, '
-        'in its `cleanup` phase',
+        'A resource that takes its time to release holds the job as long, '
+        'and the phase is then `cleanup`',
       );
       _run((async) {
         Solo.observer = page.Hangs();
