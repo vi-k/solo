@@ -43,8 +43,8 @@ Bad state: Job(track) has already finished, cannot emit
 
 Nothing ends that subscription either: there is no job left to cancel, and
 `close()` knows nothing of it. Registering `sub.cancel` with `ctx.onDispose`
-does not repair that: the cleanup runs as soon as the body returns, and the
-subscription is gone before the first position.
+does not repair that: the cleanup runs as soon as the body returns, and it
+cancels the subscription before the first position arrives.
 
 ### A child that owns the subscription
 

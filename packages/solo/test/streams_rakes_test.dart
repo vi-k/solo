@@ -248,8 +248,8 @@ void main() {
         'Ready(sent: 0, position: 0, path: )',
       ]);
       _says('Registering `sub.cancel` with `ctx.onDispose` does not repair '
-          'that: the cleanup runs as soon as the body returns, and the '
-          'subscription is gone before the first position.');
+          'that: the cleanup runs as soon as the body returns, and it cancels '
+          'the subscription before the first position arrives.');
     });
 
     group('a child that owns the subscription', () {
