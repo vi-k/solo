@@ -173,15 +173,15 @@ While a job holds it, `pending` is a `SoloPendingJob`, a snapshot of that job:
 | `heldCancellation` | the one an open `ctx.uncancellable` section holds back |
 | `children` | how many children it is still waiting for |
 | `inUncancellableSection` | whether such a section is open |
-| `refusesCancellation` | whether it was created with `cancellable: false` |
+| `cancellable` | `false` when it was created with `cancellable: false` |
 | `closing` | whether `close()` was called on the controller |
 | `draining` | whether that `close()` is a drain, which lets the job run to its end |
 
 Next to those fields the snapshot computes one answer of its own:
 `SoloPendingJob.cancellationPending` is true when either cancellation above is
-there, the accepted one or the held one. A job with `refusesCancellation` turns
-down the ones it may turn down, so nothing is pending on it however often it
-was asked to stop.
+there, the accepted one or the held one. A job whose `cancellable` is false
+turns down the ones it may turn down, so nothing is pending on it however often
+it was asked to stop.
 
 A job is not the only thing a close waits for, and `pending` names the other
 two. A drain waits for the queue as well, and a group of `collect` or

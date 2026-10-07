@@ -172,15 +172,15 @@ unawaited(controller.close().timeout(
 | `heldCancellation` | отмена, которую держит открытая секция `ctx.uncancellable` |
 | `children` | сколько детей она ещё ждёт |
 | `inUncancellableSection` | открыта ли такая секция |
-| `refusesCancellation` | создана ли она с `cancellable: false` |
+| `cancellable` | `false`, когда она создана с `cancellable: false` |
 | `closing` | позвали ли у контроллера `close()` |
 | `draining` | дренаж ли этот `close()`: тогда `Job` доработает до конца |
 
 Рядом с полями снимок считает и один свой ответ:
 `SoloPendingJob.cancellationPending` истинно, когда есть любая из двух отмен
-выше, принятая или придержанная. `Job` с `refusesCancellation` отклоняет те
-отмены, которые может отклонить, и тогда ждать нечего, сколько бы раз её
-ни просили остановиться.
+выше, принятая или придержанная. `Job`, у которой `cancellable` равно `false`,
+отклоняет те отмены, которые может отклонить, и тогда ждать нечего, сколько бы
+раз её ни просили остановиться.
 
 Кроме `Job`, закрытие ждёт ещё двух вещей. Их `pending` тоже называет. Дренаж,
 то есть `close(mode: SoloCloseMode.drain)`, ждёт ещё и очередь, а группа

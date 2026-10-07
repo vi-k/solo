@@ -81,9 +81,10 @@ final class SoloPendingJob extends SoloPending {
   /// not mean one has, and [heldCancellation] is what says so.
   final bool inUncancellableSection;
 
-  /// Whether the job was created with `cancellable: false` and turns down
-  /// every cancellation it may turn down.
-  final bool refusesCancellation;
+  /// Whether the job accepts a cancellation it may refuse, as it was
+  /// created. One created with `cancellable: false` turns every such
+  /// cancellation down.
+  final bool cancellable;
 
   /// Whether `close` has been called on the controller.
   final bool closing;
@@ -101,7 +102,7 @@ final class SoloPendingJob extends SoloPending {
     required this.heldCancellation,
     required this.children,
     required this.inUncancellableSection,
-    required this.refusesCancellation,
+    required this.cancellable,
     required this.closing,
     required this.draining,
   });
@@ -113,7 +114,7 @@ final class SoloPendingJob extends SoloPending {
   /// Not the same as "somebody asked". A job created with
   /// `cancellable: false` turns a rejectable cancellation down instead of
   /// keeping it, so nothing is pending on it however many times it was
-  /// asked — [refusesCancellation] is the half of that story the engine
+  /// asked — [cancellable] is the half of that story the engine
   /// can tell.
   bool get cancellationPending =>
       cancellation != null || heldCancellation != null;
@@ -132,7 +133,7 @@ final class SoloPendingJob extends SoloPending {
         'holding $heldCancellation back'
       else if (inUncancellableSection)
         'in an uncancellable section',
-      if (refusesCancellation) 'created cancellable: false',
+      if (!cancellable) 'created cancellable: false',
     ];
 
     return 'SoloPending(${_name(job)} $what${notes.isEmpty ? '' : ', '

@@ -1482,7 +1482,7 @@ void main() {
           '`heldCancellation`',
           '`children`',
           '`inUncancellableSection`',
-          '`refusesCancellation`',
+          '`cancellable`',
           '`closing`',
           '`draining`',
         ]);
@@ -1508,7 +1508,7 @@ void main() {
           expect(before.heldCancellation, isNull);
           expect(before.children, 0);
           expect(before.inUncancellableSection, isFalse);
-          expect(before.refusesCancellation, isFalse);
+          expect(before.cancellable, isTrue);
           expect(before.closing, isFalse);
           expect(before.draining, isFalse);
           expect(before.cancellationPending, isFalse);
@@ -1549,7 +1549,7 @@ void main() {
 
       test('a job created with cancellable: false, asked twice and closed', () {
         _says(
-          'A job with `refusesCancellation` turns down the ones it may turn '
+          'A job whose `cancellable` is false turns down the ones it may turn '
           'down, so nothing is pending on it however often it was asked to '
           'stop',
         );
@@ -1569,7 +1569,7 @@ void main() {
           async.flushMicrotasks();
           final closed = bench.pending! as SoloPendingJob;
 
-          expect(asked.refusesCancellation, isTrue);
+          expect(asked.cancellable, isFalse);
           expect(asked.cancellation, isNull);
           expect(asked.heldCancellation, isNull);
           expect(asked.cancellationPending, isFalse);

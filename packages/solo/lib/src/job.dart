@@ -156,7 +156,7 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
         heldCancellation: heldCancel,
         children: children.length,
         inUncancellableSection: inUncancellableSection,
-        refusesCancellation: !cancellable,
+        cancellable: cancellable,
         closing: closing,
         draining: draining,
       );

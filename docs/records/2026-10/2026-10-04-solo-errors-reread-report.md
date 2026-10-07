@@ -996,3 +996,14 @@ passed!», набор примера `packages/solo/example` — 47 — и `flut
    и `flutter_solo`, в их переводах, в сторожах и в `docs/architecture.md`.
    Записи в `docs/records/` называют обработчик прежним именем: они хранятся
    как написаны.
+
+9. «What is holding the controller», таблица полей снимка. Владелец спросил,
+   зачем `refusesCancellation`, если есть `job.cancellable`. Снаружи его нет:
+   у `JobBase` геттер защищённый, а `ctx.cancellable` виден только телу,
+   поэтому снимок говорит это сам. Но имя у поля было своё, а факт тот же, что
+   у параметра `cancellable: false`. По слову владельца поле
+   `SoloPendingJob.refusesCancellation` переименовано в `cancellable`
+   с обратным смыслом: `false` у задачи, созданной с `cancellable: false`.
+   Строка таблицы и фраза под ней поправлены в оригинале и в переводе, сторож
+   и `packages/solo/test/pending_test.dart` ждут нового поля. Снимок
+   не выпущен, поэтому правка сделана на месте.

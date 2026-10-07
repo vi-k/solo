@@ -28,7 +28,7 @@ void main() {
       expect(pending.cancellation, isNull);
       expect(pending.cancellationPending, isFalse);
       expect(pending.closing, isFalse);
-      expect(pending.refusesCancellation, isFalse);
+      expect(pending.cancellable, isTrue);
       expect('$pending', 'SoloPending([job] in its body)');
       async.flushTimers();
     });
@@ -51,7 +51,7 @@ void main() {
         reason: 'close asked and this one turned it down',
       );
       expect(pending.cancellationPending, isFalse);
-      expect(pending.refusesCancellation, isTrue);
+      expect(pending.cancellable, isFalse);
       expect(
         '$pending',
         'SoloPending([job] in its body, closing, '
