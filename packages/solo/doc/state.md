@@ -268,8 +268,9 @@ engine has finished, and `pending` then says `SoloPendingStream`.
 
 ## External state
 
-An independent source — a device, a socket — changes without waiting for the
-controller, and the controller has to show what has already happened there.
+An independent source, such as a device or a socket, changes without waiting
+for the controller, and the controller has to show what has already happened
+there.
 
 ### The first attempt
 
