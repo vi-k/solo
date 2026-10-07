@@ -689,3 +689,11 @@ state» и `Logged`, `state_page_profile.dart` — обработчики и з�
    later». Там же по слову владельца режим назван вызовом:
    `close(mode: SoloCloseMode.drain)` вместо голого `SoloCloseMode.drain`.
    Перевод следом.
+
+5. «о каком соседе идёт речь?», 2026-10-07, о первой строке таблицы «Handler
+   eligibility and errors»: «the `emit` of its parent, child or sibling».
+   Сосед — другой ребёнок того же родителя, который работает рядом; слова
+   «sibling» страница нигде не вводила. Теперь сказано прямо: «of another child
+   of the same parent», в переводе «другого ребёнка того же родителя».
+   Поведение держит прежний тест «so does an emit of a child, of the parent or
+   of a sibling».
