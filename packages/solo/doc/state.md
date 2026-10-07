@@ -323,9 +323,9 @@ final class Camera extends Solo<CameraState> with SoloStream {
 }
 ```
 
-The method is `@protected` and is called from inside the controller subclass,
-typically from a subscription it holds — the one on the device above, not a
-listener of the controller.
+`externalSetState` is `@protected` and is called from inside the controller
+subclass, typically from a subscription it holds — the one on the device above,
+not a listener of the controller.
 
 `externalSetState` updates state immediately and re-evaluates running jobs, so
 a job whose rules require a connection is cancelled by the disconnection
