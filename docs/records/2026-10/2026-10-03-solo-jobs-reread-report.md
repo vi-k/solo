@@ -794,3 +794,11 @@ gate», предметное слово рецепта.
    не начала», и сама работа выпадала. Теперь сказано прямо: работающая `Job`
    считается существующей всё время, пока её не отменили; принявшая отмену
    работу не сделает, поэтому вызов ставит свою. Перевод следом.
+
+8. «надо ли здесь про ManualCancelReason? будто опять объясняем прошлое»,
+   2026-10-07, о фразе «The reason is a `DuplicateCancelReason`, not the
+   `ManualCancelReason` of a `cancel()` — nobody asked for that job to stop».
+   Не надо: сравнение отвечало версии, где отброшенная `Job` кончалась
+   `manual`, а читатель её не видел. Осталось «ends on the spot with
+   `Cancelled(duplicate)`, whose reason is a `DuplicateCancelReason`». Перевод
+   следом.

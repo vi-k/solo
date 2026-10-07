@@ -208,8 +208,7 @@ the policy the identity of one request rather than of the operation:
 one through.
 
 The job the second call brought never starts: it ends on the spot with
-`Cancelled(duplicate)`. The reason is a `DuplicateCancelReason`, not the
-`ManualCancelReason` of a `cancel()` — nobody asked for that job to stop. `run`
+`Cancelled(duplicate)`, whose reason is a `DuplicateCancelReason`. `run`
 returns one handle and does not say whose job it is, so a method that has to
 know assembles the job first and compares it with what `add` gives back:
 
