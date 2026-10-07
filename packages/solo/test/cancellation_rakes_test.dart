@@ -41,6 +41,25 @@ final class _Windowed extends Solo<AppState> with OpenSolo<AppState>, Desk {
   SoloJob<void> line(String text) => _lines.add(text);
 }
 
+/// The seek of "A deadline of a job" with `Future.timeout` on the call in
+/// place of the `timeout` of `run`.
+final class _CallDeadline extends Solo<AppState> with OpenSolo<AppState>, Desk {
+  _CallDeadline() : super(const Ready());
+
+  SoloJob<void> seek(Duration position) => run<Ready, void>(
+        key: 'seek',
+        policy: Policy.restart,
+        onError: (state, error, stackTrace) => const Offline(),
+        onCancel: (state, cancelled) => state,
+        (ctx) async {
+          await ctx.join(
+            () => player.seek(position).timeout(const Duration(seconds: 2)),
+          );
+          ctx.emit(ctx.state.copyWith(position: position));
+        },
+      );
+}
+
 /// What a run under [_zone] left behind: the errors that reached the zone
 /// uncaught, and the lines the code printed.
 typedef _Left = ({List<String> errors, List<String> printed});
@@ -2226,8 +2245,31 @@ void main() {
       expect(
         _prose(),
         contains(
-          'a deadline that runs out reaches the `onCancel` state handler, '
-          'not `onError`',
+          'The `timeout:` of `run` ends the job `Cancelled`, so `onCancel:` '
+          'maps the state and `onError:` is not called.',
+        ),
+      );
+    });
+
+    test('Future.timeout on the call fails the job, and onError: maps', () {
+      fakeAsync((async) {
+        final player = _CallDeadline();
+        final job = player.seek(_s(1))..ignore();
+        async.elapse(_s(2));
+
+        expect(stage.trace, ['seek 1 start']);
+        expect(job.outcome, isA<Failed>());
+        expect((job.outcome! as Failed).error, isA<TimeoutException>());
+        expect('${player.currentState}', 'Offline');
+      });
+      expect(
+        _prose(),
+        contains(
+          'A deadline that runs out is not the `TimeoutException` of '
+          '`Future.timeout`. With `.timeout(...)` on the call of '
+          '`_player.seek` the exception is thrown into the body, the job '
+          'ends `Failed`, and it is the `onError:` of `run` that maps the '
+          'state.',
         ),
       );
     });

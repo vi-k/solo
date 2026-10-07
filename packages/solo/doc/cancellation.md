@@ -411,10 +411,15 @@ cancellation of `async_job` with a `TimeoutCancelReason`, and
 [A deadline](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cancellation.md#a-deadline)
 on the cancellation page of `async_job` takes it apart.
 
-So a deadline that runs out reaches the `onCancel` state handler, not
-`onError`, and a handler that is to tell it from a seek dragged past branches
-on the reason, as the one above does. `value` of such a job throws that
-`Cancelled`, and a clause `on TimeoutException` around it catches nothing.
+A deadline that runs out is not the `TimeoutException` of `Future.timeout`.
+With `.timeout(...)` on the call of `_player.seek` the exception is thrown into
+the body, the job ends `Failed`, and it is the `onError:` of `run` that maps
+the state. The `timeout:` of `run` ends the job `Cancelled`, so `onCancel:`
+maps the state and `onError:` is not called. `onCancel:` takes every
+cancellation, and a handler that is to tell the deadline from a seek dragged
+past branches on the reason, as the one above does. `value` of such a job
+throws that `Cancelled`, and a clause `on TimeoutException` around it catches
+nothing.
 
 The deadline is counted from the start of the body, not from the call: the time
 a job waits in the queue does not count, and neither does the window of a
