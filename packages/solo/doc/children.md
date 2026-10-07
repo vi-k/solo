@@ -111,7 +111,8 @@ SoloJob<String> syncAndAnnounce(int item) => run<Ready, String>(
       key: _Op.syncAndAnnounce,
       (ctx) async {
         // Kept, not awaited: the upload runs while the parent goes on.
-        // A failure of the upload is ignored until the `return` asks.
+        // A failure of the upload is ignored here, and the body fails
+        // with it at the `return`.
         final uploading = ctx.run(_sync(item))..ignore();
         await ctx.join(() => analytics.send('started $item'));
         return uploading;
@@ -128,8 +129,8 @@ and the child with it.
 Nobody waits for a future kept this way until the `await`: an upload that fails
 while the parent is still sending would hand its error to the zone as an
 unhandled one. `ignore()` on the kept future says that the error is not to be
-reported there. The `return` asks for the future afterwards and throws that
-error all the same.
+reported there. The body fails with that error all the same, at the `return`,
+where it hands the future on.
 
 ## Two ways to ignore a child
 

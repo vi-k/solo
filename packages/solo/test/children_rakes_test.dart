@@ -514,8 +514,8 @@ void main() {
         ]);
         _says('Nobody waits for a future kept this way until the `await`');
         _says('`ignore()` on the kept future says that the error is not to '
-            'be reported there. The `return` asks for the future afterwards '
-            'and throws that error all the same.');
+            'be reported there. The body fails with that error all the same, '
+            'at the `return`, where it hands the future on.');
       });
     }
 

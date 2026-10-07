@@ -109,7 +109,8 @@ SoloJob<String> syncAndAnnounce(int item) => run<Ready, String>(
       key: _Op.syncAndAnnounce,
       (ctx) async {
         // Сохранена, но не ожидается: загрузка идёт, пока родитель работает.
-        // Ошибка загрузки игнорируется, пока её не спросит `return`.
+        // Ошибка загрузки здесь игнорируется, а тело упадёт с ней
+        // на `return`.
         final uploading = ctx.run(_sync(item))..ignore();
         await ctx.join(() => analytics.send('started $item'));
         return uploading;
@@ -126,7 +127,8 @@ SoloJob<String> syncAndAnnounce(int item) => run<Ready, String>(
 Сохранённую так future до самого `await` никто не ждёт: загрузка, которая
 упала, пока родитель ещё отправляет своё, отдала бы ошибку в зону как
 необработанную. `ignore()` на сохранённой future говорит, что сообщать туда
-об ошибке не нужно. `return` спрашивает future позже и бросает ту же ошибку.
+об ошибке не нужно. Тело всё равно упадёт с этой ошибкой, на `return`, где оно
+отдаёт эту future.
 
 ## Два способа игнорировать ребёнка
 
