@@ -173,7 +173,9 @@ README — `2026-10-02-async-job-readme-reread-report.md`. `extending.md`
 что добавляет контроллер, за механикой оно ссылается на страницу ядра.
 `packages/solo/doc/resources.md` он прочитал и принял в тот же день: один пункт
 в разделе «По чтению владельца» отчёта
-`2026-10-04-solo-resources-reread-report.md`. Дальше `errors.md` и остальные
+`2026-10-04-solo-resources-reread-report.md`. С того же дня он читает
+`packages/solo/doc/errors.md`, правки по его вопросам идут в раздел «По чтению
+владельца» отчёта `2026-10-04-solo-errors-reread-report.md`; за ней остальные
 страницы `solo` в порядке вычитки. С того же дня в примерах действует правило:
 предметный метод контроллера объявляет `Job<T>`, а `SoloJob<T>` пишется только
 там, где читают `isQueued`; оно записано в `packages/solo/doc/jobs.md`.
