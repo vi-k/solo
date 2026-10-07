@@ -839,4 +839,19 @@ changed)»; `dart analyze` — «No issues found!»; `dart test --concurrency=4`
    `join` проверяет и до операции, по-прежнему говорит комментарий в коде
    ответа, и его держит тест «a join checks before its operation as well as
    after it». Перевод следом.
-7. «есть случаи, когда пользователь может бросить started: false? …не можем ли мы сделать started: true значением по умолчанию?», 2026-10-07, о строке `throw Cancelled.by(reason: OutOfRange(position), started: true);` раздела «Cancellation details». Из тела нельзя: на пути через `cancelWith` ядро ставит `started` по статусу `Job`, и зонд, где тело бросает `started: false`, кончается исходом со `started: true`. Значение доходит до исхода только через `JobBase.finish`, то есть у движков: `solo` передаёт `false` для `Job`, убранных до старта. По слову владельца параметр `started` у `Cancelled.by` стал необязательным со значением `true` (`packages/async_job/lib/src/outcome.dart`). После этого линт `avoid_redundant_argument_values` назвал пятьдесят два вызова со `started: true` в `async_job` и `solo`, их убрал `dart fix`. Из примеров аргумент ушёл на этой странице, в `packages/async_job/doc/outcomes.md` и в двух блоках `packages/async_job/doc/extending.md`. Запись в «Added» CHANGELOG `async_job` и `solo`. Наборы: `async_job` — 1333 теста, `solo` — 1762. Переводы следом.
+7. «есть случаи, когда пользователь может бросить started: false? …не можем ли
+   мы сделать started: true значением по умолчанию?», 2026-10-07, о строке
+   `throw Cancelled.by(...)` с аргументом `started: true` раздела «Cancellation
+   details». Из тела нельзя: на пути через `cancelWith` ядро ставит `started`
+   по статусу `Job`, и зонд, где тело бросает `started: false`, кончается
+   исходом со `started: true`. Значение доходит до исхода только через
+   `JobBase.finish`, то есть у движков: `solo` передаёт `false` для `Job`,
+   убранных до старта. По слову владельца параметр `started` у `Cancelled.by`
+   стал необязательным со значением `true`
+   (`packages/async_job/lib/src/outcome.dart`). После этого линт
+   `avoid_redundant_argument_values` назвал пятьдесят два вызова
+   со `started: true` в `async_job` и `solo`, их убрал `dart fix`. Из примеров
+   аргумент ушёл на этой странице, в `packages/async_job/doc/outcomes.md`
+   и в двух блоках `packages/async_job/doc/extending.md`. Запись в «Added»
+   CHANGELOG `async_job` и `solo`. Наборы `async_job` (1333 теста) и `solo`
+   (1762 теста) зелёные. Переводы следом.
