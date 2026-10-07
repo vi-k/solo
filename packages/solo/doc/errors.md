@@ -134,9 +134,9 @@ void main() {
 }
 ```
 
-A change hook is given a `SoloTransition`: the state before and after, the
-`job` the change belongs to, and a `revision` that grows by one per change, so
-two transitions are in order even when a hook changed the state again from
+The hook `onChange` is given a `SoloTransition`: the state before and after,
+the `job` the change belongs to, and a `revision` that grows by one per change,
+so two transitions are in order even when a hook changed the state again from
 inside the first. The `job` is the one whose `emit` made the change or whose
 state handler returned it: `null` for an `externalSetState`, and a child of the
 running job rather than the root it belongs to. It answers who changed the
