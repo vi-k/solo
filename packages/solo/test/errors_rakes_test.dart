@@ -1078,7 +1078,7 @@ void main() {
     });
 
     test('the reporting hook hears the error as it came', () {
-      _says('The reporting hook hears the error as it came');
+      _says('The reporting hook `onError` hears the error as it came');
       late Bench bench;
       _run((async) {
         Solo.errorHandler = (solo, job, error, stackTrace) {};
