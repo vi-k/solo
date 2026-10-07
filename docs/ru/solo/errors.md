@@ -72,7 +72,7 @@ final class ProfileController extends Solo<ProfileState> {
 Переопределение выше отвечает за них здесь, и дальше они не идут никуда: этот
 контроллер владеет тем, на чём упали его задачи, и сказал об этом.
 У контроллера без такого переопределения остаётся тело по умолчанию, и оно
-передаёт их дальше:
+передаёт их в `Solo.errorHandler`. Этот обработчик задаёт приложение:
 
 ```dart
 Solo.errorHandler = (solo, job, error, stackTrace) => Job.visitErrors(

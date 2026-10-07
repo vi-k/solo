@@ -73,7 +73,8 @@ Somebody has to answer for those, and the one asked is always the same:
 
 The override above answers for them here, and they reach nothing else: this
 controller owns what its jobs failed at and has said so. A controller that
-writes no such override keeps the default body, which hands them on:
+writes no such override keeps the default body, which hands them to
+`Solo.errorHandler`. The application sets that handler:
 
 ```dart
 Solo.errorHandler = (solo, job, error, stackTrace) => Job.visitErrors(
