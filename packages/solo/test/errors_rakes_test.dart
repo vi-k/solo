@@ -951,8 +951,7 @@ void main() {
 
     test('the handler of the page: one for the app, given the controller', () {
       _says(
-        'One handler for the whole application, set once at startup; it '
-        'takes `solo` because it serves every controller',
+        'One handler for the whole application, set once at startup',
       );
       final served = <String>[];
       final ran = _run((async) {
