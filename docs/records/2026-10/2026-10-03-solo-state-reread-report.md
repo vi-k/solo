@@ -697,3 +697,12 @@ state» и `Logged`, `state_page_profile.dart` — обработчики и з�
    of the same parent», в переводе «другого ребёнка того же родителя».
    Поведение держит прежний тест «so does an emit of a child, of the parent or
    of a sibling».
+
+6. «колонка посвящена обработчикам. тогда кто такой "сам"?», 2026-10-07,
+   о строке «The job's own `emit`» той же таблицы: «Nothing by itself; it does
+   not disable its own handlers». Подлежащим ячейки был `emit` из левой
+   колонки, а колонка говорит об обработчиках. Теперь ячейка начинается с них:
+   «Stay enabled: the job's own `emit` does not disable them», в переводе
+   «Остаются включёнными: собственный `emit` их не отключает». Случай, когда
+   правила отменяют задачу после её же `emit`, стоит следующей строкой таблицы,
+   как и стоял.

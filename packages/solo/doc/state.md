@@ -496,7 +496,7 @@ permit the operation and the correction after it.
 | An incompatible update the job did not make — `externalSetState`, or the `emit` of its parent, of its child or of another child of the same parent — whenever it arrives | Disabled for good; a later compatible update does not bring them back. |
 | A parent loses its permission | Its children's handlers are blocked as well. |
 | Success, a discarded duplicate, a body that never started | Not run at all. |
-| The job's own `emit` | Nothing by itself; it does not disable its own handlers. |
+| The job's own `emit` | Stay enabled: the job's own `emit` does not disable them. |
 | The job's rules cancel it at a checkpoint of its own: after its own `emit` of a state they refuse, or on a `stateAs` mismatch | Not run: a job its rules cancelled leaves the state as it is. |
 | A handler throws | The error is reported; the outcome and the queue are untouched. |
 | A rule throws while eligibility is checked | Handlers disabled and the error reported. Resource cleanup still runs. |
