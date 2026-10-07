@@ -180,9 +180,9 @@ job a deadline of its own»: параметр `timeout` у `Job(...)`,
 абзац о `onCancel:` и `onError:` в `packages/solo/doc/cancellation.md` называет
 `Future.timeout`, с которым сравнивает, а абзац о ветке `catch` в «A deadline
 for one step» `async_job` говорит, что она отбирает только по типу. Раздел «A
-deadline» в `packages/async_job/doc/cancellation.md` владелец принял
-2026-10-07; из добавленного о сроке в `async_job` ему остались абзац README,
-два места в `outcomes.md` и запись CHANGELOG. Клон и копии ревью
+deadline» в `packages/async_job/doc/cancellation.md` и добавленное о сроке
+в `outcomes.md` владелец принял 2026-10-07; из добавленного о сроке
+в `async_job` ему остались абзац README и запись CHANGELOG. Клон и копии ревью
 в `.artifacts/` больше не нужны.
 
 **Открытые вопросы владельцу.** По слову владельца 2026-10-03 вопросы вычитки
