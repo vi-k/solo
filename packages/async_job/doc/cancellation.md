@@ -663,9 +663,9 @@ outcome: Done(page without a thumbnail)
 
 The child ends `Cancelled(timeout)`, and `ctx.run` throws that cancellation
 into the body of the parent. The parent itself is not cancelled: the deadline
-ran out for the child. A `catch` in Dart has no `when`, so the clause takes
-every `Cancelled` and rethrows what is not the deadline: the job's own
-cancellation, and a thumbnail somebody else cancelled. Let out, the child's
-deadline ends the parent
+ran out for the child. A `catch` clause in Dart filters by type alone, with no
+pattern and no `when`, so the clause takes every `Cancelled` and rethrows what
+is not the deadline: the job's own cancellation, and a thumbnail somebody else
+cancelled. Let out, the child's deadline ends the parent
 `Cancelled(handler: child thumbnail: Cancelled(timeout))`. The key is there for
 that line: a child without one prints as `child null`.
