@@ -3086,8 +3086,9 @@ void main() {
     group('a rule answers:', () {
       test('no free slot', () {
         _says(
-          'A rule that answers `false` is not an error: it cancels the job, '
-          'and the `Cancelled` carries a trace',
+          'A rule that answers `false` is not an error: it cancels the job. '
+          'That `Cancelled` always carries a trace, and what varies is where '
+          'the trace is taken',
         );
         late page.Pool pool;
         late Job<void> job;
@@ -3138,8 +3139,8 @@ void main() {
       test('keepWhile re-checked on an externalSetState', () {
         _says(
           'A `keepWhile` re-checked on a change says no from inside it, so '
-          'that trace is the change — the `emit` or the `externalSetState` '
-          'whose state broke the rule',
+          'the trace leads to the change — the `emit` or the '
+          '`externalSetState` whose state broke the rule',
         );
         fakeAsync((async) {
           Solo.traceStateChanges = true;
@@ -3163,7 +3164,7 @@ void main() {
 
       test('the same without the trace of the change', () {
         _says(
-          'Dropped, the trace is taken at the rejection instead, a couple of '
+          'a release build takes it at the rejection instead, a couple of '
           'engine frames above the same change',
         );
         fakeAsync((async) {
@@ -3215,9 +3216,11 @@ void main() {
 
       test('traceStateChanges where assertions are on', () {
         _says(
-          'it is taken where assertions are on and left out of a release '
-          'build: `Solo.traceStateChanges = true` keeps it everywhere, '
-          '`false` drops it everywhere',
+          'Where assertions are on, the trace is taken in the change itself',
+        );
+        _says(
+          '`Solo.traceStateChanges = true` takes it in the change everywhere, '
+          '`false` at the rejection everywhere',
         );
         var assertionsOn = false;
         assert(assertionsOn = true, 'only evaluated where assertions are on');
