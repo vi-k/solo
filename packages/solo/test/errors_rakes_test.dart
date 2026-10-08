@@ -2601,7 +2601,10 @@ void main() {
       _says(
         'Handle those futures like any other: `await` them where the error '
         'is caught, or give them `onError` or `Future.ignore()`. '
-        '`job.ignoreFailure()` does nothing for a future already taken',
+        '`job.ignoreFailure()` does not do it for them: it tells the job '
+        'that nobody needs its failure, and a future already taken from '
+        '`job.value` stays an ordinary future whose error somebody has to '
+        'handle',
       );
       final caught = <String>[];
       final ran = _run((async) {

@@ -462,8 +462,9 @@ An unhandled error of `job.value` or `ctx.run(child)` is still an unhandled
 Future error under Dart's rules, even if that error is `Cancelled`: that route
 to the zone is Dart's own, not the engine's. Handle those futures like any
 other: `await` them where the error is caught, or give them `onError` or
-`Future.ignore()`. `job.ignoreFailure()` does nothing for a future already
-taken.
+`Future.ignore()`. `job.ignoreFailure()` does not do it for them: it tells the
+job that nobody needs its failure, and a future already taken from `job.value`
+stays an ordinary future whose error somebody has to handle.
 
 ## Catching errors inside a body
 
