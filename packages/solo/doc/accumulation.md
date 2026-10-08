@@ -1,9 +1,11 @@
 # Accumulating events before a job starts
 
 Several events can share one queued job. `collect` keeps every event in a list;
-`accumulate` combines each event with a single accumulated value. Both return a
-`SoloAccumulator<E, T>`. Create it once in your controller, then call its
-`add(event)` method from the controller's public methods.
+`accumulate` combines each event with a single accumulated value. Both take
+three type arguments, `<W, E, T>`: the working type `W`, as in `run`, the event
+type `E` and the result type `T`, and return a `SoloAccumulator<E, T>`. Create
+it once in your controller, then call its `add(event)` method from the
+controller's public methods.
 
 The accumulator owns the input of a queued job. Adding an event does not run
 the handler or change controller state. The events that share one job are a
@@ -479,7 +481,8 @@ takes, the caller gets the same `Job` every other addition to that group got,
 and `close()` drops the group instead of leaving a list and a timer behind.
 
 This controller's state counts entries whose send operation completed and whose
-handler reached `emit`.
+handler reached `emit`. The working type `int` is that whole state, so the
+handler starts whatever the count is and reads it as `ctx.state`.
 [Choosing where events join](#choosing-where-events-join) explains why `join`
 is the default this example spells out, and
 [Choosing when a group is ready](#choosing-when-a-group-is-ready) explains what

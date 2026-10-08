@@ -1015,6 +1015,30 @@ void main() {
       expect(errors, ['Bad state: offline']);
     });
 
+    test('the working type int is the whole state, so any count starts', () {
+      _says('Both take three type arguments, `<W, E, T>`: the working type '
+          '`W`, as in `run`, the event type `E` and the result type `T`');
+      _says('The working type `int` is that whole state, so the handler '
+          'starts whatever the count is and reads it as `ctx.state`.');
+      final api = FakeLogApi();
+      final counts = <int>[];
+      _zone((async) {
+        final logs = LogController(api);
+        for (final message in ['one', 'two', 'three']) {
+          logs.logEvent(LogEntry(message));
+          async.elapse(ms(1200));
+          counts.add(logs.currentState);
+        }
+      });
+      // Each group started at the count the one before it left.
+      expect(counts, [1, 2, 3]);
+      expect(api.sent, [
+        ['one'],
+        ['two'],
+        ['three'],
+      ]);
+    });
+
     test('a cancelled group and a plain close() leave entries unsent', () {
       _says('A failed send, a cancelled group or a plain `close()` can leave '
           'them unsent');
