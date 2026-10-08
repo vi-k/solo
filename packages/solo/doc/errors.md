@@ -379,11 +379,12 @@ ignores has not stopped: SoloPending([ignores] in its body, cancelled by Cancell
 ```
 
 A job nobody cancelled arms nothing here, however long it runs: this observer
-is about a cancellation that has not landed, not about slow work. Nor does it
-see a job cancelled while its body is in an open `ctx.uncancellable` section:
-the section holds that cancellation back, and `whenCancelled` has not fired. A
-child the cancellation passed to gets a line of its own, and the snapshot in it
-is of the root again.
+is about a cancellation that has not landed, not about slow work. While a
+`ctx.uncancellable` section is open, it does not see a job cancelled in the
+meantime either: the section holds that cancellation back, and `whenCancelled`
+fires when the section closes. The five seconds are counted from there. A child
+the cancellation passed to gets a line of its own, and the snapshot in it is of
+the root again.
 
 `Solo.observer` holds one observer, and this page has four to install by now.
 `SoloObserver.all` puts them in one:

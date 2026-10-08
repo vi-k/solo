@@ -2140,9 +2140,10 @@ void main() {
           'A job nobody cancelled arms nothing here, however long it runs',
         );
         _says(
-          'Nor does it see a job cancelled while its body is in an open '
-          '`ctx.uncancellable` section: the section holds that cancellation '
-          'back, and `whenCancelled` has not fired',
+          'While a `ctx.uncancellable` section is open, it does not see a '
+          'job cancelled in the meantime either: the section holds that '
+          'cancellation back, and `whenCancelled` fires when the section '
+          'closes',
         );
         final timers = <int>[];
         _run((async) {
@@ -2169,6 +2170,31 @@ void main() {
 
         expect(stage.lines, isEmpty);
         expect(timers, [0, 0], reason: 'the one that stopped disarmed its own');
+      });
+
+      test('the five seconds are counted from the close of the section', () {
+        _says('The five seconds are counted from there');
+        _run((async) {
+          Solo.observer = page.StuckCancellations();
+          final holds = Bench().run<int, void>(key: 'holds', (ctx) async {
+            await ctx.uncancellable(() => stage.start<void>('held', null));
+            await stage.start<void>('after', null);
+          })
+            ..ignoreFailure();
+          async.elapse(const Duration(seconds: 1));
+          unawaited(holds.cancel());
+          async.elapse(const Duration(seconds: 20));
+          expect(stage.lines, isEmpty);
+          _end(async, 'held');
+          async.elapse(const Duration(seconds: 4));
+          expect(stage.lines, isEmpty);
+          async.elapse(const Duration(seconds: 2));
+          _end(async, 'after');
+        });
+
+        const holds =
+            'SoloPending([holds] in its body, cancelled by Cancelled(manual))';
+        expect(stage.lines, ['holds has not stopped: $holds']);
       });
 
       test('a child the cancellation passed to', () {
