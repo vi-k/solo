@@ -585,11 +585,12 @@ Where a rule throws anyway decides what becomes of the error:
 
 A job with a state handler is re-evaluated after its body has ended as well;
 [Handler eligibility and errors](state.md#handler-eligibility-and-errors) on
-the state page is about that. Re-evaluation errors fall back to the job's
-creation zone when neither an override of `onUnanswered` nor a
-`Solo.unansweredHandler` answers for them. In the root Dart zone, an unhandled
-error can terminate the application. Install error reporting and observe job
-outcomes according to your application's needs.
+the state page is about that.
+
+Re-evaluation errors fall back to the job's creation zone when neither an
+override of `onUnanswered` nor a `Solo.unansweredHandler` answers for them. In
+the root Dart zone, an unhandled error can terminate the application. Install
+error reporting and observe job outcomes according to your application's needs.
 
 ## Background work and logs
 
