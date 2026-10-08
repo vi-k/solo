@@ -214,7 +214,11 @@ changes» CHANGELOG `solo`. 2026-10-07 по его же слову `Job.ignore()
 `packages/solo/doc/testing.md` принята в тот же день, три пункта
 в `2026-10-04-solo-testing-reread-report.md`; дальше в его чтении `camera.md`,
 `accumulation.md`, `vs-bloc.md` и README пакета `solo`, README и `mixins.md`
-пакета `flutter_solo`, последними CHANGELOG трёх пакетов. Сейчас он
+пакета `flutter_solo`, последними CHANGELOG трёх пакетов. Правки принятых
+страниц после их приёмки (переименования, `pause` в списке вызовов
+`extending.md` пакета `async_job`, `Job<T>` в коде `children.md` пакета `solo`,
+абзацы по его вопросам после приёмки) владелец просмотрел 2026-10-08; принятые
+страницы `async_job` и `solo` на `165735d` прочитаны им целиком. Сейчас он
 перечитывает остальные страницы `async_job`. Изменённую тем же коммитом фразу
 в `packages/solo/doc/resources.md` он перечитал и принял в тот же день. Отчёт —
 `2026-10-07-unanswered-walk-report.md`. Вопросы владельца правятся в странице,
