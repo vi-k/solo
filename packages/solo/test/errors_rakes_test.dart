@@ -2140,9 +2140,9 @@ void main() {
           'A job nobody cancelled arms nothing here, however long it runs',
         );
         _says(
-          'Nor does it see a job inside an open `ctx.uncancellable` section — '
-          'that cancellation is still held back, and `whenCancelled` has not '
-          'fired',
+          'Nor does it see a job cancelled while its body is in an open '
+          '`ctx.uncancellable` section: the section holds that cancellation '
+          'back, and `whenCancelled` has not fired',
         );
         final timers = <int>[];
         _run((async) {
