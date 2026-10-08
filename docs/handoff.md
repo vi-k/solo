@@ -212,9 +212,10 @@ changes» CHANGELOG `solo`. 2026-10-07 по его же слову `Job.ignore()
 Страницу `errors.md` он дочитал и принял 2026-10-08, восемнадцать пунктов
 раздела «По чтению владельца» в `2026-10-04-solo-errors-reread-report.md`;
 `packages/solo/doc/testing.md` принята в тот же день, три пункта
-в `2026-10-04-solo-testing-reread-report.md`; следующая страница `solo` в его
-чтении — `packages/solo/doc/children.md`. Сейчас он перечитывает остальные
-страницы `async_job`. Изменённую тем же коммитом фразу
+в `2026-10-04-solo-testing-reread-report.md`; дальше в его чтении `camera.md`,
+`accumulation.md`, `vs-bloc.md` и README пакета `solo`, README и `mixins.md`
+пакета `flutter_solo`, последними CHANGELOG трёх пакетов. Сейчас он
+перечитывает остальные страницы `async_job`. Изменённую тем же коммитом фразу
 в `packages/solo/doc/resources.md` он перечитал и принял в тот же день. Отчёт —
 `2026-10-07-unanswered-walk-report.md`. Вопросы владельца правятся в странице,
 переводе и стороже и идут пунктами раздела «По чтению владельца» в отчёте
