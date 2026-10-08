@@ -513,9 +513,7 @@ try {
 
 `ctx.check()` asks the job, not the error: it throws the job's `Cancelled` if
 the job has accepted one, whatever the catch took, and what follows handles the
-failures of a job nobody cancelled. The check is the first line of the catch.
-Written under the reset, it would let out a cancellation that has already reset
-the camera, and the cost of the first attempt would stay exactly where it was.
+failures of a job nobody cancelled.
 
 A clause for the error does less. `on Cancelled { rethrow; }` in front of the
 broad clause, or `if (error is Cancelled) rethrow;` as its first line, holds
