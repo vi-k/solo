@@ -302,9 +302,10 @@ Job<Photo> takePhoto() => run<Ready, Photo>(
 ```
 
 A capture takes three times as long as the other operations, and the commands
-asked for meanwhile wait in the queue. This example counts them as part of the
-shot: once the photo is taken, `queue.clear()` drops them. A zoom requested
-five milliseconds into the capture:
+asked for meanwhile wait in the queue. They have nothing to apply to: the frame
+stays fixed while the capture runs, and after it the user is shown the photo.
+So once the photo is taken, `queue.clear()` drops them. A zoom requested five
+milliseconds into the capture:
 
 ```text
 [takePhoto] started
