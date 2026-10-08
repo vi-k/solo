@@ -1654,11 +1654,6 @@ void main() {
         '`close()` stands in the `Done` case: the disposal is over before '
         'it is called, and `close()` finds nothing to cancel.',
       );
-      _says(
-        answer,
-        'The shot waits behind the zoom in the queue, and `value` hands '
-        'over its photo',
-      );
       late CameraController made;
       late List<String> lines;
       var over = false;
@@ -1677,12 +1672,6 @@ void main() {
         'state: Preparing()',
         'state: Ready(zoom: 1.0, focusPoint: null, paused: false)',
         '[init] finished Done(null)',
-        '[setZoom: zoom: 2.0] started',
-        'state: Ready(zoom: 2.0, focusPoint: null, paused: false)',
-        '[setZoom: zoom: 2.0] finished Done(null)',
-        '[takePhoto] started',
-        '[takePhoto] log captured Photo#1',
-        '[takePhoto] finished Done(Photo#1)',
         '[dispose] started',
         '> [closeCamera] started',
         '> [closeCamera] finished Done(null)',
@@ -1729,113 +1718,9 @@ void main() {
       expect(over, isTrue);
       expect(seen.printed, ['failed: Bad state: close timed out']);
       expect(closed, isFalse);
-      expect(state, const Ready(zoom: 2));
+      expect(state, const Ready());
       expect(again, 'Done(null)');
       expect(after, isA<Disposed>());
-    });
-
-    test('an opening that fails stops the code with its own error', () {
-      _says(
-        _part(_closing, '### Awaiting the disposal'),
-        '`init().value` returns nothing. It is awaited because it throws '
-        'when the camera did not open, and the code stops there with the '
-        'error of the opening.',
-      );
-      late CameraController made;
-      late List<String> lines;
-      Object? thrown;
-      final seen = alone((async, journal) {
-        awaitingTheDisposal().onError<Object>((error, _) {
-          thrown = error;
-        }).ignore();
-        made = journal.created.single as CameraController;
-        made.hw.failures['open'] = StateError('camera in use');
-        async.flushTimers();
-        lines = journal.take();
-      });
-
-      expect(seen.zone, isEmpty);
-      expect(seen.printed, isEmpty);
-      expect('$thrown', 'Bad state: camera in use');
-      // Nothing was asked of the camera after the opening.
-      expect(lines.last, '[init] finished Failed(Bad state: camera in use)');
-      expect(made.hw.log, ['open: begin', 'open: failed']);
-    });
-
-    test('a zoom nobody reads reports its failure to the zone', () {
-      _says(
-        _part(_closing, '### Awaiting the disposal'),
-        'Nobody reads the outcome of that zoom, so a failure of it would go '
-        'to the zone like the failed disposal of the second attempt; '
-        '`camera.setZoom(2).ignoreFailure()` leaves the reporting to the hooks '
-        'instead.',
-      );
-      late CameraController made;
-      final seen = alone((async, journal) {
-        unawaited(awaitingTheDisposal());
-        made = journal.created.single as CameraController;
-        made.hw.failures['zoom'] = StateError('lens stuck');
-        async.flushTimers();
-      });
-
-      expect(seen.zone, [isA<StateError>()]);
-      expect('${seen.zone.single}', 'Bad state: lens stuck');
-      // The rest of the code went on.
-      expect(seen.printed, ['disposed']);
-      expect(made.currentState, isA<Disposed>());
-
-      late List<String> lines;
-      final ignored = alone((async, journal) {
-        final hw = FakeCameraHardware()
-          ..failures['zoom'] = StateError('lens stuck');
-        final camera = CameraController(hw);
-        opened(camera.init, hw, journal, async);
-        camera.setZoom(2).ignoreFailure();
-        async.flushTimers();
-        lines = journal.take();
-      });
-
-      expect(ignored.zone, isEmpty);
-      expect(
-        lines,
-        contains('[setZoom: zoom: 2.0] error Bad state: lens stuck'),
-      );
-    });
-
-    test('value throws when the shot fails or is cancelled', () {
-      _says(
-        _part(_closing, '### Awaiting the disposal'),
-        'or throws, if the shot fails or is cancelled.',
-      );
-      late bool closed;
-      Object? thrown;
-      final seen = alone((async, journal) {
-        awaitingTheDisposal().onError<Object>((error, _) {
-          thrown = error;
-        }).ignore();
-        final made = journal.created.single as CameraController;
-        made.hw.failures['capture'] = StateError('shutter stuck');
-        async.flushTimers();
-        closed = made.isClosed;
-      });
-
-      expect(seen.zone, isEmpty);
-      expect('$thrown', 'Bad state: shutter stuck');
-      // The code stopped at the shot: nothing was disposed or closed.
-      expect(closed, isFalse);
-
-      camera(CameraController.new, (camera, hw, journal, async) {
-        opened(camera.init, hw, journal, async);
-        Object? cancelled;
-        camera.takePhoto().value.then<void>((_) {}).onError<Object>((error, _) {
-          cancelled = error;
-        }).ignore();
-        async.elapse(const Duration(milliseconds: 5));
-        camera.dispose().ignoreFailure();
-        async.elapse(const Duration(milliseconds: 60));
-
-        expect(cancelled, isA<Cancelled>());
-      });
     });
 
     test('Cancelled comes back when the controller was closed first', () {
@@ -1897,30 +1782,6 @@ void main() {
           expect(disposal.outcome, isA<Cancelled>());
         });
       }
-    });
-
-    test('the lint about unawaited futures is on where the page code stands',
-        () {
-      _says(
-        _part(_closing, '### Awaiting the disposal'),
-        '`setZoom(2)` is not awaited: a `Job` is not a `Future`, and '
-        '`unawaited_futures` has nothing to say about it.',
-      );
-      // `support/camera_page.dart` holds that line inside an `async`
-      // function, and `dart analyze` of this package passes with the lint
-      // on: that is the check. This test holds the lint to its place.
-      expect(
-        File('analysis_options.yaml').readAsLinesSync(),
-        contains(startsWith('    unawaited_futures: true')),
-      );
-      expect(
-        File('test/support/camera_page.dart').readAsStringSync(),
-        contains('  camera.setZoom(2); // no await needed'),
-      );
-      camera(CameraController.new, (camera, hw, journal, async) {
-        final Object job = camera.setZoom(2)..ignoreFailure();
-        expect(job, isNot(isA<Future<void>>()));
-      });
     });
   });
 

@@ -134,11 +134,6 @@ Future<void> awaitingTheDisposal() async {
   final camera = CameraController(FakeCameraHardware());
   await camera.init().value;
 
-  camera.setZoom(2); // no await needed, and no lint about it
-
-  // ignore: unused_local_variable
-  final photo = await camera.takePhoto().value;
-
   switch (await camera.dispose().done) {
     case Done():
       print('disposed');

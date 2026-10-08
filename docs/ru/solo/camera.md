@@ -521,10 +521,6 @@ closed
 final camera = CameraController(FakeCameraHardware());
 await camera.init().value;
 
-camera.setZoom(2); // await не нужен, и линта об этом нет
-
-final photo = await camera.takePhoto().value;
-
 switch (await camera.dispose().done) {
   case Done():
     print('disposed');
@@ -550,15 +546,6 @@ switch (await camera.dispose().done) {
 случай, потому что исход всегда один из трёх. Возвращается `Cancelled`, когда
 `close()` успевает первым, как в первой попытке, или когда контроллер закрыли
 раньше, чем вызвали `dispose()`.
-
-`init().value` ничего не возвращает. Ждут его потому, что он бросает, когда
-камера не открылась, и код останавливается на этом месте с ошибкой открытия.
-`setZoom(2)` не ждут: `Job` не реализует `Future`, и `unawaited_futures`
-сказать о ней нечего. Исход этого масштаба никто не читает, поэтому его провал
-ушёл бы в зону, как провал освобождения во второй попытке;
-`camera.setZoom(2).ignoreFailure()` вместо этого оставляет отчёт хукам. Снимок
-ждёт в очереди за масштабом, и `value` отдаёт его фотографию или бросает, если
-снимок упал или отменён.
 
 ## Сбой после освобождения
 

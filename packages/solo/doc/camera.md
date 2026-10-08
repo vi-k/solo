@@ -516,10 +516,6 @@ the errors page describes. The failure arrives where nothing can act on it.
 final camera = CameraController(FakeCameraHardware());
 await camera.init().value;
 
-camera.setZoom(2); // no await needed, and no lint about it
-
-final photo = await camera.takePhoto().value;
-
 switch (await camera.dispose().done) {
   case Done():
     print('disposed');
@@ -545,15 +541,6 @@ either before the outcome arrives. The switch names the case because an outcome
 is always one of the three. It does come back when `close()` gets there first,
 as in the first attempt, or when the controller was closed before `dispose()`
 was called.
-
-`init().value` returns nothing. It is awaited because it throws when the camera
-did not open, and the code stops there with the error of the opening.
-`setZoom(2)` is not awaited: a `Job` is not a `Future`, and `unawaited_futures`
-has nothing to say about it. Nobody reads the outcome of that zoom, so a
-failure of it would go to the zone like the failed disposal of the second
-attempt; `camera.setZoom(2).ignoreFailure()` leaves the reporting to the hooks
-instead. The shot waits behind the zoom in the queue, and `value` hands over
-its photo — or throws, if the shot fails or is cancelled.
 
 ## A failure after the disposal
 
