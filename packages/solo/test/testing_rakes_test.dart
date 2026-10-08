@@ -233,16 +233,13 @@ void main() {
 
   // First in the file: nothing has touched a static yet.
   group('The statics, before any test has set one', () {
-    test('four of the five start as null, and tracing is on with assertions',
-        () {
+    test('all four start as null', () {
       expect(Solo.observer, isNull);
       expect(Solo.unansweredHandler, isNull);
       expect(Solo.debug, isNull);
       expect(Job.debug, isNull);
-      expect(Solo.traceStateChanges, isTrue, reason: 'assertions are on');
-      _says('Five statics belong to the process rather than to a controller');
-      _says('The first four start as `null`');
-      _says('`traceStateChanges` is on wherever assertions are');
+      _says('Four statics belong to the process rather than to a controller');
+      _says('All four start as `null`');
     });
   });
 
@@ -1198,10 +1195,6 @@ void main() {
       });
     });
 
-    group('addTearDown, as the page writes it:', () {
-      _asWritten(page.tracingPutBack);
-    });
-
     group('addTearDown', () {
       test('runs whether the test passed or failed', () async {
         final afterAFailure = await _run(first.secondLoadInTheSameTurn.body);
@@ -1213,24 +1206,6 @@ void main() {
         expect(afterASuccess.state, _passed);
         expect(Solo.observer, isNull);
         _says('`addTearDown` runs whether the test passed or failed.');
-      });
-
-      test('puts back the value the test found, whichever it was', () async {
-        final found = Solo.traceStateChanges;
-        addTearDown(() => Solo.traceStateChanges = found);
-        final after = <bool, String>{};
-
-        for (final outside in [true, false]) {
-          Solo.traceStateChanges = outside;
-          final run = await _run(page.tracingPutBack.body);
-          after[outside] = '${run.state}, ${Solo.traceStateChanges}';
-        }
-
-        expect(after, {true: '$_passed, true', false: '$_passed, false'});
-        _says('Read the value before changing it, and put back what was '
-            'read');
-        _says('Any of the five can be put back this way, and the last one '
-            'only this way.');
       });
     });
   });

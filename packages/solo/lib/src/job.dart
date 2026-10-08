@@ -235,11 +235,7 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     // A handler can synchronously notify an external state source. Such
     // a transition may revoke permission before the result is applied.
     if (!_mayCorrectState) return;
-    _solo._setState(
-      next,
-      emitter: this,
-      stackTrace: Solo.traceStateChanges ? StackTrace.current : null,
-    );
+    _solo._setState(next, emitter: this);
   }
 
   @override

@@ -157,16 +157,6 @@ final cancelledUnderFakeTime = test('a running load is cancelled', () {
   });
 });
 
-/// `### addTearDown`: the static with a default of its own.
-final tracingPutBack = test('tracing goes back to what it was', () {
-  final tracing = Solo.traceStateChanges;
-  addTearDown(() => Solo.traceStateChanges = tracing);
-
-  Solo.traceStateChanges = false;
-
-  expect(Solo.traceStateChanges, isFalse);
-});
-
 /// `### Collecting in the zone, asserting outside`.
 final collectedInTheZone =
     test('a failure nobody read reaches the zone', () async {

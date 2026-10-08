@@ -79,28 +79,6 @@ abstract class Solo<S extends Object> {
   /// on [Job.debug]; to follow both sides, set both.
   static void Function(String message)? debug;
 
-  /// Whether a change of state records where it was made.
-  ///
-  /// The record is the stack trace of a job its rules cancel: the `emit`
-  /// or `externalSetState` whose state they turned down. Taking it costs
-  /// most of what a change costs, so by default it is taken only where
-  /// assertions are on — in development and in tests — and not in a
-  /// release or profile build. Set it to `true` to have it there too, or to
-  /// `false` to go without it everywhere.
-  ///
-  /// Without the record a cancellation by the rules still has a trace:
-  /// the one of the place that noticed. When a change is what cancels a
-  /// running job, that place is inside the change itself, and the trace
-  /// leads back to it through a few frames of the engine; a job that finds
-  /// its rules broken at a checkpoint of its own gets the checkpoint.
-  static bool traceStateChanges = _assertionsOn();
-
-  static bool _assertionsOn() {
-    var on = false;
-    assert(on = true, 'only evaluated where assertions are on');
-    return on;
-  }
-
   S _state;
   int _stateRevision = 0;
   Completer<void>? _closing;
@@ -123,7 +101,6 @@ abstract class Solo<S extends Object> {
   /// is what says so.
   _SoloJob<S, S, Object?>? _inTransition;
   final _running = <_SoloJob<S, S, Object?>>[];
-  StackTrace? _lastChange;
   bool _pumpScheduled = false;
 
   /// The changes waiting to be published, oldest first.
@@ -759,11 +736,7 @@ abstract class Solo<S extends Object> {
       );
     }
     _debug(() => 'externalSetState: $state');
-    _setState(
-      state,
-      emitter: null,
-      stackTrace: traceStateChanges ? StackTrace.current : null,
-    );
+    _setState(state, emitter: null);
   }
 
   /// Closes the controller, then calls the observer's `onClose` and
@@ -1023,11 +996,7 @@ abstract class Solo<S extends Object> {
     throw ArgumentError.value('$job', 'job', 'was not created by this Solo');
   }
 
-  void _setState(
-    S next, {
-    required _SoloJob<S, S, Object?>? emitter,
-    required StackTrace? stackTrace,
-  }) {
+  void _setState(S next, {required _SoloJob<S, S, Object?>? emitter}) {
     // Every write comes through here, and none can arrive once closing has
     // finished: `externalSetState` throws before the call, and a job that
     // could still emit is a job `close` is waiting for. Asserted rather
@@ -1037,7 +1006,6 @@ abstract class Solo<S extends Object> {
     final previous = _state;
     _state = next;
     final revision = ++_stateRevision;
-    _lastChange = stackTrace;
     _debug(() => 'state: $next');
     _unpublished.add((previous, next));
     // Record lost correction rights before observers can synchronously
@@ -1058,7 +1026,6 @@ abstract class Solo<S extends Object> {
     _publishPending();
     _reevaluate(
       except: emitter,
-      stackTrace: stackTrace,
       ruleErrors: ruleErrors,
       revision: revision,
     );
@@ -1111,7 +1078,6 @@ abstract class Solo<S extends Object> {
   /// the current state, children before parents.
   void _reevaluate({
     required _SoloJob<S, S, Object?>? except,
-    required StackTrace? stackTrace,
     required Set<_SoloJob<S, S, Object?>> ruleErrors,
     required int revision,
   }) {
@@ -1143,9 +1109,9 @@ abstract class Solo<S extends Object> {
           Cancelled.by(
             reason: const RulesCancelReason(),
             description: rejection,
-            // Taken here when the change took none: this is still inside
-            // the change, so the trace leads back to whoever made it.
-            stackTrace: stackTrace ?? StackTrace.current,
+            // Still inside the change, so the trace leads back to
+            // whoever made it.
+            stackTrace: StackTrace.current,
           ),
           rejectable: false,
         );

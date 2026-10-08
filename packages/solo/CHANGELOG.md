@@ -314,10 +314,11 @@ Text that reads differently, for a test that matches it:
   `is cleaning up after its body` where it said `is disposing`, and a job of
   another controller refused by `add` is named as `Job(key)`, not by its class.
 
-And one trace is taken elsewhere in a release build. A change of state records
-its stack trace only where assertions are on, so the trace of a job its rules
-cancelled is taken where the rules noticed; `Solo.traceStateChanges`, under
-"Added", turns the record back on.
+And one trace is taken elsewhere. A change of state no longer records its stack
+trace, which cost most of what the change costs, so the trace of a job its
+rules cancelled is taken where the rules noticed: a few engine frames above the
+change that cancels a running job, and at the next checkpoint of a job that
+broke its own rule.
 
 ### Added
 
@@ -397,12 +398,6 @@ cancelled is taken where the rules noticed; `Solo.traceStateChanges`, under
   written meanwhile. The default is unchanged. Take it where the rate matters
   more than the latency of the first event; the cost is that a single event
   waits the whole interval, and a draining `close` waits with it.
-
-- `Solo.traceStateChanges`. A change of state recorded its stack trace every
-  time, which cost most of what the change costs, for one reader: the trace of
-  a job its rules cancel. The record is now taken where assertions are on — in
-  development and in tests — and the flag turns it on in a release build or off
-  everywhere.
 
 - `package:solo/listeners.dart`: `Listeners`, the list of listeners a notifier
   walks, for a package that builds a delivery of its own on top of `solo`. An

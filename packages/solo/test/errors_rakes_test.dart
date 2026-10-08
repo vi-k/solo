@@ -395,8 +395,6 @@ SoloJob<void> _dirtyCleanup(OpenSolo<int> controller) =>
     });
 
 void main() {
-  final traceStateChanges = Solo.traceStateChanges;
-
   setUp(() => stage = Stage());
 
   tearDown(() {
@@ -404,7 +402,6 @@ void main() {
     Solo.unansweredHandler = null;
     Solo.debug = null;
     Job.debug = null;
-    Solo.traceStateChanges = traceStateChanges;
   });
 
   group('Reporting an error', () {
@@ -3086,9 +3083,8 @@ void main() {
     group('a rule answers:', () {
       test('no free slot', () {
         _says(
-          'A rule that answers `false` is not an error: it cancels the job. '
-          'That `Cancelled` always carries a trace, and what varies is where '
-          'the trace is taken',
+          'A rule that answers `false` is not an error: it cancels the job, '
+          'and the trace of that `Cancelled` is taken where the rule said no',
         );
         late page.Pool pool;
         late Job<void> job;
@@ -3143,7 +3139,6 @@ void main() {
           '`externalSetState` whose state broke the rule',
         );
         fakeAsync((async) {
-          Solo.traceStateChanges = true;
           final traced = _Traced();
           final job = kept(traced);
           async.flushMicrotasks();
@@ -3151,30 +3146,6 @@ void main() {
           async.flushMicrotasks();
 
           expect('${job.outcome}', 'Cancelled(rules: keepWhile)');
-          expect(
-            _frames(outcomeOf(job).stackTrace).take(3),
-            [
-              'Solo.externalSetState',
-              'OpenSolo.externalSetState',
-              '_Traced.setsTooBig',
-            ],
-          );
-        });
-      });
-
-      test('the same without the trace of the change', () {
-        _says(
-          'a release build takes it at the rejection instead, a couple of '
-          'engine frames above the same change',
-        );
-        fakeAsync((async) {
-          Solo.traceStateChanges = false;
-          final traced = _Traced();
-          final job = kept(traced);
-          async.flushMicrotasks();
-          traced.setsTooBig();
-          async.flushMicrotasks();
-
           expect(
             _frames(outcomeOf(job).stackTrace).take(5),
             [
@@ -3190,7 +3161,6 @@ void main() {
 
       test('keepWhile re-checked on the emit of a child', () {
         fakeAsync((async) {
-          Solo.traceStateChanges = true;
           final traced = _Traced();
           final job = traced.run<int, void>(
             key: 'parent',
@@ -3208,24 +3178,15 @@ void main() {
 
           expect('${job.outcome}', 'Cancelled(rules: keepWhile)');
           expect(
-            _frames(outcomeOf(job).stackTrace).take(2),
-            ['_SoloContext.emit', '_Traced.emitsTooBig'],
+            _frames(outcomeOf(job).stackTrace).take(4),
+            [
+              'Solo._reevaluate',
+              'Solo._setState',
+              '_SoloContext.emit',
+              '_Traced.emitsTooBig',
+            ],
           );
         });
-      });
-
-      test('traceStateChanges where assertions are on', () {
-        _says(
-          'Where assertions are on, the trace is taken in the change itself',
-        );
-        _says(
-          '`Solo.traceStateChanges = true` takes it in the change everywhere, '
-          '`false` at the rejection everywhere',
-        );
-        var assertionsOn = false;
-        assert(assertionsOn = true, 'only evaluated where assertions are on');
-
-        expect(traceStateChanges, assertionsOn);
       });
 
       /// A job that breaks its own rule with an `emit`, goes on, and reaches
@@ -3259,28 +3220,20 @@ void main() {
           _says(
             'A job that breaks its own rule is not re-evaluated on its own '
             '`emit`: it finds out at its next checkpoint — a `ctx.state`, a '
-            '`ctx.check()`, a waiting method — and without the trace of the '
-            'change that checkpoint is all the `Cancelled` has',
+            '`ctx.check()`, a waiting method — and the trace names that '
+            'checkpoint',
           );
           fakeAsync((async) {
-            Solo.traceStateChanges = true;
-            final withTrace = breaksItsOwnRule(_Traced(), kind);
-            async.flushTimers();
-            Solo.traceStateChanges = false;
-            final without = breaksItsOwnRule(_Traced(), kind);
+            final job = breaksItsOwnRule(_Traced(), kind);
             async.flushTimers();
 
-            expect('${withTrace.outcome}', 'Cancelled(rules: keepWhile)');
+            expect('${job.outcome}', 'Cancelled(rules: keepWhile)');
             expect(
               stage.trace,
-              ['the body went on', 'the body went on'],
+              ['the body went on'],
               reason: 'the call of the waiting method never started',
             );
-            expect(
-              _frames(outcomeOf(withTrace).stackTrace).take(2),
-              ['_SoloContext.emit', '_Traced.emitsTooBig'],
-            );
-            final frames = _frames(outcomeOf(without).stackTrace);
+            final frames = _frames(outcomeOf(job).stackTrace);
             expect(frames, contains(member));
             expect(frames, isNot(contains('_Traced.emitsTooBig')));
           });
@@ -3293,20 +3246,17 @@ void main() {
           'the queue',
         );
         fakeAsync((async) {
-          for (final traced in [true, false]) {
-            Solo.traceStateChanges = traced;
-            final controller = _Traced()..setsTooBig();
-            final job = controller.run<int, void>(
-              key: 'big',
-              canStart: (state) => state < 5,
-              (ctx) async {},
-            )..ignoreFailure();
-            async.flushMicrotasks();
+          final controller = _Traced()..setsTooBig();
+          final job = controller.run<int, void>(
+            key: 'big',
+            canStart: (state) => state < 5,
+            (ctx) async {},
+          )..ignoreFailure();
+          async.flushMicrotasks();
 
-            final frames = _frames(outcomeOf(job).stackTrace);
-            expect(frames.first, 'Solo._pump');
-            expect(frames, isNot(contains('_Traced.setsTooBig')));
-          }
+          final frames = _frames(outcomeOf(job).stackTrace);
+          expect(frames.first, 'Solo._pump');
+          expect(frames, isNot(contains('_Traced.setsTooBig')));
         });
       });
     });
