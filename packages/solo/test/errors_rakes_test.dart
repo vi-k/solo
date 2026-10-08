@@ -2288,8 +2288,8 @@ void main() {
 
       test('the same observer twice in the list', () {
         _says(
-          'The same observer twice in the list, and `SoloObserver.all` throws '
-          '`ArgumentError`',
+          'If the same observer is in the list twice, `SoloObserver.all` '
+          'throws `ArgumentError`',
         );
         final one = _Watching();
 

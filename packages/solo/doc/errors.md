@@ -400,7 +400,7 @@ Solo.observer = SoloObserver.all([
 
 Every hook goes to each of them in the order of the list, each call on its own:
 one that throws hands its error to the zone, and the next is called all the
-same. The same observer twice in the list, and `SoloObserver.all` throws
+same. If the same observer is in the list twice, `SoloObserver.all` throws
 `ArgumentError`.
 
 ## Handled and unhandled failures
