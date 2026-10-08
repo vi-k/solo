@@ -58,11 +58,12 @@ calls ended up in, a deadline five seconds away — and can await nothing at all
 it runs under `package:fake_async`, where the clock moves when the test says
 so. The three sections below await; `fakeAsync` starts with the fourth.
 
-Every section below opens with the version the vocabulary of the API and of
-`package:test` leads to — the assertion right after the call, the `close` that
-should let the work finish, the `await` inside `fakeAsync`, the expectation
-inside a zone, the `timeout` on a call — and says what it does instead of what
-it was written to do. The version that works follows under its own heading.
+Every section below opens with the version habit or the vocabulary of this API
+and of `package:test` leads to — the assertion right after the call, the
+`close` that should let the work finish, the `await` inside `fakeAsync`, the
+expectation inside a zone, the `timeout` on a call — and says what it does
+instead of what it was written to do. The version that works follows under its
+own heading.
 
 ## Awaiting a job
 
