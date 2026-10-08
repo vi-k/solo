@@ -433,7 +433,7 @@ sent.
 ### Observing the outcome
 
 ```dart
-profile.load().ignoreFailure(); // the counterpart of Future.ignore
+profile.load().ignoreFailure();
 ```
 
 Accessing `job.done` or `job.value`, or calling `job.ignoreFailure()`, marks

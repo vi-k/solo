@@ -432,7 +432,7 @@ final class Failures extends SoloObserver {
 ### Наблюдение исхода
 
 ```dart
-profile.load().ignoreFailure(); // аналог Future.ignore
+profile.load().ignoreFailure();
 ```
 
 Обращение к `job.done` или `job.value`, а также вызов `job.ignoreFailure()`

@@ -427,10 +427,12 @@ abstract interface class Job<T> {
 
   /// Tells the core that nobody is interested in this job's failure.
   ///
-  /// The counterpart of `Future.ignore`. A job that ends with [Failed]
-  /// without ever being observed hands its error to the zone that created
-  /// it; call this on a fire-and-forget job whose failure is already
-  /// handled elsewhere, by a [JobObserver] of your own.
+  /// A job that ends with [Failed] without ever being observed hands its
+  /// error to the zone that created it; call this on a fire-and-forget job
+  /// whose failure is already handled elsewhere, by a [JobObserver] of your
+  /// own. Like `Future.ignore`, it keeps the error from the zone. Unlike it,
+  /// the error is still told: [JobObserver.onError] hears it, and the outcome
+  /// stays there to be read.
   ///
   /// ```dart
   /// Job<void>(
