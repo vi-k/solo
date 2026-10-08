@@ -2729,7 +2729,9 @@ void main() {
         test('closed while hw.setZoom is in flight, and the reset takes time',
             () {
           if (!asks) {
-            _says('whoever cancelled the job waits for the reset as well');
+            _says(
+              'whoever cancelled the job has to wait for the reset as well',
+            );
           }
           var backAfterTheCall = false;
           var resetStarted = false;

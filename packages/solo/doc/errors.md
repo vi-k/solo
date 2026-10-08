@@ -488,7 +488,7 @@ try {
 device failures. Cancel this job while `hw.setZoom` is in flight: `join` waits
 the call out and throws `Cancelled` in place of its result, and the catch reads
 that as a failure of the camera. It resets a camera that opened and took its
-zoom, and whoever cancelled the job waits for the reset as well.
+zoom, and whoever cancelled the job has to wait for the reset as well.
 
 The two lines under the reset change nothing. `ctx.emit` on a cancelled job
 throws `Cancelled` in turn, so `Broken` never reaches the screen and the
