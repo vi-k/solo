@@ -605,11 +605,11 @@ void main() {
       });
     });
 
-    group('reading the outcome, as the page writes it:', () {
-      _asWritten(page.outcomeRead);
+    group('ignoreFailure, as the page writes it:', () {
+      _asWritten(page.failureIgnored);
     });
 
-    group('reading the outcome', () {
+    group('ignoreFailure', () {
       test(
           'done, value and ignoreFailure() mark the job observed, '
           'outcome does not', () async {
@@ -648,11 +648,10 @@ void main() {
           'ignoreFailure': isEmpty,
           'outcome': ['StateError: no network'],
         });
-        _says('Reading `done` or `value` marks the job observed');
         _says(
-          '`job.ignoreFailure()`, which marks it observed without waiting '
-          'for it',
+          '`ignoreFailure()` marks the job observed without waiting for it',
         );
+        _says('Reading `done` or `value` marks it as well');
         _says('Reading `job.outcome` does not mark anything');
       });
 
@@ -672,7 +671,7 @@ void main() {
 
         expect(run.state, _failed);
         expect(_errors(run), ['StateError: no network']);
-        _says('The read has to come before the job ends');
+        _says('The mark has to come before the job ends');
         _says('so a test that holds the job, drains the controller and reads '
             '`done` afterwards is red all the same');
       });
@@ -1702,7 +1701,7 @@ void main() {
       '### The first attempt': [attempts, timeout, fixtures],
       '### Awaiting the outcome': [answers],
       '### Letting the work finish': [answers],
-      '### Reading the outcome': [answers],
+      '### ignoreFailure': [answers],
       '### Letting the first job start': [answers],
       '### Elapsing instead of awaiting': [answers],
       '### addTearDown': [answers],

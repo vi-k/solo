@@ -69,18 +69,16 @@ final drained = test('load fills in the name', () async {
   expect(profile.currentState, isA<Loaded>());
 });
 
-/// `### Reading the outcome`.
-final outcomeRead = test('a failed load shows the failure', () async {
+/// `### ignoreFailure`.
+final failureIgnored = test('a failed load shows the failure', () async {
   final profile = ProfileController(
     FakeProfileApi(error: StateError('no network')),
   );
 
-  final outcome = await profile.load().done;
+  profile.load().ignoreFailure();
+  await profile.close(mode: SoloCloseMode.drain);
 
-  expect(outcome, isA<Failed>());
   expect(profile.currentState, isA<Failure>());
-
-  await profile.close();
 });
 
 /// `### Letting the first job start`: the test of the first attempt with

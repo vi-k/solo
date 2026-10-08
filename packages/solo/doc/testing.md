@@ -233,7 +233,7 @@ that has already passed while a later one is running. With no later test still
 running by then, the run is over before the failure arrives: nobody says
 anything, and the run is green.
 
-### Reading the outcome
+### ignoreFailure
 
 ```dart
 test('a failed load shows the failure', () async {
@@ -241,23 +241,21 @@ test('a failed load shows the failure', () async {
     FakeProfileApi(error: StateError('no network')),
   );
 
-  final outcome = await profile.load().done;
+  profile.load().ignoreFailure();
+  await profile.close(mode: SoloCloseMode.drain);
 
-  expect(outcome, isA<Failed>());
   expect(profile.currentState, isA<Failure>());
-
-  await profile.close();
 });
 ```
 
-Reading `done` or `value` marks the job observed, and an observed failure is
-the test's business rather than the zone's. The read has to come before the job
-ends: a failure nobody has asked about is reported as the job finishes, so a
-test that holds the job, drains the controller and reads `done` afterwards is
-red all the same. A job the test starts and drops on purpose says so with
-`job.ignoreFailure()`, which marks it observed without waiting for it. Reading
-`job.outcome` does not mark anything: it is a look at a field, and the field is
-`null` until the job has finished.
+`ignoreFailure()` marks the job observed without waiting for it, and an
+observed failure is the test's business rather than the zone's. Reading `done`
+or `value` marks it as well, so a test that awaits the outcome, as the first
+section does, needs nothing more. The mark has to come before the job ends: a
+failure nobody has asked about is reported as the job finishes, so a test that
+holds the job, drains the controller and reads `done` afterwards is red all the
+same. Reading `job.outcome` does not mark anything: it is a look at a field,
+and the field is `null` until the job has finished.
 
 One failure is out of reach of all three: that of a call the job has walked
 away from. Cancel a load while the fake is still answering, or close the
