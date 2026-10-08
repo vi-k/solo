@@ -76,12 +76,12 @@ the controller has closed. A job goes by its key, a value of the example's
 `CameraKey` enum, followed by its `describe` text where it has one:
 `[setZoom: zoom: 2.0]`. A child job's lines begin with `>`.
 
-Sections open with the version the API's vocabulary leads to — the working type
-named after the state a job starts from, the default policy, a disposal queued
-like any other job — and show what that code does. Where the version that
-repairs it still falls short, it stands as a second attempt. The version the
-example uses follows under its own heading. The section on commands that arrive
-during a shot has nothing to trip over and opens with the answer.
+Sections open with the version habit or the API's vocabulary leads to — the
+working type named after the state a job starts from, the default policy, a
+disposal queued like any other job — and show what that code does. Where the
+version that repairs it still falls short, it stands as a second attempt. The
+version the example uses follows under its own heading. The section on commands
+that arrive during a shot has nothing to trip over and opens with the answer.
 
 ## Opening the camera
 
