@@ -668,6 +668,6 @@ void onLog(Job<Object?> job, Object? message) {
 }
 ```
 
-The body logs unconditionally, and `describe()` runs only where somebody
-listens at that level. Everywhere else the message stays a closure nobody
-called.
+The body logs unconditionally, and the line is built, the call of `describe()`
+included, only where somebody listens at that level. Everywhere else the
+message stays a closure nobody called.

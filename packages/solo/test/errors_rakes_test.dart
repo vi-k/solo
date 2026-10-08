@@ -3818,8 +3818,8 @@ void main() {
 
       test('the lazy line of the page, with the logger at FINE', () {
         _says(
-          'The body logs unconditionally, and `describe()` runs only where '
-          'somebody listens at that level',
+          'The body logs unconditionally, and the line is built, the call of '
+          '`describe()` included, only where somebody listens at that level',
         );
         _run((async) {
           page.Camera(Hardware()).zoomTo(2, page.logLazily);
