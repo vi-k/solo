@@ -213,20 +213,21 @@ changes» CHANGELOG `solo`. 2026-10-07 по его же слову `Job.ignore()
 Страницу `errors.md` он дочитал и принял 2026-10-08, восемнадцать пунктов
 раздела «По чтению владельца» в `2026-10-04-solo-errors-reread-report.md`;
 `packages/solo/doc/testing.md` принята в тот же день, три пункта
-в `2026-10-04-solo-testing-reread-report.md`; дальше в его чтении `camera.md`,
+в `2026-10-04-solo-testing-reread-report.md`; `packages/solo/doc/camera.md`
+принята в тот же день в нынешнем виде, три пункта
+в `2026-10-04-solo-camera-reread-report.md`; дальше в его чтении
 `accumulation.md`, `vs-bloc.md` и README пакета `solo`, README и `mixins.md`
 пакета `flutter_solo`, последними CHANGELOG трёх пакетов. Правки принятых
 страниц после их приёмки (переименования, `pause` в списке вызовов
 `extending.md` пакета `async_job`, `Job<T>` в коде `children.md` пакета `solo`,
 абзацы по его вопросам после приёмки) владелец просмотрел 2026-10-08; принятые
-страницы `async_job` и `solo` на `165735d` прочитаны им целиком. Сейчас он
-перечитывает остальные страницы `async_job`. Изменённую тем же коммитом фразу
-в `packages/solo/doc/resources.md` он перечитал и принял в тот же день. Отчёт —
-`2026-10-07-unanswered-walk-report.md`. Вопросы владельца правятся в странице,
-переводе и стороже и идут пунктами раздела «По чтению владельца» в отчёте
-страницы. В `docs/backlog.md` одна запись — общий отлов зависаний; по ней
-решено оставить рецептами, пока не выполнится условие, названное в самой
-записи.
+страницы `async_job` и `solo` на `165735d` прочитаны им целиком. Изменённую
+тем же коммитом фразу в `packages/solo/doc/resources.md` он перечитал и принял
+в тот же день. Отчёт — `2026-10-07-unanswered-walk-report.md`. Вопросы
+владельца правятся в странице, переводе и стороже и идут пунктами раздела
+«По чтению владельца» в отчёте страницы. В `docs/backlog.md` одна запись —
+общий отлов зависаний; по ней решено оставить рецептами, пока не выполнится
+условие, названное в самой записи.
 
 **Срок задачи.** 2026-10-06 сделан и перенесён в `main` коммитом «feat: give a
 job a deadline of its own»: параметр `timeout` у `Job(...)`,
@@ -280,16 +281,6 @@ dozen calls» в README `solo` перестроен — `play` кончаетс�
 (M8); убрала `.ignore()` при `job.cancel()` во фрагменте об отмене вместе
 с фразой о нём, написанной по пятому вопросу (L5); добавила dev-зависимость
 `test_api` в `packages/solo/pubspec.yaml`. Раздел «Вопросы владельцу»
-в `2026-10-04-solo-camera-reread-report.md`: после упавшего освобождения камера
-примера остаётся в `Ready`, принимает команды, но не слышит устройство, потому
-что `dispose()` снимает слушателя `hw.onError` первой строкой и назад
-не ставит; оставить (страница говорит об этом одной фразой) или снимать
-слушателя в теле задачи перед `emit(const Disposed())`, ценой `Broken` посреди
-закрытия и переписанного ответа раздела. Там же правка на подтверждение: в код
-примера `packages/solo/example/lib/src/camera_controller.dart` без его слова
-добавлен `onClose`. Код ответа «Awaiting the disposal» владелец прочёл
-2026-10-08, и по его вопросу из вызывающего кода ушли масштаб и снимок (пункт 3
-«По чтению владельца»). Раздел «Вопросы владельцу»
 в `2026-10-04-solo-accumulation-reread-report.md`: рецепт журнала стоит
 на `AccumulationTiming.throttle` с немедленным стартом, и всплеск из трёх строк
 уходит одним запросом, только пока написан одним синхронным проходом; с одним
@@ -600,7 +591,7 @@ README `flutter_solo` с его `doc/mixins.md` и быстрого старта
 в `children_*.dart`, тест `children_rakes_test.dart`, 118; код `testing.md` —
 в `testing_*.dart`, тест `testing_rakes_test.dart`, 96; код `camera.md` —
 в `packages/solo/example/test/support/camera_*.dart`, тест
-`camera_rakes_test.dart` пакета примера, 93. Код `accumulation.md` сверх стенда
+`camera_rakes_test.dart` пакета примера, 89. Код `accumulation.md` сверх стенда
 стоит в `packages/solo/test/support/accumulation_*.dart`, тест
 `accumulation_rakes_test.dart`, 126; код сторон `solo` страницы `vs-bloc.md` —
 в `vs_bloc_*.dart` там же, тест `vs_bloc_rakes_test.dart`, 64, а блоки стороны
