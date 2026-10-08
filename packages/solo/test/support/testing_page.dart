@@ -57,22 +57,13 @@ final cancelledLoad = test('a cancelled load ends Cancelled', () async {
   await profile.close();
 });
 
-/// `### Letting the work finish`: the job first, the close after it.
-final closedAfterTheJob = test('load fills in the name', () async {
-  final profile = ProfileController(FakeProfileApi());
-
-  final outcome = await profile.load().done;
-  await profile.close();
-
-  expect(outcome, isA<Done<String>>());
-  expect(profile.currentState, isA<Loaded>());
-});
-
 /// `### Letting the work finish`: the drain, for a job the test does not
 /// hold.
-final drained = test('a drain runs the load nobody holds', () async {
-  final profile = ProfileController(FakeProfileApi())..load();
+final drained = test('load fills in the name', () async {
+  final profile = ProfileController(FakeProfileApi());
 
+  // ignore: cascade_invocations
+  profile.load();
   await profile.close(mode: SoloCloseMode.drain);
 
   expect(profile.currentState, isA<Loaded>());

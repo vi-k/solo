@@ -186,22 +186,18 @@ test('load fills in the name', () async {
 test('load fills in the name', () async {
   final profile = ProfileController(FakeProfileApi());
 
-  final outcome = await profile.load().done;
-  await profile.close();
+  profile.load();
+  await profile.close(mode: SoloCloseMode.drain);
 
-  expect(outcome, isA<Done<String>>());
   expect(profile.currentState, isA<Loaded>());
 });
 ```
 
-Сначала тест дождался задачи, и только потом идёт `close`: как конец теста,
-а не как способ подождать. Там, где у теста `Job` в руках нет (контроллер сам
-ставит работу, очередь наполняет виджет), `close` может выполнить то, что в ней
-уже стоит:
-
-```dart
-await profile.close(mode: SoloCloseMode.drain);
-```
+`SoloCloseMode.drain` выполняет то, что уже стоит в очереди, а не отбрасывает,
+поэтому такой `close` годится, чтобы подождать. Он нужен тесту, у которого
+`Job` в руках нет: контроллер сам ставит работу, очередь наполняет виджет.
+Тест, который `Job` держит, ждёт её `done`, как в разделе выше, а `close`
+у него остаётся концом теста.
 
 Дренаж выполняет очередь, но не обещает, что работа удастся. Задача под
 дренажем всё ещё может упасть, и чего это стоит тесту, сказано в следующем

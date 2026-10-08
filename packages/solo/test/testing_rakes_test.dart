@@ -533,7 +533,6 @@ void main() {
     });
 
     group('letting the work finish, as the page writes it:', () {
-      _asWritten(page.closedAfterTheJob);
       _asWritten(page.drained);
     });
 

@@ -184,22 +184,18 @@ publish `Initial` over the `Loading` its body had emitted.
 test('load fills in the name', () async {
   final profile = ProfileController(FakeProfileApi());
 
-  final outcome = await profile.load().done;
-  await profile.close();
+  profile.load();
+  await profile.close(mode: SoloCloseMode.drain);
 
-  expect(outcome, isA<Done<String>>());
   expect(profile.currentState, isA<Loaded>());
 });
 ```
 
-The job is awaited first and `close` comes after it, as the end of the test
-rather than a way to wait. Where the test holds no job — a controller that
-queues work of its own, a widget that fills the queue — `close` can run what is
-already in it:
-
-```dart
-await profile.close(mode: SoloCloseMode.drain);
-```
+`SoloCloseMode.drain` runs what is already in the queue instead of dropping it,
+so this `close` is a way to wait. It suits a test that holds no job — a
+controller that queues work of its own, a widget that fills the queue. A test
+that holds the job awaits its `done`, as in the section above, and its `close`
+is only the end of the test.
 
 A drain runs the queue; it does not promise the work succeeds. A drained job
 can still fail, and what that costs a test is the next section.
