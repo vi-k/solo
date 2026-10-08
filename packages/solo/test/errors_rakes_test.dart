@@ -2463,8 +2463,8 @@ void main() {
         'asked to answer for them through `onUnanswered`',
       );
       _says(
-        'Without an override of it or an installed `Solo.unansweredHandler`, '
-        "they fall back to the job's creation zone",
+        'Either an override of it or an installed `Solo.unansweredHandler` '
+        "takes them; with neither, they fall back to the job's creation zone",
       );
       _says('Such an error can arrive after the job has already completed');
       _says('It does not replace an existing cancellation outcome');

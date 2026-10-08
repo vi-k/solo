@@ -448,15 +448,15 @@ waits for children of its own or runs its cleanup, `await job.value` throws the
 
 Errors from cleanup, cancellation callbacks and operations abandoned by
 `abandonable` go to the reporting hooks, and the controller is asked to answer
-for them through `onUnanswered`. Without an override of it or an installed
-`Solo.unansweredHandler`, they fall back to the job's creation zone. Such an
-error can arrive after the job has already completed. It does not replace an
-existing cancellation outcome. A `Cancelled` that arrives this way — an
-abandoned action that ended in the cancellation of another job, say — is told
-to the reporting hooks, and nobody is asked to answer for it: it reaches
-neither `onUnanswered` nor `Solo.unansweredHandler` nor the zone. The job's own
-cancellation, thrown back by such an action, is news to nobody and is not
-reported at all.
+for them through `onUnanswered`. Either an override of it or an installed
+`Solo.unansweredHandler` takes them; with neither, they fall back to the job's
+creation zone. Such an error can arrive after the job has already completed. It
+does not replace an existing cancellation outcome. A `Cancelled` that arrives
+this way — an abandoned action that ended in the cancellation of another job,
+say — is told to the reporting hooks, and nobody is asked to answer for it: it
+reaches neither `onUnanswered` nor `Solo.unansweredHandler` nor the zone. The
+job's own cancellation, thrown back by such an action, is news to nobody and is
+not reported at all.
 
 An unhandled error of `job.value` or `ctx.run(child)` is still an unhandled
 Future error under Dart's rules, even if that error is `Cancelled`: that route
