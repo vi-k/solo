@@ -776,3 +776,13 @@ group that waits only for the slot» освобождали слот в тот �
    the queue cannot take it until that job ends». Правка в оригинале
    и переводе; тест сторожа «a burst over several turns while a job is running
    stays together» цитирует фразу целиком.
+
+5. Там же, абзац о `debounce(duration)`. Вслед за пунктом 4 владелец спросил,
+   что тогда значит «When the timer fires, the group is sealed even if another
+   job is running». Фраза о debounce, но стояла в конце абзаца, после
+   отступления о рецептах поиска и журнала, где назван и throttle, и «таймер»
+   читался как таймер любого режима. Три фразы о запечатывании переставлены
+   к механике debounce, сразу за примером с окном 200 мс, и таймер назван:
+   «When the debounce timer fires, the group is sealed even if another job is
+   running». Правка в оригинале и переводе; тест сторожа «the timer seals the
+   group while another job is running» цитирует новую фразу.

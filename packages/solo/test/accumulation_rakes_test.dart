@@ -1399,8 +1399,8 @@ void main() {
     });
 
     test('the timer seals the group while another job is running', () {
-      _says('When the timer fires, the group is sealed even if another job '
-          'is running');
+      _says('When the debounce timer fires, the group is sealed even if '
+          'another job is running');
       _says('`collect` takes its snapshot then, and not again');
       final seen = <String>[];
       _zone((async) {
