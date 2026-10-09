@@ -830,12 +830,13 @@ future — обычное слово без бэктиков; «дренаж» �
     `Connected`. С `connect` наоборот: устройство подключено, состояние
     `Offline`. Флаг теперь стоит у `connect` и `disconnect`, отменяемым
     осталось одно чтение, и под абзацем о переименовании новый: «`connect` and
-    `disconnect` carry it too, for what happens once they have started».
-    Сторожа — тесты «a sweep during disconnect» и «a sweep during connect»,
-    каждый на код страницы и на `SweptDeviceController` без флага
-    в `test/support/vs_bloc_7_device.dart`. Тот же зонд показал, что `close()`
-    убирает из очереди и `Job` с `cancellable: false`: страница называет только
-    `cancelAll()` и `queue.clear()`, так что это ей не противоречит.
+    `disconnect` carry `cancellable: false` too, for what happens once they
+    have started». Сторожа — тесты «a sweep during disconnect» и «a sweep
+    during connect», каждый на код страницы и на `SweptDeviceController` без
+    флага в `test/support/vs_bloc_7_device.dart`. Тот же зонд показал, что
+    `close()` убирает из очереди и `Job` с `cancellable: false`: страница
+    называет только `cancelAll()` и `queue.clear()`, так что это ей
+    не противоречит.
 
 13. «Awaiting a particular request», ответ solo. Владелец заметил, что ключ
     `('pay', order.id)` в коде легко пропустить, а фраза под кодом говорила
