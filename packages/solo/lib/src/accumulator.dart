@@ -2,11 +2,13 @@ part of 'solo.dart';
 
 /// Chooses which waiting group receives an event and where it runs.
 enum AccumulationPolicy {
-  /// Joins only the queue's tail, preserving intervening jobs as boundaries.
+  /// Adjoins the event only to a group at the queue's tail, preserving
+  /// intervening jobs as boundaries.
   adjacent,
 
-  /// Moves the last matching group's job to the tail, keeping its handle.
-  /// Nothing is cancelled, so `cancellable: false` has nothing to refuse.
+  /// Replaces the last matching group's job at the queue's tail, keeping its
+  /// handle. Nothing is cancelled, so `cancellable: false` has nothing to
+  /// refuse.
   replace,
 
   /// Joins the last matching group at its existing position in the queue.

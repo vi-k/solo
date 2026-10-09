@@ -817,3 +817,10 @@ group that waits only for the slot» освобождали слот в тот �
    перенесены на новое время, тест о строке внутри интервала заменён тестом «a
    transition written over several turns stays together», а два теста
    о немедленном старте идут на `Bench` с обычным throttle.
+
+7. Dartdoc вариантов `AccumulationPolicy`. Владелец предложил начать описание
+   каждого глаголом, который соответствует имени. Было `Joins`, `Moves`
+   и `Joins`, стало `Adjoins the event only to a group at the queue's tail`,
+   `Replaces the last matching group's job at the queue's tail` (в смысле
+   «ставит на место») и прежнее `Joins` у `join`. У прилагательного `adjacent`
+   своего глагола нет, ближе всего `adjoin`.
