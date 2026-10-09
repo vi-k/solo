@@ -1182,6 +1182,7 @@ final class DeviceController extends Solo<DeviceState> {
 
   Job<void> connect() => run<Offline, void>(
         key: DeviceKey.connect,
+        cancellable: false,
         (ctx) async {
           await ctx.join(_ble.connect);
           ctx.emit(const Connected());
@@ -1206,6 +1207,7 @@ final class DeviceController extends Solo<DeviceState> {
     queue.removeWhere((job) => job.key == DeviceKey.readBattery);
     return run<Connected, void>(
       key: DeviceKey.disconnect,
+      cancellable: false,
       (ctx) async {
         await ctx.join(_ble.disconnect);
         ctx.emit(const Offline());
@@ -1230,6 +1232,15 @@ final class DeviceController extends Solo<DeviceState> {
 и тогда, поэтому гарантия принадлежит задаче, а не строке, удаляющей кого-то
 другого: такую задачу общая чистка пропускает, а не удаляет, и уносит её только
 `force: true`.
+
+Он стоит и у `connect` с `disconnect`, ради того, что бывает после их старта.
+`ctx.join` даёт вызову устройства закончиться и после отмены, а тело,
+отменённое за это время, пропускает следующий за ним `emit`: чистка во время
+`disconnect` оставила бы устройство отключённым, а состояние `Connected`,
+а чистка во время `connect` наоборот. Работающей `Job` с `cancellable: false`
+чистка отказывает, поэтому состояние вслед за устройством доходит до `Offline`
+и `Connected`. Отменяемой остаётся одна команда, чтение: на устройстве оно
+ничего не меняет, и выбросить его стоит только показаний батареи.
 
 Контроллер длиннее, чем bloc над ним, и построчно они не сравниваются. Иерархии
 событий, на которой работает та версия, в документе нет: базовый класс и четыре

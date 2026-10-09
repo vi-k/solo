@@ -81,6 +81,7 @@ final class DeviceController extends Solo<DeviceState> {
 
   Job<void> connect() => run<Offline, void>(
         key: DeviceKey.connect,
+        cancellable: false,
         (ctx) async {
           await ctx.join(_ble.connect);
           ctx.emit(const Connected());
@@ -105,6 +106,7 @@ final class DeviceController extends Solo<DeviceState> {
     queue.removeWhere((job) => job.key == DeviceKey.readBattery);
     return run<Connected, void>(
       key: DeviceKey.disconnect,
+      cancellable: false,
       (ctx) async {
         await ctx.join(_ble.disconnect);
         ctx.emit(const Offline());
@@ -120,4 +122,28 @@ final class DeviceController extends Solo<DeviceState> {
 extension Sweeps on DeviceController {
   // ignore: invalid_use_of_protected_member
   void clearQueue({bool force = false}) => queue.clear(force: force);
+}
+
+/// `connect` and `disconnect` of the page without `cancellable: false`: what
+/// the paragraph under the code says a sweep would do to them while they run.
+final class SweptDeviceController extends Solo<DeviceState> {
+  SweptDeviceController(this._ble) : super(const Offline());
+
+  final Ble _ble;
+
+  Job<void> connect() => run<Offline, void>(
+        key: DeviceKey.connect,
+        (ctx) async {
+          await ctx.join(_ble.connect);
+          ctx.emit(const Connected());
+        },
+      );
+
+  Job<void> disconnect() => run<Connected, void>(
+        key: DeviceKey.disconnect,
+        (ctx) async {
+          await ctx.join(_ble.disconnect);
+          ctx.emit(const Offline());
+        },
+      );
 }

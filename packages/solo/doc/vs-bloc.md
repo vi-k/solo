@@ -1168,6 +1168,7 @@ final class DeviceController extends Solo<DeviceState> {
 
   Job<void> connect() => run<Offline, void>(
         key: DeviceKey.connect,
+        cancellable: false,
         (ctx) async {
           await ctx.join(_ble.connect);
           ctx.emit(const Connected());
@@ -1192,6 +1193,7 @@ final class DeviceController extends Solo<DeviceState> {
     queue.removeWhere((job) => job.key == DeviceKey.readBattery);
     return run<Connected, void>(
       key: DeviceKey.disconnect,
+      cancellable: false,
       (ctx) async {
         await ctx.join(_ble.disconnect);
         ctx.emit(const Offline());
@@ -1215,6 +1217,15 @@ whole queue with `cancelAll()` or `queue.clear()`. A rename the user asked for
 has to reach the device in that case too, so the guarantee belongs to the job
 rather than to a line that removes somebody else: a sweep skips such a job
 instead of removing it, and `force: true` is what takes it.
+
+`connect` and `disconnect` carry it too, for what happens once they have
+started. `ctx.join` lets the device call finish even after a cancellation, and
+a body cancelled in the meantime skips the `emit` after it: a sweep arriving
+while `disconnect` runs would leave the device disconnected and the state at
+`Connected`, and one arriving during `connect` the reverse. A sweep turns a
+running `cancellable: false` job down, so the state follows the device to
+`Offline` and `Connected`. The read is the one command left cancellable: it
+changes nothing on the device, and dropping it costs only the reading.
 
 The controller is longer than the bloc above it, and the two do not compare
 line for line. The events that version runs on are not in this document: a

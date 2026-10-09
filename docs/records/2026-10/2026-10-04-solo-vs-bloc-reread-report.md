@@ -820,3 +820,19 @@ future — обычное слово без бэктиков; «дренаж» �
     methods of the controller itself, as in `controller.moveTo(point)`»,
     в переводе «Снаружи их должны вызывать как методы самого контроллера, вроде
     `controller.moveTo(point)`».
+
+12. «Removing selected pending work», ответ solo. Владелец спросил, не нужен ли
+    `cancellable: false` и у `disconnect`. Зонд на контроллере раздела: если
+    `disconnect` ещё в очереди, `cancelAll()` его убирает, связь остаётся,
+    состояние `Connected`, и устройство с состоянием согласны. Если он уже
+    работает, `ctx.join` даёт вызову закончиться, устройство отключается,
+    а отменённое тело пропускает `emit(Offline)`: состояние остаётся
+    `Connected`. С `connect` наоборот: устройство подключено, состояние
+    `Offline`. Флаг теперь стоит у `connect` и `disconnect`, отменяемым
+    осталось одно чтение, и под абзацем о переименовании новый: «`connect` and
+    `disconnect` carry it too, for what happens once they have started».
+    Сторожа — тесты «a sweep during disconnect» и «a sweep during connect»,
+    каждый на код страницы и на `SweptDeviceController` без флага
+    в `test/support/vs_bloc_7_device.dart`. Тот же зонд показал, что `close()`
+    убирает из очереди и `Job` с `cancellable: false`: страница называет только
+    `cancelAll()` и `queue.clear()`, так что это ей не противоречит.

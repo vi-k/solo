@@ -1160,6 +1160,70 @@ void main() {
       });
     }
 
+    for (final held in [true, false]) {
+      final kind = held ? 'page' : 'flagless';
+      test('a sweep during disconnect, $kind version', () {
+        late device.Ble ble;
+        String? state;
+        Outcome<void>? outcome;
+        final errors = _zone((async) {
+          ble = device.Ble();
+          final Solo<device.DeviceState> controller;
+          final Job<void> Function() disconnect;
+          if (held) {
+            final page = device.DeviceController(ble)..connect();
+            (controller, disconnect) = (page, page.disconnect);
+          } else {
+            final swept = device.SweptDeviceController(ble)..connect();
+            (controller, disconnect) = (swept, swept.disconnect);
+          }
+          async.elapse(_ms(30));
+          final job = disconnect();
+          async.elapse(_ms(5));
+          unawaited(controller.cancelAll());
+          async.elapse(_ms(100));
+          state = '${controller.currentState}';
+          outcome = job.outcome;
+        });
+        expect(errors, isEmpty);
+        expect(ble.trace, ['connect', 'disconnect']);
+        expect(state, held ? 'Offline' : 'Connected(b:null)');
+        expect('$outcome', held ? 'Done(null)' : 'Cancelled(manual)');
+        _says('a sweep arriving while `disconnect` runs would leave the '
+            'device disconnected and the state at `Connected`');
+        _says('A sweep turns a running `cancellable: false` job down, so the '
+            'state follows the device to `Offline` and `Connected`.');
+      });
+
+      test('a sweep during connect, $kind version', () {
+        late device.Ble ble;
+        String? state;
+        Outcome<void>? outcome;
+        final errors = _zone((async) {
+          ble = device.Ble();
+          final Solo<device.DeviceState> controller;
+          final Job<void> job;
+          if (held) {
+            final page = device.DeviceController(ble);
+            (controller, job) = (page, page.connect());
+          } else {
+            final swept = device.SweptDeviceController(ble);
+            (controller, job) = (swept, swept.connect());
+          }
+          async.elapse(_ms(5));
+          unawaited(controller.cancelAll());
+          async.elapse(_ms(100));
+          state = '${controller.currentState}';
+          outcome = job.outcome;
+        });
+        expect(errors, isEmpty);
+        expect(ble.trace, ['connect']);
+        expect(state, held ? 'Connected(b:null)' : 'Offline');
+        expect('$outcome', held ? 'Done(null)' : 'Cancelled(manual)');
+        _says('and one arriving during `connect` the reverse');
+      });
+    }
+
     test('a read queued behind the disconnect never reaches the device', () {
       late device.Ble ble;
       Outcome<void>? late_;
