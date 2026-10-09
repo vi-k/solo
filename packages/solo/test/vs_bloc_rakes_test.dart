@@ -1310,6 +1310,60 @@ void main() {
           'queued.');
     });
 
+    test('withdraw takes the queued payment and leaves the charge', () {
+      late checkout.Api api;
+      final withdrawn = <bool>[];
+      final outcomes = <String>[];
+      final errors = _zone((async) {
+        api = checkout.Api();
+        final controller = checkout.CheckoutController(api);
+        final charging = controller.pay(const checkout.Order('A'));
+        final queued = controller.pay(const checkout.Order('B'));
+        async.elapse(_ms(10));
+        withdrawn.addAll([
+          controller.withdraw(const checkout.Order('A')),
+          controller.withdraw(const checkout.Order('B')),
+        ]);
+        async.elapse(_ms(100));
+        outcomes.addAll(['${charging.outcome}', '${queued.outcome}']);
+      });
+      expect(errors, isEmpty);
+      expect(withdrawn, [false, true]);
+      expect(outcomes, ['Done(Receipt(for A))', 'Cancelled(manual)']);
+      expect(api.calls, 1);
+      _says('A payment the user may still withdraw before charging starts is '
+          'taken out of the queue by `withdraw`: `force: true` removes a '
+          'queued job whatever its flag, and the queue never touches a '
+          'running job, so a charge already on its way stays and `withdraw` '
+          'returns `false`.');
+    });
+
+    test('a whole-body section lets a cancel land after the charge', () {
+      late checkout.Api api;
+      String? state;
+      Outcome<checkout.Receipt>? outcome;
+      final errors = _zone((async) {
+        api = checkout.Api();
+        final controller = checkout.SectionedCheckoutController(api);
+        final charging = controller.pay(const checkout.Order('A'));
+        async.elapse(_ms(10));
+        unawaited(charging.cancel());
+        async.elapse(_ms(100));
+        state = '${controller.currentState}';
+        outcome = charging.outcome;
+      });
+      expect(errors, isEmpty);
+      expect(api.calls, 1);
+      expect(state, 'Paid(Receipt(for A))');
+      expect('$outcome', 'Cancelled(manual)');
+      _says('Wrapping the whole body in `ctx.uncancellable` instead of the '
+          'flag would not do the same.');
+      _says('a cancel arriving during the charge lands when the section '
+          'closes, after `Paid` is published, and the job ends `Cancelled`, '
+          'so the platform handler answers `paid: false` for a payment that '
+          'was made.');
+    });
+
     test('close waits for the running payment and discards the queued one', () {
       late checkout.Api api;
       late checkout.CheckoutController controller;
@@ -1348,7 +1402,8 @@ void main() {
       _says('`close()` and `queue.clear(force: true)` can still discard a '
           'queued payment without charging, and a submission after close '
           'also never starts.');
-      _says("These cases explain the platform handler's `Cancelled` branch.");
+      _says('These cases, `withdraw` among them, explain the platform '
+          "handler's `Cancelled` branch.");
     });
 
     test('queue.clear takes a queued payment only by force', () {

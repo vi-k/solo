@@ -1437,6 +1437,9 @@ final class CheckoutController extends Solo<CheckoutState> {
           return receipt;
         },
       );
+
+  bool withdraw(Order order) =>
+      queue.removeWhere((job) => job.key == ('pay', order.id), force: true) > 0;
 }
 ```
 
@@ -1480,11 +1483,20 @@ waits for that completion. API failures still produce `Failed`; a failure state
 can be supplied with `run(ifFailed: ...)`. No waiting method could retract a
 charge anyway: this API provides no cancellation mechanism.
 
-The flag also refuses manual cancellation while the payment is queued. If users
-must be able to cancel before charging starts, model that admission decision
-separately. `close()` and `queue.clear(force: true)` can still discard a queued
-payment without charging, and a submission after close also never starts. These
-cases explain the platform handler's `Cancelled` branch.
+The flag also refuses manual cancellation while the payment is queued. A
+payment the user may still withdraw before charging starts is taken out of the
+queue by `withdraw`: `force: true` removes a queued job whatever its flag, and
+the queue never touches a running job, so a charge already on its way stays and
+`withdraw` returns `false`. `close()` and `queue.clear(force: true)` can still
+discard a queued payment without charging, and a submission after close also
+never starts. These cases, `withdraw` among them, explain the platform
+handler's `Cancelled` branch.
+
+Wrapping the whole body in `ctx.uncancellable` instead of the flag would not do
+the same. A section holds a cancellation back rather than refusing it: a cancel
+arriving during the charge lands when the section closes, after `Paid` is
+published, and the job ends `Cancelled`, so the platform handler answers
+`paid: false` for a payment that was made.
 
 Sharing an in-memory job only deduplicates concurrent calls to this controller.
 Payment retries across process restarts or network failures also require an

@@ -102,6 +102,9 @@ final class CheckoutController extends Solo<CheckoutState> {
           return receipt;
         },
       );
+
+  bool withdraw(Order order) =>
+      queue.removeWhere((job) => job.key == ('pay', order.id), force: true) > 0;
 }
 
 Future<Map<String, Object?>> handlePayRequest(
@@ -195,4 +198,24 @@ final class WaitingCheckoutController extends Solo<CheckoutState> {
           rethrow;
         }
       });
+}
+
+/// The payment of the page with its whole body in `ctx.uncancellable` where
+/// the page has `cancellable: false`: what the paragraph under the code says
+/// that section does not do.
+final class SectionedCheckoutController extends Solo<CheckoutState> {
+  SectionedCheckoutController(this._api) : super(const Idle());
+
+  final Api _api;
+
+  Job<Receipt> pay(Order order) => run<CheckoutState, Receipt>(
+        key: ('pay', order.id),
+        policy: Policy.droppable,
+        (ctx) => ctx.uncancellable(() async {
+          ctx.emit(Paying(order.id));
+          final receipt = await _api.pay(order);
+          ctx.emit(Paid(receipt));
+          return receipt;
+        }),
+      );
 }

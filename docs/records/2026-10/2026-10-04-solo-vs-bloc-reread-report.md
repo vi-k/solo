@@ -845,3 +845,20 @@ future — обычное слово без бэктиков; «дренаж» �
     instead of adding another», в переводе «Ключ `('pay', order.id)` у всех
     запросов одного заказа один и тот же». Сторож — тест «three requests for
     two orders make two charges», цитата в нём заменена.
+
+14. «Awaiting a particular request», абзац о флаге. Владелец спросил, хватит ли
+    убрать `cancellable: false` и обернуть всё тело в `ctx.uncancellable`,
+    чтобы пользователь мог отменить оплату до начала списания. Зонд: ожидающая
+    оплата так отменяется, но отмена во время списания срабатывает, когда
+    секция закрывается, уже после `Paid`, и `Job` кончается
+    `Cancelled(manual)`: деньги списаны, а обработчик платформы отвечает
+    `paid: false`. `close()` во время списания даёт то же
+    с `Cancelled(closed)`. Расплывчатое «model that admission decision
+    separately» заменено методом `withdraw` в коде страницы:
+    `queue.removeWhere((job) => job.key == ('pay', order.id), force: true)`;
+    `force: true` снимает ожидающую оплату при любом флаге, а работающую
+    очередь не трогает. Под абзацем о флаге новый: «Wrapping the whole body in
+    `ctx.uncancellable` instead of the flag would not do the same». Сторожа —
+    тесты «withdraw takes the queued payment and leaves the charge» и «a
+    whole-body section lets a cancel land after the charge»,
+    `SectionedCheckoutController` в `test/support/vs_bloc_8_checkout.dart`.
