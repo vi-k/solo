@@ -1627,7 +1627,9 @@ void main() {
     test('a burst over several turns while a job is running stays together',
         () {
       _says('A burst written while a job of the controller is running stays '
-          'together too, however many turns it takes');
+          'together too, however many turns it takes: under a throttle the '
+          'group is sealed when the queue takes it, and the queue cannot take '
+          'it until that job ends.');
       final seen = <String>[];
       _zone((async) {
         final bench = Bench();

@@ -765,3 +765,14 @@ group that waits only for the slot» освобождали слот в тот �
    empty interval the next group counts a whole one»: группа на 0 мс стартует
    на 200, событие на 1000 стартует на 1200, а не на 1000, событие на 1300 —
    на 1400.
+
+4. Справочник, «Choosing when a group is ready», абзац о цене немедленного
+   старта. Фраза о всплеске, написанном, пока работает задача контроллера,
+   объясняла, что очередь не может взять группу, и владелец спросил,
+   не запечатывается ли группа в этом случае. Не запечатывается: при throttle
+   группу запечатывает очередь, когда берёт её на выполнение, а не конец
+   интервала; это сказано во вступлении страницы, но фраза связь не называла.
+   Теперь «under a throttle the group is sealed when the queue takes it, and
+   the queue cannot take it until that job ends». Правка в оригинале
+   и переводе; тест сторожа «a burst over several turns while a job is running
+   stays together» цитирует фразу целиком.

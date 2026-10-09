@@ -713,8 +713,8 @@ group on the next microtask, so a burst that does not fit in one synchronous
 turn is split: the first event goes on its own and the rest wait out the whole
 interval. The log recipe's three lines stay together because they are written
 in one turn. A burst written while a job of the controller is running stays
-together too, however many turns it takes: the queue cannot take the group
-until that job ends.
+together too, however many turns it takes: under a throttle the group is sealed
+when the queue takes it, and the queue cannot take it until that job ends.
 
 Waiting has a price of its own. A single event on an idle accumulator is held
 for the whole interval, and `close(mode: SoloCloseMode.drain)` waits with it —
