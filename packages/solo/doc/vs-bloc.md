@@ -2,17 +2,18 @@
 
 This guide compares [solo](https://pub.dev/packages/solo) with `Bloc` and
 `Cubit` through eleven controller scenarios. Each section states the required
-behavior, starts from the code that behavior invites, says what that code
-actually does, and only then shows the implementations that meet it — bloc's
-and solo's — with what the library handles and what remains application code.
+behavior, starts from the code habit or the API's own vocabulary leads to, says
+what that code actually does, and only then shows the implementations that meet
+it — bloc's and solo's — with what the library handles and what remains
+application code.
 
-A first attempt here is the version the API's own vocabulary suggests, and the
-states and traces quoted under it are what running that code produces. It is
-written with bloc, like the answer under the bloc heading after it: that
-heading adds the version that meets the requirement. Where one attempt does not
-get close enough to that, a second follows under its own heading. Reading the
-attempts before the answer is the point of the section; a reader who already
-knows the trap can skip to the bloc heading and `### Solo`.
+That code is the section's first attempt, and the states and traces quoted
+under it are what running it produces. It is written with bloc, like the answer
+under the bloc heading after it: that heading adds the version that meets the
+requirement. Where one attempt does not get close enough to that, a second
+follows under its own heading. Reading the attempts before the answer is the
+point of the section; a reader who already knows the trap can skip to the bloc
+heading and `### Solo`.
 
 `Bloc` processes events in handlers, and each `on<E>` call is one registration:
 a handler for the events of type `E` and the transformer that determines how

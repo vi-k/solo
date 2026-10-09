@@ -178,7 +178,7 @@ void main() {
         expect(headings.last, 'Solo');
       }
       _says('Each section states the required behavior, starts from the code '
-          'that behavior invites');
+          "habit or the API's own vocabulary leads to");
       _says('through eleven controller scenarios');
       // Where one attempt does not get close enough, a second follows.
       expect(
