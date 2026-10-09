@@ -55,7 +55,7 @@ The main API correspondences, for a reader who knows bloc:
 | `BlocObserver` | `SoloObserver` |
 | `BlocBuilder`, `BlocSelector` | `ValueListenableBuilder` or `SoloBuilder`, and `SoloSelector`; the last two are in `flutter_solo` |
 | `BlocListener` for an operation's result | Await that operation's `job.done` |
-| `BlocProvider` | Your chosen ownership or dependency mechanism |
+| `BlocProvider` | Deliberately not part of the package: dependencies are passed by other means and packages, such as [scopo](https://pub.dev/packages/scopo) |
 | `close()` | `close()` |
 | `blocTest` | `test` and an awaited job outcome |
 

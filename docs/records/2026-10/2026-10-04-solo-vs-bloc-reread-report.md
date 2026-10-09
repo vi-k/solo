@@ -716,3 +716,13 @@ future — обычное слово без бэктиков; «дренаж» �
    vocabulary leads to», в переводе «начинает с кода, к которому ведёт привычка
    или словарь самого API»; вторая фраза говорит, что этот код и есть первая
    попытка раздела. Цитату в `vs_bloc_rakes_test.dart` сторож держит новую.
+
+2. Таблица соответствий, строка `BlocProvider`. Ячейка говорила «Your chosen
+   ownership or dependency mechanism», будто у solo есть свой выбор способа.
+   Владелец: пакет сознательно не занимается передачей зависимостей, для этого
+   есть другие способы и пакеты, например scopo. Теперь: «Deliberately not part
+   of the package: dependencies are passed by other means and packages, such as
+   [scopo](https://pub.dev/packages/scopo)», в переводе «Пакет этим сознательно
+   не занимается: зависимости передают другими способами и пакетами, например
+   scopo».
+

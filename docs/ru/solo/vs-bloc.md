@@ -54,7 +54,7 @@
 | `BlocObserver` | `SoloObserver` |
 | `BlocBuilder`, `BlocSelector` | `ValueListenableBuilder` или `SoloBuilder` и `SoloSelector`; два последних лежат в `flutter_solo` |
 | `BlocListener` для результата операции | Ожидание `job.done` этой операции |
-| `BlocProvider` | Выбранный способ владения или передачи зависимостей |
+| `BlocProvider` | Пакет этим сознательно не занимается: зависимости передают другими способами и пакетами, например [scopo](https://pub.dev/packages/scopo) |
 | `close()` | `close()` |
 | `blocTest` | `test` и ожидание исхода `Job` |
 
