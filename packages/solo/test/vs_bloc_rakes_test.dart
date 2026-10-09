@@ -416,6 +416,37 @@ void main() {
       _says('Work started without awaiting it can outlive the job; it must '
           'not be assumed to finish before `close()`.');
     });
+
+    test('a child nobody awaits holds its parent and close', () {
+      final runs = <String>[];
+      for (final close in [false, true]) {
+        late notes.PlainNotesController controller;
+        final seen = <String>[];
+        final errors = _zone((async) {
+          controller = notes.PlainNotesController(notes.Api());
+          final job = controller.withChild();
+          async.elapse(_ms(10));
+          if (close) {
+            controller.close().then(
+                  (_) => seen.add('closed at ${async.elapsed.inMilliseconds}'),
+                );
+          }
+          async.flushMicrotasks();
+          seen.add('at 10: ${job.outcome} ${controller.met}');
+          async.elapse(_ms(200));
+          seen.add('at 210: ${job.outcome} ${controller.met}');
+        });
+        expect(errors, isEmpty);
+        runs.add(seen.join(', '));
+      }
+      expect(runs, [
+        'at 10: null [], at 210: Done(null) [child work ended]',
+        'at 10: null [], closed at 100, at 210: Cancelled(closed) []',
+      ]);
+      _says('Work the job has to wait for is started as a child with '
+          '`ctx.run`: the parent waits for its children even when its body '
+          'does not await them, and `close()` waits for them too.');
+    });
   });
 
   group('An observer fails during a state update', () {

@@ -777,3 +777,17 @@ future — обычное слово без бэктиков; «дренаж» �
    событий; её сверяет `check_traces.py`, и две цитаты ушли из списка `QUOTED`
    стенда.
 
+8. Конец раздела «Ordering updates to shared state», работа без ожидания.
+   Владелец спросил, не написать ли, что так устроен Dart и сделать здесь
+   ничего нельзя. Первое верно, второе нет: дочерняя `Job` держит родителя.
+   Теперь за фразой о работе без ожидания: «That is how a Dart future works:
+   nothing ties it to the code that started it, so neither the job nor the
+   controller knows it exists. Work the job has to wait for is started as
+   a child with `ctx.run`: the parent waits for its children even when its body
+   does not await them, and `close()` waits for them too», и ссылка
+   на «Children and streams». Зонд: тело запускает ребёнка с `join` на 100 мс
+   и возвращается; без `close()` родитель на 10 мс ещё идёт и кончается
+   `Done` после ребёнка, с `close()` на 10 мс закрытие завершается на 100 мс.
+   Сторож — тест «a child nobody awaits holds its parent and close»,
+   `PlainNotesController.withChild` в `test/support/vs_bloc_1_notes.dart`.
+

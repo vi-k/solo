@@ -138,7 +138,8 @@ final class AbandoningNotesController extends Solo<NotesState> {
 }
 
 /// Bodies the page describes without showing: a plain `await` where the
-/// page has `ctx.join`, and work started and not awaited.
+/// page has `ctx.join`, and work started and not awaited, plain and as a
+/// child.
 final class PlainNotesController extends Solo<NotesState> {
   PlainNotesController(this._api) : super(const NotesState());
 
@@ -171,6 +172,20 @@ final class PlainNotesController extends Solo<NotesState> {
         key: 'detached',
         (ctx) async {
           unawaited(tick(100).then((_) => met.add('detached work ended')));
+        },
+      );
+
+  Job<void> withChild() => run<NotesState, void>(
+        key: 'withChild',
+        (ctx) async {
+          final child = job<NotesState, void>(
+            key: 'child',
+            (childCtx) async {
+              await childCtx.join(() => tick(100));
+              met.add('child work ended');
+            },
+          );
+          ctx.run(child).ignore();
         },
       );
 }
