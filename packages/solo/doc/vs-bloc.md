@@ -285,8 +285,8 @@ root jobs of a controller run one at a time, in the order they were added, and
 that is the only way they run. Adding another queued method preserves the
 ordering, because the queue is one per controller rather than one per command;
 no arrangement of the methods can give two of them a queue each. This guarantee
-covers root jobs; child jobs can run inside a parent, and independent external
-changes have a separate path described in
+covers root jobs; child jobs can run inside a parent, in parallel too, and
+independent external changes have a separate path described in
 [Reacting to an independent external state change](#reacting-to-an-independent-external-state-change).
 
 Use context waiting methods inside job bodies to check cancellation and state
