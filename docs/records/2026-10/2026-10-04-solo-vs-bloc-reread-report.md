@@ -764,3 +764,9 @@ future — обычное слово без бэктиков; «дренаж» �
    second has one registration but no queue at all: the default transformer
    starts every event at once, without waiting for the one before.»
 
+6. Ответ на solo того же раздела, переменная `merged`. Владелец спросил, зачем
+   она: ответ на bloc обходится без неё. Нужна она была только ширине строки,
+   читателю этого не видно. Теперь список собирается прямо в `copyWith`,
+   как у bloc, а вызов разложен висящими запятыми. Та же правка в обеих копиях
+   в `test/support/vs_bloc_1_notes.dart`, где сторож сверяет код страницы.
+

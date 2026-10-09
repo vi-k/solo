@@ -242,8 +242,12 @@ final class NotesController extends Solo<NotesState> {
         (ctx) async {
           ctx.emit(ctx.state.copyWith(uploading: true));
           await ctx.join(() => _api.upload(note));
-          final merged = [...ctx.state.notes, note];
-          ctx.emit(ctx.state.copyWith(notes: merged, uploading: false));
+          ctx.emit(
+            ctx.state.copyWith(
+              notes: [...ctx.state.notes, note],
+              uploading: false,
+            ),
+          );
         },
       );
 
