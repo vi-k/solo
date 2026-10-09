@@ -300,8 +300,8 @@ void main() {
         'list reads [n0, n1]',
       ]);
       _says('Upload uses `join` so that even a cancelled upload holds the '
-          'queue until the server has answered: the next root job cannot '
-          'read the server while the upload is still in progress.');
+          'queue until the server has answered: the queue does not start the '
+          'next job while the upload is still in progress.');
       _says('`ctx.join(action)` calls the operation and waits for it.');
     });
 
@@ -342,7 +342,7 @@ void main() {
       expect(errors, isEmpty);
       expect('$atTen', 'Cancelled(manual)');
       expect(controller.currentState.notes, isEmpty);
-      _says('Refresh uses `ctx.abandonable`, which can stop waiting on '
+      _says('`refresh` uses `ctx.abandonable`, which can stop waiting on '
           'cancellation because this example allows its read result to be '
           'abandoned.');
     });

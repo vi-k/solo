@@ -269,8 +269,16 @@ final class NotesController extends Solo<NotesState> {
 в этом примере результат чтения разрешено отбросить.
 
 Итоговое состояние тоже `NotesState([n0, n1], uploading: false)`, и порядок
-тот же, что у bloc выше: `list reads [n0, n1]` стоит после
-`server receives n1`, только вместо типов событий в нём ключи `Job`.
+тот же, что у bloc выше, только вместо типов событий в нём ключи `Job`:
+
+```text
+upload emits [], uploading: true
+upload n1 starts
+server receives n1 and holds [n0, n1]
+upload emits [n1], uploading: false
+list reads [n0, n1]
+refresh emits [n0, n1]
+```
 
 Помнить здесь про трансформеры и порядок обработки событий не нужно:
 трансформер некуда передать, планирование не выбирают. Корневые `Job`

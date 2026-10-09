@@ -268,8 +268,16 @@ the queue does not start the next job while the upload is still in progress.
 because this example allows its read result to be abandoned.
 
 The final state is also `NotesState([n0, n1], uploading: false)`, from the same
-order as the bloc above — `list reads [n0, n1]` after `server receives n1` —
-with job keys where that run has event types.
+order as the bloc above, with job keys where that run has event types:
+
+```text
+upload emits [], uploading: true
+upload n1 starts
+server receives n1 and holds [n0, n1]
+upload emits [n1], uploading: false
+list reads [n0, n1]
+refresh emits [n0, n1]
+```
 
 There is nothing to remember here about transformers or the order events are
 processed in: there is no transformer to pass and no scheduling to choose. The

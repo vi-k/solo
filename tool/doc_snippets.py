@@ -151,11 +151,7 @@ QUOTED = {
         'NotesState([n0], uploading: true)',
         'NotesState([n0, n1], uploading: false)',
     ],
-    'solo/item1': [
-        'NotesState([n0, n1], uploading: false)',
-        'list reads [n0, n1]',
-        'server receives n1',
-    ],
+    'solo/item1': ['NotesState([n0, n1], uploading: false)'],
     'bloc/item2': [
         '[Recording]',
         'telemetry unavailable',
