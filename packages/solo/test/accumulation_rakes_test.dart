@@ -177,11 +177,12 @@ AccumulationTiming _throttle(int milliseconds, {bool startAtOnce = true}) =>
 }
 
 /// The scenario of the log recipe: three lines written one after another,
-/// then one more [later] ms after them.
+/// then one more two seconds later. With [turns] each of the three lines
+/// is written a turn after the one before it.
 ({String trace, FakeLogApi api, int counter}) _write<C extends Solo<int>>(
   C Function(LogApi api) make,
   Job<void> Function(C controller, LogEntry entry) log, {
-  int later = 2000,
+  bool turns = false,
 }) {
   final api = FakeLogApi();
   var burst = 0;
@@ -190,10 +191,11 @@ AccumulationTiming _throttle(int milliseconds, {bool startAtOnce = true}) =>
     final controller = make(api);
     for (final message in ['opened', 'loaded', 'shown']) {
       log(controller, LogEntry(message));
+      if (turns) async.flushMicrotasks();
     }
-    async.elapse(ms(500));
+    async.elapse(ms(1500));
     burst = api.sent.length;
-    async.elapse(ms(later - 500));
+    async.elapse(ms(500));
     log(controller, const LogEntry('tapped'));
     async.elapse(ms(3000));
     counter = controller.currentState;
@@ -386,6 +388,7 @@ void main() {
         final job = logs.logEvent(const LogEntry('one'));
         queued = job.isQueued;
         counter = logs.currentState;
+        async.elapse(ms(1000));
       });
       expect(queued, isTrue);
       expect(counter, 0);
@@ -887,28 +890,32 @@ void main() {
       _says('each send starts only when the one before it has finished');
     });
 
-    test('the collector sends the transition together and the fourth at once',
-        () {
+    test(
+        'the collector sends the transition together, and the fourth a '
+        'second late', () {
       final run = _write(LogController.new, (c, entry) => c.logEvent(entry));
       expect(run.trace, _quotes()[8]);
-      _says('The fourth is written after the throttle interval has passed, '
-          'so it goes at once and on its own');
-      expect(run.api.sentAt, [0, 2000]);
+      _says('The fourth line is written when no interval is running, so it '
+          'starts one of its own and waits it out: a line written alone '
+          'reaches the server a second late.');
+      expect(run.api.sentAt, [1000, 3000]);
     });
 
-    test('a fourth line written inside the interval waits for its end', () {
-      _says('the interval is a floor under the rate, not a delay added to '
-          'every entry');
+    test('a transition written over several turns stays together', () {
+      _says('With `startAtOnce: false` the interval starts at the first of '
+          'them and the group waits it out, so lines written within that '
+          'second stay together, however many turns the code takes to write '
+          'them.');
       final run = _write(
         LogController.new,
         (c, entry) => c.logEvent(entry),
-        later: 500,
+        turns: true,
       );
       expect(run.api.sent, [
         ['opened', 'loaded', 'shown'],
         ['tapped'],
       ]);
-      expect(run.api.sentAt, [0, 1000]);
+      expect(run.api.sentAt, [1000, 3000]);
     });
 
     test('the handler gets an unmodifiable list', () {
@@ -917,7 +924,7 @@ void main() {
       Object? refusal;
       _zone((async) {
         LogController(api).logEvent(const LogEntry('one'));
-        async.elapse(ms(10));
+        async.elapse(ms(1010));
         try {
           api.lists.single.add(const LogEntry('two'));
         } on Object catch (error) {
@@ -939,7 +946,7 @@ void main() {
         entry.text = 'changed after add';
         async.elapse(ms(2000));
       });
-      expect(api.sent.last, ['changed after add']);
+      expect(api.sent.single, ['first', 'changed after add']);
     });
 
     test('every addition to a group gets the same job', () {
@@ -963,7 +970,7 @@ void main() {
       final seen = <String>[];
       _zone((async) {
         final logs = LogController(api)..logEvent(const LogEntry('one'));
-        async.elapse(ms(150));
+        async.elapse(ms(1150));
         final waiting = logs.logEvent(const LogEntry('two'));
         seen.add('before: ${async.pendingTimers.length} timer');
         logs.close().ignore();
@@ -988,18 +995,19 @@ void main() {
       final errors = _zone((async) {
         final logs = LogController(api);
         final failed = logs.logEvent(const LogEntry('one'));
-        async.elapse(ms(200));
+        async.elapse(ms(1200));
         seen.add('${failed.outcome}, counter ${logs.currentState}');
         api.failure = null;
         async.elapse(ms(1000));
         final cancelled = logs.logEvent(const LogEntry('two'));
-        async.elapse(ms(50));
+        // It starts a second after it was written; cancel it mid-send.
+        async.elapse(ms(1050));
         cancelled.cancel().ignore();
         async.elapse(ms(200));
         seen.add('${cancelled.outcome}, counter ${logs.currentState}');
         async.elapse(ms(1000));
         logs.logEvent(const LogEntry('three'));
-        async.elapse(ms(200));
+        async.elapse(ms(1200));
         seen.add('counter ${logs.currentState}');
       });
       expect(seen, [
@@ -1045,7 +1053,7 @@ void main() {
       final api = FakeLogApi();
       _zone((async) {
         final logs = LogController(api)..logEvent(const LogEntry('one'));
-        async.elapse(ms(150));
+        async.elapse(ms(1150));
         logs.logEvent(const LogEntry('cancelled')).cancel().ignore();
         logs.logEvent(const LogEntry('closed'));
         logs.close().ignore();
@@ -1064,7 +1072,7 @@ void main() {
       var counter = 0;
       _zone((async) {
         final logs = LogController(api)..logEvent(const LogEntry('one'));
-        async.elapse(ms(10));
+        async.elapse(ms(1010));
         logs
           ..logEvent(const LogEntry('two'))
           ..logEvent(const LogEntry('three'));
@@ -1079,8 +1087,8 @@ void main() {
         ['one'],
         ['two', 'three'],
       ]);
-      expect(api.sentAt, [0, 1000]);
-      expect(closedAt, 1100);
+      expect(api.sentAt, [1000, 2000]);
+      expect(closedAt, 2100);
       expect(counter, 3);
     });
   });
@@ -1587,47 +1595,45 @@ void main() {
     });
 
     test('starting at once: a burst in one turn is one group', () {
-      _says("The log recipe's three lines stay together because they are "
-          'written in one turn');
-      final api = FakeLogApi();
+      _says('a burst that does not fit in one synchronous turn is split');
+      final seen = <String>[];
       _zone((async) {
-        LogController(api)
-          ..logEvent(const LogEntry('opened'))
-          ..logEvent(const LogEntry('loaded'))
-          ..logEvent(const LogEntry('shown'));
+        final bench = Bench();
+        bench.collector('a', timing: _throttle(1000))
+          ..add('1')
+          ..add('2')
+          ..add('3');
         async.elapse(ms(3000));
+        seen.addAll(bench.ran);
       });
-      expect(api.sent, [
-        ['opened', 'loaded', 'shown'],
-      ]);
+      expect(seen, ['a[1, 2, 3] at 0 ms']);
     });
 
     test('starting at once: a burst over two turns is split', () {
       _says('Starting at once has a price when nothing is running');
-      _says('what starting at once costs a burst that takes more than one '
-          'turn');
       _says('the first event goes on its own and the rest wait out the whole '
           'interval');
-      final api = FakeLogApi();
+      _says('With the default the first line would go at once, and the rest '
+          'of a transition written over more than one turn would follow a '
+          'second later.');
+      final seen = <String>[];
       _zone((async) {
-        final logs = LogController(api)..logEvent(const LogEntry('opened'));
+        final bench = Bench();
+        final a = bench.collector('a', timing: _throttle(1000))..add('1');
         async.flushMicrotasks();
-        logs
-          ..logEvent(const LogEntry('loaded'))
-          ..logEvent(const LogEntry('shown'));
+        a
+          ..add('2')
+          ..add('3');
         async.elapse(ms(3000));
+        seen.addAll(bench.ran);
       });
-      expect(api.sent, [
-        ['opened'],
-        ['loaded', 'shown'],
-      ]);
-      expect(api.sentAt, [0, 1000]);
+      expect(seen, ['a[1] at 0 ms', 'a[2, 3] at 1000 ms']);
     });
 
     test('a burst over several turns while a job is running stays together',
         () {
       _says('A burst written while a job of the controller is running stays '
-          'together too, however many turns it takes: under a throttle the '
+          'together, however many turns it takes: under a throttle the '
           'group is sealed when the queue takes it, and the queue cannot take '
           'it until that job ends.');
       final seen = <String>[];
@@ -2544,7 +2550,8 @@ void main() {
       _zone((async) {
         final logs = LogController(api);
         final group = logs.logEvent(const LogEntry('one'));
-        async.elapse(ms(50));
+        // The group starts at 1000 ms; cancel it while it sends.
+        async.elapse(ms(1050));
         group.cancel().ignore();
         async.elapse(ms(100));
         seen.add('${group.outcome}, counter ${logs.currentState}');

@@ -453,7 +453,10 @@ final class LogController extends Solo<int> {
     },
     key: 'logs',
     policy: AccumulationPolicy.join,
-    timing: AccumulationTiming.throttle(const Duration(seconds: 1)),
+    timing: AccumulationTiming.throttle(
+      const Duration(seconds: 1),
+      startAtOnce: false,
+    ),
   );
 
   LogController(this._api) : super(0);
@@ -464,16 +467,19 @@ final class LogController extends Solo<int> {
 
 ```text
 the server got 2 requests:
-  [opened, loaded, shown] at 0 ms
-  [tapped] at 2000 ms
+  [opened, loaded, shown] at 1000 ms
+  [tapped] at 3000 ms
 the three lines of the transition cost 1 of them
 the counter says 4
 ```
 
-The three lines of the transition travel together. The fourth is written after
-the throttle interval has passed, so it goes at once and on its own rather than
-waiting for company — the interval is a floor under the rate, not a delay added
-to every entry.
+The three lines of the transition travel together. With `startAtOnce: false`
+the interval starts at the first of them and the group waits it out, so lines
+written within that second stay together, however many turns the code takes to
+write them. With the default the first line would go at once, and the rest of a
+transition written over more than one turn would follow a second later. The
+fourth line is written when no interval is running, so it starts one of its own
+and waits it out: a line written alone reaches the server a second late.
 
 A buffer you keep yourself would batch them too. What `collect` adds is that
 the buffer is the job's input: the entries are sealed into the group the queue
@@ -486,8 +492,8 @@ handler starts whatever the count is and reads it as `ctx.state`.
 [Choosing where events join](#choosing-where-events-join) explains why `join`
 is the default this example spells out, and
 [Choosing when a group is ready](#choosing-when-a-group-is-ready) explains what
-a throttle interval is measured from, and what starting at once costs a burst
-that takes more than one turn.
+a throttle interval is measured from in each of its two modes, and what each of
+them costs.
 
 Collecting entries does not guarantee delivery. A failed send, a cancelled
 group or a plain `close()` can leave them unsent; `close()` with
@@ -711,16 +717,15 @@ interval from its own appearance.
 Starting at once has a price when nothing is running. The queue takes the first
 group on the next microtask, so a burst that does not fit in one synchronous
 turn is split: the first event goes on its own and the rest wait out the whole
-interval. The log recipe's three lines stay together because they are written
-in one turn. A burst written while a job of the controller is running stays
-together too, however many turns it takes: under a throttle the group is sealed
+interval. A burst written while a job of the controller is running stays
+together, however many turns it takes: under a throttle the group is sealed
 when the queue takes it, and the queue cannot take it until that job ends.
 
 Waiting has a price of its own. A single event on an idle accumulator is held
 for the whole interval, and `close(mode: SoloCloseMode.drain)` waits with it —
 a plain `close()` drops it. Take `startAtOnce: false` where the rate matters
-more than the latency of the first event, and leave the default where the first
-event is what the user is waiting for.
+more than the latency of the first event, as the log recipe does, and leave the
+default where the first event is what the user is waiting for.
 
 The start is the transition to running, before `onStart`. A group rejected by
 start rules consumes no throttle interval; cancellation from `onStart` does.

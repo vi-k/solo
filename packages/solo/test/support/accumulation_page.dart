@@ -137,7 +137,10 @@ final class LogController extends Solo<int> {
     },
     key: 'logs',
     policy: AccumulationPolicy.join,
-    timing: AccumulationTiming.throttle(const Duration(seconds: 1)),
+    timing: AccumulationTiming.throttle(
+      const Duration(seconds: 1),
+      startAtOnce: false,
+    ),
   );
 
   LogController(this._api) : super(0);

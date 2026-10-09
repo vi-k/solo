@@ -769,7 +769,8 @@ class RecordingLogApi implements LogApi {
 
 LOG_DRIVE = '''
 /// Three lines written one after another, in one synchronous turn, then one
-/// more two seconds later. One scenario for both versions.
+/// more two seconds later. One scenario for both versions; the burst is
+/// counted at 1500 ms, once the recipe's interval has let it go.
 int drive(
   String name,
   RecordingLogApi api,
@@ -782,9 +783,9 @@ int drive(
     for (final message in ['opened', 'loaded', 'shown']) {
       log(LogEntry(message));
     }
-    clock.elapse(const Duration(milliseconds: 500));
-    burst = api.sent.length;
     clock.elapse(const Duration(milliseconds: 1500));
+    burst = api.sent.length;
+    clock.elapse(const Duration(milliseconds: 500));
     log(const LogEntry('tapped'));
     clock.elapse(const Duration(seconds: 3));
 
@@ -802,32 +803,44 @@ int drive(
 }
 '''
 
-# The reference's second throttle mode, on the recipe's own controller: one
-# changed argument, plus a gate the driver can close, because the sentence
-# about a refused start has to have something to refuse. The gate is the
+# The recipe's controller in two more shapes. The reference speaks of both
+# throttle modes, and the recipe takes `startAtOnce: false`, so its claims
+# about starting at once run on a copy with the default instead: one changed
+# argument. The sentence about a refused start has to have something to
+# refuse, so another copy gets a gate the driver can close; the gate is the
 # bench's, and it is open unless a driver shuts it.
 LOG_CONTROLLER = snips['recipes/LogController']
+LOG_TIMING = ('    timing: AccumulationTiming.throttle(\n'
+              '      const Duration(seconds: 1),\n'
+              '      startAtOnce: false,\n'
+              '    ),\n')
+assert LOG_TIMING in LOG_CONTROLLER, 'the recipe has to wait its interval out'
 
 
-def with_trailing(name):
+def renamed(name):
     body = (LOG_CONTROLLER
             .replace('final class LogController extends Solo<int> {',
                      f'final class {name} extends Solo<int> {{')
-            .replace('LogController(this._api)', f'{name}(this._api)')
+            .replace('LogController(this._api)', f'{name}(this._api)'))
+    assert f'final class {name} ' in body, name
+    return body
+
+
+def with_gate(name):
+    body = (renamed(name)
             .replace('  final LogApi _api;\n',
                      '  final LogApi _api;\n  bool allowed = true;\n')
-            .replace(
-                '    timing: AccumulationTiming.throttle('
-                'const Duration(seconds: 1)),\n',
-                '    canStart: (state) => allowed,\n'
-                '    timing: AccumulationTiming.throttle(\n'
-                '      const Duration(seconds: 1),\n'
-                '      startAtOnce: false,\n'
-                '    ),\n'))
-    assert f'final class {name} ' in body, name
-    assert 'startAtOnce: false' in body, 'the mode has to be in the class'
-    assert 'canStart: (state) => allowed' in body, 'and the gate with it'
-    assert 'throttle(const' not in body, 'the old throttle has to be gone'
+            .replace(LOG_TIMING, '    canStart: (state) => allowed,\n'
+                     + LOG_TIMING))
+    assert 'canStart: (state) => allowed' in body, 'the gate has to be there'
+    return body
+
+
+def at_once(name):
+    body = renamed(name).replace(
+        LOG_TIMING,
+        '    timing: AccumulationTiming.throttle(const Duration(seconds: 1)),\n')
+    assert 'startAtOnce' not in body, 'the default has to be back'
     return body
 
 
@@ -835,7 +848,8 @@ FILES['logs'] = (
     with_fake_async('recipes/LogEntry', dart_async=True)
     + snips['recipes/EagerLogController']
     + snips['recipes/LogController']
-    + with_trailing('TrailingLogController')
+    + with_gate('GatedLogController')
+    + at_once('AtOnceLogController')
     + LOG_FAKE
     + """
 Future<void> oneHandle(LogController logs) async {
@@ -869,9 +883,9 @@ void main() {
     'and every request carries a single entry',
   );
 
-  // collect: the three lines of the transition travel together, and the
-  // fourth goes at once and on its own because the interval had already
-  // passed when it was written.
+  // collect: the three lines of the transition travel together once the
+  // interval their first line started is over, and the fourth, written when
+  // no interval runs, starts one of its own and waits it out.
   final api = RecordingLogApi();
   final logs = LogController(api);
   final burst = drive(
@@ -884,37 +898,34 @@ void main() {
   require(api.sent.first.length == 3, 'carrying all three lines');
   require(api.sent.first.first == 'opened', 'in the order they were written');
   require(api.sent.last.single == 'tapped', 'the fourth went on its own');
-  require(api.sentAt.first == 0, 'the first group started at once');
+  require(api.sentAt.first == 1000, 'the first group waited its interval');
   require(
-    api.sentAt.last == 2000,
-    'and the fourth went the moment it was written, after the interval',
+    api.sentAt.last == 3000,
+    'and the fourth, written alone, waited a whole one of its own',
   );
+  require(logs.currentState == 4, 'the counter saw every entry');
 
-  // The other side of the same sentence: a fourth line written inside the
-  // interval waits for it to end, half a second in this case.
+  // The same transition written a turn per line stays together all the
+  // same: the interval its first line started holds the group.
   fakeAsync((clock) {
     final api = RecordingLogApi()..now = () => clock.elapsed.inMilliseconds;
     final logs = LogController(api);
     for (final message in ['opened', 'loaded', 'shown']) {
       logs.logEvent(LogEntry(message));
+      clock.flushMicrotasks();
     }
-    clock.elapse(const Duration(milliseconds: 500));
-    logs.logEvent(const LogEntry('tapped'));
     clock.elapse(const Duration(seconds: 3));
-    require(api.sent.length == 2, 'two requests here as well');
-    require(
-      api.sentAt.last == 1000,
-      'a line written inside the interval waits for its end',
-    );
+    require(api.sent.length == 1, 'a turn per line, still one request');
+    require(api.sent.single.length == 3, 'carrying all three lines');
+    require(api.sentAt.single == 1000, 'when the interval was over');
   });
-  require(logs.currentState == 4, 'the counter saw every entry');
 
-  // What starting at once costs an idle accumulator. The same four entries
-  // written in one synchronous turn, and then with a single microtask
-  // between the first and the rest.
+  // What starting at once costs an idle accumulator, on the copy that keeps
+  // the default. The same four entries written in one synchronous turn, and
+  // then with a single microtask between the first and the rest.
   fakeAsync((clock) {
     final api = RecordingLogApi();
-    final logs = LogController(api);
+    final logs = AtOnceLogController(api);
     for (var i = 0; i < 4; i += 1) {
       logs.logEvent(LogEntry('e$i'));
     }
@@ -925,7 +936,7 @@ void main() {
 
   fakeAsync((clock) {
     final api = RecordingLogApi();
-    final logs = LogController(api)..logEvent(const LogEntry('e0'));
+    final logs = AtOnceLogController(api)..logEvent(const LogEntry('e0'));
     clock.flushMicrotasks(); // no time passes, only a turn of the loop
     for (var i = 1; i < 4; i += 1) {
       logs.logEvent(LogEntry('e$i'));
@@ -945,7 +956,7 @@ void main() {
   // burst stays together. The job here is the batch sent before it.
   fakeAsync((clock) {
     final api = RecordingLogApi()..now = () => clock.elapsed.inMilliseconds;
-    final logs = LogController(api)..logEvent(const LogEntry('e0'));
+    final logs = AtOnceLogController(api)..logEvent(const LogEntry('e0'));
     clock.elapse(const Duration(milliseconds: 1500));
     require(api.sent.length == 1, 'the first batch went long ago');
 
@@ -966,18 +977,18 @@ void main() {
     final logs = LogController(api)..logEvent(const LogEntry('opened'));
     clock.elapse(const Duration(milliseconds: 10));
 
-    // This group waits out the throttle interval, and the entry it carries
-    // is changed while it waits.
+    // The group waits out the throttle interval, and the second entry it
+    // carries is changed while it waits.
     final entry = MutableEntry('loaded');
     logs.logEvent(entry);
     clock.elapse(const Duration(milliseconds: 10));
     entry.text = 'changed after add';
     clock.elapse(const Duration(seconds: 3));
 
-    require(api.sent.length == 2, 'the second entry went in its own batch');
+    require(api.sent.length == 1, 'both entries went in one batch');
     require(
-      api.sent.last.single == 'changed after add',
-      'and it was sent as it was changed, not as it was added',
+      api.sent.single.last == 'changed after add',
+      'and the second was sent as it was changed, not as it was added',
     );
   });
 
@@ -986,7 +997,7 @@ void main() {
   // does not extend it.
   fakeAsync((clock) {
     final api = RecordingLogApi();
-    final logs = TrailingLogController(api);
+    final logs = LogController(api);
     for (final message in ['opened', 'loaded', 'shown']) {
       logs.logEvent(LogEntry(message));
     }
@@ -1011,8 +1022,7 @@ void main() {
   // whole interval, and a draining close has to wait with it.
   fakeAsync((clock) {
     final api = RecordingLogApi();
-    final logs = TrailingLogController(api)
-      ..logEvent(const LogEntry('alone'));
+    final logs = LogController(api)..logEvent(const LogEntry('alone'));
     var closed = false;
     unawaited(
       logs.close(mode: SoloCloseMode.drain).then((_) => closed = true),
@@ -1033,7 +1043,7 @@ void main() {
   // interval, and the next one counts its own from where it appears.
   fakeAsync((clock) {
     final api = RecordingLogApi();
-    final logs = TrailingLogController(api)
+    final logs = GatedLogController(api)
       ..allowed = false
       ..logEvent(const LogEntry('refused'));
     clock.elapse(const Duration(seconds: 1));
@@ -1052,11 +1062,12 @@ void main() {
     clock.flushMicrotasks();
   });
 
-  // The throttle is a floor under the rate: entries written inside the
-  // interval wait for it, and are sent together when it ends.
+  // With the default, the throttle is a floor under the rate: entries
+  // written inside the interval wait for it, and are sent together when it
+  // ends.
   fakeAsync((clock) {
     final api = RecordingLogApi();
-    final logs = LogController(api)
+    final logs = AtOnceLogController(api)
       ..logEvent(const LogEntry('one'))
       ..logEvent(const LogEntry('two'))
       ..logEvent(const LogEntry('three'));
