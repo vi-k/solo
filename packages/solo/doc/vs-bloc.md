@@ -1458,9 +1458,10 @@ Future<Map<String, Object?>> handlePayRequest(
 }
 ```
 
-`Policy.droppable` returns the existing queued or running job for the same
-order key. Both callers share its receipt, while another order creates another
-job. The three requests again make two API calls.
+The key is `('pay', order.id)`, the same for every request for one order, and
+`Policy.droppable` returns the job already queued or running under it instead
+of adding another. Both callers share its receipt, while another order creates
+another job. The three requests again make two API calls.
 
 The charge is a plain `await`. `ctx.abandonable`, `ctx.join` and
 `ctx.uncancellable` are for a job that can be cancelled, and they differ in

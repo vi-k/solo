@@ -1276,8 +1276,9 @@ void main() {
         {'paid': true, 'receipt': 'R-B'},
       ]);
       expect('${controller.currentState}', 'Paid(Receipt(for B))');
-      _says('`Policy.droppable` returns the existing queued or running job '
-          'for the same order key.');
+      _says("The key is `('pay', order.id)`, the same for every request for "
+          'one order, and `Policy.droppable` returns the job already queued or '
+          'running under it instead of adding another.');
       _says('The three requests again make two API calls.');
     });
 

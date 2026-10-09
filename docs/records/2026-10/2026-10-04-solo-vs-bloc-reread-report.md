@@ -836,3 +836,12 @@ future — обычное слово без бэктиков; «дренаж» �
     в `test/support/vs_bloc_7_device.dart`. Тот же зонд показал, что `close()`
     убирает из очереди и `Job` с `cancellable: false`: страница называет только
     `cancelAll()` и `queue.clear()`, так что это ей не противоречит.
+
+13. «Awaiting a particular request», ответ solo. Владелец заметил, что ключ
+    `('pay', order.id)` в коде легко пропустить, а фраза под кодом говорила
+    только о «ключе заказа». Теперь она его называет: «The key is
+    `('pay', order.id)`, the same for every request for one order, and
+    `Policy.droppable` returns the job already queued or running under it
+    instead of adding another», в переводе «Ключ `('pay', order.id)` у всех
+    запросов одного заказа один и тот же». Сторож — тест «three requests for
+    two orders make two charges», цитата в нём заменена.
