@@ -1613,9 +1613,9 @@ void main() {
       _says('Starting at once has a price when nothing is running');
       _says('the first event goes on its own and the rest wait out the whole '
           'interval');
-      _says('With the default the first line would go at once, and the rest '
-          'of a transition written over more than one turn would follow a '
-          'second later.');
+      _says('With the default (`startAtOnce: true`) the first line would go '
+          'at once, and the rest of a transition written over more than one '
+          'turn would follow a second later.');
       final seen = <String>[];
       _zone((async) {
         final bench = Bench();

@@ -476,10 +476,11 @@ the counter says 4
 The three lines of the transition travel together. With `startAtOnce: false`
 the interval starts at the first of them and the group waits it out, so lines
 written within that second stay together, however many turns the code takes to
-write them. With the default the first line would go at once, and the rest of a
-transition written over more than one turn would follow a second later. The
-fourth line is written when no interval is running, so it starts one of its own
-and waits it out: a line written alone reaches the server a second late.
+write them. With the default (`startAtOnce: true`) the first line would go at
+once, and the rest of a transition written over more than one turn would follow
+a second later. The fourth line is written when no interval is running, so it
+starts one of its own and waits it out: a line written alone reaches the server
+a second late.
 
 A buffer you keep yourself would batch them too. What `collect` adds is that
 the buffer is the job's input: the entries are sealed into the group the queue
