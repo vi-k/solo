@@ -296,8 +296,9 @@ must not be assumed to finish before `close()`. That is how a Dart future
 works: nothing ties it to the code that started it, so neither the job nor the
 controller knows it exists. If such work has to end before the job does, it is
 started as a child with `ctx.run`: the parent waits for its children even when
-its body does not await them, and `close()` waits for them too. The page
-[Children and streams](children.md) covers them.
+its body does not await them, the queue does not start the next job until then,
+and `close()` waits for them too. The page [Children and streams](children.md)
+covers them.
 
 ## An observer fails during a state update
 

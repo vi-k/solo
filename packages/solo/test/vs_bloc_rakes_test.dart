@@ -417,6 +417,27 @@ void main() {
           'not be assumed to finish before `close()`.');
     });
 
+    test('the queue starts the next job after the unawaited child', () {
+      late notes.PlainNotesController controller;
+      final seen = <String>[];
+      final errors = _zone((async) {
+        controller = notes.PlainNotesController(notes.Api())
+          ..withChild()
+          ..mark('next');
+        for (final at in [10, 99, 101]) {
+          async.elapse(_ms(at - async.elapsed.inMilliseconds));
+          seen.add('at $at: ${controller.met}');
+        }
+      });
+      expect(errors, isEmpty);
+      expect(seen, [
+        'at 10: []',
+        'at 99: []',
+        'at 101: [child work ended, next started]',
+      ]);
+      _says('the queue does not start the next job until then');
+    });
+
     test('a child nobody awaits holds its parent and close', () {
       final runs = <String>[];
       for (final close in [false, true]) {
@@ -445,8 +466,8 @@ void main() {
       ]);
       _says('If such work has to end before the job does, it is started as '
           'a child with `ctx.run`: the parent waits for its children even '
-          'when its body does not await them, and `close()` waits for them '
-          'too.');
+          'when its body does not await them');
+      _says('and `close()` waits for them too.');
     });
   });
 

@@ -791,3 +791,11 @@ future — обычное слово без бэктиков; «дренаж» �
    на 100 мс. Сторож — тест «a child nobody awaits holds its parent and close»,
    `PlainNotesController.withChild` в `test/support/vs_bloc_1_notes.dart`.
 
+9. Там же, очередь. Владелец спросил, ждёт ли очередь `Job`, которая ждёт
+   детей, запущенных без `await`. Ждёт: зонд ставит за родителем ещё одну
+   `Job`, и та стартует на 101 мс, сразу после того как ребёнок кончил работу
+   на 100. Фраза говорила только о родителе и `close()`; теперь в ней «the
+   queue does not start the next job until then», в переводе «очередь до тех
+   пор не запускает следующую `Job`». Сторож — тест «the queue starts the next
+   job after the unawaited child».
+
