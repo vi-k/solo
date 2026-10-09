@@ -756,18 +756,18 @@ future — обычное слово без бэктиков; «дренаж» �
    went out.» Так устроен и стенд: ответ списка возвращается 60 мс, отправка
    заметки занимает 40 мс; трассу сверяет `check_traces.py`.
 
-5. Вторая попытка того же раздела, «там две очереди, здесь ни одной».
-   Владелец спросил, почему ни одной. Почему, фраза не говорила: что
-   трансформер по умолчанию запускает события конкурентно, сказано абзацем
-   выше, и связать одно с другим оставалось читателю. Теперь: «The first has
-   two queues, one per registration, and neither waits for the other. The
-   second has one registration but no queue at all: the default transformer
-   starts every event at once, without waiting for the one before.»
+5. Вторая попытка того же раздела, «там две очереди, здесь ни одной». Владелец
+   спросил, почему ни одной. Почему, фраза не говорила: что трансформер
+   по умолчанию запускает события конкурентно, сказано абзацем выше, и связать
+   одно с другим оставалось читателю. Теперь: «The first has two queues, one
+   per registration, and neither waits for the other. The second has one
+   registration but no queue at all: the default transformer starts every event
+   at once, without waiting for the one before.»
 
 6. Ответ на solo того же раздела, переменная `merged`. Владелец спросил, зачем
    она: ответ на bloc обходится без неё. Нужна она была только ширине строки,
-   читателю этого не видно. Теперь список собирается прямо в `copyWith`,
-   как у bloc, а вызов разложен висящими запятыми. Та же правка в обеих копиях
+   читателю этого не видно. Теперь список собирается прямо в `copyWith`, как
+   у bloc, а вызов разложен висящими запятыми. Та же правка в обеих копиях
    в `test/support/vs_bloc_1_notes.dart`, где сторож сверяет код страницы.
 
 7. Ответ на solo того же раздела, трасса. Абзац под кодом сравнивал порядок
@@ -782,12 +782,12 @@ future — обычное слово без бэктиков; «дренаж» �
    ничего нельзя. Первое верно, второе нет: дочерняя `Job` держит родителя.
    Теперь за фразой о работе без ожидания: «That is how a Dart future works:
    nothing ties it to the code that started it, so neither the job nor the
-   controller knows it exists. Work the job has to wait for is started as
-   a child with `ctx.run`: the parent waits for its children even when its body
-   does not await them, and `close()` waits for them too», и ссылка
-   на «Children and streams». Зонд: тело запускает ребёнка с `join` на 100 мс
-   и возвращается; без `close()` родитель на 10 мс ещё идёт и кончается
-   `Done` после ребёнка, с `close()` на 10 мс закрытие завершается на 100 мс.
-   Сторож — тест «a child nobody awaits holds its parent and close»,
+   controller knows it exists. If such work has to end before the job does, it
+   is started as a child with `ctx.run`: the parent waits for its children even
+   when its body does not await them, and `close()` waits for them too»,
+   и ссылка на «Children and streams». Зонд: тело запускает ребёнка с `join`
+   на 100 мс и возвращается; без `close()` родитель на 10 мс ещё идёт
+   и кончается `Done` после ребёнка, с `close()` на 10 мс закрытие завершается
+   на 100 мс. Сторож — тест «a child nobody awaits holds its parent and close»,
    `PlainNotesController.withChild` в `test/support/vs_bloc_1_notes.dart`.
 

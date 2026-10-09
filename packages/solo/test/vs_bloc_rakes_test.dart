@@ -443,9 +443,10 @@ void main() {
         'at 10: null [], at 210: Done(null) [child work ended]',
         'at 10: null [], closed at 100, at 210: Cancelled(closed) []',
       ]);
-      _says('Work the job has to wait for is started as a child with '
-          '`ctx.run`: the parent waits for its children even when its body '
-          'does not await them, and `close()` waits for them too.');
+      _says('If such work has to end before the job does, it is started as '
+          'a child with `ctx.run`: the parent waits for its children even '
+          'when its body does not await them, and `close()` waits for them '
+          'too.');
     });
   });
 
