@@ -624,12 +624,12 @@ This works because the commands are absolute: each one says what the end state
 is, so the last one is the answer. Commands that build on each other — "ten
 seconds further on" — are merged by adding them up, not by replacing.
 
-`adjacent` joins a group only at the queue's tail, so a job of another kind
-added between two commands is a boundary and the merging stops there. That is
-what keeps the order with the rest of the work, and why this recipe names the
-policy instead of taking the default: `join` joins the group where it stands,
-and here that would drop the `resume` the user tapped and leave the device with
-the `pause` alone.
+`adjacent` adjoins an event to a group only at the queue's tail, so a job of
+another kind added between two commands is a boundary and the merging stops
+there. That is what keeps the order with the rest of the work, and why this
+recipe names the policy instead of taking the default: `join` joins the group
+where it stands, and here that would drop the `resume` the user tapped and
+leave the device with the `pause` alone.
 
 #### When they are separate jobs after all
 
@@ -770,11 +770,13 @@ created.
 | `replace` | `[B, A(A1 + A2)]` | A1's existing job, moved behind B |
 | `join` (default) | `[A(A1 + A2), B]` | A1's existing job |
 
-`adjacent` accepts into the group only when it is at the queue's tail.
-`replace` and `join` find the last open queued group of the same accumulator,
-looking past other jobs. Those other jobs stay in the queue. In `join`, A
-retains its position before B; `replace` moves A behind B. Execution also
-depends on readiness: a ready B can pass A while A waits for timing.
+`adjacent` adjoins an event to a group only when that group is at the queue's
+tail. `replace` replaces a group's job at the tail: it finds the last open
+queued group of the same accumulator, looking past other jobs, and moves that
+job behind them, so A ends up behind B. `join` joins the event to that same
+group where it stands, so A keeps its place before B. Either way the jobs
+passed over stay in the queue. Execution also depends on readiness: a ready B
+can pass A while A waits for timing.
 
 `join` is the default so that a group does not depend on what else is queued.
 An entry written while another job waits in the queue still belongs in the
@@ -795,13 +797,14 @@ at the tail, so a later event can join it with `adjacent`. Already separate
 groups are never combined retroactively. A sealed debounce group is ineligible
 for all three policies.
 
-`replace` adds the incoming event to the group it found and moves that group's
-job to the tail. The handle is the one every addition to this group got, the
-events already accepted stay in it, and a group that is already at the tail
-keeps the place it has. Nothing is cancelled on the way, so no cancellation
-callback runs in the middle of the move. `Solo.debug`, the engine's own trace
-from [Logs](errors.md#logs) on the errors page, says `move <job> to the tail`;
-there is no observer event, because no job started or finished.
+`replace` replaces the job of the group it found at the tail, with the incoming
+event added to that group. The handle is the one every addition to this group
+got, the events already accepted stay in it, and a group that is already at the
+tail keeps the place it has. Nothing is cancelled on the way, so no
+cancellation callback runs in the middle of the move. `Solo.debug`, the
+engine's own trace from [Logs](errors.md#logs) on the errors page, says
+`move <job> to the tail`; there is no observer event, because no job started or
+finished.
 
 The move starts a fresh debounce window and preserves the accumulator's
 throttle interval. It applies to a queued group, including one configured with

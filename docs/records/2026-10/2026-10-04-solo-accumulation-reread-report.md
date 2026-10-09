@@ -818,9 +818,13 @@ group that waits only for the slot» освобождали слот в тот �
    transition written over several turns stays together», а два теста
    о немедленном старте идут на `Bench` с обычным throttle.
 
-7. Dartdoc вариантов `AccumulationPolicy`. Владелец предложил начать описание
-   каждого глаголом, который соответствует имени. Было `Joins`, `Moves`
-   и `Joins`, стало `Adjoins the event only to a group at the queue's tail`,
-   `Replaces the last matching group's job at the queue's tail` (в смысле
-   «ставит на место») и прежнее `Joins` у `join`. У прилагательного `adjacent`
-   своего глагола нет, ближе всего `adjoin`.
+7. Описания политик накопления. Владелец предложил начинать описание каждой
+   политики глаголом, который соответствует её имени. В разделе «Choosing where
+   events join» абзац под таблицей теперь говорит `adjacent adjoins`,
+   `replace replaces` и `join joins` (в переводе «пристраивает»,
+   «переставляет», «присоединяет»); вместо общего «`replace` и `join` находят»
+   каждая политика описана своим предложением. Так же начинаются абзац
+   о `replace` ниже в разделе и фраза об `adjacent` в рецепте команд. Dartdoc
+   вариантов `AccumulationPolicy` начинается с `Adjoins`, `Replaces` и `Joins`.
+   У прилагательного `adjacent` своего глагола нет, ближе всего `adjoin`;
+   `replace` здесь в смысле «ставит на место».
