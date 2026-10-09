@@ -264,8 +264,8 @@ final class NotesController extends Solo<NotesState> {
 response it checks cancellation before returning the result. Upload uses `join`
 so that even a cancelled upload holds the queue until the server has answered:
 the queue does not start the next job while the upload is still in progress.
-Refresh uses `ctx.abandonable`, which can stop waiting on cancellation because
-this example allows its read result to be abandoned.
+`refresh` uses `ctx.abandonable`, which can stop waiting on cancellation
+because this example allows its read result to be abandoned.
 
 The final state is also `NotesState([n0, n1], uploading: false)`, from the same
 order as the bloc above — `list reads [n0, n1]` after `server receives n1` —
