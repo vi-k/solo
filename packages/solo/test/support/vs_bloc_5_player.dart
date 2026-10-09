@@ -1,4 +1,4 @@
-// Section 5 of `doc/vs-bloc.md`, "Restarting one operation within a shared queue": what the page leaves out,
+// `doc/vs-bloc.md`, section "Restarting one operation within a shared queue": what the page leaves out,
 // then the code under its `### Solo` heading, verbatim, then what
 // `vs_bloc_rakes_test.dart` adds on top of it. Every piece of the page's
 // blocks is a run of lines of this file. The bloc side of the section is

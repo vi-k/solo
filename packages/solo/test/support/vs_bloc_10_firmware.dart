@@ -1,4 +1,4 @@
-// Section 10 of `doc/vs-bloc.md`, "Finishing an in-flight write before
+// `doc/vs-bloc.md`, section "Finishing an in-flight write before
 // restarting": what the page leaves out, then the code under its `### Solo`
 // heading, verbatim, then what `vs_bloc_rakes_test.dart` adds on top of it.
 // Every piece of the page's blocks is a run of lines of this file. The bloc

@@ -1,4 +1,4 @@
-// Section 9 of `doc/vs-bloc.md`, "Reacting to an independent external state
+// `doc/vs-bloc.md`, section "Reacting to an independent external state
 // change": what the page leaves out, then the code under its `### Solo`
 // heading, verbatim, then what `vs_bloc_rakes_test.dart` adds on top of it.
 // Every piece of the page's blocks is a run of lines of this file. The bloc

@@ -1,4 +1,4 @@
-// Section 1 of `doc/vs-bloc.md`, "Ordering updates to shared state": what the
+// `doc/vs-bloc.md`, section "Ordering updates to shared state": what the
 // page leaves out, then the code under its `### Solo` heading, verbatim, then
 // what `vs_bloc_rakes_test.dart` adds on top of it. Every piece of the page's
 // blocks is a run of lines of this file. The bloc side of the section is built

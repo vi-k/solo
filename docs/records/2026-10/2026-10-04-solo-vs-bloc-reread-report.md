@@ -726,3 +726,21 @@ future — обычное слово без бэктиков; «дренаж» �
    не занимается: зависимости передают другими способами и пакетами, например
    scopo».
 
+3. Номера разделов. Владелец заметил, что нумерации нет больше ни в одном
+   документе, и спросил, нужна ли она здесь. Номера держали только ссылки
+   внутри страницы, «as in section 9» и подобные: двенадцать в оригинале,
+   столько же в переводе. Номера из заголовков сняты, ссылки стали ссылками
+   на раздел по имени, как на других страницах: «as in
+   [Reacting to an independent external state change](#…)», в переводе «как
+   в разделе [«Реакция на независимое внешнее изменение состояния»](#…)». Две
+   фразы перестроены: «What [Ordering updates to shared state](#…) requires and
+   the promptness needed here pull in opposite directions» и «needs the waiting
+   behavior of [Finishing an in-flight write before restarting](#…) instead».
+   Стенд `tool/doc_snippets.py` нумерует сценарии сам, по порядку на странице
+   после «Correspondences», и ключи вида `5/PlayerBloc` у драйверов
+   не изменились; сторож `vs_bloc_rakes_test.dart` считает разделы так же,
+   имена его групп и шапки файлов `test/support/vs_bloc_*.dart` номеров больше
+   не несут. Имена этих файлов номера сохранили. Сторож README
+   `readme_rakes_test.dart` считал сценарии по номерам заголовков; теперь он
+   считает разделы после «Correspondences».
+

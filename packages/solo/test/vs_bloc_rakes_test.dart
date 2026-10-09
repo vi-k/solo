@@ -79,12 +79,15 @@ void _says(String phrase) => expect(
       reason: '$_doc no longer says: $phrase',
     );
 
-/// The numbered sections of the page, heading line first.
-Map<int, String> _sections() => {
-      for (final part in _page().split(RegExp('^## ', multiLine: true)).skip(1))
-        if (RegExp(r'^(\d+)\. ').firstMatch(part) case final number?)
-          int.parse(number.group(1)!): part,
-    };
+/// The scenario sections of the page, heading line first, numbered in page
+/// order: every `## ` section after the correspondences.
+Map<int, String> _sections() {
+  final parts = _page().split(RegExp('^## ', multiLine: true)).skip(1).toList();
+  expect(parts.first, startsWith('Correspondences\n'));
+  return {
+    for (final (index, part) in parts.skip(1).indexed) index + 1: part,
+  };
+}
 
 /// The `dart` blocks under the `### Solo` heading of section [number].
 List<String> _soloBlocks(int number) {
@@ -154,7 +157,8 @@ void main() {
         }
       }
       expect(astray, isEmpty);
-      // One block a section, and the platform handler of section 8.
+      // One block a section, and the platform handler of "Awaiting a
+      // particular request".
       expect(blocks, 12);
     });
 
@@ -245,7 +249,7 @@ void main() {
     });
   });
 
-  group('1. Ordering updates to shared state', () {
+  group('Ordering updates to shared state', () {
     test('upload and refresh end with both notes, in the order of bloc', () {
       late notes.TracedNotesController controller;
       final errors = _zone((async) {
@@ -414,7 +418,7 @@ void main() {
     });
   });
 
-  group('2. An observer fails during a state update', () {
+  group('An observer fails during a state update', () {
     test('a throwing observer changes neither the outcome nor the queue', () {
       final device = recorder.Recorder();
       final journal = recorder.Journal();
@@ -488,7 +492,7 @@ void main() {
     });
   });
 
-  group('3. Closing and cancelling in-flight work', () {
+  group('Closing and cancelling in-flight work', () {
     test('close cancels the running send and the queued one', () {
       late chat.Api api;
       late chat.ChatController controller;
@@ -659,7 +663,7 @@ void main() {
     });
   });
 
-  group('4. Leaving a loading state when the work is cancelled', () {
+  group('Leaving a loading state when the work is cancelled', () {
     test('cancelRefresh cancels the running refresh and hands back its job',
         () {
       late refresh.RefreshController controller;
@@ -813,7 +817,7 @@ void main() {
     });
   });
 
-  group('5. Restarting one operation within a shared queue', () {
+  group('Restarting one operation within a shared queue', () {
     test('the drag reaches the device as play, seek 3, pause', () {
       late player.Player device;
       late player.PlayerController controller;
@@ -922,7 +926,7 @@ void main() {
     });
   });
 
-  group('6. Typed methods with queued execution', () {
+  group('Typed methods with queued execution', () {
     test('the first move stops, the middle one never starts', () {
       late map.MapApi api;
       late map.MapController controller;
@@ -989,7 +993,7 @@ void main() {
     });
   });
 
-  group('7. Removing selected pending work', () {
+  group('Removing selected pending work', () {
     test('disconnect removes the queued read at the call', () {
       late device.Ble ble;
       late device.DeviceController controller;
@@ -1121,7 +1125,7 @@ void main() {
     });
   });
 
-  group('8. Awaiting a particular request', () {
+  group('Awaiting a particular request', () {
     test('three requests for two orders make two charges', () {
       late checkout.Api api;
       late checkout.CheckoutController controller;
@@ -1349,7 +1353,7 @@ void main() {
     });
   });
 
-  group('9. Reacting to an independent external state change', () {
+  group('Reacting to an independent external state change', () {
     test('the revocation shows at once and cancels the build by its rule', () {
       late report.Reports reports;
       late report.ReportController controller;
@@ -1553,7 +1557,7 @@ void main() {
     });
   });
 
-  group('10. Finishing an in-flight write before restarting', () {
+  group('Finishing an in-flight write before restarting', () {
     test('the restart waits for the write in flight; nothing overlaps', () {
       late firmware.Ble ble;
       late firmware.FirmwareController controller;
@@ -1663,7 +1667,7 @@ void main() {
     });
   });
 
-  group('11. Releasing a resource returned after cancellation', () {
+  group('Releasing a resource returned after cancellation', () {
     test('the stale buffer is released when it arrives, after close', () {
       late preview.Decoder decoder;
       late preview.PreviewController controller;

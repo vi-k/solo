@@ -116,8 +116,22 @@ class Blocks(dict):
         return sorted(left.values())
 
 
-snips = Blocks(doc_blocks.blocks(
-    open(DOC).read(), 'dart', doc_blocks.DECLARES['dart']))
+def _numbered(text):
+    """The blocks keyed by scenario number. The page's headings carry no
+    numbers, so the scenarios are counted in page order, after the
+    correspondences: '1/NotesBloc' is NotesBloc of the first scenario."""
+    order = [key for key, _ in doc_blocks.sections(text)
+             if key != 'correspondences']
+    number = {key: str(n) for n, key in enumerate(order, 1)}
+    found = doc_blocks.blocks(text, 'dart', doc_blocks.DECLARES['dart'])
+    renamed = {}
+    for key, source in found.items():
+        section, name = key.split('/', 1)
+        renamed[f'{number.get(section, section)}/{name}'] = source
+    return renamed
+
+
+snips = Blocks(_numbered(open(DOC).read()))
 
 
 def _prose(path):

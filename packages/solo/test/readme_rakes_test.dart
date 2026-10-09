@@ -748,10 +748,13 @@ void main() {
     });
 
     test('vs-bloc.md compares eleven scenarios, as the page says twice', () {
-      final scenarios = RegExp(r'^## \d+\. ', multiLine: true)
+      // Every `## ` section after the correspondences is a scenario.
+      final sections = RegExp(r'^## (.*)$', multiLine: true)
           .allMatches(File('doc/vs-bloc.md').readAsStringSync())
-          .length;
-      expect(scenarios, 11);
+          .map((match) => match.group(1))
+          .toList();
+      expect(sections.first, 'Correspondences');
+      expect(sections.length - 1, 11);
       expect(_page(), contains('| Eleven scenarios in both packages |'));
       expect(_page(), contains('compares eleven application scenarios'));
     });
