@@ -774,9 +774,9 @@ created.
 tail. `replace` replaces a group's job at the tail: it finds the last open
 queued group of the same accumulator, looking past other jobs, and moves that
 job behind them, so A ends up behind B. `join` joins the event to that same
-group where it stands, so A keeps its place before B. Either way the jobs
-passed over stay in the queue. Execution also depends on readiness: a ready B
-can pass A while A waits for timing.
+group where it stands, so A keeps its place before B. Either way B stays in the
+queue: the search only looks past it. Execution also depends on readiness: a
+ready B can pass A while A waits for timing.
 
 `join` is the default so that a group does not depend on what else is queued.
 An entry written while another job waits in the queue still belongs in the
