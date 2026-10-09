@@ -123,11 +123,11 @@ Refresh reads the server on line three, before the upload reaches it on line
 four, and publishes that answer on line six, after the upload has published its
 own. Both requests are in flight at once, and a handler publishes when its
 response arrives, not when the server produced it: the server answers the list
-with what it holds at that moment, and the answer is still on its way back
-while the upload lands and publishes. A long list or a slow connection is
-enough for that. The response is older than the state it replaces, and no
-reading of the local `state` inside either handler can tell: the obsolete list
-is in the response, not in the state.
+with what it holds at that moment, and the answer is still on its way back when
+the upload of the new note lands and publishes. A long list or a slow
+connection is enough for that. The response is older than the state it
+replaces, and no reading of the local `state` inside either handler can tell:
+the obsolete list is in the response, not in the state.
 
 A transformer schedules the events of its own registration, and here there are
 two registrations, so the two handlers still run at the same time. The

@@ -747,11 +747,11 @@ future — обычное слово без бэктиков; «дренаж» �
 4. Первая попытка раздела «Ordering updates to shared state», трасса. Владелец:
    новичок спросит, как список, прочитанный до прихода новой заметки, может
    быть опубликован позже неё. Абзац под трассой говорил, в каких строках это
-   случилось, но не почему. Теперь: «Both requests are in flight at once, and
-   a handler publishes when its response arrives, not when the server produced
+   случилось, но не почему. Теперь: «Both requests are in flight at once, and a
+   handler publishes when its response arrives, not when the server produced
    it: the server answers the list with what it holds at that moment, and the
-   answer is still on its way back while the upload lands and publishes.
-   A long list or a slow connection is enough for that.» Так устроен и стенд:
-   ответ списка возвращается 60 мс, отправка заметки занимает 40 мс; трассу
-   сверяет `check_traces.py`.
+   answer is still on its way back when the upload of the new note lands and
+   publishes. A long list or a slow connection is enough for that.» Так устроен
+   и стенд: ответ списка возвращается 60 мс, отправка заметки занимает 40 мс;
+   трассу сверяет `check_traces.py`.
 
