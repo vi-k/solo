@@ -215,14 +215,16 @@ changes» CHANGELOG `solo`. 2026-10-07 по его же слову `Job.ignore()
 `packages/solo/doc/testing.md` принята в тот же день, три пункта
 в `2026-10-04-solo-testing-reread-report.md`; `packages/solo/doc/camera.md`
 принята в тот же день в нынешнем виде, три пункта
-в `2026-10-04-solo-camera-reread-report.md`; дальше в его чтении
-`accumulation.md`, `vs-bloc.md` и README пакета `solo`, README и `mixins.md`
-пакета `flutter_solo`, последними CHANGELOG трёх пакетов. Правки принятых
-страниц после их приёмки (переименования, `pause` в списке вызовов
-`extending.md` пакета `async_job`, `Job<T>` в коде `children.md` пакета `solo`,
-абзацы по его вопросам после приёмки) владелец просмотрел 2026-10-08; принятые
-страницы `async_job` и `solo` на `165735d` прочитаны им целиком. Изменённую
-тем же коммитом фразу в `packages/solo/doc/resources.md` он перечитал и принял
+в `2026-10-04-solo-camera-reread-report.md`;
+`packages/solo/doc/accumulation.md` принята 2026-10-09, девять пунктов
+в `2026-10-04-solo-accumulation-reread-report.md`; дальше в его чтении
+`vs-bloc.md` и README пакета `solo`, README и `mixins.md` пакета
+`flutter_solo`, последними CHANGELOG трёх пакетов. Правки принятых страниц
+после их приёмки (переименования, `pause` в списке вызовов `extending.md`
+пакета `async_job`, `Job<T>` в коде `children.md` пакета `solo`, абзацы по его
+вопросам после приёмки) владелец просмотрел 2026-10-08; принятые страницы
+`async_job` и `solo` на `165735d` прочитаны им целиком. Изменённую тем же
+коммитом фразу в `packages/solo/doc/resources.md` он перечитал и принял
 в тот же день. Отчёт — `2026-10-07-unanswered-walk-report.md`. Вопросы
 владельца правятся в странице, переводе и стороже и идут пунктами раздела
 «По чтению владельца» в отчёте страницы. В `docs/backlog.md` одна запись —
@@ -238,20 +240,21 @@ job a deadline of its own»: параметр `timeout` у `Job(...)`,
 в вердикте каждой находки. Принятые владельцем страницы `async_job` получили
 своё о сроке: раздел «A deadline» в `cancellation.md`, причина в `outcomes.md`,
 абзац README; в `solo` — `cancellation.md`, «Timeouts» в `testing.md`,
-`errors.md`, `accumulation.md`, README. Владельцу показать расхождение
-в `accumulation.md`: срок задачи `accumulate` не накладывает записи, а теряет
-финальный `emit`. Сторожа: `timeout_test.dart` в `async_job` и `solo`, раздел
-«A deadline» в `cancellation_rakes_test.dart`. Вопросы владельца о сроке —
-пунктами раздела «По чтению владельца» того же отчёта, на 2026-10-07 их три,
-третий — шаблон в `if` в примере того же раздела вместо `is!`; первые два:
-абзац о `ifCancelled:` и `ifFailed:` в `packages/solo/doc/cancellation.md`
-называет `Future.timeout`, с которым сравнивает, а абзац о ветке `catch` в «A
-deadline for one step» `async_job` говорит, что она отбирает только по типу.
-Раздел «A deadline» в `packages/async_job/doc/cancellation.md` и добавленное
-о сроке в `outcomes.md` и README владелец принял 2026-10-07; из добавленного
-о сроке в `async_job` ему осталась запись CHANGELOG, и CHANGELOG по его слову
-читается в самом конце, после страниц `solo`. Клон и копии ревью
-в `.artifacts/` больше не нужны.
+`errors.md`, `accumulation.md`, README. Расхождение в `accumulation.md` (срок
+задачи `accumulate` не накладывает записи, а теряет финальный `emit`) владелец
+прочитал и принял со страницей 2026-10-09. Сторожа: `timeout_test.dart`
+в `async_job` и `solo`, раздел «A deadline» в `cancellation_rakes_test.dart`.
+Вопросы владельца о сроке — пунктами раздела «По чтению владельца» того же
+отчёта, на 2026-10-07 их три, третий — шаблон в `if` в примере того же раздела
+вместо `is!`; первые два: абзац о `ifCancelled:` и `ifFailed:`
+в `packages/solo/doc/cancellation.md` называет `Future.timeout`, с которым
+сравнивает, а абзац о ветке `catch` в «A deadline for one step» `async_job`
+говорит, что она отбирает только по типу. Раздел «A deadline»
+в `packages/async_job/doc/cancellation.md` и добавленное о сроке
+в `outcomes.md` и README владелец принял 2026-10-07; из добавленного о сроке
+в `async_job` ему осталась запись CHANGELOG, и CHANGELOG по его слову читается
+в самом конце, после страниц `solo`. Клон и копии ревью в `.artifacts/` больше
+не нужны.
 
 **Открытые вопросы владельцу.** По слову владельца 2026-10-03 вопросы вычитки
 копятся здесь: он разберёт их позже, вычитка из-за них не останавливается,
@@ -280,14 +283,10 @@ dozen calls» в README `solo` перестроен — `play` кончаетс�
 фразу о настоящем времени в «Timeouts», написанную по его девятому вопросу
 (M8); убрала `.ignore()` при `job.cancel()` во фрагменте об отмене вместе
 с фразой о нём, написанной по пятому вопросу (L5); добавила dev-зависимость
-`test_api` в `packages/solo/pubspec.yaml`. Раздел «Вопросы владельцу»
-в `2026-10-04-solo-accumulation-reread-report.md`: вопрос о режиме рецепта
-журнала закрыт 2026-10-09, рецепт переведён на `startAtOnce: false`, умолчание
-осталось `true`. Там же три правки текста, который владелец читал: сценарий
-и трассы журнала (H1), блок о хэндле в «Start, cancellation and errors» (M2),
-блок типов в рецепте поиска (M8). В dartdoc `AccumulationTiming`
-и в `CHANGELOG.md` осталось «where the group appears», на странице оно заменено
-на «when»: править ли код, не решено. Раздел «Вопросы владельцу»
+`test_api` в `packages/solo/pubspec.yaml`. В dartdoc `AccumulationTiming`
+и в `CHANGELOG.md` `solo` осталось «where the group appears», а на странице
+`accumulation.md` стоит «when»: править ли код, не решено, вопрос к чтению
+CHANGELOG. Раздел «Вопросы владельцу»
 в `2026-10-04-solo-vs-bloc-reread-report.md`: в ответе на bloc восьмого раздела
 `CheckoutBloc` при наблюдателе, бросающем на `Paid`, отдаёт вызывающему
 квитанцию, а состояние становится `PaymentFailed` для списанного заказа.
@@ -589,7 +588,7 @@ README `flutter_solo` с его `doc/mixins.md` и быстрого старта
 в `packages/solo/example/test/support/camera_*.dart`, тест
 `camera_rakes_test.dart` пакета примера, 89. Код `accumulation.md` сверх стенда
 стоит в `packages/solo/test/support/accumulation_*.dart`, тест
-`accumulation_rakes_test.dart`, 126; код сторон `solo` страницы `vs-bloc.md` —
+`accumulation_rakes_test.dart`, 130; код сторон `solo` страницы `vs-bloc.md` —
 в `vs_bloc_*.dart` там же, тест `vs_bloc_rakes_test.dart`, 64, а блоки стороны
 bloc держит только стенд.
 
