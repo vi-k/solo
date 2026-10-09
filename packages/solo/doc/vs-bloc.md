@@ -357,10 +357,9 @@ with `telemetry unavailable`, which lands in the zone unhandled, and the same
 observer failure in a `Cubit` method reaches the method's caller.
 
 Both `Bloc` and `Cubit` publish through `BlocBase.emit`. It calls `onChange`
-before updating the state, and an exception from that call is passed to
-`onError` and rethrown — into the handler that was publishing. The reporting an
-observer exists for is therefore on the same path as the operation it reports
-on.
+before updating the state, and an error from that call is passed to `onError`
+and rethrown — into the handler that was publishing. The reporting an observer
+exists for is therefore on the same path as the operation it reports on.
 
 ### Bloc and Cubit
 
