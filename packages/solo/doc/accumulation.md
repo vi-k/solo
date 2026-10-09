@@ -693,7 +693,9 @@ immediately, then waits at least `duration` between actual starts of the same
 accumulator. Additions during the interval gather in an open group without
 extending the timer. When the interval ends, queued input is ready without
 needing another event. The group accepts events until the queue takes it for
-execution. No job is created for an empty interval.
+execution. An interval that passes with no event creates no job, and the group
+of the next event is ready at once: the interval is counted from the previous
+start, and it has run out.
 
 `startAtOnce: false` counts the interval before the first group as well. An
 accumulator with nothing of its own queued or running starts its interval when

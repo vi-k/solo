@@ -738,3 +738,15 @@ group that waits only for the slot» освобождали слот в тот �
    сторож — новый тест «the working type int is the whole state, so any count
    starts»: обе фразы и три группы, каждая стартует на счёте, который оставила
    предыдущая.
+
+2. Справочник, «Choosing when a group is ready», абзац о `throttle(duration)`.
+   Фраза «No job is created for an empty interval» не говорила, когда стартует
+   группа после пустого интервала, и владелец спросил об этом. Ответ движка:
+   таймер интервала заводит фактический старт группы, а пустой интервал ничего
+   не перезаводит, поэтому группа следующего события готова сразу; в рецепте
+   журнала так уходит `[tapped]` на 2000 мс. Теперь «An interval that passes
+   with no event creates no job, and the group of the next event is ready at
+   once: the interval is counted from the previous start, and it has run out».
+   Правка в оригинале и переводе; тест сторожа, который держал прежнюю фразу
+   и уже проверял старт на 2200 мс без ожидания, цитирует новую и назван
+   по ней.

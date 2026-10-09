@@ -1444,8 +1444,11 @@ void main() {
       ]);
     });
 
-    test('throttle: no job is created for an empty interval', () {
-      _says('No job is created for an empty interval');
+    test('throttle: an empty interval creates no job, and the next group '
+        'is ready at once', () {
+      _says('An interval that passes with no event creates no job, and the '
+          'group of the next event is ready at once: the interval is counted '
+          'from the previous start, and it has run out.');
       final hears = Hears();
       Solo.observer = hears;
       var timers = -1;
