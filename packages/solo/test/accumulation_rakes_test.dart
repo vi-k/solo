@@ -1444,7 +1444,8 @@ void main() {
       ]);
     });
 
-    test('throttle: an empty interval creates no job, and the next group '
+    test(
+        'throttle: an empty interval creates no job, and the next group '
         'is ready at once', () {
       _says('An interval that passes with no event creates no job, and the '
           'group of the next event is ready at once: the interval is counted '
@@ -1497,6 +1498,41 @@ void main() {
         expect(seen, ['busy at 0 ms', 'a[1, 2] at 400 ms']);
       });
     }
+
+    test(
+        'startAtOnce false: after an empty interval the next group counts a '
+        'whole one', () {
+      _says('An interval that passes with no event leaves nothing running, '
+          'and the next group counts a whole interval from its own '
+          'appearance.');
+      final seen = <String>[];
+      _zone((async) {
+        final bench = Bench();
+        final a = bench.collector(
+          'a',
+          timing: _throttle(200, startAtOnce: false),
+        )..add('1');
+        // The first group starts at 200 ms, and the interval its start
+        // renewed is over at 400 ms with nothing written in it.
+        async.elapse(ms(1000));
+        a.add('2');
+        async.elapse(ms(199));
+        seen.add('at 1199: ${bench.ran}');
+        async.elapse(ms(1));
+        seen.add('at 1200: ${bench.ran}');
+        async.elapse(ms(100));
+        // Written while the interval of the start at 1200 ms still runs:
+        // ready when that one ends, not a whole interval later.
+        a.add('3');
+        async.elapse(ms(1000));
+        seen.add('then: ${bench.ran}');
+      });
+      expect(seen, [
+        'at 1199: [a[1] at 200 ms]',
+        'at 1200: [a[1] at 200 ms, a[2] at 1200 ms]',
+        'then: [a[1] at 200 ms, a[2] at 1200 ms, a[3] at 1400 ms]',
+      ]);
+    });
 
     test('startAtOnce false: a group beside a running one starts no interval',
         () {

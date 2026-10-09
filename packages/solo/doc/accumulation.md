@@ -704,7 +704,9 @@ everything written meanwhile. That condition is the whole of it: an interval
 already running is never restarted, and a group that appears beside another of
 the same accumulator, queued or running, starts none. So a group that has
 waited its interval out and needs only the execution slot is not pushed back by
-a later event, whatever the policy does with that event.
+a later event, whatever the policy does with that event. An interval that
+passes with no event leaves nothing running, and the next group counts a whole
+interval from its own appearance.
 
 Starting at once has a price when nothing is running. The queue takes the first
 group on the next microtask, so a burst that does not fit in one synchronous
