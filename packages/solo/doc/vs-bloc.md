@@ -130,8 +130,8 @@ arrive in the order the requests went out. The response is older than the state
 it replaces, and no reading of the local `state` inside either handler can
 tell: the obsolete list is in the response, not in the state.
 
-A transformer schedules the events of its own registration, and here there are
-two registrations, so the two handlers still run at the same time. The
+Each transformer schedules the events of its own registration, but here there
+are two registrations, so the two handlers still run at the same time. The
 [per-handler ordering discussion](https://github.com/felangel/bloc/issues/2790)
 describes that distinction.
 
