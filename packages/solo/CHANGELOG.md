@@ -393,7 +393,7 @@ broke its own rule.
 
 - `AccumulationTiming.throttle` takes `startAtOnce`. With `startAtOnce: false`
   the interval is counted before the first group as well: an accumulator with
-  nothing of its own queued or running starts its interval where the group
+  nothing of its own queued or running starts its interval when the group
   appears, and the group runs when the interval ends, carrying everything
   written meanwhile. The default is unchanged. Take it where the rate matters
   more than the latency of the first event; the cost is that a single event

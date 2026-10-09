@@ -283,10 +283,7 @@ dozen calls» в README `solo` перестроен — `play` кончаетс�
 фразу о настоящем времени в «Timeouts», написанную по его девятому вопросу
 (M8); убрала `.ignore()` при `job.cancel()` во фрагменте об отмене вместе
 с фразой о нём, написанной по пятому вопросу (L5); добавила dev-зависимость
-`test_api` в `packages/solo/pubspec.yaml`. В dartdoc `AccumulationTiming`
-и в `CHANGELOG.md` `solo` осталось «where the group appears», а на странице
-`accumulation.md` стоит «when»: править ли код, не решено, вопрос к чтению
-CHANGELOG. Раздел «Вопросы владельцу»
+`test_api` в `packages/solo/pubspec.yaml`. Раздел «Вопросы владельцу»
 в `2026-10-04-solo-vs-bloc-reread-report.md`: в ответе на bloc восьмого раздела
 `CheckoutBloc` при наблюдателе, бросающем на `Paid`, отдаёт вызывающему
 квитанцию, а состояние становится `PaymentFailed` для списанного заказа.

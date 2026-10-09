@@ -327,7 +327,8 @@ queued or running, starts none». Сторож проверяет оба слу�
 Вердикт: принято, три места: «when the group appears», «the moment the group
 appeared», «from the moment it appears». В dartdoc `AccumulationTiming`
 и в `CHANGELOG.md` «where the group appears» осталось: код `lib/` вычитка
-не меняла.
+не меняла. Итог 2026-10-09: по слову владельца там тоже «when the group
+appears».
 
 **L13. Три имени одного слота.** «The controller's slot», «the queue slot»,
 «the execution slot».
@@ -453,7 +454,8 @@ does not help» не проверял никто. Оба утверждения 
 
 В dartdoc `AccumulationTiming.throttle` и в записи `CHANGELOG.md`
 о `startAtOnce` осталось «starts its interval where the group appears» (L12).
-Не правлено: это не страница, и дефекта в коде нет.
+Не правлено: это не страница, и дефекта в коде нет. Итог 2026-10-09: по слову
+владельца поправлено и там, см. вердикт L12.
 
 `docs/handoff.md` говорит, что стенд `accumulation` последний раз прогнан
 2026-09-28. Теперь он прогнан 2026-10-04, с правками этой вычитки.
