@@ -1614,7 +1614,9 @@ final class ReportController extends Solo<ReportState> with SoloStream {
       );
 
   @override
-  void onClose() => _auth.onRevoked = null;
+  void onClose() {
+    _auth.onRevoked = null;
+  }
 }
 ```
 
