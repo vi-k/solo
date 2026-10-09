@@ -751,7 +751,8 @@ future — обычное слово без бэктиков; «дренаж» �
    handler publishes when its response arrives, not when the server produced
    it: the server answers the list with what it holds at that moment, and the
    answer is still on its way back when the upload of the new note lands and
-   publishes. This can happen with a long list or a slow connection.» Так
-   устроен и стенд: ответ списка возвращается 60 мс, отправка заметки занимает
-   40 мс; трассу сверяет `check_traces.py`.
+   publishes. This can happen with a long list or a slow connection. Nobody can
+   guarantee that responses from the server arrive in the order the requests
+   went out.» Так устроен и стенд: ответ списка возвращается 60 мс, отправка
+   заметки занимает 40 мс; трассу сверяет `check_traces.py`.
 
