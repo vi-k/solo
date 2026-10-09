@@ -865,9 +865,10 @@ await.
 `merge` must be synchronous and pure. It must not mutate either argument or
 call into the controller. If it throws, `add` throws the same error and the
 existing group, its job and its timer remain unchanged. Calling the same
-accumulator's `add` from within its `merge` throws `StateError`. The engine
-also checks that the target group is still eligible after the callback, before
-committing the result.
+accumulator's `add` from within its `merge` throws `StateError`. After the
+callback the engine looks for the group again and writes the result only if the
+search finds the same group: if `merge` has cancelled its job or closed the
+controller, `add` throws `StateError`.
 
 `canStart`, `keepWhile` and cancellation apply to the whole job, and the rules
 themselves are in [State and rules](state.md#state-and-rules) on the state

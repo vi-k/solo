@@ -2458,6 +2458,8 @@ void main() {
                   a.add('again');
                 case 'cancels':
                   bench.cancelAll().ignore();
+                case 'closes':
+                  bench.close().ignore();
               }
             }
 
@@ -2514,12 +2516,28 @@ void main() {
     });
 
     test('a merge that removes its own group is not committed', () {
-      _says('The engine also checks that the target group is still eligible '
-          'after the callback, before committing the result');
+      _says('After the callback the engine looks for the group again and '
+          'writes the result only if the search finds the same group: if '
+          '`merge` has cancelled its job or closed the controller, `add` '
+          'throws `StateError`.');
       expect(merging('cancels').seen, [
         'StateError',
         'Bad state: The accumulation group changed during merge',
         'Cancelled(manual), 0 queued',
+        'at 199: []',
+        'at 200: []',
+      ]);
+    });
+
+    test('a merge that closes the controller is not committed', () {
+      _says('After the callback the engine looks for the group again and '
+          'writes the result only if the search finds the same group: if '
+          '`merge` has cancelled its job or closed the controller, `add` '
+          'throws `StateError`.');
+      expect(merging('closes').seen, [
+        'StateError',
+        'Bad state: The accumulation group changed during merge',
+        'Cancelled(closed), 0 queued',
         'at 199: []',
         'at 200: []',
       ]);
