@@ -263,7 +263,7 @@ final class NotesController extends Solo<NotesState> {
 `ctx.join(action)` calls the operation and waits for it. After a successful
 response it checks cancellation before returning the result. Upload uses `join`
 so that even a cancelled upload holds the queue until the server has answered:
-the next root job cannot read the server while the upload is still in progress.
+the queue does not start the next job while the upload is still in progress.
 Refresh uses `ctx.abandonable`, which can stop waiting on cancellation because
 this example allows its read result to be abandoned.
 
