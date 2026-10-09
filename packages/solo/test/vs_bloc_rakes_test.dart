@@ -542,6 +542,9 @@ void main() {
       expect('$outcome', 'Done(null)');
       expect('${controller.currentState}', 'Recording');
       expect(watcher.seen, ['change to Recording']);
+      _says("The controller's own hook goes the same way: had `_journal.note` "
+          'thrown, its error would reach the zone too, and the observer would '
+          'not hear it');
     });
   });
 

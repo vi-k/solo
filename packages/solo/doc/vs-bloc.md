@@ -444,7 +444,10 @@ the failing hook changes neither the job's outcome nor the queue. The telemetry
 error goes to `Zone.current.handleUncaughtError` — to whatever the application
 already does with uncaught asynchronous errors, and nowhere else. Left
 unhandled there it can still terminate the application: hook isolation keeps
-the operation's control flow, it does not take over the reporting.
+the operation's control flow, it does not take over the reporting. The
+controller's own hook goes the same way: had `_journal.note` thrown, its error
+would reach the zone too, and the observer would not hear it, because its
+`onError` is for what a job threw, not for what a hook threw.
 
 ## Closing and cancelling in-flight work
 

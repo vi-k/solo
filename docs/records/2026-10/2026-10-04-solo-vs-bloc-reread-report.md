@@ -799,3 +799,15 @@ future — обычное слово без бэктиков; «дренаж» �
    пор не запускает следующую `Job`». Сторож — тест «the queue starts the next
    job after the unawaited child».
 
+
+10. «An observer fails during a state update», последний абзац. Владелец
+    спросил, уходит ли ошибка `_journal.note` тоже только в зону или её слышит
+    наблюдатель. Только в зону: хуки контроллера зовёт `callHook`, а он отдаёт
+    всё `Zone.current.handleUncaughtError`; `SoloObserver.onError` слышит
+    только ошибки `Job`. Абзац говорил о хуке наблюдателя и молчал о хуке
+    самого контроллера; теперь в конце: «The controller's own hook goes the
+    same way: had `_journal.note` thrown, its error would reach the zone too,
+    and the observer would not hear it, because its `onError` is for what a job
+    threw, not for what a hook threw». Зонд не понадобился: это уже держит тест
+    «a throwing hook of the controller leaves the observer alone», и в него
+    добавлена цитата новой фразы.
