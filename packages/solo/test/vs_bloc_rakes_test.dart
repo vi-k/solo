@@ -1695,18 +1695,20 @@ void main() {
         'Cancelled(rules: is not SignedIn)',
       ]);
       expect('${controller.currentState}', 'SignedOut(signed out elsewhere)');
-      _says('so that a `SoloCloseMode.drain` still hears the revocation '
-          'while its queue runs');
+      _says('a `SoloCloseMode.drain` still hears the revocation while its '
+          'queue runs');
     });
 
-    test('a revocation after the end is dropped by the guard', () {
-      late report.ReportController guarded;
+    test('after the end a revocation reaches nothing', () {
+      late report.ReportController stopped;
       late report.UnguardedReportController unguarded;
+      var cleared = false;
       Object? thrown;
       final errors = _zone((async) {
         final auth = report.Auth();
-        guarded = report.ReportController(report.Reports(), auth)..close();
+        stopped = report.ReportController(report.Reports(), auth)..close();
         async.flushMicrotasks();
+        cleared = auth.onRevoked == null;
         auth.revoke('after the end');
 
         final other = report.Auth();
@@ -1721,15 +1723,16 @@ void main() {
         }
       });
       expect(errors, isEmpty);
-      expect(guarded.isFinished, isTrue);
-      expect('${guarded.currentState}', 'SignedIn');
+      expect(cleared, isTrue);
+      expect(stopped.isFinished, isTrue);
+      expect('${stopped.currentState}', 'SignedIn');
       expect(thrown, isA<StateError>());
       // `onClose` comes after the last job, with `isFinished` still false.
       expect(unguarded.seen, ['report is over', 'onClose, isFinished false']);
-      _says('the write is guarded with `isFinished` and the listener is '
-          'stopped in `onClose`, which comes once every job is over');
-      _says('a revocation arriving after the end is dropped by the guard '
-          'instead of throwing');
+      _says('`ReportController` clears it in `onClose`, which comes once '
+          'every job is over, while `isFinished` is still false');
+      _says('after the end nothing reaches `externalSetState`');
+      _says('a revocation would throw from `externalSetState`');
     });
   });
 

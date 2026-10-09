@@ -75,11 +75,10 @@ final class SignedOut extends ReportState {
 
 final class ReportController extends Solo<ReportState> with SoloStream {
   final Reports _reports;
+  final Auth _auth;
 
-  ReportController(this._reports, Auth auth) : super(const SignedIn()) {
-    auth.onRevoked = (reason) {
-      if (!isFinished) externalSetState(SignedOut(reason));
-    };
+  ReportController(this._reports, this._auth) : super(const SignedIn()) {
+    _auth.onRevoked = (reason) => externalSetState(SignedOut(reason));
   }
 
   Job<void> build(Range range) => run<SignedIn, void>(
@@ -89,6 +88,9 @@ final class ReportController extends Solo<ReportState> with SoloStream {
           ctx.emit(Ready(report));
         },
       );
+
+  @override
+  void onClose() => _auth.onRevoked = null;
 }
 
 // What the test adds.
@@ -161,8 +163,9 @@ final class HandledReportController extends Solo<ReportState> {
       );
 }
 
-/// The controller of the page without its guard, with an `onClose` that
-/// says when it came and a job that says how far the build had got.
+/// The controller of the page with its listener left in place, with an
+/// `onClose` that says when it came and a job that says how far the build
+/// had got.
 final class UnguardedReportController extends Solo<ReportState> {
   UnguardedReportController(this._reports, Auth auth)
       : super(const SignedIn()) {

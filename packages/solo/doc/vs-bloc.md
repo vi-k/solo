@@ -1561,9 +1561,10 @@ build:
 ```dart
 class ReportBloc extends Bloc<ReportEvent, ReportState> {
   final Reports _reports;
+  final Auth _auth;
 
-  ReportBloc(this._reports, Auth auth) : super(SignedIn()) {
-    auth.onRevoked = (reason) => add(SessionRevoked(reason));
+  ReportBloc(this._reports, this._auth) : super(SignedIn()) {
+    _auth.onRevoked = (reason) => add(SessionRevoked(reason));
     on<SessionRevoked>((e, emit) => emit(SignedOut(e.reason)));
     on<BuildReport>((e, emit) async {
       if (state is! SignedIn) return;
@@ -1571,6 +1572,12 @@ class ReportBloc extends Bloc<ReportEvent, ReportState> {
       if (state is! SignedIn) return;
       emit(Ready(report));
     }, transformer: sequential());
+  }
+
+  @override
+  Future<void> close() {
+    _auth.onRevoked = null;
+    return super.close();
   }
 }
 ```
@@ -1592,11 +1599,10 @@ subclass:
 ```dart
 final class ReportController extends Solo<ReportState> with SoloStream {
   final Reports _reports;
+  final Auth _auth;
 
-  ReportController(this._reports, Auth auth) : super(const SignedIn()) {
-    auth.onRevoked = (reason) {
-      if (!isFinished) externalSetState(SignedOut(reason));
-    };
+  ReportController(this._reports, this._auth) : super(const SignedIn()) {
+    _auth.onRevoked = (reason) => externalSetState(SignedOut(reason));
   }
 
   Job<void> build(Range range) => run<SignedIn, void>(
@@ -1606,6 +1612,9 @@ final class ReportController extends Solo<ReportState> with SoloStream {
           ctx.emit(Ready(report));
         },
       );
+
+  @override
+  void onClose() => _auth.onRevoked = null;
 }
 ```
 
@@ -1620,14 +1629,14 @@ gone, and no job waiting in line can change that. A request to do something —
 refresh this, fetch that, try again — is ordinary work and belongs in the
 queue.
 
-Stop the auth listener deliberately in both implementations, but not in the
-same order. The bloc is closed after the listener. The controller is the other
-way round: the write is guarded with `isFinished` and the listener is stopped
-in `onClose`, which comes once every job is over, so that a
-`SoloCloseMode.drain` still hears the revocation while its queue runs, and a
-revocation arriving after the end is dropped by the guard instead of throwing.
-How the listener is stopped is up to the application; the snippets show
-registration only.
+Both implementations stop the auth listener, at different moments. `ReportBloc`
+clears it in `close()`, before the bloc closes: a revocation added to a closed
+bloc would throw. `ReportController` clears it in `onClose`, which comes once
+every job is over, while `isFinished` is still false: a `SoloCloseMode.drain`
+still hears the revocation while its queue runs, and after the end nothing
+reaches `externalSetState`. Left in place, the listener would keep the closed
+controller reachable from `auth`, and a revocation would throw from
+`externalSetState`.
 
 On the success path, the job may finish by emitting `Ready`, even though that
 state is outside `SignedIn`. Its own `emit` is excluded from the rule check; a

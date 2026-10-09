@@ -1573,9 +1573,10 @@ class FunnelReportBloc extends Bloc<ReportEvent, ReportState> {
 ```dart
 class ReportBloc extends Bloc<ReportEvent, ReportState> {
   final Reports _reports;
+  final Auth _auth;
 
-  ReportBloc(this._reports, Auth auth) : super(SignedIn()) {
-    auth.onRevoked = (reason) => add(SessionRevoked(reason));
+  ReportBloc(this._reports, this._auth) : super(SignedIn()) {
+    _auth.onRevoked = (reason) => add(SessionRevoked(reason));
     on<SessionRevoked>((e, emit) => emit(SignedOut(e.reason)));
     on<BuildReport>((e, emit) async {
       if (state is! SignedIn) return;
@@ -1583,6 +1584,12 @@ class ReportBloc extends Bloc<ReportEvent, ReportState> {
       if (state is! SignedIn) return;
       emit(Ready(report));
     }, transformer: sequential());
+  }
+
+  @override
+  Future<void> close() {
+    _auth.onRevoked = null;
+    return super.close();
   }
 }
 ```
@@ -1603,11 +1610,10 @@ class ReportBloc extends Bloc<ReportEvent, ReportState> {
 ```dart
 final class ReportController extends Solo<ReportState> with SoloStream {
   final Reports _reports;
+  final Auth _auth;
 
-  ReportController(this._reports, Auth auth) : super(const SignedIn()) {
-    auth.onRevoked = (reason) {
-      if (!isFinished) externalSetState(SignedOut(reason));
-    };
+  ReportController(this._reports, this._auth) : super(const SignedIn()) {
+    _auth.onRevoked = (reason) => externalSetState(SignedOut(reason));
   }
 
   Job<void> build(Range range) => run<SignedIn, void>(
@@ -1617,6 +1623,9 @@ final class ReportController extends Solo<ReportState> with SoloStream {
           ctx.emit(Ready(report));
         },
       );
+
+  @override
+  void onClose() => _auth.onRevoked = null;
 }
 ```
 
@@ -1631,13 +1640,14 @@ final class ReportController extends Solo<ReportState> with SoloStream {
 то обновить, дозагрузить или повторить, остаётся обычной работой, и ей место
 в очереди.
 
-Слушатель авторизации останавливают осознанно в обеих версиях, но не в одном
-порядке. Bloc закрывают после слушателя. С контроллером наоборот: запись
-защищают признаком `isFinished`, а слушатель останавливают в `onClose`, который
-приходит, когда все задачи закончились, чтобы `SoloCloseMode.drain` услышал
-отзыв, пока крутится его очередь, а отзыв, пришедший после конца, был отброшен
-защитой, а не бросил ошибку. Как именно останавливать, решает приложение;
-фрагменты показывают только регистрацию.
+Обе версии останавливают слушатель авторизации, но в разные моменты.
+`ReportBloc` снимает его в `close()`, до закрытия bloc: отзыв, добавленный
+в закрытый bloc, бросил бы ошибку. `ReportController` снимает его в `onClose`,
+который приходит, когда все `Job` закончились, а `isFinished` ещё ложен:
+`SoloCloseMode.drain` слышит отзыв, пока крутится его очередь, а после конца
+до `externalSetState` ничего не доходит. Оставленный на месте, слушатель
+держал бы закрытый контроллер достижимым из `auth`, и отзыв бросил бы ошибку
+из `externalSetState`.
 
 При успехе `Job` может закончиться публикацией `Ready`, хотя это состояние
 за пределами `SignedIn`. Собственный `emit` исключён из проверки правил;

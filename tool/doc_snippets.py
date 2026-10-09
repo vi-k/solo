@@ -2040,6 +2040,9 @@ Future<void> main() async {
   }
   await sub.cancel();
   await bloc.close();
+  if (auth.onRevoked != null) {
+    throw StateError('close must stop the auth listener');
+  }
 
   final funnelAuth = Auth();
   final funnel = FunnelReportBloc(Reports(), funnelAuth);
@@ -2057,6 +2060,14 @@ Future<void> main() async {
   }
   await sub2.cancel();
   await funnel.close();
+  // The funnel leaves its listener in place: what the paragraph under the
+  // answer says a revocation added to a closed bloc does.
+  try {
+    funnelAuth.revoke('after the end');
+    throw AssertionError('an event added to a closed bloc must throw');
+  } on StateError catch (error) {
+    print('after close: $error');
+  }
 }
 ''')
 
@@ -2115,6 +2126,9 @@ Future<void> main() async {
   }
   await sub.cancel();
   await controller.close();
+  if (auth.onRevoked != null) {
+    throw StateError('onClose must stop the auth listener');
+  }
 }
 ''')
 

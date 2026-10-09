@@ -863,3 +863,20 @@ future — обычное слово без бэктиков; «дренаж» �
     тесты «withdraw takes the queued payment and leaves the charge» и «a
     whole-body section lets a cancel land after the charge»,
     `SectionedCheckoutController` в `test/support/vs_bloc_8_checkout.dart`.
+
+15. «Reacting to an independent external state change», абзац о слушателе.
+    Страница говорила, что останавливать слушатель авторизации надо, но «How
+    the listener is stopped is up to the application; the snippets show
+    registration only». Владелец попросил остановить: зарегистрированный
+    слушатель держит контроллер достижимым из `auth`. Теперь `ReportBloc`
+    снимает `_auth.onRevoked` в переопределённом `close()` до `super.close()`,
+    а `ReportController` в `onClose`. Защита `if (!isFinished)` в слушателе
+    контроллера ушла: `onClose` приходит, пока `isFinished` ещё ложен, и после
+    него слушателя уже нет, так что защищать нечего. Абзац переписан: «Both
+    implementations stop the auth listener, at different moments». Сторожа —
+    тест «after the end a revocation reaches nothing» (слушатель снят, отзыв
+    после закрытия ничего не делает; контроллер со слушателем на месте бросает
+    `StateError`) и проверки стенда: после `close()` обоих ответов
+    `auth.onRevoked` пуст, а отзыв в закрытый `FunnelReportBloc`, который
+    слушатель не снимает, бросает
+    `Bad state: Cannot add new events after calling close`.
