@@ -913,11 +913,12 @@ for a replaced request.
 
 ## Typed methods with queued execution
 
-A map exposes `moveTo` and `setZoom`. The caller should reach them as methods
-on the controller, with their own arguments and without a class per command,
-and rapid drag updates should not leave the map at an older position. In the
-scenario below a drag sends position 1, then, while the map is still moving
-there, positions 2 and 3, and the user zooms to 4.
+A map exposes `moveTo` and `setZoom`. Callers should invoke them as methods of
+the controller itself, as in `controller.moveTo(point)`, with their own
+arguments and without a class per command, and rapid drag updates should not
+leave the map at an older position. In the scenario below a drag sends position
+1, then, while the map is still moving there, positions 2 and 3, and the user
+zooms to 4.
 
 ### The first attempt
 

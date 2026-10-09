@@ -811,3 +811,12 @@ future — обычное слово без бэктиков; «дренаж» �
     threw, not for what a hook threw». Зонд не понадобился: это уже держит тест
     «a throwing hook of the controller leaves the observer alone», и в него
     добавлена цитата новой фразы.
+
+11. «Typed methods with queued execution», требование. Владелец спросил, что
+    значит «дотягиваться» до `moveTo` и `setZoom`: иметь возможность дождаться?
+    Нет, речь о форме вызова: метод контроллера вместо события со своим
+    классом, и дальше раздел сравнивает именно это. Слово «reach» и перевод
+    «дотягиваться» этого не говорили; теперь «Callers should invoke them as
+    methods of the controller itself, as in `controller.moveTo(point)`»,
+    в переводе «Снаружи их должны вызывать как методы самого контроллера, вроде
+    `controller.moveTo(point)`».
