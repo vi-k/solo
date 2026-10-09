@@ -1332,8 +1332,8 @@ void main() {
     test('the table: debounce', () {
       _says('| The first group is ready | after `duration` with no new event '
           '| at once | after `duration` |');
-      _says('| An addition | restarts the timer | does not extend it | does '
-          'not extend it |');
+      _says('| An addition | restarts the timer | does not extend the timer '
+          '| does not extend the timer |');
       expect(twoAndOne(_debounce(200)), [
         'a[1, 2] at 300 ms',
         'a[3] at 1350 ms',

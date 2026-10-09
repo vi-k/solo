@@ -674,7 +674,7 @@ whatever its `merge` returns. For example,
 | | `debounce(duration)` | `throttle(duration)` | `throttle(duration, startAtOnce: false)` |
 | --- | --- | --- | --- |
 | The first group is ready | after `duration` with no new event | at once | after `duration` |
-| An addition | restarts the timer | does not extend it | does not extend it |
+| An addition | restarts the timer | does not extend the timer | does not extend the timer |
 | The wait is measured from | the last accepted event | the previous actual start | the previous start, or the moment the group appeared |
 
 `AccumulationTiming.debounce(duration)` waits for a pause after the last
