@@ -175,8 +175,10 @@ class ConcurrentNotesBloc extends Bloc<NotesEvent, NotesState> {
 
 The state is `NotesState([n0], uploading: false)` again, from an order
 identical to the one above, line for line. The two attempts fail for different
-reasons — two queues there, no queue here — but the result does not tell them
-apart.
+reasons. The first has two queues, one per registration, and neither waits for
+the other. The second has one registration but no queue at all: the default
+transformer starts every event at once, without waiting for the one before. The
+result does not tell them apart.
 
 ### Bloc
 

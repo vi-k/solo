@@ -756,3 +756,11 @@ future — обычное слово без бэктиков; «дренаж» �
    went out.» Так устроен и стенд: ответ списка возвращается 60 мс, отправка
    заметки занимает 40 мс; трассу сверяет `check_traces.py`.
 
+5. Вторая попытка того же раздела, «там две очереди, здесь ни одной».
+   Владелец спросил, почему ни одной. Почему, фраза не говорила: что
+   трансформер по умолчанию запускает события конкурентно, сказано абзацем
+   выше, и связать одно с другим оставалось читателю. Теперь: «The first has
+   two queues, one per registration, and neither waits for the other. The
+   second has one registration but no queue at all: the default transformer
+   starts every event at once, without waiting for the one before.»
+
