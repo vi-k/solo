@@ -789,8 +789,8 @@ class SerialPlayerBloc extends Bloc<PlayerCommand, PlayerState> {
 }
 ```
 
-Теперь команды доходят до устройства в том порядке, в каком их нажимали,
-а состояние снова заканчивается на `PlayerState(3ms)`, и в этот раз с ним
+Теперь команды доходят до устройства в том порядке, в каком их нажимали.
+Состояние снова заканчивается на `PlayerState(3ms)`, и в этот раз с ним
 согласно устройство: оно действительно стоит на паузе на третьей позиции.
 Трасса: `[play start, play end, seek 1 start, seek 1 end, seek 2 start,
 seek 2 end, seek 3 start, seek 3 end, pause start, pause end]`.
