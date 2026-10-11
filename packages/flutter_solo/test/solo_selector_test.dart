@@ -256,6 +256,145 @@ void main() {
     },
   );
 
+  testWidgets(
+    'closures written in place keep the value the answer is given from',
+    (tester) async {
+      final controller = _Controller();
+      addTearDown(controller.close);
+
+      final built = <int>[];
+      // New closures on every call, the way a `build` writes them.
+      Widget tree() => _wrap(
+            SoloSelector<_Screen, int>(
+              solo: controller,
+              selector: (state) => state.progress,
+              changed: (previous, current) => (current - previous).abs() >= 2,
+              builder: (context, progress, _) {
+                built.add(progress);
+
+                return Text('$progress');
+              },
+            ),
+          );
+
+      await tester.pumpWidget(tree());
+      controller.set(const _Screen(progress: 1));
+      await tester.pump();
+      expect(built, [0]);
+
+      await tester.pumpWidget(tree());
+      expect(
+        built,
+        [0, 0],
+        reason: 'the parent rebuilt, and 1 is still no change from 0',
+      );
+
+      controller.set(const _Screen(progress: 2));
+      await tester.pump();
+      expect(built, [0, 0, 2], reason: 'two away from the 0 on the screen');
+    },
+  );
+
+  testWidgets('closures written in place move no subscription', (
+    tester,
+  ) async {
+    final controller = _CountingController();
+    addTearDown(controller.close);
+
+    Widget tree() => _wrap(
+          SoloSelector<int, bool>(
+            solo: controller,
+            selector: (state) => state > 0,
+            changed: (previous, current) => previous != current,
+            builder: (context, positive, _) => Text('$positive'),
+          ),
+        );
+
+    await tester.pumpWidget(tree());
+    await tester.pumpWidget(tree());
+    await tester.pumpWidget(tree());
+    await tester.pumpWidget(tree());
+    expect((controller.adds, controller.removes), (1, 0));
+
+    controller.set(1);
+    await tester.pump();
+    expect(find.text('true'), findsOneWidget);
+  });
+
+  testWidgets('held functions are not called for a parent rebuild', (
+    tester,
+  ) async {
+    final controller = _Controller(const _Screen(name: 'Ada'));
+    addTearDown(controller.close);
+    var picks = 0;
+    var asked = 0;
+    String pickName(_Screen state) {
+      picks++;
+
+      return state.name;
+    }
+
+    bool differs(String previous, String current) {
+      asked++;
+
+      return previous != current;
+    }
+
+    Widget tree() => _wrap(
+          SoloSelector<_Screen, String>(
+            solo: controller,
+            selector: pickName,
+            changed: differs,
+            builder: (context, name, _) => Text(name),
+          ),
+        );
+
+    await tester.pumpWidget(tree());
+    expect((picks, asked), (1, 0), reason: 'the mount picks and asks nothing');
+
+    await tester.pumpWidget(tree());
+    await tester.pumpWidget(tree());
+    expect((picks, asked), (1, 0), reason: 'nothing new to pick with');
+
+    controller.set(const _Screen(name: 'Grace'));
+    await tester.pump();
+    expect((picks, asked), (2, 1));
+    expect(find.text('Grace'), findsOneWidget);
+  });
+
+  testWidgets('a new controller starts the value over', (tester) async {
+    final first = _Controller();
+    final second = _Controller(const _Screen(progress: 1));
+    addTearDown(first.close);
+    addTearDown(second.close);
+    int pickProgress(_Screen state) => state.progress;
+    bool movedByTwo(int previous, int current) =>
+        (current - previous).abs() >= 2;
+
+    final built = <int>[];
+    Widget tree(Solo<_Screen> controller) => _wrap(
+          SoloSelector<_Screen, int>(
+            solo: controller,
+            selector: pickProgress,
+            changed: movedByTwo,
+            builder: (context, progress, _) {
+              built.add(progress);
+
+              return Text('$progress');
+            },
+          ),
+        );
+
+    await tester.pumpWidget(tree(first));
+    await tester.pumpWidget(tree(second));
+    expect(
+      built,
+      [0, 1],
+      reason: 'the 1 is the first value of another controller, and changed '
+          'is not asked about it',
+    );
+  });
+
   testWidgets('a selector handed over in its place picks instead', (
     tester,
   ) async {
@@ -363,7 +502,7 @@ void main() {
     addTearDown(controller.close);
     var picks = 0;
 
-    // A new closure on every call, so the rebuild makes a new selection.
+    // A new closure on every call, so the rebuild has to pick with it.
     Widget tree() => _wrap(
           SoloSelector<_Screen, String>(
             solo: controller,
@@ -459,14 +598,75 @@ void main() {
     },
   );
 
+  testWidgets('a selector that throws on mounting leaves no listener behind', (
+    tester,
+  ) async {
+    final controller = _CountingController();
+    addTearDown(controller.close);
+
+    await tester.pumpWidget(
+      _wrap(
+        SoloSelector<int, String>(
+          solo: controller,
+          selector: (state) => throw StateError('no pick'),
+          builder: (context, label, _) => Text(label),
+        ),
+      ),
+    );
+
+    expect(tester.takeException(), isStateError);
+    expect(
+      controller.live,
+      0,
+      reason: 'the widget never came to be, and nothing will dispose of it',
+    );
+  });
+
   testWidgets(
-    'three selections in a row leave one registration, not three',
+    'a selector or a changed that throws for a parent rebuild leaves none '
+    'either',
+    (tester) async {
+      Future<int> liveAfter({required bool selectorThrows}) async {
+        final controller = _CountingController();
+        Widget tree({required bool throws}) => _wrap(
+              SoloSelector<int, String>(
+                solo: controller,
+                selector: (state) => throws && selectorThrows
+                    ? throw StateError('no pick')
+                    : '$state',
+                changed: (previous, current) => throws && !selectorThrows
+                    ? throw StateError('no answer')
+                    : previous != current,
+                builder: (context, label, _) => Text(label),
+              ),
+            );
+
+        await tester.pumpWidget(tree(throws: false));
+        expect(controller.live, 1);
+        await tester.pumpWidget(tree(throws: true));
+        expect(tester.takeException(), isStateError);
+        final live = controller.live;
+        await tester.pumpWidget(_wrap(const SizedBox()));
+        await controller.close();
+
+        return live;
+      }
+
+      // The framework drops a widget whose update threw without disposing
+      // of its `State`, so a listener left there would stay for good.
+      expect(await liveAfter(selectorThrows: true), 0);
+      expect(await liveAfter(selectorThrows: false), 0);
+    },
+  );
+
+  testWidgets(
+    'three selectors in a row leave the one registration where it was',
     (tester) async {
       final controller = _CountingController();
       addTearDown(controller.close);
 
-      // A new closure on every call, so every parent rebuild asks for a new
-      // selection and the widget has to move its listener across.
+      // A new closure on every call, so every parent rebuild picks with a
+      // new selector; the listener is not moved for it.
       Widget tree(int seed) => _wrap(
             SoloSelector<int, String>(
               solo: controller,
@@ -481,11 +681,8 @@ void main() {
       await tester.pumpWidget(tree(2));
       await tester.pumpWidget(tree(3));
       await tester.pumpWidget(tree(4));
-      expect(
-        controller.live,
-        1,
-        reason: 'adds=${controller.adds} removes=${controller.removes}',
-      );
+      expect((controller.adds, controller.removes), (1, 0));
+      expect(find.text('0/4'), findsOneWidget);
 
       controller.set(7);
       await tester.pump();

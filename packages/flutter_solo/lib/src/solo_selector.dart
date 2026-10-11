@@ -6,7 +6,8 @@ import 'solo_builder.dart';
 import 'solo_selection.dart';
 
 /// Rebuilds its subtree when one value picked out of a [Solo]'s state
-/// changes: a [SoloSelection] for a widget that has nowhere to keep one.
+/// changes: what a [SoloSelection] does, for a widget that has nowhere to
+/// keep one.
 ///
 /// ```dart
 /// SoloSelector<Profile, bool>(
@@ -29,11 +30,16 @@ import 'solo_selection.dart';
 /// build, and the announced value it holds notifications back with goes
 /// with it.
 /// That is what a `State` field was for, and it is what this widget
-/// carries instead — so the picking widget can be a `StatelessWidget`,
+/// carries instead: its subscription to [solo] and the value it last
+/// handed to [builder]. So the picking widget can be a `StatelessWidget`,
 /// and a screen that picks three values out of one controller needs no
 /// `State` at all. Nothing has to be disposed of: the widget going away
-/// takes the last listener of the selection with it, and the selection
-/// then lets go of [solo].
+/// takes its listener off [solo].
+///
+/// Of what it is given the widget compares [solo] alone. [selector] and
+/// [changed] are called as the widget has them at the moment, so a closure
+/// written in place is as good as a function held in a field: a parent
+/// rebuild moves no subscription and does not start the value over.
 final class SoloSelector<S extends Object, T> extends StatefulWidget {
   /// The controller to pick out of.
   ///
@@ -44,18 +50,21 @@ final class SoloSelector<S extends Object, T> extends StatefulWidget {
 
   /// Picks the value this widget rebuilds for.
   ///
-  /// Compared by identity when the parent rebuilds, and it has to be: a
-  /// new function may pick something else, and there is no way to ask one
-  /// closure whether it does what another did. The inline
-  /// `(state) => state.canSave` above is therefore a different object on
-  /// every build of the parent, so each of those rebuilds drops the
-  /// selection and makes another: one `removeListener`, one `addListener`
-  /// and one pick. That is small, and it is not nothing — hold the
-  /// function in a field or a `static` where the parent rebuilds often.
+  /// Called once on mounting and once for every change of the state. The
+  /// inline `(state) => state.canSave` above is a different object on
+  /// every build of the parent, and a new function may pick something
+  /// else: there is no way to ask one closure whether it does what another
+  /// did. So a parent rebuild that hands over another [selector] or
+  /// another [changed] picks once more and puts the pick to [changed].
+  /// One that hands over the same two calls neither.
   final T Function(S state) selector;
 
-  /// Answers whether the pick changed, `!=` when it is omitted. Compared
-  /// by identity, the same as [selector].
+  /// Answers whether the pick changed, `!=` when it is omitted.
+  ///
+  /// `previous` is the value [builder] was last given, and it stays that
+  /// across a parent rebuild, whether this function is held in a field or
+  /// written in place. Only another [solo] starts it over: the first pick
+  /// from a new controller goes to [builder] unasked.
   final bool Function(T previous, T current)? changed;
 
   /// Builds the subtree from the picked value.
@@ -87,51 +96,100 @@ final class SoloSelector<S extends Object, T> extends StatefulWidget {
 
 final class _SoloSelectorState<S extends Object, T>
     extends State<SoloSelector<S, T>> {
-  late SoloSelection<S, T> _selection = _select();
+  /// The value last handed to the builder, and what `changed` is asked
+  /// against.
   late T _value;
 
-  SoloSelection<S, T> _select() => SoloSelection.from<S, T>(
-        widget.solo,
-        widget.selector,
-        changed: widget.changed,
-      );
+  /// Set while the controller is being subscribed to.
+  var _subscribing = false;
+
+  T _pick() => widget.selector(widget.solo.currentState);
+
+  bool _changed(T previous, T current) {
+    final changed = widget.changed;
+
+    return changed == null ? previous != current : changed(previous, current);
+  }
+
+  /// Subscribes to the controller of the widget and takes its first pick.
+  ///
+  /// The pick comes after the subscription, so a controller that publishes
+  /// while it is being subscribed to is read once, with what it published;
+  /// the notification itself is let pass, there being no value yet to
+  /// compare it with.
+  void _follow() {
+    try {
+      _subscribing = true;
+      try {
+        widget.solo.addListener(_stateChanged);
+      } finally {
+        _subscribing = false;
+      }
+      _value = _pick();
+    } on Object catch (_) {
+      _unfollow();
+      rethrow;
+    }
+  }
+
+  /// Takes the listener off the controller of the widget.
+  ///
+  /// Besides `dispose`, the way out of `initState` and `didUpdateWidget`
+  /// when a function of the widget throws there: the framework drops a
+  /// `State` that failed in either without disposing of it, and a listener
+  /// left on the controller would stay for as long as the controller does.
+  void _unfollow() => widget.solo.removeListener(_stateChanged);
 
   @override
   void initState() {
     super.initState();
-    _selection.addListener(_valueChanged);
-    _value = _selection.value;
+    _follow();
   }
 
   @override
   void didUpdateWidget(covariant SoloSelector<S, T> oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // The selector and the answer about a change are as much a part of
-    // what this widget watches as the controller is: a parent handing over
-    // a new one is asking for something else to be picked, or for a
-    // different answer to "did it change?". The widget manages the
-    // subscription itself, moving its listener from the old selection to
-    // the new one.
-    if (!identical(widget.solo, oldWidget.solo) ||
-        !identical(widget.selector, oldWidget.selector) ||
+    if (!identical(widget.solo, oldWidget.solo)) {
+      oldWidget.solo.removeListener(_stateChanged);
+      _follow();
+
+      return;
+    }
+    // A new function may pick something else, or answer "did it change?"
+    // differently, and a closure written in `build` is a new one every
+    // time. Either is a reason to pick and ask again, and neither is a
+    // reason to touch the subscription or the value the answer is given
+    // from. The build that follows shows what came of it.
+    if (!identical(widget.selector, oldWidget.selector) ||
         !identical(widget.changed, oldWidget.changed)) {
-      _selection.removeListener(_valueChanged);
-      _selection = _select();
-      _selection.addListener(_valueChanged);
-      _value = _selection.value;
+      try {
+        final next = _pick();
+        if (_changed(_value, next)) {
+          _value = next;
+        }
+      } on Object catch (_) {
+        _unfollow();
+        rethrow;
+      }
     }
   }
 
   @override
   void dispose() {
-    _selection.removeListener(_valueChanged);
+    _unfollow();
     super.dispose();
   }
 
-  void _valueChanged() {
-    setState(() {
-      _value = _selection.value;
-    });
+  void _stateChanged() {
+    if (_subscribing) {
+      return;
+    }
+    final next = _pick();
+    if (_changed(_value, next)) {
+      setState(() {
+        _value = next;
+      });
+    }
   }
 
   @override

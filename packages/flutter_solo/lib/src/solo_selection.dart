@@ -45,8 +45,8 @@ import 'solo_selector.dart';
 /// `State` whose widget can be handed another source builds the selection
 /// again in `didUpdateWidget`, or it goes on picking from the old one.
 /// [SoloSelector] is the same pick over a controller, with nowhere to hold
-/// it — the widget keeps the selection itself and follows a new controller
-/// on its own.
+/// it — the widget keeps the subscription and the picked value itself and
+/// follows a new controller on its own.
 /// Nothing has to be disposed of — the last listener to go takes the
 /// subscription with it — and a selection outlives its source harmlessly:
 /// a closed [SoloListenable] no longer changes state, while [value] keeps

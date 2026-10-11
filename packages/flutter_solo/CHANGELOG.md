@@ -152,12 +152,13 @@ last entries of the first group name them.
   listeners behind it still hear the change. See
   [Selecting one value](README.md#selecting-one-value).
 
-- `SoloSelector`, the widget that holds a selection for you: a controller, a
-  `selector` and a `builder`, and no `State` field to keep the selection in — a
-  widget that picks can be a `StatelessWidget`. It takes any `Solo`,
-  `SoloListenable` or not, holds its selection across a parent rebuild, and
-  picks once per occasion: once on mounting, once when the parent hands over a
-  new selector, once per change of the state.
+- `SoloSelector`, the widget that picks for you: a controller, a `selector` and
+  a `builder`, and no `State` field to keep a selection in — a widget that
+  picks can be a `StatelessWidget`. It takes any `Solo`, `SoloListenable` or
+  not, and keeps its subscription and the value `changed` compares against
+  across a parent rebuild, whether its functions are held or written in place.
+  It picks once per occasion: once on mounting, once when the parent hands over
+  a new `selector` or `changed`, once per change of the state.
 
 - `select` and `listen` as methods, with `SoloSubscription` and
   `SoloSubscriptions`, in an import of their own,

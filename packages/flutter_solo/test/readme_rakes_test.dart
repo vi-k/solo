@@ -577,7 +577,7 @@ void main() {
       _says('`solo` is any controller, a `ValueListenable` or not.');
     });
 
-    testWidgets('an inline selector makes a new selection on every build',
+    testWidgets('closures written in place cost a pick and no subscription',
         (tester) async {
       Future<Plain> rebuilt({required bool inline}) async {
         final plain = Plain();
@@ -589,6 +589,8 @@ void main() {
               (context) => SoloSelector<Profile, bool>(
                 solo: plain,
                 selector: inline ? (state) => state.canSave : _counted,
+                changed:
+                    inline ? (previous, current) => previous != current : null,
                 builder: (context, canSave, _) => const SizedBox(),
               ),
             ),
@@ -604,12 +606,12 @@ void main() {
       }
 
       final inline = await rebuilt(inline: true);
-      expect((inline.added, inline.removed), (4, 3));
+      expect((inline.added, inline.removed), (1, 0));
       final held = await rebuilt(inline: false);
       expect((held.added, held.removed), (1, 0));
       expect(_picks, 0);
 
-      // One pick for each new selection.
+      // One pick for each build of the parent that brings a new closure.
       final plain = Plain();
       final parent = GlobalKey<ParentState>();
       var picks = 0;
@@ -637,12 +639,15 @@ void main() {
       await inline.close();
       await held.close();
       await plain.close();
-      _says('an inline closure is a new one on every such build and makes a '
-          'new selection each time: one `removeListener`, one `addListener` '
-          'and one pick');
+      _says('The selector and `changed:` can be closures written in place, '
+          'as the selector is above.');
+      _says('Such a closure is a new one on every build of the parent, and it '
+          'may pick something else, so the widget picks once more and puts '
+          'the pick to `changed:`.');
+      _says('It moves no subscription for that');
     });
 
-    testWidgets('a new selection forgets what changed was comparing with',
+    testWidgets('a parent rebuild leaves what changed compares with alone',
         (tester) async {
       Future<List<String?>> shown({required bool inline}) async {
         final plain = Plain();
@@ -669,15 +674,20 @@ void main() {
         parent.currentState!.again();
         await tester.pump();
         final after = _texts(tester).single;
+        // Three are far from the none on the screen, and not from the two
+        // a value started over would have shown.
+        plain.set(Loaded('Abc'));
+        await tester.pump();
+        final later = _texts(tester).single;
         await tester.pumpWidget(const SizedBox());
         await plain.close();
-        return [before, after];
+        return [before, after, later];
       }
 
-      expect(await shown(inline: false), ['0', '0']);
-      expect(await shown(inline: true), ['0', '2']);
-      _says('with a `changed:` of your own the value it compares against '
-          'starts over');
+      expect(await shown(inline: false), ['0', '0', '3']);
+      expect(await shown(inline: true), ['0', '0', '3']);
+      _says('the value `changed:` compares against stays the one the builder '
+          'was last given');
     });
 
     testWidgets('the selection in a field follows a new controller',
@@ -698,7 +708,9 @@ void main() {
 
       await loaded.close();
       await empty.close();
-      _says('What the widget holds for you is a `SoloSelection`');
+      _says('Where a listenable of the picked value is what you need, the '
+          'same pick is made by an object, a `SoloSelection`, and a `State` '
+          'holds it in a field:');
     });
 
     testWidgets('without didUpdateWidget it stays with the old one',

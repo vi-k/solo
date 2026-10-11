@@ -218,16 +218,15 @@ SoloSelector<Profile, bool>(
 Picks count as changed when they are `!=`, unless `changed:` answers that
 question itself. The selector runs once for every change of the state, so keep
 it a cheap pick that gives the same answer for the same state. `solo` is any
-controller, a `ValueListenable` or not. The selector is compared by identity
-when the parent rebuilds, so an inline closure is a new one on every such build
-and makes a new selection each time: one `removeListener`, one `addListener`
-and one pick, and with a `changed:` of your own the value it compares against
-starts over. Hold the function in a field or a `static` where the parent
-rebuilds often.
+controller, a `ValueListenable` or not. The selector and `changed:` can be
+closures written in place, as the selector is above. Such a closure is a new
+one on every build of the parent, and it may pick something else, so the widget
+picks once more and puts the pick to `changed:`. It moves no subscription for
+that, and the value `changed:` compares against stays the one the builder was
+last given.
 
-What the widget holds for you is a `SoloSelection` — a `ValueListenable` of the
-picked value — and it is an object like any other where a listenable is what
-you need:
+Where a listenable of the picked value is what you need, the same pick is made
+by an object, a `SoloSelection`, and a `State` holds it in a field:
 
 ```dart
 class _SaveButtonState extends State<SaveButton> {
