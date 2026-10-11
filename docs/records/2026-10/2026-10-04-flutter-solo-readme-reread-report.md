@@ -1012,3 +1012,30 @@ B4 и B8 красят сборку, а не драйвер: блок без об
    the controller publishes on listen`. Ещё две гонялись по набору виджета: без
    снятия слушателя после броска на монтировании и без снятия после броска
    на перестроении родителя. В каждой красным стал один тест, свой.
+
+6. Раздел «Selecting one value», абзац под блоком `_SaveButtonState`. «A field
+   is built from the first widget only, though, and a parent can hand the
+   `State` another controller», в переводе «Только поле создаётся по первому
+   виджету, а родитель может передать `State` другой контроллер». Владелец:
+   не могу понять фразу. Она стояла на том, чего не говорила: что `State` живёт
+   дольше своего виджета, а «первый виджет» в примере не назван ничем. Теперь:
+   «The initializer of the field runs once, though, and reads
+   `widget.controller` as it is at that moment. The `State` outlives the
+   widget: a parent that rebuilds can hand it a new `SaveButton` with another
+   controller, and without `didUpdateWidget` the button would go on taking its
+   permission from the old controller while its tap went to the new one»,
+   в переводе «Но инициализатор поля выполняется один раз и читает
+   `widget.controller`, каким тот был в этот момент. `State` при этом живёт
+   дольше виджета: перестраиваясь, родитель может передать ему новый
+   `SaveButton` с другим контроллером, и без `didUpdateWidget` кнопка и дальше
+   брала бы разрешение у старого контроллера, а её нажатие уходило бы в новый».
+   Следующая фраза, «Both come with the field that `SoloSelector` spares you»,
+   не говорила, что именно «оба»; теперь «The field and its `didUpdateWidget`
+   are what `SoloSelector` spares you», в переводе «От поля и от его
+   `didUpdateWidget` избавляет `SoloSelector`». Фразы об инициализаторе
+   и о `State` держит тест сторожа
+   `without didUpdateWidget it stays with the old one`: он и раньше показывал
+   это поведением на `StuckSaveButton`, теперь цитирует и слова. Фразу о том,
+   от чего избавляет `SoloSelector`, сторож не цитирует, как не цитировал
+   и прежнюю. Та же фраза о первом виджете стояла в dartdoc `SoloSelection`
+   и переписана там так же. Сканер перевода: 90 до и 90 после.

@@ -41,9 +41,10 @@ import 'solo_selector.dart';
 /// Hold the selection, do not build one in `build`: a new object on every
 /// build makes the builder under it unsubscribe from the old one and
 /// subscribe to the new, and the kept value it exists for is thrown away
-/// with it. A field is built from the first widget only, though: a
-/// `State` whose widget can be handed another source builds the selection
-/// again in `didUpdateWidget`, or it goes on picking from the old one.
+/// with it. The initializer of a field runs once, though, and a `State`
+/// outlives its widget: one that can be handed a widget with another
+/// source builds the selection again in `didUpdateWidget`, or it goes on
+/// picking from the old one.
 /// [SoloSelector] is the same pick over a controller, with nowhere to hold
 /// it — the widget keeps the subscription and the picked value itself and
 /// follows a new controller on its own.

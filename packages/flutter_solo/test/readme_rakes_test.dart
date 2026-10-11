@@ -737,9 +737,12 @@ void main() {
 
       await loaded.close();
       await empty.close();
-      _says('without `didUpdateWidget` the button would go on taking its '
-          'permission from the old controller while its tap went to the new '
-          'one');
+      _says('The initializer of the field runs once, though, and reads '
+          '`widget.controller` as it is at that moment.');
+      _says('The `State` outlives the widget: a parent that rebuilds can '
+          'hand it a new `SaveButton` with another controller, and without '
+          '`didUpdateWidget` the button would go on taking its permission '
+          'from the old controller while its tap went to the new one.');
     });
 
     testWidgets('a selection built inside build is a new one every build',

@@ -257,12 +257,14 @@ class _SaveButtonState extends State<SaveButton> {
 Hold the selection in a field, the way `canSave` is held above. One built
 inside `build` is a new object on every build: the builder under it
 unsubscribes from the old one and subscribes to the new, and the value a
-selection holds notifications back with starts over each time. A field is built
-from the first widget only, though, and a parent can hand the `State` another
-controller: without `didUpdateWidget` the button would go on taking its
-permission from the old controller while its tap went to the new one. Both come
-with the field that `SoloSelector` spares you. The source is subscribed to only
-while the selection has listeners, and there is nothing to dispose of.
+selection holds notifications back with starts over each time. The initializer
+of the field runs once, though, and reads `widget.controller` as it is at that
+moment. The `State` outlives the widget: a parent that rebuilds can hand it a
+new `SaveButton` with another controller, and without `didUpdateWidget` the
+button would go on taking its permission from the old controller while its tap
+went to the new one. The field and its `didUpdateWidget` are what
+`SoloSelector` spares you. The source is subscribed to only while the selection
+has listeners, and there is nothing to dispose of.
 
 The constructor takes a `ValueListenable`: here, the controller with
 `SoloListenable`. For a controller without the mixin,

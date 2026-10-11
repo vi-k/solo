@@ -226,7 +226,7 @@ changes» CHANGELOG `solo`. 2026-10-07 по его же слову `Job.ignore()
 и анализ чистые, 1769 тестов, `readme_rakes_test.dart` — 39), на вопрос о форме
 тура «The dozen calls» владелец ответил в тот же день: тур остаётся как есть.
 С 2026-10-11 он читает README пакета `flutter_solo`, пункты идут
-в `2026-10-04-flutter-solo-readme-reread-report.md`, их пять. По четвёртому
+в `2026-10-04-flutter-solo-readme-reread-report.md`, их шесть. По четвёртому
 страница перестроена: «Usage» объявляет контроллер чистым `Solo` и рисует его
 через `SoloBuilder`, а `with SoloListenable` и `ValueListenableBuilder` стоят
 в новом разделе «The controller as a `ValueListenable`» сразу за ним; раздел
