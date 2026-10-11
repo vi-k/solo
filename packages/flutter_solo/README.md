@@ -424,7 +424,8 @@ listener and stops notifying for good. It is safe on either side of
 
 A controller shared by several screens lives where the other objects they share
 live — a `get_it` registration, an `InheritedWidget` above those screens, a
-field of the app object — and is closed there, once.
+scope of [scopo](https://pub.dev/packages/scopo), a field of the app object —
+and is closed there, once.
 
 ## Outcomes
 
