@@ -57,6 +57,22 @@ class _FailingApi extends quick.ProfileApi {
   }
 }
 
+/// The load of the quick start without `ifFailed` and `ifCancelled`.
+final class _Unhandled extends Solo<quick.ProfileState> {
+  final quick.ProfileApi api;
+
+  _Unhandled(this.api) : super(const quick.Initial());
+
+  Job<String> load() => run<quick.ProfileState, String>(
+        (ctx) async {
+          ctx.emit(const quick.Loading());
+          final name = await ctx.abandonable(api.fetchName);
+          ctx.emit(quick.Loaded(name));
+          return name;
+        },
+      );
+}
+
 /// A controller whose first job fails with a child still running and a
 /// cleanup registered, and whose second job is queued behind it.
 final class _Ordered extends Solo<int> {
@@ -256,6 +272,33 @@ void main() {
         expect('${job.outcome}', 'Cancelled(manual)');
         expect(thrown, isA<Cancelled>(), reason: 'value throws Cancelled');
         profile.close().ignore();
+        async.flushTimers();
+      });
+    });
+
+    test('without a handler an error or a cancel leaves Loading', () {
+      expect(
+        _page().replaceAll(RegExp(r'\s+'), ' '),
+        allOf(
+          contains('Two optional parameters of `run`'),
+          contains('Without a handler, the state stays where the body left it: '
+              'an error or a cancellation here would leave `Loading`.'),
+        ),
+      );
+      fakeAsync((async) {
+        final failing = _Unhandled(_FailingApi());
+        final failed = failing.load()..value.ignore();
+        final cancelling = _Unhandled(quick.ProfileApi());
+        final cancelled = cancelling.load()..value.ignore();
+        async.elapse(const Duration(milliseconds: 10));
+        cancelled.cancel().ignore();
+        async.flushTimers();
+        expect(failed.outcome, isA<Failed>());
+        expect('${cancelled.outcome}', 'Cancelled(manual)');
+        expect(failing.currentState, isA<quick.Loading>());
+        expect(cancelling.currentState, isA<quick.Loading>());
+        failing.close().ignore();
+        cancelling.close().ignore();
         async.flushTimers();
       });
     });

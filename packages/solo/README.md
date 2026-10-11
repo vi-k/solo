@@ -101,16 +101,17 @@ cancellation-aware waiting:
 - `ctx.abandonable` waits for the API response, or throws `Cancelled` if the
   job accepts cancellation while waiting.
 
-Two parameters of `run` give the state to publish when the job does not
-succeed:
+Two optional parameters of `run` give the state to publish when the job does
+not succeed:
 
 - `ifFailed` returns the state to publish if the job fails.
 - `ifCancelled` returns the state to publish if a started job is cancelled.
 
 The state handlers run after the body and its cleanup. In this example, the
 state becomes `Loaded` on success, `Failure` on error, or `Initial` on
-cancellation. The job's outcome stays `Failed` or `Cancelled` even when a
-handler updates the state.
+cancellation. Without a handler, the state stays where the body left it: an
+error or a cancellation here would leave `Loading`. The job's outcome stays
+`Failed` or `Cancelled` even when a handler updates the state.
 
 `Policy.droppable` and `key: 'load'` make repeated calls share the queued or
 running load. A second call returns the existing job. Once that job finishes,
