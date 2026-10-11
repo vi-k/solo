@@ -112,6 +112,29 @@ class ARelativeLink(unittest.TestCase):
         )
 
 
+class ATranslatedChangelog(unittest.TestCase):
+    # A changelog has its translation in `docs/ru/<package>/`, next to the
+    # translated guides, but it is no page of the site: the English one is
+    # not published here either, and it has no title heading to be one.
+    def test_it_is_no_source(self):
+        names = {source.name for source, _, _, _ in build_site.sources()}
+        self.assertNotIn('CHANGELOG.md', names)
+
+    def test_the_two_locales_mirror_each_other(self):
+        pages = {'en': set(), 'ru': set()}
+        for _, relative, _, locale in build_site.sources():
+            pages[locale].add(relative.removeprefix('ru/'))
+        self.assertEqual(pages['ru'], pages['en'])
+
+    def test_a_link_to_it_goes_to_github(self):
+        self.assertEqual(
+            rewrite(
+                'CHANGELOG.md', 'docs/ru/solo/jobs.md', locale='ru',
+            ),
+            f'{REPO}/tree/main/docs/ru/solo/CHANGELOG.md',
+        )
+
+
 class WhatIsLeftAlone(unittest.TestCase):
     def test_a_section_of_the_page_itself(self):
         self.assertEqual(

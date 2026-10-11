@@ -396,9 +396,9 @@ broke its own rule.
   the interval is counted before the first group as well: an accumulator with
   nothing of its own queued or running starts its interval when the group
   appears, and the group runs when the interval ends, carrying everything
-  written meanwhile. The default is unchanged. Take it where the rate matters
-  more than the latency of the first event; the cost is that a single event
-  waits the whole interval, and a draining `close` waits with it.
+  written meanwhile. The default is unchanged. Take `startAtOnce: false` where
+  the rate matters more than the latency of the first event; the cost is that a
+  single event waits the whole interval, and a draining `close` waits with it.
 
 - `package:solo/listeners.dart`: `Listeners`, the list of listeners a notifier
   walks, for a package that builds a delivery of its own on top of `solo`. An

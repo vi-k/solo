@@ -12,6 +12,9 @@ the packages; Russian lives under `/ru/` and comes from the `README.ru.md`
 of each package and from `docs/ru/<package>/`. The two sides mirror each
 other because `tool/check_translations.py` holds them to it.
 
+A changelog is no page of the site in either language: its translation
+lies in `docs/ru/<package>/` with the translated guides and is passed over.
+
 Usage, from the repository root:
 
     python3 tool/build_site.py
@@ -41,6 +44,9 @@ PACKAGES = {
 # Locale -> the path segment it is served under. English is the root.
 LOCALES = {'en': '', 'ru': 'ru'}
 
+# Translations in `docs/ru/<package>/` whose originals are no pages here.
+NOT_PAGES = {'CHANGELOG.md'}
+
 HEADING = re.compile(r'^#\s+(.*)$')
 LINK = re.compile(r'\]\(([^)]+)\)')
 
@@ -63,6 +69,8 @@ def sources():
         russian = REPO / 'docs' / 'ru' / package
         if russian.is_dir():
             for page in sorted(russian.glob('*.md')):
+                if page.name in NOT_PAGES:
+                    continue
                 yield page, f'ru/{segment}/{page.name}', segment, 'ru'
 
 
@@ -86,7 +94,7 @@ def page_of(path, base, locale):
             (root, folder) == ('packages', 'doc')
             or (root, package) == ('docs', 'ru')
         )
-        if published:
+        if published and name not in NOT_PAGES:
             # `docs/ru/<package>/` names the package one level later.
             if root == 'docs':
                 package = folder

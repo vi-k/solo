@@ -10,6 +10,7 @@ Pairs checked:
   * packages/solo/doc/<page>.md    <-> docs/ru/solo/<page>.md
   * packages/async_job/doc/<page>.md <-> docs/ru/async_job/<page>.md
   * packages/flutter_solo/doc/<page>.md <-> docs/ru/flutter_solo/<page>.md
+  * packages/<package>/CHANGELOG.md  <-> docs/ru/<package>/CHANGELOG.md
 
 Compares:
   * the sequence of heading levels (count and order),
@@ -127,6 +128,18 @@ PAIRS = [
     (
         REPO / "packages" / "async_job" / "doc" / "extending.md",
         REPO / "docs" / "ru" / "async_job" / "extending.md",
+    ),
+    (
+        REPO / "packages" / "async_job" / "CHANGELOG.md",
+        REPO / "docs" / "ru" / "async_job" / "CHANGELOG.md",
+    ),
+    (
+        REPO / "packages" / "solo" / "CHANGELOG.md",
+        REPO / "docs" / "ru" / "solo" / "CHANGELOG.md",
+    ),
+    (
+        REPO / "packages" / "flutter_solo" / "CHANGELOG.md",
+        REPO / "docs" / "ru" / "flutter_solo" / "CHANGELOG.md",
     ),
 ]
 

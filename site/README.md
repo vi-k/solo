@@ -15,6 +15,10 @@ the packages; Russian lives under `/ru/` and comes from each package's
 header pairs a page with its translation, and `check_translations.py`
 keeps the two sides mirroring each other, so the pairing cannot go stale.
 
+A changelog is no page of the site in either language. Its translation
+lies in `docs/ru/<package>/` beside the translated guides, and the build
+passes it over; a link to it leads to GitHub.
+
 This says nothing about what pub.dev gets: `README.ru.md` stays excluded
 by each package's `.pubignore`, and the other translations live outside
 the packages.

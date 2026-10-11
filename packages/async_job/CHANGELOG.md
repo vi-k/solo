@@ -389,12 +389,12 @@ named as `Job(key)`, not by its class.
 - A `ctx.runAll` the body walked away from no longer throws the parent's
   cancellation into the zone once the branches end. It hands the values over,
   as `ctx.run` does.
-- A value that comes to `ctx.abandonable` after the cancellation has already
-  ended is released as soon as it arrives, and the job still ends only after
-  that release. It was held for the unwinding of the cleanup stack, after the
-  children, so a child that kept waiting for the same lock or slot of a pool
-  through the cancellation, inside `ctx.uncancellable` for one, waited for it
-  for good, and the job or the branch of `ctx.runAll` never ended. A branch
+- A value that comes to a call of `ctx.abandonable` the cancellation has
+  already ended is released as soon as it arrives, and the job still ends only
+  after that release. It was held for the unwinding of the cleanup stack, after
+  the children, so a child that kept waiting for the same lock or slot of a
+  pool through the cancellation, inside `ctx.uncancellable` for one, waited for
+  it for good, and the job or the branch of `ctx.runAll` never ended. A branch
   waiting for its group between the two passes over its cleanup stack releases
   it at once too, so a cleanup of a sibling that wants the same slot no longer
   holds the group for good. A value arriving while the job runs its cleanup
