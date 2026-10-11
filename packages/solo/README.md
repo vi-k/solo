@@ -1,9 +1,9 @@
 # solo
 
 `solo` manages state and asynchronous work in Dart. A controller holds the
-current state and processes jobs one at a time. Each job can declare which
-states allow it to start and continue, and callers can await its result or
-request cancellation.
+current state and processes jobs one at a time, hence the name. Each job can
+declare which states allow it to start and continue, and callers can await its
+result or request cancellation.
 
 Use it for screens, sessions and devices where operations share state and need
 an explicit order. The package has no Flutter dependency.
