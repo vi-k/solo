@@ -2,11 +2,12 @@
 
 Управление состоянием для Flutter: последовательные задачи над одним
 состоянием, монопольное владение им, кооперативная отмена и перерисовка через
-`ValueListenable`.
+`SoloBuilder` или `ValueListenable`.
 
-Контроллер владеет состоянием и выполняет над ним задачи по одной. Подмешайте
-в него `SoloListenable`, и он одновременно станет `ValueListenable` своего
-состояния, поэтому вставляется прямо в `ValueListenableBuilder`,
+Контроллер владеет состоянием и выполняет над ним задачи по одной,
+а `SoloBuilder` перестраивает виджет на каждое изменение этого состояния.
+Подмешайте в контроллер `SoloListenable`, и он станет ещё и `ValueListenable`
+своего состояния, поэтому вставляется прямо в `ValueListenableBuilder`,
 `ListenableBuilder`, `AnimatedBuilder` и `Listenable.merge`.
 
 На [сайте документации](https://docs.yet-another.dev/ru/flutter_solo/) лежат
@@ -92,7 +93,7 @@ final class Loaded extends Profile {
   Loaded(this.name);
 }
 
-final class ProfileController extends Solo<Profile> with SoloListenable {
+final class ProfileController extends Solo<Profile> {
   final ProfileApi api;
 
   ProfileController(this.api) : super(Empty());
@@ -125,8 +126,8 @@ class ProfileView extends StatelessWidget {
   const ProfileView({required this.controller, super.key});
 
   @override
-  Widget build(BuildContext context) => ValueListenableBuilder<Profile>(
-        valueListenable: controller,
+  Widget build(BuildContext context) => SoloBuilder<Profile>(
+        solo: controller,
         builder: (context, state, _) => switch (state) {
           Empty() => TextButton(
               onPressed: controller.load,
@@ -150,6 +151,52 @@ class ProfileView extends StatelessWidget {
 а без них экран держал бы спиннер задачи, которой уже нет. Всё API целиком,
 с правилами, очередью, детьми и наблюдателями, описано
 в [solo](https://pub.dev/packages/solo).
+
+Состояние рисует `SoloBuilder`: он принимает контроллер как `solo`,
+перестраивается на каждое изменение состояния и передаёт `child` нетронутым.
+
+## Контроллер как `ValueListenable`
+
+У фреймворка есть свои билдеры, и они принимают `ValueListenable`. Подмешайте
+в контроллер `SoloListenable`, и он им станет:
+
+```dart
+final class ProfileController extends Solo<Profile> with SoloListenable {
+  // ...то же, что и выше...
+}
+```
+
+Состояние он отдаёт как `value`, и `ValueListenableBuilder` принимает
+контроллер как есть:
+
+```dart
+ValueListenableBuilder<Profile>(
+  valueListenable: controller,
+  builder: (context, state, _) => Text(
+    switch (state) {
+      Empty() => 'no profile',
+      Loading() => 'loading',
+      Loaded(:final name) => name,
+    },
+  ),
+)
+```
+
+`ListenableBuilder` и `AnimatedBuilder` принимают его так же,
+а `Listenable.merge` объединяет его с другими listenable.
+
+`SoloBuilder` по-прежнему принимает и его, как любой контроллер: с миксином,
+без него или `with SoloStream`. От `ValueListenableBuilder` его отличает одно:
+контроллеры он сравнивает по идентичности. Получив новый контроллер, который
+по `==` равен старому, `SoloBuilder` переходит на него,
+а `ValueListenableBuilder` продолжает слушать старый.
+
+Разделы ниже о выборе значения и о подписке работают с контроллером, в который
+миксин подмешан.
+
+Контроллер, у которого есть и `stream`, и `SoloListenable`, экран на этом
+стриме и базовый класс контроллеров без Flutter описаны на отдельной странице,
+[«Миксины»](../../docs/ru/flutter_solo/mixins.md).
 
 ## Выбор одного значения
 
@@ -217,40 +264,9 @@ class _SaveButtonState extends State<SaveButton> {
 `SoloSelector`. На источник проекция подписана, только пока у неё есть
 слушатели, и освобождать её не нужно.
 
-## Билдеры для любого контроллера
-
-`ValueListenableBuilder` требует `ValueListenable`, и контроллер с подмешанным
-`SoloListenable` под это требование подходит. Контроллер без него не подходит:
-ни голый `Solo`, ни контроллер только `with SoloStream`. Для них `SoloBuilder`
-принимает сам контроллер:
-
-```dart
-SoloBuilder<Profile>(
-  solo: controller,
-  builder: (context, state, _) => Text(
-    switch (state) {
-      Empty() => 'no profile',
-      Loading() => 'loading',
-      Loaded(:final name) => name,
-    },
-  ),
-)
-```
-
-Он перестраивается на каждое изменение состояния и передаёт `child` нетронутым.
-Кроме контроллера, который он принимает, от `ValueListenableBuilder` его
-отличает одно: контроллеры он сравнивает по идентичности. Получив новый
-контроллер, который по `==` равен старому, `SoloBuilder` переходит на него,
-а `ValueListenableBuilder` продолжает слушать старый.
-
-Чтобы выбрать одно значение из такого контроллера, ничего нового не нужно.
-`SoloSelector` принимает любой контроллер,
-а `SoloSelection.from(controller, selector)` даёт его проекцию без виджета
-вокруг, для поля в `State`, когда контроллер не `ValueListenable`.
-
-Контроллер, у которого есть и `stream`, и `SoloListenable`, экран на этом
-стриме и базовый класс контроллеров без Flutter описаны на отдельной странице,
-[«Миксины»](../../docs/ru/flutter_solo/mixins.md).
+Конструктор принимает `ValueListenable`: здесь это контроллер
+с `SoloListenable`. Для контроллера без миксина ту же проекцию строит
+`SoloSelection.from(controller, selector)`.
 
 ## Подписка без хранения колбэка
 
@@ -378,8 +394,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 `close()` отменяет всё, что стоит в очереди или выполняется, причём
 выполняющееся тело остановится на ближайшем обращении к контексту, поэтому уход
 с экрана и стоит так дёшево. Ещё он сбрасывает всех слушателей и больше никого
-не уведомляет. Он безопасен по обе стороны от `super.dispose()`.
-`SoloListenable` не `ChangeNotifier`: метод называется `close()`,
+не уведомляет. Он безопасен по обе стороны от `super.dispose()`. Даже
+с `SoloListenable` контроллер не `ChangeNotifier`: метод называется `close()`,
 а не `dispose()`, и возвращает future, которая завершается, когда задача
 действительно остановилась.
 
@@ -509,9 +525,9 @@ final outcome = await done;
 
 | Вопрос | Ответ |
 | --- | --- |
-| Когда зовут слушателей? | Синхронно, в порядке подписки, на каждое изменение состояния. `value` и `currentState` дают один и тот же объект. Стрима нет, пока не подмешан ещё и `SoloStream`: виджет перестраивается по `value`. |
+| Когда зовут слушателей? | Синхронно, в порядке подписки, на каждое изменение состояния. С `SoloListenable` `value` и `currentState` дают один и тот же объект. Стрима нет, пока не подмешан `SoloStream`: билдеры слушают сам контроллер. |
 | Фильтруются ли равные состояния? | Нет. `emit` состояния, равного текущему, всё равно уведомляет: слушатели принадлежат движку, а движок ничего не сравнивает. Кадр может склеить несколько таких, а слушатель нет. Проекция фильтрует своё значение, а виджету обычно важно именно оно. |
-| Несколько контроллеров на одном экране? | Работают как ожидается, каждый со своим билдером, а `Listenable.merge([a, b])` в `ListenableBuilder` закрывает случай, когда один виджет зависит от двух. |
+| Несколько контроллеров на одном экране? | Работают как ожидается, каждый со своим билдером, а `Listenable.merge([a, b])` в `ListenableBuilder` закрывает случай, когда один виджет зависит от двух; ему нужны контроллеры с `SoloListenable`. |
 | Можно ли присвоить `value`? | Сеттера нет. Состояние принадлежит задачам, а лицо `ValueNotifier` с сеттером его бы раздало. |
 
 ## solo

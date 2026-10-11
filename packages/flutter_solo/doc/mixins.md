@@ -2,14 +2,14 @@
 
 `SoloListenable` makes a controller a `ValueListenable`, and so a `Listenable`
 as well: the framework's `ValueListenableBuilder`, `ListenableBuilder` and
-`AnimatedBuilder` take the controller as it is, and the screen in
-[Usage](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.md#usage)
-of the package README is built on the first of them. The builders of this
-package, `SoloBuilder` and `SoloSelector`, take any controller, with the mixin
-or without it. This page is about what sits around `SoloListenable` —
-`SoloStream` of `solo` beside it, a screen built on that stream, and a base
-class of controllers in a package without Flutter, where `SoloListenable`
-cannot go.
+`AnimatedBuilder` take the controller as it is, and the package README shows
+the first of them in
+[The controller as a `ValueListenable`](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.md#the-controller-as-a-valuelistenable).
+The builders of this package, `SoloBuilder` and `SoloSelector`, take any
+controller, with the mixin or without it. This page is about what sits around
+`SoloListenable` — `SoloStream` of `solo` beside it, a screen built on that
+stream, and a base class of controllers in a package without Flutter, where
+`SoloListenable` cannot go.
 
 The lines under a block of code are what a run of it shows: the text on the
 screen after each step, or where a listener's failure was reported. Two

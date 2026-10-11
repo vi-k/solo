@@ -23,7 +23,7 @@ final class Loaded extends Profile {
   Loaded(this.name);
 }
 
-final class ProfileController extends Solo<Profile> with SoloListenable {
+final class ProfileController extends Solo<Profile> {
   final ProfileApi api;
 
   ProfileController(this.api) : super(Empty());
@@ -56,8 +56,8 @@ class ProfileView extends StatelessWidget {
   const ProfileView({required this.controller, super.key});
 
   @override
-  Widget build(BuildContext context) => ValueListenableBuilder<Profile>(
-        valueListenable: controller,
+  Widget build(BuildContext context) => SoloBuilder<Profile>(
+        solo: controller,
         builder: (context, state, _) => switch (state) {
           Empty() => TextButton(
               onPressed: controller.load,

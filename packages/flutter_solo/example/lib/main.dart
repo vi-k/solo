@@ -40,7 +40,7 @@ final class Loaded extends Profile {
 
 /// One state, one job over it, a policy for the second tap, and the state
 /// to fall back to when the job does not get to the end.
-final class ProfileController extends Solo<Profile> with SoloListenable {
+final class ProfileController extends Solo<Profile> {
   final ProfileApi api;
 
   ProfileController(this.api) : super(Empty());
@@ -118,8 +118,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ],
         ),
         body: Center(
-          child: ValueListenableBuilder<Profile>(
-            valueListenable: controller,
+          child: SoloBuilder<Profile>(
+            solo: controller,
             builder: (context, state, _) => switch (state) {
               Empty() => TextButton(
                   onPressed: _load,

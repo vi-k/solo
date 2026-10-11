@@ -23,7 +23,7 @@ hero:
 | --- | --- |
 | [solo](solo/) | Контроллер: очередь с политиками, правила состояния, дети, накопление. Чистый Dart. |
 | [async_job](async_job/) | Ядро: отмена, дети и освобождение ресурсов для одной операции. Чистый Dart, зависит только от `meta`. |
-| [flutter_solo](flutter_solo/) | Лицо для Flutter: `ValueListenable`, `select`, `listen`. |
+| [flutter_solo](flutter_solo/) | Лицо для Flutter: `SoloBuilder`, `ValueListenable`, `select`, `listen`. |
 
 `solo` реэкспортирует `async_job`, а `flutter_solo` — `solo`, поэтому
 достаточно одной зависимости.

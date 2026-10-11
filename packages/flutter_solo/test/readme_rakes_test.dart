@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_solo/flutter_solo.dart';
 import 'package:flutter_solo/listenable.dart';
@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'support/page_code.dart';
 import 'support/readme_install.dart';
+import 'support/readme_listenable.dart' as listenable;
 import 'support/readme_profile.dart';
 import 'support/readme_tests.dart';
 import 'support/readme_variants.dart';
@@ -19,7 +20,11 @@ import 'support/readme_widgets.dart';
 /// The code of the page stands verbatim in three files of `test/support/`:
 /// `readme_profile.dart` holds the model of "Usage",
 /// `readme_widgets.dart` the fragments between "Why" and "Outcomes", and
-/// `readme_tests.dart` the code of "Testing". The tests below run it. What
+/// `readme_tests.dart` the code of "Testing". The tests below run it. The
+/// one block the page cuts short, the controller of "Usage" with the mixin
+/// and `// ...same as above...` for a body, stands in full in
+/// `readme_listenable.dart`, imported here as `listenable`: a test over a
+/// fragment that needs a `ValueListenable` builds that controller. What
 /// the page says in prose about a version it does not show is run from
 /// `readme_variants.dart`, and a test that checks a sentence holds the page
 /// to it through [_says].
@@ -31,6 +36,12 @@ import 'support/readme_widgets.dart';
 /// tests run as well, and `tool/check_translations.py` holds it to the page.
 
 const _doc = 'README.md';
+
+/// The block of the page that stands for a class and leaves its body out.
+const _cutShort = 'final class ProfileController extends Solo<Profile> '
+    'with SoloListenable {\n'
+    '  // ...same as above...\n'
+    '}';
 const _support = [
   'test/support/readme_profile.dart',
   'test/support/readme_widgets.dart',
@@ -72,8 +83,29 @@ Future<ProfileController> _loaded(WidgetTester tester) async {
   final controller = ProfileController(ProfileApi());
   controller.load().ignoreFailure();
   await tester.pump(const Duration(milliseconds: 10));
+  expect(controller.currentState, isA<Loaded>());
+  return controller;
+}
+
+/// The same with `SoloListenable` mixed in.
+Future<listenable.ProfileController> _loadedListenable(
+  WidgetTester tester,
+) async {
+  final controller = listenable.ProfileController(ProfileApi());
+  controller.load().ignoreFailure();
+  await tester.pump(const Duration(milliseconds: 10));
   expect(controller.value, isA<Loaded>());
   return controller;
+}
+
+/// The members of `ProfileController` as [file] declares them.
+String _controllerBody(String file) {
+  final source = File(file).readAsStringSync();
+  final start = source.indexOf(
+    '\n',
+    source.indexOf('final class ProfileController extends Solo<Profile>'),
+  );
+  return source.substring(start, source.indexOf('\n}\n', start));
 }
 
 /// Runs [body] the way `testWidgets` runs the body of a widget test — on the
@@ -111,13 +143,15 @@ void main() {
 
   group('The page', () {
     test('every piece of its code stands in the support files', () {
+      // But for the block that cuts its body short: the group of its
+      // section holds that one to the controller of "Usage".
       expect(
         codeMissingFrom(
           _doc,
           _support.first,
           alsoIn: _support.skip(1).toList(),
         ),
-        isEmpty,
+        [_cutShort],
       );
     });
 
@@ -125,7 +159,7 @@ void main() {
       expect(strayFences(_doc), ['```sh']);
       expect(
         RegExp(r'^```dart$', multiLine: true).allMatches(_page()),
-        hasLength(14),
+        hasLength(15),
         reason: 'a new block of the page needs a place in the support files '
             'and a test that runs it',
       );
@@ -153,17 +187,17 @@ void main() {
       final controller = ProfileController(api);
       final job = controller.load();
       await tester.pump(const Duration(milliseconds: 3));
-      expect(controller.value, isA<Loading>());
+      expect(controller.currentState, isA<Loading>());
 
       await job.cancel();
 
       expect('${job.outcome}', 'Cancelled(manual)');
-      expect(controller.value, isA<Empty>());
+      expect(controller.currentState, isA<Empty>());
       // The request the job walked away from is still on its way.
       expect(api.trace, ['fetch begins']);
       await tester.pump(const Duration(milliseconds: 10));
       expect(api.trace, ['fetch begins', 'fetch ends']);
-      expect(controller.value, isA<Empty>());
+      expect(controller.currentState, isA<Empty>());
       await controller.close();
     });
 
@@ -324,13 +358,13 @@ void main() {
       );
       failing.load().ignoreFailure();
       await tester.pump(const Duration(milliseconds: 10));
-      expect(failing.value, isA<Empty>());
+      expect(failing.currentState, isA<Empty>());
 
       final cancelled = ProfileController(ProfileApi());
       final job = cancelled.load();
       await tester.pump(const Duration(milliseconds: 3));
       await job.cancel();
-      expect(cancelled.value, isA<Empty>());
+      expect(cancelled.currentState, isA<Empty>());
 
       await tester.pump(const Duration(milliseconds: 10));
       _says('they say what state a load that failed or was cancelled leaves '
@@ -409,6 +443,42 @@ void main() {
           'moment the job is cancelled, and `ctx.join` waits its call out '
           'either way — a save is not cut in half');
     });
+
+    testWidgets('the builder rebuilds on every change and leaves child alone',
+        (tester) async {
+      final plain = Plain();
+      final built = <String>[];
+      var childBuilds = 0;
+      await tester.pumpWidget(
+        _app(
+          SoloBuilder<Profile>(
+            solo: plain,
+            child: Builder(
+              builder: (context) {
+                childBuilds++;
+                return const SizedBox();
+              },
+            ),
+            builder: (context, state, child) {
+              built.add(show(state));
+              return child!;
+            },
+          ),
+        ),
+      );
+      final same = Loaded('Ada');
+      for (final state in [same, same, Loaded('Ada')]) {
+        plain.set(state);
+        await tester.pump();
+      }
+
+      expect(built, ['Empty', 'Loaded(Ada)', 'Loaded(Ada)', 'Loaded(Ada)']);
+      expect(childBuilds, 1);
+      await plain.close();
+      _says('`SoloBuilder` is what draws the state: it takes the controller '
+          'as `solo`, rebuilds on every change of the state and hands '
+          '`child` through untouched.');
+    });
   });
 
   group('Selecting one value', () {
@@ -421,7 +491,7 @@ void main() {
       controller.load().ignoreFailure();
       await tester.pump();
       await tester.pump();
-      expect(controller.value, isA<Loading>());
+      expect(controller.currentState, isA<Loading>());
       expect(_save(tester), isNull);
       await tester.pump(const Duration(milliseconds: 10));
       expect(_save(tester), isNotNull);
@@ -612,8 +682,8 @@ void main() {
 
     testWidgets('the selection in a field follows a new controller',
         (tester) async {
-      final loaded = await _loaded(tester);
-      final empty = ProfileController(ProfileApi());
+      final loaded = await _loadedListenable(tester);
+      final empty = listenable.ProfileController(ProfileApi());
 
       await tester.pumpWidget(_app(SaveButton(controller: loaded)));
       expect(_save(tester), isNotNull);
@@ -633,8 +703,8 @@ void main() {
 
     testWidgets('without didUpdateWidget it stays with the old one',
         (tester) async {
-      final loaded = await _loaded(tester);
-      final empty = ProfileController(ProfileApi());
+      final loaded = await _loadedListenable(tester);
+      final empty = listenable.ProfileController(ProfileApi());
 
       // From a loaded profile to an empty one: the button stays enabled,
       // and its tap goes to a controller that has nothing to save.
@@ -729,68 +799,176 @@ void main() {
       _says('The source is subscribed to only while the selection has '
           'listeners, and there is nothing to dispose of.');
     });
+
+    test('from builds the same selection of a controller without the mixin',
+        () async {
+      final plain = Plain();
+      final bench = Bench();
+      final fromPlain = SoloSelection.from(plain, (state) => state.canSave);
+      final ofBench = SoloSelection<Profile, bool>(
+        bench,
+        (state) => state.canSave,
+      );
+      final heard = <String>[];
+      void onPlain() => heard.add('from ${fromPlain.value}');
+      void onBench() => heard.add('constructor ${ofBench.value}');
+      fromPlain.addListener(onPlain);
+      ofBench.addListener(onBench);
+
+      for (final state in [Loading(), Loaded('Ada'), Loaded('Bob')]) {
+        plain.set(state);
+        bench.set(state);
+      }
+
+      expect(heard, ['from true', 'constructor true']);
+      fromPlain.removeListener(onPlain);
+      ofBench.removeListener(onBench);
+      await plain.close();
+      await bench.close();
+      expect(
+        File('lib/src/solo_selection.dart').readAsStringSync(),
+        contains('SoloSelection(\n    ValueListenable<S> source,'),
+      );
+      _says('The constructor takes a `ValueListenable`: here, the controller '
+          'with `SoloListenable`. For a controller without the mixin, '
+          '`SoloSelection.from(controller, selector)` builds the same '
+          'selection.');
+    });
   });
 
-  group('Builders for any controller', () {
-    testWidgets('the builder takes a controller that is not a listenable',
-        (tester) async {
-      final plain = Plain();
-      await tester.pumpWidget(_app(anyBuilder(plain)));
-      expect(_texts(tester), ['no profile']);
-      plain.set(Loading());
-      await tester.pump();
-      expect(_texts(tester), ['loading']);
-      plain.set(Loaded('Ada Lovelace'));
-      await tester.pump();
-      expect(_texts(tester), ['Ada Lovelace']);
+  group('The controller as a ValueListenable', () {
+    test('the block that cuts its body short is the controller of Usage',
+        () async {
+      const mixed = 'test/support/readme_listenable.dart';
+      expect(_controllerBody(mixed), _controllerBody(_support.first));
+      expect(
+        File(mixed).readAsStringSync(),
+        contains(_cutShort.split('\n').first),
+      );
 
-      final streamed = StreamOnly();
-      await tester.pumpWidget(_app(anyBuilder(streamed)));
-      streamed.set(Loaded('Bob'));
-      await tester.pump();
-      expect(_texts(tester), ['Bob']);
-
-      await plain.close();
-      await tester.pumpWidget(const SizedBox());
-      await tester.runAsync(streamed.close);
-      _says('A controller without it is not — a plain `Solo`, or one `with '
-          'SoloStream` only — and for those `SoloBuilder` takes the '
-          'controller itself');
+      final without = ProfileController(ProfileApi());
+      final withMixin = listenable.ProfileController(ProfileApi());
+      expect(without, isNot(isA<ValueListenable<Profile>>()));
+      expect(withMixin, isA<ValueListenable<Profile>>());
+      await without.close();
+      await withMixin.close();
+      _says('they take a `ValueListenable`. Mix `SoloListenable` into the '
+          'controller, and it is one:');
     });
 
-    testWidgets('it rebuilds on every change and leaves child alone',
+    testWidgets('ValueListenableBuilder takes the controller as it is',
         (tester) async {
-      final plain = Plain();
-      final built = <String>[];
-      var childBuilds = 0;
+      final controller = listenable.ProfileController(ProfileApi());
+      await tester.pumpWidget(_app(listenableBuilder(controller)));
+      expect(_texts(tester), ['no profile']);
+
+      controller.load().ignoreFailure();
+      await tester.pump();
+      await tester.pump();
+      expect(_texts(tester), ['loading']);
+      expect(identical(controller.value, controller.currentState), isTrue);
+      await tester.pump(const Duration(milliseconds: 10));
+      expect(_texts(tester), ['Ada Lovelace']);
+      expect(controller.value, isA<Loaded>());
+
+      await controller.close();
+      _says('The state is its `value`, and `ValueListenableBuilder` takes the '
+          'controller as it is:');
+    });
+
+    testWidgets('ListenableBuilder, AnimatedBuilder and a merge take it too',
+        (tester) async {
+      final controller = listenable.ProfileController(ProfileApi());
+      final scroll = ScrollController();
+      var merged = 0;
       await tester.pumpWidget(
         _app(
-          SoloBuilder<Profile>(
-            solo: plain,
-            child: Builder(
-              builder: (context) {
-                childBuilds++;
-                return const SizedBox();
-              },
-            ),
-            builder: (context, state, child) {
-              built.add(show(state));
-              return child!;
-            },
+          Column(
+            children: [
+              ListenableBuilder(
+                listenable: controller,
+                builder: (context, _) =>
+                    Text('listenable ${show(controller.value)}'),
+              ),
+              AnimatedBuilder(
+                animation: controller,
+                builder: (context, _) =>
+                    Text('animated ${show(controller.value)}'),
+              ),
+              ListenableBuilder(
+                listenable: Listenable.merge([controller, scroll]),
+                builder: (context, _) {
+                  merged++;
+                  return Text('merged ${show(controller.value)}');
+                },
+              ),
+            ],
           ),
         ),
       );
-      final same = Loaded('Ada');
-      for (final state in [same, same, Loaded('Ada')]) {
-        plain.set(state);
-        await tester.pump();
-      }
+      expect(
+        _texts(tester),
+        ['listenable Empty', 'animated Empty', 'merged Empty'],
+      );
 
-      expect(built, ['Empty', 'Loaded(Ada)', 'Loaded(Ada)', 'Loaded(Ada)']);
-      expect(childBuilds, 1);
+      controller.load().ignoreFailure();
+      await tester.pump(const Duration(milliseconds: 10));
+      expect(_texts(tester), [
+        'listenable Loaded(Ada Lovelace)',
+        'animated Loaded(Ada Lovelace)',
+        'merged Loaded(Ada Lovelace)',
+      ]);
+
+      // The other listenable of the merge wakes its builder as well.
+      final before = merged;
+      scroll.notifyListeners();
+      await tester.pump();
+      expect(merged, before + 1);
+
+      await tester.pumpWidget(const SizedBox());
+      scroll.dispose();
+      await controller.close();
+      _says('`ListenableBuilder` and `AnimatedBuilder` take it the same way, '
+          'and `Listenable.merge` joins it with other listenables.');
+    });
+
+    testWidgets('SoloBuilder takes a controller with the mixin or without',
+        (tester) async {
+      Widget over(Solo<Profile> controller) => _app(
+            SoloBuilder<Profile>(
+              solo: controller,
+              builder: (context, state, _) => Text(show(state)),
+            ),
+          );
+
+      final withMixin = listenable.ProfileController(ProfileApi());
+      await tester.pumpWidget(over(withMixin));
+      expect(_texts(tester), ['Empty']);
+      withMixin.load().ignoreFailure();
+      await tester.pump(const Duration(milliseconds: 10));
+      expect(_texts(tester), ['Loaded(Ada Lovelace)']);
+
+      final plain = Plain();
+      await tester.pumpWidget(over(plain));
+      expect(_texts(tester), ['Empty']);
+      plain.set(Loading());
+      await tester.pump();
+      expect(_texts(tester), ['Loading']);
+      expect(plain, isNot(isA<Listenable>()));
+
+      final streamed = StreamOnly();
+      await tester.pumpWidget(over(streamed));
+      streamed.set(Loaded('Bob'));
+      await tester.pump();
+      expect(_texts(tester), ['Loaded(Bob)']);
+      expect(streamed, isNot(isA<Listenable>()));
+
+      await withMixin.close();
       await plain.close();
-      _says('It rebuilds on every change of the state and hands `child` '
-          'through untouched.');
+      await tester.pumpWidget(const SizedBox());
+      await tester.runAsync(streamed.close);
+      _says('`SoloBuilder` goes on taking it, as it takes any controller: '
+          'with the mixin, without it, or `with SoloStream`.');
     });
 
     testWidgets('it moves to a controller that == calls the old one',
@@ -840,37 +1018,18 @@ void main() {
 
       await first.close();
       await second.close();
+      _says('One thing sets it apart from `ValueListenableBuilder`: it '
+          'compares controllers by identity.');
       _says('Handed a new controller whose `==` says it is the old one, '
           '`SoloBuilder` moves to it and `ValueListenableBuilder` goes on '
           'listening to the old one.');
-    });
-
-    test('from is the selection of such a controller without a widget',
-        () async {
-      final plain = Plain();
-      final selection = SoloSelection.from(plain, (state) => state.canSave);
-      final heard = <bool>[];
-      void listener() => heard.add(selection.value);
-      selection.addListener(listener);
-
-      plain
-        ..set(Loading())
-        ..set(Loaded('Ada'))
-        ..set(Loaded('Bob'));
-
-      expect(heard, [true]);
-      selection.removeListener(listener);
-      await plain.close();
-      _says('`SoloSelector` takes any controller, and '
-          '`SoloSelection.from(controller, selector)` is its selection '
-          'without a widget around it');
     });
   });
 
   group('Listening without keeping the callback', () {
     testWidgets('the first attempt goes on being called after dispose()',
         (tester) async {
-      final controller = await _loaded(tester);
+      final controller = await _loadedListenable(tester);
       final heard = <String>[];
       await tester.pumpWidget(
         Listening(controller: controller, heard: heard, firstAttempt: true),
@@ -898,7 +1057,7 @@ void main() {
     });
 
     testWidgets('a group of subscriptions goes with the State', (tester) async {
-      final controller = ProfileController(ProfileApi());
+      final controller = listenable.ProfileController(ProfileApi());
       final heard = <String>[];
       await tester.pumpWidget(Listening(controller: controller, heard: heard));
 
@@ -1032,8 +1191,8 @@ void main() {
 
     testWidgets('handed another controller, initState goes on hearing the old',
         (tester) async {
-      final first = ProfileController(ProfileApi());
-      final second = ProfileController(ProfileApi());
+      final first = listenable.ProfileController(ProfileApi());
+      final second = listenable.ProfileController(ProfileApi());
       final heard = <String>[];
       await tester.pumpWidget(Listening(controller: first, heard: heard));
       await tester.pumpWidget(Listening(controller: second, heard: heard));
@@ -1055,10 +1214,10 @@ void main() {
     testWidgets('the subscriptions are taken again into a new group',
         (tester) async {
       Future<List<String>> followed({required bool newGroup}) async {
-        final first = ProfileController(ProfileApi());
-        final second = ProfileController(ProfileApi());
+        final first = listenable.ProfileController(ProfileApi());
+        final second = listenable.ProfileController(ProfileApi());
         final heard = <String>[];
-        Widget over(ProfileController controller) => Following(
+        Widget over(listenable.ProfileController controller) => Following(
               controller: controller,
               heard: heard,
               newGroup: newGroup,
@@ -1091,7 +1250,7 @@ void main() {
 
   group('Methods from a second import', () {
     test('select and listen arrive as methods', () async {
-      final controller = ProfileController(ProfileApi());
+      final controller = listenable.ProfileController(ProfileApi());
       heardBySecondImport.clear();
       final (canSave, subscription) = secondImport(controller);
 
@@ -1178,7 +1337,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 3));
       await tester.pumpWidget(const SizedBox());
       expect(first.isFinished, isTrue);
-      expect(first.value, isA<Empty>());
+      expect(first.currentState, isA<Empty>());
 
       // The other side.
       final second = ProfileController(ProfileApi());
@@ -1188,7 +1347,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 3));
       await tester.pumpWidget(const SizedBox());
       expect(second.isFinished, isTrue);
-      expect(second.value, isA<Empty>());
+      expect(second.currentState, isA<Empty>());
 
       expect(tester.takeException(), isNull);
       await tester.pump(const Duration(milliseconds: 10));
@@ -1253,7 +1412,7 @@ void main() {
       final controller = ProfileController(ProfileApi());
       final heard = <String>[];
       controller
-        ..addListener(() => heard.add(show(controller.value)))
+        ..addListener(() => heard.add(show(controller.currentState)))
         ..load().ignoreFailure();
       await tester.pump(const Duration(milliseconds: 3));
       await controller.close();
@@ -1271,6 +1430,16 @@ void main() {
       expect(late, isEmpty);
       expect(bench.value, isA<Empty>());
       _says('drops every listener and stops notifying for good');
+    });
+
+    test('with the mixin a controller is still no ChangeNotifier', () async {
+      final controller = listenable.ProfileController(ProfileApi());
+
+      expect(controller, isA<Listenable>());
+      expect(controller, isNot(isA<ChangeNotifier>()));
+      await controller.close();
+      _says('Even with `SoloListenable` a controller is not a '
+          '`ChangeNotifier`: the method is `close()`, not `dispose()`');
     });
   });
 
@@ -1491,7 +1660,7 @@ void main() {
       await tester.pump();
       await tester.idle();
       expect(through, isFalse);
-      expect(controller.value, isA<Loading>());
+      expect(controller.currentState, isA<Loading>());
 
       // It is the clock it was waiting for, and nothing else. The clock is
       // moved without a pump: the attempt pumps a frame of its own as it
@@ -1544,7 +1713,7 @@ void main() {
         tester.binding.clock.now().difference(before),
         const Duration(milliseconds: 100) * frames,
       );
-      expect(quiet.value, isA<Loading>());
+      expect(quiet.currentState, isA<Loading>());
       expect(find.text('Loading'), findsOneWidget);
 
       await tester.pump(second);
@@ -1645,7 +1814,7 @@ void main() {
       controller.load().ignoreFailure();
       await tester.pump(const Duration(milliseconds: 20));
 
-      expect(controller.value, isA<Empty>());
+      expect(controller.currentState, isA<Empty>());
       await controller.close();
       _says('A job the test starts and drops says so with `ignoreFailure()`.');
     });
@@ -1662,7 +1831,7 @@ void main() {
 
       controller.load().ignoreFailure();
       await tester.pump();
-      expect(controller.value, isA<Loading>());
+      expect(controller.currentState, isA<Loading>());
       expect(find.text('Load'), findsOneWidget);
       expect(find.byType(CircularProgressIndicator), findsNothing);
 
@@ -1702,7 +1871,7 @@ void main() {
       );
       await tester.tap(find.text('Load'));
       await tester.pump();
-      expect(controller.value, isA<Loading>());
+      expect(controller.currentState, isA<Loading>());
 
       await controller.close();
 
@@ -1723,7 +1892,7 @@ void main() {
         controller = ProfileController(SilentApi());
         controller.load().ignoreFailure();
         await binding.pump();
-        expect(controller.value, isA<Loading>());
+        expect(controller.currentState, isA<Loading>());
       });
       expect(reported, isEmpty);
 
@@ -1818,7 +1987,39 @@ void main() {
       expect(bench, isNot(isA<SoloStream<Profile>>()));
       await bench.close();
       _says('Synchronously, in subscription order, on every state change. '
-          '`value` and `currentState` are the same object.');
+          'With `SoloListenable`, `value` and `currentState` are the same '
+          'object.');
+    });
+
+    testWidgets('the builders listen to the controller itself', (tester) async {
+      final plain = Plain();
+      final bench = Bench();
+      await tester.pumpWidget(
+        _app(
+          Column(
+            children: [
+              SoloBuilder<Profile>(
+                solo: plain,
+                builder: (context, state, _) => Text(show(state)),
+              ),
+              ValueListenableBuilder<Profile>(
+                valueListenable: bench,
+                builder: (context, state, _) => Text(show(state)),
+              ),
+            ],
+          ),
+        ),
+      );
+      expect((plain.added, bench.added), (1, 1));
+      expect(plain, isNot(isA<SoloStream<Profile>>()));
+      expect(bench, isNot(isA<SoloStream<Profile>>()));
+
+      await tester.pumpWidget(const SizedBox());
+      expect((plain.removed, bench.removed), (1, 1));
+      await plain.close();
+      await bench.close();
+      _says('There is no `stream` unless `SoloStream` is mixed in: the '
+          'builders listen to the controller itself.');
     });
 
     testWidgets('equal states are not filtered, and a frame swallows several',
@@ -1888,8 +2089,10 @@ void main() {
       expect(built, ['Empty Empty', 'Loading Empty', 'Loading Loaded(Bob)']);
       await a.close();
       await b.close();
+      expect(Plain(), isNot(isA<Listenable>()));
       _says('`Listenable.merge([a, b])` in a `ListenableBuilder` covers the '
-          'case where one widget depends on two.');
+          'case where one widget depends on two; it takes controllers with '
+          '`SoloListenable`.');
     });
 
     test('the mixin gives value no setter', () {

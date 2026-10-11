@@ -22,12 +22,15 @@ The drivers are widget tests rather than programs under bin/, because
 what this document shows are widgets: a screen needs a binding to be
 built, pumped and read back. `flutter test` is what provides one.
 
-One liberty is taken with the snippets, and it is the only one. Import
-lines are hoisted to the head of the driver, verbatim, because a file
-takes its directives before its declarations. Everything between the
-imports is byte-identical to the document. The driver of the README adds
-no import of its own but that of `flutter_test`, so a block that stops
-showing an import it needs stops the driver compiling.
+Two liberties are taken with the snippets. Import lines are hoisted to
+the head of the driver, verbatim, because a file takes its directives
+before its declarations. And the one block that writes the body of a
+class as `// ...same as above...`, the controller of the README with
+`SoloListenable` mixed in, is built with the body it points at: the head
+line is the block's, the rest is the block of Usage. Everything else
+between the imports is byte-identical to the document. The drivers of the
+README add no import of their own but that of `flutter_test`, so a block
+that stops showing an import it needs stops its driver compiling.
 
 Every Dart block of the README of flutter_solo is built -- the first page
 a user of the package copies from. That README went without a bench until
@@ -1090,11 +1093,21 @@ void main() {
 ])
 
 # ------------------------------------------------- the README of flutter_solo
-# Every Dart block of the package's README, built into one file. The README
+# Every Dart block of the package's README, built into two files. The README
 # declares the model once, under Usage, and the rest of the page leans on
 # it; what the page takes as the reader's own -- the API behind the
 # controller, the widgets a `State` belongs to, a toast -- is supplied here,
 # and nothing the page itself names is.
+#
+# Two files, because the page has two controllers of one name. Under Usage
+# `ProfileController` is a plain `Solo`, and the screen is built on
+# `SoloBuilder`. The next section mixes `SoloListenable` into it in a block
+# that writes the body as `// ...same as above...`, and the sections on
+# selecting and listening take that controller. So the first file holds the
+# model as Usage declares it, with every fragment that asks nothing more of
+# a controller, and the second holds the same model under the head of the
+# second block, with the fragments that need a `ValueListenable`. The
+# screen of "The controller's life" is built in both: it takes either.
 #
 # That goes for imports too. `dart:async` is hoisted out of the block of
 # "The controller's life", whose `unawaited` needs it, and the drivers below
@@ -1109,6 +1122,16 @@ _install_imports, _install_rest = split_imports(
     _fr['install/import-package-flutter_solo-fl'])
 assert _install_rest.strip() == '', _install_rest
 _usage_imports, _usage_body = split_imports(_usage)
+_as_listenable = doc_blocks.slug('The controller as a `ValueListenable`')
+_PLAIN_HEAD = 'final class ProfileController extends Solo<Profile> {\n'
+_MIXIN_HEAD = (
+    'final class ProfileController extends Solo<Profile> '
+    'with SoloListenable {\n')
+# The block says its body is the one above, and that is how it is built.
+_cut_short = _fr[_as_listenable + '/ProfileController']
+assert _cut_short == _MIXIN_HEAD + '  // ...same as above...\n}\n', _cut_short
+assert _usage_body.count(_PLAIN_HEAD) == 1, _usage_body
+_listenable_body = _usage_body.replace(_PLAIN_HEAD, _MIXIN_HEAD)
 _listening = subsections(
     open(FLUTTER_README).read(), doc_blocks.slug(
         'Listening without keeping the callback'), _taken_readme)
@@ -1124,15 +1147,7 @@ _life_imports, _life_body = split_imports(
     _fr['the-controller-s-life/_ProfileScreenState'])
 assert _life_imports == ["import 'dart:async';"], _life_imports
 
-FILES['readme_test'] = '\n'.join([
-    *sorted(set(
-        _install_imports + _usage_imports + _listening_imports
-        + _second_imports + _life_imports + [
-            "import 'package:flutter_test/flutter_test.dart';",
-        ])),
-    '',
-    _usage_body,
-    '''
+README_API = '''
 /// The API the README takes as the application's own: it answers ten
 /// milliseconds after the call.
 class ProfileApi {
@@ -1161,90 +1176,56 @@ class FailingApi extends ProfileApi {
     throw StateError('no network');
   }
 }
-''',
-    # Why: the fragment is the body of a function that has a controller.
-    'Future<void> why(ProfileController controller) async {\n'
-    + _fr['why/final-job-controller-load'] + '}\n',
-    wrap('saveSelector', _fr['selecting-one-value/soloselector-profile-bool'],
-         'ProfileController controller'),
-    '''
-class SaveButton extends StatefulWidget {
-  final ProfileController controller;
+'''
 
-  const SaveButton({required this.controller, super.key});
-
-  @override
-  State<SaveButton> createState() => _SaveButtonState();
-}
-''',
-    _fr['selecting-one-value/_SaveButtonState'],
-    wrap('anyBuilder', _fr['builders-for-any-controller/solobuilder-profile'],
-         'Solo<Profile> controller'),
-    '''
-/// The first attempt of the section on listening.
-class Leaking extends StatefulWidget {
-  final ProfileController controller;
-  final List<String> heard;
-
-  const Leaking({required this.controller, required this.heard, super.key});
-
-  @override
-  State<Leaking> createState() => _LeakingState();
-}
-
-class _LeakingState extends State<Leaking> {''',
-    _leaking_body,
-    '''
-  void _onState(Profile state) =>
-      widget.heard.add('state ${state.runtimeType}');
-
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class Listening extends StatefulWidget {
-  final ProfileController controller;
-  final List<String> heard;
-
-  const Listening({required this.controller, required this.heard, super.key});
-
-  @override
-  State<Listening> createState() => _ListeningState();
-}
-
-class _ListeningState extends State<Listening> {
-  late final canSave =
-      SoloSelection(widget.controller, (state) => state.canSave);
-''',
-    _listening_body,
-    '''
-  void _onState(Profile state) =>
-      widget.heard.add('state ${state.runtimeType}');
-
-  void _onCanSave(bool canSave) => widget.heard.add('canSave $canSave');
-
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-final _heardBySecondImport = <bool>[];
-
-void _onCanSave(bool canSave) => _heardBySecondImport.add(canSave);
-
-(SoloSelection<Profile, bool>, SoloSubscription) secondImport(
-  ProfileController controller,
-) {''',
-    _second_body,
-    '''  return (canSave, subscription);
-}
-
+README_SCREEN = '''
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
-''',
+'''
+
+README_HELPERS = '''
+Widget app(Widget child) => MaterialApp(home: Scaffold(body: child));
+
+VoidCallback? pressable(WidgetTester tester) =>
+    tester.widget<ElevatedButton>(find.byType(ElevatedButton)).onPressed;
+
+/// Closes [controller] once the test is over, without waiting for it.
+///
+/// A tear-down runs after the fake clock has stopped, and a `close()`
+/// awaited there with a job still running never comes back: a driver that
+/// went red halfway through a load would stand until its timeout and take
+/// the next one with it, instead of saying what failed.
+void closing(Solo<Object> controller) =>
+    addTearDown(() => unawaited(controller.close()));
+
+Future<ProfileController> loaded(WidgetTester tester) async {
+  final controller = ProfileController(ProfileApi());
+  closing(controller);
+  controller.load().ignoreFailure();
+  await tester.pump(const Duration(milliseconds: 20));
+
+  return controller;
+}
+'''
+
+FILES['readme_test'] = '\n'.join([
+    *sorted(set(
+        _install_imports + _usage_imports + _life_imports + [
+            "import 'package:flutter_test/flutter_test.dart';",
+        ])),
+    '',
+    _usage_body,
+    README_API,
+    # Why: the fragment is the body of a function that has a controller.
+    'Future<void> why(ProfileController controller) async {\n'
+    + _fr['why/final-job-controller-load'] + '}\n',
+    wrap('saveSelector', _fr['selecting-one-value/soloselector-profile-bool'],
+         'ProfileController controller'),
+    README_SCREEN,
     _life_body,
     '''
 class LoadButton extends StatefulWidget {
@@ -1289,30 +1270,7 @@ Future<Outcome<String>> theHandle(
     _fr['testing/final-done-controller-load-don'],
     '''  return outcome;
 }
-
-Widget app(Widget child) => MaterialApp(home: Scaffold(body: child));
-
-VoidCallback? pressable(WidgetTester tester) =>
-    tester.widget<ElevatedButton>(find.byType(ElevatedButton)).onPressed;
-
-/// Closes [controller] once the test is over, without waiting for it.
-///
-/// A tear-down runs after the fake clock has stopped, and a `close()`
-/// awaited there with a job still running never comes back: a driver that
-/// went red halfway through a load would stand until its timeout and take
-/// the next one with it, instead of saying what failed.
-void closing(Solo<Object> controller) =>
-    addTearDown(() => unawaited(controller.close()));
-
-Future<ProfileController> loaded(WidgetTester tester) async {
-  final controller = ProfileController(ProfileApi());
-  closing(controller);
-  controller.load().ignoreFailure();
-  await tester.pump(const Duration(milliseconds: 20));
-
-  return controller;
-}
-
+''' + README_HELPERS + '''
 void main() {
   testWidgets('a handle stops the job it stands for', (tester) async {
     final controller = ProfileController(ProfileApi());
@@ -1432,90 +1390,6 @@ void main() {
     expect(pressable(tester), isNotNull);
   });
 
-  testWidgets('the selection in a field follows a new controller',
-      (tester) async {
-    final first = await loaded(tester);
-    final second = ProfileController(ProfileApi());
-    closing(second);
-
-    await tester.pumpWidget(app(SaveButton(controller: first)));
-    expect(pressable(tester), isNotNull);
-
-    await tester.pumpWidget(app(SaveButton(controller: second)));
-    expect(
-      pressable(tester),
-      isNull,
-      reason: 'the new controller has nothing to save; a selection left on '
-          'the old one would say otherwise and send its tap to the new one',
-    );
-    debugPrint('the field: follows the controller it is handed');
-  });
-
-  testWidgets('the builder takes the controller itself', (tester) async {
-    final controller = ProfileController(ProfileApi());
-    closing(controller);
-    await tester.pumpWidget(app(anyBuilder(controller)));
-    expect(find.text('no profile'), findsOne);
-
-    controller.load().ignoreFailure();
-    await tester.pump();
-    await tester.pump();
-    expect(find.text('loading'), findsOne);
-    await tester.pump(const Duration(milliseconds: 10));
-    expect(find.text('Ada Lovelace'), findsOne);
-  });
-
-  testWidgets('a closure handed to removeListener again removes nothing',
-      (tester) async {
-    final controller = ProfileController(ProfileApi());
-    closing(controller);
-    final heard = <String>[];
-    await tester.pumpWidget(Leaking(controller: controller, heard: heard));
-    await tester.pumpWidget(const SizedBox());
-
-    controller.load().ignoreFailure();
-    await tester.pump(const Duration(milliseconds: 10));
-    expect(
-      heard,
-      ['state Loading', 'state Loaded'],
-      reason: 'the first attempt: its State is gone and its closure is still '
-          'called',
-    );
-    debugPrint('the first attempt: heard $heard after dispose()');
-  });
-
-  testWidgets('a group of subscriptions goes with the State', (tester) async {
-    final controller = ProfileController(ProfileApi());
-    closing(controller);
-    final heard = <String>[];
-    await tester.pumpWidget(Listening(controller: controller, heard: heard));
-
-    controller.load().ignoreFailure();
-    await tester.pumpAndSettle();
-    expect(heard, ['state Loading', 'state Loaded', 'canSave true']);
-
-    await tester.pumpWidget(const SizedBox());
-    controller.load().ignoreFailure();
-    await tester.pumpAndSettle();
-    expect(
-      heard,
-      hasLength(3),
-      reason: 'dispose cancelled the group, so nothing is heard after it',
-    );
-  });
-
-  testWidgets('the second import brings select and listen', (tester) async {
-    final controller = ProfileController(ProfileApi());
-    closing(controller);
-    final (canSave, subscription) = secondImport(controller);
-
-    controller.load().ignoreFailure();
-    await tester.pumpAndSettle();
-    expect(canSave.value, isTrue);
-    expect(_heardBySecondImport, [true]);
-    subscription.cancel();
-  });
-
   testWidgets('the screen owns its controller and closes it', (tester) async {
     await tester.pumpWidget(const MaterialApp(home: ProfileScreen()));
     final controller = tester
@@ -1579,6 +1453,204 @@ void main() {
       isEmpty,
       reason: 'the job ends Cancelled, and that branch says nothing',
     );
+  });
+}
+''',
+])
+
+# The same model under the head of the block that mixes `SoloListenable`
+# in, and the fragments that need what the mixin gives.
+FILES['readme_listenable_test'] = '\n'.join([
+    *sorted(set(
+        _install_imports + _usage_imports + _listening_imports
+        + _second_imports + _life_imports + [
+            "import 'package:flutter_test/flutter_test.dart';",
+        ])),
+    '',
+    _listenable_body,
+    README_API,
+    wrap('listenableBuilder',
+         _fr[_as_listenable + '/valuelistenablebuilder-profile'],
+         'ProfileController controller'),
+    '''
+class SaveButton extends StatefulWidget {
+  final ProfileController controller;
+
+  const SaveButton({required this.controller, super.key});
+
+  @override
+  State<SaveButton> createState() => _SaveButtonState();
+}
+''',
+    _fr['selecting-one-value/_SaveButtonState'],
+    '''
+/// The first attempt of the section on listening.
+class Leaking extends StatefulWidget {
+  final ProfileController controller;
+  final List<String> heard;
+
+  const Leaking({required this.controller, required this.heard, super.key});
+
+  @override
+  State<Leaking> createState() => _LeakingState();
+}
+
+class _LeakingState extends State<Leaking> {''',
+    _leaking_body,
+    '''
+  void _onState(Profile state) =>
+      widget.heard.add('state ${state.runtimeType}');
+
+  @override
+  Widget build(BuildContext context) => const SizedBox();
+}
+
+class Listening extends StatefulWidget {
+  final ProfileController controller;
+  final List<String> heard;
+
+  const Listening({required this.controller, required this.heard, super.key});
+
+  @override
+  State<Listening> createState() => _ListeningState();
+}
+
+class _ListeningState extends State<Listening> {
+  late final canSave =
+      SoloSelection(widget.controller, (state) => state.canSave);
+''',
+    _listening_body,
+    '''
+  void _onState(Profile state) =>
+      widget.heard.add('state ${state.runtimeType}');
+
+  void _onCanSave(bool canSave) => widget.heard.add('canSave $canSave');
+
+  @override
+  Widget build(BuildContext context) => const SizedBox();
+}
+
+final _heardBySecondImport = <bool>[];
+
+void _onCanSave(bool canSave) => _heardBySecondImport.add(canSave);
+
+(SoloSelection<Profile, bool>, SoloSubscription) secondImport(
+  ProfileController controller,
+) {''',
+    _second_body,
+    '''  return (canSave, subscription);
+}
+''' + README_SCREEN,
+    _life_body,
+    README_HELPERS + '''
+void main() {
+  testWidgets('the framework builder takes the controller with the mixin',
+      (tester) async {
+    final controller = ProfileController(ProfileApi());
+    closing(controller);
+    await tester.pumpWidget(app(listenableBuilder(controller)));
+    expect(find.text('no profile'), findsOne);
+
+    controller.load().ignoreFailure();
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('loading'), findsOne);
+    await tester.pump(const Duration(milliseconds: 10));
+    expect(find.text('Ada Lovelace'), findsOne);
+    expect(
+      controller.value,
+      isA<Loaded>(),
+      reason: 'the state is the value of the listenable',
+    );
+  });
+
+  testWidgets('the screen of Usage takes this controller as well',
+      (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: ProfileScreen()));
+    final controller = tester
+        .state<_ProfileScreenState>(find.byType(ProfileScreen))
+        .controller;
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Ada Lovelace'),
+      findsOne,
+      reason: 'SoloBuilder goes on taking a controller with the mixin',
+    );
+    expect(controller.value, isA<Loaded>());
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpAndSettle();
+    expect(controller.isClosed, isTrue);
+  });
+
+  testWidgets('the selection in a field follows a new controller',
+      (tester) async {
+    final first = await loaded(tester);
+    final second = ProfileController(ProfileApi());
+    closing(second);
+
+    await tester.pumpWidget(app(SaveButton(controller: first)));
+    expect(pressable(tester), isNotNull);
+
+    await tester.pumpWidget(app(SaveButton(controller: second)));
+    expect(
+      pressable(tester),
+      isNull,
+      reason: 'the new controller has nothing to save; a selection left on '
+          'the old one would say otherwise and send its tap to the new one',
+    );
+    debugPrint('the field: follows the controller it is handed');
+  });
+
+  testWidgets('a closure handed to removeListener again removes nothing',
+      (tester) async {
+    final controller = ProfileController(ProfileApi());
+    closing(controller);
+    final heard = <String>[];
+    await tester.pumpWidget(Leaking(controller: controller, heard: heard));
+    await tester.pumpWidget(const SizedBox());
+
+    controller.load().ignoreFailure();
+    await tester.pump(const Duration(milliseconds: 10));
+    expect(
+      heard,
+      ['state Loading', 'state Loaded'],
+      reason: 'the first attempt: its State is gone and its closure is still '
+          'called',
+    );
+    debugPrint('the first attempt: heard $heard after dispose()');
+  });
+
+  testWidgets('a group of subscriptions goes with the State', (tester) async {
+    final controller = ProfileController(ProfileApi());
+    closing(controller);
+    final heard = <String>[];
+    await tester.pumpWidget(Listening(controller: controller, heard: heard));
+
+    controller.load().ignoreFailure();
+    await tester.pumpAndSettle();
+    expect(heard, ['state Loading', 'state Loaded', 'canSave true']);
+
+    await tester.pumpWidget(const SizedBox());
+    controller.load().ignoreFailure();
+    await tester.pumpAndSettle();
+    expect(
+      heard,
+      hasLength(3),
+      reason: 'dispose cancelled the group, so nothing is heard after it',
+    );
+  });
+
+  testWidgets('the second import brings select and listen', (tester) async {
+    final controller = ProfileController(ProfileApi());
+    closing(controller);
+    final (canSave, subscription) = secondImport(controller);
+
+    controller.load().ignoreFailure();
+    await tester.pumpAndSettle();
+    expect(canSave.value, isTrue);
+    expect(_heardBySecondImport, [true]);
+    subscription.cancel();
   });
 }
 ''',

@@ -41,8 +41,8 @@ export default defineConfig({
               'its cleanup and cooperative cancellation. Pure Dart.',
             '- `solo` adds the controller: a queue with policies, state ' +
               'rules, event accumulation. Re-exports `async_job`.',
-            '- `flutter_solo` adds the Flutter face: `ValueListenable`, ' +
-              '`select`, `listen`. Re-exports `solo`.',
+            '- `flutter_solo` adds the Flutter face: `SoloBuilder`, ' +
+              '`ValueListenable`, `select`, `listen`. Re-exports `solo`.',
             '',
             'Cancellation is cooperative: `cancel()` requests it and the ' +
               'body answers at a checkpoint -- `ctx.abandonable`, `ctx.join`, ' +

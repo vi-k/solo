@@ -139,8 +139,7 @@ last entries of the first group name them.
   a `ValueListenable`. It takes any `Solo` — one `with SoloStream` included —
   subscribes in `initState`, reads the controller's state on every build,
   compares controllers by identity when the parent hands over a new one, and
-  passes `child` through untouched. See
-  [Builders for any controller](README.md#builders-for-any-controller).
+  passes `child` through untouched. See [Usage](README.md#usage).
 
 - `SoloSelection<S, T>`: a `ValueListenable` of one value picked out of
   another, notifying only when that value changes — by `!=`, or by a `changed`

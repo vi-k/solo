@@ -1,7 +1,7 @@
 name: flutter_solo
 description: >-
   State management for Flutter: sequential jobs, exclusive state ownership,
-  cooperative cancellation, rebuilds through ValueListenable.
+  cooperative cancellation, rebuilds through SoloBuilder or ValueListenable.
 version: 0.2.0
 repository: https://github.com/vi-k/solo/tree/main/packages/flutter_solo
 issue_tracker: https://github.com/vi-k/solo/issues

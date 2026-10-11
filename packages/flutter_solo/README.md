@@ -1,11 +1,13 @@
 # flutter_solo
 
 State management for Flutter: sequential jobs over one state, exclusive
-ownership, cooperative cancellation, and rebuilds through `ValueListenable`.
+ownership, cooperative cancellation, and rebuilds through `SoloBuilder` or
+`ValueListenable`.
 
-A controller owns a state and runs jobs over it one at a time. Mix
-`SoloListenable` into it, and it is a `ValueListenable` of its state at the
-same time — so it drops straight into `ValueListenableBuilder`,
+A controller owns a state and runs jobs over it one at a time, and
+`SoloBuilder` rebuilds a widget on every change of that state. Mix
+`SoloListenable` into the controller, and it is a `ValueListenable` of its
+state as well — so it drops straight into `ValueListenableBuilder`,
 `ListenableBuilder`, `AnimatedBuilder` and `Listenable.merge`.
 
 The [documentation site](https://docs.yet-another.dev/flutter_solo/) carries
@@ -91,7 +93,7 @@ final class Loaded extends Profile {
   Loaded(this.name);
 }
 
-final class ProfileController extends Solo<Profile> with SoloListenable {
+final class ProfileController extends Solo<Profile> {
   final ProfileApi api;
 
   ProfileController(this.api) : super(Empty());
@@ -124,8 +126,8 @@ class ProfileView extends StatelessWidget {
   const ProfileView({required this.controller, super.key});
 
   @override
-  Widget build(BuildContext context) => ValueListenableBuilder<Profile>(
-        valueListenable: controller,
+  Widget build(BuildContext context) => SoloBuilder<Profile>(
+        solo: controller,
         builder: (context, state, _) => switch (state) {
           Empty() => TextButton(
               onPressed: controller.load,
@@ -149,6 +151,52 @@ a load that failed or was cancelled leaves behind, and without them the screen
 would keep the spinner of a job that is no longer running. The full API —
 rules, the queue, children, observers — is documented in
 [solo](https://pub.dev/packages/solo).
+
+`SoloBuilder` is what draws the state: it takes the controller as `solo`,
+rebuilds on every change of the state and hands `child` through untouched.
+
+## The controller as a `ValueListenable`
+
+The framework has builders of its own, and they take a `ValueListenable`. Mix
+`SoloListenable` into the controller, and it is one:
+
+```dart
+final class ProfileController extends Solo<Profile> with SoloListenable {
+  // ...same as above...
+}
+```
+
+The state is its `value`, and `ValueListenableBuilder` takes the controller as
+it is:
+
+```dart
+ValueListenableBuilder<Profile>(
+  valueListenable: controller,
+  builder: (context, state, _) => Text(
+    switch (state) {
+      Empty() => 'no profile',
+      Loading() => 'loading',
+      Loaded(:final name) => name,
+    },
+  ),
+)
+```
+
+`ListenableBuilder` and `AnimatedBuilder` take it the same way, and
+`Listenable.merge` joins it with other listenables.
+
+`SoloBuilder` goes on taking it, as it takes any controller: with the mixin,
+without it, or `with SoloStream`. One thing sets it apart from
+`ValueListenableBuilder`: it compares controllers by identity. Handed a new
+controller whose `==` says it is the old one, `SoloBuilder` moves to it and
+`ValueListenableBuilder` goes on listening to the old one.
+
+The sections below on selecting and listening take the controller with the
+mixin.
+
+A controller with both a `stream` and `SoloListenable`, a screen built on that
+stream, and a base class of controllers with no Flutter in it are on a page of
+their own, [Mixins](doc/mixins.md).
 
 ## Selecting one value
 
@@ -216,40 +264,9 @@ permission from the old controller while its tap went to the new one. Both come
 with the field that `SoloSelector` spares you. The source is subscribed to only
 while the selection has listeners, and there is nothing to dispose of.
 
-## Builders for any controller
-
-`ValueListenableBuilder` needs a `ValueListenable`, and a controller with
-`SoloListenable` mixed in is one. A controller without it is not — a plain
-`Solo`, or one `with SoloStream` only — and for those `SoloBuilder` takes the
-controller itself:
-
-```dart
-SoloBuilder<Profile>(
-  solo: controller,
-  builder: (context, state, _) => Text(
-    switch (state) {
-      Empty() => 'no profile',
-      Loading() => 'loading',
-      Loaded(:final name) => name,
-    },
-  ),
-)
-```
-
-It rebuilds on every change of the state and hands `child` through untouched.
-Besides the controller it takes, one thing sets it apart from
-`ValueListenableBuilder`: it compares controllers by identity. Handed a new
-controller whose `==` says it is the old one, `SoloBuilder` moves to it and
-`ValueListenableBuilder` goes on listening to the old one.
-
-Picking one value out of such a controller needs nothing new. `SoloSelector`
-takes any controller, and `SoloSelection.from(controller, selector)` is its
-selection without a widget around it, for a `State` field of a controller that
-is not a `ValueListenable`.
-
-A controller with both a `stream` and `SoloListenable`, a screen built on that
-stream, and a base class of controllers with no Flutter in it are on a page of
-their own, [Mixins](doc/mixins.md).
+The constructor takes a `ValueListenable`: here, the controller with
+`SoloListenable`. For a controller without the mixin,
+`SoloSelection.from(controller, selector)` builds the same selection.
 
 ## Listening without keeping the callback
 
@@ -377,9 +394,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 `close()` cancels whatever is queued or running — a running body stops at its
 next context call, which is what makes leaving the screen cheap — drops every
 listener and stops notifying for good. It is safe on either side of
-`super.dispose()`. `SoloListenable` is not a `ChangeNotifier`: the method is
-`close()`, not `dispose()`, and it returns a `Future` that completes when the
-job has actually stopped.
+`super.dispose()`. Even with `SoloListenable` a controller is not a
+`ChangeNotifier`: the method is `close()`, not `dispose()`, and it returns a
+`Future` that completes when the job has actually stopped.
 
 A controller shared by several screens lives where your other singletons live —
 a `get_it` registration, an `InheritedWidget`, a field of the app object — and
@@ -508,9 +525,9 @@ body, as above, ends the job and takes its timer along.
 
 | Question | Answer |
 | --- | --- |
-| When do listeners run? | Synchronously, in subscription order, on every state change. `value` and `currentState` are the same object. There is no `stream` unless `SoloStream` is mixed in as well: a widget rebuilds from `value`. |
+| When do listeners run? | Synchronously, in subscription order, on every state change. With `SoloListenable`, `value` and `currentState` are the same object. There is no `stream` unless `SoloStream` is mixed in: the builders listen to the controller itself. |
 | Are equal states filtered? | No. `emit` of a state equal to the current one still notifies: the listeners are the engine's own, and the engine compares nothing. A frame may swallow several of them, a listener will not. A selection filters its own value, which is the one a widget usually cares about. |
-| Several controllers on one screen? | Each with its own builder, as expected. `Listenable.merge([a, b])` in a `ListenableBuilder` covers the case where one widget depends on two. |
+| Several controllers on one screen? | Each with its own builder, as expected. `Listenable.merge([a, b])` in a `ListenableBuilder` covers the case where one widget depends on two; it takes controllers with `SoloListenable`. |
 | Can I set `value`? | There is no setter. The state belongs to the jobs; a `ValueNotifier` face with a setter would give it away. |
 
 ## solo

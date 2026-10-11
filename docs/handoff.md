@@ -225,11 +225,20 @@ changes» CHANGELOG `solo`. 2026-10-07 по его же слову `Job.ignore()
 в `2026-10-02-solo-readme-reread-report.md` (на bee1fd10 `solo` — формат
 и анализ чистые, 1769 тестов, `readme_rakes_test.dart` — 39), на вопрос о форме
 тура «The dozen calls» владелец ответил в тот же день: тур остаётся как есть.
-С 2026-10-11 он читает README пакета `flutter_solo`, пункты пойдут
-в `2026-10-04-flutter-solo-readme-reread-report.md`; дальше `mixins.md` того же
-пакета, последними CHANGELOG трёх пакетов. Правки принятых страниц после их
-приёмки (переименования, `pause` в списке вызовов `extending.md` пакета
-`async_job`, `Job<T>` в коде `children.md` пакета `solo`, абзацы по его
+С 2026-10-11 он читает README пакета `flutter_solo`, пункты идут
+в `2026-10-04-flutter-solo-readme-reread-report.md`, их четыре. По четвёртому
+страница перестроена: «Usage» объявляет контроллер чистым `Solo` и рисует его
+через `SoloBuilder`, а `with SoloListenable` и `ValueListenableBuilder` стоят
+в новом разделе «The controller as a `ValueListenable`» сразу за ним; раздел
+«Builders for any controller» убран. Вместе с README изменены `description`
+в `packages/flutter_solo/pubspec.yaml`, ссылка в его CHANGELOG, вступление
+`mixins.md`, пример пакета и строка о пакете на сайте (на коммите перестройки
+`flutter_solo` — формат и анализ чистые, 191 тест, `readme_rakes_test.dart` —
+77, его пример 4, стенд `tool/flutter_snippets.py` — 43 теста и 6 цитат трасс,
+проверки задания `docs` зелёные, сайт собран, 46 страниц). Дальше `mixins.md`
+того же пакета, последними CHANGELOG трёх пакетов. Правки принятых страниц
+после их приёмки (переименования, `pause` в списке вызовов `extending.md`
+пакета `async_job`, `Job<T>` в коде `children.md` пакета `solo`, абзацы по его
 вопросам после приёмки) владелец просмотрел 2026-10-08; принятые страницы
 `async_job` и `solo` на `165735d` прочитаны им целиком. Изменённую тем же
 коммитом фразу в `packages/solo/doc/resources.md` он перечитал и принял
@@ -288,15 +297,21 @@ job a deadline of its own»: параметр `timeout` у `Job(...)`,
 с фразой о нём, написанной по пятому вопросу (L5); добавила dev-зависимость
 `test_api` в `packages/solo/pubspec.yaml`. Раздел «Вопросы владельцу»
 в `2026-10-04-flutter-solo-readme-reread-report.md`: README `flutter_solo`
-вырос до 512 строк, а карта `2026-09-11[16]-docs-structure-design.md` числила
-его страницей в 325. Оставить, вынести «Testing»
-на `packages/flutter_solo/doc/testing.md` с переводом, оставив в README тест
-и ссылку, или вынести туда же и раздел о подписках. Там же правки показанного
-кода на подтверждение: блок хэндла в «Testing», `close()` в теле теста вместо
-`addTearDown`, заголовки первых попыток в двух разделах, пример `SoloBuilder`,
-параметр `enabled` вместо второго `canSave`, `import 'dart:async';` в блоке
-экрана, `controller` вместо `profile` в «Why», замыкания в `listen`; и два
-предложения dartdoc в `packages/flutter_solo/lib/`. Вычитка `mixins.md`
+вырос до 512 строк, после перестройки 2026-10-11 в нём 540, а карта
+`2026-09-11[16]-docs-structure-design.md` числила его страницей в 325.
+Оставить, вынести «Testing» на `packages/flutter_solo/doc/testing.md`
+с переводом, оставив в README тест и ссылку, или вынести туда же и раздел
+о подписках. Там же правки показанного кода на подтверждение: блок хэндла
+в «Testing», `close()` в теле теста вместо `addTearDown`, заголовки первых
+попыток в двух разделах, параметр `enabled` вместо второго `canSave`,
+`import 'dart:async';` в блоке экрана, `controller` вместо `profile` в «Why»,
+замыкания в `listen`; и два предложения dartdoc в `packages/flutter_solo/lib/`.
+По чтению той же страницы владельцу заданы и ждут ответа два вопроса.
+Добавить ли scopo в перечень мест, где живёт контроллер, в разделе «The
+controller's life» (сейчас там регистрация в `get_it`, `InheritedWidget` и поле
+объекта приложения). И добавить ли в принятый `packages/solo/README.md` слова
+о том, откуда имя пакета, которые по его слову встали в README `flutter_solo`
+(«hence the `solo` in the name»). Вычитка `mixins.md`
 (`2026-10-04-flutter-solo-mixins-reread-report.md`) вопросов не передала,
 на подтверждение три вещи: импорты в двух блоках базы, новый блок
 `ListenableController` и dev-зависимость `meta: ^1.15.0`

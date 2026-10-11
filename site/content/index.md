@@ -23,7 +23,7 @@ hero:
 | --- | --- |
 | [solo](solo/) | The controller: a queue with policies, state rules, children, accumulation. Pure Dart. |
 | [async_job](async_job/) | The kernel: cancellation, children and cleanup for one operation. Pure Dart, depends only on `meta`. |
-| [flutter_solo](flutter_solo/) | The Flutter face: `ValueListenable`, `select`, `listen`. |
+| [flutter_solo](flutter_solo/) | The Flutter face: `SoloBuilder`, `ValueListenable`, `select`, `listen`. |
 
 `solo` re-exports `async_job`, and `flutter_solo` re-exports `solo`, so one
 dependency is enough.

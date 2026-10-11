@@ -6,6 +6,9 @@
 > раздела «Testing»; работу он не останавливал. Основная сессия после
 > переноса прогнала проверки пяти пакетов, пять проверок документов и стенд
 > `tool/flutter_snippets.py`. Владелец читает страницу с 2026-10-11.
+> По его вопросу в тот же день страница перестроена: первый пример стоит
+> на чистом `Solo` и `SoloBuilder`, а миксин `SoloListenable` получил свой
+> раздел; подробности в четвёртом пункте раздела «По чтению владельца».
 > **Что это:** отчёт о повторной вычитке `packages/flutter_solo/README.md`
 > перед чтением владельца: находки ревью с вердиктами, два раздела,
 > перестроенные первыми попытками, новый сторож пакета, правки стенда
@@ -314,7 +317,13 @@ answers with the name ten milliseconds after the call». Сторожа —
 
 Вердикт: принято. Билдер возвращает `Text` со `switch` по трём состояниям, как
 бейдж в `mixins.md`; сторож —
-`the builder takes a controller that is not a listenable`.
+`the builder takes a controller that is not a listenable`. Итог 2026-10-11:
+этого блока на странице больше нет. По четвёртому пункту раздела «По чтению
+владельца» раздел «Builders for any controller» убран, `SoloBuilder` показан
+в «Usage» экраном `ProfileView`, а `Text` со `switch` по трём состояниям стоит
+теперь под `ValueListenableBuilder` в разделе «The controller as a
+`ValueListenable`». Сторож заменён
+на `SoloBuilder takes a controller with the mixin or without`.
 
 **L2. «Would subscribe and unsubscribe every frame».** `build` зовут не каждый
 кадр; зонд B6 считает подписки по построениям. И чем плохо, что «the value it
@@ -801,8 +810,7 @@ B4 и B8 красят сборку, а не драйвер: блок без об
    и пакетами, например scopo». Формулировка та же, что в строке `BlocProvider`
    таблицы соответствий `packages/solo/doc/vs-bloc.md`. Хвост прежней фразы
    о том, что пакет работает по одной задаче за раз, стал отдельной фразой, она
-   в пункте
-3. Сканер перевода: 90 до и 90 после.
+   в третьем пункте. Сканер перевода: 90 до и 90 после.
 
 2. Раздел «Install», абзац под импортом. «`SoloListenable` is the mixin this
    package is about; `SoloBuilder`, `SoloSelector` and `SoloSelection` come
@@ -828,3 +836,89 @@ B4 и B8 красят сборку, а не драйвер: блок без об
    the package, not a limit of its engine», в переводе «По одной задаче за раз
    пакет работает тоже намеренно, отсюда и `solo` в его имени: в этом его
    предмет, а не предел его движка». Сканер перевода: 90 до и 90 после.
+
+4. Раздел «Usage» и порядок страницы за ним. Первый пример объявлял
+   `ProfileController` сразу `with SoloListenable` и рисовал его через
+   `ValueListenableBuilder`, а `SoloBuilder` появлялся только в середине
+   страницы, в разделе «Builders for any controller». Владелец: может, стоит
+   показывать чистый `Solo` и `SoloBuilder`, а `ValueListenableBuilder`
+   в другом месте? План перестройки он одобрил, страница перестроена.
+
+   «Usage» теперь объявляет
+   `final class ProfileController extends Solo<Profile>` без миксина,
+   а `ProfileView` стоит на `SoloBuilder`. Под блоком новая фраза:
+   «`SoloBuilder` is what draws the state: it takes the controller as `solo`,
+   rebuilds on every change of the state and hands `child` through untouched»,
+   в переводе «Состояние рисует `SoloBuilder`: он принимает контроллер как
+   `solo`, перестраивается на каждое изменение состояния и передаёт `child`
+   нетронутым».
+
+   Сразу за «Usage» встал новый раздел «The controller as a `ValueListenable`»,
+   в переводе «Контроллер как `ValueListenable`». Он открывается фразой «The
+   framework has builders of its own, and they take a `ValueListenable`. Mix
+   `SoloListenable` into the controller, and it is one», в переводе
+   «У фреймворка есть свои билдеры, и они принимают `ValueListenable`.
+   Подмешайте в контроллер `SoloListenable`, и он им станет». Дальше идёт блок
+   с миксином, который пишет тело класса как `// ...same as above...`,
+   по образцу блока `SoloStream` в `packages/solo/README.md`, затем
+   `ValueListenableBuilder` над этим контроллером и фраза
+   о `ListenableBuilder`, `AnimatedBuilder` и `Listenable.merge`. Раздел
+   «Builders for any controller» убран: показ `SoloBuilder` ушёл в «Usage»,
+   а отличие билдеров переехало в новый раздел: «One thing sets it apart from
+   `ValueListenableBuilder`: it compares controllers by identity», в переводе
+   «От `ValueListenableBuilder` его отличает одно: контроллеры он сравнивает
+   по идентичности». Разделы о выборе значения и о подписке остались
+   на контроллере с миксином, и новый раздел говорит об этом одной фразой.
+
+   Там, где страница молча полагалась на миксин, она теперь его называет.
+   Вступление: «…and `SoloBuilder` rebuilds a widget on every change of that
+   state. Mix `SoloListenable` into the controller, and it is a
+   `ValueListenable` of its state as well». «Selecting one value»: «The
+   constructor takes a `ValueListenable`: here, the controller with
+   `SoloListenable`. For a controller without the mixin,
+   `SoloSelection.from(controller, selector)` builds the same selection»,
+   в переводе «Конструктор принимает `ValueListenable`: здесь это контроллер
+   с `SoloListenable`. Для контроллера без миксина ту же проекцию строит
+   `SoloSelection.from(controller, selector)`». «The controller's life»: «Even
+   with `SoloListenable` a controller is not a `ChangeNotifier`». Таблица
+   «Notes»: первая строка говорит «With `SoloListenable`, `value` and
+   `currentState` are the same object», третья — что `Listenable.merge` берёт
+   контроллеры с миксином.
+
+   Сторож `packages/flutter_solo/test/readme_rakes_test.dart` вырос с 72 тестов
+   до 77, пакет `flutter_solo` — со 186 до 191. На странице два класса с именем
+   `ProfileController`, поэтому второй живёт в новом файле
+   `test/support/readme_listenable.dart`, и фрагменты, которым нужен
+   `ValueListenable` (`SaveButton`, `Listening`, блок второго импорта), берут
+   его оттуда. Блок с `// ...same as above...` — единственный кусок страницы,
+   которого нет в support-файлах дословно; сторож ждёт ровно его и отдельным
+   тестом держит тело класса в `readme_listenable.dart` равным телу
+   из `readme_profile.dart`. Мутация: `key: 'load'` в копии заменён
+   на `key: 'fetch'`, красным стал один этот тест. Новые тесты держат каждое
+   новое утверждение страницы: `SoloBuilder` перестраивается на каждое
+   изменение и не трогает `child`; `ValueListenableBuilder`,
+   `ListenableBuilder`, `AnimatedBuilder` и `Listenable.merge` принимают
+   контроллер с миксином; `SoloBuilder` принимает контроллер с миксином, без
+   него и `with SoloStream`; `SoloSelection.from` над контроллером без миксина
+   даёт ту же проекцию, что конструктор; контроллер с миксином
+   не `ChangeNotifier`; билдеры подписываются на сам контроллер.
+
+   Стенд `tool/flutter_snippets.py` собирает README двумя файлами: модель
+   «Usage» с фрагментами, которым хватает любого контроллера, и ту же модель
+   под заголовком блока с миксином с фрагментами, которым нужен
+   `ValueListenable`. Тело во втором файле стенд берёт из блока «Usage»
+   и падает, если блок с миксином перестанет быть заголовком класса,
+   комментарием и скобкой. Тестов в стенде стало 43 вместо 42.
+
+   За пределами README тем же коммитом изменены: `description`
+   в `packages/flutter_solo/pubspec.yaml` («rebuilds through SoloBuilder or
+   ValueListenable»), ссылка записи `SoloBuilder`
+   в `packages/flutter_solo/CHANGELOG.md` (теперь на «Usage»), вступление
+   `packages/flutter_solo/doc/mixins.md` и его перевода (ссылка на новый
+   раздел), пример `packages/flutter_solo/example/lib/main.dart` (чистый `Solo`
+   и `SoloBuilder`). В одобренный список не входила, но повторяла прежнее
+   вступление строка о пакете в `site/content/index.md`,
+   `site/content/ru/index.md` и `site/astro.config.mjs`; теперь она читается
+   «The Flutter face: `SoloBuilder`, `ValueListenable`, `select`, `listen`».
+   Сканер перевода: 90 до и 90 после у `packages/flutter_solo/README.ru.md`
+   и у `docs/ru/flutter_solo/mixins.md`.

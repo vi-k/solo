@@ -2,13 +2,14 @@
 
 `SoloListenable` делает контроллер `ValueListenable`, а значит, и `Listenable`:
 `ValueListenableBuilder`, `ListenableBuilder` и `AnimatedBuilder` фреймворка
-принимают контроллер как есть, а экран из раздела
-[«Как пользоваться»](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.ru.md#как-пользоваться)
-README пакета построен на первом из них. Билдеры этого пакета, `SoloBuilder`
-и `SoloSelector`, принимают любой контроллер, с миксином и без. Эта страница
-о том, что стоит вокруг `SoloListenable`: `SoloStream` из `solo` рядом с ним,
-экран на этом стриме и базовый класс контроллеров в пакете без Flutter, куда
-`SoloListenable` не подмешать.
+принимают контроллер как есть, а README пакета показывает первый из них
+в разделе
+[«Контроллер как `ValueListenable`»](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.ru.md#контроллер-как-valuelistenable).
+Билдеры этого пакета, `SoloBuilder` и `SoloSelector`, принимают любой
+контроллер, с миксином и без. Эта страница о том, что стоит вокруг
+`SoloListenable`: `SoloStream` из `solo` рядом с ним, экран на этом стриме
+и базовый класс контроллеров в пакете без Flutter, куда `SoloListenable`
+не подмешать.
 
 Строки под блоком кода показывают, что даёт его запуск: текст на экране после
 каждого шага или место, куда ушло сообщение об ошибке слушателя. Два раздела

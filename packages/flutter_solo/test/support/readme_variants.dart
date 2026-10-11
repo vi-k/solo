@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_solo/flutter_solo.dart';
 import 'package:flutter_solo/listenable.dart';
 
+import 'readme_listenable.dart' as listenable;
 import 'readme_profile.dart';
 
 /// A controller over the states of the page that a test can steer: it
@@ -248,7 +249,7 @@ class ParentState extends State<Parent> {
 /// `didUpdateWidget`.
 class StuckSaveButton extends StatefulWidget {
   /// The controller the button saves to.
-  final ProfileController controller;
+  final listenable.ProfileController controller;
 
   /// A Save button over [controller].
   const StuckSaveButton({required this.controller, super.key});
@@ -280,8 +281,8 @@ class QuietView extends StatelessWidget {
   const QuietView({required this.controller, super.key});
 
   @override
-  Widget build(BuildContext context) => ValueListenableBuilder<Profile>(
-        valueListenable: controller,
+  Widget build(BuildContext context) => SoloBuilder<Profile>(
+        solo: controller,
         builder: (context, state, _) => switch (state) {
           Empty() => TextButton(
               onPressed: controller.load,
@@ -298,7 +299,7 @@ class QuietView extends StatelessWidget {
 /// cancelled one.
 class Following extends StatefulWidget {
   /// The controller listened to.
-  final ProfileController controller;
+  final listenable.ProfileController controller;
 
   /// What the `State` was told, in order.
   final List<String> heard;

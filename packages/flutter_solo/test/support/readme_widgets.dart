@@ -2,7 +2,9 @@
 // fragment inside what a fragment needs around it: a function for a line of
 // statements, a `State` for the members of one. The imports are the ones
 // the page shows next to the code that needs them, and nothing else is
-// imported here but the model. `test/readme_rakes_test.dart` runs it.
+// imported here but the model and, under a prefix, the controller the page
+// mixes `SoloListenable` into: the fragments that need a `ValueListenable`
+// are handed that one. `test/readme_rakes_test.dart` runs it.
 //
 // A widget expression of the page ends with `)` on a line of its own, where
 // a function that returned it would end with `);`. It stands as the one
@@ -18,6 +20,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_solo/flutter_solo.dart';
 import 'package:flutter_solo/listenable.dart';
 
+import 'readme_listenable.dart' as listenable;
 import 'readme_profile.dart';
 
 /// The fragment of "Why", as the body of a function that has a controller.
@@ -28,6 +31,20 @@ Future<void> why(ProfileController controller) async {
   // ignore: avoid_print
   print(job.outcome); // Cancelled(manual)
 }
+
+/// The builder of "The controller as a `ValueListenable`".
+Widget listenableBuilder(listenable.ProfileController controller) => [
+      ValueListenableBuilder<Profile>(
+        valueListenable: controller,
+        builder: (context, state, _) => Text(
+          switch (state) {
+            Empty() => 'no profile',
+            Loading() => 'loading',
+            Loaded(:final name) => name,
+          },
+        ),
+      )
+    ].single;
 
 /// The selector of "Selecting one value".
 Widget saveSelector(ProfileController controller) => [
@@ -44,7 +61,7 @@ Widget saveSelector(ProfileController controller) => [
 /// The widget whose `State` holds a selection in a field.
 class SaveButton extends StatefulWidget {
   /// The controller the button saves to.
-  final ProfileController controller;
+  final listenable.ProfileController controller;
 
   /// A Save button over [controller].
   const SaveButton({required this.controller, super.key});
@@ -77,25 +94,11 @@ class _SaveButtonState extends State<SaveButton> {
       );
 }
 
-/// The builder of "Builders for any controller".
-Widget anyBuilder(Solo<Profile> controller) => [
-      SoloBuilder<Profile>(
-        solo: controller,
-        builder: (context, state, _) => Text(
-          switch (state) {
-            Empty() => 'no profile',
-            Loading() => 'loading',
-            Loaded(:final name) => name,
-          },
-        ),
-      )
-    ].single;
-
 /// The widget of "Listening without keeping the callback": what its `State`
 /// hears goes to [heard].
 class Listening extends StatefulWidget {
   /// The controller listened to.
-  final ProfileController controller;
+  final listenable.ProfileController controller;
 
   /// What the `State` was told, in order.
   final List<String> heard;
@@ -173,7 +176,7 @@ void _onCanSave(bool canSave) => heardBySecondImport.add(canSave);
 
 /// The two lines of "Methods from a second import".
 (SoloSelection<Profile, bool>, SoloSubscription) secondImport(
-  ProfileController controller,
+  listenable.ProfileController controller,
 ) {
   final canSave = controller.select((state) => state.canSave);
   final subscription = canSave.listen(() => _onCanSave(canSave.value));
