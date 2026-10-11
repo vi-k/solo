@@ -1070,3 +1070,19 @@ B4 и B8 красят сборку, а не драйвер: блок без об
    `tool/flutter_snippets.py` берёт новый блок по его подразделу и собирает
    из него виджет `Named`; тестов в стенде стало 44 вместо 43. Сканер перевода:
    90 до и 90 после.
+
+8. Раздел «The controller's life», последний абзац. «A controller shared by
+   several screens lives where your other singletons live — a `get_it`
+   registration, an `InheritedWidget`, a field of the app object», в переводе
+   «…живёт там же, где остальные ваши синглтоны». Владелец: почему синглтоны?
+   С `InheritedWidget` контроллеру не обязательно быть синглтоном. Слово
+   называло не то свойство: общему контроллеру нужно стоять выше экранов,
+   которые его делят, а быть единственным на приложение ему незачем. Теперь: «A
+   controller shared by several screens lives where the other objects they
+   share live — a `get_it` registration, an `InheritedWidget` above those
+   screens, a field of the app object — and is closed there, once», в переводе
+   «Контроллер, общий для нескольких экранов, живёт там же, где остальные общие
+   для них объекты: в регистрации `get_it`, в `InheritedWidget` над этими
+   экранами, в поле объекта приложения. Там же он и закрывается, один раз».
+   Сторож эту фразу не цитирует: кода за ней на странице нет. Сканер перевода:
+   90 до и 90 после.

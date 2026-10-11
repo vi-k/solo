@@ -422,9 +422,9 @@ listener and stops notifying for good. It is safe on either side of
 `ChangeNotifier`: the method is `close()`, not `dispose()`, and it returns a
 `Future` that completes when the job has actually stopped.
 
-A controller shared by several screens lives where your other singletons live —
-a `get_it` registration, an `InheritedWidget`, a field of the app object — and
-is closed there, once.
+A controller shared by several screens lives where the other objects they share
+live — a `get_it` registration, an `InheritedWidget` above those screens, a
+field of the app object — and is closed there, once.
 
 ## Outcomes
 
