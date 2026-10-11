@@ -211,9 +211,10 @@ the working type, here `Loaded`, and the `keepWhile` rule of a job that has
 one, like `play` below. A plain read named `state` would look exactly like
 `ctx.state`, and a body that typed it out of habit would read past a
 cancellation it was supposed to honour: no `Cancelled`, no check of the rules,
-and the whole of `S` instead of `W`, with no `name` to read. The controller's
-own read is named `currentState`: a bare `state` in a body does not compile,
-and nobody types `currentState` by habit where a checkpoint is meant.
+and the whole of `S` instead of `W`, with no `name` to read. So the
+controller's own read is named `currentState`: a bare `state` in a body does
+not compile, and nobody types `currentState` by habit where a checkpoint is
+meant.
 
 Outside a job `currentState` is the read to use. Inside one it stays right for
 a different controller: `session.currentState` above is somebody else's
