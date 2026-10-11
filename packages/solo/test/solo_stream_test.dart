@@ -125,7 +125,7 @@ final class _StreamCloseOnFinish extends Solo<TestState>
   }
 }
 
-/// The one-line class `CHANGELOG` gives for a controller that used to be
+/// The one-line class that stands in for a controller that used to be
 /// created directly for its stream: the argument of `SoloStream` comes from
 /// the superclass, a type parameter included, and the constructor of `Solo`
 /// is taken as it is.

@@ -1,219 +1,74 @@
 ## Unreleased
 
-Moving from `0.2.0`: read "Breaking changes" for what stops compiling or
-behaves differently, and "Changes you will see on upgrade" for what a test
-shows with no change to the code. This package re-exports `solo` and, through
-it, `async_job`, so their breaking changes are its own; the first three and the
-last entries of the first group name them.
+This package re-exports `solo` and, through it, `async_job`, so their changes
+are its own: see
+[the `solo` changelog](https://github.com/vi-k/solo/blob/main/packages/solo/CHANGELOG.md)
+and
+[the `async_job` changelog](https://github.com/vi-k/solo/blob/main/packages/async_job/CHANGELOG.md).
 
 ### Breaking changes
 
-- **`ctx.wait` is renamed to `ctx.abandonable`** in `async_job`, which this
-  package re-exports through `solo`; `wait` stays as a deprecated alias until
-  the next breaking release. **Migrating.** Replace `ctx.wait` with
-  `ctx.abandonable`: `flutter analyze` fails on the old name. See
-  [the `async_job` changelog](https://github.com/vi-k/solo/blob/main/packages/async_job/CHANGELOG.md).
-
-- **`Job.ignore()` is renamed to `Job.ignoreFailure()`** in `async_job`, with
-  no deprecated alias: the old name read as `Future.ignore()`, which does
-  another thing. **Migrating.** `controller.load().ignore()` becomes
-  `controller.load().ignoreFailure()`; the analyzer names every such call.
-  `ignore()` on a future stays. See
-  [the `async_job` changelog](https://github.com/vi-k/solo/blob/main/packages/async_job/CHANGELOG.md).
-
+- **`ctx.wait` is renamed to `ctx.abandonable`** in `async_job`.
+- **`Job.ignore()` is renamed to `Job.ignoreFailure()`** in `async_job`.
 - **The state handlers of `run` and `job` are renamed in `solo`: `onError` to
-  `ifFailed`, `onCancel` to `ifCancelled`**, with no deprecated alias.
-  **Migrating.** Rename the two arguments wherever a controller calls `run` or
-  `job`; the analyzer names every such call. `Solo.onError` and `ctx.onCancel`
-  keep their names. See
-  [the `solo` changelog](https://github.com/vi-k/solo/blob/main/packages/solo/CHANGELOG.md).
-
+  `ifFailed`, `onCancel` to `ifCancelled`.**
 - **`SoloListenable` is a mixin on `Solo`,** the way `solo`'s `SoloStream` is:
-  `mixin SoloListenable<S extends Object> on Solo<S> implements
-  ValueListenable<S>`. It rides on `solo`'s rename — `SoloBase` becomes `Solo`,
-  and the stream-carrying `Solo` becomes the mixin `SoloStream`. What the mixin
-  opens is a base class of controllers without Flutter, with the mixin on the
-  leaf. A class that mixes `SoloListenable` in and overrides `onListenerError`
-  keeps its own report; a base without Flutter under a leaf with the mixin
-  loses its override to the mixin's, and keeps the report in a method of
-  another name for the leaf's override to call. **Migrating.**
-  `extends SoloListenable<S>` becomes `extends Solo<S> with SoloListenable`,
-  the type argument inferred from the superclass. `SoloListenable<S>(value)` no
-  longer compiles — a mixin cannot be instantiated — and a one-line class takes
-  its place: `class C<S extends Object> = Solo<S> with SoloListenable;`. In a
-  type position the argument is written out, `SoloListenable<S>`: the analyzer
-  does not ask for it, and a bare `SoloListenable` there is a
-  `SoloListenable<Object>`. See
-  [A base class without Flutter](doc/mixins.md#a-base-class-without-flutter).
-
-- **`SoloListenable` no longer carries a stream.** The listeners are its whole
-  delivery: a widget rebuilds from `value`, and an operation's result is
-  awaited through its `Job`, so the broadcast `StreamController` every
-  controller used to carry — created with it, fed on every change and closed
-  afterwards — is gone. **Migrating.** A controller whose `stream` somebody
-  reads mixes in both, `with SoloStream, SoloListenable`. See
+  `extends SoloListenable<S>` becomes `extends Solo<S> with SoloListenable`.
+  See
+  [The controller as a `ValueListenable`](README.md#the-controller-as-a-valuelistenable).
+- **`SoloListenable` no longer carries a stream.** A controller whose `stream`
+  somebody reads mixes in both, `with SoloStream, SoloListenable`. See
   [A controller with both deliveries](doc/mixins.md#a-controller-with-both-deliveries).
-
-- **The synchronous read is `solo`'s `currentState`, so `SoloListenable.state`
-  is gone.** `value` is unchanged and is the same object. **Migrating.** A
-  widget that read `controller.state` reads `controller.currentState` or
-  `controller.value`.
-
-- **`ValueListenable` is no longer re-exported.**
-  `package:flutter/widgets.dart` does not export it either. **Migrating.** A
-  file that names the type imports `package:flutter/foundation.dart`; a file
-  that only hands a controller to `ValueListenableBuilder` needs nothing new.
-
-- **`close` takes `solo`'s new `SoloCloseMode`.** Calls are unchanged.
-  **Migrating.** An override of `close` takes the parameter too and passes it
-  to `super.close(mode: mode)`.
-
+- **In `solo`, the controller's synchronous read is `currentState`, not
+  `state`.**
+- **`ValueListenable` is no longer re-exported.** A file that names the type
+  imports `package:flutter/foundation.dart`.
+- **`close` takes `solo`'s new `SoloCloseMode`.**
 - **`publish` is no longer a public member of a controller with
-  `SoloListenable`.** The class overrode the engine's hook and left
-  `@protected` off, and the annotation does not carry over to an override. The
-  mixin overrides nothing there, so the member is `Solo.publish`, which is
-  protected, and `solo` has marked the override of `SoloStream` as well. The
-  analyzer reports a call from outside the class as
-  `invalid_use_of_protected_member`; the code still compiles. **Migrating.**
-  Write the state from the controller: `externalSetState` for what a source
-  reports, `emit` in a job.
-
+  `SoloListenable`.**
 - **The listeners are dropped when the engine finishes closing, right after the
-  observer's `onClose` and the controller's own.** They used to be dropped a
-  few microtasks later, once the stream had closed after the engine, so a
-  change made from a microtask scheduled inside the observer's `onClose` still
-  reached them. Now it is not a change at all: `solo` freezes the state of a
-  closed controller, and `externalSetState` from there throws a `StateError`. A
-  change made inside the hook itself still reaches the listeners.
-  **Migrating.** Write the last state synchronously, in the controller's
-  `onClose`.
-
-- **Inherited from `solo` and `async_job`.** From `solo`: `SoloBase` becomes
-  `Solo` and the stream moves to the mixin `SoloStream`; `job`, `add`, `run`,
-  `collect` and `accumulate` are protected, so a controller's operations are
-  its own methods; the synchronous read is `currentState`; `close` takes a
-  `SoloCloseMode`; the change hooks take a `SoloTransition`; the state of a
-  closed controller is final, `isFinished` is the guard before an external fact
-  and `onClose` is where a controller stops its source; `Solo` carries its own
-  listeners; `Solo.onError` is a notice, the new `Solo.onUnanswered` answers
-  for an error no outcome carries, and an observer no longer keeps such an
-  error out of `Solo.unansweredHandler` and the zone; `collect` and
-  `accumulate` default to `AccumulationPolicy.join`, and `replace` moves the
-  waiting group's job instead of cancelling it; `Policy.droppable` compares the
-  result types of the two jobs and throws `ArgumentError` when they differ, and
-  the job it drops ends with a `DuplicateCancelReason` instead of a
-  `ManualCancelReason`; a job replaced under `Policy.replace` or
-  `Policy.restart` ends with a `ReplacedCancelReason` instead of a
-  `ManualCancelReason`; `SoloQueue.lastWhere` is gone; `cancelAll` and the
-  removing methods of `SoloQueue` take a `reason`; `job`, `run`, `collect` and
-  `accumulate` take a `timeout`, so an override of any of them that does not
-  take it stops compiling, and one that takes it passes it on to `super`, or
-  `run(timeout: ...)` loses its deadline; a subclass member named like a new
-  member of `Solo` stops compiling or overrides it, `isFinished` silently. From
-  `async_job`, through `solo`: a cancellation inside a `ParallelWaitError` is a
-  cancellation again, so the job's `ifCancelled` handler takes the outcome
-  where `ifFailed` used to; a body that throws `Cancelled` runs its
-  `ctx.onCancel` callbacks, and `whenCancelled` fires as it throws;
-  `JobContext` gains `runAll` and `ctx.run` takes `dispose` and `discard`, so a
-  class that implements `JobContext` or `SoloContext` by hand, a test fake for
-  one, needs both, and `abandonable` and the new `pause` with them;
-  `JobObserver.onError` is a notice and the new `JobAnswerer` answers for an
-  error no outcome carries; the core's debug switch `JobBase.debug` is
-  `Job.debug`; `JobBase`, `JobContextBase` and `JobStatus` move to
-  `package:async_job/engine.dart` and are no longer visible through this
-  package. **Migrating.** Read the entries of both:
-  [the `solo` changelog](https://github.com/vi-k/solo/blob/main/packages/solo/CHANGELOG.md)
-  and
-  [the `async_job` changelog](https://github.com/vi-k/solo/blob/main/packages/async_job/CHANGELOG.md).
+  observer's `onClose` and the controller's own.** Write the last state
+  synchronously, in the controller's `onClose`.
 
 ### Changes you will see on upgrade
 
 - A listener that throws is reported through `FlutterError.reportError`, the
   way `ChangeNotifier` reports one, and no longer throws out of the `emit` or
-  the `externalSetState` that made the change. The job whose `emit` it was ends
-  `Done` where it used to end `Failed`, and a widget test fails on the reported
-  error instead.
+  the `externalSetState` that made the change: the job whose `emit` it was ends
+  `Done` where it used to end `Failed`.
 - Errors that `0.2.0` kept to the hooks reach `Solo.unansweredHandler` or the
-  zone: see the first list under the same heading of
+  zone: see the same heading of
   [the `solo` changelog](https://github.com/vi-k/solo/blob/main/packages/solo/CHANGELOG.md).
 
 ### Added
 
-- Inherited from `solo` and `async_job`: `timeout`, a deadline of its own for a
-  job of the controller; `ctx.pause`, a delay a cancellation ends;
-  `Solo.pending`, what is holding a `close` that has not come back;
-  `SoloObserver.all` and `JobObserver.all`, one observer made of several;
-  `Job.visitErrors`, each failure inside an error on its own and the
-  cancellations apart. These and the rest are under the same heading of
-  [the `solo` changelog](https://github.com/vi-k/solo/blob/main/packages/solo/CHANGELOG.md)
-  and
-  [the `async_job` changelog](https://github.com/vi-k/solo/blob/main/packages/async_job/CHANGELOG.md).
-
 - `SoloBuilder`: what `ValueListenableBuilder` is, for a controller that is not
-  a `ValueListenable`. It takes any `Solo` — one `with SoloStream` included —
-  subscribes in `initState`, reads the controller's state on every build,
-  compares controllers by identity when the parent hands over a new one, and
-  passes `child` through untouched. See [Usage](README.md#usage).
-
+  a `ValueListenable`. See [Usage](README.md#usage).
 - `SoloSelection<S, T>`: a `ValueListenable` of one value picked out of
-  another, notifying only when that value changes — by `!=`, or by a `changed`
-  of your own answering whether it did. It subscribes to its source only while
-  it has listeners and needs no disposal. The source is any `ValueListenable`,
-  so a selection picks out of a controller, a `ValueNotifier` or another
-  selection alike, and `SoloSelection.from` builds one straight from a
-  controller that is not a `ValueListenable`. A listener that throws is
-  reported through `FlutterError.reportError` with the selection named, and the
-  listeners behind it still hear the change. See
+  another, notifying only when that value changes. See
   [Selecting one value](README.md#selecting-one-value).
-
 - `SoloSelector`, the widget that picks for you: a controller, a `selector` and
-  a `builder`, and no `State` field to keep a selection in — a widget that
-  picks can be a `StatelessWidget`. It takes any `Solo`, `SoloListenable` or
-  not, and keeps its subscription and the value `changed` compares against
-  across a parent rebuild, whether its functions are held or written in place.
-  It picks once per occasion: once on mounting, once when the parent hands over
-  a new `selector` or `changed`, once per change of the state.
-
+  a `builder`.
 - `select` and `listen` as methods, with `SoloSubscription` and
   `SoloSubscriptions`, in an import of their own,
-  `package:flutter_solo/listenable.dart`. Both methods are extensions on the
-  framework's own `ValueListenable` and `Listenable`, where another package's
-  methods of the same name sit too: two extensions with one member name on one
-  type are ambiguous at every call site, so the import is the choice rather
-  than something every user of the package is given.
-  `SoloSubscriptions.cancel()` never throws, so it is safe in
-  `State.dispose()`: a member that refuses to let go is reported through
-  `FlutterError.reportError`. See
+  `package:flutter_solo/listenable.dart`. See
   [Listening without keeping the callback](README.md#listening-without-keeping-the-callback)
   and [Methods from a second import](README.md#methods-from-a-second-import).
 
 ### Fixed
 
-- A listener that throws no longer costs a job its cancellation. Its error left
-  `publish` and skipped the engine's re-evaluation of the rules that follows a
-  state change, so a job could go on running against a state its `keepWhile`
-  forbids. It is reported through `FlutterError.reportError` now, and the
-  listeners behind it still hear the change.
-- A listener registered after the controller had finished closing was kept in
-  memory for good. It was never notified, but it was held; now the registration
-  is refused outright and nothing is retained.
-- Notifying no longer looks each listener up in the list of all of them, so one
-  pass is linear in their number rather than quadratic.
+- A listener that throws no longer cuts off the listeners behind it, and no
+  longer lets a job go on running against a state its `keepWhile` forbids.
+- A listener registered after the controller had finished closing is refused;
+  it was kept in memory for good.
+- One pass of notifying is linear in the number of listeners; it was quadratic.
 
 ### Documentation
 
-- The README's examples compile, and every Dart block of the page is built and
-  run in the repository's CI. `Usage` draws a controller that mixes nothing in
-  with `SoloBuilder`, and the page gained the sections on the controller as a
-  `ValueListenable`, on selections and on `listen`. Its `load` falls back to
-  `Empty` when it fails or is cancelled instead of leaving a spinner, and the
-  notes at its end became a table of the four questions they answer.
-- The package has a guide of its own, [Mixins](doc/mixins.md): a controller
-  with both `SoloListenable` and `SoloStream`, a screen built on that stream,
-  and a base class of controllers without Flutter, with the mixin on the leaf.
-- The example no longer sticks on a failed load: the job falls back to `Empty`
-  when it fails or is cancelled, the screen offers `Cancel` while a load runs
-  and a reload in every state, and the example has widget tests of its own.
+- The README's examples compile, and the page gained the sections on the
+  controller as a `ValueListenable`, on selections and on `listen`.
+- The package has a guide of its own, [Mixins](doc/mixins.md).
+- The example no longer sticks on a failed load.
 
 ## 0.2.0
 
