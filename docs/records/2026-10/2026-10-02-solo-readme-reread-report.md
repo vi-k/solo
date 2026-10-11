@@ -652,3 +652,15 @@ humanizer-ru: «он может быть уже типа» читалось ка
    в поле `session`. API профиля теперь принимает пользователя:
    `fetchName(user)`». Код раздела не менялся.
 
+3. Тур «The dozen calls», комментарий над `ctx.each` в `play`. Вторая фраза
+   «`value` waits for that», в переводе «`value` этого ждёт», ссылалась на всю
+   предыдущую фразу словом «that» и не говорила, кто ждёт. Владелец: некрасивая
+   фраза. Теперь: «A child job: the device reads the download in, and its
+   stream ends when the track starts. The body awaits its `value` and goes on
+   once the track plays», в переводе «Дочерняя Job: устройство читает
+   скачанное, и её стрим кончается, когда трек начинает играть. Тело ждёт её
+   `value` и идёт дальше, когда трек уже играет». Тот же комментарий поправлен
+   в копии кода страницы `readme_player.dart`; что `play` кончается, когда трек
+   начал играть, сторож держит тестом «play ends when the track starts, and the
+   device plays on».
+

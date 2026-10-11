@@ -47,8 +47,9 @@ final class Player extends Solo<PlayerState> {
             () => api.download(track),
             dispose: (download) => download.close(),
           );
-          // A child job: the device reads the download in, and the stream
-          // ends when the track starts. `value` waits for that.
+          // A child job: the device reads the download in, and its stream
+          // ends when the track starts. The body awaits its `value` and
+          // goes on once the track plays.
           await ctx.each(device.load(download), (childCtx, percent) {
             childCtx.emit(Buffering(track, percent));
           }).value;
