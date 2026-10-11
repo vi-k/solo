@@ -182,9 +182,10 @@ request that has already been sent.
 
 ## Why `currentState` and not `state`
 
-Say `ProfileController` also holds `session`, another controller, and the
-profile API takes the user: `fetchName(user)`. A method that reloads a loaded
-profile:
+Say the name is fetched for the user of the session. The session is another
+controller, and `ProfileController` keeps it in the field `session`. The
+profile API now takes the user: `fetchName(user)`. A method that reloads a
+loaded profile:
 
 ```dart
 Job<String> reload() => run<Loaded, String>(

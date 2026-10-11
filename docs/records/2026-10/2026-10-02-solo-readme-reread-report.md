@@ -639,3 +639,16 @@ humanizer-ru: «он может быть уже типа» читалось ка
    отмена здесь оставили бы `Loading`». Сторож `readme_rakes_test.dart` держит
    обе цитаты и прогон зонда тестом «without a handler an error or a cancel
    leaves Loading». Сканер перевода: 90 до и 90 после.
+
+2. Раздел «Why `currentState` and not `state`», первая фраза. «Say
+   `ProfileController` also holds `session`, another controller, and the
+   profile API takes the user» укладывала в одно предложение два допущения
+   и приложение «another controller» посередине. Владелец: сложная фраза.
+   Теперь три фразы с поводом впереди: «Say the name is fetched for the user of
+   the session. The session is another controller, and `ProfileController`
+   keeps it in the field `session`. The profile API now takes the user:
+   `fetchName(user)`», в переводе «Допустим, имя загружается для пользователя
+   сессии. Сессию ведёт другой контроллер, и `ProfileController` держит его
+   в поле `session`. API профиля теперь принимает пользователя:
+   `fetchName(user)`». Код раздела не менялся.
+
