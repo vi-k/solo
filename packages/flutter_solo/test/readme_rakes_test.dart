@@ -278,7 +278,8 @@ void main() {
       );
       _says('`Solo`, `SoloContext`, `Job`, `Outcome` and `Policy` all arrive '
           'with');
-      _says('`SoloBuilder`, `SoloSelector` and `SoloSelection` come with it');
+      _says('the mixin `SoloListenable`, the widgets `SoloBuilder` and '
+          '`SoloSelector`, and the class `SoloSelection`');
     });
 
     test('select, listen and the subscriptions are in the second import', () {
@@ -289,7 +290,7 @@ void main() {
       expect(first, contains("'src/solo_selection.dart' show SoloSelection;"));
       expect(second, contains("'src/solo_selection.dart' show SoloSelect;"));
       expect(second, contains("export 'src/subscription.dart';"));
-      _says('a second import next door adds `select` and `listen` as '
+      _says('A second import next door adds `select` and `listen` as '
           'methods, with the subscriptions `listen` hands back');
       _says('`SoloSubscription` and `SoloSubscriptions` come with the second '
           'import only');

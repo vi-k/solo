@@ -794,14 +794,37 @@ B4 и B8 красят сборку, а не драйвер: блок без об
 
 1. Вступление, абзац «What is not here». Он перечислял, чего в пакете нет,
    и среди прочего `SoloProvider` и внедрение зависимостей, но не говорил, куда
-   с этим идти. Владелец: надо отправить в scopo. Теперь после перечня:
+   с этим идти. Владелец: надо отправить в scopo. Теперь после перечня стоит
    «Dependencies are left out deliberately: they are passed by other means and
-   packages, such as [scopo](https://pub.dev/packages/scopo). One job at a time
-   is deliberate too: it is the subject of the package, not a limit of its
-   engine», в переводе «Зависимости оставлены в стороне сознательно: их
-   передают другими способами и пакетами, например scopo. По одной задаче
-   за раз пакет работает тоже намеренно: в этом его предмет, а не предел его
-   движка». Формулировка та же, что в строке `BlocProvider` таблицы
-   соответствий `packages/solo/doc/vs-bloc.md`. Сканер перевода: 90 до и 90
-   после.
+   packages, such as [scopo](https://pub.dev/packages/scopo)», в переводе
+   «Зависимости оставлены в стороне сознательно: их передают другими способами
+   и пакетами, например scopo». Формулировка та же, что в строке `BlocProvider`
+   таблицы соответствий `packages/solo/doc/vs-bloc.md`. Хвост прежней фразы
+   о том, что пакет работает по одной задаче за раз, стал отдельной фразой, она
+   в пункте
+3. Сканер перевода: 90 до и 90 после.
 
+2. Раздел «Install», абзац под импортом. «`SoloListenable` is the mixin this
+   package is about; `SoloBuilder`, `SoloSelector` and `SoloSelection` come
+   with it», в переводе «Пакет существует ради миксина `SoloListenable`…».
+   Владелец: уже не ради одного миксина, раз в пакете есть `SoloBuilder`,
+   `SoloSelector` и `SoloSelection`. Теперь абзац перечисляет собственную часть
+   пакета ровно и называет род каждого имени: «The package's own part arrives
+   with the same import: the mixin `SoloListenable`, the widgets `SoloBuilder`
+   and `SoloSelector`, and the class `SoloSelection`. A second import next door
+   adds `select` and `listen` as methods, with the subscriptions `listen` hands
+   back», в переводе «Собственная часть пакета приходит с тем же импортом:
+   миксин `SoloListenable`, виджеты `SoloBuilder` и `SoloSelector`, класс
+   `SoloSelection`. Второй импорт по соседству добавляет `select` и `listen`
+   методами, вместе с подписками, которые отдаёт `listen`». Сторож
+   `readme_rakes_test.dart` держит обе новые цитаты, а роды имён держит функция
+   `ownPart` в `test/support/readme_install.dart`: она собирается, только пока
+   `SoloBuilder` и `SoloSelector` виджеты, а `SoloSelection` реализует
+   `ValueListenable`.
+
+3. Вступление, тот же абзац «What is not here», фраза о работе по одной задаче.
+   Владелец: сказать, что поэтому пакет и называется solo. Теперь: «One job at
+   a time is deliberate too, hence the `solo` in the name: it is the subject of
+   the package, not a limit of its engine», в переводе «По одной задаче за раз
+   пакет работает тоже намеренно, отсюда и `solo` в его имени: в этом его
+   предмет, а не предел его движка». Сканер перевода: 90 до и 90 после.

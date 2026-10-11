@@ -46,8 +46,9 @@ The long argument, eleven scenarios solved in bloc first and then here, is in
 What is not here: no `SoloProvider` and no code generation, no dependency
 injection, no persistence, and no parallel root jobs. Dependencies are left out
 deliberately: they are passed by other means and packages, such as
-[scopo](https://pub.dev/packages/scopo). One job at a time is deliberate too:
-it is the subject of the package, not a limit of its engine.
+[scopo](https://pub.dev/packages/scopo). One job at a time is deliberate too,
+hence the `solo` in the name: it is the subject of the package, not a limit of
+its engine.
 
 ## Install
 
@@ -64,10 +65,10 @@ One dependency is all it takes: `flutter_solo` re-exports the whole of
 import 'package:flutter_solo/flutter_solo.dart';
 ```
 
-`SoloListenable` is the mixin this package is about; `SoloBuilder`,
-`SoloSelector` and `SoloSelection` come with it, and a second import next door
-adds `select` and `listen` as methods, with the subscriptions `listen` hands
-back.
+The package's own part arrives with the same import: the mixin
+`SoloListenable`, the widgets `SoloBuilder` and `SoloSelector`, and the class
+`SoloSelection`. A second import next door adds `select` and `listen` as
+methods, with the subscriptions `listen` hands back.
 
 ## Usage
 
