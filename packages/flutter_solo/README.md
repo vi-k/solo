@@ -44,8 +44,10 @@ The long argument, eleven scenarios solved in bloc first and then here, is in
 [solo and bloc, side by side](https://github.com/vi-k/solo/blob/main/packages/solo/doc/vs-bloc.md).
 
 What is not here: no `SoloProvider` and no code generation, no dependency
-injection, no persistence, and no parallel root jobs — one at a time is the
-subject of the package, not a limit of its engine.
+injection, no persistence, and no parallel root jobs. Dependencies are left out
+deliberately: they are passed by other means and packages, such as
+[scopo](https://pub.dev/packages/scopo). One job at a time is deliberate too:
+it is the subject of the package, not a limit of its engine.
 
 ## Install
 
