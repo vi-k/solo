@@ -188,10 +188,11 @@ takes a `Stream`, a test that wants the whole sequence of changes.
 ## A base class without Flutter
 
 A base class the app's controllers share can live in a package with no Flutter
-in it: the package depends on `solo`, and the leaf, a controller of the app,
-mixes `SoloListenable` in. What every controller shares goes into the base, and
-here that is a report of a listener's failure to the app's own log, `AppLog`.
-`Profile` and `Empty` in the code below are the states of
+in it: the package depends on `solo`, and the leaf, a controller of the app
+that extends the base, mixes `SoloListenable` in. What every controller shares
+goes into the base, and here that is a report of a listener's failure to the
+app's own log, `AppLog`. `Profile` and `Empty` in the code below are the states
+of
 [Usage](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.md#usage)
 in the package README.
 
@@ -274,14 +275,14 @@ AppLog: Bad state: the listener blew up
 FlutterError: nothing
 ```
 
-The base's hook reports for a controller that mixes nothing in, and the leaf's
-hook sends the failures of the leaf's listeners to the same place. A leaf that
-wants the report through `FlutterError` as well calls `super.onListenerError`
-next to `reportListenerError`. `@protected` is repeated on every override
-because Dart does not inherit it: left off, the hook is a public member of that
-class and of every class that inherits the override. The annotation comes from
-`package:meta`, which neither `solo` nor this package exports: the package
-without Flutter depends on `meta` for it, and in the app
+The base's hook reports for a controller that mixes nothing in, and the hook of
+`ProfileController` sends the failures of its own listeners to the same place.
+A leaf that wants the report through `FlutterError` as well calls
+`super.onListenerError` next to `reportListenerError`. `@protected` is repeated
+on every override because Dart does not inherit it: left off, the hook is a
+public member of that class and of every class that inherits the override. The
+annotation comes from `package:meta`, which neither `solo` nor this package
+exports: the package without Flutter depends on `meta` for it, and in the app
 `package:flutter/foundation.dart` exports it.
 
 That override is the leaf's to write, and a leaf that mixes `SoloListenable` in
