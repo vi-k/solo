@@ -258,8 +258,9 @@ final class Player extends Solo<PlayerState> {
         // состояния, пока работает тело, кроме сделанной самим телом
         // через `ctx.emit`.
         keepWhile: (state) => state is! Disconnected,
-        // Состояние для публикации, если Job упала или её отменили. Отмена
-        // правилом ничего не публикует, и `Disconnected` остаётся.
+        // Состояние для публикации, если Job упала или её отменили. Если Job
+        // отменяется правилом, ничего не публикуется, и `Disconnected`
+        // остаётся.
         ifFailed: (state, error, stackTrace) => const Idle(),
         ifCancelled: (state, cancelled) => const Idle(),
         (ctx) async {

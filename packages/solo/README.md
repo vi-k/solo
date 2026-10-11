@@ -249,8 +249,9 @@ final class Player extends Solo<PlayerState> {
         // A rule: asked before the start, and on every change of state
         // while the body runs, except one the body makes with `ctx.emit`.
         keepWhile: (state) => state is! Disconnected,
-        // The state to publish when the job fails or is cancelled. A
-        // cancellation by the rule publishes nothing: `Disconnected` stays.
+        // The state to publish when the job fails or is cancelled. If the
+        // job is cancelled by the rule, nothing is published and
+        // `Disconnected` stays.
         ifFailed: (state, error, stackTrace) => const Idle(),
         ifCancelled: (state, cancelled) => const Idle(),
         (ctx) async {
