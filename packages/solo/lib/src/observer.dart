@@ -13,7 +13,7 @@ import 'transition.dart';
 /// independently of it: a subclass that forgets `super` does not switch the
 /// observer off. A hook that throws hands its error to the current zone and
 /// changes nothing else — the engine goes on, and the controller's own hook
-/// is still called.
+/// is still called. A [Cancelled] a hook throws does not reach the zone.
 ///
 /// Several observers watch every controller through [SoloObserver.all].
 abstract class SoloObserver {

@@ -260,13 +260,20 @@ void main() {
           (ctx) async => 'x',
         ),
         throwsA(
-          isA<ArgumentError>().having(
-            (error) => error.message,
-            'message',
-            // Both types, or the reader learns nothing about the job
-            // already holding the key.
-            'key shared is held by a job of result type int, not String',
-          ),
+          isA<ArgumentError>()
+              .having(
+                (error) => error.message,
+                'message',
+                // Both types, or the reader learns nothing about the job
+                // already holding the key.
+                'key shared is held by a job of result type int, not String',
+              )
+              .having(
+                (error) => '$error',
+                'text',
+                // The job by its key, not by the class of the engine.
+                endsWith('not String: "Job(shared)"'),
+              ),
         ),
       );
       expect(

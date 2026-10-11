@@ -146,7 +146,8 @@ The observer is called before the controller's corresponding hook. Each call is
 independent; omitting `super` in a controller hook does not disable the
 observer. An error thrown by either hook is sent to the current Dart zone
 without changing the job's outcome, stopping the queue, or preventing the other
-hook from running.
+hook from running. A `Cancelled` thrown by a hook neither reaches the zone nor
+cancels the job.
 
 An observer only watches. Setting one changes nothing about where an error then
 goes.

@@ -137,17 +137,16 @@ void main() {
       [
         'zone: Bad state: onStart',
         'a onStart',
-        'zone: Cancelled(handler: from onLog)',
         'a onLog: hello',
         'a ifFailed: Bad state: boom',
         'a onFinish',
       ],
-      reason: 'a Cancelled goes to the zone, as one thrown by a single '
+      reason: 'a Cancelled stays out of the zone, as one thrown by a single '
           'observer does',
     );
     expect(
       heard((seen) => Throwing()),
-      contains('zone: Cancelled(handler: from onLog)'),
+      ['zone: Bad state: onStart'],
       reason: 'the single observer, for comparison',
     );
   });

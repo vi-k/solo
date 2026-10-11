@@ -387,6 +387,80 @@ void main() {
     ]);
   });
 
+  test('a Cancelled a hook throws stays out of the zone', () {
+    final lines = <String>[];
+    final errors = <String>[];
+    late Job<void> job;
+    runZonedGuarded(
+      () {
+        fakeAsync((async) {
+          final solo = _LazyLog(lines);
+          job = solo.run<TestState, void>(key: 'job', (ctx) async {
+            await delay(100);
+            // The line is built where the hook reads it, and the job has
+            // been cancelled by then: reading the state throws.
+            ctx.log(() => 'state ${ctx.state}');
+          });
+          async.flushMicrotasks();
+          job.cancel().ignore();
+          async.flushTimers();
+          solo.close();
+          async.flushTimers();
+        });
+      },
+      (error, stackTrace) => errors.add('$error'),
+    );
+    expect(lines, ['hook: log'], reason: 'the hook was called');
+    expect(errors, isEmpty);
+    expect('${job.outcome}', 'Cancelled(manual)');
+  });
+
+  test('a hook error is a cancellation only when all of it is', () {
+    List<String> zoneOf(Object Function() thrown) {
+      final errors = <String>[];
+      runZonedGuarded(
+        () {
+          fakeAsync((async) {
+            final solo = _ThrowingAtStart(thrown)
+              ..run<TestState, void>(key: 'job', (ctx) async {});
+            async.flushTimers();
+            solo.close();
+            async.flushTimers();
+          });
+        },
+        (error, stackTrace) => errors.add('${error.runtimeType}'),
+      );
+      return errors;
+    }
+
+    AsyncError cancelled() =>
+        AsyncError(const Cancelled('branch'), StackTrace.empty);
+    AsyncError failed() => AsyncError(StateError('branch'), StackTrace.empty);
+
+    expect(zoneOf(() => const Cancelled('hook')), isEmpty);
+    expect(
+      zoneOf(
+        () => ParallelWaitError<List<Object?>, List<AsyncError?>>(
+          const [null, null],
+          [cancelled(), cancelled()],
+        ),
+      ),
+      isEmpty,
+      reason: 'nothing but cancellations inside',
+    );
+    expect(
+      zoneOf(
+        () => ParallelWaitError<List<Object?>, List<AsyncError?>>(
+          const [null, null],
+          [cancelled(), failed()],
+        ),
+      ),
+      [startsWith('ParallelWaitError')],
+      reason: 'one failure inside, and the error goes whole',
+    );
+    expect(zoneOf(() => StateError('hook')), ['StateError']);
+  });
+
   test('the observer sees start, log, error and finish in order', () {
     runSolo((solo, journal, async) {
       solo.run<TestState, void>(
@@ -500,6 +574,32 @@ final class _Closing extends Solo<TestState> with OpenSolo<TestState> {
       externalSetState(state);
     }
   }
+}
+
+/// Builds a lazy log line in the hook, as the page about errors does.
+final class _LazyLog extends Solo<TestState> with OpenSolo<TestState> {
+  final List<String> lines;
+
+  _LazyLog(this.lines) : super(const Initial());
+
+  @override
+  void onLog(Job<Object?> job, Object? message) {
+    lines.add('hook: log');
+    final line = message is Object? Function() ? message() : message;
+    lines.add('hook: $line');
+  }
+}
+
+/// Throws what [thrown] makes from the instance hook the engine calls before
+/// a job body.
+final class _ThrowingAtStart extends Solo<TestState> with OpenSolo<TestState> {
+  final Object Function() thrown;
+
+  _ThrowingAtStart(this.thrown) : super(const Initial());
+
+  @override
+  void onStart(Job<Object?> job) =>
+      Error.throwWithStackTrace(thrown(), StackTrace.current);
 }
 
 /// Throws from the observer hook the engine calls while closing.

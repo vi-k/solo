@@ -136,6 +136,24 @@ void main() {
     },
   );
 
+  test('a Cancelled onListenerError throws stays out of the zone', () {
+    final solo = _GivingUpReporterSolo(const Preparing())
+      ..addListener(() => throw StateError('listener failed'));
+    final zoneErrors = <Object>[];
+
+    runZonedGuarded(() {
+      solo.externalSetState(const Preparing(progress: 100));
+    }, (error, stackTrace) {
+      zoneErrors.add(error);
+    });
+
+    expect(
+      zoneErrors.map((error) => '$error').toList(),
+      ['Bad state: listener failed'],
+      reason: 'the failure the hook was called about still gets there',
+    );
+  });
+
   test('nested externalSetState trace matches spec verbatim', () async {
     final log = <String>[];
     final solo = _TracedSolo(log);
@@ -314,6 +332,16 @@ final class _ThrowingReporterSolo extends Solo<TestState>
   @override
   void onListenerError(Object error, StackTrace stackTrace) {
     throw StateError('reporter failed');
+  }
+}
+
+final class _GivingUpReporterSolo extends Solo<TestState>
+    with OpenSolo<TestState> {
+  _GivingUpReporterSolo(super.initialState);
+
+  @override
+  void onListenerError(Object error, StackTrace stackTrace) {
+    throw const Cancelled('reporter gave up');
   }
 }
 

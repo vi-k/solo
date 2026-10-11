@@ -131,6 +131,21 @@ final class _EveryHook extends Solo<int> with OpenSolo<int> {
       _say('onListenerError');
 }
 
+/// An observer whose `onStart` throws a [Cancelled].
+final class _GivingUp extends SoloObserver {
+  @override
+  void onStart(Solo<Object> solo, Job<Object?> job) =>
+      throw const Cancelled('observer.onStart');
+}
+
+/// A controller whose `onStart` throws a [Cancelled].
+final class _GivingUpController extends Solo<int> with OpenSolo<int> {
+  _GivingUpController() : super(0);
+
+  @override
+  void onStart(Job<Object?> job) => throw const Cancelled('controller.onStart');
+}
+
 /// A reporting hook that calls `super`, and one that does not.
 final class _ReportsAndCallsSuper extends Solo<int> with OpenSolo<int> {
   final heard = <String>[];
@@ -1325,6 +1340,21 @@ void main() {
         ]);
       });
     }
+
+    test('both hooks throw a Cancelled', () {
+      _says(
+        'A `Cancelled` thrown by a hook neither reaches the zone nor '
+        'cancels the job',
+      );
+      late Job<void> job;
+      final ran = _run((async) {
+        Solo.observer = _GivingUp();
+        job = _GivingUpController().run<int, void>(key: 'job', (ctx) async {});
+      });
+
+      expect('${job.outcome}', 'Done(null)');
+      expect(ran.errors, isEmpty);
+    });
 
     test('the zone a hook error goes to is the current one', () {
       final where = <String, List<String>>{};

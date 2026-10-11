@@ -230,14 +230,14 @@ abstract class Solo<S extends Object> {
   /// failure it was called about: both errors reach the zone, the
   /// listener's first. The hook is the channel here, not the fact, and a
   /// broken channel is a second problem rather than a reason to lose the
-  /// first.
+  /// first. A [Cancelled] the hook throws stays out of the zone, as with
+  /// every other hook, and the listener's failure reaches it alone.
   void _reportListenerError(Object error, StackTrace stackTrace) {
     try {
       onListenerError(error, stackTrace);
     } on Object catch (hookError, hookStackTrace) {
-      Zone.current
-        ..handleUncaughtError(error, stackTrace)
-        ..handleUncaughtError(hookError, hookStackTrace);
+      Zone.current.handleUncaughtError(error, stackTrace);
+      reportHookError(hookError, hookStackTrace);
     }
   }
 
@@ -482,7 +482,7 @@ abstract class Solo<S extends Object> {
     // get somebody else's job back while its own work never ran.
     if (duplicate != null && duplicate._resultType != impl._resultType) {
       throw ArgumentError.value(
-        job,
+        '$job',
         'job',
         'key ${impl.key} is held by a job of result type '
             '${duplicate._resultType}, not ${impl._resultType}',

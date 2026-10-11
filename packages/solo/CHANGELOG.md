@@ -125,6 +125,8 @@ The stack trace of a job its rules cancelled is taken where the rules noticed.
 - A job one controller's `ctx.unattended` work starts on another controller
   starts in the zone the work was started from: a bare `unawaited` error in its
   body reached the `onError` of the controller whose job started the work.
+- A `Cancelled` a hook of the controller or of the observer throws no longer
+  reaches the zone.
 
 ### Documentation
 
