@@ -28,7 +28,8 @@
   See [Registering on arrival](doc/cleanup.md#registering-on-arrival).
 - **`JobContext` gains `runAll`,** which runs children side by side and asks
   the rest to stop as soon as one of them goes wrong; the branches it asks to
-  stop get the new `SiblingCancelReason`. See
+  stop get the new `SiblingCancelReason`. An extension named `runAll` on
+  `JobContext` is shadowed by it without a warning. See
   [When one failure makes the rest pointless](doc/children.md#when-one-failure-makes-the-rest-pointless).
 - **A cancellation that travels inside a `ParallelWaitError` is a cancellation
   again.** A child cancelled under `[ctx.run(a), ctx.run(b)].wait` ends the

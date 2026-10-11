@@ -801,7 +801,7 @@ void main() {
     });
   });
 
-  // Inherited from `async_job` and named in this package's changelog: a
+  // Inherited from `async_job`, whose changelog names the change: a
   // controller's job reads the envelope the way the core does.
   test('a child cancelled under [...].wait takes the parent to ifCancelled',
       () {
