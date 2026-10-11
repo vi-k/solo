@@ -188,8 +188,9 @@ ValueListenableBuilder<Profile>(
 `SoloBuilder` goes on taking it, as it takes any controller: with the mixin,
 without it, or `with SoloStream`. One thing sets it apart from
 `ValueListenableBuilder`: it compares controllers by identity. Handed a new
-controller whose `==` says it is the old one, `SoloBuilder` moves to it and
-`ValueListenableBuilder` goes on listening to the old one.
+controller that equals the old one by `==` but not by `identical`,
+`SoloBuilder` moves to it and `ValueListenableBuilder` goes on listening to the
+old one.
 
 The sections below on selecting and listening take the controller with the
 mixin.

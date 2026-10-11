@@ -975,6 +975,9 @@ void main() {
         (tester) async {
       final first = Same(Loaded('first'));
       final second = Same(Loaded('second'));
+      // Equal by `==`, and two objects all the same.
+      expect(first == second, isTrue);
+      expect(identical(first, second), isFalse);
       var soloBuilds = 0;
       var listenableBuilds = 0;
       Widget both(Same controller) => _app(
@@ -1020,9 +1023,9 @@ void main() {
       await second.close();
       _says('One thing sets it apart from `ValueListenableBuilder`: it '
           'compares controllers by identity.');
-      _says('Handed a new controller whose `==` says it is the old one, '
-          '`SoloBuilder` moves to it and `ValueListenableBuilder` goes on '
-          'listening to the old one.');
+      _says('Handed a new controller that equals the old one by `==` but '
+          'not by `identical`, `SoloBuilder` moves to it and '
+          '`ValueListenableBuilder` goes on listening to the old one.');
     });
   });
 
