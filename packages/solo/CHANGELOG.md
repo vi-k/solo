@@ -266,19 +266,20 @@ entries of the first group name them.
   `ctx.run` takes `dispose` and `discard`: no call site breaks, but a
   registration written on the line after `await ctx.run(child)` belongs in the
   call now. A class that implements `JobContext` or `SoloContext` by hand, a
-  test fake for one, needs both. A body that throws `Cancelled`, or lets out
-  the cancellation of a child, runs its `ctx.onCancel` callbacks, and
-  `whenCancelled` fires as it throws rather than once its children have ended.
-  One more reaches code that gives a job of the core an observer of its own:
-  `JobObserver.onError` is a notice, and the new `JobAnswerer` answers for an
-  error no outcome carries in `onUnanswered`, so such an observer no longer
-  keeps those errors out of the zone unless it mixes in `JobAnswerer`. The
-  switch of the core's debug channel, the one set next to `Solo.debug`, is
-  `Job.debug`, where it was `JobBase.debug`. The rest concern an engine built
-  on the core: `JobBase`, `JobContextBase` and `JobStatus` moved to
-  `package:async_job/engine.dart`, which also takes them out of what an app
-  sees through this package, and the protected surface of `JobBase` changed.
-  **Migrating.** Read the core's own entries:
+  test fake for one, needs both, and `abandonable` and the new `pause` with
+  them. A body that throws `Cancelled`, or lets out the cancellation of a
+  child, runs its `ctx.onCancel` callbacks, and `whenCancelled` fires as it
+  throws rather than once its children have ended. One more reaches code that
+  gives a job of the core an observer of its own: `JobObserver.onError` is a
+  notice, and the new `JobAnswerer` answers for an error no outcome carries in
+  `onUnanswered`, so such an observer no longer keeps those errors out of the
+  zone unless it mixes in `JobAnswerer`. The switch of the core's debug
+  channel, the one set next to `Solo.debug`, is `Job.debug`, where it was
+  `JobBase.debug`. The rest concern an engine built on the core: `JobBase`,
+  `JobContextBase` and `JobStatus` moved to `package:async_job/engine.dart`,
+  which also takes them out of what an app sees through this package, and the
+  protected surface of `JobBase` changed. **Migrating.** Read the core's own
+  entries:
   [the `async_job` changelog](https://github.com/vi-k/solo/blob/main/packages/async_job/CHANGELOG.md).
 
 ### Changes you will see on upgrade
@@ -449,8 +450,9 @@ broke its own rule.
 ### Documentation
 
 - The README is a starting page: what the package is, `Install`, `Quick start`,
-  `The dozen calls` — one controller holding everything reached for day to
-  day — a map of the guides and a table of recipes. The reference it had grown
+  why the read is named `currentState`, `The dozen calls` — one controller
+  holding everything reached for day to day — a map of the guides, a table of
+  recipes and a word for those coming from bloc. The reference it had grown
   moved to `doc/`, one page per subject: [Jobs and the queue](doc/jobs.md),
   [State](doc/state.md), [Cancellation](doc/cancellation.md),
   [Resources and cleanup](doc/resources.md),

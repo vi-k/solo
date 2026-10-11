@@ -1,0 +1,207 @@
+> **Состояние на 2026-10-12:** проверка сделана, четырнадцать находок
+> исправлены в трёх `CHANGELOG.md` тем же коммитом, что и эта запись. Русские
+> переводы трёх файлов ещё не написаны: раздел «Переводы» появится с ними.
+> Владелец разделы `## Unreleased` ещё не читал.
+> **Что это:** отчёт о проверке разделов `## Unreleased` в `CHANGELOG.md` трёх
+> пакетов перед чтением владельца: чем сверялось, что сошлось, находки
+> с вердиктами.
+> **Связанные записи:** `2026-10-01-solo-unreleased-report.md` (как писались
+> и сверялись разделы `solo` и `flutter_solo`),
+> `2026-09-28-async-job-unreleased-report.md` (то же для `async_job`),
+> `2026-10-04-flutter-solo-readme-reread-report.md` (перестройка README
+> `flutter_solo`, после которой устарела запись о нём).
+
+# Проверка CHANGELOG трёх пакетов
+
+## Зачем
+
+Владелец 2026-10-12: «беру mixins, а ты пока проверь CHANGELOG и сделай к ним
+переводы по всем правилам переводов». Разделы `## Unreleased` последними стоят
+в его втором чтении документации. `solo` и `flutter_solo` сверялись с тегами
+`0.2.0` 2026-10-01, `async_job` 2026-09-28. С тех пор в файлы писали 17, 23
+и 15 коммитов: переименования `ctx.wait` и `Job.ignore`, обработчики `ifFailed`
+и `ifCancelled`, срок задачи, `ctx.pause`, `Job.each`, `Job.visitErrors`,
+перестройка README `flutter_solo`. Каждая такая правка добавляла запись
+и не перечитывала соседние, поэтому искалось прежде всего то, что устарело
+рядом с новым.
+
+## Как
+
+Проверял сам, без субагентов. Четыре прохода.
+
+Имена. Скрипт собрал слова из код-спанов трёх разделов `## Unreleased`: 419
+спанов и 142 слова у `async_job`, 449 и 173 у `solo`, 212 и 110
+у `flutter_solo`. Каждое слово искалось в `lib/` трёх пакетов на `HEAD`
+и на тегах `0.2.0`. Только на теге нашлись `cascadeToChildren`, `SoloBase`,
+`lastWhere` и `TypeError`: все четыре стоят в записях о том, что ушло. Нигде
+не нашлись только имена линтов, заголовки README и имена из примеров. Имени,
+которое жило между релизами и не дожило до `HEAD`, в разделах нет.
+
+Поверхность. Второй скрипт выписал публичные объявления `lib/` на теге
+и на `HEAD` и показал разницу: что ушло, что пришло, у чего сменилась сигнатура
+или аннотация. Каждая строка разницы сверена с записями. У `async_job` и `solo`
+сошлось всё. У `flutter_solo` одна строка осталась без записи, это находка F5.
+
+Тексты. Процитированные сообщения ошибок и строка отладочного канала сверены
+с местами, где они собираются: `cannot wait`,
+`cannot run an abandonable action`, `cannot run a group of children`,
+`cannot follow a stream`, `is cleaning up after its body`,
+`is a continuation, which starts itself once its source finishes`,
+`handed its value over: 1 conditional cleanup dropped`. Имена причин
+в `Cancelled(duplicate)`, `Cancelled(replaced)` и `Cancelled(timeout)` сверены
+с `name` их классов.
+
+Ссылки и ориентиры. `tool/check_links.py` обходит и `CHANGELOG.md`, якоря
+в разделах целы. Отдельно прочитаны ориентиры внутри текста, которых скрипт
+не видит: «первые две записи», «первая из ломающих правок», «раздел под тем же
+заголовком», перечни разделов README и страниц `doc/`, счёт сценариев
+в `vs-bloc.md`, описания двух примеров.
+
+Скрипты лежат в рабочем каталоге сессии и в репозиторий не идут: это разовая
+сверка, а не сторож.
+
+## Что сошлось
+
+- Перечень новых членов `Solo` в записи о подклассах: десять имён, столько же
+  в разнице поверхностей.
+- Семь хуков с `@visibleForOverriding` и два члена с `@mustCallSuper`
+  у `async_job`.
+- Страницы `doc/` в записях «Documentation»: семь у `async_job`, девять
+  у `solo`, заголовки совпадают с первыми строками страниц. В `vs-bloc.md`
+  одиннадцать сценариев, и каждый открывается первой попыткой.
+- Записи об обоих примерах: в примере камеры `init` и `reopen` приводят неудачу
+  и отмену в `Broken` через `ifFailed` и `ifCancelled`, в примере
+  `flutter_solo` загрузка возвращается в `Empty`, на экране есть `Cancel`,
+  у примера есть свой тест.
+- Записи о `SoloBuilder`, `SoloSelection` и `SoloSelector` сверены с кодом
+  виджетов, в том числе «once on mounting, once when the parent hands over a
+  new `selector` or `changed`, once per change of the state».
+- Унаследованные записи `solo` покрывают все четырнадцать ломающих записей
+  `async_job`, кроме одной, это находка S1. Унаследованная запись
+  `flutter_solo` покрывает двадцать одну запись `solo`, кроме одной, это
+  находка F5.
+
+## Находки
+
+### `packages/async_job/CHANGELOG.md`
+
+**A1. Старые имена обработчиков `solo`.** Запись о `ParallelWaitError` кончала
+перечень перемен словами «in `solo` the job's `onCancel` hook takes the outcome
+where `onError` used to». Обработчики состояния переименованы в `ifCancelled`
+и `ifFailed`, а `onCancel` и `onError` в `solo` теперь называют другое:
+`ctx.onCancel` и хук контроллера.
+
+Вердикт: принята. Теперь «the job's `ifCancelled` handler takes the outcome
+where `ifFailed` used to», как в унаследованной записи `solo`.
+
+**A2. «Первая из ломающих правок» уже третья.** В «Changes you will see on
+upgrade» пункт об ошибке без исхода отсылал: «see the first of the breaking
+changes». Запись о `JobObserver.onError` была первой, пока перед ней не встали
+переименования `ctx.wait` и `Job.ignore`.
+
+Вердикт: принята. Отсылка стала по имени, а не по номеру: «see the entry on
+`JobAnswerer` above».
+
+**A3. `Job.ignore` в записи о справке.** «The example of `Job.ignore` gives its
+job an observer»: члена с таким именем нет, пример стоит в dartdoc
+`Job.ignoreFailure`.
+
+Вердикт: принята, имя заменено.
+
+**A4. Запись без «Migrating».** `docs/handoff.md` говорит, что «Migrating» есть
+у каждой ломающей записи; у записи о `inUncancellableSection` и `heldCancel` её
+не было, одной из четырнадцати.
+
+Вердикт: принята. Добавлено «**Migrating.** Rename the member of the subclass»,
+как в такой же записи `solo`.
+
+**A5. «drops each uncaught `Cancelled`».** В записи о `Job.visitErrors` слово
+`uncaught` читается как условие, которого нет: без `onCancelled` обход
+отбрасывает каждую отмену, и dartdoc говорит «drop the cancellations».
+
+Вердикт: принята, слово убрано.
+
+**A6. Пустая строка внутри списка «Fixed».** Последний пункт был отделён
+от остальных двадцати трёх пустой строкой: по разметке это второй список.
+
+Вердикт: принята, строка убрана.
+
+### `packages/solo/CHANGELOG.md`
+
+**S1. Самодельному контексту нужны ещё два члена.** Унаследованная запись
+говорила, что классу, который реализует `JobContext` или `SoloContext` руками,
+нужны `runAll` и новые параметры `run`: «needs both». После неё в интерфейс
+пришли `abandonable` и `pause`, и такой класс без них тоже не собирается;
+у `async_job` об этом сказано в записях о `ctx.wait` и о `pause`.
+
+Вердикт: принята. Теперь «needs both, and `abandonable` and the new `pause`
+with them».
+
+**S2. Перечень разделов README неполон.** Запись «Documentation» перечисляла
+README как закрытый список, а в нём есть ещё «Why `currentState` and not
+`state`» и «Coming from bloc».
+
+Вердикт: принята, оба названы: «why the read is named `currentState`» и «a word
+for those coming from bloc».
+
+### `packages/flutter_solo/CHANGELOG.md`
+
+**F1. «Первые две» унаследованные записи.** Вступление говорило, что чужие
+ломающие правки называют «the first two and the last entries». Третьей встала
+запись о переименовании обработчиков в `solo`, она тоже унаследованная.
+
+Вердикт: принята, «the first three and the last».
+
+**F2. Раздела о билдерах в README больше нет.** «It gained the sections on
+selections, builders and `listen`». Раздел «Builders for any controller» убран
+2026-10-11: `SoloBuilder` показан в «Usage», а за ним встал новый раздел «The
+controller as a `ValueListenable`».
+
+Вердикт: принята. Теперь «`Usage` draws a controller that mixes nothing in with
+`SoloBuilder`, and the page gained the sections on the controller as a
+`ValueListenable`, on selections and on `listen`».
+
+**F3. `SoloListenable.close`, которого нет.** Запись называлась
+«`SoloListenable.close` takes `solo`'s new `SoloCloseMode` and hands it on».
+У миксина своего `close` нет, переопределение ушло вместе со стримом;
+контроллер переопределяет `Solo.close`.
+
+Вердикт: принята. Заголовок записи стал «`close` takes `solo`'s new
+`SoloCloseMode`», совет о переопределении остался как был.
+
+**F4. «Первый раздел под тем же заголовком».** Пункт об ошибках отсылал
+в CHANGELOG `solo`: «the first section … under the same heading». Под
+заголовком разделов нет, там абзац и три списка.
+
+Вердикт: принята, «see the first list under the same heading of the `solo`
+changelog».
+
+**F5. `publish` перестал быть публичным, записи нет.** На теге `0.2.0` класс
+`SoloListenable` переопределял `publish` без `@protected`, и у каждого его
+контроллера хук движка был публичным членом. Миксин `publish`
+не переопределяет, остаётся `Solo.publish` с `@protected`. В `solo` такая же
+перемена записана отдельно, «`SoloStream.publish` is `@protected`», а здесь
+о ней не было ни записи, ни слова в унаследованных. Зонд на дереве: вызов
+`counter.publish(0, 1)` снаружи контроллера `with SoloListenable` анализатор
+называет `invalid_use_of_protected_member`.
+
+Вердикт: принята. Добавлена ломающая запись «`publish` is no longer a public
+member of a controller with `SoloListenable`» с «Migrating»; счёт ломающих
+записей пакета стал одиннадцать.
+
+**F6. Унаследованное в «Added» названо выборочно.** Две записи называли
+`SoloObserver.all` с `JobObserver.all` и `Job.visitErrors` и не говорили, что
+это не всё: срок задачи, `ctx.pause` и `Solo.pending` приходят тем же путём.
+
+Вердикт: принята. Две записи сведены в одну: к прежним трём именам добавлены
+`timeout`, `ctx.pause` и `Solo.pending`, а за остальным запись отсылает под
+тот же заголовок в CHANGELOG `solo` и `async_job`. Та же правка, что S1,
+сделана в унаследованной ломающей записи: «needs both, and `abandonable` and
+the new `pause` with them».
+
+## Проверки
+
+Пять проверок документов зелёные на дереве с правками: `reflow.py --check`,
+`check_line_width.py`, `check_links.py`, `check_translations.py`,
+`check_doc_shape.py`. Код пакетов не менялся, наборы тестов не гонялись. Зонд
+к F5 лежал в `packages/flutter_solo/test/` и удалён после прогона.

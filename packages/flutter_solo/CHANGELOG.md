@@ -3,7 +3,7 @@
 Moving from `0.2.0`: read "Breaking changes" for what stops compiling or
 behaves differently, and "Changes you will see on upgrade" for what a test
 shows with no change to the code. This package re-exports `solo` and, through
-it, `async_job`, so their breaking changes are its own; the first two and the
+it, `async_job`, so their breaking changes are its own; the first three and the
 last entries of the first group name them.
 
 ### Breaking changes
@@ -64,9 +64,19 @@ last entries of the first group name them.
   file that names the type imports `package:flutter/foundation.dart`; a file
   that only hands a controller to `ValueListenableBuilder` needs nothing new.
 
-- **`SoloListenable.close` takes `solo`'s new `SoloCloseMode` and hands it
-  on.** Calls are unchanged. **Migrating.** An override of `close` takes the
-  parameter too and passes it to `super.close(mode: mode)`.
+- **`close` takes `solo`'s new `SoloCloseMode`.** Calls are unchanged.
+  **Migrating.** An override of `close` takes the parameter too and passes it
+  to `super.close(mode: mode)`.
+
+- **`publish` is no longer a public member of a controller with
+  `SoloListenable`.** The class overrode the engine's hook and left
+  `@protected` off, and the annotation does not carry over to an override. The
+  mixin overrides nothing there, so the member is `Solo.publish`, which is
+  protected, and `solo` has marked the override of `SoloStream` as well. The
+  analyzer reports a call from outside the class as
+  `invalid_use_of_protected_member`; the code still compiles. **Migrating.**
+  Write the state from the controller: `externalSetState` for what a source
+  reports, `emit` in a job.
 
 - **The listeners are dropped when the engine finishes closing, right after the
   observer's `onClose` and the controller's own.** They used to be dropped a
@@ -106,11 +116,12 @@ last entries of the first group name them.
   `ctx.onCancel` callbacks, and `whenCancelled` fires as it throws;
   `JobContext` gains `runAll` and `ctx.run` takes `dispose` and `discard`, so a
   class that implements `JobContext` or `SoloContext` by hand, a test fake for
-  one, needs both; `JobObserver.onError` is a notice and the new `JobAnswerer`
-  answers for an error no outcome carries; the core's debug switch
-  `JobBase.debug` is `Job.debug`; `JobBase`, `JobContextBase` and `JobStatus`
-  move to `package:async_job/engine.dart` and are no longer visible through
-  this package. **Migrating.** Read the entries of both:
+  one, needs both, and `abandonable` and the new `pause` with them;
+  `JobObserver.onError` is a notice and the new `JobAnswerer` answers for an
+  error no outcome carries; the core's debug switch `JobBase.debug` is
+  `Job.debug`; `JobBase`, `JobContextBase` and `JobStatus` move to
+  `package:async_job/engine.dart` and are no longer visible through this
+  package. **Migrating.** Read the entries of both:
   [the `solo` changelog](https://github.com/vi-k/solo/blob/main/packages/solo/CHANGELOG.md)
   and
   [the `async_job` changelog](https://github.com/vi-k/solo/blob/main/packages/async_job/CHANGELOG.md).
@@ -123,17 +134,20 @@ last entries of the first group name them.
   `Done` where it used to end `Failed`, and a widget test fails on the reported
   error instead.
 - Errors that `0.2.0` kept to the hooks reach `Solo.unansweredHandler` or the
-  zone: the first section of
-  [the `solo` changelog](https://github.com/vi-k/solo/blob/main/packages/solo/CHANGELOG.md)
-  under the same heading.
+  zone: see the first list under the same heading of
+  [the `solo` changelog](https://github.com/vi-k/solo/blob/main/packages/solo/CHANGELOG.md).
 
 ### Added
 
-- Inherited from `solo` and `async_job`: `SoloObserver.all` and
-  `JobObserver.all`, one observer made of several.
-
-- Inherited from `async_job`: `Job.visitErrors`, each failure inside an error
-  on its own and the cancellations apart.
+- Inherited from `solo` and `async_job`: `timeout`, a deadline of its own for a
+  job of the controller; `ctx.pause`, a delay a cancellation ends;
+  `Solo.pending`, what is holding a `close` that has not come back;
+  `SoloObserver.all` and `JobObserver.all`, one observer made of several;
+  `Job.visitErrors`, each failure inside an error on its own and the
+  cancellations apart. These and the rest are under the same heading of
+  [the `solo` changelog](https://github.com/vi-k/solo/blob/main/packages/solo/CHANGELOG.md)
+  and
+  [the `async_job` changelog](https://github.com/vi-k/solo/blob/main/packages/async_job/CHANGELOG.md).
 
 - `SoloBuilder`: what `ValueListenableBuilder` is, for a controller that is not
   a `ValueListenable`. It takes any `Solo` — one `with SoloStream` included —
@@ -189,10 +203,11 @@ last entries of the first group name them.
 ### Documentation
 
 - The README's examples compile, and every Dart block of the page is built and
-  run in the repository's CI. It gained the sections on selections, builders
-  and `listen`, its `load` falls back to `Empty` when it fails or is cancelled
-  instead of leaving a spinner, and the notes at its end became a table of the
-  four questions they answer.
+  run in the repository's CI. `Usage` draws a controller that mixes nothing in
+  with `SoloBuilder`, and the page gained the sections on the controller as a
+  `ValueListenable`, on selections and on `listen`. Its `load` falls back to
+  `Empty` when it fails or is cancelled instead of leaving a spinner, and the
+  notes at its end became a table of the four questions they answer.
 - The package has a guide of its own, [Mixins](doc/mixins.md): a controller
   with both `SoloListenable` and `SoloStream`, a screen built on that stream,
   and a base class of controllers without Flutter, with the mixin on the leaf.

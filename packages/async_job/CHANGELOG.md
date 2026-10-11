@@ -176,9 +176,9 @@ now reach the zone, and fail a test there.
   failure must not hide behind a cancellation. What changes for a caller:
   `job.value` throws the `Cancelled` instead of the envelope, a
   `catch (ParallelWaitError)` around it no longer runs, `whenCancelled` fires,
-  and in `solo` the job's `onCancel` hook takes the outcome where `onError`
-  used to. **Migrating.** A resource opened in a successful branch and closed
-  from that outer `catch` should be taken through
+  and in `solo` the job's `ifCancelled` handler takes the outcome where
+  `ifFailed` used to. **Migrating.** A resource opened in a successful branch
+  and closed from that outer `catch` should be taken through
   `ctx.abandonable(() => open(), dispose: (value) => value.close())`: the core
   then closes it whatever the outcome, and nothing is needed at the call site.
   For a branch that cannot go through `ctx.abandonable`, catch the envelope
@@ -210,7 +210,8 @@ now reach the zone, and fail a test there.
   section holds back, which the job does not accept until the section closes
   and so shows nowhere else. An open section alone does not mean anybody asked.
   Adding a member to a class meant to be extended is breaking on its own: a
-  subclass with a member of that name stops compiling.
+  subclass with a member of that name stops compiling. **Migrating.** Rename
+  the member of the subclass.
 
 - **`JobContext` gains `pause`.** A context built on `JobContextBase` gets the
   member with it. A class that implements `JobContext` by hand — a fake in a
@@ -235,7 +236,7 @@ job was created in. In a test that zone is the test's, and the test fails:
   `.timeout` or `Future.any`, arriving once the job is over: `0.2.0` told
   nobody at all;
 - an error no outcome carries, of a job that has an observer: `0.2.0` stopped
-  it there, see the first of the breaking changes;
+  it there, see the entry on `JobAnswerer` above;
 - the failure of a source's own cleanup, the future of the subscription's
   `cancel()`, when `ctx.each` lets go of a stream: `0.2.0` dropped it. It
   reaches `onError` and `onUnanswered` of the `each` child.
@@ -327,11 +328,11 @@ named as `Job(key)`, not by its class.
   as it was thrown, and so does a `catch`: a check for `error is Cancelled`
   lets a cancellation inside it through, and a report of the whole error names
   none of its failures. `Job.visitErrors(error, stackTrace, onFailure: report)`
-  reports each failure and drops each uncaught `Cancelled`. The hooks of an
-  observer need no such call, the job walks the error for them:
-  `JobObserver.onError` is told about each failure and each cancellation in a
-  call of its own, and `JobAnswerer.onUnanswered` is asked about each failure.
-  See [Answering for errors](doc/observing.md#answering-for-errors).
+  reports each failure and drops each `Cancelled`. The hooks of an observer
+  need no such call, the job walks the error for them: `JobObserver.onError` is
+  told about each failure and each cancellation in a call of its own, and
+  `JobAnswerer.onUnanswered` is asked about each failure. See
+  [Answering for errors](doc/observing.md#answering-for-errors).
 
 - The debug channel names a job that handed its value over and dropped the
   conditional registrations that went with it:
@@ -452,7 +453,6 @@ named as `Job(key)`, not by its class.
   The siblings of the child that overflowed are not skipped, and the error
   still reaches whoever cancelled. What lies below the break is still left
   running. How deep a tree may go is in [Children](doc/children.md#children).
-
 - A call of `ctx.abandonable` the body did not await no longer sends the job's
   cancellation to the zone when the job accepts it after the body has ended:
   cancelled while it waits for a child, say. The table of where errors go held
@@ -478,7 +478,7 @@ named as `Job(key)`, not by its class.
   error goes, and that a parent waits for its children and not for the
   continuations hanging off them.
 - The API reference says where to start and where the guides are. The example
-  of `Job.ignore` gives its job an observer, as the text above it asks.
+  of `Job.ignoreFailure` gives its job an observer, as the text above it asks.
   `ctx.onCancel` promises the order its callbacks run in, `ctx.log` says which
   message costs nothing without an observer, `ctx.disown` covers what `ctx.run`
   registers, and `run`, `runAll`, `each` and the engine protocol name what they
