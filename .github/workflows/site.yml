@@ -3,8 +3,9 @@ name: site
 # Builds the documentation site and publishes it to GitHub Pages.
 #
 # The pages are not kept in git: `tool/build_site.py` assembles them from
-# the READMEs and the `doc/` folders of the packages, so the packages stay
-# the single source of truth and the site cannot drift from them.
+# the READMEs, the changelogs and the `doc/` folders of the packages and
+# from their Russian translations, so the packages stay the single source
+# of truth and the site cannot drift from them.
 #
 # Settings -> Pages -> Source is "GitHub Actions". The custom domain is a
 # Pages setting, not a file: a deployment made from Actions does not read
@@ -15,7 +16,10 @@ on:
     branches: [main]
     paths:
       - 'packages/*/README.md'
+      - 'packages/*/README.ru.md'
+      - 'packages/*/CHANGELOG.md'
       - 'packages/*/doc/**'
+      - 'docs/ru/**'
       - 'site/**'
       - 'tool/build_site.py'
       - '.github/workflows/site.yml'

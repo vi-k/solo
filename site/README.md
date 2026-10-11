@@ -2,12 +2,12 @@
 
 [Starlight](https://starlight.astro.build) over the packages' own Markdown. The
 pages under `src/content/docs/` are **generated** and not kept in git:
-`tool/build_site.py` reads the READMEs and the `doc/` folders, adds the
-frontmatter Starlight wants, and rewrites the links between files into links
-between pages. A paragraph of prose that links only to the very page it stands
-in — a README's "Also on the documentation site" — is dropped. The packages
-stay the single source of truth, so the site cannot drift from what ships on
-pub.dev.
+`tool/build_site.py` reads the READMEs, the changelogs and the `doc/` folders,
+adds the frontmatter Starlight wants, and rewrites the links between files into
+links between pages. A paragraph of prose that links only to the very page it
+stands in — a README's "Also on the documentation site" — is dropped. The
+packages stay the single source of truth, so the site cannot drift from what
+ships on pub.dev.
 
 Both languages are published. English is the root locale and comes from
 the packages; Russian lives under `/ru/` and comes from each package's
@@ -15,9 +15,12 @@ the packages; Russian lives under `/ru/` and comes from each package's
 header pairs a page with its translation, and `check_translations.py`
 keeps the two sides mirroring each other, so the pairing cannot go stale.
 
-A changelog is no page of the site in either language. Its translation
-lies in `docs/ru/<package>/` beside the translated guides, and the build
-passes it over; a link to it leads to GitHub.
+A changelog is a page of its package in both languages, at
+`<package>/changelog/` and last in the package's group of the sidebar. The
+English one is the package's `CHANGELOG.md`; its translation lies in
+`docs/ru/<package>/` beside the translated guides. A changelog opens with
+the heading of a version, so the build gives the page its title, "Changelog"
+or «Список изменений».
 
 This says nothing about what pub.dev gets: `README.ru.md` stays excluded
 by each package's `.pubignore`, and the other translations live outside
@@ -39,8 +42,8 @@ npm run dev     # http://localhost:4321/
 npm run build   # static output in dist/
 ```
 
-Re-run `build_site.py` after editing any README or page in `doc/`; `npm run
-dev` watches only what it has already been given.
+Re-run `build_site.py` after editing any README, changelog or page in `doc/`;
+`npm run dev` watches only what it has already been given.
 
 ## Settings
 
@@ -60,7 +63,8 @@ one place moves the whole site.
 ## Publishing
 
 `.github/workflows/site.yml` builds and deploys on every push to `main`
-that touches a README, a `doc/` page, this folder or the assembler.
+that touches a README, a changelog, a `doc/` page, a translation of any of
+them, this folder or the assembler.
 **Settings → Pages → Source** is set to *GitHub Actions*.
 
 The domain is `docs.yet-another.dev`. A subdomain needs one DNS record —
@@ -100,8 +104,8 @@ crawling the site or the repository page by page:
 | File | What it holds |
 | --- | --- |
 | `/llms.txt` | The entry point: what the packages are and where the other two files live. |
-| `/llms-full.txt` | Every English page, in order, as plain text. |
-| `/llms-small.txt` | The same with asides and `<details>` stripped. Barely smaller here — these docs are mostly code, and code is kept. |
+| `/llms-full.txt` | Every English page, in order, as plain text, the three changelogs last. |
+| `/llms-small.txt` | The same without the changelogs and with asides and `<details>` stripped. Barely smaller here — these docs are mostly code, and code is kept. |
 
 English only: the plugin takes the default locale, which is what we want
 — an agent asking about `ctx.join` should not get the answer twice.

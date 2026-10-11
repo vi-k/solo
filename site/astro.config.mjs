@@ -8,11 +8,16 @@ import config from './site.json' with { type: 'json' };
 /** One sidebar entry, named in both languages. */
 const page = (slug, label, ru) => ({ slug, label, translations: { ru } });
 
+/** The changelog of a package: the last entry of its group. */
+const changelog = (segment) =>
+  page(`${segment}/changelog`, 'Changelog', 'Список изменений');
+
 // Content under src/content/docs/ is generated from the packages by
 // `python3 tool/build_site.py` and is not kept in git. The packages stay
 // the single source of truth; this site renders them. English is the root
 // locale and comes from the packages; Russian lives under /ru/ and comes
-// from each package's README.ru.md and from docs/ru/<package>/.
+// from each package's README.ru.md and from docs/ru/<package>/. A changelog
+// is a page too: CHANGELOG.md of the package and its translation.
 export default defineConfig({
   site: config.site,
   base: config.base,
@@ -49,6 +54,11 @@ export default defineConfig({
               '`ctx.uncancellable` or `ctx.check` -- and which one it is ' +
               'decides what happens to the operation behind it.',
           ].join('\n'),
+          // A changelog tells what changed, not how the package works, and
+          // its older sections name API that is gone: it closes the full
+          // file and stays out of the abridged one.
+          demote: ['**/changelog'],
+          exclude: ['**/changelog'],
           optionalLinks: [
             {
               label: 'solo and bloc, side by side',
@@ -108,6 +118,7 @@ export default defineConfig({
               'solo and bloc, side by side',
               'solo и bloc рядом',
             ),
+            changelog('solo'),
           ],
         },
         {
@@ -133,6 +144,7 @@ export default defineConfig({
               'Building on the core',
               'Своё поверх ядра',
             ),
+            changelog('async_job'),
           ],
         },
         {
@@ -140,6 +152,7 @@ export default defineConfig({
           items: [
             page('flutter_solo', 'Overview', 'Обзор'),
             page('flutter_solo/mixins', 'Mixins', 'Миксины'),
+            changelog('flutter_solo'),
           ],
         },
       ],

@@ -112,13 +112,16 @@ class ARelativeLink(unittest.TestCase):
         )
 
 
-class ATranslatedChangelog(unittest.TestCase):
-    # A changelog has its translation in `docs/ru/<package>/`, next to the
-    # translated guides, but it is no page of the site: the English one is
-    # not published here either, and it has no title heading to be one.
-    def test_it_is_no_source(self):
-        names = {source.name for source, _, _, _ in build_site.sources()}
-        self.assertNotIn('CHANGELOG.md', names)
+class AChangelog(unittest.TestCase):
+    # A changelog is a page of its package in both languages. The English
+    # one lies in the package, beside the README, and its translation in
+    # `docs/ru/<package>/`, beside the translated guides.
+    def test_it_is_a_page_in_both_languages(self):
+        pages = {relative for _, relative, _, _ in build_site.sources()}
+        for segment in build_site.PACKAGES.values():
+            with self.subTest(segment):
+                self.assertIn(f'{segment}/changelog.md', pages)
+                self.assertIn(f'ru/{segment}/changelog.md', pages)
 
     def test_the_two_locales_mirror_each_other(self):
         pages = {'en': set(), 'ru': set()}
@@ -126,13 +129,106 @@ class ATranslatedChangelog(unittest.TestCase):
             pages[locale].add(relative.removeprefix('ru/'))
         self.assertEqual(pages['ru'], pages['en'])
 
-    def test_a_link_to_it_goes_to_github(self):
+    def test_a_relative_link_to_it_is_its_page(self):
         self.assertEqual(
             rewrite(
-                'CHANGELOG.md', 'docs/ru/solo/jobs.md', locale='ru',
+                '../async_job/CHANGELOG.md', 'docs/ru/solo/CHANGELOG.md',
+                locale='ru',
             ),
-            f'{REPO}/tree/main/docs/ru/solo/CHANGELOG.md',
+            '/ru/async_job/changelog/',
         )
+        self.assertEqual(
+            rewrite('CHANGELOG.md', 'docs/ru/solo/jobs.md', locale='ru'),
+            '/ru/solo/changelog/',
+        )
+        self.assertEqual(
+            rewrite('../CHANGELOG.md', 'packages/solo/doc/jobs.md'),
+            '/solo/changelog/',
+        )
+
+    def test_its_github_address_is_its_page(self):
+        self.assertEqual(
+            rewrite(
+                f'{REPO}/blob/main/packages/async_job/CHANGELOG.md',
+                'packages/solo/CHANGELOG.md',
+            ),
+            '/async_job/changelog/',
+        )
+
+    def test_its_own_links_are_read_from_where_it_lies(self):
+        # The English one lies a folder above the guides it names and
+        # beside the README; the Russian one lies among the guides.
+        self.assertEqual(
+            rewrite(
+                'doc/state.md#observing-state', 'packages/solo/CHANGELOG.md'
+            ),
+            '/solo/state/#observing-state',
+        )
+        self.assertEqual(
+            rewrite('README.md#usage', 'packages/flutter_solo/CHANGELOG.md'),
+            '/flutter_solo/#usage',
+        )
+        self.assertEqual(
+            rewrite(
+                'mixins.md#базовый-класс-без-flutter',
+                'docs/ru/flutter_solo/CHANGELOG.md',
+                locale='ru',
+            ),
+            '/ru/flutter_solo/mixins/#базовый-класс-без-flutter',
+        )
+
+    def test_the_site_gives_it_the_title_it_does_not_carry(self):
+        # A changelog opens with the heading of a version, not with a title
+        # of its own: pub.dev names its tab itself.
+        built = build_site.convert(
+            '## Unreleased\n\n- One.\n', 'en', '', REPO,
+            'packages/solo/CHANGELOG.md', SITE,
+        )
+        self.assertTrue(built.startswith('---\ntitle: "Changelog"\n'))
+        self.assertIn('\n## Unreleased\n\n- One.\n', built)
+
+        built = build_site.convert(
+            '## Не выпущено\n\n- Раз.\n', 'ru', '', REPO,
+            'docs/ru/solo/CHANGELOG.md', SITE,
+        )
+        self.assertTrue(
+            built.startswith('---\ntitle: "Список изменений"\n')
+        )
+        self.assertIn('\n## Не выпущено\n\n- Раз.\n', built)
+
+    def test_any_other_page_without_a_title_is_refused(self):
+        with self.assertRaises(SystemExit):
+            build_site.convert(
+                '## Jobs\n\nText.\n', 'en', '', REPO,
+                'packages/solo/doc/jobs.md', SITE,
+            )
+
+    def test_no_link_of_a_real_one_is_left_as_a_file(self):
+        # The guards above run on links written here. This one runs on the
+        # changelogs themselves: every link in them is a page of the site,
+        # a section of the page or an address outside the repository.
+        settings = build_site.config()
+        repo = settings['repo'].rstrip('/')
+        seen = 0
+        for source, _, _, locale in build_site.sources():
+            if source.name != 'CHANGELOG.md':
+                continue
+            seen += 1
+            relative = source.relative_to(build_site.REPO).as_posix()
+            built = build_site.convert(
+                source.read_text(encoding='utf-8'),
+                locale,
+                settings['base'].strip('/'),
+                repo,
+                relative,
+                settings['site'],
+            )
+            for target in build_site.LINK.findall(built):
+                with self.subTest(source=relative, target=target):
+                    self.assertFalse(target.startswith(repo), target)
+                    self.assertNotIn('.md', target)
+        self.assertEqual(seen, 2 * len(build_site.PACKAGES))
+
 
 
 class WhatIsLeftAlone(unittest.TestCase):

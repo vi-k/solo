@@ -5,15 +5,16 @@ The packages stay the single source of truth: `site/src/content/docs/` is
 generated here and kept out of git. Nothing is edited by hand there, and
 nothing is duplicated -- a README or a page in `doc/` is read where it
 lives, given the frontmatter Starlight wants, and written out with its
-links pointing at site URLs instead of files in the repository.
+links pointing at site URLs instead of files in the repository. So is the
+changelog of a package.
 
 Both languages go to the site. English is the root locale and comes from
 the packages; Russian lives under `/ru/` and comes from the `README.ru.md`
 of each package and from `docs/ru/<package>/`. The two sides mirror each
 other because `tool/check_translations.py` holds them to it.
 
-A changelog is no page of the site in either language: its translation
-lies in `docs/ru/<package>/` with the translated guides and is passed over.
+A changelog is a page of its package in both languages, `changelog`. It
+carries no title heading, so the title comes from here.
 
 Usage, from the repository root:
 
@@ -44,8 +45,10 @@ PACKAGES = {
 # Locale -> the path segment it is served under. English is the root.
 LOCALES = {'en': '', 'ru': 'ru'}
 
-# Translations in `docs/ru/<package>/` whose originals are no pages here.
-NOT_PAGES = {'CHANGELOG.md'}
+# A changelog opens with the heading of a version, not with a title of its
+# own: pub.dev names its tab itself. Here the page is named per locale.
+CHANGELOG = 'CHANGELOG.md'
+CHANGELOG_TITLES = {'en': 'Changelog', 'ru': 'Список изменений'}
 
 HEADING = re.compile(r'^#\s+(.*)$')
 LINK = re.compile(r'\]\(([^)]+)\)')
@@ -56,22 +59,29 @@ def config():
         return json.load(file)
 
 
+def page_name(file_name):
+    """The last segment of a page's URL: `CHANGELOG.md` is `changelog`."""
+    return file_name[:-len('.md')].lower()
+
+
 def sources():
     """Yields (source path, path under OUT, package segment, locale)."""
     for package, segment in PACKAGES.items():
         english = REPO / 'packages' / package
         yield english / 'README.md', f'{segment}/index.md', segment, 'en'
-        for page in sorted((english / 'doc').glob('*.md')):
-            yield page, f'{segment}/{page.name}', segment, 'en'
+        pages = sorted((english / 'doc').glob('*.md'))
+        for page in [english / CHANGELOG, *pages]:
+            name = page_name(page.name)
+            yield page, f'{segment}/{name}.md', segment, 'en'
 
         yield (english / 'README.ru.md', f'ru/{segment}/index.md',
                segment, 'ru')
         russian = REPO / 'docs' / 'ru' / package
         if russian.is_dir():
+            # The translated changelog lies here, among the guides.
             for page in sorted(russian.glob('*.md')):
-                if page.name in NOT_PAGES:
-                    continue
-                yield page, f'ru/{segment}/{page.name}', segment, 'ru'
+                name = page_name(page.name)
+                yield page, f'ru/{segment}/{name}.md', segment, 'ru'
 
 
 def page_url(base, locale, segment, name=None):
@@ -88,19 +98,24 @@ def page_of(path, base, locale):
         _, package, name = parts
         if package in PACKAGES and name.startswith('README'):
             return page_url(base, locale, PACKAGES[package])
+        # The English changelog lies beside the README, not in `doc/`.
+        if package in PACKAGES and name == CHANGELOG:
+            return page_url(
+                base, locale, PACKAGES[package], page_name(name)
+            )
     if len(parts) == 4 and parts[3].endswith('.md'):
         root, package, folder, name = parts
         published = (
             (root, folder) == ('packages', 'doc')
             or (root, package) == ('docs', 'ru')
         )
-        if published and name not in NOT_PAGES:
+        if published:
             # `docs/ru/<package>/` names the package one level later.
             if root == 'docs':
                 package = folder
             if package in PACKAGES:
                 return page_url(
-                    base, locale, PACKAGES[package], name[:-len('.md')]
+                    base, locale, PACKAGES[package], page_name(name)
                 )
     return None
 
@@ -201,6 +216,8 @@ def convert(text, locale, base, repo, source, site=''):
                 continue
         body.append(line)
 
+    if title is None and posixpath.basename(source) == CHANGELOG:
+        title = CHANGELOG_TITLES[locale]
     if title is None:
         raise SystemExit(f'{source}: no title heading')
 
