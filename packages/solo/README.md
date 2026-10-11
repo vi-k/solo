@@ -289,8 +289,8 @@ final class Player extends Solo<PlayerState> {
 
   Job<void> setVolume(double value) => _volume.add(value);
 
-  // The callback is removed before the state is final: after that,
-  // `externalSetState` would throw.
+  // The callback is removed before the state is final: after that, a call
+  // to `externalSetState` would throw a `StateError`.
   @override
   void onClose() => device.onDisconnect = null;
 }

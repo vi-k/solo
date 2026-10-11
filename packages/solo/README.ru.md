@@ -299,7 +299,7 @@ final class Player extends Solo<PlayerState> {
   Job<void> setVolume(double value) => _volume.add(value);
 
   // Колбэк снимается раньше, чем состояние станет окончательным: после
-  // этого `externalSetState` бросил бы.
+  // этого вызов `externalSetState` бросил бы `StateError`.
   @override
   void onClose() => device.onDisconnect = null;
 }

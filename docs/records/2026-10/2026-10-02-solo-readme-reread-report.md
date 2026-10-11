@@ -664,3 +664,14 @@ humanizer-ru: «он может быть уже типа» читалось ка
    начал играть, сторож держит тестом «play ends when the track starts, and the
    device plays on».
 
+4. Тур «The dozen calls», комментарий над `onClose` у `Player`. «After that,
+   `externalSetState` would throw», в переводе «после этого `externalSetState`
+   бросил бы», не называл, что именно бросается. Владелец спросил, значит ли
+   это, что `externalSetState` завершается ошибкой. Вызов синхронный и ничего
+   не возвращает: после конца закрытия он сразу бросает `StateError`, так
+   говорит и его dartdoc. Теперь: «after that, a call to `externalSetState`
+   would throw a `StateError`», в переводе «после этого вызов
+   `externalSetState` бросил бы `StateError`». Тот же комментарий поправлен
+   в копии кода страницы `readme_player.dart`; сторож держит это тестом «after
+   the close a report of the device would throw» (`throwsStateError`).
+
