@@ -1138,6 +1138,10 @@ _listening = subsections(
 _leaking_imports, _leaking_body = split_imports(
     _listening[doc_blocks.slug('The first attempt') + '/initState'])
 assert _leaking_imports == [], _leaking_imports
+_method_imports, _method_body = split_imports(
+    _listening[doc_blocks.slug('A method instead of the closure')
+               + '/_onChange'])
+assert _method_imports == [], _method_imports
 _listening_imports, _listening_body = split_imports(
     _listening[doc_blocks.slug('A subscription that keeps the callback')
                + '/initState'])
@@ -1505,6 +1509,27 @@ class _LeakingState extends State<Leaking> {''',
   Widget build(BuildContext context) => const SizedBox();
 }
 
+/// The same with a method in place of the two closures.
+class Named extends StatefulWidget {
+  final ProfileController controller;
+  final List<String> heard;
+
+  const Named({required this.controller, required this.heard, super.key});
+
+  @override
+  State<Named> createState() => _NamedState();
+}
+
+class _NamedState extends State<Named> {''',
+    _method_body,
+    '''
+  void _onState(Profile state) =>
+      widget.heard.add('state ${state.runtimeType}');
+
+  @override
+  Widget build(BuildContext context) => const SizedBox();
+}
+
 class Listening extends StatefulWidget {
   final ProfileController controller;
   final List<String> heard;
@@ -1619,6 +1644,27 @@ void main() {
           'called',
     );
     debugPrint('the first attempt: heard $heard after dispose()');
+  });
+
+  testWidgets('a method named twice is the callback dispose() removes',
+      (tester) async {
+    final controller = ProfileController(ProfileApi());
+    closing(controller);
+    final heard = <String>[];
+    await tester.pumpWidget(Named(controller: controller, heard: heard));
+
+    controller.load().ignoreFailure();
+    await tester.pumpAndSettle();
+    expect(heard, ['state Loading', 'state Loaded']);
+
+    await tester.pumpWidget(const SizedBox());
+    controller.load().ignoreFailure();
+    await tester.pumpAndSettle();
+    expect(
+      heard,
+      hasLength(2),
+      reason: 'dispose removed the method, so nothing is heard after it',
+    );
   });
 
   testWidgets('a group of subscriptions goes with the State', (tester) async {

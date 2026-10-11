@@ -106,19 +106,27 @@ class Listening extends StatefulWidget {
   /// Whether the `State` is the first attempt of the section.
   final bool firstAttempt;
 
+  /// Whether the `State` listens with a method of its own.
+  final bool withMethod;
+
   /// A widget that listens to [controller].
   const Listening({
     required this.controller,
     required this.heard,
     this.firstAttempt = false,
+    this.withMethod = false,
     super.key,
   });
 
   @override
   State<Listening> createState() =>
-      // The switch is the test's: one widget for both versions of the page.
+      // The switch is the test's: one widget for the versions of the page.
       // ignore: no_logic_in_create_state
-      firstAttempt ? _FirstAttemptState() : _ListeningState();
+      firstAttempt
+          ? _FirstAttemptState()
+          : withMethod
+              ? _MethodState()
+              : _ListeningState();
 }
 
 class _FirstAttemptState extends State<Listening> {
@@ -131,6 +139,27 @@ class _FirstAttemptState extends State<Listening> {
   @override
   void dispose() {
     widget.controller.removeListener(() => _onState(widget.controller.value));
+    super.dispose();
+  }
+
+  void _onState(Profile state) => widget.heard.add('state ${show(state)}');
+
+  @override
+  Widget build(BuildContext context) => const SizedBox();
+}
+
+class _MethodState extends State<Listening> {
+  void _onChange() => _onState(widget.controller.value);
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_onChange);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onChange);
     super.dispose();
   }
 

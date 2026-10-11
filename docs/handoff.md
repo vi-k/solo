@@ -226,7 +226,7 @@ changes» CHANGELOG `solo`. 2026-10-07 по его же слову `Job.ignore()
 и анализ чистые, 1769 тестов, `readme_rakes_test.dart` — 39), на вопрос о форме
 тура «The dozen calls» владелец ответил в тот же день: тур остаётся как есть.
 С 2026-10-11 он читает README пакета `flutter_solo`, пункты идут
-в `2026-10-04-flutter-solo-readme-reread-report.md`, их шесть. По четвёртому
+в `2026-10-04-flutter-solo-readme-reread-report.md`, их семь. По четвёртому
 страница перестроена: «Usage» объявляет контроллер чистым `Solo` и рисует его
 через `SoloBuilder`, а `with SoloListenable` и `ValueListenableBuilder` стоят
 в новом разделе «The controller as a `ValueListenable`» сразу за ним; раздел
@@ -243,9 +243,11 @@ changes» CHANGELOG `solo`. 2026-10-07 по его же слову `Job.ignore()
 последним. Функция виджета, бросившая на монтировании или на перестроении
 родителя, слушателя на контроллере не оставляет. В README переписан абзац под
 блоком `SoloSelector` в «Selecting one value», совет держать функцию в поле
-убран (после правки `flutter_solo` — формат и анализ чистые, 197 тестов,
-`solo_selector_test.dart` — 19, `readme_rakes_test.dart` — 77, его пример 4,
-стенд — 43 теста и 6 цитат трасс, проверки задания `docs` зелёные, сайт
+убран. По седьмому в разделе о подписке за первой попыткой встал подраздел «A
+method instead of the closure» с блоком, где колбэк — метод `State` (после
+седьмого пункта `flutter_solo` — формат и анализ чистые, 198 тестов,
+`solo_selector_test.dart` — 19, `readme_rakes_test.dart` — 78, его пример 4,
+стенд — 44 теста и 6 цитат трасс, проверки задания `docs` зелёные, сайт
 собран). Дальше `mixins.md` того же пакета, последними CHANGELOG трёх пакетов.
 Правки принятых страниц после их приёмки (переименования, `pause` в списке
 вызовов `extending.md` пакета `async_job`, `Job<T>` в коде `children.md` пакета
@@ -308,7 +310,7 @@ job a deadline of its own»: параметр `timeout` у `Job(...)`,
 с фразой о нём, написанной по пятому вопросу (L5); добавила dev-зависимость
 `test_api` в `packages/solo/pubspec.yaml`. Раздел «Вопросы владельцу»
 в `2026-10-04-flutter-solo-readme-reread-report.md`: README `flutter_solo`
-вырос до 512 строк, после перестройки 2026-10-11 в нём 540, а карта
+вырос до 512 строк, после правок 2026-10-11 в нём 564, а карта
 `2026-09-11[16]-docs-structure-design.md` числила его страницей в 325.
 Оставить, вынести «Testing» на `packages/flutter_solo/doc/testing.md`
 с переводом, оставив в README тест и ссылку, или вынести туда же и раздел

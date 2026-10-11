@@ -295,8 +295,30 @@ The closure in `dispose()` is spelled like the one in `initState()` and is
 another object. `removeListener` has to be given the very callback
 `addListener` took; given anything else it removes nothing and says nothing.
 The first closure stays registered and goes on being called, over a `State`
-that is gone, until the controller is closed. To be given back, the closure
-would need a field of its own to live in.
+that is gone, until the controller is closed.
+
+### A method instead of the closure
+
+```dart
+void _onChange() => _onState(widget.controller.value);
+
+@override
+void initState() {
+  super.initState();
+  widget.controller.addListener(_onChange);
+}
+
+@override
+void dispose() {
+  widget.controller.removeListener(_onChange);
+  super.dispose();
+}
+```
+
+A method can be named in both places. `removeListener` compares with `==`: a
+method named twice is equal to itself, and a closure written twice is not. The
+cost is a method for every listener, and for every `addListener` a
+`removeListener` that `dispose()` must not leave out.
 
 ### A subscription that keeps the callback
 

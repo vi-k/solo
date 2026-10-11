@@ -1039,3 +1039,34 @@ B4 и B8 красят сборку, а не драйвер: блок без об
    от чего избавляет `SoloSelector`, сторож не цитирует, как не цитировал
    и прежнюю. Та же фраза о первом виджете стояла в dartdoc `SoloSelection`
    и переписана там так же. Сканер перевода: 90 до и 90 после.
+
+7. Раздел «Listening without keeping the callback», конец подраздела «The first
+   attempt». «To be given back, the closure would need a field of its own to
+   live in», в переводе «Чтобы замыкание можно было вернуть, ему
+   понадобилось бы собственное поле». Владелец: стоит показать примером, что
+   это значит; и проще не поле, а отдельный метод. Фраза убрана, а за первой
+   попыткой встал подраздел «A method instead of the closure», в переводе
+   «Метод вместо замыкания». Его блок объявляет
+   `void _onChange() => _onState(widget.controller.value);`, отдаёт `_onChange`
+   в `addListener` в `initState()` и в `removeListener` в `dispose()`. Под
+   блоком: «A method can be named in both places. `removeListener` compares
+   with `==`: a method named twice is equal to itself, and a closure written
+   twice is not. The cost is a method for every listener, and for every
+   `addListener` a `removeListener` that `dispose()` must not leave out»,
+   в переводе «Метод можно назвать в обоих местах. `removeListener` сравнивает
+   через `==`: метод, названный дважды, равен сам себе, а замыкание, написанное
+   дважды, нет. Цена: свой метод на каждого слушателя и на каждый `addListener`
+   свой `removeListener`, который нельзя забыть в `dispose()`».
+
+   Блоков `dart` на странице стало 16 вместо 15. В support-файлах сторожа новый
+   блок стоит классом `_MethodState`
+   в `packages/flutter_solo/test/support/readme_widgets.dart`. Новый тест
+   сторожа, `a method named twice is the callback dispose() removes`, держит
+   и поведение, и слова: после `dispose()` колбэк больше не зовут, два имени
+   одного метода равны по `==`, а два одинаково написанных замыкания нет.
+   Сторож вырос с 77 тестов до 78, пакет `flutter_solo` — со 197 до 198.
+   Мутация: без `removeListener(_onChange)` в `_MethodState` красными стали
+   этот тест и тест, который ищет код страницы в support-файлах. Стенд
+   `tool/flutter_snippets.py` берёт новый блок по его подразделу и собирает
+   из него виджет `Named`; тестов в стенде стало 44 вместо 43. Сканер перевода:
+   90 до и 90 после.

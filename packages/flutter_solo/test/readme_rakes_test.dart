@@ -159,7 +159,7 @@ void main() {
       expect(strayFences(_doc), ['```sh']);
       expect(
         RegExp(r'^```dart$', multiLine: true).allMatches(_page()),
-        hasLength(15),
+        hasLength(16),
         reason: 'a new block of the page needs a place in the support files '
             'and a test that runs it',
       );
@@ -1072,6 +1072,37 @@ void main() {
           'says nothing.');
       _says('The first closure stays registered and goes on being called, '
           'over a `State` that is gone, until the controller is closed.');
+    });
+
+    testWidgets('a method named twice is the callback dispose() removes',
+        (tester) async {
+      final controller = listenable.ProfileController(ProfileApi());
+      final heard = <String>[];
+      await tester.pumpWidget(
+        Listening(controller: controller, heard: heard, withMethod: true),
+      );
+
+      controller.load().ignoreFailure();
+      await tester.pump(const Duration(milliseconds: 10));
+      expect(heard, ['state Loading', 'state Loaded(Ada Lovelace)']);
+
+      await tester.pumpWidget(const SizedBox());
+      heard.clear();
+      controller.load().ignoreFailure();
+      await tester.pump(const Duration(milliseconds: 10));
+      expect(heard, isEmpty);
+
+      // What sets the two spellings apart.
+      final named = controller.load;
+      final namedAgain = controller.load;
+      VoidCallback written() => () {};
+      expect(named == namedAgain, isTrue);
+      expect(written() == written(), isFalse);
+
+      await controller.close();
+      _says('A method can be named in both places. `removeListener` compares '
+          'with `==`: a method named twice is equal to itself, and a closure '
+          'written twice is not.');
     });
 
     testWidgets('a group of subscriptions goes with the State', (tester) async {
