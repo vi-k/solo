@@ -899,9 +899,18 @@ abstract class JobBase<T> implements Job<T> {
   /// is theirs to do. Forget that, and nothing looks wrong until the
   /// receiver ends badly — and then the resource is simply lost, with no
   /// trace anywhere.
-  void _traceDroppedCleanups() {
+  void _traceDroppedCleanups() => _droppedCleanupsTrace()?.call();
+
+  /// The line of [_traceDroppedCleanups], taken in two steps.
+  ///
+  /// The count and the outcome a hand finish left are read now, while the
+  /// list is full. The line itself, the job's `describe` and `toString`
+  /// included, is built and said when called: the unwinding calls it after
+  /// `finish`, and the caller's code that builds or hears the line finds the
+  /// job over.
+  void Function()? _droppedCleanupsTrace() {
     if (_skipped.isEmpty) {
-      return;
+      return null;
     }
     final count = '${_skipped.length} conditional '
         'cleanup${_skipped.length == 1 ? '' : 's'}';
@@ -910,11 +919,12 @@ abstract class JobBase<T> implements Job<T> {
     // But an engine of a domain may finish a job by hand while it unwinds,
     // and then the outcome is already something else and the value went
     // nowhere — saying it was handed over would be a plain lie.
-    _debug(
-      () => isFinished
-          ? '$this was finished as $_outcome with $count left aside'
-          : '$this handed its value over: $count dropped',
-    );
+    final finishedAs = isFinished ? _outcome : null;
+    return () => _debug(
+          () => finishedAs != null
+              ? '$this was finished as $finishedAs with $count left aside'
+              : '$this handed its value over: $count dropped',
+        );
   }
 
   /// Builds and delivers a diagnostic message, guarded on both halves.
@@ -2025,6 +2035,7 @@ abstract class JobBase<T> implements Job<T> {
       bool valueHandedOver() =>
           _committedByGroup || (_pendingCancel ?? outcome) is Done<T>;
 
+      void Function()? sayDropped;
       if (_cleanups.isNotEmpty || hold != null) {
         _disposing = true;
         // The loop lives here and not in a method of its own: between the
@@ -2085,12 +2096,19 @@ abstract class JobBase<T> implements Job<T> {
         // them there. Left behind, they would hold their values and their
         // closures for as long as anyone holds the handle — the job is over,
         // and the list is a field now, not a local that dies with the call.
-        _traceDroppedCleanups();
+        sayDropped = _droppedCleanupsTrace();
         _skipped.clear();
         _disposing = false;
       }
       final decided = _pendingCancel ?? outcome;
       finish(decided);
+      // Said after `finish` and not before: the debug channel is the
+      // caller's code, and so are `describe` and `toString` that build the
+      // line. One that cancels this job there would land between the dropped
+      // registrations and the outcome — the job would end `Cancelled` with
+      // its `discard` gone and its value with nobody. After `finish` the
+      // cancellation finds the job over.
+      sayDropped?.call();
       // After `finish`, not before, and on the spot. `finished` and
       // `onFinish` run first, and an engine of a domain may still call
       // [Job.ignoreFailure] there; a parent's body hears the cancellation only

@@ -202,12 +202,66 @@ void main() {
       async.flushTimers();
     });
     expect(
-      traces,
-      containsAllInOrder(<String>[
-        'Job(opener) handed its value over: 1 conditional cleanup dropped',
+      traces.where((line) => line.startsWith('Job(opener)')),
+      [
+        'Job(opener) started',
         'Job(opener) finished: Done(db)',
-      ]),
+        'Job(opener) handed its value over: 1 conditional cleanup dropped',
+      ],
     );
+  });
+
+  test('a cancellation from the channel on that line finds the job over', () {
+    final heard = <String>[];
+    var closed = 0;
+    fakeAsync((async) {
+      late final Job<String> opener;
+      Job.debug = (message) {
+        if (message.contains('handed its value over')) {
+          opener.cancel().ignore();
+        }
+      };
+      opener = Job<String>(
+        key: 'opener',
+        (ctx) => ctx.abandonable(() => 'db', discard: (db) => closed++),
+      )..whenCancelled((cancelled) => heard.add('$cancelled'));
+      async.flushTimers();
+      expect(opener.outcome, isA<Done<String>>());
+    });
+    expect(closed, 0, reason: 'the value went to the receiver');
+    expect(heard, isEmpty);
+  });
+
+  test('so does a describe that cancels the job while the line is built', () {
+    final heard = <String>[];
+    var closed = 0;
+    // Once: a cancellation is traced too, and its line asks `describe`
+    // again.
+    var cancelOnNextLine = false;
+    Job.debug = (_) {};
+    fakeAsync((async) {
+      late final Job<String> opener;
+      opener = Job<String>(
+        key: 'opener',
+        describe: () {
+          if (cancelOnNextLine) {
+            cancelOnNextLine = false;
+            opener.cancel().ignore();
+          }
+          return 'opens db';
+        },
+        (ctx) async {
+          final db =
+              await ctx.abandonable(() => 'db', discard: (db) => closed++);
+          cancelOnNextLine = true;
+          return db;
+        },
+      )..whenCancelled((cancelled) => heard.add('$cancelled'));
+      async.flushTimers();
+      expect(opener.outcome, isA<Done<String>>());
+    });
+    expect(closed, 0, reason: 'the value went to the receiver');
+    expect(heard, isEmpty);
   });
 
   test('the line counts them, and a job that keeps them gets no line', () {
