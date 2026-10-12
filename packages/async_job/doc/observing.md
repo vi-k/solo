@@ -314,6 +314,17 @@ branch of `ctx.runAll` failed and its group threw another error.
 `ignoreFailure()` on the job whose body failed lets such a failure go:
 `onError` still hears it, and it reaches neither `onUnanswered` nor the zone.
 
+While debugging, the errors a job hands to its observer can be seen with no
+observer written for them: the debug channel shows them. Besides the start, the
+cancellation and the end of every job, `Job.debug = print;` prints each such
+error, whether the job has an observer or not, and says so when one goes on to
+the zone. A `ParallelWaitError` takes one line, whole, where `onError` hears
+each failure inside it. For the first attempt above it prints
+`Job() error: Bad state: database locked` after the cancellation and before the
+end, and nothing about the zone: the error went no further. The channel is one
+for all the jobs of the app and speaks to whoever reads the console; what the
+app has to act on, it hears through an observer.
+
 ## Work the job does not wait for
 
 A job sends an analytics event and does not wait for it, and the sending fails:

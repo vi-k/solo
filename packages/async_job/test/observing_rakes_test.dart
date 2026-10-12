@@ -1640,6 +1640,118 @@ void main() {
         ],
       );
     });
+
+    // The debug channel of the paragraph after the table, switched on the
+    // way the paragraph writes it: its lines go where the job prints.
+    List<String> debugged(List<String> Function() run) {
+      Job.debug = print;
+      try {
+        return quotable(run());
+      } finally {
+        Job.debug = null;
+      }
+    }
+
+    test('the debug channel prints the error of the first attempt', () {
+      final lines = debugged(
+        () => play(first.opening, cancelAt: 10, outcomeObserved: false),
+      );
+
+      expect(lines, [
+        'Job() started',
+        'cancel',
+        'cancel Job(): Cancelled(manual)',
+        'Job() error: Bad state: database locked',
+        'Job() finished: Cancelled(manual)',
+      ]);
+      // The line the page quotes, in the original and in the translation,
+      // and nothing about the zone after it.
+      final quoted = {
+        'doc/observing.md': r'first attempt\s+above it prints\s+`([^`]+)`',
+        '../../docs/ru/async_job/observing.md':
+            r'первой попытки выше он печатает\s+`([^`]+)`',
+      };
+      for (final MapEntry(key: page, value: pattern) in quoted.entries) {
+        if (!File(page).existsSync()) {
+          continue;
+        }
+        expect(
+          RegExp(pattern).firstMatch(File(page).readAsStringSync())!.group(1),
+          lines[3],
+          reason: page,
+        );
+      }
+    });
+
+    test('it prints what the observer hears, whether there is one or not', () {
+      expect(
+        debugged(
+          () => play(
+            first.opening,
+            cancelAt: 10,
+            outcomeObserved: false,
+          ),
+        ).where((line) => line.contains(' error: ')),
+        ['Job() error: Bad state: database locked'],
+      );
+      expect(
+        debugged(
+          () => play(openingReported, cancelAt: 10, outcomeObserved: false),
+        ).where(
+          (line) => line.contains(' error: ') || line.startsWith('onError:'),
+        ),
+        [
+          'Job() error: Bad state: database locked',
+          'onError: Bad state: database locked',
+        ],
+      );
+    });
+
+    test('a ParallelWaitError takes one line, and onError hears each failure',
+        () {
+      final lines = debugged(
+        () => play(
+          () => Job<void>(observer: Reporter(), (ctx) async {
+            await [
+              ctx.join<void>(() async {
+                await delay(20);
+                throw StateError('a');
+              }),
+              ctx.join<void>(() async {
+                await delay(30);
+                throw StateError('b');
+              }),
+            ].wait;
+          }),
+          cancelAt: 10,
+          outcomeObserved: false,
+        ),
+      );
+
+      expect(
+        lines.where(
+          (line) => line.contains(' error: ') || line.startsWith('onError:'),
+        ),
+        [
+          startsWith('Job() error: ParallelWaitError'),
+          'onError: Bad state: a',
+          'onError: Bad state: b',
+        ],
+      );
+    });
+
+    test('and says so when an error goes on to the zone', () {
+      // The second row of the table, then the first: each line of the zone
+      // has the channel's word about it right before it.
+      for (final lines in [
+        debugged(() => play(openingShown, cancelAt: 30)),
+        debugged(() => play(failing, outcomeObserved: false)),
+      ]) {
+        final zone = lines.indexWhere((line) => line.startsWith('zone:'));
+        expect(zone, isNot(-1));
+        expect(lines[zone - 1], contains('went to the zone'), reason: '$lines');
+      }
+    });
   });
 
   group('Work the job does not wait for', () {

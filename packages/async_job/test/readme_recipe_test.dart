@@ -11,10 +11,13 @@
 // described the others.
 //
 // What the page quotes is read from the page: the output in the comments
-// of its blocks and the outcome of a job cancelled before its start, from
-// the README and its translation alike, the number of runs of the example
-// and the dependency of the package. A literal kept here would follow the
-// code, and the page would go on promising what the code no longer does.
+// of its blocks, the output of the example and the outcome of a job
+// cancelled before its start, from the README and its translation alike,
+// the number of runs of the example and the dependency of the package. A
+// literal kept here would follow the code, and the page would go on
+// promising what the code no longer does. The table of the context is read
+// from the page too: every member of `JobContext` stands in it, and what it
+// says of a cancellation is run here.
 @Timeout(Duration(seconds: 5))
 library;
 
@@ -105,8 +108,39 @@ final class Answering extends Listening with JobAnswerer {
 }
 
 // The blocks of the README stand between these marks, each as it is
-// written there, with nothing more; the flag is declared as the block
-// declares it.
+// written there, with nothing more, in the order of the page; the flag is
+// declared as the block declares it.
+
+/// The Quick start of the README, as it is written there.
+Future<void> quickStart() async {
+  // README: begin
+  final job = Job<Database>((ctx) async {
+    final database = await ctx.join(
+      Database.open,
+      discard: (database) => database.close(),
+    );
+
+    final stop = CancelToken();
+    ctx.onCancel(stop.cancel);
+
+    await ctx.join(() => database.migrate(stop));
+    await ctx.uncancellable(() async {
+      await database.writeVersion();
+      await ctx.run(database.readyFlag());
+    });
+
+    return database;
+  });
+
+  // Somebody changed their mind while the database was opening.
+  await Future<void>.delayed(const Duration(milliseconds: 10));
+  await job.cancel();
+
+  final outcome = await job.done; // Cancelled(manual)
+  // README: end
+  print(outcome);
+}
+
 // README: begin
 // ignore: type_annotate_public_apis
 var cancelled = false;
@@ -127,7 +161,7 @@ Future<void> load() async {
 }
 // README: end
 
-/// The job the README opens with, as it is written there.
+/// The job of "Why" in the README, as it is written there.
 Future<void> openingJob() async {
   // README: begin
   final job = Job<void>((ctx) async {
@@ -158,36 +192,6 @@ CancelableOperation<Database> lateOpenCaught() {
   );
   // README: end
   return operation;
-}
-
-/// The Quick start of the README, as it is written there.
-Future<void> quickStart() async {
-  // README: begin
-  final job = Job<Database>((ctx) async {
-    final database = await ctx.join(
-      Database.open,
-      discard: (database) => database.close(),
-    );
-
-    final stop = CancelToken();
-    ctx.onCancel(stop.cancel);
-
-    await ctx.join(() => database.migrate(stop));
-    await ctx.uncancellable(() async {
-      await database.writeVersion();
-      await ctx.run(database.readyFlag());
-    });
-
-    return database;
-  });
-
-  // Somebody changed their mind while the database was opening.
-  await Future<void>.delayed(const Duration(milliseconds: 10));
-  await job.cancel();
-
-  final outcome = await job.done; // Cancelled(manual)
-  // README: end
-  print(outcome);
 }
 
 /// What [run] prints, on fake time, once every timer has fired.
@@ -246,6 +250,123 @@ String quotedAfter(String page, String code) {
   return line.substring(line.indexOf('// ') + 3);
 }
 
+/// The members of `JobContext`, in the order of its source, the deprecated
+/// ones left out: a name kept for one release is not one to teach.
+List<String> contextMembers() {
+  final body = RegExp(
+    r'abstract interface class JobContext \{\n(.*?)\n\}',
+    dotAll: true,
+  ).firstMatch(read('lib/src/job_context.dart'))!.group(1)!;
+  final members = <String>[];
+  var deprecated = false;
+  for (final line in body.split('\n')) {
+    // A declaration stands at two spaces; its parameters and its
+    // documentation do not count.
+    if (!line.startsWith('  ') || line.startsWith('   ')) {
+      continue;
+    }
+    final code = line.substring(2);
+    if (code.startsWith('//')) {
+      continue;
+    }
+    if (code.startsWith('@Deprecated')) {
+      deprecated = true;
+      continue;
+    }
+    final name = RegExp(r'get (\w+);').firstMatch(code)?.group(1) ??
+        RegExp(r' (\w+)(?:<[^(]*>)?\(')
+            .allMatches(code)
+            .map((match) => match.group(1)!)
+            .where((name) => name != 'Function')
+            .firstOrNull;
+    if (name == null) {
+      // What closes the parameters of a declaration names nothing; any
+      // other line that names nothing is a declaration this reading missed,
+      // and a member missed here would be missing from the table unseen.
+      if (code.startsWith(')') || code.startsWith('}')) {
+        continue;
+      }
+      throw StateError('no member read from "$line"');
+    }
+    if (!deprecated) {
+      members.add(name);
+    }
+    deprecated = false;
+  }
+  return members;
+}
+
+/// The rows of the table of the context on [page]: the member and its cells.
+///
+/// A member with two rows throws: in a map the second would hide the first.
+Map<String, List<String>> contextTable(String page) {
+  final rows = <String, List<String>>{};
+  for (final match
+      in RegExp(r'^\| `ctx\.(\w+)[^`]*` \|(.*)\|$', multiLine: true)
+          .allMatches(read(page))) {
+    final member = match.group(1)!;
+    if (rows.containsKey(member)) {
+      throw StateError('two rows for $member on $page');
+    }
+    rows[member] = [
+      for (final cell in match.group(2)!.split('|')) cell.trim(),
+    ];
+  }
+  return rows;
+}
+
+/// What [call] does on a job that has accepted a cancellation: `throws` and
+/// the cancellation, or `works`.
+String onCancelledJob(FutureOr<Object?> Function(JobContext ctx) call) {
+  final heard = <String>[];
+  fakeAsync((async) {
+    final job = Job<void>((ctx) async {
+      try {
+        await ctx.join(() => delay(10));
+      } on Cancelled {
+        try {
+          await call(ctx);
+          heard.add('works');
+        } on Cancelled catch (cancelled) {
+          heard.add('throws $cancelled');
+        }
+      }
+    });
+    async.elapse(const Duration(milliseconds: 5));
+    job.cancel().ignore();
+    async.flushTimers();
+  });
+  return heard.single;
+}
+
+/// What happens when the job is cancelled at 10 ms while [body] runs: what
+/// [body] says, what it returns, and the [Cancelled] the body throws, each
+/// with the time. The job is created [cancellable] or not.
+List<String> cancelledWhile(
+  Future<Object?> Function(JobContext ctx, void Function(String) say) body, {
+  bool cancellable = true,
+}) {
+  final heard = <String>[];
+  fakeAsync((async) {
+    void say(String what) =>
+        heard.add('$what at ${async.elapsed.inMilliseconds}');
+    final job = Job<void>(cancellable: cancellable, (ctx) async {
+      try {
+        say('returned ${await body(ctx, say)}');
+        ctx.check();
+      } on Cancelled catch (cancelled) {
+        say('threw $cancelled');
+        rethrow;
+      }
+    });
+    async.elapse(const Duration(milliseconds: 10));
+    say('cancel');
+    job.cancel().ignore();
+    async.flushTimers();
+  });
+  return heard;
+}
+
 void main() {
   setUp(() {
     Database.events.clear();
@@ -253,7 +374,7 @@ void main() {
     cancelled = false;
   });
 
-  group('the flag the README starts from', () {
+  group('the flag "Why" starts from', () {
     test('closes the database at the check after the open', () {
       fakeAsync((async) {
         unawaited(load());
@@ -286,7 +407,7 @@ void main() {
     });
   });
 
-  test('the job the README opens with earns every line of it', () {
+  test('the job of "Why" earns every line of it', () {
     final printed = printedBy(openingJob);
 
     expect(
@@ -791,33 +912,15 @@ void main() {
     });
   });
 
-  test('the example runs the job to its end and cancels it at each step', () {
+  test('the example prints what the README quotes', () {
     final printed = printedBy(example.main);
-    expect(printed, [
-      'Nobody changes their mind:',
-      'database opened',
-      'migrated',
-      'version written',
-      'ready flag written',
-      'Done(database)',
-      'database closed',
-      '\nSomebody changes their mind while the database opens:',
-      'database opened',
-      'database closed',
-      'Cancelled(manual)',
-      '\nWhile it migrates, the token stops the migration:',
-      'database opened',
-      'migration stopped',
-      'database closed',
-      'Cancelled(manual)',
-      '\nWhile the version is written, the step ends whole:',
-      'database opened',
-      'migrated',
-      'version written',
-      'ready flag written',
-      'database closed',
-      'Cancelled(manual)',
-    ]);
+    for (final page in readmes) {
+      final quoted = RegExp(r'```text\n(.*?)\n```', dotAll: true)
+          .allMatches(read(page))
+          .single
+          .group(1)!;
+      expect(printed.join('\n'), quoted, reason: page);
+    }
 
     // The README counts the runs in a word, and each run opens with a
     // heading of its own.
@@ -832,6 +935,343 @@ void main() {
         .firstMatch(read('README.md'))!
         .group(1);
     expect(printed.where((line) => line.endsWith(':')).length, numbers[said]);
+  });
+
+  group('the context at a glance', () {
+    test('names every member of the context, and nothing else', () {
+      for (final page in readmes) {
+        expect(
+          contextTable(page).keys.toList()..sort(),
+          contextMembers()..sort(),
+          reason: page,
+        );
+      }
+    });
+
+    test('says which of them throw once the job is cancelled', () {
+      final calls = <String, FutureOr<Object?> Function(JobContext ctx)>{
+        'check': (ctx) => ctx.check(),
+        'join': (ctx) => ctx.join(() => 1),
+        'abandonable': (ctx) => ctx.abandonable(() => 1),
+        'uncancellable': (ctx) => ctx.uncancellable(() => 1),
+        'pause': (ctx) => ctx.pause(),
+        'run': (ctx) => ctx.run(Job.deferred<int>((ctx) async => 1)),
+        'runAll': (ctx) => ctx.runAll([Job.deferred<int>((ctx) async => 1)]),
+        'each': (ctx) => ctx.each(Stream.value(1), (ctx, event) {}),
+        'onCancel': (ctx) => ctx.onCancel(() {}),
+        'onDispose': (ctx) => ctx.onDispose(() {}),
+        'onDiscard': (ctx) => ctx.onDiscard(() {}),
+        'disown': (ctx) => ctx.disown(Object()),
+        'unattended': (ctx) => ctx.unattended(() {}),
+        'log': (ctx) => ctx.log('message'),
+        'job': (ctx) => ctx.job,
+      };
+      const said = {
+        'Throws `Cancelled`': 'throws Cancelled(manual)',
+        'Works as usual': 'works',
+        'Бросает `Cancelled`': 'throws Cancelled(manual)',
+        'Работает как обычно': 'works',
+      };
+      expect(calls.keys.toList()..sort(), contextMembers()..sort());
+      for (final page in readmes) {
+        for (final MapEntry(key: member, value: cells)
+            in contextTable(page).entries) {
+          expect(
+            onCancelledJob(calls[member]!),
+            said[cells[1]],
+            reason: '$member on $page',
+          );
+        }
+      }
+    });
+
+    // What a cancellation that comes while a member runs does to it, and
+    // for one member what it does. The cell is read here next to the run
+    // that holds it: a cell rewritten turns this red until the run says the
+    // same. The translation says it in words of its own, and its cell is
+    // held to them.
+    const translated = {
+      'Waits for the action to end, then throws':
+          'Ждёт конца действия, потом бросает',
+      'Throws at once; the action runs on':
+          'Бросает сразу, а действие идёт дальше',
+      'Holds the cancellation until the step ends; the next checkpoint throws':
+          'Держит отмену до конца шага, а бросает следующая контрольная точка',
+      'Ends the pause and throws': 'Прерывает паузу и бросает',
+      'Passes the cancellation to the child, waits for it and throws':
+          'Передаёт отмену ребёнку, ждёт его и бросает',
+      'Passes the cancellation to the children, waits for them and throws':
+          'Передаёт отмену детям, ждёт их и бросает',
+      'Passes the cancellation to the child': 'Передаёт отмену ребёнку',
+      'The work is not cancelled': 'Работа не отменяется',
+      'Starts work the job does not wait for; its errors go where those of '
+              'cleanup go':
+          'Запускает работу, которую задача не ждёт; её ошибки идут туда же, '
+              'куда ошибки уборки',
+    };
+    String cell(String member, {int column = 2}) {
+      final original = contextTable('README.md')[member]![column];
+      if (readmes.contains('README.ru.md')) {
+        expect(
+          contextTable('README.ru.md')[member]![column],
+          translated[original],
+          reason: '$member in the translation',
+        );
+      }
+      return original;
+    }
+
+    test('join waits for the action to end, then throws', () {
+      expect(cell('join'), 'Waits for the action to end, then throws');
+      expect(
+        cancelledWhile(
+          (ctx, say) => ctx.join<void>(() async {
+            await delay(100);
+            say('action ended');
+          }),
+        ),
+        [
+          'cancel at 10',
+          'action ended at 100',
+          'threw Cancelled(manual) at 100',
+        ],
+      );
+    });
+
+    test('abandonable throws at once, and the action runs on', () {
+      expect(cell('abandonable'), 'Throws at once; the action runs on');
+      expect(
+        cancelledWhile(
+          (ctx, say) => ctx.abandonable<void>(() async {
+            await delay(100);
+            say('action ended');
+          }),
+        ),
+        [
+          'cancel at 10',
+          'threw Cancelled(manual) at 10',
+          'action ended at 100',
+        ],
+      );
+    });
+
+    test('uncancellable holds it until the step ends', () {
+      expect(
+        cell('uncancellable'),
+        'Holds the cancellation until the step ends; the next checkpoint '
+        'throws',
+      );
+      expect(
+        cancelledWhile(
+          (ctx, say) => ctx.uncancellable(() async {
+            await delay(100);
+            say('step ended');
+            return 'the step';
+          }),
+        ),
+        [
+          'cancel at 10',
+          'step ended at 100',
+          'returned the step at 100',
+          'threw Cancelled(manual) at 100',
+        ],
+      );
+    });
+
+    test('pause ends and throws', () {
+      expect(cell('pause'), 'Ends the pause and throws');
+      expect(
+        cancelledWhile(
+          (ctx, say) => ctx.pause(const Duration(milliseconds: 100)),
+        ),
+        ['cancel at 10', 'threw Cancelled(manual) at 10'],
+      );
+    });
+
+    test('run passes the cancellation to the child and waits for it', () {
+      expect(
+        cell('run'),
+        'Passes the cancellation to the child, waits for it and throws',
+      );
+      expect(
+        cancelledWhile((ctx, say) {
+          final child = Job.deferred<int>((ctx) async {
+            await ctx.join(() => delay(100));
+            return 1;
+          });
+          unawaited(child.done.then((outcome) => say('child $outcome')));
+          return ctx.run(child);
+        }),
+        [
+          'cancel at 10',
+          'child Cancelled(parent) at 100',
+          'threw Cancelled(parent) at 100',
+        ],
+      );
+    });
+
+    test('runAll passes it to the children and waits for them', () {
+      expect(
+        cell('runAll'),
+        'Passes the cancellation to the children, waits for them and throws',
+      );
+      expect(
+        cancelledWhile((ctx, say) {
+          Job<int> child(String name, int ms) {
+            final child = Job.deferred<int>((ctx) async {
+              await ctx.join(() => delay(ms));
+              return ms;
+            });
+            unawaited(child.done.then((outcome) => say('$name $outcome')));
+            return child;
+          }
+
+          return ctx.runAll([child('a', 100), child('b', 50)]);
+        }),
+        [
+          'cancel at 10',
+          'b Cancelled(parent) at 50',
+          'a Cancelled(parent) at 100',
+          'threw Cancelled(parent) at 100',
+        ],
+      );
+    });
+
+    test('each passes it to the child', () {
+      expect(cell('each'), 'Passes the cancellation to the child');
+      expect(
+        cancelledWhile((ctx, say) async {
+          final child = ctx.each(StreamController<int>().stream, (ctx, _) {});
+          unawaited(child.done.then((outcome) => say('child $outcome')));
+          await ctx.pause(const Duration(milliseconds: 100));
+          return null;
+        }),
+        [
+          'cancel at 10',
+          'threw Cancelled(manual) at 10',
+          'child Cancelled(parent) at 10',
+        ],
+      );
+    });
+
+    test('unattended work is not cancelled', () {
+      expect(cell('unattended'), 'The work is not cancelled');
+      expect(
+        cancelledWhile((ctx, say) async {
+          ctx.unattended(() async {
+            await delay(100);
+            say('work ended');
+          });
+          await ctx.pause(const Duration(milliseconds: 100));
+          return null;
+        }),
+        [
+          'cancel at 10',
+          'threw Cancelled(manual) at 10',
+          'work ended at 100',
+        ],
+      );
+    });
+
+    test('the errors of unattended work go where those of cleanup go', () {
+      expect(
+        cell('unattended', column: 0),
+        'Starts work the job does not wait for; its errors go where those of '
+        'cleanup go',
+      );
+      // Who hears the error: the observer, if there is one, and the zone.
+      List<String> heardOf(
+        Listening? observer,
+        void Function(JobContext ctx) fail,
+      ) {
+        final zone = zoneErrorsOf(
+          (async) => Job<void>(observer: observer, (ctx) async => fail(ctx)),
+        );
+        return [...?observer?.heard, for (final error in zone) 'zone: $error'];
+      }
+
+      final ways = <Listening? Function(), List<String>>{
+        () => null: ['zone: Bad state: lost'],
+        Listening.new: ['onError: Bad state: lost', 'zone: Bad state: lost'],
+        Answering.new: [
+          'onError: Bad state: lost',
+          'onUnanswered: Bad state: lost',
+        ],
+      };
+      for (final MapEntry(key: observer, value: way) in ways.entries) {
+        expect(
+          heardOf(
+            observer(),
+            (ctx) => ctx.unattended(() => throw StateError('lost')),
+          ),
+          way,
+        );
+        expect(
+          heardOf(
+            observer(),
+            (ctx) => ctx.onDispose(() => throw StateError('lost')),
+          ),
+          way,
+        );
+      }
+    });
+
+    test('in a section and in a job that refuses, the members go on', () {
+      Future<Object?> members(JobContext ctx, void Function(String) say) async {
+        await ctx.join(() => delay(20));
+        say('join returned');
+        await ctx.abandonable(() => delay(20));
+        say('abandonable returned');
+        await ctx.pause(const Duration(milliseconds: 20));
+        say('pause ended');
+        final value = await ctx.run(
+          Job.deferred<int>((ctx) async {
+            await ctx.join(() => delay(20));
+            return 1;
+          }),
+        );
+        say('run returned $value');
+        return 'the step';
+      }
+
+      const ran = [
+        'cancel at 10',
+        'join returned at 20',
+        'abandonable returned at 40',
+        'pause ended at 60',
+        'run returned 1 at 80',
+        'returned the step at 80',
+      ];
+      expect(
+        cancelledWhile(
+          (ctx, say) => ctx.uncancellable(() => members(ctx, say)),
+        ),
+        [...ran, 'threw Cancelled(manual) at 80'],
+      );
+      expect(cancelledWhile(members, cancellable: false), ran);
+    });
+
+    test('the members that do not run on leave the cell empty', () {
+      for (final page in readmes) {
+        expect(
+          [
+            for (final MapEntry(key: member, value: cells)
+                in contextTable(page).entries)
+              if (cells[2].isEmpty) member,
+          ],
+          [
+            'check',
+            'onCancel',
+            'onDispose',
+            'onDiscard',
+            'disown',
+            'log',
+            'job',
+          ],
+          reason: page,
+        );
+      }
+    });
   });
 
   group('what the README says of the package', () {
