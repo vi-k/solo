@@ -25,16 +25,14 @@ import 'solo_selection.dart';
 /// state. A [ValueListenable] that is not a controller is picked from with
 /// a [SoloSelection] of its own and a `ValueListenableBuilder`.
 ///
-/// A selection earns its keep by being kept: one built in `build` and
-/// dropped at the end of it is subscribed to and unsubscribed from on every
-/// build, and the announced value it holds notifications back with goes
-/// with it.
-/// That is what a `State` field was for, and it is what this widget
-/// carries instead: its subscription to [solo] and the value it last
-/// handed to [builder]. So the picking widget can be a `StatelessWidget`,
-/// and a screen that picks three values out of one controller needs no
-/// `State` at all. Nothing has to be disposed of: the widget going away
-/// takes its listener off [solo].
+/// A selection earns its keep by being kept: one built in `build` and dropped
+/// at the end of it is subscribed to and unsubscribed from on every build, and
+/// the announced value it holds notifications back with goes with it. That is
+/// what a `State` field was for, and it is what this widget carries instead:
+/// its subscription to [solo] and the pick it last accepted. So the picking
+/// widget can be a `StatelessWidget`, and a screen that picks three values out
+/// of one controller needs no `State` at all. Nothing has to be disposed of:
+/// the widget going away takes its listener off [solo].
 ///
 /// Of what it is given the widget compares [solo] alone. [selector] and
 /// [changed] are called as the widget has them at the moment, so a closure
@@ -61,10 +59,16 @@ final class SoloSelector<S extends Object, T> extends StatefulWidget {
 
   /// Answers whether the pick changed, `!=` when it is omitted.
   ///
-  /// `previous` is the value [builder] was last given, and it stays that
-  /// across a parent rebuild, whether this function is held in a field or
-  /// written in place. Only another [solo] starts it over: the first pick
-  /// from a new controller goes to [builder] unasked.
+  /// `previous` is the pick the widget last accepted: the first one, or the
+  /// last one this function called changed. It stays that across a parent
+  /// rebuild, whether this function is held in a field or written in place.
+  /// [builder] has usually been given it already, but not always: when two
+  /// changes come before a frame and the first is accepted, the second is put
+  /// against it, and [builder] has not seen it yet. So, while [selector] and
+  /// this function keep their meaning, where the screen ends up depends on the
+  /// changes alone, and not on how they fall into frames. Only another [solo]
+  /// starts it over: the first pick from a new controller goes to [builder]
+  /// unasked.
   final bool Function(T previous, T current)? changed;
 
   /// Builds the subtree from the picked value.
@@ -96,8 +100,8 @@ final class SoloSelector<S extends Object, T> extends StatefulWidget {
 
 final class _SoloSelectorState<S extends Object, T>
     extends State<SoloSelector<S, T>> {
-  /// The value last handed to the builder, and what `changed` is asked
-  /// against.
+  /// The pick last accepted: what `changed` is asked against, and what the next
+  /// build hands to the builder.
   late T _value;
 
   /// Set while the controller is being subscribed to.

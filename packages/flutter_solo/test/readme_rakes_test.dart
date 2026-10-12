@@ -730,8 +730,83 @@ void main() {
 
       expect(await shown(inline: false), ['0', '0', '3']);
       expect(await shown(inline: true), ['0', '0', '3']);
-      _says('the value `changed:` compares against stays the one the builder '
-          'was last given');
+      _says('and `changed:` still compares against the last pick the widget '
+          'accepted.');
+    });
+
+    testWidgets('two changes before a frame: the second against the first',
+        (tester) async {
+      Future<(List<String>, String?)> run({
+        required bool frameApart,
+        bool parentRebuilds = false,
+      }) async {
+        final plain = Plain();
+        final parent = GlobalKey<ParentState>();
+        final log = <String>[];
+        await tester.pumpWidget(
+          _app(
+            Parent(
+              key: parent,
+              // `changed:` is written in place, so a rebuild of the parent
+              // asks once more.
+              (context) => SoloSelector<Profile, int>(
+                solo: plain,
+                selector: _length,
+                changed: (previous, current) {
+                  log.add('$previous->$current');
+                  return _far(previous, current);
+                },
+                builder: (context, length, _) {
+                  log.add('build $length');
+                  return Text('$length');
+                },
+              ),
+            ),
+          ),
+        );
+        // Three letters are far from none and accepted; five are not far
+        // from three, and they are not put against the none on the screen.
+        plain.set(Loaded('Abc'));
+        if (frameApart) {
+          await tester.pump();
+        }
+        plain.set(Loaded('Abcde'));
+        if (parentRebuilds) {
+          parent.currentState!.again();
+        }
+        await tester.pump();
+        final screen = _texts(tester).single;
+        await tester.pumpWidget(const SizedBox());
+        await plain.close();
+        return (log, screen);
+      }
+
+      final (together, endsAt) = await run(frameApart: false);
+      final (apart, endsApartAt) = await run(frameApart: true);
+      expect(together, ['build 0', '0->3', '3->5', 'build 3']);
+      expect(apart, ['build 0', '0->3', 'build 3', '3->5']);
+      expect(endsAt, '3');
+      expect(endsApartAt, '3');
+      _says('The builder has usually been given that pick, but not always: '
+          'when two changes come before a frame and the first is accepted, '
+          'the second is put against it, and the builder has not seen it yet.');
+      _says('So where the screen ends up depends on the changes alone, not on '
+          'how they fall into frames.');
+
+      // The question a parent rebuild asks is put against the same pick.
+      final (rebuilt, rebuiltEndsAt) =
+          await run(frameApart: false, parentRebuilds: true);
+      final (rebuiltApart, rebuiltApartEndsAt) =
+          await run(frameApart: true, parentRebuilds: true);
+      expect(rebuilt, ['build 0', '0->3', '3->5', '3->5', 'build 3']);
+      expect(
+        rebuiltApart,
+        ['build 0', '0->3', 'build 3', '3->5', '3->5', 'build 3'],
+      );
+      expect(rebuiltEndsAt, '3');
+      expect(rebuiltApartEndsAt, '3');
+      _says('and `changed:` still compares against the last pick the widget '
+          'accepted.');
     });
 
     testWidgets('the selection in a field follows a new controller',

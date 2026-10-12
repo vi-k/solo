@@ -228,8 +228,11 @@ controller, a `ValueListenable` or not. The selector and `changed:` can be
 closures written in place, as the selector is above. Such a closure is a new
 one on every build of the parent, and it may pick something else, so the widget
 picks once more and puts the pick to `changed:`. It moves no subscription for
-that, and the value `changed:` compares against stays the one the builder was
-last given.
+that, and `changed:` still compares against the last pick the widget accepted.
+The builder has usually been given that pick, but not always: when two changes
+come before a frame and the first is accepted, the second is put against it,
+and the builder has not seen it yet. So where the screen ends up depends on the
+changes alone, not on how they fall into frames.
 
 Where a listenable of the picked value is what you need, the same pick is made
 by an object, a `SoloSelection`, and a `State` holds it in a field:
