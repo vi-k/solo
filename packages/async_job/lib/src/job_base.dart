@@ -1857,9 +1857,10 @@ abstract class JobBase<T> implements Job<T> {
         }
         final own = _handlerCancel(cancelled, stackTrace);
         // Read again: putting the cancellation into words runs the caller's
-        // code -- the `toString` of a child's key, `onError` when that
-        // throws -- and code that cancels this job in between marks it with
-        // its own reason, which `whenCancelled` then hears. That one stands.
+        // code -- the child's `toString`, with its key and `describe` or an
+        // engine's own, and `onError` when that throws -- and code that
+        // cancels this job in between marks it with its own reason, which
+        // `whenCancelled` then hears. That one stands.
         return _pendingCancel ?? (selfCancelled = own);
       }
 
@@ -2257,7 +2258,9 @@ abstract class JobBase<T> implements Job<T> {
     if (child != null) {
       String description;
       try {
-        description = 'child ${child.key}: $thrown';
+        // The child as it prints itself: `Job(thumbnail)`, and `Job()` for a
+        // child without a key, never `null`.
+        description = '$child: $thrown';
       } on Object catch (error, stackTrace) {
         notifyError(error, stackTrace);
         description = 'child cancellation';

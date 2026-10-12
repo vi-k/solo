@@ -796,7 +796,7 @@ void main() {
           'own onCancel',
           'listener',
           'other child ended',
-          'Cancelled(handler: child null: Cancelled(manual))',
+          'Cancelled(handler: Job(): Cancelled(manual))',
         ]);
       });
     });

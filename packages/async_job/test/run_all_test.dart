@@ -451,7 +451,7 @@ void main() {
             .having(
               (cancelled) => cancelled.description,
               'description',
-              startsWith('child b: '),
+              startsWith('Job(b): '),
             ),
       );
       expect(heardCancelled, 1);

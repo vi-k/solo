@@ -318,7 +318,7 @@ void main() {
       async.flushTimers();
       final outcome = parent.outcome! as Cancelled;
       expect(outcome.reason, isA<HandlerCancelReason>());
-      expect(outcome.description, 'child child: Cancelled(manual)');
+      expect(outcome.description, 'Job(child): Cancelled(manual)');
     });
   });
 
@@ -334,7 +334,52 @@ void main() {
       async.flushTimers();
       expect(
         parent.outcome.toString(),
-        'Cancelled(handler: child null: Cancelled(manual))',
+        'Cancelled(handler: Job(): Cancelled(manual))',
+      );
+    });
+  });
+
+  for (final (key, named) in [
+    ('thumbnail', 'Job(thumbnail: page 3)'),
+    (null, 'Job(page 3)'),
+  ]) {
+    test(
+        'the parent outcome names the child as the child prints itself: '
+        '$named', () {
+      fakeAsync((async) {
+        late final Job<void> child;
+        final parent = Job<void>((ctx) async {
+          child = Job.deferred<void>(
+            key: key,
+            describe: () => 'page 3',
+            (ctx) => ctx.abandonable(() => delay(50)),
+          );
+          final result = ctx.run(child);
+          child.cancel().ignore();
+          await result;
+        });
+        async.flushTimers();
+        expect('$child', named);
+        expect(
+          parent.outcome.toString(),
+          'Cancelled(handler: $named: Cancelled(manual))',
+        );
+      });
+    });
+  }
+
+  test("a child of an engine is named by the engine's own toString", () {
+    fakeAsync((async) {
+      final child = _NamedJob<void>((ctx) => ctx.abandonable(() => delay(50)));
+      final parent = Job<void>((ctx) async {
+        final result = ctx.run(child);
+        child.cancel().ignore();
+        await result;
+      });
+      async.flushTimers();
+      expect(
+        parent.outcome.toString(),
+        'Cancelled(handler: Named<thumbnail>: Cancelled(manual))',
       );
     });
   });
@@ -971,6 +1016,27 @@ final class _SwitchableRulesContext extends JobContextBase {
     }
     return null;
   }
+}
+
+/// A job of an engine that prints itself its own way.
+final class _NamedJob<T> extends JobBase<T> {
+  final Future<T> Function(JobContext ctx) _body;
+
+  _NamedJob(this._body) : super(key: 'thumbnail');
+
+  @override
+  JobContextBase createContext() => _NamedContext(this);
+
+  @override
+  Future<T> execute(covariant _NamedContext ctx) => _body(ctx);
+
+  @override
+  String toString() => 'Named<$key>';
+}
+
+/// The context of [_NamedJob].
+final class _NamedContext extends JobContextBase {
+  _NamedContext(super.owner);
 }
 
 /// The protocol implemented rather than extended, the way a mock is.

@@ -169,7 +169,7 @@ Job<String> resend(int item) => run<Ready, String>(
 Когда состояние на паузе, ничего не загружается, и `resend` кончается так:
 
 ```text
-Cancelled(handler: child _Op.upload: Cancelled(rules: canStart))
+Cancelled(handler: Job(_Op.upload): Cancelled(rules: canStart))
 ```
 
 Ребёнок, которого отвернули стартовые правила, не запускается вовсе. Сначала он

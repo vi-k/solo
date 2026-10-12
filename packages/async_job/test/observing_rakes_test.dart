@@ -1331,13 +1331,16 @@ void main() {
 
     List<String> childNamed({
       required Object key,
+      String Function()? describe,
       CancelReason reason = const ManualCancelReason(),
       JobObserver? observer,
+      bool outcomeObserved = false,
     }) =>
         play(
           () {
             final child = Job.deferred<void>(
               key: key,
+              describe: describe,
               (ctx) => ctx.abandonable(() => delay(50)),
             );
             unawaited(
@@ -1348,12 +1351,12 @@ void main() {
             );
             return Job<void>(observer: observer, (ctx) => ctx.run(child));
           },
-          outcomeObserved: false,
+          outcomeObserved: outcomeObserved,
         );
 
     test(
-        "a child's key or Cancelled that fails to name the child: onError, "
-        'then the zone', () {
+        "a child's key, describe or Cancelled that fails to name the child: "
+        'onError, then the zone', () {
       expect(
         childNamed(key: BrokenKey(), observer: Reporter()),
         ['onError: Bad state: key failed', 'zone: Bad state: key failed'],
@@ -1366,6 +1369,31 @@ void main() {
           observer: Reporter(),
         ),
         ['onError: Bad state: name failed', 'zone: Bad state: name failed'],
+      );
+      expect(
+        childNamed(
+          key: 'child',
+          describe: () => throw StateError('describe failed'),
+          observer: Reporter(),
+        ),
+        [
+          'onError: Bad state: describe failed',
+          'zone: Bad state: describe failed',
+        ],
+      );
+    });
+
+    test('a child that fails to name itself is named by the fallback', () {
+      expect(
+        childNamed(
+          key: 'child',
+          describe: () => throw StateError('describe failed'),
+          outcomeObserved: true,
+        ),
+        [
+          'zone: Bad state: describe failed',
+          'outcome: Cancelled(handler: child cancellation)',
+        ],
       );
     });
 

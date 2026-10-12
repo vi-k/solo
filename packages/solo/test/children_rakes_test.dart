@@ -901,7 +901,7 @@ void main() {
       expect(_seen, ['caught Cancelled(manual), the parent cancelled false']);
       expect(
         '${parent.outcome}',
-        'Cancelled(handler: child child: Cancelled(manual))',
+        'Cancelled(handler: Job(child): Cancelled(manual))',
       );
       expect(
         (parent.outcome! as Cancelled).reason,
@@ -1257,7 +1257,7 @@ void main() {
         expect(
           _seen.skip(4).single,
           'Job(parent) finished '
-          'Cancelled(handler: child b: Cancelled(rules: canStart))',
+          'Cancelled(handler: Job(b): Cancelled(rules: canStart))',
         );
         _says('each branch of a group answers to its start rules as a child '
             'of `ctx.run` does');

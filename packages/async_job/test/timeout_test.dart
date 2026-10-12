@@ -654,7 +654,7 @@ void main() {
       async.flushTimers();
       expect(
         '${job.outcome}',
-        'Cancelled(handler: child step: Cancelled(timeout))',
+        'Cancelled(handler: Job(step): Cancelled(timeout))',
       );
     });
   });

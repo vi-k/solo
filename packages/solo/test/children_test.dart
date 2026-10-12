@@ -107,8 +107,8 @@ void main() {
         await ctx.run(child);
       });
       async.flushTimers();
-      const parentOutcome = '[parent] finished Cancelled(handler: child '
-          'child: Cancelled(rules: is not Working))';
+      const parentOutcome = '[parent] finished Cancelled(handler: Job(child): '
+          'Cancelled(rules: is not Working))';
       expect(journal.take(), [
         '[parent] started',
         '> [child] dropped Cancelled(rules: is not Working)',
@@ -229,8 +229,8 @@ void main() {
       async.elapse(const Duration(milliseconds: 50));
       solo.externalSetState(const Preparing(progress: 50));
       async.elapse(const Duration(milliseconds: 50));
-      const parentOutcome = '[parent] finished Cancelled(handler: child '
-          'child: Cancelled(rules: keepWhile))';
+      const parentOutcome = '[parent] finished Cancelled(handler: Job(child): '
+          'Cancelled(rules: keepWhile))';
       expect(journal.take(), [
         '[parent] started',
         '> [child] started',
@@ -639,7 +639,7 @@ void main() {
       async.flushTimers();
       expect(
         parent.outcome.toString(),
-        'Cancelled(handler: child null: Cancelled(rules: is not Working))',
+        'Cancelled(handler: Job(): Cancelled(rules: is not Working))',
       );
     });
   });
@@ -826,7 +826,7 @@ void main() {
       async.flushTimers();
 
       expect(handled, [
-        'ifCancelled Cancelled(handler: child a: Cancelled(manual))',
+        'ifCancelled Cancelled(handler: Job(a): Cancelled(manual))',
       ]);
       expect(
         journal.take(),

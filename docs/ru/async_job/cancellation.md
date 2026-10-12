@@ -669,5 +669,5 @@ outcome: Done(page without a thumbnail after 15 ms)
 и достаёт его длительность. `else` бросает дальше всё, что не относится
 к сроку: отмену самой задачи и миниатюру, которую отменил кто-то другой. Если
 ветки нет, срок ребёнка кончает родителя
-`Cancelled(handler: child thumbnail: Cancelled(timeout))`. Ключ нужен ради этой
-строки: ребёнок без ключа печатается как `child null`.
+`Cancelled(handler: Job(thumbnail): Cancelled(timeout))`. Ключ нужен ради этой
+строки: ребёнок без ключа печатается как `Job()`.

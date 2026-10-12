@@ -672,5 +672,5 @@ goes into an `if` inside it: it matches the reason of the deadline and takes
 its duration. The `else` rethrows what is not the deadline: the job's own
 cancellation, and a thumbnail somebody else cancelled. Let out, the child's
 deadline ends the parent
-`Cancelled(handler: child thumbnail: Cancelled(timeout))`. The key is there for
-that line: a child without one prints as `child null`.
+`Cancelled(handler: Job(thumbnail): Cancelled(timeout))`. The key is there for
+that line: a child without one prints as `Job()`.

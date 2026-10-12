@@ -172,7 +172,7 @@ Job<String> resend(int item) => run<Ready, String>(
 With the state paused, nothing is uploaded and `resend` ends:
 
 ```text
-Cancelled(handler: child _Op.upload: Cancelled(rules: canStart))
+Cancelled(handler: Job(_Op.upload): Cancelled(rules: canStart))
 ```
 
 A child the start rules turn away never runs. It is adopted first — parent and

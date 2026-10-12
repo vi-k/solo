@@ -1032,7 +1032,7 @@ void main() {
     });
 
     for (final (form, outcome) in [
-      ('rethrow', 'Cancelled(handler: child null: Cancelled(manual))'),
+      ('rethrow', 'Cancelled(handler: Job(): Cancelled(manual))'),
       ('check', 'Done(page without a thumbnail)'),
     ]) {
       test('an optional child cancelled on its own, with $form', () {
@@ -1519,7 +1519,7 @@ void main() {
     test('the clause rethrows a thumbnail somebody else cancelled', () {
       stage.thumbnail = Thumbnail.isCancelled;
       expect(watch(page.thumbnailWithADeadline), [
-        'outcome: Cancelled(handler: child thumbnail: Cancelled(manual))',
+        'outcome: Cancelled(handler: Job(thumbnail): Cancelled(manual))',
       ]);
     });
 
@@ -1540,12 +1540,10 @@ void main() {
           outcome = '${job.outcome}';
         });
 
-        expect(
-          outcome,
-          'Cancelled(handler: child $key: Cancelled(timeout))',
-        );
+        final child = key == null ? 'Job()' : 'Job($key)';
+        expect(outcome, 'Cancelled(handler: $child: Cancelled(timeout))');
         if (key == null) {
-          expect(quotedAfter('a child without one prints as'), 'child null');
+          expect(quotedAfter('a child without one prints as'), child);
         } else {
           expect(quotedAfter('deadline ends the parent'), outcome);
         }

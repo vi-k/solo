@@ -67,6 +67,10 @@ A job that gives up inside a call it walked away from no longer reaches
 in a call of its own, where `0.2.0` handed it the whole error once. See
 [Answering for errors](doc/observing.md#answering-for-errors).
 
+A child's cancellation that the body lets out names the child as the job prints
+itself: `Cancelled(handler: Job(thumbnail): Cancelled(timeout))`, where `0.2.0`
+printed `child thumbnail`, and `child null` for a child without a key.
+
 Several error messages are reworded: a test that matches them by text needs the
 new wording.
 

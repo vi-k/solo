@@ -422,7 +422,7 @@ void main() {
         expect(errors, isEmpty);
         expect(
           '${job.outcome}',
-          'Cancelled(handler: child null: Cancelled(manual))',
+          'Cancelled(handler: Job(each): Cancelled(manual))',
         );
         _says("An uncaught `Cancelled` from the child's `.value` does "
             'cancel the parent through its body.');
