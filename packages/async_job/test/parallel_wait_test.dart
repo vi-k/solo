@@ -743,6 +743,255 @@ void main() {
     });
   });
 
+  // `[a, b].wait` waits for every branch: when `a` fails and the parent is
+  // cancelled while `b` still runs, the envelope leaves the body after the
+  // cancellation and carries a failure that came before it.
+  group('a failure that came first, in an envelope thrown after the mark', () {
+    Job<void> failingChild(StateError error) =>
+        Job.deferred<void>((ctx) async => throw error);
+
+    Job<void> runningChild() => Job.deferred<void>(
+          (ctx) => ctx.join(
+            () => Future<void>.delayed(const Duration(milliseconds: 10)),
+          ),
+        );
+
+    /// A child whose own body throws an envelope before the mark.
+    Job<void> envelopingChild(StateError first, StateError second) =>
+        Job.deferred<void>(
+          (ctx) => [
+            Future<void>.error(first, StackTrace.empty),
+            Future<void>.error(second, StackTrace.empty),
+          ].wait,
+        );
+
+    /// Runs [body] as a parent, cancels it once the children that fail at
+    /// once have failed, and returns its outcome and what reached the zone.
+    Future<(Outcome<void>, List<Object>)> cancelledAfter(
+      Future<void> Function(JobContext ctx) body, {
+      JobObserver? observer,
+      void Function(Job<void> parent)? before,
+    }) async {
+      final zone = <Object>[];
+      late Outcome<void> outcome;
+      await runZonedGuarded(
+        () async {
+          final parent = Job<void>(observer: observer, body);
+          before?.call(parent);
+          await Future<void>.delayed(Duration.zero);
+          parent.cancel().ignore();
+          outcome = await parent.done;
+          await Future<void>.delayed(Duration.zero);
+        },
+        (error, stackTrace) => zone.add(error),
+      )!;
+      return (outcome, zone);
+    }
+
+    fakeAsyncTest('goes to the zone, as it does under Future.wait', () async {
+      final early = StateError('early');
+      final (waited, waitedZone) = await cancelledAfter(
+        (ctx) => [ctx.run(failingChild(early)), ctx.run(runningChild())].wait,
+      );
+      final (all, allZone) = await cancelledAfter(
+        (ctx) => Future.wait([
+          ctx.run(failingChild(early)),
+          ctx.run(runningChild()),
+        ]),
+      );
+
+      expect(waited, isA<Cancelled>());
+      expect(waitedZone, [same(early)]);
+      expect(all, isA<Cancelled>());
+      expect(allZone, [same(early)]);
+    });
+
+    fakeAsyncTest('an observer that answers is asked, after onError', () async {
+      final early = StateError('early');
+      final heard = <Object>[];
+      final answered = <Object>[];
+      final (outcome, zone) = await cancelledAfter(
+        observer: _Answers(heard, answered),
+        (ctx) => [ctx.run(failingChild(early)), ctx.run(runningChild())].wait,
+      );
+
+      expect(outcome, isA<Cancelled>());
+      expect(heard, [same(early), isA<Cancelled>()]);
+      expect(answered, [same(early)]);
+      expect(zone, isEmpty);
+    });
+
+    fakeAsyncTest('a failure in it that came after the mark stays with onError',
+        () async {
+      final early = StateError('early');
+      final late = StateError('late');
+      final heard = <Object>[];
+      final (outcome, zone) = await cancelledAfter(
+        observer: _Answers(heard, null),
+        (ctx) => [
+          ctx.run(failingChild(early)),
+          Future<void>.delayed(
+            const Duration(milliseconds: 10),
+            () => throw late,
+          ),
+        ].wait,
+      );
+
+      expect(outcome, isA<Cancelled>());
+      expect(heard, [same(early), same(late)]);
+      expect(zone, [same(early)]);
+    });
+
+    fakeAsyncTest('two that came first go on one by one, in branch order',
+        () async {
+      final first = StateError('first');
+      final second = StateError('second');
+      final (outcome, zone) = await cancelledAfter(
+        (ctx) => [
+          ctx.run(failingChild(first)),
+          ctx.run(failingChild(second)),
+          ctx.run(runningChild()),
+        ].wait,
+      );
+
+      expect(outcome, isA<Cancelled>());
+      expect(zone, [same(first), same(second)]);
+    });
+
+    fakeAsyncTest('the record form too', () async {
+      final early = StateError('early');
+      final (outcome, zone) = await cancelledAfter(
+        (ctx) => (ctx.run(failingChild(early)), ctx.run(runningChild())).wait,
+      );
+
+      expect(outcome, isA<Cancelled>());
+      expect(zone, [same(early)]);
+    });
+
+    fakeAsyncTest('a child that threw an envelope: each failure inside it',
+        () async {
+      final first = StateError('inner first');
+      final second = StateError('inner second');
+      final (waited, waitedZone) = await cancelledAfter(
+        (ctx) => [
+          ctx.run(envelopingChild(first, second)),
+          ctx.run(runningChild()),
+        ].wait,
+      );
+      final (all, allZone) = await cancelledAfter(
+        (ctx) => Future.wait([
+          ctx.run(envelopingChild(first, second)),
+          ctx.run(runningChild()),
+        ]),
+      );
+
+      expect(waited, isA<Cancelled>());
+      expect(waitedZone, [same(first), same(second)]);
+      expect(all, isA<Cancelled>());
+      expect(allZone, [same(first), same(second)]);
+    });
+
+    fakeAsyncTest('a failure taken out of such a child and thrown again',
+        () async {
+      // The envelope of the child came first, and so did each failure in
+      // it: the body that throws one of them again keeps it first.
+      final first = StateError('inner first');
+      final (outcome, zone) = await cancelledAfter((ctx) async {
+        try {
+          await ctx.run(envelopingChild(first, StateError('inner second')));
+        } on Object catch (error) {
+          final envelope =
+              error as ParallelWaitError<Object?, List<AsyncError?>>;
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+          final taken = envelope.errors.first!;
+          Error.throwWithStackTrace(taken.error, taken.stackTrace);
+        }
+      });
+
+      expect(outcome, isA<Cancelled>());
+      expect(zone, [same(first)]);
+    });
+
+    fakeAsyncTest('ignoreFailure() takes the answer away, not the notice',
+        () async {
+      final early = StateError('early');
+      final heard = <Object>[];
+      final answered = <Object>[];
+      final (outcome, zone) = await cancelledAfter(
+        observer: _Answers(heard, answered),
+        before: (parent) => parent.ignoreFailure(),
+        (ctx) => [ctx.run(failingChild(early)), ctx.run(runningChild())].wait,
+      );
+
+      expect(outcome, isA<Cancelled>());
+      expect(heard, [same(early), isA<Cancelled>()]);
+      expect(answered, isEmpty);
+      expect(zone, isEmpty);
+    });
+
+    fakeAsyncTest('asked after onFinish, where an engine may still ignore it',
+        () async {
+      final early = StateError('early');
+      final waited = <Object>[];
+      final all = <Object>[];
+      final (_, waitedZone) = await cancelledAfter(
+        observer: _IgnoresOnFinish(waited),
+        (ctx) => [ctx.run(failingChild(early)), ctx.run(runningChild())].wait,
+      );
+      final (_, allZone) = await cancelledAfter(
+        observer: _IgnoresOnFinish(all),
+        (ctx) => Future.wait([
+          ctx.run(failingChild(early)),
+          ctx.run(runningChild()),
+        ]),
+      );
+
+      expect(waited, isEmpty);
+      expect(waitedZone, isEmpty);
+      expect(all, isEmpty);
+      expect(allZone, isEmpty);
+    });
+
+    fakeAsyncTest('an envelope thrown before the mark is answered for once',
+        () async {
+      // The envelope leaves the body at once, before anything marks the job;
+      // the cancellation covers it while a child the body left behind runs.
+      final early = StateError('early');
+      final heard = <Object>[];
+      final answered = <Object>[];
+      final (outcome, zone) = await cancelledAfter(
+        observer: _Answers(heard, answered),
+        (ctx) async {
+          ctx.run(runningChild()).ignore();
+          await [ctx.run(failingChild(early)), Future<void>.value()].wait;
+        },
+      );
+
+      expect(outcome, isA<Cancelled>());
+      expect(heard, [same(early)]);
+      expect(answered, [same(early)]);
+      expect(zone, isEmpty);
+    });
+
+    fakeAsyncTest('an envelope the body builds itself is read the same way',
+        () async {
+      // The job reads any `ParallelWaitError`, not only one of `.wait`: a
+      // body that wraps the failure in one keeps it first.
+      final early = StateError('early');
+      final (outcome, zone) = await cancelledAfter((ctx) async {
+        try {
+          await ctx.run(failingChild(early));
+        } on Object catch (error, stackTrace) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+          throw _listEnvelope([AsyncError(error, stackTrace)]);
+        }
+      });
+
+      expect(outcome, isA<Cancelled>());
+      expect(zone, [same(early)]);
+    });
+  });
+
   group('continuation', () {
     fakeAsyncTest('a continuation classifies a clean parallel cancellation',
         () async {
@@ -1083,4 +1332,50 @@ final class _EqualEnvelope
 
   @override
   int get hashCode => 1;
+}
+
+/// Hears and answers for the parent only: a child created without an
+/// observer of its own has its parent's. Without [answered] it hands each
+/// error on to the zone.
+final class _Answers extends JobObserver with JobAnswerer {
+  final List<Object> heard;
+  final List<Object>? answered;
+
+  _Answers(this.heard, this.answered);
+
+  @override
+  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
+    if (job.level == 0) {
+      heard.add(error);
+    }
+  }
+
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
+    if (answered case final answered?) {
+      answered.add(error);
+    } else {
+      super.onUnanswered(job, error, stackTrace);
+    }
+  }
+}
+
+/// Calls `ignoreFailure()` on the parent in `onFinish`, as an engine of a
+/// domain may in `finished`, and records what it is asked to answer for all
+/// the same.
+final class _IgnoresOnFinish extends JobObserver with JobAnswerer {
+  final List<Object> answered;
+
+  _IgnoresOnFinish(this.answered);
+
+  @override
+  void onFinish(Job<Object?> job) {
+    if (job.level == 0) {
+      job.ignoreFailure();
+    }
+  }
+
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      answered.add(error);
 }

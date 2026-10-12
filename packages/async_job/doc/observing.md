@@ -232,9 +232,15 @@ the job accepts the cancellation, the body throws the failure. The job ends
 second row of the table, not the third. The body keeps the failure first by
 letting it through, or by catching it and throwing it again later; a new error
 thrown in its place comes after the cancellation, even one that carries the
-caught failure inside it. A future the body awaits on its own is different: the
-job learns of its failure only when the body throws it, so that failure comes
-first if the body throws it before the cancellation.
+caught failure inside it. The one exception is a `ParallelWaitError`, such as
+the one `.wait` throws: the job reads what is inside it. Under
+`[ctx.run(a), ctx.run(b)].wait` a failure of `a` leaves the body only once `b`
+has ended as well, and if the job accepts a cancellation in between, the
+envelope comes after it. Each failure inside it that the job learned of first
+still takes the second row; the rest of it takes the third. A future the body
+awaits on its own is different: the job learns of its failure only when the
+body throws it, so that failure comes first if the body throws it before the
+cancellation.
 
 A body that catches the failed open and shows it to the user before throwing it
 again; its own cancellation it lets through unshown:

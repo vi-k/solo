@@ -666,13 +666,15 @@ abstract class JobBase<T> implements Job<T> {
   /// The failures of [_failedBeforeMark] that an [Expando] cannot hold: a
   /// string, a number, a boolean or a record.
   ///
-  /// Every one of them, as for objects: [JobContext.runAll] throws the
-  /// first failure of its branches, another branch may fail with a string
-  /// of its own before the mark, and both have to stay noted. Held
-  /// strongly, because no weak reference can hold them, and by identity, so
-  /// a body that throws the same constant in a loop keeps one entry. A body
-  /// that catches distinct ones in a loop before any mark keeps them all
-  /// until [finish] — and a record keeps whatever it references.
+  /// Every one of them, as for objects: [JobContext.runAll] throws the first
+  /// failure of its branches, another branch may fail with a string of its own
+  /// before the mark, and both have to stay noted. Held strongly, because no
+  /// weak reference can hold them, and by identity, so a body that throws the
+  /// same constant in a loop keeps one entry. A body that catches distinct ones
+  /// in a loop before any mark keeps them all until [finish] — and a record
+  /// keeps whatever it references. So does a `ParallelWaitError` on its way to
+  /// the body: each of these inside it is noted on its own and stays here,
+  /// while the error itself is held weakly.
   Set<Object>? _plainFailedBeforeMark;
 
   static bool _isPlain(Object error) =>
@@ -687,10 +689,27 @@ abstract class JobBase<T> implements Job<T> {
   /// engine of a domain finished by hand, may fail after that, and a string
   /// or a record would then stay in [_plainFailedBeforeMark] for as long as
   /// the job lives.
+  ///
+  /// A `ParallelWaitError` is noted together with each failure inside it, as
+  /// [Job.visitErrors] walks it: those came first as well. The body may get
+  /// the envelope back inside one of its own — a child that threw one,
+  /// awaited under `[a, b].wait` — and [_failedUnmarkedIn] looks for the
+  /// failures, not for the envelope that carried them.
   void _failedUnmarked(Object error) {
     if (_pendingCancel != null || isFinished) {
       return;
     }
+    _noteFailedUnmarked(error);
+    if (error is ParallelWaitError<Object?, Object?>) {
+      _visitErrors(
+        error,
+        StackTrace.empty,
+        onFailure: (failure, _) => _noteFailedUnmarked(failure),
+      );
+    }
+  }
+
+  void _noteFailedUnmarked(Object error) {
     if (_isPlain(error)) {
       (_plainFailedBeforeMark ??= Set.identity()).add(error);
     } else {
@@ -702,6 +721,29 @@ abstract class JobBase<T> implements Job<T> {
   bool _wasFailedUnmarked(Object error) => _isPlain(error)
       ? _plainFailedBeforeMark?.contains(error) ?? false
       : _failedBeforeMark?[error] ?? false;
+
+  /// The failures inside [envelope] that were noted by [_failedUnmarked], each
+  /// with the stack trace of its branch.
+  ///
+  /// For an envelope the body threw after the mark: `[a, b].wait` waits for
+  /// every future, so a child that failed before the cancellation leaves the
+  /// body only inside the envelope built after it.
+  List<AsyncError> _failedUnmarkedIn(
+    ParallelWaitError<Object?, Object?> envelope,
+    StackTrace stackTrace,
+  ) {
+    final found = <AsyncError>[];
+    _visitErrors(
+      envelope,
+      stackTrace,
+      onFailure: (failure, failureStackTrace) {
+        if (_wasFailedUnmarked(failure)) {
+          found.add(AsyncError(failure, failureStackTrace));
+        }
+      },
+    );
+    return found;
+  }
 
   /// Whether this job is unwinding a cascade that ran out of stack.
   ///
@@ -1803,6 +1845,10 @@ abstract class JobBase<T> implements Job<T> {
       // *after* the mark is the body's own way of giving up, and its error
       // belongs to the observer alone.
       var failedFirst = false;
+      // The failures that came first inside an envelope the body threw after
+      // the mark. Each is such a diagnosis on its own, and goes where one the
+      // body threw alone would go; the rest of the envelope came after.
+      var firstInEnvelope = const <AsyncError>[];
       // The outcome of a body that threw [cancelled]: the mark if there is
       // one, and otherwise its own decision to give up.
       Cancelled gaveUp(Cancelled cancelled, StackTrace stackTrace) {
@@ -1843,6 +1889,9 @@ abstract class JobBase<T> implements Job<T> {
           // first look like it came second. The order is the whole diagnosis,
           // and it is settled at the moment of the throw.
           failedFirst = _pendingCancel == null || _wasFailedUnmarked(error);
+          if (!failedFirst && error is ParallelWaitError<Object?, Object?>) {
+            firstInEnvelope = _failedUnmarkedIn(error, stackTrace);
+          }
           if (!identical(error, _announcedError)) {
             _announcedError = error;
             notifyObserver(error, stackTrace);
@@ -2049,6 +2098,14 @@ abstract class JobBase<T> implements Job<T> {
       if (failedFirst && outcome is Failed && !identical(decided, outcome)) {
         _reportCovered(outcome, announced: true);
       }
+      // Not empty only if the job was marked at the throw: [decided] is the
+      // mark then, and not the envelope.
+      for (final failure in firstInEnvelope) {
+        _reportCovered(
+          Failed(failure.error, failure.stackTrace),
+          announced: true,
+        );
+      }
     } on Object catch (error, stackTrace) {
       if (_startReturned) {
         rethrow;
@@ -2148,17 +2205,18 @@ abstract class JobBase<T> implements Job<T> {
   ///
   /// The body failed and a cancellation arrived afterwards, so the job ends
   /// [Cancelled] and the path that reports an unobserved [Failed] never runs.
-  /// An engine of a domain can bring one here too: a [Failed] it hands to
-  /// [finish] over the mark, or to a job that is already over. Whoever reads
-  /// the outcome — [Job.value], [Job.done], [JobContext.run], a group of
-  /// [JobContext.runAll] — gets the cancellation, or whatever the job ended
-  /// with first, and not this, so reading it settles nothing. It is an error no
-  /// outcome carries, answered the way the failure of a branch the group did
-  /// not throw is: through [JobAnswerer.onUnanswered] of an observer that
-  /// answers, otherwise in the zone. [announced] says whether
-  /// [JobObserver.onError] has heard it already — a failure of the body was
-  /// told where it was caught, one an engine of a domain handed to [finish] was
-  /// told nowhere.
+  /// The same goes for a failure that came before the cancellation inside an
+  /// envelope the body threw after it. An engine of a domain can bring one here
+  /// too: a [Failed] it hands to [finish] over the mark, or to a job that is
+  /// already over. Whoever reads the outcome — [Job.value], [Job.done],
+  /// [JobContext.run], a group of [JobContext.runAll] — gets the cancellation,
+  /// or whatever the job ended with first, and not this, so reading it settles
+  /// nothing. It is an error no outcome carries, answered the way the failure
+  /// of a branch the group did not throw is: through [JobAnswerer.onUnanswered]
+  /// of an observer that answers, otherwise in the zone. [announced] says
+  /// whether [JobObserver.onError] has heard it already — a failure of the body
+  /// was told where it was caught, one an engine of a domain handed to [finish]
+  /// was told nowhere.
   ///
   /// [Job.ignoreFailure] takes the answer away and leaves the notice: one
   /// handed to [finish] is still told to [JobObserver.onError], once. An

@@ -1095,6 +1095,72 @@ void main() {
       );
     });
 
+    test('the envelope of .wait: a failure that came first in it', () {
+      // The open of `a` fails at 20 ms, the cancellation comes at 30 ms, and
+      // `.wait` throws its envelope once `b` has ended too, after it.
+      Job<void> waiting({JobObserver? observer}) => Job<void>(
+            observer: observer,
+            (ctx) => [
+              ctx.run(Job.deferred<void>((ctx) => ctx.join(Database.open))),
+              ctx.run(Job.deferred<void>((ctx) => ctx.join(() => delay(50)))),
+            ].wait,
+          );
+
+      expect(
+        quotable(play(() => waiting(observer: Reporter()), cancelAt: 30)),
+        [
+          'onError: Bad state: database locked',
+          'cancel',
+          'onError: Bad state: database locked',
+          'onError: Cancelled(parent)',
+          'zone: Bad state: database locked',
+          'outcome: Cancelled(manual)',
+        ],
+        reason: 'the child hears its own failure at 20 ms, the parent each '
+            'error of the envelope, and the failure takes the second row',
+      );
+      expect(
+        quotable(play(waiting, cancelAt: 30)),
+        [
+          'cancel',
+          'zone: Bad state: database locked',
+          'outcome: Cancelled(manual)',
+        ],
+      );
+    });
+
+    test('the envelope of .wait: the rest of it takes the third row', () {
+      // The open fails at 20 ms, the cancellation comes at 30 ms, and the
+      // future the body awaits on its own fails at 40 ms, after it.
+      Job<void> waiting({JobObserver? observer}) => Job<void>(
+            observer: observer,
+            (ctx) => [
+              ctx.run(Job.deferred<void>((ctx) => ctx.join(Database.open))),
+              delay(40).then<void>((_) => throw StateError('disk full')),
+            ].wait,
+          );
+
+      expect(
+        quotable(play(() => waiting(observer: Reporter()), cancelAt: 30)),
+        [
+          'onError: Bad state: database locked',
+          'cancel',
+          'onError: Bad state: database locked',
+          'onError: Bad state: disk full',
+          'zone: Bad state: database locked',
+          'outcome: Cancelled(manual)',
+        ],
+      );
+      expect(
+        quotable(play(waiting, cancelAt: 30)),
+        [
+          'cancel',
+          'zone: Bad state: database locked',
+          'outcome: Cancelled(manual)',
+        ],
+      );
+    });
+
     test('the body shows the failure and not its own cancellation', () {
       play(openingShown, cancelAt: 30);
       expect(stage.shown.map((error) => '$error'), [

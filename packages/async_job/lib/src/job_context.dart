@@ -192,14 +192,15 @@ abstract interface class JobContext {
   /// section leaves alone. Sections nest — only the outermost lets a held
   /// cancellation through — and it is let through even if [action] throws.
   ///
-  /// When [action] throws while a cancellation is held, the error came
-  /// before the cancellation, and it goes on the way a failure a
-  /// cancellation covered does — see [Failed]. So does an error of [action]
-  /// the body caught and throws again after a cancellation that came later,
-  /// whether the section held it or not. That is said of this error alone:
-  /// the body keeps it first by letting it through or throwing it again,
-  /// while a new error thrown in its place, a wrapper included, comes after
-  /// the cancellation and only [JobObserver.onError] hears it.
+  /// When [action] throws while a cancellation is held, the error came before
+  /// the cancellation, and it goes on the way a failure a cancellation covered
+  /// does — see [Failed]. So does an error of [action] the body caught and
+  /// throws again after a cancellation that came later, whether the section
+  /// held it or not. That is said of this error alone: the body keeps it first
+  /// by letting it through or throwing it again, a `ParallelWaitError` around
+  /// it included, such as the one of `.wait`, while a new error thrown in its
+  /// place, a wrapper of any other kind included, comes after the cancellation
+  /// and only [JobObserver.onError] hears it.
   ///
   /// **Always await this call.** The section belongs to the job, not to the
   /// future returned here: it opens on the call and holds a cancellation
