@@ -388,6 +388,50 @@ void main() {
           'no longer running');
     });
 
+    testWidgets('a tap on Load that fails puts Empty back and fails no test',
+        (tester) async {
+      final controller = ProfileController(
+        ProfileApi(error: StateError('no network')),
+      );
+      await tester.pumpWidget(_app(ProfileView(controller: controller)));
+
+      await tester.tap(find.text('Load'));
+      await tester.pump();
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 10));
+
+      expect(controller.currentState, isA<Empty>());
+      expect(find.text('Load'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await controller.close();
+      _says('`ignoreFailure()` on the button says the screen is all the answer '
+          'the failure needs');
+    });
+
+    test('a button that drops the job hands the failure to the zone', () async {
+      Profile? state;
+      final reported = await _asWidgetTest((binding) async {
+        final controller = ProfileController(
+          ProfileApi(error: StateError('no network')),
+        );
+        // What `onPressed: controller.load` would call: the job it hands
+        // back goes nowhere.
+        final VoidCallback onPressed = controller.load;
+        onPressed();
+        await binding.pump(const Duration(milliseconds: 10));
+        state = controller.currentState;
+        await controller.close();
+      });
+
+      expect(state, isA<Empty>(), reason: 'ifFailed has answered on screen');
+      expect(reported.single.exception, isA<StateError>());
+      _says('The button drops the job that `load` hands back, and a failure '
+          'nobody reads goes on to the zone even after `ifFailed` has put '
+          '`Empty` on the screen: in an app towards '
+          '`PlatformDispatcher.onError`, in a widget test into the test, which '
+          'fails.');
+    });
+
     testWidgets('save does not start over a state that is not Loaded',
         (tester) async {
       final api = ProfileApi();

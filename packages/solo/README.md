@@ -113,6 +113,14 @@ cancellation. Without a handler, the state stays where the body left it: an
 error or a cancellation here would leave `Loading`. The job's outcome stays
 `Failed` or `Cancelled` even when a handler updates the state.
 
+A `Failed` that nobody observes goes on to the zone the job was created in,
+even when `ifFailed` has published a state: a plain Dart program ends there,
+and a Flutter app hands it to its error handlers. Reading the job's `done` or
+`value` observes the outcome; a caller that needs no result says so with
+`ignoreFailure()`, as in `profile.load().ignoreFailure()`. See
+[Handled and unhandled failures](doc/errors.md#handled-and-unhandled-failures)
+on the errors page.
+
 `Policy.droppable` and `key: 'load'` make repeated calls share the queued or
 running load. A second call returns the existing job. Once that job finishes,
 another call can start a new load.

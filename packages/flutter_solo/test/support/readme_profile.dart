@@ -60,7 +60,7 @@ class ProfileView extends StatelessWidget {
         solo: controller,
         builder: (context, state, _) => switch (state) {
           Empty() => TextButton(
-              onPressed: controller.load,
+              onPressed: () => controller.load().ignoreFailure(),
               child: const Text('Load'),
             ),
           Loading() => const CircularProgressIndicator(),

@@ -130,7 +130,7 @@ class ProfileView extends StatelessWidget {
         solo: controller,
         builder: (context, state, _) => switch (state) {
           Empty() => TextButton(
-              onPressed: controller.load,
+              onPressed: () => controller.load().ignoreFailure(),
               child: const Text('Load'),
             ),
           Loading() => const CircularProgressIndicator(),
@@ -148,9 +148,15 @@ in it. Inside a body `ctx.emit` is the only way to write the state,
 job is cancelled, and `ctx.join` waits its call out either way — a save is not
 cut in half. `ifFailed` and `ifCancelled` are the way back: they say what state
 a load that failed or was cancelled leaves behind, and without them the screen
-would keep the spinner of a job that is no longer running. The full API —
-rules, the queue, children, observers — is documented in
-[solo](https://pub.dev/packages/solo).
+would keep the spinner of a job that is no longer running.
+
+They answer on the screen and not for the caller. The button drops the job that
+`load` hands back, and a failure nobody reads goes on to the zone even after
+`ifFailed` has put `Empty` on the screen: in an app towards
+`PlatformDispatcher.onError`, in a widget test into the test, which fails.
+`ignoreFailure()` on the button says the screen is all the answer the failure
+needs; [Outcomes](#outcomes) has the rule. The full API — rules, the queue,
+children, observers — is documented in [solo](https://pub.dev/packages/solo).
 
 `SoloBuilder` is what draws the state: it takes the controller as `solo`,
 rebuilds on every change of the state and hands `child` through untouched.

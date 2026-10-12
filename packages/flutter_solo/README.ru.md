@@ -130,7 +130,7 @@ class ProfileView extends StatelessWidget {
         solo: controller,
         builder: (context, state, _) => switch (state) {
           Empty() => TextButton(
-              onPressed: controller.load,
+              onPressed: () => controller.load().ignoreFailure(),
               child: const Text('Load'),
             ),
           Loading() => const CircularProgressIndicator(),
@@ -148,7 +148,14 @@ class ProfileView extends StatelessWidget {
 момент, когда `Job` отменяют, а `ctx.join` дожидается своего вызова в любом
 случае, так что сохранение не рвётся пополам. `ifFailed` и `ifCancelled` ведут
 назад: они говорят, в каком состоянии остаётся упавшая или отменённая загрузка,
-а без них экран держал бы спиннер задачи, которой уже нет. Всё API целиком,
+а без них экран держал бы спиннер задачи, которой уже нет.
+
+Отвечают они за экран, а не за того, кто вызвал метод. Кнопка выбрасывает
+`Job`, которую вернул `load`, и провал, который никто не прочитал, всё равно
+уходит в зону, хотя `ifFailed` уже вернул на экран `Empty`. В приложении он
+идёт к `PlatformDispatcher.onError`, в виджет-тесте попадает в сам тест, и тест
+падает. `ignoreFailure()` на кнопке говорит, что в ответ на провал хватит
+экрана; правило описано в разделе [«Исходы»](#исходы). Всё API целиком,
 с правилами, очередью, детьми и наблюдателями, описано
 в [solo](https://pub.dev/packages/solo).
 

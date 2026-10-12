@@ -250,6 +250,52 @@ void main() {
       });
     });
 
+    test('a Failed nobody observes goes to the zone, ifFailed or not', () {
+      final prose = _page().replaceAll(RegExp(r'\s+'), ' ');
+      expect(
+        prose,
+        allOf(
+          contains('A `Failed` that nobody observes goes on to the zone the '
+              'job was created in, even when `ifFailed` has published a '
+              'state'),
+          contains("Reading the job's `done` or `value` observes the outcome; "
+              'a caller that needs no result says so with `ignoreFailure()`, '
+              'as in `profile.load().ignoreFailure()`.'),
+        ),
+      );
+      final zones = <String, List<String>>{};
+      final states = <String, String>{};
+      // Nothing is asserted inside the zones: an `expect` that failed there
+      // would be one more error of the zone.
+      fakeAsync((async) {
+        void call(String how, void Function(quick.ProfileController) use) {
+          final errors = zones[how] = [];
+          final profile = quick.ProfileController(_FailingApi());
+          runZonedGuarded(
+            () => use(profile),
+            (error, stackTrace) => errors.add('$error'),
+          );
+          async.flushTimers();
+          states[how] = _profile(profile.currentState);
+          profile.close().ignore();
+          async.flushTimers();
+        }
+
+        call('dropped', (profile) => profile.load());
+        call('done read', (profile) => profile.load().done.ignore());
+        call('value read', (profile) => profile.load().value.ignore());
+        call('ignored', (profile) => profile.load().ignoreFailure());
+      });
+
+      expect(zones, {
+        'dropped': ['Bad state: offline'],
+        'done read': isEmpty,
+        'value read': isEmpty,
+        'ignored': isEmpty,
+      });
+      expect(states.values.toSet(), {'Failure(Bad state: offline)'});
+    });
+
     test('a started load cancelled publishes Initial; cancel waits for it', () {
       fakeAsync((async) {
         final profile = quick.ProfileController(quick.ProfileApi());

@@ -1362,6 +1362,23 @@ void main() {
     debugPrint('the handle: $outcome');
   });
 
+  testWidgets('a tap on Load that fails puts the button back, and no more',
+      (tester) async {
+    final controller = ProfileController(FailingApi());
+    closing(controller);
+    await tester.pumpWidget(
+      MaterialApp(home: ProfileView(controller: controller)),
+    );
+
+    // A failure the button left to the zone would fail this test here.
+    await tester.tap(find.text('Load'));
+    await tester.pump(const Duration(milliseconds: 20));
+
+    expect(find.text('Load'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    debugPrint('the failed tap: back on Load');
+  });
+
   testWidgets('save starts on a loaded profile and nowhere else',
       (tester) async {
     final api = ProfileApi();
