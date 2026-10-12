@@ -1587,7 +1587,9 @@ abstract class JobContextBase implements JobContext {
     // every failure handed in, and a child the rule has already ended is told
     // too. `ignoreFailure` first: the error is already on its way to the body
     // through the rethrow, and the body is where it is answered for, not the
-    // zone.
+    // zone. Two throws leave the child be after all, and the `catch` says why:
+    // one that threw the routine of the child out of its start, and a stack
+    // that ran out while the start was under way.
     Cancelled? markedWhileAsking;
     try {
       final rejection = beforeChildStart(child);
@@ -1604,10 +1606,29 @@ abstract class JobContextBase implements JobContext {
       // `catch`: the child ends `Cancelled`, not `Failed(Cancelled)`.
       markedWhileAsking = _owner.pendingCancel;
       if (markedWhileAsking == null) {
+        // Up before the child joins the list and down once its start has
+        // returned, by a store both times.
+        child._startInFlight = true;
         _owner._children.add(child);
-        child.start();
+        child
+          ..start()
+          .._startInFlight = false;
       }
     } on Object catch (error, stackTrace) {
+      if (child._startInFlight &&
+          (child._tornError != null || error is StackOverflowError)) {
+        // Nothing here. The routine of the child was thrown out of the
+        // start, and only the rest of that routine ends such a job: the
+        // body may have run, and what it registered is released there. Or
+        // the stack ran out, and whatever this did would need the stack
+        // that has just run out; the check for that is itself allowed to
+        // throw. The child stays where the throw left it, the mark of its
+        // start still up: on the list, and the owner ends it once its own
+        // body is over. A child the stack ran out on inside `add`, before
+        // the list took it, is on no list, and nothing ends it, as nothing
+        // ends a job `run` never took.
+        rethrow;
+      }
       // By identity, as in `finish`: the refused child is taken off the
       // list here, before it is finished, so `finish` will not do it later
       // and a plain `remove` would take a sibling equal by `==` instead.

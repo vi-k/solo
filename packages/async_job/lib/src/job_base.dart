@@ -714,6 +714,42 @@ abstract class JobBase<T> implements Job<T> {
   /// nothing else.
   bool _outOfStack = false;
 
+  /// Whether [_execute] has taken its first step.
+  ///
+  /// Written by the routine, and by the parent that ends the job in its
+  /// place. A job that is running with this still `false` has no routine:
+  /// its start was cut short before it got that far.
+  bool _routineEntered = false;
+
+  /// Whether the start of this job, a child, is on the stack.
+  ///
+  /// Written by the parent: up before the child joins the waiting list,
+  /// down once [start] has returned. While it stands the child may be
+  /// anywhere in its start, and the parent does not judge it. A start is
+  /// synchronous, so a turn later it is on no stack, and a mark that still
+  /// stands then was left by a start that was thrown out: where the stack
+  /// has run out nothing is done, and that includes taking this down. The
+  /// parent takes it down itself -- see [_awaitChildren]. On a job that has
+  /// finished it says nothing.
+  bool _startInFlight = false;
+
+  /// What escaped the synchronous part of [_execute], and its trace.
+  ///
+  /// That part runs on the stack of whoever starts the job, and when that
+  /// stack has run out, it is out for every handler on the way up as well:
+  /// whatever one of them calls throws again, a type check included, and a
+  /// handler cut short leaves its bookkeeping half done. So nothing is done
+  /// down there. What escaped is written down, [_start] throws it to
+  /// whoever started the job, and the parent ends the job once its own
+  /// body is over, on a stack of its own -- see [_startWasTorn].
+  Object? _tornError;
+  StackTrace? _tornTrace;
+
+  /// Whether [_start] has returned: the synchronous part of [_execute] is
+  /// over, and whatever escapes the routine from here on did not happen on
+  /// the stack of the start.
+  bool _startReturned = false;
+
   /// What the body ended with, from that moment until the job has an
   /// outcome of its own.
   ///
@@ -732,6 +768,17 @@ abstract class JobBase<T> implements Job<T> {
   /// sibling the group is waiting for may want that very slot of a pool.
   bool _betweenPasses = false;
   int _level = 0;
+
+  /// The newest of the groups of [JobContext.runAll] this job has formed
+  /// and that have not ended; each holds the one before it -- see
+  /// [_RunAllGroup._next].
+  ///
+  /// A chain and not a list: a group goes on it where the stack may have
+  /// run out, and there only a store is sure to be done. One of the groups
+  /// with no routine of its own was cut short while it was forming, and
+  /// this job takes it up once its body is over -- see
+  /// [_RunAllGroup._concludeTorn].
+  _RunAllGroup<Object?>? _firstGroup;
 
   /// What holds this job while a group of [JobContext.runAll] decides.
   ///
@@ -1304,7 +1351,24 @@ abstract class JobBase<T> implements Job<T> {
       notifyError(error, stackTrace);
     }
     _notifyStart();
-    unawaited(_execute(ctx));
+    final routine = _execute(ctx);
+    // By a store, before anything is called again: a call may find no
+    // stack, and the routine has returned whether or not one does.
+    _startReturned = true;
+    unawaited(routine);
+    if (_tornError != null) {
+      // The synchronous part of the routine was cut short and left where it
+      // stood. Thrown to whoever started the job, the way an overflow
+      // anywhere else in the start reaches them.
+      _throwTorn();
+    }
+  }
+
+  Never _throwTorn() => Error.throwWithStackTrace(_tornError!, _tornTrace!);
+
+  Never _throwWhatEndedTheBody() {
+    final ended = _bodyOutcome! as Failed;
+    Error.throwWithStackTrace(ended.error, ended.stackTrace);
   }
 
   /// The deadline ran out: an ordinary rejectable cancellation, with a
@@ -1725,210 +1789,202 @@ abstract class JobBase<T> implements Job<T> {
   void _notifyLog(Object? message) =>
       _notify(() => _observer?.onLog(this, message));
 
-  Future<void> _execute(JobContextBase ctx) async {
-    Outcome<T> outcome;
-    // The body gave itself up: the children go, the same as they do for a
-    // job cancelled from outside. Not from inside the `catch`: the cascade
-    // runs the callbacks of the children, which is the caller's code, and
-    // it must find a parent that already refuses to start anything.
-    Cancelled? selfCancelled;
-    // Whether the body failed before anything marked the job. Only such a
-    // failure is a diagnosis the cancellation would swallow; one thrown
-    // *after* the mark is the body's own way of giving up, and its error
-    // belongs to the observer alone.
-    var failedFirst = false;
-    // The outcome of a body that threw [cancelled]: the mark if there is
-    // one, and otherwise its own decision to give up.
-    Cancelled gaveUp(Cancelled cancelled, StackTrace stackTrace) {
-      if (_pendingCancel case final pending?) {
-        return pending;
-      }
-      final own = _handlerCancel(cancelled, stackTrace);
-      // Read again: putting the cancellation into words runs the caller's
-      // code -- the `toString` of a child's key, `onError` when that
-      // throws -- and code that cancels this job in between marks it with
-      // its own reason, which `whenCancelled` then hears. That one stands.
-      return _pendingCancel ?? (selfCancelled = own);
-    }
-
+  Future<void> _execute(JobContextBase? ctx) async {
     try {
-      outcome = Done(await execute(ctx));
-    } on Cancelled catch (cancelled, stackTrace) {
-      outcome = gaveUp(cancelled, stackTrace);
-    } on Object catch (error, stackTrace) {
-      final envelope = _analyzeEnvelope(error);
-      if (envelope != null && envelope.isCleanCancellation) {
-        outcome = gaveUp(
-          envelope.firstCancelled!,
-          envelope.firstStackTrace!,
-        );
-      } else {
-        // Read before the observer hears: it is handed the job, and an
-        // `onError` that cancels would otherwise make a failure that came
-        // first look like it came second. The order is the whole diagnosis,
-        // and it is settled at the moment of the throw.
-        failedFirst = _pendingCancel == null || _wasFailedUnmarked(error);
-        if (!identical(error, _announcedError)) {
-          _announcedError = error;
-          notifyObserver(error, stackTrace);
+      _routineEntered = true;
+      Outcome<T> outcome;
+      // The body gave itself up: the children go, the same as they do for a
+      // job cancelled from outside. Not from inside the `catch`: the cascade
+      // runs the callbacks of the children, which is the caller's code, and
+      // it must find a parent that already refuses to start anything.
+      Cancelled? selfCancelled;
+      // Whether the body failed before anything marked the job. Only such a
+      // failure is a diagnosis the cancellation would swallow; one thrown
+      // *after* the mark is the body's own way of giving up, and its error
+      // belongs to the observer alone.
+      var failedFirst = false;
+      // The outcome of a body that threw [cancelled]: the mark if there is
+      // one, and otherwise its own decision to give up.
+      Cancelled gaveUp(Cancelled cancelled, StackTrace stackTrace) {
+        if (_pendingCancel case final pending?) {
+          return pending;
         }
-        outcome = Failed(error, stackTrace);
+        final own = _handlerCancel(cancelled, stackTrace);
+        // Read again: putting the cancellation into words runs the caller's
+        // code -- the `toString` of a child's key, `onError` when that
+        // throws -- and code that cancels this job in between marks it with
+        // its own reason, which `whenCancelled` then hears. That one stands.
+        return _pendingCancel ?? (selfCancelled = own);
       }
-    }
-    // The body has ended: from here a value coming out of a call it walked
-    // away from can no longer reach it, and no child is started any more.
-    _bodyEnded = true;
-    _bodyOutcome = outcome;
-    // On its way to the parent's body through `run` or `value` from this
-    // moment, and it gets there only when this job is over: after its
-    // children and its cleanup, which may take any time.
-    if (outcome case Failed(:final error)) {
-      _parent?._failedUnmarked(error);
-    }
-    if (selfCancelled != null) {
-      // Marked before the children are waited for, and only marked. The
-      // body gave itself up, so from here the job is cancelled to anyone
-      // who asks -- `isCancelled`, `check`, a `cancel()` from outside --
-      // and the decision it made is the one that stands: `cancelWith`
-      // turns around at its own early return instead of laying another
-      // reason over this one. Without the mark that whole wait was a
-      // window: `isCancelled` answered `false`, a cancellation arriving
-      // in it won by `??=`, and the children were left carrying a cause
-      // their parent never had.
-      //
-      // And marked before the group below hears of it: asking the siblings
-      // to stop runs their `onCancel` callbacks, which are the caller's
-      // code, and one that cancels this job must find the decision already
-      // made. Marked after, that `cancelWith` would mark the job with its
-      // own reason, `whenCancelled` would hear that one, and the outcome
-      // would carry the body's.
-      _pendingCancel = selfCancelled;
-      // A cancellation a section still holds would land on a job already
-      // cancelled, and `cancelWith` turns such a one around: it never
-      // lands, so `heldCancel` stops naming it.
-      _heldCancel = null;
-      _heldBehindTimeout = null;
-    }
-    // The early word of a branch to its group: the siblings are asked to
-    // stop while this one is still waiting for its own descendants. It
-    // decides nothing and hands nothing over — what comes out of a group
-    // is settled by the final outcomes, later and elsewhere. After the
-    // classification and not before it: a clean envelope thrown by a child
-    // is a cancellation here, not a failure.
-    _hold?.bodyEnded(outcome);
-    if (selfCancelled case final cancelled?) {
-      // The rest of what `cancelWith` does, in its order: the children are
-      // asked first, then the `onCancel` callbacks run and `whenCancelled`
-      // hears it. A job whose body gives itself up no longer needs what
-      // the body started any more than one cancelled from outside does.
+
       try {
-        try {
-          _cascadeToChildren(cancelled);
-        } finally {
-          // Skipped when a callback of a child reached the engine of a
-          // domain and it ended the job by hand, as in `cancelWith`.
-          if (_status != JobStatus.finished) {
-            _markCancelled(cancelled);
-          } else {
-            _outOfStack = false;
-          }
+        if (ctx == null) {
+          // The second time round, on a stack of its own: the start was cut
+          // short, and the parent has come back for this job. The body is
+          // over, or never began, and it is not asked again. It ended with
+          // what the parent found written down for it: its own failure if
+          // the first pass got that far, and what cut the start short
+          // otherwise.
+          _throwWhatEndedTheBody();
         }
+        outcome = Done(await execute(ctx));
+      } on Cancelled catch (cancelled, stackTrace) {
+        outcome = gaveUp(cancelled, stackTrace);
       } on Object catch (error, stackTrace) {
-        // The cascade is recursive, and a deep enough tree overflows the
-        // stack inside it; a callback a domain registered unguarded may
-        // throw. Here there is nobody to hand that to: the outcome is
-        // decided, the job still has to wait for its children and unwind
-        // its cleanup stack, and an error thrown out of `_execute` would
-        // leave it running for good. It goes out the one door for an
-        // error with nowhere else to go.
-        notifyError(error, stackTrace);
+        final envelope = _analyzeEnvelope(error);
+        if (envelope != null && envelope.isCleanCancellation) {
+          outcome = gaveUp(
+            envelope.firstCancelled!,
+            envelope.firstStackTrace!,
+          );
+        } else {
+          // Read before the observer hears: it is handed the job, and an
+          // `onError` that cancels would otherwise make a failure that came
+          // first look like it came second. The order is the whole diagnosis,
+          // and it is settled at the moment of the throw.
+          failedFirst = _pendingCancel == null || _wasFailedUnmarked(error);
+          if (!identical(error, _announcedError)) {
+            _announcedError = error;
+            notifyObserver(error, stackTrace);
+          }
+          outcome = Failed(error, stackTrace);
+        }
       }
-    }
-    await _awaitChildren();
-    if (isFinished) {
-      // An engine of a domain ended the job by hand while the body was
-      // playing out: the outcome is not ours, the children were not waited
-      // for, and the stack stays where it is.
-      return;
-    }
-    // The deadline bounds the body and the children, and ends here. Past
-    // this point come the cleanup stack and the barriers of a group, and a
-    // cancellation landing there turns the outcome of a job that did its
-    // work into `Cancelled` and closes its value through `discard`.
-    _liftTimeout();
-    // The outcome is decided, and the mark is already on: the body either
-    // caught the one that was there or gave itself up and was marked
-    // above. Asserted rather than assigned, so a path that ever arrives
-    // here unmarked shows up as the defect it is instead of quietly
-    // changing the reason the job ends with. Nothing is told here: both
-    // paths told everyone when the mark went on.
-    if (outcome is Cancelled) {
-      assert(
-        identical(_pendingCancel, outcome),
-        'a cancelled body reaches its outcome marked',
-      );
-    }
-    final hold = _hold;
-    if (hold != null) {
-      // The first barrier. The body is over, the descendants are done and
-      // the outcome is counted — but it is not final, and nothing has
-      // looked at the cleanup stack yet. The group gathers every branch
-      // here before any of them starts unwinding.
-      await hold.beforeDisposal();
+      // The body has ended: from here a value coming out of a call it walked
+      // away from can no longer reach it, and no child is started any more.
+      _bodyEnded = true;
+      _bodyOutcome = outcome;
+      // On its way to the parent's body through `run` or `value` from this
+      // moment, and it gets there only when this job is over: after its
+      // children and its cleanup, which may take any time.
+      if (outcome case Failed(:final error)) {
+        _parent?._failedUnmarked(error);
+      }
+      if (selfCancelled != null) {
+        // Marked before the children are waited for, and only marked. The
+        // body gave itself up, so from here the job is cancelled to anyone
+        // who asks -- `isCancelled`, `check`, a `cancel()` from outside --
+        // and the decision it made is the one that stands: `cancelWith`
+        // turns around at its own early return instead of laying another
+        // reason over this one. Without the mark that whole wait was a
+        // window: `isCancelled` answered `false`, a cancellation arriving
+        // in it won by `??=`, and the children were left carrying a cause
+        // their parent never had.
+        //
+        // And marked before the group below hears of it: asking the siblings
+        // to stop runs their `onCancel` callbacks, which are the caller's
+        // code, and one that cancels this job must find the decision already
+        // made. Marked after, that `cancelWith` would mark the job with its
+        // own reason, `whenCancelled` would hear that one, and the outcome
+        // would carry the body's.
+        _pendingCancel = selfCancelled;
+        // A cancellation a section still holds would land on a job already
+        // cancelled, and `cancelWith` turns such a one around: it never
+        // lands, so `heldCancel` stops naming it.
+        _heldCancel = null;
+        _heldBehindTimeout = null;
+      }
+      // The early word of a branch to its group: the siblings are asked to
+      // stop while this one is still waiting for its own descendants. It
+      // decides nothing and hands nothing over — what comes out of a group
+      // is settled by the final outcomes, later and elsewhere. After the
+      // classification and not before it: a clean envelope thrown by a child
+      // is a cancellation here, not a failure.
+      _hold?.bodyEnded(outcome);
+      if (selfCancelled case final cancelled?) {
+        // The rest of what `cancelWith` does, in its order: the children are
+        // asked first, then the `onCancel` callbacks run and `whenCancelled`
+        // hears it. A job whose body gives itself up no longer needs what
+        // the body started any more than one cancelled from outside does.
+        try {
+          try {
+            _cascadeToChildren(cancelled);
+          } finally {
+            // Skipped when a callback of a child reached the engine of a
+            // domain and it ended the job by hand, as in `cancelWith`.
+            if (_status != JobStatus.finished) {
+              _markCancelled(cancelled);
+            } else {
+              _outOfStack = false;
+            }
+          }
+        } on Object catch (error, stackTrace) {
+          // The cascade is recursive, and a deep enough tree overflows the
+          // stack inside it; a callback a domain registered unguarded may
+          // throw. Here there is nobody to hand that to: the outcome is
+          // decided, the job still has to wait for its children and unwind
+          // its cleanup stack, and an error thrown out of `_execute` would
+          // leave it running for good. It goes out the one door for an
+          // error with nowhere else to go.
+          notifyError(error, stackTrace);
+        }
+      }
+      if (!_startReturned) {
+        // The body never left the stack it was entered on: it threw before
+        // its first `await`. That stack belongs to the start of this job,
+        // and it may be the one that ran out. The rest is done on a stack
+        // of its own.
+        await null;
+      }
+      await _awaitChildren();
       if (isFinished) {
-        // An engine of a domain ended the branch by hand while it stood
-        // there. A bare `return` would leave the phase where it is, and
-        // the job would read as disposing for good. Nothing is put aside
-        // yet -- the loops below are what fill that list -- so there is
-        // nothing to say on the debug channel either.
-        _disposing = false;
+        // An engine of a domain ended the job by hand while the body was
+        // playing out: the outcome is not ours, the children were not waited
+        // for, and the stack stays where it is.
         return;
       }
-    }
-    // Whether a conditional registration has to be passed over: its value
-    // went to somebody. A group overrides this one way only — towards
-    // success. A branch that refused the group's cancellation and ends
-    // [Done] hands its value over through [Job.value] all the same, and a
-    // group that failed must not close what that branch is about to give.
-    bool valueHandedOver() =>
-        _committedByGroup || (_pendingCancel ?? outcome) is Done<T>;
-
-    if (_cleanups.isNotEmpty || hold != null) {
-      _disposing = true;
-      // The loop lives here and not in a method of its own: between the
-      // last look at the stack and `finish` there must be no `await`, or
-      // the window after `return` grows by a microtask.
-      //
-      // The condition of a `discard` registration is read as it comes off
-      // the stack, from the outcome as it stands then: a cancellation may
-      // arrive into the unwinding itself. The ones it passed over wait for
-      // a second pass instead of being dropped.
-      while (_cleanups.isNotEmpty) {
-        final cleanup = _cleanups.removeLast();
-        if (!cleanup.always && valueHandedOver()) {
-          _skipped.add(cleanup);
-          continue;
-        }
-        await _runCleanup(cleanup);
+      // The deadline bounds the body and the children, and ends here. Past
+      // this point come the cleanup stack and the barriers of a group, and a
+      // cancellation landing there turns the outcome of a job that did its
+      // work into `Cancelled` and closes its value through `discard`.
+      _liftTimeout();
+      // The outcome is decided, and the mark is already on: the body either
+      // caught the one that was there or gave itself up and was marked
+      // above. Asserted rather than assigned, so a path that ever arrives
+      // here unmarked shows up as the defect it is instead of quietly
+      // changing the reason the job ends with. Nothing is told here: both
+      // paths told everyone when the mark went on.
+      if (outcome is Cancelled) {
+        assert(
+          identical(_pendingCancel, outcome),
+          'a cancelled body reaches its outcome marked',
+        );
       }
+      final hold = _hold;
       if (hold != null) {
-        // The second barrier, between the two passes — where the core
-        // re-reads the outcome anyway. A branch stands here disposing
-        // whether or not it registered a thing: what it may do while it
-        // waits must not depend on that, and the group needs every branch
-        // to check against, not only the ones with a cleanup stack.
-        _betweenPasses = true;
-        _committedByGroup = await hold.beforeOutcome();
-        _betweenPasses = false;
+        // The first barrier. The body is over, the descendants are done and
+        // the outcome is counted — but it is not final, and nothing has
+        // looked at the cleanup stack yet. The group gathers every branch
+        // here before any of them starts unwinding.
+        await hold.beforeDisposal();
         if (isFinished) {
-          _traceDroppedCleanups();
+          // An engine of a domain ended the branch by hand while it stood
+          // there. A bare `return` would leave the phase where it is, and
+          // the job would read as disposing for good. Nothing is put aside
+          // yet -- the loops below are what fill that list -- so there is
+          // nothing to say on the debug channel either.
           _disposing = false;
           return;
         }
-        // The stack is read again, and this pass is not the second one: a
-        // branch at the barrier is not over, and an `onDispose` from a
-        // background timer or an event of a domain lands on it legally.
-        // Without this reading such a registration would never run at all.
+      }
+      // Whether a conditional registration has to be passed over: its value
+      // went to somebody. A group overrides this one way only — towards
+      // success. A branch that refused the group's cancellation and ends
+      // [Done] hands its value over through [Job.value] all the same, and a
+      // group that failed must not close what that branch is about to give.
+      bool valueHandedOver() =>
+          _committedByGroup || (_pendingCancel ?? outcome) is Done<T>;
+
+      if (_cleanups.isNotEmpty || hold != null) {
+        _disposing = true;
+        // The loop lives here and not in a method of its own: between the
+        // last look at the stack and `finish` there must be no `await`, or
+        // the window after `return` grows by a microtask.
+        //
+        // The condition of a `discard` registration is read as it comes off
+        // the stack, from the outcome as it stands then: a cancellation may
+        // arrive into the unwinding itself. The ones it passed over wait for
+        // a second pass instead of being dropped.
         while (_cleanups.isNotEmpty) {
           final cleanup = _cleanups.removeLast();
           if (!cleanup.always && valueHandedOver()) {
@@ -1937,36 +1993,155 @@ abstract class JobBase<T> implements Job<T> {
           }
           await _runCleanup(cleanup);
         }
+        if (hold != null) {
+          // The second barrier, between the two passes — where the core
+          // re-reads the outcome anyway. A branch stands here disposing
+          // whether or not it registered a thing: what it may do while it
+          // waits must not depend on that, and the group needs every branch
+          // to check against, not only the ones with a cleanup stack.
+          _betweenPasses = true;
+          _committedByGroup = await hold.beforeOutcome();
+          _betweenPasses = false;
+          if (isFinished) {
+            _traceDroppedCleanups();
+            _disposing = false;
+            return;
+          }
+          // The stack is read again, and this pass is not the second one: a
+          // branch at the barrier is not over, and an `onDispose` from a
+          // background timer or an event of a domain lands on it legally.
+          // Without this reading such a registration would never run at all.
+          while (_cleanups.isNotEmpty) {
+            final cleanup = _cleanups.removeLast();
+            if (!cleanup.always && valueHandedOver()) {
+              _skipped.add(cleanup);
+              continue;
+            }
+            await _runCleanup(cleanup);
+          }
+        }
+        // `removeAt(0)`, not `removeLast`: the skipped registrations were
+        // collected in the order they came off the stack, and that is the
+        // order they run in — the top one first, as if they had never been
+        // put aside.
+        while (_skipped.isNotEmpty && !valueHandedOver()) {
+          await _runCleanup(_skipped.removeAt(0));
+          while (_cleanups.isNotEmpty) {
+            await _runCleanup(_cleanups.removeLast());
+          }
+        }
+        // Whatever is still put aside will never run: the loop above drains
+        // the list for every outcome but [Done], and a [Done] is what put
+        // them there. Left behind, they would hold their values and their
+        // closures for as long as anyone holds the handle — the job is over,
+        // and the list is a field now, not a local that dies with the call.
+        _traceDroppedCleanups();
+        _skipped.clear();
+        _disposing = false;
       }
-      // `removeAt(0)`, not `removeLast`: the skipped registrations were
-      // collected in the order they came off the stack, and that is the
-      // order they run in — the top one first, as if they had never been
-      // put aside.
-      while (_skipped.isNotEmpty && !valueHandedOver()) {
-        await _runCleanup(_skipped.removeAt(0));
-        while (_cleanups.isNotEmpty) {
-          await _runCleanup(_cleanups.removeLast());
+      final decided = _pendingCancel ?? outcome;
+      finish(decided);
+      // After `finish`, not before, and on the spot. `finished` and
+      // `onFinish` run first, and an engine of a domain may still call
+      // [Job.ignoreFailure] there; a parent's body hears the cancellation only
+      // after the answer. Reading the outcome settles nothing here, so there
+      // is no window to wait for.
+      if (failedFirst && outcome is Failed && !identical(decided, outcome)) {
+        _reportCovered(outcome, announced: true);
+      }
+    } on Object catch (error, stackTrace) {
+      if (_startReturned) {
+        rethrow;
+      }
+      // Still inside the start, and its stack may be the one that ran out:
+      // two stores and nothing else. `_start` throws this to whoever
+      // started the job.
+      _tornError = error;
+      _tornTrace = stackTrace;
+    }
+  }
+
+  /// Whether this job, a child on the list of its parent and not finished,
+  /// has no routine alive: its start was cut short.
+  ///
+  /// Never reached [_execute] -- not started at all, or started and cut
+  /// short before the routine -- or reached it and was thrown out of its
+  /// synchronous part. Asked by the parent once its body is over and the
+  /// start of this job is on no stack: until then a job that has not
+  /// reached its routine is one on its way there.
+  bool get _startWasTorn => !_routineEntered || _tornError != null;
+
+  /// Ends the children whose start was cut short.
+  void _concludeTornChildren() {
+    final body = _bodyOutcome;
+    final Object error;
+    final StackTrace stackTrace;
+    if (body is Failed && body.error is StackOverflowError) {
+      // The overflow that reached this body through the throw.
+      error = body.error;
+      stackTrace = body.stackTrace;
+    } else {
+      error = const StackOverflowError();
+      stackTrace = StackTrace.current;
+    }
+    var group = _firstGroup;
+    while (group != null) {
+      // Read first: the group leaves the chain below.
+      final next = group._next;
+      if (!group._settling) {
+        // Off the chain before anything else, so that a group this fails
+        // to take up is not asked again, forever.
+        group._leave();
+        try {
+          group._concludeTorn(error, stackTrace);
+        } on Object catch (error, stackTrace) {
+          notifyError(error, stackTrace);
         }
       }
-      // Whatever is still put aside will never run: the loop above drains
-      // the list for every outcome but [Done], and a [Done] is what put
-      // them there. Left behind, they would hold their values and their
-      // closures for as long as anyone holds the handle — the job is over,
-      // and the list is a field now, not a local that dies with the call.
-      _traceDroppedCleanups();
-      _skipped.clear();
-      _disposing = false;
+      group = next;
     }
-    final decided = _pendingCancel ?? outcome;
-    finish(decided);
-    // After `finish`, not before, and on the spot. `finished` and
-    // `onFinish` run first, and an engine of a domain may still call
-    // [Job.ignoreFailure] there; a parent's body hears the cancellation only
-    // after the answer. Reading the outcome settles nothing here, so there
-    // is no window to wait for.
-    if (failedFirst && outcome is Failed && !identical(decided, outcome)) {
-      _reportCovered(outcome, announced: true);
+    // By copy: a child that finishes takes itself off the list.
+    for (final child in List.of(_children)) {
+      if (child.isFinished || !child._startWasTorn) {
+        continue;
+      }
+      try {
+        child._concludeTorn(error, stackTrace);
+      } on Object catch (error, stackTrace) {
+        notifyError(error, stackTrace);
+      }
     }
+  }
+
+  /// Ends this job, whose start was cut short, as a job whose body failed
+  /// with what cut it short, [error] if nothing else was written down.
+  void _concludeTorn(Object error, StackTrace stackTrace) {
+    final tornError = _tornError ?? error;
+    final tornTrace = _tornError == null ? stackTrace : _tornTrace!;
+    // Before anything else, and for good: whatever happens below, the
+    // parent does not take this job for one cut short again, and come back
+    // for it without end.
+    _routineEntered = true;
+    _tornError = null;
+    _tornTrace = null;
+    final ended = _bodyOutcome;
+    if (ended is! Failed || ended.error is StackOverflowError) {
+      // The overflow reached the parent's body by the throw, and the body
+      // is where it is answered for, not the zone. A failure of its own
+      // that the body of this job wrote down reached nobody, and it is
+      // reported the way any unobserved one is.
+      ignoreFailure();
+    }
+    if (_status == JobStatus.created) {
+      finish(Failed(tornError, tornTrace));
+      return;
+    }
+    if (ended is! Failed) {
+      // What the second pass takes the body to have ended with.
+      _bodyOutcome = Failed(tornError, tornTrace);
+    }
+    _startReturned = true;
+    unawaited(_execute(null));
   }
 
   /// Hands on an error the outcome does not carry.
@@ -2044,16 +2219,65 @@ abstract class JobBase<T> implements Job<T> {
 
   Future<void> _awaitChildren() async {
     while (true) {
+      var starting = false;
+      var torn = false;
+      for (var group = _firstGroup; group != null; group = group._next) {
+        if (group._forming) {
+          starting = true;
+        } else if (!group._settling) {
+          torn = true;
+        }
+      }
       // `whenDone`, not `done`: waiting for a child is the core's
       // business and must not mark the child observed for the parent.
-      final pending = [
-        for (final child in _children)
-          if (!child.isFinished) child.whenDone,
-      ];
+      final pending = <Future<void>>[];
+      for (final child in _children) {
+        if (child.isFinished) {
+          continue;
+        }
+        if (child._startInFlight) {
+          starting = true;
+        } else if (child._startWasTorn) {
+          torn = true;
+        } else {
+          pending.add(child.whenDone);
+        }
+      }
+      if (starting) {
+        // The body ended inside the start of a child of its, or a start
+        // was thrown out and left its mark up. Which of the two cannot be
+        // told from here, and need not be: a start is synchronous, so a
+        // turn later it is on no stack, and a mark that still stands then
+        // was left behind.
+        await null;
+        _takeDownStartMarks();
+        continue;
+      }
+      if (torn) {
+        // On a stack of its own. The first time round `_execute` comes to
+        // this routine past a suspension. The second time it comes straight
+        // in, on the stack of the parent that has come back for this job,
+        // and finds every start that was cut short still marked: nothing
+        // but the lines above takes such a mark down, and they do it a
+        // turn later. So no job is ended under another.
+        _concludeTornChildren();
+        continue;
+      }
       if (pending.isEmpty) {
         return;
       }
       await Future.wait(pending);
+    }
+  }
+
+  /// Takes down the marks of the starts of children and groups: none of
+  /// those starts is on a stack any more.
+  void _takeDownStartMarks() {
+    for (var group = _firstGroup; group != null; group = group._next) {
+      group._forming = false;
+    }
+    for (final child in _children) {
+      child._startInFlight = false;
     }
   }
 

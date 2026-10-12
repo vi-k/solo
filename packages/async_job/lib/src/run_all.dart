@@ -57,6 +57,9 @@ final class _GroupBranch<T> {
   /// The final outcome, once the branch has one.
   Outcome<T>? settled;
 
+  /// Whether the group listens for the outcome of the branch.
+  bool heard = false;
+
   _GroupBranch(this.job);
 }
 
@@ -92,19 +95,52 @@ final class _RunAllGroup<T> {
 
   Completer<void>? _changing;
 
+  /// Whether [run] is on the stack: the group is forming.
+  ///
+  /// Up from the construction, and [run] takes it down once [_settle] has
+  /// been entered. While it stands the owner does not judge the group. A
+  /// turn later [run] is on no stack, for it is synchronous, and a mark
+  /// that still stands then was left by a [run] that was thrown out: the
+  /// owner takes it down -- see [JobBase._awaitChildren].
+  bool _forming = true;
+
+  /// Whether [_settle] is alive: entered, and not thrown out.
+  ///
+  /// Written by that routine and by nobody else. A group on the chain of
+  /// its owner that is neither forming nor settling has no routine
+  /// deciding for its branches: it was cut short while it was forming.
+  /// The stack ran out under [run], and whatever the handlers on the way
+  /// up called ran out of it again, so nothing is done down there. The
+  /// owner takes the group up once its own body is over, on a stack of
+  /// its own -- see [_concludeTorn].
+  bool _settling = false;
+
+  /// The group that went on the chain of the owner before this one -- see
+  /// [JobBase._firstGroup].
+  _RunAllGroup<Object?>? _next;
+
   _RunAllGroup(this._ctx, this._children);
 
   Future<List<T>> run() {
+    // On the chain of the owner before anything starts, and off it once
+    // the group has ended. By two stores, and not into a list: this may be
+    // the bottom of a stack that has run out, and a call made there may
+    // stop halfway.
+    final owner = _ctx._owner;
+    _next = owner._firstGroup;
+    owner._firstGroup = this;
     for (var index = 0; index < _children.length; index++) {
       final child = _children[index];
       try {
         _ctx.startChild(child);
       } on Object catch (error, stackTrace) {
-        // A child refused before adoption is left as it was, and one refused
-        // after it `startChild` has already finished with this very error;
-        // either way the error is what comes out of the group. The child
-        // does not join the branches, or the group would report it a
-        // second time as a failure nobody chose.
+        // A child refused before adoption is left as it was. One refused
+        // after it `startChild` has already finished with this very error,
+        // or, when the stack ran out under its start, has left where the
+        // throw found it: on the list of the owner, if `add` got it there,
+        // for the owner to end. Either way the error is what comes out of
+        // the group. The child does not join the branches, or the group
+        // would report it a second time as a failure nobody chose.
         _refusal = (error, stackTrace);
         if (identical(error, _ctx.pendingCancel)) {
           _turnAwayTheRest(index + 1);
@@ -124,16 +160,12 @@ final class _RunAllGroup<T> {
       // `_execute` awaits the descendants before it reaches one. The early
       // word is not, and it is read off the branch below.
       final branch = _GroupBranch<T>(child);
-      branch.job._hold = _holdFor(branch);
+      // On the list before it has a hold: a branch that stands at a
+      // barrier is then always one the group knows, wherever this loop is
+      // cut short.
       _branches.add(branch);
-      // `done` and not `whenDone`: the group looks at every outcome and
-      // answers for the failures it does not throw, so no branch is left
-      // reporting one on its own as well. A failure a cancellation covered
-      // is in no outcome, and the group never sees it: the branch answers
-      // for that one itself, as any job does.
-      branch.job.done
-          .then((outcome) => _branchFinished(branch, outcome))
-          .ignore();
+      branch.job._hold = _holdFor(branch);
+      _hear(branch);
     }
     // The early word a branch said before it had a hold. A body that
     // throws before its first `await` runs to its end inside `startChild`,
@@ -155,11 +187,84 @@ final class _RunAllGroup<T> {
       if (_branches.isEmpty) {
         // Nothing started and nobody to wait for: the refusal comes out
         // the way `run` gives one, synchronously.
+        _leave();
         Error.throwWithStackTrace(refusal.$1, refusal.$2);
       }
       _beginFailing(refusal.$1, null);
     }
-    return _settle();
+    final settled = _settle();
+    // By a store: the routine has been entered, and from here it is the
+    // one that speaks for the group.
+    _forming = false;
+    return settled;
+  }
+
+  /// Listens for the outcome of [branch] and takes the answering for it.
+  ///
+  /// The group looks at every outcome and answers for the failures it does
+  /// not throw, so no branch is left reporting one on its own as well: the
+  /// branch is marked observed, the way `done` marks it. By a store after
+  /// the listening and not by `done` before it: cut short between the two,
+  /// the branch would be observed with nobody listening, and its failure
+  /// would reach no one. A failure a cancellation covered is in no outcome,
+  /// and the group never sees it: the branch answers for that one itself,
+  /// as any job does.
+  void _hear(_GroupBranch<T> branch) {
+    branch.job._done.future
+        .then((outcome) => _branchFinished(branch, outcome))
+        .ignore();
+    branch.heard = true;
+    branch.job._observed = true;
+  }
+
+  /// The group has ended, and its owner no longer keeps it.
+  ///
+  /// Stores and nothing else, as on the way in: a group refused before it
+  /// started anything leaves from wherever [run] stands.
+  void _leave() {
+    final owner = _ctx._owner;
+    if (identical(owner._firstGroup, this)) {
+      owner._firstGroup = _next;
+      return;
+    }
+    for (var group = owner._firstGroup; group != null; group = group._next) {
+      if (identical(group._next, this)) {
+        group._next = _next;
+        return;
+      }
+    }
+  }
+
+  /// Takes up a group that was cut short while it was forming.
+  ///
+  /// Called on a stack of its own, once the body of the owner is over, so
+  /// [run] is on no stack. The caller of [run] has its answer: whatever
+  /// threw the group out reached the body by the throw, [error] if nothing
+  /// else is written down. What is left is all a group does for its
+  /// branches when it fails -- they are asked to stop, none is left
+  /// standing at a barrier, and the group answers for the failures it
+  /// listened for.
+  ///
+  /// The branches are the ones [run] wrote down. A handle it started and
+  /// did not get to writing down has no hold and stands at no barrier: it
+  /// is a child of the owner like any other.
+  void _concludeTorn(Object error, StackTrace stackTrace) {
+    // Written down as a refusal, so that no failure of a branch is taken
+    // for the one the caller receives: the caller receives nothing more.
+    _refusal ??= (error, stackTrace);
+    // Before anything here that may throw. The owner comes back for the
+    // group once, and a group that is failing holds no branch at a barrier:
+    // if the rest is cut short as well, every branch still ends.
+    _beginFailing(_refusal!.$1, null);
+    // A branch the loop wrote down and did not get to listening for has
+    // answered for itself if it is over.
+    _branches.removeWhere((branch) => !branch.heard && branch.job.isFinished);
+    for (final branch in _branches) {
+      if (!branch.heard) {
+        _hear(branch);
+      }
+    }
+    _settle().ignore();
   }
 
   /// Turns away the handles from [from] on: a branch started earlier in the
@@ -313,51 +418,63 @@ final class _RunAllGroup<T> {
 
   Future<List<T>> _settle() async {
     try {
-      while (!_failing && !_everyBranchIsAtFirstBarrier()) {
-        await _somethingChanges();
-      }
-      if (!_failing) {
-        _branches.forEach(_letPastFirstBarrier);
-        while (!_failing && !_everyBranchIsAtSecondBarrier()) {
+      _settling = true;
+      try {
+        while (!_failing && !_everyBranchIsAtFirstBarrier()) {
           await _somethingChanges();
         }
-      }
-      if (!_failing) {
-        // Step two of the commit: the parent. The successful path does not
-        // wait for `child.value`, and the check of the parent that waiting
-        // makes goes with it — without this one a group would commit under
-        // a parent that is already cancelled, or one whose rules of a
-        // domain no longer hold. Not once the body has ended, the same as
-        // `run`: nobody is left to hear the answer, and a cancellation
-        // thrown into a future nobody awaits goes to the zone.
-        if (!_ctx._owner.bodyEnded) {
-          _ctx.check();
+        if (!_failing) {
+          _branches.forEach(_letPastFirstBarrier);
+          while (!_failing && !_everyBranchIsAtSecondBarrier()) {
+            await _somethingChanges();
+          }
         }
-        // Step three, and after the check rather than before it: the check
-        // runs a predicate of a domain, and that predicate may cancel a
-        // branch on its way to answering yes.
-        _rereadBranches();
+        if (!_failing) {
+          // Step two of the commit: the parent. The successful path does not
+          // wait for `child.value`, and the check of the parent that waiting
+          // makes goes with it — without this one a group would commit under
+          // a parent that is already cancelled, or one whose rules of a
+          // domain no longer hold. Not once the body has ended, the same as
+          // `run`: nobody is left to hear the answer, and a cancellation
+          // thrown into a future nobody awaits goes to the zone.
+          if (!_ctx._owner.bodyEnded) {
+            _ctx.check();
+          }
+          // Step three, and after the check rather than before it: the check
+          // runs a predicate of a domain, and that predicate may cancel a
+          // branch on its way to answering yes.
+          _rereadBranches();
+        }
+        if (!_failing) {
+          final values = _commit();
+          _leave();
+          return values;
+        }
+      } on Object catch (error, stackTrace) {
+        // The code of the group itself threw while the branches stood at
+        // their barriers. Nothing may be left held, and a branch whose body
+        // returned a value must not slip away as [Done] with what it took
+        // for the caller passed over.
+        _ownError ??= (error, stackTrace);
+        if (!_failing) {
+          _beginFailing(error, null);
+        }
       }
-      if (!_failing) {
-        return _commit();
+      // Every branch is stopped and every branch unwinds; the group waits
+      // for all of them. That waiting is the promise: by the time the error
+      // reaches the parent, whatever the branches took is closed.
+      while (_received.length < _branches.length) {
+        await _somethingChanges();
       }
-    } on Object catch (error, stackTrace) {
-      // The code of the group itself threw while the branches stood at
-      // their barriers. Nothing may be left held, and a branch whose body
-      // returned a value must not slip away as [Done] with what it took
-      // for the caller passed over.
-      _ownError ??= (error, stackTrace);
-      if (!_failing) {
-        _beginFailing(error, null);
-      }
+      _leave();
+      return _conclude();
+    } on Object {
+      // A store and nothing else: this may be the bottom of a stack that
+      // has run out. An error that leaves the routine after the group has
+      // ended -- the one it fails with -- finds nobody asking.
+      _settling = false;
+      rethrow;
     }
-    // Every branch is stopped and every branch unwinds; the group waits
-    // for all of them. That waiting is the promise: by the time the error
-    // reaches the parent, whatever the branches took is closed.
-    while (_received.length < _branches.length) {
-      await _somethingChanges();
-    }
-    return _conclude();
   }
 
   /// The outcome a branch would end with if it ended right now.

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:async_job/engine.dart';
 
 import 'cancel_reason.dart';
@@ -160,6 +162,184 @@ final class UnstartableJob<T> extends JobBase<T> {
   @override
   Future<T> execute(covariant ProbeContext ctx) async =>
       throw StateError('never runs');
+}
+
+/// A job of the core with no stack left for its context.
+///
+/// Stands in for the bottom of a stack: [JobBase.createContext] is the
+/// first thing a start calls, and a start cut short there has done nothing
+/// yet.
+final class NoStackForContextJob extends JobBase<void> {
+  NoStackForContextJob({super.key});
+
+  @override
+  JobContextBase createContext() => throw const StackOverflowError();
+
+  @override
+  Future<void> execute(covariant ProbeContext ctx) async =>
+      throw StateError('never runs');
+}
+
+/// A job with no stack for its context whose engine fails to end it.
+///
+/// Stands in for an override of [JobBase.finish] in a domain that throws
+/// before it gets to `super`, the first time it is asked: the job is not
+/// over, and whoever asked hears the error.
+final class HardToEndJob extends JobBase<void> {
+  /// How many times the job was asked to end.
+  int asked = 0;
+
+  HardToEndJob({super.key});
+
+  @override
+  void finish(Outcome<void> outcome) {
+    if (asked++ == 0) {
+      throw StateError('engine failed to finish');
+    }
+    super.finish(outcome);
+  }
+
+  @override
+  JobContextBase createContext() => throw const StackOverflowError();
+
+  @override
+  Future<void> execute(covariant ProbeContext ctx) async =>
+      throw StateError('never runs');
+}
+
+/// A job with a deadline whose engine fails to end it.
+///
+/// Started in a zone that has no stack for a timer, it is cut short after
+/// it began to run, and the routine that comes back for it is thrown out
+/// by an override of [JobBase.finish] in a domain.
+final class HardToEndTimedJob extends JobBase<void> {
+  /// How many times the job was asked to end.
+  int asked = 0;
+
+  HardToEndTimedJob({super.key, super.timeout});
+
+  @override
+  void finish(Outcome<void> outcome) {
+    if (asked++ == 0) {
+      throw StateError('engine failed to finish');
+    }
+    super.finish(outcome);
+  }
+
+  @override
+  JobContextBase createContext() => ProbeContext(this);
+
+  @override
+  Future<void> execute(covariant ProbeContext ctx) async {}
+}
+
+/// A job whose context has no stack for the question a group asks.
+///
+/// Stands in for the bottom of a stack under a group that is still
+/// forming: a child of the group refused to start, and the first thing the
+/// group does about it is ask the context whether the job is cancelled.
+final class NoStackForGroupJob<T> extends JobBase<T> {
+  final Future<T> Function(NoStackForGroupContext ctx) _body;
+
+  NoStackForGroupJob(this._body, {super.key});
+
+  /// Starts the body the way an engine of a domain would.
+  void launch() => start();
+
+  @override
+  JobContextBase createContext() => NoStackForGroupContext(this);
+
+  @override
+  Future<T> execute(covariant NoStackForGroupContext ctx) => _body(ctx);
+}
+
+/// The context of [NoStackForGroupJob].
+final class NoStackForGroupContext extends JobContextBase {
+  /// Whether the next read of [pendingCancel] finds no stack.
+  bool outOfStack = false;
+
+  NoStackForGroupContext(super.owner);
+
+  @override
+  Cancelled? get pendingCancel {
+    if (outOfStack) {
+      outOfStack = false;
+      throw const StackOverflowError();
+    }
+    return super.pendingCancel;
+  }
+}
+
+/// A job of the core with a deadline and a cleanup its context registers.
+///
+/// Started in a zone that has no stack for a timer, it is cut short after
+/// it began to run and before its body did: the cleanup is registered, and
+/// only the rest of the job's own routine can release it.
+final class TimedProbeJob extends JobBase<void> {
+  /// What the job went through, in the order it happened.
+  final hooks = <String>[];
+
+  TimedProbeJob({super.key, super.timeout, super.observer});
+
+  @override
+  void started() => hooks.add('started');
+
+  @override
+  void finished() => hooks.add('finished');
+
+  @override
+  JobContextBase createContext() =>
+      ProbeContext(this)..onDispose(() => hooks.add('disposed'));
+
+  @override
+  Future<void> execute(covariant ProbeContext ctx) async => hooks.add('body');
+}
+
+/// A job of a domain that throws when its parent comes to wait for it.
+///
+/// Stands in for whatever may fail in the part of a routine that runs after
+/// the start has returned: the parent of this job asks for it there.
+final class UnwaitableJob extends JobBase<void> {
+  UnwaitableJob({super.key});
+
+  @override
+  Future<void> get whenDone => throw StateError('engine failed to wait');
+
+  @override
+  JobContextBase createContext() => ProbeContext(this);
+
+  @override
+  Future<void> execute(covariant ProbeContext ctx) =>
+      ctx.abandonable(() => Completer<void>().future);
+}
+
+/// A job whose context has a rule that runs out of stack by itself.
+///
+/// Stands in for a rule of a domain with a recursion of its own. The stack
+/// the child would have started on is not the one that ran out, and the
+/// child has not joined the waiting list of its parent.
+final class OverflowingRulesJob<T> extends JobBase<T> {
+  final Future<T> Function(JobContext ctx) _body;
+
+  OverflowingRulesJob(this._body, {super.key});
+
+  /// Starts the body the way an engine of a domain would.
+  void launch() => start();
+
+  @override
+  JobContextBase createContext() => OverflowingRulesContext(this);
+
+  @override
+  Future<T> execute(covariant OverflowingRulesContext ctx) => _body(ctx);
+}
+
+/// The context of [OverflowingRulesJob].
+final class OverflowingRulesContext extends JobContextBase {
+  OverflowingRulesContext(super.owner);
+
+  @override
+  Cancelled? beforeChildStart(JobBase<Object?> child) =>
+      throw const StackOverflowError();
 }
 
 /// A job whose context throws when a child asks to start.

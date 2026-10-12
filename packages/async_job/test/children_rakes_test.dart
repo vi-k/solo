@@ -959,6 +959,27 @@ void main() {
       expect(await root.done, isA<Done<void>>());
     });
 
+    test(
+        'how deep a tree goes: without the await, the tree runs out of '
+        'stack and still ends', () async {
+      // The level of the page with its `await null` taken out.
+      Job<void> level(int depth) => Job.deferred<void>((ctx) async {
+            if (depth > 0) await ctx.run(level(depth - 1));
+          });
+      final zone = <Object>[];
+      late Job<void> root;
+      runZonedGuarded(
+        () => root = Job<void>((ctx) => ctx.run(level(50000))),
+        (error, stackTrace) => zone.add(error),
+      );
+      final outcome = await root.done;
+      await delay(1);
+
+      expect(outcome, isA<Failed>());
+      expect((outcome as Failed).error, isA<StackOverflowError>());
+      expect(zone, everyElement(isA<StackOverflowError>()));
+    });
+
     test('Future.wait: the failure that came first decides the outcome', () {
       fakeAsync((async) {
         stubs.stage

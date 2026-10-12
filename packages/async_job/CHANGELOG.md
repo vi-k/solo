@@ -139,6 +139,9 @@ new wording.
   callbacks of the jobs it reached as it unwinds; it used to run none of them.
 - A call of `ctx.abandonable` the body did not await no longer sends the job's
   cancellation to the zone when the job accepts it after the body has ended.
+- A tree of jobs that runs out of stack while it is being built ends with the
+  `StackOverflowError`; its root could be left running for good, with nothing
+  reported.
 
 ### Documentation
 
