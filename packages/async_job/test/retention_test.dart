@@ -59,6 +59,19 @@ final class Payload {
   return (first, WeakReference(payload));
 }
 
+/// Only a job made inside the unattended work of another comes back. The
+/// value of the job that started the work is then reachable from it alone,
+/// through the fork the work runs in: the fork carries that job.
+Future<(Job<int>, WeakReference<Payload>)> madeInUnattendedWork() async {
+  final payload = Payload();
+  final made = Completer<Job<int>>();
+  Job<Object?>((ctx) async {
+    ctx.unattended(() => made.complete(Job<int>((_) async => 1)));
+    return payload;
+  }).ignoreFailure();
+  return (await made.future, WeakReference(payload));
+}
+
 /// A failure that holds what it carries.
 final class CarryingFailure implements Exception {
   final Payload payload;
@@ -180,6 +193,23 @@ void main() {
       reason: 'the group has taken its verdict; one branch handle must not '
           'hold the coordinator and every sibling in it',
     );
+  });
+
+  test('a job made in unattended work lets go of the job that started it',
+      () async {
+    final (made, capture) = await madeInUnattendedWork();
+    await made.done;
+    expect(made.outcome, isA<Done<int>>());
+    expect(
+      await collected(capture),
+      isTrue,
+      reason: 'the job is not the work and keeps nothing of it; a handle '
+          'kept for its outcome would otherwise hold the job that started '
+          'the work, through the zone it was made in',
+    );
+    // Read after the check, so the handle is held through it by the
+    // language and not by how the VM keeps a suspended frame.
+    expect(made.isFinished, isTrue);
   });
 
   // An error an `Expando` can hold and a record, which it cannot.

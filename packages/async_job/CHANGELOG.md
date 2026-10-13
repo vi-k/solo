@@ -125,6 +125,11 @@ new wording.
   children runs after the ones registered earlier, instead of ahead of them.
 - A finished job lets go of its body and of its parent: a kept handle held
   everything the body captured.
+- A job made inside work handed to `ctx.unattended` lets go of the job that
+  started the work: a kept handle held that job, and everything it held,
+  through the zone of the work. A job made there under a zone with a microtask
+  queue of its own, such as that of `fakeAsync`, no longer leaves its outcome
+  waiting in that queue for good.
 - `ctx.run` refuses a continuation, the job `then` returns, with the same
   `ArgumentError` whenever it is called; once the source had finished it threw
   a `StateError`.

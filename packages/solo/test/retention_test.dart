@@ -13,6 +13,8 @@
 @Timeout(Duration(seconds: 30))
 library;
 
+import 'dart:async';
+
 import 'package:solo/solo.dart';
 import 'package:test/test.dart';
 
@@ -72,6 +74,24 @@ final class Counter extends Solo<int> with OpenSolo<int> {
   return (child, WeakReference(payload));
 }
 
+/// Only a job run inside the unattended work of another comes back. The
+/// value of the job that started the work is then reachable from it alone,
+/// through the zone the job was made in: the fork of the work, which
+/// carries the job that started it.
+Future<(SoloJob<int>, WeakReference<Payload>)> madeInUnattendedWork(
+  Counter solo,
+) async {
+  final payload = Payload();
+  final made = Completer<SoloJob<int>>();
+  solo.run<int, Object?>((ctx) async {
+    ctx.unattended(() => made.complete(solo.run<int, int>((_) async => 1)));
+
+    return payload;
+  }).ignoreFailure();
+
+  return (await made.future, WeakReference(payload));
+}
+
 void main() {
   test('a finished job lets go of its body', () async {
     final solo = Counter();
@@ -118,6 +138,27 @@ void main() {
       reason: 'the parent chain leads to jobs that are over, and one handle '
           'in a field would keep the whole tree it came out of',
     );
+
+    await solo.close();
+  });
+
+  test('a job made in unattended work lets go of the job that started it',
+      () async {
+    final solo = Counter();
+    final (made, capture) = await madeInUnattendedWork(solo);
+    await made.done;
+
+    expect(made.outcome, isA<Done<int>>());
+    expect(
+      await collected(capture),
+      isTrue,
+      reason: 'the queue keeps the zone a job was made in to start it '
+          'there; kept after the end, that zone would hold the job that '
+          'started the work for as long as anyone keeps the handle',
+    );
+    // Read after the check, so the handle is held through it by the
+    // language and not by how the VM keeps a suspended frame.
+    expect(made.isFinished, isTrue);
 
     await solo.close();
   });

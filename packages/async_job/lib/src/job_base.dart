@@ -535,7 +535,23 @@ abstract class JobBase<T> implements Job<T> {
   static Zone _creationZone() =>
       (Zone.current[_unattendedKey] as Zone?) ?? Zone.current;
 
-  final _done = Completer<Outcome<T>>();
+  /// Made in [_zone], not in the current zone: a future keeps the zone it
+  /// was made in, and inside the work of [JobContext.unattended] that is
+  /// the fork, whose values carry the job that started the work. A handle
+  /// kept for the outcome would hold that job, and all it holds, for as
+  /// long as the handle lives.
+  final _done = _newDone<T>();
+
+  /// Through `run` only inside the work: everywhere else [_zone] is the
+  /// current zone, and `run` would cost every job a call into the zone's
+  /// handlers for nothing.
+  static Completer<Outcome<R>> _newDone<R>() {
+    final outside = Zone.current[_unattendedKey] as Zone?;
+    return outside == null
+        ? Completer<Outcome<R>>()
+        : outside.run(Completer<Outcome<R>>.new);
+  }
+
   Cancelled? _cancelled;
   final _cancelListeners = <void Function(Cancelled)>[];
   final _onCancel = <void Function()>[];
