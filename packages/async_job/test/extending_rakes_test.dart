@@ -35,8 +35,10 @@ final class MyJob<T> extends JobBase<T> {
   Future<T> execute(covariant MyContext ctx) => _body(ctx);
 
   // `start` and `whenDone` are protected: the rest of the engine calls
-  // them through these wrappers, private to its library.
-  void _launch() => start();
+  // them through these wrappers, private to its library. The queue starts
+  // a job later, from a zone of its own, so `_launch` starts it in the zone
+  // it was created in.
+  void _launch() => creationZone.run(start);
 
   Future<void> get _whenDone => whenDone;
 
@@ -473,6 +475,80 @@ void main() {
       });
       expect(answer.answered, ['FormatException: known']);
       expect(errors, ['Bad state: of MyJob', 'Bad state: of a plain child']);
+    });
+
+    test('the queue starts a job in the zone it was created in', () {
+      fakeAsync((async) {
+        final seen = <Object?>[];
+        late MyJob<void> job;
+        runZoned(
+          () => job = MyJob<void>((_) async => seen.add(Zone.current[#who])),
+          zoneValues: {#who: 'screen'},
+        );
+        final queue = MyQueue()..add(job);
+        runZoned(() => queue.run().ignore(), zoneValues: {#who: 'app'});
+        async.flushTimers();
+        expect(seen, ['screen'], reason: 'not the zone the queue runs in');
+      });
+    });
+
+    test('a failing future of the zone a job was created in reaches its body',
+        () {
+      fakeAsync((async) {
+        final screen = <String>[];
+        final app = <String>[];
+        late Completer<void> connected;
+        late MyJob<void> job;
+        runZonedGuarded(
+          () {
+            connected = Completer<void>();
+            job = MyJob<void>((_) async {
+              await connected.future;
+            })
+              ..ignoreFailure();
+          },
+          (error, stackTrace) => screen.add('$error'),
+        );
+        final next = MyJob<void>((_) async {});
+        final queue = MyQueue()
+          ..add(job)
+          ..add(next);
+        var over = false;
+        runZonedGuarded(
+          () => queue.run().then((_) => over = true).ignore(),
+          (error, stackTrace) => app.add('$error'),
+        );
+        async.flushMicrotasks();
+        expect(job.isRunning, isTrue);
+        connected.completeError(StateError('connection lost'));
+        async.flushTimers();
+        expect(
+          '${job.outcome}',
+          'Failed(Bad state: connection lost)',
+          reason: "started under the queue's runZonedGuarded, the body would "
+              'never hear of the failure and would wait for good',
+        );
+        expect(screen, isEmpty, reason: "the failure is the body's");
+        expect(app, isEmpty);
+        expect(next.outcome, isA<Done<void>>(), reason: 'the queue goes on');
+        expect(over, isTrue);
+      });
+    });
+
+    test('every MyJob of the bench launches the way the page shows', () {
+      const opening = '  // `start` and `whenDone` are protected: '
+          'the rest of the engine calls';
+      for (final file in [
+        'test/support/extending_plain.dart',
+        'test/support/extending_first_attempts.dart',
+      ]) {
+        expect(
+          _declaration(file, opening, ''),
+          _declaration('test/extending_rakes_test.dart', opening, ''),
+          reason: 'the page shows the wrappers once, and a piece of the page '
+              'is found in any one of the files',
+        );
+      }
     });
   });
 
@@ -993,6 +1069,42 @@ void main() {
       job.start();
       async.flushTimers();
       expect(job.outcome, isA<Done<void>>());
+    });
+  });
+
+  test('a queue starts a deferred job in the zone the job was made in', () {
+    fakeAsync((async) {
+      final made = <String>[];
+      final queue = <String>[];
+      late Zone zone;
+      late Completer<void> connected;
+      late DeferredJob<void> job;
+      runZonedGuarded(
+        () {
+          zone = Zone.current;
+          connected = Completer<void>();
+          job = Job.deferred<void>((_) async {
+            await connected.future;
+          })
+            ..ignoreFailure();
+        },
+        (error, stackTrace) => made.add('$error'),
+      );
+      runZonedGuarded(
+        () => zone.run(job.start),
+        (error, stackTrace) => queue.add('$error'),
+      );
+      async.flushMicrotasks();
+      connected.completeError(StateError('connection lost'));
+      async.flushTimers();
+      expect(
+        '${job.outcome}',
+        'Failed(Bad state: connection lost)',
+        reason: "started by job.start() from the queue's runZonedGuarded, "
+            'the body would never hear of the failure',
+      );
+      expect(made, isEmpty);
+      expect(queue, isEmpty);
     });
   });
 

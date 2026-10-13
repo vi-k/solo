@@ -41,8 +41,10 @@ final class MyJob<T> extends JobBase<T> {
   Future<T> execute(covariant MyContext ctx) => _body(ctx);
 
   // `start` and `whenDone` are protected: the rest of the engine calls
-  // them through these wrappers, private to its library.
-  void _launch() => start();
+  // them through these wrappers, private to its library. The queue starts
+  // a job later, from a zone of its own, so `_launch` starts it in the zone
+  // it was created in.
+  void _launch() => creationZone.run(start);
 
   Future<void> get _whenDone => whenDone;
 }
@@ -58,6 +60,15 @@ the Dart library of `MyJob`, and nobody else who holds the job can start it
 behind the engine's back. `whenDone` waits for the job without observing its
 outcome, so a failure nobody looked at still reaches the zone; waiting for
 `done` would count as looking.
+
+`start` runs the body in the zone it is called from, and a queue calls it
+later, from wherever the queue runs. `creationZone.run(start)` starts the job
+in the zone it was created in: the body gets the timers, the zone values and
+the error handler of the code that made the job. A future of that zone that
+fails reaches the body there. Started under another `runZonedGuarded`, the body
+would never hear of the failure and would wait for good, and the queue with it.
+For a job made inside `ctx.unattended`, `creationZone` is the zone that work
+was started from, the one `start` itself moves to when called inside the work.
 
 Override `started()` and `finished()` to follow the lifecycle. `started()` runs
 as the body is about to start, with the job already running. `finished()` runs
@@ -385,3 +396,8 @@ final job = Job.deferred<void>((ctx) => ctx.abandonable(work));
 // ... later, or from a queue of your own
 job.start();
 ```
+
+`start()` runs the body in the zone it is called from. A queue that calls it
+later, from a zone of its own, should keep the zone the job was made in and
+start the job there, with `zone.run(job.start)`:
+[A job of your own](#a-job-of-your-own) says why.

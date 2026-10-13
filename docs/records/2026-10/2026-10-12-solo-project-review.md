@@ -485,6 +485,9 @@ protected-геттер `JobBase.creationZone`: поле `_zone` убрано, н
 и бега — в `retention_test.dart` `solo`, тесты геттера —
 в `extending_test.dart` ядра, геттер — в «Breaking changes» `CHANGELOG.md`
 `async_job`; подробности — в том же отчёте, раздел «Геттер зоны создания».
+Очередь страницы `doc/extending.md` ядра запускала задачи из зоны, где
+крутилась сама, так же, как `solo` до M12; тем же днём она запускает их через
+`creationZone.run(start)`, раздел «Образец очереди» того же отчёта.
 
 ### M13. `lastJobWhere` возвращает задачу, которую предикат уже отменил
 

@@ -15,8 +15,10 @@ final class MyJob<T> extends JobBase<T> {
   Future<T> execute(covariant MyContext ctx) => _body(ctx);
 
   // `start` and `whenDone` are protected: the rest of the engine calls
-  // them through these wrappers, private to its library.
-  void _launch() => start();
+  // them through these wrappers, private to its library. The queue starts
+  // a job later, from a zone of its own, so `_launch` starts it in the zone
+  // it was created in.
+  void _launch() => creationZone.run(start);
 
   Future<void> get _whenDone => whenDone;
 }
