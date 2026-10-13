@@ -46,11 +46,13 @@ mixin SoloListenable<S extends Object> on Solo<S>
   @override
   S get value => currentState;
 
-  /// Notifies through the engine's listeners, isolated through [FlutterError].
+  /// Reports a listener's failure through [FlutterError], the way a
+  /// `ChangeNotifier` reports one, instead of to the zone.
   ///
-  /// The engine publishes from inside a state change and re-evaluates rules
-  /// right after: a subscriber's failure is its own, and letting it out of
-  /// here would cost a job the cancellation the new state owes it.
+  /// A listener's failure is its own and never reaches whoever wrote the
+  /// state: the engine hands it here and goes on to the next listener. An
+  /// override that throws sends both errors to the zone, the listener's
+  /// first.
   ///
   /// `@protected` is repeated because Dart does not inherit it. Left off,
   /// this override makes a hook of the engine a public member of every

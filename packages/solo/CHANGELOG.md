@@ -124,7 +124,9 @@ different `runZonedGuarded`. See
   answered the second call with the handle the first had just cancelled.
 - `cancelAll` reaches the job the engine is about to start: called from that
   job's start rules, it missed the job, which started anyway.
-- A `publish` that throws no longer holds back the changes queued behind it.
+- A `publish` that throws no longer holds back the changes queued behind it,
+  and the rules of the running jobs are asked all the same: a job the new state
+  rejects is cancelled.
 - A predicate of `SoloQueue.removeWhere` or `Solo.lastJobWhere` that removes a
   job no longer walks into a `ConcurrentModificationError`.
 - A finished job lets go of its body, of its state handlers and of the job that

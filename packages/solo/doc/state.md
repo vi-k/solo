@@ -239,9 +239,9 @@ class Logged<S extends Object> extends Solo<S> {
     try {
       write('$previous -> $current');
     } on Object catch (error, stackTrace) {
-      // The engine re-evaluates the rules of the running jobs right after
-      // this call. An error let out of here would cost a job the
-      // cancellation the new state owes it.
+      // The state has changed by now, and the rules of the running jobs
+      // are asked about it all the same. An error let out of here would
+      // reach whoever wrote the state, as if the write had failed.
       Zone.current.handleUncaughtError(error, stackTrace);
     }
   }
@@ -254,7 +254,7 @@ What such an override owes, and what the engine owes it back:
 | --- | --- |
 | `super.publish` comes first | It is what calls the listeners, so a delivery of your own runs after the engine's rather than instead of it. `@mustCallSuper` says so and the analyzer holds you to it. |
 | `@protected` is repeated | Dart does not carry the annotation over to an override. Without it `publish` is a public member of the controller, and code that holds the controller can publish a state nobody wrote: the listeners are called and the delivery runs, while `currentState` stays what it was. The annotation is in `package:meta`. |
-| A failure must not leave `publish` | The rules of the running jobs are re-evaluated right after the call, and an error let out of here costs a job the cancellation the new state owes it. It goes back the way the write came: into the body that called `ctx.emit`, out of `externalSetState` to whoever called it — to `Zone.current.handleUncaughtError` from `dart:async` when that caller is a hook of the engine, where a failing hook's error goes anyway — and to the controller's `onError` and `onUnanswered` when the write is the result of a state handler. |
+| A failure should stay in `publish` | An error let out of here goes back the way the write came: into the body that called `ctx.emit`, out of `externalSetState` to whoever called it — to `Zone.current.handleUncaughtError` from `dart:async` when that caller is a hook of the engine, where a failing hook's error goes anyway — and to the controller's `onError` and `onUnanswered` when the write is the result of a state handler. The write has gone through by then: the state has changed, and the rules of the running jobs have been asked about it. Whoever wrote the state hears of a failed delivery as if the write had failed. |
 | The changes behind it are published all the same | The failed change is gone — it left the publication queue before the call, and nothing publishes a change twice — but the ones queued behind it are the state the controller now holds, and they go out before the failure leaves. Of several failures only the first is thrown; the rest go to the zone. |
 
 `SoloStream` is this override with a broadcast `StreamController` behind it,

@@ -1029,12 +1029,34 @@ abstract class Solo<S extends Object> {
     );
     _callHook(() => observer?.onChange(this, transition));
     _callHook(() => onChange(transition));
-    _publishPending();
-    _reevaluate(
-      except: emitter,
-      ruleErrors: ruleErrors,
-      revision: revision,
-    );
+    // The rules are asked even when a delivery throws: the state has
+    // changed either way, and a job the new state rejects is owed its
+    // cancellation whatever a `publish` did with the news. The failure
+    // still goes back to whoever wrote the state. Should the rules fail
+    // after it -- a cancellation that cascades through a tree deeper than
+    // the stack -- theirs is the second failure and goes where the second
+    // failure of a delivery goes.
+    Object? failure;
+    StackTrace? failureTrace;
+    try {
+      _publishPending();
+    } on Object catch (error, stackTrace) {
+      failure = error;
+      failureTrace = stackTrace;
+    }
+    try {
+      _reevaluate(
+        except: emitter,
+        ruleErrors: ruleErrors,
+        revision: revision,
+      );
+    } on Object catch (error, stackTrace) {
+      if (failure == null) rethrow;
+      Zone.current.handleUncaughtError(error, stackTrace);
+    }
+    if (failure != null) {
+      Error.throwWithStackTrace(failure, failureTrace!);
+    }
   }
 
   /// Publishes the recorded changes, oldest first.

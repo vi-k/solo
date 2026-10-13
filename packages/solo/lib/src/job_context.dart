@@ -24,7 +24,9 @@ abstract interface class SoloContext<S extends Object, W extends S>
   /// write, as every member does, and again after it if the write cancelled
   /// this job on the way: hooks, observers and listeners run inside it and
   /// may set the state again, and a parent that goes down there takes its
-  /// children with it.
+  /// children with it. A delivery that throws comes first: its error is
+  /// what `emit` throws, and a cancellation the write brought waits for
+  /// the next checkpoint.
   ///
   /// ```dart
   /// ctx.emit(ctx.state.copyWith(loading: true));
@@ -139,7 +141,8 @@ final class _SoloContext<S extends Object, W extends S, R>
     // The write is a checkpoint on both sides: hooks, observers and
     // listeners run inside `_setState` and may cancel this job — through a
     // reentrant `externalSetState` or through a parent going down with it.
-    // The body must not walk past that.
+    // The body must not walk past that. A delivery that throws leaves
+    // before this line, and its failure is what the body hears first.
     throwIfCancelled();
   }
 

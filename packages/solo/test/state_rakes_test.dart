@@ -321,7 +321,7 @@ final class _LoggedNumbers extends page.Logged<int> {
       );
 }
 
-/// A delivery that lets its failure out, against the rule of the page.
+/// A delivery that lets its failure out, against the advice of the page.
 final class _Leaky extends Solo<int> {
   final trace = <String>[];
 
@@ -330,6 +330,9 @@ final class _Leaky extends Solo<int> {
 
   /// Whether `onChange` answers the state `1` with a write of `9`.
   bool writesFromHook = false;
+
+  /// Whether `onLog` answers every message with a write of `9`.
+  bool writesFromLog = false;
 
   _Leaky() : super(0);
 
@@ -347,6 +350,11 @@ final class _Leaky extends Solo<int> {
       externalSetState(9);
       trace.add('the write of the hook returned');
     }
+  }
+
+  @override
+  void onLog(Job<Object?> job, Object? message) {
+    if (writesFromLog) externalSetState(9);
   }
 
   @override
@@ -375,6 +383,89 @@ final class _Leaky extends Solo<int> {
         ifCancelled: (state, cancelled) => 4,
         (ctx) => ctx.abandonable(() => gate.future),
       );
+
+  /// A job its rules keep while the state is under 5, and a child of it
+  /// that writes 9, keeps in [heard] what its `emit` and the checkpoint
+  /// after it threw, and waits for [gate] like its parent.
+  ///
+  /// No checkpoint of the parent after the write: a checkpoint asks the
+  /// rules itself, and so does the end of a child the parent ran, and a job
+  /// cancelled there would hide whether the write asked them.
+  Job<void> watchWhileChildWrites(List<String> heard, Completer<void> gate) =>
+      run<int, void>(
+        keepWhile: (state) => state < 5,
+        (ctx) async {
+          ctx.run(
+            job<int, void>((ctx) async {
+              try {
+                ctx.emit(9);
+              } on Object catch (error) {
+                heard.add('emit threw: $error');
+              }
+              try {
+                ctx.check();
+              } on Cancelled catch (cancelled) {
+                heard.add('check threw: $cancelled');
+              }
+              await gate.future;
+            }),
+          ).ignore();
+          await gate.future;
+        },
+      );
+
+  /// A job its rules keep while the state is under 5, that logs once and
+  /// waits for [gate] without a checkpoint after the message.
+  Job<void> logWhileUnder5(Completer<void> gate) => run<int, void>(
+        keepWhile: (state) => state < 5,
+        (ctx) async {
+          ctx.log('hello');
+          await gate.future;
+        },
+      );
+
+  /// A job its rules keep while the state is under 5, and a child of it
+  /// whose state handler answers a cancellation with `9`. Returns both.
+  ///
+  /// The parent does not wait for the child: the end of a child it waited
+  /// for would ask its rules itself.
+  (Job<void>, Job<void>) watchOverCorrected(Completer<void> gate) {
+    final child = job<int, void>(
+      ifCancelled: (state, cancelled) => 9,
+      (ctx) => ctx.abandonable(() => gate.future),
+    );
+    final parent = run<int, void>(
+      keepWhile: (state) => state < 5,
+      (ctx) async {
+        ctx.run(child).ignore();
+        await gate.future;
+      },
+    );
+    return (parent, child);
+  }
+
+  /// A job its rules keep while the state is under 5, over a chain of
+  /// [depth] children, each run by the one above it. [bottom] completes
+  /// once the last of them has started.
+  Job<void> deep(int depth, Completer<void> bottom) => run<int, void>(
+        keepWhile: (state) => state < 5,
+        (ctx) => _down(ctx, depth, bottom),
+      );
+
+  Future<void> _down(
+    SoloContext<int, int> ctx,
+    int left,
+    Completer<void> bottom,
+  ) async {
+    if (left == 0) {
+      bottom.complete();
+      return ctx.abandonable(() => Completer<void>().future);
+    }
+    // A start of its own for every level: started from the one above,
+    // the chain would run out of stack before the test begins.
+    await null;
+    await ctx.run(job<int, void>((ctx) => _down(ctx, left - 1, bottom)));
+  }
 }
 
 /// A delivery that gives up on the states named in [bombAt], and writes
@@ -1447,7 +1538,8 @@ void main() {
       });
     });
 
-    test('a failure let out of publish costs a job its cancellation', () {
+    test('a failure let out of publish leaves the rules asked all the same',
+        () {
       fakeAsync((async) {
         final leaky = _Leaky();
         final job = leaky.watch();
@@ -1461,16 +1553,49 @@ void main() {
           ),
           reason: 'out of externalSetState, to whoever called it',
         );
+        expect(job.isCancelled, isTrue, reason: 'within the write');
         async.flushMicrotasks();
         expect(leaky.currentState, 9);
-        expect(job.isCancelled, isFalse, reason: 'the rules were not asked');
+        expect(
+          '${job.outcome}',
+          'Cancelled(rules: keepWhile)',
+          reason: 'the state has changed, and a delivery that failed does '
+              'not spare the job the cancellation the new state owes it',
+        );
+        leaky.close().ignore();
+        async.flushTimers();
+      });
+    });
 
-        // The same state published by a delivery that holds.
-        leaky
-          ..bomb = false
-          ..set(9);
+    test(
+        'a failure let out of publish into a body leaves the rules of the '
+        'others asked', () {
+      fakeAsync((async) {
+        final leaky = _Leaky();
+        final heard = <String>[];
+        final gate = Completer<void>();
+        final parent = leaky.watchWhileChildWrites(heard, gate);
         async.flushMicrotasks();
-        expect('${job.outcome}', 'Cancelled(rules: keepWhile)');
+
+        expect(
+          heard,
+          [
+            'emit threw: Bad state: delivery boom on 9',
+            'check threw: Cancelled(parent)',
+          ],
+          reason: 'the parent took its writing child down with it, and the '
+              'failed delivery comes first: it is what emit throws, and the '
+              'cancellation waits for the next checkpoint',
+        );
+        expect(leaky.currentState, 9);
+        expect(
+          parent.isCancelled,
+          isTrue,
+          reason: 'the write asked the rules of the job that did not write',
+        );
+        gate.complete();
+        async.flushTimers();
+        expect('${parent.outcome}', 'Cancelled(rules: keepWhile)');
         leaky.close().ignore();
         async.flushTimers();
       });
@@ -1535,6 +1660,107 @@ void main() {
         'onUnanswered: Bad state: delivery boom on 4',
       ]);
       expect(zone, isEmpty, reason: 'onUnanswered answered for it');
+    });
+
+    test('a failure let out of publish from a hook leaves the rules asked', () {
+      late _Leaky leaky;
+      late Job<void> job;
+      late bool cancelledAtOnce;
+      final zone = _zone((async) {
+        final gate = Completer<void>();
+        leaky = _Leaky()..writesFromLog = true;
+        job = leaky.logWhileUnder5(gate);
+        async.flushMicrotasks();
+        cancelledAtOnce = job.isCancelled;
+        gate.complete();
+        async.flushMicrotasks();
+        leaky.close().ignore();
+        async.flushTimers();
+      });
+
+      expect(leaky.currentState, 9);
+      expect(
+        cancelledAtOnce,
+        isTrue,
+        reason: 'the write of the hook asked the rules, and no checkpoint '
+            'came after it',
+      );
+      expect('${job.outcome}', 'Cancelled(rules: keepWhile)');
+      expect(zone, ['Bad state: delivery boom on 9']);
+    });
+
+    test(
+        'a failure let out of publish over a handler result leaves the rules '
+        'asked', () {
+      late _Leaky leaky;
+      late Job<void> parent;
+      late bool cancelledAtOnce;
+      final zone = _zone((async) {
+        final gate = Completer<void>();
+        leaky = _Leaky();
+        final (watching, child) = leaky.watchOverCorrected(gate);
+        parent = watching;
+        async.flushMicrotasks();
+        child.cancel().ignore();
+        async.flushMicrotasks();
+        cancelledAtOnce = parent.isCancelled;
+        gate.complete();
+        async.flushMicrotasks();
+        leaky.close().ignore();
+        async.flushTimers();
+      });
+
+      expect(leaky.currentState, 9);
+      expect(
+        cancelledAtOnce,
+        isTrue,
+        reason: 'the result of the handler asked the rules of the parent',
+      );
+      expect('${parent.outcome}', 'Cancelled(rules: keepWhile)');
+      expect(leaky.trace, [
+        'ifFailed: Bad state: delivery boom on 9',
+        'onUnanswered: Bad state: delivery boom on 9',
+      ]);
+      expect(zone, isEmpty, reason: 'onUnanswered answered for it');
+    });
+
+    test('a failure of the rules after a failed delivery goes to the zone',
+        () async {
+      // Deep enough that the cancellation the new state owes the root runs
+      // out of stack on its way down the chain, as in the core's
+      // cascade_depth_test.dart. The rules fail after the delivery, and
+      // the delivery failed first.
+      const depth = 50000;
+      final leaky = _Leaky();
+      final bottom = Completer<void>();
+      final zone = <Object>[];
+      late Job<void> root;
+      Object? thrown;
+      await runZonedGuarded(
+        () async {
+          root = leaky.deep(depth, bottom);
+          await bottom.future;
+          try {
+            leaky.set(9);
+          } on Object catch (error) {
+            thrown = error;
+          }
+        },
+        (error, stackTrace) => zone.add(error),
+      );
+
+      expect(
+        '$thrown',
+        'Bad state: delivery boom on 9',
+        reason: 'the first failure goes back to whoever wrote the state',
+      );
+      expect(
+        zone.first,
+        isA<StackOverflowError>(),
+        reason: 'the second goes where the second failure of a delivery '
+            'goes',
+      );
+      expect(root.isCancelled, isTrue);
     });
 
     test('the changes behind the failed one are published all the same', () {

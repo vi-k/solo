@@ -113,9 +113,9 @@ class Logged<S extends Object> extends Solo<S> {
     try {
       write('$previous -> $current');
     } on Object catch (error, stackTrace) {
-      // The engine re-evaluates the rules of the running jobs right after
-      // this call. An error let out of here would cost a job the
-      // cancellation the new state owes it.
+      // The state has changed by now, and the rules of the running jobs
+      // are asked about it all the same. An error let out of here would
+      // reach whoever wrote the state, as if the write had failed.
       Zone.current.handleUncaughtError(error, stackTrace);
     }
   }
