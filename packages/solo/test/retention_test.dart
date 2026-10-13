@@ -1,4 +1,5 @@
-// What a finished job of a controller lets go of.
+// What a job of a controller lets go of once it is over, and what it does
+// not hold before that.
 //
 // The core answers the same question in
 // `packages/async_job/test/retention_test.dart`, and a job of a controller
@@ -74,22 +75,27 @@ final class Counter extends Solo<int> with OpenSolo<int> {
   return (child, WeakReference(payload));
 }
 
-/// Only a job run inside the unattended work of another comes back. The
-/// value of the job that started the work is then reachable from it alone,
-/// through the zone the job was made in: the fork of the work, which
-/// carries the job that started it.
-Future<(SoloJob<int>, WeakReference<Payload>)> madeInUnattendedWork(
+/// Only the job [make] runs inside the unattended work of another comes
+/// back, and it comes back once the job that started the work is over.
+/// The value of that job is then reachable from it alone, through the zone
+/// the job was made in: the fork of the work, which carries the job that
+/// started it.
+Future<(SoloJob<T>, WeakReference<Payload>)> madeInUnattendedWork<T>(
   Counter solo,
+  SoloJob<T> Function() make,
 ) async {
   final payload = Payload();
-  final made = Completer<SoloJob<int>>();
-  solo.run<int, Object?>((ctx) async {
-    ctx.unattended(() => made.complete(solo.run<int, int>((_) async => 1)));
+  final made = Completer<SoloJob<T>>();
+  final starter = solo.run<int, Object?>((ctx) async {
+    ctx.unattended(() => made.complete(make()));
 
     return payload;
-  }).ignoreFailure();
+  })
+    ..ignoreFailure();
+  final job = await made.future;
+  await starter.done;
 
-  return (await made.future, WeakReference(payload));
+  return (job, WeakReference(payload));
 }
 
 void main() {
@@ -145,22 +151,104 @@ void main() {
   test('a job made in unattended work lets go of the job that started it',
       () async {
     final solo = Counter();
-    final (made, capture) = await madeInUnattendedWork(solo);
+    final (made, capture) = await madeInUnattendedWork(
+      solo,
+      () => solo.run<int, int>((_) async => 1),
+    );
     await made.done;
 
     expect(made.outcome, isA<Done<int>>());
     expect(
       await collected(capture),
       isTrue,
-      reason: 'the queue keeps the zone a job was made in to start it '
-          'there; kept after the end, that zone would hold the job that '
-          'started the work for as long as anyone keeps the handle',
+      reason: 'the zone current where the job was made is the fork of the '
+          'work, and a handle that held it would hold the job that started '
+          'the work for as long as anyone keeps the handle',
     );
     // Read after the check, so the handle is held through it by the
     // language and not by how the VM keeps a suspended frame.
     expect(made.isFinished, isTrue);
 
     await solo.close();
+  });
+
+  test(
+      'a job made in unattended work waits in the queue without holding '
+      'the job that started it', () async {
+    final solo = Counter();
+    final other = Counter();
+    final gate = Completer<void>();
+    final ahead = other.run<int, void>((_) => gate.future);
+    final (made, capture) = await madeInUnattendedWork(
+      solo,
+      () => other.run<int, int>((_) async => 1),
+    );
+
+    expect(made.isQueued, isTrue);
+    expect(
+      await collected(capture),
+      isTrue,
+      reason: 'the queue starts a job in the zone it was made in, and a job '
+          'made in the work starts where the work was started from; kept '
+          'for the start, the fork would hold the job that started the '
+          'work for as long as this one waits',
+    );
+    expect(made.isQueued, isTrue);
+
+    gate.complete();
+    await ahead.done;
+    await made.done;
+    await solo.close();
+    await other.close();
+  });
+
+  test(
+      'a job made in unattended work runs without holding the job that '
+      'started it', () async {
+    final solo = Counter();
+    final other = Counter();
+    final gate = Completer<void>();
+    final (made, capture) = await madeInUnattendedWork(
+      solo,
+      () => other.run<int, void>((_) => gate.future),
+    );
+
+    expect(made.isRunning, isTrue);
+    expect(
+      await collected(capture),
+      isTrue,
+      reason: 'a running job holds nothing of the work it was made in',
+    );
+    expect(made.isRunning, isTrue);
+
+    gate.complete();
+    await made.done;
+    await solo.close();
+    await other.close();
+  });
+
+  test(
+      'a job made in unattended work and not yet added holds nothing of the '
+      'job that started it', () async {
+    final solo = Counter();
+    final other = Counter();
+    final (made, capture) = await madeInUnattendedWork(
+      solo,
+      () => other.job<int, int>((_) async => 1),
+    );
+
+    expect(made.isQueued, isFalse);
+    expect(
+      await collected(capture),
+      isTrue,
+      reason: 'a job made by `job` may wait for `add` as long as anyone '
+          'keeps the handle, and nothing lets go of what it holds until it '
+          'is over',
+    );
+    expect(made.isFinished, isFalse);
+
+    await solo.close();
+    await other.close();
   });
 
   test('the rules outlive the job, because a leaked context reads them',

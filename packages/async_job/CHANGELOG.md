@@ -40,7 +40,8 @@
   a body throws `Cancelled`, or lets out the cancellation of a child, the
   children are asked to stop, then the `ctx.onCancel` callbacks run and
   `whenCancelled` fires.
-- **`JobBase` gains the protected `inUncancellableSection` and `heldCancel`.**
+- **`JobBase` gains the protected `inUncancellableSection`, `heldCancel` and
+  `creationZone`.**
 - **`JobContext` gains `pause`,** a delay a cancellation ends. See
   [Letting time pass](doc/cancellation.md#letting-time-pass).
 

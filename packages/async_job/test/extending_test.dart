@@ -1,12 +1,12 @@
 // The protected surface an engine of a domain stands on.
 //
-// Four of its members are held by `solo` alone and by nothing in here, so
+// Five of its members are held by `solo` alone and by nothing in here, so
 // a change to their contract would leave this package green and redden the
-// neighbour: `createEachJob`, `whenDone`, `inUncancellableSection` and
-// `heldCancel`. Each of them is exercised below by a small engine of its
-// own, the way `solo` does it. So is the way an engine answers for an
-// error nobody answered for: through an observer of its own on every job,
-// which is how `solo` reaches `Solo.onUnanswered`.
+// neighbour: `createEachJob`, `whenDone`, `inUncancellableSection`,
+// `heldCancel` and `creationZone`. Each of them is exercised below by a
+// small engine of its own, the way `solo` does it. So is the way an engine
+// answers for an error nobody answered for: through an observer of its own
+// on every job, which is how `solo` reaches `Solo.onUnanswered`.
 @Timeout(Duration(seconds: 5))
 library;
 
@@ -95,6 +95,24 @@ final class WaitingJob<T> extends JobBase<T> {
   Future<void> get waited => whenDone;
 
   void launch() => start();
+
+  @override
+  JobContextBase createContext() => DomainContext(this);
+
+  @override
+  Future<T> execute(covariant DomainContext ctx) => _body(ctx);
+}
+
+/// An engine that starts a job later, from a queue, in the zone the job
+/// was created in.
+final class QueuedJob<T> extends JobBase<T> {
+  QueuedJob(this._body);
+
+  final Future<T> Function(JobContext ctx) _body;
+
+  Zone get zone => creationZone;
+
+  void launch() => creationZone.run(start);
 
   @override
   JobContextBase createContext() => DomainContext(this);
@@ -544,6 +562,53 @@ void main() {
       );
       async.flushTimers();
       expect((job.outcome! as Cancelled).reason, isA<ManualCancelReason>());
+    });
+  });
+
+  test('creationZone is where a queue that took a job later starts it', () {
+    fakeAsync((async) {
+      final ranIn = <Object?>[];
+      final job = runZoned(
+        () => QueuedJob<void>((ctx) async => ranIn.add(Zone.current[#where])),
+        zoneValues: {#where: 'made'},
+      );
+      runZoned(job.launch, zoneValues: {#where: 'woke'});
+      async.flushTimers();
+      expect(
+        ranIn,
+        ['made'],
+        reason: 'the queue runs in the zone of whatever woke it, and the '
+            'body belongs to the zone the job was made in',
+      );
+      expect(job.outcome, isA<Done<void>>());
+    });
+  });
+
+  test('inside unattended work creationZone is where the work came from', () {
+    fakeAsync((async) {
+      late final Zone body;
+      late final Zone work;
+      late final Zone seen;
+      late final QueuedJob<void> made;
+      Job<void>((ctx) async {
+        body = Zone.current;
+        ctx.unattended(() {
+          work = Zone.current;
+          made = QueuedJob<void>((c) async {});
+          seen = made.zone;
+        });
+      });
+      async.flushTimers();
+      expect(identical(work, body), isFalse);
+      expect(
+        identical(seen, body),
+        isTrue,
+        reason: 'the fork carries the job that started the work, and a job '
+            'waiting in a queue would hold that job through it',
+      );
+      made.launch();
+      async.flushTimers();
+      expect(made.outcome, isA<Done<void>>());
     });
   });
 

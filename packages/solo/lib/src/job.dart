@@ -14,23 +14,6 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     implements SoloJob<T> {
   final Solo<S> _solo;
 
-  /// The zone the job was made in, where the queue starts it.
-  ///
-  /// The pump runs in the zone of whatever woke the queue: the call that
-  /// queued a job just before this one, the end of the job before, a
-  /// window's timer. A body started from there took that zone's timers,
-  /// values and error handler for its own, and a future of its own zone
-  /// that failed while the body ran under another `runZonedGuarded` never
-  /// reached it: the body waited for good. The whole start moves here,
-  /// with the deadline and the hooks the core calls in it; the rules the
-  /// pump asks before the start are still asked from the pump. Inside the
-  /// work of `JobContext.unattended` this is the work's zone, and the
-  /// core's `start` moves out of it to the zone the work was started from.
-  ///
-  /// Let go of when the job is over, like the body: inside unattended work
-  /// the zone carries the job that started the work.
-  Zone? _zone = Zone.current;
-
   /// Let go of when the job is over, the way the core lets go of its own
   /// body and of the parent chain. A body runs once, and the handlers of
   /// a job that has an outcome have had their turn; kept after that, they
@@ -213,7 +196,6 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
       _ifFailed = null;
       _ifCancelled = null;
       _parentJob = null;
-      _zone = null;
     }
   }
 
@@ -270,10 +252,24 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   // The engine reaches a job from the side, and `@protected` holds only
   // inside a subclass; these wrappers are how `Solo` and `_SoloQueue`
   // touch it.
-  //
-  // `_zone` is null only once the job is over, and `start` refuses it then
-  // anyway.
-  void _launch() => (_zone ?? Zone.current).run(start);
+
+  /// Starts the job in the zone the core keeps for it: the zone it was made
+  /// in, or the zone the work was started from for a job made inside the
+  /// work of `JobContext.unattended`.
+  ///
+  /// The pump runs in the zone of whatever woke the queue: the call that
+  /// queued a job just before this one, the end of the job before, a
+  /// window's timer. A body started from there took that zone's timers,
+  /// values and error handler for its own, and a future of its own zone
+  /// that failed while the body ran under another `runZonedGuarded` never
+  /// reached it: the body waited for good. The whole start moves, with
+  /// the deadline and the hooks the core calls in it; the rules the pump
+  /// asks before the start are still asked from the pump.
+  ///
+  /// Not the zone current at creation: inside the work that is the fork,
+  /// which carries the job that started the work, and a job that kept it
+  /// would hold that job for as long as it waited and ran.
+  void _launch() => creationZone.run(start);
 
   void _drop(Outcome<T> outcome) => finish(outcome);
 

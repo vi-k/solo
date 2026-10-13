@@ -1355,6 +1355,24 @@ abstract class JobBase<T> implements Job<T> {
   @protected
   Future<void> get whenDone => _done.future.then((_) {});
 
+  /// The zone the job was created in, where an unobserved failure of the
+  /// job goes.
+  ///
+  /// An engine that starts a job later, from a queue, starts it here, as
+  /// `creationZone.run(start)`: the queue runs in the zone of whatever woke
+  /// it, and a body started from there takes that zone's timers, values
+  /// and error handler for its own.
+  ///
+  /// For a job made inside the work of [JobContext.unattended] this is the
+  /// zone that work was started from, the one [start] moves to out of the
+  /// fork; when the work of one job runs inside the work of another, it is
+  /// the zone the outer work was started from. It is not the fork, the zone
+  /// current at creation: the fork carries the job that started the work,
+  /// and an engine that kept it would hold that job for as long as it kept
+  /// the fork.
+  @protected
+  Zone get creationZone => _zone;
+
   /// Runs the body.
   ///
   /// The job starts in the zone this is called from: its body runs there, and

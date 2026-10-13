@@ -42,7 +42,8 @@
   Когда тело бросает `Cancelled` или выпускает наружу отмену ребёнка, детей
   просят остановиться, затем выполняются колбэки `ctx.onCancel` и срабатывает
   `whenCancelled`.
-- **У `JobBase` появились защищённые `inUncancellableSection` и `heldCancel`.**
+- **У `JobBase` появились защищённые `inUncancellableSection`, `heldCancel`
+  и `creationZone`.**
 - **У `JobContext` появился `pause`,** задержка, которую кончает отмена. См.
   [«Дать времени пройти»](cancellation.md#дать-времени-пройти).
 
