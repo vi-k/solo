@@ -46,7 +46,7 @@ final class MyJob<T> extends JobBase<T> {
   // `start` и `whenDone` защищены: остальной движок вызывает их
   // через эти обёртки, приватные для его библиотеки. Очередь запускает
   // задачу позже, из своей зоны, поэтому `_launch` запускает её в зоне,
-  // где её создали.
+  // где задачу создали.
   void _launch() => creationZone.run(start);
 
   Future<void> get _whenDone => whenDone;
