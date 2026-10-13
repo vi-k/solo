@@ -607,8 +607,8 @@ unawaited(analytics.send('zoom'));
 `unawaited` says what is meant — this caller does not wait — and that is all it
 says. The future's error belongs to nobody in the job: the hooks never see it,
 `Solo.unansweredHandler` is never asked, and it surfaces as an unhandled error
-in whatever zone the body happened to run in, with nothing there to name the
-job it came from.
+in the zone the body runs in, the one the job was created in for a job from the
+queue, with nothing there to name the job it came from.
 
 ### Work with a life of its own
 

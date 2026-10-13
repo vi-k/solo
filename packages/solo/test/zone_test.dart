@@ -345,6 +345,205 @@ void main() {
     expect(caught, ['Bad state: onStart of b', 'Bad state: leak']);
   });
 
+  group('a body runs in the zone its job was made in', () {
+    // The queue starts a job from whatever woke it: the call that queued
+    // a job just before it, the end of the job before, a window's timer.
+    // The body ran in that zone, another call's as a rule, with its timers,
+    // its values and its error handler.
+    test('queued right after a job of another zone', () {
+      final seen = <String>[];
+      fakeAsync((async) {
+        final solo = TestSolo();
+        for (final name in ['A', 'B']) {
+          runZoned(
+            () => solo.run<TestState, void>(
+              key: name,
+              (ctx) async => seen.add('$name:${Zone.current[#name]}'),
+            ),
+            zoneValues: {#name: name},
+          );
+        }
+        async.flushMicrotasks();
+        solo.close();
+        async.flushMicrotasks();
+      });
+      expect(seen, ['A:A', 'B:B']);
+    });
+
+    test('queued behind a job of another zone', () {
+      final seen = <String>[];
+      fakeAsync((async) {
+        final solo = TestSolo();
+        final gate = Completer<void>();
+        runZoned(
+          () => solo.run<TestState, void>(key: 'A', (ctx) async {
+            await gate.future;
+            seen.add('A:${Zone.current[#name]}');
+          }),
+          zoneValues: {#name: 'A'},
+        );
+        async.flushMicrotasks();
+        runZoned(
+          () => solo.run<TestState, void>(
+            key: 'B',
+            (ctx) async => seen.add('B:${Zone.current[#name]}'),
+          ),
+          zoneValues: {#name: 'B'},
+        );
+        async.flushMicrotasks();
+        gate.complete();
+        async.flushMicrotasks();
+        solo.close();
+        async.flushMicrotasks();
+      });
+      expect(seen, ['A:A', 'B:B']);
+    });
+
+    test('a group sealed by a window another zone restarted', () {
+      final seen = <String>[];
+      fakeAsync((async) {
+        final solo = TestSolo();
+        final events = solo.collect<TestState, String, void>(
+          (ctx, names) async => seen.add('$names:${Zone.current[#name]}'),
+          timing: AccumulationTiming.debounce(
+            const Duration(milliseconds: 200),
+          ),
+        );
+        for (final name in ['A', 'B']) {
+          runZoned(() => events.add(name), zoneValues: {#name: name});
+        }
+        async.elapse(const Duration(milliseconds: 200));
+        solo.close();
+        async.flushMicrotasks();
+      });
+      expect(seen, ['[A, B]:A']);
+    });
+
+    test('a group a throttle window let through', () {
+      final seen = <String>[];
+      fakeAsync((async) {
+        final solo = TestSolo();
+        final events = solo.collect<TestState, String, void>(
+          (ctx, names) async => seen.add('$names:${Zone.current[#name]}'),
+          timing: AccumulationTiming.throttle(
+            const Duration(milliseconds: 200),
+          ),
+        );
+        runZoned(() => events.add('A'), zoneValues: {#name: 'A'});
+        async.flushMicrotasks();
+        for (final name in ['B', 'C']) {
+          runZoned(() => events.add(name), zoneValues: {#name: name});
+        }
+        async.elapse(const Duration(milliseconds: 500));
+        solo.close();
+        async.flushMicrotasks();
+      });
+      expect(seen, ['[A]:A', '[B, C]:B']);
+    });
+
+    test('made in one zone and queued from another', () {
+      final seen = <String>[];
+      fakeAsync((async) {
+        final solo = TestSolo();
+        final job = runZoned(
+          () => solo.job<TestState, void>(
+            (ctx) async => seen.add('${Zone.current[#name]}'),
+          ),
+          zoneValues: {#name: 'made'},
+        );
+        runZoned(() => solo.add(job), zoneValues: {#name: 'queued'});
+        async.flushMicrotasks();
+        solo.close();
+        async.flushMicrotasks();
+      });
+      expect(seen, ['made']);
+    });
+
+    test('made in one zone and queued from another: its failure', () {
+      final caught = <String, List<String>>{'made': [], 'queued': []};
+      fakeAsync((async) {
+        final solo = TestSolo();
+        late final SoloJob<void> job;
+        runZonedGuarded(
+          () => job = solo.job<TestState, void>(
+            (ctx) async => throw StateError('nobody read it'),
+          ),
+          (error, stackTrace) => caught['made']!.add('$error'),
+        );
+        runZonedGuarded(
+          () => solo.add(job),
+          (error, stackTrace) => caught['queued']!.add('$error'),
+        );
+        async.flushMicrotasks();
+        solo.close();
+        async.flushMicrotasks();
+      });
+      expect(caught, {
+        'made': ['Bad state: nobody read it'],
+        'queued': isEmpty,
+      });
+    });
+
+    test('the onStart hooks of a job run in its zone', () {
+      final caught = <String, List<String>>{'A': [], 'B': []};
+      fakeAsync((async) {
+        final solo = _StartNames();
+        for (final name in ['A', 'B']) {
+          runZonedGuarded(
+            () => solo.run<TestState, void>(key: name, (ctx) async {}),
+            (error, stackTrace) => caught[name]!.add('$error'),
+          );
+        }
+        async.flushMicrotasks();
+        solo.close();
+        async.flushMicrotasks();
+      });
+      expect(caught, {
+        'A': ['Bad state: onStart of A'],
+        'B': ['Bad state: onStart of B'],
+      });
+    });
+
+    test('a failure of a future of its own zone reaches the body', () {
+      // An error does not cross into another error zone. Started from the
+      // zone of the job before, the body below never heard of the failure,
+      // the zone of B took it as unhandled, and the job never ended.
+      final caught = <String, List<String>>{'A': [], 'B': []};
+      Outcome<int>? outcome;
+      fakeAsync((async) {
+        final solo = TestSolo();
+        final gate = Completer<void>();
+        late final Completer<int> fetch;
+        runZonedGuarded(
+          () => solo.run<TestState, void>(key: 'A', (ctx) => gate.future),
+          (error, stackTrace) => caught['A']!.add('$error'),
+        );
+        runZonedGuarded(
+          () {
+            fetch = Completer<int>();
+            solo
+                .run<TestState, int>(
+                  key: 'B',
+                  (ctx) => fetch.future,
+                )
+                .done
+                .then((done) => outcome = done);
+          },
+          (error, stackTrace) => caught['B']!.add('$error'),
+        );
+        async.flushMicrotasks();
+        gate.complete();
+        async.flushMicrotasks();
+        fetch.completeError(StateError('offline'));
+        async.flushMicrotasks();
+        solo.close();
+        async.flushMicrotasks();
+      });
+      expect('$outcome', startsWith('Failed(Bad state: offline'));
+      expect(caught, {'A': isEmpty, 'B': isEmpty});
+    });
+  });
+
   group('a failure a cancellation covered', () {
     // Whoever reads the outcome gets the cancellation — `ctx.run`, a reader
     // of `value`, a body waiting for a child of `each` — and the controller
@@ -637,6 +836,14 @@ final class _Loud extends Solo<TestState> with OpenSolo<TestState> {
     errors.add('$error');
     super.onError(job, error, stackTrace);
   }
+}
+
+/// Throws from `onStart`, naming the job by its key.
+final class _StartNames extends Solo<TestState> with OpenSolo<TestState> {
+  _StartNames() : super(const Initial());
+
+  @override
+  void onStart(Job<Object?> job) => throw StateError('onStart of ${job.key}');
 }
 
 final class _StartThrows extends Solo<TestState> with OpenSolo<TestState> {

@@ -3572,17 +3572,18 @@ void main() {
         expect(ran.errors, ['analytics offline']);
       });
 
-      test('the zone it surfaces in is the one the body ran in', () {
+      test('the zone it surfaces in is the one the job was created in', () {
         _says(
-          'it surfaces as an unhandled error in whatever zone the body '
-          'happened to run in, with nothing there to name the job it came '
-          'from',
+          'it surfaces as an unhandled error in the zone the body runs in, the '
+          'one the job was created in for a job from the queue, with nothing '
+          'there to name the job it came from',
         );
         final where = <String, List<String>>{};
         fakeAsync((async) {
           late first.BroadCamera camera;
           // The queue starts the second job from the zone its pump was
-          // scheduled in, which is the zone of the first job here.
+          // scheduled in, the zone of the first job here, and the body runs
+          // in the zone it was created in all the same.
           where['the first job was created'] = _zoneOf(() {
             camera = first.BroadCamera(Hardware())
               ..run<CameraState, void>(
@@ -3601,8 +3602,8 @@ void main() {
         });
 
         expect(where, {
-          'the first job was created': ['analytics offline'],
-          'the second job was created': isEmpty,
+          'the first job was created': isEmpty,
+          'the second job was created': ['analytics offline'],
           'the rest': isEmpty,
         });
       });

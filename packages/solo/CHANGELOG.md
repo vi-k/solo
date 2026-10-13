@@ -91,6 +91,13 @@ error messages are reworded.
 
 The stack trace of a job its rules cancelled is taken where the rules noticed.
 
+The body of a queued job runs in the zone the job was created in, with its
+deadline and its `onStart` hooks, where `0.2.0` ran them in the zone of
+whatever woke the queue, often another call's: a body awaiting a future of its
+own zone waited for good when the future failed while the body ran under a
+different `runZonedGuarded`. See
+[Creating and scheduling jobs](doc/jobs.md#creating-and-scheduling-jobs).
+
 ### Added
 
 - **`timeout` gives a job of the controller a deadline of its own.** `job`,

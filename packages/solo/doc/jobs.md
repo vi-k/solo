@@ -87,6 +87,17 @@ see those, not the members they are built from. A domain method declares
 result or cancel the job. It declares `SoloJob<T>` only for a caller that reads
 `isQueued`.
 
+A job the queue starts runs its body in the Dart zone of the call that made the
+job: `run`, or `job` for `saving` above, and not `add`. What woke the queue
+does not change the zone: a job queued just before it from another zone, the
+end of the job before, or the timer of an accumulation window. The body's
+timers and zone values, the job's deadline, the `onStart` hooks and the errors
+of futures the body does not await all stay in that zone, which is also where
+the job's failure goes when nobody reads its outcome. Inside `ctx.unattended`
+the zone is the one that work was started from, as in the core. A child is not
+the queue's to start: it runs where `ctx.run` starts it, like any
+`Job.deferred`.
+
 The code of this section and of the ones below belongs to one controller of a
 camera, a `Solo<CameraState>`. The two type arguments of `job` and `run` are
 the working type — the states the body works in, here `Ready`, one of the

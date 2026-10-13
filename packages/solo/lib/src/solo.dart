@@ -244,6 +244,12 @@ abstract class Solo<S extends Object> {
   /// Creates a job without queueing it. Use for job factories such as
   /// `_closeCameraJob()` that are added or run as children later.
   ///
+  /// Queued, the job starts in the zone this method is called in — inside
+  /// [JobContext.unattended], the zone that work was started from — where
+  /// an unread failure of the job goes as well, and not in the zone of
+  /// [add] or of whatever wakes the queue. Run as a child, it starts where
+  /// [JobContext.run] starts it.
+  ///
   /// `canStart` is checked once, when the job is taken from the queue;
   /// `keepWhile` is checked at start, on every state change while the job
   /// runs, and on every read through the context. `cancellable: false`
