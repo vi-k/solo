@@ -540,4 +540,43 @@ void main() {
       });
     }
   });
+
+  // A group the queue has taken but not started is neither queued nor
+  // running, so an event its own rule adds finds the accumulator idle and
+  // arms an interval. Its start renews that interval in the same turn, and
+  // a group its rule refuses leaves the accumulator idle indeed.
+  for (final allow in [true, false]) {
+    test(
+        'startAtOnce false: an event from the rule of a group being started '
+        'waits one interval (${allow ? 'started' : 'refused'})', () {
+      fakeAsync((async) {
+        final solo = PlainSolo<int>(0);
+        final calls = <String>[];
+        var asked = 0;
+        late final SoloAccumulator<String, void> events;
+        events = solo.collect<int, String, void>(
+          (ctx, values) async =>
+              calls.add('$values at ${async.elapsed.inMilliseconds}'),
+          timing: AccumulationTiming.throttle(
+            const Duration(milliseconds: 200),
+            startAtOnce: false,
+          ),
+          canStart: (state) {
+            if (++asked > 1) {
+              return true;
+            }
+            events.add('2');
+            return allow;
+          },
+        );
+
+        events.add('1');
+        async.elapse(const Duration(seconds: 1));
+
+        expect(calls, [if (allow) '[1] at 200', '[2] at 400']);
+        solo.close();
+        async.flushMicrotasks();
+      });
+    });
+  }
 }
