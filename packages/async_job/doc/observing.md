@@ -1,17 +1,20 @@
 # Observing and testing
 
-A job's outcome tells how it ended. A `JobObserver` hears the rest: when the
-job starts and ends, what its body logs, and the errors no outcome carries. The
-last section tests a job without waiting in real time.
+A job's outcome says how the job ended. A `JobObserver` hears the rest: when
+the job starts and ends, what its body logs, and the errors that no outcome
+carries. The last section shows how to test a job without waiting in real time.
 
-The lines under the code are what it prints when it runs. `cancel` is the
-moment the user cancels, `outcome:` is what `job.done` completes with,
-`onError:` is what reaches the observer, `onUnanswered:` is an error an
-observer answered for, and `zone:` is an error that reached the zone uncaught.
-The sections on the observer itself and on answering for errors open with code
-that works. The others open with the version habit leads to and show what that
-code does. Under its own heading follows the version that works or, where the
-first one works already, a simpler one.
+The sections on the observer itself and on answering for errors start with code
+that works. The other sections start with a common first attempt and show what
+that code does. Under a heading of its own comes a version that works, or,
+where the first attempt works already, a simpler one. The lines under the code
+are what the code prints:
+
+- `cancel`: the user cancels the job;
+- `outcome:` what `job.done` completes with;
+- `onError:` an error the observer hears;
+- `onUnanswered:` an error the observer answered for;
+- `zone:` an error that reached the zone uncaught.
 
 ## Observer
 
@@ -46,40 +49,50 @@ Job(load): Done(3)
 ```
 
 A `JobObserver` has four hooks: `onStart`, `onFinish`, `onError` and `onLog`.
-`Job` calls the first three itself; the body sends messages to `onLog` through
-`ctx.log(message)`. `onFinish` runs for every job, including one cancelled
-before it started; `onStart` runs only for a job that starts.
+The job calls the first three itself. The body sends messages to `onLog` with
+`ctx.log(message)`. `onFinish` runs for every job, even one cancelled before it
+started. `onStart` runs only for a job that starts.
 
-They do nothing by default, so you override only those you need. An observer
-that also answers for errors mixes in `JobAnswerer`, which adds a fifth hook,
-`onUnanswered`: the subject of [Answering for errors](#answering-for-errors)
-below. A class that already extends another class mixes the observer in with
-`with JobObserver`, or `with JobObserver, JobAnswerer`, and overrides the hooks
-it needs the same way. Whoever runs the job passes the observer when creating
-it; the children it runs inherit it unless they have their own, and a
-continuation made with `then` takes only the observer passed to `then`. If one
-of the observer's hooks throws, its error goes to the current zone and nothing
-else changes: the job ends as it would have, and the observer's other hooks are
-still called. A `Cancelled` thrown by a hook neither reaches the zone nor
-cancels the job. A hook that has to cancel the job calls `job.cancel()`, and
-the job is cancelled as it would be from anywhere else.
+The hooks do nothing by default, so an observer overrides only the hooks it
+needs. An observer that also answers for errors mixes in `JobAnswerer`, which
+adds a fifth hook, `onUnanswered`; see
+[Answering for errors](#answering-for-errors) below. A class that already
+extends another class mixes the observer in with `with JobObserver`, or
+`with JobObserver, JobAnswerer`, and overrides the hooks the same way.
 
-A job can be given a `key` and a `describe` callback when it is created. Its
-string representation is `Job($key)`, or `Job($key: $description)` when
-`describe` returns a description that is not empty, or `Job($description)` when
-there is no key, or `Job()` when there is neither. Use `key` to identify the
-job in logs or in a library's scheduling rules, such as `solo` queue policies;
-`describe` adds details to that representation. A `key` whose `toString`
-throws, or a `describe` that throws, is printed as a mark in its place:
-`Job(load: <describe threw StateError>)`. The core names a job in its own error
-messages, and a broken name does not take the message's place. The error itself
-is reported where the core names a job on a channel of its own: in a parent's
-cancellation, as the table below says, and on a line of the debug channel, to
+Whoever runs the job passes the observer when creating it. The children the job
+runs inherit it unless they have their own. A continuation made with `then`
+takes only the observer passed to `then`.
+
+If a hook throws, its error goes to the current zone, and nothing else changes:
+the job ends as it would have, and the other hooks are still called. A
+`Cancelled` thrown by a hook does not reach the zone and does not cancel the
+job. To cancel the job from a hook, call `job.cancel()`; the job is cancelled
+as it would be from anywhere else.
+
+When you create a job, you can give it a `key` and a `describe` callback. A
+job's string form is:
+
+- `Job($key)` with a key;
+- `Job($key: $description)` with a key and a `describe` that returns a
+  description that is not empty;
+- `Job($description)` with such a description and no key;
+- `Job()` with neither.
+
+Use `key` to identify the job in logs or in the scheduling rules of a library,
+such as the queue policies of `solo`. `describe` adds details to it.
+
+A `key` whose `toString` throws, or a `describe` that throws, prints as a mark
+in its place: `Job(load: <describe threw StateError>)`. The core names jobs in
+its own error messages, and a broken name does not replace the message. The
+error of the name itself is still reported, in two places. When the core names
+a child in its parent's cancellation, the error goes as row 5 of the table
+below says. When a line of the debug channel names the job, the error goes to
 the zone.
 
-A cancelled job is expected to end soon, and one that goes on is busy with work
-the user has already given up on. An observer finds such jobs by timing how
-long each one runs past its cancellation:
+A cancelled job should end soon. One that goes on is busy with work the user
+has already given up on. An observer finds such jobs by timing how long each
+one runs past its cancellation:
 
 ```dart
 final class SlowCancellations extends JobObserver {
@@ -100,21 +113,24 @@ final class SlowCancellations extends JobObserver {
 ```
 
 `Job.whenCancelled`, registered in `onStart`, fires when the job accepts a
-cancellation, and `onFinish` when the outcome arrives; the time between them is
-how long the job ran past its cancellation, children and cleanup included. A
-body waiting on something slow with a bare `await` adds the rest of that wait
-to the count, where the same call through `ctx.abandonable` shows 0 ms. The
-count starts at acceptance, not at `cancel()`: a cancellation held back by
-`ctx.uncancellable` is accepted when the section ends, so a 100 ms section
-cancelled 10 ms in shows 0 ms, while the caller of `cancel` waited 90 ms. A
-body that gives itself up, throwing `Cancelled` or letting a child's
-cancellation out, accepts the cancellation as it throws, and the count starts
-there.
+cancellation. `onFinish` runs when the outcome arrives. The time between them
+is how long the job ran past its cancellation, children and cleanup included.
+Three things decide the count:
+
+- A body that waits on something slow with a bare `await` adds the rest of that
+  wait to the count. The same call through `ctx.abandonable` shows 0 ms.
+- The count starts when the job accepts the cancellation, not at `cancel()`.
+  `ctx.uncancellable` holds a cancellation back, and the job accepts it when
+  the section ends: a 100 ms section cancelled 10 ms in shows 0 ms, while the
+  caller of `cancel` waited 90 ms.
+- A body that gives itself up, by throwing `Cancelled` or by letting a child's
+  cancellation out, accepts the cancellation as it throws, and the count starts
+  there.
 
 ## A message for the log
 
-A body migrates the database and, when the migration fails, logs the `error` it
-caught. Someone debugging the app gives the job an observer; a release build
+A body migrates the database. When the migration fails, it logs the `error` it
+caught. Someone debugging the app gives the job an observer. A release build
 gives it none, and there the message should cost nothing.
 
 ### The first attempt
@@ -126,8 +142,8 @@ gives it none, and there the message should cost nothing.
 ctx.log('migration failed: $error');
 ```
 
-Without an observer `ctx.log` does nothing, yet the string is already built:
-Dart evaluates the argument before the call, and `error.toString()` runs for
+Without an observer, `ctx.log` does nothing, but the string is already built:
+Dart evaluates the argument before the call, so `error.toString()` runs for
 nobody.
 
 ### Formatting left to the observer
@@ -136,23 +152,23 @@ nobody.
 ctx.log(() => 'migration failed: $error');
 ```
 
-A callback defers building the message itself. `ctx.log` passes it through
+A callback puts off building the message. `ctx.log` passes the callback on
 unchanged, like any other object, so without an observer nothing is built. With
-one, building it is the observer's convention: the `Log` above calls a callback
-and prints what it returns, and an observer that prints the message as it came
-prints the closure itself. Passing `error` alone leaves the formatting to the
-observer too, and needs no convention.
+an observer, calling the callback is that observer's convention: the `Log`
+above calls a callback and prints what it returns, while an observer that
+prints each message as it came would print the closure itself. Passing `error`
+alone also leaves the formatting to the observer, and needs no convention.
 
 ## Where errors go
 
 The app reports every error that reaches its zone uncaught. A job opens the
-database, the user cancels while it opens, and then the open fails: the
+database. The user cancels while it opens, and then the open fails: the
 database is locked.
 
 ### The first attempt
 
-Dart sends an error nobody caught to the zone, so the app counts on the zone
-and gives the job no observer:
+Dart sends an error that nobody caught to the zone, so the app relies on the
+zone and gives the job no observer:
 
 ```dart
 // The first attempt: the zone never hears that the open failed.
@@ -170,19 +186,23 @@ outcome: Cancelled(manual)
 ```
 
 Nothing reaches the zone, and the app never learns that the open failed: the
-job itself caught the error. The job accepted the cancellation while the
-database was opening, so it ends `Cancelled` whatever the open does. `join`
-then throws the open's own error, and the body fails with it on a job that is
-already cancelled. That error is not the outcome, and the job hands it to the
-`onError` of its observer and no further: neither `onUnanswered` nor the zone
-gets it. The job keeps it from the zone because it cannot tell what the error
-is. Here it is a real failure: the database is locked. Most often, though, an
-error thrown after a cancellation is the operation stopping at the job's token:
-the migration in
+job itself caught the error. This is what happens:
+
+1. The job accepts the cancellation while the database is opening. From then on
+   it will end `Cancelled`, whatever the open does.
+2. The open fails, and `join` throws the open's error. The body fails with that
+   error on a job that is already cancelled.
+3. That error is not the outcome. The job hands it to the `onError` of its
+   observer and no further: neither `onUnanswered` nor the zone gets it.
+
+The job keeps such an error from the zone because it cannot tell what the error
+is. Here it is a real failure: the database is locked. But most often an error
+thrown after a cancellation is the operation stopping at the job's token. The
+migration in
 [A token through `onCancel`](cancellation.md#a-token-through-oncancel) on the
 cancellation page throws `DatabaseStopped` that way, and in the zone every such
-cancellation would show up as a failure. So without an observer neither the
-failure nor the stop is heard.
+stop would look like a failure. So without an observer, neither the failure nor
+the stop is heard.
 
 ### An observer
 
@@ -208,50 +228,73 @@ onError: Bad state: database locked
 outcome: Cancelled(manual)
 ```
 
-An observer hears through `onError` the errors its job catches, all but its own
-cancellation, and only hears them: overriding `onError` moves no error
-anywhere. The outcome counts as observed when somebody reads `done` or `value`,
-continues the job with `then` or calls `ignoreFailure()`, as
+An observer hears through `onError` the errors its job catches, except its own
+cancellation. It only hears them: overriding `onError` moves no error anywhere.
+
+The outcome counts as observed when somebody reads `done` or `value`, continues
+the job with `then`, or calls `ignoreFailure()`; see
 [A failure nobody waits for](outcomes.md#a-failure-nobody-waits-for) on the
-outcomes page shows; the observer's hooks do not observe it, even a hook that
-reads `job.outcome`, as the `onFinish` of `Log` above does. Where each error
-goes, with an observer and without, the zone being the one the job was created
-in:
+outcomes page. The observer's hooks do not observe the outcome, even a hook
+that reads `job.outcome`, as the `onFinish` of `Log` above does.
+
+The table shows where each error goes, with an observer and without one. "The
+zone" is the zone the job was created in. "The answer" is `onUnanswered` if the
+observer answers for errors, and the zone if it does not.
 
 | The error | With an observer | Without one |
 | --- | --- | --- |
-| The body's, and the job ends `Failed` with it | `onError`, and the zone if nobody observed the outcome | The zone if nobody observed the outcome |
-| The body's, and the job accepts a cancellation after it: one that arrives before the error leaves the body, one that arrives after the error has left it, while the job waits for its children or runs its cleanup, or one `ctx.uncancellable` held while its step failed | `onError`, then `onUnanswered` if the observer answers, the zone otherwise | The zone |
-| The body's, and it happened after the job accepted a cancellation | `onError` | Nobody |
-| The body's, in a branch of `ctx.runAll` whose group throws another failure | `onError`, then `onUnanswered` if the observer answers, the zone otherwise | The zone |
-| Outside the body: a late error of an action abandoned by `ctx.abandonable`, cleanup, a callback of `ctx.onCancel` or `job.whenCancelled`, work of `ctx.unattended`, the `toString` of a child's `key`, its `describe` or its `Cancelled` when the core names the child in the parent's cancellation | `onError`, then `onUnanswered` if the observer answers, the zone otherwise | The zone |
-| A `Cancelled` thrown outside the body | `onError` | Nobody |
-| The job's own cancellation, out of an action abandoned by `ctx.abandonable` or work of `ctx.unattended` | Nobody | Nobody |
-| What a context call the body did not await throws, the job's own cancellation included, and for `ctx.abandonable` only until the body ends | The zone the body runs in, as with any future nobody awaits | The zone the body runs in |
+| 1. The body's, and the job ends `Failed` with it | `onError`, and the zone if nobody observed the outcome | The zone if nobody observed the outcome |
+| 2. The body's, and it came before a cancellation the job accepted | `onError`, then the answer | The zone |
+| 3. The body's, and it came after a cancellation the job accepted | `onError` | Nobody |
+| 4. The body's, in a branch of `ctx.runAll` whose group throws another failure | `onError`, then the answer | The zone |
+| 5. From outside the body, in the places listed below | `onError`, then the answer | The zone |
+| 6. A `Cancelled` thrown outside the body | `onError` | Nobody |
+| 7. The job's own cancellation, out of an action `ctx.abandonable` stopped waiting for or out of work of `ctx.unattended` | Nobody | Nobody |
+| 8. From a context call the body did not await (see below) | The zone the body runs in | The zone the body runs in |
 
-Of a failure and a cancellation, the one the job learned of first came first.
-The job learns of a failure the moment it happens when it is the failure of an
-operation behind `ctx.abandonable` or `ctx.join`, of a callback of `ctx.each`,
-of a child or of a step of `ctx.uncancellable`. Such a failure does not leave
-the body at once: that takes a few microtasks, or a child's whole cleanup. If
-the job accepts a cancellation in between, the order is: the failure happens,
-the job accepts the cancellation, the body throws the failure. The job ends
-`Cancelled`, but the failure came before the cancellation, and it takes the
-second row of the table, not the third. The body keeps the failure first by
-letting it through, or by catching it and throwing it again later; a new error
-thrown in its place comes after the cancellation, even one that carries the
-caught failure inside it. The one exception is a `ParallelWaitError`, such as
-the one `.wait` throws: the job reads what is inside it. Under
-`[ctx.run(a), ctx.run(b)].wait` a failure of `a` leaves the body only once `b`
-has ended as well, and if the job accepts a cancellation in between, the
-envelope comes after it. Each failure inside it that the job learned of first
-still takes the second row; the rest of it takes the third. A future the body
-awaits on its own is different: the job learns of its failure only when the
-body throws it, so that failure comes first if the body throws it before the
-cancellation.
+Rows 2, 5 and 8 cover only these cases:
 
-A body that catches the failed open and shows it to the user before throwing it
-again; its own cancellation it lets through unshown:
+- Row 2: the cancellation arrives before the error leaves the body; or after it
+  has left, while the job waits for its children or runs its cleanup; or
+  `ctx.uncancellable` held the cancellation while its step failed.
+- Row 5: a late error of an action `ctx.abandonable` stopped waiting for;
+  cleanup; a callback of `ctx.onCancel` or `job.whenCancelled`; work of
+  `ctx.unattended`; the `toString` of a child's `key`, its `describe` or its
+  `Cancelled` when the core names the child in the parent's cancellation.
+- Row 8: the error goes to the zone the body runs in, as with any future nobody
+  awaits. This includes the job's own cancellation. For `ctx.abandonable`, it
+  holds only until the body ends.
+
+Rows 2 and 3 depend on which came first, the failure or the cancellation: the
+one the job learned of first came first. The job learns of a failure the moment
+it happens when the failure comes from an operation behind `ctx.abandonable` or
+`ctx.join`, from a callback of `ctx.each`, from a child or from a step of
+`ctx.uncancellable`. Such a failure does not leave the body at once: that takes
+a few microtasks, or a child's whole cleanup. If the job accepts a cancellation
+in between, the order is:
+
+1. the failure happens;
+2. the job accepts the cancellation;
+3. the body throws the failure.
+
+The job ends `Cancelled`, but the failure came first, so it takes row 2, not
+row 3. The body keeps the failure first by letting it through, or by catching
+it and throwing it again later. A new error thrown in its place comes after the
+cancellation, even one that carries the caught failure inside it.
+
+The one exception is a `ParallelWaitError`, such as the one `.wait` throws: the
+job reads what is inside it. Under `[ctx.run(a), ctx.run(b)].wait`, a failure
+of `a` leaves the body only once `b` has ended too. If the job accepts a
+cancellation in between, the envelope comes after it. Each failure inside it
+that the job learned of first still takes row 2. The rest of the envelope takes
+row 3.
+
+A future the body awaits on its own is different. The job learns of its failure
+only when the body throws it, so that failure comes first if the body throws it
+before the cancellation.
+
+This body catches the failed open, shows it to the user and throws it again. It
+lets its own cancellation through without showing it:
 
 ```dart
 final job = Job<Database>(
@@ -279,10 +322,10 @@ zone: Bad state: database locked
 outcome: Cancelled(manual)
 ```
 
-The failure came before the cancellation, so it must not be lost. That is the
-second row of the table, and so the zone hears it, though the job ends
-`Cancelled`. If the user cancels at 10 ms, before the open fails, the same
-failure takes the third row, and only the observer hears it:
+The failure came before the cancellation, so it must not be lost. That is row 2
+of the table, and the zone hears it, though the job ends `Cancelled`. If the
+user cancels at 10 ms, before the open fails, the same failure takes row 3, and
+only the observer hears it:
 
 ```text
 cancel
@@ -291,56 +334,58 @@ outcome: Cancelled(manual)
 ```
 
 A step of `ctx.uncancellable` and the same step behind `ctx.join` land in
-different rows. The section holds a cancellation that arrives while the step
-runs, and the job accepts it when the section closes, on the way out of the
-failure: the failure came first and reaches the zone even without an observer.
-`join` lets the job accept the cancellation as it arrives, so the step's
+different rows. `ctx.uncancellable` holds a cancellation that arrives while the
+step runs, and the job accepts it when the section closes with the failure. So
+the failure came first, and it reaches the zone even without an observer.
+`join` lets the job accept the cancellation when it arrives, so the step's
 failure comes after it, and without an observer nobody hears it.
 
-A context call the body did not await throws into a future nobody awaits, and
-Dart hands that to the zone the body runs in: for a job made with
-`Job.deferred`, the zone it was started from. The job's own cancellation goes
-there too: when the job is cancelled, `ctx.abandonable` called without `await`
-throws `Cancelled` into its future, and Dart hands it to the zone like any
-other error. It is Dart that sends this cancellation to the zone, not the job.
-For `ctx.abandonable`, all of this holds only while the body runs. If its
-action fails once the body has ended, the error takes the fifth row of the
-table, like that of an action `ctx.abandonable` stopped waiting for on a
-cancellation: `onError` hears it, and then it goes where the other errors
-outside the body go.
+A context call the body did not await throws into a future that nobody awaits.
+Dart hands that error to the zone the body runs in; for a job made with
+`Job.deferred`, that is the zone it was started from. The job's own
+cancellation goes there too: when the job is cancelled, `ctx.abandonable`
+called without `await` throws `Cancelled` into its future, and Dart hands it to
+the zone like any other error. It is Dart that sends this cancellation to the
+zone, not the job.
 
-An error can reach `onError` and the zone both, and an app that reports in both
-places hears it twice. The table shows the way each error takes to the zone:
-when nobody observed the outcome, or when nobody answers or `onUnanswered`
-sends it on. Observing the outcome closes the first way. An observer that
-answers (`with JobAnswerer`) closes the second.
+For `ctx.abandonable` called without `await`, this holds only while the body
+runs. If its action fails after the body has ended, the error takes row 5 of
+the table, like the error of an action `ctx.abandonable` stopped waiting for on
+a cancellation: `onError` hears it, and then it goes where the other errors
+from outside the body go.
 
-A failure of a body the outcome does not carry goes to `onUnanswered` or the
-zone even when the outcome is observed. The table has two: the job failed and
-then accepted a cancellation, so the outcome carries the cancellation; or a
-branch of `ctx.runAll` failed and its group threw another error.
-`ignoreFailure()` on the job whose body failed lets such a failure go:
-`onError` still hears it, and it reaches neither `onUnanswered` nor the zone.
+An error can reach both `onError` and the zone, and an app that reports in both
+places hears it twice. The table shows two ways to the zone. The first: nobody
+observed the outcome. The second: nobody answers for the error, or
+`onUnanswered` sends it on. Observing the outcome closes the first way. An
+observer that answers (`with JobAnswerer`) closes the second.
 
-While debugging, the errors a job hands to its observer can be seen with no
-observer written for them: the debug channel shows them. Besides the start, the
-cancellation and the end of every job, `Job.debug = print;` prints each such
-error, whether the job has an observer or not, and says so when one goes on to
-the zone. A `ParallelWaitError` takes one line, whole, where `onError` hears
-each failure inside it. For the first attempt above it prints
-`Job() error: Bad state: database locked` after the cancellation and before the
-end, and nothing about the zone: the error went no further. The channel is one
-for all the jobs of the app and speaks to whoever reads the console; what the
-app has to act on, it hears through an observer.
+Two kinds of body failure are not carried by the outcome, and they go to
+`onUnanswered` or the zone even when the outcome is observed: the job failed
+and then accepted a cancellation, so the outcome carries the cancellation (row
+2); or a branch of `ctx.runAll` failed and its group threw another error (row
+4). `ignoreFailure()` on the job whose body failed lets such a failure go:
+`onError` still hears it, but it reaches neither `onUnanswered` nor the zone.
+
+While debugging, you can see the errors a job hands to its observer without
+writing an observer: the debug channel shows them. `Job.debug = print;` prints
+the start, the cancellation and the end of every job. It also prints each such
+error, whether the job has an observer or not, and says so when the error goes
+on to the zone. A `ParallelWaitError` takes one line, whole, where `onError`
+hears each failure inside it on its own. For the first attempt above, the
+channel prints `Job() error: Bad state: database locked` after the cancellation
+and before the end, and nothing about the zone: the error went no further. The
+channel is one for all the jobs of the app and speaks to whoever reads the
+console. The app hears what it has to act on through an observer.
 
 ## Work the job does not wait for
 
-A job sends an analytics event and does not wait for it, and the sending fails:
+A job sends an analytics event and does not wait for it. The sending fails:
 analytics is offline. The job has the `Reporter` from the section above.
 
 ### The first attempt
 
-Dart's `unawaited` marks a future left on purpose:
+Dart's `unawaited` marks a future that is left unawaited on purpose:
 
 ```dart
 // The first attempt: the error goes to the zone, not to the job.
@@ -353,7 +398,7 @@ zone: Bad state: analytics offline
 ```
 
 The observer hears nothing, and nothing ties the error to the job. A future
-nobody awaits hands its error to the zone as an uncaught one; `unawaited` only
+that nobody awaits hands its error to the zone as uncaught. `unawaited` only
 tells the analyzer that not waiting is on purpose.
 
 ### Work handed to the job
@@ -368,27 +413,30 @@ onError: Bad state: analytics offline
 zone: Bad state: analytics offline
 ```
 
-`ctx.unattended(action)` keeps the work's errors with the job, including errors
-after the job finishes: its observer hears them, and they go on to the zone the
-job was created in unless the observer answers for them. Without an observer
-they go straight there. The job does not wait for the work and does not cancel
-it.
+`ctx.unattended(action)` keeps the errors of the work with the job, including
+errors that come after the job finishes. The observer hears them, and then they
+go on to the zone the job was created in, unless the observer answers for them.
+Without an observer they go straight there. The job does not wait for the work
+and does not cancel it.
 
-Start the work inside the callback and take nothing out of it: the work runs in
-an error zone of its own, and the boundary holds both ways. A future made
-outside and awaited in there never comes back if it fails, and its error goes
-to the zone it was made in. A future made in there and awaited outside hangs
-whoever awaits it if it fails; awaited by the body, it hangs the job. A job
-started inside the callback is outside the boundary: its body runs in the zone
-the work was started from.
+Start the work inside the callback, and take nothing out of it. The work runs
+in an error zone of its own, and the boundary holds both ways:
+
+- A future made outside and awaited inside never comes back if it fails, and
+  its error goes to the zone it was made in.
+- A future made inside and awaited outside hangs whoever awaits it if it fails.
+  If the body awaits it, the job hangs.
+
+A job started inside the callback is outside the boundary: its body runs in the
+zone the work was started from.
 
 ## Answering for errors
 
-The errors no outcome carries go on from `onError` to an answer. An observer
-written to watch, like `Reporter`, gives none, and they go where they go
-without an observer: to the zone. So watching changes nowhere an error goes. An
-observer that answers for these errors itself mixes in `JobAnswerer` and
-overrides its `onUnanswered`:
+The errors that no outcome carries go on from `onError` to an answer. An
+observer written only to watch, like `Reporter`, gives no answer, so these
+errors go where they would go without an observer: to the zone. Watching alone
+does not change where an error goes. An observer that answers for these errors
+itself mixes in `JobAnswerer` and overrides `onUnanswered`:
 
 ```dart
 final class Answering extends JobObserver with JobAnswerer {
@@ -398,11 +446,11 @@ final class Answering extends JobObserver with JobAnswerer {
 }
 ```
 
-The errors stop there and do not reach the zone. The default implementation of
-`onUnanswered` sends them to the zone the job was created in, as happens
-without an answer. So calling `super.onUnanswered(job, error, stackTrace)`
-sends one on to the zone as well. An observer that answers only for the
-database errors it knows hands the rest to `super`:
+The errors stop there and do not reach the zone. The default `onUnanswered`
+sends them to the zone the job was created in, as happens without an answer. So
+calling `super.onUnanswered(job, error, stackTrace)` sends an error on to the
+zone as well. An observer that answers only for the database errors it knows
+hands the rest to `super`:
 
 ```dart
 final class DatabaseErrors extends JobObserver with JobAnswerer {
@@ -417,10 +465,10 @@ final class DatabaseErrors extends JobObserver with JobAnswerer {
 }
 ```
 
-The job hands `ctx.unattended` two operations waited for together: `saveDraft`
-fails with a `DatabaseException`, and `sendAnalytics` with a `StateError`.
-`[saveDraft(), sendAnalytics()].wait` throws a `ParallelWaitError` holding both
-failures:
+The job hands `ctx.unattended` two operations awaited together. `saveDraft`
+fails with a `DatabaseException`, and `sendAnalytics` fails with a
+`StateError`. `[saveDraft(), sendAnalytics()].wait` throws a
+`ParallelWaitError` that holds both failures:
 
 ```dart
 final job = Job<void>(
@@ -438,16 +486,16 @@ zone: Bad state: analytics offline
 ```
 
 `onUnanswered` is asked about one failure at a time. The job walks a
-`ParallelWaitError` and asks about each failure inside it, with the stack trace
-of that failure: the observer answers for the database error, and the zone
-hears the analytics error on its own. An uncaught `Cancelled` is not a failure,
-and nobody is asked about it, whether it comes alone or inside a
+`ParallelWaitError` and asks about each failure inside it, with that failure's
+stack trace. So the observer answers for the database error, and the zone hears
+the analytics error on its own. An uncaught `Cancelled` is not a failure, and
+nobody is asked about it, whether it comes alone or inside a
 `ParallelWaitError`.
 
-`onError` hears them one at a time as well, and a `Cancelled` inside a
+`onError` also hears them one at a time, and hears a `Cancelled` inside a
 `ParallelWaitError` in a call of its own. The outcome keeps the error as it was
 thrown: a body that fails with a `ParallelWaitError` ends `Failed` with that
-error, and `Job.visitErrors` is the same walk for whoever reads the outcome:
+error. `Job.visitErrors` does the same walk for whoever reads the outcome:
 
 ```dart
 final outcome = await job.done;
@@ -460,17 +508,17 @@ if (outcome case Failed(:final error, :final stackTrace)) {
 }
 ```
 
-The override answers for the job that got the observer and for the children
-that inherit it, at any depth. The app answers for every job at once in its
-zone, where it already reports what nobody caught: the default implementation
-brings these errors there. The zone gets the error and its stack trace but not
-the job, so a report that names the job takes an override.
+The override answers for the job that got the observer, and for the children
+that inherit it, at any depth. To answer for every job at once, the app uses
+its zone, where it already reports what nobody caught: the default
+implementation brings these errors there. The zone gets the error and its stack
+trace but not the job, so a report that names the job needs an override.
 
 ## Several observers
 
-The app hands what nobody answered for to its crash reporter, and the job from
+The app sends whatever nobody answered for to its crash reporter. The job from
 [Work the job does not wait for](#work-the-job-does-not-wait-for) keeps its
-`Reporter`. `Crashes` answers:
+`Reporter` as well. `Crashes` is the observer that answers:
 
 ```dart
 final class Crashes extends JobObserver with JobAnswerer {
@@ -482,7 +530,7 @@ final class Crashes extends JobObserver with JobAnswerer {
 
 ### The first attempt
 
-`observer:` takes one `JobObserver`, so a class hands its hooks on to both and
+`observer:` takes one `JobObserver`, so a class hands its hooks on to both, and
 its answer to `Crashes`:
 
 ```dart
@@ -511,10 +559,10 @@ onError: Bad state: analytics offline
 onUnanswered: Bad state: analytics offline
 ```
 
-It works: `Reporter` hears the error, and `Crashes` answers for it. Each hook
-is handed on by hand, though: five methods for two observers, and a third adds
-a line to each. To be complete, each call also needs a `try`/`catch`: otherwise
-an observer that throws switches off the ones after it.
+It works: `Reporter` hears the error, and `Crashes` answers for it. But each
+hook is handed on by hand: five methods for two observers, and a third observer
+adds a line to each. To be complete, each call also needs a `try`/`catch`;
+otherwise an observer that throws switches off the ones after it.
 
 ### Observers in one list
 
@@ -533,20 +581,20 @@ onError: Bad state: analytics offline
 onUnanswered: Bad state: analytics offline
 ```
 
-`JobObserver.all` hands every hook to each observer in the order of the list,
-each call on its own: one that throws does not switch off the next. The one
-that is a `JobAnswerer` watches in its place and answers for the list, once
-every observer has heard `onError`; with none, the errors go to the zone, as
-for an observer that does not answer. Two that answer, or the same observer
-twice, and `JobObserver.all` throws `ArgumentError`. An observer made by
-`JobObserver.all` can stand in the list of another, and answers there when one
-inside it does.
+`JobObserver.all` hands every hook to each observer, in the order of the list,
+each call on its own: an observer that throws does not switch off the next one.
+The observer that is a `JobAnswerer` watches at its place in the list too, and
+answers for the whole list once every observer has heard `onError`. With no
+`JobAnswerer` in the list, the errors go to the zone, as for an observer that
+does not answer. Two observers that answer, or the same observer twice, make
+`JobObserver.all` throw `ArgumentError`. An observer made by `JobObserver.all`
+can stand in the list of another, and answers there when one inside it does.
 
 ## Testing
 
 A test checks that cancelling a database open still closes the database once
-opening finishes. `package:fake_async` runs timers and microtasks on fake time,
-so the test waits for nothing in real time.
+the open finishes. `package:fake_async` runs timers and microtasks on fake
+time, so the test waits for nothing in real time.
 
 ### The first attempt
 
@@ -577,12 +625,12 @@ test('a cancelled open still closes what it opened', () {
 });
 ```
 
-The test passes, and it would pass with `expect(closed, 0)` as well: neither
-`expect` runs. Under `fakeAsync` time moves only when the test moves it. The
-callback returns at its first `await`, `fakeAsync` returns with it, and nothing
+The test passes, and it would pass with `expect(closed, 0)` too: neither
+`expect` runs. Under `fakeAsync`, time moves only when the test moves it. The
+callback returns at its first `await`, and `fakeAsync` returns with it. Nothing
 moves the time again, so the future of `cancel()` never completes. Written as
-`() => fakeAsync(...)`, the test waits for that future instead and fails on its
-timeout.
+`() => fakeAsync(...)`, the test would wait for that future instead and fail on
+its timeout.
 
 ### Time moved by the test
 
@@ -610,8 +658,8 @@ test('a cancelled open still closes what it opened', () {
 });
 ```
 
-Nothing inside `fakeAsync` awaits: the future of `cancel()` is ignored,
+Nothing inside `fakeAsync` awaits. The future of `cancel()` is ignored,
 `flushTimers()` runs the open to its end, and the checks see what happened.
-`flushMicrotasks()` is enough to start a job, since its body starts on a
-microtask. Operations scheduled through `Future(...)` or `Future.delayed(...)`
-use timers, so advance them with `flushTimers()` or `elapse(...)`.
+`flushMicrotasks()` is enough to start a job, since its body starts in a
+microtask. Operations scheduled with `Future(...)` or `Future.delayed(...)` use
+timers, so advance them with `flushTimers()` or `elapse(...)`.

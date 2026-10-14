@@ -1779,9 +1779,10 @@ void main() {
       // The line the page quotes, in the original and in the translation,
       // and nothing about the zone after it.
       final quoted = {
-        'doc/observing.md': r'first attempt\s+above it prints\s+`([^`]+)`',
+        'doc/observing.md':
+            r'first\s+attempt\s+above,\s+the\s+channel\s+prints\s+`([^`]+)`',
         '../../docs/ru/async_job/observing.md':
-            r'первой попытки выше он печатает\s+`([^`]+)`',
+            r'первой\s+попытки\s+выше\s+канал\s+печатает\s+`([^`]+)`',
       };
       for (final MapEntry(key: page, value: pattern) in quoted.entries) {
         if (!File(page).existsSync()) {
