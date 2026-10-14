@@ -80,6 +80,11 @@ With asserts on, an `AssertionError` reaches the zone when an engine ends two
 children of one job with one `Cancelled` instance. See
 [Not waiting for the checkpoint](doc/extending.md#not-waiting-for-the-checkpoint).
 
+A `Job<void>` whose body returns a job of `Job.deferred` that nobody has
+started, and a `then<void>` continuation whose callback does the same, end
+`Failed` with an `ArgumentError`, where `0.2.0` ended them `Done`. See
+[Chains](doc/children.md#chains).
+
 Several error messages are reworded: a test that matches them by text needs the
 new wording.
 

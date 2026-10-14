@@ -704,21 +704,46 @@ void main() {
       });
     });
 
+    test('a running job the callback returns is not waited for', () {
+      fakeAsync((async) {
+        final saving = Job<void>(
+          (ctx) => ctx.pause(const Duration(seconds: 1)),
+        );
+        final parsed = Job<int>((ctx) async => 21);
+        // The page says this compiles under `then<void>`.
+        final stored = parsed.then<void>((ctx, number) => saving);
+
+        async.elapse(const Duration(milliseconds: 1));
+
+        expect(stored.outcome, isA<Done<void>>());
+        expect(saving.isFinished, isFalse);
+        async.flushTimers();
+      });
+    });
+
     test(
-        'a job the callback returns is not waited for, and a deferred one '
-        'never starts', () {
+        'a deferred job the callback returns never starts, and the '
+        'continuation fails', () {
       fakeAsync((async) {
         var ran = false;
         final saving = Job.deferred<void>((ctx) async {
           ran = true;
         });
         final parsed = Job<int>((ctx) async => 21);
-        // The page says this compiles under `then<void>`.
         final stored = parsed.then<void>((ctx, number) => saving);
+        Outcome<void>? outcome;
+        stored.done.then((done) => outcome = done).ignore();
 
         async.flushTimers();
 
-        expect(stored.outcome, isA<Done<void>>());
+        expect(
+          outcome,
+          isA<Failed>().having(
+            (failed) => failed.error,
+            'error',
+            isA<ArgumentError>(),
+          ),
+        );
         expect(ran, isFalse);
         expect(saving.isFinished, isFalse);
         saving.cancel().ignore();

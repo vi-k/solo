@@ -601,9 +601,12 @@ later fails still needs its own error handling.
 
 The callback returns a value or a future, and the continuation waits for the
 future. A `Job` is not a future. A callback that returns one,
-`then<void>((ctx, number) => saving)`, compiles, and the continuation finishes
-`Done` at once without waiting for `saving`; a deferred `saving` is never even
-started. A continuation waits for a job it runs as its child:
+`then<void>((ctx, number) => saving)`, compiles, and the continuation does not
+wait for `saving`: it finishes `Done` at once, and a `saving` that starts by
+itself goes on alone. Nothing here starts a deferred `saving`, so there the
+continuation fails with an `ArgumentError` instead; that check is made for
+`void` only, because a wider type may hold a job as its value. A continuation
+waits for a job it runs as its child:
 
 ```dart
 final stored = parsed.then<void>((ctx, number) {

@@ -11,6 +11,9 @@ part 'observer.dart';
 part 'outcome.dart';
 part 'run_all.dart';
 
+/// `void` as a type to compare with: `T == void` does not parse.
+typedef _Void = void;
+
 /// A handle to a job: the outcome, the waiting and the cancellation.
 ///
 /// Not a [Future]: a method that starts a job may be called without an
@@ -33,6 +36,13 @@ abstract interface class Job<T> {
   /// A job made this way is a root and stays one: [JobContext.run] refuses
   /// it, its own start being already on the way. A child is made with
   /// [deferred].
+  ///
+  /// The job ends [Failed] with an [ArgumentError] when a body of
+  /// `Job<void>` returns a job of [deferred] that nobody has started: `void`
+  /// lets the analyzer take the handle, and nothing here starts the job or
+  /// waits for it. A body of a wider type keeps the job as its value, and
+  /// any other job a body returns is not waited for: run a child with
+  /// [JobContext.run].
   ///
   /// [observer] receives the hooks of this job, and a child inherits it
   /// unless given one of its own. What the body opens is released through
@@ -346,7 +356,9 @@ abstract interface class Job<T> {
   /// failure it cannot forward; observe the source separately if needed.
   /// Returned jobs are ordinary values, not automatically awaited: start and
   /// await deferred children with `await ctx.run(child)`. Keep the original
-  /// child separately when its handle is needed.
+  /// child separately when its handle is needed. A continuation of `void`
+  /// fails with an [ArgumentError] when its callback returns a job of
+  /// [Job.deferred] that nobody has started: nothing here starts it.
   ///
   /// ```dart
   /// final length = Job<String>((ctx) async => 'hello')
@@ -933,6 +945,14 @@ abstract class JobBase<T> implements Job<T> {
   /// core touches throws `NoSuchMethodError`. Asked here instead, it is
   /// refused as what it is, a job of no core.
   static final _builtOnCore = Expando<bool>('builtOnCore');
+
+  /// Whether the value of this job is `void`, and not just one that admits
+  /// `null`: a `Job<Object?>` may end with a handle on purpose.
+  bool get _isVoid => T == _Void;
+
+  /// Whether [value] is a job of [Job.deferred] that nobody has started.
+  static bool _neverStartedDeferredJob(Object? value) =>
+      value is _DeferredJob<Object?> && value.status == JobStatus.created;
 
   /// Says what went nowhere when the value of this job went to somebody.
   ///
@@ -2039,7 +2059,21 @@ abstract class JobBase<T> implements Job<T> {
           // otherwise.
           _throwWhatEndedTheBody();
         }
-        outcome = Done(await execute(ctx));
+        final value = await execute(ctx);
+        if (_isVoid && _neverStartedDeferredJob(value)) {
+          // `void` takes any value, so the analyzer lets a body hand back a
+          // deferred child it meant to run: nothing here starts it or waits for
+          // it, and unless somebody else does, the work in it is lost without a
+          // word. Only a deferred job is refused: one made by `Job(...)`, a
+          // continuation or a job an engine has queued is still `created` for a
+          // while, and starts without anyone telling it to. A wider type keeps
+          // the handle: there it may be the value.
+          throw ArgumentError(
+            '$this returned $value, a deferred job that never started; '
+            'run it with ctx.run or start it',
+          );
+        }
+        outcome = Done(value);
       } on Cancelled catch (cancelled, stackTrace) {
         outcome = gaveUp(cancelled, stackTrace);
       } on Object catch (error, stackTrace) {
