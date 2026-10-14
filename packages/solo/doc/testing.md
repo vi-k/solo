@@ -523,15 +523,15 @@ only when an error arrives. When none does it never runs, the test is green,
 and nothing has been said about the zone.
 
 The expectation in the body is no better off. A job reports to the zone it was
-created in, so the controller has to be built inside `runZonedGuarded`, and the
-expectation about its state comes inside with it. There it stops being an
-expectation: `expect` reports a failure by throwing `TestFailure`, and a throw
-from inside the zone belongs to the zone's handler, like any other error. With
-a state other than `Failure` the handler would be handed that `TestFailure`,
-compare it to `StateError`, find no match and report that on a line of the
-handler rather than the line the expectation was on; and the `await` would
-never return — the body's error went to the zone instead of into its future —
-so the test would end on a timeout.
+created in, so `load()`, the call that creates it, has to be made inside
+`runZonedGuarded`, and the expectation about the state comes inside with it.
+There it stops being an expectation: `expect` reports a failure by throwing
+`TestFailure`, and a throw from inside the zone belongs to the zone's handler,
+like any other error. With a state other than `Failure` the handler would be
+handed that `TestFailure`, compare it to `StateError`, find no match and report
+that on a line of the handler rather than the line the expectation was on; and
+the `await` would never return — the body's error went to the zone instead of
+into its future — so the test would end on a timeout.
 
 ### Collecting in the zone, asserting outside
 

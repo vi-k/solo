@@ -79,7 +79,7 @@ class _SaveButtonState extends State<SaveButton> {
   @override
   void didUpdateWidget(SaveButton oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.controller != oldWidget.controller) {
+    if (!identical(widget.controller, oldWidget.controller)) {
       canSave = _select();
     }
   }

@@ -54,6 +54,12 @@ abstract class SoloObserver {
   }
 
   /// A controller was created.
+  ///
+  /// Called from the constructor of [Solo], and so before the body of the
+  /// constructor of a subclass: a field initialized in its declaration or
+  /// in the initializer list is set, and one assigned in the body is not
+  /// yet: a nullable one reads `null`, and a `late` one without an
+  /// initializer throws when read.
   void onCreate(Solo<Object> solo) {}
 
   /// A job body is about to run.

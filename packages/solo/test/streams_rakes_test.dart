@@ -1023,6 +1023,33 @@ void main() {
         );
       });
 
+      test(
+          'a change a listener of the screen makes on the first write is heard',
+          () {
+        final errors = _zone((async) {
+          final session = SessionController(const Session(signedIn: true));
+          final screen = page.ScreenController(session);
+          var changed = false;
+          // The screen's listener hears the first write at once, and from
+          // in there it signs the session out.
+          screen
+            ..addListener(() {
+              if (!changed) {
+                changed = true;
+                session.signOutNow();
+              }
+            })
+            ..follow();
+          async.flushMicrotasks();
+          _see('${session.currentState}, ${screen.currentState}');
+          screen.close();
+          session.close();
+        });
+
+        expect(errors, isEmpty);
+        expect(_seen, ['Session(signedIn: false), Screen(signedIn: false)']);
+      });
+
       test('a change right before the job starts and right after is not lost',
           () {
         final errors = _zone((async) {

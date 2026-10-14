@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 /// A listener registered on a [Listenable], and the way to take it back.
@@ -25,6 +27,14 @@ final class SoloSubscription {
 
   var _cancelled = false;
 
+  /// The groups that hold this subscription. Cancelled on its own, it
+  /// leaves them at once rather than waiting to be swept out.
+  ///
+  /// Weakly: a group dropped without [SoloSubscriptions.cancel] would
+  /// otherwise live as long as any one of its members is kept, and hold
+  /// every other member with it.
+  final _groups = <WeakReference<SoloSubscriptions>>[];
+
   SoloSubscription._(this._listenable, this._listener);
 
   /// Whether [cancel] has been called.
@@ -43,6 +53,10 @@ final class SoloSubscription {
       return;
     }
     _cancelled = true;
+    for (final group in _groups) {
+      group.target?._subscriptions.remove(this);
+    }
+    _groups.clear();
     _listenable.removeListener(_listener);
   }
 }
@@ -71,7 +85,8 @@ final class SoloSubscription {
 /// }
 /// ```
 final class SoloSubscriptions {
-  final _subscriptions = <SoloSubscription>[];
+  /// In the order they came, and each one once.
+  final _subscriptions = <SoloSubscription>{};
 
   var _cancelled = false;
 
@@ -85,11 +100,7 @@ final class SoloSubscriptions {
   ///
   /// A cancelled one is not held, whether the group cancelled it or
   /// somebody cancelled that one alone.
-  int get length {
-    _forgetCancelled();
-
-    return _subscriptions.length;
-  }
+  int get length => _subscriptions.length;
 
   /// Takes [subscription] into the group.
   ///
@@ -104,21 +115,15 @@ final class SoloSubscriptions {
 
       return;
     }
-    _subscriptions.add(subscription);
-    // Takes out this one, if it was cancelled before it got here, and the
-    // members somebody cancelled one at a time: what is left is what the
-    // group would cancel.
-    _forgetCancelled();
+    // A cancelled subscription has nothing left for the group to do, and
+    // held on to, it keeps the listener and whatever the closure closed
+    // over alive — the leak this class exists to prevent, one object
+    // further along.
+    if (subscription.isCancelled || !_subscriptions.add(subscription)) {
+      return;
+    }
+    subscription._groups.add(WeakReference(this));
   }
-
-  /// Drops the members somebody cancelled one at a time.
-  ///
-  /// A cancelled subscription has nothing left for the group to do, and
-  /// held on to it keeps the listener and whatever the closure closed over
-  /// alive — the leak this class exists to prevent, one object further
-  /// along.
-  void _forgetCancelled() =>
-      _subscriptions.removeWhere((subscription) => subscription.isCancelled);
 
   /// Cancels every subscription in the group and empties it; calling it
   /// again does nothing.
@@ -126,7 +131,7 @@ final class SoloSubscriptions {
   /// One that cannot let go is no reason to walk away from the ones behind
   /// it, which are still listening — that is the leak this class exists to
   /// prevent. So every member is cancelled and every failure goes to
-  /// [FlutterError.reportError].
+  /// [FlutterError.reportError], or to the zone when the reporter throws.
   ///
   /// This never throws, whatever a member does. The place for the call is
   /// `State.dispose()`, and an exception out of `dispose()` stops the
@@ -140,23 +145,40 @@ final class SoloSubscriptions {
       return;
     }
     _cancelled = true;
-    for (final subscription in _subscriptions) {
+    // A copy, emptied out of the group first: `removeListener` is the
+    // source's code, and whatever it does to the group — reads [length],
+    // cancels another member — must not cut the walk short.
+    final members = _subscriptions.toList();
+    _subscriptions.clear();
+    for (final subscription in members) {
       try {
         subscription.cancel();
       } on Object catch (error, stackTrace) {
-        FlutterError.reportError(
-          FlutterErrorDetails(
-            exception: error,
-            stack: stackTrace,
-            library: 'flutter_solo',
-            context: ErrorDescription(
-              'while cancelling a $SoloSubscriptions',
-            ),
-          ),
-        );
+        _report(error, stackTrace);
       }
     }
-    _subscriptions.clear();
+  }
+
+  /// Reports a member's failure through [FlutterError].
+  ///
+  /// A reporter that throws does not take the member's failure with it,
+  /// nor the members behind it: both errors go to the zone, the member's
+  /// first, and the walk goes on.
+  void _report(Object error, StackTrace stackTrace) {
+    try {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'flutter_solo',
+          context: ErrorDescription('while cancelling a $SoloSubscriptions'),
+        ),
+      );
+    } on Object catch (reporterError, reporterStackTrace) {
+      Zone.current
+        ..handleUncaughtError(error, stackTrace)
+        ..handleUncaughtError(reporterError, reporterStackTrace);
+    }
   }
 }
 

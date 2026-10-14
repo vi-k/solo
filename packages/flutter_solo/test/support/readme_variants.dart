@@ -335,7 +335,7 @@ class _FollowingState extends State<Following> {
   @override
   void didUpdateWidget(Following oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.controller != oldWidget.controller) {
+    if (!identical(widget.controller, oldWidget.controller)) {
       _listening.cancel();
       if (widget.newGroup) {
         _listening = SoloSubscriptions();

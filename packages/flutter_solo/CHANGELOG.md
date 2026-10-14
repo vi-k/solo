@@ -8,7 +8,6 @@ and
 
 ### Breaking changes
 
-- **`ctx.wait` is renamed to `ctx.abandonable`** in `async_job`.
 - **`Job.ignore()` is renamed to `Job.ignoreFailure()`** in `async_job`.
 - **The state handlers of `run` and `job` are renamed in `solo`: `onError` to
   `ifFailed`, `onCancel` to `ifCancelled`.**
@@ -29,6 +28,11 @@ and
 - **The listeners are dropped when the engine finishes closing, right after the
   observer's `onClose` and the controller's own.** Write the last state
   synchronously, in the controller's `onClose`.
+
+### Deprecated
+
+- `ctx.wait` in `async_job` is deprecated in favour of `ctx.abandonable` and
+  goes away in the next release.
 
 ### Changes you will see on upgrade
 

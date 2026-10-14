@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_solo/flutter_solo.dart';
 import 'package:flutter_solo/listenable.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'support/reachability.dart';
 
 final class _Counter extends Solo<int> with SoloListenable {
   _Counter() : super(0);
@@ -17,6 +21,45 @@ final class _Stuck extends Solo<int> with SoloListenable {
   @override
   void removeListener(VoidCallback listener) =>
       throw StateError('this one does not let go');
+}
+
+/// A notifier that runs [onRemove] each time a listener is taken back:
+/// `removeListener` is the source's code, free to do anything there.
+final class _Watched extends ChangeNotifier {
+  _Watched(this.onRemove);
+
+  final void Function() onRemove;
+
+  bool get listened => hasListeners;
+
+  @override
+  void removeListener(VoidCallback listener) {
+    onRemove();
+    super.removeListener(listener);
+  }
+}
+
+/// A subscription made, put into [group] and cancelled on its own, in a
+/// frame of its own: a closure captures the variable, not the value, so a
+/// payload left in the test would be held by the test. The payload,
+/// weakly.
+WeakReference<Object> _cancelledAlone(SoloSubscriptions group) {
+  final payload = List<int>.filled(1024, 7);
+  ValueNotifier(0).listen(() => payload.length)
+    ..addTo(group)
+    ..cancel();
+  return WeakReference(payload);
+}
+
+/// A group of two dropped without being cancelled, in a frame of its own:
+/// one member comes back, the other closed over a payload. The kept member
+/// and the payload, weakly.
+(SoloSubscription, WeakReference<Object>) _droppedGroup() {
+  final payload = List<int>.filled(1024, 7);
+  final group = SoloSubscriptions();
+  final kept = ValueNotifier(0).listen(() {})..addTo(group);
+  ValueNotifier(0).listen(() => payload.length).addTo(group);
+  return (kept, WeakReference(payload));
 }
 
 /// Records its own `dispose`, so a frame that stopped halfway shows up as
@@ -177,6 +220,31 @@ void main() {
     expect(listening.length, 0);
   });
 
+  test('a member cancelled on its own is let go of at once', () async {
+    final listening = SoloSubscriptions();
+    final payload = _cancelledAlone(listening);
+
+    expect(
+      await collected(payload),
+      isTrue,
+      reason: 'held on to until the next add or read of length, it keeps '
+          'the listener and everything it closed over',
+    );
+    expect(listening.length, 0);
+  });
+
+  test('a member kept on its own does not keep its group', () async {
+    final (kept, payload) = _droppedGroup();
+
+    expect(
+      await collected(payload),
+      isTrue,
+      reason: 'the group was dropped; through it, one member would hold '
+          'every other and everything they closed over',
+    );
+    expect(kept.isCancelled, isFalse, reason: 'the member is kept to the end');
+  });
+
   test('a group takes no notice of a subscription already cancelled', () {
     final counter = _Counter();
     final listening = SoloSubscriptions();
@@ -223,6 +291,51 @@ void main() {
 
     counter.set(1);
     expect(calls, 0);
+  });
+
+  test('a source that reads or changes the group does not cut the walk short',
+      () {
+    final listening = SoloSubscriptions();
+    late final SoloSubscription last;
+    final lengths = <int>[];
+    final source = _Watched(() {
+      lengths.add(listening.length);
+      last.cancel();
+    });
+    addTearDown(source.dispose);
+    final members = [
+      for (var i = 0; i < 3; i++) source.listen(() {})..addTo(listening),
+    ];
+    last = members.last;
+
+    listening.cancel();
+
+    expect(members.map((member) => member.isCancelled), everyElement(isTrue));
+    expect(source.listened, isFalse, reason: 'every listener taken back');
+    expect(lengths, everyElement(0), reason: 'the group is empty by then');
+  });
+
+  test('a reporter that throws does not stop the walk', () {
+    final stuck = _Stuck();
+    final counter = _Counter();
+    final previous = FlutterError.onError;
+    FlutterError.onError = (details) => throw StateError('reporter');
+    addTearDown(() => FlutterError.onError = previous);
+    final listening = SoloSubscriptions();
+    stuck.listen(() {}).addTo(listening);
+    final last = counter.listen(() {})..addTo(listening);
+    final zone = <String>[];
+
+    runZonedGuarded(
+      listening.cancel,
+      (error, stackTrace) => zone.add('$error'),
+    );
+
+    expect(zone, [
+      'Bad state: this one does not let go',
+      'Bad state: reporter',
+    ]);
+    expect(last.isCancelled, isTrue, reason: 'the pass went on to the end');
   });
 
   testWidgets('a member that cannot let go does not stop the frame',

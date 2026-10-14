@@ -6,7 +6,6 @@ package's too: see
 
 ### Breaking changes
 
-- **`ctx.wait` is renamed to `ctx.abandonable`** in `async_job`.
 - **`Job.ignore()` is renamed to `Job.ignoreFailure()`** in `async_job`.
 - **The state handlers of `run` and `job` are renamed: `onError` to `ifFailed`,
   `onCancel` to `ifCancelled`.**
@@ -24,7 +23,8 @@ package's too: see
 - **`Solo.onError` is a notice, and the new `Solo.onUnanswered` answers for an
   error no outcome carries.** Setting `Solo.observer`, or overriding `onError`
   without calling `super`, no longer keeps such an error out of the zone: set
-  `Solo.unansweredHandler`, or override `onUnanswered`. See
+  `Solo.unansweredHandler`, a `SoloUnansweredHandler`, or override
+  `onUnanswered`. See
   [Answering for an error](doc/errors.md#answering-for-an-error).
 - **The state of a closed controller is final.** Once the engine has finished
   closing, `externalSetState` throws a `StateError`: the new `Solo.isFinished`
@@ -61,6 +61,11 @@ package's too: see
 - **`job`, `run`, `collect` and `accumulate` take `timeout`.** An override
   passes it on to `super`, or `run(timeout: ...)` loses its deadline without a
   word.
+
+### Deprecated
+
+- `ctx.wait` in `async_job` is deprecated in favour of `ctx.abandonable` and
+  goes away in the next release.
 
 ### Changes you will see on upgrade
 
@@ -110,7 +115,9 @@ different `runZonedGuarded`. See
   protected `hasListeners` and `onListenerError` beside them. See
   [Observing state](doc/state.md#observing-state).
 - `Solo.pending`: what is holding the controller, for a `close` that has not
-  come back. See
+  come back, or `null` when nothing does. It is a `SoloPending`, one of three:
+  a `SoloPendingJob` with its `SoloPhase`, a `SoloPendingQueue` or a
+  `SoloPendingStream`. See
   [What is holding the controller](doc/errors.md#what-is-holding-the-controller).
 - `AccumulationTiming.throttle` takes `startAtOnce`. With `startAtOnce: false`
   the interval is counted before the first group as well.
@@ -119,6 +126,8 @@ different `runZonedGuarded`. See
 
 ### Fixed
 
+- A state `canStart` writes while it answers is held to `W` and `keepWhile`:
+  the job started under it even when it no longer matched them.
 - `Policy.droppable` and `Solo.lastJobWhere` no longer hand back a job that is
   not going to do the work: `cancelAll()` and a fresh request a line later
   answered the second call with the handle the first had just cancelled.

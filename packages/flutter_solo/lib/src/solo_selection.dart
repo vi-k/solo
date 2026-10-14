@@ -16,11 +16,12 @@ import 'solo_selector.dart';
 /// to be cheap, and to answer the same for the same value of the source.
 /// That lets a subscribed selection pick once per change: the pick made to
 /// decide whether to notify is the one a listener reads back from [value].
-/// What the selection keeps besides is the last value it announced, and it
-/// keeps it to hold notifications back: listeners hear only a pick that
-/// `changed` calls changed — `!=` unless another answer is given — so a
-/// change of the source that leaves the pick alone reaches nobody here.
-/// With nobody listening the source is not subscribed to at all.
+/// What the selection keeps besides, while somebody listens, is the last
+/// value it announced, and it keeps it to hold notifications back:
+/// listeners hear only a pick that `changed` calls changed — `!=` unless
+/// another answer is given — so a change of the source that leaves the
+/// pick alone reaches nobody here. With nobody listening the source is not
+/// subscribed to at all, and nothing picked out of it is kept.
 ///
 /// ```dart
 /// class _ProfileState extends State<Profile> {
@@ -64,8 +65,9 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
   final _listeners = Listeners();
 
   /// The last value announced to the listeners, kept to tell a change
-  /// from a change of the source that left the pick alone.
-  late T _selected;
+  /// from a change of the source that left the pick alone. Let go of with
+  /// the last listener, like [_picked].
+  T? _selected;
   var _subscribing = false;
 
   /// The source value the last pick was made from, while the selection is
@@ -75,7 +77,14 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
   /// says so, and [value] picks every time; the field is cleared then only
   /// so an idle selection does not hold on to an old value of the source.
   Object? _pickedFrom = _none;
-  late T _picked;
+  T? _picked;
+
+  /// Moves on with every notification and with the loss of the last
+  /// listener. A notification put off to a microtask goes out only if it
+  /// has not moved since: otherwise the listeners have heard a newer pick
+  /// already, or they are the listeners of a later subscription, for whom
+  /// the source has not changed.
+  var _epoch = 0;
 
   /// Set when the source notifies while it is being subscribed to.
   var _heardWhileSubscribing = false;
@@ -117,7 +126,7 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
   T get value {
     final source = _source.value;
     if (!_listeners.isEmpty && identical(source, _pickedFrom)) {
-      return _picked;
+      return _picked as T;
     }
     return _pick(source);
   }
@@ -159,9 +168,12 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
         final after = _source.value;
         if (_heardWhileSubscribing || !identical(before, after)) {
           final next = _pick(after);
-          if (_changed(_selected, next)) {
+          if (_changed(_selected as T, next)) {
             _selected = next;
-            scheduleMicrotask(() => _listeners.notify(_report));
+            final epoch = ++_epoch;
+            scheduleMicrotask(() {
+              if (epoch == _epoch) _listeners.notify(_report);
+            });
           }
         }
       } on Object catch (_) {
@@ -170,7 +182,7 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
           _source.removeListener(_onSourceChanged);
         }
         _listeners.remove(listener);
-        _pickedFrom = _none;
+        _forget();
         rethrow;
       }
     }
@@ -184,7 +196,16 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
       return;
     }
     _source.removeListener(_onSourceChanged);
+    _epoch++;
+    _forget();
+  }
+
+  /// Lets go of what the selection kept for its listeners: an idle one
+  /// holds no value of the source, nor anything picked out of one.
+  void _forget() {
     _pickedFrom = _none;
+    _picked = null;
+    _selected = null;
   }
 
   /// Reports a listener's failure through [FlutterError], naming this
@@ -212,6 +233,11 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
   }
 
   void _onSourceChanged() {
+    // A source that walks a copy of its listeners may still call this one
+    // after the last listener here has left, and nothing is kept by then.
+    if (_listeners.isEmpty) {
+      return;
+    }
     if (_subscribing) {
       _heardWhileSubscribing = true;
       return;
@@ -222,7 +248,7 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
     final source = _source.value;
     _pickedFrom = _none;
     final next = _pick(source);
-    if (!_changed(_selected, next)) {
+    if (!_changed(_selected as T, next)) {
       return;
     }
     // Written before the listeners run: one of them is free to change the
@@ -231,6 +257,7 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
     // either — [value] reads the source rather than this, so a listener that
     // missed a notification is a rebuild missed, not a value stuck.
     _selected = next;
+    _epoch++;
     _listeners.notify(_report);
   }
 }

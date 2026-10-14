@@ -132,7 +132,10 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     if (canStart != null && !canStart(state)) {
       return 'canStart';
     }
-    return _rejectKeep(state);
+    // The keep rules against the state as it is now: `canStart` is the
+    // caller's code, and it may write the state while it answers. It is
+    // not asked again — it said yes, and whatever it did is done.
+    return _rejectKeep(_solo._state);
   }
 
   /// A rejection description if [state] fails the keep rules, else null.

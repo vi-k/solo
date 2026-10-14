@@ -37,8 +37,9 @@ print(job.outcome); // Cancelled(manual)
   из них никогда не пишут одно и то же состояние;
 - правила вместо флагов: задача объявляет, с какими состояниями работает и при
   каком условии живёт, и её отменяют, когда они перестают выполняться;
-- отмена, о которой может попросить вызывающий и мимо которой тело не пройдёт,
-  забыв проверку;
+- отмена, о которой может попросить вызывающий: её бросает следующая
+  контрольная точка контекста, а тело, которое до такой точки не дошло, всё
+  равно кончается `Cancelled` и состояния не пишет;
 - исход у каждой задачи, `Done`, `Failed` или `Cancelled`: его экрану и надо
   показать.
 
@@ -248,7 +249,7 @@ class _SaveButtonState extends State<SaveButton> {
   @override
   void didUpdateWidget(SaveButton oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.controller != oldWidget.controller) {
+    if (!identical(widget.controller, oldWidget.controller)) {
       canSave = _select();
     }
   }

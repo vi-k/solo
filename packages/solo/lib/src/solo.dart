@@ -250,12 +250,12 @@ abstract class Solo<S extends Object> {
   /// [add] or of whatever wakes the queue. Run as a child, it starts where
   /// [JobContext.run] starts it.
   ///
-  /// `canStart` is checked once, when the job is taken from the queue;
-  /// `keepWhile` is checked at start, on every state change while the job
-  /// runs, and on every read through the context. `cancellable: false`
-  /// turns down every cancellation that may be turned down — `cancel`,
-  /// `clear` without `force`, parent cancellation and `close` — but not a
-  /// state that stopped matching `W` or `keepWhile`.
+  /// `canStart` is checked once, when the job is taken from the queue or, run
+  /// as a child, when [JobContext.run] starts it; `keepWhile` is checked at
+  /// start, on every state change while the job runs, and on every read through
+  /// the context. `cancellable: false` turns down every cancellation that may
+  /// be turned down — `cancel`, `clear` without `force`, parent cancellation
+  /// and `close` — but not a state that stopped matching `W` or `keepWhile`.
   ///
   /// The flag is consulted only once the engine holds the job. One this
   /// method has made and nobody has added is cancelled like any other.
@@ -707,20 +707,26 @@ abstract class Solo<S extends Object> {
     bool Function(Job<Object?> job) test,
   ) {
     // A snapshot for the same reason as in `removeWhere`: the predicate is
-    // the caller's code, and it may touch the queue while it answers.
+    // the caller's code, and it may touch the queue while it answers. It
+    // may even cancel the job it is about to accept, so a job is asked
+    // after the answer, too, whether it is still going to do the work.
     for (final job in _queue._jobs.reversed.toList()) {
-      if (test(job)) {
+      if (test(job) && _goingOn(job)) {
         return job;
       }
     }
     final current = _current;
     return current != null &&
-            !current.isCancelled &&
-            !current.isFinished &&
-            test(current)
+            _goingOn(current) &&
+            test(current) &&
+            _goingOn(current)
         ? current
         : null;
   }
+
+  /// Whether [job] is still going to do its work: neither cancelled nor
+  /// finished.
+  static bool _goingOn(Job<Object?> job) => !job.isCancelled && !job.isFinished;
 
   /// Reflects state already changed by an external source, such as a
   /// device or socket. Re-evaluates the rules of running bodies and the

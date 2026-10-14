@@ -7,8 +7,11 @@
 > слово, и M5 исправлена; по M12 тело закреплено за зоной, где задачу
 > создали, и M12 исправлена, а удержание развилки, найденное ревью этой
 > правки, починено в ядре и в `solo`; по M16 правила спрашиваются и после
-> брошенного `publish`, и M16 исправлена. Остальное не исправлено и ждёт
-> его решений, вопросы — в конце записи.
+> брошенного `publish`, и M16 исправлена. 2026-10-14 он разрешил список
+> «без вопроса»: M7–M11, M13, M14, M17–M19, L3, L7–L10 и L12 исправлены,
+> готовую правку проверило ревью на Opus, итоги — в вердиктах; M6 и M15 этот
+> список отдаёт только отдельному слову владельца, их не трогали. Остальное
+> не исправлено и ждёт его решений, вопросы — в конце записи.
 > **Что это:** четыре независимых ревьюера — Astra и Sol 6.1 через Codex,
 > Fable и Opus через Claude Code, у каждого своя копия дерева — проверили код
 > и документацию `solo` и `flutter_solo` глазами пользователя pub.dev,
@@ -350,7 +353,13 @@ subscription generation: old=[], new=[1], sourceChangesAfterNew=0
 ```
 
 Вердикт: воспроизведено, Medium. Чинить: поколение подписки и версия
-уведомления; тест на оба промежутка.
+уведомления; тест на оба промежутка. Итог 2026-10-14: исправлено одним
+счётчиком `_epoch` вместо поколения подписки и версии уведомления: отложенное
+уведомление уходит, только если после него не было ни нового уведомления,
+ни потери последнего слушателя. Тесты в `solo_selection_test.dart`: «a
+notification put off while subscribing goes out once» и «a notification put off
+for one subscription skips the next». Ревью готовой правки на Opus: каждая
+из трёх мутаций счётчика краснеет.
 
 ### M8. Выборка без слушателей удерживает старый результат
 
@@ -364,7 +373,14 @@ idle selection: collected=false, read=1024, collectedAfterRead=false, collectedA
 ```
 
 Вердикт: воспроизведено `WeakReference`, Medium. Чинить: сбрасывать оба поля
-на нуле слушателей.
+на нуле слушателей. Итог 2026-10-14: исправлено: на нуле слушателей и на пути
+неудачной подписки `_forget()` сбрасывает `_pickedFrom`, `_picked`
+и `_selected`. Сторожа сборщиком: «a selection nobody listens to keeps nothing
+it picked» и, по ревью готовой правки на Opus, «a selection whose subscription
+failed keeps nothing it picked». То же ревью нашло, что сброшенное `_selected`
+роняло `TypeError` у источника, который обходит копию слушателей и зовёт уже
+снятого; теперь `_onSourceChanged` без слушателей ничего не делает, сторож — «a
+source that calls a listener already removed is let be».
 
 ### M9. Чтение `length` во время групповой отмены оставляет подписки активными
 
@@ -382,7 +398,9 @@ GROUP error=ConcurrentModificationError lastCancelled=false calls=1
 ```
 
 Вердикт: принято, Medium. Воспроизведено у обоих. Нарушает обещание «never
-throws». Чинить: обходить снимок.
+throws». Чинить: обходить снимок. Итог 2026-10-14: исправлено, как предложено:
+`cancel()` группы обходит снимок членов и сначала очищает группу. Тест «a
+source that reads or changes the group does not cut the walk short».
 
 ### M10. Бросающий `FlutterError.onError` прерывает групповую отмену
 
@@ -397,7 +415,10 @@ REPORTER error=Bad state: reporter lastCancelled=false
 ```
 
 Вердикт: принято, Medium. Воспроизведено у обоих. `SoloSelection._report` ту же
-границу уже защищает — сделать так же.
+границу уже защищает — сделать так же. Итог 2026-10-14: исправлено, как
+в `SoloSelection._report`: ошибка члена идёт в `FlutterError.reportError`,
+а если бросил и он, обе ошибки уходят в зону. Тест «a reporter that throws does
+not stop the walk».
 
 ### M11. Отдельно отменённая подписка держится в группе
 
@@ -413,7 +434,13 @@ RETENTION collectedBefore=false length=0 collectedAfter=true
 ```
 
 Вердикт: принято, Medium. Воспроизведено `WeakReference` у обоих. Чинить:
-убирать член при отдельной отмене; тест — сборщиком до чтения `length`.
+убирать член при отдельной отмене; тест — сборщиком до чтения `length`. Итог
+2026-10-14: исправлено: подписка помнит свои группы и при отдельной отмене
+сразу выходит из них; `add` не берёт отменённую подписку и дубликат. Тест
+сборщиком «a member cancelled on its own is let go of at once». Ревью готовой
+правки на Opus нашло, что ссылка подписки на группу держит группу, брошенную
+без `cancel()`, через любого сохранённого члена; подписка держит свои группы
+слабо, сторож — «a member kept on its own does not keep its group».
 
 ### M12. Зона тела корневой задачи — зона первого `_schedulePump`
 
@@ -502,7 +529,11 @@ FIND same=true outcome=Cancelled(manual)
 ```
 
 Вердикт: принято, Medium, край. Воспроизведено у обоих. Чинить: после `true`
-проверить, что кандидат ещё в очереди или жив.
+проверить, что кандидат ещё в очереди или жив. Итог 2026-10-14: исправлено, как
+предложено: после `true` предиката задача, и в очереди, и текущая, должна быть
+ещё не отменённой и не кончившейся. Тест в `queue_test.dart` «lastJobWhere does
+not answer with a job its predicate cancelled»; запись «Fixed» о `lastJobWhere`
+в `CHANGELOG.md` это уже покрывает.
 
 ### M14. `canStart`, синхронно записавший состояние, пускает задачу по старому состоянию
 
@@ -520,7 +551,13 @@ start-rule: state=Offline, actions=1, outcome=Done(null)
 Вердикт: воспроизведено, Medium, край: побочные действия в стартовом правиле
 законны — тесты пакета проверяют `cancelAll`, `close` и `cancel` оттуда.
 Чинить: перепроверять `W` и `keepWhile`, если ревизия состояния сменилась,
-не вызывая `canStart` второй раз.
+не вызывая `canStart` второй раз. Итог 2026-10-14: исправлено с отличием: `W`
+и `keepWhile` после `canStart` проверяются всегда, против состояния, каким оно
+стало, без сравнения ревизий; при неизменном состоянии ответ тот же,
+а `canStart` второй раз не зовётся. Тест «a state canStart writes is held to W
+and keepWhile» в `start_rules_test.dart`. Поведение вышло в 0.2.0, поэтому
+по ревью готовой правки на Opus — запись «Fixed» в `CHANGELOG.md` `solo`
+с переводом.
 
 ### M15. Две регистрации одного колбэка: отмена второй снимает первую
 
@@ -614,7 +651,11 @@ README replacement: identical=false, equals=true, sourceCanSave=false, buttonEna
 ```
 
 Вердикт: подтверждено строкой и зондом. Принято, Medium. Чинить:
-`!identical(...)`, с переводом.
+`!identical(...)`, с переводом. Итог 2026-10-14: исправлено: `!identical(...)`
+в README, переводе и support-файлах; сторож в `readme_rakes_test.dart` держит
+текст. Теста на поведение с двумя контроллерами, равными по `==`, нет: код
+README держит правило «код страницы — строки support-файла», а такого
+контроллера на странице нет.
 
 ### M18. README `flutter_solo` обещает отмену, которую тело не может пройти
 
@@ -632,7 +673,11 @@ bare await: followedAfterCancellation=true, outcome=Cancelled(manual)
 Вердикт: воспроизведено, Medium. Исход всё равно `Cancelled`, но строки после
 `await` выполняются — ровно то, от чего фраза обещает защиту. Требования
 к README ядра в handoff говорят то же: прямой `await` допустим, но сам отмену
-не проверяет. Чинить фразу, с переводом.
+не проверяет. Чинить фразу, с переводом. Итог 2026-10-14: исправлено: пункт
+говорит «the next checkpoint of the context throws it, and a body that never
+reaches one still ends `Cancelled` and writes no state», перевод вместе; слово
+«checkpoint» — по ревью готовой правки на Opus: `ctx.log` и `ctx.unattended`
+после отмены не бросают. Сторож в `readme_rakes_test.dart`.
 
 ### M19. Рецепт «Following another controller» теряет синхронное изменение источника
 
@@ -651,7 +696,11 @@ FOLLOW source=true screen=false
 
 Вердикт: воспроизведено зондом на коде поддержки страницы. Принято, Medium:
 рецепт обещает то, чего не держит. Чинить: подписка до публикации снимка или
-честная оговорка; сторож и перевод.
+честная оговорка; сторож и перевод. Итог 2026-10-14: исправлено подпиской
+до снимка: в `follow()` подписка `ctx.each` стоит до чтения `currentState`,
+на соседней строке без `await` между ними, и проза говорит почему; перевод
+вместе. Сторож «a change a listener of the screen makes on the first write is
+heard» в `streams_rakes_test.dart`; стаб получил синхронный `signOutNow()`.
 
 ### M20. Форма страниц: первые попытки без пометки и вступления о структуре
 
@@ -697,7 +746,8 @@ FOLLOW source=true screen=false
 `ifFailed` и `ifCancelled`.
 
 Вердикт: подтверждено, трое. `onError` теперь — отдельный хук, и путаница
-настоящая. Две замены.
+настоящая. Две замены. Итог 2026-10-14: исправлено: «`ifFailed` or
+`ifCancelled`».
 
 ### L4. README `flutter_solo` на 565 строк
 
@@ -736,7 +786,10 @@ zone errors: [LateInitializationError: Field 'name' has not been initialized.]
 ```
 
 Вердикт: воспроизведено. Порядок конструкторов Dart не изменить; сказать
-в dartdoc `onCreate`, когда он зовётся. Low.
+в dartdoc `onCreate`, когда он зовётся. Low. Итог 2026-10-14: исправлено:
+dartdoc `onCreate` говорит, что его зовёт конструктор `Solo` до тела
+конструктора подкласса, и что тогда видно в полях: поле, присвоенное в теле,
+ещё не задано, nullable читается `null`, а `late` без инициализатора бросает.
 
 ### L8. CHANGELOG `solo` не называет новые публичные типы
 
@@ -744,7 +797,9 @@ zone errors: [LateInitializationError: Field 'name' has not been initialized.]
 
 Вердикт: подтверждено grep — `SoloPhase`, `SoloPendingJob`, `SoloPendingQueue`,
 `SoloPendingStream`, `SoloUnansweredHandler` в CHANGELOG ни разу. Дописать
-в `Unreleased` с переводом.
+в `Unreleased` с переводом. Итог 2026-10-14: исправлено:
+`SoloUnansweredHandler` назван при `Solo.unansweredHandler`, `SoloPending`
+с тремя вариантами и `SoloPhase` — при `Solo.pending`; перевод вместе.
 
 ### L9. «Renamed» там, где ядро оставило `@Deprecated`
 
@@ -752,7 +807,10 @@ zone errors: [LateInitializationError: Field 'name' has not been initialized.]
 
 Вердикт: подтверждено, в CHANGELOG `solo` и `flutter_solo` то же «`ctx.wait` is
 renamed», что в CHANGELOG ядра — L11
-в `2026-10-12-async-job-project-review.md`. Чинить вместе.
+в `2026-10-12-async-job-project-review.md`. Чинить вместе. Итог 2026-10-14:
+исправлено вместе с L11 ядра: запись говорит, что `ctx.wait` устарел и уйдёт
+в следующем выпуске, и стоит в разделе «Deprecated» CHANGELOG `solo`
+и `flutter_solo`; переводы вместе.
 
 ### L10. Dartdoc `Solo.job`: «`canStart` is checked once, when the job is taken from the queue»
 
@@ -761,7 +819,8 @@ renamed», что в CHANGELOG ядра — L11
 У ребёнка `ctx.run` очереди нет, `canStart` проверяет `beforeChildStart`.
 
 Вердикт: подтверждено чтением. Low, одна фраза; на `state.md` уже сказано
-точнее.
+точнее. Итог 2026-10-14: исправлено: «`canStart` is checked once, when the job
+is taken from the queue or, run as a child, when [JobContext.run] starts it».
 
 ### L11. `vs-bloc.md` ссылается на «the local solo 0.2.0 source»
 
@@ -783,7 +842,10 @@ creation zone: controllerOutside=true, jobInside=true, caught=[Bad state: offlin
 ```
 
 Вердикт: воспроизведено. Low: совет перестраховывается, а не ломает. Чинить
-фразу: внутри зоны должен быть вызов, который создаёт задачу.
+фразу: внутри зоны должен быть вызов, который создаёт задачу. Итог 2026-10-14:
+исправлено: в зоне должен быть `load()`, вызов, который создаёт задачу; перевод
+вместе. Зонд на дереве после M12: с контроллером снаружи и `load()` внутри
+ошибка приходит в зону, с контроллером внутри и `load()` снаружи — во внешнюю.
 
 ## Вопросы владельцу
 
@@ -801,4 +863,4 @@ creation zone: controllerOutside=true, jobInside=true, caught=[Bad state: offlin
 
 Без вопроса чинить можно M1, M2, M7–M11, M13, M14, M17–M19, L3, L7–L10, L12, и,
 если вы согласны со сниженной тяжестью, M6 и M15 — но и их только по вашему
-слову.
+слову. Ответ 2026-10-14: «давай без вопроса»; исправлено всё, кроме M6 и M15.

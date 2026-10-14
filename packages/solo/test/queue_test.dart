@@ -85,6 +85,29 @@ void main() {
     });
   });
 
+  test('lastJobWhere does not answer with a job its predicate cancelled', () {
+    runSolo((solo, journal, async) {
+      final a = solo.add(slow(solo, 'a'));
+      async.flushMicrotasks();
+      final b1 = solo.add(slow(solo, 'b'));
+      final b2 = solo.add(slow(solo, 'b'));
+      SoloJob<Object?>? cancelling(SoloJob<Object?> target) =>
+          solo.lastJobWhere((job) {
+            if (identical(job, target)) {
+              job.cancel().ignore();
+            }
+            return job.key == target.key;
+          });
+
+      expect(identical(cancelling(b2), b1), isTrue, reason: 'the next match');
+      expect(cancelling(a), isNull, reason: 'the current job, stopped');
+      expect(b2.isCancelled, isTrue);
+      expect(a.isCancelled, isTrue);
+      journal.take();
+      async.flushTimers();
+    });
+  });
+
   test('remove skips a cancellable: false job unless forced', () {
     runSolo((solo, journal, async) {
       solo.add(slow(solo, 'a'));

@@ -253,7 +253,8 @@ void main() {
           'lives under, and it is cancelled when they stop holding');
     });
 
-    testWidgets('the body cannot walk past a cancellation', (tester) async {
+    testWidgets('a body that never reaches a checkpoint ends Cancelled',
+        (tester) async {
       final bench = Bench();
       final log = <String>[];
       final writing = bench.go<Profile, String>((ctx) async {
@@ -282,8 +283,9 @@ void main() {
       expect('${deaf.outcome}', 'Cancelled(manual)');
 
       await bench.close();
-      _says('a cancellation the caller can ask for and the body cannot walk '
-          'past by forgetting a check');
+      _says('a cancellation the caller can ask for: the next checkpoint of '
+          'the context throws it, and a body that never reaches one still '
+          'ends `Cancelled` and writes no state');
     });
 
     testWidgets('every job ends with one of three outcomes', (tester) async {
@@ -830,6 +832,20 @@ void main() {
       _says('Where a listenable of the picked value is what you need, the '
           'same pick is made by an object, a `SoloSelection`, and a `State` '
           'holds it in a field:');
+    });
+
+    test('a State follows a new controller by identity, not by ==', () {
+      final readme = File('README.md').readAsStringSync();
+      expect(
+        readme,
+        contains('!identical(widget.controller, oldWidget.controller)'),
+      );
+      expect(
+        readme,
+        isNot(contains('!= oldWidget.controller')),
+        reason: 'two controllers equal by == are still two sources, the way '
+            'SoloBuilder treats them',
+      );
     });
 
     testWidgets('without didUpdateWidget it stays with the old one',

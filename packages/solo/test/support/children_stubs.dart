@@ -214,4 +214,8 @@ final class SessionController extends Solo<Session> with SoloStream<Session> {
         key: 'sign',
         (ctx) async => ctx.emit(Session(signedIn: signedIn)),
       );
+
+  /// Signs the user out on the spot, the way a fact from outside is
+  /// written: no job, no queue.
+  void signOutNow() => externalSetState(const Session());
 }

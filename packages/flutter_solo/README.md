@@ -37,8 +37,9 @@ What the engine holds to:
   write the same state;
 - rules instead of flags — a job declares the states it works with and the
   condition it lives under, and it is cancelled when they stop holding;
-- a cancellation the caller can ask for and the body cannot walk past by
-  forgetting a check;
+- a cancellation the caller can ask for: the next checkpoint of the context
+  throws it, and a body that never reaches one still ends `Cancelled` and
+  writes no state;
 - an outcome for every job — `Done`, `Failed` or `Cancelled` — which is what a
   screen has to show anyway.
 
@@ -247,7 +248,7 @@ class _SaveButtonState extends State<SaveButton> {
   @override
   void didUpdateWidget(SaveButton oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.controller != oldWidget.controller) {
+    if (!identical(widget.controller, oldWidget.controller)) {
       canSave = _select();
     }
   }

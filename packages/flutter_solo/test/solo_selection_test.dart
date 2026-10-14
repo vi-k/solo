@@ -6,6 +6,8 @@ import 'package:flutter_solo/flutter_solo.dart';
 import 'package:flutter_solo/listenable.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/reachability.dart';
+
 @immutable
 final class _Screen {
   final String name;
@@ -570,6 +572,81 @@ void main() {
     );
   });
 
+  test('a notification put off while subscribing goes out once', () async {
+    final source = EagerSource();
+    addTearDown(source.dispose);
+    final selection = SoloSelection<int, int>(source, (value) => value);
+    final heard = <int>[];
+    selection.addListener(() => heard.add(selection.value));
+    source.value = 2;
+    await Future<void>.delayed(Duration.zero);
+
+    expect(heard, [2], reason: 'the newer pick went out, the older is stale');
+  });
+
+  test('a notification put off for one subscription skips the next', () async {
+    final source = EagerSource();
+    addTearDown(source.dispose);
+    final selection = SoloSelection<int, int>(source, (value) => value);
+    final first = <int>[];
+    final second = <int>[];
+    void firstListener() => first.add(selection.value);
+    selection
+      ..addListener(firstListener)
+      ..removeListener(firstListener)
+      ..addListener(() => second.add(selection.value));
+    await Future<void>.delayed(Duration.zero);
+
+    expect(first, isEmpty);
+    expect(
+      second,
+      isEmpty,
+      reason: 'the source has not changed since this subscription',
+    );
+  });
+
+  test('a selection nobody listens to keeps nothing it picked', () async {
+    final source = ValueNotifier(<int>[]);
+    addTearDown(source.dispose);
+    final selection = source.select((list) => list);
+    final payload = _pickedThenIdle(source, selection);
+
+    expect(
+      await collected(payload),
+      isTrue,
+      reason: 'kept until the next subscription, the last pick holds a '
+          'value the source let go of long ago',
+    );
+    expect(selection.value, isEmpty);
+  });
+
+  test('a source that calls a listener already removed is let be', () {
+    final source = _ReentrantSource();
+    final selection = SoloSelection<int, int>(source, (value) => value);
+    void listener() {}
+    // Registered on the source before the selection is, so it runs first
+    // and takes the selection's last listener away; the source, walking a
+    // copy, calls the selection all the same.
+    source.addListener(() => selection.removeListener(listener));
+    selection.addListener(listener);
+
+    expect(() => source.set(1), returnsNormally);
+  });
+
+  test('a selection whose subscription failed keeps nothing it picked',
+      () async {
+    final source = _ThrowingListSource();
+    final selection = source.select((list) => list);
+    final payload = _pickedThenRefused(source, selection);
+
+    expect(
+      await collected(payload),
+      isTrue,
+      reason: 'nobody listens after the failure, and the pick made for the '
+          'subscription holds a value the source let go of',
+    );
+  });
+
   test('a source publishing during addListener must not notify synchronously',
       () {
     final selection = SoloSelection<int, int>(EagerSource(), (value) => value);
@@ -584,6 +661,55 @@ void main() {
     inside = false;
     expect(calls, 0, reason: 'nothing may arrive before addListener returns');
   });
+}
+
+/// A selection that picked a payload while subscribed and then lost its
+/// last listener, with the source moved on since. In a frame of its own: a
+/// closure or a local keeps what it holds, so a payload left in the test
+/// would be held by the test. The payload, weakly.
+WeakReference<Object> _pickedThenIdle(
+  ValueNotifier<List<int>> source,
+  SoloSelection<List<int>, List<int>> selection,
+) {
+  source.value = List<int>.filled(1024, 7);
+  final payload = WeakReference<Object>(source.value);
+  void listener() {}
+  selection
+    ..addListener(listener)
+    ..removeListener(listener);
+  source.value = <int>[];
+  return payload;
+}
+
+/// Picks a payload while subscribing, has the subscription refused, and
+/// moves the source on; the payload, weakly. A frame of its own, as for
+/// [_pickedThenIdle].
+WeakReference<Object> _pickedThenRefused(
+  _ThrowingListSource source,
+  SoloSelection<List<int>, List<int>> selection,
+) {
+  source.value = List<int>.filled(1024, 7);
+  final payload = WeakReference<Object>(source.value);
+  try {
+    selection.addListener(() {});
+  } on Object catch (_) {
+    // Refused, as the source was told to.
+  }
+  source.value = <int>[];
+  return payload;
+}
+
+/// A source of lists that refuses every subscription.
+final class _ThrowingListSource implements ValueListenable<List<int>> {
+  @override
+  List<int> value = [];
+
+  @override
+  void addListener(VoidCallback listener) =>
+      throw StateError('subscription failed');
+
+  @override
+  void removeListener(VoidCallback listener) {}
 }
 
 /// Holds one list and grows it in place, telling its listeners: the value

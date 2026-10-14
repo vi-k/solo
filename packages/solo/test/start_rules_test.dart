@@ -100,6 +100,41 @@ void main() {
     });
   });
 
+  test('a state canStart writes is held to W and keepWhile', () {
+    runSolo((solo, journal, async) {
+      var asked = 0;
+      var ran = false;
+      solo.run<Initial, void>(
+        key: 'moved',
+        canStart: (state) {
+          asked++;
+          solo.externalSetState(const Preparing());
+          return true;
+        },
+        (ctx) async => ran = true,
+      );
+      solo.run<Preparing, void>(
+        key: 'kept',
+        canStart: (state) {
+          asked++;
+          solo.externalSetState(const Preparing(progress: 100));
+          return true;
+        },
+        keepWhile: (state) => state.progress < 100,
+        (ctx) async => ran = true,
+      );
+      async.flushMicrotasks();
+      expect(journal.take(), [
+        'state: Preparing(progress: 0)',
+        '[moved] dropped Cancelled(rules: is not Initial)',
+        'state: Preparing(progress: 100)',
+        '[kept] dropped Cancelled(rules: keepWhile)',
+      ]);
+      expect(ran, isFalse);
+      expect(asked, 2, reason: 'canStart is asked once a job');
+    });
+  });
+
   test('the type is checked before canStart', () {
     runSolo((solo, journal, async) {
       var called = false;

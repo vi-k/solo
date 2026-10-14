@@ -33,8 +33,9 @@ final class ScreenController extends Solo<Screen> {
           void take(SoloContext<Screen, Screen> target, Session next) =>
               target.emit(target.state.copyWith(signedIn: next.signedIn));
 
+          final following = ctx.each(session.stream, take); // what happens next
           take(ctx, session.currentState); // what has already happened
-          await ctx.each(session.stream, take).value; // what happens next
+          await following.value;
         },
       );
 

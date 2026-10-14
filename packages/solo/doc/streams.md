@@ -141,15 +141,19 @@ Job<void> follow() => run<Screen, void>(
         void take(SoloContext<Screen, Screen> target, Session next) =>
             target.emit(target.state.copyWith(signedIn: next.signedIn));
 
+        final following = ctx.each(session.stream, take); // what happens next
         take(ctx, session.currentState); // what has already happened
-        await ctx.each(session.stream, take).value; // what happens next
+        await following.value;
       },
     );
 ```
 
 Here `Screen` and `Session` are application states with a `signedIn` property.
-The read and the subscription stand on two lines with no `await` between them,
-so no change of the session falls between the two.
+The subscription and the read stand on two lines with no `await` between them,
+so no change of the session falls between the two. The subscription comes
+first: `take` emits, the listeners of the screen hear the write at once, and
+one of them may change the session right there. Subscribed already, the child
+hears that change; a subscription made after the read would miss it.
 
 The subscription keeps the following controller's queue occupied until it ends:
 no other job of that controller starts before the session closes its stream,

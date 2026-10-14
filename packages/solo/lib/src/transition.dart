@@ -22,7 +22,7 @@ final class SoloTransition<S extends Object> {
   /// A child of the running job is that child, not the root it belongs to.
   ///
   /// Usually the job whose `emit` made the change. A state returned by the
-  /// job's `onError` or `onCancel` handler is its change as well, although
+  /// job's `ifFailed` or `ifCancelled` handler is its change as well, although
   /// by then its body has ended and emitted nothing itself.
   final Job<Object?>? job;
 
