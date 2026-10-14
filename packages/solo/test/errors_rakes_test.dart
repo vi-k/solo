@@ -584,11 +584,6 @@ void main() {
         "the child, from the parent and, when nobody observes the parent's "
         'outcome, from the creation zone',
       );
-      _says(
-        'keeping only the call of the root drops the failure of a child its '
-        'parent caught, and an `Expando` that marks the errors already sent '
-        'takes no string or number',
-      );
       late Bench bench;
       final ran = _run((async) {
         bench = Bench();
@@ -604,8 +599,6 @@ void main() {
 
       expect(bench.heard, ['child: the child', 'parent: the child']);
       expect(ran.errors, ['the child']);
-      expect(() => Expando<bool>()['sent'] = true, throwsArgumentError);
-      expect(() => Expando<bool>()[404] = true, throwsArgumentError);
     });
 
     for (final make in <OpenSolo<int> Function()>[

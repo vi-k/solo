@@ -39,11 +39,8 @@ child throws and its parent lets through is the failure of both: the hook hears
 it twice, and the `job` it is given tells the two calls apart. A crash reporter
 fed from here may get one error three times: from the child, from the parent
 and, when nobody observes the parent's outcome, from the creation zone. The
-recipe does not filter them: keeping only the call of the root drops the
-failure of a child its parent caught, and an `Expando` that marks the errors
-already sent takes no string or number. The hook reports and returns, which is
-all it is for: the hook answers for nothing, and overriding it moves no error
-anywhere.
+hook reports and returns, which is all it is for: the hook answers for nothing,
+and overriding it moves no error anywhere.
 
 ### Answering for an error
 
