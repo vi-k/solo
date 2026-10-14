@@ -2,17 +2,7 @@ include: package:lints/recommended.yaml
 
 analyzer:
   exclude:
-    # Web
-    - 'web/**'
-    # Build
     - 'build/**'
-    # Generated code
-    - 'lib/**.g.dart'
-    - 'lib/**.freezed.dart'
-    - 'lib/generated_plugin_registrant.dart'
-    - '.test_coverage.dart'
-    # Assets
-    - 'assets/**'
 
   language:
     strict-casts: true
