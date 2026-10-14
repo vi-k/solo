@@ -286,11 +286,11 @@ Job<void> syncAndRecord(int item) => run<Ready, void>(
 не будет: поставленная им `Job` выполнится после этой задачи и после всего, что
 поставили раньше.
 
-Само зависание ничего не говорит, но `Solo.debug` говорит об этом, когда задачу
-ставят в очередь:
+Само зависание ничего не показывает, но `Solo.debug` предупреждает о нём, когда
+задачу ставят в очередь:
 
 ```text
-add Job(_Op.sync) while Job(_Op.syncAndRecord) is in its body: it starts after Job(_Op.syncAndRecord) ends
+add Job(_Op.sync) while Job(_Op.syncAndRecord) is running: it starts after Job(_Op.syncAndRecord) ends
 ```
 
 ### Два ребёнка подряд

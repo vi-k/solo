@@ -288,10 +288,11 @@ caller is waiting for that job: the upload never starts, and nothing moves
 until `close()` cancels both. Called without the `await`, such a method is no
 trap: what it queues runs after this job and after everything queued before it.
 
-The hang itself says nothing, but `Solo.debug` says it as the job is queued:
+The hang itself shows nothing, but `Solo.debug` warns of it when the job is
+queued:
 
 ```text
-add Job(_Op.sync) while Job(_Op.syncAndRecord) is in its body: it starts after Job(_Op.syncAndRecord) ends
+add Job(_Op.sync) while Job(_Op.syncAndRecord) is running: it starts after Job(_Op.syncAndRecord) ends
 ```
 
 ### Two children in a row

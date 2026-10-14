@@ -413,9 +413,10 @@ final class _RunAllGroup<T> {
   /// their number.
   ///
   /// The walk counts a branch let past the barrier too, though while
-  /// [_settle] waits there is none: before the wait is over a branch is
-  /// let past only once [_failing] is raised, and that ends the wait. The
-  /// check stays so that the count does not depend on that order.
+  /// [_settle] waits for the first barrier there is none: before that wait
+  /// is over a branch is let past only once [_failing] is raised, and that
+  /// ends the wait. The check stays so that the count does not depend on
+  /// that order.
   var _atFirstBarrier = 0;
 
   /// The same for the second barrier, which a branch leaves only when the

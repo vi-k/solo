@@ -83,10 +83,12 @@ abstract class Solo<S extends Object> {
   /// and the error goes no further. [Job.debug] hands such an error to the
   /// zone as well.
   ///
-  /// A job queued while the running one is still in its body gets a tail on
-  /// its line, `add Job(inner) while Job(outer) is in its body: it starts
-  /// after Job(outer) ends`. A body that awaits a job of its own controller
-  /// waits for good, and this is the line that shows it.
+  /// A job queued while another one runs gets a tail on its line,
+  /// `add Job(inner) while Job(outer) is running: it starts after Job(outer)
+  /// ends`. For a job queued from outside that is only when it starts. A
+  /// running job that awaits a job it queued on its own controller, from its
+  /// body, a child or its cleanup, waits for good, and this is the line that
+  /// shows it.
   static void Function(String message)? debug;
 
   S _state;
@@ -574,14 +576,15 @@ abstract class Solo<S extends Object> {
     _debug(() {
       final line = 'add $impl${first ? ' first' : ''}';
       final current = _current;
-      // A method of the controller called from a body queues a root job,
-      // and a body that awaits it waits for good. Who called is not known
-      // here, so the line says what holds for any caller.
-      if (current == null || current._bodyEnded) {
+      // A method of the controller called from a running job -- its body,
+      // a child of it, its cleanup -- queues a root job, and a job that
+      // awaits it waits for good. Who called is not known here, so the line
+      // says what holds for any caller.
+      if (current == null) {
         return line;
       }
-      return '$line while $current is in its body: '
-          'it starts after $current ends';
+      final name = '$current';
+      return '$line while $name is running: it starts after $name ends';
     });
     _schedulePump();
     return impl;

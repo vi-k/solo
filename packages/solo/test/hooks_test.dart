@@ -506,7 +506,7 @@ void main() {
     expect(jobs, isNot(contains('add Job(job)')));
   });
 
-  test('a job added while another is in its body says when it starts', () {
+  test('a job added while another runs says when it starts', () {
     final engine = <String>[];
     Solo.debug = engine.add;
     try {
@@ -527,11 +527,46 @@ void main() {
     expect(
       engine,
       contains(
-        'add Job(inner) while Job(outer) is in its body: '
+        'add Job(inner) while Job(outer) is running: '
         'it starts after Job(outer) ends',
       ),
     );
-    expect(engine, contains('add Job(cleanup)'), reason: 'past the body');
+    expect(
+      engine,
+      contains(
+        'add Job(cleanup) while Job(outer) is running: '
+        'it starts after Job(outer) ends',
+      ),
+      reason: 'past the body, the job still holds the queue',
+    );
+  });
+
+  test('a job a child adds names the root job it waits for', () {
+    final engine = <String>[];
+    Solo.debug = engine.add;
+    try {
+      runSolo((solo, journal, async) {
+        solo.run<TestState, void>(key: 'root', (ctx) async {
+          await ctx.run(
+            solo.job<TestState, void>(key: 'child', (child) async {
+              solo.run<TestState, void>(key: 'fromChild', (ctx) async {});
+            }),
+          );
+        });
+        async.flushMicrotasks();
+      });
+    } finally {
+      Solo.debug = null;
+    }
+    // The child runs too, but the queue waits for the root job, and the
+    // root job is what the line names.
+    expect(
+      engine,
+      contains(
+        'add Job(fromChild) while Job(root) is running: '
+        'it starts after Job(root) ends',
+      ),
+    );
   });
 
   test('a describe that throws is a mark on Solo.debug, and no more', () {

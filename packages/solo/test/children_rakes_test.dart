@@ -1760,7 +1760,7 @@ void main() {
         _says('The caller is waiting for that job: the upload never starts');
       });
 
-      test('Solo.debug says it as the job is queued', () {
+      test('Solo.debug warns of it when the job is queued', () {
         final lines = <String>[];
         final errors = _zone((async) {
           Solo.debug = lines.add;
@@ -1770,8 +1770,8 @@ void main() {
 
         expect(errors, isEmpty);
         expect(lines, contains(_quotes()[2]));
-        _says('The hang itself says nothing, but `Solo.debug` says it as the '
-            'job is queued:');
+        _says('The hang itself shows nothing, but `Solo.debug` warns of it '
+            'when the job is queued:');
       });
 
       test('close() cancels both', () {

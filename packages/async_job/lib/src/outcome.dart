@@ -125,9 +125,10 @@ final class HandlerCancelReason extends CancelReason {
 /// Outcomes are equal by identity, not by value: two of them stand for two
 /// runs, and a [Failed] or a [Cancelled] carries a stack trace that makes
 /// value equality a question with no good answer. Compare what is inside
-/// — the value, the error, the reason — not the outcome itself. In a test
-/// that is `expect(await job.value, 42)`; comparing `await job.done` with
-/// `Done(42)` fails even when the job returned 42.
+/// — the value, the error, the reason — not the outcome itself. In a test,
+/// that means `expect(await job.value, 42)`. Comparing `await job.done` with
+/// `Done(42)` fails even when the job returned 42, and the failure prints
+/// `Done(42)` on both sides.
 sealed class Outcome<T> {
   const Outcome();
 }
