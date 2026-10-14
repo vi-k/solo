@@ -33,15 +33,26 @@
 import 'package:async_job/engine.dart';
 
 final class MyJob<T> extends JobBase<T> {
-  final Future<T> Function(MyContext ctx) _body;
+  // Отпускается, когда задача кончилась, как ядро отпускает своё: тело
+  // держит всё, что захватило, а задачу держат, чтобы прочесть исход
+  // много позже.
+  Future<T> Function(MyContext ctx)? _body;
 
-  MyJob(this._body, {super.key, super.observer, super.cancellable});
+  MyJob(
+    Future<T> Function(MyContext ctx) body, {
+    super.key,
+    super.observer,
+    super.cancellable,
+  }) : _body = body;
 
   @override
   JobContextBase createContext() => MyContext(this);
 
   @override
-  Future<T> execute(covariant MyContext ctx) => _body(ctx);
+  Future<T> execute(covariant MyContext ctx) => _body!(ctx);
+
+  @override
+  void finished() => _body = null;
 
   // `start` и `whenDone` защищены: остальной движок вызывает их
   // через эти обёртки, приватные для его библиотеки. Очередь запускает
@@ -82,7 +93,9 @@ final class MyContext extends JobContextBase {
 к ответу наблюдателя, как всякая ошибка, которой не несёт ни один исход: о них
 говорит раздел [«С наблюдателем»](observing.md#с-наблюдателем) страницы
 о наблюдении. Задача при этом идёт дальше как шла. Недоделанным остаётся ваш
-собственный учёт, поэтому держите оба короткими и безусловными.
+собственный учёт, поэтому держите оба короткими и безусловными. `MyJob`
+отпускает своё тело в `finished()`: иначе тело держало бы всё, что захватило,
+пока кто-нибудь держит задачу.
 
 Чтобы движок сам отвечал за такие ошибки, повесьте своего наблюдателя на каждую
 задачу, подмешайте в него `JobAnswerer` и переопределите его `onUnanswered`,

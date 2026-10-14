@@ -22,6 +22,12 @@ final class Stage {
   int warmTake = 30;
   Object? warmError;
 
+  /// The name of the source whose `close` throws.
+  String? closeFails;
+
+  /// How long `load` takes; none by default.
+  int loadTake = 0;
+
   bool lockHeld = false;
   final lockQueue = <Completer<void>>[];
 
@@ -62,7 +68,13 @@ final class Source {
 
   Source(this.name);
 
-  void close() => stage.trace.add('$name closed');
+  void close() {
+    if (stage.closeFails == name) {
+      stage.trace.add('$name close failed');
+      throw StateError('$name close failed');
+    }
+    stage.trace.add('$name closed');
+  }
 }
 
 /// A cache a branch keeps for itself.
@@ -110,7 +122,10 @@ Future<void> warmCache() async {
   stage.trace.add('cache warm');
 }
 
-Future<int> load() async => 21;
+Future<int> load() async {
+  if (stage.loadTake > 0) await delay(stage.loadTake);
+  return 21;
+}
 
 Future<void> report(int rows) async {
   await delay(80);

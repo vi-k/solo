@@ -939,6 +939,67 @@ void main() {
       });
     }
 
+    // An action that throws before it has a future to hand back: the error
+    // reaches the body through the future of the call, a microtask later.
+    for (final (name, call) in [
+      (
+        'abandonable',
+        (JobContext ctx, FutureOr<void> Function() action) =>
+            ctx.abandonable(action),
+      ),
+      (
+        'join',
+        (JobContext ctx, FutureOr<void> Function() action) => ctx.join(action),
+      ),
+    ]) {
+      for (var n = 1; n <= 3; n++) {
+        test(
+            '$name, an action that throws at once, '
+            'the cancellation $n microtasks after', () {
+          late final Job<void> root;
+          expect(
+            zoneOf((async) {
+              root = Job<void>(
+                (ctx) => call(ctx, () {
+                  later(n, () => root.cancel().ignore());
+                  throw StateError('device failed');
+                }),
+              );
+              async.flushTimers();
+            }),
+            [device],
+          );
+          if (n == 1) {
+            expect(root.outcome, isA<Cancelled>(), reason: 'in the window');
+          }
+        });
+      }
+
+      // The case the window was found by: the body catches the failure,
+      // cancels its own job and throws the failure again. The cancellation
+      // is first by the time the body ends, and the failure came before it.
+      test(
+          '$name, an action that throws at once, caught, the job cancelled '
+          'and the failure thrown again', () {
+        late final Job<void> root;
+        expect(
+          zoneOf((async) {
+            root = Job<void>((ctx) async {
+              try {
+                await call(ctx, () => throw StateError('device failed'));
+              } on Object {
+                root.cancel().ignore();
+                rethrow;
+              }
+            });
+            async.flushTimers();
+          }),
+          [device],
+        );
+        expect(root.outcome, isA<Cancelled>());
+      });
+    }
+
     test('abandonable, the cancellation first: the abandoned action fails late',
         () {
       expect(

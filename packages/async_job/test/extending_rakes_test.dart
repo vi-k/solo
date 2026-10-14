@@ -20,19 +20,31 @@ import 'support/extending_first_attempts.dart' as first;
 import 'support/extending_plain.dart' as plain;
 import 'support/extending_stubs.dart';
 import 'support/page_code.dart';
+import 'support/reachability.dart';
 
 final class MyJob<T> extends JobBase<T> {
-  final Future<T> Function(MyContext ctx) _body;
+  // Dropped once the job is over, as the core drops its own: the body
+  // holds everything it captured, and a job is held to read its outcome
+  // long after.
+  Future<T> Function(MyContext ctx)? _body;
 
   MyQueue? _queue;
 
-  MyJob(this._body, {super.key, super.observer, super.cancellable});
+  MyJob(
+    Future<T> Function(MyContext ctx) body, {
+    super.key,
+    super.observer,
+    super.cancellable,
+  }) : _body = body;
 
   @override
   JobContextBase createContext() => MyContext(this);
 
   @override
-  Future<T> execute(covariant MyContext ctx) => _body(ctx);
+  Future<T> execute(covariant MyContext ctx) => _body!(ctx);
+
+  @override
+  void finished() => _body = null;
 
   // `start` and `whenDone` are protected: the rest of the engine calls
   // them through these wrappers, private to its library. The queue starts
@@ -50,6 +62,30 @@ final class MyJob<T> extends JobBase<T> {
     if (waits && !cancellable && rejectable) return;
     _queue?._waiting.remove(this);
     super.cancelWith(cancelled, rejectable: rejectable);
+  }
+}
+
+/// The three copies of the page's job: as it is first shown, in the first
+/// attempt at a queue, and with the queue of the answer.
+enum _Copy { firstShown, firstQueue, withQueue }
+
+/// A job of the page, in [copy], whose body captures a payload; the job,
+/// the wait for its end and the payload, weakly. Made in a frame of its
+/// own: a closure captures the variable, not the value, so a payload left
+/// in the test would be held by the test.
+(Object, Future<void>, WeakReference<Object>) _capturing(_Copy copy) {
+  final payload = List<int>.filled(1024, 7);
+  switch (copy) {
+    case _Copy.firstShown:
+      final job = plain.MyJob<int>((ctx) async => payload.length);
+      return (job, plain.launchAndWait(job), WeakReference(payload));
+    case _Copy.firstQueue:
+      final job = first.MyJob<int>((ctx) async => payload.length);
+      final queue = first.MyQueue()..add(job);
+      return (job, queue.run(), WeakReference(payload));
+    case _Copy.withQueue:
+      final job = MyJob<int>((ctx) async => payload.length).._launch();
+      return (job, job._whenDone, WeakReference(payload));
   }
 }
 
@@ -550,6 +586,24 @@ void main() {
         );
       }
     });
+
+    for (final (version, copy) in [
+      ('as first shown', _Copy.firstShown),
+      ('in the first attempt at a queue', _Copy.firstQueue),
+      ('with its queue', _Copy.withQueue),
+    ]) {
+      test('a finished MyJob lets go of its body, $version', () async {
+        final (job, over, capture) = _capturing(copy);
+        await over;
+        expect(
+          await collected(capture),
+          isTrue,
+          reason: 'the body ran once; held on, it keeps everything it '
+              'captured for as long as anyone keeps the job',
+        );
+        expect(job, isNotNull, reason: 'the job is kept to the end');
+      });
+    }
   });
 
   group('A queue of your own', () {

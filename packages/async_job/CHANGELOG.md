@@ -2,7 +2,6 @@
 
 ### Breaking changes
 
-- **`ctx.wait` is renamed to `ctx.abandonable`.**
 - **`Job.ignore()` is renamed to `Job.ignoreFailure()`.**
 - **`JobObserver.onError` is a notice, and the new `JobAnswerer` answers for an
   error no outcome carries.** An observer from `0.2.0` compiles unchanged, and
@@ -44,6 +43,11 @@
   `creationZone`.**
 - **`JobContext` gains `pause`,** a delay a cancellation ends. See
   [Letting time pass](doc/cancellation.md#letting-time-pass).
+
+### Deprecated
+
+- `ctx.wait` is deprecated in favour of `ctx.abandonable` and goes away in the
+  next release.
 
 ### Changes you will see on upgrade
 

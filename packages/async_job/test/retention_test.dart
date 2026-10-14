@@ -125,6 +125,24 @@ final class CarryingFailure implements Exception {
   );
 }
 
+/// A body that fails once the gate opens, after a cancellation marked the
+/// job: the cancellation is the outcome, and the failure it covers is in
+/// none. With no observer it goes nowhere, by the rule for a failure after
+/// the mark.
+(Job<void>, WeakReference<Payload>, Completer<void>)
+    failureACancellationCovered() {
+  final payload = Payload();
+  final gate = Completer<void>();
+  return (
+    Job<void>((ctx) async {
+      await gate.future;
+      throw CarryingFailure(payload);
+    }),
+    WeakReference(payload),
+    gate,
+  );
+}
+
 /// Unattended work whose `ctx.abandonable` fails once the gate opens, with a
 /// record that holds the payload; the job itself is over by then.
 (Job<int>, WeakReference<Payload>, Completer<void>, Future<void>)
@@ -286,6 +304,22 @@ void main() {
       isTrue,
       reason: 'nothing reads the order once the body has ended, so a failure '
           'arriving after it is not noted at all',
+    );
+  });
+
+  test('a cancelled job keeps nothing its body failed with after the mark',
+      () async {
+    final (job, capture, gate) = failureACancellationCovered();
+    await Future<void>.delayed(Duration.zero);
+    job.cancel().ignore();
+    gate.complete();
+    await job.done;
+    expect(job.outcome, isA<Cancelled>());
+    expect(
+      await collected(capture),
+      isTrue,
+      reason: 'the failure is in no outcome, and the core keeps it only to '
+          'not announce it twice',
     );
   });
 

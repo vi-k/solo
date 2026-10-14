@@ -464,8 +464,24 @@ try {
 The `try` opens on the very next line after the group returns, before anything
 that can throw, and `finally` runs however the body leaves it: on the
 cancellation `join` throws, on the error of the archive, or after the last
-line. For a list the body keeps for itself, that closes every source.
-`ctx.onDispose` with the same loop, on the same line, does what `finally` does.
+line. For a list the body keeps for itself, that closes every source, as long
+as no `close` throws. One that throws ends the loop, and the sources after it
+stay open.
+
+A registration of its own for each source closes the rest all the same. The
+cleanup stack runs every callback whatever the one before it did: an error from
+one goes to `onError` and, by default, on to the zone, as
+[Cleanup order and late results](cleanup.md#cleanup-order-and-late-results) on
+the cleanup page describes. The loop takes the place of the `try`, on the very
+next line:
+
+```dart
+final sources = await ctx.runAll(branches);
+for (final source in sources) {
+  ctx.onDispose(source.close);
+}
+await ctx.join(() => writeArchive(sources));
+```
 
 ### A list the body hands out
 
@@ -495,24 +511,23 @@ never reaches the caller. The body has long left the `try` by then, and the
 sources stay open.
 
 `ctx.onDiscard` runs exactly when the value reaches nobody, so it closes the
-list in that case too, and stays out of the way when the list arrives:
+list in that case too, and stays out of the way when the list arrives. Each
+source gets a registration of its own, as in the section above:
 
 ```dart
 final exported = Job.deferred<List<Source>>((ctx) async {
   final sources = await ctx.runAll(branches);
-  ctx.onDiscard(() {
-    for (final source in sources) {
-      source.close();
-    }
-  });
+  for (final source in sources) {
+    ctx.onDiscard(source.close);
+  }
   await ctx.join(() => writeArchive(sources));
   return sources;
 });
 ```
 
-`ctx.onDiscard` goes on the very next line, before anything that can throw: an
-error or a cancellation above the registration would leave the list open, as in
-the first attempt.
+The registrations go on the very next line, before anything that can throw: an
+error or a cancellation above them would leave the list open, as in the first
+attempt.
 
 ## Processing streams
 
@@ -709,6 +724,16 @@ continuation runs, nothing the parent does reaches it; only the continuation's
 own handle stops it, `tail.cancel()`, or
 `ctx.onCancel(() => tail.cancel().ignore())` in a parent body that is still
 running.
+
+The other way round, the continuation does reach its source while the source
+runs. `tail.cancel()` while the child still loads travels back along the chain,
+as [Chains](#chains) describes, and asks the child to cancel. `ctx.run(child)`
+throws the child's cancellation into the parent's body, and the parent ends
+`Cancelled` too, with `HandlerCancelReason`:
+
+```text
+parent: Cancelled(handler: Job(): Cancelled(chain)), child: Cancelled(chain)
+```
 
 A failure in the continuation is nobody's business but its own. Observe it
 through `value`, `done` or `ignoreFailure`; an unobserved one goes to the zone

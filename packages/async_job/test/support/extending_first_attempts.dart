@@ -9,15 +9,26 @@ import 'package:async_job/engine.dart';
 import 'extending_stubs.dart';
 
 final class MyJob<T> extends JobBase<T> {
-  final Future<T> Function(MyContext ctx) _body;
+  // Dropped once the job is over, as the core drops its own: the body
+  // holds everything it captured, and a job is held to read its outcome
+  // long after.
+  Future<T> Function(MyContext ctx)? _body;
 
-  MyJob(this._body, {super.key, super.observer, super.cancellable});
+  MyJob(
+    Future<T> Function(MyContext ctx) body, {
+    super.key,
+    super.observer,
+    super.cancellable,
+  }) : _body = body;
 
   @override
   JobContextBase createContext() => MyContext(this);
 
   @override
-  Future<T> execute(covariant MyContext ctx) => _body(ctx);
+  Future<T> execute(covariant MyContext ctx) => _body!(ctx);
+
+  @override
+  void finished() => _body = null;
 
   // `start` and `whenDone` are protected: the rest of the engine calls
   // them through these wrappers, private to its library. The queue starts

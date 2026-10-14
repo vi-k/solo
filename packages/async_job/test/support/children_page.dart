@@ -182,6 +182,14 @@ Job<void> groupTry(List<Job<Source>> branches) => Job<void>((ctx) async {
       }
     });
 
+Job<void> groupRegistered(List<Job<Source>> branches) => Job<void>((ctx) async {
+      final sources = await ctx.runAll(branches);
+      for (final source in sources) {
+        ctx.onDispose(source.close);
+      }
+      await ctx.join(() => writeArchive(sources));
+    });
+
 Job<List<Source>> handedOutCatch(List<Job<Source>> branches) {
   final exported = Job.deferred<List<Source>>((ctx) async {
     final sources = await ctx.runAll(branches);
@@ -201,11 +209,9 @@ Job<List<Source>> handedOutCatch(List<Job<Source>> branches) {
 Job<List<Source>> handedOutDiscard(List<Job<Source>> branches) {
   final exported = Job.deferred<List<Source>>((ctx) async {
     final sources = await ctx.runAll(branches);
-    ctx.onDiscard(() {
-      for (final source in sources) {
-        source.close();
-      }
-    });
+    for (final source in sources) {
+      ctx.onDiscard(source.close);
+    }
     await ctx.join(() => writeArchive(sources));
     return sources;
   });

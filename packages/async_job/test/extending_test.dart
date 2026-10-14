@@ -400,6 +400,26 @@ void main() {
     });
   }
 
+  test('an empty runAll asks check(), as a group of children does', () {
+    fakeAsync((async) {
+      Object? thrown;
+      final job = CheckingJob<void>((ctx) async {
+        ctx.rules = () => throw const RuleBroken();
+        // The call itself comes back: the rule's error is in its future.
+        final group = ctx.runAll(<Job<void>>[]);
+        try {
+          await group;
+        } on RuleBroken catch (error) {
+          thrown = error;
+        }
+      })
+        ..launch();
+      async.flushMicrotasks();
+      expect(thrown, isA<RuleBroken>());
+      expect(job.outcome, isA<Done<void>>());
+    });
+  });
+
   test('inUncancellableSection is open while the section is', () {
     fakeAsync((async) {
       final inside = <bool>[];

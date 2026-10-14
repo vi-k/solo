@@ -1302,6 +1302,59 @@ void main() {
       });
     });
 
+    test('a close that throws ends the loop of the try', () {
+      fakeAsync((async) {
+        stubs.stage.closeFails = 'rows';
+        final parent = page.groupTry(branches())..ignoreFailure();
+        async.flushTimers();
+        expect(parent.outcome, isA<Failed>());
+        expect(trace(), ['archive of 2', 'rows close failed']);
+      });
+    });
+
+    test('the registrations close the list on a stop during the archive', () {
+      fakeAsync((async) {
+        final parent = page.groupRegistered(branches())..ignoreFailure();
+        async.elapse(const Duration(milliseconds: 20));
+        parent.cancel().ignore();
+        async.flushTimers();
+        expect(parent.outcome, isA<Cancelled>());
+        expect(trace(), ['archive of 2', 'images closed', 'rows closed']);
+      });
+    });
+
+    test('the registrations close the list on a failing archive', () {
+      fakeAsync((async) {
+        stubs.stage.archiveError = StateError('disk');
+        final parent = page.groupRegistered(branches())..ignoreFailure();
+        async.flushTimers();
+        expect(parent.outcome, isA<Failed>());
+        expect(trace(), ['images closed', 'rows closed']);
+      });
+    });
+
+    for (final fails in ['images', 'rows']) {
+      test('the registrations close the other source when $fails throws', () {
+        final zone = <Object>[];
+        late Job<void> parent;
+        runZonedGuarded(
+          () => fakeAsync((async) {
+            stubs.stage.closeFails = fails;
+            parent = page.groupRegistered(branches());
+            async.flushTimers();
+          }),
+          (error, stackTrace) => zone.add(error),
+        );
+        expect(parent.outcome, isA<Done<void>>());
+        expect(trace(), [
+          'archive of 2',
+          if (fails == 'images') 'images close failed' else 'images closed',
+          if (fails == 'rows') 'rows close failed' else 'rows closed',
+        ]);
+        expect(zone, [isA<StateError>()]);
+      });
+    }
+
     /// Runs [exported] next to a sibling that fails after it returned.
     Job<void> beside(Job<List<stubs.Source>> exported, {bool fails = true}) {
       final sibling = Job.deferred<void>((ctx) async {
@@ -1345,8 +1398,26 @@ void main() {
         async.flushTimers();
         expect(exported.outcome, isA<Cancelled>());
         expect(parent.outcome, isA<Failed>());
-        expect(trace(), ['archive of 2', 'rows closed', 'images closed']);
+        expect(trace(), ['archive of 2', 'images closed', 'rows closed']);
       });
+    });
+
+    test(
+        'onDiscard closes the other source of a list taken away when one '
+        'throws', () {
+      final zone = <Object>[];
+      late Job<void> parent;
+      runZonedGuarded(
+        () => fakeAsync((async) {
+          stubs.stage.closeFails = 'images';
+          parent = beside(page.handedOutDiscard(branches()))..ignoreFailure();
+          async.flushTimers();
+        }),
+        (error, stackTrace) => zone.add(error),
+      );
+      expect(parent.outcome, isA<Failed>());
+      expect(trace(), ['archive of 2', 'images close failed', 'rows closed']);
+      expect(zone, [isA<StateError>()]);
     });
 
     test('onDiscard leaves a handed-out list open when it arrives', () {
@@ -1401,6 +1472,34 @@ void main() {
         final quote = quoted.firstMatch(text)!.group(1)!.replaceAll('\n', ' ');
         expect(thrown, isA<ArgumentError>());
         expect('$thrown', quote);
+      });
+    });
+
+    test(
+        'a cancelled continuation cancels its running source and the parent, '
+        'as the page quotes', () {
+      fakeAsync((async) {
+        stubs.stage.loadTake = 50;
+        final child = Job.deferred<int>((ctx) => ctx.abandonable(stubs.load));
+        final tail = child.then<void>((ctx, rows) => stubs.report(rows))
+          ..ignoreFailure();
+        final parent = Job<void>((ctx) async {
+          ctx.log(await ctx.run(child));
+        })
+          ..ignoreFailure();
+        async.elapse(const Duration(milliseconds: 20));
+        tail.cancel().ignore();
+        async.flushTimers();
+        final text = File('doc/children.md').readAsStringSync();
+        final quoted = RegExp(
+          r'with `HandlerCancelReason`:\n\n```text\n(.*?)\n```',
+          dotAll: true,
+        );
+        expect(
+          'parent: ${parent.outcome}, child: ${child.outcome}',
+          quoted.firstMatch(text)!.group(1),
+        );
+        expect(trace(), isEmpty, reason: 'the report never ran');
       });
     });
 

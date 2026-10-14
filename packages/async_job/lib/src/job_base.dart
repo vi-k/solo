@@ -684,7 +684,32 @@ abstract class JobBase<T> implements Job<T> {
   /// error arriving by a second route — a body that throws what the engine
   /// has already ended the job with, say — is not announced again. By
   /// identity: two errors equal by `==` are still two errors.
-  Object? _announcedError;
+  ///
+  /// Held weakly. A failure a cancellation covered is in no outcome, and the
+  /// handle of a job cancelled over it would otherwise keep the error, and
+  /// everything it references, for as long as the handle lives. What
+  /// [_isPlain] says cannot be held weakly is held as it is, in
+  /// [_announcedPlain], and a record keeps whatever it references.
+  WeakReference<Object>? _announcedError;
+
+  /// The error of the last announcement, when it cannot be held weakly.
+  Object? _announcedPlain;
+
+  /// Whether [error] is the error the core announced last for this job.
+  bool _wasAnnounced(Object error) => _isPlain(error)
+      ? identical(error, _announcedPlain)
+      : identical(error, _announcedError?.target);
+
+  /// Notes [error] as the error the core announced last for this job.
+  void _noteAnnounced(Object error) {
+    if (_isPlain(error)) {
+      _announcedPlain = error;
+      _announcedError = null;
+    } else {
+      _announcedError = WeakReference(error);
+      _announcedPlain = null;
+    }
+  }
 
   /// Continuations still waiting to receive this outcome. A late listener
   /// may attach within the observation grace period but receive the result
@@ -719,8 +744,8 @@ abstract class JobBase<T> implements Job<T> {
   /// otherwise hold every one of them until the job is over.
   Expando<bool>? _failedBeforeMark;
 
-  /// The failures of [_failedBeforeMark] that an [Expando] cannot hold: a
-  /// string, a number, a boolean or a record.
+  /// The failures of [_failedBeforeMark] that an [Expando] cannot hold; see
+  /// [_isPlain].
   ///
   /// Every one of them, as for objects: [JobContext.runAll] throws the first
   /// failure of its branches, another branch may fail with a string of its own
@@ -733,8 +758,26 @@ abstract class JobBase<T> implements Job<T> {
   /// while the error itself is held weakly.
   Set<Object>? _plainFailedBeforeMark;
 
-  static bool _isPlain(Object error) =>
-      error is String || error is num || error is bool || error is Record;
+  /// Whether [error] cannot be held weakly: a string, a number, a boolean,
+  /// a record, or a `Pointer`, `Struct` or `Union` of `dart:ffi`. The last
+  /// three are not named, so the package does not import `dart:ffi` and
+  /// still builds for the web; [_weakProbe] is asked instead, and its
+  /// refusal is the answer.
+  static bool _isPlain(Object error) {
+    if (error is String || error is num || error is bool || error is Record) {
+      return true;
+    }
+    try {
+      // Never written, so a lookup that goes through answers false.
+      return _weakProbe[error] ?? false;
+    } on Object {
+      return true;
+    }
+  }
+
+  /// Read by [_isPlain] and never written: it refuses exactly what an
+  /// [Expando] or a [WeakReference] cannot hold.
+  static final _weakProbe = Expando<bool>();
 
   /// Notes [error] as a failure that came before any mark, if nothing has
   /// marked the job yet and it is not over.
@@ -1665,8 +1708,8 @@ abstract class JobBase<T> implements Job<T> {
       // The outcome stays. A failure handed in now has no outcome to carry
       // it — a rule of a domain that ended the job and then threw looks
       // like that — and dropped here it would be heard by nobody.
-      if (outcome is Failed && !identical(outcome.error, _announcedError)) {
-        _announcedError = outcome.error;
+      if (outcome is Failed && !_wasAnnounced(outcome.error)) {
+        _noteAnnounced(outcome.error);
         _reportCovered(outcome, announced: false);
       }
       return;
@@ -1740,8 +1783,8 @@ abstract class JobBase<T> implements Job<T> {
     // of a covered failure below.
     if (decided is Failed &&
         replaced == null &&
-        !identical(decided.error, _announcedError)) {
-      _announcedError = decided.error;
+        !_wasAnnounced(decided.error)) {
+      _noteAnnounced(decided.error);
       notifyObserver(decided.error, decided.stackTrace);
     }
     // Guarded: the hook belongs to an engine of a domain, and its error
@@ -1784,8 +1827,8 @@ abstract class JobBase<T> implements Job<T> {
     // body threw before a cancellation goes. It came in here and not
     // through the body, so nobody has announced it yet — unless the body
     // threw this very error, and then the body's route answers for it.
-    if (replaced is Failed && !identical(replaced.error, _announcedError)) {
-      _announcedError = replaced.error;
+    if (replaced is Failed && !_wasAnnounced(replaced.error)) {
+      _noteAnnounced(replaced.error);
       _reportCovered(replaced, announced: false);
     }
     // Said and not thrown, and last of all: the job has ended the way it
@@ -2092,8 +2135,8 @@ abstract class JobBase<T> implements Job<T> {
           if (!failedFirst && error is ParallelWaitError<Object?, Object?>) {
             firstInEnvelope = _failedUnmarkedIn(error, stackTrace);
           }
-          if (!identical(error, _announcedError)) {
-            _announcedError = error;
+          if (!_wasAnnounced(error)) {
+            _noteAnnounced(error);
             notifyObserver(error, stackTrace);
           }
           outcome = Failed(error, stackTrace);

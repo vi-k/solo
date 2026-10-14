@@ -94,8 +94,9 @@ child's context and an event. The child delivers the next message when the
 callback for the previous one has finished, so the saves run one after another.
 It cancels the subscription the moment it accepts a cancellation, whether a
 message is on its way or not. A save that is running at that moment is waited
-for: `join` holds the cancellation until the save has finished, and the child
-ends after it. And an error of the stream or of the callback ends it `Failed`.
+for: `join` waits the save out and then throws the cancellation in place of its
+value, and the child ends after it. And an error of the stream or of the
+callback ends it `Failed`.
 
 `saving.value` completes when the stream ends and the last save finishes;
 awaiting it throws the child's failure into the body, and a `Cancelled` it

@@ -542,18 +542,18 @@ abstract interface class JobContext {
   /// without awaiting the future, the group hands the values over without
   /// checking the parent, as [run] does.
   ///
-  /// An empty group starts nothing and returns an empty list, after making
-  /// the same checks [run] would make. Admission errors are those of [run].
-  /// Everything that needs no adoption is asked of every handle before the
-  /// first one starts, so such a refusal leaves nothing running, and under a
-  /// parent that is already cancelled every branch is turned away the way
-  /// [run] turns away its child, and so is the rest of the list when a branch
-  /// cancels the parent before its first `await`, while the list starts. A
-  /// refusal only the adoption can give — an
+  /// An empty group starts nothing and returns an empty list, after making the
+  /// same checks [run] would make, the checkpoint of the parent included.
+  /// Admission errors are those of [run]. Everything that needs no adoption is
+  /// asked of every handle before the first one starts, so such a refusal
+  /// leaves nothing running, and under a parent that is already cancelled every
+  /// branch is turned away the way [run] turns away its child, and so is the
+  /// rest of the list when a branch cancels the parent before its first
+  /// `await`, while the list starts. A refusal only the adoption can give — an
   /// engine of a domain turning the parent down, a rule of its domain that
   /// throws — may arrive after some branches have started: it stops them and
-  /// waits for them before it comes out, and the handles after the refused
-  /// one are left as they were, never started.
+  /// waits for them before it comes out, and the handles after the refused one
+  /// are left as they were, never started.
   Future<List<T>> runAll<T>(Iterable<Job<T>> children);
 
   /// Starts a child job that processes [stream] one event at a time.
@@ -1240,7 +1240,17 @@ abstract class JobContextBase implements JobContext {
     throwIfFinished('run an abandonable action');
     _oneCleanupOnly(dispose, discard);
     check();
-    final result = action();
+    final FutureOr<T> result;
+    try {
+      result = action();
+    } on Object catch (error) {
+      // Thrown before the action had a future to hand back, and the body
+      // hears it a microtask later, through the future of this call: a
+      // cancellation arriving in between would look first. `join` notes
+      // its failure the same way.
+      _owner._failedUnmarked(error);
+      rethrow;
+    }
     if (result is! Future<T>) {
       // Work handed over with `unattended` waits for the value, so it goes
       // on below like the body's: see `join`.
@@ -1465,7 +1475,13 @@ abstract class JobContextBase implements JobContext {
       throw pending;
     }
     if (branches.isEmpty) {
-      return Future<List<T>>.value(<T>[]);
+      // A checkpoint all the same, as a group of children is once they have
+      // committed: a body that goes on after the call must find the rules
+      // of its domain still holding. Through the future, as theirs comes.
+      return Future<List<T>>.sync(() {
+        check();
+        return <T>[];
+      });
     }
     return _RunAllGroup<T>(this, branches).run();
   }
