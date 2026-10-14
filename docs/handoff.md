@@ -160,10 +160,10 @@ taking a child where the stack runs out takes it whole»
 реализации `Future` и бросающая зона дают то же без него, в ядре — через
 `ctx.join` и `ctx.uncancellable`; это дописано в восьмой вопрос; о нём заведён
 https://github.com/dart-lang/sdk/issues/64584, а правка в ядре ещё ждёт слова
-владельца. План по SDK: ждать разбора issue, после подтверждения отправить
-комментарий с идеей правки — черновик
-`.artifacts/first-await-examples/sdk-issue/comment-idea.md`, — а если команда
-VM согласится, делать правку самим. На старте сессии смотреть issue:
+владельца. План по SDK: ждать разбора issue; комментарий с идеей правки
+отправлен 2026-10-14, текст —
+`.artifacts/first-await-examples/sdk-issue/comment-idea.md`; если команда VM
+согласится, делать правку самим. На старте сессии смотреть issue:
 `gh issue view 64584 --repo dart-lang/sdk --comments`. Остался и десятый
 вопрос — пункт 5 записи `2026-10-12-solo-project-review.md`: M4, M20, L1 и L5.
 Сырые отчёты, зонды и заметки приёмки — `.artifacts/2026-10-12-full-review/`,
