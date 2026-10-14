@@ -4,6 +4,7 @@ library;
 import 'dart:async';
 
 import 'package:async_job/async_job.dart';
+import 'package:async_job/engine.dart' show JobBase;
 import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart';
 
@@ -76,6 +77,13 @@ final class ThrowingNotice extends JobObserver with JobAnswerer {
 
 /// A job of another kind, which the core never hands a hook.
 final class ForeignJob implements Job<Object?> {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+/// The engine protocol implemented rather than extended, the way a mock is:
+/// it passes `is JobBase` and has none of the state of a job of the core.
+final class MockedEngineJob implements JobBase<Object?> {
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
@@ -1806,6 +1814,28 @@ void main() {
       },
       (error, stackTrace) => zone.add(error),
     );
+    expect(zone.map((error) => '$error'), ['Bad state: kept']);
+  });
+
+  test('called by hand with a mock of JobBase, the error reaches the zone',
+      () async {
+    final zone = <Object>[];
+    Object? thrown;
+    await runZonedGuarded(
+      () async {
+        final observer = PlainAnswer();
+        final job = MockedEngineJob();
+        try {
+          observer
+            ..onUnanswered(job, const Cancelled('dropped'), StackTrace.empty)
+            ..onUnanswered(job, StateError('kept'), StackTrace.empty);
+        } on Object catch (error) {
+          thrown = error;
+        }
+      },
+      (error, stackTrace) => zone.add(error),
+    );
+    expect(thrown, isNull);
     expect(zone.map((error) => '$error'), ['Bad state: kept']);
   });
 }

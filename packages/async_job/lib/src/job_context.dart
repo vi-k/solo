@@ -856,6 +856,8 @@ abstract class JobContextBase implements JobContext {
   /// Cancels the owner with a cancellation it cannot refuse: the rules of
   /// a domain come here, and they cancel a job whatever `cancellable`
   /// says.
+  ///
+  /// [cancelled] belongs to the owner alone, as [JobBase.finish] explains.
   @protected
   void cancelOwnJob(Cancelled cancelled) =>
       _owner.cancelWith(cancelled, rejectable: false);
@@ -878,8 +880,9 @@ abstract class JobContextBase implements JobContext {
 
   /// The parent's last word before a child starts.
   ///
-  /// A non-null result finishes the child with it. `solo`, for example, checks
-  /// its start rules here.
+  /// A non-null result finishes the child with it, and belongs to that child
+  /// alone, as [JobBase.finish] explains: it is built at every call. `solo`,
+  /// for example, checks its start rules here.
   @visibleForOverriding
   Cancelled? beforeChildStart(JobBase<Object?> child) => null;
 
@@ -1610,7 +1613,7 @@ abstract class JobContextBase implements JobContext {
         // Up before the child joins the list and down once its start has
         // returned, by a store both times.
         child._startInFlight = true;
-        _owner._children.add(child);
+        _owner._waitFor(child);
         child
           ..start()
           .._startInFlight = false;
@@ -1625,15 +1628,16 @@ abstract class JobContextBase implements JobContext {
         // that has just run out; the check for that is itself allowed to
         // throw. The child stays where the throw left it, the mark of its
         // start still up: on the list, and the owner ends it once its own
-        // body is over. A child the stack ran out on inside `add`, before
-        // the list took it, is on no list, and nothing ends it, as nothing
-        // ends a job `run` never took.
+        // body is over. A child the stack ran out on at the door of
+        // `_waitFor`, before the list took it, is on no list, and nothing
+        // ends it, as nothing ends a job `run` never took.
         rethrow;
       }
-      // By identity, as in `finish`: the refused child is taken off the
-      // list here, before it is finished, so `finish` will not do it later
-      // and a plain `remove` would take a sibling equal by `==` instead.
-      _owner._children.removeWhere((each) => identical(each, child));
+      // Off the list by hand: `finish` below takes a child off it, and
+      // turns around on one that is over already. A rule that ended the
+      // child and still let it in put such a child on the list, and its
+      // start threw.
+      _owner._stopWaitingFor(child);
       child
         ..ignoreFailure()
         ..finish(Failed(error, stackTrace));

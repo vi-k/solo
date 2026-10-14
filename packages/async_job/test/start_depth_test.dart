@@ -134,6 +134,122 @@ void main() {
     expect(zone, isEmpty, reason: 'the body heard it by the throw');
   });
 
+  test('a child cut short and started again is waited for once', () async {
+    final release = Completer<void>();
+    final child = NoStackAtFirstJob(() => release.future, key: 'child');
+    final between = Job.deferred<void>((ctx) => release.future);
+    Object? thrown;
+    final parent = ProbeJob<void>((ctx) async {
+      try {
+        await ctx.run(child);
+      } on Object catch (error) {
+        thrown = error;
+      }
+      ctx.run(between).ignore();
+      ctx.run(child).ignore();
+    })
+      ..launch();
+    await delay(1);
+
+    expect(thrown, isA<StackOverflowError>());
+    expect(
+      parent.childrenList,
+      [same(between), same(child)],
+      reason: 'once, and where a child adopted now stands: the list is in '
+          'the order of adoption',
+    );
+    expect(child.isRunning, isTrue);
+    expect(parent.isFinished, isFalse, reason: 'it waits for the child');
+
+    release.complete();
+    expect(await _ends(parent), isA<Done<void>>());
+    expect(child.outcome, isA<Done<void>>());
+  });
+
+  test('a child cut short and started by another job leaves the first',
+      () async {
+    final release = Completer<void>();
+    final child = NoStackAtFirstJob(() => release.future, key: 'child');
+    Object? thrown;
+    final first = ProbeJob<void>(
+      (ctx) async {
+        try {
+          await ctx.run(child);
+        } on Object catch (error) {
+          thrown = error;
+        }
+        await release.future;
+      },
+      key: 'first',
+    )..launch();
+    await delay(1);
+    final second = ProbeJob<void>(
+      (ctx) async {
+        ctx.run(child).ignore();
+      },
+      key: 'second',
+    )..launch();
+    await delay(1);
+
+    expect(thrown, isA<StackOverflowError>());
+    expect(first.childrenList, isEmpty);
+    expect(second.childrenList, [same(child)]);
+    expect(child.isRunning, isTrue);
+    expect(second.isFinished, isFalse, reason: 'it waits for the child');
+
+    release.complete();
+    expect(await _ends(first), isA<Done<void>>());
+    expect(await _ends(second), isA<Done<void>>());
+    expect(child.outcome, isA<Done<void>>());
+  });
+
+  test('a child cut short under one job and turned away by another leaves it',
+      () async {
+    final release = Completer<void>();
+    final child = NoStackAtFirstJob(() async {}, key: 'child');
+    Object? thrown;
+    final first = ProbeJob<void>(
+      (ctx) async {
+        try {
+          await ctx.run(child);
+        } on Object catch (error) {
+          thrown = error;
+        }
+        await release.future;
+      },
+      key: 'first',
+    )..launch();
+    await delay(1);
+    expect(thrown, isA<StackOverflowError>());
+    expect(first.childrenList, [same(child)]);
+
+    Object? refused;
+    final second = RefusingParentJob<void>(
+      (ctx) async {
+        try {
+          await ctx.run(child);
+        } on Object catch (error) {
+          refused = error;
+        }
+      },
+      key: 'second',
+    )..launch();
+    await delay(1);
+
+    expect(refused, isA<Cancelled>());
+    expect(child.outcome, same(refused));
+    expect(
+      first.childrenList,
+      isEmpty,
+      reason: 'the child has a new parent by now, and it was never on the '
+          'list of that one: it leaves the list it is on',
+    );
+
+    release.complete();
+    expect(await _ends(first), isA<Done<void>>());
+    expect(await _ends(second), isA<Done<void>>());
+  });
+
   test('a child turned away by a rule that overflowed is ended on the spot',
       () async {
     late ProbeJob<void> child;
@@ -694,6 +810,109 @@ void main() {
     await delay(5);
 
     expect(zone, [isStateError]);
+  });
+
+  test('a parent taking a child where the stack runs out takes it whole',
+      () async {
+    // Four of them: the size at which a hash set of the SDK grows to take
+    // one more, by calls any of which the stack may refuse.
+    const had = 4;
+    // In a turn of its own, as every call below is made: the stack under
+    // the test is the same each time.
+    await delay(0);
+    final bottom = _Bottom()..find();
+    var took = 0;
+    var tookNone = 0;
+    for (var call = 0; call < _Bottom.calls; call++) {
+      final body = Completer<void>();
+      final release = Completer<void>();
+      late ProbeContext context;
+      final others = [
+        for (var child = 0; child < had; child++)
+          Job.deferred<void>((ctx) => release.future),
+      ];
+      final leave = Completer<void>();
+      final last = Job.deferred<void>((ctx) => leave.future);
+      final after = Job.deferred<void>((ctx) => release.future);
+      final parent = ProbeJob<void>((ctx) async {
+        context = ctx as ProbeContext;
+        for (final child in others) {
+          ctx.run(child).ignore();
+        }
+        await body.future;
+      })
+        ..launch();
+      await delay(0);
+
+      // By the door a child is taken through and no further. `run` goes on
+      // from there into an `async` function, and an overflow thrown by the
+      // machinery of its first `await` completes the future on the spot,
+      // before the caller has it: with nobody listening the VM reports it
+      // to the zone as unhandled, from a depth the handler of the zone has
+      // no stack to run on, and the root zone ends the isolate. About one
+      // run of this test in forty went that way, the runner waiting for
+      // good.
+      bottom.at(call, () => context.adopt(last));
+
+      final waitedFor = parent.childrenList;
+      expect(
+        waitedFor.take(had),
+        others,
+        reason: 'call $call: the stack may refuse the child, and with it the '
+            'whole of the call that takes it; never the children the parent '
+            'was waiting for already',
+      );
+      final taken = waitedFor.length > had;
+      taken ? took++ : tookNone++;
+
+      // A child written on the list by half is there to a walk from the
+      // front and has no place of its own: the child adopted next and the
+      // first one to leave are where that shows.
+      context.run(after).ignore();
+      expect(
+        parent.childrenList,
+        [...others, if (taken) same(last), same(after)],
+        reason: 'call $call: the child adopted next stands after it',
+      );
+      last.ignoreFailure();
+      if (last.isRunning) {
+        leave.complete();
+      } else {
+        last.cancel().ignore();
+      }
+      await delay(0);
+      // Not asked about itself: a child whose start was cut short once it
+      // was running stays until the body of the parent is over.
+      expect(
+        parent.childrenList.where((child) => !identical(child, last)),
+        [...others, same(after)],
+        reason: 'call $call: it leaves alone, and takes no neighbour with it',
+      );
+
+      body.complete();
+      await delay(0);
+      expect(
+        parent.isFinished,
+        isFalse,
+        reason: 'call $call: five children are still running',
+      );
+
+      release.complete();
+      expect(await _ends(parent), isA<Done<void>>());
+      expect(
+        [...others, after].map((child) => child.outcome),
+        everyElement(isA<Done<void>>()),
+        reason: 'call $call',
+      );
+      expect(last.isFinished, isTrue, reason: 'call $call');
+      expect(parent.childrenList, isEmpty, reason: 'call $call');
+    }
+    expect(
+      [took, tookNone],
+      everyElement(isPositive),
+      reason: 'the calls are to stand on both sides of the place where the '
+          'stack runs out, or none of them was cut short halfway',
+    );
   });
 
   test('a group one branch of which had no stack fails with the overflow',
@@ -1578,6 +1797,85 @@ final class _Tree {
       everyElement(isA<StackOverflowError>()),
       reason: 'the zone hears nothing but the overflow, $shifted',
     );
+  }
+}
+
+/// The bottom of the stack, and the calls made just above it.
+///
+/// [at] makes a call so far down that it finds room for a part of its work
+/// and not for the rest. From one number to the next that part is a frame
+/// longer, and the [calls] numbers between them stand on both sides of the
+/// place where the stack runs out.
+final class _Bottom {
+  /// The levels of the way down the calls are made on.
+  static const levels = 40;
+
+  /// The calls made on a level, each a frame lower than the one before.
+  static const steps = 24;
+
+  /// The calls there are, numbered from zero.
+  static const calls = levels * steps;
+
+  var _reached = 0;
+  var _from = 0;
+
+  /// Walks down to where the stack runs out.
+  void find() {
+    // More than once: the bottom moves while the VM is still compiling the
+    // way down.
+    for (var warm = 0; warm < 8; warm++) {
+      try {
+        _descend(0, -1, 0, null);
+      } on Object catch (error) {
+        if (error is! StackOverflowError) {
+          rethrow;
+        }
+      }
+    }
+    // A few of the levels lie below what was reached: the bottom moves
+    // afterwards as well, by less.
+    _from = _reached - levels + 8;
+  }
+
+  /// Makes [call] at the depth its [number] stands for.
+  void at(int number, void Function() call) {
+    try {
+      _descend(0, _from + number ~/ steps, number % steps, call);
+    } on Object catch (error) {
+      if (error is! StackOverflowError) {
+        rethrow;
+      }
+      // The way down ran out before the level: the call was never made.
+    }
+  }
+
+  @pragma('vm:never-inline')
+  void _descend(int depth, int stop, int lower, void Function()? call) {
+    _reached = depth;
+    if (depth == stop) {
+      try {
+        _lowerBy(lower, call!);
+      } on Object catch (error) {
+        if (error is! StackOverflowError) {
+          rethrow;
+        }
+        // The stack ran out under the call, and what that left behind is
+        // the subject. Caught on the level and not at the top of the way:
+        // a handler is looked for through every frame an error passes, and
+        // there are thousands of them above.
+      }
+      return;
+    }
+    _descend(depth + 1, stop, lower, call);
+  }
+
+  @pragma('vm:never-inline')
+  void _lowerBy(int frames, void Function() call) {
+    if (frames > 0) {
+      _lowerBy(frames - 1, call);
+      return;
+    }
+    call();
   }
 }
 

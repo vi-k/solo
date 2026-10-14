@@ -135,12 +135,12 @@ final class _RunAllGroup<T> {
         _ctx.startChild(child);
       } on Object catch (error, stackTrace) {
         // A child refused before adoption is left as it was. One refused
-        // after it `startChild` has already finished with this very error,
-        // or, when the stack ran out under its start, has left where the
-        // throw found it: on the list of the owner, if `add` got it there,
-        // for the owner to end. Either way the error is what comes out of
-        // the group. The child does not join the branches, or the group
-        // would report it a second time as a failure nobody chose.
+        // after it `startChild` has already finished with this very
+        // error, or, when the stack ran out under its start, has left
+        // where the throw found it: on the list of the owner, if it got
+        // there, for the owner to end. Either way the error is what comes
+        // out of the group. The child does not join the branches, or the
+        // group would report it a second time as a failure nobody chose.
         _refusal = (error, stackTrace);
         if (identical(error, _ctx.pendingCancel)) {
           _turnAwayTheRest(index + 1);

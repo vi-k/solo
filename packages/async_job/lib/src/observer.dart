@@ -186,11 +186,13 @@ mixin JobAnswerer on JobObserver {
   /// these errors out of the zone. Call
   /// `super.onUnanswered(job, error, stackTrace)` to keep the zone as well.
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
-    if (job is JobBase<Object?>) {
+    if (job is JobBase<Object?> && (JobBase._builtOnCore[job] ?? false)) {
       job._toZone(error, stackTrace);
     } else if (!JobBase._isCancellation(error)) {
-      // Called by hand with a job of another kind: the core always passes
-      // its own, so the zone it was created in is not known here.
+      // Called by hand with a job of another kind, or with one that
+      // implements `JobBase` instead of extending it, the way a mock does:
+      // the core always passes its own, so the zone it was created in is
+      // not known here.
       Zone.current.handleUncaughtError(error, stackTrace);
     }
   }

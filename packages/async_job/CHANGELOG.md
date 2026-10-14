@@ -72,6 +72,14 @@ A child's cancellation that the body lets out names the child as the job prints
 itself: `Cancelled(handler: Job(thumbnail): Cancelled(timeout))`, where `0.2.0`
 printed `child thumbnail`, and `child null` for a child without a key.
 
+`JobBase.children` is a copy taken at the call: a child that finishes later is
+still in it and one adopted later is not, where the view `0.2.0` returned
+followed both.
+
+With asserts on, an `AssertionError` reaches the zone when an engine ends two
+children of one job with one `Cancelled` instance. See
+[Not waiting for the checkpoint](doc/extending.md#not-waiting-for-the-checkpoint).
+
 Several error messages are reworded: a test that matches them by text needs the
 new wording.
 
@@ -116,6 +124,8 @@ new wording.
   and the body runs. It left the job running with no body, forever.
 - A child leaves its parent's waiting list by identity: with children equal by
   `==`, the parent finished while one of them still ran.
+- A child leaves its parent's waiting list without a search of it: a parent of
+  thousands of children took time quadratic in their number.
 - Two jobs equal by `==` are no longer taken for one another inside work handed
   to `ctx.unattended`.
 - A body that gives itself up with `throw Cancelled(...)` has accepted that

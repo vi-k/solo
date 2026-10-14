@@ -7,6 +7,7 @@ import 'package:async_job/engine.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart';
 
+import 'support/cancel_reason.dart';
 import 'support/delay.dart';
 import 'support/journal.dart';
 import 'support/probe_job.dart';
@@ -384,6 +385,262 @@ void main() {
     });
   });
 
+  group('the parent finds the child behind a cancellation by its instance', () {
+    // One instance that ends two children of one parent would name the
+    // child that finished last, whichever the body awaited.
+    const shared = Cancelled.by(reason: TestCancelReason('dropped'));
+    ProbeJob<void> slow(String key) =>
+        ProbeJob<void>(key: key, (ctx) => ctx.abandonable(() => delay(50)));
+
+    test('an instance an engine builds for each child names that child', () {
+      fakeAsync((async) {
+        final a = slow('a');
+        final b = slow('b');
+        final parent = Job<void>((ctx) async {
+          final result = ctx.run(a);
+          ctx.run(b).ignore();
+          await result;
+        });
+        async.flushMicrotasks();
+        for (final child in [a, b]) {
+          child.drop(
+            Cancelled.by(
+              reason: const TestCancelReason('dropped'),
+              stackTrace: StackTrace.current,
+            ),
+          );
+        }
+        async.flushTimers();
+        expect(
+          parent.outcome.toString(),
+          'Cancelled(handler: Job(a): Cancelled(dropped))',
+        );
+      });
+    });
+
+    // With asserts on, which is how tests run: the mistake is said to the
+    // zone, and the children end the way they end without asserts.
+    final reported = isA<AssertionError>().having(
+      (error) => '${error.message}',
+      'message',
+      allOf(contains('Job(a)'), contains('Job(b)'), contains('dropped')),
+    );
+    List<Object> zoneOf(void Function(FakeAsync async) scenario) {
+      final zone = <Object>[];
+      runZonedGuarded(
+        () => fakeAsync(scenario),
+        (error, _) => zone.add(error),
+      );
+      return zone;
+    }
+
+    test('one instance handed to finish of two children is reported', () {
+      late final ProbeJob<void> a;
+      late final ProbeJob<void> b;
+      late final Job<void> parent;
+      final zone = zoneOf((async) {
+        a = slow('a');
+        b = slow('b');
+        parent = Job<void>((ctx) async {
+          final result = ctx.run(a);
+          ctx.run(b).ignore();
+          await result;
+        });
+        async.flushMicrotasks();
+        a.drop(shared);
+        b.drop(shared);
+        async.flushTimers();
+      });
+      expect([a.outcome, b.outcome], [same(shared), same(shared)]);
+      expect(
+        parent.outcome.toString(),
+        'Cancelled(handler: Job(b): Cancelled(dropped))',
+        reason: 'the body waited for a: this is what the report is about',
+      );
+      expect(zone, [reported]);
+    });
+
+    test('and so is one handed to cancelWith of two children', () {
+      late final ProbeJob<void> a;
+      late final ProbeJob<void> b;
+      final zone = zoneOf((async) {
+        a = slow('a');
+        b = slow('b');
+        Job<void>((ctx) async {
+          ctx.run(a).ignore();
+          ctx.run(b).ignore();
+        });
+        async.flushMicrotasks();
+        a.cancelBy(shared);
+        b.cancelBy(shared);
+        async.flushTimers();
+      });
+      expect(
+        [a.outcome, b.outcome],
+        [same(shared), same(shared)],
+        reason: 'the routine of b went all the way: nothing was thrown '
+            'through it',
+      );
+      expect(zone, [reported]);
+    });
+
+    test('and one a mark puts over a value', () {
+      late final ProbeJob<void> a;
+      late final ProbeJob<void> b;
+      final zone = zoneOf((async) {
+        a = slow('a');
+        b = slow('b');
+        Job<void>((ctx) async {
+          ctx.run(a).ignore();
+          ctx.run(b).ignore();
+        });
+        async.flushMicrotasks();
+        a.cancelBy(shared);
+        async.flushMicrotasks();
+        b
+          ..cancelBy(shared)
+          ..drop(const Done(null));
+        async.flushTimers();
+      });
+      expect([a.outcome, b.outcome], [same(shared), same(shared)]);
+      expect(zone, [reported]);
+    });
+
+    test('and one a rule turns two children away with', () {
+      const refusal = Cancelled.by(
+        reason: TestCancelReason('dropped'),
+        started: false,
+      );
+      final refused = <Object>[];
+      late final ProbeJob<void> a;
+      late final ProbeJob<void> b;
+      late final RefusingParentJob<void> parent;
+      final zone = zoneOf((async) {
+        a = slow('a');
+        b = slow('b');
+        parent = RefusingParentJob<void>(
+          (ctx) async {
+            for (final child in [a, b]) {
+              try {
+                await ctx.run(child);
+              } on Object catch (error) {
+                refused.add(error);
+              }
+            }
+          },
+          refusal: refusal,
+        )..launch();
+        async.flushTimers();
+      });
+      expect([a.outcome, b.outcome], [same(refusal), same(refusal)]);
+      expect(
+        refused,
+        [same(refusal), same(refusal)],
+        reason: 'the body hears the refusal of b, and not the report',
+      );
+      expect(parent.outcome, isA<Done<void>>());
+      expect(zone, [reported]);
+    });
+
+    test('the report leaves the rest of the routine of the job in place', () {
+      late final ProbeJob<void> a;
+      late final ProbeJob<void> b;
+      final zone = zoneOf((async) {
+        a = slow('a');
+        b = ProbeJob<void>(key: 'b', (ctx) async {
+          ctx.onDispose(() => delay(10));
+          throw StateError('b failed first');
+        });
+        Job<void>((ctx) async {
+          ctx.run(a).ignore();
+          ctx.run(b).ignore();
+        });
+        async.flushMicrotasks();
+        a.cancelBy(shared);
+        b.cancelBy(shared);
+        async.flushTimers();
+      });
+      expect([a.outcome, b.outcome], [same(shared), same(shared)]);
+      expect(
+        zone,
+        [reported, isStateError],
+        reason: 'the failure the cancellation covered is answered for after '
+            '`finish`, by the routine the report must not cut short',
+      );
+    });
+
+    test('the report is said once the job has ended, after its hooks', () {
+      late final ProbeJob<void> b;
+      runZonedGuarded(
+        () => fakeAsync((async) {
+          final a = slow('a');
+          b = slow('b');
+          Job<void>((ctx) async {
+            ctx.run(a).ignore();
+            ctx.run(b).ignore();
+          });
+          async.flushMicrotasks();
+          a.drop(shared);
+          b.drop(shared);
+          async.flushTimers();
+        }),
+        (error, _) => b.hooks.add('reported'),
+      );
+      expect(b.hooks, ['started', 'finished', 'reported']);
+    });
+
+    test('the report goes to the zone the job was created in', () {
+      final created = <Object>[];
+      final ended = <Object>[];
+      fakeAsync((async) {
+        late final ProbeJob<void> a;
+        late final ProbeJob<void> b;
+        late final JobContext context;
+        ProbeJob<void>((ctx) {
+          context = ctx;
+          return ctx.abandonable(() => delay(50));
+        }).launch();
+        runZonedGuarded(
+          () {
+            a = slow('a');
+            b = slow('b');
+          },
+          (error, _) => created.add(error),
+        );
+        context.run(a).ignore();
+        context.run(b).ignore();
+        async.flushMicrotasks();
+        runZonedGuarded(
+          () {
+            a.drop(shared);
+            b.drop(shared);
+          },
+          (error, _) => ended.add(error),
+        );
+        async.flushTimers();
+      });
+      expect(created, [reported]);
+      expect(ended, isEmpty);
+    });
+
+    test('children of two parents may share one', () {
+      late final ProbeJob<void> a;
+      late final ProbeJob<void> b;
+      final zone = zoneOf((async) {
+        a = slow('a');
+        b = slow('b');
+        Job<void>((ctx) async => ctx.run(a).ignore());
+        Job<void>((ctx) async => ctx.run(b).ignore());
+        async.flushMicrotasks();
+        a.drop(shared);
+        b.drop(shared);
+        async.flushTimers();
+      });
+      expect([a.outcome, b.outcome], [same(shared), same(shared)]);
+      expect(zone, isEmpty);
+    });
+  });
+
   test('a finished child leaves the waiting list', () {
     fakeAsync((async) {
       late final ProbeJob<void> parent;
@@ -403,6 +660,60 @@ void main() {
       async.flushTimers();
       expect(parent.outcome, isA<Done<void>>());
       expect(counts, [0, 0, 0]);
+    });
+  });
+
+  test('a child leaves the waiting list from anywhere in it', () {
+    fakeAsync((async) {
+      final gates = <String, Completer<void>>{};
+      final stopped = <String>[];
+      late final JobContext context;
+      final parent = ProbeJob<void>((ctx) {
+        context = ctx;
+        return ctx.abandonable(() => Completer<void>().future);
+      })
+        ..launch();
+      void adopt(String key) {
+        final gate = gates[key] = Completer<void>();
+        final child = Job.deferred<void>(key: key, (ctx) {
+          ctx.onCancel(() => stopped.add(key));
+          return ctx.abandonable(() => gate.future);
+        });
+        context.run(child).ignore();
+      }
+
+      void end(String key) {
+        gates[key]!.complete();
+        async.flushMicrotasks();
+      }
+
+      List<Object?> waitedFor() =>
+          [for (final child in parent.childrenList) child.key];
+
+      ['a', 'b', 'c', 'd', 'e'].forEach(adopt);
+      expect(waitedFor(), ['a', 'b', 'c', 'd', 'e']);
+      end('c');
+      expect(waitedFor(), ['a', 'b', 'd', 'e'], reason: 'from the middle');
+      end('a');
+      expect(waitedFor(), ['b', 'd', 'e'], reason: 'the first');
+      end('e');
+      expect(waitedFor(), ['b', 'd'], reason: 'the last');
+      adopt('f');
+      expect(waitedFor(), ['b', 'd', 'f']);
+      end('d');
+      expect(waitedFor(), ['b', 'f'], reason: 'a neighbour of two gone');
+      end('b');
+      end('f');
+      expect(waitedFor(), isEmpty);
+      ['g', 'h', 'i'].forEach(adopt);
+      expect(waitedFor(), ['g', 'h', 'i'], reason: 'a list emptied fills');
+      end('h');
+
+      parent.cancel().ignore();
+      async.flushTimers();
+      expect(stopped, ['i', 'g'], reason: 'the cascade, last one first');
+      expect(parent.outcome, isA<Cancelled>());
+      expect(waitedFor(), isEmpty);
     });
   });
 
@@ -709,6 +1020,65 @@ void main() {
     fakeAsync((async) {
       final job = ProbeJob<void>((ctx) async {})..launch();
       expect(() => job.childrenList.add(job), throwsUnsupportedError);
+    });
+  });
+  test('the waiting list a subclass sees is a copy taken at the call', () {
+    fakeAsync((async) {
+      final child =
+          Job.deferred<void>((ctx) => ctx.abandonable(() => delay(10)));
+      final later =
+          Job.deferred<void>((ctx) => ctx.abandonable(() => delay(50)));
+      late final JobContext context;
+      final parent = ProbeJob<void>((ctx) async {
+        context = ctx;
+        ctx.run(child).ignore();
+        await ctx.abandonable(() => delay(30));
+      })
+        ..launch();
+      async.flushMicrotasks();
+      final seen = parent.childrenList;
+      expect(seen, [same(child)]);
+      async.elapse(const Duration(milliseconds: 20));
+      expect(child.isFinished, isTrue);
+      context.run(later).ignore();
+      expect(
+        seen,
+        [same(child)],
+        reason: 'the copy keeps the child that left, and does not take the '
+            'one adopted since',
+      );
+      expect(parent.childrenList, [same(later)]);
+      async.flushTimers();
+      expect(parent.outcome, isA<Done<void>>());
+    });
+  });
+
+  test('a child its rule ended and still let in is not waited for', () {
+    fakeAsync((async) {
+      final child = Job.deferred<void>((ctx) async {});
+      Object? thrown;
+      final parent = ChildEndingRulesJob<void>(
+        (ctx) async {
+          try {
+            await ctx.run(child);
+          } on Object catch (error) {
+            thrown = error;
+          }
+          await delay(50);
+        },
+        letsIn: true,
+      )..launch();
+      async.flushMicrotasks();
+      expect(thrown, isStateError, reason: 'a job that is over is not started');
+      expect(child.outcome, isA<Cancelled>());
+      expect(
+        parent.childrenList,
+        isEmpty,
+        reason: 'the child joined the list on the word of the rule and ended '
+            'before that: nothing but the refusal takes it off',
+      );
+      async.flushTimers();
+      expect(parent.outcome, isA<Done<void>>());
     });
   });
   test(

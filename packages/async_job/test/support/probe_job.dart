@@ -90,14 +90,22 @@ final class UnadoptableJob<T> extends JobBase<T> {
 /// A job whose context turns every child away before it starts.
 final class RefusingParentJob<T> extends JobBase<T> {
   final Future<T> Function(JobContext ctx) _body;
+  final Cancelled? _refusal;
 
-  RefusingParentJob(this._body, {super.key, super.observer});
+  /// With [refusal], every child is turned away with that one instance, the
+  /// way a rule of a domain that answers with a constant does.
+  RefusingParentJob(
+    this._body, {
+    super.key,
+    super.observer,
+    Cancelled? refusal,
+  }) : _refusal = refusal;
 
   /// Starts the body the way an engine of a domain would.
   void launch() => start();
 
   @override
-  JobContextBase createContext() => RefusingContext(this);
+  JobContextBase createContext() => RefusingContext(this, _refusal);
 
   @override
   Future<T> execute(covariant RefusingContext ctx) => _body(ctx);
@@ -105,10 +113,14 @@ final class RefusingParentJob<T> extends JobBase<T> {
 
 /// The context of [RefusingParentJob].
 final class RefusingContext extends JobContextBase {
-  RefusingContext(super.owner);
+  final Cancelled? _refusal;
+
+  RefusingContext(super.owner, [this._refusal]);
 
   @override
-  Cancelled? beforeChildStart(JobBase<Object?> child) => Cancelled.by(
+  Cancelled? beforeChildStart(JobBase<Object?> child) =>
+      _refusal ??
+      Cancelled.by(
         reason: const TestCancelReason('rules'),
         started: false,
         description: 'not now',
@@ -178,6 +190,25 @@ final class NoStackForContextJob extends JobBase<void> {
   @override
   Future<void> execute(covariant ProbeContext ctx) async =>
       throw StateError('never runs');
+}
+
+/// A job of the core with no stack for its context the first time it is
+/// started.
+///
+/// Stands in for a handle whose start was cut short at the bottom of a
+/// stack before it did a thing, and that is started again higher up.
+final class NoStackAtFirstJob extends JobBase<void> {
+  final Future<void> Function() _body;
+  var _starts = 0;
+
+  NoStackAtFirstJob(this._body, {super.key});
+
+  @override
+  JobContextBase createContext() =>
+      _starts++ == 0 ? throw const StackOverflowError() : ProbeContext(this);
+
+  @override
+  Future<void> execute(covariant ProbeContext ctx) => _body();
 }
 
 /// A job with no stack for its context whose engine fails to end it.
@@ -377,14 +408,26 @@ final class ThrowingRulesContext extends JobContextBase {
 /// arrives at a child that is already over.
 final class ChildEndingRulesJob<T> extends JobBase<T> {
   final Future<T> Function(JobContext ctx) _body;
+  final bool _letsIn;
 
-  ChildEndingRulesJob(this._body, {super.key, super.observer});
+  /// With [letsIn], the rule says yes instead of throwing, and the child
+  /// that is over goes on to its start.
+  ChildEndingRulesJob(
+    this._body, {
+    super.key,
+    super.observer,
+    bool letsIn = false,
+  }) : _letsIn = letsIn;
+
+  /// The waiting list, as a subclass of the core sees it.
+  List<JobBase<Object?>> get childrenList => children;
 
   /// Starts the body the way an engine of a domain would.
   void launch() => start();
 
   @override
-  JobContextBase createContext() => ChildEndingRulesContext(this);
+  JobContextBase createContext() =>
+      ChildEndingRulesContext(this, letsIn: _letsIn);
 
   @override
   Future<T> execute(covariant ChildEndingRulesContext ctx) => _body(ctx);
@@ -392,12 +435,15 @@ final class ChildEndingRulesJob<T> extends JobBase<T> {
 
 /// The context of [ChildEndingRulesJob].
 final class ChildEndingRulesContext extends JobContextBase {
-  ChildEndingRulesContext(super.owner);
+  final bool _letsIn;
+
+  ChildEndingRulesContext(super.owner, {bool letsIn = false})
+      : _letsIn = letsIn;
 
   @override
   Cancelled? beforeChildStart(JobBase<Object?> child) {
     child.cancel().ignore();
-    throw StateError('rule failed');
+    return _letsIn ? null : throw StateError('rule failed');
   }
 }
 

@@ -59,6 +59,30 @@ final class Payload {
   return (first, WeakReference(payload));
 }
 
+/// Only one of two children comes back, the one that ends first. The value
+/// of the other is then reachable from it alone, through the neighbours a
+/// child keeps while its parent waits for it: the one adopted before it and
+/// the one adopted after.
+(Job<Object?>, WeakReference<Payload>) valueOfANeighbour({
+  required bool adoptedFirst,
+}) {
+  final payload = Payload();
+  final gate = Completer<void>();
+  final kept = Job.deferred<Object?>((ctx) async => 1);
+  final other = Job.deferred<Object?>((ctx) async {
+    await ctx.abandonable(() => gate.future);
+    return payload;
+  });
+  Job<void>((ctx) async {
+    final (first, second) = adoptedFirst ? (kept, other) : (other, kept);
+    final values = [ctx.run(first), ctx.run(second)];
+    await kept.done;
+    gate.complete();
+    await values.wait;
+  }).ignoreFailure();
+  return (kept, WeakReference(payload));
+}
+
 /// Only a job made inside the unattended work of another comes back. The
 /// value of the job that started the work is then reachable from it alone,
 /// through the fork the work runs in: the fork carries that job.
@@ -182,6 +206,24 @@ void main() {
           'chain it came out of, up to the root',
     );
   });
+
+  for (final (adoptedFirst, neighbour) in [
+    (true, 'after'),
+    (false, 'before'),
+  ]) {
+    test('a finished child lets go of the child adopted $neighbour it',
+        () async {
+      final (child, capture) = valueOfANeighbour(adoptedFirst: adoptedFirst);
+      await child.done;
+      expect(child.outcome, isA<Done<Object?>>());
+      expect(
+        await collected(capture),
+        isTrue,
+        reason: 'the parent stopped waiting for it; a handle kept for its '
+            'outcome must not hold the children it stood between',
+      );
+    });
+  }
 
   test('a finished branch lets go of its group', () async {
     final (branch, capture) = valueOfASibling();

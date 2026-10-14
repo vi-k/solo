@@ -568,16 +568,44 @@ abstract class JobBase<T> implements Job<T> {
 
   /// Hands out [_Cleanup.order] — the order registrations were made in.
   int _cleanupOrder = 0;
-  final _children = <JobBase<Object?>>[];
+
+  /// The first and the last of the children this job waits for, in the
+  /// order they were adopted; each child holds its neighbours, in
+  /// [_previousSibling] and [_nextSibling].
+  ///
+  /// A chain and not a collection, for three reasons. A child goes on it
+  /// where the stack may have run out, and there only a store is sure to be
+  /// done: a hash set that grows re-adds its keys by calls, and one cut
+  /// short halfway leaves the set empty and the parent with no child to wait
+  /// for. A child is found by what it is and never by `==`: a job of a
+  /// domain may compare itself by a key, two children equal by that key are
+  /// still two jobs, and a list searched by `==` would let the one that
+  /// finishes take its sibling off instead. And a child leaves at once,
+  /// where a list had to be walked to find it and a parent of thousands of
+  /// children took time quadratic in their number.
+  JobBase<Object?>? _firstChild;
+  JobBase<Object?>? _lastChild;
+
+  /// The neighbours of this job on the chain of [_waitedForBy].
+  JobBase<Object?>? _previousSibling;
+  JobBase<Object?>? _nextSibling;
+
+  /// The job whose chain of children this one is on.
+  ///
+  /// Not [_parent]: that one is set before the child joins the chain, and a
+  /// handle whose start was cut short may be handed to another parent while
+  /// the first still lists it.
+  JobBase<Object?>? _waitedForBy;
 
   /// The child behind an outcome of a child, for the description of this
   /// job's own.
   ///
-  /// The key is the outcome instance itself, so a child must never be
-  /// finished with a canonicalized constant: two identical
-  /// `const Cancelled.by(...)` are one object and one entry. Today that
-  /// holds by itself — every cancellation the core builds carries a
-  /// stack trace of its own.
+  /// The key is the outcome instance itself, so two children of one job
+  /// must never end with one instance, const or not: they would share one
+  /// entry, and the job would name the one that finished last. Every
+  /// cancellation the core builds is an instance of its own; an engine of a
+  /// domain that hands one to [finish] or [cancelWith] builds one per job
+  /// too, and with asserts on [finish] says so when it did not.
   ///
   /// `late final` and not `final`, the way `_cascadeChild` below already
   /// is: only a parent whose child's outcome came out through its body
@@ -1099,6 +1127,8 @@ abstract class JobBase<T> implements Job<T> {
 
   /// Cancels the job with [cancelled], correcting `started` to its status.
   ///
+  /// [cancelled] belongs to this job alone, as [finish] explains.
+  ///
   /// Idempotent. [rejectable] is what a job created with
   /// `cancellable: false` may refuse, and its refusal is final — nothing
   /// is replayed later. Inside [JobContext.uncancellable] a rejectable
@@ -1207,7 +1237,7 @@ abstract class JobBase<T> implements Job<T> {
   /// first error is rethrown once the last child has been asked.
   void _cascadeToChildren(Cancelled cancelled) {
     (Object, StackTrace)? failure;
-    for (final child in _children.reversed.toList()) {
+    for (final child in _childrenNow().reversed) {
       try {
         // The body of `_cancelChild`, written out rather than called.
         // Every frame on this path is paid for at every level of the
@@ -1340,14 +1370,79 @@ abstract class JobBase<T> implements Job<T> {
     cancelWith(held);
   }
 
-  /// The children this job waits for; read-only.
+  /// The children this job waits for, in the order they were adopted;
+  /// read-only.
+  ///
+  /// A copy taken at the call, not a view: a child that finishes after it
+  /// is still in the list, and one adopted after it is not.
   ///
   /// The way in is [JobContextBase.startChild] alone, which [JobContext.run],
   /// [JobContext.runAll] and [JobContext.each] go through: it sets the parent,
   /// the level and the observer of the child, and nothing else may put a job on
   /// this list — the core would wait for a child it never adopted.
   @protected
-  List<JobBase<Object?>> get children => UnmodifiableListView(_children);
+  List<JobBase<Object?>> get children => UnmodifiableListView(_childrenNow());
+
+  /// The chain of children as it is now, first adopted first.
+  ///
+  /// A list of its own: whoever walks it may end a child, and a child that
+  /// ends takes itself off the chain.
+  List<JobBase<Object?>> _childrenNow() {
+    final children = <JobBase<Object?>>[];
+    for (var child = _firstChild; child != null; child = child._nextSibling) {
+      children.add(child);
+    }
+    return children;
+  }
+
+  /// Puts [child] at the end of the chain.
+  ///
+  /// Whole or not at all: the stack may run out at the door of this call or
+  /// of the one it begins with, before anything is written, and past that
+  /// there are only stores.
+  void _waitFor(JobBase<Object?> child) {
+    // A handle whose start was cut short is still on the chain of the job
+    // that started it, and is started again here: by that job or by
+    // another.
+    child._waitedForBy?._stopWaitingFor(child);
+    // Asserted, so an edit that ever leaves the child where it stood shows
+    // up as the defect it is: linked below to itself, it would make every
+    // walk of the chain endless.
+    assert(child._waitedForBy == null, '$child is on a chain already');
+    final last = _lastChild;
+    child
+      .._previousSibling = last
+      .._waitedForBy = this;
+    if (last == null) {
+      _firstChild = child;
+    } else {
+      last._nextSibling = child;
+    }
+    _lastChild = child;
+  }
+
+  /// Takes [child] off the chain, if it is on it.
+  void _stopWaitingFor(JobBase<Object?> child) {
+    if (!identical(child._waitedForBy, this)) {
+      return;
+    }
+    final previous = child._previousSibling;
+    final next = child._nextSibling;
+    if (previous == null) {
+      _firstChild = next;
+    } else {
+      previous._nextSibling = next;
+    }
+    if (next == null) {
+      _lastChild = previous;
+    } else {
+      next._previousSibling = previous;
+    }
+    child
+      .._previousSibling = null
+      .._nextSibling = null
+      .._waitedForBy = null;
+  }
 
   /// Waiting without observing: an engine waits for a job to finish
   /// without marking its outcome observed, so a failure nobody looked at
@@ -1534,6 +1629,13 @@ abstract class JobBase<T> implements Job<T> {
   /// cancellation covered goes — to [JobObserver.onError] and to the
   /// answer of the observer. A [Cancelled] handed in stands.
   ///
+  /// A [Cancelled] handed in here or to [cancelWith] belongs to this job
+  /// alone. The parent finds the child behind a cancellation by the
+  /// instance, and with one instance for two of its children — a `const`
+  /// one is one for the whole program — it names the child that ended last.
+  /// With asserts on, the second of them ends as it does without them, and
+  /// an [AssertionError] goes to the zone it was created in.
+  ///
   /// An override calls `super.finish`: this is where the job gets its
   /// outcome, and without it the job never ends.
   @protected
@@ -1588,15 +1690,18 @@ abstract class JobBase<T> implements Job<T> {
     // an outcome to the child that carried it lives on, in the parent's
     // `Expando`. Both happen here, where they are observable: in `finished`
     // and in `onFinish` the parent's list is already without this child.
-    // By identity, never by `==`: a job of a domain may compare itself by a
-    // key, and two children equal by that key are still two jobs. Plain
-    // `remove` would take the first equal one off the list and leave this
-    // one on it — the parent would then wait for a job that is over and
-    // walk away from one that is still running.
+    _waitedForBy?._stopWaitingFor(this);
     final parent = _parent;
+    JobBase<Object?>? endedWithTheSame;
     if (parent != null) {
-      parent._children.removeWhere((child) => identical(child, this));
       if (decided is Cancelled) {
+        assert(
+          () {
+            endedWithTheSame = parent._outcomeChild[decided];
+            return true;
+          }(),
+          'never fails: it reads the entry the next line replaces',
+        );
         parent._outcomeChild[decided] = this;
       }
       // On its way to the parent's body through `run` or `value`. A failure
@@ -1662,6 +1767,22 @@ abstract class JobBase<T> implements Job<T> {
     if (replaced is Failed && !identical(replaced.error, _announcedError)) {
       _announcedError = replaced.error;
       _reportCovered(replaced, announced: false);
+    }
+    // Said and not thrown, and last of all: the job has ended the way it
+    // ends with asserts off. Thrown from here, it would leave through the
+    // routine of a job whose engine handed the instance to `cancelWith`,
+    // and take the rest of that routine with it.
+    if (endedWithTheSame case final other?) {
+      _notify(
+        () => _toZone(
+          AssertionError(
+            '$decided ended two children of $parent, $other and $this: a '
+            'Cancelled an engine ends a job with belongs to that job, build '
+            'one for each',
+          ),
+          StackTrace.current,
+        ),
+      );
     }
   }
 
@@ -2211,7 +2332,7 @@ abstract class JobBase<T> implements Job<T> {
       group = next;
     }
     // By copy: a child that finishes takes itself off the list.
-    for (final child in List.of(_children)) {
+    for (final child in _childrenNow()) {
       if (child.isFinished || !child._startWasTorn) {
         continue;
       }
@@ -2344,7 +2465,7 @@ abstract class JobBase<T> implements Job<T> {
       // `whenDone`, not `done`: waiting for a child is the core's
       // business and must not mark the child observed for the parent.
       final pending = <Future<void>>[];
-      for (final child in _children) {
+      for (var child = _firstChild; child != null; child = child._nextSibling) {
         if (child.isFinished) {
           continue;
         }
@@ -2389,7 +2510,7 @@ abstract class JobBase<T> implements Job<T> {
     for (var group = _firstGroup; group != null; group = group._next) {
       group._forming = false;
     }
-    for (final child in _children) {
+    for (var child = _firstChild; child != null; child = child._nextSibling) {
       child._startInFlight = false;
     }
   }

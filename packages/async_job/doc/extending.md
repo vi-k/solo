@@ -383,6 +383,16 @@ or a `Failed` gives way to the cancellation the job accepted, a value handed in
 goes nowhere, and only another `Cancelled` handed in stands. An engine that
 finishes a running job by hand anyway releases what the job holds first.
 
+A `Cancelled` handed to `cancelWith` or to `finish` belongs to one job, the way
+`onSignOut` above builds one at every call. A parent finds the child behind a
+cancellation by the instance: with one instance for two of its children, its
+outcome names the child that ended last, not the one its body waited for, and a
+`const` one is one instance for the whole program. With asserts on, the second
+child of one parent to end with the instance sends an `AssertionError` to the
+zone it was created in, and ends the way it does without them. A `Cancelled`
+that a body throws, or a rule from `check()`, is not bound by this: the job
+ends with one the core builds from it.
+
 ## Deferred start
 
 A regular `Job` schedules its own start on the next microtask. If the caller
