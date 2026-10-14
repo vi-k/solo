@@ -183,6 +183,7 @@ void main() {
     stage.dispose();
     Solo.observer = null;
     Solo.unansweredHandler = null;
+    Solo.debug = null;
   });
 
   group('The opening block', () {
@@ -1595,14 +1596,14 @@ void main() {
 
       expect(errors, isEmpty);
       expect(_seen, [
-        _quotes().last,
-        _quotes().last.replaceFirst('Job(then)', 'Job()'),
+        _quotes()[1],
+        _quotes()[1].replaceFirst('Job(then)', 'Job()'),
       ]);
       expect(
-        _quotes().last,
+        _quotes()[1],
         'Invalid argument (job): was not created by this Solo: "Job(then)"',
       );
-      expect(_quotes(), hasLength(2));
+      expect(_quotes(), hasLength(3));
       _says('The controller refuses it with an `ArgumentError`:');
       _says('A job of the core made by hand is refused in the same words.');
     });
@@ -1757,6 +1758,20 @@ void main() {
           'an hour later: job no outcome, [], queue [Job(_Op.sync)]',
         ]);
         _says('The caller is waiting for that job: the upload never starts');
+      });
+
+      test('Solo.debug says it as the job is queued', () {
+        final lines = <String>[];
+        final errors = _zone((async) {
+          Solo.debug = lines.add;
+          first.Queued().syncAndRecord(1);
+          async.flushMicrotasks();
+        });
+
+        expect(errors, isEmpty);
+        expect(lines, contains(_quotes()[2]));
+        _says('The hang itself says nothing, but `Solo.debug` says it as the '
+            'job is queued:');
       });
 
       test('close() cancels both', () {

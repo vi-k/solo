@@ -506,6 +506,34 @@ void main() {
     expect(jobs, isNot(contains('add Job(job)')));
   });
 
+  test('a job added while another is in its body says when it starts', () {
+    final engine = <String>[];
+    Solo.debug = engine.add;
+    try {
+      runSolo((solo, journal, async) {
+        solo.run<TestState, void>(key: 'outer', (ctx) async {
+          // Not awaited: awaited, it would wait for good.
+          solo.run<TestState, void>(key: 'inner', (ctx) async {});
+          ctx.onDispose(() {
+            solo.run<TestState, void>(key: 'cleanup', (ctx) async {});
+          });
+        });
+        async.flushMicrotasks();
+      });
+    } finally {
+      Solo.debug = null;
+    }
+    expect(engine, contains('add Job(outer)'));
+    expect(
+      engine,
+      contains(
+        'add Job(inner) while Job(outer) is in its body: '
+        'it starts after Job(outer) ends',
+      ),
+    );
+    expect(engine, contains('add Job(cleanup)'), reason: 'past the body');
+  });
+
   test('a describe that throws is a mark on Solo.debug, and no more', () {
     final engine = <String>[];
     final zone = <Object>[];

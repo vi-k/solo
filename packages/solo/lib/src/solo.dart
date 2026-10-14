@@ -82,6 +82,11 @@ abstract class Solo<S extends Object> {
   /// `describe` that throws shows as a mark, `Job(<key threw StateError>)`,
   /// and the error goes no further. [Job.debug] hands such an error to the
   /// zone as well.
+  ///
+  /// A job queued while the running one is still in its body gets a tail on
+  /// its line, `add Job(inner) while Job(outer) is in its body: it starts
+  /// after Job(outer) ends`. A body that awaits a job of its own controller
+  /// waits for good, and this is the line that shows it.
   static void Function(String message)? debug;
 
   S _state;
@@ -566,7 +571,18 @@ abstract class Solo<S extends Object> {
     // incoming job. It must not occupy a queue slot or match a later policy.
     if (impl.isFinished) return impl;
     _queue._insert(impl, first: first);
-    _debug(() => 'add $impl${first ? ' first' : ''}');
+    _debug(() {
+      final line = 'add $impl${first ? ' first' : ''}';
+      final current = _current;
+      // A method of the controller called from a body queues a root job,
+      // and a body that awaits it waits for good. Who called is not known
+      // here, so the line says what holds for any caller.
+      if (current == null || current._bodyEnded) {
+        return line;
+      }
+      return '$line while $current is in its body: '
+          'it starts after $current ends';
+    });
     _schedulePump();
     return impl;
   }
