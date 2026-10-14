@@ -188,6 +188,7 @@ Job<void> seek(Duration position) => run<Ready, void>(
 #### Первая попытка
 
 ```dart
+// Первая попытка: один ключ на все профили.
 Job<Profile> load(String id) => run<Ready, Profile>(
       key: _Op.load,
       policy: Policy.droppable,
@@ -307,6 +308,7 @@ Job<void> stop() {
 #### Первая попытка
 
 ```dart
+// Первая попытка: ворота ждут за задачами из очереди.
 Completer<void>? _gate;
 
 bool get isPaused => _gate != null;
@@ -339,6 +341,7 @@ void resume() {
 #### Вторая попытка
 
 ```dart
+// Вторая попытка: ворота, снятые до старта, остаются в поле.
 void pause() {
   if (_gate != null) return;
   final gate = _gate = Completer<void>();

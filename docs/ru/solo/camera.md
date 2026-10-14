@@ -94,6 +94,7 @@ final class Disposed extends CameraState {
 ### Первая попытка
 
 ```dart
+// Первая попытка: первый emit выводит из рабочего типа.
 Job<void> init() => run<Initial, void>(
       key: CameraKey.init,
       policy: Policy.droppable,
@@ -156,6 +157,7 @@ Job<void> init() => run<NotDisposed, void>(
 ### Первая попытка
 
 ```dart
+// Первая попытка: отмена оставляет состояние в Preparing.
 (ctx) async {
   ctx.emit(const Preparing());
   try {
@@ -233,6 +235,7 @@ state: Broken(Cancelled(manual))
 ### Первая попытка
 
 ```dart
+// Первая попытка: каждый зум доходит до объектива.
 Job<void> setZoom(double zoom) => run<Ready, void>(
       key: CameraKey.setZoom,
       describe: () => 'zoom: $zoom',
@@ -330,6 +333,7 @@ Job<Photo> takePhoto() => run<Ready, Photo>(
 ### Первая попытка
 
 ```dart
+// Первая попытка: освобождение ждёт в конце очереди.
 Job<void> dispose() => run<CameraState, void>(
       key: CameraKey.dispose,
       policy: Policy.droppable,
@@ -375,6 +379,7 @@ state: Disposed()
 ### Вторая попытка
 
 ```dart
+// Вторая попытка: повторный dispose() сообщает об отмене.
 Job<void> dispose() {
   queue.clear();
   current?.cancel();
@@ -468,6 +473,7 @@ Job<void> dispose() {
 ### Первая попытка
 
 ```dart
+// Первая попытка: close() снимает освобождение из очереди.
 camera.dispose();
 await camera.close();
 ```
@@ -490,6 +496,7 @@ closed
 ### Вторая попытка
 
 ```dart
+// Вторая попытка: сбой освобождения уходит в зону.
 camera.dispose();
 await camera.close(mode: SoloCloseMode.drain);
 ```
@@ -556,6 +563,7 @@ switch (await camera.dispose().done) {
 ### Первая попытка
 
 ```dart
+// Первая попытка: слушатель переживает освобождение.
 CameraController(this.hw) : super(const Initial()) {
   hw.onError = (error) => externalSetState(Broken(error));
 }
@@ -583,6 +591,7 @@ state: Broken(Bad state: cable pulled)
 ### Вторая попытка
 
 ```dart
+// Вторая попытка: сообщение до close() всё ещё затирает Disposed.
 @override
 void onClose() => hw.onError = null;
 ```

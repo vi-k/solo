@@ -52,6 +52,7 @@ abstract interface class SearchApi {
 The controller's vocabulary says `run`, so every keystroke gets a job:
 
 ```dart
+// The first attempt: every keystroke waits for the one before.
 final class QueuedSearch extends Solo<SearchState> {
   final SearchApi api;
 
@@ -90,6 +91,7 @@ queue's own policies are in [Queue and policies](jobs.md#queue-and-policies) on
 the jobs page. Only the method changes:
 
 ```dart
+// The second attempt: the server is still asked four times.
 Job<void> query(String text) => run<SearchState, void>(
       key: 'query',
       policy: Policy.restart,
@@ -214,6 +216,7 @@ abstract interface class SettingsApi {
 Every change is a job, and the job writes:
 
 ```dart
+// The first attempt: every change is a write of its own.
 final class EagerSettingsController extends Solo<Settings> {
   final SettingsApi _api;
 
@@ -252,6 +255,7 @@ theme after its owner has already picked the dark one.
 one to stop. Only the method changes:
 
 ```dart
+// The second attempt: a restart overwrites the change it replaced.
 Job<void> update(SettingsPatch patch) => run<Settings, void>(
       key: 'settings',
       policy: Policy.restart,
@@ -402,6 +406,7 @@ abstract interface class LogApi {
 Every line is a job, and the job sends:
 
 ```dart
+// The first attempt: every line is a round trip of its own.
 final class EagerLogController extends Solo<int> {
   final LogApi _api;
 
@@ -535,6 +540,7 @@ abstract interface class PlayerDevice {
 Each command is a job of its own:
 
 ```dart
+// The first attempt: every tap reaches the device.
 final class QueuedPlayer extends Solo<Playback> {
   final PlayerDevice device;
 

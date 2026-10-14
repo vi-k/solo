@@ -73,6 +73,7 @@ class FakeProfileApi implements ProfileApi {
 ### Первая попытка
 
 ```dart
+// Первая попытка: проверка выполняется раньше загрузки.
 test('load fills in the name', () {
   final profile = ProfileController(FakeProfileApi());
 
@@ -163,6 +164,7 @@ test('a cancelled load ends Cancelled', () async {
 ### Первая попытка
 
 ```dart
+// Первая попытка: close() отменяет загрузку раньше.
 test('load fills in the name', () async {
   final profile = ProfileController(FakeProfileApi());
 
@@ -211,6 +213,7 @@ test('load fills in the name', () async {
 ### Первая попытка
 
 ```dart
+// Первая попытка: непрочитанный сбой роняет тест.
 test('a failed load shows the failure', () async {
   final profile = ProfileController(
     FakeProfileApi(error: StateError('no network')),
@@ -278,6 +281,7 @@ test('a failed load shows the failure', () async {
 ### Первая попытка
 
 ```dart
+// Первая попытка: тест назван по случаю, которого не создаёт.
 final class Journal extends SoloObserver {
   final lines = <String>[];
 
@@ -381,6 +385,7 @@ load Done(Ada Lovelace)
 ### Первая попытка
 
 ```dart
+// Первая попытка: никто не двигает поддельные часы.
 test('load fills in the name', () async {
   await fakeAsync((async) async {
     final profile = ProfileController(FakeProfileApi());
@@ -467,6 +472,7 @@ expect('${job.outcome}', 'Cancelled(manual)');
 ### Первая попытка
 
 ```dart
+// Первая попытка: упавший expect пропускает сброс.
 test('a second load while the first one runs is dropped', () {
   final journal = Journal();
   Solo.observer = journal;
@@ -505,6 +511,7 @@ addTearDown(() => Solo.observer = null);
 ### Первая попытка
 
 ```dart
+// Первая попытка: тест ничего не доказывает о зоне.
 test('a failure nobody read reaches the zone', () async {
   await runZonedGuarded(
     () async {
@@ -571,6 +578,7 @@ test('a failure nobody read reaches the zone', () async {
 ### Первая попытка
 
 ```dart
+// Первая попытка: срок обрывает ожидание, а не вызов.
 final name = await ctx.abandonable(
   () => api.fetchName().timeout(const Duration(milliseconds: 5)),
 );

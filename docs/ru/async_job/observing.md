@@ -126,6 +126,7 @@ final class SlowCancellations extends JobObserver {
 `log` принимает сообщение, и строка годится в сообщение:
 
 ```dart
+// Первая попытка: строка собирается впустую.
 ctx.log('migration failed: $error');
 ```
 
@@ -158,6 +159,7 @@ Dart отправляет в зону ошибку, которую никто н
 полагается на зону и наблюдателя задаче не даёт:
 
 ```dart
+// Первая попытка: зона так и не узнаёт о сбое открытия.
 final job = Job<Database>(
   (ctx) => ctx.join(
     Database.open,
@@ -340,6 +342,7 @@ outcome: Cancelled(manual)
 `unawaited` из Dart помечает future, которую намеренно не ждут:
 
 ```dart
+// Первая попытка: ошибка уходит в зону, а не в задачу.
 unawaited(analytics.send('loaded'));
 ```
 
@@ -482,6 +485,7 @@ final class Crashes extends JobObserver with JobAnswerer {
 обоим, а ответ `Crashes`:
 
 ```dart
+// Первая попытка: каждый хук передаётся вручную и без try/catch.
 final class Both extends JobObserver with JobAnswerer {
   final _reporter = Reporter();
   final _crashes = Crashes();
@@ -551,6 +555,7 @@ onUnanswered: Bad state: analytics offline
 поэтому тест её ждёт:
 
 ```dart
+// Первая попытка: ни один expect не выполняется.
 test('a cancelled open still closes what it opened', () {
   fakeAsync((async) async {
     var closed = 0;

@@ -122,6 +122,7 @@ gives it none, and there the message should cost nothing.
 `log` takes a message, and a string is one:
 
 ```dart
+// The first attempt: the string is built for nobody.
 ctx.log('migration failed: $error');
 ```
 
@@ -154,6 +155,7 @@ Dart sends an error nobody caught to the zone, so the app counts on the zone
 and gives the job no observer:
 
 ```dart
+// The first attempt: the zone never hears that the open failed.
 final job = Job<Database>(
   (ctx) => ctx.join(
     Database.open,
@@ -341,6 +343,7 @@ analytics is offline. The job has the `Reporter` from the section above.
 Dart's `unawaited` marks a future left on purpose:
 
 ```dart
+// The first attempt: the error goes to the zone, not to the job.
 unawaited(analytics.send('loaded'));
 ```
 
@@ -483,6 +486,7 @@ final class Crashes extends JobObserver with JobAnswerer {
 its answer to `Crashes`:
 
 ```dart
+// The first attempt: every hook handed on by hand, with no try/catch.
 final class Both extends JobObserver with JobAnswerer {
   final _reporter = Reporter();
   final _crashes = Crashes();
@@ -550,6 +554,7 @@ so the test waits for nothing in real time.
 awaits it:
 
 ```dart
+// The first attempt: neither expect runs.
 test('a cancelled open still closes what it opened', () {
   fakeAsync((async) async {
     var closed = 0;

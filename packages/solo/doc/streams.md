@@ -22,6 +22,7 @@ A controller copies the positions its hardware reports into the state.
 ### The first attempt
 
 ```dart
+// The first attempt: the job ends before the first position.
 Job<void> track() => run<Ready, void>(
       key: 'track',
       (ctx) async {
@@ -113,6 +114,7 @@ another controller.
 ### The first attempt
 
 ```dart
+// The first attempt: the screen misses the current session.
 final class ScreenController extends Solo<Screen> {
   final SoloStream<Session> session;
 

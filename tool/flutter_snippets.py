@@ -455,7 +455,7 @@ FILES['stream_screen_test'] = '\n'.join([
     _session,
     snips['a-screen-built-on-the-stream/SessionBadge'],
     wrap('withInitialData',
-         snips['a-screen-built-on-the-stream/streambuilder-sessionstate']),
+         snips['a-screen-built-on-the-stream/the-second-attempt-handed-anot']),
     wrap('overTheController',
          snips['a-screen-built-on-the-stream/solobuilder-sessionstate']),
     WRAP,
@@ -1263,7 +1263,7 @@ Future<void> firstAttempt(
   WidgetTester tester,
   ProfileController controller,
 ) async {''',
-    _fr['testing/await-controller-load-done'],
+    _fr['testing/the-first-attempt-the-test-wai'],
     '''}
 
 /// The three lines of the handle.

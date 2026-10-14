@@ -42,6 +42,7 @@ return database;
 ### Первая попытка
 
 ```dart
+// Первая попытка: при успехе блокировка не освобождается.
 final lock = await ctx.join(Lock.acquire, discard: (lock) => lock.release());
 final database = await ctx.join(
   Database.open,
@@ -95,6 +96,7 @@ return database;
 ### Первая попытка
 
 ```dart
+// Первая попытка: discard не уходит со значением, и база не закрывается.
 final connect = Job.deferred<Database>(
   key: 'connect',
   (ctx) => ctx.abandonable(
@@ -124,6 +126,7 @@ final ready = Job.deferred<Database>((ctx) async {
 ### Вторая попытка
 
 ```dart
+// Вторая попытка: контрольная точка в run может потерять значение раньше.
 final ready = Job.deferred<Database>((ctx) async {
   final database = await ctx.run(connect);
   ctx.onDiscard(database.close);
@@ -207,6 +210,7 @@ ctx.onDispose(() => sink.add(buffer.toString()));
 ### Первая попытка
 
 ```dart
+// Первая попытка: отмена во время readAll закрывает курсор дважды.
 final removeDisposer = ctx.onDispose(cursor.close);
 await ctx.join(() => cursor.readAll()); // в конце курсор закрывается
 removeDisposer();

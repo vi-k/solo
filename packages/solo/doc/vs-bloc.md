@@ -84,6 +84,7 @@ An event type per command, a handler per event, and on both of them the
 transformer whose name is the requirement:
 
 ```dart
+// The first attempt: two queues, and a stale list wins.
 class SplitNotesBloc extends Bloc<NotesEvent, NotesState> {
   final Api _api;
 
@@ -152,6 +153,7 @@ being constructed, so an assignment governs the blocs made after it and leaves
 the ones already alive as they were:
 
 ```dart
+// The second attempt: one registration, but no queue.
 class ConcurrentNotesBloc extends Bloc<NotesEvent, NotesState> {
   final Api _api;
 
@@ -314,6 +316,7 @@ journal of them. Both are written the way the hooks invite, calling `super`
 first:
 
 ```dart
+// The first attempt: an observer that throws stops the emit.
 class RecorderBloc extends Bloc<StartRecording, RecorderState> {
   final Recorder _recorder;
   final Journal _journal;
@@ -462,6 +465,7 @@ The screen is gone and the controller is closed, so the handler is written as
 though closing had ended it:
 
 ```dart
+// The first attempt: closing does not end the handler.
 class UnguardedChatBloc extends Bloc<ChatEvent, ChatState> {
   final Api _api;
 
@@ -615,6 +619,7 @@ The reset belongs where the work ends, whichever way it ends, and `finally` is
 where a body says that:
 
 ```dart
+// The first attempt: finally emits into a cancelled emitter.
 class RefreshBloc extends Bloc<RefreshEvent, RefreshState> {
   final RefreshApi _api;
 
@@ -726,6 +731,7 @@ One registration per command, and on the one that must be replaceable, the
 transformer named after the requirement:
 
 ```dart
+// The first attempt: three registrations, and every seek runs.
 class SplitPlayerBloc extends Bloc<PlayerCommand, PlayerState> {
   final Player _player;
 
@@ -762,6 +768,7 @@ of this.
 One registration for all three commands, so that one queue holds them all:
 
 ```dart
+// The second attempt: one queue that keeps every obsolete seek.
 class SerialPlayerBloc extends Bloc<PlayerCommand, PlayerState> {
   final Player _player;
 
@@ -926,6 +933,7 @@ zooms to 4.
 interface costs nothing:
 
 ```dart
+// The first attempt: the calls run at once, and any of them can win.
 class MapCubit extends Cubit<MapState> {
   final MapApi _map;
 
@@ -1056,6 +1064,7 @@ check whether a read is still relevant, and a leaving flag is the obvious thing
 to check: the screen sets it when it goes and clears it when it comes back.
 
 ```dart
+// The first attempt: a flag that a returning screen clears.
 class FlagDeviceBloc extends Bloc<DeviceEvent, DeviceState> {
   final Ble _ble;
   var _leaving = false;
@@ -1272,6 +1281,7 @@ one payment: while a charge is running, another request for it should not start
 a second one.
 
 ```dart
+// The first attempt: dropped events leave their callers waiting.
 class Pay extends CheckoutEvent {
   final Order order;
   final Completer<Receipt> result;
@@ -1520,6 +1530,7 @@ registration for both events is what
 and it is what a reader who has just learned that lesson writes:
 
 ```dart
+// The first attempt: the revocation waits behind the build.
 class FunnelReportBloc extends Bloc<ReportEvent, ReportState> {
   final Reports _reports;
 
@@ -1665,6 +1676,7 @@ This example's BLE API cannot abort an accepted write.
 one running. The loop is written as though the replacement stopped it:
 
 ```dart
+// The first attempt: the replaced loop goes on writing.
 class UnguardedFirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
   final Ble _ble;
 
@@ -1695,6 +1707,7 @@ Since the body is not interrupted, it has to notice: `emit.isDone` is true once
 the emitter has been cancelled.
 
 ```dart
+// The second attempt: two writers still share the wire.
 class FirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
   final Ble _ble;
 
@@ -1827,6 +1840,7 @@ update, and after
 that check is the reflex:
 
 ```dart
+// The first attempt: the stale buffer is never released.
 class PreviewBloc extends Bloc<OpenPreview, PreviewState> {
   final Decoder _decoder;
 

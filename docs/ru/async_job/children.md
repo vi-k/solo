@@ -155,6 +155,7 @@ Job<void> level(int depth) {
 ### Первая попытка
 
 ```dart
+// Первая попытка: исход решает гонка, а источник утекает.
 final parent = Job<void>((ctx) async {
   final rows = Job.deferred<Source>(
     (ctx) => ctx.abandonable(openRows, discard: (source) => source.close()),
@@ -190,6 +191,7 @@ final parent = Job<void>((ctx) async {
 `eagerError: true` не чинит ни того ни другого:
 
 ```dart
+// Первая попытка с eagerError: та же гонка и та же утечка.
 final sources = await Future.wait(
   [ctx.run(rows), ctx.run(images)],
   eagerError: true,
@@ -432,6 +434,7 @@ try {
 ### Первая попытка
 
 ```dart
+// Первая попытка: исключение до цикла оставляет источники открытыми.
 final sources = await ctx.runAll(branches);
 await ctx.join(() => writeArchive(sources));
 for (final source in sources) {
@@ -747,6 +750,7 @@ parent: Cancelled(handler: Job(): Cancelled(chain)), child: Cancelled(chain)
 берёт обоих детьми:
 
 ```dart
+// Первая попытка: ctx.run не принимает продолжение.
 final child = Job.deferred<int>((ctx) => ctx.abandonable(load));
 final tail = child.then<void>((ctx, rows) => report(rows));
 

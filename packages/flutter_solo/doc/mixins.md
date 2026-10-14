@@ -72,6 +72,7 @@ framework has a widget that takes one.
 ### The first attempt
 
 ```dart
+// The first attempt: the badge waits for the next change.
 class SessionBadge extends StatelessWidget {
   final Session session;
 
@@ -122,6 +123,7 @@ after close(): nothing yet
 is in is `currentState`:
 
 ```dart
+// The second attempt: handed another session, the badge keeps old data.
 StreamBuilder<SessionState>(
   stream: session.stream,
   initialData: session.currentState,
@@ -201,6 +203,7 @@ in the package README.
 The engine has a hook for this failure, and the base overrides it:
 
 ```dart
+// The first attempt: the override of the mixin wins over the base.
 // A package of your own, without Flutter.
 import 'package:meta/meta.dart';
 import 'package:solo/solo.dart';

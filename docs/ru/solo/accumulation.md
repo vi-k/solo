@@ -53,6 +53,7 @@ abstract interface class SearchApi {
 Словарь контроллера говорит `run`, значит, на каждое нажатие заводится задача:
 
 ```dart
+// Первая попытка: каждое нажатие ждёт предыдущего.
 final class QueuedSearch extends Solo<SearchState> {
   final SearchApi api;
 
@@ -91,6 +92,7 @@ at 400 ms the screen shows [hits for solo]
 только метод:
 
 ```dart
+// Вторая попытка: к серверу всё равно четыре запроса.
 Job<void> query(String text) => run<SearchState, void>(
       key: 'query',
       policy: Policy.restart,
@@ -214,6 +216,7 @@ abstract interface class SettingsApi {
 Каждое изменение становится задачей, и задача пишет:
 
 ```dart
+// Первая попытка: каждое изменение пишется отдельно.
 final class EagerSettingsController extends Solo<Settings> {
   final SettingsApi _api;
 
@@ -252,6 +255,7 @@ the screen ends up with notifications: true, theme: dark, language: ru
 остановиться ту, что идёт. Меняется только метод:
 
 ```dart
+// Вторая попытка: перезапуск затирает изменение, которое заменил.
 Job<void> update(SettingsPatch patch) => run<Settings, void>(
       key: 'settings',
       policy: Policy.restart,
@@ -404,6 +408,7 @@ abstract interface class LogApi {
 Каждая строка становится задачей, и задача отправляет:
 
 ```dart
+// Первая попытка: каждая строка стоит отдельного запроса.
 final class EagerLogController extends Solo<int> {
   final LogApi _api;
 
@@ -540,6 +545,7 @@ abstract interface class PlayerDevice {
 Каждая команда идёт отдельной задачей:
 
 ```dart
+// Первая попытка: каждое нажатие доходит до устройства.
 final class QueuedPlayer extends Solo<Playback> {
   final PlayerDevice device;
 

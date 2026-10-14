@@ -73,6 +73,7 @@ The plainest test of a controller calls a method and looks at the state: after
 ### The first attempt
 
 ```dart
+// The first attempt: the expectation runs before the load.
 test('load fills in the name', () {
   final profile = ProfileController(FakeProfileApi());
 
@@ -161,6 +162,7 @@ reads as the way to wait for the load without holding its job: await the
 ### The first attempt
 
 ```dart
+// The first attempt: close() cancels the load first.
 test('load fills in the name', () async {
   final profile = ProfileController(FakeProfileApi());
 
@@ -209,6 +211,7 @@ waiting.
 ### The first attempt
 
 ```dart
+// The first attempt: the unread failure fails the test.
 test('a failed load shows the failure', () async {
   final profile = ProfileController(
     FakeProfileApi(error: StateError('no network')),
@@ -277,6 +280,7 @@ observer — one for every controller in the process.
 ### The first attempt
 
 ```dart
+// The first attempt: the test names a case it never sets up.
 final class Journal extends SoloObserver {
   final lines = <String>[];
 
@@ -379,6 +383,7 @@ outcome of the load, then the state. The habit from those sections is to await
 ### The first attempt
 
 ```dart
+// The first attempt: nobody moves the fake clock.
 test('load fills in the name', () async {
   await fakeAsync((async) async {
     final profile = ProfileController(FakeProfileApi());
@@ -464,6 +469,7 @@ installed when the next test starts, unless something takes it away.
 ### The first attempt
 
 ```dart
+// The first attempt: a failed expect skips the reset.
 test('a second load while the first one runs is dropped', () {
   final journal = Journal();
   Solo.observer = journal;
@@ -502,6 +508,7 @@ test, the failure is what turns the test red.
 ### The first attempt
 
 ```dart
+// The first attempt: the test proves nothing about the zone.
 test('a failure nobody read reaches the zone', () async {
   await runZonedGuarded(
     () async {
@@ -570,6 +577,7 @@ ends on time, and what has become of the call by then.
 ### The first attempt
 
 ```dart
+// The first attempt: the deadline stops the waiting, not the call.
 final name = await ctx.abandonable(
   () => api.fetchName().timeout(const Duration(milliseconds: 5)),
 );

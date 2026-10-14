@@ -272,6 +272,7 @@ held is still running: SoloPending([held] in its body, holding Cancelled(manual)
 ### Первая попытка
 
 ```dart
+// Первая попытка: время жизни прячет отмену, после которой задача доработала.
 final class SlowJobs extends SoloObserver {
   final _startedAt = Expando<DateTime>('start');
 
@@ -417,6 +418,7 @@ Solo.observer = SoloObserver.all([
 ### Первая попытка
 
 ```dart
+// Первая попытка: сбои всё равно уходят в зону.
 final class Failures extends SoloObserver {
   @override
   void onFinish(Solo<Object> solo, Job<Object?> job) {
@@ -480,6 +482,7 @@ profile.load().ignoreFailure();
 ### Первая попытка
 
 ```dart
+// Первая попытка: отмена сбрасывает исправную камеру.
 try {
   await ctx.join(hw.open);
   await ctx.join(() => hw.setZoom(zoom));
@@ -548,6 +551,7 @@ try {
 ### Первая попытка
 
 ```dart
+// Первая попытка: исключение в canStart означает сбой.
 canStart: (state) {
   if (state.free == 0) throw StateError('no free slot');
 
@@ -609,6 +613,7 @@ canStart: (state) => state.free > 0,
 ### Первая попытка
 
 ```dart
+// Первая попытка: ошибка не принадлежит никому в задаче.
 unawaited(analytics.send('zoom'));
 ```
 

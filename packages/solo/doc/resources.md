@@ -53,6 +53,7 @@ point, it must leave no database open.
 ### The first attempt
 
 ```dart
+// The first attempt: a cancellation fits between open and onDispose.
 Job<void> load() => run<Idle, void>(
       key: 'load',
       (ctx) async {
@@ -138,6 +139,7 @@ then on.
 ### The first attempt
 
 ```dart
+// The first attempt: success closes the database it hands out.
 Job<Database> open() => run<Idle, Database>(
       key: 'open',
       (ctx) async {
@@ -211,6 +213,7 @@ there the database is the controller's to close, not the job's.
 ### The first attempt
 
 ```dart
+// The first attempt: dispose closes the database the state holds.
 final db = await ctx.join(
   Database.open,
   dispose: (db) => db.close(),
@@ -228,6 +231,7 @@ from it.
 ### The second attempt
 
 ```dart
+// The second attempt: disown comes before the emit that may throw.
 await ctx.uncancellable(db.migrate);
 ctx
   ..disown(db)
@@ -302,6 +306,7 @@ the queue must not find it, and neither must `close()` when it returns.
 ### The first attempt
 
 ```dart
+// The first attempt: the file is deleted late and alone.
 // Deleted whatever happens: dispose runs on every outcome.
 await ctx.abandonable(openTemp, dispose: (file) => file.delete());
 ```

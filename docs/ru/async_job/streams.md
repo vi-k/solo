@@ -20,6 +20,7 @@
 ### Первая попытка
 
 ```dart
+// Первая попытка: молчащий поток держит отменённую задачу.
 Job<void>((ctx) async {
   await for (final message in messages) {
     await ctx.join(() => store.saveBody(message));
@@ -38,6 +39,7 @@ Job<void>((ctx) async {
 ### Вторая попытка
 
 ```dart
+// Вторая попытка: сохранения идут внахлёст, а их ошибки уходят в зону.
 Job<void>((ctx) async {
   final subscription = messages.listen((message) async {
     await store.saveBody(message);
@@ -62,6 +64,7 @@ Job<void>((ctx) async {
 ### Третья попытка
 
 ```dart
+// Третья попытка: задача кончается, пока сохранение ещё идёт.
 Job<void>((ctx) async {
   final subscription = messages.asyncMap(store.saveBody).listen((_) {});
   ctx.onCancel(subscription.cancel);
@@ -120,6 +123,7 @@ Job<void>((ctx) async {
 ### Первая попытка
 
 ```dart
+// Первая попытка: отменённый колбэк всё равно доходит до конца.
 ctx.each(messages, (childCtx, message) async {
   await store.saveBody(message);
   await store.saveAttachments(message);
@@ -165,6 +169,7 @@ ctx.each(messages, (childCtx, message) async {
 ### Первая попытка
 
 ```dart
+// Первая попытка: черновики закрываются только с концом потока.
 ctx.each(messages, (childCtx, message) async {
   final draft = await childCtx.join(
     () => store.openDraft(message),

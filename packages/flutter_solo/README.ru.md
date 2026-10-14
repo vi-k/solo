@@ -289,6 +289,7 @@ class _SaveButtonState extends State<SaveButton> {
 ### Первая попытка
 
 ```dart
+// Первая попытка: dispose() ничего не снимает, слушатель остаётся.
 @override
 void initState() {
   super.initState();
@@ -490,6 +491,7 @@ Future<void> _load() async {
 ### Первая попытка
 
 ```dart
+// Первая попытка: тест ждёт задачу, а задача ждёт тест.
 await controller.load().done;
 await tester.pump();
 ```

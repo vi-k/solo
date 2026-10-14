@@ -43,6 +43,7 @@
 ### Первая попытка
 
 ```dart
+// Первая попытка: брошенные перемотки идут на устройстве.
 Job<void> seek(Duration position) => run<Ready, void>(
       key: 'seek',
       policy: Policy.restart,
@@ -66,6 +67,7 @@ Job<void> seek(Duration position) => run<Ready, void>(
 ### Вторая попытка
 
 ```dart
+// Вторая попытка: устаревшая перемотка идёт до конца.
 Job<void> seek(Duration position) => run<Ready, void>(
       key: 'seek',
       policy: Policy.restart,
@@ -129,6 +131,7 @@ Job<void> seek(Duration position) => run<Ready, void>(
 ### Первая попытка
 
 ```dart
+// Первая попытка: платёж проходит, а чек нет.
 Job<void> commit(String entry) => run<Ready, void>((ctx) async {
       // Каждого вызова дожидаются, что бы ни случилось.
       final receipt = await ctx.join(() => payment.commit());
@@ -148,6 +151,7 @@ Job<void> commit(String entry) => run<Ready, void>((ctx) async {
 ### Вторая попытка
 
 ```dart
+// Вторая попытка: emit внутри шага бросает.
 Job<void> commit(String entry) => run<Ready, void>((ctx) async {
       // Дождаться всего шага как одного вызова.
       await ctx.join(() async {
@@ -223,6 +227,7 @@ Job<void> flush() => run<Ready, void>(
 ### Первая попытка
 
 ```dart
+// Первая попытка: каждая половина ждёт так, как нужно было другой.
 Job<void> upload(List<int> chunks) => run<Ready, void>((ctx) async {
       ctx.onDispose(() async {
         // Сброс должен закончиться до продвижения очереди.
@@ -394,6 +399,7 @@ Job<void> seek(Duration position) => run<Ready, void>(
 ### Первая попытка
 
 ```dart
+// Первая попытка: close() отменяет пакеты в очереди.
 logs.send(first);
 logs.send(second);
 logs.send(third);
@@ -465,6 +471,7 @@ await logs.close(mode: SoloCloseMode.drain);
 #### Первая попытка
 
 ```dart
+// Первая попытка: задача ждёт close(), а close() ждёт задачу.
 Job<void> logout() => run<Ready, void>((ctx) async {
       await ctx.join(api.logout);
       await close();
@@ -482,6 +489,7 @@ Job<void> logout() => run<Ready, void>((ctx) async {
 #### Вторая попытка
 
 ```dart
+// Вторая попытка: контроллер принимает работу до самого close().
 Future<void> logout() async {
   await run<Ready, void>((ctx) => ctx.join(api.logout)).done;
   await close();

@@ -272,6 +272,7 @@ ran on past the cancellation that was meant to stop them, and for how long.
 ### The first attempt
 
 ```dart
+// The first attempt: a lifetime hides a cancellation that ran on.
 final class SlowJobs extends SoloObserver {
   final _startedAt = Expando<DateTime>('start');
 
@@ -418,6 +419,7 @@ waits for the result. Something still has to answer for a failure.
 ### The first attempt
 
 ```dart
+// The first attempt: the failures still go to the zone.
 final class Failures extends SoloObserver {
   @override
   void onFinish(Solo<Object> solo, Job<Object?> job) {
@@ -481,6 +483,7 @@ left half-open put back the way it was.
 ### The first attempt
 
 ```dart
+// The first attempt: a cancellation resets a working camera.
 try {
   await ctx.join(hw.open);
   await ctx.join(() => hw.setZoom(zoom));
@@ -549,6 +552,7 @@ A job that needs a free slot asks for one in its start rule.
 ### The first attempt
 
 ```dart
+// The first attempt: a throw in canStart is a failure.
 canStart: (state) {
   if (state.free == 0) throw StateError('no free slot');
 
@@ -607,6 +611,7 @@ cancel: the event either goes out or it does not.
 ### The first attempt
 
 ```dart
+// The first attempt: the error belongs to nobody in the job.
 unawaited(analytics.send('zoom'));
 ```
 

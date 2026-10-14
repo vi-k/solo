@@ -43,6 +43,7 @@ needed.
 ### The first attempt
 
 ```dart
+// The first attempt: on success the lock is never released.
 final lock = await ctx.join(Lock.acquire, discard: (lock) => lock.release());
 final database = await ctx.join(
   Database.open,
@@ -93,6 +94,7 @@ still be able to close it.
 ### The first attempt
 
 ```dart
+// The first attempt: discard stays with connect, and the database leaks.
 final connect = Job.deferred<Database>(
   key: 'connect',
   (ctx) => ctx.abandonable(
@@ -122,6 +124,7 @@ and the connection stays open with nobody left to close it.
 ### The second attempt
 
 ```dart
+// The second attempt: a checkpoint in run can lose the value first.
 final ready = Job.deferred<Database>((ctx) async {
   final database = await ctx.run(connect);
   ctx.onDiscard(database.close);
@@ -206,6 +209,7 @@ found one, so pass the very instance the call returned.
 ### The first attempt
 
 ```dart
+// The first attempt: a cancellation in readAll closes the cursor twice.
 final removeDisposer = ctx.onDispose(cursor.close);
 await ctx.join(() => cursor.readAll()); // closes the cursor at the end
 removeDisposer();

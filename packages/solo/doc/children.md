@@ -252,6 +252,7 @@ Job<void> recordPath(String path) => add(_recordPath(path));
 ### The first attempt
 
 ```dart
+// The first attempt: the continuation queues behind other work.
 Job<void> syncAndRecord(int item) =>
     sync(item).then((ctx, path) => recordPath(path).value);
 ```
@@ -270,6 +271,7 @@ path is never recorded, and the continuation ends `Cancelled(closed)`.
 ### The second attempt
 
 ```dart
+// The second attempt: an awaited method waits for this very job.
 Job<void> syncAndRecord(int item) => run<Ready, void>(
       key: _Op.syncAndRecord,
       (ctx) async {

@@ -16,6 +16,7 @@ device reports a pause.
 ### The first attempt
 
 ```dart
+// The first attempt: the state is checked once, at the start.
 Job<void> record() => run<CameraState, void>(
       key: 'record',
       (ctx) async {
@@ -275,6 +276,7 @@ there.
 ### The first attempt
 
 ```dart
+// The first attempt: the update waits behind the running job.
 Camera(this.device) : super(const Ready()) {
   _link = device.connection.listen((connected) {
     if (!connected) {
@@ -376,6 +378,7 @@ Something has to take the controller out of it when the load does not arrive.
 ### The first attempt
 
 ```dart
+// The first attempt: a cancellation leaves the state at Loading.
 run<ProfileState, String>(
   (ctx) async {
     ctx.emit(const Loading());
@@ -433,6 +436,7 @@ and the connection can now drop while a load is running.
 #### The first attempt
 
 ```dart
+// The first attempt: ifCancelled writes over Disconnected.
 final class Disconnected extends ProfileState {
   const Disconnected();
 }

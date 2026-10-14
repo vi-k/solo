@@ -84,6 +84,7 @@
 которого и есть требование:
 
 ```dart
+// Первая попытка: две очереди, и побеждает устаревший список.
 class SplitNotesBloc extends Bloc<NotesEvent, NotesState> {
   final Api _api;
 
@@ -153,6 +154,7 @@ RefreshList emits [n0]
 теми, кто создан после него, и не трогает уже живых:
 
 ```dart
+// Вторая попытка: одна регистрация, но без очереди.
 class ConcurrentNotesBloc extends Bloc<NotesEvent, NotesState> {
   final Api _api;
 
@@ -316,6 +318,7 @@ refresh emits [n0, n1]
 с вызовом `super` первой строкой:
 
 ```dart
+// Первая попытка: исключение наблюдателя срывает emit.
 class RecorderBloc extends Bloc<StartRecording, RecorderState> {
   final Recorder _recorder;
   final Journal _journal;
@@ -465,6 +468,7 @@ final class TelemetryObserver extends SoloObserver {
 всё и заканчивает:
 
 ```dart
+// Первая попытка: закрытие не останавливает обработчик.
 class UnguardedChatBloc extends Bloc<ChatEvent, ChatState> {
   final Api _api;
 
@@ -620,6 +624,7 @@ Future<void> onScreenClosed(ChatController chat) async {
 а это `finally`:
 
 ```dart
+// Первая попытка: finally пишет в отменённый emitter.
 class RefreshBloc extends Bloc<RefreshEvent, RefreshState> {
   final RefreshApi _api;
 
@@ -733,6 +738,7 @@ API плеера в примере принимает токен и возвра
 трансформер, названный по требованию:
 
 ```dart
+// Первая попытка: три регистрации, и выполняется каждая перемотка.
 class SplitPlayerBloc extends Bloc<PlayerCommand, PlayerState> {
   final Player _player;
 
@@ -770,6 +776,7 @@ seek 3 start, play end, pause end, seek 1 end, seek 2 end, seek 3 end]`,
 Одна регистрация на все три команды, чтобы очередь была одна:
 
 ```dart
+// Вторая попытка: одна очередь, и все устаревшие перемотки в ней.
 class SerialPlayerBloc extends Bloc<PlayerCommand, PlayerState> {
   final Player _player;
 
@@ -936,6 +943,7 @@ final class PlayerController extends Solo<PlayerState> with SoloStream {
 типизированный интерфейс вызова достаётся даром:
 
 ```dart
+// Первая попытка: вызовы идут разом, и победить может любой.
 class MapCubit extends Cubit<MapState> {
   final MapApi _map;
 
@@ -1069,6 +1077,7 @@ API `Bloc` нельзя перечислить или удалить её ожи
 и снимает, когда возвращается.
 
 ```dart
+// Первая попытка: флаг, который сбрасывает вернувшийся экран.
 class FlagDeviceBloc extends Bloc<DeviceEvent, DeviceState> {
   final Ble _ble;
   var _leaving = false;
@@ -1286,6 +1295,7 @@ final class DeviceController extends Solo<DeviceState> {
 выполняется, второй запрос на него не должен начинать ещё одно.
 
 ```dart
+// Первая попытка: отброшенные события оставляют вызывающих ждать.
 class Pay extends CheckoutEvent {
   final Order order;
   final Completer<Receipt> result;
@@ -1532,6 +1542,7 @@ Future<Map<String, Object?>> handlePayRequest(
 и её же напишет читатель, только что усвоивший тот урок:
 
 ```dart
+// Первая попытка: отзыв сессии ждёт за сборкой отчёта.
 class FunnelReportBloc extends Bloc<ReportEvent, ReportState> {
   final Reports _reports;
 
@@ -1676,6 +1687,7 @@ final class ReportController extends Solo<ReportState> with SoloStream {
 заменяет работающую. Цикл написан так, будто замена его останавливает:
 
 ```dart
+// Первая попытка: заменённый цикл продолжает писать.
 class UnguardedFirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
   final Ble _ble;
 
@@ -1706,6 +1718,7 @@ class UnguardedFirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
 того, как emitter отменили.
 
 ```dart
+// Вторая попытка: в эфире всё ещё двое пишущих.
 class FirmwareBloc extends Bloc<FirmwareEvent, FirmwareState> {
   final Ble _ble;
 
@@ -1838,6 +1851,7 @@ final class FirmwareController extends Solo<FirmwareState> {
 эта проверка ставится рефлекторно:
 
 ```dart
+// Первая попытка: устаревший буфер так и не освобождается.
 class PreviewBloc extends Bloc<OpenPreview, PreviewState> {
   final Decoder _decoder;
 

@@ -288,6 +288,7 @@ listens with a closure that reads it.
 ### The first attempt
 
 ```dart
+// The first attempt: dispose() removes nothing; the listener stays.
 @override
 void initState() {
   super.initState();
@@ -488,6 +489,7 @@ after the call. A plain test would await the job.
 ### The first attempt
 
 ```dart
+// The first attempt: the test waits for a job that waits for the test.
 await controller.load().done;
 await tester.pump();
 ```

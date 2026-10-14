@@ -26,6 +26,7 @@ with, or that it was cancelled.
 `value` is the report, and a `try` takes what goes wrong:
 
 ```dart
+// The first attempt: the catch takes a cancellation for a failure.
 try {
   print('report: ${await report.value}');
 } on Object catch (error) {
@@ -74,6 +75,7 @@ how it went whenever the line is drawn.
 `outcome` is how the job went, and `null` while it runs:
 
 ```dart
+// The first attempt: reading outcome leaves the failure to the zone.
 final backup = Job<void>(upload);
 
 // Wherever the status line is drawn:
@@ -178,6 +180,7 @@ by the user.
 The `switch` over `done` gets a case for the reason:
 
 ```dart
+// The first attempt: the reason of the request is one cause further down.
 final message = switch (await report.done) {
   Done(:final value) => 'report: $value',
   Failed(:final error) => 'failed: $error',
@@ -287,6 +290,7 @@ somebody cancels it, while the step still runs.
 The outcome says whether the job was cancelled:
 
 ```dart
+// The first attempt: done arrives only after the cleanup.
 if (await report.done case Cancelled(:final reason)) {
   print('cancelling: $reason');
 }

@@ -21,6 +21,7 @@ API: `listen`, который и так есть в любой программ�
 ### Первая попытка
 
 ```dart
+// Первая попытка: задача кончается до первой позиции.
 Job<void> track() => run<Ready, void>(
       key: 'track',
       (ctx) async {
@@ -112,6 +113,7 @@ Job<void> track() => run<Ready, void>(
 ### Первая попытка
 
 ```dart
+// Первая попытка: экран не видит текущую сессию.
 final class ScreenController extends Solo<Screen> {
   final SoloStream<Session> session;
 

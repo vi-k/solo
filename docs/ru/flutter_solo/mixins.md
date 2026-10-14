@@ -72,6 +72,7 @@ final class Session extends Solo<SessionState> with SoloStream, SoloListenable {
 ### Первая попытка
 
 ```dart
+// Первая попытка: бейдж ждёт следующего изменения.
 class SessionBadge extends StatelessWidget {
   final Session session;
 
@@ -122,6 +123,7 @@ after close(): nothing yet
 сессия находится сейчас, отдаёт `currentState`:
 
 ```dart
+// Вторая попытка: при другой сессии остаются старые данные.
 StreamBuilder<SessionState>(
   stream: session.stream,
   initialData: session.currentState,
@@ -200,6 +202,7 @@ README пакета: там объявлены его состояния.
 У движка есть хук для этой ошибки, и база его переопределяет:
 
 ```dart
+// Первая попытка: переопределение миксина побеждает базовое.
 // Свой пакет, без Flutter.
 import 'package:meta/meta.dart';
 import 'package:solo/solo.dart';

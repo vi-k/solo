@@ -19,6 +19,7 @@ fails, and stopping when it is cancelled.
 ### The first attempt
 
 ```dart
+// The first attempt: a silent stream holds a cancelled job.
 Job<void>((ctx) async {
   await for (final message in messages) {
     await ctx.join(() => store.saveBody(message));
@@ -37,6 +38,7 @@ that is never.
 ### The second attempt
 
 ```dart
+// The second attempt: saves overlap, and their errors go to the zone.
 Job<void>((ctx) async {
   final subscription = messages.listen((message) async {
     await store.saveBody(message);
@@ -62,6 +64,7 @@ not what the callback throws.
 ### The third attempt
 
 ```dart
+// The third attempt: the job ends while a save still runs.
 Job<void>((ctx) async {
   final subscription = messages.asyncMap(store.saveBody).listen((_) {});
   ctx.onCancel(subscription.cancel);
@@ -121,6 +124,7 @@ attachments — and a cancellation should stop the save between them.
 ### The first attempt
 
 ```dart
+// The first attempt: a cancelled callback still runs to its end.
 ctx.each(messages, (childCtx, message) async {
   await store.saveBody(message);
   await store.saveAttachments(message);
@@ -167,6 +171,7 @@ its message is written.
 ### The first attempt
 
 ```dart
+// The first attempt: the drafts close only when the stream ends.
 ctx.each(messages, (childCtx, message) async {
   final draft = await childCtx.join(
     () => store.openDraft(message),

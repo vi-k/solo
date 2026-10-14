@@ -91,6 +91,7 @@ start only from `Initial`.
 ### The first attempt
 
 ```dart
+// The first attempt: the first emit leaves the working type.
 Job<void> init() => run<Initial, void>(
       key: CameraKey.init,
       policy: Policy.droppable,
@@ -153,6 +154,7 @@ state the camera can be opened from later.
 ### The first attempt
 
 ```dart
+// The first attempt: a cancellation leaves the state at Preparing.
 (ctx) async {
   ctx.emit(const Preparing());
   try {
@@ -230,6 +232,7 @@ A pinch asks for a zoom on every frame, and only the last request matters.
 ### The first attempt
 
 ```dart
+// The first attempt: every zoom reaches the lens.
 Job<void> setZoom(double zoom) => run<Ready, void>(
       key: CameraKey.setZoom,
       describe: () => 'zoom: $zoom',
@@ -327,6 +330,7 @@ was doing when it was called.
 ### The first attempt
 
 ```dart
+// The first attempt: the disposal waits at the end of the queue.
 Job<void> dispose() => run<CameraState, void>(
       key: CameraKey.dispose,
       policy: Policy.droppable,
@@ -372,6 +376,7 @@ the device is never left half closed.
 ### The second attempt
 
 ```dart
+// The second attempt: a later dispose() reports a cancellation.
 Job<void> dispose() {
   queue.clear();
   current?.cancel();
@@ -463,6 +468,7 @@ After the disposal the controller itself is released with `close()`.
 ### The first attempt
 
 ```dart
+// The first attempt: close() drops the queued disposal.
 camera.dispose();
 await camera.close();
 ```
@@ -485,6 +491,7 @@ controller that could close the camera is closed itself.
 ### The second attempt
 
 ```dart
+// The second attempt: a failed disposal goes to the zone.
 camera.dispose();
 await camera.close(mode: SoloCloseMode.drain);
 ```
@@ -551,6 +558,7 @@ into `Broken`. Once the camera is disposed, a report must change nothing:
 ### The first attempt
 
 ```dart
+// The first attempt: the listener outlives the disposal.
 CameraController(this.hw) : super(const Initial()) {
   hw.onError = (error) => externalSetState(Broken(error));
 }
@@ -578,6 +586,7 @@ state of a closed controller is final, so `externalSetState` throws a
 ### The second attempt
 
 ```dart
+// The second attempt: a report before close() still replaces Disposed.
 @override
 void onClose() => hw.onError = null;
 ```

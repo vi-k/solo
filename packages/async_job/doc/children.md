@@ -152,6 +152,7 @@ truth about it, and nothing may stay open.
 ### The first attempt
 
 ```dart
+// The first attempt: a race decides the outcome, and a source leaks.
 final parent = Job<void>((ctx) async {
   final rows = Job.deferred<Source>(
     (ctx) => ctx.abandonable(openRows, discard: (source) => source.close()),
@@ -187,6 +188,7 @@ source.
 `eagerError: true` does not repair either of the two:
 
 ```dart
+// The first attempt with eagerError: the same race, the same leak.
 final sources = await Future.wait(
   [ctx.run(rows), ctx.run(images)],
   eagerError: true,
@@ -432,6 +434,7 @@ the body registers the list itself.
 ### The first attempt
 
 ```dart
+// The first attempt: a throw before the loop leaves every source open.
 final sources = await ctx.runAll(branches);
 await ctx.join(() => writeArchive(sources));
 for (final source in sources) {
@@ -751,6 +754,7 @@ report is done.
 continuation, and the body adopts both:
 
 ```dart
+// The first attempt: ctx.run refuses a continuation.
 final child = Job.deferred<int>((ctx) => ctx.abandonable(load));
 final tail = child.then<void>((ctx, rows) => report(rows));
 

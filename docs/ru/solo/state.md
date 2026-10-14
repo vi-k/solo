@@ -16,6 +16,7 @@
 ### Первая попытка
 
 ```dart
+// Первая попытка: состояние проверяется один раз, на старте.
 Job<void> record() => run<CameraState, void>(
       key: 'record',
       (ctx) async {
@@ -277,6 +278,7 @@ Flutter `ValueListenable`, из-за которого контроллер по�
 ### Первая попытка
 
 ```dart
+// Первая попытка: обновление ждёт за идущей задачей.
 Camera(this.device) : super(const Ready()) {
   _link = device.connection.listen((connected) {
     if (!connected) {
@@ -378,6 +380,7 @@ README пакета публикует `Loading` до того, как его з
 ### Первая попытка
 
 ```dart
+// Первая попытка: отмена оставляет состояние в Loading.
 run<ProfileState, String>(
   (ctx) async {
     ctx.emit(const Loading());
@@ -435,6 +438,7 @@ run<ProfileState, String>(
 #### Первая попытка
 
 ```dart
+// Первая попытка: ifCancelled затирает Disconnected.
 final class Disconnected extends ProfileState {
   const Disconnected();
 }

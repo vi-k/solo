@@ -132,6 +132,7 @@ The queue keeps the jobs, starts each with `_launch` and skips a job cancelled
 while it waited:
 
 ```dart
+// The first attempt: a job that refused cancellation is skipped too.
 final class MyQueue {
   final _waiting = <MyJob<Object?>>[];
 
@@ -267,6 +268,7 @@ outcome: Cancelled(manual)
 of the core that the analyzer requires an override to call, and then the rule:
 
 ```dart
+  // The first attempt: a broken rule ends the job Failed.
   @override
   void check() {
     super.check();

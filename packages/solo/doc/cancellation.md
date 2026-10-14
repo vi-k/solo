@@ -43,6 +43,7 @@ the position the user lands on must not wait for the ones dragged past.
 ### The first attempt
 
 ```dart
+// The first attempt: the seeks it let go of still run on the device.
 Job<void> seek(Duration position) => run<Ready, void>(
       key: 'seek',
       policy: Policy.restart,
@@ -65,6 +66,7 @@ the user asked for, whatever the device actually did.
 ### The second attempt
 
 ```dart
+// The second attempt: an obsolete seek runs to its end.
 Job<void> seek(Duration position) => run<Ready, void>(
       key: 'seek',
       policy: Policy.restart,
@@ -127,6 +129,7 @@ written, whatever the job is asked in the meantime.
 ### The first attempt
 
 ```dart
+// The first attempt: the payment goes through, the receipt does not.
 Job<void> commit(String entry) => run<Ready, void>((ctx) async {
       // Each call waited out, whatever happens.
       final receipt = await ctx.join(() => payment.commit());
@@ -146,6 +149,7 @@ checkpoint, and on the cancelled job it throws.
 ### The second attempt
 
 ```dart
+// The second attempt: the emit inside the step throws.
 Job<void> commit(String entry) => run<Ready, void>((ctx) async {
       // The whole step waited out as one call.
       await ctx.join(() async {
@@ -220,6 +224,7 @@ chunk in flight, and however it ends, the device buffer has to be flushed.
 ### The first attempt
 
 ```dart
+// The first attempt: each half waits the way the other one needed.
 Job<void> upload(List<int> chunks) => run<Ready, void>((ctx) async {
       ctx.onDispose(() async {
         // The flush must finish before the queue moves on.
@@ -393,6 +398,7 @@ batches already queued still have to go out.
 ### The first attempt
 
 ```dart
+// The first attempt: close() cancels the batches still queued.
 logs.send(first);
 logs.send(second);
 logs.send(third);
@@ -464,6 +470,7 @@ closes.
 #### The first attempt
 
 ```dart
+// The first attempt: the job waits for close(), and close() for the job.
 Job<void> logout() => run<Ready, void>((ctx) async {
       await ctx.join(api.logout);
       await close();
@@ -481,6 +488,7 @@ children, and its `ctx.onCancel` callbacks run.
 #### The second attempt
 
 ```dart
+// The second attempt: the controller takes work until close().
 Future<void> logout() async {
   await run<Ready, void>((ctx) => ctx.join(api.logout)).done;
   await close();

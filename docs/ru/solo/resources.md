@@ -53,6 +53,7 @@
 ### Первая попытка
 
 ```dart
+// Первая попытка: отмена влезает между открытием и onDispose.
 Job<void> load() => run<Idle, void>(
       key: 'load',
       (ctx) async {
@@ -139,6 +140,7 @@ final sub = await ctx.join(
 ### Первая попытка
 
 ```dart
+// Первая попытка: при успехе база закрывается раньше, чем её отдают.
 Job<Database> open() => run<Idle, Database>(
       key: 'open',
       (ctx) async {
@@ -214,6 +216,7 @@ Job<Database> open() => run<Idle, Database>(
 ### Первая попытка
 
 ```dart
+// Первая попытка: dispose закрывает базу, которую держит состояние.
 final db = await ctx.join(
   Database.open,
   dispose: (db) => db.close(),
@@ -230,6 +233,7 @@ ctx.emit(Ready(db));
 ### Вторая попытка
 
 ```dart
+// Вторая попытка: disown стоит до emit, который может бросить.
 await ctx.uncancellable(db.migrate);
 ctx
   ..disown(db)
@@ -304,6 +308,7 @@ await ctx.uncancellable(() async {
 ### Первая попытка
 
 ```dart
+// Первая попытка: файл удаляется поздно и в одиночку.
 // Удалён при любом исходе: dispose срабатывает всегда.
 await ctx.abandonable(openTemp, dispose: (file) => file.delete());
 ```

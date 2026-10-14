@@ -249,6 +249,7 @@ Job<void> recordPath(String path) => add(_recordPath(path));
 ### Первая попытка
 
 ```dart
+// Первая попытка: продолжение встаёт в очередь за чужой работой.
 Job<void> syncAndRecord(int item) =>
     sync(item).then((ctx, path) => recordPath(path).value);
 ```
@@ -267,6 +268,7 @@ Job<void> syncAndRecord(int item) =>
 ### Вторая попытка
 
 ```dart
+// Вторая попытка: ожидаемый метод ждёт эту же задачу.
 Job<void> syncAndRecord(int item) => run<Ready, void>(
       key: _Op.syncAndRecord,
       (ctx) async {

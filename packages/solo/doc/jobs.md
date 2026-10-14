@@ -189,6 +189,7 @@ profile should get that one.
 #### The first attempt
 
 ```dart
+// The first attempt: one key for every profile.
 Job<Profile> load(String id) => run<Ready, Profile>(
       key: _Op.load,
       policy: Policy.droppable,
@@ -306,6 +307,7 @@ type, and a pause is not the business of one state.
 #### The first attempt
 
 ```dart
+// The first attempt: the gate waits behind the queued jobs.
 Completer<void>? _gate;
 
 bool get isPaused => _gate != null;
@@ -337,6 +339,7 @@ A gate can also leave without a `resume`: `cancelAll` cancels it, and so does
 #### The second attempt
 
 ```dart
+// The second attempt: a gate removed before it starts stays set.
 void pause() {
   if (_gate != null) return;
   final gate = _gate = Completer<void>();

@@ -88,6 +88,7 @@ The body waits for the migration through `abandonable`, so that a cancellation
 ends the job at once:
 
 ```dart
+// The first attempt: the database closes under a running migration.
 final job = Job<Database>(observer: printing, (ctx) async {
   final database = await ctx.join(
     Database.open,
@@ -130,6 +131,7 @@ the cleanup page takes this order apart.
 `join` stays with the migration to its end:
 
 ```dart
+// The second attempt: the migration nobody wants runs to its end.
 await ctx.join(() => database.migrate(stop));
 ```
 
@@ -229,6 +231,7 @@ being written.
 `join` waits for its action, so each write goes through one:
 
 ```dart
+// The first attempt: a cancellation during the first write skips the second.
 await ctx.join(database.writeVersion);
 await ctx.join(database.writeReadyFlag);
 ```
@@ -276,6 +279,7 @@ The step is the same, and the flag is written by a job of its own now:
 The step keeps its one `join`:
 
 ```dart
+// The first attempt: ctx.run throws the cancellation inside join.
 await ctx.join(() async {
   await database.writeVersion();
   await ctx.run(database.readyFlag());
@@ -367,6 +371,7 @@ failures, not cancellations. The user cancels 15 ms in.
 A cancellation throws `Cancelled`, so a clause for it comes first and rethrows:
 
 ```dart
+// The first attempt: the error the token causes is logged as a failure.
 final stop = CancelToken();
 ctx.onCancel(stop.cancel);
 
@@ -471,6 +476,7 @@ The job reads the rows once a second.
 ### The first attempt
 
 ```dart
+// The first attempt: a plain await sits the delay out.
 final job = Job<void>((ctx) async {
   while (true) {
     use(await ctx.abandonable(database.readAll));
@@ -487,6 +493,7 @@ of the cancellation at the `ctx.abandonable` of the next turn. Until then
 ### The second attempt
 
 ```dart
+// The second attempt: the timer of the delay outlives the job.
 await ctx.abandonable(
   () => Future<void>.delayed(const Duration(seconds: 1)),
 );
@@ -531,6 +538,7 @@ database. Nobody cancels by hand here.
 `cancel` is what stops a job, so a timer calls it once the limit has run out:
 
 ```dart
+// The first attempt: the timer of the limit outlives the job.
 const limit = Duration(milliseconds: 15);
 
 final job = Job<Database>(observer: printing, (ctx) async {
@@ -571,6 +579,7 @@ one.
 The timer is cancelled when the job ends:
 
 ```dart
+// The second attempt: reading done keeps the failure from the zone.
 final timer = Timer(limit, job.cancel);
 job.done.whenComplete(timer.cancel);
 ```

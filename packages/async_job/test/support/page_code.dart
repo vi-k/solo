@@ -12,12 +12,14 @@ import 'dart:io';
 /// piece has to stand in [test] as a run of whole lines, in the same order
 /// and with nothing between them. Indentation does not count, nor do blank
 /// lines and `// ignore:` comments of the test, which the page has no use
-/// for. The first line of a piece may end a longer line of the test, where
-/// the test hands the page's expression to a helper of its own: what the
-/// test puts in front of it ends with `=>`, `=` or `return`, and nothing
-/// else does — a first line cut short on the left would match any tail. A
-/// line checked alone would let a piece drop a line or swap two and still
-/// be found.
+/// for, nor the mark of an attempt on the page, which the test has no use
+/// for either: `// The first attempt: …` on the first line of a block says
+/// what goes wrong in the code under it. The first line of a piece may end
+/// a longer line of the test, where the test hands the page's expression to
+/// a helper of its own: what the test puts in front of it ends with `=>`,
+/// `=` or `return`, and nothing else does — a first line cut short on the
+/// left would match any tail. A line checked alone would let a piece drop a
+/// line or swap two and still be found.
 ///
 /// A page whose first attempts cannot share a library with its answer —
 /// two classes of one name — names the libraries that hold them in
@@ -76,7 +78,7 @@ List<String> codeMissingFrom(
   }
   return [
     for (final block in blocks)
-      for (final piece in block.group(1)!.split(RegExp(r'\n\s*\n')))
+      for (final piece in _unmarked(block.group(1)!).split(RegExp(r'\n\s*\n')))
         if (!runs(lines(piece))) piece,
   ];
 }
@@ -84,15 +86,15 @@ List<String> codeMissingFrom(
 /// The blocks of `dart` code on [page] that [file] does not hold in their
 /// place, and the regions of [file] that stand for no block.
 ///
-/// [file] marks a region for every block: the lines after a
-/// `// #docregion` line, up to the next `// #enddocregion` line. The n-th
-/// block of the page has to be the n-th region, line for line, and there
-/// are as many regions as blocks. Indentation, blank lines and
-/// `// ignore:` comments do not count, and the first line of a region may
-/// end a longer line of [file], as in [codeMissingFrom]. That check finds
-/// a piece anywhere in its files, so a block turned into another block of
-/// the page, or one that lost a line between two of its pieces, still
-/// passes it; this one reports both.
+/// [file] marks a region for every block: the lines after a `// #docregion`
+/// line, up to the next `// #enddocregion` line. The n-th block of the page
+/// has to be the n-th region, line for line, and there are as many regions
+/// as blocks. Indentation, blank lines, `// ignore:` comments and the mark
+/// of an attempt do not count, and the first line of a region may end a
+/// longer line of [file], as in [codeMissingFrom]. That check finds a piece
+/// anywhere in its files, so a block turned into another block of the page,
+/// or one that lost a line between two of its pieces, still passes it; this
+/// one reports both.
 List<String> codeOutOfPlace(String page, String file) {
   List<String> lines(Iterable<String> text) => [
         for (final line in text)
@@ -103,7 +105,7 @@ List<String> codeOutOfPlace(String page, String file) {
   final blocks = [
     for (final block in RegExp(r'```dart\n(.*?)\n```', dotAll: true)
         .allMatches(File(page).readAsStringSync()))
-      lines(block.group(1)!.split('\n')),
+      lines(_unmarked(block.group(1)!).split('\n')),
   ];
   final regions = <List<String>>[];
   List<String>? region;
@@ -156,6 +158,13 @@ List<String> codeOutOfPlace(String page, String file) {
         '${block(index)}\nis not region ${index + 1} of $file',
   ];
 }
+
+/// [block] without the mark of an attempt on its first line.
+String _unmarked(String block) => block.replaceFirst(_mark, '');
+
+/// The first line of a block under an attempt: `// The first attempt: `,
+/// `// The second attempt: ` and on, and what goes wrong after it.
+final _mark = RegExp(r'^[ \t]*// The \w+ attempt\b[^\n]*\n');
 
 /// Whether [line] of the test is [first], the first line of a piece, or
 /// hands it to a helper: `Job<void> opening() => ` in front of the page's

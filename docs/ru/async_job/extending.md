@@ -138,6 +138,7 @@ final class MyContext extends JobContextBase {
 отменённую в ожидании:
 
 ```dart
+// Первая попытка: задача, отказавшаяся от отмены, тоже пропускается.
 final class MyQueue {
   final _waiting = <MyJob<Object?>>[];
 
@@ -277,6 +278,7 @@ outcome: Cancelled(manual)
 а потом правило:
 
 ```dart
+  // Первая попытка: нарушенное правило завершает задачу как Failed.
   @override
   void check() {
     super.check();

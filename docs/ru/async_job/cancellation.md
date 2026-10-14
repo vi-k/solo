@@ -88,6 +88,7 @@ Job<void>((ctx) async {
 сразу:
 
 ```dart
+// Первая попытка: база закрывается под идущей миграцией.
 final job = Job<Database>(observer: printing, (ctx) async {
   final database = await ctx.join(
     Database.open,
@@ -129,6 +130,7 @@ step 3 on a closed database
 `join` остаётся с миграцией до её конца:
 
 ```dart
+// Вторая попытка: ненужная миграция идёт до конца.
 await ctx.join(() => database.migrate(stop));
 ```
 
@@ -228,6 +230,7 @@ await ctx.join(device.record);
 `join` ждёт своё действие, поэтому каждая запись идёт через него:
 
 ```dart
+// Первая попытка: после отмены во время первой записи второй не будет.
 await ctx.join(database.writeVersion);
 await ctx.join(database.writeReadyFlag);
 ```
@@ -274,6 +277,7 @@ outcome: Cancelled(manual)
 У шага остаётся его единственный `join`:
 
 ```dart
+// Первая попытка: внутри join ctx.run бросает отмену.
 await ctx.join(() async {
   await database.writeVersion();
   await ctx.run(database.readyFlag());
@@ -367,6 +371,7 @@ outcome: Cancelled(manual)
 его дальше:
 
 ```dart
+// Первая попытка: ошибка, вызванная токеном, записывается как сбой.
 final stop = CancelToken();
 ctx.onCancel(stop.cancel);
 
@@ -469,6 +474,7 @@ try {
 ### Первая попытка
 
 ```dart
+// Первая попытка: обычный await досиживает задержку.
 final job = Job<void>((ctx) async {
   while (true) {
     use(await ctx.abandonable(database.readAll));
@@ -486,6 +492,7 @@ final job = Job<void>((ctx) async {
 ### Вторая попытка
 
 ```dart
+// Вторая попытка: таймер задержки переживает задачу.
 await ctx.abandonable(
   () => Future<void>.delayed(const Duration(seconds: 1)),
 );
@@ -530,6 +537,7 @@ await ctx.pause(const Duration(seconds: 1));
 Задачу останавливает `cancel`, поэтому таймер вызывает его, когда предел вышел:
 
 ```dart
+// Первая попытка: таймер лимита переживает задачу.
 const limit = Duration(milliseconds: 15);
 
 final job = Job<Database>(observer: printing, (ctx) async {
@@ -569,6 +577,7 @@ outcome: Cancelled(manual)
 Таймер снимается, когда задача кончается:
 
 ```dart
+// Вторая попытка: чтение done не пускает сбой в зону.
 final timer = Timer(limit, job.cancel);
 job.done.whenComplete(timer.cancel);
 ```

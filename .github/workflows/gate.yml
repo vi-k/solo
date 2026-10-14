@@ -404,7 +404,7 @@ jobs:
       - name: The filler keeps lists
         run: python3 -m unittest tool/reflow_test.py
 
-      - name: A section starts with code
+      - name: A section starts with code, an attempt with its mark
         run: python3 tool/check_doc_shape.py
 
       # The `floor` job trusts this script to say which files make an

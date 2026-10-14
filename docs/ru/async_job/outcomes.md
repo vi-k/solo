@@ -26,6 +26,7 @@
 `value` отдаёт отчёт, а `try` принимает то, что пошло не так:
 
 ```dart
+// Первая попытка: catch принимает отмену за сбой.
 try {
   print('report: ${await report.value}');
 } on Object catch (error) {
@@ -74,6 +75,7 @@ cancelled: manual
 `outcome` хранит то, чем кончилась задача, и равен `null`, пока она идёт:
 
 ```dart
+// Первая попытка: чтение outcome оставляет сбой зоне.
 final backup = Job<void>(upload);
 
 // Там, где рисуется строка статуса:
@@ -177,6 +179,7 @@ try {
 `switch` по `done` получает вариант для причины:
 
 ```dart
+// Первая попытка: причина запроса лежит на шаг глубже, в cause.
 final message = switch (await report.done) {
   Done(:final value) => 'report: $value',
   Failed(:final error) => 'failed: $error',
@@ -285,6 +288,7 @@ final report = Job<void>((ctx) async {
 Исход говорит, отменили ли задачу:
 
 ```dart
+// Первая попытка: done приходит только после очистки.
 if (await report.done case Cancelled(:final reason)) {
   print('cancelling: $reason');
 }
