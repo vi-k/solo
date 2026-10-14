@@ -45,6 +45,13 @@ void main() {
     );
   });
 
+  test('a test compares the value, not the outcome', () async {
+    // What the dartdoc of Outcome says: outcomes are equal by identity.
+    final job = Job<int>((ctx) async => 42);
+    expect(await job.value, 42);
+    expect(await job.done, isNot(const Done(42)));
+  });
+
   test('a switch over Outcome<T> is exhaustive with three cases', () {
     String describe(Outcome<int> outcome) => switch (outcome) {
           Done(:final value) => 'done $value',

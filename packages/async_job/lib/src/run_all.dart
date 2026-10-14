@@ -406,11 +406,16 @@ final class _RunAllGroup<T> {
   }
 
   /// How many branches from the start of the list [_settle] has already
-  /// seen at the first barrier, past it or finished. A branch that is one
-  /// of these stays one while [_settle] waits, so a wake looks on from
-  /// here rather than over every branch again: with branches that come to
-  /// the barrier one per turn, a walk over all of them on every wake was a
-  /// square of their number.
+  /// seen at the first barrier or finished. A branch that is one of these
+  /// stays one while [_settle] waits, so a wake looks on from here rather
+  /// than over every branch again: with branches that come to the barrier
+  /// one per turn, a walk over all of them on every wake was a square of
+  /// their number.
+  ///
+  /// The walk counts a branch let past the barrier too, though while
+  /// [_settle] waits there is none: before the wait is over a branch is
+  /// let past only once [_failing] is raised, and that ends the wait. The
+  /// check stays so that the count does not depend on that order.
   var _atFirstBarrier = 0;
 
   /// The same for the second barrier, which a branch leaves only when the

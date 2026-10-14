@@ -2633,6 +2633,37 @@ void main() {
   });
 
   test(
+      'a branch an engine ends at the second barrier no longer reads as '
+      'disposing', () async {
+    final slow = Completer<void>();
+    late JobContext leaked;
+    final branches = [
+      ProbeJob<int>((c) async {
+        leaked = c;
+        return 0;
+      }),
+      // A cleanup that waits keeps this one in its first pass, and the
+      // other at the second barrier.
+      ProbeJob<int>((c) async {
+        c.onDispose(() => slow.future);
+        return 1;
+      }),
+    ];
+    final job = Job<List<int>>((ctx) => ctx.runAll(branches));
+    await _hops(12);
+    expect(
+      branches[0].isDisposingNow,
+      isTrue,
+      reason: 'the branch stands at the second barrier',
+    );
+    branches[0].drop(const Done(100));
+    slow.complete();
+    expect(await job.value.timeout(const Duration(seconds: 2)), [100, 1]);
+    expect(branches[0].isDisposingNow, isFalse);
+    expect(leaked.check, returnsNormally);
+  });
+
+  test(
     'branches that end one a turn are gathered in linear time',
     () async {
       // The group looks at the barriers of its branches each time one of them

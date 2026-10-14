@@ -710,7 +710,11 @@ callback returns never starts, and the continuation fails»
 
 Вердикт: по замыслу, dartdoc `Outcome` говорит «Outcomes are equal by
 identity». Матчеры в отдельной библиотеке — новая работа, в бэклог владельцу,
-если захочет.
+если захочет. Итог 2026-10-14: владелец оставил идентичность. Dartdoc `Outcome`
+говорит теперь, что в тесте значение проверяют через
+`expect(await job.value, 42)`, а сравнение `await job.done` с `Done(42)`
+не проходит, даже когда задача вернула 42; сторож — «a test compares the value,
+not the outcome» в `outcome_test.dart`.
 
 ### L7. `analysis_options.yaml` — шаблон с правилами приложения Flutter
 
@@ -1111,7 +1115,15 @@ a glance» стоит между «Why» и «Guides», в переводе — 
    в dartdoc `Outcome` одна строка о том, что значение проверяют через
    `expect(await job.value, 42)`. Low: дописать сторож в `run_all_test.dart`,
    код ядра не менять. Nit: проверку оставить сторожем, dartdoc курсора
-   поправить.
+   поправить. Low и Nit сделаны. Сторож Low — «a branch an engine ends at the
+   second barrier no longer reads as disposing» в `run_all_test.dart`: ветвь,
+   которую движок кончил руками у второго барьера, больше не читается
+   разбирающей, и `check` её контекста не бросает; мутант
+   `barrier2_finished_no_disposing_false` его краснит. Dartdoc
+   `_atFirstBarrier` больше не говорит «past it»: он говорит, что пропущенной
+   за барьер ветви, пока `_settle` ждёт, не бывает — до конца ожидания ветвь
+   пропускают только после `_failing`, а он ожидание кончает, — и что проверка
+   стоит, чтобы счёт от этого порядка не зависел. Итог L6 — в её вердикте.
 
 Без вопроса чинить можно M1, M3, M4, M6, M7, M8, L10, L11 — но и их только
 по вашему слову. Ответ 2026-10-14: «давай без вопроса»; исправлены все восемь.
