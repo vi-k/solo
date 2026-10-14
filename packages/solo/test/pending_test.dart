@@ -200,6 +200,64 @@ void main() {
     });
   });
 
+  test('a body awaiting a job of its own controller names it', () {
+    runSolo((solo, journal, async) {
+      solo.run<TestState, void>(key: 'outer', (ctx) async {
+        // The inner job waits for the slot the outer body holds, and the
+        // body waits for the inner job: neither moves until a close.
+        await solo.run<TestState, void>(key: 'inner', (ctx) async {}).done;
+      });
+      async.flushMicrotasks();
+      final pending = solo.pending! as SoloPendingJob;
+      expect([for (final job in pending.queued) job.key], ['inner']);
+      expect('$pending', 'SoloPending([outer] in its body, 1 queued: [inner])');
+      expect(pending.queued.clear, throwsUnsupportedError);
+      solo.close();
+      async.flushTimers();
+      expect(solo.pending, isNull);
+    });
+  });
+
+  test('a key, describe or reason that throws is printed as a mark', () {
+    final errors = <Object>[];
+    late final String printed;
+    runZonedGuarded(
+      () {
+        printed = '${SoloPendingJob(
+          job: Job.deferred<void>(
+            key: _BrokenKey(),
+            describe: () => throw ArgumentError('describe'),
+            (ctx) async {},
+          ),
+          phase: SoloPhase.body,
+          cancellation: const Cancelled.by(reason: _BrokenReason()),
+          heldCancellation: const Cancelled.by(reason: _BrokenReason()),
+          children: 0,
+          inUncancellableSection: false,
+          cancellable: true,
+          closing: false,
+          draining: false,
+          queued: [
+            Job.deferred<void>(
+              key: 'next',
+              describe: () => throw _BrokenType(),
+              (ctx) async {},
+            ),
+          ],
+        )}';
+      },
+      (error, stackTrace) => errors.add(error),
+    );
+    expect(
+      printed,
+      'SoloPending([<key threw StateError>: <describe threw ArgumentError>] '
+      'in its body, cancelled by <cancellation threw StateError>, '
+      'holding <cancellation threw StateError> back, '
+      '1 queued: [next: <describe threw an error>])',
+    );
+    expect(errors, isEmpty, reason: 'the snapshot reports nothing');
+  });
+
   group('a close held without a job names what holds it', () {
     test('a drain waits out a group still in the queue', () {
       runSolo((solo, journal, async) {
@@ -256,7 +314,11 @@ void main() {
         expect(running.job.key, 'ready');
         expect(running.closing, isTrue);
         expect(running.draining, isTrue);
-        expect('$running', 'SoloPending([ready: gate] in its body, draining)');
+        expect(
+          '$running',
+          'SoloPending([ready: gate] in its body, draining, '
+              '1 queued: [group])',
+        );
 
         gate.complete();
         async.flushMicrotasks();
@@ -453,4 +515,21 @@ final class _Hooked extends Solo<TestState> with OpenSolo<TestState> {
 
   @override
   void onFinish(Job<Object?> job) => finished?.call(job);
+}
+
+final class _BrokenKey {
+  @override
+  String toString() => throw StateError('key');
+}
+
+final class _BrokenType extends Error {
+  @override
+  Type get runtimeType => throw StateError('runtimeType');
+}
+
+final class _BrokenReason extends CancelReason {
+  const _BrokenReason();
+
+  @override
+  String get name => throw StateError('name');
 }

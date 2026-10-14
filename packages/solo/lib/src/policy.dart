@@ -2,6 +2,12 @@
 ///
 /// Every policy except [sequential] requires a non-null key and throws
 /// [ArgumentError] otherwise.
+///
+/// A job whose start rules are being asked counts as queued for every
+/// policy: it is off the queue and not started yet, and a rule of it may
+/// call `add`. Its `isQueued` says `false` all the same. [droppable] hands
+/// that job back, so a rule that turns its job down afterwards ends the
+/// job the call got as well.
 enum Policy {
   /// Append to the queue; keys are ignored.
   sequential,

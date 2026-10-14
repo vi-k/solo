@@ -133,6 +133,9 @@ different `runZonedGuarded`. See
   answered the second call with the handle the first had just cancelled.
 - `cancelAll` reaches the job the engine is about to start: called from that
   job's start rules, it missed the job, which started anyway.
+- `Policy.droppable`, `replace` and `restart` reach the job the engine is about
+  to start: called from that job's start rules with its key, they missed it,
+  and two jobs of one key ran one after the other.
 - A `publish` that throws no longer holds back the changes queued behind it,
   and the rules of the running jobs are asked all the same: a job the new state
   rejects is cancelled.

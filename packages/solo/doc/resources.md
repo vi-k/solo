@@ -367,6 +367,7 @@ Never await the same job's `done`, `value` or `cancel()` from its cleanup: each
 completes only after that cleanup, so the wait never ends, and neither does a
 `close()` that waits for the job. A later job of the same queue cannot start
 until this one is over, so waiting for it holds the queue for as long as that
-job stays queued. `pending` reports such a job as `in its cleanup`;
+job stays queued. `pending` reports such a job as `in its cleanup`, with the
+later one among those `queued` behind it;
 [What is holding the controller](errors.md#what-is-holding-the-controller) on
 the errors page shows how to read it.

@@ -441,4 +441,173 @@ void main() {
       expect(root.outcome, isA<Done<void>>());
     });
   });
+
+  group('a job whose start rules are being asked counts as queued', () {
+    // Off the queue, not started, and not yet the current job: a rule of
+    // it is the caller's code, and a call of the same key from in there
+    // must find it, the way `pending` and `cancelAll` do.
+    test('a droppable call from its rule gets it back', () {
+      runSolo((solo, journal, async) {
+        SoloJob<void>? fromRule;
+        Job<Object?>? lastFromRule;
+        late final SoloJob<void> first;
+        first = solo.job<TestState, void>(
+          key: 'k',
+          describe: () => 'first',
+          canStart: (state) {
+            lastFromRule = solo.lastJobWhere((job) => job.key == 'k');
+            fromRule = solo.add(
+              solo.job<TestState, void>(
+                key: 'k',
+                describe: () => 'second',
+                (ctx) async {},
+              ),
+              policy: Policy.droppable,
+            );
+            return true;
+          },
+          (ctx) async {},
+        );
+        solo.add(first, policy: Policy.droppable);
+        async.flushTimers();
+        expect(lastFromRule, same(first));
+        expect(fromRule, same(first));
+        expect(journal.take(), [
+          '[k: second] dropped Cancelled(duplicate)',
+          '[k: first] started',
+          '[k: first] finished Done(null)',
+        ]);
+      });
+    });
+
+    for (final policy in [Policy.replace, Policy.restart]) {
+      test('${policy.name} from its rule removes it before it starts', () {
+        runSolo((solo, journal, async) {
+          late final SoloJob<void> first;
+          first = solo.job<TestState, void>(
+            key: 'k',
+            describe: () => 'first',
+            canStart: (state) {
+              solo.add(
+                solo.job<TestState, void>(
+                  key: 'k',
+                  describe: () => 'second',
+                  (ctx) async {},
+                ),
+                policy: policy,
+              );
+              return true;
+            },
+            (ctx) async {},
+          );
+          solo.add(first, policy: policy);
+          async.flushTimers();
+          expect(journal.take(), [
+            '[k: first] dropped Cancelled(replaced)',
+            '[k: second] started',
+            '[k: second] finished Done(null)',
+          ]);
+        });
+      });
+    }
+
+    test('a call of another key leaves it be', () {
+      runSolo((solo, journal, async) {
+        late final SoloJob<void> first;
+        first = solo.job<TestState, void>(
+          key: 'a',
+          canStart: (state) {
+            solo.add(
+              solo.job<TestState, void>(key: 'b', (ctx) async {}),
+              policy: Policy.replace,
+            );
+            return true;
+          },
+          (ctx) async {},
+        );
+        solo.add(first, policy: Policy.replace);
+        async.flushTimers();
+        expect(journal.take(), [
+          '[a] started',
+          '[a] finished Done(null)',
+          '[b] started',
+          '[b] finished Done(null)',
+        ]);
+      });
+    });
+
+    test('it stands ahead of what its rule has queued', () {
+      runSolo((solo, journal, async) {
+        SoloJob<void>? fromRule;
+        late final SoloJob<void> queued;
+        late final SoloJob<void> first;
+        first = solo.job<TestState, void>(
+          key: 'k',
+          describe: () => 'first',
+          canStart: (state) {
+            queued = solo.add(
+              solo.job<TestState, void>(
+                key: 'k',
+                describe: () => 'queued',
+                (ctx) async {},
+              ),
+            );
+            fromRule = solo.add(
+              solo.job<TestState, void>(
+                key: 'k',
+                describe: () => 'third',
+                (ctx) async {},
+              ),
+              policy: Policy.droppable,
+            );
+            return true;
+          },
+          (ctx) async {},
+        );
+        solo.add(first, policy: Policy.droppable);
+        async.flushTimers();
+        // The queue is searched from its tail: the job the rule queued is
+        // the last one of the key, and the one being started comes first.
+        expect(fromRule, same(queued));
+        expect(journal.take(), [
+          '[k: third] dropped Cancelled(duplicate)',
+          '[k: first] started',
+          '[k: first] finished Done(null)',
+          '[k: queued] started',
+          '[k: queued] finished Done(null)',
+        ]);
+      });
+    });
+
+    test('one created cancellable: false refuses the removal', () {
+      runSolo((solo, journal, async) {
+        late final SoloJob<void> first;
+        first = solo.job<TestState, void>(
+          key: 'k',
+          describe: () => 'first',
+          cancellable: false,
+          canStart: (state) {
+            solo.add(
+              solo.job<TestState, void>(
+                key: 'k',
+                describe: () => 'second',
+                (ctx) async {},
+              ),
+              policy: Policy.replace,
+            );
+            return true;
+          },
+          (ctx) async {},
+        );
+        solo.add(first, policy: Policy.replace);
+        async.flushTimers();
+        expect(journal.take(), [
+          '[k: first] started',
+          '[k: first] finished Done(null)',
+          '[k: second] started',
+          '[k: second] finished Done(null)',
+        ]);
+      });
+    });
+  });
 }

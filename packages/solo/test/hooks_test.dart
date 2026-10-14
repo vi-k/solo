@@ -505,6 +505,29 @@ void main() {
     expect(jobs, contains('Job(job) finished: Done(null)'));
     expect(jobs, isNot(contains('add Job(job)')));
   });
+
+  test('a describe that throws is a mark on Solo.debug, and no more', () {
+    final engine = <String>[];
+    final zone = <Object>[];
+    Solo.debug = engine.add;
+    try {
+      runZonedGuarded(
+        () => fakeAsync((async) {
+          PlainSolo<TestState>(const Initial()).run<TestState, void>(
+            key: 'job',
+            describe: () => throw StateError('describe'),
+            (ctx) async {},
+          );
+          async.flushMicrotasks();
+        }),
+        (error, stackTrace) => zone.add(error),
+      );
+    } finally {
+      Solo.debug = null;
+    }
+    expect(engine, contains('add Job(job: <describe threw StateError>)'));
+    expect(zone, isEmpty);
+  });
 }
 
 /// Throws from the instance hook the engine calls while finishing a job.

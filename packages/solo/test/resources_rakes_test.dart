@@ -2060,7 +2060,8 @@ void main() {
 
       test('for a later job holds the queue while that job stays queued', () {
         _says('holds the queue for as long as that job stays queued');
-        _says('`pending` reports such a job as `in its cleanup`');
+        _says('`pending` reports such a job as `in its cleanup`, with the '
+            'later one among those `queued` behind it');
         fakeAsync((async) {
           final bench = Bench();
           late final SoloJob<void> later;
@@ -2070,7 +2071,10 @@ void main() {
 
           expect(job.outcome, isNull);
           expect(later.isQueued, isTrue);
-          expect('${bench.pending}', 'SoloPending([stuck] in its cleanup)');
+          expect(
+            '${bench.pending}',
+            'SoloPending([stuck] in its cleanup, 1 queued: [next])',
+          );
 
           expect(bench.queue.remove(later), isTrue);
           async.flushMicrotasks();

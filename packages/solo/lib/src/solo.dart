@@ -77,6 +77,11 @@ abstract class Solo<S extends Object> {
   /// The queue, the state and the closing report here. The life of each job,
   /// its start, its errors, a cancellation that reaches it and its outcome, is
   /// on [Job.debug]; to follow both sides, set both.
+  ///
+  /// A job in a line here is printed the way it prints itself: a key or a
+  /// `describe` that throws shows as a mark, `Job(<key threw StateError>)`,
+  /// and the error goes no further. [Job.debug] hands such an error to the
+  /// zone as well.
   static void Function(String message)? debug;
 
   S _state;
@@ -529,11 +534,13 @@ abstract class Solo<S extends Object> {
           (other) => other.key == impl.key,
           reason: const ReplacedCancelReason(),
         );
+        _replaceInTransition(impl.key);
       case Policy.restart:
         _queue.removeWhere(
           (other) => other.key == impl.key,
           reason: const ReplacedCancelReason(),
         );
+        _replaceInTransition(impl.key);
         final current = _current;
         if (current != null && current.key == impl.key) {
           unawaited(current.cancel(reason: const ReplacedCancelReason()));
@@ -667,7 +674,12 @@ abstract class Solo<S extends Object> {
   SoloPending? get pending {
     final current = _current;
     if (current != null) {
-      return current._pending(closing: isClosed, draining: _draining);
+      return current._pending(
+        closing: isClosed,
+        draining: _draining,
+        // A copy, not a view, as below.
+        queued: List<Job<Object?>>.unmodifiable(_queue._jobs),
+      );
     }
     if (_draining) {
       // A copy, not a view: the snapshot says what held the close when it
@@ -690,7 +702,9 @@ abstract class Solo<S extends Object> {
   Job<Object?>? get current => _current;
 
   /// The last queued job matching [test], else the current job if it
-  /// matches, else `null`.
+  /// matches, else `null`. A job whose start rules are being asked counts
+  /// as queued, ahead of the rest: it is off the queue and not started
+  /// yet, and a rule of it may ask.
   ///
   /// Only a job that is still going to do the work answers. A queued one
   /// always is — cancelling it takes it off the queue — but the current
@@ -715,6 +729,17 @@ abstract class Solo<S extends Object> {
         return job;
       }
     }
+    // The job whose start rules are being asked: off the queue, not
+    // started, and ahead of everything in the queue. Asked before the
+    // predicate as well as after, as the current job is: `cancelAll` from
+    // its rules ends it where it stands.
+    final transition = _inTransition;
+    if (transition != null &&
+        _goingOn(transition) &&
+        test(transition) &&
+        _goingOn(transition)) {
+      return transition;
+    }
     final current = _current;
     return current != null &&
             _goingOn(current) &&
@@ -722,6 +747,22 @@ abstract class Solo<S extends Object> {
             _goingOn(current)
         ? current
         : null;
+  }
+
+  /// Removes the job whose start rules are being asked, the way a policy
+  /// removes a queued job of the same [key]: it is queued work until it is
+  /// launched. Rejectable, as that removal is.
+  void _replaceInTransition(Object? key) {
+    final transition = _inTransition;
+    if (transition != null && !transition.isFinished && transition.key == key) {
+      transition._cancelWith(
+        Cancelled.by(
+          reason: const ReplacedCancelReason(),
+          started: false,
+          stackTrace: StackTrace.current,
+        ),
+      );
+    }
   }
 
   /// Whether [job] is still going to do its work: neither cancelled nor

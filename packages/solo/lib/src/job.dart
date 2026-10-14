@@ -151,7 +151,11 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   }
 
   /// A snapshot of what this job is doing, for [Solo.pending].
-  SoloPendingJob _pending({required bool closing, required bool draining}) =>
+  SoloPendingJob _pending({
+    required bool closing,
+    required bool draining,
+    required List<Job<Object?>> queued,
+  }) =>
       SoloPendingJob(
         job: this,
         phase: _phase,
@@ -162,6 +166,7 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
         cancellable: cancellable,
         closing: closing,
         draining: draining,
+        queued: queued,
       );
 
   SoloPhase get _phase {

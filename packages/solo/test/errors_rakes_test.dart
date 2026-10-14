@@ -578,6 +578,36 @@ void main() {
       expect('${job.outcome}', 'Done(null)');
     });
 
+    test('a crash reporter fed from the hook gets one error three times', () {
+      _says(
+        'A crash reporter fed from here may get one error three times: from '
+        "the child, from the parent and, when nobody observes the parent's "
+        'outcome, from the creation zone',
+      );
+      _says(
+        'keeping only the call of the root drops the failure of a child its '
+        'parent caught, and an `Expando` that marks the errors already sent '
+        'takes no string or number',
+      );
+      late Bench bench;
+      final ran = _run((async) {
+        bench = Bench();
+        bench.run<int, void>(key: 'parent', (ctx) async {
+          await ctx.run(
+            bench.job<int, void>(
+              key: 'child',
+              (child) async => throw StateError('the child'),
+            ),
+          );
+        });
+      });
+
+      expect(bench.heard, ['child: the child', 'parent: the child']);
+      expect(ran.errors, ['the child']);
+      expect(() => Expando<bool>()['sent'] = true, throwsArgumentError);
+      expect(() => Expando<bool>()[404] = true, throwsArgumentError);
+    });
+
     for (final make in <OpenSolo<int> Function()>[
       _ReportsAndCallsSuper.new,
       _ReportsAndReturns.new,
@@ -1501,7 +1531,7 @@ void main() {
     });
 
     group('the fields of the table:', () {
-      test('the nine the page names', () {
+      test('the ten the page names', () {
         expect(_rows('| Field | What it says |').keys, [
           '`job`',
           '`phase`',
@@ -1512,6 +1542,7 @@ void main() {
           '`cancellable`',
           '`closing`',
           '`draining`',
+          '`queued`',
         ]);
         _says(
           'While a job holds it, `pending` is a `SoloPendingJob`, a snapshot '
@@ -1538,6 +1569,7 @@ void main() {
           expect(before.cancellable, isTrue);
           expect(before.closing, isFalse);
           expect(before.draining, isFalse);
+          expect(before.queued, isEmpty);
           expect(before.cancellationPending, isFalse);
 
           expect('${after.cancellation}', 'Cancelled(manual)');
@@ -1796,9 +1828,10 @@ void main() {
           _end(async, 'op');
         });
 
+        const snapshot = 'SoloPending([stuck] in its body, 1 queued: [queued])';
         expect(
           stage.lines,
-          ['stuck is still running: SoloPending([stuck] in its body)'],
+          ['stuck is still running: $snapshot'],
           reason: 'onStart has not come for the queued one',
         );
       });

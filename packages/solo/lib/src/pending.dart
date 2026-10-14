@@ -39,7 +39,12 @@ enum SoloPhase {
 /// ```
 ///
 /// Every one of them prints as `SoloPending(...)`: a log line is read by
-/// eye, and the name of the variant adds nothing to it.
+/// eye, and the name of the variant adds nothing to it. Printing never
+/// throws: a key whose `toString` throws, a `describe` that does, or a
+/// cancellation whose reason does, is printed as a mark,
+/// `[<key threw StateError>]`, the way a job prints itself, and the error
+/// goes nowhere — the snapshot is read where something already went wrong,
+/// and the line must not take its place.
 @immutable
 sealed class SoloPending {
   /// Lets the three variants be constant.
@@ -94,6 +99,17 @@ final class SoloPendingJob extends SoloPending {
   /// next. [closing] is true as well.
   final bool draining;
 
+  /// The jobs queued behind this one, in queue order: none of them starts
+  /// before this one is over. Taken when the snapshot is: the queue moving
+  /// on does not change it.
+  ///
+  /// A body that calls a method of its own controller and awaits the job
+  /// that comes back waits for one of these: that job waits for the slot
+  /// the body is holding, and neither moves until `close` or `cancelAll`
+  /// cancels both; a drain waits for them for good.
+  /// The snapshot names them side by side.
+  final List<Job<Object?>> queued;
+
   /// Creates a snapshot; the engine makes these, a domain reads them.
   const SoloPendingJob({
     required this.job,
@@ -105,6 +121,7 @@ final class SoloPendingJob extends SoloPending {
     required this.cancellable,
     required this.closing,
     required this.draining,
+    this.queued = const [],
   });
 
   /// Whether a cancellation is on this job and waiting to land: it is
@@ -128,12 +145,15 @@ final class SoloPendingJob extends SoloPending {
     };
     final notes = [
       if (draining) 'draining' else if (closing) 'closing',
-      if (cancellation != null) 'cancelled by $cancellation',
-      if (heldCancellation != null)
-        'holding $heldCancellation back'
+      if (cancellation case final cancellation?)
+        'cancelled by ${_part('cancellation', () => '$cancellation')}',
+      if (heldCancellation case final held?)
+        'holding ${_part('cancellation', () => '$held')} back'
       else if (inUncancellableSection)
         'in an uncancellable section',
       if (!cancellable) 'created cancellable: false',
+      if (queued.isNotEmpty)
+        '${queued.length} queued: ${queued.map(_name).join(', ')}',
     ];
 
     return 'SoloPending(${_name(job)} $what${notes.isEmpty ? '' : ', '
@@ -189,6 +209,26 @@ final class SoloPendingStream extends SoloPending {
 }
 
 String _name(Job<Object?> job) {
-  final description = job.describe();
-  return description.isEmpty ? '[${job.key}]' : '[${job.key}: $description]';
+  final key = _part('key', () => '${job.key}');
+  final description = _part('describe', job.describe);
+  return description.isEmpty ? '[$key]' : '[$key: $description]';
+}
+
+/// What [print] prints, or a mark when it throws.
+String _part(String what, String Function() print) {
+  try {
+    return print();
+  } on Object catch (error) {
+    return '<$what threw ${_typeOf(error)}>';
+  }
+}
+
+/// The type of [error] for a mark, or a word when even that throws: a
+/// `runtimeType` is a getter like any other.
+String _typeOf(Object error) {
+  try {
+    return '${error.runtimeType}';
+  } on Object {
+    return 'an error';
+  }
 }
