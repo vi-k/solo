@@ -2594,6 +2594,86 @@ void main() {
       });
     }
   });
+
+  // An engine may end a branch by hand wherever it stands. The group must
+  // count such a branch as done at either barrier, or it waits for good.
+  test('a branch an engine ends with a value in its body does not hang',
+      () async {
+    final slow = Completer<void>();
+    final branches = [
+      ProbeJob<int>((c) async {
+        await slow.future;
+        return 0;
+      }),
+      ProbeJob<int>((c) async => 1),
+    ];
+    final job = Job<List<int>>((ctx) => ctx.runAll(branches));
+    await _hops(5);
+    branches[0].drop(const Done(100));
+    slow.complete();
+    expect(await job.value.timeout(const Duration(seconds: 2)), [100, 1]);
+  });
+
+  test(
+      'a branch an engine ends with a value at the first barrier does not '
+      'hang', () async {
+    final slow = Completer<void>();
+    final branches = [
+      ProbeJob<int>((c) async => 0),
+      ProbeJob<int>((c) async {
+        await slow.future;
+        return 1;
+      }),
+    ];
+    final job = Job<List<int>>((ctx) => ctx.runAll(branches));
+    await _hops(8);
+    branches[0].drop(const Done(100));
+    slow.complete();
+    expect(await job.value.timeout(const Duration(seconds: 2)), [100, 1]);
+  });
+
+  test(
+    'branches that end one a turn are gathered in linear time',
+    () async {
+      // The group looks at the barriers of its branches each time one of them
+      // moves. Looked at from the first branch every time, the walk passes
+      // all the ones already there, and branches ending one a turn cost the
+      // square of their number. Measured on this test, 160 000 branches:
+      // about 24 s from the first branch; on from where the last look
+      // stopped, about 2 s alone and 3 s under the load of the whole suite.
+      // The bound sits between the two with room for a machine some times
+      // slower, as the runners of the gate are.
+      //
+      // The timeout of this file cannot guard this: the branches end in
+      // microtasks, one after another, and no timer of the runner gets a
+      // turn until the group is over. Hence a watch of our own, and a timeout
+      // of its own that leaves the verdict to it.
+      const count = 160000;
+      final turns = [for (var i = 0; i <= count; i++) Completer<void>()];
+      final watch = Stopwatch()..start();
+      final job = Job<List<int>>(
+        (ctx) => ctx.runAll([
+          for (var i = 0; i < count; i++)
+            Job.deferred<int>((ctx) async {
+              await turns[i].future;
+              turns[i + 1].complete();
+              return i;
+            }),
+        ]),
+      );
+      turns.first.complete();
+      final values = await job.value;
+      watch.stop();
+      expect(values, [for (var i = 0; i < count; i++) i]);
+      expect(
+        watch.elapsedMilliseconds,
+        lessThan(14000),
+        reason: 'a look at the barriers goes on from where the last one '
+            'stopped',
+      );
+    },
+    timeout: const Timeout(Duration(minutes: 1)),
+  );
 }
 
 /// A lock, or a pool when it has more than one slot, and a trace of who
@@ -2633,5 +2713,11 @@ final class SharedSlots {
     if (at < 0) return;
     trace.add('$name gives up');
     _waiting.removeAt(at).$2.completeError(StateError('$name gave up'));
+  }
+}
+
+Future<void> _hops(int count) async {
+  for (var i = 0; i < count; i++) {
+    await null;
   }
 }

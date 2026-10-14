@@ -405,16 +405,41 @@ final class _RunAllGroup<T> {
     changing.complete();
   }
 
-  bool _everyBranchIsAtFirstBarrier() => _branches.every(
-        (branch) =>
-            branch.atFirstBarrier ||
-            branch.pastFirstBarrier.isCompleted ||
-            branch.job.isFinished,
-      );
+  /// How many branches from the start of the list [_settle] has already
+  /// seen at the first barrier, past it or finished. A branch that is one
+  /// of these stays one while [_settle] waits, so a wake looks on from
+  /// here rather than over every branch again: with branches that come to
+  /// the barrier one per turn, a walk over all of them on every wake was a
+  /// square of their number.
+  var _atFirstBarrier = 0;
 
-  bool _everyBranchIsAtSecondBarrier() => _branches.every(
-        (branch) => branch.atSecondBarrier || branch.job.isFinished,
-      );
+  /// The same for the second barrier, which a branch leaves only when the
+  /// group commits or fails — past the waiting either way.
+  var _atSecondBarrier = 0;
+
+  bool _everyBranchIsAtFirstBarrier() {
+    while (_atFirstBarrier < _branches.length) {
+      final branch = _branches[_atFirstBarrier];
+      if (!branch.atFirstBarrier &&
+          !branch.pastFirstBarrier.isCompleted &&
+          !branch.job.isFinished) {
+        return false;
+      }
+      _atFirstBarrier++;
+    }
+    return true;
+  }
+
+  bool _everyBranchIsAtSecondBarrier() {
+    while (_atSecondBarrier < _branches.length) {
+      final branch = _branches[_atSecondBarrier];
+      if (!branch.atSecondBarrier && !branch.job.isFinished) {
+        return false;
+      }
+      _atSecondBarrier++;
+    }
+    return true;
+  }
 
   Future<List<T>> _settle() async {
     try {

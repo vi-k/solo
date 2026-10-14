@@ -2072,6 +2072,22 @@ abstract class JobBase<T> implements Job<T> {
   void _notifyLog(Object? message) =>
       _notify(() => _observer?.onLog(this, message));
 
+  /// The routine of a job, from the body to [finish].
+  ///
+  /// No loop stands here. Thousands of jobs let go together sleep in this
+  /// routine at once, and under JIT a frame that went to sleep in
+  /// unoptimized code wakes up in it. At the header of a loop such a frame
+  /// asks the VM to replace it with optimized code, and the VM compiles the
+  /// whole routine again for that one frame: two milliseconds or so for a
+  /// routine this big, once for every job that wakes up there. Moving a loop
+  /// out does not settle it by itself, and only a measure does: one big
+  /// local function took 30 000 branches of `let_go_together_test.dart` 13 s,
+  /// and a loop of a few lines in a small local one took 30 000 jobs waking
+  /// in it 6 to 8.5 s. The loop of [_unwind] costs nothing there, under
+  /// 0.4 s and no replacement asked. So the only loop that sleeps over the
+  /// cleanup stack is the one of [_unwind]; the one of [_nextCleanup] never
+  /// awaits. The local functions below go round through [_unwind], and each
+  /// of these places is held by its own test in that file.
   Future<void> _execute(JobContextBase? ctx) async {
     try {
       _routineEntered = true;
@@ -2266,7 +2282,7 @@ abstract class JobBase<T> implements Job<T> {
           // An engine of a domain ended the branch by hand while it stood
           // there. A bare `return` would leave the phase where it is, and
           // the job would read as disposing for good. Nothing is put aside
-          // yet -- the loops below are what fill that list -- so there is
+          // yet -- the passes below are what fill that list -- so there is
           // nothing to say on the debug channel either.
           _disposing = false;
           return;
@@ -2280,96 +2296,93 @@ abstract class JobBase<T> implements Job<T> {
       bool valueHandedOver() =>
           _committedByGroup || (_pendingCancel ?? outcome) is Done<T>;
 
-      void Function()? sayDropped;
-      if (_cleanups.isNotEmpty || hold != null) {
-        _disposing = true;
-        // The loop lives here and not in a method of its own: between the
-        // last look at the stack and `finish` there must be no `await`, or
-        // the window after `return` grows by a microtask.
-        //
-        // The condition of a `discard` registration is read as it comes off
-        // the stack, from the outcome as it stands then: a cancellation may
-        // arrive into the unwinding itself. The ones it passed over wait for
-        // a second pass instead of being dropped.
-        while (_cleanups.isNotEmpty) {
-          final cleanup = _cleanups.removeLast();
-          if (!cleanup.always && valueHandedOver()) {
-            _skipped.add(cleanup);
-            continue;
-          }
-          await _runCleanup(cleanup);
-        }
-        if (hold != null) {
-          // The second barrier, between the two passes — where the core
-          // re-reads the outcome anyway. A branch stands here disposing
-          // whether or not it registered a thing: what it may do while it
-          // waits must not depend on that, and the group needs every branch
-          // to check against, not only the ones with a cleanup stack.
-          _betweenPasses = true;
-          _committedByGroup = await hold.beforeOutcome();
-          _betweenPasses = false;
-          if (isFinished) {
-            _traceDroppedCleanups();
-            _disposing = false;
-            return;
-          }
-          // The stack is read again, and this pass is not the second one: a
-          // branch at the barrier is not over, and an `onDispose` from a
-          // background timer or an event of a domain lands on it legally.
-          // Without this reading such a registration would never run at all.
-          while (_cleanups.isNotEmpty) {
-            final cleanup = _cleanups.removeLast();
-            if (!cleanup.always && valueHandedOver()) {
-              _skipped.add(cleanup);
-              continue;
-            }
-            await _runCleanup(cleanup);
-          }
-        }
-        // `removeAt(0)`, not `removeLast`: the skipped registrations were
-        // collected in the order they came off the stack, and that is the
-        // order they run in — the top one first, as if they had never been
-        // put aside.
-        while (_skipped.isNotEmpty && !valueHandedOver()) {
-          await _runCleanup(_skipped.removeAt(0));
-          while (_cleanups.isNotEmpty) {
-            await _runCleanup(_cleanups.removeLast());
-          }
-        }
-        // Whatever is still put aside will never run: the loop above drains
-        // the list for every outcome but [Done], and a [Done] is what put
-        // them there. Left behind, they would hold their values and their
-        // closures for as long as anyone holds the handle — the job is over,
-        // and the list is a field now, not a local that dies with the call.
-        sayDropped = _droppedCleanupsTrace();
+      // The tail, from the last look at the cleanup stack to the end. Called
+      // in the same turn as that look: an `await` between the two would
+      // widen the window after `return` by a microtask.
+      void conclude() {
+        // Whatever is still put aside will never run: the passes drain the
+        // list for every outcome but [Done], and a [Done] is what put them
+        // there. Left behind, they would hold their values and their
+        // closures for as long as anyone holds the handle — the job is
+        // over, and the list is a field now, not a local that dies with the
+        // call.
+        final sayDropped = _droppedCleanupsTrace();
         _skipped.clear();
         _disposing = false;
+        final decided = _pendingCancel ?? outcome;
+        finish(decided);
+        // Said after `finish` and not before: the debug channel is the
+        // caller's code, and so are `describe` and `toString` that build the
+        // line. One that cancels this job there would land between the
+        // dropped registrations and the outcome — the job would end
+        // `Cancelled` with its `discard` gone and its value with nobody.
+        // After `finish` the cancellation finds the job over.
+        sayDropped?.call();
+        // After `finish`, not before, and on the spot. `finished` and
+        // `onFinish` run first, and an engine of a domain may still call
+        // [Job.ignoreFailure] there; a parent's body hears the cancellation
+        // only after the answer. Reading the outcome settles nothing here,
+        // so there is no window to wait for.
+        if (failedFirst && outcome is Failed && !identical(decided, outcome)) {
+          _reportCovered(outcome, announced: true);
+        }
+        // Not empty only if the job was marked at the throw: [decided] is
+        // the mark then, and not the envelope.
+        for (final failure in firstInEnvelope) {
+          _reportCovered(
+            Failed(failure.error, failure.stackTrace),
+            announced: true,
+          );
+        }
       }
-      final decided = _pendingCancel ?? outcome;
-      finish(decided);
-      // Said after `finish` and not before: the debug channel is the
-      // caller's code, and so are `describe` and `toString` that build the
-      // line. One that cancels this job there would land between the dropped
-      // registrations and the outcome — the job would end `Cancelled` with
-      // its `discard` gone and its value with nobody. After `finish` the
-      // cancellation finds the job over.
-      sayDropped?.call();
-      // After `finish`, not before, and on the spot. `finished` and
-      // `onFinish` run first, and an engine of a domain may still call
-      // [Job.ignoreFailure] there; a parent's body hears the cancellation only
-      // after the answer. Reading the outcome settles nothing here, so there
-      // is no window to wait for.
-      if (failedFirst && outcome is Failed && !identical(decided, outcome)) {
-        _reportCovered(outcome, announced: true);
+
+      if (_cleanups.isEmpty && hold == null) {
+        conclude();
+        return;
       }
-      // Not empty only if the job was marked at the throw: [decided] is the
-      // mark then, and not the envelope.
-      for (final failure in firstInEnvelope) {
-        _reportCovered(
-          Failed(failure.error, failure.stackTrace),
-          announced: true,
-        );
+      _disposing = true;
+      // The registrations put aside. `removeAt(0)`, not `removeLast`: they
+      // were collected in the order they came off the stack, and that is
+      // the order they run in — the top one first, as if they had never
+      // been put aside.
+      // No loop here either, for the reason on [_execute]: it goes round
+      // through [_unwind], which runs what the skipped one registered.
+      Future<void> skippedPass() async {
+        if (_skipped.isEmpty || valueHandedOver()) {
+          conclude();
+          return;
+        }
+        await _runCleanup(_skipped.removeAt(0));
+        return _unwind(() => false, skippedPass);
       }
+
+      // The condition of a `discard` registration is read as it comes off
+      // the stack, from the outcome as it stands then: a cancellation may
+      // arrive into the unwinding itself. The ones it passed over wait for
+      // [skippedPass] instead of being dropped.
+      await _unwind(valueHandedOver, () async {
+        if (hold == null) {
+          return skippedPass();
+        }
+        // The second barrier, between the two passes — where the core
+        // re-reads the outcome anyway. A branch stands here disposing
+        // whether or not it registered a thing: what it may do while it
+        // waits must not depend on that, and the group needs every branch
+        // to check against, not only the ones with a cleanup stack.
+        _betweenPasses = true;
+        _committedByGroup = await hold.beforeOutcome();
+        _betweenPasses = false;
+        if (isFinished) {
+          _traceDroppedCleanups();
+          _disposing = false;
+          return;
+        }
+        // The stack is read again, and this pass is not the second one: a
+        // branch at the barrier is not over, and an `onDispose` from a
+        // background timer or an event of a domain lands on it legally.
+        // Without this reading such a registration would never run at all.
+        return _unwind(valueHandedOver, skippedPass);
+      });
     } on Object catch (error, stackTrace) {
       if (_startReturned) {
         rethrow;
@@ -2502,6 +2515,41 @@ abstract class JobBase<T> implements Job<T> {
     } else {
       notifyError(outcome.error, outcome.stackTrace);
     }
+  }
+
+  /// Runs the cleanup stack from the top until it is empty, and then
+  /// [then], in the same turn as that last look at the stack.
+  ///
+  /// A registration that [passOver] says to skip goes onto [_skipped]
+  /// instead of running. Each one is read as it comes off the stack, and
+  /// one may register more while it runs.
+  ///
+  /// The only loop that sleeps over the stack: why it is not in
+  /// [_execute], and why nothing else loops there, is said on [_execute].
+  Future<void> _unwind(
+    bool Function() passOver,
+    FutureOr<void> Function() then,
+  ) async {
+    for (var cleanup = _nextCleanup(passOver);
+        cleanup != null;
+        cleanup = _nextCleanup(passOver)) {
+      await _runCleanup(cleanup);
+    }
+    return then();
+  }
+
+  /// Takes the next registration to run off the stack, putting aside the
+  /// ones [passOver] says to skip; `null` once the stack is empty.
+  _Cleanup? _nextCleanup(bool Function() passOver) {
+    while (_cleanups.isNotEmpty) {
+      final cleanup = _cleanups.removeLast();
+      if (!cleanup.always && passOver()) {
+        _skipped.add(cleanup);
+        continue;
+      }
+      return cleanup;
+    }
+    return null;
   }
 
   /// Runs one registration; its error goes to [notifyError], and the stack

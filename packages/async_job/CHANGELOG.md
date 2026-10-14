@@ -174,6 +174,10 @@ new wording.
 - A key whose `toString` throws, or a `describe` that throws, is printed as a
   mark in the job's string representation; its error took the place of the
   core's error message that named the job.
+- Thousands of jobs that wake up together, such as children waiting on one
+  future, no longer cost about two milliseconds each under JIT (`dart test`,
+  `dart run`, a debug build): the VM compiled the routine of a job again for
+  every one of them.
 
 ### Documentation
 

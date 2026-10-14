@@ -1219,6 +1219,78 @@ void main() {
           'its handle: it holds its value and its closure',
     );
   });
+  test(
+      'a discard below the cleanup a cancellation arrives in runs in its '
+      'place', () async {
+    // The condition of a `discard` is read as each registration comes off
+    // the stack, not once for the pass: the cancellation arrives while the
+    // top one runs, and the one below it is no longer passed over.
+    final order = <String>[];
+    final gate = Completer<void>();
+    final job = Job<int>((ctx) async {
+      ctx
+        ..onDispose(() => order.add('bottom'))
+        ..onDiscard(() => order.add('middle'))
+        ..onDispose(() async {
+          order.add('slow starts');
+          await gate.future;
+          order.add('slow ends');
+        });
+      return 7;
+    });
+    await _hops(5);
+    unawaited(job.cancel());
+    gate.complete();
+    await job.done;
+    expect(order, ['slow starts', 'slow ends', 'middle', 'bottom']);
+  });
+
+  // From the last look at the cleanup stack to `finish` no turn passes: a
+  // registration that comes k microtasks after the last cleanup has ended
+  // either runs or meets a job that is over and is refused. Swept over k.
+  for (final kind in ['plain', 'branch']) {
+    test(
+        'no registration falls into the window after the last cleanup, '
+        '$kind', () async {
+      for (var k = 0; k < 12; k++) {
+        var ran = false;
+        var refused = false;
+        late JobContext context;
+        Future<int> body(JobContext ctx) async {
+          context = ctx;
+          ctx.onDispose(() {
+            var left = k;
+            void again() {
+              if (left-- > 0) {
+                scheduleMicrotask(again);
+                return;
+              }
+              try {
+                context.onDispose(() => ran = true);
+              } on Object catch (error) {
+                refused = error is StateError;
+              }
+            }
+
+            scheduleMicrotask(again);
+          });
+          await null;
+          return 1;
+        }
+
+        final Job<Object?> job = kind == 'plain'
+            ? Job<int>(body)
+            : Job<List<int>>((ctx) => ctx.runAll([Job.deferred<int>(body)]));
+        await job.done;
+        await _hops(30);
+        expect(
+          ran || refused,
+          isTrue,
+          reason: 'k=$k: the registration was neither run nor refused',
+        );
+      }
+    });
+  }
 }
 
 /// The registrations the unwinding put aside, read through the mirror: the
@@ -1234,4 +1306,10 @@ List<Object?> _putAside(Job<Object?> job) {
     }
   }
   throw StateError('no _skipped field on ${job.runtimeType}');
+}
+
+Future<void> _hops(int count) async {
+  for (var i = 0; i < count; i++) {
+    await null;
+  }
 }
