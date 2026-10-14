@@ -325,6 +325,20 @@ void main() {
     expect(length.value, 1);
   });
 
+  test('a listener of the source ahead of the selection reads the old pick',
+      () {
+    final source = _InPlaceSource();
+    final length = SoloSelection<List<int>, int>(source, (list) => list.length);
+    final ahead = <int>[];
+    source.addListener(() => ahead.add(length.value));
+    void listener() {}
+    length.addListener(listener);
+
+    source.grow();
+    expect(ahead, [0], reason: 'the selection has not heard the change yet');
+    expect(length.value, 1, reason: 'and once it has, the pick is fresh');
+  });
+
   test('a source changed in place while subscribing is picked again', () async {
     final source = _InPlaceSource(growOnFirstListener: true);
     final length = SoloSelection<List<int>, int>(source, (list) => list.length);

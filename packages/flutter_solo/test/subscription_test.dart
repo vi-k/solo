@@ -23,6 +23,29 @@ final class _Stuck extends Solo<int> with SoloListenable {
       throw StateError('this one does not let go');
 }
 
+/// A listenable that knows a listener by identity, not by `==`: a
+/// tear-off made again for `removeListener` is not found.
+final class _ByIdentity implements Listenable {
+  final _listeners = <VoidCallback>[];
+
+  @override
+  void addListener(VoidCallback listener) => _listeners.add(listener);
+
+  @override
+  void removeListener(VoidCallback listener) {
+    final index = _listeners.indexWhere((each) => identical(each, listener));
+    if (index >= 0) {
+      _listeners.removeAt(index);
+    }
+  }
+
+  void notify() {
+    for (final listener in List.of(_listeners)) {
+      listener();
+    }
+  }
+}
+
 /// A notifier that runs [onRemove] each time a listener is taken back:
 /// `removeListener` is the source's code, free to do anything there.
 final class _Watched extends ChangeNotifier {
@@ -157,6 +180,32 @@ void main() {
     first.cancel();
     counter.set(2);
     expect(calls, 3, reason: 'the other registration is still there');
+  });
+
+  test('cancelling one of two subscriptions of a closure takes back its own',
+      () {
+    final counter = _Counter();
+    final notifier = ValueNotifier(0);
+    final byIdentity = _ByIdentity();
+    for (final (source, change) in <(Listenable, void Function())>[
+      (counter, () => counter.set(1)),
+      (notifier, () => notifier.value = 1),
+      (byIdentity, byIdentity.notify),
+    ]) {
+      final heard = <String>[];
+      void a() => heard.add('A');
+      void b() => heard.add('B');
+      source
+        ..listen(a)
+        ..listen(b)
+        ..listen(a).cancel();
+      change();
+      expect(
+        heard,
+        ['A', 'B'],
+        reason: '$source: the last A went, not the first',
+      );
+    }
   });
 
   test('a selection is listened to the same way', () {

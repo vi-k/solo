@@ -11,11 +11,18 @@ import 'solo_selector.dart';
 /// its own: a widget that needs the name rebuilds when the name changes
 /// and not when the progress does.
 ///
-/// [value] answers from the value the source has now, with or without
-/// listeners, so it is never behind — a selector is a pick and is expected
-/// to be cheap, and to answer the same for the same value of the source.
-/// That lets a subscribed selection pick once per change: the pick made to
-/// decide whether to notify is the one a listener reads back from [value].
+/// [value] picks out of the source's value, with or without listeners — a
+/// selector is a pick and is expected to be cheap, and to answer the same
+/// for the same value of the source. That lets a subscribed selection pick
+/// once per change: while the source holds the object the last pick was
+/// made from, [value] hands that pick back, and the pick made to decide
+/// whether to notify is the one a listener reads. A source that changes its
+/// value in place keeps the object, so [value] sees such a change once the
+/// selection has taken it in: a listener that reads [value] before then —
+/// one the source calls ahead of the selection, say — gets the pick from
+/// before the change. A controller of `solo` whose state is immutable, as
+/// its state is meant to be, puts in a new object for every change and
+/// never meets this.
 /// What the selection keeps besides, while somebody listens, is the last
 /// value it announced, and it keeps it to hold notifications back:
 /// listeners hear only a pick that `changed` calls changed — `!=` unless
@@ -121,7 +128,12 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
   /// The default answer of `changed`.
   static bool _differ<T>(T previous, T current) => previous != current;
 
-  /// The picked value, as the source has it right now.
+  /// The pick out of the value the source has now.
+  ///
+  /// While somebody listens and the source holds the object the last pick
+  /// was made from, this is that pick and not a new one: a source that
+  /// changes its value in place reaches it once the selection has taken
+  /// the change in. See [SoloSelection].
   @override
   T get value {
     final source = _source.value;
@@ -254,8 +266,9 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
     // Written before the listeners run: one of them is free to change the
     // source from in here, and the pick it has already been handed must not
     // set a walk of its own going. Not taken back when a listener throws
-    // either — [value] reads the source rather than this, so a listener that
-    // missed a notification is a rebuild missed, not a value stuck.
+    // either — [value] answers from its own pick of the source rather than
+    // from this, so a listener that missed a notification is a rebuild
+    // missed, not a value stuck.
     _selected = next;
     _epoch++;
     _listeners.notify(_report);

@@ -25,6 +25,15 @@ final class SoloSubscription {
   final Listenable _listenable;
   final VoidCallback _listener;
 
+  /// What is registered on the listenable: this subscription's own rather
+  /// than [_listener], so [cancel] takes back this registration and no
+  /// other. One callback listened to twice is two registrations, and
+  /// `removeListener` with the callback itself takes off the first of
+  /// them, whichever subscription is cancelled. Kept in a field rather than
+  /// torn off again: a new tear-off is `==` to this one but not identical,
+  /// and a listenable of somebody's own may compare either way.
+  late final VoidCallback _registered = _notify;
+
   var _cancelled = false;
 
   /// The groups that hold this subscription. Cancelled on its own, it
@@ -36,6 +45,8 @@ final class SoloSubscription {
   final _groups = <WeakReference<SoloSubscriptions>>[];
 
   SoloSubscription._(this._listenable, this._listener);
+
+  void _notify() => _listener();
 
   /// Whether [cancel] has been called.
   bool get isCancelled => _cancelled;
@@ -57,7 +68,7 @@ final class SoloSubscription {
       group.target?._subscriptions.remove(this);
     }
     _groups.clear();
-    _listenable.removeListener(_listener);
+    _listenable.removeListener(_registered);
   }
 }
 
@@ -192,11 +203,14 @@ final class SoloSubscriptions {
 extension SoloListen on Listenable {
   /// Registers [listener] and hands back the way to take it back.
   ///
-  /// The same thing as [Listenable.addListener], with the callback kept
-  /// for you; see [SoloSubscription].
+  /// [Listenable.addListener] with the callback kept for you; see
+  /// [SoloSubscription]. What goes to `addListener` is the subscription's
+  /// own callback that calls [listener], so the subscription is the way
+  /// back: `removeListener(listener)` does not find it.
   SoloSubscription listen(VoidCallback listener) {
-    addListener(listener);
+    final subscription = SoloSubscription._(this, listener);
+    addListener(subscription._registered);
 
-    return SoloSubscription._(this, listener);
+    return subscription;
   }
 }
