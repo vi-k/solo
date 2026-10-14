@@ -1047,11 +1047,24 @@ abstract class JobBase<T> implements Job<T> {
     if (debug == null) {
       return;
     }
+    final marked = <(Object, StackTrace)>[];
     try {
-      debug(message());
+      final line = _collectingMarks(marked, message);
+      _marksToZone(marked);
+      debug(line);
     } on Object catch (error, stackTrace) {
+      _marksToZone(marked);
       Zone.current.handleUncaughtError(error, stackTrace);
     }
+  }
+
+  /// Hands [marked] to the current zone and empties it, so a mark already
+  /// reported is not reported again.
+  static void _marksToZone(List<(Object, StackTrace)> marked) {
+    for (final (error, stackTrace) in marked) {
+      Zone.current.handleUncaughtError(error, stackTrace);
+    }
+    marked.clear();
   }
 
   /// Calls [hook] and hands whatever it throws to the current zone, a
@@ -2506,14 +2519,19 @@ abstract class JobBase<T> implements Job<T> {
   Cancelled _handlerCancel(Cancelled thrown, StackTrace stackTrace) {
     final child = _outcomeChild[thrown];
     if (child != null) {
+      final marked = <(Object, StackTrace)>[];
       String description;
       try {
         // The child as it prints itself: `Job(thumbnail)`, and `Job()` for a
         // child without a key, never `null`.
-        description = '$child: $thrown';
+        description = _collectingMarks(marked, () => '$child: $thrown');
       } on Object catch (error, stackTrace) {
-        notifyError(error, stackTrace);
+        // An engine's own `toString`, or the `Cancelled`, threw.
+        marked.add((error, stackTrace));
         description = 'child cancellation';
+      }
+      for (final (error, stackTrace) in marked) {
+        notifyError(error, stackTrace);
       }
       return Cancelled.by(
         reason: HandlerCancelReason(cause: thrown),
@@ -2645,16 +2663,67 @@ abstract class JobBase<T> implements Job<T> {
     }
   }
 
+  /// Never throws: a key whose `toString` throws, or a [describe] that
+  /// does, is printed as a mark, `Job(key: <describe threw StateError>)`.
+  /// The core builds its own error messages with this, and the message
+  /// must stay the core's rather than turn into the error of a name. The
+  /// error itself is reported where the core names a job on a channel of
+  /// its own: in a parent's cancellation, to [JobObserver.onError], and
+  /// on a line of [Job.debug], to the zone.
   @override
   String toString() {
-    final description = describe();
+    String part(String what, String Function() print) {
+      try {
+        return print();
+      } on Object catch (error, stackTrace) {
+        _marked?.add((error, stackTrace));
+        return '<$what threw ${_typeOf(error)}>';
+      }
+    }
+
     final key = _key;
     if (key == null) {
       // Not `Job(null)`: a job without a key has no name to print, and a
       // `null` in every error message reads as a defect of its own.
-      return 'Job($description)';
+      return 'Job(${part('describe', describe)})';
     }
-    return description.isEmpty ? 'Job($key)' : 'Job($key: $description)';
+    // The key first, the way it is printed, and so its error is reported
+    // first too.
+    final name = part('key', () => '$key');
+    final description = part('describe', describe);
+    return description.isEmpty ? 'Job($name)' : 'Job($name: $description)';
+  }
+
+  /// Where [toString] puts the errors it printed as marks, while
+  /// [_collectingMarks] runs.
+  static List<(Object, StackTrace)>? _marked;
+
+  /// Runs [print] and puts into [marked] every error a [toString] inside
+  /// it printed as a mark, for a caller that reports them: a parent naming
+  /// a child in its cancellation, a line of [Job.debug]. Everything printed
+  /// inside counts, an error message of the core built there included;
+  /// one built outside reports nothing, and its marks stay marks.
+  static String _collectingMarks(
+    List<(Object, StackTrace)> marked,
+    String Function() print,
+  ) {
+    final outer = _marked;
+    _marked = marked;
+    try {
+      return print();
+    } finally {
+      _marked = outer;
+    }
+  }
+
+  /// The type of [error] for a mark, or a word when even that throws: a
+  /// `runtimeType` is a getter like any other.
+  static String _typeOf(Object error) {
+    try {
+      return '${error.runtimeType}';
+    } on Object {
+      return 'an error';
+    }
   }
 }
 

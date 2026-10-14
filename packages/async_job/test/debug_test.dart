@@ -457,9 +457,129 @@ void main() {
       caught.map((error) => '$error').toList(),
       everyElement('Bad state: describe'),
     );
-    expect(caught, isNotEmpty);
-    expect(traces, isEmpty, reason: 'no message was ever built');
+    expect(
+      traces,
+      [
+        'Job(job: <describe threw StateError>) started',
+        'Job(job: <describe threw StateError>) finished: Done(null)',
+      ],
+      reason: 'the line is printed with a mark, and the error goes to the '
+          'zone once for each line',
+    );
+    expect(caught, hasLength(2));
   });
+
+  group('the mark of a name that throws', () {
+    /// The lines of [Job.debug] and the errors the zone heard, in order,
+    /// while [body] runs and its timers run out.
+    List<String> heard(
+      void Function() body, {
+      void Function(String line)? debug,
+    }) {
+      final heard = <String>[];
+      Job.debug = debug ?? (line) => heard.add('debug: $line');
+      runZonedGuarded(
+        () => fakeAsync((async) {
+          body();
+          async.flushTimers();
+        }),
+        (error, stackTrace) => heard.add('zone: $error'),
+      );
+      return heard;
+    }
+
+    test('a line printed inside a name reports its own marks only', () {
+      // The describe of the outer job prints a line of a job whose
+      // cancellation cannot be put into words: that line throws, and the
+      // outer describe that breaks after it is still reported for its own
+      // line.
+      final lines = heard(() {
+        Job<void>(
+          key: 'outer',
+          describe: () {
+            Job.deferred<void>((ctx) async {})
+                .cancel(reason: const _BrokenReason())
+                .ignore();
+            throw StateError('outer failed');
+          },
+          (ctx) async {},
+        );
+      });
+      expect(
+        lines.where((line) => line == 'zone: Bad state: outer failed'),
+        hasLength(2),
+        reason: 'started and finished, each reported once',
+      );
+    });
+
+    test('a debug channel that throws reports each mark once', () {
+      final lines = heard(
+        debug: (line) => throw StateError('sink'),
+        () => Job<void>(
+          key: 'k',
+          describe: () => throw StateError('describe'),
+          (ctx) async {},
+        ),
+      );
+      expect(lines, [
+        'zone: Bad state: describe',
+        'zone: Bad state: sink',
+        'zone: Bad state: describe',
+        'zone: Bad state: sink',
+      ]);
+    });
+
+    test('a mark is reported before the line that throws after it', () {
+      final lines = heard(() {
+        final job = Job<void>(
+          key: 'k',
+          describe: () => throw StateError('describe'),
+          (ctx) => ctx.abandonable(() => delay(10)),
+        );
+        Timer(
+          const Duration(milliseconds: 1),
+          () => job.cancel(reason: const _BrokenReason()).ignore(),
+        );
+      });
+      expect(
+        lines.where((line) => line.startsWith('zone:')).take(3),
+        [
+          'zone: Bad state: describe',
+          'zone: Bad state: describe',
+          'zone: Bad state: name failed',
+        ],
+        reason: 'started, then the cancellation: its mark, then its throw',
+      );
+    });
+
+    test('an error whose type cannot be read is still a mark', () {
+      fakeAsync((async) {
+        final job = Job<void>(
+          key: 'k',
+          // ignore: only_throw_errors
+          describe: () => throw _NoType(),
+          (ctx) async {},
+        );
+        expect('$job', 'Job(k: <describe threw an error>)');
+        async.flushTimers();
+      });
+    });
+  });
+}
+
+/// A reason of a cancellation that cannot be put into words.
+final class _BrokenReason extends CancelReason {
+  const _BrokenReason();
+
+  @override
+  String get name => throw StateError('name failed');
+}
+
+/// An error whose type cannot be read: `runtimeType` is a getter like any
+/// other.
+final class _NoType {
+  @override
+  Type get runtimeType => throw StateError('runtimeType failed');
 }
 
 /// Keeps the errors it is given, and nothing else.

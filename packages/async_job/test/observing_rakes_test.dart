@@ -485,6 +485,75 @@ void main() {
         async.flushTimers();
       });
     });
+
+    test('a key or describe that throws is printed as a mark', () {
+      Job<void> job({Object? key, String Function()? describe}) =>
+          Job<void>(key: key, describe: describe, (ctx) async {});
+      String brokenDescribe() => throw StateError('describe failed');
+
+      fakeAsync((async) {
+        expect(
+          job(key: 'load', describe: brokenDescribe).toString(),
+          'Job(load: <describe threw StateError>)',
+        );
+        expect(
+          job(describe: brokenDescribe).toString(),
+          'Job(<describe threw StateError>)',
+        );
+        expect(job(key: BrokenKey()).toString(), 'Job(<key threw StateError>)');
+        async.flushTimers();
+      });
+    });
+
+    test("a name that throws leaves the core's own error in place", () {
+      const mark = '<describe threw StateError>';
+      String brokenDescribe() => throw StateError('describe failed');
+      final errors = <Object>[];
+      fakeAsync((async) {
+        final twice = Job.deferred<void>(
+          key: 'twice',
+          describe: brokenDescribe,
+          (ctx) async {},
+        )..start();
+        try {
+          twice.start();
+        } on Object catch (error) {
+          errors.add(error);
+        }
+
+        final finished = Job.deferred<void>(
+          key: 'finished',
+          describe: brokenDescribe,
+          (ctx) async {},
+        )..start();
+        async.flushMicrotasks();
+        final parent = Job<void>((ctx) async {
+          try {
+            await ctx.run(finished);
+          } on Object catch (error) {
+            errors.add(error);
+          }
+        });
+
+        final lost = Job<void>(
+          key: 'lost',
+          describe: brokenDescribe,
+          (ctx) async => Job.deferred<void>((ctx) async {}),
+        )..ignoreFailure();
+        async.flushTimers();
+        expect(parent.outcome, isA<Done<void>>());
+        errors.add((lost.outcome! as Failed).error);
+      });
+
+      expect(errors.map((error) => '$error'), [
+        'Bad state: Job(twice: $mark) is already running',
+        'Bad state: Job(finished: $mark) has already finished',
+        startsWith(
+          'Invalid argument(s): Job(lost: $mark) '
+          'returned Job(), a deferred job that never started',
+        ),
+      ]);
+    });
   });
 
   group('Timing a cancellation', () {
@@ -1383,7 +1452,8 @@ void main() {
       );
     });
 
-    test('a child that fails to name itself is named by the fallback', () {
+    test('a child that fails to describe itself is named with a mark', () {
+      const named = 'Job(child: <describe threw StateError>)';
       expect(
         childNamed(
           key: 'child',
@@ -1392,6 +1462,20 @@ void main() {
         ),
         [
           'zone: Bad state: describe failed',
+          'outcome: Cancelled(handler: $named: Cancelled(manual))',
+        ],
+      );
+    });
+
+    test('a cancellation that fails to name itself falls back on words', () {
+      expect(
+        childNamed(
+          key: 'child',
+          reason: const BrokenReason(),
+          outcomeObserved: true,
+        ),
+        [
+          'zone: Bad state: name failed',
           'outcome: Cancelled(handler: child cancellation)',
         ],
       );

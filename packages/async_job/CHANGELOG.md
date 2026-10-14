@@ -171,6 +171,9 @@ new wording.
 - A tree of jobs that runs out of stack while it is being built ends with the
   `StackOverflowError`; its root could be left running for good, with nothing
   reported.
+- A key whose `toString` throws, or a `describe` that throws, is printed as a
+  mark in the job's string representation; its error took the place of the
+  core's error message that named the job.
 
 ### Documentation
 

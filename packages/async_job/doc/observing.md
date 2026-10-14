@@ -69,7 +69,13 @@ string representation is `Job($key)`, or `Job($key: $description)` when
 `describe` returns a description that is not empty, or `Job($description)` when
 there is no key, or `Job()` when there is neither. Use `key` to identify the
 job in logs or in a library's scheduling rules, such as `solo` queue policies;
-`describe` adds details to that representation.
+`describe` adds details to that representation. A `key` whose `toString`
+throws, or a `describe` that throws, is printed as a mark in its place:
+`Job(load: <describe threw StateError>)`. The core names a job in its own error
+messages, and a broken name does not take the message's place. The error itself
+is reported where the core names a job on a channel of its own: in a parent's
+cancellation, as the table below says, and on a line of the debug channel, to
+the zone.
 
 A cancelled job is expected to end soon, and one that goes on is busy with work
 the user has already given up on. An observer finds such jobs by timing how
