@@ -352,6 +352,8 @@ await player.close(mode: SoloCloseMode.drain);
 | [Накопление событий](../../docs/ru/solo/accumulation.md) | `collect`, `accumulate`, debounce и throttle |
 | [Ошибки и наблюдение](../../docs/ru/solo/errors.md) | `SoloObserver`, `unansweredHandler`, `pending`, логи |
 | [Тестирование](../../docs/ru/solo/testing.md) | Ожидание исходов, фейковое время, таймауты |
+| [Частые ошибки](../../docs/ru/solo/mistakes.md) | Семь ошибок, которые часто проходят первый тест, и правильный способ для каждой |
+| [Справочник](../../docs/ru/solo/reference.md) | Все члены `Solo`, его контекста, задач, очереди и накопителей, с разделом, где о них рассказано |
 | [Flutter](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.ru.md) | Пакет `flutter_solo`: `SoloListenable`, владение контроллером, перестроение экрана |
 | [Пример камеры](../../docs/ru/solo/camera.md) | Один контроллер с правилами, освобождением ресурсов и устройством |
 | [solo и bloc рядом](../../docs/ru/solo/vs-bloc.md) | Одиннадцать сценариев на обоих пакетах |

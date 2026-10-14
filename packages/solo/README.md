@@ -341,6 +341,8 @@ search.
 | [Event accumulation](doc/accumulation.md) | `collect`, `accumulate`, debounce and throttle |
 | [Errors and observation](doc/errors.md) | `SoloObserver`, `unansweredHandler`, `pending`, logs |
 | [Testing](doc/testing.md) | Awaiting outcomes, fake time, timeouts |
+| [Common mistakes](doc/mistakes.md) | Seven mistakes that often pass a first test, and the right way for each |
+| [Reference](doc/reference.md) | Every member of `Solo`, its context, jobs, queue and accumulators, with the section that explains it |
 | [Flutter](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.md) | The `flutter_solo` package: `SoloListenable`, owning a controller, rebuilding a screen |
 | [Camera example](doc/camera.md) | One controller with rules, cleanup and a device |
 | [solo and bloc, side by side](doc/vs-bloc.md) | Eleven scenarios in both packages |

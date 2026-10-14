@@ -206,9 +206,11 @@ in the second.
 
 Like `ChangeNotifier`, `removeListener` matches with `==` rather than identity,
 so a widget can subscribe in `initState` and unsubscribe in `dispose` with a
-method of its own. A listener that throws stops neither the listeners after it
-nor the re-evaluation that follows them: its error goes to `onListenerError`,
-which hands it to the zone unless a subclass says otherwise.
+method of its own. `hasListeners` is protected, as in `ChangeNotifier`: it
+tells the subclass whether anyone listens. A listener that throws stops neither
+the listeners after it nor the re-evaluation that follows them: its error goes
+to `onListenerError`, which hands it to the zone unless a subclass says
+otherwise.
 
 The engine drops the listeners for good when closing finishes, not when
 `close()` is called — the same moment `isFinished` turns true. From then on

@@ -158,6 +158,10 @@ different `runZonedGuarded`. See
   [Children and streams](doc/children.md), [Streams](doc/streams.md),
   [Errors and observation](doc/errors.md), [Testing](doc/testing.md) and
   [Camera example](doc/camera.md). The Flutter section went to `flutter_solo`.
+- Two pages to look things up: [Reference](doc/reference.md), every member of
+  `Solo`, its context, jobs, queue and accumulators with the section that
+  explains it, and [Common mistakes](doc/mistakes.md), seven mistakes and the
+  right way for each.
 - One recommendation of `0.2.0` is replaced: a source of external states is
   stopped in `onClose`, not before `close`, and a callback that can still
   arrive after that guards its write with `isFinished`.

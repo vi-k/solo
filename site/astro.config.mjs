@@ -112,6 +112,8 @@ export default defineConfig({
               'Ошибки и наблюдение',
             ),
             page('solo/testing', 'Testing', 'Тестирование'),
+            page('solo/mistakes', 'Common mistakes', 'Частые ошибки'),
+            page('solo/reference', 'Reference', 'Справочник'),
             page('solo/camera', 'Camera example', 'Пример камеры'),
             page(
               'solo/vs-bloc',

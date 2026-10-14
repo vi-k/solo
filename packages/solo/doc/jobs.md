@@ -281,12 +281,13 @@ started, and the page [Cancellation](cancellation.md) is about it.
 
 `queue` exposes `jobs`, `length`, `isEmpty`, `isNotEmpty`, `remove`,
 `removeWhere` and `clear`. `lastJobWhere` on the controller finds the last
-queued job that passes its test or, when none does, the running one. Removal
-methods affect queued jobs only — the running job is not theirs to touch — and
-they preserve jobs with `cancellable: false` unless called with `force: true`.
-What they remove ends `Cancelled(manual)`, or with the `reason:` the caller
-passes; `cancelAll`, which clears the queue and cancels the running job as
-well, takes one too.
+queued job that passes its test or, when none does, the running one. The
+running root job itself is `current`, or `null` when the controller is idle,
+and `current?.cancel()` asks it to stop. Removal methods affect queued jobs
+only — the running job is not theirs to touch — and they preserve jobs with
+`cancellable: false` unless called with `force: true`. What they remove ends
+`Cancelled(manual)`, or with the `reason:` the caller passes; `cancelAll`,
+which clears the queue and cancels the running job as well, takes one too.
 
 The order in `jobs` is not the order jobs will run in: a job waiting for an
 accumulation window can be passed by a ready one standing behind it, so the

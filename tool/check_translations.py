@@ -98,6 +98,14 @@ PAIRS = [
         REPO / "docs" / "ru" / "solo" / "camera.md",
     ),
     (
+        REPO / "packages" / "solo" / "doc" / "reference.md",
+        REPO / "docs" / "ru" / "solo" / "reference.md",
+    ),
+    (
+        REPO / "packages" / "solo" / "doc" / "mistakes.md",
+        REPO / "docs" / "ru" / "solo" / "mistakes.md",
+    ),
+    (
         REPO / "packages" / "flutter_solo" / "doc" / "mixins.md",
         REPO / "docs" / "ru" / "flutter_solo" / "mixins.md",
     ),
