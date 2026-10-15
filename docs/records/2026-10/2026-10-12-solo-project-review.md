@@ -866,7 +866,23 @@ for the new one, and the new one waits for the current one»; детьми та�
 отличается от `_sync`, абзац теперь говорит это прямо: `_sync` и `_recordPath`
 создают задачи и ничего не запускают, `sync` и `recordPath` ставят их
 в очередь, `sync(item)` возвращает `add(_sync(item))`, а `ctx.run` запускает
-те же задачи детьми сразу, минуя очередь.
+те же задачи детьми сразу, минуя очередь. Раздел «Answering for every failure»
+владелец прочёл так, будто ошибка в выборе хука: ждёшь `onError`,
+а в `onFinish` ловить уже поздно. Поздно там не было, `ignoreFailure()`
+действует и из `onFinish`, а `onError` наблюдателя за ошибку тоже не отвечает;
+ревью ниже повторило это зондами P1 и P2. По выбору владельца первая попытка
+раздела «Handled and unhandled failures» `errors.md` и неверный блок страницы
+ошибок отправляют отчёт из `onError` наблюдателя. Абзац `errors.md` теперь
+говорит «whatever hook it reports from, being told of a failure marks no
+outcome as observed», и это держит новый тест с наблюдателем на `onFinish`;
+второй новый тест держит саму правку: провал, который накрыла отмена, `onError`
+слышит, а `onFinish` через исход нет; на странице ошибок список тех, кто видит
+ошибку, начинается с «The `onError` hook of an observer or of the controller».
+Ревью на Opus дало три Low и пять Nit, внесено всё, кроме Nit о фразе
+`jobs.md`, которую правка не трогала, и словаря фраз для прозы страницы ошибок;
+`errors.md` снова говорит, что чтение `job.outcome` исход не помечает. Отчёт
+ревьюера —
+`.artifacts/2026-10-12-full-review/mine/probes/mistakes-onerror/review-report.md`.
 
 ## Low
 

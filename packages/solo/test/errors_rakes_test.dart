@@ -46,6 +46,18 @@ final class _Watching extends SoloObserver {
       heard.add('${job.key}: ${text(error)}');
 }
 
+/// Not on the page: the first attempt reporting from `onFinish`, through a
+/// look at the outcome, instead of from `onError`.
+final class _FailuresOnFinish extends SoloObserver {
+  @override
+  void onFinish(Solo<Object> solo, Job<Object?> job) {
+    final outcome = job.outcome;
+    if (outcome is Failed) {
+      reportCrash(outcome.error, outcome.stackTrace);
+    }
+  }
+}
+
 /// An observer that says when each of its hooks runs, and may throw from
 /// one of them.
 final class _Saying extends SoloObserver {
@@ -2365,11 +2377,8 @@ void main() {
   group('Handled and unhandled failures', () {
     group('the first attempt:', () {
       test('a load that fails, and nobody waits for the result', () {
-        _says(
-          'Reading `job.outcome` says what happened without taking '
-          'responsibility for it, and an observer only watches: an installed '
-          'observer marks no outcome as observed',
-        );
+        _says('An observer only watches');
+        _says('being told of a failure marks no outcome as observed');
         _says(
           "A `Failed` that nobody observed goes to the job's creation zone "
           'through `Zone.handleUncaughtError` as well',
@@ -2401,6 +2410,42 @@ void main() {
         expect(stage.crashes, isEmpty);
         expect(ran.errors, isEmpty);
       });
+
+      test('a load that fails just before a cancellation reaches it', () {
+        _says('Every failure now reaches the reporter');
+        late Bench bench;
+        final ran = _run((async) {
+          Solo.observer = first.Failures();
+          bench = Bench();
+          final load = _waits(bench, 'load');
+          async.flushMicrotasks();
+          stage.fail('op', StateError('no network'));
+          scheduleMicrotask(load.cancel);
+          async.flushMicrotasks();
+        });
+
+        expect(stage.crashes, ['no network'], reason: 'the outcome is not it');
+        expect(bench.unanswered, ['load: no network']);
+        expect(ran.errors, ['no network'], reason: 'and so has the zone');
+      });
+
+      test('reported from onFinish, the failure reaches the zone all the same',
+          () {
+        _says('whatever hook it reports from');
+        late Bench bench;
+        final ran = _run((async) {
+          Solo.observer = _FailuresOnFinish();
+          bench = Bench()
+            ..run<int, void>(
+              key: 'load',
+              (ctx) async => throw StateError('no network'),
+            );
+        });
+
+        expect(stage.crashes, ['no network'], reason: 'the reporter has it');
+        expect(ran.errors, ['no network'], reason: 'and so has the zone');
+        expect(bench.unanswered, isEmpty);
+      });
     });
 
     group('observing the outcome:', () {
@@ -2428,6 +2473,7 @@ void main() {
           'Accessing `job.done` or `job.value`, or calling '
           '`job.ignoreFailure()`, marks the outcome as observed',
         );
+        _says('Reading `job.outcome` does not.');
         final caught = <String>[];
         String? read;
         final ran = _run((async) {

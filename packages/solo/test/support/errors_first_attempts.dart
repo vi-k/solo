@@ -35,12 +35,13 @@ final class SlowJobs extends SoloObserver {
 /// reports every failure it sees.
 final class Failures extends SoloObserver {
   @override
-  void onFinish(Solo<Object> solo, Job<Object?> job) {
-    final outcome = job.outcome;
-    if (outcome is Failed) {
-      reportCrash(outcome.error, outcome.stackTrace);
-    }
-  }
+  void onError(
+    Solo<Object> solo,
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace,
+  ) =>
+      reportCrash(error, stackTrace);
 }
 
 /// The first attempt of "Catching errors inside a body": one catch for

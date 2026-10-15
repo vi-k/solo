@@ -419,22 +419,22 @@ waits for the result. Something still has to answer for a failure.
 // The first attempt: the failures still go to the zone.
 final class Failures extends SoloObserver {
   @override
-  void onFinish(Solo<Object> solo, Job<Object?> job) {
-    final outcome = job.outcome;
-    if (outcome is Failed) {
-      reportCrash(outcome.error, outcome.stackTrace);
-    }
-  }
+  void onError(
+    Solo<Object> solo,
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace,
+  ) =>
+      reportCrash(error, stackTrace);
 }
 ```
 
 Every failure now reaches the reporter, and the code reads as if failures were
-answered for. They are not. Reading `job.outcome` says what happened without
-taking responsibility for it, and an observer only watches: an installed
-observer marks no outcome as observed. A `Failed` that nobody observed goes to
-the job's creation zone through `Zone.handleUncaughtError` as well, where an
-unhandled error can end the application — a moment after the crash report was
-sent.
+answered for. They are not. An observer only watches: whatever hook it reports
+from, being told of a failure marks no outcome as observed. A `Failed` that
+nobody observed goes to the job's creation zone through
+`Zone.handleUncaughtError` as well, where an unhandled error can end the
+application — a moment after the crash report was sent.
 
 ### Observing the outcome
 
@@ -443,14 +443,14 @@ profile.load().ignoreFailure();
 ```
 
 Accessing `job.done` or `job.value`, or calling `job.ignoreFailure()`, marks
-the outcome as observed. `ignoreFailure()` is for the caller that needs no
-result and leaves reporting to the hooks; a caller that needs the result takes
-it with `await job.value` and answers for the error by catching it. One failure
-it cannot catch: if the load fails and a cancellation reaches the job
-afterwards, whether before the error leaves the body or while the job still
-waits for children of its own or runs its cleanup, `await job.value` throws the
-`Cancelled`, and the failure goes to `onUnanswered` like the errors below.
-`ignoreFailure()` silences that one too.
+the outcome as observed. Reading `job.outcome` does not. `ignoreFailure()` is
+for the caller that needs no result and leaves reporting to the hooks; a caller
+that needs the result takes it with `await job.value` and answers for the error
+by catching it. One failure it cannot catch: if the load fails and a
+cancellation reaches the job afterwards, whether before the error leaves the
+body or while the job still waits for children of its own or runs its cleanup,
+`await job.value` throws the `Cancelled`, and the failure goes to
+`onUnanswered` like the errors below. `ignoreFailure()` silences that one too.
 
 Errors from cleanup, cancellation callbacks and operations abandoned by
 `abandonable` go to the reporting hooks, and the controller is asked to answer

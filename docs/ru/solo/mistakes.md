@@ -190,19 +190,21 @@ Job<void> syncAndRecord(int item) => run<Ready, void>(
 // Неверно: сбои всё равно уходят в зону.
 final class Failures extends SoloObserver {
   @override
-  void onFinish(Solo<Object> solo, Job<Object?> job) {
-    final outcome = job.outcome;
-    if (outcome is Failed) {
-      reportCrash(outcome.error, outcome.stackTrace);
-    }
-  }
+  void onError(
+    Solo<Object> solo,
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace,
+  ) =>
+      reportCrash(error, stackTrace);
 }
 ```
 
-Наблюдатель, хук `onError`, обработчик `ifFailed` и взгляд на `job.outcome`
-видят ошибку, но чтением ни одно из них не считается. Дождитесь `job.value`
-и поймайте ошибку, прочитайте `job.done` либо вызовите `ignoreFailure()`, когда
-результат никому не нужен, а отчёты оставлены хукам, как наблюдателю выше.
+Хук `onError` наблюдателя или контроллера, обработчик `ifFailed` и взгляд
+на `job.outcome` видят ошибку, но ни один из них не считается чтением.
+Дождитесь `job.value` и поймайте ошибку, прочитайте `job.done` либо вызовите
+`ignoreFailure()`, когда результат никому не нужен, а отчёты оставлены хукам,
+как наблюдателю выше.
 
 Делайте так:
 

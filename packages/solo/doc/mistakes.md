@@ -190,20 +190,21 @@ Don't do this:
 // Wrong: the failures still go to the zone.
 final class Failures extends SoloObserver {
   @override
-  void onFinish(Solo<Object> solo, Job<Object?> job) {
-    final outcome = job.outcome;
-    if (outcome is Failed) {
-      reportCrash(outcome.error, outcome.stackTrace);
-    }
-  }
+  void onError(
+    Solo<Object> solo,
+    Job<Object?> job,
+    Object error,
+    StackTrace stackTrace,
+  ) =>
+      reportCrash(error, stackTrace);
 }
 ```
 
-An observer, the `onError` hook, an `ifFailed` handler and a look at
-`job.outcome` all see the failure, but none of them counts as reading it. Await
-`job.value` and catch the error, read `job.done`, or call `ignoreFailure()`
-when nobody needs the result and the reporting is left to the hooks, like the
-observer above.
+The `onError` hook of an observer or of the controller, an `ifFailed` handler
+and a look at `job.outcome` all see the failure, but none of them counts as
+reading it. Await `job.value` and catch the error, read `job.done`, or call
+`ignoreFailure()` when nobody needs the result and the reporting is left to the
+hooks, like the observer above.
 
 Do this:
 
