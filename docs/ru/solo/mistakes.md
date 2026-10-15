@@ -1,15 +1,30 @@
 # Частые ошибки
 
 Семь ошибок, которые компилируются, работают и часто проходят первый тест.
-Каждый раздел говорит, что идёт не так, показывает правильный способ
-в несколько строк и ссылается на раздел, где ошибка показана целиком.
+Каждый раздел показывает ошибку, говорит, что идёт не так, показывает
+правильный способ в несколько строк и ссылается на раздел, где ошибка показана
+целиком.
 
 ## Ждать через контекст
 
-Простой `await` в теле не служит контрольной точкой: отменённая задача идёт
-дальше до первой контрольной точки, и `close()` ждёт столько же. Ждите через
-контекст. `ctx.join` дожидается вызова и бросает `Cancelled` вместо его
-результата; `ctx.abandonable` бросает сразу и оставляет вызов работать.
+Простой `await` в теле не служит контрольной точкой.
+
+Так не делайте:
+
+```dart
+// Неверно: отменённая загрузка продолжает писать.
+for (final chunk in chunks) {
+  await device.write(chunk);
+}
+```
+
+Отменённая задача идёт дальше до первой контрольной точки, и `close()` ждёт
+столько же: загрузка, отменённая на втором из четырёх кусков, пишет и третий,
+и четвёртый. Ждите через контекст. `ctx.join` дожидается вызова и бросает
+`Cancelled` вместо его результата; `ctx.abandonable` бросает сразу и оставляет
+вызов работать.
+
+Делайте так:
 
 ```dart
 for (final chunk in chunks) {
@@ -25,10 +40,21 @@ for (final chunk in chunks) {
 
 ## Освобождение на вызове
 
-`ctx.onDispose(db.close)` строкой ниже `await ctx.join(Database.open)`
-оставляет зазор. Отмена во время открытия бросает раньше этой строки,
-и открытая база теряется. Передайте освобождение вызову, который приносит
-ресурс:
+Ресурс можно потерять, если его освобождение регистрируют строкой ниже вызова,
+который его приносит.
+
+Так не делайте:
+
+```dart
+// Неверно: отмена влезает между открытием и onDispose.
+final db = await ctx.join(Database.open);
+ctx.onDispose(db.close);
+```
+
+Отмена во время открытия бросает раньше второй строки, и открытая база
+теряется. Передайте освобождение вызову, который приносит ресурс.
+
+Делайте так:
 
 ```dart
 final db = await ctx.join(
@@ -45,8 +71,26 @@ final db = await ctx.join(
 ## Пропустить отмену через catch
 
 `Cancelled` реализует `Exception`, поэтому широкий `catch` ловит его вместе
-с ошибками, ради которых его писали, и сбрасывает устройство, которое никто
-не ломал. Сначала спросите задачу:
+с ошибками, ради которых его писали.
+
+Так не делайте:
+
+```dart
+// Неверно: отмена сбрасывает исправную камеру.
+try {
+  await ctx.join(hw.open);
+  await ctx.join(() => hw.setZoom(zoom));
+} on Object catch (error) {
+  await hw.reset();
+  ctx.emit(Broken(error));
+  rethrow;
+}
+```
+
+Задача, отменённая во время `setZoom`, сбрасывает устройство, которое никто
+не ломал, и тот, кто её отменил, ждёт ещё и сброса. Сначала спросите задачу.
+
+Делайте так:
 
 ```dart
 try {
@@ -70,12 +114,36 @@ try {
 ## Шаги детьми
 
 Контроллер выполняет по одной корневой задаче за раз, а метод контроллера
-ставит в очередь ещё одну. Если тело её ждёт, задача ждёт конца тела, а тело
-ждёт задачу. Выполняйте шаги детьми работающей задачи:
+ставит в очередь ещё одну.
+
+Так не делайте:
 
 ```dart
-final path = await ctx.run(_sync(item));
-await ctx.run(_recordPath(path));
+// Неверно: ожидаемый метод ждёт эту же задачу.
+Job<void> syncAndRecord(int item) => run<Ready, void>(
+      key: _Op.syncAndRecord,
+      (ctx) async {
+        final path = await sync(item).value;
+        await recordPath(path).value;
+      },
+    );
+```
+
+Если тело ждёт поставленную задачу, задача ждёт конца тела, а тело ждёт задачу:
+ничего не движется, пока `close()` не отменит обе. `sync` и `recordPath` ставят
+в очередь задачи `_sync` и `_recordPath`; выполняйте их детьми работающей
+задачи.
+
+Делайте так:
+
+```dart
+Job<void> syncAndRecord(int item) => run<Ready, void>(
+      key: _Op.syncAndRecord,
+      (ctx) async {
+        final path = await ctx.run(_sync(item));
+        await ctx.run(_recordPath(path));
+      },
+    );
 ```
 
 `Solo.debug` предупреждает о таком ожидании, когда задача встаёт в очередь.
@@ -87,11 +155,29 @@ await ctx.run(_recordPath(path));
 ## Ответ за каждую ошибку
 
 Ошибка, которую никто не прочитал, уходит в зону, где задачу создали, и там
-необработанная ошибка может завершить приложение. Наблюдатель, хук `onError`,
-обработчик `ifFailed` и взгляд на `job.outcome` видят ошибку, но чтением
-ни одно из них не считается. Дождитесь `job.value` и поймайте ошибку,
-прочитайте `job.done` либо вызовите `ignoreFailure()`, когда результат никому
-не нужен:
+необработанная ошибка может завершить приложение.
+
+Так не делайте:
+
+```dart
+// Неверно: сбои всё равно уходят в зону.
+final class Failures extends SoloObserver {
+  @override
+  void onFinish(Solo<Object> solo, Job<Object?> job) {
+    final outcome = job.outcome;
+    if (outcome is Failed) {
+      reportCrash(outcome.error, outcome.stackTrace);
+    }
+  }
+}
+```
+
+Наблюдатель, хук `onError`, обработчик `ifFailed` и взгляд на `job.outcome`
+видят ошибку, но чтением ни одно из них не считается. Дождитесь `job.value`
+и поймайте ошибку, прочитайте `job.done` либо вызовите `ignoreFailure()`, когда
+результат никому не нужен, а отчёты оставлены хукам, как наблюдателю выше.
+
+Делайте так:
 
 ```dart
 profile.load().ignoreFailure();
@@ -104,30 +190,74 @@ profile.load().ignoreFailure();
 
 ## Двигать часы в fakeAsync
 
-Колбэк `fakeAsync` должен оставаться синхронным. `await` в нём приостанавливает
-колбэк, и двигать поддельные часы больше некому: тест висит до своего таймаута,
-а без `await` перед `fakeAsync` сразу кончается зелёным, ничего не выполнив.
-Двигайте часы через `elapse` и читайте исход:
+Колбэк `fakeAsync` должен оставаться синхронным.
+
+Так не делайте:
 
 ```dart
-final job = profile.load()..ignoreFailure();
-async.elapse(const Duration(milliseconds: 20));
+// Неверно: никто не двигает поддельные часы.
+test('load fills in the name', () async {
+  await fakeAsync((async) async {
+    final profile = ProfileController(FakeProfileApi());
 
-expect(job.outcome, isA<Done<String>>());
-expect(profile.currentState, isA<Loaded>());
+    final outcome = await profile.load().done;
+
+    expect(outcome, isA<Done<String>>());
+    await profile.close();
+  });
+});
+```
+
+`await` в колбэке приостанавливает его, и двигать поддельные часы больше
+некому: тест висит до своего таймаута, а без `await` перед `fakeAsync` сразу
+кончается зелёным, ничего не выполнив. Двигайте часы через `elapse` и читайте
+исход.
+
+Делайте так:
+
+```dart
+test('load fills in the name', () {
+  fakeAsync((async) {
+    final profile = ProfileController(FakeProfileApi());
+
+    final job = profile.load()..ignoreFailure();
+    async.elapse(const Duration(milliseconds: 20));
+
+    expect(job.outcome, isA<Done<String>>());
+    expect(profile.currentState, isA<Loaded>());
+
+    profile.close();
+    async.flushTimers();
+  });
+});
 ```
 
 Внутри ничего нельзя дождаться, поэтому ошибку отмечает прочитанной
-`ignoreFailure()`. Подробнее в разделе
+`ignoreFailure()`, а `close()` и последний `flushTimers()` заканчивают тест
+с пустыми часами. Подробнее в разделе
 [«Ожидание внутри fakeAsync»](testing.md#ожидание-внутри-fakeasync) страницы
 о тестировании.
 
 ## Ключ на каждый запрос
 
-Политика сравнивает ключи, а не аргументы. С одним ключом на `load(id)`
-политика `Policy.droppable` принимает `load('grace')`, вызванный, пока идёт
-`load('ada')`, за дубликат и отдаёт вызывающему профиль Ады. Включите аргумент
-в ключ:
+Политика сравнивает ключи, а не аргументы.
+
+Так не делайте:
+
+```dart
+// Неверно: один ключ на все профили.
+Job<Profile> load(String id) => run<Ready, Profile>(
+      key: _Op.load,
+      policy: Policy.droppable,
+      (ctx) => ctx.abandonable(() => api.load(id)),
+    );
+```
+
+С одним ключом на `load(id)` политика `Policy.droppable` принимает
+`load('grace')`, вызванный, пока идёт `load('ada')`, за дубликат и отдаёт
+вызывающему профиль Ады. Включите аргумент в ключ.
+
+Делайте так:
 
 ```dart
 Job<Profile> load(String id) => run<Ready, Profile>(
