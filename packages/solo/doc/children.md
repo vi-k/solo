@@ -271,7 +271,7 @@ path is never recorded, and the continuation ends `Cancelled(closed)`.
 ### The second attempt
 
 ```dart
-// The second attempt: an awaited method waits for this very job.
+// The second attempt: sync waits for this job to end; this job waits for sync.
 Job<void> syncAndRecord(int item) => run<Ready, void>(
       key: _Op.syncAndRecord,
       (ctx) async {

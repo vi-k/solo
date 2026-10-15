@@ -144,7 +144,7 @@ queues one more.
 Don't do this:
 
 ```dart
-// Wrong: an awaited method waits for this very job.
+// Wrong: sync waits for this job to end; this job waits for sync.
 Job<void> syncAndRecord(int item) => run<Ready, void>(
       key: _Op.syncAndRecord,
       (ctx) async {
@@ -154,10 +154,12 @@ Job<void> syncAndRecord(int item) => run<Ready, void>(
     );
 ```
 
-Awaited from a body, the queued job waits for the body to end, and the body
-waits for the job: nothing moves until `close()` cancels both. `sync` and
-`recordPath` queue the jobs `_sync` and `_recordPath`; run those as children of
-the running job instead.
+The current job waits for the new one, and the new one waits for the current
+one: nothing moves until `close()` cancels both. `_sync` and `_recordPath` make
+the jobs and start nothing, and `sync` and `recordPath` put them into the
+queue: `sync(item)` returns `add(_sync(item))`. Run the jobs through `ctx.run`
+instead: they start at once as children of the current job, bypassing the
+queue.
 
 Do this:
 

@@ -268,7 +268,7 @@ Job<void> syncAndRecord(int item) =>
 ### Вторая попытка
 
 ```dart
-// Вторая попытка: ожидаемый метод ждёт эту же задачу.
+// Вторая попытка: sync ждёт конца этой задачи, а задача ждёт sync.
 Job<void> syncAndRecord(int item) => run<Ready, void>(
       key: _Op.syncAndRecord,
       (ctx) async {
