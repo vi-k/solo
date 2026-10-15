@@ -883,7 +883,9 @@ outcome as observed», и это держит новый тест с наблю�
 `errors.md` снова говорит, что чтение `job.outcome` исход не помечает. Отчёт
 ревьюера —
 `.artifacts/2026-10-12-full-review/mine/probes/mistakes-onerror/review-report.md`.
-2026-10-15 владелец страницу ошибок принял.
+2026-10-15 владелец страницу ошибок принял. В строке `lastJobWhere(test)`
+справочника по его слову туманное «will still do its work» сменило условие,
+которое проверяет код: «has not been cancelled», в переводе «не отменена».
 
 ## Low
 

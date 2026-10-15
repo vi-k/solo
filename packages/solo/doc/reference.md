@@ -50,7 +50,7 @@ sees those. Every member here is protected.
 | `collect(handler)` | Makes an accumulator that hands one job the list of the events of its group | [One request per log line](accumulation.md#one-request-per-log-line) |
 | `accumulate(handler, merge: ...)` | Makes an accumulator that merges the events of a group into one value | [Settings saved on every flip of a switch](accumulation.md#settings-saved-on-every-flip-of-a-switch) |
 | `queue` | The jobs waiting to run, a `SoloQueue` | [Working the queue directly](jobs.md#working-the-queue-directly) |
-| `lastJobWhere(test)` | The last queued job that passes the test, else the running one if it passes and will still do its work, else `null` | [Working the queue directly](jobs.md#working-the-queue-directly) |
+| `lastJobWhere(test)` | The last queued job that passes the test, else the running one if it passes and has not been cancelled, else `null` | [Working the queue directly](jobs.md#working-the-queue-directly) |
 | `current` | The running root job, or `null` when the controller is idle | [Working the queue directly](jobs.md#working-the-queue-directly) |
 | `hasListeners` | Whether any listener is registered | [Observing state](state.md#observing-state) |
 | `externalSetState(state)` | Reflects a state an outside source has already changed | [externalSetState](state.md#externalsetstate) |
