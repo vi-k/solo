@@ -4,7 +4,7 @@ Seven mistakes that compile, run and often pass a first test. Each section
 shows the mistake, says what goes wrong, shows the right way in a few lines and
 links to the section that shows the mistake in full.
 
-## Waiting through the context
+## Each wait in its place
 
 A plain `await` in a body is not a checkpoint.
 
@@ -33,7 +33,34 @@ for (final chunk in chunks) {
 ```
 
 Cleanup is the other way round. It runs after the body, where `join` throws
-`StateError`, so cleanup waits with a plain `await`. See
+`StateError`.
+
+Don't do this:
+
+```dart
+// Wrong: the flush never happens.
+ctx.onDispose(() async {
+  // The flush must finish before the queue moves on.
+  await ctx.join(() => device.flush());
+});
+```
+
+No matter how the job ended, `Done` included, the device buffer stays
+unflushed. The `StateError` is told to the controller's `onError` hook and then
+handed to `Solo.unansweredHandler`, or to the zone when no handler is set. Wait
+in cleanup with a plain `await`.
+
+Do this:
+
+```dart
+ctx.onDispose(() async {
+  // Cleanup runs after the body, where the waiting methods are
+  // gone: a plain await is the wait that works here.
+  await device.flush();
+});
+```
+
+The buffer is flushed however the upload ended. See
 [Ordinary await and context lifetime](cancellation.md#ordinary-await-and-context-lifetime)
 on the cancellation page.
 

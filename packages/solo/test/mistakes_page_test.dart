@@ -9,13 +9,16 @@ import 'support/page_code.dart';
 ///
 /// Each section of the page shows a mistake and then the right way, each
 /// in a few lines of the section its first link leads to: the mistake from
-/// an attempt there, the right way from the answer. The mistake stands
-/// under `Don't do this:` and opens with a `// Wrong: ` line, the right way
-/// stands under `Do this:`. Each block has to stand whole, as one run of
-/// lines, under its heading on the other page, so the two cannot part, and
-/// in the file the tests of that page run, so the lines are run code. The
-/// translation has its own words for the two lines and the mark, and the
-/// same code: `tool/check_translations.py` holds that.
+/// an attempt there, the right way from the answer. A section may show
+/// more than one such pair, all from the same attempt and answer and in
+/// the order they stand there. The mistake stands under `Don't do this:`
+/// and opens with a `// Wrong: ` line, the right way stands under
+/// `Do this:`. Each block has to stand whole, as one run of lines, under
+/// its heading on the other page, so the two cannot part, and in the file
+/// the tests of that page run, so the lines are run code. Its comments
+/// aside, a mistake is not a run of the answer, nor a right way of the
+/// attempt. The translation has its own words for the two lines and the
+/// mark, and the same code: `tool/check_translations.py` holds that.
 
 const _page = 'doc/mistakes.md';
 const _translation = '../../docs/ru/solo/mistakes.md';
@@ -38,11 +41,13 @@ const _russian = (
   wrong: '// Неверно: ',
 );
 
-/// A section of the page: the attempt it quotes and the file that holds
-/// that attempt, the answer it quotes and the file that holds that answer,
-/// and the links the section gives. The first link leads to the section
-/// the attempt and the answer stand in.
+/// A section of the page, in the order of the page: how many pairs of a
+/// mistake and the right way it shows, the attempt it quotes and the file
+/// that holds that attempt, the answer it quotes and the file that holds
+/// that answer, and the links the section gives. The first link leads to
+/// the section the attempt and the answer stand in.
 typedef _Source = ({
+  int pairs,
   String attempt,
   String attemptHolder,
   String answer,
@@ -51,7 +56,8 @@ typedef _Source = ({
 });
 
 const _sources = <String, _Source>{
-  '## Waiting through the context': (
+  '## Each wait in its place': (
+    pairs: 2,
     attempt: '### The first attempt',
     attemptHolder: 'test/support/cancellation_first_attempts.dart',
     answer: '### Each wait in its place',
@@ -59,6 +65,7 @@ const _sources = <String, _Source>{
     links: ['cancellation.md#ordinary-await-and-context-lifetime'],
   ),
   '## Registering a release on the call': (
+    pairs: 1,
     attempt: '### The first attempt',
     attemptHolder: 'test/support/resources_first_attempts.dart',
     answer: '### The release travels with the call',
@@ -66,6 +73,7 @@ const _sources = <String, _Source>{
     links: ['resources.md#taking-a-resource-from-a-call'],
   ),
   '## Letting cancellation through a catch': (
+    pairs: 1,
     attempt: '### The first attempt',
     attemptHolder: 'test/support/errors_first_attempts.dart',
     answer: '### Letting cancellation through',
@@ -73,6 +81,7 @@ const _sources = <String, _Source>{
     links: ['errors.md#catching-errors-inside-a-body'],
   ),
   '## Steps as children': (
+    pairs: 1,
     attempt: '### The second attempt',
     attemptHolder: 'test/support/children_first_attempts.dart',
     answer: '### Two children in a row',
@@ -83,6 +92,7 @@ const _sources = <String, _Source>{
     ],
   ),
   '## Answering for every failure': (
+    pairs: 1,
     attempt: '### The first attempt',
     attemptHolder: 'test/support/errors_first_attempts.dart',
     answer: '### Observing the outcome',
@@ -90,6 +100,7 @@ const _sources = <String, _Source>{
     links: ['errors.md#handled-and-unhandled-failures'],
   ),
   '## Moving the clock in fakeAsync': (
+    pairs: 1,
     attempt: '### The first attempt',
     attemptHolder: 'test/support/testing_first_attempts.dart',
     answer: '### Elapsing instead of awaiting',
@@ -97,6 +108,7 @@ const _sources = <String, _Source>{
     links: ['testing.md#awaiting-inside-fakeasync'],
   ),
   '## A key for each request': (
+    pairs: 1,
     attempt: '#### The first attempt',
     attemptHolder: 'test/support/jobs_first_attempts.dart',
     answer: '#### The record key',
@@ -135,21 +147,51 @@ String _under(String text, String heading) {
   return [heading, ...rest].join('\n');
 }
 
-/// Every way [section] fails to show a mistake and then the right way in
-/// the [words] of its page: the mistake under `dont`, opening with `wrong`,
-/// and the right way under `doThis`.
-List<String> _shapeMissing(String section, _Words words) {
+/// Every way [section] fails to show [pairs] mistakes, each followed by
+/// the right way, in the [words] of its page: a mistake under `dont`,
+/// opening with `wrong`, and the right way under `doThis`, opening with
+/// anything else.
+List<String> _shapeMissing(String section, _Words words, int pairs) {
   // A fence with no blank line in front of it is not one of the blocks.
   final fences = '```dart'.allMatches(section).length;
   final blocks = _blocks(section);
   final labels = [for (final block in blocks) block.label];
-  return [
-    if (fences != 2) '$fences dart blocks, not 2',
-    if (labels.join('|') != '${words.dont}|${words.doThis}')
-      'the lines over the blocks are $labels',
-    if (blocks.isEmpty || !blocks.first.code.startsWith(words.wrong))
-      'the mistake does not open with "${words.wrong}"',
+  final expected = [
+    for (var pair = 0; pair < pairs; pair++) ...[words.dont, words.doThis],
   ];
+  return [
+    if (fences != expected.length)
+      '$fences dart blocks, not ${expected.length}',
+    if (labels.join('|') != expected.join('|'))
+      'the lines over the blocks are $labels',
+    for (final (index, block) in blocks.indexed)
+      if (index.isEven && !block.code.startsWith(words.wrong))
+        'mistake ${index ~/ 2 + 1} does not open with "${words.wrong}"'
+      else if (index.isOdd && block.code.startsWith(words.wrong))
+        'right way ${index ~/ 2 + 1} opens with "${words.wrong}"',
+  ];
+}
+
+/// The lines of [code] that are code, trimmed: no blank lines and no
+/// comments, which an attempt and its answer each word their own way.
+List<String> _code(String code) => [
+      for (final line in code.split('\n'))
+        if (line.trim().isNotEmpty && !line.trim().startsWith('//'))
+          line.trim(),
+    ];
+
+/// Where [run] starts in [lines] as a run of whole lines, or -1.
+int _runAt(List<String> lines, List<String> run) {
+  for (var start = 0; start + run.length <= lines.length; start++) {
+    var matched = 0;
+    while (matched < run.length && lines[start + matched] == run[matched]) {
+      matched++;
+    }
+    if (matched == run.length) {
+      return start;
+    }
+  }
+  return -1;
 }
 
 /// The `dart` blocks of [text], each with the line in front of it.
@@ -195,13 +237,13 @@ void main() {
     expect(strayFences(_page), isEmpty);
   });
 
-  test('every section is one of the sections below', () {
+  test('has the sections below, in their order', () {
     expect(
       [
         for (final heading in sections.keys)
           if (heading.startsWith('## ')) heading,
       ],
-      unorderedEquals(_sources.keys),
+      _sources.keys,
     );
   });
 
@@ -215,8 +257,13 @@ void main() {
           if (heading.startsWith('## ')) (heading, part),
       ];
       expect(parts, hasLength(_sources.length));
-      for (final (heading, part) in parts) {
-        expect(_shapeMissing(part, _russian), isEmpty, reason: heading);
+      final sources = _sources.values.toList();
+      for (final (index, (heading, part)) in parts.indexed) {
+        expect(
+          _shapeMissing(part, _russian, sources[index].pairs),
+          isEmpty,
+          reason: heading,
+        );
       }
     },
   );
@@ -225,10 +272,7 @@ void main() {
     final [link, ...] = source.links;
     final page = 'doc/${link.split('#').first}';
     group(heading, () {
-      // The code of the section, the mistake first.
-      List<String> code() => [
-            for (final block in _blocks(sections[heading]!)) block.code,
-          ];
+      final index = _sources.keys.toList().indexOf(heading);
 
       // [code] in a page of its own, for the page helper that matches the
       // pieces of a page against the lines of a file. The blank lines go:
@@ -244,36 +288,31 @@ void main() {
             .path;
       }
 
-      // The code under [subheading] of the linked section, in a file of
-      // its own.
-      String held(String name, String subheading) {
-        final part = _under(_linked(link), subheading);
-        return (File('${scratch.path}/$name.dart')
-              ..writeAsStringSync(
-                [
-                  for (final block
-                      in RegExp(r'```dart\n(.*?)\n```', dotAll: true)
-                          .allMatches(part))
-                    block.group(1),
-                ].join('\n'),
-              ))
-            .path;
-      }
+      // The code under [subheading] of the linked section.
+      String under(String subheading) => [
+            for (final block in RegExp(r'```dart\n(.*?)\n```', dotAll: true)
+                .allMatches(_under(_linked(link), subheading)))
+              block.group(1)!,
+          ].join('\n');
 
-      // The mistake and the right way, each in a page of its own.
-      final index = _sources.keys.toList().indexOf(heading);
-      String mistakePage() {
-        final [wrong, ...] = code();
-        final unmarked = wrong.replaceFirst(
-          RegExp('^${RegExp.escape(_english.wrong)}.*\n'),
-          '',
-        );
-        return quoted('$index-wrong', unmarked);
-      }
+      // [under] in a file of its own, for the page helper.
+      String held(String name, String subheading) =>
+          (File('${scratch.path}/$name.dart')
+                ..writeAsStringSync(under(subheading)))
+              .path;
 
-      String rightWayPage() {
-        final [_, ...right] = code();
-        return quoted('$index-right', right.join('\n'));
+      // The pairs of the section: the code of the mistake without its
+      // mark, then the code of the right way.
+      List<({String mistake, String rightWay})> pairs() {
+        final blocks = _blocks(sections[heading]!);
+        final mark = RegExp('^${RegExp.escape(_english.wrong)}.*\n');
+        return [
+          for (var pair = 0; 2 * pair + 1 < blocks.length; pair++)
+            (
+              mistake: blocks[2 * pair].code.replaceFirst(mark, ''),
+              rightWay: blocks[2 * pair + 1].code,
+            ),
+        ];
       }
 
       test('links to ${source.links.join(' and ')}', () {
@@ -283,8 +322,11 @@ void main() {
         }
       });
 
-      test('shows the mistake, then the right way', () {
-        expect(_shapeMissing(sections[heading]!, _english), isEmpty);
+      test('shows each mistake, then the right way', () {
+        expect(
+          _shapeMissing(sections[heading]!, _english, source.pairs),
+          isEmpty,
+        );
       });
 
       test('the attempt and the answer stand in the section of $link', () {
@@ -294,30 +336,93 @@ void main() {
 
       test('quotes "${source.attempt}" of $page', () {
         final attempt = held('$index-attempt', source.attempt);
-        expect(codeMissingFrom(mistakePage(), attempt), isEmpty);
+        for (final (pair, (:mistake, rightWay: _)) in pairs().indexed) {
+          expect(
+            codeMissingFrom(quoted('$index-$pair-wrong', mistake), attempt),
+            isEmpty,
+            reason: 'mistake ${pair + 1}',
+          );
+        }
       });
 
       test('quotes "${source.answer}" of $page', () {
         final answer = held('$index-answer', source.answer);
-        expect(codeMissingFrom(rightWayPage(), answer), isEmpty);
+        for (final (pair, (mistake: _, :rightWay)) in pairs().indexed) {
+          expect(
+            codeMissingFrom(quoted('$index-$pair-right', rightWay), answer),
+            isEmpty,
+            reason: 'right way ${pair + 1}',
+          );
+        }
       });
 
-      test('the mistake is not the answer, nor the right way the attempt', () {
-        final attempt = held('$index-attempt', source.attempt);
-        final answer = held('$index-answer', source.answer);
-        expect(codeMissingFrom(mistakePage(), answer), isNotEmpty);
-        expect(codeMissingFrom(rightWayPage(), attempt), isNotEmpty);
+      test('each mistake is a run of lines of ${source.attemptHolder}', () {
+        for (final (pair, (:mistake, rightWay: _)) in pairs().indexed) {
+          expect(
+            codeMissingFrom(
+              quoted('$index-$pair-wrong', mistake),
+              source.attemptHolder,
+            ),
+            isEmpty,
+            reason: 'mistake ${pair + 1}',
+          );
+        }
       });
 
-      test('the mistake is a run of lines of ${source.attemptHolder}', () {
-        expect(codeMissingFrom(mistakePage(), source.attemptHolder), isEmpty);
+      test('each right way is a run of lines of ${source.answerHolder}', () {
+        for (final (pair, (mistake: _, :rightWay)) in pairs().indexed) {
+          expect(
+            codeMissingFrom(
+              quoted('$index-$pair-right', rightWay),
+              source.answerHolder,
+            ),
+            isEmpty,
+            reason: 'right way ${pair + 1}',
+          );
+        }
       });
 
-      test('the right way is a run of lines of ${source.answerHolder}', () {
-        expect(
-          codeMissingFrom(rightWayPage(), source.answerHolder),
-          isEmpty,
-        );
+      // Comments aside: an attempt and its answer comment the same lines
+      // their own way, and a block that lost its fix, or its mistake,
+      // keeps the comment that tells it from the other side.
+      test('no mistake is in the answer, no right way in the attempt', () {
+        final attempt = _code(under(source.attempt));
+        final answer = _code(under(source.answer));
+        for (final (pair, (:mistake, :rightWay)) in pairs().indexed) {
+          final reason = 'pair ${pair + 1}';
+          expect(_code(mistake), isNotEmpty, reason: reason);
+          expect(_code(rightWay), isNotEmpty, reason: reason);
+          expect(_runAt(answer, _code(mistake)), -1, reason: reason);
+          expect(_runAt(attempt, _code(rightWay)), -1, reason: reason);
+        }
+      });
+
+      // Two pairs of one section quote two places of one attempt and one
+      // answer: the right ways stand in the answer in the order the
+      // mistakes stand in the attempt, and no place is quoted twice.
+      test('the pairs keep the order of the attempt and of the answer', () {
+        final attempt = _code(under(source.attempt));
+        final answer = _code(under(source.answer));
+        final places = [
+          for (final (:mistake, :rightWay) in pairs())
+            (
+              wrong: _runAt(attempt, _code(mistake)),
+              right: _runAt(answer, _code(rightWay)),
+            ),
+        ];
+        for (var first = 0; first < places.length; first++) {
+          for (var second = first + 1; second < places.length; second++) {
+            final (:wrong, :right) = places[first];
+            final other = places[second];
+            final reason = 'pairs ${first + 1} and ${second + 1}';
+            expect(wrong, isNot(other.wrong), reason: reason);
+            expect(
+              (wrong - other.wrong).sign,
+              (right - other.right).sign,
+              reason: reason,
+            );
+          }
+        }
       });
     });
   }
