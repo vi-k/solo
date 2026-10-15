@@ -89,6 +89,18 @@ abstract class Solo<S extends Object> {
   /// running job that awaits a job it queued on its own controller, from its
   /// body, a child or its cleanup, waits for good, and this is the line that
   /// shows it.
+  ///
+  /// A droppable duplicate gets a tail too, since [add] hands back the job
+  /// it duplicates. A duplicate of a queued job gets the same tail as above,
+  /// `add Job(load): duplicate of Job(load), which is queued while
+  /// Job(outer) is running: it starts after Job(outer) ends`. A duplicate of
+  /// the running job gets `add Job(x): duplicate of Job(x), which is running:
+  /// if awaited from inside Job(x), it waits for itself`: a wait for the
+  /// running job from its body, a child or its cleanup is a wait for itself,
+  /// cancelling the job does not wake a plain `await`, and not even [close]
+  /// ends it. Who called is not known here, so a duplicate added from
+  /// outside, by a second tap on a button, gets the tail as well, and a wait
+  /// for the job there is no trap.
   static void Function(String message)? debug;
 
   S _state;
@@ -525,7 +537,28 @@ abstract class Solo<S extends Object> {
         break;
       case Policy.droppable:
         if (duplicate != null) {
-          _debug(() => 'add $impl: duplicate of $duplicate');
+          _debug(() {
+            final name = '$duplicate';
+            final line = 'add $impl: duplicate of $name';
+            final current = _current;
+            // A droppable method called from inside the running job -- its
+            // body, a child of it, its cleanup -- hands back that very job,
+            // and a wait for it there is a wait for itself. A duplicate of a
+            // queued job hands back that one, which starts only after the
+            // running job ends, like any job queued from inside it. Who
+            // called is not known here, so the line says what holds for any
+            // caller.
+            if (current == null) {
+              return line;
+            }
+            if (identical(duplicate, current)) {
+              return '$line, which is running: if awaited from inside $name, '
+                  'it waits for itself';
+            }
+            final running = '$current';
+            return '$line, which is queued while $running is running: '
+                'it starts after $running ends';
+          });
           impl._drop(
             Cancelled.by(
               reason: const DuplicateCancelReason(),

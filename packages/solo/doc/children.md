@@ -295,6 +295,17 @@ queued:
 add Job(_Op.sync) while Job(_Op.syncAndRecord) is running: it starts after Job(_Op.syncAndRecord) ends
 ```
 
+A droppable method called from inside its own job sets a trap that not even
+`close()` gets out of. It hands back that very job: a `sync` that queues with
+`droppable` and whose body retries with `await sync(item).value` awaits itself.
+`close()` marks the job cancelled, but a plain `await` does not wake for that,
+and the value comes only when the body ends, so `close()` waits for good as
+well. `Solo.debug` shows it on the line of the duplicate:
+
+```text
+add Job(_Op.sync): duplicate of Job(_Op.sync), which is running: if awaited from inside Job(_Op.sync), it waits for itself
+```
+
 ### Two children in a row
 
 ```dart

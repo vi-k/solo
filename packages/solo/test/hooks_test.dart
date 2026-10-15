@@ -569,6 +569,119 @@ void main() {
     );
   });
 
+  test('a droppable duplicate of the running job says it waits for itself', () {
+    final engine = <String>[];
+    Solo.debug = engine.add;
+    try {
+      runSolo((solo, journal, async) {
+        SoloJob<void> refresh(void Function() inside) =>
+            solo.run<TestState, void>(
+              key: 'refresh',
+              policy: Policy.droppable,
+              (ctx) async => inside(),
+            );
+        late SoloJob<void> again;
+        final running = refresh(() {
+          // Not awaited: awaited, it would wait for itself.
+          again = refresh(() {});
+        });
+        async.flushMicrotasks();
+        expect(identical(again, running), isTrue, reason: 'the very job');
+      });
+    } finally {
+      Solo.debug = null;
+    }
+    expect(
+      engine,
+      contains(
+        'add Job(refresh): duplicate of Job(refresh), which is running: '
+        'if awaited from inside Job(refresh), it waits for itself',
+      ),
+    );
+  });
+
+  test('a droppable duplicate from a child or cleanup names the root job', () {
+    final engine = <String>[];
+    Solo.debug = engine.add;
+    var describes = 0;
+    try {
+      runSolo((solo, journal, async) {
+        SoloJob<void> sync(
+          Future<void> Function(SoloContext<TestState, TestState> ctx) body,
+        ) =>
+            solo.run<TestState, void>(
+              key: 'sync',
+              policy: Policy.droppable,
+              describe: () => 'call ${++describes}',
+              body,
+            );
+        sync((ctx) async {
+          // Neither is awaited: awaited, each would wait for itself.
+          ctx.onDispose(() {
+            sync((_) async {});
+          });
+          await ctx.run(
+            solo.job<TestState, void>(key: 'child', (child) async {
+              sync((_) async {});
+            }),
+          );
+        });
+        async.flushMicrotasks();
+      });
+    } finally {
+      Solo.debug = null;
+    }
+    // The child runs too, but the duplicate is the root job. The line
+    // prints it once: `describe` counts its calls, and both names on a line
+    // carry the same count.
+    final names = [
+      for (final line in engine)
+        if (RegExp(
+          r'^add Job\(sync: call \d+\): duplicate of (Job\(sync: call \d+\)), '
+          r'which is running: if awaited from inside (Job\(sync: call \d+\)), '
+          r'it waits for itself$',
+        ).firstMatch(line)
+            case final match?)
+          (match[1], match[2]),
+    ];
+    expect(names, hasLength(2), reason: '$engine');
+    for (final (duplicate, inside) in names) {
+      expect(inside, duplicate);
+    }
+  });
+
+  test('a droppable duplicate of a queued job says when it starts', () {
+    final engine = <String>[];
+    Solo.debug = engine.add;
+    try {
+      runSolo((solo, journal, async) {
+        SoloJob<void> load() => solo.run<TestState, void>(
+              key: 'load',
+              policy: Policy.droppable,
+              (ctx) async {},
+            );
+        solo.run<TestState, void>(key: 'outer', (ctx) async {
+          // Not awaited: awaited, it would wait for good.
+          load();
+        });
+        // Queued while nothing runs yet: no tail on either line.
+        load();
+        load();
+        async.flushMicrotasks();
+      });
+    } finally {
+      Solo.debug = null;
+    }
+    expect(engine, contains('add Job(load): duplicate of Job(load)'));
+    expect(
+      engine,
+      contains(
+        'add Job(load): duplicate of Job(load), which is queued while '
+        'Job(outer) is running: it starts after Job(outer) ends',
+      ),
+    );
+  });
+
   test('a describe that throws is a mark on Solo.debug, and no more', () {
     final engine = <String>[];
     final zone = <Object>[];

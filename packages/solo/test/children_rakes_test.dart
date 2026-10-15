@@ -38,6 +38,29 @@ void _see(String line) => _seen.addAll(line.split('; '));
 String _label(Job<Object?> job) =>
     '${'>' * job.level}${job.level == 0 ? '' : ' '}$job';
 
+/// Not on the page: the key of the droppable `sync` the second attempt
+/// speaks of.
+enum _Op { sync }
+
+/// Not on the page: a `sync` that queues with `Policy.droppable` and whose
+/// body retries with `await sync(item).value`.
+final class _Retrying extends Solo<AppState> {
+  int attempts = 0;
+
+  _Retrying() : super(const Ready());
+
+  Job<void> sync(int item) => run<Ready, void>(
+        key: _Op.sync,
+        policy: Policy.droppable,
+        (ctx) async {
+          attempts++;
+          if (attempts == 1) {
+            await sync(item).value;
+          }
+        },
+      );
+}
+
 /// An observer that writes what it hears to [_seen].
 final class _Watch extends SoloObserver {
   @override
@@ -1603,7 +1626,7 @@ void main() {
         _quotes()[1],
         'Invalid argument (job): was not created by this Solo: "Job(then)"',
       );
-      expect(_quotes(), hasLength(3));
+      expect(_quotes(), hasLength(4));
       _says('The controller refuses it with an `ArgumentError`:');
       _says('A job of the core made by hand is refused in the same words.');
     });
@@ -1818,6 +1841,37 @@ void main() {
         ]);
         _says('what it queues runs after this job and after everything '
             'queued before it');
+      });
+
+      test('with droppable, the job awaits itself and close() never ends', () {
+        final lines = <String>[];
+        final errors = _zone((async) {
+          Solo.debug = lines.add;
+          final solo = _Retrying();
+          final job = solo.sync(1);
+          async.elapse(const Duration(hours: 1));
+          var closed = false;
+          solo.close().then((_) => closed = true);
+          async.elapse(const Duration(hours: 1));
+          _see(
+            'closed $closed, job ${_how(job)}, cancelled ${job.isCancelled}',
+          );
+          _see('attempts ${solo.attempts}');
+        });
+
+        expect(errors, isEmpty);
+        expect(lines, contains(_quotes()[3]));
+        expect(_seen, [
+          'closed false, job no outcome, cancelled true',
+          'attempts 1',
+        ]);
+        _says('A droppable method called from inside its own job sets a trap '
+            'that not even `close()` gets out of.');
+        _says('It hands back that very job');
+        _says('`close()` marks the job cancelled, but a plain `await` does '
+            'not wake for that, and the value comes only when the body ends, '
+            'so `close()` waits for good as well.');
+        _says('`Solo.debug` shows it on the line of the duplicate:');
       });
     });
 

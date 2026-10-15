@@ -293,6 +293,18 @@ Job<void> syncAndRecord(int item) => run<Ready, void>(
 add Job(_Op.sync) while Job(_Op.syncAndRecord) is running: it starts after Job(_Op.syncAndRecord) ends
 ```
 
+Метод с `droppable`, вызванный изнутри своей же задачи, заводит в ловушку,
+из которой не выручает даже `close()`. Он отдаёт эту самую задачу: если `sync`
+ставит задачу с `droppable`, а её тело повторяет попытку через
+`await sync(item).value`, задача ждёт сама себя. `close()` помечает задачу
+отменённой, но простой `await` от этого не просыпается, а значение придёт
+только с концом тела, поэтому и `close()` ждёт вечно. `Solo.debug` показывает
+это в строке дубликата:
+
+```text
+add Job(_Op.sync): duplicate of Job(_Op.sync), which is running: if awaited from inside Job(_Op.sync), it waits for itself
+```
+
 ### Два ребёнка подряд
 
 ```dart
