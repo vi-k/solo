@@ -332,7 +332,137 @@ void main() {
       }
     });
   });
+
+  group('after the job emits a state its rules refuse', () {
+    test('each ends the job instead of starting a child', () {
+      runSolo((solo, journal, async) {
+        final events = StreamController<int>();
+        Object? thrown;
+        final job = solo.run<Initial, void>(key: 'job', (ctx) async {
+          ctx.emit(const Preparing());
+          try {
+            // Not read: a child refused at its start would be heard of by
+            // nobody, and the stream with it.
+            ctx.each(events.stream, (child, p) {});
+          } on Cancelled catch (error) {
+            thrown = error;
+            rethrow;
+          }
+        });
+        async.flushMicrotasks();
+        expect(job.outcome, isA<Cancelled>());
+        expect(thrown, same(job.outcome));
+        expect(events.hasListener, isFalse);
+        expect(journal.take(), [
+          '[job] started',
+          'state: Preparing(progress: 0)',
+          '[job] finished Cancelled(rules: is not Initial)',
+        ]);
+        events.close();
+      });
+    });
+
+    test('a keepWhile that refuses it does the same', () {
+      runSolo((solo, journal, async) {
+        final events = StreamController<int>();
+        solo.run<TestState, void>(
+          key: 'job',
+          keepWhile: (state) => state is! Working,
+          (ctx) async {
+            ctx.emit(const Working());
+            await ctx.each(events.stream, (child, p) {}).value;
+          },
+        );
+        async.flushMicrotasks();
+        expect(events.hasListener, isFalse);
+        expect(journal.take(), [
+          '[job] started',
+          'state: Working(a: 0, b: 0)',
+          '[job] finished Cancelled(rules: keepWhile)',
+        ]);
+        events.close();
+      });
+    });
+
+    test('ifCancelled does not run, as at any checkpoint of the rules', () {
+      runSolo((solo, journal, async) {
+        final events = StreamController<int>();
+        solo.run<Initial, void>(
+          key: 'job',
+          ifCancelled: (state, cancelled) => const Disposed(),
+          (ctx) async {
+            ctx.emit(const Preparing());
+            // Read: the child refused at its start used to cancel the job
+            // through its value, and that cancellation kept `ifCancelled`.
+            await ctx.each(events.stream, (child, p) {}).value;
+          },
+        );
+        async.flushMicrotasks();
+        expect(journal.take(), [
+          '[job] started',
+          'state: Preparing(progress: 0)',
+          '[job] finished Cancelled(rules: is not Initial)',
+        ]);
+        events.close();
+      });
+    });
+
+    test('a job that has accepted a cancellation is left to it', () {
+      runSolo((solo, journal, async) {
+        final gate = Completer<void>();
+        final events = StreamController<int>();
+        final job = solo.run<Initial, void>(
+          key: 'job',
+          ifCancelled: (state, cancelled) => const Disposed(),
+          (ctx) async {
+            ctx.emit(const Preparing());
+            await gate.future;
+            ctx.each(events.stream, (child, p) {});
+          },
+        );
+        async.flushMicrotasks();
+        job.cancel();
+        gate.complete();
+        async.flushMicrotasks();
+        expect(events.hasListener, isFalse);
+        // As `ctx.run` does: the child is dropped where observers see it,
+        // and the job keeps its `ifCancelled`, which rules asked here would
+        // have taken away.
+        expect(journal.take(), [
+          '[job] started',
+          'state: Preparing(progress: 0)',
+          '> [null: each] dropped Cancelled(parent)',
+          'state: Disposed()',
+          '[job] finished Cancelled(manual)',
+        ]);
+        events.close();
+      });
+    });
+
+    test('unattended work is refused for being unattended first', () {
+      runSolo((solo, journal, async) {
+        final events = StreamController<int>();
+        solo.run<Initial, void>(key: 'job', (ctx) async {
+          ctx
+            ..emit(const Preparing())
+            ..unattended(() => ctx.each(events.stream, (child, p) {}));
+        });
+        async.flushMicrotasks();
+        expect(events.hasListener, isFalse);
+        expect(journal.take(), [
+          '[job] started',
+          'state: Preparing(progress: 0)',
+          '[job] error $_unattendedEach',
+          '[job] finished Done(null)',
+        ]);
+        events.close();
+      });
+    });
+  });
 }
+
+const _unattendedEach =
+    'Bad state: Job(job) cannot follow a stream inside unattended work';
 
 /// Pushes the state out of `NotDisposed` from inside the second change,
 /// so the job is cancelled inside its own `emit`, inside a stream callback.

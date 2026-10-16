@@ -105,6 +105,7 @@ rules. The body above is `run<Ready, void>`, so `ctx.state` is a `Ready`
 already; `stateAs<T>()` is for a body whose `W` is wider than the state it
 needs at that moment, and it requires the state to be `T` rather than returning
 null — a mismatch cancels the job. Waiting methods use state checkpoints too.
+So does `ctx.each`, whose child would keep the job's rules.
 
 `check()` is the same check, minus the value to read. The reads and the waiting
 methods make it themselves; `check()` covers the gaps between them. A plain
@@ -119,10 +120,11 @@ beside the waiting methods it goes with.
 an initialization job may finish by emitting `Ready`. A later state checkpoint
 will reject that state if it does not match `W`, and a waiting method is such a
 checkpoint as much as a read is: `ctx.abandonable` or `ctx.join` after that
-emit ends the job `Cancelled` before its action starts. So put such a
-transition last in the body, with no read and no wait through the context after
-it. `canStart` is checked once, at the start, and is not used again, after this
-emit either.
+emit ends the job `Cancelled` before its action starts, and `ctx.each` ends it
+instead of starting a child the same rules would refuse. So put such a
+transition last in the body, with no read, no wait and no `ctx.each` through
+the context after it. `canStart` is checked once, at the start, and is not used
+again, after this emit either.
 
 Other running bodies are checked after a state update: a job's children run
 beside it, and each body answers to its own rules. A job's own emit is excluded

@@ -580,7 +580,7 @@ Where a rule says no away from the change, the trace names the place that
 noticed. `canStart` is asked once, as the job leaves the queue, and names the
 queue. A job that breaks its own rule is not re-evaluated on its own `emit`: it
 finds out at its next checkpoint — a `ctx.state`, a `ctx.check()`, a waiting
-method — and the trace names that checkpoint.
+method, a `ctx.each` — and the trace names that checkpoint.
 
 Where a rule throws anyway decides what becomes of the error:
 

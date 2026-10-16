@@ -80,14 +80,15 @@ narrowed to the working type `W` of the job. `join`, `abandonable`, `run`,
 `onDispose` and the rest of `ctx` are the core's, in
 [The context at a glance](https://github.com/vi-k/solo/blob/main/packages/async_job/README.md#the-context-at-a-glance)
 of the `async_job` README. Here the checkpoints of the core, `check()` and the
-waiting methods, also ask the rules of the job, as `ctx.state` does.
+waiting methods, also ask the rules of the job, as `ctx.state` does, and so
+does `ctx.each`.
 
 | Member | What it does | Where |
 | --- | --- | --- |
 | `ctx.state` | The state as `W`; a checkpoint, and a state the rules of the job refuse cancels it | [Reading and updating state](state.md#reading-and-updating-state) |
 | `ctx.stateAs<T>()` | The state narrowed further, to `T`; a mismatch cancels the job | [Reading and updating state](state.md#reading-and-updating-state) |
 | `ctx.emit(next)` | The body's only way to write the state; synchronous | [Reading and updating state](state.md#reading-and-updating-state) |
-| `ctx.each(stream, onData)` | Starts a child that takes the events of a stream one at a time; `onData` gets the child's `SoloContext` | [Processing a stream](streams.md#processing-a-stream) |
+| `ctx.each(stream, onData)` | Starts a child that takes the events of a stream one at a time, and `onData` gets the child's `SoloContext`; a checkpoint, and a state the rules of the job refuse cancels the job instead of starting the child | [Processing a stream](streams.md#processing-a-stream) |
 
 ## SoloJob
 

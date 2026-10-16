@@ -303,6 +303,9 @@ final class _Traced extends Solo<int> with OpenSolo<int>, Desk<int> {
 
   Future<void> waitsOnTheContext(SoloContext<int, int> ctx) =>
       ctx.abandonable(() => stage.start<void>('after', null));
+
+  void followsAStream(SoloContext<int, int> ctx) =>
+      ctx.each(const Stream<int>.empty(), (child, event) {});
 }
 
 String _page() => File('doc/errors.md').readAsStringSync();
@@ -3306,6 +3309,8 @@ void main() {
                   traced.readsTheState(ctx);
                 case 'ctx.check()':
                   traced.checksTheJob(ctx);
+                case 'ctx.each':
+                  traced.followsAStream(ctx);
                 default:
                   await traced.waitsOnTheContext(ctx);
               }
@@ -3316,14 +3321,15 @@ void main() {
         'ctx.state': '_Traced.readsTheState',
         'ctx.check()': '_Traced.checksTheJob',
         'a waiting method': '_Traced.waitsOnTheContext',
+        'ctx.each': '_Traced.followsAStream',
       };
       for (final MapEntry(key: kind, value: member) in checkpoints.entries) {
         test('a job that breaks its own rule, and then reaches $kind', () {
           _says(
             'A job that breaks its own rule is not re-evaluated on its own '
             '`emit`: it finds out at its next checkpoint — a `ctx.state`, a '
-            '`ctx.check()`, a waiting method — and the trace names that '
-            'checkpoint',
+            '`ctx.check()`, a waiting method, a `ctx.each` — and the trace '
+            'names that checkpoint',
           );
           fakeAsync((async) {
             final job = breaksItsOwnRule(_Traced(), kind);

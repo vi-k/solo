@@ -96,6 +96,15 @@ error messages are reworded.
 
 The stack trace of a job its rules cancelled is taken where the rules noticed.
 
+`ctx.each` asks the rules of the job before it starts the child, as `ctx.state`
+does. After the job's own `emit` of a state they refuse, it ends the job
+`Cancelled` by the rules, and `ifCancelled` does not run, as at any checkpoint
+of the rules. `0.2.0` handed back a child the same rules had refused to start:
+the stream was never listened to, a job that did not read the child ended
+`Done`, and one that read its `.value` ended cancelled by the child, with
+`ifCancelled` run. See
+[Processing a stream](doc/streams.md#processing-a-stream).
+
 The body of a queued job runs in the zone the job was created in, with its
 deadline and its `onStart` hooks, where `0.2.0` ran them in the zone of
 whatever woke the queue, often another call's: a body awaiting a future of its

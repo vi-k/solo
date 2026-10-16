@@ -5,8 +5,8 @@ part of 'solo.dart';
 /// The state is narrowed to the job's working type `W`, and [emit] is the
 /// only way to change it. Reading it is a checkpoint of its own: [state],
 /// [stateAs] and [check] throw the job's [Cancelled] once its rules
-/// stopped holding, and [emit] throws a [StateError] for a job that has
-/// already finished.
+/// stopped holding, and so does [each], whose child would keep them. [emit]
+/// throws a [StateError] for a job that has already finished.
 abstract interface class SoloContext<S extends Object, W extends S>
     implements JobContext {
   /// The current state. Throws [Cancelled] if the job is cancelled, if the
@@ -42,6 +42,12 @@ abstract interface class SoloContext<S extends Object, W extends S>
   /// The parent's `canStart` rule is not repeated. The child is cancellable
   /// independently of the parent's `cancellable` setting.
   ///
+  /// A checkpoint of the parent's rules, as a read of [state] is: a state
+  /// they refuse would refuse the child too, so this job's own [emit] of
+  /// such a state, followed by `each`, ends this job [Cancelled] by the
+  /// rules, and `each` throws it instead of handing back a child that never
+  /// listened.
+  ///
   /// Use the context passed to [onData] for [emit], state access and
   /// cancellation checkpoints. All other behavior is [JobContext.each]'s.
   @override
@@ -60,12 +66,28 @@ final class _SoloContext<S extends Object, W extends S, R>
   Solo<S> get _solo => _job._solo;
 
   @override
-  Job<void> createEachJob(Future<void> Function(JobContext ctx) body) =>
-      _solo.job<W, void>(
-        body,
-        keepWhile: _job._keepWhile,
-        describe: () => 'each',
-      );
+  Job<void> createEachJob(Future<void> Function(JobContext ctx) body) {
+    // The child gets the parent's working type and `keepWhile`, so a state
+    // they refuse would refuse it at the start, and `each` would hand back
+    // a child that is over and never listened -- with nobody to read its
+    // outcome, a stream nobody hears and a parent that ends `Done`. The
+    // parent's own `emit` is how a body gets there, and the read that
+    // follows such an `emit` cancels the parent; `each` does the same.
+    // Called by the core after its refusals of unattended work and of a
+    // body that has ended, so those come first. Its refusal of a job that
+    // has already accepted a cancellation comes later, in `startChild`, and
+    // is left to it: asked here, the rules would mark that job cancelled by
+    // the rules too, which takes its `ifCancelled` away, and observers
+    // would not see the child `startChild` drops, as they do for `run`.
+    if (pendingCancel == null) {
+      _checkedState();
+    }
+    return _solo.job<W, void>(
+      body,
+      keepWhile: _job._keepWhile,
+      describe: () => 'each',
+    );
+  }
 
   @override
   Job<void> each<T>(
