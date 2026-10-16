@@ -209,8 +209,8 @@ abstract interface class Job<T> {
   /// through [JobContext.onCancel] stops it.
   ///
   /// Asked about each failure of a job that has accepted a cancellation, when
-  /// the job is about to send it to the answer, and only then: such an error
-  /// reaches [JobObserver.onError] like any other, and nobody is asked to
+  /// the job is about to send the failure to the answer, and only then: such an
+  /// error reaches [JobObserver.onError] like any other, and nobody is asked to
   /// answer for it, neither [JobAnswerer.onUnanswered] nor the zone. A failure
   /// of a job that was not cancelled is not asked about, nor is one that
   /// [Job.ignoreFailure] has already kept out of the answer. `null`, the

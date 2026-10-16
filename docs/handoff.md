@@ -1192,8 +1192,12 @@ caller», функция `loadWithRetries`, второе ревью на Opus; �
 двусмысленности, что русские правки сняли. Фраза о `Job.isCancellationError`
 разбита на две, и «it» стало «the failure»; «It lets go» о `ignoreFailure()`
 начинается с имени; «its answer to `Crashes`» стало «its answer on to
-`Crashes`». Русский уже говорил так и не менялся. Проверки документов,
-`observing_rakes_test.dart` и сборка сайта зелёные. Восемь коммитов в `main`
+`Crashes`». Русский уже говорил так и не менялся. Следом, тоже по слову
+владельца, сняты ещё две такие же: «It changes no outcome» на странице стало
+«The filter changes no outcome», а в dartdoc `Job.isCancellationError`
+в `job_base.dart` «send it to the answer» — «send the failure to the answer».
+`async_job`: формат и анализ `--fatal-infos` чистые, 1467 тестов зелёные;
+проверки документов и сборка сайта зелёные. Девять коммитов в `main`
 с `85978550` не отправлены: пушить только по слову владельца.
 
 Имя ядра решено 2026-09-19: держатель `job` ответил, и владелец остаётся

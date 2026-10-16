@@ -225,10 +225,10 @@ outcome: Cancelled(manual)
 The job stays as it was. `Job.isCancellationError` is asked about each failure
 of a job that has accepted a cancellation. It is asked when the job is about to
 send the failure to the answer, and only then. An error it names still reaches
-`onError` and goes no further: neither `onUnanswered` nor the zone hears it. It
-changes no outcome either. A failure of a job that nobody cancelled is not
-asked about: a body that throws `DatabaseStopped` while its own job goes on
-ends `Failed` with it, and if nobody observes that outcome, it reaches the
+`onError` and goes no further: neither `onUnanswered` nor the zone hears it.
+The filter changes no outcome either. A failure of a job that nobody cancelled
+is not asked about: a body that throws `DatabaseStopped` while its own job goes
+on ends `Failed` with it, and if nobody observes that outcome, it reaches the
 zone. Somebody else cancelled the token then, and the job has to say so.
 
 The filter is called synchronously, with one failure at a time and never with a
