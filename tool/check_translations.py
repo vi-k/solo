@@ -20,17 +20,18 @@ Compares:
   * the shape of the prose around them: under each heading, as many
     paragraphs, list items and table rows as the original has, in the same
     places between the code blocks,
-  * dashes in the translation: there are to be none, in the prose or in the
-    comments of its code.
+  * the dashes of the translation: an em dash, not an en dash outside a range
+    of numbers, in the prose or in the comments of its code, and not a hyphen
+    between spaces in the prose.
 
 Prose and comment text are expected to differ: they are the translation.
 The last check is there because the first three let a paragraph go: the
 README of flutter_solo went without the last paragraph of its "Testing"
 section in Russian, with every heading and every block of code in place.
 
-The translations are written without dashes, and nothing but attention held
-that: the Russian state page of solo kept twenty of them through two rounds
-of reading.
+A Russian dash is the em dash. An en dash or a hyphen between spaces stands
+in for it when it is typed on a keyboard, and attention alone does not catch
+that.
 """
 
 from __future__ import annotations
@@ -153,8 +154,8 @@ PAIRS = [
 
 FENCE = re.compile(r"^\s*```")
 HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
-# An em dash anywhere; an en dash unless it stands in a range of numbers.
-DASH = re.compile(r"\u2014|(?<!\d)\u2013|\u2013(?!\d)")
+# An en dash unless it stands in a range of numbers.
+EN_DASH = re.compile(r"(?<!\d)\u2013|\u2013(?!\d)")
 # A hyphen between spaces, which is a dash typed on the keyboard.
 HYPHEN_DASH = re.compile(r"(?<=\S) - (?=\S)")
 CODE_SPAN = re.compile(r"`[^`]*`")
@@ -223,12 +224,13 @@ def shape(path: Path) -> list[str]:
     return blocks
 
 
-def dashes(path: Path) -> list[str]:
-    """The lines of a translation that carry a dash, as `path:line: text`.
+def wrong_dashes(path: Path) -> list[str]:
+    """The lines of a translation with a dash that is not an em dash, as
+    `path:line: text`.
 
-    A dash counts wherever it stands, a comment in a code block included: the
-    comments are translated too. A hyphen between spaces counts in the prose
-    only, outside code spans, where it cannot be a minus.
+    An en dash counts wherever it stands, a comment in a code block included:
+    the comments are translated too. A hyphen between spaces counts in the
+    prose only, outside code spans, where it cannot be a minus.
     """
     found: list[str] = []
     fenced = False
@@ -238,7 +240,7 @@ def dashes(path: Path) -> list[str]:
             fenced = not fenced
             continue
         prose = "" if fenced else CODE_SPAN.sub("``", line)
-        if DASH.search(line) or HYPHEN_DASH.search(prose):
+        if EN_DASH.search(line) or HYPHEN_DASH.search(prose):
             found.append(f"{path.relative_to(REPO)}:{number}: {line.strip()}")
     return found
 
@@ -323,14 +325,14 @@ def check(orig: Path, tran: Path) -> list[str]:
         prose = sum(not b.startswith(("#", "```")) for b in so)
         print(f"prose: {prose} paragraphs, lists and tables in the same places")
 
-    dashed = dashes(tran)
+    dashed = wrong_dashes(tran)
     if dashed:
         problems.append(
-            f"{len(dashed)} lines of the translation carry a dash:\n    "
-            + "\n    ".join(dashed)
+            f"{len(dashed)} lines of the translation carry a dash that is not "
+            "an em dash:\n    " + "\n    ".join(dashed)
         )
     else:
-        print("dashes: none in the translation")
+        print("dashes: em dashes only")
 
     for i, (a, b) in enumerate(zip(bo, bt), start=1):
         info_a, lines_a = a
