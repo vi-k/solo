@@ -337,7 +337,9 @@ probe2 after close: Cancelled(closed)
 не держал сторож; дубликат задачи из очереди хвоста не получал; `describe`
 звался дважды. Внесено всё, кроме Nit о том, что страница ошибок о `droppable`
 молчит. Отчёт — `review-report.md`
-в `.artifacts/2026-10-12-full-review/mine/probes/droppable-self-wait/`.
+в `.artifacts/2026-10-12-full-review/mine/probes/droppable-self-wait/`. Хвост
+дубликата задачи из очереди добавлен сверх выбора владельца; 2026-10-16 он
+сказал его оставить.
 
 ### M5. `SoloSelector.changed` сравнивает с ещё не показанным значением
 
@@ -910,9 +912,12 @@ outcome as observed», и это держит новый тест с наблю�
 `errors.md` снова говорит, что чтение `job.outcome` исход не помечает. Отчёт
 ревьюера —
 `.artifacts/2026-10-12-full-review/mine/probes/mistakes-onerror/review-report.md`.
-2026-10-15 владелец страницу ошибок принял. В строке `lastJobWhere(test)`
-справочника по его слову туманное «will still do its work» сменило условие,
-которое проверяет код: «has not been cancelled», в переводе «не отменена».
+Фразу `jobs.md` «the error is already in the zone», которая строже кода
+на микрозадачу, владелец 2026-10-16 сказал оставить: совет наблюдать исход
+до конца задачи верен. 2026-10-15 владелец страницу ошибок принял. В строке
+`lastJobWhere(test)` справочника по его слову туманное «will still do its work»
+сменило условие, которое проверяет код: «has not been cancelled», в переводе
+«не отменена».
 
 ## Low
 
