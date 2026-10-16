@@ -493,11 +493,12 @@ Solo.observer = journal;
 addTearDown(() => Solo.observer = null);
 ```
 
-`addTearDown` runs whether the test passed or failed. Four statics belong to
+`addTearDown` runs whether the test passed or failed. Five statics belong to
 the process rather than to a controller, and each of them outlives a test the
-same way: `Solo.observer`, `Solo.unansweredHandler`, `Solo.debug` and the
-`Job.debug` of the core that is set next to it. All four start as `null`, and
-`null` is what the tear-down above puts back.
+same way: `Solo.observer`, `Solo.unansweredHandler`, `Solo.debug` with the
+`Job.debug` of the core that is set next to it, and the
+`Job.isCancellationError` of the core. All five start as `null`, and `null` is
+what the tear-down above puts back.
 
 ## Assertions inside a zone
 
@@ -642,14 +643,24 @@ cancels it: `ctx.onCancel` cancels the token, and `join` waits for the device
 to stop, so the next job starts after it. A cancellation that comes from
 outside takes the same way, so a cancelled job stops the device as well.
 Whether the device actually stops depends on that device's API. The hardware
-API completes with an error when its token is cancelled, and `join` throws that
-error, but the job is cancelled by then: it ends `Cancelled(timeout)`, not
-`Failed`, nothing reaches the zone, and the test needs no `ignoreFailure()`.
-The five seconds cost the test nothing; its `FakeCamera` is a device that never
-answers on its own, so the deadline is what ends the call:
+API completes with `OpenCancelled` when its token is cancelled, and `join`
+throws that error, but the job is cancelled by then: it ends
+`Cancelled(timeout)`, not `Failed`. The error is nobody's outcome, and the job
+answers for it as for any failure of its body: left alone, it reaches the zone
+of the test and turns the test red. The app names the stop of its device once,
+in `main`, with `Job.isCancellationError` of the core, and the test names it
+the same way and puts the field back. Then nothing reaches the zone, and the
+test needs no `ignoreFailure()`.
+[Errors of a cancellation](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/observing.md#errors-of-a-cancellation)
+on the observing page of `async_job` takes the field apart. The five seconds
+cost the test nothing; its `FakeCamera` is a device that never answers on its
+own, so the deadline is what ends the call:
 
 ```dart
 test('connect gives up after five seconds', () {
+  Job.isCancellationError = (error) => error is OpenCancelled;
+  addTearDown(() => Job.isCancellationError = null);
+
   fakeAsync((async) {
     final camera = CameraController(FakeCamera());
 

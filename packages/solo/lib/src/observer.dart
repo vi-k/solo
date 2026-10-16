@@ -74,14 +74,13 @@ abstract class SoloObserver {
   /// disposer or an `onCancel` callback; and a rule of the controller —
   /// `canStart` or `keepWhile` — that threw instead of answering.
   ///
-  /// Called for every such error, including the ones that end as
-  /// [Cancelled], which are never handed to the zone: a body that throws
-  /// after cancellation, or an abandoned action that fails later. The
-  /// job's own cancellation is not an error and never comes here; a
-  /// [Cancelled] thrown by an abandoned action does, because for an
-  /// observer that is a late failure like any other. One error at a time:
-  /// each failure and each cancellation inside a `ParallelWaitError` comes
-  /// in a call of its own.
+  /// Called for every such error, including those of a job that ends
+  /// [Cancelled]: a body that throws once the job is cancelled, or an abandoned
+  /// action that fails later. The job's own cancellation is not an error and
+  /// never comes here; a [Cancelled] thrown by an abandoned action does,
+  /// because for an observer that is a late failure like any other. One error
+  /// at a time: each failure and each cancellation inside a `ParallelWaitError`
+  /// comes in a call of its own.
   ///
   /// Watching changes nothing about where the error then goes: an error
   /// with nowhere else to go reaches the zone the job was created in

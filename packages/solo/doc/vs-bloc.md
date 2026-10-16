@@ -908,8 +908,10 @@ final class PlayerController extends Solo<PlayerState> with SoloStream {
 requests cancellation of the active `seek`. `ctx.onCancel` forwards that
 request to the player immediately. `ctx.join` waits for the operation to return
 before the current job can finish and the replacement can start. If the
-operation fails after cancellation, its error reaches the body; the job's
-outcome still remains cancelled.
+operation throws as it stops, its error reaches the body, and the job's outcome
+still remains cancelled. The error then goes to the controller's `onError` hook
+and on to `onUnanswered`, as any failure of the body of a cancelled job does,
+unless the application has named it once in `Job.isCancellationError`.
 
 The traces are those of the bloc answer above: `[play, seek 3, pause]` for the
 drag, and `[seek 1 start, seek 1 stopped, seek 3 start, seek 3 end]` when

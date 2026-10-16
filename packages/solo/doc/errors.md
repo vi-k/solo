@@ -65,10 +65,10 @@ the rest:
 - a `keepWhile` that throws when a change of state re-checks it;
 - work handed to `ctx.unattended`;
 - the failure of a branch of `ctx.runAll` that the group did not throw;
-- the failure of a body when a cancellation reaches the job afterwards, whether
-  before the error leaves the body or while the job still waits for children of
-  its own or runs its cleanup: whoever reads that outcome gets the
-  cancellation.
+- the failure of the body of a job that ends `Cancelled`, whether the job
+  accepted the cancellation before the error left the body or after, while it
+  still waited for children of its own or ran its cleanup: whoever reads that
+  outcome gets the cancellation.
 
 Somebody has to answer for those, and the one asked is always the same:
 `onUnanswered`, on the controller whose job it was.
@@ -97,13 +97,17 @@ uncaught `Cancelled`, alone or inside one, does not come at all. The reporting
 hook `onError` hears them the same way, one at a time, and each `Cancelled`
 too.
 
-One error no outcome carries is missing from that list, and nobody is asked to
-answer for it: the failure of a body that comes after its job has accepted a
-cancellation — a call that `ctx.join` is still waiting out fails, say. The job
-ends `Cancelled`, the hook `onError` is told of the error, and it goes no
-further. Most often it is the operation the cancellation stopped, throwing as
-it stops, and the engine cannot tell a failure of the operation from that. A
-body that catches such an error asks the job, not the error:
+The last item of that list comes most often from the cancellation itself: a
+call that `ctx.join` is still waiting out stops at a token that `ctx.onCancel`
+cancelled, and throws as it stops. The engine cannot tell that error from a
+failure of the call, so the application names such errors once, at startup, in
+`Job.isCancellationError` of the core. A failure of a cancelled job that it
+names reaches the hook `onError` and goes no further: neither `onUnanswered`
+nor `Solo.unansweredHandler` hears it. [The token](cancellation.md#the-token)
+on the cancellation page names the stop of a player, and
+[Errors of a cancellation](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/observing.md#errors-of-a-cancellation)
+on the observing page of `async_job` takes the field apart. A body that catches
+such an error asks the job, not the error:
 [Letting cancellation through](#letting-cancellation-through) has the `catch`.
 
 Answering for an error is a responsibility somebody takes, not a side effect of

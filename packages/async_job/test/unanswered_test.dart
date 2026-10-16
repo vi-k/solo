@@ -489,8 +489,7 @@ void main() {
     );
   });
 
-  group('a failure of the body no cancellation covered is never asked about',
-      () {
+  group('a failure of a job that ends Failed never comes to onUnanswered', () {
     // Each job also fails in its cleanup, so a hook that is never called
     // at all cannot pass for one that is called at the right times.
     List<String> asked(Job<void> Function(JobObserver observer) start) {
@@ -513,19 +512,6 @@ void main() {
           (observer) => Job<void>(observer: observer, (ctx) async {
             ctx.onDispose(() => throw StateError('cleanup'));
             throw StateError('body');
-          }),
-        ),
-        ['onUnanswered: Bad state: cleanup'],
-      );
-    });
-
-    test('a failure after the job accepted a cancellation', () {
-      expect(
-        asked(
-          (observer) => Job<void>(observer: observer, (ctx) async {
-            ctx.onDispose(() => throw StateError('cleanup'));
-            await ctx.join(() => delay(20));
-            throw StateError('stopped at the token');
           }),
         ),
         ['onUnanswered: Bad state: cleanup'],
@@ -903,14 +889,12 @@ void main() {
     });
   });
 
-  group('a failure is first by when it happened, not when the body threw it',
-      () {
-    // The error takes microtasks to travel from where it happened to where
-    // the body throws it, and a cancellation arriving in them came after
-    // the failure. It covers the failure, which goes on to the zone: never
-    // silence. From the first microtask on, whatever the outcome — a
-    // failure the body threw before the cancellation came is a `Failed`
-    // nobody observed, and it goes to the zone as well.
+  group('a failure of the body is answered for, whenever it came', () {
+    // The job ends `Cancelled`, and its body failed: before the
+    // cancellation came or after it, the failure is in no outcome, and it
+    // goes to the answer. The order of the two decides nothing. Each route a
+    // failure takes to the body is here, with the cancellation on either side
+    // of it where the route lets it come there.
     const device = 'Bad state: device failed';
     Future<void> viaAbandonable(
       JobContext ctx,
@@ -927,142 +911,70 @@ void main() {
       return ctx.join(() => operation.future);
     }
 
-    for (var n = 1; n <= 6; n++) {
-      test('abandonable, the cancellation $n microtasks after the failure', () {
-        expect(failureAndCancellation(viaAbandonable, microtasks: n), [device]);
-      });
+    Future<void> viaRun(JobContext ctx, void Function(void Function()) arm) {
+      final operation = Completer<void>();
+      arm(() => operation.completeError(StateError('device failed')));
+      return ctx.run(
+        Job.deferred<void>((ctx) => ctx.join(() => operation.future)),
+      );
     }
 
-    for (var n = 1; n <= 6; n++) {
-      test('join, the cancellation $n microtasks after the failure', () {
-        expect(failureAndCancellation(viaJoin, microtasks: n), [device]);
-      });
-    }
-
-    // An action that throws before it has a future to hand back: the error
-    // reaches the body through the future of the call, a microtask later.
-    for (final (name, call) in [
-      (
-        'abandonable',
-        (JobContext ctx, FutureOr<void> Function() action) =>
-            ctx.abandonable(action),
-      ),
-      (
-        'join',
-        (JobContext ctx, FutureOr<void> Function() action) => ctx.join(action),
-      ),
-    ]) {
-      for (var n = 1; n <= 3; n++) {
-        test(
-            '$name, an action that throws at once, '
-            'the cancellation $n microtasks after', () {
-          late final Job<void> root;
+    for (final cancelFirst in [false, true]) {
+      final when = cancelFirst
+          ? 'the cancellation first'
+          : 'the cancellation a microtask after';
+      for (final (route, body) in [
+        ('abandonable', viaAbandonable),
+        ('join', viaJoin),
+        ('a child of run', viaRun),
+      ]) {
+        test('$route, $when', () {
           expect(
-            zoneOf((async) {
-              root = Job<void>(
-                (ctx) => call(ctx, () {
-                  later(n, () => root.cancel().ignore());
-                  throw StateError('device failed');
-                }),
-              );
-              async.flushTimers();
-            }),
+            failureAndCancellation(
+              body,
+              microtasks: 1,
+              cancelFirst: cancelFirst,
+            ),
             [device],
           );
-          if (n == 1) {
-            expect(root.outcome, isA<Cancelled>(), reason: 'in the window');
-          }
         });
       }
-
-      // The case the window was found by: the body catches the failure,
-      // cancels its own job and throws the failure again. The cancellation
-      // is first by the time the body ends, and the failure came before it.
-      test(
-          '$name, an action that throws at once, caught, the job cancelled '
-          'and the failure thrown again', () {
-        late final Job<void> root;
-        expect(
-          zoneOf((async) {
-            root = Job<void>((ctx) async {
-              try {
-                await call(ctx, () => throw StateError('device failed'));
-              } on Object {
-                root.cancel().ignore();
-                rethrow;
-              }
-            });
-            async.flushTimers();
-          }),
-          [device],
-        );
-        expect(root.outcome, isA<Cancelled>());
-      });
     }
 
-    test('abandonable, the cancellation first: the abandoned action fails late',
-        () {
+    // A cancellation lets go of the stream, so after it nothing more is
+    // delivered and nothing fails: here the cancellation comes after.
+    test('a handler of each, the cancellation a microtask after', () {
       expect(
-        failureAndCancellation(viaAbandonable, cancelFirst: true),
-        [device],
+        failureAndCancellation(
+          microtasks: 1,
+          (ctx, arm) async {
+            final source = StreamController<int>(sync: true);
+            arm(() => source.add(1));
+            try {
+              await ctx
+                  .each(
+                    source.stream,
+                    (_, event) => throw StateError('handler'),
+                  )
+                  .value;
+            } finally {
+              source.close().ignore();
+            }
+          },
+        ),
+        ['Bad state: handler'],
       );
     });
 
-    test('join, the cancellation first: the body fails after the mark', () {
-      expect(failureAndCancellation(viaJoin, cancelFirst: true), isEmpty);
-    });
-
-    for (var n = 1; n <= 6; n++) {
-      test('a child of run, the cancellation $n microtasks after', () {
+    for (final cancelFirst in [false, true]) {
+      final when = cancelFirst
+          ? 'the cancellation first'
+          : 'the cancellation a microtask after';
+      test('an asynchronous handler, $when', () {
         expect(
           failureAndCancellation(
-            microtasks: n,
-            (ctx, arm) async {
-              final operation = Completer<void>();
-              arm(() => operation.completeError(StateError('child failed')));
-              await ctx.run(
-                Job.deferred<void>((ctx) => ctx.join(() => operation.future)),
-              );
-            },
-          ),
-          ['Bad state: child failed'],
-        );
-      });
-    }
-
-    // The handler throws inside the call that delivers the event, and the
-    // error leaves the body of `each` and then the parent's `value` several
-    // microtasks later: here the window is widest.
-    for (var n = 0; n <= 6; n++) {
-      test('a handler of each, the cancellation $n microtasks after', () {
-        expect(
-          failureAndCancellation(
-            microtasks: n,
-            (ctx, arm) async {
-              final source = StreamController<int>(sync: true);
-              arm(() => source.add(1));
-              try {
-                await ctx
-                    .each(
-                      source.stream,
-                      (_, event) => throw StateError('handler'),
-                    )
-                    .value;
-              } finally {
-                source.close().ignore();
-              }
-            },
-          ),
-          ['Bad state: handler'],
-        );
-      });
-    }
-
-    for (var n = 1; n <= 6; n++) {
-      test('an asynchronous handler, the cancellation $n microtasks after', () {
-        expect(
-          failureAndCancellation(
-            microtasks: n,
+            microtasks: 1,
+            cancelFirst: cancelFirst,
             (ctx, arm) async {
               final source = StreamController<int>(sync: true);
               final handling = Completer<void>();
@@ -1082,45 +994,76 @@ void main() {
       });
     }
 
-    for (var n = 1; n <= 6; n++) {
-      test('a listen that throws, the cancellation $n microtasks after', () {
+    test('a listen that throws, the cancellation a microtask after', () {
+      expect(
+        zoneOf((async) {
+          Job<void>? root;
+          root = Job<void>(
+            (ctx) => ctx
+                .each(
+                  ListenThrows(
+                    () => later(1, () => root!.cancel().ignore()),
+                  ),
+                  (_, event) {},
+                )
+                .value,
+          );
+          async.flushTimers();
+        }),
+        ['Bad state: listen'],
+      );
+    });
+
+    test('an error of the stream, the cancellation a microtask after', () {
+      expect(
+        failureAndCancellation(
+          microtasks: 1,
+          (ctx, arm) async {
+            final source = StreamController<int>(sync: true);
+            arm(() => source.addError(StateError('source')));
+            try {
+              await ctx.each(source.stream, (_, event) {}).value;
+            } finally {
+              source.close().ignore();
+            }
+          },
+        ),
+        ['Bad state: source'],
+      );
+    });
+
+    // The body catches the failure, cancels its own job and throws the
+    // failure again: the job ends `Cancelled`, and the failure goes on.
+    for (final (name, call) in [
+      (
+        'abandonable',
+        (JobContext ctx, FutureOr<void> Function() action) =>
+            ctx.abandonable(action),
+      ),
+      (
+        'join',
+        (JobContext ctx, FutureOr<void> Function() action) => ctx.join(action),
+      ),
+    ]) {
+      test(
+          '$name, an action that throws at once, caught, the job cancelled '
+          'and the failure thrown again', () {
+        late final Job<void> root;
         expect(
           zoneOf((async) {
-            Job<void>? root;
-            root = Job<void>(
-              (ctx) => ctx
-                  .each(
-                    ListenThrows(
-                      () => later(n, () => root!.cancel().ignore()),
-                    ),
-                    (_, event) {},
-                  )
-                  .value,
-            );
+            root = Job<void>((ctx) async {
+              try {
+                await call(ctx, () => throw StateError('device failed'));
+              } on Object {
+                root.cancel().ignore();
+                rethrow;
+              }
+            });
             async.flushTimers();
           }),
-          ['Bad state: listen'],
+          [device],
         );
-      });
-    }
-
-    for (var n = 0; n <= 6; n++) {
-      test('an error of the stream, the cancellation $n microtasks after', () {
-        expect(
-          failureAndCancellation(
-            microtasks: n,
-            (ctx, arm) async {
-              final source = StreamController<int>(sync: true);
-              arm(() => source.addError(StateError('source')));
-              try {
-                await ctx.each(source.stream, (_, event) {}).value;
-              } finally {
-                source.close().ignore();
-              }
-            },
-          ),
-          ['Bad state: source'],
-        );
+        expect(root.outcome, isA<Cancelled>());
       });
     }
 
@@ -1162,6 +1105,7 @@ void main() {
       'uncancellable': (ctx) => ctx.uncancellable(stepFailing),
       'a child of run': (ctx) =>
           ctx.run(Job.deferred<void>((_) => stepFailing())),
+      'nothing of the context': (_) => stepFailing(),
     };
     for (final MapEntry(key: member, value: step) in members.entries) {
       test('$member, caught and thrown again after the stop', () {
@@ -1172,59 +1116,9 @@ void main() {
       });
     }
 
-    test('awaited past the context, it is dated by the throw', () {
-      // The core learns when a failure happened from the members of the
-      // context and from the children: one the body awaits on its own
-      // comes first only if the body throws it before the mark.
-      expect(
-        cancelledAt10((ctx) => throwAgainAfterStop(ctx, stepFailing)),
-        isEmpty,
-      );
-    });
-
-    test('the earlier of two caught failures, thrown again after the stop', () {
-      expect(
-        cancelledAt10((ctx) async {
-          Object? first;
-          try {
-            await ctx.abandonable(stepFailing);
-          } on Object catch (error) {
-            first = error;
-          }
-          try {
-            await ctx.abandonable(() async {
-              await delay(1);
-              throw StateError('second');
-            });
-          } on Object {
-            // Handled: the body goes on.
-          }
-          final stopped = Completer<void>();
-          ctx.onCancel(stopped.complete);
-          await stopped.future;
-          Error.throwWithStackTrace(first!, StackTrace.current);
-        }),
-        ['Bad state: step'],
-      );
-    });
-
-    test('an error that is a string, the cancellation a microtask after', () {
-      expect(
-        failureAndCancellation(
-          microtasks: 1,
-          (ctx, arm) {
-            final operation = Completer<void>();
-            arm(() => operation.completeError('device failed'));
-            return ctx.abandonable(() => operation.future);
-          },
-        ),
-        ['device failed'],
-      );
-    });
-
     test('a child that failed, cancelled while it waits for its cleanup', () {
       // `cancellable: false`: the child refuses the cascade and ends
-      // `Failed`, long after the parent was marked. Its body failed before.
+      // `Failed`, long after the parent was marked.
       expectAnswered(
         (observer) => runCancelled(
           observer,
@@ -1240,7 +1134,7 @@ void main() {
     });
 
     test('a failure an engine hands a child, the cancellation right after', () {
-      // No body threw it, so nothing noted it before `finish`.
+      // The parent is marked before its body hears the failure.
       expect(
         zoneOf((async) {
           final child = ProbeJob<int>((ctx) async {
@@ -1257,7 +1151,7 @@ void main() {
       );
     });
 
-    test('a child that fails after the parent was marked is after', () {
+    test('a child that fails after the parent was marked', () {
       expect(
         cancelledAt10(
           (ctx) => ctx.run(
@@ -1267,7 +1161,7 @@ void main() {
             }),
           ),
         ),
-        isEmpty,
+        ['Bad state: late child'],
       );
     });
 
@@ -1285,109 +1179,12 @@ void main() {
         ['Bad state: branch'],
       );
     });
-
-    test('two branches of runAll failed before the mark', () {
-      // The group throws the first; the second, which it does not throw,
-      // is answered for by its branch.
-      expect(
-        cancelledAt10(
-          (ctx) => ctx.runAll<void>([
-            Job.deferred<void>((ctx) async {
-              await delay(5);
-              throw StateError('first');
-            }),
-            Job.deferred<void>(cancellable: false, (ctx) async {
-              await delay(8);
-              throw StateError('second');
-            }),
-            Job.deferred<void>((ctx) => ctx.uncancellable(() => delay(50))),
-          ]),
-        ),
-        ['Bad state: second', 'Bad state: first'],
-      );
-    });
-
-    test('two branches of runAll failed before the mark, both with strings',
-        () {
-      // An Expando holds no string, so these are noted apart from objects;
-      // the second must not take the place of the first. Thrown with
-      // `throwWithStackTrace`, which `only_throw_errors` lets through.
-      expect(
-        cancelledAt10(
-          (ctx) => ctx.runAll<void>([
-            Job.deferred<void>((ctx) async {
-              await delay(5);
-              Error.throwWithStackTrace('first', StackTrace.current);
-            }),
-            Job.deferred<void>(cancellable: false, (ctx) async {
-              await delay(8);
-              Error.throwWithStackTrace('second', StackTrace.current);
-            }),
-            Job.deferred<void>((ctx) => ctx.uncancellable(() => delay(50))),
-          ]),
-        ),
-        ['second', 'first'],
-      );
-    });
-
-    test('a NaN caught before the stop and thrown again after it', () {
-      // Noted by identity: `double.nan == double.nan` is false, and a note
-      // compared by `==` would never find the failure again.
-      expect(
-        cancelledAt10((ctx) async {
-          late final Object caught;
-          try {
-            await ctx.abandonable(() async {
-              await delay(1);
-              Error.throwWithStackTrace(double.nan, StackTrace.current);
-            });
-          } on Object catch (error) {
-            caught = error;
-          }
-          final stopped = Completer<void>();
-          ctx.onCancel(stopped.complete);
-          await stopped.future;
-          Error.throwWithStackTrace(caught, StackTrace.current);
-        }),
-        ['NaN'],
-      );
-    });
-
-    for (final (which, expected) in [
-      ('earlier', 'step'),
-      ('later', 'second'),
-    ]) {
-      test('the $which of two caught strings, thrown again after the stop', () {
-        expect(
-          cancelledAt10((ctx) async {
-            final caught = <Object>[];
-            for (final error in ['step', 'second']) {
-              try {
-                await ctx.abandonable(() async {
-                  await delay(1);
-                  Error.throwWithStackTrace(error, StackTrace.current);
-                });
-              } on Object catch (error) {
-                caught.add(error);
-              }
-            }
-            final stopped = Completer<void>();
-            ctx.onCancel(stopped.complete);
-            await stopped.future;
-            Error.throwWithStackTrace(
-              caught[which == 'earlier' ? 0 : 1],
-              StackTrace.current,
-            );
-          }),
-          [expected],
-        );
-      });
-    }
   });
 
-  group('a failure after the child accepted a cancellation is only told', () {
+  group('a failure after the child accepted a cancellation is answered for',
+      () {
     test('a stop at the token', () {
-      expectOnlyTold(
+      expectAnswered(
         (observer) => runCancelled(
           observer,
           () => Job.deferred<int>((ctx) async {
@@ -1403,9 +1200,9 @@ void main() {
     });
 
     test('another failure after a step that failed under a held stop', () {
-      // The section put the order right for its own error, and for no
-      // other: the body caught that one and threw a new one after the mark.
-      expectOnlyTold(
+      // The body caught the failure of the step and threw a new one after
+      // the stop landed.
+      expectAnswered(
         (observer) => runCancelled(
           observer,
           () => Job.deferred<int>((ctx) async {
@@ -1426,9 +1223,8 @@ void main() {
 
     test('a step a rule stopped while the section held a stop', () {
       // A rule marks the job inside the section, where the stop it held
-      // could not: the step fails after that mark, and the held stop has
-      // nothing left to land.
-      expectOnlyTold(
+      // could not, and the step fails after that mark.
+      expectAnswered(
         (observer) => zoneOf((async) {
           late RulesContext rules;
           final parent = Job<void>(observer: observer, (ctx) async {

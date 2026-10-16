@@ -180,9 +180,21 @@ database. A request to abort or a subscription to cancel goes through
 
 The `onError:` line is that `DatabaseStopped`. `join` throws an error of its
 action as it is, even after a cancellation, and the body does not catch it. The
-job still ends `Cancelled`, so the error is nobody's outcome: it reaches the
-observer and stops there, and without an observer nothing hears it. What a
-`catch` around this `join` sees is the subject of
+job still ends `Cancelled`, so the error is nobody's outcome, and the job
+answers for it as for any failure of its body: from the observer it goes on to
+the zone, unless the observer answers for it, and each stop would reach the
+crash reports of the app as a failure. So the app names the stop of its
+database client once, in `main`, and every job on this page runs with that
+line:
+
+```dart
+Job.isCancellationError = (error) => error is DatabaseStopped;
+```
+
+An error it names reaches the observer and stops there.
+[Errors of a cancellation](observing.md#errors-of-a-cancellation) on the
+observing page takes the filter apart. What a `catch` around this `join` sees
+is the subject of
 [Catching errors of the operation](#catching-errors-of-the-operation), below.
 
 A stop that takes time, such as a device's, needs more than `onCancel` alone.
@@ -321,12 +333,11 @@ the next checkpoint throws it. The job still ends `Cancelled`, even if the body
 returns a value, so whatever has to happen after the step anyway belongs inside
 the same section.
 
-If the step fails and the body lets the error through, the failure came before
-the job accepted the cancellation the section held: the job still ends
-`Cancelled`, and the failure reaches the zone even without an observer. Through
-`join`, where the job accepts the cancellation at once, the same failure comes
-after it, and only an observer hears it.
-[Where errors go](observing.md#where-errors-go) on the observing page has both.
+If the step fails and the body lets the error through, the job still ends
+`Cancelled`, and the failure goes on to the answer, as any failure of the body
+of a cancelled job does: the observer hears it, and then the zone does, unless
+the observer answers for it. [Where errors go](observing.md#where-errors-go) on
+the observing page has the table.
 
 Always await `ctx.uncancellable`. The section opens when called, even if you do
 not await its future. An unawaited section can outlive the body; if the job

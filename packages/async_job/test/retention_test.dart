@@ -12,7 +12,6 @@ import 'dart:async';
 import 'package:async_job/async_job.dart';
 import 'package:test/test.dart';
 
-import 'support/probe_job.dart';
 import 'support/reachability.dart';
 
 /// What a body captures. Big enough that holding it is worth noticing.
@@ -125,16 +124,22 @@ final class CarryingFailure implements Exception {
   );
 }
 
+/// Answers for every error and keeps none of them.
+final class Answering extends JobObserver with JobAnswerer {
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {}
+}
+
 /// A body that fails once the gate opens, after a cancellation marked the
 /// job: the cancellation is the outcome, and the failure it covers is in
-/// none. With no observer it goes nowhere, by the rule for a failure after
-/// the mark.
+/// none. It goes to the answer, and the observer answers for it and keeps
+/// nothing.
 (Job<void>, WeakReference<Payload>, Completer<void>)
     failureACancellationCovered() {
   final payload = Payload();
   final gate = Completer<void>();
   return (
-    Job<void>((ctx) async {
+    Job<void>(observer: Answering(), (ctx) async {
       await gate.future;
       throw CarryingFailure(payload);
     }),
@@ -168,35 +173,6 @@ final class CarryingFailure implements Exception {
     WeakReference(payload),
     gate,
     workDone.future,
-  );
-}
-
-/// A job an engine finishes by hand while its body waits on a `ctx.abandonable`
-/// call that fails, after that, with a record holding a payload. The payload is
-/// made inside the action and handed out weakly through [made]: a [ProbeJob]
-/// keeps its body function, which must not capture it.
-(ProbeJob<int>, Completer<void>, Future<void>) failureAfterAHandFinish(
-  List<WeakReference<Payload>> made,
-) {
-  final gate = Completer<void>();
-  final bodyDone = Completer<void>();
-  return (
-    ProbeJob<int>((ctx) async {
-      try {
-        await ctx.abandonable<void>(() async {
-          await gate.future;
-          final payload = Payload();
-          made.add(WeakReference(payload));
-          Error.throwWithStackTrace((payload,), StackTrace.current);
-        });
-      } on Object catch (_) {
-        // Handled: the body is over.
-      }
-      bodyDone.complete();
-      return 1;
-    }),
-    gate,
-    bodyDone.future,
   );
 }
 
@@ -277,22 +253,6 @@ void main() {
     'an exception': CarryingFailure.new,
     'a record': (payload) => (payload,),
   };
-  test('a job finished by hand keeps nothing its body failed with after',
-      () async {
-    final made = <WeakReference<Payload>>[];
-    final (job, gate, bodyDone) = failureAfterAHandFinish(made);
-    job.launch();
-    await Future<void>.delayed(Duration.zero);
-    job.drop(const Done(0));
-    gate.complete();
-    await bodyDone;
-    expect(
-      await collected(made.single),
-      isTrue,
-      reason: 'the job is over, and nothing will read the order again',
-    );
-  });
-
   test('a finished job keeps nothing its unattended work failed with',
       () async {
     final (job, capture, gate, workDone) = failureOfWorkAfterTheJob();
@@ -302,8 +262,7 @@ void main() {
     expect(
       await collected(capture),
       isTrue,
-      reason: 'nothing reads the order once the body has ended, so a failure '
-          'arriving after it is not noted at all',
+      reason: 'the work caught the failure, and nothing of the job holds it',
     );
   });
 
@@ -331,9 +290,8 @@ void main() {
       expect(
         await collected(capture),
         isTrue,
-        reason: 'the core notes a failure on its way to the body, to tell '
-            'the order against a cancellation; once the job is over there '
-            'is no order left to tell',
+        reason: 'the body caught the failure, and nothing of the job holds '
+            'it',
       );
     });
   }

@@ -75,9 +75,12 @@ in. In a test that zone is the test's, and the test fails:
 
 - an error no outcome carries, in an application that sets `Solo.observer` or
   overrides `onError` without calling `super`;
-- the failure of a body when a cancellation reaches the job afterwards, or of a
-  step of `ctx.uncancellable` while the section held one back:
-  `job.ignoreFailure()` silences it;
+- the failure of the body of a job that ends `Cancelled`, before the
+  cancellation or after it: an operation that stops at a token the job cancels
+  through `ctx.onCancel` throws one on every cancellation.
+  `Job.isCancellationError` names the errors a cancellation causes, once, in
+  `main`, and they reach `onError` and go no further; `job.ignoreFailure()`
+  silences the failure of that job alone;
 - the late failure of an action the body walked away from through `.timeout` or
   `Future.any`, arriving once the job is over;
 - the failure of a source's own cleanup when `ctx.each` lets go of a stream.
@@ -118,6 +121,10 @@ different `runZonedGuarded`. See
   `run`, `collect` and `accumulate` take it; when it runs out, the job ends
   `Cancelled(timeout)` with the new `TimeoutCancelReason` of `async_job`. See
   [A deadline of a job](doc/cancellation.md#a-deadline-of-a-job).
+- **`Job.isCancellationError` of `async_job` names the errors a cancellation
+  causes.** A failure of a cancelled job that it names reaches `onError` and
+  goes no further: neither `onUnanswered` nor `Solo.unansweredHandler` hears
+  it. See [The token](doc/cancellation.md#the-token).
 - **`SoloObserver.all` makes one observer of several** for `Solo.observer`. See
   [A cancellation that never lands](doc/errors.md#a-cancellation-that-never-lands).
 - `Solo` carries its own listeners: `addListener` and `removeListener`, and the

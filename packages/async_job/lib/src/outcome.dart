@@ -155,13 +155,14 @@ final class Done<T> extends Outcome<T> {
 /// after completion; a continuation attached within that grace period gets a
 /// chance to receive the outcome first.
 ///
-/// This is the error that has an outcome of its own. A body that throws
-/// after its cancellation ends as [Cancelled] instead, and [Cancelled] is
-/// never reported to the zone. A body that fails before a cancellation
-/// arrives — the job still waits for its children or runs its cleanup,
-/// say — ends [Cancelled] as well. Whoever reads that outcome gets the
-/// cancellation, and the error goes on the way of the errors below;
-/// [Job.ignoreFailure] silences it.
+/// This is the error that has an outcome of its own. A job that has accepted a
+/// cancellation ends [Cancelled] whatever its body throws, and so does one
+/// whose body failed while the job still waited for its children or ran its
+/// cleanup, if a cancellation arrived then. Whoever reads that outcome gets the
+/// cancellation, and the error goes on the way of the errors below; one that
+/// [Job.isCancellationError] names stops after [JobObserver.onError], and
+/// [Job.ignoreFailure] silences it. [Cancelled] itself is never reported to the
+/// zone.
 ///
 /// The errors with no outcome to carry them — a late failure of an action
 /// [JobContext.abandonable] walked away from, a disposer, a callback of

@@ -98,12 +98,13 @@ abstract mixin class JobObserver {
   /// Notification only: overriding it changes nothing about where the error
   /// goes. The errors with no outcome go on to [JobAnswerer.onUnanswered] of an
   /// observer that answers, and so do two failures of the body: that of a
-  /// branch of [JobContext.runAll] the group did not throw, and one a
-  /// cancellation covered afterwards. [Job.ignoreFailure] on the job stops
-  /// these two here. Any other failure of the job is carried by the outcome,
-  /// and one nobody observes reaches the zone — all but a failure that happened
-  /// after the job accepted a cancellation: an operation stopping at the job's
-  /// token looks like that, and only this hook hears it.
+  /// branch of [JobContext.runAll] the group did not throw, and that of a job
+  /// that ends [Cancelled]. [Job.ignoreFailure] on the job stops these two
+  /// here. Any other failure of the job is carried by the outcome, and one
+  /// nobody observes reaches the zone. Once the job has accepted a
+  /// cancellation, a failure [Job.isCancellationError] names stops here too: an
+  /// operation stopping at the job's token throws such an error, and only this
+  /// hook hears it.
   ///
   /// A [Cancelled] reaches this hook whenever one is thrown where there is
   /// no outcome to carry it — never the job giving up, which is not an
@@ -163,13 +164,14 @@ mixin JobAnswerer on JobObserver {
   /// [JobContext.onCancel] or [Job.whenCancelled], work handed over with
   /// [JobContext.unattended], a failure while formatting a child's cancellation
   /// description, the failure of a branch of [JobContext.runAll] that the group
-  /// did not throw, and a failure of the body that a cancellation covered
-  /// afterwards — the outcome carries the cancellation, whoever reads it.
-  /// [Job.ignoreFailure] keeps the last two from coming here. So does a failure
-  /// an engine of a domain hands to a job already over, and [Job.ignoreFailure]
-  /// keeps that one away as well. Any other failure of a body does not come
-  /// here: it has an outcome, and one nobody observes reaches the zone by
-  /// itself. Every error that comes here has been through [onError] already.
+  /// did not throw, a failure of the body of a job that ends [Cancelled] — the
+  /// outcome carries the cancellation, whoever reads it — and a failure an
+  /// engine of a domain hands to a job already over. [Job.ignoreFailure] keeps
+  /// the last three from coming here, and [Job.isCancellationError] keeps away
+  /// the failures it names of a job that has accepted a cancellation. Any other
+  /// failure of a body does not come here: it has an outcome, and one nobody
+  /// observes reaches the zone by itself. Every error that comes here has been
+  /// through [onError] already.
   ///
   /// **One failure at a time.** The job walks a `ParallelWaitError` the way
   /// [Job.visitErrors] does and asks about each failure inside it in a call

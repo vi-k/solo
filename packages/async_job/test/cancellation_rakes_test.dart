@@ -217,7 +217,13 @@ void main() {
   setUp(() {
     stage = Stage();
     freshRun();
+    // The page runs every job with the line it sets in `main`.
+    page.nameTheStop();
   });
+  tearDown(() => Job.isCancellationError = null);
+  // The setUp above names the stop for every test of the file, so the field
+  // is checked once the last tearDown has run, not in a test of its own.
+  tearDownAll(() => expect(Job.isCancellationError, isNull));
 
   group('The opening example', () {
     test('uncancelled, it runs to its end', () {
@@ -278,23 +284,34 @@ void main() {
       expect(watch(page.stopTheMigration, cancelAt: cancelMs), quoted[2]);
     });
 
-    test('without an observer the stopped migration reaches no zone', () {
-      final lines = play(
-        (ctx) async {
-          final stop = CancelToken();
-          ctx.onCancel(stop.cancel);
+    test('without the line of main each stop reaches the zone', () {
+      Future<void> stopping(JobContext ctx) async {
+        final stop = CancelToken();
+        ctx.onCancel(stop.cancel);
 
-          await ctx.join(() => database.migrate(stop));
-        },
-        cancelAt: cancelMs,
-        observed: false,
+        await ctx.join(() => database.migrate(stop));
+      }
+
+      expect(
+        play(stopping, cancelAt: cancelMs, observed: false),
+        [
+          'step 1',
+          'cancel',
+          'step 2',
+          'migration stopped',
+          'outcome: Cancelled(manual)',
+        ],
+        reason: 'with the line, nobody past the observer hears the stop',
       );
 
-      expect(lines, [
+      Job.isCancellationError = null;
+      expect(play(stopping, cancelAt: cancelMs), [
         'step 1',
         'cancel',
         'step 2',
         'migration stopped',
+        'onError: DatabaseStopped',
+        'zone: DatabaseStopped',
         'outcome: Cancelled(manual)',
       ]);
     });

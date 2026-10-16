@@ -32,6 +32,14 @@ import 'support/test_solo.dart';
 /// order the test set, and fake time moves only where the page speaks of
 /// time: the five seconds of the two timers and the delays of the table.
 
+/// What a call throws when the token of its cancelled job stops it.
+final class _CallStopped implements Exception {
+  const _CallStopped();
+
+  @override
+  String toString() => 'the call stopped';
+}
+
 /// An observer that keeps what `onError` told it.
 final class _Watching extends SoloObserver {
   final heard = <String>[];
@@ -432,6 +440,7 @@ void main() {
     Solo.unansweredHandler = null;
     Solo.debug = null;
     Job.debug = null;
+    Job.isCancellationError = null;
   });
 
   group('Reporting an error', () {
@@ -716,10 +725,10 @@ void main() {
           'throw;',
         );
         _says(
-          '- the failure of a body when a cancellation reaches the job '
-          'afterwards, whether before the error leaves the body or while the '
-          'job still waits for children of its own or runs its cleanup: '
-          'whoever reads that outcome gets the cancellation.',
+          '- the failure of the body of a job that ends `Cancelled`, whether '
+          'the job accepted the cancellation before the error left the body '
+          'or after, while it still waited for children of its own or ran its '
+          'cleanup: whoever reads that outcome gets the cancellation.',
         );
         _says(
           'Somebody has to answer for those, and the one asked is always the '
@@ -963,41 +972,56 @@ void main() {
       });
     });
 
-    test('a failure that comes after the cancellation', () {
-      _says(
-        'One error no outcome carries is missing from that list, and nobody '
-        'is asked to answer for it: the failure of a body that comes after '
-        'its job has accepted a cancellation',
-      );
-      _says(
-        'The job ends `Cancelled`, the hook `onError` is told of the error, '
-        'and it goes no further',
-      );
-      final handled = <String>[];
-      late Bench bench;
-      late Job<void> job;
-      final ran = _run((async) {
-        Solo.unansweredHandler =
-            (solo, job, error, stackTrace) => handled.add(text(error));
-        bench = Bench();
-        // Not ignored: ignoreFailure() would silence a failure that asked for
-        // an answer, and this one asks for none.
-        job = bench.run<int, void>(
-          key: 'stopped',
-          (ctx) => ctx.join(() => stage.start<void>('op', null)),
-        );
-        async.flushMicrotasks();
-        unawaited(job.cancel());
-        async.flushMicrotasks();
-        _fail(async, 'op', StateError('the call'));
-      });
+    for (final named in [false, true]) {
+      test(
+          named
+              ? 'a failure after the cancellation that the app named goes no '
+                  'further than onError'
+              : 'a failure after the cancellation is answered for', () {
+        if (named) {
+          _says(
+            'A failure of a cancelled job that it names reaches the hook '
+            '`onError` and goes no further: neither `onUnanswered` nor '
+            '`Solo.unansweredHandler` hears it',
+          );
+        } else {
+          _says(
+            'The last item of that list comes most often from the '
+            'cancellation itself: a call that `ctx.join` is still waiting out '
+            'stops at a token that `ctx.onCancel` cancelled, and throws as it '
+            'stops',
+          );
+        }
+        final handled = <String>[];
+        late Bench bench;
+        late Job<void> job;
+        final ran = _run((async) {
+          if (named) {
+            Job.isCancellationError = (error) => error is _CallStopped;
+          }
+          Solo.unansweredHandler =
+              (solo, job, error, stackTrace) => handled.add(text(error));
+          bench = Bench();
+          job = bench.run<int, void>(
+            key: 'stopped',
+            (ctx) => ctx.join(() => stage.start<void>('op', null)),
+          );
+          async.flushMicrotasks();
+          unawaited(job.cancel());
+          async.flushMicrotasks();
+          _fail(async, 'op', const _CallStopped());
+        });
 
-      expect('${job.outcome}', 'Cancelled(manual)');
-      expect(bench.heard, ['stopped: the call']);
-      expect(bench.unanswered, isEmpty);
-      expect(handled, isEmpty);
-      expect(ran.errors, isEmpty);
-    });
+        expect('${job.outcome}', 'Cancelled(manual)');
+        expect(bench.heard, ['stopped: the call stopped']);
+        expect(
+          bench.unanswered,
+          named ? isEmpty : ['stopped: the call stopped'],
+        );
+        expect(handled, named ? isEmpty : ['the call stopped']);
+        expect(ran.errors, isEmpty, reason: 'the handler took what came');
+      });
+    }
 
     test('the handler of the page: one for the app, given the controller', () {
       _says(
@@ -4092,6 +4116,10 @@ void main() {
       ];
       expect(withCode.toSet(), holders.keys.toSet());
     });
+  });
+
+  test('the filter of cancellation errors is left as it was found', () {
+    expect(Job.isCancellationError, isNull);
   });
 }
 

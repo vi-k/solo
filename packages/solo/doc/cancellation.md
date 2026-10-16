@@ -111,10 +111,22 @@ second attempt: the seek dragged past runs to its end, and only then does the
 next one start.
 
 A player that stops its seek by throwing hands that error to `join`, and `join`
-throws it as it is. The job still ends `Cancelled`, and the controller's
-`onError` hook is told of an error for every seek dragged past. Put the call in
-a `try` and make `ctx.check()` the first line of its `catch`, and the
-cancellation comes out instead of the player's error:
+throws it as it is. The job still ends `Cancelled`, so the error is nobody's
+outcome, and the job answers for it as for any failure of its body. For every
+seek dragged past, the controller's `onError` hook is told of it, and then
+`onUnanswered` is asked to answer for it, which by default hands it on to
+`Solo.unansweredHandler` or to the zone. The app names the stop of its player
+once, in `main`:
+
+```dart
+Job.isCancellationError = (error) => error is SeekStopped;
+```
+
+An error it names reaches `onError` and goes no further.
+[Errors of a cancellation](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/observing.md#errors-of-a-cancellation)
+on the observing page of `async_job` takes the field apart. A body can let the
+cancellation out instead of the player's error: put the call in a `try` and
+make `ctx.check()` the first line of its `catch`.
 [Asking the job](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/cancellation.md#asking-the-job)
 on the cancellation page of `async_job` has that `catch`.
 

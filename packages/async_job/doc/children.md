@@ -91,16 +91,20 @@ child's `Cancelled`. `ctx.run(child).ignore()` silences the error of that
 future and nothing more: the child's observer still hears the error through
 `onError`.
 
-If the child's body fails and a cancellation reaches the child afterwards —
-while it still waits for children of its own or runs its cleanup, say — its
-error does not arrive through that future. The child ends `Cancelled`,
-`await ctx.run(child)` throws `Cancelled`, and the error goes where an error
-nobody handled goes: to the child's observer and, unless that observer answers
-for it, to the zone, as in [Where errors go](observing.md#where-errors-go) on
-the observing page. `child.ignoreFailure()` silences it.
-`ctx.run(child).ignore()` does not: it silences what the future throws, and the
-future throws the cancellation. To answer for the error differently, give the
-child an observer that answers: a `JobAnswerer` with `onUnanswered` overridden.
+If the child ends `Cancelled` and its body failed, the error does not arrive
+through that future. That happens when the body fails and a cancellation
+reaches the child afterwards, while it still waits for children of its own or
+runs its cleanup, say, or when the cancellation stops an operation and the body
+throws that operation's error. `await ctx.run(child)` throws `Cancelled`, and
+the error goes where an error nobody handled goes: to the child's observer and,
+unless that observer answers for it, to the zone, as in
+[Where errors go](observing.md#where-errors-go) on the observing page.
+`child.ignoreFailure()` silences it. `ctx.run(child).ignore()` does not: it
+silences what the future throws, and the future throws the cancellation. To
+answer for the error differently, give the child an observer that answers: a
+`JobAnswerer` with `onUnanswered` overridden. An error the app named in
+[Errors of a cancellation](observing.md#errors-of-a-cancellation) goes no
+further than the child's observer.
 
 ### When `ctx.run` refuses a child
 

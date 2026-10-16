@@ -543,9 +543,24 @@ void main() {
     });
 
     test(
-        'an open that fails after the cancellation reaches the observer '
-        'alone, and nobody without one', () {
-      for (final observer in [null, Listening(), Answering()]) {
+        'an open that fails after the cancellation is answered for: the '
+        'observer hears it, and then the zone, unless the observer answers',
+        () {
+      final heard = {
+        null: (zone: ['Bad state: database locked'], heard: null),
+        Listening(): (
+          zone: ['Bad state: database locked'],
+          heard: ['onError: Bad state: database locked'],
+        ),
+        Answering(): (
+          zone: <String>[],
+          heard: [
+            'onError: Bad state: database locked',
+            'onUnanswered: Bad state: database locked',
+          ],
+        ),
+      };
+      for (final MapEntry(key: observer, value: expected) in heard.entries) {
         Database.openError = StateError('database locked');
         Outcome<Database>? ended;
         final zone = zoneErrorsOf((async) {
@@ -560,11 +575,8 @@ void main() {
         });
 
         expect('$ended', 'Cancelled(manual)');
-        expect(zone, isEmpty);
-        expect(
-          observer?.heard,
-          observer == null ? null : ['onError: Bad state: database locked'],
-        );
+        expect(zone, expected.zone);
+        expect(observer?.heard, expected.heard);
       }
     });
   });

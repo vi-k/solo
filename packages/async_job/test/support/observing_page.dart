@@ -71,6 +71,19 @@ Job<void> migration({JobObserver? observer}) => Job<void>(
       },
     );
 
+/// What the app sets once, in `main`: the stop of its database is no
+/// failure. A test that calls it puts the field back in `tearDown`.
+void nameTheStop() {
+  Job.isCancellationError = (error) => error is DatabaseStopped;
+}
+
+/// The same, chained after a filter another part of the app has set.
+void nameTheStopAfter() {
+  final previous = Job.isCancellationError;
+  Job.isCancellationError =
+      (error) => error is DatabaseStopped || (previous?.call(error) ?? false);
+}
+
 final class Reporter extends JobObserver {
   @override
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
@@ -84,24 +97,6 @@ Job<Database> openingReported() {
       Database.open,
       discard: (database) => database.close(),
     ),
-  );
-  return job;
-}
-
-Job<Database> openingShown() {
-  final job = Job<Database>(
-    observer: Reporter(),
-    (ctx) async {
-      try {
-        return await ctx.join(Database.open);
-      } on Cancelled {
-        rethrow;
-        // ignore: avoid_catches_without_on_clauses
-      } catch (error) {
-        await showError(error);
-        rethrow;
-      }
-    },
   );
   return job;
 }

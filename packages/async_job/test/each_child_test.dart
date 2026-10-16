@@ -168,30 +168,41 @@ void main() {
   });
 
   test('a handler fails while cancellation is waiting for it', () {
-    fakeAsync((async) {
-      final active = Completer<void>();
-      final source = StreamController<int>();
-      final journal = JobJournal();
-      late Job<void> listening;
-      final parent = Job<void>(observer: journal, (ctx) async {
-        listening = ctx.each(source.stream, (_, event) => active.future);
-      });
-      async.flushMicrotasks();
-      source.add(1);
-      async.flushMicrotasks();
-      listening.cancel().ignore();
-      async.flushMicrotasks();
-      expect(listening.isFinished, isFalse);
-      active.completeError(StateError('handler'));
-      async.flushMicrotasks();
-      expect(listening.outcome, isA<Cancelled>());
-      expect(parent.outcome, isA<Done<void>>());
-      expect(
-        journal.lines.where((line) => line.contains('error')),
-        ['> [null: each] error Bad state: handler'],
-      );
-      source.close().ignore();
-    });
+    // The child has accepted the cancellation and ends `Cancelled`, so the
+    // failure is in no outcome: the observer hears it, and the zone the
+    // child was created in answers for it.
+    final journal = JobJournal();
+    final zone = <String>[];
+    late Job<void> parent;
+    late Job<void> listening;
+    late bool finishedBeforeTheFailure;
+    runZonedGuarded(
+      () => fakeAsync((async) {
+        final active = Completer<void>();
+        final source = StreamController<int>();
+        parent = Job<void>(observer: journal, (ctx) async {
+          listening = ctx.each(source.stream, (_, event) => active.future);
+        });
+        async.flushMicrotasks();
+        source.add(1);
+        async.flushMicrotasks();
+        listening.cancel().ignore();
+        async.flushMicrotasks();
+        finishedBeforeTheFailure = listening.isFinished;
+        active.completeError(StateError('handler'));
+        async.flushMicrotasks();
+        source.close().ignore();
+      }),
+      (error, _) => zone.add('$error'),
+    );
+    expect(finishedBeforeTheFailure, isFalse);
+    expect(listening.outcome, isA<Cancelled>());
+    expect(parent.outcome, isA<Done<void>>());
+    expect(
+      journal.lines.where((line) => line.contains('error')),
+      ['> [null: each] error Bad state: handler'],
+    );
+    expect(zone, ['Bad state: handler']);
   });
 
   test('the child is cancelled from inside a synchronous handler', () {

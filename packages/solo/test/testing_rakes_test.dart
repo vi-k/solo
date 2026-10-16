@@ -233,13 +233,14 @@ void main() {
 
   // First in the file: nothing has touched a static yet.
   group('The statics, before any test has set one', () {
-    test('all four start as null', () {
+    test('all five start as null', () {
       expect(Solo.observer, isNull);
       expect(Solo.unansweredHandler, isNull);
       expect(Solo.debug, isNull);
       expect(Job.debug, isNull);
-      _says('Four statics belong to the process rather than to a controller');
-      _says('All four start as `null`');
+      expect(Job.isCancellationError, isNull);
+      _says('Five statics belong to the process rather than to a controller');
+      _says('All five start as `null`');
     });
   });
 
@@ -1476,6 +1477,10 @@ void main() {
     });
 
     group('a deadline of the job', () {
+      // The tests of the section run with the line the page's test sets.
+      setUp(() => Job.isCancellationError = (error) => error is OpenCancelled);
+      tearDown(() => Job.isCancellationError = null);
+
       test('the fake camera never answers on its own', () {
         fakeAsync((async) {
           var answered = false;
@@ -1505,9 +1510,10 @@ void main() {
           expect(hw.refused, 1);
           expect(_state(camera), 'Idle');
           expect(async.pendingTimers, isEmpty);
-          _says('The hardware API completes with an error when its token is '
-              'cancelled, and `join` throws that error, but the job is '
-              'cancelled by then: it ends `Cancelled(timeout)`, not `Failed`');
+          _says('The hardware API completes with `OpenCancelled` when its '
+              'token is cancelled, and `join` throws that error, but the job '
+              'is cancelled by then: it ends `Cancelled(timeout)`, not '
+              '`Failed`');
           _says('`async.pendingTimers` is empty after the five seconds');
 
           camera.close();
@@ -1604,7 +1610,22 @@ void main() {
         });
       });
 
-      test('without ignoreFailure() nothing reaches the zone', () {
+      test('without the line, the stop of the device reaches the zone', () {
+        Job.isCancellationError = null;
+        final errors = _fakeZoned((async, errors) {
+          final camera = page.CameraController(FakeCamera())..connect();
+          async.elapse(const Duration(seconds: 5));
+          camera.close();
+          async.flushTimers();
+        });
+
+        expect(errors, ['OpenCancelled']);
+        _says("The error is nobody's outcome, and the job answers for it as "
+            'for any failure of its body: left alone, it reaches the zone of '
+            'the test and turns the test red');
+      });
+
+      test('with it, nothing reaches the zone without ignoreFailure()', () {
         final errors = _fakeZoned((async, errors) {
           final camera = page.CameraController(FakeCamera())..connect();
           async.elapse(const Duration(seconds: 5));
@@ -1613,9 +1634,10 @@ void main() {
         });
 
         expect(errors, isEmpty);
-        _says(
-          'nothing reaches the zone, and the test needs no `ignoreFailure()`',
-        );
+        _says('The app names the stop of its device once, in `main`, with '
+            '`Job.isCancellationError` of the core, and the test names it the '
+            'same way and puts the field back. Then nothing reaches the zone, '
+            'and the test needs no `ignoreFailure()`');
       });
 
       test('the deadline reaches ifCancelled of run, not ifFailed', () {
@@ -1742,5 +1764,9 @@ void main() {
 
       expect(withCode.toSet(), holders.keys.toSet());
     });
+  });
+
+  test('the filter of cancellation errors is left as it was found', () {
+    expect(Job.isCancellationError, isNull);
   });
 }

@@ -189,8 +189,12 @@ final class CameraController extends Solo<CameraState> {
   Job<void> next() => run<CameraState, void>(key: 'next', (ctx) async {});
 }
 
-/// `### A deadline of the job`: the five seconds under fake time.
+/// `### A deadline of the job`: the five seconds under fake time, with the
+/// stop of the device named the way the app names it in `main`.
 final connectGivesUp = test('connect gives up after five seconds', () {
+  Job.isCancellationError = (error) => error is OpenCancelled;
+  addTearDown(() => Job.isCancellationError = null);
+
   fakeAsync((async) {
     final camera = CameraController(FakeCamera());
 

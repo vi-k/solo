@@ -331,8 +331,8 @@ void main() {
               await ctx.abandonable(() => delay(1000));
               return 1;
             } finally {
-              // The point of the run: a failure after the mark is the body
-              // giving up, not a diagnosis of its own.
+              // The point of the run: a failure after the mark leaves the
+              // outcome to the cancellation the branch accepted.
               // ignore: throw_in_finally
               throw covered;
             }
@@ -367,15 +367,20 @@ void main() {
         'reason',
         isA<SiblingCancelReason>(),
       ),
-      reason: 'a failure thrown after the mark is the body giving up',
+      reason: 'the cancellation the branch accepted is its outcome',
     );
     expect(thrown, same(foreignOutcome));
     expect(
       journal.take().where((line) => line.contains('error')).toList(),
       ['> [a] error Bad state: covered'],
-      reason: 'the observer of the branch hears it, and only it',
+      reason: 'the observer hears it once, from the branch',
     );
-    expect(zone, isEmpty);
+    expect(
+      zone,
+      [same(covered)],
+      reason: 'the outcome does not carry it, so the branch answers for it, '
+          'and ignoreFailure on the parent does not reach the branch',
+    );
   });
 
   test('the cancellation that comes out names the branch it came from', () {
@@ -2385,6 +2390,9 @@ void main() {
         fakeAsync((async) {
           final trace = <String>[];
           final lock = SharedSlots(trace);
+          if (name.contains('hears ctx.onCancel')) {
+            _stopsAreCancellations();
+          }
           Future<int> waitForLock(JobContext ctx, String who) async {
             if (name.contains('hears ctx.onCancel')) {
               ctx.onCancel(() => lock.giveUp(who));
@@ -2539,6 +2547,9 @@ void main() {
     };
     for (final MapEntry(key: name, value: untied) in cases.entries) {
       test(name, () {
+        if (name.contains('abort')) {
+          _stopsAreCancellations();
+        }
         fakeAsync((async) {
           final a = Job.deferred<int>(key: 'a', (ctx) async => 1);
           Future<int> sibling() async {
@@ -2553,7 +2564,9 @@ void main() {
             (ctx) async {
               if (name.contains('abort')) {
                 final abort = Completer<int>();
-                ctx.onCancel(() => abort.completeError(StateError('abort')));
+                ctx.onCancel(
+                  () => abort.completeError(const _Stopped('abort')),
+                );
                 return ctx.join(() => Future.any([sibling(), abort.future]));
               }
               if (name.contains('bare')) return await sibling() + 1;
@@ -2705,6 +2718,12 @@ void main() {
     },
     timeout: const Timeout(Duration(minutes: 1)),
   );
+
+  // Last: the tests of a file share the isolate, and a filter left behind
+  // would silence the failures of every test after it.
+  test('the filter of cancellation errors is left as it was found', () {
+    expect(Job.isCancellationError, isNull);
+  });
 }
 
 /// A lock, or a pool when it has more than one slot, and a trace of who
@@ -2743,8 +2762,24 @@ final class SharedSlots {
     final at = _waiting.indexWhere((waiter) => waiter.$1 == name);
     if (at < 0) return;
     trace.add('$name gives up');
-    _waiting.removeAt(at).$2.completeError(StateError('$name gave up'));
+    _waiting.removeAt(at).$2.completeError(_Stopped('$name gave up'));
   }
+}
+
+/// What an operation throws once the cancellation of its job stopped it.
+final class _Stopped implements Exception {
+  final String message;
+
+  const _Stopped(this.message);
+
+  @override
+  String toString() => message;
+}
+
+/// Names [_Stopped] an error of a cancellation until the test ends.
+void _stopsAreCancellations() {
+  Job.isCancellationError = (error) => error is _Stopped;
+  addTearDown(() => Job.isCancellationError = null);
 }
 
 Future<void> _hops(int count) async {

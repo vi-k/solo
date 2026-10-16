@@ -871,14 +871,15 @@ void main() {
     });
   });
 
-  test('a handler failing after cancellation reaches the child observer', () {
+  test('a handler failing after cancellation is answered for by the child', () {
     final zone = <Object>[];
     final journal = JobJournal();
+    late Job<void> job;
     runZonedGuarded(
       () {
         fakeAsync((async) {
           final controller = StreamController<int>();
-          final job = Job<void>(
+          job = Job<void>(
             key: 'job',
             observer: journal,
             (ctx) async => ctx.each(controller.stream, (_, event) async {
@@ -891,19 +892,24 @@ void main() {
           async.elapse(const Duration(milliseconds: 5));
           job.cancel().ignore();
           async.flushTimers();
-          expect(job.outcome, isA<Cancelled>());
           controller.close().ignore();
         });
       },
       (error, stack) => zone.add(error),
     );
+    expect(job.outcome, isA<Cancelled>());
     expect(
       journal.lines,
       contains('> [null: each] error Bad state: late boom'),
       reason: 'a failure covered by a cancellation goes where covered '
           'failures go',
     );
-    expect(zone, isEmpty, reason: 'the observer took it');
+    expect(
+      zone.map((error) => '$error'),
+      ['Bad state: late boom'],
+      reason: 'the child answers for it, and the observer does not answer: '
+          'ignoreFailure on the parent does not reach the child',
+    );
   });
 
   test('an ignored child fails after its parent body returns', () {
@@ -1002,9 +1008,8 @@ void main() {
     expect(
       zone.map((error) => '$error'),
       ['Bad state: handler boom'],
-      reason: 'the handler failed first: the stream is let go of, and only '
-          'then does the source cancel the job, so the failure is one a '
-          'cancellation covered and goes on to the zone',
+      reason: 'the failure of the handler is one of a job that ends '
+          'cancelled, and it goes on to the zone',
     );
   });
 

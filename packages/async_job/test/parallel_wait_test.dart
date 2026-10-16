@@ -695,8 +695,10 @@ void main() {
       const cancellation = Cancelled('parallel sibling');
       final errors = <Object>[];
       late Job<void> parent;
+      // Answering: the child ends `Cancelled` and answers for its handler's
+      // failure, and where that goes is not what this test is about.
       parent = Job<void>(
-        observer: ErrorObserver(errors),
+        observer: ErrorObserver.answering(errors),
         (ctx) async {
           final listening = ctx.each(
             controller.stream,
@@ -746,7 +748,7 @@ void main() {
   // `[a, b].wait` waits for every branch: when `a` fails and the parent is
   // cancelled while `b` still runs, the envelope leaves the body after the
   // cancellation and carries a failure that came before it.
-  group('a failure that came first, in an envelope thrown after the mark', () {
+  group('an envelope thrown after the cancellation', () {
     Job<void> failingChild(StateError error) =>
         Job.deferred<void>((ctx) async => throw error);
 
@@ -756,7 +758,7 @@ void main() {
           ),
         );
 
-    /// A child whose own body throws an envelope before the mark.
+    /// A child whose own body throws an envelope at once.
     Job<void> envelopingChild(StateError first, StateError second) =>
         Job.deferred<void>(
           (ctx) => [
@@ -821,7 +823,8 @@ void main() {
       expect(zone, isEmpty);
     });
 
-    fakeAsyncTest('a failure in it that came after the mark stays with onError',
+    fakeAsyncTest(
+        'a failure in it that came after the cancellation goes on too',
         () async {
       final early = StateError('early');
       final late = StateError('late');
@@ -839,10 +842,10 @@ void main() {
 
       expect(outcome, isA<Cancelled>());
       expect(heard, [same(early), same(late)]);
-      expect(zone, [same(early)]);
+      expect(zone, [same(early), same(late)]);
     });
 
-    fakeAsyncTest('two that came first go on one by one, in branch order',
+    fakeAsyncTest('two failures in it go on one by one, in branch order',
         () async {
       final first = StateError('first');
       final second = StateError('second');
@@ -893,8 +896,8 @@ void main() {
 
     fakeAsyncTest('a failure taken out of such a child and thrown again',
         () async {
-      // The envelope of the child came first, and so did each failure in
-      // it: the body that throws one of them again keeps it first.
+      // Thrown again after the cancellation, it is a failure of the body like
+      // any other.
       final first = StateError('inner first');
       final (outcome, zone) = await cancelledAfter((ctx) async {
         try {
@@ -952,10 +955,10 @@ void main() {
       expect(allZone, isEmpty);
     });
 
-    fakeAsyncTest('an envelope thrown before the mark is answered for once',
+    fakeAsyncTest('an envelope thrown before the cancellation is answered once',
         () async {
-      // The envelope leaves the body at once, before anything marks the job;
-      // the cancellation covers it while a child the body left behind runs.
+      // The envelope leaves the body at once, before the cancellation; the
+      // cancellation covers it while a child the body left behind runs.
       final early = StateError('early');
       final heard = <Object>[];
       final answered = <Object>[];
@@ -975,8 +978,8 @@ void main() {
 
     fakeAsyncTest('an envelope the body builds itself is read the same way',
         () async {
-      // The job reads any `ParallelWaitError`, not only one of `.wait`: a
-      // body that wraps the failure in one keeps it first.
+      // The job reads any `ParallelWaitError`, not only one of `.wait`, and
+      // answers for each failure in it.
       final early = StateError('early');
       final (outcome, zone) = await cancelledAfter((ctx) async {
         try {
@@ -1078,8 +1081,10 @@ void main() {
         reason: const ManualCancelReason(),
         stackTrace: StackTrace.current,
       );
+      // Answering: the job answers for the failure, and the next test says
+      // where it goes without one.
       final job = ProbeJob<void>(
-        observer: ErrorObserver(errors),
+        observer: ErrorObserver.answering(errors),
         (ctx) async {
           await [
             Future<void>.error(failure, StackTrace.current),
@@ -1128,7 +1133,7 @@ void main() {
         },
         (error, stackTrace) => caught.add(error),
       );
-      expect(caught, isEmpty);
+      expect(caught, [same(failure)]);
     });
 
     fakeAsyncTest('Future.wait keeps its first completed error behavior',

@@ -187,6 +187,14 @@ Bench _coveredFailure(
   return bench;
 }
 
+/// What an operation of a child throws once the cancellation stops it.
+final class _OpStopped implements Exception {
+  const _OpStopped();
+
+  @override
+  String toString() => 'op stopped';
+}
+
 /// An observer of the core that keeps what `onError` told it.
 final class _Own extends JobObserver {
   final heard = <String>[];
@@ -207,6 +215,7 @@ void main() {
     Solo.observer = null;
     Solo.unansweredHandler = null;
     Solo.debug = null;
+    Job.isCancellationError = null;
   });
 
   group('The opening block', () {
@@ -1062,9 +1071,10 @@ void main() {
             ['Job(child): Bad state: child failed first'],
           );
           expect(errors, ['Bad state: child failed first']);
-          _says('The child ends `Cancelled`, `await ctx.run(child)` throws '
-              "`Cancelled`, and the error goes to the controller's "
-              '`onUnanswered`');
+          _says('If the child ends `Cancelled` and its body failed, its error '
+              'is not thrown into the parent body');
+          _says('`await ctx.run(child)` throws `Cancelled`, and the error goes '
+              "to the controller's `onUnanswered`");
         });
 
         test('with Solo.unansweredHandler set, the error goes there', () {
@@ -1126,6 +1136,56 @@ void main() {
           _says('`ctx.run(child).ignore()` does not: it handles what the '
               'future throws, and the future throws the cancellation.');
         });
+      });
+    }
+
+    for (final named in [false, true]) {
+      test(
+          named
+              ? 'a child whose operation the cancellation stopped, the stop '
+                  'named by the app: only onError hears it'
+              : 'a child whose operation the cancellation stopped: the stop '
+                  'goes to onUnanswered', () {
+        if (named) {
+          Job.isCancellationError = (error) => error is _OpStopped;
+        }
+        late Bench bench;
+        final errors = _zone((async) {
+          bench = Bench();
+          final parent = bench.run<Ready, void>(key: 'parent', (ctx) async {
+            try {
+              await ctx.run(
+                bench.job<Ready, void>(key: 'child', (childCtx) async {
+                  childCtx.onCancel(
+                    () => stage.fail('op', const _OpStopped()),
+                  );
+                  await childCtx.join(() => stage.start<void>('op', null));
+                }),
+              );
+            } on Object catch (error) {
+              _see('the parent body caught $error');
+              rethrow;
+            }
+          });
+          async.flushMicrotasks();
+          parent.cancel().ignore();
+          async.flushMicrotasks();
+          _see('parent ${_how(parent)}');
+        });
+
+        expect(_seen, [
+          'the parent body caught Cancelled(parent)',
+          'parent Cancelled(manual)',
+        ]);
+        expect(bench.heard, ['Job(child): op stopped']);
+        expect(bench.unanswered, named ? isEmpty : ['Job(child): op stopped']);
+        expect(errors, named ? isEmpty : ['op stopped']);
+        _says('or when the cancellation stops an operation and the body throws '
+            "that operation's error");
+        if (named) {
+          _says('An error the app named in `Job.isCancellationError` goes no '
+              "further than the controller's `onError`");
+        }
       });
     }
 
@@ -1988,6 +2048,10 @@ void main() {
       ];
       expect(withCode.toSet(), holders.keys.toSet());
     });
+  });
+
+  test('the filter of cancellation errors is left as it was found', () {
+    expect(Job.isCancellationError, isNull);
   });
 }
 

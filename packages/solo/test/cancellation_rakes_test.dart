@@ -191,6 +191,7 @@ void main() {
     Solo.observer = null;
     Solo.unansweredHandler = null;
     Solo.debug = null;
+    Job.isCancellationError = null;
   });
 
   group('The table', () {
@@ -518,30 +519,55 @@ void main() {
       });
     });
 
-    test(
-        'a player that stops by throwing: the hook hears every seek dragged '
-        'past', () {
-      late page.TokenPlayer player;
-      late List<Job<void>> jobs;
-      final left = _zone((async) {
-        stage.stopsByThrowing = true;
-        player = page.TokenPlayer();
-        jobs = [];
-        for (final position in [1, 2, 3]) {
-          jobs.add(player.seek(_s(position)));
-          async.flushMicrotasks();
+    for (final named in [false, true]) {
+      test(
+          named
+              ? 'a player that stops by throwing, named in main: only the '
+                  'hook hears every seek dragged past'
+              : 'a player that stops by throwing: every seek dragged past is '
+                  'heard and answered for', () {
+        if (named) {
+          page.nameTheStop();
         }
-        _end(async, 'seek 3');
-      });
+        late page.TokenPlayer player;
+        late List<Job<void>> jobs;
+        final left = _zone((async) {
+          stage.stopsByThrowing = true;
+          player = page.TokenPlayer();
+          jobs = [];
+          for (final position in [1, 2, 3]) {
+            jobs.add(player.seek(_s(position)));
+            async.flushMicrotasks();
+          }
+          _end(async, 'seek 3');
+        });
 
-      expect(
-        [for (final job in jobs) '${job.outcome}'],
-        ['Cancelled(replaced)', 'Cancelled(replaced)', 'Done(null)'],
-      );
-      expect(player.heard, [isA<SeekStopped>(), isA<SeekStopped>()]);
-      expect(player.unanswered, isEmpty);
-      expect(left.errors, isEmpty);
-    });
+        expect(
+          [for (final job in jobs) '${job.outcome}'],
+          ['Cancelled(replaced)', 'Cancelled(replaced)', 'Done(null)'],
+        );
+        expect(player.heard, [isA<SeekStopped>(), isA<SeekStopped>()]);
+        if (named) {
+          expect(player.unanswered, isEmpty);
+          expect(left.errors, isEmpty);
+          expect(
+            _prose(),
+            contains('An error it names reaches `onError` and goes no '
+                'further.'),
+          );
+        } else {
+          expect(player.unanswered, [isA<SeekStopped>(), isA<SeekStopped>()]);
+          expect(left.errors, ['SeekStopped', 'SeekStopped']);
+          expect(
+            _prose(),
+            contains("For every seek dragged past, the controller's `onError` "
+                'hook is told of it, and then `onUnanswered` is asked to '
+                'answer for it, which by default hands it on to '
+                '`Solo.unansweredHandler` or to the zone.'),
+          );
+        }
+      });
+    }
 
     test('a catch with ctx.check() first lets the cancellation out instead',
         () {
@@ -2940,6 +2966,10 @@ void main() {
       ];
       expect(withCode.toSet(), holders.keys.toSet());
     });
+  });
+
+  test('the filter of cancellation errors is left as it was found', () {
+    expect(Job.isCancellationError, isNull);
   });
 }
 

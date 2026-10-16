@@ -29,16 +29,16 @@ part 'queue.dart';
 /// protected: a caller sees the operations, not how they are queued.
 ///
 /// The hooks — [onStart], [onFinish], [onError], [onUnanswered], [onLog],
-/// [onChange], [onClose] and the [observer]'s — are a cross-cutting
-/// channel, so an error thrown by one goes to the current zone and changes
-/// nothing else: the job's outcome, the queue and [close] carry on as if
-/// the hook had returned. [onUnanswered] is the one with a body of its own:
-/// what reaches it and has nowhere else to go — a disposer, an `onCancel`
-/// callback, a late failure of an abandoned call or of work handed to
-/// `JobContext.unattended`, a rule that threw — goes on to [unansweredHandler],
-/// or to the zone when none is set. [publish] is not one of them: it is how
-/// a subclass delivers the state, and an error there is the subclass's own
-/// business.
+/// [onChange], [onClose] and the [observer]'s — are a cross-cutting channel, so
+/// an error thrown by one goes to the current zone and changes nothing else:
+/// the job's outcome, the queue and [close] carry on as if the hook had
+/// returned. [onUnanswered] is the one with a body of its own: what reaches it
+/// and has nowhere else to go — a disposer, an `onCancel` callback, a late
+/// failure of an abandoned call or of work handed to `JobContext.unattended`,
+/// the failure of the body of a job that ends [Cancelled], a rule that threw —
+/// goes on to [unansweredHandler], or to the zone when none is set. [publish]
+/// is not one of them: it is how a subclass delivers the state, and an error
+/// there is the subclass's own business.
 abstract class Solo<S extends Object> {
   /// A global observer for all controllers; `null` by default.
   ///
@@ -49,12 +49,12 @@ abstract class Solo<S extends Object> {
   /// Where an error with nowhere else to go goes instead of the zone;
   /// `null` by default.
   ///
-  /// The errors [onError] describes — a disposer, an `onCancel` callback,
-  /// a late failure of an abandoned call, a rule that threw — have no
-  /// outcome of their own to carry them anywhere. With nobody set here
-  /// they reach the zone the job was created in; with a handler set they
-  /// go to it instead, for every controller of the process, and what it
-  /// does with one is the end of it.
+  /// The errors [onError] describes — a disposer, an `onCancel` callback, a
+  /// late failure of an abandoned call, the failure of the body of a job that
+  /// ends [Cancelled], a rule that threw — have no outcome of their own to
+  /// carry them anywhere. With nobody set here they reach the zone the job was
+  /// created in; with a handler set they go to it instead, for every controller
+  /// of the process, and what it does with one is the end of it.
   ///
   /// One global handler, set once at startup, the way [observer] is. It is
   /// separate from the observer on purpose: answering for an error is a
@@ -67,9 +67,11 @@ abstract class Solo<S extends Object> {
   /// ```
   ///
   /// The handler gets one failure at a time: each failure inside a
-  /// `ParallelWaitError` that `[a, b].wait` throws comes in a call of its
-  /// own, with its own stack trace. An uncaught [Cancelled], alone or inside
-  /// one, does not come.
+  /// `ParallelWaitError` that `[a, b].wait` throws comes in a call of its own,
+  /// with its own stack trace. An uncaught [Cancelled], alone or inside one,
+  /// does not come. Nor does a failure of a cancelled job that
+  /// [Job.isCancellationError] names: the app names there, once, the errors an
+  /// operation throws because a cancellation stopped it.
   static SoloUnansweredHandler? unansweredHandler;
 
   /// Engine tracing for debugging the engine itself; `null` by default.
@@ -1025,14 +1027,16 @@ abstract class Solo<S extends Object> {
   /// callback, work handed over with [JobContext.unattended], a `keepWhile`
   /// that threw anywhere but at a checkpoint of the body, the failure of a
   /// branch of [JobContext.runAll] that the group did not throw, and a failure
-  /// of the body that a cancellation covered afterwards — the outcome carries
-  /// the cancellation, whoever reads it: `job.value`, `ctx.run`, a group.
-  /// [Job.ignoreFailure] keeps the last two from coming here. Any other failure
-  /// of a body does not come here — it becomes a [Failed], where `run(ifFailed:
-  /// ...)` computes a state from it and an outcome nobody observes reaches the
-  /// zone by itself — and neither does a `canStart` that threw, for the same
-  /// reason. Every error that comes here has been through [onError] already:
-  /// one error is announced once.
+  /// of the body of a job that ends [Cancelled] — the outcome carries the
+  /// cancellation, whoever reads it: `job.value`, `ctx.run`, a group.
+  /// [Job.ignoreFailure] keeps the last two from coming here, and
+  /// [Job.isCancellationError] keeps away the failures it names of a job that
+  /// has accepted a cancellation. Any other failure of a body does not come
+  /// here — it becomes a [Failed], where `run(ifFailed: ...)` computes a state
+  /// from it and an outcome nobody observes reaches the zone by itself — and
+  /// neither does a `canStart` that threw, for the same reason. Every error
+  /// that comes here has been through [onError] already: one error is announced
+  /// once.
   ///
   /// **What the default body does.** With no [unansweredHandler] set, the error
   /// goes to the zone the job was created in — the same thing the core does

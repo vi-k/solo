@@ -455,36 +455,47 @@ void main() {
     );
     expect(caught, isEmpty, reason: 'one microtask of grace, as Dart gives');
   });
-  test('a body that turns its cancellation into an error keeps it in hand', () {
-    // No observer: the zone is the only place such an error could land.
-    final caught = <Object>[];
-    late Job<void> job;
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          job = Job<void>((ctx) async {
-            try {
-              await ctx.abandonable(() => delay(100));
-            } on Cancelled {
-              // The device said no in its own words, as a real one does
-              // through the token it was handed.
-              throw StateError('device aborted');
-            }
+  for (final checksFirst in [false, true]) {
+    test(
+        'a body that turns its cancellation into an error, '
+        'checking first: $checksFirst', () {
+      // No observer: the zone is the only place such an error could land.
+      final caught = <Object>[];
+      late Job<void> job;
+      runZonedGuarded(
+        () {
+          fakeAsync((async) {
+            job = Job<void>((ctx) async {
+              try {
+                await ctx.abandonable(() => delay(100));
+              } on Cancelled {
+                if (checksFirst) {
+                  ctx.check();
+                }
+                // The device said no in its own words, as a real one does
+                // through the token it was handed.
+                throw StateError('device aborted');
+              }
+            });
+            async.elapse(const Duration(milliseconds: 10));
+            job.cancel().ignore();
+            async.flushTimers();
           });
-          async.elapse(const Duration(milliseconds: 10));
-          job.cancel().ignore();
-          async.flushTimers();
-        });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
-    expect(
-      caught,
-      isEmpty,
-      reason: 'the job was already cancelled when the body threw',
-    );
-    expect(job.outcome, isA<Cancelled>());
-  });
+        },
+        (error, stackTrace) => caught.add(error),
+      );
+      expect(
+        caught.map((error) => '$error'),
+        checksFirst ? isEmpty : ['Bad state: device aborted'],
+        reason: checksFirst
+            ? 'the check throws the cancellation of the job, and the body '
+                'ends with it'
+            : 'the job ends Cancelled, and the error its body threw is in '
+                'no outcome: it is answered for',
+      );
+      expect(job.outcome, isA<Cancelled>());
+    });
+  }
 
   test('ignoreFailure silences a failure a late cancellation covered', () {
     final caught = <Object>[];
@@ -778,49 +789,8 @@ void main() {
     );
   });
 
-  test('a step caught before the stop says nothing about a new failure after',
+  test('a step a rule stopped while the section held a stop is answered for',
       () {
-    final caught = <Object>[];
-    final errors = <Object>[];
-    runZonedGuarded(
-      () {
-        fakeAsync((async) {
-          final job = Job<void>(observer: ErrorObserver(errors), (ctx) async {
-            try {
-              await ctx.uncancellable(() async {
-                await delay(1);
-                throw StateError('the step failed');
-              });
-            } on Object catch (_) {
-              // Handled: the job goes on.
-            }
-            final stopped = Completer<void>();
-            ctx.onCancel(
-              () => stopped.completeError(StateError('stopped at the token')),
-            );
-            await stopped.future;
-          });
-          async.elapse(const Duration(milliseconds: 10));
-          job.cancel().ignore();
-          async.flushTimers();
-        });
-      },
-      (error, stackTrace) => caught.add(error),
-    );
-    expect(
-      errors.map((error) => '$error'),
-      ['Bad state: stopped at the token'],
-    );
-    expect(
-      caught,
-      isEmpty,
-      reason: 'the section noted its step as a failure before the mark, '
-          'but the body threw a new error after the job accepted the '
-          'cancellation, and that one came after it',
-    );
-  });
-
-  test('a step a rule stopped while the section held a stop is not first', () {
     final caught = <Object>[];
     runZonedGuarded(
       () {
@@ -845,10 +815,10 @@ void main() {
       (error, stackTrace) => caught.add(error),
     );
     expect(
-      caught,
-      isEmpty,
-      reason: 'the rule marked the job before the step failed; the stop the '
-          'section held has nothing left to land and no order to put right',
+      caught.map((error) => '$error'),
+      ['Bad state: stopped by a rule'],
+      reason: 'the rule marked the job before the step failed, and the job '
+          'ends Cancelled: the failure of its body goes on all the same',
     );
   });
 

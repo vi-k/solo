@@ -603,40 +603,57 @@ void main() {
       expect(caught, isEmpty);
     });
 
-    test('a step the state stopped while a section held a stop is only told',
-        () {
-      // The state leaves the child's working type inside the section: that
-      // marks the child at once, the step fails after the mark, and the
-      // stop the section held has nothing left to land.
-      final caught = <String>[];
-      final solo = _Loud();
-      fakeAsync((async) {
-        late final Job<void> parent;
-        _inZone(caught, () {
-          parent = solo.run<TestState, void>(key: 'parent', (ctx) async {
-            await ctx.run(
-              solo.job<Initial, int>(key: 'child', (ctx) async {
-                final stopped = Completer<void>();
-                ctx.onCancel(
-                  () => stopped.completeError(StateError('stopped')),
+    for (final named in [false, true]) {
+      test(
+          named
+              ? 'a step the state stopped while a section held a stop, named '
+                  'a cancellation error, is only told'
+              : 'a step the state stopped while a section held a stop reaches '
+                  'the zone', () {
+        // The section holds the parent's cancellation. The state leaves the
+        // child's working type inside it, and the rule cancels the child at
+        // once: `onCancel` stops the step, and the body fails with that
+        // stop. The child ends `Cancelled`, and the failure of its body goes
+        // to the answer like any other, unless the app named it.
+        if (named) {
+          Job.isCancellationError = (error) => error is _Stopped;
+        }
+        final caught = <String>[];
+        final solo = _Loud();
+        late final Job<int> child;
+        try {
+          fakeAsync((async) {
+            late final Job<void> parent;
+            _inZone(caught, () {
+              parent = solo.run<TestState, void>(key: 'parent', (ctx) async {
+                await ctx.run(
+                  child = solo.job<Initial, int>(key: 'child', (ctx) async {
+                    final stopped = Completer<void>();
+                    ctx.onCancel(
+                      () => stopped.completeError(const _Stopped()),
+                    );
+                    await ctx.uncancellable<void>(() => stopped.future);
+                    return 1;
+                  }),
                 );
-                await ctx.uncancellable<void>(() => stopped.future);
-                return 1;
-              }),
-            );
+              });
+            });
+            async.elapse(const Duration(milliseconds: 5));
+            parent.cancel().ignore();
+            async.elapse(const Duration(milliseconds: 5));
+            solo.set(const Preparing());
+            async.flushTimers();
+            solo.close();
+            async.flushTimers();
           });
-        });
-        async.elapse(const Duration(milliseconds: 5));
-        parent.cancel().ignore();
-        async.elapse(const Duration(milliseconds: 5));
-        solo.set(const Preparing());
-        async.flushTimers();
-        solo.close();
-        async.flushTimers();
+        } finally {
+          Job.isCancellationError = null;
+        }
+        expect('${child.outcome}', 'Cancelled(rules: is not Initial)');
+        expect(solo.errors, ['stopped']);
+        expect(caught, named ? isEmpty : ['stopped']);
       });
-      expect(solo.errors, ['Bad state: stopped']);
-      expect(caught, isEmpty, reason: 'a failure after the mark is only told');
-    });
+    }
 
     for (final read in [false, true]) {
       test(
@@ -680,6 +697,10 @@ void main() {
       expect(answered, ['Bad state: each failed first']);
       expect(caught, isEmpty, reason: 'the handler answered for it');
     });
+  });
+
+  test('the filter of cancellation errors is left as it was found', () {
+    expect(Job.isCancellationError, isNull);
   });
 }
 
@@ -822,6 +843,14 @@ final class _Noting extends Solo<TestState> with OpenSolo<TestState> {
   @override
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
       errors.add('$error');
+}
+
+/// What the step of a child throws once its cancellation stops it.
+final class _Stopped implements Exception {
+  const _Stopped();
+
+  @override
+  String toString() => 'stopped';
 }
 
 final class _Loud extends Solo<TestState> with OpenSolo<TestState> {

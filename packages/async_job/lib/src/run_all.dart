@@ -201,14 +201,14 @@ final class _RunAllGroup<T> {
 
   /// Listens for the outcome of [branch] and takes the answering for it.
   ///
-  /// The group looks at every outcome and answers for the failures it does
-  /// not throw, so no branch is left reporting one on its own as well: the
-  /// branch is marked observed, the way `done` marks it. By a store after
-  /// the listening and not by `done` before it: cut short between the two,
-  /// the branch would be observed with nobody listening, and its failure
-  /// would reach no one. A failure a cancellation covered is in no outcome,
-  /// and the group never sees it: the branch answers for that one itself,
-  /// as any job does.
+  /// The group looks at every outcome and answers for the failures it does not
+  /// throw, so no branch is left reporting one on its own as well: the branch
+  /// is marked observed, the way `done` marks it. By a store after the
+  /// listening and not by `done` before it: cut short between the two, the
+  /// branch would be observed with nobody listening, and its failure would
+  /// reach no one. A failure of the body of a branch that ends [Cancelled] is
+  /// in no outcome, and the group never sees it: the branch answers for that
+  /// one itself, as any job does.
   void _hear(_GroupBranch<T> branch) {
     branch.job._done.future
         .then((outcome) => _branchFinished(branch, outcome))
@@ -576,8 +576,8 @@ final class _RunAllGroup<T> {
       // an engine of a domain handed in by [JobBase.finish] — so only the route
       // for an error nobody answered for is left, and the group is the last one
       // holding it. A branch that [Job.ignoreFailure] was called on wants no
-      // answer: the notice stays, as it does for a failure a cancellation
-      // covered.
+      // answer: the notice stays, as it does for a failure of the body of a
+      // cancelled job.
       if (!branch.job._ignored) {
         branch.job._handleUnanswered(outcome.error, outcome.stackTrace);
       }

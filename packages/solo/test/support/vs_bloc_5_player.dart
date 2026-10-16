@@ -54,13 +54,23 @@ class Player {
       if (cancelToken?.cancelled ?? false) {
         trace.add('seek $ms stopped');
         if (failsWhenStopped) {
-          throw StateError('seek $ms interrupted');
+          throw SeekInterrupted(ms);
         }
         return;
       }
     }
     trace.add('seek $ms end');
   }
+}
+
+/// What a seek told to stop throws when the player fails it.
+final class SeekInterrupted implements Exception {
+  SeekInterrupted(this.ms);
+
+  final int ms;
+
+  @override
+  String toString() => 'seek $ms interrupted';
 }
 
 // The code of the page.
@@ -102,12 +112,18 @@ final class PlayerController extends Solo<PlayerState> with SoloStream {
 
 // What the test adds.
 
-/// The seek of the page with what `ctx.join` threw written down.
+/// The seek of the page with what `ctx.join` threw written down, and what
+/// the `onError` hook was told.
 final class CatchingPlayerController extends Solo<PlayerState> {
   CatchingPlayerController(this._player) : super(Ready());
 
   final Player _player;
   final met = <String>[];
+  final heard = <String>[];
+
+  @override
+  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      heard.add('$error');
 
   Job<void> seek(Duration position) => run<Ready, void>(
         key: PlayerKey.seek,

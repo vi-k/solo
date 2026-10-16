@@ -134,7 +134,7 @@ where it hands the future on.
 
 ## Two ways to ignore a child
 
-| In the parent | An error the future of `ctx.run` throws | A failure of the child that a cancellation covered |
+| In the parent | An error the future of `ctx.run` throws | A failure of the body of a child that ends `Cancelled` |
 | --- | --- | --- |
 | `ctx.run(child).ignore()` | handled | goes to `onUnanswered` |
 | `child.ignoreFailure()` | not handled, goes to the zone | silenced |
@@ -143,14 +143,17 @@ where it hands the future on.
 parent still waits for its children. `child.ignoreFailure()` alone does not
 handle errors of the future returned by `run`.
 
-If the child's body fails and a cancellation reaches the child afterwards,
-whether before the error leaves the body or while the child still waits for
-children of its own or runs its cleanup, its error is not thrown into the
-parent body. The child ends `Cancelled`, `await ctx.run(child)` throws
-`Cancelled`, and the error goes to the controller's `onUnanswered` — by default
-to `Solo.unansweredHandler`, or to the zone without one.
-`child.ignoreFailure()` silences it. `ctx.run(child).ignore()` does not: it
-handles what the future throws, and the future throws the cancellation.
+If the child ends `Cancelled` and its body failed, its error is not thrown into
+the parent body. That happens when the body fails and a cancellation reaches
+the child afterwards, while it still waits for children of its own or runs its
+cleanup, say, or when the cancellation stops an operation and the body throws
+that operation's error. `await ctx.run(child)` throws `Cancelled`, and the
+error goes to the controller's `onUnanswered` — by default to
+`Solo.unansweredHandler`, or to the zone without one. `child.ignoreFailure()`
+silences it. `ctx.run(child).ignore()` does not: it handles what the future
+throws, and the future throws the cancellation. An error the app named in
+`Job.isCancellationError` goes no further than the controller's `onError`, as
+in [The token](cancellation.md#the-token) on the cancellation page.
 
 ## A child the rules turn away
 

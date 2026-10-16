@@ -128,6 +128,7 @@ void main() {
   tearDown(() {
     Solo.observer = null;
     Solo.unansweredHandler = null;
+    Job.isCancellationError = null;
   });
 
   group('The page', () {
@@ -955,31 +956,46 @@ void main() {
           'current job can finish and the replacement can start.');
     });
 
-    test('an error of the stopped call reaches the body, not the outcome', () {
-      late player.CatchingPlayerController controller;
-      Outcome<void>? stale;
-      Outcome<void>? fresh;
-      final errors = _zone((async) {
-        controller = player.CatchingPlayerController(
-          player.Player(failsWhenStopped: true),
+    for (final named in [false, true]) {
+      test(
+          named
+              ? 'an error of the stopped call the application named stops at '
+                  'the hook'
+              : 'an error of the stopped call reaches the body and the '
+                  'answer, not the outcome', () {
+        late player.CatchingPlayerController controller;
+        Outcome<void>? stale;
+        Outcome<void>? fresh;
+        if (named) {
+          Job.isCancellationError = (error) => error is player.SeekInterrupted;
+        }
+        final errors = _zone((async) {
+          controller = player.CatchingPlayerController(
+            player.Player(failsWhenStopped: true),
+          );
+          final first = controller.seek(_ms(1));
+          async.elapse(_ms(15));
+          final second = controller.seek(_ms(3));
+          async.elapse(_ms(300));
+          stale = first.outcome;
+          fresh = second.outcome;
+        });
+        expect(errors, named ? isEmpty : ['seek 1 interrupted']);
+        expect(
+          controller.met,
+          ['join threw SeekInterrupted: seek 1 interrupted'],
         );
-        final first = controller.seek(_ms(1));
-        async.elapse(_ms(15));
-        final second = controller.seek(_ms(3));
-        async.elapse(_ms(300));
-        stale = first.outcome;
-        fresh = second.outcome;
+        expect(controller.heard, ['seek 1 interrupted']);
+        expect('$stale', 'Cancelled(replaced)');
+        expect('$fresh', 'Done(null)');
+        _says('If the operation throws as it stops, its error reaches the '
+            "body, and the job's outcome still remains cancelled.");
+        _says("The error then goes to the controller's `onError` hook and on "
+            'to `onUnanswered`, as any failure of the body of a cancelled job '
+            'does, unless the application has named it once in '
+            '`Job.isCancellationError`.');
       });
-      expect(errors, isEmpty);
-      expect(
-        controller.met,
-        ['join threw StateError: Bad state: seek 1 interrupted'],
-      );
-      expect('$stale', 'Cancelled(replaced)');
-      expect('$fresh', 'Done(null)');
-      _says('If the operation fails after cancellation, its error reaches '
-          "the body; the job's outcome still remains cancelled.");
-    });
+    }
   });
 
   group('Typed methods with queued execution', () {
@@ -1950,5 +1966,9 @@ void main() {
       _says('Use `join` when both the operation and its resource release '
           'must finish before the queue or controller proceeds.');
     });
+  });
+
+  test('the filter of cancellation errors is left as it was found', () {
+    expect(Job.isCancellationError, isNull);
   });
 }

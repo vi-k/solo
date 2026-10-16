@@ -24,13 +24,15 @@ Job<void> migrationLoggedAsAString({JobObserver? observer}) => Job<void>(
       },
     );
 
-Job<Database> opening() {
-  final job = Job<Database>(
-    (ctx) => ctx.join(
-      Database.open,
-      discard: (database) => database.close(),
-    ),
-  );
+/// The job of the section on where errors go, with the token wired as the
+/// cancellation page wires it.
+Job<void> migrating() {
+  final job = Job<void>((ctx) async {
+    final stop = CancelToken();
+    ctx.onCancel(stop.cancel);
+
+    await ctx.join(() => database.migrate(stop));
+  });
   return job;
 }
 

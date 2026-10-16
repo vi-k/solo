@@ -1,5 +1,6 @@
 // What the code of `doc/observing.md` takes for granted: the database, the
-// operations it waits for and the analytics it sends. Each test sets the
+// operations it waits for, the token that stops them and the analytics it
+// sends. Each test sets the
 // stage first, so the same open can succeed or fail.
 import 'delay.dart';
 
@@ -10,9 +11,6 @@ final class Stage {
 
   /// What `migrate` throws.
   Object migrationError = StateError('migration failed');
-
-  /// What `showError` was given.
-  final List<Object> shown = [];
 }
 
 /// The stage of the test at hand.
@@ -37,12 +35,39 @@ final class Database {
 
   /// Closes the database.
   Future<void> close() async {}
+
+  /// Migrates the database in 40 ms, and stops at 20 ms with
+  /// [DatabaseStopped] if [stop] has been cancelled by then.
+  Future<void> migrate(CancelToken stop) async {
+    await delay(20);
+    if (stop.isCancelled) {
+      throw const DatabaseStopped();
+    }
+    await delay(20);
+  }
 }
 
-/// Shows [error] to the user for 30 ms.
-Future<void> showError(Object error) {
-  stage.shown.add(error);
-  return delay(30);
+/// The database the migration runs on.
+final database = Database();
+
+/// The database client's own stop signal.
+final class CancelToken {
+  var _cancelled = false;
+
+  /// Whether [cancel] has been called.
+  bool get isCancelled => _cancelled;
+
+  /// Tells the operation that holds the token to stop.
+  void cancel() => _cancelled = true;
+}
+
+/// How the migration stops when its token is cancelled.
+final class DatabaseStopped implements Exception {
+  /// Creates the error.
+  const DatabaseStopped();
+
+  @override
+  String toString() => 'DatabaseStopped';
 }
 
 /// Migrates the database and fails with the error of the stage.

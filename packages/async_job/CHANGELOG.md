@@ -54,15 +54,20 @@
 Errors that `0.2.0` lost, or told only to the observer, now reach the zone the
 job was created in. In a test that zone is the test's, and the test fails:
 
-- the failure of a body when a cancellation reaches the job afterwards, or of a
-  step of `ctx.uncancellable` while the section held one back;
+- the failure of the body of a job that ends `Cancelled`, before the
+  cancellation or after it: an operation that stops at a token the job cancels
+  through `ctx.onCancel` throws one on every cancellation, and so does a body
+  that wraps its own cancellation in an exception of its own;
 - the late failure of an action under `ctx.abandonable` that the body left
   through `.timeout` or `Future.any`, arriving once the job is over;
 - an error no outcome carries, of a job that has an observer;
 - the failure of a source's own cleanup when `ctx.each` lets go of a stream.
 
-`job.ignoreFailure()` silences the first, and an observer that mixes in
-`JobAnswerer` and overrides `onUnanswered` answers for the rest. See
+`Job.isCancellationError` names the errors a cancellation causes, once, in
+`main`: they reach `onError` and go no further. `job.ignoreFailure()` silences
+the first for that job alone: a child whose body failed answers for its failure
+itself, whatever its parent calls. An observer that mixes in `JobAnswerer` and
+overrides `onUnanswered` answers for the rest. See
 [Where errors go](doc/observing.md#where-errors-go).
 
 A job that gives up inside a call it walked away from no longer reaches
@@ -103,6 +108,13 @@ new wording.
   [A job that only follows a stream](doc/streams.md#a-job-that-only-follows-a-stream).
 - **`JobObserver.all` makes one observer of several.** See
   [Several observers](doc/observing.md#several-observers).
+- **`Job.isCancellationError` names the errors a cancellation causes.** Set
+  once, in `main`, it keeps them out of the answer: `onError` hears them, and
+  nobody is asked to answer for them. A stop at a token is named by its type,
+  `(error) => error is DatabaseStopped`, and a wrapper of the job's own
+  cancellation by its cause,
+  `(error) => error is AppException && error.cause is Cancelled`. See
+  [Errors of a cancellation](doc/observing.md#errors-of-a-cancellation).
 - **`Job.visitErrors` hands each failure and each cancellation inside an error
   to a callback of its own.** See
   [Answering for errors](doc/observing.md#answering-for-errors).

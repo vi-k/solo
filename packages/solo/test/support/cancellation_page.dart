@@ -30,6 +30,12 @@ final class TokenPlayer extends Solo<AppState> with OpenSolo<AppState>, Desk {
       );
 }
 
+/// "The token": what the app sets once, in `main`, for a player that stops
+/// by throwing. The tests that set it put it back.
+void nameTheStop() {
+  Job.isCancellationError = (error) => error is SeekStopped;
+}
+
 /// "A deadline of a job": the seek of "The token" with a deadline, and a
 /// state for the deadline of its own.
 final class DeadlinePlayer extends Solo<AppState>

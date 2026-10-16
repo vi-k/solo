@@ -60,9 +60,10 @@ final outcome = await job.done; // Cancelled(manual)
   database. If cancellation arrives during opening, it waits for the call to
   finish and throws `Cancelled` if opening succeeded. If opening fails, it
   throws the original error, even after cancellation. The job still ends
-  `Cancelled`, so the error is nobody's outcome: it reaches the job's observer
-  and stops there, and without an observer nothing hears it. See
-  [Where errors go](doc/observing.md#where-errors-go) on the observing page.
+  `Cancelled`, so the error is nobody's outcome, and the job answers for it:
+  the job's observer hears it, and then the zone does, unless the observer
+  answers for it. See [Where errors go](doc/observing.md#where-errors-go) on
+  the observing page.
 - **`discard: (database) => database.close()`** closes the database if the job
   ends with cancellation or an error. With `Done(database)`, it stays open for
   the caller. Cleanup also covers cancellation after `return database`: for
@@ -190,13 +191,15 @@ accessing the job's `done` or `value`, or by calling `ignoreFailure()`;
 awaiting `cancel()` and reading `outcome`, as the block above does, do not
 observe it, and neither does the job's observer (`JobObserver`).
 
-An error that does not become the outcome, such as one from cleanup, goes to
-the zone as well, unless the job's observer answers for it (`JobAnswerer`). But
-an error of the body that happens once the job is cancelled, like an open that
-fails after the cancellation in the Quick start above, goes only to the job's
-observer, and without one to nobody.
+An error that does not become the outcome goes to the zone as well, unless the
+job's observer answers for it (`JobAnswerer`): one from cleanup, or an error of
+the body of a cancelled job, like an open that fails after the cancellation in
+the Quick start above. An operation that a cancellation stops by throwing, such
+as a migration that a database client stops at its token, throws such an error
+on every cancellation. The app names these errors once, in
+`Job.isCancellationError`, and they stop at the observer.
 [Where errors go](doc/observing.md#where-errors-go) on the observing page lists
-each one, with an observer and without.
+each kind of error, with an observer and without.
 
 Cancellation is cooperative: `cancel()` requests it, and the body stops when it
 reaches a cancellation checkpoint. A running job accepts the request inside

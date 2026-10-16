@@ -192,15 +192,11 @@ abstract interface class JobContext {
   /// section leaves alone. Sections nest — only the outermost lets a held
   /// cancellation through — and it is let through even if [action] throws.
   ///
-  /// When [action] throws while a cancellation is held, the error came before
-  /// the cancellation, and it goes on the way a failure a cancellation covered
-  /// does — see [Failed]. So does an error of [action] the body caught and
-  /// throws again after a cancellation that came later, whether the section
-  /// held it or not. That is said of this error alone: the body keeps it first
-  /// by letting it through or throwing it again, a `ParallelWaitError` around
-  /// it included, such as the one of `.wait`, while a new error thrown in its
-  /// place, a wrapper of any other kind included, comes after the cancellation
-  /// and only [JobObserver.onError] hears it.
+  /// When [action] throws while a cancellation is held, the section closes, the
+  /// cancellation lands, and the body receives the error. A body that lets it
+  /// out ends [Cancelled], and the error goes on as any failure of the body of
+  /// a cancelled job does: to [JobObserver.onError], then to the answer — see
+  /// [Failed].
   ///
   /// **Always await this call.** The section belongs to the job, not to the
   /// future returned here: it opens on the call and holds a cancellation
@@ -403,11 +399,11 @@ abstract interface class JobContext {
   /// Once the child starts, this method observes its [Job.value]. Handle the
   /// future returned here even when [Job.ignoreFailure] was called on [child]:
   /// that ignores the job's own reporting, not an error carried by this future.
-  /// A failure of the child's body that a cancellation covered afterwards does
-  /// not come through the future: the future throws the [Cancelled], and the
-  /// child answers for the failure through [JobAnswerer.onUnanswered] of its
+  /// A failure of the body of a child that ends [Cancelled] does not come
+  /// through the future: the future throws the [Cancelled], and the child
+  /// answers for the failure through [JobAnswerer.onUnanswered] of its
   /// observer, otherwise in the zone, unless [Job.ignoreFailure] was called on
-  /// [child].
+  /// [child] or [Job.isCancellationError] names the failure.
   ///
   /// A child is a job nobody starts by itself: [Job.deferred], or a job of
   /// an engine whose start belongs to the engine. One from `Job(body)` or
@@ -465,10 +461,10 @@ abstract interface class JobContext {
   /// cancellation arrives as a cancellation and there is no envelope to take
   /// apart. A failure the group received and did not throw is not lost either:
   /// it goes the way an error nobody answered for goes, once. Nor is a failure
-  /// of a branch's body that a cancellation covered afterwards: the outcome
-  /// carries the cancellation, and the branch answers for the failure the same
-  /// way. [Job.ignoreFailure] on a branch silences both: [JobObserver.onError]
-  /// hears them, and nobody answers for them.
+  /// of the body of a branch that ends [Cancelled]: the outcome carries the
+  /// cancellation, and the branch answers for the failure the same way.
+  /// [Job.ignoreFailure] on a branch silences both: [JobObserver.onError] hears
+  /// them, and nobody answers for them.
   ///
   /// **When which.** `[ctx.run(a), ctx.run(b)].wait` and [Future.wait] wait
   /// for every branch and stop none, so a branch whose sibling has already
@@ -895,15 +891,7 @@ abstract class JobContextBase implements JobContext {
     throwIfFinished('join');
     _oneCleanupOnly(dispose, discard);
     check();
-    final T result;
-    try {
-      result = await action();
-    } on Object catch (error) {
-      // It reaches the body in this very microtask, but the body may catch
-      // it, go on and throw it again after a cancellation.
-      _owner._failedUnmarked(error);
-      rethrow;
-    }
+    final result = await action();
     if (_owner.bodyEnded && identical(Zone.current[_owner], _owner)) {
       // Called from work handed over with `unattended`, and that work is
       // waiting for the value: it is the receiver, on the body's terms. A
@@ -1085,16 +1073,6 @@ abstract class JobContextBase implements JobContext {
     enterUncancellable();
     try {
       return await action();
-    } on Object catch (error) {
-      // The step failed, and the cancellation this section was holding
-      // lands on the way out -- before the error has reached the body,
-      // where the core decides which of the two came first. It was the
-      // failure, and said nowhere else the diagnosis of the one step that
-      // cannot be rolled back is the one the cancellation swallows. After
-      // a mark -- a rule of a domain makes one inside the section -- the
-      // held one has nothing left to land, and the step failed after it.
-      _owner._failedUnmarked(error);
-      rethrow;
     } finally {
       leaveUncancellable();
     }
@@ -1240,17 +1218,7 @@ abstract class JobContextBase implements JobContext {
     throwIfFinished('run an abandonable action');
     _oneCleanupOnly(dispose, discard);
     check();
-    final FutureOr<T> result;
-    try {
-      result = action();
-    } on Object catch (error) {
-      // Thrown before the action had a future to hand back, and the body
-      // hears it a microtask later, through the future of this call: a
-      // cancellation arriving in between would look first. `join` notes
-      // its failure the same way.
-      _owner._failedUnmarked(error);
-      rethrow;
-    }
+    final result = action();
     if (result is! Future<T>) {
       // Work handed over with `unattended` waits for the value, so it goes
       // on below like the body's: see `join`.
@@ -1386,10 +1354,6 @@ abstract class JobContextBase implements JobContext {
             notifyError(error, stackTrace);
           }
         } else {
-          // The completer hands the error on a microtask later, and the
-          // body throws it later still: a cancellation arriving in between
-          // would look first.
-          _owner._failedUnmarked(error);
           completer.completeError(error, stackTrace);
         }
       } finally {

@@ -97,6 +97,14 @@ Job<Database> stopTheMigration() {
   return job;
 }
 
+/// What the app sets once, in `main`: the stop of its database client is no
+/// failure. Every job of the page runs with it, and the tests put it back.
+void nameTheStop() {
+  // #docregion
+  Job.isCancellationError = (error) => error is DatabaseStopped;
+  // #enddocregion
+}
+
 /// A stop that takes time, run as work the job does not wait for.
 Job<void> stopTheDevice() {
   final job = Job<void>(observer: printing, (ctx) async {

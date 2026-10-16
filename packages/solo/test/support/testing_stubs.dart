@@ -56,8 +56,17 @@ class CancelToken {
   }
 }
 
+/// What a call of the device fails with when its token is cancelled.
+final class OpenCancelled implements Exception {
+  const OpenCancelled();
+
+  @override
+  String toString() => 'OpenCancelled';
+}
+
 /// A camera that never opens on its own: the call waits until the test
-/// says [answer], or until its token is cancelled, which fails it.
+/// says [answer], or until its token is cancelled, which fails it with
+/// [OpenCancelled].
 class FakeCamera {
   Completer<void>? _opening;
 
@@ -71,7 +80,7 @@ class FakeCamera {
     cancelToken.whenCancelled(() {
       if (opening.isCompleted) return;
       refused++;
-      opening.completeError(StateError('open cancelled'), StackTrace.current);
+      opening.completeError(const OpenCancelled(), StackTrace.current);
     });
     return opening.future;
   }
