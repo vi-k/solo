@@ -75,12 +75,11 @@ in. In a test that zone is the test's, and the test fails:
 
 - an error no outcome carries, in an application that sets `Solo.observer` or
   overrides `onError` without calling `super`;
-- the failure of the body of a job that ends `Cancelled`, before the
-  cancellation or after it: an operation that stops at a token the job cancels
-  through `ctx.onCancel` throws one on every cancellation.
-  `Job.isCancellationError` names the errors a cancellation causes, once, in
-  `main`, and they reach `onError` and go no further; `job.ignoreFailure()`
-  silences the failure of that job alone;
+- the failure of the body of a job that ends `Cancelled`: an operation that
+  stops at a token the job cancels through `ctx.onCancel` throws one on every
+  cancellation. `Job.isCancellationError` names the errors a cancellation
+  causes, once, in `main`, and they reach `onError` and go no further;
+  `job.ignoreFailure()` silences the failure of that job alone;
 - the late failure of an action the body walked away from through `.timeout` or
   `Future.any`, arriving once the job is over;
 - the failure of a source's own cleanup when `ctx.each` lets go of a stream.

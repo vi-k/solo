@@ -725,10 +725,8 @@ void main() {
           'throw;',
         );
         _says(
-          '- the failure of the body of a job that ends `Cancelled`, whether '
-          'the job accepted the cancellation before the error left the body '
-          'or after, while it still waited for children of its own or ran its '
-          'cleanup: whoever reads that outcome gets the cancellation.',
+          '- the failure of the body of a job that ends `Cancelled`: whoever '
+          'reads that outcome gets the cancellation.',
         );
         _says(
           'Somebody has to answer for those, and the one asked is always the '
@@ -2535,10 +2533,8 @@ void main() {
 
       test('the load fails, and a cancellation reaches the job afterwards', () {
         _says(
-          'One failure it cannot catch: if the load fails and a cancellation '
-          'reaches the job afterwards, whether before the error leaves the '
-          'body or while the job still waits for children of its own or runs '
-          'its cleanup, `await job.value` throws the `Cancelled`, and the '
+          'One failure it cannot catch: if the job ends `Cancelled` and the '
+          'load failed, `await job.value` throws the `Cancelled`, and the '
           'failure goes to `onUnanswered` like the errors below',
         );
         final handled = <String>[];

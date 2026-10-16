@@ -605,7 +605,22 @@ the cancellation, asked about after it» в `cancellation_error_test.dart` ег�
 куда уходит ошибка; раньше о нём говорила последняя фраза абзаца, и только
 ссылкой на раздел «Errors of a cancellation». Перевод рядом, сторож — тест «a
 child it names: the parent gets Cancelled, nobody answers»
-в `cancellation_error_test.dart`; `async_job` — 1467 тестов.
+в `cancellation_error_test.dart`; `async_job` — 1467 тестов. По замечанию
+владельца 2026-10-16 о пересказе порядка снято, когда задача приняла отмену:
+до того, как ошибка вышла из тела, или после, пока ждала дочерних или шла
+уборка. Это история прежнего правила, которой читатель не знает; правило теперь
+сказано одно: провал тела задачи, которая кончается `Cancelled`, в исходе
+не лежит, и кто читает исход, получает отмену. Места — пункт списка и абзац
+«One failure it cannot catch» в `errors.md` пакета `solo`, абзацы о ребёнке
+в `children.md` обоих пакетов (остался пример с остановленной операцией), абзац
+`outcomes.md` ядра, записи в «Changes you will see on upgrade» обоих
+`CHANGELOG.md`, dartdoc `Job.ignoreFailure` и `Failed`, `docs/architecture.md`;
+переводы рядом. Тем самым снят и Nit об одном порядке на `outcomes.md`: порядка
+там больше нет. Сторожа фраз в `errors_rakes_test.dart`
+и `children_rakes_test.dart` переписаны, группа в `outcomes_rakes_test.dart`
+переименована; сами тесты по-прежнему гоняют оба порядка. Условие фильтра —
+«задача, которая приняла отмену» — оставлено: это область, где его спрашивают,
+а не порядок событий. `async_job` — 1467 тестов, `solo` — 1919.
 
 ### L3. Снятие ребёнка со списка родителя — O(n), большие группы квадратичны
 

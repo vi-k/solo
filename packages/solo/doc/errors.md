@@ -65,9 +65,7 @@ the rest:
 - a `keepWhile` that throws when a change of state re-checks it;
 - work handed to `ctx.unattended`;
 - the failure of a branch of `ctx.runAll` that the group did not throw;
-- the failure of the body of a job that ends `Cancelled`, whether the job
-  accepted the cancellation before the error left the body or after, while it
-  still waited for children of its own or ran its cleanup: whoever reads that
+- the failure of the body of a job that ends `Cancelled`: whoever reads that
   outcome gets the cancellation.
 
 Somebody has to answer for those, and the one asked is always the same:
@@ -450,11 +448,10 @@ Accessing `job.done` or `job.value`, or calling `job.ignoreFailure()`, marks
 the outcome as observed. Reading `job.outcome` does not. `ignoreFailure()` is
 for the caller that needs no result and leaves reporting to the hooks; a caller
 that needs the result takes it with `await job.value` and answers for the error
-by catching it. One failure it cannot catch: if the load fails and a
-cancellation reaches the job afterwards, whether before the error leaves the
-body or while the job still waits for children of its own or runs its cleanup,
-`await job.value` throws the `Cancelled`, and the failure goes to
-`onUnanswered` like the errors below. `ignoreFailure()` silences that one too.
+by catching it. One failure it cannot catch: if the job ends `Cancelled` and
+the load failed, `await job.value` throws the `Cancelled`, and the failure goes
+to `onUnanswered` like the errors below. `ignoreFailure()` silences that one
+too.
 
 Errors from cleanup, cancellation callbacks and operations abandoned by
 `abandonable` go to the reporting hooks, and the controller is asked to answer

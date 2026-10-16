@@ -481,8 +481,7 @@ abstract interface class Job<T> {
   /// ```
   ///
   /// Waiting for [done] or [value] observes a [Failed] too: the one waiting has
-  /// the error. A failure of the body of a job that ends [Cancelled] — one the
-  /// body threw before or after the job accepted the cancellation — is not in
+  /// the error. A failure of the body of a job that ends [Cancelled] is not in
   /// the outcome, and the one waiting gets the [Cancelled]. That failure is
   /// answered through [JobAnswerer.onUnanswered] of an observer that answers,
   /// otherwise in the zone, however the outcome was read, and this is what

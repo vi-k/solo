@@ -122,10 +122,9 @@ throws; with `value` the waiting code gets the error itself and has to handle
 it, as with any `Future`. Forwarding a failure through `then` observes it too;
 the continuation takes responsibility for it.
 
-Waiting does not observe a failure a cancellation covers: the body of `backup`
-fails, and a cancellation arrives after it — while the job still waits for its
-children or runs its cleanup, say. The job ends `Cancelled`: the code waiting
-for it gets the cancellation, not the error, and the status line says
+Waiting does not observe the failure of the body of a job that ends
+`Cancelled`. If `backup` is cancelled and its body fails, the code waiting for
+it gets the cancellation, not the error, and the status line says
 `backup cancelled`. The error goes the way of an error no outcome carries —
 [Where errors go](observing.md#where-errors-go) on the observing page shows it.
 `ignoreFailure()` keeps it out of the zone, and then only an observer's

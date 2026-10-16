@@ -1180,8 +1180,8 @@ void main() {
         expect(bench.heard, ['Job(child): op stopped']);
         expect(bench.unanswered, named ? isEmpty : ['Job(child): op stopped']);
         expect(errors, named ? isEmpty : ['op stopped']);
-        _says('or when the cancellation stops an operation and the body throws '
-            "that operation's error");
+        _says('That happens, for instance, when the cancellation stops an '
+            "operation and the body throws that operation's error");
         if (named) {
           _says('An error the app named in `Job.isCancellationError` goes no '
               "further than the controller's `onError`");

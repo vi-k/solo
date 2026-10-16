@@ -281,7 +281,7 @@ void main() {
       expect(ignored, isEmpty);
     });
 
-    group('waiting does not observe a failure a cancellation covers', () {
+    group('waiting does not observe a failed body of a cancelled job', () {
       // The upload fails 10 ms in while a child of the job still runs, and
       // the cancellation 20 ms in arrives before the job has ended.
       Future<void> uploadWithChild(JobContext ctx) async {

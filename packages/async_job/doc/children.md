@@ -92,15 +92,13 @@ future and nothing more: the child's observer still hears the error through
 `onError`.
 
 If the child ends `Cancelled` and its body failed, the error does not arrive
-through that future. That happens when the body fails and a cancellation
-reaches the child afterwards, while it still waits for children of its own or
-runs its cleanup, say, or when the cancellation stops an operation and the body
-throws that operation's error. `await ctx.run(child)` throws `Cancelled`, and
-the error goes where an error nobody handled goes: to the child's observer and,
-unless that observer answers for it, to the zone, as in
-[Where errors go](observing.md#where-errors-go) on the observing page. An error
-the app names in `Job.isCancellationError` goes no further than the child's
-observer, as in
+through that future. That happens, for instance, when the cancellation stops an
+operation and the body throws that operation's error. `await ctx.run(child)`
+throws `Cancelled`, and the error goes where an error nobody handled goes: to
+the child's observer and, unless that observer answers for it, to the zone, as
+in [Where errors go](observing.md#where-errors-go) on the observing page. An
+error the app names in `Job.isCancellationError` goes no further than the
+child's observer, as in
 [Errors of a cancellation](observing.md#errors-of-a-cancellation).
 `child.ignoreFailure()` silences the error, whatever it is.
 `ctx.run(child).ignore()` does not: it silences what the future throws, and the

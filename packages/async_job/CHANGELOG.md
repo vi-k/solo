@@ -54,10 +54,10 @@
 Errors that `0.2.0` lost, or told only to the observer, now reach the zone the
 job was created in. In a test that zone is the test's, and the test fails:
 
-- the failure of the body of a job that ends `Cancelled`, before the
-  cancellation or after it: an operation that stops at a token the job cancels
-  through `ctx.onCancel` throws one on every cancellation, and so does a body
-  that wraps its own cancellation in an exception of its own;
+- the failure of the body of a job that ends `Cancelled`: an operation that
+  stops at a token the job cancels through `ctx.onCancel` throws one on every
+  cancellation, and so does a body that wraps its own cancellation in an
+  exception of its own;
 - the late failure of an action under `ctx.abandonable` that the body left
   through `.timeout` or `Future.any`, arriving once the job is over;
 - an error no outcome carries, of a job that has an observer;
