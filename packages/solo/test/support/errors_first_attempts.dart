@@ -1,6 +1,6 @@
 // The first attempts of `doc/errors.md`, verbatim: every piece of the code
 // under a "The first attempt" heading is a run of lines of this file, and
-// `errors_rakes_test.dart` runs it. The page shows two observers and three
+// `errors_rakes_test.dart` runs it. The page shows two observers and four
 // fragments; here each fragment stands in a method or a function, marked
 // "Not on the page".
 import 'dart:async';
@@ -71,6 +71,37 @@ final class BroadCamera extends Solo<CameraState>
   SoloJob<void> zoomTo(double zoom) => run<CameraState, void>(
         key: 'zoom',
         (ctx) async => sendZoomUnawaited(),
+      );
+}
+
+/// The first attempt of "Retrying a failed call": a plain delay between the
+/// attempts.
+final class DelayingProfile extends Solo<ProfileState>
+    with OpenSolo<ProfileState>, Desk<ProfileState> {
+  final ProfileApi api;
+
+  DelayingProfile(this.api) : super(const Initial());
+
+  /// Not on the page: the job around the statements.
+  SoloJob<String> load() => run<ProfileState, String>(
+        key: 'load',
+        ifFailed: (state, error, stackTrace) => Failure(error),
+        ifCancelled: (state, cancelled) => const Initial(),
+        (ctx) async {
+          ctx.emit(const Loading());
+          for (var attempt = 1;; attempt++) {
+            final String name;
+            try {
+              name = await ctx.abandonable(api.fetchName);
+            } on Object {
+              if (attempt == 3) rethrow;
+              await Future<void>.delayed(Duration(seconds: attempt));
+              continue;
+            }
+            ctx.emit(Loaded(name));
+            return name;
+          }
+        },
       );
 }
 

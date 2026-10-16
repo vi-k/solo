@@ -937,6 +937,92 @@ void main() {
       });
     });
 
+    test('switchOn reads Ready again and keeps what changed during the wait',
+        () {
+      fakeAsync((async) {
+        final device = camera.Device();
+        final cam = page.Camera(device)..reflect(const camera.Off());
+        final job = cam.switchOn(3);
+        async
+          ..flushMicrotasks()
+          ..elapse(const Duration(milliseconds: 20));
+        expect('${cam.currentState}', 'Ready(free: 8, paused: false, zoom: 1)');
+
+        cam.reflect(const camera.Ready(free: 2));
+        async.elapse(const Duration(milliseconds: 40));
+        expect(camera.stage.trace, [
+          'power up begins',
+          'power up ends',
+          'zoom 3 begins',
+          'zoom 3 ends',
+        ]);
+        expect('${job.outcome}', 'Done(null)');
+        expect('${cam.currentState}', 'Ready(free: 2, paused: false, zoom: 3)');
+        cam.close().ignore();
+        device.dispose();
+        async.flushTimers();
+      });
+    });
+
+    test('switchOn ends Cancelled(rules) when the device drops at either wait',
+        () {
+      fakeAsync((async) {
+        // When the drop comes, and the step whose read ends the job.
+        const drops = {5: 'Off', 20: 'Ready'};
+        for (final MapEntry(key: ms, value: needed) in drops.entries) {
+          final at = Duration(milliseconds: ms);
+          camera.stage = camera.Stage();
+          final device = camera.Device();
+          final cam = page.Camera(device)..reflect(const camera.Off());
+          final job = cam.switchOn(3);
+          async
+            ..flushMicrotasks()
+            ..elapse(at);
+
+          device.drop();
+          async.flushMicrotasks();
+          expect(
+            job.isCancelled,
+            isFalse,
+            reason: 'W is CameraState: the drop breaks no rule of the job',
+          );
+          async.elapse(const Duration(milliseconds: 60));
+          expect(
+            _ended(job),
+            'Cancelled(rules: is not $needed), started: true',
+            reason: 'a drop after $at',
+          );
+          expect((job.outcome! as Cancelled).reason, isA<RulesCancelReason>());
+          expect(
+            cam.currentState,
+            isA<camera.Disconnected>(),
+            reason: 'no Ready over a camera that is gone',
+          );
+          expect(
+            camera.stage.trace.contains('zoom 3 begins'),
+            needed == 'Ready',
+          );
+          cam.close().ignore();
+          device.dispose();
+          async.flushTimers();
+        }
+      });
+    });
+
+    test('switchOn is refused unless the camera is off', () {
+      fakeAsync((async) {
+        final device = camera.Device();
+        final cam = page.Camera(device);
+        final job = cam.switchOn(3);
+        async.flushTimers();
+        expect(_ended(job), 'Cancelled(rules: canStart), started: false');
+        expect(camera.stage.trace, isEmpty);
+        cam.close().ignore();
+        device.dispose();
+        async.flushTimers();
+      });
+    });
+
     test('after an emit outside W a read or a wait ends the job', () {
       var started = 0;
       Future<void> action() async => started++;

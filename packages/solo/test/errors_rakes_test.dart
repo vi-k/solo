@@ -6,6 +6,7 @@ import 'dart:io';
 
 import 'package:clock/clock.dart';
 import 'package:fake_async/fake_async.dart';
+import 'package:meta/meta.dart';
 import 'package:solo/solo.dart';
 import 'package:test/test.dart';
 
@@ -30,7 +31,8 @@ import 'support/test_solo.dart';
 ///
 /// Every call of a stub runs until the test ends it, so each trace is the
 /// order the test set, and fake time moves only where the page speaks of
-/// time: the five seconds of the two timers and the delays of the table.
+/// time: the five seconds of the two timers, the delays of the table and
+/// the seconds between the attempts of a retry.
 
 /// What a call throws when the token of its cancelled job stops it.
 final class _CallStopped implements Exception {
@@ -38,6 +40,24 @@ final class _CallStopped implements Exception {
 
   @override
   String toString() => 'the call stopped';
+}
+
+/// Not on the page: the profile of "A pause between attempts" whose first
+/// delivery of [Loaded] fails.
+final class _FailingDelivery extends page.RetryingProfile {
+  var _failed = false;
+
+  _FailingDelivery() : super(ProfileApi());
+
+  @protected
+  @override
+  void publish(ProfileState previous, ProfileState current) {
+    super.publish(previous, current);
+    if (current is Loaded && !_failed) {
+      _failed = true;
+      throw StateError('delivery');
+    }
+  }
 }
 
 /// An observer that keeps what `onError` told it.
@@ -3138,6 +3158,341 @@ void main() {
     });
   });
 
+  group('Retrying a failed call', () {
+    /// The two versions of the page, each in a profile of its own.
+    final versions = <String, (Desk<ProfileState>, SoloJob<String>) Function()>{
+      'the first attempt': () {
+        final profile = first.DelayingProfile(ProfileApi());
+
+        return (profile, profile.load());
+      },
+      'the pause between attempts': () {
+        final profile = page.RetryingProfile(ProfileApi());
+
+        return (profile, profile.load());
+      },
+    };
+
+    /// Sends a job to [profile] that notes in [events] when it runs.
+    void sendNext(
+      Desk<ProfileState> profile,
+      FakeAsync async,
+      List<String> events,
+    ) =>
+        (profile as OpenSolo<ProfileState>).run<ProfileState, void>(
+          key: 'next',
+          (ctx) async => events.add('next ran at ${async.elapsed.inSeconds} s'),
+        );
+
+    /// Notes in [events] when [job] ends.
+    void noteEnd(SoloJob<String> job, FakeAsync async, List<String> events) =>
+        unawaited(
+          job.done.then(
+            (_) => events.add('load ended at ${async.elapsed.inSeconds} s'),
+          ),
+        );
+
+    for (final MapEntry(key: name, value: start) in versions.entries) {
+      final pauses = name != 'the first attempt';
+      final after = pauses ? 0 : 3;
+
+      group('$name:', () {
+        test('cancelled while the first call is in flight', () {
+          if (pauses) {
+            _says(
+              'A cancellation the catch has taken is thrown again by the '
+              'pause up front',
+            );
+            _says(
+              'the pause asks the job, not the error, so the catch needs no '
+              'clause for the cancellation',
+            );
+          } else {
+            _says(
+              '`abandonable` throws `Cancelled`, and the catch counts it as a '
+              'failed attempt and waits a second. A plain `Future.delayed` is '
+              'no checkpoint, so the job sits that second out. The next '
+              '`abandonable` throws at once, without calling `fetchName`, and '
+              'the catch waits two seconds more. Only the third throw goes '
+              'out: the job ends `Cancelled` three seconds after it was '
+              'cancelled, and all that time it holds the queue. The next job '
+              'waits for a body that has nothing left to do',
+            );
+          }
+          late Desk<ProfileState> profile;
+          late SoloJob<String> job;
+          final events = <String>[];
+          final ran = _run((async) {
+            final (controller, started) = start();
+            profile = controller;
+            job = started;
+            noteEnd(job, async, events);
+            async.flushMicrotasks();
+            unawaited(job.cancel());
+            sendNext(profile, async, events);
+            async.elapse(const Duration(seconds: 5));
+          });
+
+          // The next job starts with the end of the load, a microtask before
+          // `done` tells of it.
+          expect(
+            events,
+            unorderedEquals(['load ended at $after s', 'next ran at $after s']),
+          );
+          expect(stage.trace, ['fetchName start'], reason: 'called once');
+          expect('${job.outcome}', 'Cancelled(manual)');
+          expect('${profile.currentState}', 'Initial');
+          expect(profile.heard, isEmpty);
+          expect(ran.errors, isEmpty);
+        });
+
+        test('closed while the first call is in flight', () {
+          if (!pauses) {
+            _says('The next job waits for a body that has nothing left to '
+                'do, and so does `close()`');
+          }
+          final events = <String>[];
+          final ran = _run((async) {
+            final (profile, job) = start();
+            noteEnd(job, async, events);
+            async.flushMicrotasks();
+            unawaited(
+              profile.close().then(
+                    (_) => events.add('closed at ${async.elapsed.inSeconds} s'),
+                  ),
+            );
+            async.elapse(const Duration(seconds: 5));
+          });
+
+          expect(events, ['load ended at $after s', 'closed at $after s']);
+          expect(ran.errors, isEmpty);
+        });
+
+        test('three failures end the job Failed with the third', () {
+          if (pauses) {
+            _says(
+              'After the third failure of the network, `rethrow` lets it out '
+              'and the job ends `Failed` with that error',
+            );
+          }
+          late Desk<ProfileState> profile;
+          late SoloJob<String> job;
+          final calling = <bool>[];
+          final ran = _run((async) {
+            final (controller, started) = start();
+            profile = controller;
+            job = started..ignoreFailure();
+            async.flushMicrotasks();
+            _fail(async, 'fetchName', StateError('no network 1'));
+            for (final seconds in [1, 2]) {
+              async.elapse(Duration(milliseconds: seconds * 1000 - 1));
+              calling.add(stage.isRunning('fetchName'));
+              async.elapse(const Duration(milliseconds: 1));
+              calling.add(stage.isRunning('fetchName'));
+              final error = StateError('no network ${seconds + 1}');
+              _fail(async, 'fetchName', error);
+            }
+          });
+
+          expect(
+            calling,
+            [false, true, false, true],
+            reason: 'the second call a second later, the third two more',
+          );
+          expect('${job.outcome}', 'Failed(Bad state: no network 3)');
+          expect('${profile.currentState}', 'Failure(Bad state: no network 3)');
+          expect(
+            profile.heard,
+            ['load: no network 3'],
+            reason: "the failures the catch took are nobody else's",
+          );
+          expect(ran.errors, isEmpty);
+        });
+
+        test('a failure, then the name', () {
+          late Desk<ProfileState> profile;
+          late SoloJob<String> job;
+          final ran = _run((async) {
+            final (controller, started) = start();
+            profile = controller;
+            job = started;
+            async.flushMicrotasks();
+            _fail(async, 'fetchName', StateError('no network'));
+            async.elapse(const Duration(seconds: 1));
+            _end(async, 'fetchName');
+          });
+
+          expect('${job.outcome}', 'Done(Ada Lovelace)');
+          expect('${profile.currentState}', 'Loaded(Ada Lovelace)');
+          expect(ran.errors, isEmpty);
+        });
+      });
+    }
+
+    test('the try holds the call alone: a failed delivery is no attempt', () {
+      late SoloJob<String> job;
+      final ran = _run((async) {
+        job = _FailingDelivery().load()..ignoreFailure();
+        async.flushMicrotasks();
+        _end(async, 'fetchName');
+        async.elapse(const Duration(seconds: 5));
+      });
+
+      expect(stage.trace, ['fetchName start', 'fetchName end']);
+      expect('${job.outcome}', 'Failed(Bad state: delivery)');
+      expect(ran.errors, isEmpty);
+    });
+
+    test('a clause for the network lets a bug end the job at once', () {
+      _says(
+        '`on Object` repeats every failure of the call, a bug in reading the '
+        'answer among them. A clause for the failures worth repeating, such '
+        'as `on SocketException`, lets a bug end the job at once, and still '
+        'needs nothing for the cancellation',
+      );
+      // Not on the page: the loop of the page with the narrower clause.
+      SoloJob<String> load(Bench bench) => bench.run<int, String>(
+            key: 'load',
+            (ctx) async {
+              for (var attempt = 1;; attempt++) {
+                final String name;
+                try {
+                  name = await ctx.abandonable(ProfileApi().fetchName);
+                } on SocketException {
+                  if (attempt == 3) rethrow;
+                  await ctx.pause(Duration(seconds: attempt));
+                  continue;
+                }
+                return name;
+              }
+            },
+          )..ignoreFailure();
+
+      final ended = <String>[];
+      late SoloJob<String> bug;
+      late SoloJob<String> network;
+      late SoloJob<String> cancelled;
+      final ran = _run((async) {
+        bug = load(Bench());
+        noteEnd(bug, async, ended);
+        async.flushMicrotasks();
+        _fail(async, 'fetchName', ArgumentError('no name in the answer'));
+
+        network = load(Bench());
+        async.flushMicrotasks();
+        _fail(async, 'fetchName', const SocketException('no network'));
+        async.elapse(const Duration(seconds: 1));
+        _end(async, 'fetchName');
+
+        cancelled = load(Bench());
+        noteEnd(cancelled, async, ended);
+        async.flushMicrotasks();
+        unawaited(cancelled.cancel());
+        async.flushMicrotasks();
+      });
+
+      expect(
+        '${bug.outcome}',
+        'Failed(Invalid argument(s): no name in the answer)',
+      );
+      expect('${network.outcome}', 'Done(Ada Lovelace)');
+      expect('${cancelled.outcome}', 'Cancelled(manual)');
+      expect(ended, ['load ended at 0 s', 'load ended at 1 s']);
+      final calls = stage.trace.where((line) => line == 'fetchName start');
+      expect(calls, hasLength(4), reason: 'one, two, one');
+      expect(ran.errors, isEmpty);
+    });
+
+    test('a cancellation during a pause ends it there, timer and all', () {
+      _says(
+        'one that comes during a pause ends it there, its timer cancelled '
+        'with it: either way the job ends `Cancelled` at once',
+      );
+      late SoloJob<String> job;
+      final events = <String>[];
+      late int timers;
+      final ran = _run((async) {
+        final profile = page.RetryingProfile(ProfileApi());
+        job = profile.load();
+        noteEnd(job, async, events);
+        async.flushMicrotasks();
+        _fail(async, 'fetchName', StateError('no network'));
+        async.elapse(const Duration(milliseconds: 500));
+        unawaited(job.cancel());
+        async.flushMicrotasks();
+        events.add('cancelled at ${async.elapsed.inMilliseconds} ms');
+        timers = async.pendingTimers.length;
+      });
+
+      expect(events, ['load ended at 0 s', 'cancelled at 500 ms']);
+      expect(timers, 0);
+      expect('${job.outcome}', 'Cancelled(manual)');
+      expect(ran.errors, isEmpty);
+    });
+
+    test('the pauses hold the queue; a caller that retries lets jobs by', () {
+      _says(
+        'Root jobs run one at a time, so the next job of the profile waits '
+        'through every attempt and every pause between them',
+      );
+      _says(
+        'the caller retries instead of the body: it awaits `job.done`, and on '
+        'a `Failed` waits and starts the job again, and the jobs sent in '
+        "between run in that gap. The gap is the caller's: `cancelAll()` on "
+        'the profile does not reach it, and the next attempt starts after it '
+        'all the same',
+      );
+      final inBody = <String>[];
+      final byCaller = <String>[];
+      final ran = _run((async) {
+        final profile = page.RetryingProfile(ProfileApi());
+        noteEnd(profile.load(), async, inBody);
+        async.flushMicrotasks();
+        _fail(async, 'fetchName', StateError('no network'));
+        sendNext(profile, async, inBody);
+        async.elapse(const Duration(seconds: 1));
+        _end(async, 'fetchName');
+
+        // Not on the page: the caller's loop, around a job that tries once.
+        final bench = Bench();
+        Future<void> retried() async {
+          for (var attempt = 1;; attempt++) {
+            final job = bench.run<int, String>(
+              key: 'load',
+              (ctx) => ctx.abandonable(ProfileApi().fetchName),
+            );
+            byCaller.add('load $attempt at ${async.elapsed.inSeconds} s');
+            if (await job.done is! Failed || attempt == 3) return;
+            await Future<void>.delayed(Duration(seconds: attempt));
+          }
+        }
+
+        unawaited(retried());
+        async.flushMicrotasks();
+        _fail(async, 'fetchName', StateError('no network'));
+        bench.run<int, void>(
+          key: 'next',
+          (ctx) async =>
+              byCaller.add('next ran at ${async.elapsed.inSeconds} s'),
+        );
+        async.flushMicrotasks();
+        unawaited(bench.cancelAll());
+        byCaller.add('cancelAll at ${async.elapsed.inSeconds} s');
+        async.elapse(const Duration(seconds: 1));
+        _end(async, 'fetchName');
+      });
+
+      expect(inBody, unorderedEquals(['load ended at 1 s', 'next ran at 1 s']));
+      expect(byCaller, [
+        'load 1 at 1 s',
+        'next ran at 1 s',
+        'cancelAll at 1 s',
+        'load 2 at 2 s',
+      ]);
+      expect(ran.errors, isEmpty);
+    });
+  });
+
   group('Errors in state rules', () {
     group('the first attempt:', () {
       test('no free slot', () {
@@ -4052,13 +4407,13 @@ void main() {
   });
 
   group('The page', () {
-    test('five sections open with a first attempt, as the introduction says',
+    test('six sections open with a first attempt, as the introduction says',
         () {
       expect(
         RegExp(r'^### The first attempt$', multiLine: true).allMatches(_page()),
-        hasLength(5),
+        hasLength(6),
       );
-      _says('Five sections below open with the version');
+      _says('Six sections below open with the version');
     });
 
     test('has no fence the checks do not read', () {
@@ -4080,6 +4435,7 @@ void main() {
       '### A cancellation that never lands': answers,
       '### Observing the outcome': answers,
       '### Letting cancellation through': answers,
+      '### A pause between attempts': answers,
       '### A rule answers': answers,
       '### Work with a life of its own': answers,
       '### Logs': answers,

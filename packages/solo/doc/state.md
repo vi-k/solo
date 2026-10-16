@@ -101,17 +101,48 @@ Job<void> zoomIn() => run<Ready, void>(
 ```
 
 `ctx.state`, `ctx.stateAs<T>()` and `ctx.check()` check cancellation and state
-rules. The body above is `run<Ready, void>`, so `ctx.state` is a `Ready`
-already; `stateAs<T>()` is for a body whose `W` is wider than the state it
-needs at that moment, and it requires the state to be `T` rather than returning
-null — a mismatch cancels the job. Waiting methods use state checkpoints too.
-So does `ctx.each`, whose child would keep the job's rules.
+rules. Waiting methods use state checkpoints too. So does `ctx.each`, whose
+child would keep the job's rules. The body above is `run<Ready, void>`, so
+`ctx.state` is a `Ready` already; `stateAs<T>()` is for a body whose `W` is
+wider than the state it needs at that moment, and it requires the state to be
+`T` rather than returning null — a mismatch cancels the job.
 
-`check()` is the same check, minus the value to read. The reads and the waiting
-methods make it themselves; `check()` covers the gaps between them. A plain
-`await` and the return from `ctx.uncancellable` check nothing: a job the rules
-have already cancelled walks on until something inside asks: can it still go
-on? Those gaps are covered in
+```dart
+Job<void> switchOn(int zoom) => run<CameraState, void>(
+      canStart: (state) => state is Off,
+      (ctx) async {
+        // W is every state, so after each wait the body names the one
+        // it needs.
+        await ctx.join(device.powerUp);
+        ctx.stateAs<Off>();
+        ctx.emit(const Ready());
+
+        await ctx.join(() => device.setZoom(zoom));
+        ctx.emit(ctx.stateAs<Ready>().copyWith(zoom: zoom));
+      },
+    );
+```
+
+`switchOn` starts in `Off` and goes on in the `Ready` it writes, so its `W` is
+the whole `CameraState`, and `ctx.state` there is a `CameraState`, which has no
+`copyWith`. While the device powers up and the lens moves, the controller may
+reflect other facts, so after each wait the body reads the state it needs. The
+`Ready` it copies at the end is the one it reads, with whatever the device
+reported during the zoom.
+
+If the connection drops, the controller reflects `Disconnected` through
+[`externalSetState`](#externalsetstate). No rule of this job refuses that
+state, so the wait returns as usual, and the `stateAs` after it ends the job
+before the `emit`: `Cancelled(rules: is not Off)` after the power-up,
+`Cancelled(rules: is not Ready)` after the zoom. The state stays
+`Disconnected`. `emit` asks none of the job's rules, so it is the read before
+it that keeps `Ready` off a camera that is gone.
+
+`check()` is the check `ctx.state` makes, minus the value to read. The reads
+and the waiting methods make it themselves; `check()` covers the gaps between
+them. A plain `await` and the return from `ctx.uncancellable` check nothing: a
+job the rules have already cancelled walks on until something inside asks: can
+it still go on? Those gaps are covered in
 [Ordinary await and context lifetime](cancellation.md#ordinary-await-and-context-lifetime)
 on the cancellation page, and the table at the top of that page puts `check()`
 beside the waiting methods it goes with.

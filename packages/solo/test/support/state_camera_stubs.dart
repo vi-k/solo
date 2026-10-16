@@ -83,6 +83,20 @@ final class Device {
   /// The device reports that the connection is lost.
   void drop() => _connection.add(false);
 
+  /// Powers the device up; that takes it 10 milliseconds.
+  Future<void> powerUp() async {
+    stage.trace.add('power up begins');
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    stage.trace.add('power up ends');
+  }
+
+  /// Moves the lens; that takes the motor 50 milliseconds.
+  Future<void> setZoom(int zoom) async {
+    stage.trace.add('zoom $zoom begins');
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    stage.trace.add('zoom $zoom ends');
+  }
+
   /// Closes both streams. Not awaited: a controller nobody listens to
   /// hands back a future of the root zone, which fake time never reaches.
   void dispose() {

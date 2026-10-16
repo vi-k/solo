@@ -362,6 +362,7 @@ section linked beside it.
 | `close()` does not come back | `controller.pending` | [What is holding the controller](doc/errors.md#what-is-holding-the-controller) |
 | A journal needs to say which operation changed the state | `SoloTransition` in `onChange` | [Watching every controller](doc/errors.md#watching-every-controller) |
 | A call must finish before the queue goes on | `ctx.join` | [Cancellation](doc/cancellation.md) |
+| A call fails now and then and should be tried again | a loop in the body with `ctx.pause` between attempts | [Retrying a failed call](doc/errors.md#retrying-a-failed-call) |
 | A step of several calls must not be interrupted halfway | `ctx.uncancellable` | [Protecting a step or a whole job](doc/cancellation.md#protecting-a-step-or-a-whole-job) |
 | A resource opened by a call nobody waited for still has to close | `dispose` or `discard` on `ctx.abandonable` and `ctx.join` | [Taking a resource from a call](doc/resources.md#taking-a-resource-from-a-call) |
 | A widget rebuilds for state it does not use | `SoloSelector` from `flutter_solo` | [Selecting one value](https://github.com/vi-k/solo/blob/main/packages/flutter_solo/README.md#selecting-one-value) |

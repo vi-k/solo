@@ -43,6 +43,21 @@ final class Camera extends Solo<CameraState> with SoloStream {
         },
       );
 
+  Job<void> switchOn(int zoom) => run<CameraState, void>(
+        canStart: (state) => state is Off,
+        (ctx) async {
+          // W is every state, so after each wait the body names the one
+          // it needs.
+          await ctx.join(device.powerUp);
+          ctx.stateAs<Off>();
+          // ignore: cascade_invocations
+          ctx.emit(const Ready());
+
+          await ctx.join(() => device.setZoom(zoom));
+          ctx.emit(ctx.stateAs<Ready>().copyWith(zoom: zoom));
+        },
+      );
+
   /// Not on the page: a fact of the device other than the connection, the
   /// way a source of the application reports one.
   void reflect(CameraState state) => externalSetState(state);

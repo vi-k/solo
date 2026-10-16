@@ -176,6 +176,37 @@ final class Camera extends Solo<CameraState>
   }
 }
 
+/// "A pause between attempts". Not final: a test gives it a delivery that
+/// fails.
+class RetryingProfile extends Solo<ProfileState>
+    with OpenSolo<ProfileState>, Desk<ProfileState> {
+  final ProfileApi api;
+
+  RetryingProfile(this.api) : super(const Initial());
+
+  /// Not on the page: the job around the statements.
+  SoloJob<String> load() => run<ProfileState, String>(
+        key: 'load',
+        ifFailed: (state, error, stackTrace) => Failure(error),
+        ifCancelled: (state, cancelled) => const Initial(),
+        (ctx) async {
+          ctx.emit(const Loading());
+          for (var attempt = 1;; attempt++) {
+            final String name;
+            try {
+              name = await ctx.abandonable(api.fetchName);
+            } on Object {
+              if (attempt == 3) rethrow;
+              await ctx.pause(Duration(seconds: attempt));
+              continue;
+            }
+            ctx.emit(Loaded(name));
+            return name;
+          }
+        },
+      );
+}
+
 /// "Work with a life of its own". Not on the page: the function around the
 /// statement.
 void sendZoom(JobContext ctx, double zoom) {

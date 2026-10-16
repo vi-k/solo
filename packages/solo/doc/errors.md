@@ -6,10 +6,11 @@ State handlers and reporting hooks have different responsibilities.
 reporting, including errors from cleanup and abandoned operations, and
 `onUnanswered` answers for the ones no outcome carries.
 
-Five sections below open with the version habit or the vocabulary of this API
-leads to — a broad `catch`, a `throw` for a refusal, the member named for the
-question you are asking — and say what that version does instead of what it was
-meant to do. The version that works follows under its own heading.
+Six sections below open with the version habit or the vocabulary of this API
+leads to — a broad `catch`, a `Future.delayed` between attempts, a `throw` for
+a refusal, the member named for the question you are asking — and say what that
+version does instead of what it was meant to do. The version that works follows
+under its own heading.
 
 ## Reporting an error
 
@@ -542,6 +543,77 @@ out.
 Once a job has accepted cancellation, its outcome remains `Cancelled` even if
 the body catches it. For a final failure state, prefer the `ifFailed` parameter
 of `run` rather than writing that correction inside a broad catch.
+
+## Retrying a failed call
+
+The network drops a request now and then. The profile tries three times before
+it gives up, and waits a little longer after each failure.
+
+### The first attempt
+
+```dart
+// The first attempt: a cancellation sits out the delays.
+ctx.emit(const Loading());
+for (var attempt = 1;; attempt++) {
+  final String name;
+  try {
+    name = await ctx.abandonable(api.fetchName);
+  } on Object {
+    if (attempt == 3) rethrow;
+    await Future<void>.delayed(Duration(seconds: attempt));
+    continue;
+  }
+  ctx.emit(Loaded(name));
+  return name;
+}
+```
+
+The catch is there for the network, and it takes a cancellation along. Cancel
+the job while the first call is in flight: `abandonable` throws `Cancelled`,
+and the catch counts it as a failed attempt and waits a second. A plain
+`Future.delayed` is no checkpoint, so the job sits that second out. The next
+`abandonable` throws at once, without calling `fetchName`, and the catch waits
+two seconds more. Only the third throw goes out: the job ends `Cancelled` three
+seconds after it was cancelled, and all that time it holds the queue. The next
+job waits for a body that has nothing left to do, and so does `close()`.
+
+### A pause between attempts
+
+```dart
+ctx.emit(const Loading());
+for (var attempt = 1;; attempt++) {
+  final String name;
+  try {
+    name = await ctx.abandonable(api.fetchName);
+  } on Object {
+    if (attempt == 3) rethrow;
+    await ctx.pause(Duration(seconds: attempt));
+    continue;
+  }
+  ctx.emit(Loaded(name));
+  return name;
+}
+```
+
+`ctx.pause` is a delay that is a checkpoint. A cancellation the catch has taken
+is thrown again by the pause up front, and one that comes during a pause ends
+it there, its timer cancelled with it: either way the job ends `Cancelled` at
+once. Like `ctx.check()` in
+[Letting cancellation through](#letting-cancellation-through), the pause asks
+the job, not the error, so the catch needs no clause for the cancellation.
+After the third failure of the network, `rethrow` lets it out and the job ends
+`Failed` with that error. `on Object` repeats every failure of the call, a bug
+in reading the answer among them. A clause for the failures worth repeating,
+such as `on SocketException`, lets a bug end the job at once, and still needs
+nothing for the cancellation.
+
+The pause belongs to the job all the same. Root jobs run one at a time, so the
+next job of the profile waits through every attempt and every pause between
+them. Where other jobs should run between the attempts, the caller retries
+instead of the body: it awaits `job.done`, and on a `Failed` waits and starts
+the job again, and the jobs sent in between run in that gap. The gap is the
+caller's: `cancelAll()` on the profile does not reach it, and the next attempt
+starts after it all the same.
 
 ## Errors in state rules
 
