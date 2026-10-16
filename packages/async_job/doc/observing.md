@@ -223,13 +223,13 @@ outcome: Cancelled(manual)
 ```
 
 The job stays as it was. `Job.isCancellationError` is asked about each failure
-of a job that has accepted a cancellation when the job is about to send it to
-the answer, and only then. An error it names still reaches `onError` and goes
-no further: neither `onUnanswered` nor the zone hears it. It changes no outcome
-either. A failure of a job that nobody cancelled is not asked about: a body
-that throws `DatabaseStopped` while its own job goes on ends `Failed` with it,
-and if nobody observes that outcome, it reaches the zone. Somebody else
-cancelled the token then, and the job has to say so.
+of a job that has accepted a cancellation. It is asked when the job is about to
+send the failure to the answer, and only then. An error it names still reaches
+`onError` and goes no further: neither `onUnanswered` nor the zone hears it. It
+changes no outcome either. A failure of a job that nobody cancelled is not
+asked about: a body that throws `DatabaseStopped` while its own job goes on
+ends `Failed` with it, and if nobody observes that outcome, it reaches the
+zone. Somebody else cancelled the token then, and the job has to say so.
 
 The filter is called synchronously, with one failure at a time and never with a
 `Cancelled`, so keep it to a type test. The job walks a `ParallelWaitError` and
@@ -368,8 +368,8 @@ Two kinds of body failure are not carried by the outcome, and they go to
 `ctx.runAll` failed and its group threw another error (row 3).
 `ignoreFailure()` on the job whose body failed lets such a failure go:
 `onError` still hears it, but it reaches neither `onUnanswered` nor the zone.
-It lets go of that job's failures alone: a child whose body failed answers for
-its failure itself, whatever its parent calls.
+`ignoreFailure()` lets go of that job's failures alone: a child whose body
+failed answers for its failure itself, whatever its parent calls.
 
 While debugging, you can see the errors a job hands to its observer without
 writing an observer: the debug channel shows them. `Job.debug = print;` prints
@@ -540,7 +540,7 @@ final class Crashes extends JobObserver with JobAnswerer {
 ### The first attempt
 
 `observer:` takes one `JobObserver`, so a class hands its hooks on to both, and
-its answer to `Crashes`:
+its answer on to `Crashes`:
 
 ```dart
 // The first attempt: every hook handed on by hand, with no try/catch.
