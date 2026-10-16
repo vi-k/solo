@@ -800,16 +800,19 @@ README отвечает на вопросы первого дня лучше, ч
 
 Итог 2026-10-16: по выбору владельца написаны повтор и `stateAs`, `check`
 закрыт. Повтор — раздел «Retrying a failed call»
-на `packages/solo/doc/errors.md`: первая попытка с `Future.delayed` и ответ
-с `ctx.pause` между попытками. Разошлось с предложенным: повтор написан циклом
-в теле, а не на `Policy.droppable` и `job.done`; повтор у вызывающего через
-`job.done` назван в разделе фразой, как способ пустить другие задачи между
-попытками. `stateAs` — блок `switchOn` в «Reading and updating state»
-на `packages/solo/doc/state.md`, с исходом `Cancelled(rules: is not Off)`
-и `Cancelled(rules: is not Ready)` при обрыве связи. `check` фрагментом
-не показан: он уже стоит фрагментом в «Letting cancellation through»
-на `errors.md` и в `mistakes.md` и строкой в таблице `cancellation.md`. Отчёт —
-`2026-10-16-solo-stateas-retry-report.md`.
+на `packages/solo/doc/errors.md`: первая попытка с `Future.delayed`, ответ
+с `ctx.pause` между попытками и, по слову владельца вдогонку, подраздел
+«Retrying from the caller» — цикл у вызывающего вокруг `job.done` задачи
+быстрого старта на `Policy.droppable`, то есть то, что предлагала находка.
+Разошлось с предложенным: главный ответ — цикл в теле, а повтор у вызывающего
+показан как способ пустить другие задачи между попытками, вместе с тем, чего он
+не умеет: его промежуток не достают `cancelAll()` и `close()`, и загрузку
+из промежутка он не видит. `stateAs` — блок `switchOn` в «Reading and updating
+state» на `packages/solo/doc/state.md`, с исходом
+`Cancelled(rules: is not Off)` и `Cancelled(rules: is not Ready)` при обрыве
+связи. `check` фрагментом не показан: он уже стоит фрагментом в «Letting
+cancellation through» на `errors.md` и в `mistakes.md` и строкой в таблице
+`cancellation.md`. Отчёт — `2026-10-16-solo-stateas-retry-report.md`.
 
 ## Что хорошо
 

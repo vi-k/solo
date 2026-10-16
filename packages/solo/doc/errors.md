@@ -607,13 +607,43 @@ in reading the answer among them. A clause for the failures worth repeating,
 such as `on SocketException`, lets a bug end the job at once, and still needs
 nothing for the cancellation.
 
-The pause belongs to the job all the same. Root jobs run one at a time, so the
-next job of the profile waits through every attempt and every pause between
-them. Where other jobs should run between the attempts, the caller retries
-instead of the body: it awaits `job.done`, and on a `Failed` waits and starts
-the job again, and the jobs sent in between run in that gap. The gap is the
-caller's: `cancelAll()` on the profile does not reach it, and the next attempt
-starts after it all the same.
+### Retrying from the caller
+
+A pause in the body belongs to the job all the same. Root jobs run one at a
+time, so the next job of the profile waits through every attempt and every
+pause between them. Where other jobs should run between the attempts, the
+caller retries instead of the body. The job is `load()` of the quick start,
+which tries once, on the profile of [Reporting an error](#reporting-an-error).
+
+```dart
+Future<Outcome<String>> loadWithRetries(ProfileController profile) async {
+  for (var attempt = 1;; attempt++) {
+    final outcome = await profile.load().done;
+    if (outcome is! Failed || attempt == 3) return outcome;
+    await Future<void>.delayed(Duration(seconds: attempt));
+  }
+}
+```
+
+Here `Future.delayed` is in its place: it belongs to no job, so it holds
+nothing. The jobs sent in between run in the gap, and `close()` does not wait
+for it. A `Cancelled` ends the loop as a `Done` does. `cancelAll()` while an
+attempt runs cancels it, and the loop returns that `Cancelled`; `cancelAll()`
+in the gap finds no job to cancel, and the next attempt starts after it all the
+same. Close the profile, and the next attempt is refused: the loop returns its
+`Cancelled(closed)` at the end of the gap. The gap itself is the caller's to
+stop. Until it does, the timer outlives a closed profile: a widget test that
+closes the profile in the gap fails on it, where the loop in the body passes.
+Nor does the loop know of a load sent in the gap: if that load succeeds, the
+next attempt still loads again.
+
+Each attempt is a job of its own, and the profile shows how each one ended.
+Between the attempts the state is the `Failure` of `ifFailed`, and the screen
+shows the error until the next attempt emits `Loading`; with the loop in the
+body the state stays `Loading` throughout. Every failed attempt reaches
+`onError` as well, so the crash reporter hears each one, where the loop in the
+body let it hear only the failure that ended the job. `done` marks each outcome
+observed, so no failure of an attempt goes on to the zone.
 
 ## Errors in state rules
 

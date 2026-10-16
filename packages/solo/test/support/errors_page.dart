@@ -207,6 +207,15 @@ class RetryingProfile extends Solo<ProfileState>
       );
 }
 
+/// "Retrying from the caller".
+Future<Outcome<String>> loadWithRetries(ProfileController profile) async {
+  for (var attempt = 1;; attempt++) {
+    final outcome = await profile.load().done;
+    if (outcome is! Failed || attempt == 3) return outcome;
+    await Future<void>.delayed(Duration(seconds: attempt));
+  }
+}
+
 /// "Work with a life of its own". Not on the page: the function around the
 /// statement.
 void sendZoom(JobContext ctx, double zoom) {

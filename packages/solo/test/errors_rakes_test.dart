@@ -3430,66 +3430,319 @@ void main() {
       expect(ran.errors, isEmpty);
     });
 
-    test('the pauses hold the queue; a caller that retries lets jobs by', () {
+    test('the pauses hold the queue', () {
       _says(
         'Root jobs run one at a time, so the next job of the profile waits '
         'through every attempt and every pause between them',
       );
-      _says(
-        'the caller retries instead of the body: it awaits `job.done`, and on '
-        'a `Failed` waits and starts the job again, and the jobs sent in '
-        "between run in that gap. The gap is the caller's: `cancelAll()` on "
-        'the profile does not reach it, and the next attempt starts after it '
-        'all the same',
-      );
-      final inBody = <String>[];
-      final byCaller = <String>[];
+      final events = <String>[];
       final ran = _run((async) {
         final profile = page.RetryingProfile(ProfileApi());
-        noteEnd(profile.load(), async, inBody);
+        noteEnd(profile.load(), async, events);
         async.flushMicrotasks();
         _fail(async, 'fetchName', StateError('no network'));
-        sendNext(profile, async, inBody);
-        async.elapse(const Duration(seconds: 1));
-        _end(async, 'fetchName');
-
-        // Not on the page: the caller's loop, around a job that tries once.
-        final bench = Bench();
-        Future<void> retried() async {
-          for (var attempt = 1;; attempt++) {
-            final job = bench.run<int, String>(
-              key: 'load',
-              (ctx) => ctx.abandonable(ProfileApi().fetchName),
-            );
-            byCaller.add('load $attempt at ${async.elapsed.inSeconds} s');
-            if (await job.done is! Failed || attempt == 3) return;
-            await Future<void>.delayed(Duration(seconds: attempt));
-          }
-        }
-
-        unawaited(retried());
-        async.flushMicrotasks();
-        _fail(async, 'fetchName', StateError('no network'));
-        bench.run<int, void>(
-          key: 'next',
-          (ctx) async =>
-              byCaller.add('next ran at ${async.elapsed.inSeconds} s'),
-        );
-        async.flushMicrotasks();
-        unawaited(bench.cancelAll());
-        byCaller.add('cancelAll at ${async.elapsed.inSeconds} s');
+        sendNext(profile, async, events);
         async.elapse(const Duration(seconds: 1));
         _end(async, 'fetchName');
       });
 
-      expect(inBody, unorderedEquals(['load ended at 1 s', 'next ran at 1 s']));
-      expect(byCaller, [
-        'load 1 at 1 s',
-        'next ran at 1 s',
-        'cancelAll at 1 s',
-        'load 2 at 2 s',
-      ]);
+      expect(events, unorderedEquals(['load ended at 1 s', 'next ran at 1 s']));
       expect(ran.errors, isEmpty);
+    });
+
+    test('the loop in the body stays Loading between the attempts', () {
+      _says('with the loop in the body the state stays `Loading` throughout');
+      _says(
+        'where the loop in the body let it hear only the failure that '
+        'ended the job',
+      );
+      final states = <String>[];
+      late page.RetryingProfile profile;
+      final ran = _run((async) {
+        profile = page.RetryingProfile(ProfileApi())
+          ..addListener(() => states.add('${profile.currentState}'));
+        profile.load();
+        async.flushMicrotasks();
+        _fail(async, 'fetchName', StateError('no network'));
+        async.elapse(const Duration(seconds: 1));
+        _fail(async, 'fetchName', StateError('no network'));
+        async.elapse(const Duration(seconds: 2));
+        _end(async, 'fetchName');
+      });
+
+      expect(states, ['Loading', 'Loaded(Ada Lovelace)']);
+      expect(profile.heard, isEmpty);
+      expect(ran.errors, isEmpty);
+    });
+
+    group('from the caller:', () {
+      /// Starts the loop of the page on a fresh profile, and notes in
+      /// [events] what it returns and when.
+      page.ProfileController retry(FakeAsync async, List<String> events) {
+        final profile = page.ProfileController(ProfileApi());
+        unawaited(
+          page.loadWithRetries(profile).then(
+                (outcome) => events.add(
+                  'returned $outcome at ${async.elapsed.inMilliseconds} ms',
+                ),
+              ),
+        );
+        async.flushMicrotasks();
+
+        return profile;
+      }
+
+      /// Moves [async] to [seconds] and notes whether `fetchName` was called
+      /// a millisecond before and at that moment.
+      void callingAround(FakeAsync async, int seconds, List<bool> calling) {
+        final at = Duration(seconds: seconds);
+        async.elapse(at - async.elapsed - const Duration(milliseconds: 1));
+        calling.add(stage.isRunning('fetchName'));
+        async.elapse(const Duration(milliseconds: 1));
+        calling.add(stage.isRunning('fetchName'));
+      }
+
+      test('a job sent in the gap runs in it, and close() does not wait', () {
+        _says(
+          'Where other jobs should run between the attempts, the caller '
+          'retries instead of the body',
+        );
+        _says(
+          'it belongs to no job, so it holds nothing. The jobs sent in '
+          'between run in the gap, and `close()` does not wait for it',
+        );
+        final events = <String>[];
+        final ran = _run((async) {
+          final profile = retry(async, events);
+          _fail(async, 'fetchName', StateError('no network'));
+          async.elapse(const Duration(milliseconds: 300));
+          events.add('pending ${profile.pending}');
+          unawaited(
+            profile.load().done.then(
+                  (outcome) => events.add(
+                    'sent: $outcome at ${async.elapsed.inMilliseconds} ms',
+                  ),
+                ),
+          );
+          async.flushMicrotasks();
+          events.add('calling ${stage.isRunning('fetchName')}');
+          async.elapse(const Duration(milliseconds: 200));
+          _end(async, 'fetchName');
+          unawaited(
+            profile.close().then(
+                  (_) => events.add(
+                    'closed at ${async.elapsed.inMilliseconds} ms',
+                  ),
+                ),
+          );
+          async.elapse(const Duration(seconds: 1));
+        });
+
+        expect(events, [
+          'pending null',
+          'calling true',
+          'sent: Done(Ada Lovelace) at 500 ms',
+          'closed at 500 ms',
+          'returned Cancelled(closed) at 1000 ms',
+        ]);
+        expect(ran.errors, isEmpty);
+      });
+
+      test(
+          'two failures, then the name: Failure between the attempts, and '
+          'the reporter hears each failure', () {
+        _says(
+          'Between the attempts the state is the `Failure` of `ifFailed`, and '
+          'the screen shows the error until the next attempt emits `Loading`',
+        );
+        _says(
+          'Every failed attempt reaches `onError` as well, so the crash '
+          'reporter hears each one',
+        );
+        _says(
+          '`done` marks each outcome observed, so no failure of an attempt '
+          'goes on to the zone',
+        );
+        final events = <String>[];
+        final states = <String>[];
+        final calling = <bool>[];
+        late page.ProfileController profile;
+        final ran = _run((async) {
+          profile = retry(async, events)
+            ..addListener(() => states.add('${profile.currentState}'));
+          _fail(async, 'fetchName', StateError('no network'));
+          callingAround(async, 1, calling);
+          _fail(async, 'fetchName', StateError('no network'));
+          callingAround(async, 3, calling);
+          _end(async, 'fetchName');
+        });
+
+        expect(
+          calling,
+          [false, true, false, true],
+          reason: 'the second call a second later, the third two more',
+        );
+        expect(states, [
+          'Failure(Bad state: no network)',
+          'Loading',
+          'Failure(Bad state: no network)',
+          'Loading',
+          'Loaded(Ada Lovelace)',
+        ]);
+        expect(events, ['returned Done(Ada Lovelace) at 3000 ms']);
+        expect(stage.crashes, ['no network', 'no network']);
+        expect(ran.errors, isEmpty);
+      });
+
+      test('three failures: the loop returns the Failed of the third', () {
+        final events = <String>[];
+        late page.ProfileController profile;
+        final ran = _run((async) {
+          profile = retry(async, events);
+          _fail(async, 'fetchName', StateError('no network 1'));
+          async.elapse(const Duration(seconds: 1));
+          _fail(async, 'fetchName', StateError('no network 2'));
+          async.elapse(const Duration(seconds: 2));
+          _fail(async, 'fetchName', StateError('no network 3'));
+          async.elapse(const Duration(seconds: 5));
+        });
+
+        expect(events, ['returned Failed(Bad state: no network 3) at 3000 ms']);
+        expect('${profile.currentState}', 'Failure(Bad state: no network 3)');
+        expect(stage.crashes, ['no network 1', 'no network 2', 'no network 3']);
+        expect(ran.errors, isEmpty);
+      });
+
+      test('cancelAll() during an attempt ends the loop', () {
+        _says(
+          'A `Cancelled` ends the loop as a `Done` does. `cancelAll()` while '
+          'an attempt runs cancels it, and the loop returns that `Cancelled`',
+        );
+        final events = <String>[];
+        final ran = _run((async) {
+          final profile = retry(async, events);
+          unawaited(profile.cancelAll());
+          async.elapse(const Duration(seconds: 5));
+        });
+
+        expect(events, ['returned Cancelled(manual) at 0 ms']);
+        expect(stage.trace, ['fetchName start']);
+        expect(ran.errors, isEmpty);
+      });
+
+      test('cancelAll() in the gap finds nothing; the next attempt starts', () {
+        _says(
+          '`cancelAll()` in the gap finds no job to cancel, and the next '
+          'attempt starts after it all the same',
+        );
+        _says("The gap itself is the caller's to stop");
+        final events = <String>[];
+        final calling = <bool>[];
+        final ran = _run((async) {
+          final profile = retry(async, events);
+          _fail(async, 'fetchName', StateError('no network'));
+          async.elapse(const Duration(milliseconds: 300));
+          unawaited(profile.cancelAll());
+          async.flushMicrotasks();
+          callingAround(async, 1, calling);
+          _end(async, 'fetchName');
+        });
+
+        expect(calling, [false, true]);
+        expect(events, ['returned Done(Ada Lovelace) at 1000 ms']);
+        expect(ran.errors, isEmpty);
+      });
+
+      test('the timer of the gap outlives a closed profile; a pause does not',
+          () {
+        _says(
+          "The gap itself is the caller's to stop. Until it does, the timer "
+          'outlives a closed profile',
+        );
+        _says('where the loop in the body passes');
+        late int afterGap;
+        late int afterPause;
+        final ran = _run((async) {
+          final profile = retry(async, <String>[]);
+          _fail(async, 'fetchName', StateError('no network'));
+          async.elapse(const Duration(milliseconds: 300));
+          unawaited(profile.close());
+          async.flushMicrotasks();
+          afterGap = async.pendingTimers.length;
+          async.elapse(const Duration(seconds: 1));
+
+          final inBody = page.RetryingProfile(ProfileApi());
+          inBody.load().ignoreFailure();
+          async.flushMicrotasks();
+          _fail(async, 'fetchName', StateError('no network'));
+          async.elapse(const Duration(milliseconds: 300));
+          unawaited(inBody.close());
+          async.flushMicrotasks();
+          afterPause = async.pendingTimers.length;
+        });
+
+        expect(afterGap, 1);
+        expect(afterPause, 0);
+        expect(ran.errors, isEmpty);
+      });
+
+      test('a load sent in the gap does not stop the loop', () {
+        _says(
+          'Nor does the loop know of a load sent in the gap: if that load '
+          'succeeds, the next attempt still loads again',
+        );
+        final events = <String>[];
+        final states = <String>[];
+        late page.ProfileController profile;
+        final ran = _run((async) {
+          profile = retry(async, events)
+            ..addListener(
+              () => states.add(
+                '${profile.currentState} at ${async.elapsed.inMilliseconds}',
+              ),
+            );
+          _fail(async, 'fetchName', StateError('no network'));
+          async.elapse(const Duration(milliseconds: 300));
+          profile.load().ignoreFailure();
+          async.elapse(const Duration(milliseconds: 200));
+          _end(async, 'fetchName');
+          async.elapse(const Duration(milliseconds: 500));
+          _end(async, 'fetchName');
+        });
+
+        expect(states, [
+          'Failure(Bad state: no network) at 0',
+          'Loading at 300',
+          'Loaded(Ada Lovelace) at 500',
+          'Loading at 1000',
+          'Loaded(Ada Lovelace) at 1000',
+        ]);
+        expect(
+          stage.trace.where((line) => line == 'fetchName start'),
+          hasLength(3),
+        );
+        expect(events, ['returned Done(Ada Lovelace) at 1000 ms']);
+        expect(ran.errors, isEmpty);
+      });
+
+      test('a profile closed in the gap refuses the next attempt', () {
+        _says(
+          'Close the profile, and the next attempt is refused: the loop '
+          'returns its `Cancelled(closed)` at the end of the gap',
+        );
+        final events = <String>[];
+        final ran = _run((async) {
+          final profile = retry(async, events);
+          _fail(async, 'fetchName', StateError('no network'));
+          async.elapse(const Duration(milliseconds: 300));
+          unawaited(profile.close());
+          async.elapse(const Duration(seconds: 5));
+        });
+
+        expect(events, ['returned Cancelled(closed) at 1000 ms']);
+        expect(stage.trace, ['fetchName start', 'fetchName failed']);
+        expect(ran.errors, isEmpty);
+      });
     });
   });
 
@@ -4436,6 +4689,7 @@ void main() {
       '### Observing the outcome': answers,
       '### Letting cancellation through': answers,
       '### A pause between attempts': answers,
+      '### Retrying from the caller': answers,
       '### A rule answers': answers,
       '### Work with a life of its own': answers,
       '### Logs': answers,
