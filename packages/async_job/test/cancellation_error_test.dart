@@ -134,6 +134,33 @@ void main() {
       expect(zone, isEmpty);
     });
 
+    test('a child it names: the parent gets Cancelled, nobody answers', () {
+      nameTheStop();
+      final heard = Heard();
+      final caught = <Object>[];
+      final zone = run(
+        () => Job<void>((ctx) async {
+          try {
+            await ctx.run(
+              Job.deferred<void>(
+                observer: heard,
+                (ctx) => ctx.join(() async {
+                  await delay(20);
+                  throw const Stopped();
+                }),
+              ),
+            );
+          } on Cancelled catch (cancelled) {
+            caught.add(cancelled);
+          }
+        }),
+      );
+      expect(caught, [isA<Cancelled>()]);
+      expect(asked, ['Stopped']);
+      expect(heard.seen, ['onError: Stopped']);
+      expect(zone, isEmpty);
+    });
+
     test('a failure it does not name goes on to the answer', () {
       nameTheStop();
       final heard = Heard();

@@ -599,7 +599,13 @@ the cancellation, asked about after it» в `cancellation_error_test.dart` ег�
 спрашивает фильтр о провале источника, как велит правило. Отчёт —
 `review-report.md` в `.artifacts/2026-10-12-full-review/mine/probes/l2-impl/`,
 зонды ревьюера — там же, в `probes/`. На дереве после ревью `async_job` — 1466
-тестов, `solo` — 1919, анализ и `dart doc` чистые.
+тестов, `solo` — 1919, анализ и `dart doc` чистые. По вопросу владельца
+2026-10-16 «а isCancellationError?» к абзацу `children.md` ядра о ребёнке,
+который кончился `Cancelled`, поле там названо по имени сразу за фразой о том,
+куда уходит ошибка; раньше о нём говорила последняя фраза абзаца, и только
+ссылкой на раздел «Errors of a cancellation». Перевод рядом, сторож — тест «a
+child it names: the parent gets Cancelled, nobody answers»
+в `cancellation_error_test.dart`; `async_job` — 1467 тестов.
 
 ### L3. Снятие ребёнка со списка родителя — O(n), большие группы квадратичны
 
