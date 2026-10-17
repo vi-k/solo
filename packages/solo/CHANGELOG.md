@@ -186,6 +186,8 @@ different `runZonedGuarded`. See
   arrive after that guards its write with `isFinished`.
 - The camera example no longer sticks in `Preparing` when an opening is
   cancelled half way.
+- The camera example no longer publishes `Ready` over a failure the hardware
+  reports while the camera opens.
 
 ## 0.2.0
 

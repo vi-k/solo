@@ -56,6 +56,59 @@ final class CatchingInit extends Solo<CameraState> with CameraParts {
       );
 }
 
+/// The first attempt of "A failure reported while opening": the answer of
+/// the section above, under the example's listener on the hardware. The
+/// page shows the body of `init` alone, and tells of this `reopen` in its
+/// prose.
+final class UncheckedOpening extends Solo<CameraState> with CameraParts {
+  @override
+  final FakeCameraHardware hw;
+
+  UncheckedOpening(this.hw) : super(const Initial()) {
+    hw.onError = (error) => externalSetState(Broken(error));
+  }
+
+  @override
+  Job<void> init() => run<NotDisposed, void>(
+        key: CameraKey.init,
+        policy: Policy.droppable,
+        canStart: (state) => state is Initial,
+        ifFailed: (state, error, stackTrace) => Broken(error),
+        ifCancelled: (state, cancelled) => Broken(cancelled),
+        (ctx) async {
+          ctx.emit(const Preparing());
+          await ctx.join(hw.open);
+          ctx.emit(const Ready());
+        },
+      );
+
+  @override
+  Job<void> reopen() => run<NotDisposed, void>(
+        key: CameraKey.reopen,
+        policy: Policy.droppable,
+        canStart: (state) => state is Ready || state is Broken,
+        ifFailed: (state, error, stackTrace) => Broken(error),
+        ifCancelled: (state, cancelled) => Broken(cancelled),
+        (ctx) async {
+          final zoom = switch (ctx.state) {
+            Ready(:final zoom) => zoom,
+            _ => 1.0,
+          };
+          await ctx.run(_closeCameraJob());
+          ctx.emit(const Preparing());
+          await ctx.join(hw.open);
+          await ctx.join(() => hw.setZoom(zoom));
+          ctx.emit(Ready(zoom: zoom));
+        },
+      );
+
+  Job<void> _closeCameraJob() => job<NotDisposed, void>(
+        key: CameraKey.closeCamera,
+        cancellable: false,
+        (ctx) async => hw.close(),
+      );
+}
+
 /// The first attempt of "Only the last zoom": the default policy.
 final class QueuedZoom extends Solo<CameraState> with CameraParts {
   @override

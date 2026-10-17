@@ -64,10 +64,16 @@ final class CameraController extends Solo<CameraState> {
   /// An opening that fails or is cancelled lands in [Broken], the state
   /// [reopen] starts from. Left in [Preparing], the camera could not be
   /// opened again: `init` wants [Initial], `reopen` [Ready] or [Broken].
+  ///
+  /// A failure the hardware reports while it opens is a [NotDisposed] as
+  /// well, so the working type lets it by. `keepWhile` does not: the report
+  /// cancels the opening, and a job its rules cancelled leaves the reported
+  /// [Broken] alone.
   Job<void> init() => run<NotDisposed, void>(
         key: CameraKey.init,
         policy: Policy.droppable,
         canStart: (state) => state is Initial,
+        keepWhile: (state) => state is! Broken,
         ifFailed: (state, error, stackTrace) => Broken(error),
         ifCancelled: (state, cancelled) => Broken(cancelled),
         (ctx) async {
@@ -80,26 +86,39 @@ final class CameraController extends Solo<CameraState> {
   /// Closes and reopens the hardware, restoring the zoom. The close runs as
   /// a `cancellable: false` child: once started it always completes. A
   /// reopening that fails or is cancelled lands in [Broken], as [init] does.
-  Job<void> reopen() => run<NotDisposed, void>(
-        key: CameraKey.reopen,
-        policy: Policy.droppable,
-        canStart: (state) => state is Ready || state is Broken,
-        ifFailed: (state, error, stackTrace) => Broken(error),
-        ifCancelled: (state, cancelled) => Broken(cancelled),
-        (ctx) async {
-          final zoom = switch (ctx.state) {
-            Ready(:final zoom) => zoom,
-            _ => 1.0,
-          };
-          // `run` throws what the close threw: hardware that is still open
-          // must not be reopened over in silence.
-          await ctx.run(_closeCameraJob());
-          ctx.emit(const Preparing());
-          await ctx.join(hw.open);
-          await ctx.join(() => hw.setZoom(zoom));
-          ctx.emit(Ready(zoom: zoom));
-        },
-      );
+  ///
+  /// A failure reported while the hardware opens or the zoom is restored
+  /// ends the reopening and stays, as in [init]. Until the body writes
+  /// [Preparing] the rule lets [Broken] by: the reopening starts from it,
+  /// and a failure reported while the hardware closes is the one it is
+  /// there to undo. The flag goes up before that write, so a report made
+  /// while the write is delivered is refused as well; the write itself is
+  /// the job's own and asks none of its rules.
+  Job<void> reopen() {
+    var opening = false;
+    return run<NotDisposed, void>(
+      key: CameraKey.reopen,
+      policy: Policy.droppable,
+      canStart: (state) => state is Ready || state is Broken,
+      keepWhile: (state) => !opening || state is! Broken,
+      ifFailed: (state, error, stackTrace) => Broken(error),
+      ifCancelled: (state, cancelled) => Broken(cancelled),
+      (ctx) async {
+        final zoom = switch (ctx.state) {
+          Ready(:final zoom) => zoom,
+          _ => 1.0,
+        };
+        // `run` throws what the close threw: hardware that is still open
+        // must not be reopened over in silence.
+        await ctx.run(_closeCameraJob());
+        opening = true;
+        ctx.emit(const Preparing());
+        await ctx.join(hw.open);
+        await ctx.join(() => hw.setZoom(zoom));
+        ctx.emit(Ready(zoom: zoom));
+      },
+    );
+  }
 
   Job<void> _closeCameraJob() => job<NotDisposed, void>(
         key: CameraKey.closeCamera,

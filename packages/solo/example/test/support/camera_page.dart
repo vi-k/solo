@@ -19,6 +19,7 @@ mixin CameraParts on Solo<CameraState> {
         key: CameraKey.init,
         policy: Policy.droppable,
         canStart: (state) => state is Initial,
+        keepWhile: (state) => state is! Broken,
         ifFailed: (state, error, stackTrace) => Broken(error),
         ifCancelled: (state, cancelled) => Broken(cancelled),
         (ctx) async {
@@ -28,24 +29,29 @@ mixin CameraParts on Solo<CameraState> {
         },
       );
 
-  Job<void> reopen() => run<NotDisposed, void>(
-        key: CameraKey.reopen,
-        policy: Policy.droppable,
-        canStart: (state) => state is Ready || state is Broken,
-        ifFailed: (state, error, stackTrace) => Broken(error),
-        ifCancelled: (state, cancelled) => Broken(cancelled),
-        (ctx) async {
-          final zoom = switch (ctx.state) {
-            Ready(:final zoom) => zoom,
-            _ => 1.0,
-          };
-          await ctx.run(_closeCameraJob());
-          ctx.emit(const Preparing());
-          await ctx.join(hw.open);
-          await ctx.join(() => hw.setZoom(zoom));
-          ctx.emit(Ready(zoom: zoom));
-        },
-      );
+  Job<void> reopen() {
+    var opening = false;
+    return run<NotDisposed, void>(
+      key: CameraKey.reopen,
+      policy: Policy.droppable,
+      canStart: (state) => state is Ready || state is Broken,
+      keepWhile: (state) => !opening || state is! Broken,
+      ifFailed: (state, error, stackTrace) => Broken(error),
+      ifCancelled: (state, cancelled) => Broken(cancelled),
+      (ctx) async {
+        final zoom = switch (ctx.state) {
+          Ready(:final zoom) => zoom,
+          _ => 1.0,
+        };
+        await ctx.run(_closeCameraJob());
+        opening = true;
+        ctx.emit(const Preparing());
+        await ctx.join(hw.open);
+        await ctx.join(() => hw.setZoom(zoom));
+        ctx.emit(Ready(zoom: zoom));
+      },
+    );
+  }
 
   Job<void> setZoom(double zoom) => run<Ready, void>(
         key: CameraKey.setZoom,
@@ -89,6 +95,28 @@ final class WideInit extends Solo<CameraState> with CameraParts {
         key: CameraKey.init,
         policy: Policy.droppable,
         canStart: (state) => state is Initial,
+        (ctx) async {
+          ctx.emit(const Preparing());
+          await ctx.join(hw.open);
+          ctx.emit(const Ready());
+        },
+      );
+}
+
+/// "The handlers of run": the opening before its `keepWhile`.
+final class HandledInit extends Solo<CameraState> with CameraParts {
+  @override
+  final FakeCameraHardware hw;
+
+  HandledInit(this.hw) : super(const Initial());
+
+  @override
+  Job<void> init() => run<NotDisposed, void>(
+        key: CameraKey.init,
+        policy: Policy.droppable,
+        canStart: (state) => state is Initial,
+        ifFailed: (state, error, stackTrace) => Broken(error),
+        ifCancelled: (state, cancelled) => Broken(cancelled),
         (ctx) async {
           ctx.emit(const Preparing());
           await ctx.join(hw.open);

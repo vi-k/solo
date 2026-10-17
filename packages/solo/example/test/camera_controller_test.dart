@@ -163,6 +163,58 @@ void main() {
     });
   });
 
+  test('a failure reported while the camera opens stays', () {
+    runCamera((camera, hw, journal, async) {
+      final opening = camera.init()..ignoreFailure();
+      async.elapse(const Duration(milliseconds: 5));
+      hw.fail(StateError('cable pulled'));
+      async.elapse(const Duration(milliseconds: 5));
+      expect(journal.take(), [
+        '[init] started',
+        'state: Preparing()',
+        'state: Broken(Bad state: cable pulled)',
+        '[init] finished Cancelled(rules: keepWhile)',
+      ]);
+      expect(opening.outcome, isA<Cancelled>());
+    });
+  });
+
+  test('a failure reported while reopening stays, unless it closes', () {
+    // The close takes the first ten milliseconds, the opening the next ten
+    // and the zoom the ten after.
+    const close = ['close: begin', 'close: end'];
+    const open = ['open: begin', 'open: end'];
+    const zoom = ['zoom 2.0: begin', 'zoom 2.0: end'];
+    for (final (at, stays, log) in [
+      (5, false, [...close, ...open, ...zoom]),
+      (15, true, [...close, ...open]),
+      (25, true, [...close, ...open, ...zoom]),
+    ]) {
+      runCamera((camera, hw, journal, async) {
+        camera
+          ..init()
+          ..setZoom(2);
+        async.elapse(const Duration(milliseconds: 20));
+        hw.log.clear();
+
+        final reopening = camera.reopen()..ignoreFailure();
+        async.elapse(Duration(milliseconds: at));
+        hw.fail(StateError('cable pulled'));
+        async.elapse(const Duration(milliseconds: 30));
+        // Nothing reaches the hardware after the call the report came in.
+        expect(hw.log, log);
+        if (stays) {
+          expect('${reopening.outcome}', 'Cancelled(rules: keepWhile)');
+          expect('${camera.currentState}', 'Broken(Bad state: cable pulled)');
+        } else {
+          // The reopening is the way back from the failure.
+          expect(reopening.outcome, isA<Done<void>>());
+          expect(camera.currentState, const Ready(zoom: 2));
+        }
+      });
+    }
+  });
+
   test('resetFocusPoint restores automatic focus', () {
     runCamera((camera, hw, journal, async) {
       camera

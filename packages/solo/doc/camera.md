@@ -225,6 +225,115 @@ A job dropped before its start reaches neither handler, so the second `init()`
 of the section above still ends in its one `dropped` line. `reopen` has the
 same two handlers.
 
+## A failure reported while opening
+
+The hardware reports failures on its own as well, and a report can come while
+the camera opens. The controller turns it into `Broken`, and the opening has to
+leave it there: the camera it was opening is broken.
+
+### The first attempt
+
+```dart
+// The first attempt: Ready is published over a reported failure.
+(ctx) async {
+  ctx.emit(const Preparing());
+  await ctx.join(hw.open);
+  ctx.emit(const Ready());
+},
+```
+
+This is the body of `init` under [The handlers of run](#the-handlers-of-run),
+and the hardware reports a failure while `hw.open` runs:
+
+```text
+[init] started
+state: Preparing()
+state: Broken(Bad state: cable pulled)
+state: Ready(zoom: 1.0, focusPoint: null, paused: false)
+[init] finished Done(null)
+```
+
+`Broken` is a `NotDisposed` as well, so no rule of the job refuses it. The wait
+returns as usual, the body publishes `Ready` over the report, and the job ends
+`Done`, which reaches neither handler. The camera says it is ready after its
+hardware said it is not. `reopen` does the same with a failure reported while
+it opens the hardware or restores the zoom.
+
+### keepWhile
+
+```dart
+Job<void> init() => run<NotDisposed, void>(
+      key: CameraKey.init,
+      policy: Policy.droppable,
+      canStart: (state) => state is Initial,
+      keepWhile: (state) => state is! Broken,
+      ifFailed: (state, error, stackTrace) => Broken(error),
+      ifCancelled: (state, cancelled) => Broken(cancelled),
+      (ctx) async {
+        ctx.emit(const Preparing());
+        await ctx.join(hw.open);
+        ctx.emit(const Ready());
+      },
+    );
+```
+
+`keepWhile` refuses what the working type lets by: an opening does not go on in
+`Broken`. The report writes it with `externalSetState`, the rule refuses it,
+and the job's rules cancel the job. `join` stays with the hardware until it has
+opened, then throws `Cancelled` instead of returning, so the `emit` is never
+reached:
+
+```text
+[init] started
+state: Preparing()
+state: Broken(Bad state: cable pulled)
+[init] finished Cancelled(rules: keepWhile)
+```
+
+A job its rules cancelled leaves the state as it is, and the handlers are
+disabled at the report itself: a cancellation or a failure of `hw.open` that
+comes after it reaches neither of them, and the reported failure stays. It is
+the rule that
+[Preserving an incompatible external state](state.md#preserving-an-incompatible-external-state)
+on the state page gives a load whose connection drops.
+
+`reopen` starts from `Broken`, and a failure reported while it closes the
+hardware is the one it is there to undo. So its rule holds from the `Preparing`
+it writes. The body raises the flag the rule reads right before that `emit`:
+the `emit` asks none of the job's rules, and a report made while `Preparing` is
+delivered is refused as well:
+
+```dart
+Job<void> reopen() {
+  var opening = false;
+  return run<NotDisposed, void>(
+    key: CameraKey.reopen,
+    policy: Policy.droppable,
+    canStart: (state) => state is Ready || state is Broken,
+    keepWhile: (state) => !opening || state is! Broken,
+    ifFailed: (state, error, stackTrace) => Broken(error),
+    ifCancelled: (state, cancelled) => Broken(cancelled),
+    (ctx) async {
+      final zoom = switch (ctx.state) {
+        Ready(:final zoom) => zoom,
+        _ => 1.0,
+      };
+      await ctx.run(_closeCameraJob());
+      opening = true;
+      ctx.emit(const Preparing());
+      await ctx.join(hw.open);
+      await ctx.join(() => hw.setZoom(zoom));
+      ctx.emit(Ready(zoom: zoom));
+    },
+  );
+}
+```
+
+A failure reported while it opens the hardware or restores the zoom ends it the
+way it ends `init`. A failure reported while it closes the hardware lets it go
+on. A `reopen()` called after a report gets a job of its own: the one the
+report cancelled is still unwinding, and `droppable` does not hand it out.
+
 ## Only the last zoom
 
 A pinch asks for a zoom on every frame, and only the last request matters.
@@ -551,9 +660,9 @@ was called.
 
 ## A failure after the disposal
 
-The hardware reports a failure on its own, and the controller turns the report
-into `Broken`. Once the camera is disposed, a report must change nothing:
-`Disposed` is the state the controller ends on.
+The hardware can report a failure after the disposal too, and the controller
+turns every report into `Broken`. Once the camera is disposed, a report must
+change nothing: `Disposed` is the state the controller ends on.
 
 ### The first attempt
 

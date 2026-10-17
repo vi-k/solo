@@ -228,6 +228,117 @@ state: Broken(Cancelled(manual))
 вторая `init()` из раздела выше по-прежнему кончается одной строкой `dropped`.
 У `reopen` те же два обработчика.
 
+## Сбой, о котором сообщили во время открытия
+
+Устройство и само сообщает о сбоях, и сообщение может прийти, пока камера
+открывается. Контроллер превращает его в `Broken`, и открытие должно оставить
+`Broken` на месте: камера, которую оно открывало, сломана.
+
+### Первая попытка
+
+```dart
+// Первая попытка: Ready публикуется поверх сообщённого сбоя.
+(ctx) async {
+  ctx.emit(const Preparing());
+  await ctx.join(hw.open);
+  ctx.emit(const Ready());
+},
+```
+
+Это тело `init` из раздела [«Обработчики run»](#обработчики-run), а устройство
+сообщает о сбое, пока идёт `hw.open`:
+
+```text
+[init] started
+state: Preparing()
+state: Broken(Bad state: cable pulled)
+state: Ready(zoom: 1.0, focusPoint: null, paused: false)
+[init] finished Done(null)
+```
+
+`Broken` тоже относится к `NotDisposed`, поэтому ни одно правило задачи его
+не отвергает. Ожидание возвращается как обычно, тело публикует `Ready` поверх
+сообщения, и задача кончается `Done`, с которым не вызывается ни один
+обработчик. Камера говорит, что готова, после того как устройство сказало, что
+нет. `reopen` делает то же со сбоем, о котором сообщили, пока он открывает
+устройство или восстанавливает масштаб.
+
+### keepWhile
+
+```dart
+Job<void> init() => run<NotDisposed, void>(
+      key: CameraKey.init,
+      policy: Policy.droppable,
+      canStart: (state) => state is Initial,
+      keepWhile: (state) => state is! Broken,
+      ifFailed: (state, error, stackTrace) => Broken(error),
+      ifCancelled: (state, cancelled) => Broken(cancelled),
+      (ctx) async {
+        ctx.emit(const Preparing());
+        await ctx.join(hw.open);
+        ctx.emit(const Ready());
+      },
+    );
+```
+
+`keepWhile` отвергает то, что пропускает рабочий тип: в `Broken` открытие
+не продолжается. Сообщение записывает это состояние через `externalSetState`,
+правило его отвергает, и задачу отменяют её правила. `join` остаётся
+с устройством, пока оно не откроется, а потом вместо возврата бросает
+`Cancelled`, так что до `emit` дело не доходит:
+
+```text
+[init] started
+state: Preparing()
+state: Broken(Bad state: cable pulled)
+[init] finished Cancelled(rules: keepWhile)
+```
+
+Задача, которую отменили её правила, оставляет состояние как есть,
+а обработчики выключаются в момент самого сообщения: отмена или сбой `hw.open`,
+пришедшие после него, не доходят ни до одного из них, и сообщённый сбой
+остаётся. Это то же правило, которое раздел
+[«Сохранение несовместимого внешнего состояния»](state.md#сохранение-несовместимого-внешнего-состояния)
+страницы о состоянии даёт загрузке, у которой обрывается соединение.
+
+`reopen` стартует из `Broken`, и сбой, о котором сообщили, пока он закрывает
+устройство, — ровно то, что ему надо исправить. Поэтому его правило действует
+с того `Preparing`, который он записывает. Правило читает флаг, а тело
+поднимает его прямо перед этим `emit`: `emit` не спрашивает правил задачи,
+а сообщение, пришедшее, пока `Preparing` доставляется, правило тоже отвергает:
+
+```dart
+Job<void> reopen() {
+  var opening = false;
+  return run<NotDisposed, void>(
+    key: CameraKey.reopen,
+    policy: Policy.droppable,
+    canStart: (state) => state is Ready || state is Broken,
+    keepWhile: (state) => !opening || state is! Broken,
+    ifFailed: (state, error, stackTrace) => Broken(error),
+    ifCancelled: (state, cancelled) => Broken(cancelled),
+    (ctx) async {
+      final zoom = switch (ctx.state) {
+        Ready(:final zoom) => zoom,
+        _ => 1.0,
+      };
+      await ctx.run(_closeCameraJob());
+      opening = true;
+      ctx.emit(const Preparing());
+      await ctx.join(hw.open);
+      await ctx.join(() => hw.setZoom(zoom));
+      ctx.emit(Ready(zoom: zoom));
+    },
+  );
+}
+```
+
+Сбой, о котором сообщили, пока он открывает устройство или восстанавливает
+масштаб, завершает его так же, как завершает `init`. Сбой, о котором сообщили,
+пока он закрывает устройство, не мешает ему продолжить. `reopen()`, вызванный
+после сообщения, получает свою задачу: та, которую отменило сообщение, ещё
+сворачивается, и `droppable` её не отдаёт.
+
 ## Только последний масштаб
 
 Щипок запрашивает масштаб на каждом кадре, и важен только последний запрос.
@@ -556,9 +667,9 @@ switch (await camera.dispose().done) {
 
 ## Сбой после освобождения
 
-Устройство сообщает о сбое само, и контроллер превращает это сообщение
-в `Broken`. Когда камера освобождена, сообщение не должно ничего менять:
-контроллер заканчивает на `Disposed`.
+Устройство может сообщить о сбое и после освобождения, и контроллер превращает
+каждое сообщение в `Broken`. Когда камера освобождена, сообщение не должно
+ничего менять: контроллер заканчивает на `Disposed`.
 
 ### Первая попытка
 

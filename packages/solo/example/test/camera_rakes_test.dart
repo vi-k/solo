@@ -206,6 +206,13 @@ Job<void> Function() _init(Solo<CameraState> camera) => switch (camera) {
       _ => throw ArgumentError.value(camera),
     };
 
+/// The `reopen` of [camera], whichever version it is.
+Job<void> Function() _reopen(Solo<CameraState> camera) => switch (camera) {
+      CameraController() => camera.reopen,
+      CameraParts() => camera.reopen,
+      _ => throw ArgumentError.value(camera),
+    };
+
 /// The `setZoom` of [camera], whichever version it is.
 Job<void> Function(double zoom) _setZoom(Solo<CameraState> camera) =>
     switch (camera) {
@@ -236,6 +243,7 @@ const _page = '../doc/camera.md';
 const _intro = '# Camera example';
 const _opening = '## Opening the camera';
 const _failing = '## An opening that fails';
+const _reported = '## A failure reported while opening';
 const _zoom = '## Only the last zoom';
 const _shot = '## Commands that arrive during a shot';
 const _disposing = '## Disposing of the camera';
@@ -880,23 +888,28 @@ void main() {
         'A failure and a cancellation both land in `Broken`, and `reopen` '
         'starts from there:',
       );
-      final hw = FakeCameraHardware()
-        ..failures['open'] = StateError('camera in use');
-      camera(CameraController.new, hardware: hw, (camera, hw, journal, async) {
-        final job = camera.init()..ignoreFailure();
-        async.elapse(const Duration(milliseconds: 20));
+      for (final create in <_Create>[
+        HandledInit.new,
+        CameraController.new,
+      ]) {
+        final hw = FakeCameraHardware()
+          ..failures['open'] = StateError('camera in use');
+        camera(create, hardware: hw, (camera, hw, journal, async) {
+          final job = _init(camera)()..ignoreFailure();
+          async.elapse(const Duration(milliseconds: 20));
 
-        expect(journal.take(), _quoted(answer).first);
-        expect(job.outcome, isA<Failed>());
+          expect(journal.take(), _quoted(answer).first);
+          expect(job.outcome, isA<Failed>());
 
-        // The other app lets go of the camera.
-        hw.failures.remove('open');
-        final rescue = camera.reopen()..ignoreFailure();
-        async.elapse(const Duration(milliseconds: 40));
+          // The other app lets go of the camera.
+          hw.failures.remove('open');
+          final rescue = _reopen(camera)()..ignoreFailure();
+          async.elapse(const Duration(milliseconds: 40));
 
-        expect(rescue.outcome, isA<Done<void>>());
-        expect(camera.currentState, const Ready());
-      });
+          expect(rescue.outcome, isA<Done<void>>());
+          expect(camera.currentState, const Ready());
+        });
+      }
     });
 
     test('the handlers land a cancelled opening in Broken', () {
@@ -907,21 +920,26 @@ void main() {
         'cancellation reaches its own handler instead of a refused `emit`.',
       );
       expect(_quoted(answer), hasLength(2));
-      camera(CameraController.new, (camera, hw, journal, async) {
-        final job = camera.init()..ignoreFailure();
-        async.elapse(const Duration(milliseconds: 5));
-        job.cancel().ignore();
-        async.elapse(const Duration(milliseconds: 20));
+      for (final create in <_Create>[
+        HandledInit.new,
+        CameraController.new,
+      ]) {
+        camera(create, (camera, hw, journal, async) {
+          final job = _init(camera)()..ignoreFailure();
+          async.elapse(const Duration(milliseconds: 5));
+          job.cancel().ignore();
+          async.elapse(const Duration(milliseconds: 20));
 
-        expect(journal.take(), _quoted(answer).last);
-        expect(hw.log, ['open: begin', 'open: end']);
+          expect(journal.take(), _quoted(answer).last);
+          expect(hw.log, ['open: begin', 'open: end']);
 
-        final rescue = camera.reopen()..ignoreFailure();
-        async.elapse(const Duration(milliseconds: 40));
+          final rescue = _reopen(camera)()..ignoreFailure();
+          async.elapse(const Duration(milliseconds: 40));
 
-        expect(rescue.outcome, isA<Done<void>>());
-        expect(camera.currentState, isA<Ready>());
-      });
+          expect(rescue.outcome, isA<Done<void>>());
+          expect(camera.currentState, isA<Ready>());
+        });
+      }
     });
 
     test('a job dropped before its start reaches neither handler', () {
@@ -971,6 +989,347 @@ void main() {
 
         expect(failed.outcome, isA<Failed>());
         expect('${camera.currentState}', 'Broken(Bad state: camera in use)');
+      });
+    });
+  });
+
+  group('a failure reported while opening', () {
+    const answer = '### keepWhile';
+
+    /// The first block of `dart` code in [part], comments aside.
+    String code(String part) => _normalize(
+          RegExp(r'```dart\n(.*?)```', dotAll: true)
+              .firstMatch(part)!
+              .group(1)!,
+        );
+
+    test('the first attempt is the body of the handlers of run', () {
+      final attempt = _part(_reported, _first);
+      _says(
+        attempt,
+        'This is the body of `init` under '
+        '[The handlers of run](#the-handlers-of-run), and the hardware '
+        'reports a failure while `hw.open` runs:',
+      );
+      final handlers = code(_part(_failing, '### The handlers of run'));
+
+      expect(handlers, contains(code(attempt)));
+      expect(code(attempt), startsWith('(ctx) async {'));
+    });
+
+    test('the opening publishes Ready over a reported failure', () {
+      final attempt = _part(_reported, _first);
+      _says(
+        attempt,
+        'The wait returns as usual, the body publishes `Ready` over the '
+        'report, and the job ends `Done`, which reaches neither handler.',
+      );
+      camera(UncheckedOpening.new, (camera, hw, journal, async) {
+        final job = camera.init()..ignoreFailure();
+        async.elapse(const Duration(milliseconds: 5));
+        expect(hw.log, ['open: begin']);
+        hw.fail(StateError('cable pulled'));
+        async.elapse(const Duration(milliseconds: 20));
+
+        expect(journal.take(), _quoted(attempt).single);
+        expect(job.outcome, isA<Done<void>>());
+        expect(camera.currentState, const Ready());
+      });
+    });
+
+    test('reopen publishes Ready over a failure in its opening or zoom', () {
+      _says(
+        _part(_reported, _first),
+        '`reopen` does the same with a failure reported while it opens the '
+        'hardware or restores the zoom.',
+      );
+      // The close takes the first ten milliseconds, the opening the next
+      // ten and the zoom the ten after.
+      for (final (at, during) in [
+        (15, 'open: begin'),
+        (25, 'zoom 1.0: begin'),
+      ]) {
+        camera(UncheckedOpening.new, (camera, hw, journal, async) {
+          opened(camera.init, hw, journal, async);
+
+          final job = camera.reopen()..ignoreFailure();
+          async.elapse(Duration(milliseconds: at));
+          expect(hw.log.last, during);
+          hw.fail(StateError('cable pulled'));
+          async.elapse(const Duration(milliseconds: 40));
+
+          expect(job.outcome, isA<Done<void>>(), reason: during);
+          expect(
+            journal.take(),
+            containsAllInOrder([
+              'state: Broken(Bad state: cable pulled)',
+              'state: Ready(zoom: 1.0, focusPoint: null, paused: false)',
+              '[reopen] finished Done(null)',
+            ]),
+            reason: during,
+          );
+        });
+      }
+    });
+
+    test('keepWhile cancels the opening at the report', () {
+      final part = _part(_reported, answer);
+      _says(
+        part,
+        '`keepWhile` refuses what the working type lets by: an opening does '
+        'not go on in `Broken`. The report writes it with '
+        "`externalSetState`, the rule refuses it, and the job's rules cancel "
+        'the job. `join` stays with the hardware until it has opened, then '
+        'throws `Cancelled` instead of returning, so the `emit` is never '
+        'reached:',
+      );
+      camera(CameraController.new, (camera, hw, journal, async) {
+        final job = camera.init()..ignoreFailure();
+        async.elapse(const Duration(milliseconds: 5));
+        hw.fail(StateError('cable pulled'));
+        async.flushMicrotasks();
+
+        expect(job.outcome, isNull, reason: 'join waits for the opening');
+        async.elapse(const Duration(milliseconds: 20));
+
+        expect(journal.take(), _quoted(part).first);
+        expect((job.outcome! as Cancelled).reason, isA<RulesCancelReason>());
+        expect(hw.log, ['open: begin', 'open: end']);
+        expect('${camera.currentState}', 'Broken(Bad state: cable pulled)');
+
+        // The way back starts from the failure the hardware reported.
+        final rescue = camera.reopen()..ignoreFailure();
+        async.elapse(const Duration(milliseconds: 40));
+
+        expect(rescue.outcome, isA<Done<void>>());
+        expect(camera.currentState, const Ready());
+      });
+    });
+
+    test('what comes after the report reaches no handler', () {
+      _says(
+        _part(_reported, answer),
+        'A job its rules cancelled leaves the state as it is, and the '
+        'handlers are disabled at the report itself: a cancellation or a '
+        'failure of `hw.open` that comes after it reaches neither of them, '
+        'and the reported failure stays.',
+      );
+      // The state after a report at 5 ms and then either a cancellation at
+      // 6 ms or a failure of the opening at 10 ms.
+      String after(
+        Solo<CameraState> Function(FakeCameraHardware hw) create, {
+        required bool failing,
+      }) {
+        late String state;
+        camera(create, (camera, hw, journal, async) {
+          if (failing) {
+            hw.failures['open'] = StateError('camera in use');
+          }
+          final job = _init(camera)()..ignoreFailure();
+          async.elapse(const Duration(milliseconds: 5));
+          hw.fail(StateError('cable pulled'));
+          async.elapse(const Duration(milliseconds: 1));
+          if (!failing) {
+            job.cancel();
+          }
+          async.elapse(const Duration(milliseconds: 20));
+
+          expect(hw.log.last, failing ? 'open: failed' : 'open: end');
+          state = '${camera.currentState}';
+        });
+        return state;
+      }
+
+      for (final failing in [false, true]) {
+        expect(
+          after(CameraController.new, failing: failing),
+          'Broken(Bad state: cable pulled)',
+          reason: 'failing: $failing',
+        );
+      }
+      // Under the handlers of run each of the two writes over the report.
+      expect(
+        after(HandledInit.new, failing: false),
+        'Broken(Cancelled(manual))',
+      );
+      expect(
+        after(HandledInit.new, failing: true),
+        'Broken(Bad state: camera in use)',
+      );
+    });
+
+    test('reopen keeps its rule from the Preparing it writes', () {
+      final part = _part(_reported, answer);
+      _says(
+        part,
+        '`reopen` starts from `Broken`, and a failure reported while it '
+        'closes the hardware is the one it is there to undo. So its rule '
+        'holds from the `Preparing` it writes. The body raises the flag the '
+        'rule reads right before that `emit`: the `emit` asks none of the '
+        "job's rules, and a report made while `Preparing` is delivered is "
+        'refused as well:',
+      );
+      final reopen = code(part.split('```text').last);
+
+      expect(reopen, startsWith('Job<void> reopen() {'));
+      expect(
+        reopen,
+        contains('opening = true;\nctx.emit(const Preparing());\n'),
+      );
+
+      // A listener on Preparing reports, then cancels the reopening or asks
+      // for another one.
+      for (final cancel in [true, false]) {
+        camera(CameraController.new, (camera, hw, journal, async) {
+          opened(camera.init, hw, journal, async);
+          late Job<void> job;
+          Job<void>? again;
+          var reported = false;
+          camera.addListener(() {
+            if (camera.currentState is Preparing && !reported) {
+              reported = true;
+              hw.fail(StateError('cable pulled'));
+              if (cancel) {
+                job.cancel();
+              } else {
+                again = camera.reopen()..ignoreFailure();
+              }
+            }
+          });
+          job = camera.reopen()..ignoreFailure();
+          async.elapse(const Duration(milliseconds: 80));
+
+          expect('${job.outcome}', 'Cancelled(rules: keepWhile)');
+          if (cancel) {
+            expect('${camera.currentState}', 'Broken(Bad state: cable pulled)');
+            expect(hw.log, ['close: begin', 'close: end']);
+          } else {
+            expect(again, isNot(same(job)));
+            expect(again!.outcome, isA<Done<void>>());
+            expect(camera.currentState, const Ready());
+          }
+        });
+      }
+    });
+
+    test('reopen ends at a failure reported while it opens or zooms', () {
+      _says(
+        _part(_reported, answer),
+        'A failure reported while it opens the hardware or restores the zoom '
+        'ends it the way it ends `init`.',
+      );
+      const closed = ['close: begin', 'close: end'];
+      const open = ['open: begin', 'open: end'];
+      const zoom = ['zoom 2.0: begin', 'zoom 2.0: end'];
+      for (final (at, failing, log) in [
+        (15, false, [...closed, ...open]),
+        // A failure of the opening after the report reaches no handler.
+        (15, true, [...closed, 'open: begin', 'open: failed']),
+        (25, false, [...closed, ...open, ...zoom]),
+      ]) {
+        camera(CameraController.new, (camera, hw, journal, async) {
+          opened(camera.init, hw, journal, async);
+          camera.setZoom(2);
+          async.elapse(const Duration(milliseconds: 10));
+          journal.take();
+          hw.log.clear();
+          if (failing) {
+            hw.failures['open'] = StateError('camera in use');
+          }
+
+          final job = camera.reopen()..ignoreFailure();
+          async.elapse(Duration(milliseconds: at));
+          expect(hw.log.last, log[log.length - 2]);
+          hw.fail(StateError('cable pulled'));
+          async.elapse(const Duration(milliseconds: 40));
+
+          expect('${job.outcome}', 'Cancelled(rules: keepWhile)');
+          expect('${camera.currentState}', 'Broken(Bad state: cable pulled)');
+          expect(hw.log, log);
+        });
+      }
+    });
+
+    test('a failure reported while closing lets the reopening go on', () {
+      _says(
+        _part(_reported, answer),
+        'A failure reported while it closes the hardware lets it go on.',
+      );
+      camera(CameraController.new, (camera, hw, journal, async) {
+        opened(camera.init, hw, journal, async);
+        camera.setZoom(2);
+        async.elapse(const Duration(milliseconds: 10));
+        journal.take();
+        hw.log.clear();
+
+        final job = camera.reopen()..ignoreFailure();
+        async.elapse(const Duration(milliseconds: 5));
+        expect(hw.log, ['close: begin']);
+        hw.fail(StateError('cable pulled'));
+        async.elapse(const Duration(milliseconds: 40));
+
+        expect(job.outcome, isA<Done<void>>());
+        expect(journal.take(), [
+          '[reopen] started',
+          '> [closeCamera] started',
+          'state: Broken(Bad state: cable pulled)',
+          '> [closeCamera] finished Done(null)',
+          'state: Preparing()',
+          'state: Ready(zoom: 2.0, focusPoint: null, paused: false)',
+          '[reopen] finished Done(null)',
+        ]);
+      });
+    });
+
+    test('a reopen asked after a report gets a job of its own', () {
+      _says(
+        _part(_reported, answer),
+        'A `reopen()` called after a report gets a job of its own: the one '
+        'the report cancelled is still unwinding, and `droppable` does not '
+        'hand it out.',
+      );
+      camera(CameraController.new, (camera, hw, journal, async) {
+        opened(camera.init, hw, journal, async);
+
+        final first = camera.reopen()..ignoreFailure();
+        async.elapse(const Duration(milliseconds: 15));
+        hw.fail(StateError('cable pulled'));
+        async.elapse(const Duration(milliseconds: 1));
+        final again = camera.reopen()..ignoreFailure();
+
+        expect(again, isNot(same(first)));
+        expect(first.outcome, isNull, reason: 'still unwinding');
+        async.elapse(const Duration(milliseconds: 60));
+
+        expect('${first.outcome}', 'Cancelled(rules: keepWhile)');
+        expect(again.outcome, isA<Done<void>>());
+        expect(camera.currentState, const Ready());
+        // The second closes the hardware after the first has opened it.
+        expect(hw.log, [
+          'close: begin',
+          'close: end',
+          'open: begin',
+          'open: end',
+          'close: begin',
+          'close: end',
+          'open: begin',
+          'open: end',
+          'zoom 1.0: begin',
+          'zoom 1.0: end',
+        ]);
+      });
+
+      // Without the rule the running reopen is going on, so the same call
+      // gets it, and it publishes Ready over the report.
+      camera(UncheckedOpening.new, (camera, hw, journal, async) {
+        opened(camera.init, hw, journal, async);
+
+        final first = camera.reopen()..ignoreFailure();
+        async.elapse(const Duration(milliseconds: 15));
+        hw.fail(StateError('cable pulled'));
+        async.elapse(const Duration(milliseconds: 1));
+
+        expect(camera.reopen(), same(first));
       });
     });
   });
@@ -1789,8 +2148,8 @@ void main() {
     test('the hardware reports on its own, and queues no job', () {
       _says(
         _part(_failure),
-        'The hardware reports a failure on its own, and the controller '
-        'turns the report into `Broken`.',
+        'The hardware can report a failure after the disposal too, and the '
+        'controller turns every report into `Broken`.',
       );
       camera(CameraController.new, (camera, hw, journal, async) {
         opened(camera.init, hw, journal, async);
@@ -2119,6 +2478,22 @@ void main() {
       expect(section, contains('throws instead of writing'));
     });
 
+    test('the state page keeps a reported state with keepWhile', () {
+      const link = '(state.md#preserving-an-incompatible-external-state)';
+      _says(
+        _part(_reported, '### keepWhile'),
+        'It is the rule that [Preserving an incompatible external state]$link '
+        'on the state page gives a load whose connection drops.',
+      );
+      // The heading is the one of the section the link names.
+      under('state.md', '### Preserving an incompatible external state');
+      final rules = under('state.md', '#### The rules');
+
+      expect(rules, contains('keepWhile: (state) => state is! Disconnected,'));
+      expect(rules, contains('cancelling the load and disabling both'));
+      expect(rules, contains('`Disconnected` therefore remains visible'));
+    });
+
     test('the cancellation page says what close does with a queued job', () {
       _says(
         _part(_closing, _first),
@@ -2231,6 +2606,7 @@ void main() {
       expect(last.keys.toSet(), {
         'CameraController',
         'init',
+        'reopen',
         'setZoom',
         'takePhoto',
         '_closeCameraJob',
@@ -2290,6 +2666,7 @@ void main() {
       expect(withAttempt, [
         _opening,
         _failing,
+        _reported,
         _zoom,
         _disposing,
         _closing,
@@ -2361,7 +2738,8 @@ void main() {
         _first: attempts,
         _second: attempts,
         '### A working type wide enough': page,
-        '### The handlers of run': 'the example',
+        '### The handlers of run': page,
+        '### keepWhile': 'the example',
         '### Policy.replace': 'the example',
         _shot: 'the example',
         '### Checking in the body': page,
