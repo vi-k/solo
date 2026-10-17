@@ -77,6 +77,25 @@ Set<String> bodyMembers() {
   };
 }
 
+/// Every member of [ctx], each called the way a callback would call it.
+Map<String, FutureOr<Object?> Function()> contextMembers(JobContext ctx) => {
+      'check': ctx.check,
+      'abandonable': () => ctx.abandonable(() async => 1),
+      'join': () => ctx.join(() async => 1),
+      'pause': ctx.pause,
+      'uncancellable': () => ctx.uncancellable(() async => 1),
+      'run': () => ctx.run(Job.deferred<int>((ctx) async => 1)),
+      'runAll': () => ctx.runAll([Job.deferred<int>((ctx) async => 1)]),
+      'each': () => ctx.each(Stream.value(1), (ctx, event) {}).done,
+      'onCancel': () => ctx.onCancel(() {}),
+      'onDispose': () => ctx.onDispose(() {}),
+      'onDiscard': () => ctx.onDiscard(() {}),
+      'disown': () => ctx.disown(Object()),
+      'unattended': () => ctx.unattended(() {}),
+      'log': () => ctx.log('cleanup'),
+      'job': () => ctx.job,
+    };
+
 /// A value with an equality of its own: two built from one name are equal,
 /// and only one of them is the value a call handed over.
 @immutable
@@ -604,24 +623,8 @@ void main() {
       final caught = <String, Object>{};
       final job = Job<void>(key: 'late', (ctx) async {
         ctx.onDispose(() async {
-          final members = <String, FutureOr<Object?> Function()>{
-            'check': ctx.check,
-            'abandonable': () => ctx.abandonable(() async => 1),
-            'join': () => ctx.join(() async => 1),
-            'pause': ctx.pause,
-            'uncancellable': () => ctx.uncancellable(() async => 1),
-            'run': () => ctx.run(Job.deferred<int>((ctx) async => 1)),
-            'runAll': () => ctx.runAll([Job.deferred<int>((ctx) async => 1)]),
-            'each': () => ctx.each(Stream.value(1), (ctx, event) {}).done,
-            'onCancel': () => ctx.onCancel(() {}),
-            'onDispose': () => ctx.onDispose(() {}),
-            'onDiscard': () => ctx.onDiscard(() {}),
-            'disown': () => ctx.disown(Object()),
-            'unattended': () => ctx.unattended(() {}),
-            'log': () => ctx.log('cleanup'),
-            'job': () => ctx.job,
-          };
-          for (final MapEntry(key: name, value: call) in members.entries) {
+          for (final MapEntry(key: name, value: call)
+              in contextMembers(ctx).entries) {
             try {
               await call();
             } on Object catch (error) {
@@ -635,6 +638,47 @@ void main() {
 
       expect(caught.keys.toSet(), bodyMembers());
       expect(caught.values, everyElement(isStateError));
+    });
+
+    // The one exception the page makes: on a cancelled job `check` throws
+    // the job's cancellation, so an action the body walked away from stops
+    // on what it waits for. The other members of the body still refuse.
+    fakeAsyncTest(
+        'on a cancelled job check throws its Cancelled in a callback, and the '
+        'other members of the body still throw StateError', () async {
+      final caught = <String, Object>{};
+      final job = Job<void>(key: 'late', (ctx) async {
+        ctx.onDispose(() async {
+          for (final MapEntry(key: name, value: call)
+              in contextMembers(ctx).entries) {
+            try {
+              await call();
+            } on Object catch (error) {
+              caught[name] = error;
+            }
+          }
+        });
+        await ctx.pause(const Duration(seconds: 1));
+      })
+        ..ignoreFailure();
+      await delay(1);
+      job.cancel().ignore();
+      await job.done;
+
+      expect(caught.keys.toSet(), bodyMembers());
+      expect(caught.remove('check'), same(job.outcome));
+      expect(caught.values, everyElement(isStateError));
+      expect(
+        File('doc/cleanup.md')
+            .readAsStringSync()
+            .replaceAll(RegExp(r'\s+'), ' '),
+        allOf(
+          contains(
+            "On a cancelled job `check` throws the job's `Cancelled` instead",
+          ),
+          contains('a `Cancelled` stops at `onError`'),
+        ),
+      );
     });
 
     final waits = <String, Future<Object?> Function(Job<int> job)>{

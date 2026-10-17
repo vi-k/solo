@@ -253,12 +253,15 @@ The callbacks on the cleanup stack run after the body ends, and cancellation
 does not interrupt them: neither one already accepted nor one arriving into the
 unwinding itself. `check`, `abandonable`, `join`, `pause`, `uncancellable`,
 `run`, `runAll`, `each` and `onCancel` are the body's and throw `StateError`
-here, so a callback must await its resource directly. It must not await its own
-job: `done`, `value` and `cancel()` all complete after the cleanup that would
-be waiting for them. Keep callbacks short, and let them wait for nothing but
-the release itself: nothing will interrupt them. An error from one goes to
-`onError` and, by default, on to the zone, and the remaining callbacks still
-run.
+here, so a callback must await its resource directly. On a cancelled job
+`check` throws the job's `Cancelled` instead, as it does once the job has
+finished, and an action the body walked away from, polling `check` to stop,
+gets the cancellation it waits for. A callback must not await its own job:
+`done`, `value` and `cancel()` all complete after the cleanup that would be
+waiting for them. Keep callbacks short, and let them wait for nothing but the
+release itself: nothing will interrupt them. An error from one goes to
+`onError` and, by default, on to the zone — a `Cancelled` stops at `onError` —
+and the remaining callbacks still run.
 
 **Cancellation after the body returns.** A job may still be waiting for
 children or running cleanup after `return`. Cancellation during that time can

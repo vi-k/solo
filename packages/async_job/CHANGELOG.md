@@ -75,6 +75,14 @@ failure itself, whatever its parent calls. An observer that mixes in
 A job that gives up inside a call it walked away from no longer reaches
 `onError` as a failure.
 
+`ctx.check()` throws the job's `Cancelled` while the core cleans up after the
+body of a cancelled job, where `0.2.0` threw a `StateError`: an action the body
+walked away from that polls it to stop gets the cancellation it waits for. A
+cleanup callback that calls it on a cancelled job stops there, and the
+`Cancelled` reaches `onError` and no further, where `0.2.0` sent a `StateError`
+on to the zone. See
+[Cleanup order and late results](doc/cleanup.md#cleanup-order-and-late-results).
+
 `onError` hears each failure and each cancellation inside a `ParallelWaitError`
 in a call of its own, where `0.2.0` handed it the whole error once. See
 [Answering for errors](doc/observing.md#answering-for-errors).

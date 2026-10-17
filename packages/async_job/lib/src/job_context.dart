@@ -16,8 +16,8 @@ part of 'job_base.dart';
 /// — neither waits nor starts nor registers anything: every member throws
 /// a [StateError] once the job has finished, except [check], [log] and
 /// [job]. While the core unwinds the cleanup stack the same holds for
-/// the members that wait or start something, and [check] throws a
-/// [StateError] there too — but [onDispose], [onDiscard], [disown] and
+/// the members that wait or start something, and for [check] on a job
+/// that is not cancelled — but [onDispose], [onDiscard], [disown] and
 /// [unattended] go on working, because a value arriving that late is put
 /// on the stack the core is unwinding, and a disposer may hand out work
 /// nobody waits for.
@@ -32,11 +32,12 @@ abstract interface class JobContext {
   /// is no call to wrap: a loop over work of your own, a `switch` after
   /// one.
   ///
-  /// Legal after the job has finished, where it throws that [Cancelled] as
-  /// always — but not while the core cleans up after the body: there it
-  /// throws a [StateError] instead. An action the body walked away from
-  /// that polls `check` to stop will see that error, not a cancellation,
-  /// if it polls inside that window.
+  /// Legal after the job has finished, where it throws the [Cancelled] the
+  /// job ended with, if any. While the core cleans up after the body it
+  /// throws the cancellation of a cancelled job as well, so an action the
+  /// body walked away from that polls `check` to stop sees the cancellation
+  /// it waits for. On a job that is not cancelled it throws a [StateError]
+  /// there instead: the body is gone, and no rule is asked for it any more.
   void check();
 
   /// Runs [action] and waits for it, but no longer than this job lives.
@@ -673,12 +674,12 @@ abstract interface class JobContext {
   /// released and the call throws a [StateError] instead of handing it over
   /// closed.
   ///
-  /// **How the work stops.** Not by polling [check]: while the core
-  /// unwinds the cleanup stack it throws a [StateError] instead of the
-  /// cancellation, and on a job that ended [Done] it does not throw at
-  /// all, so a loop waiting for it waits forever and holds the job while
-  /// it waits. Ask `job.isFinished`, or wait for `job.done`. Work that
-  /// must end with the job puts its own stop on the cleanup stack —
+  /// **How the work stops.** Not by polling [check]: on a job nobody
+  /// cancelled it throws a [StateError] while the core unwinds the cleanup
+  /// stack, and once that job has ended [Done] it does not throw at all, so
+  /// a loop waiting for it waits forever and holds the job while it waits.
+  /// Ask `job.isFinished`, or wait for `job.done`. Work that must end with
+  /// the job puts its own stop on the cleanup stack —
   /// `ctx.onDispose(timer.cancel)` — or takes the cancellation through
   /// [onCancel], which is also the natural place to hand out an
   /// asynchronous stop whose failure should be heard:
@@ -726,8 +727,8 @@ abstract interface class JobContext {
 /// and calls it first. That is where the cancellation of the job is asked:
 /// without it [join] hands a value to a job already cancelled and
 /// [uncancellable] begins its step on one. And while the core cleans up after
-/// the body it throws a [StateError]: the body is gone, and no rule is asked
-/// for it any more.
+/// the body it throws the cancellation of a cancelled job and a [StateError]
+/// otherwise: the body is gone, and no rule is asked for it any more.
 ///
 /// A rule that no longer holds throws a [Cancelled] with a reason of the
 /// engine's own. The body lets it out and gives itself up, and a job whose body
@@ -775,8 +776,8 @@ abstract class JobContextBase implements JobContext {
   @override
   @mustCallSuper
   void check() {
-    throwIfDisposing('check');
     throwIfCancelled();
+    throwIfDisposing('check');
   }
 
   /// The cancellation the job has accepted, or `null`.

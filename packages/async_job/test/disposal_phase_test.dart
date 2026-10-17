@@ -118,6 +118,72 @@ void main() {
     });
   });
 
+  test(
+      'an action the body walked away from that polls check stops on the '
+      'cancellation while the core cleans up', () {
+    fakeAsync((async) {
+      final errors = <Object>[];
+      final polls = <String>[];
+      final job = Job<int>(
+        // Not answering: an error that slipped past the action would reach
+        // the zone and fail the test.
+        observer: ErrorObserver(errors),
+        (ctx) async {
+          // Keeps the cleanup going while the action polls.
+          ctx.onDispose(() => delay(20));
+          await ctx.abandonable(() async {
+            while (true) {
+              await delay(1);
+              try {
+                ctx.check();
+              } on Cancelled {
+                polls.add(ctx.job.isFinished ? 'finished' : 'cleaning up');
+                return;
+              }
+            }
+          });
+          return 1;
+        },
+      )..ignoreFailure();
+      async.elapse(const Duration(milliseconds: 5));
+      job.cancel().ignore();
+      async.flushTimers();
+      expect(job.outcome, isA<Cancelled>());
+      expect(polls, ['cleaning up']);
+      expect(errors, isEmpty);
+    });
+  });
+
+  test(
+      'a callback that calls check on a cancelled job hands the '
+      'cancellation to onError alone, and the stack goes on', () {
+    fakeAsync((async) {
+      final errors = <Object>[];
+      final order = <String>[];
+      final job = Job<int>(
+        // Not answering: a cancellation is kept out of the zone, and
+        // anything else reaching it would fail the test.
+        observer: ErrorObserver(errors),
+        (ctx) async {
+          ctx
+            ..onDispose(() => order.add('first'))
+            ..onDispose(() {
+              ctx.check();
+              order.add('after check');
+            })
+            ..onDispose(() => order.add('last'));
+          await ctx.abandonable(() => delay(50));
+          return 1;
+        },
+      )..ignoreFailure();
+      async.elapse(const Duration(milliseconds: 5));
+      job.cancel().ignore();
+      async.flushTimers();
+      expect(order, ['last', 'first']);
+      expect(errors, [same(job.outcome)]);
+    });
+  });
+
   test('check stays legal after the job has finished', () {
     fakeAsync((async) {
       late JobContext leaked;
