@@ -25,13 +25,13 @@ final class MyJob<T> extends JobBase<T> {
   @override
   void finished() => _body = null;
 
-  // `start` and `whenDone` are protected: the rest of the engine calls
+  // `start` and `untilFinished` are protected: the rest of the engine calls
   // them through these wrappers, private to its library. The queue starts
   // a job later, from a zone of its own, so `_launch` starts it in the zone
   // it was created in.
   void _launch() => creationZone.run(start);
 
-  Future<void> get _whenDone => whenDone;
+  Future<void> get _untilFinished => untilFinished;
 }
 
 final class MyContext extends JobContextBase {
@@ -42,5 +42,5 @@ final class MyContext extends JobContextBase {
 /// engine does, without looking at its outcome.
 Future<void> launchAndWait(MyJob<Object?> job) {
   job._launch();
-  return job._whenDone;
+  return job._untilFinished;
 }

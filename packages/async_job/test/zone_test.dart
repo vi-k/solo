@@ -41,7 +41,7 @@ void main() {
     expect(caught, isEmpty);
   });
 
-  // A parent waits for its children with `whenDone`: waiting is the
+  // A parent waits for its children with `untilFinished`: waiting is the
   // engine's business, and a child nobody looked at still answers to the
   // zone. The ordinary shape of it: the body starts listening and returns,
   // and the stream fails later.

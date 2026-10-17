@@ -3,6 +3,12 @@
 ### Breaking changes
 
 - **`Job.ignore()` is renamed to `Job.ignoreFailure()`.**
+- **`JobBase.whenDone` is renamed to `JobBase.untilFinished`,** so that a
+  `when` member is always a listener: `whenCancelled` and the new
+  `whenFinished`. A subclass of `JobBase` with a member named `untilFinished`
+  renames its own.
+- **`Job` gains `whenFinished`.** A class that implements `Job` itself adds it,
+  and a subclass of `JobBase` with a member of that name renames its own.
 - **`JobObserver.onError` is a notice, and the new `JobAnswerer` answers for an
   error no outcome carries.** An observer from `0.2.0` compiles unchanged, and
   the errors it used to swallow reach the zone; one that mixes in `JobAnswerer`
@@ -110,6 +116,10 @@ new wording.
 ### Added
 
 - **`started` of `Cancelled.by` is optional and defaults to `true`.**
+- **`Job.whenFinished` hears the end of a job without observing its outcome.**
+  A screen that redraws when the job is over no longer takes over a failure the
+  job's owner answers for, as waiting for `done` does. See
+  [Hearing the end without the failure](doc/outcomes.md#hearing-the-end-without-the-failure).
 - **`timeout` gives a job a deadline of its own.** `Job(...)`,
   `Job.deferred(...)` and the constructor of `JobBase` take it; when it runs
   out, the job ends `Cancelled(timeout)` with the new `TimeoutCancelReason`.

@@ -339,9 +339,10 @@ observer answers for errors, and the zone if it does not.
 Rows 4 and 7 cover only these cases:
 
 - Row 4: a late error of an action `ctx.abandonable` stopped waiting for;
-  cleanup; a callback of `ctx.onCancel` or `job.whenCancelled`; work of
-  `ctx.unattended`; the `toString` of a child's `key`, its `describe` or its
-  `Cancelled` when the core names the child in the parent's cancellation.
+  cleanup; a callback of `ctx.onCancel`, `job.whenCancelled` or
+  `job.whenFinished`; work of `ctx.unattended`; the `toString` of a child's
+  `key`, its `describe` or its `Cancelled` when the core names the child in the
+  parent's cancellation.
 - Row 7: the error goes to the zone the body runs in, as with any future nobody
   awaits. This includes the job's own cancellation. For `ctx.abandonable`, it
   holds only until the body ends.

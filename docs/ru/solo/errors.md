@@ -62,7 +62,7 @@ final class ProfileController extends Solo<ProfileState> {
 
 - операции, брошенной `abandonable` и упавшей позже;
 - того, что `Job` зовёт вне своего тела: уборщика, колбэка `ctx.onCancel`,
-  слушателя `whenCancelled`, обработчика состояния у `run`;
+  слушателя `whenCancelled` или `whenFinished`, обработчика состояния у `run`;
 - `keepWhile`, который бросил, когда его перепроверяло изменение состояния;
 - работы, отданной `ctx.unattended`;
 - провала ветки `ctx.runAll`, который группа не бросила;

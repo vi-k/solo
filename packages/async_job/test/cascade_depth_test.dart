@@ -360,6 +360,29 @@ void main() {
           'it landed in, and must not be announced as one',
     );
   });
+
+  test('a listener that runs out of stack is not a listener that failed',
+      () async {
+    // The same run with the frames asked for by `whenCancelled` listeners,
+    // which go through the guard `whenFinished` shares.
+    final chain = _Chain(depth, framesPerCallback: 400, listeners: true);
+    final errors = <Object>[];
+    final root = chain.start(observer: ErrorObserver(errors));
+    await chain.bottom.future;
+
+    try {
+      root.cancel().ignore();
+    } on Object catch (_) {
+      // The cascade running out of stack is the point of the run.
+    }
+
+    expect(
+      chain.interrupted,
+      greaterThan(0),
+      reason: 'no listener was cut short, so nothing here was tested',
+    );
+    expect(errors, isEmpty);
+  });
 }
 
 /// A chain of nested jobs, one child per level, as deep as asked.
@@ -372,6 +395,10 @@ final class _Chain {
   /// How many frames a callback of this chain asks for of its own.
   final int framesPerCallback;
 
+  /// Whether each level hears the cancellation through a [Job.whenCancelled]
+  /// listener rather than a callback of [JobContext.onCancel].
+  final bool listeners;
+
   final jobs = <Job<void>>[];
   final List<bool> toldToStop;
 
@@ -383,13 +410,14 @@ final class _Chain {
 
   final _never = Completer<void>();
 
-  _Chain(this.depth, {this.framesPerCallback = 0})
+  _Chain(this.depth, {this.framesPerCallback = 0, this.listeners = false})
       : toldToStop = List<bool>.filled(depth + 1, false);
 
   /// The head of the chain, started the way any root is.
   Job<void> start({JobObserver? observer}) {
     final head = Job<void>((ctx) => _down(ctx, 0), observer: observer);
     jobs.add(head);
+    if (listeners) head.whenCancelled((_) => _heard(0));
     return head;
   }
 
@@ -426,13 +454,15 @@ final class _Chain {
     ];
   }
 
+  void _heard(int index) {
+    interrupted++;
+    _burn(framesPerCallback);
+    interrupted--;
+    toldToStop[index] = true;
+  }
+
   Future<void> _down(JobContext ctx, int index) async {
-    ctx.onCancel(() {
-      interrupted++;
-      _burn(framesPerCallback);
-      interrupted--;
-      toldToStop[index] = true;
-    });
+    if (!listeners) ctx.onCancel(() => _heard(index));
     if (index == depth) {
       bottom.complete();
       await _never.future;
@@ -445,6 +475,7 @@ final class _Chain {
     await null;
     final child = Job.deferred<void>((ctx) => _down(ctx, index + 1));
     jobs.add(child);
+    if (listeners) child.whenCancelled((_) => _heard(index + 1));
     await ctx.run(child);
   }
 }

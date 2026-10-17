@@ -33,6 +33,10 @@ const quoted = [
     'status: backup failed: Bad state: disk full',
   ],
   ['status: backup failed: Bad state: disk full'],
+  [
+    'status redrawn: Failed(Bad state: disk full)',
+    'zone: Bad state: disk full',
+  ],
   ['cancelled: handler'],
   ['request failed: Bad state: token expired'],
   ['step finished', 'cleanup', 'cancelling: manual'],
@@ -169,6 +173,36 @@ void main() {
       });
 
       expect(lines, quoted[3]);
+    });
+
+    test('whenFinished hears the end and leaves the failure to the zone', () {
+      final lines = printed((async) {
+        page.redrawOnEnd(Job<void>(upload));
+        async.flushTimers();
+      });
+
+      expect(lines, quoted[4]);
+    });
+
+    test('a screen that unregisters before the end hears nothing', () {
+      final lines = printed((async) {
+        final unregister = page.redrawOnEnd(Job<void>(upload));
+        async.elapse(const Duration(milliseconds: 5));
+        unregister();
+        async.flushTimers();
+      });
+
+      expect(lines, ['zone: Bad state: disk full']);
+    });
+
+    test('a listener registered once the job is over runs at once', () {
+      final lines = printed((async) {
+        final backup = Job<void>(upload)..ignoreFailure();
+        async.flushTimers();
+        page.redrawOnEnd(backup);
+      });
+
+      expect(lines, ['status redrawn: Failed(Bad state: disk full)']);
     });
 
     test('onError of the observer hears the failure and does not observe it',
@@ -357,7 +391,7 @@ void main() {
         jobs = requestFails(async, first.tellTheRequest);
       });
 
-      expect(lines, quoted[4]);
+      expect(lines, quoted[5]);
       final reason = (jobs.report.outcome! as Cancelled).reason;
       expect(reason, isA<HandlerCancelReason>());
       expect((reason as HandlerCancelReason).cause, same(jobs.fetch.outcome));
@@ -368,7 +402,7 @@ void main() {
         requestFails(async, page.tellTheRequest);
       });
 
-      expect(lines, quoted[5]);
+      expect(lines, quoted[6]);
     });
 
     test('the outcome of fetch holds the very reason passed to cancel', () {
@@ -593,7 +627,7 @@ void main() {
       });
 
       expect(atCancel, isEmpty, reason: 'accepted, and the screen is silent');
-      expect(lines, quoted[6]);
+      expect(lines, quoted[7]);
     });
 
     test('awaiting cancel is no quicker than awaiting done', () {
@@ -653,7 +687,7 @@ void main() {
 
       expect(atCancel, ['cancelling: manual'], reason: 'at acceptance');
       expect(finished, isFalse);
-      expect(lines, quoted[7]);
+      expect(lines, quoted[8]);
     });
 
     test('a listener unregistered while the job runs hears nothing', () {
@@ -669,7 +703,7 @@ void main() {
       });
 
       expect(finished, isFalse, reason: 'the report goes on');
-      expect(lines, quoted[8]);
+      expect(lines, quoted[9]);
     });
 
     test('unregistering after the job has finished does nothing', () {
@@ -684,7 +718,7 @@ void main() {
         unregister();
       });
 
-      expect(lines, quoted[7]);
+      expect(lines, quoted[8]);
     });
 
     test('an external cancellation: after the cascade and onCancel, once', () {
@@ -1209,6 +1243,8 @@ void main() {
     '### The first attempt': 'test/support/outcomes_first_attempts.dart',
     '### A switch over `done`': 'test/support/outcomes_page.dart',
     '### Telling the core it is handled': 'test/support/outcomes_page.dart',
+    '### Hearing the end without the failure':
+        'test/support/outcomes_page.dart',
     '## Why a job was cancelled': 'test/support/outcomes_page.dart',
     '### Following the cause': 'test/support/outcomes_page.dart',
     '## Reacting before the outcome': 'test/support/outcomes_page.dart',

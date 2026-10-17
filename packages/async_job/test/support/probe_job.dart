@@ -334,7 +334,7 @@ final class UnwaitableJob extends JobBase<void> {
   UnwaitableJob({super.key});
 
   @override
-  Future<void> get whenDone => throw StateError('engine failed to wait');
+  Future<void> get untilFinished => throw StateError('engine failed to wait');
 
   @override
   JobContextBase createContext() => ProbeContext(this);

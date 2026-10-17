@@ -344,9 +344,10 @@ outcome: Cancelled(manual)
 Строки 4 и 7 охватывают только эти случаи:
 
 - Строка 4: поздняя ошибка действия, ожидание которого прервал
-  `ctx.abandonable`; уборка; колбэк `ctx.onCancel` или `job.whenCancelled`;
-  работа `ctx.unattended`; `toString` ключа дочерней задачи, её `describe` или
-  её `Cancelled`, когда ядро называет её в отмене родителя.
+  `ctx.abandonable`; уборка; колбэк `ctx.onCancel`, `job.whenCancelled` или
+  `job.whenFinished`; работа `ctx.unattended`; `toString` ключа дочерней
+  задачи, её `describe` или её `Cancelled`, когда ядро называет её в отмене
+  родителя.
 - Строка 7: ошибка уходит в зону, где идёт тело, как у любой future, которую
   никто не ждёт. Это касается и собственной отмены задачи. У `ctx.abandonable`
   так бывает, только пока тело не кончилось.

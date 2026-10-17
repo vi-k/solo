@@ -41,6 +41,7 @@ error and stack trace, `Cancelled` the cancellation reason.
 | `job.cancel()` | Request cancellation and wait for completion. |
 | `job.ignoreFailure()` | Keep the failure of a job nobody awaits from being reported as unhandled. |
 | `job.whenCancelled(callback)` | Hear the cancellation the moment the job accepts it, running or still queued. |
+| `job.whenFinished(callback)` | Hear the end with the outcome, without observing a failure. |
 
 A failed job does not stop the queue. Its error is reported and the next job
 can run. Cancellation is a separate outcome: closing the controller, removing a

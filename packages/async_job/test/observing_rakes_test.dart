@@ -1502,7 +1502,9 @@ void main() {
               throw StateError('late wait');
             });
           },
-        )..whenCancelled((_) => throw StateError('whenCancelled'));
+        )
+          ..whenCancelled((_) => throw StateError('whenCancelled'))
+          ..whenFinished((_) => throw StateError('whenFinished'));
 
     test('errors outside the body: onError, then the zone', () {
       const errors = [
@@ -1510,6 +1512,7 @@ void main() {
         'Bad state: onCancel',
         'Bad state: whenCancelled',
         'Bad state: cleanup',
+        'Bad state: whenFinished',
         'Bad state: late wait',
       ];
       List<String> starting(List<String> lines, String prefix) => [

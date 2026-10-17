@@ -124,6 +124,9 @@ different `runZonedGuarded`. See
   causes.** A failure of a cancelled job that it names reaches `onError` and
   goes no further: neither `onUnanswered` nor `Solo.unansweredHandler` hears
   it. See [The token](doc/cancellation.md#the-token).
+- **`Job.whenFinished` of `async_job` hears the end of a job without observing
+  its outcome.** A listener gets the outcome, and a failure nobody observes
+  still reaches the zone. See [Jobs and results](doc/jobs.md#jobs-and-results).
 - **`SoloObserver.all` makes one observer of several** for `Solo.observer`. See
   [A cancellation that never lands](doc/errors.md#a-cancellation-that-never-lands).
 - `Solo` carries its own listeners: `addListener` and `removeListener`, and the

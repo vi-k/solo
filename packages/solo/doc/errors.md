@@ -62,7 +62,7 @@ the rest:
 
 - an operation abandoned by `abandonable` that fails later;
 - what the job calls outside its body: a disposer, a `ctx.onCancel` callback, a
-  `whenCancelled` listener, a state handler of `run`;
+  `whenCancelled` or `whenFinished` listener, a state handler of `run`;
 - a `keepWhile` that throws when a change of state re-checks it;
 - work handed to `ctx.unattended`;
 - the failure of a branch of `ctx.runAll` that the group did not throw;

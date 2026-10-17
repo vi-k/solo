@@ -918,9 +918,9 @@ abstract class Solo<S extends Object> {
           stackTrace: stackTrace,
         ),
       );
-      // `whenDone`, not `done`: closing waits for the job, it does not
+      // `untilFinished`, not `done`: closing waits for the job, it does not
       // observe its outcome, so a failure here still reaches the zone.
-      current._whenDone.then((_) => _finishClose(completer));
+      current._untilFinished.then((_) => _finishClose(completer));
     }
   }
 

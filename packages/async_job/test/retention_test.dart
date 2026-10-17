@@ -31,6 +31,13 @@ final class Payload {
   );
 }
 
+/// A listener of the end of [job] that captures a payload of its own.
+WeakReference<Payload> captureInListener(Job<int> job) {
+  final payload = Payload();
+  job.whenFinished((_) => payload.bytes.length);
+  return WeakReference(payload);
+}
+
 /// Only the child comes back. The value of the parent is then reachable
 /// from it alone, through the link a child keeps to its parent.
 ///
@@ -258,6 +265,18 @@ void main() {
       isTrue,
       reason: 'the body ran once and will not run again; held on, it keeps '
           'everything it captured for as long as anyone keeps the handle',
+    );
+  });
+
+  test('a finished job lets go of its whenFinished listeners', () async {
+    final job = Job<int>((ctx) async => 1);
+    final capture = captureInListener(job);
+    await job.done;
+    expect(
+      await collected(capture),
+      isTrue,
+      reason: 'a listener runs once; held on, it keeps what it captured for '
+          'as long as anyone keeps the handle',
     );
   });
 

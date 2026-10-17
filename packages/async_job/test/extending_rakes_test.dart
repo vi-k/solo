@@ -46,13 +46,13 @@ final class MyJob<T> extends JobBase<T> {
   @override
   void finished() => _body = null;
 
-  // `start` and `whenDone` are protected: the rest of the engine calls
+  // `start` and `untilFinished` are protected: the rest of the engine calls
   // them through these wrappers, private to its library. The queue starts
   // a job later, from a zone of its own, so `_launch` starts it in the zone
   // it was created in.
   void _launch() => creationZone.run(start);
 
-  Future<void> get _whenDone => whenDone;
+  Future<void> get _untilFinished => untilFinished;
 
   void _stop(Cancelled cancelled) => cancelWith(cancelled, rejectable: false);
 
@@ -85,7 +85,7 @@ enum _Copy { firstShown, firstQueue, withQueue }
       return (job, queue.run(), WeakReference(payload));
     case _Copy.withQueue:
       final job = MyJob<int>((ctx) async => payload.length).._launch();
-      return (job, job._whenDone, WeakReference(payload));
+      return (job, job._untilFinished, WeakReference(payload));
   }
 }
 
@@ -117,7 +117,7 @@ final class MyQueue {
       final job = _waiting.removeAt(0);
       if (job.isFinished) continue;
       job._launch();
-      await job._whenDone;
+      await job._untilFinished;
     }
   }
 }
@@ -384,7 +384,7 @@ void main() {
       expect(job.hooks, ['started', 'finished']);
     });
 
-    test('whenDone waits without looking: a failure reaches the zone', () {
+    test('untilFinished waits without looking: a failure reaches the zone', () {
       var waited = false;
       final errors = reachingTheZone(() {
         plain
@@ -572,7 +572,7 @@ void main() {
     });
 
     test('every MyJob of the bench launches the way the page shows', () {
-      const opening = '  // `start` and `whenDone` are protected: '
+      const opening = '  // `start` and `untilFinished` are protected: '
           'the rest of the engine calls';
       for (final file in [
         'test/support/extending_plain.dart',

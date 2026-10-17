@@ -100,9 +100,9 @@ A failure nobody observes goes to the job's creation zone on the microtask
 after the job finishes: that keeps it visible when no caller waits for the
 result. In a test that zone is the test's, and the test fails. Reading
 `outcome` does not count as observing, and neither does awaiting
-`job.cancel()`, registering with `whenCancelled` or any callback of the
-observer: `onError` and `onFinish` hear the failure, and it reaches the zone
-all the same.
+`job.cancel()`, registering with `whenCancelled` or `whenFinished`, or any
+callback of the observer: `onError` and `onFinish` hear the failure, and it
+reaches the zone all the same.
 
 ### Telling the core it is handled
 
@@ -116,11 +116,11 @@ status: backup failed: Bad state: disk full
 
 `ignoreFailure()` tells the core that the failure is handled elsewhere, here by
 the status line, and nothing reaches the zone. Accessing `done` or `value`
-observes a failure as well, so code that waits for the job — to redraw the
-status line when it is over, say — needs no `ignoreFailure()`. `done` never
-throws; with `value` the waiting code gets the error itself and has to handle
-it, as with any `Future`. Forwarding a failure through `then` observes it too;
-the continuation takes responsibility for it.
+observes a failure as well, so code that waits for the job and handles its
+result needs no `ignoreFailure()`. `done` never throws; with `value` the
+waiting code gets the error itself and has to handle it, as with any `Future`.
+Forwarding a failure through `then` observes it too; the continuation takes
+responsibility for it.
 
 Waiting does not observe the failure of the body of a job that ends
 `Cancelled`. If `backup` is cancelled and its body fails, the code waiting for
@@ -129,6 +129,29 @@ it gets the cancellation, not the error, and the status line says
 [Where errors go](observing.md#where-errors-go) on the observing page shows it.
 `ignoreFailure()` keeps it out of the zone, and then only an observer's
 `onError` hears it.
+
+### Hearing the end without the failure
+
+```dart
+// Runs when the backup is over, and does not answer for its failure.
+final unregister = backup.whenFinished((outcome) {
+  print('status redrawn: $outcome');
+});
+```
+
+```text
+status redrawn: Failed(Bad state: disk full)
+zone: Bad state: disk full
+```
+
+A status line that waits for `done` to redraw itself observes the failure, and
+the zone stops hearing about it, even when the line is not the code that
+answers for the backup. `whenFinished` calls its listener with the outcome once
+the job is over — after its cleanup, before anything waiting on `done`
+resumes — and observes nothing: the failure reaches the zone as in the first
+attempt, and the owner of `backup` keeps the choice of who answers for it. A
+screen that closes before the job ends calls `unregister()`; a listener
+registered on a job that is already over runs at once.
 
 ## Why a job was cancelled
 

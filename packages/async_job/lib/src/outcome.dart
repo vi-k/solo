@@ -164,12 +164,12 @@ final class Done<T> extends Outcome<T> {
 ///
 /// The errors with no outcome to carry them — a late failure of an action
 /// [JobContext.abandonable] walked away from, a disposer, a callback of
-/// [JobContext.onCancel] or [Job.whenCancelled], a failure of work handed over
-/// with [JobContext.unattended], a failure an engine of a domain hands to a job
-/// already over — take the other path: [JobObserver.onError] hears them, and an
-/// observer that is a [JobAnswerer] answers for them, by default in the zone
-/// the job was created in, where they go straight away without such an
-/// observer.
+/// [JobContext.onCancel], [Job.whenCancelled] or [Job.whenFinished], a failure
+/// of work handed over with [JobContext.unattended], a failure an engine of a
+/// domain hands to a job already over — take the other path:
+/// [JobObserver.onError] hears them, and an observer that is a [JobAnswerer]
+/// answers for them, by default in the zone the job was created in, where they
+/// go straight away without such an observer.
 final class Failed extends Outcome<Never> {
   /// The thrown error.
   final Object error;

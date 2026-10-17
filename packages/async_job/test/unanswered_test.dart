@@ -93,14 +93,16 @@ const outside = [
   'Bad state: cleanup',
   'Bad state: onCancel',
   'Bad state: whenCancelled',
+  'Bad state: whenFinished',
   'Bad state: unattended',
   'Bad state: abandoned',
 ];
 
 /// Every error a job can run into outside its body, one of each: a
 /// `discard` releasing a value the cancellation kept from the body,
-/// cleanup, a callback of `onCancel` and of `whenCancelled`, unattended
-/// work, and the late failure of an action `abandonable` walked away from.
+/// cleanup, a callback of `onCancel`, of `whenCancelled` and of
+/// `whenFinished`, unattended work, and the late failure of an action
+/// `abandonable` walked away from.
 Job<void> failingOutside(JobObserver? observer) {
   final job = Job<void>(key: 'j', observer: observer, (ctx) async {
     ctx
@@ -123,7 +125,8 @@ Job<void> failingOutside(JobObserver? observer) {
       discard: (_) => throw StateError('discard'),
     );
   })
-    ..whenCancelled((_) => throw StateError('whenCancelled'));
+    ..whenCancelled((_) => throw StateError('whenCancelled'))
+    ..whenFinished((_) => throw StateError('whenFinished'));
   return job;
 }
 

@@ -196,7 +196,8 @@ completing. An unobserved `Failed` is reported to the zone that created the
 job, just as Dart reports an unhandled `Future` error. A failure is observed by
 accessing the job's `done` or `value`, or by calling `ignoreFailure()`;
 awaiting `cancel()` and reading `outcome`, as the block above does, do not
-observe it, and neither does the job's observer (`JobObserver`).
+observe it, and neither does the job's observer (`JobObserver`). To hear the
+end without taking over the failure, register with `whenFinished`.
 
 An error that does not become the outcome goes to the zone as well, unless the
 job's observer answers for it (`JobAnswerer`): one from cleanup, or an error of

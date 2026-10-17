@@ -51,13 +51,13 @@ final class MyJob<T> extends JobBase<T> {
   @override
   void finished() => _body = null;
 
-  // `start` and `whenDone` are protected: the rest of the engine calls
+  // `start` and `untilFinished` are protected: the rest of the engine calls
   // them through these wrappers, private to its library. The queue starts
   // a job later, from a zone of its own, so `_launch` starts it in the zone
   // it was created in.
   void _launch() => creationZone.run(start);
 
-  Future<void> get _whenDone => whenDone;
+  Future<void> get _untilFinished => untilFinished;
 }
 
 final class MyContext extends JobContextBase {
@@ -68,8 +68,8 @@ final class MyContext extends JobContextBase {
 A `@protected` member is for the subclass alone, and an engine reaches a job
 from the side, from its queue. The wrappers are private, so the engine lives in
 the Dart library of `MyJob`, and nobody else who holds the job can start it
-behind the engine's back. `whenDone` waits for the job without observing its
-outcome, so a failure nobody looked at still reaches the zone; waiting for
+behind the engine's back. `untilFinished` waits for the job without observing
+its outcome, so a failure nobody looked at still reaches the zone; waiting for
 `done` would count as looking.
 
 `start` runs the body in the zone it is called from, and a queue calls it
@@ -143,7 +143,7 @@ final class MyQueue {
       final job = _waiting.removeAt(0);
       if (job.isFinished) continue;
       job._launch();
-      await job._whenDone;
+      await job._untilFinished;
     }
   }
 }

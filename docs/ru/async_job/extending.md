@@ -54,13 +54,13 @@ final class MyJob<T> extends JobBase<T> {
   @override
   void finished() => _body = null;
 
-  // `start` и `whenDone` защищены: остальной движок вызывает их
+  // `start` и `untilFinished` защищены: остальной движок вызывает их
   // через эти обёртки, приватные для его библиотеки. Очередь запускает
   // задачу позже, из своей зоны, поэтому `_launch` запускает её в зоне,
   // где задачу создали.
   void _launch() => creationZone.run(start);
 
-  Future<void> get _whenDone => whenDone;
+  Future<void> get _untilFinished => untilFinished;
 }
 
 final class MyContext extends JobContextBase {
@@ -71,9 +71,9 @@ final class MyContext extends JobContextBase {
 Член с `@protected` доступен только наследнику, а движок обращается к задаче
 со стороны, из своей очереди. Обёртки приватные, поэтому движок живёт
 в Dart-библиотеке `MyJob`, и никто другой, у кого есть задача, не запустит её
-в обход движка. `whenDone` ждёт задачу, не наблюдая её исход, поэтому провал,
-на который никто не посмотрел, всё равно доходит до зоны. Ожидание `done`
-считалось бы наблюдением.
+в обход движка. `untilFinished` ждёт задачу, не наблюдая её исход, поэтому
+провал, на который никто не посмотрел, всё равно доходит до зоны. Ожидание
+`done` считалось бы наблюдением.
 
 `start` запускает тело в той зоне, откуда его вызвали, а очередь вызывает его
 позже, из той зоны, где работает сама. `creationZone.run(start)` запускает
@@ -149,7 +149,7 @@ final class MyQueue {
       final job = _waiting.removeAt(0);
       if (job.isFinished) continue;
       job._launch();
-      await job._whenDone;
+      await job._untilFinished;
     }
   }
 }

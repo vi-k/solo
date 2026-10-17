@@ -2,7 +2,7 @@
 //
 // Five of its members are held by `solo` alone and by nothing in here, so
 // a change to their contract would leave this package green and redden the
-// neighbour: `createEachJob`, `whenDone`, `inUncancellableSection`,
+// neighbour: `createEachJob`, `untilFinished`, `inUncancellableSection`,
 // `heldCancel` and `creationZone`. Each of them is exercised below by a
 // small engine of its own, the way `solo` does it. So is the way an engine
 // answers for an error nobody answered for: through an observer of its own
@@ -92,7 +92,7 @@ final class WaitingJob<T> extends JobBase<T> {
 
   final Future<T> Function(JobContext ctx) _body;
 
-  Future<void> get waited => whenDone;
+  Future<void> get waited => untilFinished;
 
   void launch() => start();
 
@@ -329,7 +329,7 @@ void main() {
     });
   });
 
-  test('whenDone waits without observing the failure', () {
+  test('untilFinished waits without observing the failure', () {
     final caught = <Object>[];
     var waited = false;
     runZonedGuarded(
@@ -352,7 +352,7 @@ void main() {
     );
   });
 
-  test('done, unlike whenDone, is observation', () {
+  test('done, unlike untilFinished, is observation', () {
     final caught = <Object>[];
     runZonedGuarded(
       () {

@@ -110,16 +110,15 @@ abstract mixin class JobObserver {
   /// here too: an operation stopping at the job's token throws such an error,
   /// and only this hook hears it.
   ///
-  /// A [Cancelled] reaches this hook whenever one is thrown where there is
-  /// no outcome to carry it — never the job giving up, which is not an
-  /// error and never comes here. A disposer or a callback of
-  /// [JobContext.onCancel] or [Job.whenCancelled] that throws one;
-  /// `throw Cancelled(...)` inside unattended work, where there is nobody
-  /// left to cancel and the object is new; a fresh `Cancelled` built by
-  /// the rules of a domain for a context that outlived its job; a child's
-  /// cancellation taken through `child.value` from one of those places
-  /// rather than from the body, where it becomes the outcome instead and
-  /// never comes here.
+  /// A [Cancelled] reaches this hook whenever one is thrown where there is no
+  /// outcome to carry it — never the job giving up, which is not an error and
+  /// never comes here. A disposer or a callback of [JobContext.onCancel],
+  /// [Job.whenCancelled] or [Job.whenFinished] that throws one;
+  /// `throw Cancelled(...)` inside unattended work, where there is nobody left
+  /// to cancel and the object is new; a fresh `Cancelled` built by the rules of
+  /// a domain for a context that outlived its job; a child's cancellation taken
+  /// through `child.value` from one of those places rather than from the body,
+  /// where it becomes the outcome instead and never comes here.
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) {}
 
   /// A job called [JobContext.log], with what it passed.
@@ -165,18 +164,19 @@ mixin JobAnswerer on JobObserver {
   ///
   /// The errors no outcome carries: an action abandoned by
   /// [JobContext.abandonable] failing later, a disposer, a callback of
-  /// [JobContext.onCancel] or [Job.whenCancelled], work handed over with
-  /// [JobContext.unattended], a failure while formatting a child's cancellation
-  /// description, the failure of a branch of [JobContext.runAll] that the group
-  /// did not throw, a failure of the body of a job that ends [Cancelled] — the
-  /// outcome carries the cancellation, whoever reads it — a failure of the body
-  /// of a job an engine of a domain ended by hand with an outcome of its own,
-  /// unless that job is a branch whose group took that failure in place of a
-  /// value (see [JobBase.finish]), and a failure an engine of a domain hands to
-  /// a job already over. [Job.ignoreFailure] keeps the last four from coming
-  /// here, and [Job.isCancellationError] keeps away the failures it names of a
-  /// job that has accepted a cancellation. Any other failure of a body does not
-  /// come here: it has an outcome, and one nobody observes reaches the zone by
+  /// [JobContext.onCancel], [Job.whenCancelled] or [Job.whenFinished], work
+  /// handed over with [JobContext.unattended], a failure while formatting a
+  /// child's cancellation description, the failure of a branch of
+  /// [JobContext.runAll] that the group did not throw, a failure of the body of
+  /// a job that ends [Cancelled] — the outcome carries the cancellation,
+  /// whoever reads it — a failure of the body of a job an engine of a domain
+  /// ended by hand with an outcome of its own, unless that job is a branch
+  /// whose group took that failure in place of a value (see [JobBase.finish]),
+  /// and a failure an engine of a domain hands to a job already over.
+  /// [Job.ignoreFailure] keeps the last four from coming here, and
+  /// [Job.isCancellationError] keeps away the failures it names of a job that
+  /// has accepted a cancellation. Any other failure of a body does not come
+  /// here: it has an outcome, and one nobody observes reaches the zone by
   /// itself. Every error that comes here has been through [onError] already.
   ///
   /// **One failure at a time.** The job walks a `ParallelWaitError` the way

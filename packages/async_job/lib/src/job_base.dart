@@ -18,7 +18,8 @@ typedef _Void = void;
 ///
 /// Not a [Future]: a method that starts a job may be called without an
 /// `await`, and the analyzer will not ask for one. Await [done] or [value]
-/// where you need to, or register a cancellation listener with [whenCancelled].
+/// where you need to, or register a cancellation listener with [whenCancelled]
+/// and one for the end with [whenFinished].
 ///
 /// A job that ends with [Failed] and is never observed hands its error to
 /// the zone that created the job, the way Dart reports an unhandled
@@ -438,6 +439,37 @@ abstract interface class Job<T> {
   /// ```
   void Function() whenCancelled(void Function(Cancelled) callback);
 
+  /// Registers [callback] for the end of the job and returns an unregister
+  /// function.
+  ///
+  /// Calls it synchronously with the outcome once the job has finished:
+  /// after its cleanup, after the [whenCancelled] listeners of a cancelled
+  /// job and [JobObserver.onFinish], and before anything waiting on [done]
+  /// or [value] resumes. A job cancelled before its start calls it as it is
+  /// dropped; one that never starts never calls it. An engine of a domain
+  /// that ends the job by hand calls it then, ahead of any cleanup still to
+  /// run.
+  ///
+  /// Registering does not observe the outcome: a [Failed] handed to
+  /// [callback] still reaches the zone, unless somebody observes it — reads
+  /// [done] or [value], or calls [ignoreFailure]. That is what it is for: a
+  /// widget that turns a spinner off when the job ends without taking over
+  /// a failure the job's owner answers for.
+  ///
+  /// ```dart
+  /// final unregister = job.whenFinished((_) => setState(() => busy = false));
+  /// // In dispose(), if the widget goes before the job does:
+  /// unregister();
+  /// ```
+  ///
+  /// Registering on a finished job calls [callback] at once, and so does
+  /// registering during the pass; one made after the outcome is set but
+  /// before the pass, from [JobObserver.onFinish] say, joins the pass.
+  /// Otherwise the registrations, the errors of a callback and unregistering
+  /// behave as they do for [whenCancelled]: each runs once, in registration
+  /// order and from a snapshot, and the job releases them as it finishes.
+  void Function() whenFinished(void Function(Outcome<T> outcome) callback);
+
   /// Cancels the job with [reason] and waits for it to actually finish.
   ///
   /// Pass a custom [CancelReason] subclass to carry data to [whenCancelled]
@@ -503,7 +535,8 @@ abstract interface class Job<T> {
   /// child's unless the child has one of its own.
   ///
   /// Call it before the job ends, or at the latest from [JobObserver.onFinish]
-  /// or a callback of [whenCancelled] registered before it ends. A failure the
+  /// or a callback of [whenCancelled] or [whenFinished] registered before it
+  /// ends. A failure the
   /// outcome does not carry is answered as the job finishes, and a call from a
   /// listener of [done] comes too late for it.
   ///
@@ -599,6 +632,13 @@ abstract class JobBase<T> implements Job<T> {
 
   Cancelled? _cancelled;
   final _cancelListeners = <void Function(Cancelled)>[];
+
+  /// Whether the pass that tells the [whenFinished] listeners has run: from
+  /// then on a registration is called at once. Not `isFinished`: the outcome
+  /// is set before `onFinish` and the pass, and a registration made in there
+  /// belongs to the pass, after the ones made earlier.
+  bool _finishTold = false;
+  final _finishListeners = <void Function(Outcome<T>)>[];
   final _onCancel = <void Function()>[];
   final _cleanups = <_Cleanup>[];
 
@@ -1104,26 +1144,29 @@ abstract class JobBase<T> implements Job<T> {
   }) =>
       _ThenJob<T, R>(this, onValue, observer: observer);
 
+  /// [callback], with its errors gone where the errors of a listener go.
+  void Function(A) _guardListener<A>(void Function(A) callback) => (event) {
+        try {
+          callback(event);
+        } on Object catch (error, stackTrace) {
+          if (error is StackOverflowError && _outOfStack) {
+            // Not `onError`, and above all not the zone. At the bottom of a
+            // cascade that has just run out of stack this is that same
+            // overflow, landing in the first callback to ask for a few
+            // frames more; reporting it would name the callback for
+            // something it did not do, and would format a stack trace with
+            // no stack left to do it on. It leaves with the error that is
+            // already unwinding. Outside that window the callback ran out
+            // of stack on its own, and that is its error like any other.
+            rethrow;
+          }
+          notifyError(error, stackTrace);
+        }
+      };
+
   @override
   void Function() whenCancelled(void Function(Cancelled) callback) {
-    void guarded(Cancelled cancelled) {
-      try {
-        callback(cancelled);
-      } on Object catch (error, stackTrace) {
-        if (error is StackOverflowError && _outOfStack) {
-          // Not `onError`, and above all not the zone. At the bottom of a
-          // cascade that has just run out of stack this is that same
-          // overflow, landing in the first callback to ask for a few
-          // frames more; reporting it would name the callback for
-          // something it did not do, and would format a stack trace with
-          // no stack left to do it on. It leaves with the error that is
-          // already unwinding. Outside that window the callback ran out
-          // of stack on its own, and that is its error like any other.
-          rethrow;
-        }
-        notifyError(error, stackTrace);
-      }
-    }
+    final guarded = _guardListener(callback);
 
     // `_cancelled` and not `_pendingCancel`: between the mark and the pass
     // that tells the listeners there is a window -- the cascade onto the
@@ -1149,6 +1192,17 @@ abstract class JobBase<T> implements Job<T> {
   }
 
   @override
+  void Function() whenFinished(void Function(Outcome<T> outcome) callback) {
+    final guarded = _guardListener(callback);
+    if (_finishTold) {
+      guarded(_outcome!);
+      return () {};
+    }
+    _finishListeners.add(guarded);
+    return () => _finishListeners.remove(guarded);
+  }
+
+  @override
   Future<void> cancel({CancelReason reason = const ManualCancelReason()}) {
     cancelWith(
       Cancelled.by(
@@ -1158,7 +1212,7 @@ abstract class JobBase<T> implements Job<T> {
     );
     // The core's own waiting is not observation, so cancelling a job does
     // not silence its failure.
-    return whenDone;
+    return untilFinished;
   }
 
   /// Cancels the job with [cancelled], correcting `started` to its status.
@@ -1502,9 +1556,10 @@ abstract class JobBase<T> implements Job<T> {
 
   /// Waiting without observing: an engine waits for a job to finish
   /// without marking its outcome observed, so a failure nobody looked at
-  /// still reaches the zone.
+  /// still reaches the zone. Code outside an engine registers with
+  /// [whenFinished] instead.
   @protected
-  Future<void> get whenDone => _done.future.then((_) {});
+  Future<void> get untilFinished => _done.future.then((_) {});
 
   /// The zone the job was created in, where an unobserved failure of the
   /// job goes.
@@ -1820,6 +1875,7 @@ abstract class JobBase<T> implements Job<T> {
     // finish hooks: a synchronous subscriber may immediately add more work.
     if (decided is Cancelled) _notifyCancelled(decided);
     _cancelListeners.clear();
+    _notifyFinished(decided);
     // Let go of the graph. The handle stays -- it is kept precisely to be read
     // later, by a controller holding the last job, by a widget, by a journal --
     // but nothing it reached through is of any use now: the parent chain leads
@@ -1908,8 +1964,8 @@ abstract class JobBase<T> implements Job<T> {
   ///
   /// For the errors that have nowhere else to go: an action abandoned by
   /// [JobContext.abandonable] failing later, a disposer, a callback of
-  /// [JobContext.onCancel] or [Job.whenCancelled], work handed over with
-  /// [JobContext.unattended]. The observer hears it through
+  /// [JobContext.onCancel], [Job.whenCancelled] or [Job.whenFinished], work
+  /// handed over with [JobContext.unattended]. The observer hears it through
   /// [JobObserver.onError], and one that is a [JobAnswerer] answers for it
   /// through [JobAnswerer.onUnanswered], whose default body sends it to the
   /// zone the job was created in; without such an observer the error goes to
@@ -2672,7 +2728,7 @@ abstract class JobBase<T> implements Job<T> {
           torn = true;
         }
       }
-      // `whenDone`, not `done`: waiting for a child is the core's
+      // `untilFinished`, not `done`: waiting for a child is the core's
       // business and must not mark the child observed for the parent.
       final pending = <Future<void>>[];
       for (var child = _firstChild; child != null; child = child._nextSibling) {
@@ -2684,7 +2740,7 @@ abstract class JobBase<T> implements Job<T> {
         } else if (child._startWasTorn) {
           torn = true;
         } else {
-          pending.add(child.whenDone);
+          pending.add(child.untilFinished);
         }
       }
       if (starting) {
@@ -2765,6 +2821,17 @@ abstract class JobBase<T> implements Job<T> {
       // Whatever happened, the pass is over and the window with it: what
       // runs out of stack after this did it on its own.
       _outOfStack = false;
+    }
+  }
+
+  /// Tells the [whenFinished] listeners, from a snapshot: one registered on
+  /// the way is called at once, one removed on the way still runs.
+  void _notifyFinished(Outcome<T> outcome) {
+    _finishTold = true;
+    final listeners = _finishListeners.toList();
+    _finishListeners.clear();
+    for (final listener in listeners) {
+      listener(outcome);
     }
   }
 

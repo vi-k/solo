@@ -733,8 +733,8 @@ void main() {
         _says('- an operation abandoned by `abandonable` that fails later;');
         _says(
           '- what the job calls outside its body: a disposer, a '
-          '`ctx.onCancel` callback, a `whenCancelled` listener, a state '
-          'handler of `run`;',
+          '`ctx.onCancel` callback, a `whenCancelled` or `whenFinished` '
+          'listener, a state handler of `run`;',
         );
         _says(
           '- a `keepWhile` that throws when a change of state re-checks it;',
@@ -786,7 +786,9 @@ void main() {
         expect(ran.errors, ['disposer']);
       });
 
-      test('a ctx.onCancel callback and a whenCancelled listener', () {
+      test(
+          'a ctx.onCancel callback, a whenCancelled and a whenFinished '
+          'listener', () {
         late Bench bench;
         final ran = _run((async) {
           bench = Bench();
@@ -795,15 +797,23 @@ void main() {
             await ctx.abandonable(() => stage.start<void>('op', null));
           })
             ..whenCancelled((_) => throw StateError('the listener'))
+            ..whenFinished((_) => throw StateError('the end listener'))
             ..ignoreFailure();
           async.flushMicrotasks();
           unawaited(job.cancel());
         });
 
-        const both = ['cancelled: the callback', 'cancelled: the listener'];
-        expect(bench.heard, both);
-        expect(bench.unanswered, both);
-        expect(ran.errors, ['the callback', 'the listener']);
+        const all = [
+          'cancelled: the callback',
+          'cancelled: the listener',
+          'cancelled: the end listener',
+        ];
+        expect(bench.heard, all);
+        expect(bench.unanswered, all);
+        expect(
+          ran.errors,
+          ['the callback', 'the listener', 'the end listener'],
+        );
       });
 
       test('a state handler of run', () {

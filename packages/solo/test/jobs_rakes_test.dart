@@ -336,6 +336,7 @@ void main() {
         ('ignoreFailure()', (job) => job.ignoreFailure(), true),
         ('outcome', (job) => job.outcome, false),
         ('whenCancelled', (job) => job.whenCancelled((_) {}), false),
+        ('whenFinished', (job) => job.whenFinished((_) {}), false),
         ('nothing at all', (job) {}, false),
       ]) {
         test(
@@ -382,6 +383,21 @@ void main() {
           camera.queue.remove(job);
           expect(heard.single.started, isFalse);
           expect('${heard.single}', 'Cancelled(manual)');
+          camera.close().ignore();
+          async.flushTimers();
+        });
+      });
+
+      test('whenFinished hears the end with the outcome', () {
+        fakeAsync((async) {
+          final camera = page.CameraController();
+          stage.saveError = StateError('disk full');
+          final job = camera.save()..ignoreFailure();
+          final heard = <Outcome<void>>[];
+          job.whenFinished(heard.add);
+          async.flushTimers();
+          expect(heard, [same(job.outcome)]);
+          expect('${heard.single}', 'Failed(Bad state: disk full)');
           camera.close().ignore();
           async.flushTimers();
         });
