@@ -7,6 +7,11 @@ part of 'solo.dart';
 /// by the queue. A removed job ends `Cancelled` with `reason`, a
 /// [ManualCancelReason] unless the caller names one of its own — a
 /// policy of the domain that clears the queue can say so.
+///
+/// A job whose start rules are being asked is off the queue and not
+/// started yet. [jobs] and [length] leave it out, as its `isQueued` does,
+/// and the removals reach it ahead of the rest, the way a [Policy] and
+/// [Solo.cancelAll] do: it is queued work until it is launched.
 abstract interface class SoloQueue {
   /// An unmodifiable view of queued jobs in their current order.
   ///
@@ -46,7 +51,17 @@ abstract interface class SoloQueue {
 }
 
 final class _SoloQueue<S extends Object> implements SoloQueue {
+  final Solo<S> _solo;
   final _jobs = <_SoloJob<S, S, Object?>>[];
+
+  _SoloQueue(this._solo);
+
+  /// The job the pump holds while its start rules are asked, unless a rule
+  /// has already ended it.
+  _SoloJob<S, S, Object?>? get _held {
+    final job = _solo._inTransition;
+    return job != null && !job.isFinished ? job : null;
+  }
 
   @override
   Iterable<Job<Object?>> get jobs => UnmodifiableListView(_jobs);
@@ -66,7 +81,8 @@ final class _SoloQueue<S extends Object> implements SoloQueue {
     bool force = false,
     CancelReason reason = const ManualCancelReason(),
   }) {
-    if (job is! _SoloJob<S, S, Object?> || !_jobs.contains(job)) {
+    if (job is! _SoloJob<S, S, Object?> ||
+        !(_jobs.contains(job) || identical(job, _held))) {
       return false;
     }
     job._cancelWith(
@@ -79,7 +95,8 @@ final class _SoloQueue<S extends Object> implements SoloQueue {
     );
     // The job answers a rejectable cancellation itself, and a job that
     // refused is still here: membership is the answer, not a second check.
-    return !_jobs.contains(job);
+    // The held one is in no list, and a cancellation it takes ends it.
+    return !_jobs.contains(job) && !identical(job, _held);
   }
 
   @override
@@ -93,7 +110,7 @@ final class _SoloQueue<S extends Object> implements SoloQueue {
     // being asked: `test` is the caller's code, and `where` is lazy, so one
     // that touches the queue used to walk into a
     // `ConcurrentModificationError` on the list it had just changed.
-    for (final job in _jobs.toList()) {
+    for (final job in [if (_held case final held?) held, ..._jobs]) {
       if (!test(job)) {
         continue;
       }

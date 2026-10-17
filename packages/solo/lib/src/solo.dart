@@ -110,7 +110,7 @@ abstract class Solo<S extends Object> {
   Completer<void>? _closing;
   StackTrace? _closeStackTrace;
   var _draining = false;
-  final _queue = _SoloQueue<S>();
+  late final _queue = _SoloQueue<S>(this);
   final _timers = <Timer>{};
 
   /// The observer every job of this controller is given.
@@ -576,13 +576,11 @@ abstract class Solo<S extends Object> {
           (other) => other.key == impl.key,
           reason: const ReplacedCancelReason(),
         );
-        _replaceInTransition(impl.key);
       case Policy.restart:
         _queue.removeWhere(
           (other) => other.key == impl.key,
           reason: const ReplacedCancelReason(),
         );
-        _replaceInTransition(impl.key);
         final current = _current;
         if (current != null && current.key == impl.key) {
           unawaited(current.cancel(reason: const ReplacedCancelReason()));
@@ -803,22 +801,6 @@ abstract class Solo<S extends Object> {
         : null;
   }
 
-  /// Removes the job whose start rules are being asked, the way a policy
-  /// removes a queued job of the same [key]: it is queued work until it is
-  /// launched. Rejectable, as that removal is.
-  void _replaceInTransition(Object? key) {
-    final transition = _inTransition;
-    if (transition != null && !transition.isFinished && transition.key == key) {
-      transition._cancelWith(
-        Cancelled.by(
-          reason: const ReplacedCancelReason(),
-          started: false,
-          stackTrace: StackTrace.current,
-        ),
-      );
-    }
-  }
-
   /// Whether [job] is still going to do its work: neither cancelled nor
   /// finished.
   static bool _goingOn(Job<Object?> job) => !job.isCancelled && !job.isFinished;
@@ -900,8 +882,12 @@ abstract class Solo<S extends Object> {
   /// once it is over: what [SoloCloseMode.cancel] means.
   void _stopWork(Completer<void> completer, StackTrace stackTrace) {
     _cancelTimers();
-    for (final job in _queue._drain()) {
-      job._drop(
+    final transition = _inTransition;
+    if (transition != null && !transition.isFinished) {
+      // Held by the pump, which is about to launch it: closing takes this
+      // one the way it takes the queue, without asking, and ahead of it,
+      // as the queue's own removals do.
+      transition._drop(
         Cancelled.by(
           reason: const ClosedCancelReason(),
           started: false,
@@ -909,11 +895,8 @@ abstract class Solo<S extends Object> {
         ),
       );
     }
-    final transition = _inTransition;
-    if (transition != null && !transition.isFinished) {
-      // Held by the pump, which is about to launch it: closing takes this
-      // one the way it takes the queue, without asking.
-      transition._drop(
+    for (final job in _queue._drain()) {
+      job._drop(
         Cancelled.by(
           reason: const ClosedCancelReason(),
           started: false,
@@ -979,17 +962,10 @@ abstract class Solo<S extends Object> {
     bool force = false,
     CancelReason reason = const ManualCancelReason(),
   }) {
+    // The queue's removals reach the job the pump holds between the queue
+    // and the start, and a call from inside its rules is exactly when that
+    // happens.
     _queue.clear(force: force, reason: reason);
-    // The pump may be holding one between the queue and the start, and a
-    // call from inside its rules is exactly when that happens.
-    _inTransition?._cancelWith(
-      Cancelled.by(
-        reason: reason,
-        started: false,
-        stackTrace: StackTrace.current,
-      ),
-      rejectable: !force,
-    );
     final current = _current;
     return current == null
         ? Future<void>.value()

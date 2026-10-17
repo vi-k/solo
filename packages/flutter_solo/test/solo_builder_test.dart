@@ -44,6 +44,47 @@ final class _PlainController extends Solo<_Screen> {
   void set(_Screen next) => externalSetState(next);
 }
 
+/// A controller of somebody's own whose `addListener` registers the
+/// callback and then throws, once: a source that starts up lazily and
+/// fails at it.
+final class _FailingController extends Solo<_Screen> {
+  _FailingController() : super(const _Screen());
+
+  var _fail = true;
+  int adds = 0;
+  int removes = 0;
+
+  int get live => adds - removes;
+
+  @override
+  void addListener(VoidCallback listener) {
+    adds++;
+    super.addListener(listener);
+    if (_fail) {
+      _fail = false;
+      throw StateError('could not start');
+    }
+  }
+
+  @override
+  void removeListener(VoidCallback listener) {
+    removes++;
+    super.removeListener(listener);
+  }
+}
+
+/// A controller whose `removeListener` throws, the way one of somebody's
+/// own may: a listener it was given stays on it.
+final class _StuckController extends Solo<_Screen> {
+  _StuckController() : super(const _Screen());
+
+  void set(_Screen next) => externalSetState(next);
+
+  @override
+  void removeListener(VoidCallback listener) =>
+      throw StateError('this one does not let go');
+}
+
 Widget _wrap(Widget child) => Directionality(
       textDirection: TextDirection.ltr,
       child: child,
@@ -351,6 +392,81 @@ void main() {
       controller.set(const _Screen(name: 'Grace'));
       await tester.pump();
       expect(find.text('Grace'), findsOneWidget);
+    },
+  );
+
+  // The framework drops a `State` that threw in `initState` or in
+  // `didUpdateWidget` without disposing of it, so a listener left on the
+  // controller would stay for as long as the controller does.
+  testWidgets(
+    'a controller that throws on mounting keeps no listener',
+    (tester) async {
+      final controller = _FailingController();
+      addTearDown(controller.close);
+
+      await tester.pumpWidget(
+        _wrap(
+          SoloBuilder<_Screen>(
+            solo: controller,
+            builder: (context, state, _) => Text(state.name),
+          ),
+        ),
+      );
+      expect(tester.takeException(), isStateError);
+      await tester.pumpWidget(_wrap(const SizedBox()));
+      expect(controller.live, 0);
+    },
+  );
+
+  testWidgets(
+    'a controller that throws when handed in keeps no listener',
+    (tester) async {
+      final first = _Controller();
+      final next = _FailingController();
+      addTearDown(first.close);
+      addTearDown(next.close);
+      Widget tree(Solo<_Screen> controller) => _wrap(
+            SoloBuilder<_Screen>(
+              solo: controller,
+              builder: (context, state, _) => Text(state.name),
+            ),
+          );
+
+      await tester.pumpWidget(tree(first));
+      await tester.pumpWidget(tree(next));
+      expect(tester.takeException(), isStateError);
+      await tester.pumpWidget(_wrap(const SizedBox()));
+      expect(next.live, 0);
+    },
+  );
+
+  // The framework disposes of the `State` all the same, and a listener
+  // the controller kept would rebuild an element that is gone.
+  testWidgets(
+    'a controller that cannot let go does not rebuild a widget that is gone',
+    (tester) async {
+      final controller = _StuckController();
+      addTearDown(controller.close);
+      var builds = 0;
+
+      await tester.pumpWidget(
+        _wrap(
+          SoloBuilder<_Screen>(
+            solo: controller,
+            builder: (context, state, _) {
+              builds++;
+              return Text(state.name);
+            },
+          ),
+        ),
+      );
+      await tester.pumpWidget(_wrap(const SizedBox()));
+      expect(tester.takeException(), isStateError);
+
+      controller.set(const _Screen(name: 'Grace'));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(builds, 1);
     },
   );
 }

@@ -325,6 +325,31 @@ void main() {
     expect(length.value, 1);
   });
 
+  test('a selector that throws on a change in place keeps no old pick', () {
+    // The object is the same one, so a pick kept for it from before the
+    // notification would answer a read with the length the list had then.
+    final errors = <Object>[];
+    final previous = FlutterError.onError;
+    FlutterError.onError = (details) => errors.add(details.exception);
+    addTearDown(() => FlutterError.onError = previous);
+    final source = _InPlaceSource();
+    var failing = false;
+    final length = SoloSelection<List<int>, int>(source, (list) {
+      if (failing) {
+        failing = false;
+        throw StateError('not now');
+      }
+      return list.length;
+    });
+    void listener() {}
+    length.addListener(listener);
+
+    failing = true;
+    source.grow();
+    expect(errors, [isStateError]);
+    expect(length.value, 1, reason: 'picked afresh, not the pick from before');
+  });
+
   test('a listener of the source ahead of the selection reads the old pick',
       () {
     final source = _InPlaceSource();

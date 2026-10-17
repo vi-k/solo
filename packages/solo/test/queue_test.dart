@@ -142,6 +142,80 @@ void main() {
     });
   });
 
+  // Off the queue and not started yet, the job the pump holds while its
+  // start rules are asked is queued work until it is launched: the
+  // policies, `lastJobWhere` and `cancelAll` reach it, and so must these.
+  const removals = [('remove', 1), ('removeWhere', 1), ('clear', 2)];
+  for (final (how, count) in removals) {
+    test('$how reaches the job whose start rules are being asked', () {
+      runSolo((solo, journal, async) {
+        int? removed;
+        bool? listed;
+        var ran = false;
+        final asked = <Object?>[];
+        late final SoloJob<void> b;
+        b = solo.job<TestState, void>(
+          key: 'b',
+          canStart: (state) {
+            listed = solo.queue.jobs.contains(b);
+            removed = switch (how) {
+              'remove' => solo.queue.remove(b) ? 1 : 0,
+              'removeWhere' => solo.queue.removeWhere((job) {
+                  asked.add(job.key);
+                  return job.key == 'b';
+                }),
+              _ => solo.queue.clear(),
+            };
+            return true;
+          },
+          (ctx) async => ran = true,
+        );
+        solo
+          ..add(b)
+          ..add(slow(solo, 'c'));
+        async.flushTimers();
+        expect(listed, isFalse, reason: 'the view is the queue itself');
+        expect(removed, count);
+        expect(ran, isFalse);
+        expect(b.outcome, isA<Cancelled>());
+        if (how == 'removeWhere') {
+          expect(asked, ['b', 'c'], reason: 'it goes ahead of the rest');
+        }
+        expect(journal.take(), [
+          '[b] dropped Cancelled(manual)',
+          if (how == 'clear')
+            '[c] dropped Cancelled(manual)'
+          else ...[
+            '[c] started',
+            '[c] finished Done(null)',
+          ],
+        ]);
+      });
+    });
+  }
+
+  test('remove leaves a cancellable: false job being asked unless forced', () {
+    runSolo((solo, journal, async) {
+      final answers = <bool>[];
+      late final SoloJob<void> b;
+      b = solo.job<TestState, void>(
+        key: 'b',
+        cancellable: false,
+        canStart: (state) {
+          answers
+            ..add(solo.queue.remove(b))
+            ..add(solo.queue.remove(b, force: true));
+          return true;
+        },
+        (ctx) async {},
+      );
+      solo.add(b);
+      async.flushTimers();
+      expect(answers, [false, true]);
+      expect(journal.take(), ['[b] dropped Cancelled(manual)']);
+    });
+  });
+
   test('lastJobWhere searches the queue from the end, then current', () {
     runSolo((solo, journal, async) {
       solo.add(slow(solo, 'a'));

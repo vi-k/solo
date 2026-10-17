@@ -178,14 +178,21 @@ final class _SoloSelectorState<S extends Object, T>
     }
   }
 
+  /// Set first thing in `dispose`: a controller whose `removeListener`
+  /// throws keeps the listener, and the framework has let go of the element
+  /// by then all the same. `mounted` would not say so: the framework clears
+  /// it only after a `dispose` that returned.
+  var _disposed = false;
+
   @override
   void dispose() {
+    _disposed = true;
     _unfollow();
     super.dispose();
   }
 
   void _stateChanged() {
-    if (_subscribing) {
+    if (_subscribing || _disposed) {
       return;
     }
     final next = _pick();

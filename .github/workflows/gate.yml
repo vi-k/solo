@@ -407,6 +407,12 @@ jobs:
       - name: A section starts with code, an attempt with its mark
         run: python3 tool/check_doc_shape.py
 
+      # The rakes tests of four packages hold their pages to one helper,
+      # kept in four copies. A fix that reached three of them would leave
+      # the fourth checking its pages by the old rule, and green.
+      - name: The copies of page_code.dart agree
+        run: python3 tool/check_page_code.py
+
       # The `floor` job trusts this script to say which files make an
       # archive and which SDK is the floor. These hold both.
       - name: The floor check reads pub and the pubspecs right

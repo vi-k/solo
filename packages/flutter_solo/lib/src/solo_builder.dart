@@ -59,10 +59,25 @@ final class SoloBuilder<S extends Object> extends StatefulWidget {
 }
 
 final class _SoloBuilderState<S extends Object> extends State<SoloBuilder<S>> {
+  /// Puts the listener on the controller of the widget.
+  ///
+  /// A controller of somebody's own may register the listener and then
+  /// throw. The framework drops a `State` that failed in `initState` or in
+  /// `didUpdateWidget` without disposing of it, and a listener left on the
+  /// controller would stay for as long as the controller does.
+  void _follow() {
+    try {
+      widget.solo.addListener(_valueChanged);
+    } on Object catch (_) {
+      widget.solo.removeListener(_valueChanged);
+      rethrow;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
-    widget.solo.addListener(_valueChanged);
+    _follow();
   }
 
   @override
@@ -70,17 +85,27 @@ final class _SoloBuilderState<S extends Object> extends State<SoloBuilder<S>> {
     super.didUpdateWidget(oldWidget);
     if (!identical(widget.solo, oldWidget.solo)) {
       oldWidget.solo.removeListener(_valueChanged);
-      widget.solo.addListener(_valueChanged);
+      _follow();
     }
   }
 
+  /// Set first thing in `dispose`: a controller whose `removeListener`
+  /// throws keeps the listener, and the framework has let go of the element
+  /// by then all the same. `mounted` would not say so: the framework clears
+  /// it only after a `dispose` that returned.
+  var _disposed = false;
+
   @override
   void dispose() {
+    _disposed = true;
     widget.solo.removeListener(_valueChanged);
     super.dispose();
   }
 
   void _valueChanged() {
+    if (_disposed) {
+      return;
+    }
     setState(() {});
   }
 

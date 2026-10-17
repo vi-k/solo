@@ -220,7 +220,7 @@
 (о нём ниже), `snippets` (два стенда, `tool/doc_snippets.py`
 и `tool/accumulation_snippets.py`: собирают код `packages/solo/doc/vs-bloc.md`
 и `packages/solo/doc/accumulation.md` в три пакета и прогоняют все драйверы)
-и `docs` (пять питоновских проверок, сторожа трёх из них — `reflow.py`,
+и `docs` (шесть питоновских проверок, сторожа трёх из них — `reflow.py`,
 `check_line_width.py` и `check_links.py`, сторож `archive_floor_test.py` —
 и сборка сайта со своим сторожем `build_site_test.py`). Триггеры: push
 в `main`, pull request и ручной запуск. Прогон перед коммитом это не отменяет:

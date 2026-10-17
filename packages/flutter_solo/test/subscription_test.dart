@@ -18,9 +18,34 @@ final class _Counter extends Solo<int> with SoloListenable {
 final class _Stuck extends Solo<int> with SoloListenable {
   _Stuck() : super(0);
 
+  void set(int value) => externalSetState(value);
+
   @override
   void removeListener(VoidCallback listener) =>
       throw StateError('this one does not let go');
+}
+
+/// A listenable whose `addListener` keeps the callback and then throws,
+/// the way a source that starts up lazily and fails at it may.
+final class _Failing implements Listenable {
+  final listeners = <VoidCallback>[];
+
+  @override
+  void addListener(VoidCallback listener) {
+    listeners.add(listener);
+    throw StateError('could not start');
+  }
+
+  @override
+  void removeListener(VoidCallback listener) {
+    listeners.remove(listener);
+  }
+
+  void notify() {
+    for (final listener in List.of(listeners)) {
+      listener();
+    }
+  }
 }
 
 /// A listenable that knows a listener by identity, not by `==`: a
@@ -166,6 +191,28 @@ void main() {
     counter.set(1);
     expect(calls, 0);
     expect(subscription.isCancelled, isTrue);
+  });
+
+  test('a source that registers and then throws keeps no listener', () {
+    final source = _Failing();
+    var calls = 0;
+
+    // Nobody gets the subscription back, so nobody could cancel it.
+    expect(() => source.listen(() => calls++), throwsStateError);
+    source.notify();
+    expect(source.listeners, isEmpty);
+    expect(calls, 0);
+  });
+
+  test('a source that cannot let go no longer calls a cancelled listener', () {
+    final stuck = _Stuck();
+    var calls = 0;
+    final subscription = stuck.listen(() => calls++);
+
+    expect(subscription.cancel, throwsStateError);
+    expect(subscription.isCancelled, isTrue);
+    stuck.set(1);
+    expect(calls, 0, reason: 'the source kept it, the subscription did not');
   });
 
   test('one closure listened to twice gives two subscriptions', () {

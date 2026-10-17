@@ -46,7 +46,13 @@ final class SoloSubscription {
 
   SoloSubscription._(this._listenable, this._listener);
 
-  void _notify() => _listener();
+  /// A listenable whose `removeListener` threw keeps the callback and may
+  /// call it still; cancelled is cancelled all the same.
+  void _notify() {
+    if (!_cancelled) {
+      _listener();
+    }
+  }
 
   /// Whether [cancel] has been called.
   bool get isCancelled => _cancelled;
@@ -59,6 +65,9 @@ final class SoloSubscription {
   /// Repeating it is not a mistake worth a complaint, the same way a
   /// repeated `close` of a controller is not, and an unknown listener
   /// handed to `removeListener` is not.
+  ///
+  /// From here on the listener is not called, even by a listenable whose
+  /// `removeListener` throws and keeps it.
   void cancel() {
     if (_cancelled) {
       return;
@@ -207,9 +216,19 @@ extension SoloListen on Listenable {
   /// [SoloSubscription]. What goes to `addListener` is the subscription's
   /// own callback that calls [listener], so the subscription is the way
   /// back: `removeListener(listener)` does not find it.
+  ///
+  /// An `addListener` that throws is thrown on, with the subscription
+  /// cancelled first: nobody would get it to cancel later. The listener is
+  /// not called whatever the listenable kept, and a `removeListener` that
+  /// throws as well is thrown in place of the first error.
   SoloSubscription listen(VoidCallback listener) {
     final subscription = SoloSubscription._(this, listener);
-    addListener(subscription._registered);
+    try {
+      addListener(subscription._registered);
+    } on Object catch (_) {
+      subscription.cancel();
+      rethrow;
+    }
 
     return subscription;
   }

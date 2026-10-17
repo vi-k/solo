@@ -141,13 +141,17 @@ different `runZonedGuarded`. See
 
 ### Fixed
 
-- A state `canStart` writes while it answers is held to `W` and `keepWhile`:
-  the job started under it even when it no longer matched them.
+- A state the start rules write while they answer is held to `W` and
+  `keepWhile`: the job started under it even when it no longer matched them.
+- A child that a start rule of its own runs again is refused with a
+  `StateError`: the parent stopped waiting for the child, whose body went on
+  running, and the child's `onDispose` never ran.
 - `Policy.droppable` and `Solo.lastJobWhere` no longer hand back a job that is
   not going to do the work: `cancelAll()` and a fresh request a line later
   answered the second call with the handle the first had just cancelled.
-- `cancelAll` reaches the job the engine is about to start: called from that
-  job's start rules, it missed the job, which started anyway.
+- `cancelAll` and the removals of `SoloQueue` reach the job the engine is about
+  to start: called from that job's start rules, they missed the job, which
+  started anyway.
 - `Policy.droppable`, `replace` and `restart` reach the job the engine is about
   to start: called from that job's start rules with its key, they missed it,
   and two jobs of one key ran one after the other.

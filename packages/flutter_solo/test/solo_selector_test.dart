@@ -88,6 +88,18 @@ final class _PublishOnListenSolo extends Solo<int> {
   }
 }
 
+/// A controller whose `removeListener` throws, the way one of somebody's
+/// own may: a listener it was given stays on it.
+final class _StuckController extends Solo<_Screen> {
+  _StuckController() : super(const _Screen());
+
+  void set(_Screen next) => externalSetState(next);
+
+  @override
+  void removeListener(VoidCallback listener) =>
+      throw StateError('this one does not let go');
+}
+
 Widget _wrap(Widget child) => Directionality(
       textDirection: TextDirection.ltr,
       child: child,
@@ -690,6 +702,37 @@ void main() {
 
       await tester.pumpWidget(_wrap(const SizedBox()));
       expect(controller.live, 0);
+    },
+  );
+
+  // The framework disposes of the `State` all the same, and a listener
+  // the controller kept would rebuild an element that is gone.
+  testWidgets(
+    'a controller that cannot let go does not rebuild a widget that is gone',
+    (tester) async {
+      final controller = _StuckController();
+      addTearDown(controller.close);
+      var builds = 0;
+
+      await tester.pumpWidget(
+        _wrap(
+          SoloSelector<_Screen, String>(
+            solo: controller,
+            selector: (state) => state.name,
+            builder: (context, name, _) {
+              builds++;
+              return Text(name);
+            },
+          ),
+        ),
+      );
+      await tester.pumpWidget(_wrap(const SizedBox()));
+      expect(tester.takeException(), isStateError);
+
+      controller.set(const _Screen(name: 'Grace'));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(builds, 1);
     },
   );
 }

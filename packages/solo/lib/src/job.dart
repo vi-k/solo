@@ -89,6 +89,13 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     if (_solo._queue._jobs.contains(this)) {
       throw StateError('$this is queued and cannot be run as a child');
     }
+    // Taken already, and still `created`: a rule of the child's own runs it
+    // again while the first adoption is asking that rule. The core lets a
+    // `created` job in, and a second adoption would start it with nobody
+    // waiting for it.
+    if (_added) {
+      throw StateError('$this has already been added or run');
+    }
     // Adoption is the controller taking the handle, the same as `add`: from
     // here nothing else may take it, and a rule of the child's own — asked
     // a moment later, while the child is still `created` and in no list —
@@ -139,15 +146,27 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
   }
 
   /// A rejection description if [state] fails the keep rules, else null.
+  ///
+  /// Once this says null, the rules hold for the state the controller has
+  /// now, whatever `keepWhile` wrote while it answered.
   String? _rejectKeep(S state) {
     if (state is! W) {
       return 'is not $W';
     }
     final keepWhile = _keepWhile;
-    if (keepWhile != null && !keepWhile(state)) {
+    if (keepWhile == null) {
+      return null;
+    }
+    if (!keepWhile(state)) {
       return 'keepWhile';
     }
-    return null;
+    // `keepWhile` is the caller's code too, and it may write the state
+    // while it answers. A running job is asked again by that change itself;
+    // one about to start is not, and its body would run under a state the
+    // rules have not seen. So they are asked here, against the state as it
+    // became, until it holds still.
+    final now = _solo._state;
+    return identical(now, state) ? null : _rejectKeep(now);
   }
 
   /// A snapshot of what this job is doing, for [Solo.pending].

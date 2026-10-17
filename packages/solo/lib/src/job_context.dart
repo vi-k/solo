@@ -133,7 +133,9 @@ final class _SoloContext<S extends Object, W extends S, R>
     // member that called it start its action on a job already marked.
     throwIfCancelled();
 
-    return current as W;
+    // Not `current`: `keepWhile` may have written the state while it
+    // answered, and the rules have held for the state as it became.
+    return _solo._state as W;
   }
 
   @override
