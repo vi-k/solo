@@ -348,6 +348,88 @@ void main() {
     });
   });
 
+  for (final cancelled in [false, true]) {
+    test(
+        'a continuation attached after the zone heard the failure does not '
+        'send it again${cancelled ? ', cancelled while hearing it' : ''}', () {
+      fakeAsync((async) {
+        final error = StateError('source');
+        final errors = <Object>[];
+        final heard = <Object>[];
+        late Job<int> a;
+        late Job<int> b;
+        runZonedGuarded(
+          () => a = Job<int>((ctx) async => throw error),
+          (error, stack) => errors.add(error),
+        );
+        async.flushMicrotasks();
+        expect(errors, [same(error)], reason: 'nobody observed it in time');
+        runZonedGuarded(
+          () => b = a.then<int>(
+            (ctx, value) => mustNotRun('must not run'),
+            observer: _Observer(
+              error: (job, error) {
+                heard.add(error);
+                if (cancelled) job.cancel().ignore();
+              },
+            ),
+          ),
+          (error, stack) => errors.add(error),
+        );
+        async.flushMicrotasks();
+        expect(
+          b.outcome,
+          cancelled
+              ? isA<Cancelled>()
+              : isA<Failed>().having((f) => f.error, 'error', same(error)),
+        );
+        expect(heard, [same(error)], reason: 'its observer still hears it');
+        expect(errors, [same(error)], reason: 'and the zone hears it once');
+      });
+    });
+  }
+
+  for (final early in [false, true]) {
+    test(
+        'nor does a continuation of that continuation, attached '
+        '${early ? 'before' : 'after'} it ended', () {
+      fakeAsync((async) {
+        final error = StateError('source');
+        final errors = <Object>[];
+        late Job<int> a;
+        late Job<int> b;
+        late Job<int> c;
+        Job<int> next(Job<int> source) =>
+            source.then<int>((ctx, value) => mustNotRun('must not run'));
+        runZonedGuarded(
+          () => a = Job<int>((ctx) async => throw error),
+          (error, stack) => errors.add(error),
+        );
+        async.flushMicrotasks();
+        runZonedGuarded(
+          () {
+            b = next(a);
+            if (early) c = next(b);
+          },
+          (error, stack) => errors.add(error),
+        );
+        async.flushMicrotasks();
+        if (!early) {
+          runZonedGuarded(
+            () => c = next(b),
+            (error, stack) => errors.add(error),
+          );
+          async.flushMicrotasks();
+        }
+        expect(
+          c.outcome,
+          isA<Failed>().having((f) => f.error, 'error', same(error)),
+        );
+        expect(errors, [same(error)], reason: 'the zone hears it once');
+      });
+    });
+  }
+
   test('observing the tail handles a forwarded failure', () {
     fakeAsync((async) {
       final error = StateError('source');

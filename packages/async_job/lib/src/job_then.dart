@@ -72,7 +72,17 @@ final class _ThenJob<T, R> extends JobBase<R> {
         _sourceValue = result;
         start();
       case Failed():
-        _source!._observed = true;
+        final source = _source!.._observed = true;
+        // Attached after the zone heard the failure of the source: the
+        // continuation carries the failure on, and its observer hears it,
+        // but nobody is left to answer it for. Unobserved, it would reach a
+        // zone a second time -- and so would it from a continuation of this
+        // one, which is why the mark passes on.
+        final heardAlready = source._failureWentToZone;
+        if (heardAlready) {
+          _observed = true;
+          _failureWentToZone = true;
+        }
         _noteAnnounced(result.error);
         notifyObserver(result.error, result.stackTrace);
         // An observer may cancel this continuation while hearing the error.
@@ -80,7 +90,9 @@ final class _ThenJob<T, R> extends JobBase<R> {
         // decides its outcome covers it, as it would a failure of a body.
         final decided = outcome ?? _pendingCancel ?? result;
         finish(decided);
-        if (decided is Cancelled) _reportCovered(result, announced: true);
+        if (decided is Cancelled && !heardAlready) {
+          _reportCovered(result, announced: true);
+        }
       case Cancelled():
         _cancelFromSource(result);
     }

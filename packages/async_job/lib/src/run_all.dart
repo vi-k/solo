@@ -553,7 +553,12 @@ final class _RunAllGroup<T> {
         .._skipped.clear();
     }
     for (final branch in _branches) {
-      // Step five: released with the verdict, and the list goes back.
+      // Step five: released with the verdict, and the list goes back. The
+      // branch learns the verdict a turn later, at its barrier, and is
+      // marked now: a cancellation reaching it in between, or while it
+      // unwinds, must not turn a value already in the caller's hands into
+      // a [Cancelled] outcome.
+      branch.job._committedByGroup = true;
       _letPastSecondBarrier(branch, committed: true);
     }
     return values;

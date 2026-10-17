@@ -1420,12 +1420,12 @@ void main() {
     });
   });
 
-  test('a job an engine ends while a body that failed first waits is only told',
-      () {
+  test('a failed body waiting when an engine ends its job is answered for', () {
     // The engine decides the outcome while the body waits for its child,
-    // and the run of the body stops there: the failure was told where the
-    // body threw it, and nothing answers for it.
-    expectOnlyTold(
+    // and the run of the body stops there. The failure was told where the
+    // body threw it, and the outcome the engine gave does not carry it: it
+    // is answered for, as the failure of the body of a cancelled job is.
+    expectAnswered(
       (observer) => zoneOf((async) {
         final root = ProbeJob<void>(observer: observer, (ctx) async {
           ctx

@@ -314,7 +314,9 @@ branch's `outcome` is `null` and its `isCancelled` is `false`. When another
 branch ends in anything but a value, the group cancels this one with
 `SiblingCancelReason`, and it ends `Cancelled`, with `isCancelled` now `true`.
 A branch created with `cancellable: false` refuses that cancellation and ends
-`Done`.
+`Done`. Once the group has handed the list over, the decision is final: every
+branch ends `Done` with the value it gave, and a cancellation that reaches it
+while it is still unwinding, the parent's cascade included, is turned away.
 
 **A branch waiting for another branch of the same group may never end.**
 Awaiting a sibling's `Job.value` or `Job.done` hangs the group: the sibling is

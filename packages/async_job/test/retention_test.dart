@@ -12,6 +12,7 @@ import 'dart:async';
 import 'package:async_job/async_job.dart';
 import 'package:test/test.dart';
 
+import 'support/probe_job.dart';
 import 'support/reachability.dart';
 
 /// What a body captures. Big enough that holding it is worth noticing.
@@ -176,6 +177,18 @@ final class Answering extends JobObserver with JobAnswerer {
   );
 }
 
+/// Registers a cleanup that holds a payload, from a frame of its own: the
+/// body that called this does not hold the payload while it waits.
+WeakReference<Payload> holdInACleanup(
+  JobContext ctx, {
+  bool conditional = false,
+}) {
+  final payload = Payload();
+  void release() => payload.bytes.length;
+  conditional ? ctx.onDiscard(release) : ctx.onDispose(release);
+  return WeakReference(payload);
+}
+
 void main() {
   test('a finished job lets go of its body', () async {
     final (job, capture) = captureInBody();
@@ -295,4 +308,91 @@ void main() {
       );
     });
   }
+
+  test('a job finished by hand lets go of the cleanups it never ran', () async {
+    final gate = Completer<void>();
+    late WeakReference<Payload> capture;
+    final job = ProbeJob<int>((ctx) async {
+      capture = holdInACleanup(ctx);
+      await gate.future;
+      return 1;
+    })
+      ..ignoreFailure()
+      ..launch();
+    await Future<void>.microtask(() {});
+    job.drop(const Done(1));
+    expect(
+      await collected(capture),
+      isTrue,
+      reason: 'nothing unwinds the stack of a job an engine ended by hand, '
+          'and held on, it keeps what each registration captured',
+    );
+    gate.complete();
+  });
+
+  test('a branch ended by hand while it unwinds drops what it put aside',
+      () async {
+    final gate = Completer<String>();
+    late WeakReference<Payload> capture;
+    late final ProbeJob<String> branch;
+    branch = ProbeJob<String>((ctx) async {
+      capture = holdInACleanup(ctx, conditional: true);
+      // On top of the stack, so it unwinds first: the conditional one
+      // under it is put aside, and the branch waits at the second barrier
+      // with an outcome of its own.
+      ctx.onDispose(() => branch.drop(const Cancelled('by hand')));
+      return 'db';
+    });
+    final parent = Job<List<String>>(
+      (ctx) => ctx.runAll([
+        branch,
+        Job.deferred<String>((ctx) => ctx.abandonable(() => gate.future)),
+      ]),
+    )..ignoreFailure();
+    await Future<void>.microtask(() {});
+    gate.complete('other');
+    await parent.done;
+    expect(branch.outcome, isA<Cancelled>());
+    expect(
+      await collected(capture),
+      isTrue,
+      reason: 'the second pass never runs, and what it would have read is '
+          'held for as long as the handle is',
+    );
+  });
+
+  test(
+      'a branch ended by hand at the second barrier lets go of what it '
+      'registered there', () async {
+    final gate = Completer<void>();
+    late JobContext context;
+    final branch = ProbeJob<String>((ctx) async {
+      context = ctx;
+      return 'db';
+    });
+    final parent = Job<List<String>>(
+      (ctx) => ctx.runAll([
+        branch,
+        Job.deferred<String>((ctx) async {
+          // Its first pass waits, so the branch waits at the second barrier.
+          ctx.onDispose(() => gate.future);
+          return 'other';
+        }),
+      ]),
+    )..ignoreFailure();
+    for (var i = 0; i < 20 && !branch.isDisposingNow; i++) {
+      await Future<void>.microtask(() {});
+    }
+    // Legal there: the branch is not over, and the stack is read again.
+    final capture = holdInACleanup(context);
+    branch.drop(const Cancelled('by hand'));
+    gate.complete();
+    await parent.done;
+    expect(
+      await collected(capture),
+      isTrue,
+      reason: 'the stack is never read again, and what is on it is held for '
+          'as long as the handle is',
+    );
+  });
 }

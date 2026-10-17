@@ -216,27 +216,26 @@ void main() {
   });
 
   group('forms and traversal', () {
-    fakeAsyncTest('all tuple arities and positions are parsed', () async {
-      for (var arity = 2; arity <= 9; arity++) {
-        for (var position = 0; position < arity; position++) {
+    // A test of its own for every arity and position: a failing one is
+    // named in the report, not hidden among the rest.
+    for (var arity = 2; arity <= 9; arity++) {
+      for (var position = 0; position < arity; position++) {
+        fakeAsyncTest('a tuple of $arity is parsed at position $position',
+            () async {
           final cancelled = Cancelled('tuple $arity/$position');
           final values = List<Object?>.filled(arity, null);
           values[position] = AsyncError(cancelled, StackTrace.current);
           final outcome = await _run(
             () async => throw _recordEnvelope(_recordErrors(values)),
           );
-          expect(
-            outcome,
-            isA<Cancelled>(),
-            reason: 'tuple position $arity/$position',
-          );
+          expect(outcome, isA<Cancelled>());
           expect(
             (outcome as Cancelled).description,
             'tuple $arity/$position',
           );
-        }
+        });
       }
-    });
+    }
 
     fakeAsyncTest('an empty envelope remains a failure', () async {
       final envelope = _listEnvelope([]);

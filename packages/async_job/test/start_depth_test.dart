@@ -414,6 +414,64 @@ void main() {
     );
   });
 
+  test(
+      'a child cut short after its body failed, then ended by hand, answers '
+      'for that failure', () async {
+    final heard = <String>[];
+    late ProbeJob<void> child;
+    var scheduled = 0;
+    final zone = <Object>[];
+    late Job<void> root;
+    runZonedGuarded(
+      () {
+        child = ProbeJob<void>(
+          (ctx) {
+            // An engine of a domain ending the job by hand as the second
+            // pass unwinds the stack.
+            ctx.onDispose(() => child.drop(const Done(null)));
+            throw StateError('of the body');
+          },
+          key: 'child',
+          observer: _Heard(heard),
+        );
+        root = Job<void>((ctx) async {
+          try {
+            await runZoned(
+              () => ctx.run(child),
+              zoneSpecification: ZoneSpecification(
+                scheduleMicrotask: (self, parent, zone, callback) {
+                  if (scheduled++ == 0) {
+                    throw const StackOverflowError();
+                  }
+                  parent.scheduleMicrotask(zone, callback);
+                },
+              ),
+            );
+          } on Object {
+            // The overflow: the test above holds what the start throws.
+          }
+          await delay(1);
+        });
+      },
+      (error, _) => zone.add(error),
+    );
+    await _ends(root);
+    await delay(1);
+
+    expect(child.outcome, isA<Done<void>>());
+    expect(
+      heard,
+      ['start child', 'error child StateError', 'finish child'],
+      reason: 'the failure is announced once, not once a pass',
+    );
+    expect(
+      zone,
+      [isStateError],
+      reason: 'the first pass announced the failure and answered for none, '
+          'and the outcome is the one the engine gave',
+    );
+  });
+
   test('a child cut short by another error ends by its routine all the same',
       () async {
     final heard = <String>[];

@@ -58,6 +58,8 @@ job was created in. In a test that zone is the test's, and the test fails:
   stops at a token the job cancels through `ctx.onCancel` throws one on every
   cancellation, and so does a body that wraps its own cancellation in an
   exception of its own;
+- the failure of the body of a job that an engine of a domain ends by hand with
+  an outcome of its own, earlier or later than the body throws;
 - the late failure of an action under `ctx.abandonable` that the body left
   through `.timeout` or `Future.any`, arriving once the job is over;
 - an error no outcome carries, of a job that has an observer;
@@ -65,9 +67,9 @@ job was created in. In a test that zone is the test's, and the test fails:
 
 `Job.isCancellationError` names the errors a cancellation causes, once, in
 `main`: they reach `onError` and go no further. `job.ignoreFailure()` silences
-the first for that job alone: a child whose body failed answers for its failure
-itself, whatever its parent calls. An observer that mixes in `JobAnswerer` and
-overrides `onUnanswered` answers for the rest. See
+the first two for that job alone: a child whose body failed answers for its
+failure itself, whatever its parent calls. An observer that mixes in
+`JobAnswerer` and overrides `onUnanswered` answers for the rest. See
 [Where errors go](doc/observing.md#where-errors-go).
 
 A job that gives up inside a call it walked away from no longer reaches
@@ -175,7 +177,8 @@ new wording.
 - A job that has accepted a cancellation no longer ends with a value: a `Done`
   or `Failed` an engine hands to `finish` after that ends it `Cancelled`.
 - A value arriving for a job an engine ended by hand is released instead of
-  leaking, and the body hears a `StateError` about the job.
+  leaking, and the body hears why: a `StateError` about the job, or the
+  cancellation the job was ended with.
 - A cancellation that runs out of stack in a deep tree runs the `onCancel`
   callbacks of the jobs it reached as it unwinds; it used to run none of them.
 - A call of `ctx.abandonable` the body did not await no longer sends the job's
@@ -190,6 +193,15 @@ new wording.
   future, no longer cost about two milliseconds each under JIT (`dart test`,
   `dart run`, a debug build): the VM compiled the routine of a job again for
   every one of them.
+- On a running job, a cancellation made from `Job.debug` on the line about
+  another cancellation of the same job comes too late, as any later
+  cancellation does; the `whenCancelled` callbacks used to hear its reason
+  while the outcome carried the other one. Inside `ctx.uncancellable` it no
+  longer takes the place of the cancellation the section holds back.
+- A continuation `then` attached to a job whose failure has already reached the
+  zone no longer sends it to the zone a second time.
+- A job that an engine ends by hand while it runs lets go of the cleanups it
+  never ran: a kept handle held everything they captured.
 
 ### Documentation
 

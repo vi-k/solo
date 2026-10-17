@@ -453,6 +453,54 @@ void main() {
       expect(outer.outcome, isA<Done<void>>());
     });
   });
+
+  test('a nested fork of an equal job does not lift the ban on a section', () {
+    // The other way round: the work of one job inside the fork of a job
+    // equal to it. A key looked up by `==` would find the inner fork
+    // answering for the outer job, and the work would open a section of
+    // a body that stands in none.
+    Object? refused;
+    var sectionRan = false;
+    late final KeyedJob<void> a;
+    late final JobContext ctxA;
+    late final JobContext ctxB;
+    fakeAsync((async) {
+      a = KeyedJob<void>(key: 'same', (ctx) async {
+        ctxA = ctx;
+        await ctx.abandonable(() => delay(100));
+      })
+        ..ignoreFailure()
+        ..launch();
+      KeyedJob<void>(key: 'same', (ctx) async {
+        ctxB = ctx;
+        await ctx.abandonable(() => delay(100));
+      })
+        ..ignoreFailure()
+        ..launch();
+      ctxA.unattended(
+        () => ctxB.unattended(() async {
+          try {
+            await ctxA.uncancellable(() async {
+              sectionRan = true;
+              await delay(1000);
+            });
+          } on Object catch (error) {
+            refused = error;
+          }
+        }),
+      );
+      async.flushMicrotasks();
+      a.cancel().ignore();
+      async.flushTimers();
+    });
+    expect(sectionRan, isFalse);
+    expect(
+      '$refused',
+      'Bad state: Job(same) cannot run an uncancellable action inside '
+          'unattended work',
+    );
+    expect(a.outcome, isA<Cancelled>(), reason: 'no section held it');
+  });
 }
 
 final class _ThrowingStart extends JobObserver {

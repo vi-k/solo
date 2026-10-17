@@ -395,7 +395,11 @@ and what the body opened stays open. Only the debug channel, switched on with
 accepted a cancellation ends `Cancelled` whatever `finish` is handed: a `Done`
 or a `Failed` gives way to the cancellation the job accepted, a value handed in
 goes nowhere, and only another `Cancelled` handed in stands. An engine that
-finishes a running job by hand anyway releases what the job holds first.
+finishes a running job by hand anyway releases what the job holds first. A
+failure of the body, thrown before `finish` or after, is then in no outcome,
+unless it is the very one handed in: `onError` hears it, and it goes on to
+`onUnanswered` or the zone, as the failure of the body of a cancelled job does.
+`ignoreFailure()` on the job stops it at `onError`.
 
 A `Cancelled` handed to `cancelWith` or to `finish` belongs to one job, the way
 `onSignOut` above builds one at every call. A parent finds the child behind a

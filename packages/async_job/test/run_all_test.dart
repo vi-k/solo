@@ -1843,7 +1843,7 @@ void main() {
 
   test(
       'a cancellation from the finish of a sibling comes after the commit '
-      'and closes nothing', () {
+      'and is turned away', () {
     fakeAsync((async) {
       // A cancellation that arrives from the finish of a sibling, in the
       // very window the commit closes: synchronous, with no schedule of
@@ -1875,8 +1875,12 @@ void main() {
       async.flushTimers();
       expect(values, ['a', 'b'], reason: 'the group still returned success');
       expect(closes, 0, reason: 'the values were already handed over');
-      expect(b.outcome, isA<Cancelled>());
-      expect(heardCancelled, 1);
+      expect(
+        b.outcome,
+        isA<Done<String>>(),
+        reason: "its value is in the caller's hands: nothing to cancel",
+      );
+      expect(heardCancelled, 0);
     });
   });
 
@@ -1923,6 +1927,76 @@ void main() {
       expect(tailEnded, isTrue);
       expect(parent.isFinished, isTrue);
     });
+  });
+
+  test('a branch whose value the group handed over is not cancelled after it',
+      () {
+    // The parent took the list inside a section that held its cancellation.
+    // The section closes, the cancellation lands and cascades -- onto a
+    // branch that has not ended yet, with its value already in the body.
+    // `run` in the same place ends its child [Done]: the value comes after
+    // the child's end. A branch turns the cascade away for the same reason.
+    final closed = <String>[];
+    final finished = <String>[];
+    late final Job<String> branch;
+    late final Job<String> parent;
+    List<String>? held;
+    bool? branchOverThen;
+    fakeAsync((async) {
+      branch = Job.deferred<String>(
+        key: 'branch',
+        (ctx) => ctx.join(
+          () async {
+            await delay(30);
+
+            return 'db';
+          },
+          discard: closed.add,
+        ),
+      );
+      parent = Job<String>(
+        key: 'parent',
+        observer: FinishHook((job) => finished.add('$job ${job.outcome}')),
+        (ctx) async {
+          held = await ctx.uncancellable(() => ctx.runAll([branch]));
+          branchOverThen = branch.isFinished;
+
+          return held!.single;
+        },
+      )..ignoreFailure();
+      async.elapse(const Duration(milliseconds: 10));
+      parent.cancel().ignore();
+      async.flushTimers();
+    });
+    expect(held, ['db'], reason: 'the value reached the body');
+    expect(branchOverThen, isFalse, reason: 'and the branch had not ended');
+    expect(parent.outcome, isA<Cancelled>());
+    expect(branch.outcome, isA<Done<String>>());
+    expect(branch.isCancelled, isFalse);
+    expect(closed, isEmpty, reason: "the value is the body's to close");
+    expect(finished, contains('Job(branch) Done(db)'));
+  });
+
+  test('a branch whose value the group handed over refuses a cancellation', () {
+    // The same window, reached from outside: a cancellation of the branch
+    // itself, of the kind the rules of a domain hand in, which a job created
+    // with `cancellable: false` cannot refuse either.
+    late final CheckingJob<String> branch;
+    var heard = 0;
+    List<String>? held;
+    fakeAsync((async) {
+      branch = CheckingJob<String>((ctx) async => 'db')
+        ..whenCancelled((_) => heard++);
+      Job<void>((ctx) async {
+        held = await ctx.runAll([branch]);
+        branch.cancelBy(const Cancelled('rules'));
+      }).ignoreFailure();
+      async.flushTimers();
+    });
+    expect(held, ['db']);
+    expect(branch.outcome, isA<Done<String>>());
+    expect(branch.isCancelled, isFalse);
+    expect(heard, 0);
   });
 
   for (final path in ['success', 'accepted', 'late-cancel', 'refused']) {

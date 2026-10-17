@@ -1030,11 +1030,11 @@ void main() {
     );
   });
 
-  test('run registers the value before the checkpoint that could take it', () {
+  test('run releases the value when the checkpoint after it refuses', () {
     // The checkpoint `run` makes after the child's value is where a rule of
     // a domain refuses: `solo` cancels the job there when `keepWhile` no
     // longer holds. The child ended [Done] and its own registration went
-    // with the value, so the one `run` made is the only one left.
+    // with the value, so the one `run` holds is the only one left.
     final closed = <String>[];
     late CheckingJob<String> parent;
     late CheckingContext rules;
@@ -1059,8 +1059,84 @@ void main() {
     expect(
       closed,
       ['parent'],
-      reason: 'the receiver registered it the moment it arrived',
+      reason: 'the value reached nobody: it is released without a condition',
     );
+  });
+
+  for (final refusal in ['a cancellation', 'a rule that throws']) {
+    test('a body that catches $refusal after run and succeeds still releases',
+        () {
+      // The body catches what the checkpoint threw and ends [Done]. A
+      // `discard` left on the stack would never run on a job that
+      // succeeded, and the value that never reached the body would stay
+      // open: `join` released it on the spot, and so does `run`.
+      final closed = <String>[];
+      var delivered = false;
+      late CheckingJob<int> parent;
+      late CheckingContext rules;
+      fakeAsync((async) {
+        final child = Job.deferred<String>((ctx) async {
+          rules.rules = refusal == 'a cancellation'
+              ? () => throw const Cancelled('keepWhile')
+              : () => throw StateError('the rule blew up');
+
+          return 'db';
+        });
+        parent = CheckingJob<int>((ctx) async {
+          rules = ctx;
+          try {
+            await ctx.run(child, discard: closed.add);
+            delivered = true;
+          } on Object {
+            return -1;
+          }
+
+          return 1;
+        })
+          ..launch();
+        async.flushTimers();
+      });
+      expect(parent.outcome, isA<Done<int>>(), reason: 'the body recovered');
+      expect(delivered, isFalse);
+      expect(closed, ['db'], reason: 'the value reached nobody');
+    });
+  }
+
+  test(
+      'run on a job an engine ended with a cancellation throws it and '
+      'releases the value first', () {
+    // The child cannot be cancelled and comes back after the engine ended
+    // the parent by hand with [Cancelled]. The checkpoint after it throws
+    // the cancellation the job ended with, as `join` does, and the value
+    // that reached nobody is closed by the time the body hears it.
+    const byHand = Cancelled('by hand');
+    final closed = <String>[];
+    final heard = <Object>[];
+    var closedWhenHeard = <String>[];
+    fakeAsync((async) {
+      final parent = ProbeJob<int>((ctx) async {
+        try {
+          await ctx.run(
+            Job.deferred<String>(cancellable: false, (ctx) async {
+              await delay(20);
+              return 'db';
+            }),
+            discard: closed.add,
+          );
+        } on Object catch (error) {
+          heard.add(error);
+          closedWhenHeard = [...closed];
+        }
+        return 1;
+      })
+        ..ignoreFailure()
+        ..launch();
+      async.elapse(const Duration(milliseconds: 5));
+      parent.drop(byHand);
+      async.flushTimers();
+    });
+    expect(heard, [same(byHand)]);
+    expect(closedWhenHeard, ['db']);
   });
 
   test('the wrapper around run does not reach that value', () {

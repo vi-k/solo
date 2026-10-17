@@ -482,10 +482,11 @@ abstract interface class Job<T> {
   ///
   /// Waiting for [done] or [value] observes a [Failed] too: the one waiting has
   /// the error. A failure of the body of a job that ends [Cancelled] is not in
-  /// the outcome, and the one waiting gets the [Cancelled]. That failure is
-  /// answered through [JobAnswerer.onUnanswered] of an observer that answers,
-  /// otherwise in the zone, however the outcome was read, and this is what
-  /// silences it. [JobObserver.onError] hears it either way. An error an
+  /// the outcome, and the one waiting gets the [Cancelled]; nor is one of a job
+  /// an engine of a domain ended by hand with an outcome of its own. Such a
+  /// failure is answered through [JobAnswerer.onUnanswered] of an observer that
+  /// answers, otherwise in the zone, however the outcome was read, and this is
+  /// what silences it. [JobObserver.onError] hears it either way. An error an
   /// operation throws because the cancellation stopped it is better named once,
   /// in [Job.isCancellationError], than silenced job by job.
   ///
@@ -698,16 +699,30 @@ abstract class JobBase<T> implements Job<T> {
   /// Whether anyone observed the outcome, directly or by forwarding it.
   bool _observed = false;
 
+  /// Whether the zone has heard the failure of this job: it went there because
+  /// nobody observed it in time — see [_reportUnobserved] — or it is the
+  /// failure of a source the zone heard it from, carried on. A continuation
+  /// attached later still carries it, and must not send it there a second time.
+  bool _failureWentToZone = false;
+
   /// Whether [Job.ignoreFailure] was called: nobody wants this job's failure.
   ///
   /// More than [_observed]. Whoever reads the outcome has the failure the
-  /// outcome carries. A failure of the body of a job that ends [Cancelled] is
+  /// outcome carries. A failure of the body of a job that ends [Cancelled], or
+  /// of one an engine of a domain ended by hand with an outcome of its own, is
   /// in no outcome, and one of a branch the group did not throw is in nothing
   /// the group passes on; only this keeps them all from being answered for —
   /// see [_reportCovered] and `_RunAllGroup._conclude`.
   /// [Job.isCancellationError] keeps out the failures of a cancelled job it
   /// names, and those alone.
   bool _ignored = false;
+
+  /// The key of the mark a fork of [JobContext.unattended] made by this job
+  /// carries. An object of its own and not the job: a zone looks a key up
+  /// by `==`, a job of a domain may compare itself by a key of its own, and
+  /// the fork of one of two equal jobs nested in the other's would then pass
+  /// for the outer one.
+  final _forkKey = Object();
 
   /// The error of the last failure the core has announced for this job:
   /// the body's, where it was caught, the one a continuation received from
@@ -861,9 +876,13 @@ abstract class JobBase<T> implements Job<T> {
   ///
   /// A committed value is in the caller's hands, so a conditional
   /// registration of this job must not run any more, whatever outcome the
-  /// branch itself ends with. The other way round it does not work: a
+  /// branch itself ends with, and a cancellation has nothing left to stop:
+  /// [cancelWith] turns it away. The other way round it does not work: a
   /// group that failed does not make a branch give up a value it hands
   /// over through [Job.value] all the same.
+  ///
+  /// Set by the group in the step that hands the values over, and read
+  /// again from the verdict at the second barrier.
   bool _committedByGroup = false;
 
   /// Creates a job that has not started yet.
@@ -1169,6 +1188,16 @@ abstract class JobBase<T> implements Job<T> {
         if (_pendingCancel != null) {
           return;
         }
+        if (_committedByGroup) {
+          // A branch whose value its group has handed over is still
+          // unwinding, and nothing is left for a cancellation to stop: the
+          // value is in the caller's hands, and the mark would only make the
+          // branch end [Cancelled] with it. Any cancellation, the rules of a
+          // domain too, finds it as it would find a child of `run` that
+          // handed its value over by ending.
+          _debug(() => 'cancel $this: its group has its value');
+          return;
+        }
         if (!_cancellable && rejectable) {
           _debug(() => 'cancel $this: not cancellable');
           return;
@@ -1178,7 +1207,7 @@ abstract class JobBase<T> implements Job<T> {
           // Held, not refused, and the job is not marked: `onCancel`
           // callbacks and the cascade onto children would stop the very
           // step this section protects.
-          _debug(() => 'cancel $this: held until the step ends: $marked');
+          //
           // A request behind a held deadline is kept apart: the deadline is
           // lifted at the end of the body and the children, and this one
           // must not be lifted with it.
@@ -1187,9 +1216,11 @@ abstract class JobBase<T> implements Job<T> {
             _heldBehindTimeout ??= marked;
           }
           _heldCancel ??= marked;
+          // Said once the request is held, as the line below is said once
+          // the job is marked: see there.
+          _debug(() => 'cancel $this: held until the step ends: $marked');
           return;
         }
-        _debug(() => 'cancel $this: $marked');
         // Only a cancellation the job cannot refuse gets here inside a
         // section, and it is accepted over the one the section holds: that
         // one would never land, and `heldCancel` must not keep showing it.
@@ -1202,6 +1233,14 @@ abstract class JobBase<T> implements Job<T> {
         // callbacks — still waits for the children, because `solo` pins the
         // order in which a cancellation is seen.
         _pendingCancel = marked;
+        // Said after the mark, not before it. `Job.debug` is code of the
+        // caller's, and one that cancels this job on hearing the line would
+        // come back in here: before the mark it would mark and announce its
+        // own reason, and this call would then overwrite the mark with
+        // another -- the listeners would hear one cancellation and the job
+        // end with a second. After the mark it turns around at the early
+        // return above, like a callback of a child does.
+        _debug(() => 'cancel $this: $marked');
         try {
           _cascadeToChildren(marked);
         } finally {
@@ -1611,11 +1650,14 @@ abstract class JobBase<T> implements Job<T> {
   /// it is a [JobAnswerer] — or to [JobObserver.onError] alone once
   /// [Job.ignoreFailure] was called.
   ///
-  /// Ending a job that is still running is not a way to cancel it: this
-  /// waits for no children and unwinds no cleanup stack, so everything the
-  /// body opened stays open. Cancel with [cancelWith] instead, and let the
-  /// body unwind; how many cleanups were left behind is in the debug
-  /// trace.
+  /// Ending a job that is still running is not a way to cancel it: this waits
+  /// for no children and unwinds no cleanup stack, so everything the body
+  /// opened stays open. Cancel with [cancelWith] instead, and let the body
+  /// unwind; how many cleanups were left behind is in the debug trace. A
+  /// failure of the body, thrown before this or after, is in no outcome then,
+  /// unless it is the one handed in: [JobObserver.onError] hears it where the
+  /// body is caught, and it goes on to the answer, as a failure of the body of
+  /// a cancelled job does.
   ///
   /// A [Failed] handed in is announced here: [JobObserver.onError] hears it
   /// once, before [finished] and [JobObserver.onFinish]. Unlike a failure
@@ -1736,6 +1778,12 @@ abstract class JobBase<T> implements Job<T> {
     // They hold whatever the body gave them — a subscription, a buffer, a
     // token — for as long as anyone holds the handle.
     _onCancel.clear();
+    // Nor will anything run the cleanups of a job an engine of a domain
+    // ended by hand before its unwinding: the core's route turns around on
+    // a job that is over. Inside the unwinding the routine that runs the
+    // stack is still alive; it reads what is left and lets go of it itself,
+    // and the registrations put aside exist only in there.
+    if (!_disposing) _cleanups.clear();
     _done.complete(decided);
     // Notify only after the domain has detached this job and delivered its
     // finish hooks: a synchronous subscriber may immediately add more work.
@@ -1870,10 +1918,11 @@ abstract class JobBase<T> implements Job<T> {
   ///
   /// The observer's [JobAnswerer.onUnanswered], or the zone the job was created
   /// in when the observer does not answer or there is none. [notifyError] ends
-  /// here, and so do two failures of a body: that of a branch of
-  /// [JobContext.runAll] the group did not throw, and that of a job that ends
-  /// [Cancelled], unless [Job.ignoreFailure] was called on the job. The job
-  /// told its observer itself, where its body was caught, and one error is
+  /// here, and so do three failures of a body: that of a branch of
+  /// [JobContext.runAll] the group did not throw, that of a job that ends
+  /// [Cancelled], and that of a job an engine of a domain ended by hand with an
+  /// outcome of its own, unless [Job.ignoreFailure] was called on the job. The
+  /// job told its observer itself, where its body was caught, and one error is
   /// announced once — but an error nobody answered for still has to reach
   /// somebody.
   ///
@@ -2058,6 +2107,12 @@ abstract class JobBase<T> implements Job<T> {
       // runs the callbacks of the children, which is the caller's code, and
       // it must find a parent that already refuses to start anything.
       Cancelled? selfCancelled;
+      // Whether the error the body threw was announced before it threw it:
+      // an engine of a domain handed that very error to [finish], and it was
+      // answered for there. The body's route does not answer for it again.
+      // The first pass of a start cut short announces it too, but answers
+      // for nothing: the second pass throws it again on a job still running.
+      var announcedBefore = false;
       // The outcome of a body that threw [cancelled]: the mark if there is
       // one, and otherwise its own decision to give up.
       Cancelled gaveUp(Cancelled cancelled, StackTrace stackTrace) {
@@ -2108,7 +2163,9 @@ abstract class JobBase<T> implements Job<T> {
             envelope.firstStackTrace!,
           );
         } else {
-          if (!_wasAnnounced(error)) {
+          final announced = _wasAnnounced(error);
+          announcedBefore = announced && isFinished;
+          if (!announced) {
             _noteAnnounced(error);
             notifyObserver(error, stackTrace);
           }
@@ -2189,7 +2246,9 @@ abstract class JobBase<T> implements Job<T> {
       if (isFinished) {
         // An engine of a domain ended the job by hand while the body was
         // playing out: the outcome is not ours, the children were not waited
-        // for, and the stack stays where it is.
+        // for, and the stack is not unwound -- `finish` let go of it. A
+        // failure of the body still has to be answered for.
+        _answerForHandFinished(outcome, announcedBefore: announcedBefore);
         return;
       }
       // The deadline bounds the body and the children, and ends here. Past
@@ -2223,6 +2282,7 @@ abstract class JobBase<T> implements Job<T> {
           // yet -- the passes below are what fill that list -- so there is
           // nothing to say on the debug channel either.
           _disposing = false;
+          _answerForHandFinished(outcome, announcedBefore: announcedBefore);
           return;
         }
       }
@@ -2248,7 +2308,13 @@ abstract class JobBase<T> implements Job<T> {
         _skipped.clear();
         _disposing = false;
         final decided = _pendingCancel ?? outcome;
-        finish(decided);
+        // An engine of a domain may have ended the job by hand while the
+        // stack unwound -- from a cleanup, or while one was awaited. The
+        // outcome is the engine's then, and nothing is handed to `finish`:
+        // on a finished job it would answer for a failure of the body, and
+        // the answer below does that already.
+        final endedByHand = isFinished;
+        if (!endedByHand) finish(decided);
         // Said after `finish` and not before: the debug channel is the
         // caller's code, and so are `describe` and `toString` that build the
         // line. One that cancels this job there would land between the
@@ -2261,7 +2327,9 @@ abstract class JobBase<T> implements Job<T> {
         // [Job.ignoreFailure] there; a parent's body hears the cancellation
         // only after the answer. Reading the outcome settles nothing here,
         // so there is no window to wait for.
-        if (outcome is Failed && !identical(decided, outcome)) {
+        if (endedByHand) {
+          _answerForHandFinished(outcome, announcedBefore: announcedBefore);
+        } else if (outcome is Failed && !identical(decided, outcome)) {
           _reportCovered(outcome, announced: true);
         }
       }
@@ -2304,7 +2372,12 @@ abstract class JobBase<T> implements Job<T> {
         _betweenPasses = false;
         if (isFinished) {
           _traceDroppedCleanups();
+          // Ended by hand at the barrier: neither pass runs again, and what
+          // is left would be held for as long as the handle is.
+          _skipped.clear();
+          _cleanups.clear();
           _disposing = false;
+          _answerForHandFinished(outcome, announcedBefore: announcedBefore);
           return;
         }
         // The stack is read again, and this pass is not the second one: a
@@ -2433,9 +2506,10 @@ abstract class JobBase<T> implements Job<T> {
   /// uncovered [Failed] needs no notice to be seen — the outcome shows it; this
   /// one the outcome does not show, and without the notice it would vanish.
   ///
-  /// A job an engine of a domain ends by hand while a body that failed waits
-  /// for its children never comes here: the engine decided the outcome, and
-  /// [JobObserver.onError] alone has heard the failure.
+  /// A failure of the body of a job an engine of a domain ended by hand comes
+  /// here too, whether the body threw before that or after, unless the engine
+  /// handed in that very failure: the outcome is the engine's, and the failure
+  /// is in none.
   void _reportCovered(Failed outcome, {required bool announced}) {
     if (_ignored) {
       if (!announced) {
@@ -2448,6 +2522,22 @@ abstract class JobBase<T> implements Job<T> {
     } else {
       notifyError(outcome.error, outcome.stackTrace);
     }
+  }
+
+  /// Answers for the failure of the body of a job an engine of a domain
+  /// ended by hand, at whatever point of the run it did so. The outcome is
+  /// the engine's, and the failure is in it only when the engine handed in
+  /// that very error; otherwise it goes where the failure of the body of a
+  /// cancelled job goes. One the engine handed in before the body threw it
+  /// was answered for in [finish] already: [announcedBefore].
+  void _answerForHandFinished(
+    Outcome<T> body, {
+    required bool announcedBefore,
+  }) {
+    if (body is! Failed || announcedBefore) return;
+    final ended = _outcome;
+    if (ended is Failed && identical(ended.error, body.error)) return;
+    _reportCovered(body, announced: true);
   }
 
   /// Runs the cleanup stack from the top until it is empty, and then
@@ -2605,6 +2695,7 @@ abstract class JobBase<T> implements Job<T> {
         return;
       }
       _debug(() => '$this failure went to the zone');
+      _failureWentToZone = true;
       _zone.handleUncaughtError(outcome.error, outcome.stackTrace);
     });
   }

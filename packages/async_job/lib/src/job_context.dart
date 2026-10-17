@@ -818,14 +818,18 @@ abstract class JobContextBase implements JobContext {
   /// section opened there would hold a cancellation of a body that stands
   /// in no section at all.
   /// Another job's fork is not this job's business, and the key is the
-  /// job itself: forks nest, and a shared key would let the inner one
-  /// pass for the outer.
+  /// job's own: forks nest, and a shared key would let the inner one pass
+  /// for the outer.
   @protected
   void throwIfUnattended(String action) {
-    if (identical(Zone.current[_owner], _owner)) {
+    if (_inOwnFork) {
       throw StateError('$_owner cannot $action inside unattended work');
     }
   }
+
+  /// Whether the code running now is work this job handed over with
+  /// [JobContext.unattended].
+  bool get _inOwnFork => identical(Zone.current[_owner._forkKey], _owner);
 
   /// Announces [error] and asks for an answer to it: the observer's
   /// `onError`, then `onUnanswered` of an observer that is a [JobAnswerer],
@@ -892,7 +896,7 @@ abstract class JobContextBase implements JobContext {
     _oneCleanupOnly(dispose, discard);
     check();
     final result = await action();
-    if (_owner.bodyEnded && identical(Zone.current[_owner], _owner)) {
+    if (_owner.bodyEnded && _inOwnFork) {
       // Called from work handed over with `unattended`, and that work is
       // waiting for the value: it is the receiver, on the body's terms. A
       // job marked cancelled -- from outside, or by a body that gave itself
@@ -1222,7 +1226,7 @@ abstract class JobContextBase implements JobContext {
     if (result is! Future<T>) {
       // Work handed over with `unattended` waits for the value, so it goes
       // on below like the body's: see `join`.
-      if (_owner.bodyEnded && !identical(Zone.current[_owner], _owner)) {
+      if (_owner.bodyEnded && !_inOwnFork) {
         await _keepLate(dispose, discard, result);
         return result;
       }
@@ -1264,7 +1268,7 @@ abstract class JobContextBase implements JobContext {
     // `unattended`. A late failure then still has a listener -- the work
     // itself -- and the fork announces what the work leaves uncaught, so
     // the core announcing it as well would say one error twice.
-    final fromFork = identical(Zone.current[_owner], _owner);
+    final fromFork = _inOwnFork;
     late final void Function() remove;
     void onCancel() {
       if (!completer.isCompleted) {
@@ -1456,17 +1460,27 @@ abstract class JobContextBase implements JobContext {
     FutureOr<void> Function(T value)? discard,
   }) async {
     final value = await child.value;
-    // Registered before the checkpoint, and that is the whole of it. The
-    // child ended [Done], so its own conditional registration went with
-    // the value and is gone; a checkpoint throwing here -- the parent's
-    // cancellation, or a rule of its domain refusing -- would take the
-    // value with it, and there would be nobody left holding the resource.
     if (_owner.bodyEnded) {
       await _keepLate(dispose, discard, value);
-    } else {
-      _keepOnStack(dispose, discard, value);
-      check();
+      return value;
     }
+    // The child ended [Done], so its own conditional registration went with
+    // the value and is gone: this call is the only one holding the
+    // resource. A checkpoint throwing here -- the parent's cancellation, or
+    // a rule of its domain refusing -- takes the value away from the body,
+    // and the body may catch that and still end [Done]. So the value is
+    // released on the spot, as `join` releases it, and not left on the
+    // stack, where a `discard` would never run on a job that succeeded.
+    try {
+      check();
+    } on Object {
+      final disposer = dispose ?? discard;
+      if (disposer != null) {
+        await _dispose(disposer, value);
+      }
+      rethrow;
+    }
+    _keepOnStack(dispose, discard, value);
 
     return value;
   }
@@ -1652,17 +1666,16 @@ abstract class JobContextBase implements JobContext {
         action();
       },
       _unattendedError,
-      // Two values, and the key of the second is the job itself: forks of
+      // Two values, and the key of the second is the job's own: forks of
       // different jobs nest, and one shared key would let the inner one
       // hide the outer. Under a key of its own each job sees its own work
       // and nobody else's.
       //
-      // The job is the value as well as the key, and the readers compare
-      // it by identity. A zone looks a key up by `==`, and a job of a
-      // domain may well compare itself by a key of its own: two such jobs
-      // are equal, and one would otherwise find itself inside the other's
-      // fork and refuse what is perfectly legal.
-      zoneValues: {_unattendedKey: from, _owner: _owner},
+      // Not the job itself as the key. A zone looks a key up by `==`, and a
+      // job of a domain may well compare itself by a key of its own: of two
+      // such jobs with forks nested, the inner fork would answer for the
+      // outer job too, and work of one would pass for work of the other.
+      zoneValues: {_unattendedKey: from, _owner._forkKey: _owner},
     );
   }
 
@@ -1708,7 +1721,7 @@ abstract class JobContextBase implements JobContext {
 /// The zone-value key under which a fork of [JobContext.unattended]
 /// carries the zone of the body. A fresh object, so nothing outside this
 /// library can name it. The fork's other value is the mark of the job
-/// that made it, and its key is that job.
+/// that made it, under a key of that job's own.
 final _unattendedKey = Object();
 
 /// The context of a job of the core itself.

@@ -7,6 +7,7 @@ import 'package:async_job/async_job.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart';
 
+import 'support/cancel_reason.dart';
 import 'support/delay.dart';
 import 'support/probe_job.dart';
 
@@ -262,6 +263,59 @@ void main() {
     });
     expect(closed, 0, reason: 'the value went to the receiver');
     expect(heard, isEmpty);
+  });
+
+  test('a cancellation from the channel on the cancel line comes too late', () {
+    // The caller's code on the line of a cancellation cancels the same job
+    // with a reason of its own. The first request has marked the job by
+    // then, so the second turns around: the listeners and the outcome
+    // speak of the same one.
+    final heard = <String>[];
+    fakeAsync((async) {
+      final job =
+          Job<void>(key: 'job', (ctx) => ctx.abandonable(() => delay(50)))
+            ..whenCancelled((cancelled) => heard.add(cancelled.reason.name));
+      async.elapse(const Duration(milliseconds: 10));
+      var reentered = false;
+      Job.debug = (message) {
+        if (!reentered && message.startsWith('cancel ')) {
+          reentered = true;
+          job.cancel(reason: const TestCancelReason('inner')).ignore();
+        }
+      };
+      job.cancel(reason: const TestCancelReason('outer')).ignore();
+      async.flushTimers();
+      expect(heard, ['outer']);
+      expect(
+        job.outcome,
+        isA<Cancelled>().having((c) => c.reason.name, 'reason', 'outer'),
+      );
+    });
+  });
+
+  test('so does one on the line of a held cancellation', () {
+    final heard = <String>[];
+    fakeAsync((async) {
+      final job = Job<void>(
+        key: 'job',
+        (ctx) => ctx.uncancellable(() => delay(50)),
+      )..whenCancelled((cancelled) => heard.add(cancelled.reason.name));
+      async.elapse(const Duration(milliseconds: 10));
+      var reentered = false;
+      Job.debug = (message) {
+        if (!reentered && message.startsWith('cancel ')) {
+          reentered = true;
+          job.cancel(reason: const TestCancelReason('inner')).ignore();
+        }
+      };
+      job.cancel(reason: const TestCancelReason('outer')).ignore();
+      async.flushTimers();
+      expect(heard, ['outer']);
+      expect(
+        job.outcome,
+        isA<Cancelled>().having((c) => c.reason.name, 'reason', 'outer'),
+      );
+    });
   });
 
   test('the line counts them, and a job that keeps them gets no line', () {
