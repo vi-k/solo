@@ -194,6 +194,26 @@ void main() {
       });
     });
 
+    test('an await for left early waits for the source to shut down', () {
+      fakeAsync((async) {
+        final source = StreamController<String>(
+          onCancel: () => delay(30).then((_) => trace().add('source closed')),
+        );
+        Future<void> loop() async {
+          await for (final _ in source.stream) {
+            break;
+          }
+          trace().add('loop over');
+        }
+
+        unawaited(loop());
+        source.add('m1');
+        async.flushTimers();
+        expect(trace(), ['source closed', 'loop over']);
+        source.close().ignore();
+      });
+    });
+
     test('onDispose with the close of the source makes the job wait', () {
       fakeAsync((async) {
         final job = page.feedClosedByTheJob();

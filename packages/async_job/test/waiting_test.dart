@@ -201,6 +201,46 @@ void main() {
     });
   });
 
+  test('onCancel from a callback of onCancel throws and registers nothing', () {
+    for (final observed in [false, true]) {
+      fakeAsync((async) {
+        final calls = <String>[];
+        final errors = <Object>[];
+        final zone = <Object>[];
+        late Job<void> job;
+        runZonedGuarded(
+          () {
+            job = Job<void>(
+              observer: observed ? ErrorObserver(errors) : null,
+              (ctx) async {
+                ctx.onCancel(() {
+                  calls.add('first');
+                  ctx.onCancel(() => calls.add('too late'));
+                  calls.add('past the second registration');
+                });
+                await ctx.abandonable(() => delay(100));
+              },
+            );
+          },
+          (error, stackTrace) => zone.add(error),
+        );
+        async.elapse(const Duration(milliseconds: 10));
+        job.cancel().ignore();
+        async.flushTimers();
+
+        expect(calls, ['first']);
+        expect(
+          errors,
+          observed ? [isA<Cancelled>()] : isEmpty,
+          reason: 'only onError hears it, as a Cancelled thrown outside the '
+              'body',
+        );
+        expect(zone, isEmpty);
+        expect(job.outcome, isA<Cancelled>());
+      });
+    }
+  });
+
   test('onCancel returns a remover', () {
     fakeAsync((async) {
       final calls = <String>[];

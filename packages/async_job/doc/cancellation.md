@@ -450,6 +450,16 @@ job's cancellation from `ctx.check()`, and a cancellation does not go to
 `on Object catch (error)` does, it needs the same `ctx.check()` as its first
 line.
 
+The clause pays for this with the failures that come after a cancellation. Once
+the job has accepted one, `ctx.check()` throws it whatever the `catch` took, a
+real failure too: a migration that fails on its own after the user cancelled is
+not logged, and the body ends with the cancellation, so neither `onError` nor
+the zone hears of it. Where such a failure has to be heard, the clause rethrows
+on a cancelled job, `if (ctx.job.isCancelled) rethrow;` in place of
+`ctx.check()`. The failure then reaches `onError` and the zone, and the stop of
+the migration goes no further than `onError`, because the filter set in `main`
+names it.
+
 If the job has already accepted cancellation, catching its `Cancelled` does not
 undo it. Code after the catch runs, but the next checkpoint throws again, and
 the outcome is still `Cancelled` even if the body returns a value.

@@ -110,6 +110,10 @@ new wording.
   [A job that only follows a stream](doc/streams.md#a-job-that-only-follows-a-stream).
 - **`JobObserver.all` makes one observer of several.** See
   [Several observers](doc/observing.md#several-observers).
+- **`JobObserver` is an `abstract mixin class`,** where `0.2.0` declared an
+  `abstract class`: an observer that already extends another class mixes
+  `JobObserver` in: `with JobObserver`. See
+  [Observer](doc/observing.md#observer).
 - **`Job.isCancellationError` names the errors a cancellation causes.** Set
   once, in `main`, it keeps them out of the answer: `onError` hears them, and
   nobody is asked to answer for them. A stop at a token is named by its type,
@@ -214,7 +218,8 @@ new wording.
   `on Cancelled { rethrow; }` in front of the `catch` logs an operation stopped
   by its token as a failure.
   [Asking the job](doc/cancellation.md#asking-the-job) calls `ctx.check()` in
-  the `catch` instead.
+  the `catch` instead and names its price: a real failure that comes after the
+  cancellation is lost, unless the `catch` rethrows on a cancelled job.
 
 ## 0.2.0
 

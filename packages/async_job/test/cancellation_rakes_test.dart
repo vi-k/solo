@@ -972,6 +972,78 @@ void main() {
       expect(lines, quoted[8]);
     });
 
+    // What the clause costs, as the page names it, and the clause it offers
+    // where that cost is too high.
+    Future<void> migrationThatFailsLate(CancelToken stop) async {
+      await delay(20);
+      throw const FormatException('bad schema');
+    }
+
+    test('check in the catch loses a failure that comes after the cancellation',
+        () {
+      final lines = play(
+        (ctx) async {
+          final stop = CancelToken();
+          ctx.onCancel(stop.cancel);
+
+          try {
+            await ctx.join(() => migrationThatFailsLate(stop));
+          } on Exception catch (error) {
+            ctx.check();
+            // ignore: cascade_invocations -- the form of Asking the job
+            ctx.log('migration failed: $error');
+          }
+        },
+        cancelAt: cancelMs,
+      );
+
+      expect(lines, ['cancel', 'outcome: Cancelled(manual)']);
+    });
+
+    for (final failsLate in [false, true]) {
+      test(
+          'a rethrow on a cancelled job sends that failure on to the zone, '
+          'and the stop no further than onError (fails late: $failsLate)', () {
+        final lines = play(
+          (ctx) async {
+            final stop = CancelToken();
+            ctx.onCancel(stop.cancel);
+
+            try {
+              await ctx.join(
+                () => failsLate
+                    ? migrationThatFailsLate(stop)
+                    : database.migrate(stop),
+              );
+            } on Exception catch (error) {
+              if (ctx.job.isCancelled) rethrow;
+              ctx.log('migration failed: $error');
+            }
+          },
+          cancelAt: cancelMs,
+        );
+
+        expect(
+          lines,
+          failsLate
+              ? [
+                  'cancel',
+                  'onError: FormatException: bad schema',
+                  'zone: FormatException: bad schema',
+                  'outcome: Cancelled(manual)',
+                ]
+              : [
+                  'step 1',
+                  'cancel',
+                  'step 2',
+                  'migration stopped',
+                  'onError: DatabaseStopped',
+                  'outcome: Cancelled(manual)',
+                ],
+        );
+      });
+    }
+
     test('a caught Cancelled of the job does not undo it', () {
       fakeAsync((async) {
         final seen = <String>[];

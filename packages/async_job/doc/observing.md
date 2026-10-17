@@ -256,15 +256,21 @@ callback of `ctx.onCancel`. Row 7 of the table below and
 [A token through `onCancel`](cancellation.md#a-token-through-oncancel) take
 these apart.
 
-Nor does it see an error that the body makes of its own cancellation. A body
-that catches everything around `ctx.abandonable` and throws an error of its own
-in its place, such as `throw AppException(error)`, wraps each `Cancelled` in an
-`AppException`, and the zone hears it at each cancellation. Either the filter
-names the wrapper,
-`(error) => error is AppException && error.cause is Cancelled`, or the `catch`
-calls `ctx.check()` first, as in
+An error that the body makes of its own cancellation reaches the filter too,
+but the type test above does not know it. A body that catches everything around
+`ctx.abandonable` and throws an error of its own in its place, such as
+`throw AppException(error)`, wraps each `Cancelled` in an `AppException`, and
+the zone hears it at each cancellation. The filter names the wrapper by its
+cause: `(error) => error is AppException && error.cause is Cancelled`.
+
+The `catch` can call `ctx.check()` first instead, as in
 [Asking the job](cancellation.md#asking-the-job) on the cancellation page: then
-the cancellation itself goes out, and a cancellation is no failure.
+the cancellation itself goes out, and a cancellation is no failure. That costs
+more than the filter. Once the job has accepted a cancellation, `ctx.check()`
+throws it whatever the `catch` took. A body that waits with `ctx.join` loses
+that way a real failure that reaches the `catch` after the cancellation, such
+as an open that found the database locked: neither `onError` nor the zone hears
+it. The filter keeps out only the errors it names.
 
 The filter only keeps errors out of the answer, and `ctx.runAll` shows it. A
 branch cancelled from outside whose body throws an error of a cancellation has
@@ -308,8 +314,10 @@ cancellation. It only hears them: overriding `onError` moves no error anywhere.
 The failed open still reaches the zone, as it would without the observer: the
 job ends `Cancelled`, and the filter above does not name a `StateError`.
 
-The outcome counts as observed when somebody reads `done` or `value`, continues
-the job with `then`, or calls `ignoreFailure()`; see
+The outcome counts as observed when somebody reads `done` or `value`, calls
+`ignoreFailure()`, or forwards the failure through `then`: a continuation
+cancelled before its source failed forwards nothing, and the failure stays
+unobserved. See
 [A failure nobody waits for](outcomes.md#a-failure-nobody-waits-for) on the
 outcomes page. The observer's hooks do not observe the outcome, even a hook
 that reads `job.outcome`, as the `onFinish` of `Log` above does.

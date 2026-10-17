@@ -226,6 +226,34 @@ void main() {
     });
   });
 
+  test('an ArgumentError or a StateError leaves the jobs untouched', () {
+    fakeAsync((async) {
+      final repeated = Job.deferred<int>((ctx) async => 1);
+      final late = Job.deferred<int>((ctx) async => 2);
+      late JobContext ended;
+      Job<void>((ctx) async {
+        ended = ctx;
+        expect(() => ctx.runAll([repeated, repeated]), throwsArgumentError);
+      }).ignoreFailure();
+      async.flushTimers();
+      expect(() => ended.run(late), throwsStateError);
+
+      final settled = <String>[];
+      repeated.done.then((outcome) => settled.add('repeated $outcome'));
+      late.done.then((outcome) => settled.add('late $outcome'));
+      async.flushTimers();
+      expect(settled, isEmpty, reason: 'nobody started or cancelled them');
+
+      repeated.start();
+      late.cancel().ignore();
+      async.flushTimers();
+      expect(settled, [
+        'late Cancelled(manual)',
+        'repeated Done(1)',
+      ]);
+    });
+  });
+
   test('the same child twice is refused before anything starts', () {
     fakeAsync((async) {
       final child = Job.deferred<int>(key: 'a', (ctx) async => 1);

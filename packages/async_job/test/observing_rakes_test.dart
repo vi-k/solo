@@ -1056,6 +1056,36 @@ void main() {
       );
     });
 
+    test('a catch that asks the job first loses a failure after the cancel',
+        () {
+      Job<void> opening({required bool checksFirst}) =>
+          Job<void>(observer: Reporter(), (ctx) async {
+            try {
+              await ctx.join(Database.open);
+              // ignore: avoid_catches_without_on_clauses
+            } catch (error) {
+              if (checksFirst) ctx.check();
+              throw AppException(error);
+            }
+          });
+
+      expect(
+        quotable(play(() => opening(checksFirst: false), cancelAt: 10)),
+        [
+          'cancel',
+          'onError: AppException(Bad state: database locked)',
+          'zone: AppException(Bad state: database locked)',
+          'outcome: Cancelled(manual)',
+        ],
+        reason: 'the open fails after the cancellation',
+      );
+      expect(
+        quotable(play(() => opening(checksFirst: true), cancelAt: 10)),
+        ['cancel', 'outcome: Cancelled(manual)'],
+        reason: 'the open failed after the cancellation, and nobody heard it',
+      );
+    });
+
     // The two things of `ctx.runAll` the page names: the group learns of an
     // error of a cancellation from the body, and a branch nobody cancelled
     // fails with it.

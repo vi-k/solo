@@ -433,6 +433,6 @@ job.start();
 ```
 
 `start()` runs the body in the zone it is called from. A queue that calls it
-later, from a zone of its own, should keep the zone the job was made in and
-start the job there, with `zone.run(job.start)`:
-[A job of your own](#a-job-of-your-own) says why.
+later, from a zone of its own, should keep the zone the job was made in,
+`final zone = Zone.current;` next to `Job.deferred`, and start the job there,
+with `zone.run(job.start)`: [A job of your own](#a-job-of-your-own) says why.

@@ -1469,7 +1469,7 @@ void main() {
           r'throws `ArgumentError`:\n\n```text\n(.*?)\n```',
           dotAll: true,
         );
-        final quote = quoted.firstMatch(text)!.group(1)!.replaceAll('\n', ' ');
+        final quote = quoted.firstMatch(text)!.group(1);
         expect(thrown, isA<ArgumentError>());
         expect('$thrown', quote);
       });

@@ -298,6 +298,12 @@ abstract interface class JobContext {
   /// [callback] goes to `onError` and on to the job's answer; the cancellation
   /// itself is not affected and the other callbacks still run.
   ///
+  /// A callback that registers another one runs in a job that is cancelled by
+  /// then, so that registration throws [Cancelled] too, and the callback stops
+  /// there. Only `onError` hears that [Cancelled], as it hears any [Cancelled]
+  /// thrown outside the body, and the job still ends with its cancellation.
+  /// Whatever has to happen on the cancellation, the callback does itself.
+  ///
   /// A body that gives itself up — throws [Cancelled], or lets out the
   /// cancellation of a child — accepts its cancellation as it throws, and
   /// these callbacks run then: what the body started is no more needed
@@ -417,7 +423,10 @@ abstract interface class JobContext {
   /// or has finished — one cancelled before its start included — and for a call
   /// made after this job's body has ended — from its cleanup, say — or from
   /// [unattended] work; and the parent's own [Cancelled], with the child
-  /// dropped, if the parent is already cancelled.
+  /// cancelled before its start, if the parent is already cancelled. An
+  /// [ArgumentError] or a [StateError] leaves [child] untouched, with the code
+  /// that made it: a job of [Job.deferred] refused that way stays unstarted,
+  /// and its [Job.done] waits until that code starts or cancels it.
   ///
   /// [dispose] and [discard] say how the child's value is cleaned up, and they
   /// work as they do in [abandonable]: [dispose] runs whatever the outcome,
@@ -546,14 +555,15 @@ abstract interface class JobContext {
   /// same checks [run] would make, the checkpoint of the parent included.
   /// Admission errors are those of [run]. Everything that needs no adoption is
   /// asked of every handle before the first one starts, so such a refusal
-  /// leaves nothing running, and under a parent that is already cancelled every
-  /// branch is turned away the way [run] turns away its child, and so is the
-  /// rest of the list when a branch cancels the parent before its first
-  /// `await`, while the list starts. A refusal only the adoption can give — an
-  /// engine of a domain turning the parent down, a rule of its domain that
-  /// throws — may arrive after some branches have started: it stops them and
-  /// waits for them before it comes out, and the handles after the refused one
-  /// are left as they were, never started.
+  /// leaves nothing running and every handle untouched, the way [run] leaves a
+  /// child it refuses with an [ArgumentError] or a [StateError]. Under a parent
+  /// that is already cancelled every branch is turned away the way [run] turns
+  /// away its child, and so is the rest of the list when a branch cancels the
+  /// parent before its first `await`, while the list starts. A refusal only the
+  /// adoption can give — an engine of a domain turning the parent down, a rule
+  /// of its domain that throws — may arrive after some branches have started:
+  /// it stops them and waits for them before it comes out, and the handles
+  /// after the refused one are left as they were, never started.
   Future<List<T>> runAll<T>(Iterable<Job<T>> children);
 
   /// Starts a child job that processes [stream] one event at a time.

@@ -8,7 +8,8 @@ A body can hand work to another job in three ways:
 3. A continuation made by `then` starts when the job it follows succeeds, and
    outlives it.
 
-The words for the three are close, and the wrong one compiles:
+The words for the three are close, and the wrong one compiles as well as the
+right one. Each in its place:
 
 ```dart
 final job = Job<void>((ctx) async {
@@ -115,6 +116,13 @@ child an observer that answers: a `JobAnswerer` with `onUnanswered` overridden.
 | A job that has already started or finished | Throws `StateError` |
 | Any job, once the parent body has ended | Throws `StateError` |
 | Any job, once the parent is cancelled | Cancels the child before its start and throws the parent's `Cancelled` |
+
+An `ArgumentError` or a `StateError` leaves the child untouched, with the code
+that made it: a `Job.deferred` that `ctx.run` refused that way stays unstarted,
+and its `done` waits until that code starts or cancels it. `ctx.runAll` makes
+the same checks for every job of its list before the first start and refuses
+the same job twice with an `ArgumentError`; such a refusal leaves every job of
+the list untouched.
 
 ### How deep a tree goes
 
@@ -776,8 +784,7 @@ final parent = Job<void>((ctx) async {
 The second `ctx.run` throws `ArgumentError`:
 
 ```text
-Invalid argument (child): is a continuation,
-which starts itself once its source finishes: "Job(then)"
+Invalid argument (child): is a continuation, which starts itself once its source finishes: "Job(then)"
 ```
 
 `ctx.run` takes a job nobody starts by itself, and a continuation is not one of

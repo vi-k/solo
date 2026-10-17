@@ -40,6 +40,13 @@ final class Database {
   /// What [open] fails with once its time has passed; nothing by default.
   static StateError? openError;
 
+  /// What [readAll] fails with once its time has passed; nothing by default.
+  static StateError? readError;
+
+  /// Whether [migrate] stops at its token by throwing [DatabaseStopped], as
+  /// many clients do, rather than by returning.
+  static bool stopThrows = false;
+
   Database._();
 
   static Future<Database> open() async {
@@ -53,6 +60,9 @@ final class Database {
 
   Future<List<String>> readAll() async {
     await Future<void>.delayed(const Duration(milliseconds: 100));
+    if (readError case final error?) {
+      throw error;
+    }
     events.add('read');
     return const ['row'];
   }
@@ -61,6 +71,9 @@ final class Database {
     for (var step = 1; step <= 3; step++) {
       if (stop.cancelled) {
         events.add('migration stopped');
+        if (stopThrows) {
+          throw const DatabaseStopped();
+        }
         return;
       }
       await Future<void>.delayed(const Duration(milliseconds: 10));
@@ -87,6 +100,14 @@ final class CancelToken {
   bool cancelled = false;
 
   void cancel() => cancelled = true;
+}
+
+/// How a client that stops by throwing stops at its token.
+final class DatabaseStopped implements Exception {
+  const DatabaseStopped();
+
+  @override
+  String toString() => 'DatabaseStopped';
 }
 
 void use(List<String> rows) => Database.events.add('used ${rows.length}');
@@ -147,17 +168,14 @@ var cancelled = false;
 
 Future<void> load() async {
   final db = await Database.open();
-  if (cancelled) {
+  try {
+    if (cancelled) return;
+    final rows = await db.readAll();
+    if (cancelled) return;
+    use(rows);
+  } finally {
     await db.close();
-    return;
   }
-  final rows = await db.readAll();
-  if (cancelled) {
-    await db.close();
-    return;
-  }
-  use(rows);
-  await db.close();
 }
 // README: end
 
@@ -371,8 +389,11 @@ void main() {
   setUp(() {
     Database.events.clear();
     Database.openError = null;
+    Database.readError = null;
+    Database.stopThrows = false;
     cancelled = false;
   });
+  tearDown(() => Job.isCancellationError = null);
 
   group('the flag "Why" starts from', () {
     test('closes the database at the check after the open', () {
@@ -404,6 +425,33 @@ void main() {
 
         expect(Database.events, ['opened', 'read', 'used 1', 'closed']);
       });
+    });
+
+    test('and when the read fails', () {
+      Database.readError = StateError('read failed');
+      final zone = zoneErrorsOf((async) => unawaited(load()));
+
+      expect(Database.events, ['opened', 'closed']);
+      expect(zone, ['Bad state: read failed']);
+    });
+
+    test('and returns the same whether cancelled or not', () {
+      for (final cancelAt in [null, 10, 50]) {
+        Database.events.clear();
+        cancelled = false;
+        fakeAsync((async) {
+          var returned = false;
+          load().then((_) => returned = true);
+          if (cancelAt != null) {
+            async.elapse(Duration(milliseconds: cancelAt));
+            cancelled = true;
+          }
+          async.flushTimers();
+
+          expect(returned, isTrue, reason: 'cancelled at $cancelAt');
+          expect(Database.events.last, 'closed');
+        });
+      }
     });
   });
 
@@ -889,6 +937,62 @@ void main() {
         ]);
         expect(job.outcome.toString(), 'Cancelled(manual)');
       });
+    });
+
+    test(
+        'a client that stops by throwing sends the stop to the zone on every '
+        'cancellation, unless the app names it', () {
+      Database.stopThrows = true;
+      for (final named in [false, true]) {
+        Job.isCancellationError =
+            named ? (error) => error is DatabaseStopped : null;
+        final heard = Listening();
+        Outcome<Database>? ended;
+        final zone = zoneErrorsOf((async) {
+          // Not the Quick start's own lines, as above; the steps after the
+          // migration are left out, since the cancellation comes during it.
+          final job = Job<Database>(observer: heard, (ctx) async {
+            final database =
+                await ctx.join(Database.open, discard: (db) => db.close());
+            final token = CancelToken();
+            ctx.onCancel(token.cancel);
+            await ctx.join(() => database.migrate(token));
+            return database;
+          });
+          // The database opens in 20 ms, and a step takes 10.
+          async.elapse(const Duration(milliseconds: 25));
+          job.cancel().ignore();
+          async.flushTimers();
+          ended = job.outcome;
+        });
+
+        expect('$ended', 'Cancelled(manual)');
+        expect(
+          Database.events,
+          ['opened', 'migration stopped', 'closed'],
+          reason: 'named: $named',
+        );
+        expect(
+          heard.heard,
+          ['onError: DatabaseStopped'],
+          reason: 'named: $named',
+        );
+        expect(zone, named ? isEmpty : ['DatabaseStopped']);
+        Database.events.clear();
+      }
+    });
+
+    test('the Quick start names that filter and the page that takes it apart',
+        () {
+      for (final page in readmes) {
+        final item = RegExp(
+          r'- \*\*`ctx\.join\(\(\) => database\.migrate\(stop\)\)`\*\*(.*?)\n- ',
+          dotAll: true,
+        ).firstMatch(read(page))!.group(1)!;
+        expect(item, contains('`Job.isCancellationError`'), reason: page);
+        // The anchor is the page's own; `tool/check_links.py` holds it.
+        expect(item, contains('observing.md#'), reason: page);
+      }
     });
 
     test('without the section a cancellation comes between the two', () {

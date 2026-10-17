@@ -78,9 +78,14 @@ final outcome = await job.done; // Cancelled(manual)
   the body reaches its next checkpoint.
 - **`ctx.join(() => database.migrate(stop))`** waits for the migration to
   finish. On cancellation, the token asks the migration to stop, and `join`
-  waits for it to stop before the job closes the database. If you need to stop
-  waiting immediately on cancellation, use `ctx.abandonable`. It stops the
-  waiting without stopping the operation itself.
+  waits for it to stop before the job closes the database. A client that stops
+  by throwing makes `join` throw its error, and that error reaches the zone
+  each time a cancellation stops the migration, unless the app names it once in
+  `Job.isCancellationError`; see
+  [Errors of a cancellation](doc/observing.md#errors-of-a-cancellation) on the
+  observing page. If you need to stop waiting immediately on cancellation, use
+  `ctx.abandonable`. It stops the waiting without stopping the operation
+  itself.
 - **`ctx.uncancellable(() async { ... })`** keeps the last step whole. The step
   writes the schema version and then runs `database.readyFlag()` as a child,
   and the section keeps a cancellation from coming between the two. Inside the
@@ -138,34 +143,36 @@ Cancelled(manual)
 ## Why
 
 A plain `Future` has no cancellation. A flag can ask work to stop, but the work
-has to ask the flag after every `await` and close what it has opened each time:
+has to ask the flag after every `await`, and a `finally` closes what it has
+opened:
 
 ```dart
 var cancelled = false;
 
 Future<void> load() async {
   final db = await Database.open();
-  if (cancelled) {
+  try {
+    if (cancelled) return;
+    final rows = await db.readAll();
+    if (cancelled) return;
+    use(rows);
+  } finally {
     await db.close();
-    return;
   }
-  final rows = await db.readAll();
-  if (cancelled) {
-    await db.close();
-    return;
-  }
-  use(rows);
-  await db.close();
 }
 ```
 
-Every new `await` needs a check of its own, and every new resource adds its
-cleanup to each check. Once the cleanup grows, checks start to be left out, and
-a check left out lets the work go on after the cancellation, with nothing
-pointing at the place.
+Every new `await` needs a check of its own, and a check left out lets the work
+go on after the cancellation, with nothing pointing at the place. The `finally`
+closes the database whichever way the work ends, but `load` returns the same
+way whether it was cancelled or ran to its end, and its caller cannot tell the
+two apart.
 
-A job checks for cancellation at each `ctx.join`, and the closing of the
-database is registered once:
+A job checks for cancellation at each `ctx.join` and ends `Cancelled` when it
+stops for one. The closing of the database is registered with `dispose`, which
+closes it whichever way the job ends. The Quick start registers `discard`
+instead, which leaves the database open for the caller when the job ends
+`Done`:
 
 ```dart
 final job = Job<void>((ctx) async {
@@ -235,10 +242,10 @@ final operation = CancelableOperation.fromFuture(
 ```
 
 Such an `onCancel` covers one wait. Once the database has been handed over,
-`cancel()` does nothing: the read that follows runs on, and closing the
-database is up to the code after every `await` again, as with the flag. A
-cancelled operation never completes its `value` either, so whoever awaits it
-waits for good.
+`cancel()` does nothing: the read that follows runs on, and the work is back to
+a check after every `await` and a `finally`, as with the flag. A cancelled
+operation never completes its `value` either, so whoever awaits it waits for
+good.
 
 `ctx.join` hands a database that opens after the job's cancellation to its
 `dispose` all the same, with no code written for the cancellation, and the job
