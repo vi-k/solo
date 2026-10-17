@@ -492,12 +492,15 @@ abstract interface class Job<T> {
   ///
   /// So it is for a child of [JobContext.run] and a branch of
   /// [JobContext.runAll] as well. A [Failed] their parent takes reaches the
-  /// parent's caller whether or not this was called. A failure of the body of a
-  /// child that ends [Cancelled], and that of a branch the group did not throw,
-  /// do not reach the parent's caller, and this, called on the child, silences
-  /// them. Called on their parent, it silences neither. To answer for them
-  /// differently instead, give the child an observer that is a [JobAnswerer] —
-  /// the parent's is the child's unless the child has one of its own.
+  /// parent's caller whether or not this was called, and so does the failure of
+  /// the body of a branch the group throws in place of a value an engine of a
+  /// domain handed in once the group had heard of that failure — see
+  /// [JobBase.finish]. A failure of the body of a child that ends [Cancelled],
+  /// and that of a branch the group did not throw, do not reach the parent's
+  /// caller, and this, called on the child, silences them. Called on their
+  /// parent, it silences neither. To answer for them differently instead, give
+  /// the child an observer that is a [JobAnswerer] — the parent's is the
+  /// child's unless the child has one of its own.
   ///
   /// Call it before the job ends, or at the latest from [JobObserver.onFinish]
   /// or a callback of [whenCancelled] registered before it ends. A failure the
@@ -839,9 +842,9 @@ abstract class JobBase<T> implements Job<T> {
   /// outcome of its own.
   ///
   /// A group of [JobContext.runAll] attaches its hold after the branch is
-  /// admitted, and a body that throws before its first `await` has ended
-  /// by then: the early word found nothing to say itself to. This is
-  /// where the group reads what it was not there to hear.
+  /// admitted, and a body that is not `async` and throws in its start has ended
+  /// by then: the early word found nothing to say itself to. This is where the
+  /// group reads what it was not there to hear.
   Outcome<T>? _bodyOutcome;
   bool _disposing = false;
 
@@ -884,6 +887,15 @@ abstract class JobBase<T> implements Job<T> {
   /// Set by the group in the step that hands the values over, and read
   /// again from the verdict at the second barrier.
   bool _committedByGroup = false;
+
+  /// Whether the group of [JobContext.runAll] goes by the failure of the body
+  /// of this branch instead of the value an engine of a domain handed in after
+  /// the group heard of that failure. The group throws that failure or answers
+  /// for it.
+  ///
+  /// Set in [finish], once, and read by the body's route, which then leaves
+  /// that failure to the group.
+  bool _failureWentToGroup = false;
 
   /// Creates a job that has not started yet.
   ///
@@ -1659,6 +1671,17 @@ abstract class JobBase<T> implements Job<T> {
   /// body is caught, and it goes on to the answer, as a failure of the body of
   /// a cancelled job does.
   ///
+  /// A branch of [JobContext.runAll] that ends with a [Done] handed in after
+  /// its group heard that its body failed is the exception. The value comes too
+  /// late for the group: it goes by the failure, as if the branch had ended
+  /// with it, and throws it, or answers for it as for any failure of a branch
+  /// it does not throw, and the value stays in the outcome of the branch alone.
+  /// The group hears of the failure right after [JobObserver.onError] does, or,
+  /// for a body that is not `async` and threw while [JobContext.runAll] was
+  /// starting the branches, once it has started them all. A value handed in
+  /// before that, from `onError` too, is what the group goes by, and the branch
+  /// answers for the failure itself.
+  ///
   /// A [Failed] handed in is announced here: [JobObserver.onError] hears it
   /// once, before [finished] and [JobObserver.onFinish]. Unlike a failure
   /// of the body, which is announced while the job still runs, it is
@@ -1725,6 +1748,14 @@ abstract class JobBase<T> implements Job<T> {
     }
     _outcome = decided;
     _status = JobStatus.finished;
+    // A value a branch of a group is handed by hand, if it is the outcome: a
+    // cancellation the branch accepted turns it away. The group goes by what it
+    // heard first, and a failure of the body it heard of is what it throws or
+    // answers for -- see [_RunAllGroup._takeFailure]. Asked here, among the
+    // stores, before any code that is not the core's runs.
+    if (decided is Done) {
+      _failureWentToGroup = _hold?.takeFailure() ?? false;
+    }
     // A section the body walked away from may still hold a cancellation;
     // it would land on a job that is over, which drops it.
     _heldCancel = null;
@@ -1789,14 +1820,14 @@ abstract class JobBase<T> implements Job<T> {
     // finish hooks: a synchronous subscriber may immediately add more work.
     if (decided is Cancelled) _notifyCancelled(decided);
     _cancelListeners.clear();
-    // Let go of the graph. The handle stays -- it is kept precisely to be
-    // read later, by a controller holding the last job, by a widget, by a
-    // journal -- but nothing it reached through is of any use now: the
-    // parent chain leads to jobs that are over, the group of
-    // [JobContext.runAll] has taken its verdict, and the outcome of the
-    // body has become the outcome. Held on, these turn one handle in a field
-    // into the whole tree it came out of, every closure that tree captured
-    // and an error with everything it references.
+    // Let go of the graph. The handle stays -- it is kept precisely to be read
+    // later, by a controller holding the last job, by a widget, by a journal --
+    // but nothing it reached through is of any use now: the parent chain leads
+    // to jobs that are over, the group of [JobContext.runAll] has taken its
+    // verdict and what it goes by, and the outcome of the body has become the
+    // outcome, or is the body's route's own to answer for. Held on, these turn
+    // one handle in a field into the whole tree it came out of, every closure
+    // that tree captured and an error with everything it references.
     _parent = null;
     _hold = null;
     _bodyOutcome = null;
@@ -1922,7 +1953,10 @@ abstract class JobBase<T> implements Job<T> {
   /// [JobContext.runAll] the group did not throw, that of a job that ends
   /// [Cancelled], and that of a job an engine of a domain ended by hand with an
   /// outcome of its own, unless [Job.ignoreFailure] was called on the job. The
-  /// job told its observer itself, where its body was caught, and one error is
+  /// last is the group's when the group took that failure in place of a value
+  /// handed in after the group heard of it (see [_failureWentToGroup]), and
+  /// comes here only as the first, when the group does not throw it. The job
+  /// told its observer itself, where its body was caught, and one error is
   /// announced once — but an error nobody answered for still has to reach
   /// somebody.
   ///
@@ -2200,12 +2234,14 @@ abstract class JobBase<T> implements Job<T> {
         _heldCancel = null;
         _heldBehindTimeout = null;
       }
-      // The early word of a branch to its group: the siblings are asked to
-      // stop while this one is still waiting for its own descendants. It
-      // decides nothing and hands nothing over — what comes out of a group
-      // is settled by the final outcomes, later and elsewhere. After the
-      // classification and not before it: a clean envelope thrown by a child
-      // is a cancellation here, not a failure.
+      // The early word of a branch to its group: the siblings are asked to stop
+      // while this one is still waiting for its own descendants. It hands
+      // nothing over, and decides only that a value an engine of a domain hands
+      // in after it comes too late for the group — see
+      // [_RunAllGroup._takeFailure]. What comes out of a group is settled by
+      // the final outcomes, later and elsewhere. After the classification and
+      // not before it: a clean envelope thrown by a child is a cancellation
+      // here, not a failure.
       _hold?.bodyEnded(outcome);
       if (selfCancelled case final cancelled?) {
         // The rest of what `cancelWith` does, in its order: the children are
@@ -2509,7 +2545,9 @@ abstract class JobBase<T> implements Job<T> {
   /// A failure of the body of a job an engine of a domain ended by hand comes
   /// here too, whether the body threw before that or after, unless the engine
   /// handed in that very failure: the outcome is the engine's, and the failure
-  /// is in none.
+  /// is in none. Nor does one the group of [JobContext.runAll] took in place of
+  /// a value handed in after the group heard of it: the group throws it or
+  /// answers for it — see [_failureWentToGroup].
   void _reportCovered(Failed outcome, {required bool announced}) {
     if (_ignored) {
       if (!announced) {
@@ -2524,17 +2562,23 @@ abstract class JobBase<T> implements Job<T> {
     }
   }
 
-  /// Answers for the failure of the body of a job an engine of a domain
-  /// ended by hand, at whatever point of the run it did so. The outcome is
-  /// the engine's, and the failure is in it only when the engine handed in
-  /// that very error; otherwise it goes where the failure of the body of a
-  /// cancelled job goes. One the engine handed in before the body threw it
-  /// was answered for in [finish] already: [announcedBefore].
+  /// Answers for the failure of the body of a job an engine of a domain ended
+  /// by hand, at whatever point of the run it did so. The outcome is the
+  /// engine's, and the failure is in it only when the engine handed in that
+  /// very error; otherwise it goes where the failure of the body of a cancelled
+  /// job goes. One the engine handed in before the body threw it was answered
+  /// for in [finish] already: [announcedBefore]. One the group of
+  /// [JobContext.runAll] took in place of a value is the group's to throw or
+  /// answer for: [_failureWentToGroup].
   void _answerForHandFinished(
     Outcome<T> body, {
     required bool announcedBefore,
   }) {
-    if (body is! Failed || announcedBefore) return;
+    // Written by the body's route after [finish] let go of it: nothing reads it
+    // past this point, and it must hold neither the failure nor the value the
+    // body ended with.
+    _bodyOutcome = null;
+    if (body is! Failed || announcedBefore || _failureWentToGroup) return;
     final ended = _outcome;
     if (ended is Failed && identical(ended.error, body.error)) return;
     _reportCovered(body, announced: true);

@@ -513,10 +513,12 @@ void main() {
 
   // A branch of a group: the hand lands after the children, at the first
   // barrier or at the second, depending on how late it comes. It comes k
-  // microtasks after the group asks the sibling to stop, swept over k. Once
-  // it comes too late the branch is over with its failure, and the group
-  // throws that.
-  test('a failed branch an engine ends by hand is answered for once', () {
+  // microtasks after the group asks the sibling to stop, swept over k. A value
+  // handed in after the group heard the body fail comes too late for it, which
+  // goes by the failure; once the hand comes too late for the branch as well,
+  // the branch is over with its failure. Either way the group throws the
+  // failure, and nobody answers for it a second time.
+  test('a failed branch an engine ends by hand with a value is thrown', () {
     final byHand = <int>[];
     final tooLate = <int>[];
     for (var k = 0; k < 8; k++) {
@@ -549,35 +551,369 @@ void main() {
         )..ignoreFailure();
         async.flushTimers();
       });
-      if (branch.outcome is Done) {
-        byHand.add(k);
-        expect(
-          hearing.seen,
-          [
-            'onError b: Bad state: body',
-            'onFinish b',
-            'onUnanswered b: Bad state: body',
-          ],
-          reason: 'k = $k',
-        );
-        expect(zone, [error], reason: 'k = $k');
-      } else {
-        tooLate.add(k);
-        expect(
-          parent.outcome,
-          isA<Failed>().having((f) => f.error, 'error', same(error)),
-          reason: 'k = $k',
-        );
-        expect(
-          hearing.seen,
-          ['onError b: Bad state: body', 'onFinish b'],
-          reason: 'k = $k',
-        );
-        expect(zone, isEmpty, reason: 'k = $k');
-      }
+      (branch.outcome is Done ? byHand : tooLate).add(k);
+      expect(
+        parent.outcome,
+        isA<Failed>().having((f) => f.error, 'error', same(error)),
+        reason: 'k = $k',
+      );
+      expect(
+        hearing.seen,
+        ['onError b: Bad state: body', 'onFinish b'],
+        reason: 'k = $k',
+      );
+      expect(zone, isEmpty, reason: 'k = $k');
     }
     expect(byHand, isNotEmpty);
     expect(tooLate, isNotEmpty);
+  });
+
+  group('a branch an engine hands a value after its body failed', () {
+    test('from a cleanup has its failure thrown by the group', () {
+      final hearing = Hearing();
+      final error = StateError('body');
+      late ProbeJob<String> branch;
+      late Job<List<String>> parent;
+      final zone = zoneOf((async) {
+        branch = ProbeJob<String>(
+          key: 'b',
+          observer: hearing,
+          (ctx) async {
+            ctx.onDispose(() => branch.drop(const Done('by hand')));
+            await delay(10);
+            throw error;
+          },
+        );
+        parent = Job<List<String>>((ctx) => ctx.runAll([branch]))
+          ..ignoreFailure();
+        async.flushTimers();
+      });
+      expect(branch.outcome, isA<Done<String>>());
+      expect(
+        parent.outcome,
+        isA<Failed>().having((f) => f.error, 'error', same(error)),
+      );
+      expect(hearing.seen, ['onError b: Bad state: body', 'onFinish b']);
+      expect(zone, isEmpty);
+    });
+
+    // The sibling fails first, and the group throws that; the branch refuses
+    // the stop, fails after it, and is handed a value from its cleanup.
+    for (final ignored in [false, true]) {
+      final heard = ignored
+          ? 'that was ignored is heard by onError alone'
+          : 'is answered for by the group, once';
+      test('behind the failure of a sibling $heard', () {
+        final hearing = Hearing();
+        final error = StateError('body');
+        final first = StateError('sibling');
+        late ProbeJob<String> branch;
+        late Job<List<String>> parent;
+        final zone = zoneOf((async) {
+          branch = ProbeJob<String>(
+            key: 'b',
+            observer: hearing,
+            cancellable: false,
+            (ctx) async {
+              ctx.onDispose(() => branch.drop(const Done('by hand')));
+              await delay(10);
+              throw error;
+            },
+          );
+          if (ignored) branch.ignoreFailure();
+          parent = Job<List<String>>(
+            (ctx) => ctx.runAll([
+              branch,
+              Job.deferred<String>((ctx) async {
+                await delay(5);
+                throw first;
+              }),
+            ]),
+          )..ignoreFailure();
+          async.flushTimers();
+        });
+        expect(branch.outcome, isA<Done<String>>());
+        expect(
+          parent.outcome,
+          isA<Failed>().having((f) => f.error, 'error', same(first)),
+        );
+        expect(hearing.seen, [
+          'onError b: Bad state: body',
+          'onFinish b',
+          if (!ignored) 'onUnanswered b: Bad state: body',
+        ]);
+        expect(zone, [if (!ignored) error]);
+      });
+    }
+
+    // The other way round: the branch fails and is handed the value first, and
+    // a sibling that refuses the stop fails after it. The group throws the
+    // failure of the branch, the first it received, and answers for the
+    // sibling.
+    test('ahead of the failure of a sibling is thrown', () {
+      final hearing = Hearing();
+      final error = StateError('body');
+      final second = StateError('sibling');
+      late ProbeJob<String> branch;
+      late Job<List<String>> parent;
+      final zone = zoneOf((async) {
+        branch = ProbeJob<String>(
+          key: 'b',
+          observer: hearing,
+          (ctx) async {
+            ctx.onDispose(() => branch.drop(const Done('by hand')));
+            await delay(5);
+            throw error;
+          },
+        );
+        parent = Job<List<String>>(
+          (ctx) => ctx.runAll([
+            branch,
+            ProbeJob<String>(
+              key: 's',
+              observer: hearing,
+              cancellable: false,
+              (ctx) async {
+                await delay(10);
+                throw second;
+              },
+            ),
+          ]),
+        )..ignoreFailure();
+        async.flushTimers();
+      });
+      expect(
+        parent.outcome,
+        isA<Failed>().having((f) => f.error, 'error', same(error)),
+      );
+      expect(hearing.seen, [
+        'onError b: Bad state: body',
+        'onFinish b',
+        'onError s: Bad state: sibling',
+        'onFinish s',
+        'onUnanswered s: Bad state: sibling',
+      ]);
+      expect(zone, [second]);
+    });
+
+    // Not a value: the group throws what was handed in, and the branch answers
+    // for the failure of its body itself.
+    for (final kind in ['Failed', 'Cancelled']) {
+      test('is not this one when the hand-in is $kind', () {
+        final hearing = Hearing();
+        final error = StateError('body');
+        final handed = kind == 'Failed'
+            ? Failed(StateError('by hand'), StackTrace.current)
+            : const Cancelled('by hand');
+        late ProbeJob<String> branch;
+        late Job<List<String>> parent;
+        final zone = zoneOf((async) {
+          branch = ProbeJob<String>(
+            key: 'b',
+            observer: hearing,
+            (ctx) async {
+              ctx.onDispose(() => branch.drop(handed));
+              await delay(10);
+              throw error;
+            },
+          );
+          parent = Job<List<String>>((ctx) => ctx.runAll([branch]))
+            ..ignoreFailure();
+          async.flushTimers();
+        });
+        expect(branch.outcome, same(handed));
+        expect(
+          parent.outcome,
+          handed is Failed
+              ? isA<Failed>()
+                  .having((f) => f.error, 'error', same(handed.error))
+              : isA<Cancelled>(),
+        );
+        expect(hearing.seen, [
+          'onError b: Bad state: body',
+          if (handed is Failed) 'onError b: Bad state: by hand',
+          'onFinish b',
+          'onUnanswered b: Bad state: body',
+        ]);
+        expect(zone, [error]);
+      });
+    }
+
+    // Nor when a cancellation the branch accepted while its cleanup ran turns
+    // the value away: the branch ends cancelled, and the group goes by that.
+    test('is not this one when a cancellation it accepted decides', () {
+      final hearing = Hearing();
+      final error = StateError('body');
+      late ProbeJob<String> branch;
+      late Job<List<String>> parent;
+      final zone = zoneOf((async) {
+        branch = ProbeJob<String>(
+          key: 'b',
+          observer: hearing,
+          (ctx) async {
+            ctx.onDispose(() => delay(50));
+            await delay(10);
+            throw error;
+          },
+        );
+        parent = Job<List<String>>((ctx) => ctx.runAll([branch]))
+          ..ignoreFailure();
+        async.elapse(const Duration(milliseconds: 20));
+        branch.cancel().ignore();
+        async.elapse(const Duration(milliseconds: 5));
+        branch.drop(const Done('by hand'));
+        async.flushTimers();
+      });
+      expect(branch.outcome, isA<Cancelled>());
+      expect(parent.outcome, isA<Cancelled>());
+      expect(hearing.seen, [
+        'onError b: Bad state: body',
+        'onFinish b',
+        'onUnanswered b: Bad state: body',
+      ]);
+      expect(zone, [error]);
+    });
+
+    // The value comes before the group hears of the failure, by every route
+    // there is: the body hands it in and throws, in its start or after it, or
+    // `onError` hands it in as it hears the failure. The group goes by the
+    // value, and the branch answers for the failure itself.
+    for (final (name, sync, fromOnError) in [
+      ('from the body in its start', true, false),
+      ('from the body before its first await', false, false),
+      ('from onError in the start', true, true),
+      ('from onError', false, true),
+    ]) {
+      test('$name is handed over', () {
+        final hearing = Hearing();
+        final error = StateError('body');
+        late ProbeJob<String> branch;
+        late Job<List<String>> parent;
+        hearing.onHeard = (job) {
+          if (fromOnError && identical(job, branch)) {
+            branch.drop(const Done('by hand'));
+          }
+        };
+        final zone = zoneOf((async) {
+          branch = ProbeJob<String>(
+            key: 'b',
+            observer: hearing,
+            switch ((sync, fromOnError)) {
+              (true, true) => (ctx) => throw error,
+              (true, false) => (ctx) {
+                  branch.drop(const Done('by hand'));
+                  throw error;
+                },
+              (false, true) => (ctx) async {
+                  await delay(10);
+                  throw error;
+                },
+              (false, false) => (ctx) async {
+                  branch.drop(const Done('by hand'));
+                  throw error;
+                },
+            },
+          );
+          parent = Job<List<String>>(
+            (ctx) => ctx.runAll([
+              branch,
+              Job.deferred((ctx) async {
+                await ctx.abandonable(() => delay(20));
+                return 'other';
+              }),
+            ]),
+          )..ignoreFailure();
+          async.flushTimers();
+        });
+        expect(
+          parent.outcome,
+          isA<Done<List<String>>>()
+              .having((done) => done.value, 'value', ['by hand', 'other']),
+        );
+        expect(hearing.seen, [
+          if (!fromOnError) 'onFinish b',
+          'onError b: Bad state: body',
+          if (fromOnError) 'onFinish b',
+          'onUnanswered b: Bad state: body',
+        ]);
+        expect(zone, [error]);
+      });
+    }
+
+    // The body throws inside its own start, before the group holds the branch,
+    // and a sibling hands the value in from its start, before the group reads
+    // what the body ended with. The group never learns of the failure, so it
+    // has none to take, and it hands the values over.
+    test('before the group heard the body is handed over', () {
+      final hearing = Hearing();
+      final error = StateError('body');
+      late ProbeJob<String> branch;
+      late Job<List<String>> parent;
+      final zone = zoneOf((async) {
+        branch = ProbeJob<String>(
+          key: 'b',
+          observer: hearing,
+          (ctx) => throw error,
+        );
+        parent = Job<List<String>>(
+          (ctx) => ctx.runAll([
+            branch,
+            Job.deferred((ctx) async {
+              branch.drop(const Done('by hand'));
+              return 'other';
+            }),
+          ]),
+        );
+        async.flushTimers();
+      });
+      expect(
+        parent.outcome,
+        isA<Done<List<String>>>()
+            .having((done) => done.value, 'value', ['by hand', 'other']),
+      );
+      expect(hearing.seen, [
+        'onError b: Bad state: body',
+        'onFinish b',
+        'onUnanswered b: Bad state: body',
+      ]);
+      expect(zone, [error]);
+    });
+
+    // The boundary: the value comes first, and the group hands it over; the
+    // body fails after that, and the branch answers for its failure itself.
+    test('before the body fails is handed over', () {
+      final hearing = Hearing();
+      final error = StateError('body');
+      late ProbeJob<String> branch;
+      late Job<List<String>> parent;
+      final zone = zoneOf((async) {
+        branch = ProbeJob<String>(
+          key: 'b',
+          observer: hearing,
+          (ctx) async {
+            await delay(10);
+            throw error;
+          },
+        );
+        parent = Job<List<String>>(
+          (ctx) => ctx.runAll([branch, Job.deferred((ctx) async => 'other')]),
+        );
+        async.elapse(const Duration(milliseconds: 5));
+        branch.drop(const Done('by hand'));
+        async.flushTimers();
+      });
+      expect(
+        parent.outcome,
+        isA<Done<List<String>>>()
+            .having((done) => done.value, 'value', ['by hand', 'other']),
+      );
+      expect(hearing.seen, [
+        'onFinish b',
+        'onError b: Bad state: body',
+        'onUnanswered b: Bad state: body',
+      ]);
+      expect(zone, [error]);
+    });
   });
 
   test('a child a rule has ended and then refused is announced', () {

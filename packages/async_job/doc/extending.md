@@ -399,7 +399,14 @@ finishes a running job by hand anyway releases what the job holds first. A
 failure of the body, thrown before `finish` or after, is then in no outcome,
 unless it is the very one handed in: `onError` hears it, and it goes on to
 `onUnanswered` or the zone, as the failure of the body of a cancelled job does.
-`ignoreFailure()` on the job stops it at `onError`.
+`ignoreFailure()` on the job stops it at `onError`. A `Done` handed to a branch
+of `runAll` after its group heard that the body failed comes too late for the
+group. The group hears of the failure right after `onError` does, or, for a
+body that is not `async` and threw while `runAll` was starting the branches,
+once all of them have started. The group then goes by the failure, as if the
+branch had ended with it, and throws it, or answers for it as for any failure
+of a branch it did not throw, which `ignoreFailure()` on the branch silences.
+The value stays in the outcome of the branch alone.
 
 A `Cancelled` handed to `cancelWith` or to `finish` belongs to one job, the way
 `onSignOut` above builds one at every call. A parent finds the child behind a

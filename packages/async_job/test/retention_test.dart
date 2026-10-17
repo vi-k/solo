@@ -96,6 +96,33 @@ Future<(Job<int>, WeakReference<Payload>)> madeInUnattendedWork() async {
   return (await made.future, WeakReference(payload));
 }
 
+/// A job of the core whose body ends it by hand in its start.
+///
+/// Made in a frame of its own: a probe keeps its body, and the closures of one
+/// frame share what they capture, so a body made next to the payload would hold
+/// it.
+ProbeJob<Object?> endsItselfInItsStart() {
+  late final ProbeJob<Object?> job;
+  return job = ProbeJob<Object?>((ctx) async {
+    job.drop(const Done(1));
+    return 2;
+  });
+}
+
+/// Only one branch comes back, and its body ended it by hand in its start,
+/// before the group got to it. The value of its sibling is then reachable from
+/// it alone, through what the group would leave on a branch that is over
+/// already.
+(Job<Object?>, WeakReference<Payload>) valueOfASiblingOfOneEndedInItsStart() {
+  final payload = Payload();
+  final first = endsItselfInItsStart();
+  final second = Job.deferred<Object?>((ctx) async => payload);
+  Job<void>((ctx) async {
+    await ctx.runAll([first, second]);
+  }).ignoreFailure();
+  return (first, WeakReference(payload));
+}
+
 /// A failure that holds what it carries.
 final class CarryingFailure implements Exception {
   final Payload payload;
@@ -147,6 +174,38 @@ final class Answering extends JobObserver with JobAnswerer {
     WeakReference(payload),
     gate,
   );
+}
+
+/// A body that fails once the gate opens, after an engine of a domain ended the
+/// job by hand: the value is the outcome, and the failure is in none. It goes
+/// to the answer, and the observer answers for it and keeps nothing.
+(ProbeJob<void>, WeakReference<Payload>, Completer<void>) failureAfterAHand() {
+  final payload = Payload();
+  final gate = Completer<void>();
+  // Handed over in a box and not captured: a probe keeps its body.
+  final box = [payload];
+  final job = ProbeJob<void>(observer: Answering(), (ctx) async {
+    await gate.future;
+    throw CarryingFailure(box.removeLast());
+  })
+    ..launch();
+  return (job, WeakReference(payload), gate);
+}
+
+/// A body that returns once the gate opens, after an engine of a domain ended
+/// the job by hand with a value of its own: that value is the outcome, and
+/// the body's is in none.
+(ProbeJob<Object?>, WeakReference<Payload>, Completer<void>) valueAfterAHand() {
+  final payload = Payload();
+  final gate = Completer<void>();
+  // Handed over in a box and not captured: a probe keeps its body.
+  final box = [payload];
+  final job = ProbeJob<Object?>((ctx) async {
+    await gate.future;
+    return box.removeLast();
+  })
+    ..launch();
+  return (job, WeakReference(payload), gate);
 }
 
 /// Unattended work whose `ctx.abandonable` fails once the gate opens, with a
@@ -244,6 +303,18 @@ void main() {
     );
   });
 
+  test('a branch ended by hand in its start lets go of its group', () async {
+    final (branch, capture) = valueOfASiblingOfOneEndedInItsStart();
+    await branch.done;
+    expect(branch.outcome, isA<Done<Object?>>());
+    expect(
+      await collected(capture),
+      isTrue,
+      reason: 'the branch was over before the group got to it, and nothing '
+          'the group leaves on it is let go of by a finish already behind it',
+    );
+  });
+
   test('a job made in unattended work lets go of the job that started it',
       () async {
     final (made, capture) = await madeInUnattendedWork();
@@ -292,6 +363,40 @@ void main() {
       isTrue,
       reason: 'the failure is in no outcome, and the core keeps it only to '
           'not announce it twice',
+    );
+  });
+
+  test('a job ended by hand keeps nothing its body failed with after it',
+      () async {
+    final (job, capture, gate) = failureAfterAHand();
+    await Future<void>.delayed(Duration.zero);
+    job.drop(const Done(null));
+    gate.complete();
+    await job.done;
+    expect(job.outcome, isA<Done<void>>());
+    expect(
+      await collected(capture),
+      isTrue,
+      reason: 'the failure is in no outcome, and the core keeps it only to '
+          'not announce it twice',
+    );
+  });
+
+  test('a job ended by hand keeps nothing its body returned after it',
+      () async {
+    final (job, capture, gate) = valueAfterAHand();
+    await Future<void>.delayed(Duration.zero);
+    job.drop(const Done(1));
+    gate.complete();
+    await job.done;
+    expect(
+      job.outcome,
+      isA<Done<Object?>>().having((d) => d.value, 'value', 1),
+    );
+    expect(
+      await collected(capture),
+      isTrue,
+      reason: 'the value of the body is in no outcome',
     );
   });
 

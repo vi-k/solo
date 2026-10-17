@@ -272,8 +272,12 @@ the branch the trouble came from is not, or its error would turn into a
 cancellation and be lost. What comes out is decided by the final outcomes: a
 real failure if there is one, otherwise the first cancellation that arrived,
 thrown as the object that outcome carries — exactly what `await ctx.run(child)`
-would have thrown. A failure the group received and did not throw is not
-dropped; it goes where an error nobody answered for goes.
+would have thrown. It goes otherwise for a branch an engine of a domain ends by
+hand with a value after the group heard its body fail:
+[Not waiting for the checkpoint](extending.md#not-waiting-for-the-checkpoint)
+on the extending page says what comes out then. A failure the group received
+and did not throw is not dropped; it goes where an error nobody answered for
+goes.
 
 | Form | Waits for | Stops the others | Values of the branches that succeeded |
 | --- | --- | --- | --- |

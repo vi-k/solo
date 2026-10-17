@@ -459,12 +459,16 @@ abstract interface class JobContext {
   /// cancellation that arrived. The object thrown is the one the outcome
   /// carries — exactly what `await ctx.run(child)` would have thrown — so a
   /// cancellation arrives as a cancellation and there is no envelope to take
-  /// apart. A failure the group received and did not throw is not lost either:
-  /// it goes the way an error nobody answered for goes, once. Nor is a failure
-  /// of the body of a branch that ends [Cancelled]: the outcome carries the
-  /// cancellation, and the branch answers for the failure the same way.
-  /// [Job.ignoreFailure] on a branch silences both: [JobObserver.onError] hears
-  /// them, and nobody answers for them.
+  /// apart. One case goes by the early word: a branch an engine of a domain
+  /// ends by hand with a value after the group heard its body fail counts as
+  /// ending with that failure. The value comes too late for the group and stays
+  /// in the outcome of the branch alone: see [JobBase.finish]. A failure the
+  /// group received and did not throw is not lost either: it goes the way an
+  /// error nobody answered for goes, once. Nor is a failure of the body of a
+  /// branch that ends [Cancelled]: the outcome carries the cancellation, and
+  /// the branch answers for the failure the same way. [Job.ignoreFailure] on a
+  /// branch silences both: [JobObserver.onError] hears them, and nobody answers
+  /// for them.
   ///
   /// **When which.** `[ctx.run(a), ctx.run(b)].wait` and [Future.wait] wait
   /// for every branch and stop none, so a branch whose sibling has already

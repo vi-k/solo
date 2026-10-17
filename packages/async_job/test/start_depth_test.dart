@@ -1278,6 +1278,56 @@ void main() {
     );
   });
 
+  // The same, and an engine of a domain hands the branch a value after its body
+  // failed: the group takes no failure of a branch it never heard.
+  test('a branch the group never heard answers for its failure past a value',
+      () async {
+    final gate = Completer<void>();
+    final listener = _NoStackForListener();
+    late ProbeJob<void> sibling;
+    late ProbeJob<void> unheard;
+    final zone = <Object>[];
+    late Job<void> root;
+    runZonedGuarded(
+      () {
+        sibling = ProbeJob<void>(
+          (ctx) => ctx.abandonable(() => Completer<void>().future),
+          key: 'sibling',
+        );
+        unheard = ProbeJob<void>(
+          (ctx) async {
+            listener.outOfStack = true;
+            ctx.onDispose(() => unheard.drop(const Done(null)));
+            await gate.future;
+            throw StateError('of the branch');
+          },
+          key: 'unheard',
+        );
+        root = Job<void>((ctx) async {
+          try {
+            await listener.run(() => ctx.runAll([sibling, unheard]));
+          } on Object {
+            // The overflow.
+          }
+          gate.complete();
+          await delay(1);
+        });
+      },
+      (error, _) => zone.add(error),
+    );
+    await _ends(root);
+    await delay(1);
+
+    expect(unheard.outcome, isA<Done<void>>());
+    expect(sibling.outcome, isA<Cancelled>());
+    expect(
+      zone,
+      [isStateError],
+      reason: 'nobody was listening when the branch failed, so it answers '
+          'for the failure itself, value or not',
+    );
+  });
+
   test('a group cut short whose end fails holds no branch at a barrier',
       () async {
     final gate = Completer<void>();
