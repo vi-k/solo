@@ -121,6 +121,29 @@ List<String> _zone(void Function(FakeAsync async) body) {
   return errors;
 }
 
+/// A controller with the two things that change the order of its queue: a
+/// job added with `first: true`, and a group that waits for its window.
+final class _Order extends Solo<int> {
+  _Order() : super(0);
+
+  /// The keys of the jobs, in the order they started.
+  final started = <String>[];
+
+  late final _group = accumulate<int, String, void>(
+    key: 'group',
+    timing: AccumulationTiming.debounce(_ms(200)),
+    merge: (previous, incoming) => incoming,
+    (ctx, value) async => started.add('group'),
+  );
+
+  SoloJob<void> grouped(String value) => _group.add(value);
+
+  SoloJob<void> plain(String key, {bool first = false}) => add(
+        job<int, void>(key: key, (ctx) async => started.add(key)),
+        first: first,
+      );
+}
+
 List<firmware.Chunk> _chunks(int from) =>
     [for (var i = from; i < from + 6; i++) firmware.Chunk(i)];
 
@@ -348,7 +371,8 @@ void main() {
           'abandoned.');
     });
 
-    test('root jobs run one at a time, in the order they were added', () {
+    test('root jobs run one at a time, ready ones in the order they were added',
+        () {
       late notes.PlainNotesController controller;
       final errors = _zone((async) {
         controller = notes.PlainNotesController(notes.Api())
@@ -364,8 +388,28 @@ void main() {
         'second started',
         'third started',
       ]);
-      _says('The root jobs of a controller run one at a time, in the order '
-          'they were added, and that is the only way they run.');
+      _says('The root jobs of a controller run one at a time, and that is '
+          'the only way they run. Ready jobs start in the order they were '
+          'added.');
+    });
+
+    test('two things change that order, and the code asks for each', () {
+      late _Order order;
+      final errors = _zone((async) {
+        order = _Order()
+          ..plain('a')
+          ..plain('b')
+          ..plain('c', first: true)
+          ..grouped('x')
+          ..plain('d');
+        async.elapse(_ms(300));
+        order.close().ignore();
+      });
+      expect(errors, isEmpty);
+      expect(order.started, ['c', 'a', 'b', 'd', 'group']);
+      _says('`first: true` puts a job ahead of what is waiting, and a job '
+          'waiting for an accumulation window can be passed by a ready one '
+          'standing behind it.');
     });
 
     test('a plain await keeps the body and the queue under a cancellation', () {

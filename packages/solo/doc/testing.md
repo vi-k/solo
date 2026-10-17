@@ -577,6 +577,9 @@ ends on time, and what has become of the call by then.
 
 ### The first attempt
 
+The deadline goes into `load`, in place of its line
+`final name = await ctx.abandonable(api.fetchName);`:
+
 ```dart
 // The first attempt: the deadline stops the waiting, not the call.
 final name = await ctx.abandonable(

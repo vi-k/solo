@@ -11,7 +11,9 @@ import 'package:test/test.dart';
 /// member, under a heading of the class. The members are read from the
 /// classes themselves, so a member added to the code and not to the page
 /// turns this red, and so does a row left after its member went. A
-/// deprecated member is no longer listed.
+/// deprecated member is no longer listed. The named parameters of the
+/// methods that make jobs stand in a table of their own, each with the
+/// methods that take it, read from `Solo` the same way.
 
 const _page = 'doc/reference.md';
 const _translation = '../../docs/ru/solo/reference.md';
@@ -30,6 +32,37 @@ final _classes = <String, Type>{
   'SoloQueue': SoloQueue,
   'SoloAccumulator': SoloAccumulator,
 };
+
+/// The methods that make jobs, whose parameters the page lists in a table
+/// of their own.
+const _makers = ['run', 'job', 'collect', 'accumulate'];
+
+/// Each named parameter of the methods of [_makers], with the methods that
+/// take it, as `Solo` declares them.
+Map<String, Set<String>> _takenBy() {
+  final solo = reflectClass(Solo);
+  final takenBy = <String, Set<String>>{};
+  for (final maker in _makers) {
+    final method = solo.declarations[Symbol(maker)]! as MethodMirror;
+    for (final parameter in method.parameters) {
+      if (parameter.isNamed) {
+        (takenBy[MirrorSystem.getName(parameter.simpleName)] ??= {}).add(maker);
+      }
+    }
+  }
+  return takenBy;
+}
+
+/// The table of parameters under [heading] in [text]: each parameter with
+/// the methods its second cell names.
+Map<String, Set<String>> _parameters(String text, String heading) => {
+      for (final row in RegExp(r'^\| `(\w+)` \| ([^|]*) \|', multiLine: true)
+          .allMatches(_under(text, heading)))
+        row.group(1)!: {
+          for (final maker in RegExp(r'`(\w+)`').allMatches(row.group(2)!))
+            maker.group(1)!,
+        },
+    };
 
 /// A public member of a class, as the code declares it.
 typedef _Member = ({bool isProtected, bool isStatic, bool isConstructor});
@@ -160,10 +193,11 @@ void main() {
       _inRepository ? File(_translation).readAsStringSync() : null;
   const outside = 'the translation is not in the archive of the package';
 
-  // The heading of the table of other types, in the language of the text.
-  for (final (path, read, others) in [
-    (_page, page, '## Other types'),
-    (_translation, translation, '## Другие типы'),
+  // The headings of the tables of other types and of parameters, in the
+  // language of the text.
+  for (final (path, read, others, parameters) in [
+    (_page, page, '## Other types', '## Parameters of a job'),
+    (_translation, translation, '## Другие типы', '## Параметры задачи'),
   ]) {
     group(path, skip: read == null ? outside : null, () {
       final text = read ?? '';
@@ -173,6 +207,10 @@ void main() {
           expect(rows, unorderedEquals(_members(type).keys));
         });
       }
+
+      test('lists every parameter of the methods that make jobs', () {
+        expect(_parameters(text, parameters), _takenBy());
+      });
 
       test('lists under Other types only the types solo exports', () {
         expect(

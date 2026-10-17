@@ -81,7 +81,7 @@ after the parent's own `emit` of a state they refuse, it ends the parent
 Cancelling only the child does not directly cancel the parent. An uncaught
 `Cancelled` from the child's `.value` does cancel the parent through its body.
 A child whose outcome nobody reads, like the progress in `_sync` at the top of
-[Children and streams](children.md), still holds the parent, but its failure is
+[Children and chains](children.md), still holds the parent, but its failure is
 not the parent's: the parent ends `Done`, and the failure goes where a failure
 nobody read goes, to the zone, as in
 [Handled and unhandled failures](errors.md#handled-and-unhandled-failures) on
@@ -100,8 +100,8 @@ the subscription from inside a callback, call `cancel()` and do not await it.
 
 The child does not wait for the source: the future the subscription's
 `cancel()` returns is the cleanup of the source, which this job does not own.
-If that cleanup fails, its error goes to `Solo.onError` and on to
-`Solo.onUnanswered`, as an error no outcome carries does. A job that must not
+If that cleanup fails, its error goes to the controller's `onError` and on to
+its `onUnanswered`, as an error no outcome carries does. A job that must not
 end before its source has closed waits for that itself, the way
 [Waiting for the source to close](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/streams.md#waiting-for-the-source-to-close)
 on the streams page of `async_job` does. The rest of that page holds here as

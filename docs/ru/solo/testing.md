@@ -577,6 +577,9 @@ test('a failure nobody read reaches the zone', () async {
 
 ### Первая попытка
 
+Срок встаёт в `load` на место его строки
+`final name = await ctx.abandonable(api.fetchName);`:
+
 ```dart
 // Первая попытка: срок обрывает ожидание, а не вызов.
 final name = await ctx.abandonable(

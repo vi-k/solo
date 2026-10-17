@@ -33,8 +33,8 @@ print(job.outcome); // Cancelled(manual)
 
 What the engine holds to:
 
-- one root job of a controller at a time, in queue order, so two of them never
-  write the same state;
+- one root job of a controller at a time, so two of them never write the same
+  state;
 - rules instead of flags — a job declares the states it works with and the
   condition it lives under, and it is cancelled when they stop holding;
 - a cancellation the caller can ask for: the next checkpoint of the context
@@ -563,6 +563,7 @@ body, as above, ends the job and takes its timer along.
 | Question | Answer |
 | --- | --- |
 | When do listeners run? | Synchronously, in subscription order, on every state change. With `SoloListenable`, `value` and `currentState` are the same object. There is no `stream` unless `SoloStream` is mixed in: the builders listen to the controller itself. |
+| Where does a listener's failure go? | With `SoloListenable`, to `FlutterError.reportError`. Without it, to the zone, as in `solo`: `SoloBuilder` and `SoloSelector` take such a controller, but `FlutterError.onError` never hears of a failure of its listeners. A selection reports its own listeners through `FlutterError` either way, while its selector runs inside a listener of the controller and takes the controller's route. |
 | Are equal states filtered? | No. `emit` of a state equal to the current one still notifies: the listeners are the engine's own, and the engine compares nothing. A frame may swallow several of them, a listener will not. A selection filters its own value, which is the one a widget usually cares about. |
 | Several controllers on one screen? | Each with its own builder, as expected. `Listenable.merge([a, b])` in a `ListenableBuilder` covers the case where one widget depends on two; it takes controllers with `SoloListenable`. |
 | Can I set `value`? | There is no setter. The state belongs to the jobs; a `ValueNotifier` face with a setter would give it away. |

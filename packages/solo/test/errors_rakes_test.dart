@@ -4382,6 +4382,40 @@ void main() {
         });
       });
 
+      test('a future made before the call fails past the hooks', () {
+        final where = <String, List<String>>{};
+        final bench = Bench();
+        fakeAsync((async) {
+          late Future<void> made;
+          where['the future was made'] = _zoneOf(() {
+            made = stage.start<void>('send', null);
+          });
+          where['the job was created'] = _zoneOf(() {
+            bench.run<int, void>(
+              key: 'job',
+              (ctx) async => ctx.unattended(() => made),
+            );
+          });
+          where['the rest'] = _zoneOf(() {
+            async.flushMicrotasks();
+            _fail(async, 'send', StateError('analytics offline'));
+            bench.close().ignore();
+            async.flushTimers();
+          });
+        });
+
+        expect(where, {
+          'the future was made': ['analytics offline'],
+          'the job was created': isEmpty,
+          'the rest': isEmpty,
+        });
+        expect(bench.heard, isEmpty);
+        expect(bench.unanswered, isEmpty);
+        _says('Start that work inside the callback: a future made before the '
+            'call and only awaited inside fails past the hooks, into the zone '
+            'it was made in.');
+      });
+
       test('the job is cancelled, and then closed, while the work goes on', () {
         _says(
           '`ctx.unattended(action)` starts work that the job does not wait '

@@ -335,10 +335,22 @@ switch (job.outcome) {
 
 `Cancelled` содержит `reason`, `started`, необязательный `description` и стек
 вызовов отмены. `started: false` означает, что тело не запускалось. Причины
-наследуют `CancelReason`. Встроенные типы: `ManualCancelReason`,
-`ParentCancelReason`, `HandlerCancelReason`, `ChainCancelReason`,
-`SiblingCancelReason`, `RulesCancelReason`, `ClosedCancelReason`,
-`DuplicateCancelReason`, `ReplacedCancelReason` и `TimeoutCancelReason`.
+наследуют `CancelReason`, а встроенные — вот эти; последний столбец показывает,
+как печатается `Cancelled` с каждой из них:
+
+| Причина | Когда | Как печатается |
+| --- | --- | --- |
+| `ManualCancelReason` | `cancel()`, `cancelAll()`, `queue.remove`, `queue.removeWhere` или `queue.clear`, вызванные без причины | `Cancelled(manual)` |
+| `ParentCancelReason` | отменили родителя, и отмена дошла до ребёнка | `Cancelled(parent)` |
+| `HandlerCancelReason` | тело сдалось: само бросило `Cancelled` или выпустило отмену ребёнка | `Cancelled(handler: why)` для `throw Cancelled('why')`; для отмены ребёнка — сам ребёнок и то, чем он кончился: `Cancelled(handler: Job(_Op.upload): Cancelled(rules: canStart))` |
+| `ChainCancelReason` | отмена пришла по цепочке `then` | `Cancelled(chain)` |
+| `SiblingCancelReason` | другая ветка `ctx.runAll` упала или была отменена либо сбой случился у самой группы, и группа остановила остальные | `Cancelled(sibling)` |
+| `RulesCancelReason` | состояние вышло из рабочего типа, `canStart` или `keepWhile` ответили «нет» либо `ctx.stateAs` нашёл другой тип | `Cancelled(rules: is not Ready)`, `Cancelled(rules: canStart)`, `Cancelled(rules: keepWhile)` |
+| `ClosedCancelReason` | `close()` или `Job`, добавленная после него | `Cancelled(closed)` |
+| `DuplicateCancelReason` | `Policy.droppable` нашёл `Job` с тем же ключом и вернул её | `Cancelled(duplicate)` |
+| `ReplacedCancelReason` | `Policy.replace` или `Policy.restart` поставили на её место более новую `Job` с тем же ключом | `Cancelled(replaced)` |
+| `TimeoutCancelReason` | истёк срок, заданный через `timeout` | `Cancelled(timeout)` |
+
 Проверяйте тип, как первая ветка `switch` выше; `name` служит подписью,
 а не ключом для сравнения. При передаче отмены между `Job` исходная отмена
 сохраняется в поле `cause` причины.
@@ -410,18 +422,18 @@ Job<void> seek(Duration position) => run<Ready, void>(
 ### Первая попытка
 
 ```dart
-// Первая попытка: close() отменяет пакеты в очереди.
-logs.send(first);
-logs.send(second);
-logs.send(third);
+// Первая попытка: close() отменяет пачки в очереди.
+// Экран отправляет пачку на каждое событие...
+void onEvent(String batch) => logs.send(batch);
 
-// Первая пачка уже в пути, когда экран уходит.
-await logs.close();
+// ...и уходит, пока первая пачка в пути.
+Future<void> onLeave() => logs.close();
 ```
 
-`close()` отменяет все `Job` в очереди с `Cancelled(closed)` и запрашивает
-отмену работающей. Вторая и третья пачки не уходят вовсе. Первая уходит, потому
-что уже была в пути, но её исход всё равно `Cancelled(closed)`: `Job` приняла
+Три события отправили три пачки, и экран уходит, пока первая в пути. `close()`
+отменяет все `Job` в очереди с `Cancelled(closed)` и запрашивает отмену
+работающей. Вторая и третья пачки не уходят вовсе. Первая уходит, потому что
+уже была в пути, но её исход всё равно `Cancelled(closed)`: `Job` приняла
 отмену раньше, чем пачка дошла, и исход записывает это, а не доставку.
 
 ### Три способа остановиться

@@ -201,7 +201,7 @@ void main() {
       await controller.close();
     });
 
-    testWidgets('root jobs run one at a time, in queue order', (tester) async {
+    testWidgets('root jobs run one at a time', (tester) async {
       final bench = Bench();
       final log = <String>[];
       Job<void> step(String name) => bench.go<Profile, void>((ctx) async {
@@ -220,7 +220,8 @@ void main() {
         ['a begins', 'a ends', 'b begins', 'b ends', 'c begins', 'c ends'],
       );
       await bench.close();
-      _says('one root job of a controller at a time, in queue order');
+      _says('one root job of a controller at a time, so two of them never '
+          'write the same state');
     });
 
     testWidgets('a job is cancelled when its rules stop holding',
@@ -2173,6 +2174,72 @@ void main() {
       _says('Synchronously, in subscription order, on every state change. '
           'With `SoloListenable`, `value` and `currentState` are the same '
           'object.');
+    });
+
+    test('a failure of a listener takes the route of the mixin', () async {
+      /// Where the failures went, outside the zone the writes were made in:
+      /// of a listener of [controller], of a selector over it, and of a
+      /// listener of a selection over it.
+      Future<(List<String>, List<String>)> route(
+        Solo<Profile> controller,
+        void Function(Profile state) write,
+      ) async {
+        final flutter = <String>[];
+        final zone = <String>[];
+        final reporter = FlutterError.onError;
+        FlutterError.onError = (details) => flutter.add('${details.exception}');
+        final loading = SoloSelection.from(
+          controller,
+          (state) => state is Loading,
+        );
+        final throwing = SoloSelection.from(
+          controller,
+          (state) => state is Loaded ? throw StateError('selector') : false,
+        );
+        void picked() {}
+        void refuse() => throw StateError('selection listener');
+        try {
+          runZonedGuarded(
+            () {
+              controller.addListener(() => throw StateError('listener'));
+              loading.addListener(refuse);
+              write(Loading());
+              throwing.addListener(picked);
+              write(Loaded('Ada'));
+            },
+            (error, _) => zone.add('$error'),
+          );
+        } finally {
+          FlutterError.onError = reporter;
+          loading.removeListener(refuse);
+          throwing.removeListener(picked);
+        }
+        await controller.close();
+        return (flutter, zone);
+      }
+
+      const ofController = [
+        'Bad state: listener',
+        'Bad state: listener',
+        'Bad state: selector',
+      ];
+      const ofSelection = [
+        'Bad state: selection listener',
+        'Bad state: selection listener',
+      ];
+      final bench = Bench();
+      final (benchFlutter, benchZone) = await route(bench, bench.set);
+      expect(benchFlutter, unorderedEquals([...ofController, ...ofSelection]));
+      expect(benchZone, isEmpty);
+      final plain = Plain();
+      final (plainFlutter, plainZone) = await route(plain, plain.set);
+      expect(plainFlutter, ofSelection);
+      expect(plainZone, ofController);
+      _says('With `SoloListenable`, to `FlutterError.reportError`. Without '
+          'it, to the zone, as in `solo`');
+      _says('A selection reports its own listeners through `FlutterError` '
+          'either way, while its selector runs inside a listener of the '
+          "controller and takes the controller's route.");
     });
 
     testWidgets('the builders listen to the controller itself', (tester) async {

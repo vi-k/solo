@@ -97,8 +97,8 @@ export default defineConfig({
             ),
             page(
               'solo/children',
-              'Children and streams',
-              'Дочерние задачи и стримы',
+              'Children and chains',
+              'Дочерние задачи и цепочки',
             ),
             page('solo/streams', 'Streams', 'Стримы'),
             page(

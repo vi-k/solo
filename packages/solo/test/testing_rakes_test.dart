@@ -1360,6 +1360,29 @@ void main() {
     });
 
     group('the first attempt', () {
+      test('the deadline takes the place of one line of load', () {
+        /// The body of `load` as [file] writes it.
+        String load(String file) {
+          final source = File(file).readAsStringSync();
+          final start = source.indexOf('  Job<String> load() =>');
+          return source.substring(start, source.indexOf('\n      );\n', start));
+        }
+
+        const line = 'final name = await ctx.abandonable(api.fetchName);';
+        const deadline = '''
+final name = await ctx.abandonable(
+            () => api.fetchName().timeout(const Duration(milliseconds: 5)),
+          );''';
+        final page = load('test/support/testing_page_fixtures.dart');
+        final timed = load('test/support/testing_first_attempt_timeout.dart');
+
+        expect(page, contains(line));
+        expect(timed, contains(deadline));
+        expect(timed.replaceFirst(deadline, line), page);
+        _says('The deadline goes into `load`, in place of its line '
+            '`$line`:');
+      });
+
       test('five milliseconds in the job ends Failed with a TimeoutException',
           () {
         fakeAsync((async) {

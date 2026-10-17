@@ -640,7 +640,7 @@ void main() {
         expect(errors, ['Bad state: progress broke']);
         expect(solo.heard, ['Job(each): Bad state: progress broke']);
         _says('A child whose outcome nobody reads, like the progress in '
-            '`_sync` at the top of [Children and streams](children.md)');
+            '`_sync` at the top of [Children and chains](children.md)');
       });
 
       test('ignoreFailure() on the child keeps its failure out of the zone',
@@ -857,8 +857,9 @@ void main() {
         expect(bench.heard, ['Job(each): Bad state: cleanup failed']);
         expect(bench.unanswered, ['Job(each): Bad state: cleanup failed']);
         expect(errors, ['Bad state: cleanup failed']);
-        _says('If that cleanup fails, its error goes to `Solo.onError` and '
-            'on to `Solo.onUnanswered`, as an error no outcome carries does.');
+        _says("If that cleanup fails, its error goes to the controller's "
+            '`onError` and on to its `onUnanswered`, as an error no outcome '
+            'carries does.');
       });
 
       test(

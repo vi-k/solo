@@ -3,9 +3,10 @@
 > **Состояние на 2026-10-17:** ревью проведено, зонды всех четырёх ревьюеров
 > перезапущены в моей копии и напечатали то же, что в отчётах; единственная
 > выжившая мутация Fable повторена у меня. У каждой находки стоит вердикт.
-> Владелец велел чинить все принятые находки; правки идут волнами. Код `solo`
-> и `flutter_solo` — M2, M3, L1–L3, L5 — сделан, итоги в вердиктах. Остальные
-> принятые ждут своих волн, вопросы владельцу — в конце записи.
+> Владелец велел чинить все принятые находки; они закрыты тремя волнами, итоги
+> в вердиктах: код `solo` и `flutter_solo` — M2, M3, L1–L3, L5, пример
+> камеры — M1, документы — L4, L6–L14, L16, L17. Вопросы владельцу — в конце
+> записи.
 > **Что это:** второе полное ревью `solo` и `flutter_solo` четырьмя ревьюерами
 > после правок по первому — Astra и Sol 6.1 через Codex, Fable и Opus через
 > Claude Code, — с оценкой из десяти, ответом на вопрос «что сделать, чтобы
@@ -16,7 +17,10 @@
 > ядра; там же устройство прогона и сравнение `observing.md` со страницами
 > ядра), `2026-10-12-solo-project-review.md` (первое ревью; его M1, M14, M20,
 > L5, L11 — предыстория M4, M3, M6, L2, L15),
-> `2026-09-25-core-error-hook-split-plan.md` (бросивший хук ответа, M5).
+> `2026-09-25-core-error-hook-split-plan.md` (бросивший хук ответа, M5),
+> отчёты волн `2026-10-17-solo-code-fixes-report.md`,
+> `2026-10-17-camera-example-fix-report.md`,
+> `2026-10-17-solo-doc-fixes-report.md`.
 
 ## Как это делалось
 
@@ -559,6 +563,13 @@ change in place keeps no old pick» в `solo_selection_test.dart`, без сбр
 и без. Чинить строкой в «Notes» с переводом; отчёт через `FlutterError` в самих
 виджетах — отдельное решение.
 
+Итог 2026-10-17: сделано, как в вердикте: строка «Where does a listener's
+failure go?» в «Notes» README `flutter_solo`, с переводом. Строка говорит
+и о проекции: о сбоях своих слушателей она сообщает через `FlutterError`
+в любом случае, а её селектор работает внутри слушателя контроллера и идёт
+путём контроллера. Тест в `readme_rakes_test.dart` гоняет оба пути, с миксином
+и без. Отчёт — `2026-10-17-solo-doc-fixes-report.md`.
+
 ### L5. Четыре копии `page_code.dart` сверяются только комментарием
 
 **Нашёл:** Opus (C4). **Где:** `test/support/page_code.dart` в `async_job`,
@@ -594,6 +605,13 @@ literal close: trace=[]; outcomes=[Cancelled(closed), started: false, Cancelled(
 Вердикт: принято, Low. Воспроизведено зондом Astra. Чинить: показать два разных
 события жизненного цикла или ждать сигнала старта первой отправки; с переводом.
 
+Итог 2026-10-17: сделано первым способом из вердикта, двумя событиями экрана:
+`onEvent` отправляет пачку на каждое событие, `onLeave` закрывает `logs`,
+а проза говорит, что три события уже отправили три пачки и экран уходит, пока
+первая в пути. Код держит `LogScreen`
+в `test/support/cancellation_first_attempts.dart`; с переводом. Отчёт —
+`2026-10-17-solo-doc-fixes-report.md`.
+
 ### L7. Первая строка dartdoc `Solo.onError` и `SoloObserver.onError` сужает хук
 
 **Нашёл:** Astra (D3).
@@ -608,6 +626,13 @@ observed: outcome=Failed(Bad state: offline); onError=[Bad state: offline]; onUn
 Вердикт: принято, Low. Воспроизведено зондом Astra. Чинить первую строку:
 уведомление о любой ошибке, которую поймал механизм задач, включая наблюдённые
 исходы; «некуда деть» — это `onUnanswered`.
+
+Итог 2026-10-17: сделано, как в вердикте, в dartdoc `Solo.onError`
+и `SoloObserver.onError`. Первая строка — «Something a job did threw, whether
+its outcome carries the error or not.», а абзац ниже говорит, что сбой тела
+приходит сюда, даже когда он — `Failed` задачи и вызывающий читает его там.
+«Некуда деть» осталось за `onUnanswered`. Отчёт —
+`2026-10-17-solo-doc-fixes-report.md`.
 
 ### L8. `vs-bloc.md` обещает FIFO без оговорок
 
@@ -624,6 +649,14 @@ Timed queue submitted A,B; started [B, A]
 Вердикт: принято, Low. Воспроизведено зондом Sol. Чинить: обещать одну корневую
 задачу за раз, FIFO — для обычных готовых задач, с исключениями и ссылкой;
 с переводом.
+
+Итог 2026-10-17: сделано, как в вердикте. `vs-bloc.md`: корневые задачи
+контроллера идут по одной, готовые стартуют в порядке добавления, и порядок
+меняют два случая, `first: true` и задача, ждущая окна накопления, со ссылкой
+на «Working the queue directly». «Why» README `flutter_solo` говорит об одной
+корневой задаче за раз. Тесты: порядок `c, a, b, d, group`
+в `vs_bloc_rakes_test.dart`, фраза README в `readme_rakes_test.dart`;
+с переводами. Отчёт — `2026-10-17-solo-doc-fixes-report.md`.
 
 ### L9. `errors.md`, «Work with a life of its own», не говорит создавать работу внутри колбэка
 
@@ -642,6 +675,12 @@ Precreated future in unattended: resumed=false; caught=0; hooks=[]; zone=[Bad st
 внутри колбэка» и ссылка на «Work handed to the job» в `observing.md`;
 с переводом.
 
+Итог 2026-10-17: сделано, как в вердикте: «Start that work inside the
+callback…» и ссылка на «Work handed to the job» страницы `observing.md` ядра,
+с переводом. Тест в `errors_rakes_test.dart` создаёт future, задачу и сбой
+в трёх разных зонах: ошибка уходит в зону, где создана future, хуки молчат.
+Отчёт — `2026-10-17-solo-doc-fixes-report.md`.
+
 ### L10. `testing.md`, «Timeouts», не говорит, какую строку `load()` заменить
 
 **Нашёл:** Sol 6.1 (D4).
@@ -658,6 +697,12 @@ Testing page unchanged controller at 20ms: Done(Ada Lovelace)
 Вердикт: принято, Low. Воспроизведено зондом Sol. Чинить: назвать заменяемую
 строку или показать метод под своим именем; с переводом.
 
+Итог 2026-10-17: сделано первым способом из вердикта: перед фрагментом стоит
+«The deadline goes into `load`, in place of its line
+`final name = await ctx.abandonable(api.fetchName);`:», с переводом. Тест
+в `testing_rakes_test.dart` сверяет, что `load` стенда отличается от `load`
+страницы ровно этой строкой. Отчёт — `2026-10-17-solo-doc-fixes-report.md`.
+
 ### L11. `children.md` называется «Children and streams»
 
 **Нашёл:** Opus (D4).
@@ -667,6 +712,12 @@ Testing page unchanged controller at 20ms: Done(Ada Lovelace)
 
 Вердикт: принято, Low, по чтению. Переименовать, например в «Children and
 chains»; с переводом и строкой «Guides».
+
+Итог 2026-10-17: сделано, как в вердикте: «Children and chains» и «Дочерние
+задачи и цепочки» в заголовке страницы, в строке «Guides», в ссылках с других
+страниц, в `CHANGELOG.md` и в меню сайта, `site/astro.config.mjs`, — меню нашло
+ревью волны; тесты страниц переименованы следом. Отчёт —
+`2026-10-17-solo-doc-fixes-report.md`.
 
 ### L12. Причина `handler:` в трассе `children.md` не объяснена
 
@@ -680,6 +731,17 @@ chains»; с переводом и строкой «Guides».
 Вердикт: принято, Low, по чтению. Фраза под трассой; перечень причин — таблицей
 «причина — когда — как выглядит в трассе».
 
+Итог 2026-10-17: сделано, как в вердикте. Под трассой `children.md` абзац:
+`handler:` — не обработчик состояния из `run`, а `HandlerCancelReason` ядра,
+за ним ребёнок и его отмена, со ссылкой на «Cancellation details». Там перечень
+стал таблицей «Reason — When — Printed as» из десяти строк. Тесты
+в `cancellation_rakes_test.dart` гоняют каждую причину, сверяют её печать
+с третьим столбцом, а вызовы, которыми её получают, — со вторым:
+`ManualCancelReason` — пятью вызовами, `RulesCancelReason` — тремя правилами
+и `stateAs`, `ReplacedCancelReason` — `replace` и `restart`; тест
+`TimeoutCancelReason` добавлен. С переводом. Отчёт —
+`2026-10-17-solo-doc-fixes-report.md`.
+
 ### L13. `streams.md` пишет `Solo.onError` и `Solo.onUnanswered` как статические
 
 **Нашёл:** Opus (D7). **Где:** `packages/solo/doc/streams.md`, строка 103.
@@ -687,6 +749,10 @@ chains»; с переводом и строкой «Guides».
 Вердикт: принято, Low, по чтению: это методы экземпляра, а `Solo.observer`
 и `Solo.unansweredHandler` в тех же документах статические. «The controller's
 `onError`»; с переводом.
+
+Итог 2026-10-17: сделано, как в вердикте: «its error goes to the controller's
+`onError` and on to its `onUnanswered`», с переводом и фразой в тесте страницы.
+Отчёт — `2026-10-17-solo-doc-fixes-report.md`.
 
 ### L14. Пример `solo` всегда кончается отменённым снимком без объяснения
 
@@ -697,6 +763,12 @@ chains»; с переводом и строкой «Guides».
 задумано.
 
 Вердикт: принято, Low. Комментарий над задержкой.
+
+Итог 2026-10-17: сделано, как в вердикте: комментарий над задержкой
+в `bin/main.dart`. Зум и фокус занимают по 10 мс, снимок — 30 мс после них,
+на 35-й мс он на полпути, и закрытие отменяет его нарочно; программа печатает
+`shot: Cancelled(manual)`. README примера не тронут. Отчёт —
+`2026-10-17-solo-doc-fixes-report.md`.
 
 ### L15. `vs-bloc.md`: «the local solo 0.2.0 source»
 
@@ -715,6 +787,15 @@ chains»; с переводом и строкой «Guides».
 Вердикт: принято, Low, по `grep`. Таблица параметров `run`, `job`, `collect`,
 `accumulate`: параметр — что делает — где объяснён; с переводом.
 
+Итог 2026-10-17: сделано, как в вердикте: раздел «Parameters of a job»
+на `reference.md` — одиннадцать именованных параметров `run`, `job`, `collect`
+и `accumulate`, у каждого — какие методы его берут, что он делает и где
+объяснён; о `cancellable` строка говорит и то, что `close()` снимает такую
+задачу с очереди, — это нашло ревью волны. Вступление страницы и строка
+`CHANGELOG.md` о справочнике говорят и о параметрах. `reference_page_test.dart`
+читает параметры из `Solo` зеркалами и сверяет с ними строки таблицы и столбец
+«Taken by»; с переводом. Отчёт — `2026-10-17-solo-doc-fixes-report.md`.
+
 ### L17. CHANGELOG `flutter_solo`: слушатель после закрытия «is refused»
 
 **Нашёл:** Fable (D3). **Где:** `packages/flutter_solo/CHANGELOG.md`, строка
@@ -725,6 +806,10 @@ chains»; с переводом и строкой «Guides».
 
 Вердикт: принято, Low. Воспроизведено зондом Fable. «Is ignored: neither
 registered nor retained, and nothing is thrown»; с переводом.
+
+Итог 2026-10-17: сделано, как в вердикте: «is ignored: it is neither registered
+nor kept, and nothing is thrown», с переводом. Отчёт —
+`2026-10-17-solo-doc-fixes-report.md`.
 
 ## Вопросы владельцу
 

@@ -978,20 +978,21 @@ abstract class Solo<S extends Object> {
   /// A job has an outcome, including jobs dropped before start.
   void onFinish(Job<Object?> job) {}
 
-  /// Something a job did threw where there was nowhere else to put it.
+  /// Something a job did threw, whether its outcome carries the error or not.
   ///
   /// The body; an action abandoned by [JobContext.abandonable] failing later; a
-  /// disposer or an `onCancel` callback; and a rule of this controller —
-  /// `canStart` or `keepWhile` — that threw instead of answering.
+  /// disposer or an `onCancel` callback; work handed over with
+  /// [JobContext.unattended]; and a rule of this controller — `canStart` or
+  /// `keepWhile` — that threw instead of answering. A failure of the body comes
+  /// here even when it is the job's [Failed] and the caller reads it there.
   ///
   /// Called once for every such error, to be seen: this hook reports and
-  /// nothing else, and overriding it changes nowhere the error goes. One
-  /// error at a time: each failure and each cancellation inside a
-  /// `ParallelWaitError` comes in a call of its own, with its own stack
-  /// trace.
-  /// [onUnanswered] is the hook that answers. The job's own cancellation
-  /// is not an error and never comes here; a [Cancelled] thrown by an
-  /// abandoned action does, because for an observer that is a late failure
+  /// nothing else, and overriding it changes nowhere the error goes. One error
+  /// at a time: each failure and each cancellation inside a `ParallelWaitError`
+  /// comes in a call of its own, with its own stack trace. [onUnanswered] is
+  /// the hook that answers, for the errors nothing else holds. The job's own
+  /// cancellation is not an error and never comes here; a [Cancelled] thrown by
+  /// an abandoned action does, because for an observer that is a late failure
   /// like any other. See [Failed] for the errors that also reach the zone.
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) {}
 

@@ -70,6 +70,29 @@ String _page() => File('doc/cancellation.md').readAsStringSync();
 /// phrase is found wherever its lines were broken.
 String _prose() => _page().replaceAll(RegExp(r'\s+'), ' ');
 
+/// The table of reasons in "Cancellation details": each built-in reason, in
+/// the order of the rows, and how a `Cancelled` with it prints.
+Map<String, String> _printedAs() => {
+      for (final row in RegExp(
+        r'^\| `(\w+CancelReason)` \| [^|]* \| ([^|]*) \|$',
+        multiLine: true,
+      ).allMatches(_page()))
+        row.group(1)!: row.group(2)!,
+    };
+
+/// The column "When" of the same table: each built-in reason, and when it
+/// comes.
+Map<String, String> _when() => {
+      for (final row in RegExp(
+        r'^\| `(\w+CancelReason)` \| ([^|]*) \|',
+        multiLine: true,
+      ).allMatches(_page()))
+        row.group(1)!: row.group(2)!,
+    };
+
+/// The key of the child the trace of `doc/children.md` names.
+enum _Op { upload }
+
 Duration _s(int seconds) => Duration(seconds: seconds);
 
 /// Runs [body] under fake time, in a zone of its own. Nothing is asserted
@@ -104,6 +127,11 @@ void _fail(FakeAsync async, String call, Object error) {
   stage.fail(call, error);
   async.flushMicrotasks();
 }
+
+/// Three events of the screen of "Cancelling and closing a controller", one
+/// after another: `first`, `second` and `third`.
+void _sendThree(Logs logs) =>
+    ['first', 'second', 'third'].forEach(first.LogScreen(logs).onEvent);
 
 /// How [job] ended: the outcome, and for a cancellation whether the body
 /// had started.
@@ -1561,14 +1589,32 @@ void main() {
     });
 
     group('the built-in reasons', () {
-      test('ManualCancelReason: cancel()', () {
+      test('ManualCancelReason: cancel(), cancelAll() and the queue', () {
         fakeAsync((async) {
-          final job = Bench().work('work');
+          final bench = Bench();
+          final running = bench.work('running');
+          final removed = bench.work('removed');
+          final matched = bench.work('matched');
+          final cleared = bench.work('cleared');
           async.flushMicrotasks();
-          unawaited(job.cancel());
-          _end(async, 'work');
+          bench.queue
+            ..remove(removed)
+            ..removeWhere((job) => identical(job, matched))
+            ..clear();
+          unawaited(running.cancel());
+          _end(async, 'running');
+          final all = [bench.work('first'), bench.work('second')];
+          async.flushMicrotasks();
+          unawaited(bench.cancelAll());
+          _end(async, 'first');
 
-          expect(_reason(job), isA<ManualCancelReason>());
+          for (final job in [running, removed, matched, cleared, ...all]) {
+            expect(_reason(job), isA<ManualCancelReason>());
+            expect(
+              _printedAs()['ManualCancelReason'],
+              contains('${job.outcome}'),
+            );
+          }
         });
       });
 
@@ -1597,6 +1643,10 @@ void main() {
               same(job.outcome),
             ),
           );
+          expect(
+            _printedAs()['ParentCancelReason'],
+            contains('${child.outcome}'),
+          );
           _end(async, 'child');
         });
       });
@@ -1604,12 +1654,19 @@ void main() {
       test('HandlerCancelReason: a body that throws Cancelled', () {
         fakeAsync((async) {
           final job = Bench().run<Ready, void>(
-            (ctx) async => throw const Cancelled('reason'),
+            (ctx) async => throw const Cancelled('why'),
           );
           async.flushMicrotasks();
 
-          expect('${job.outcome}', 'Cancelled(handler: reason)');
+          expect('${job.outcome}', 'Cancelled(handler: why)');
           expect(_reason(job), isA<HandlerCancelReason>());
+          expect(
+            _printedAs()['HandlerCancelReason'],
+            allOf(
+              contains("`${job.outcome}` for `throw Cancelled('why')`"),
+              isNot(contains('reason')),
+            ),
+          );
         });
       });
 
@@ -1643,6 +1700,34 @@ void main() {
         });
       });
 
+      test('HandlerCancelReason: prints the child and how it ended', () {
+        fakeAsync((async) {
+          final bench = Bench();
+          final job = bench.run<Ready, void>(
+            (ctx) => ctx.run(
+              bench.job<Ready, void>(
+                key: _Op.upload,
+                canStart: (state) => false,
+                (child) async {},
+              ),
+            ),
+          );
+          async.flushMicrotasks();
+
+          expect(
+            '${job.outcome}',
+            'Cancelled(handler: Job(_Op.upload): Cancelled(rules: canStart))',
+          );
+          expect(
+            _printedAs()['HandlerCancelReason'],
+            contains(
+              "for a child's cancellation, the child and how it ended: "
+              '`${job.outcome}`',
+            ),
+          );
+        });
+      });
+
       test(
           'ChainCancelReason: the continuation of a cancelled job, with the '
           'cause', () {
@@ -1660,6 +1745,10 @@ void main() {
               'cause',
               same(job.outcome),
             ),
+          );
+          expect(
+            _printedAs()['ChainCancelReason'],
+            contains('${next.outcome}'),
           );
         });
       });
@@ -1698,6 +1787,10 @@ void main() {
             same(error),
           ),
         );
+        expect(
+          _printedAs()['SiblingCancelReason'],
+          contains('${slow.outcome}'),
+        );
         expect(group.outcome, isA<Failed>());
       });
 
@@ -1711,21 +1804,72 @@ void main() {
 
           expect(_reason(job), isA<RulesCancelReason>());
           expect(_how(job), 'Cancelled(rules: is not Ready), started: true');
+          expect(
+            _printedAs()['RulesCancelReason'],
+            contains('${job.outcome}'),
+          );
         });
       });
 
-      test('ClosedCancelReason: close(), for the running job and the queue',
-          () {
+      test('RulesCancelReason: canStart, keepWhile and stateAs', () {
+        fakeAsync((async) {
+          final bench = Bench();
+          final refused = bench.run<Ready, void>(
+            canStart: (state) => false,
+            (ctx) async {},
+          );
+          final kept = bench.run<Ready, void>(
+            keepWhile: (state) => state.position == Duration.zero,
+            (ctx) => ctx.join(() => stage.start<void>('kept', null)),
+          );
+          async.flushMicrotasks();
+          bench.reflect(Ready(position: _s(1)));
+          _end(async, 'kept');
+          bench.reflect(const Offline());
+          final read = bench.run<AppState, void>(
+            (ctx) async => ctx.stateAs<Ready>(),
+          );
+          async.flushMicrotasks();
+
+          expect(
+            [
+              for (final job in [refused, kept, read]) '${job.outcome}',
+            ],
+            [
+              'Cancelled(rules: canStart)',
+              'Cancelled(rules: keepWhile)',
+              'Cancelled(rules: is not Ready)',
+            ],
+          );
+          for (final job in [refused, kept, read]) {
+            expect(_reason(job), isA<RulesCancelReason>());
+            expect(
+              _printedAs()['RulesCancelReason'],
+              contains('${job.outcome}'),
+            );
+          }
+        });
+      });
+
+      test(
+          'ClosedCancelReason: close(), for the running job, the queue and '
+          'a job added after it', () {
         fakeAsync((async) {
           final bench = Bench();
           final running = bench.work('running');
           final queued = bench.work('queued');
           async.flushMicrotasks();
           unawaited(bench.close());
+          final afterClose = bench.work('after close');
           _end(async, 'running');
 
-          expect(_reason(running), isA<ClosedCancelReason>());
-          expect(_reason(queued), isA<ClosedCancelReason>());
+          for (final job in [running, queued, afterClose]) {
+            expect(_reason(job), isA<ClosedCancelReason>());
+            expect(
+              _printedAs()['ClosedCancelReason'],
+              contains('${job.outcome}'),
+            );
+          }
         });
       });
 
@@ -1738,12 +1882,18 @@ void main() {
 
           expect(taken, same(running));
           expect(_reason(mine), isA<DuplicateCancelReason>());
+          expect(
+            _printedAs()['DuplicateCancelReason'],
+            contains('${mine.outcome}'),
+          );
           async.flushMicrotasks();
           _end(async, 'load');
         });
       });
 
-      test('ReplacedCancelReason: a job a newer one takes the place of', () {
+      test(
+          'ReplacedCancelReason: a job a newer one takes the place of, by '
+          'replace and by restart', () {
         fakeAsync((async) {
           final bench = Bench();
           final running = bench.work('load');
@@ -1751,26 +1901,92 @@ void main() {
           final queued = bench.add(
             bench.job<Ready, void>(key: 'load', (ctx) async {}),
           );
+          final replacing = bench.add(
+            bench.job<Ready, void>(key: 'load', (ctx) async {}),
+            policy: Policy.replace,
+          );
+
+          expect(_reason(queued), isA<ReplacedCancelReason>());
+          expect(running.outcome, isNull, reason: 'replace leaves it running');
           bench.add(
             bench.job<Ready, void>(key: 'load', (ctx) async {}),
             policy: Policy.restart,
           );
 
-          expect(_reason(queued), isA<ReplacedCancelReason>());
+          expect(_reason(replacing), isA<ReplacedCancelReason>());
           _end(async, 'load');
           expect(_reason(running), isA<ReplacedCancelReason>());
+          for (final job in [queued, replacing, running]) {
+            expect(
+              _printedAs()['ReplacedCancelReason'],
+              contains('${job.outcome}'),
+            );
+          }
         });
       });
 
-      test('are the ones the page names', () {
-        final named = RegExp(r'The built-in types are (.+?)\. Inspect')
-            .firstMatch(_prose())!
-            .group(1)!;
-        expect(
-          [
-            for (final type in RegExp(r'`(\w+)`').allMatches(named))
-              type.group(1),
+      test('TimeoutCancelReason: the deadline given with timeout', () {
+        fakeAsync((async) {
+          final job = Bench().run<Ready, void>(
+            timeout: _s(2),
+            (ctx) => ctx.abandonable(() => stage.start<void>('slow', null)),
+          );
+          async.elapse(_s(2));
+
+          expect(_reason(job), isA<TimeoutCancelReason>());
+          expect(
+            _printedAs()['TimeoutCancelReason'],
+            contains('${job.outcome}'),
+          );
+          _end(async, 'slow');
+        });
+      });
+
+      test('come from the calls the column When names', () {
+        // What the tests above drive for each reason.
+        const driven = {
+          'ManualCancelReason': [
+            '`cancel()`',
+            '`cancelAll()`',
+            '`queue.remove`',
+            '`queue.removeWhere`',
+            '`queue.clear`',
           ],
+          'ParentCancelReason': ['the parent was cancelled'],
+          'HandlerCancelReason': [
+            'threw `Cancelled` itself',
+            'the cancellation of a child',
+          ],
+          'ChainCancelReason': ['`then`'],
+          'SiblingCancelReason': ['another branch of `ctx.runAll` failed'],
+          'RulesCancelReason': [
+            'the working type',
+            '`canStart`',
+            '`keepWhile`',
+            '`ctx.stateAs`',
+          ],
+          'ClosedCancelReason': ['`close()`', 'a job added after it'],
+          'DuplicateCancelReason': ['`Policy.droppable`'],
+          'ReplacedCancelReason': ['`Policy.replace`', '`Policy.restart`'],
+          'TimeoutCancelReason': ['`timeout`'],
+        };
+        final when = _when();
+        for (final MapEntry(key: reason, value: calls) in driven.entries) {
+          for (final call in calls) {
+            expect(when[reason], contains(call), reason: reason);
+          }
+        }
+      });
+
+      test('are the ones the table names', () {
+        expect(
+          _prose(),
+          contains('Reasons extend `CancelReason`, and the built-in ones are '
+              'these; the last column is how a `Cancelled` with each one '
+              'prints:'),
+        );
+        expect(
+          _printedAs().keys,
           [
             'ManualCancelReason',
             'ParentCancelReason',
@@ -2264,11 +2480,11 @@ void main() {
         'Cancelled(closed)', () {
       fakeAsync((async) {
         final logs = Logs();
-        first.sendThree(logs, 'first', 'second', 'third');
+        _sendThree(logs);
         // The first batch is on its way.
         async.flushMicrotasks();
         var closed = false;
-        unawaited(first.closeTheScreen(logs).then((_) => closed = true));
+        unawaited(first.LogScreen(logs).onLeave().then((_) => closed = true));
         async.flushMicrotasks();
 
         expect(_how(logs.sent[1]), 'Cancelled(closed), started: false');
@@ -2288,13 +2504,18 @@ void main() {
           reason: 'the outcome records the cancellation, not the delivery',
         );
       });
+      expect(
+        _prose(),
+        contains('Three events have sent three batches, and the screen goes '
+            'away while the first is on its way.'),
+      );
     });
 
-    test('run in one turn, the same lines drop the first batch as well', () {
+    test('events and the leaving in one turn drop the first batch as well', () {
       fakeAsync((async) {
         final logs = Logs();
-        first.sendThree(logs, 'first', 'second', 'third');
-        unawaited(first.closeTheScreen(logs));
+        _sendThree(logs);
+        unawaited(first.LogScreen(logs).onLeave());
         async.flushMicrotasks();
 
         expect(
@@ -2309,7 +2530,7 @@ void main() {
       test('clears the queue, cancels the running job and waits for it', () {
         fakeAsync((async) {
           final logs = Logs();
-          first.sendThree(logs, 'first', 'second', 'third');
+          _sendThree(logs);
           final refusing = logs.run<Ready, void>(
             cancellable: false,
             (ctx) => ctx.join(() => stage.start<void>('refusing', null)),
@@ -2340,7 +2561,7 @@ void main() {
       test('the jobs it ends carry the reason passed to it', () {
         fakeAsync((async) {
           final logs = Logs();
-          first.sendThree(logs, 'first', 'second', 'third');
+          _sendThree(logs);
           async.flushMicrotasks();
           final reason = page.OutOfRange(_s(5));
           unawaited(logs.cancelAll(reason: reason));
@@ -2521,7 +2742,7 @@ void main() {
       test('the three batches go out in order, and each ends Done', () {
         fakeAsync((async) {
           final logs = Logs();
-          first.sendThree(logs, 'first', 'second', 'third');
+          _sendThree(logs);
           async.flushMicrotasks();
           var closed = false;
           unawaited(page.stopByDraining(logs).then((_) => closed = true));
@@ -2619,7 +2840,7 @@ void main() {
       test('a plain close() over a running drain stops it', () {
         fakeAsync((async) {
           final logs = Logs();
-          first.sendThree(logs, 'first', 'second', 'third');
+          _sendThree(logs);
           async.flushMicrotasks();
           var drained = false;
           unawaited(

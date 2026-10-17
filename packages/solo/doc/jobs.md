@@ -158,7 +158,7 @@ A root job holds the queue until its body, its children, its cleanup and its
 state handler — the `ifFailed` or `ifCancelled` of `run` — have finished. Until
 then no other root job starts. The children it waits for are its own: they run
 inside it and never stand in the queue; they are described on the page
-[Children and streams](children.md). A policy does not apply to child jobs.
+[Children and chains](children.md). A policy does not apply to child jobs.
 
 A job that `replace` or `restart` removes ends `Cancelled(replaced)`, whose
 reason is a `ReplacedCancelReason`: the queued zoom that `replace` takes out,

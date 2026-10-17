@@ -11,6 +11,9 @@ Future<void> main() async {
     ..setZoom(2)
     ..setFocusPoint(const Point(0.5, 0.5));
   final shot = camera.takePhoto();
+  // The zoom and the focus take 10 ms each, and the shot 30 ms after them:
+  // 35 ms in, the shot is halfway through, and the disposal cancels it on
+  // purpose. The program prints `shot: Cancelled(manual)` for it.
   await Future<void>.delayed(const Duration(milliseconds: 35));
   await camera.dispose().done;
   print('shot: ${shot.outcome}');

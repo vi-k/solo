@@ -1,9 +1,9 @@
 # Reference
 
 Every member of `Solo`, of the context its jobs get, of the jobs it returns, of
-its queue and of its accumulators, in one line each, with the section that
-explains it. What `solo` takes from the core is listed where it is explained:
-the rest of `ctx` in
+its queue and of its accumulators, and every parameter of the methods that make
+jobs, in one line each, with the section that explains it. What `solo` takes
+from the core is listed where it is explained: the rest of `ctx` in
 [The context at a glance](https://github.com/vi-k/solo/blob/main/packages/async_job/README.md#the-context-at-a-glance)
 of the `async_job` README, and `value`, `done` or `cancel()` of a job in
 [Jobs and results](jobs.md#jobs-and-results) on the jobs page.
@@ -72,6 +72,27 @@ hand an error on, and `publish` delivers the state: an override calls
 | `onClose()` | The engine is about to finish closing: the place to release what the controller holds beside its jobs | [externalSetState](state.md#externalsetstate) |
 | `onListenerError(error, stackTrace)` | A listener threw; by default the error goes to the zone | [Observing state](state.md#observing-state) |
 | `publish(previous, current)` | Calls the listeners; the seam for a delivery of another kind | [A delivery of your own](state.md#a-delivery-of-your-own) |
+
+## Parameters of a job
+
+`run`, `job`, `collect` and `accumulate` take the body first — for an
+accumulator, a handler that also gets the events of its group — and these named
+parameters after it. The first type argument of each is the working type, in
+[State and rules](state.md#state-and-rules) on the state page.
+
+| Parameter | Taken by | What it does | Where |
+| --- | --- | --- | --- |
+| `key` | `run`, `job`, `collect`, `accumulate` | The key of the job, what a `Policy` matches on; without `describe`, the job prints as `Job(key)` | [Creating and scheduling jobs](jobs.md#creating-and-scheduling-jobs) |
+| `describe` | `run`, `job`, `collect`, `accumulate` | The label after the key for logs, observers and `toString()`: `Job(key: label)` | [Creating and scheduling jobs](jobs.md#creating-and-scheduling-jobs) |
+| `policy` | `run`, `collect`, `accumulate` | For `run`, a `Policy`: what happens to a job whose key is already queued or running. For an accumulator, an `AccumulationPolicy`: which waiting group an event joins | [Queue and policies](jobs.md#queue-and-policies), [Choosing where events join](accumulation.md#choosing-where-events-join) |
+| `timing` | `collect`, `accumulate` | When a group may start, an `AccumulationTiming`: `debounce` or `throttle` | [Choosing when a group is ready](accumulation.md#choosing-when-a-group-is-ready) |
+| `merge` | `accumulate` | Merges an incoming event into the value of the group; required, synchronous and pure | [Start, cancellation and errors](accumulation.md#start-cancellation-and-errors) |
+| `canStart` | `run`, `job`, `collect`, `accumulate` | Asked once, when the job is about to start; `false` ends it `Cancelled(rules: canStart)` before the body runs | [The rules](state.md#the-rules) |
+| `keepWhile` | `run`, `job`, `collect`, `accumulate` | Asked before the start, on state updates while the body runs and at state checkpoints; `false` cancels the job `Cancelled(rules: keepWhile)` | [The rules](state.md#the-rules) |
+| `cancellable` | `run`, `job`, `collect`, `accumulate` | `false` turns down manual cancellation, the parent's and closing; waiting in the queue, the job stays through removals and `cancelAll()` without `force: true`, while `close()` takes it out all the same | [A whole job](cancellation.md#a-whole-job) |
+| `timeout` | `run`, `job`, `collect`, `accumulate` | A deadline counted from the start of the body; when it runs out, the job ends `Cancelled(timeout)` | [A deadline of a job](cancellation.md#a-deadline-of-a-job) |
+| `ifFailed` | `run`, `job` | The state to write when the job fails, once the body, its children and cleanup are over | [The handlers](state.md#the-handlers) |
+| `ifCancelled` | `run`, `job` | The state to write when the job is cancelled, once the body, its children and cleanup are over | [The handlers](state.md#the-handlers) |
 
 ## SoloContext
 

@@ -1,4 +1,4 @@
-# Children and streams
+# Children and chains
 
 A root job can split its work into child jobs:
 
@@ -184,6 +184,12 @@ how deep under the parent the job stands, and `child.done` holds the
 cancellation. It joins no waiting list, so the parent waits for nothing; the
 future of `ctx.run` carries that cancellation all the same, and it is what ends
 `resend` above.
+
+`handler:` in that line is not a state handler of `run`. It is
+`HandlerCancelReason`, the reason the core gives a body that lets the
+cancellation of its child out, and after it come the child and the cancellation
+it ended with. [Cancellation details](cancellation.md#cancellation-details) has
+every reason and how it prints.
 
 The rules `canStart` and `keepWhile`, when they throw themselves, are the other
 case. The error is the rule's own, the child ends `Failed` with it, and

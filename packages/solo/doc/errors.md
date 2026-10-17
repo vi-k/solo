@@ -733,7 +733,10 @@ ctx.unattended(() => analytics.send('zoom'));
 Its errors stay with the job, even after the job finishes: the reporting hooks
 are told, `onUnanswered` is asked to answer, and with nothing to answer they
 end in the zone the job was created in. Use it for work with an independent
-lifetime.
+lifetime. Start that work inside the callback: a future made before the call
+and only awaited inside fails past the hooks, into the zone it was made in.
+[Work handed to the job](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/observing.md#work-handed-to-the-job)
+on the observing page of `async_job` draws that boundary both ways.
 
 Unattended work is not the job, and the context refuses there whatever acts on
 the job: `ctx.run`, `ctx.runAll`, `ctx.each` and `ctx.uncancellable` all throw

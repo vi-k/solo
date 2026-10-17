@@ -334,10 +334,22 @@ switch (job.outcome) {
 
 `Cancelled` includes `reason`, `started`, an optional `description` and the
 cancellation stack trace. `started: false` means the body never ran. Reasons
-extend `CancelReason`. The built-in types are `ManualCancelReason`,
-`ParentCancelReason`, `HandlerCancelReason`, `ChainCancelReason`,
-`SiblingCancelReason`, `RulesCancelReason`, `ClosedCancelReason`,
-`DuplicateCancelReason`, `ReplacedCancelReason` and `TimeoutCancelReason`.
+extend `CancelReason`, and the built-in ones are these; the last column is how
+a `Cancelled` with each one prints:
+
+| Reason | When | Printed as |
+| --- | --- | --- |
+| `ManualCancelReason` | `cancel()`, `cancelAll()`, `queue.remove`, `queue.removeWhere` or `queue.clear` called without a reason | `Cancelled(manual)` |
+| `ParentCancelReason` | the parent was cancelled, and the cancellation passed down to the child | `Cancelled(parent)` |
+| `HandlerCancelReason` | the body gave up: it threw `Cancelled` itself, or let the cancellation of a child out | `Cancelled(handler: why)` for `throw Cancelled('why')`; for a child's cancellation, the child and how it ended: `Cancelled(handler: Job(_Op.upload): Cancelled(rules: canStart))` |
+| `ChainCancelReason` | the cancellation came along a chain of `then` | `Cancelled(chain)` |
+| `SiblingCancelReason` | another branch of `ctx.runAll` failed or was cancelled, or the group itself hit an error, and the group stopped the rest | `Cancelled(sibling)` |
+| `RulesCancelReason` | the state left the working type, `canStart` or `keepWhile` said no, or `ctx.stateAs` found another type | `Cancelled(rules: is not Ready)`, `Cancelled(rules: canStart)`, `Cancelled(rules: keepWhile)` |
+| `ClosedCancelReason` | `close()`, or a job added after it | `Cancelled(closed)` |
+| `DuplicateCancelReason` | `Policy.droppable` found a job with the same key and handed that one back | `Cancelled(duplicate)` |
+| `ReplacedCancelReason` | `Policy.replace` or `Policy.restart` put a newer job with the same key in its place | `Cancelled(replaced)` |
+| `TimeoutCancelReason` | the deadline given with `timeout` ran out | `Cancelled(timeout)` |
+
 Inspect the type, as the first case above does; `name` is a display label, not
 an equality key. Propagation between jobs retains the original cancellation in
 the reason's `cause`.
@@ -411,17 +423,17 @@ batches already queued still have to go out.
 
 ```dart
 // The first attempt: close() cancels the batches still queued.
-logs.send(first);
-logs.send(second);
-logs.send(third);
+// The screen sends a batch for each event...
+void onEvent(String batch) => logs.send(batch);
 
-// The first batch is on its way when the screen goes away.
-await logs.close();
+// ...and goes away while the first batch is on its way.
+Future<void> onLeave() => logs.close();
 ```
 
-`close()` cancels every queued job with `Cancelled(closed)` and requests
-cancellation of the running one. The second and third batches never go out. The
-first does, because it was already in flight, but its outcome is
+Three events have sent three batches, and the screen goes away while the first
+is on its way. `close()` cancels every queued job with `Cancelled(closed)` and
+requests cancellation of the running one. The second and third batches never go
+out. The first does, because it was already in flight, but its outcome is
 `Cancelled(closed)` all the same: the job accepted the cancellation before the
 batch arrived, and the outcome records that, not the delivery.
 

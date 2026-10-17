@@ -68,11 +68,13 @@ abstract class SoloObserver {
   /// A job has an outcome, including jobs dropped before start.
   void onFinish(Solo<Object> solo, Job<Object?> job) {}
 
-  /// Something a job did threw where there was nowhere else to put it.
+  /// Something a job did threw, whether its outcome carries the error or not.
   ///
   /// The body; an action abandoned by `JobContext.abandonable` failing later; a
-  /// disposer or an `onCancel` callback; and a rule of the controller —
-  /// `canStart` or `keepWhile` — that threw instead of answering.
+  /// disposer or an `onCancel` callback; work handed over with
+  /// `JobContext.unattended`; and a rule of the controller — `canStart` or
+  /// `keepWhile` — that threw instead of answering. A failure of the body comes
+  /// here even when it is the job's [Failed] and the caller reads it there.
   ///
   /// Called for every such error, including those of a job that ends
   /// [Cancelled]: a body that throws once the job is cancelled, or an abandoned

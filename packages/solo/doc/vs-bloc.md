@@ -283,12 +283,17 @@ refresh emits [n0, n1]
 
 There is nothing to remember here about transformers or the order events are
 processed in: there is no transformer to pass and no scheduling to choose. The
-root jobs of a controller run one at a time, in the order they were added, and
-that is the only way they run. Adding another queued method preserves the
-ordering, because the queue is one per controller rather than one per command;
-no arrangement of the methods can give two of them a queue each. This guarantee
-covers root jobs; child jobs can run inside a parent, in parallel too, and
-independent external changes have a separate path described in
+root jobs of a controller run one at a time, and that is the only way they run.
+Ready jobs start in the order they were added. Two things change that order,
+and each happens only where the code asks for it: `first: true` puts a job
+ahead of what is waiting, and a job waiting for an accumulation window can be
+passed by a ready one standing behind it. Both are on the jobs page, in
+[Working the queue directly](jobs.md#working-the-queue-directly). Adding
+another queued method preserves the ordering, because the queue is one per
+controller rather than one per command; no arrangement of the methods can give
+two of them a queue each. This guarantee covers root jobs; child jobs can run
+inside a parent, in parallel too, and independent external changes have a
+separate path described in
 [Reacting to an independent external state change](#reacting-to-an-independent-external-state-change).
 
 Use context waiting methods inside job bodies to check cancellation and state
@@ -301,7 +306,7 @@ the code that started it, so neither the job nor the controller knows it
 exists. If such work has to end before the job does, it is started as a child
 with `ctx.run`: the parent waits for its children even when its body does not
 await them, the queue does not start the next job until then, and `close()`
-waits for them too. The page [Children and streams](children.md) covers them.
+waits for them too. The page [Children and chains](children.md) covers them.
 
 ## An observer fails during a state update
 

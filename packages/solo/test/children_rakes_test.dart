@@ -584,6 +584,35 @@ void main() {
       _says('With the state paused, nothing is uploaded and `resend` ends:');
     });
 
+    test('handler: in the trace is the reason of a body that lets it out', () {
+      late Job<void> job;
+      final errors = _zone((async) {
+        job = page.Resending(const Ready(paused: true)).resend(7)
+          ..ignoreFailure();
+        async.flushMicrotasks();
+      });
+
+      expect(errors, isEmpty);
+      expect(
+        (job.outcome! as Cancelled).reason,
+        isA<HandlerCancelReason>().having(
+          (reason) => reason.cause,
+          'cause',
+          isA<Cancelled>().having(
+            (cancelled) => cancelled.reason,
+            'reason',
+            isA<RulesCancelReason>(),
+          ),
+        ),
+      );
+      _says('`handler:` in that line is not a state handler of `run`. It is '
+          '`HandlerCancelReason`, the reason the core gives a body that lets '
+          'the cancellation of its child out, and after it come the child '
+          'and the cancellation it ended with.');
+      _says('[Cancellation details](cancellation.md#cancellation-details) has '
+          'every reason and how it prints.');
+    });
+
     test('not paused, the upload runs', () {
       final errors = _zone((async) {
         final job = page.Resending().resend(7);
@@ -2014,7 +2043,7 @@ void main() {
     const answers = 'test/support/children_page.dart';
     const attempts = 'test/support/children_first_attempts.dart';
     const holders = {
-      '# Children and streams': answers,
+      '# Children and chains': answers,
       '## The future of `ctx.run`': answers,
       '## Working beside a child': answers,
       '## A child the rules turn away': answers,

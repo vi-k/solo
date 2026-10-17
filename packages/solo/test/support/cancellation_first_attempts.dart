@@ -94,19 +94,18 @@ final class InvertedUploader extends Solo<AppState>
       });
 }
 
-/// The first attempt of "Cancelling and closing a controller", in the two
-/// moments its comment tells apart: the screen sends its batches...
-void sendThree(Logs logs, String first, String second, String third) {
-  logs.send(first);
-  // ignore: cascade_invocations
-  logs.send(second);
-  logs.send(third);
-}
+/// The first attempt of "Cancelling and closing a controller": the screen
+/// that sends the batches and goes away.
+final class LogScreen {
+  final Logs logs;
 
-/// ...and goes away.
-Future<void> closeTheScreen(Logs logs) async {
-  // The first batch is on its way when the screen goes away.
-  await logs.close();
+  LogScreen(this.logs);
+
+  // The screen sends a batch for each event...
+  void onEvent(String batch) => logs.send(batch);
+
+  // ...and goes away while the first batch is on its way.
+  Future<void> onLeave() => logs.close();
 }
 
 /// The first attempt of "Closing from a job": the job closes its own

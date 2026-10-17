@@ -63,8 +63,9 @@ and
 
 - A listener that throws no longer cuts off the listeners behind it, and no
   longer lets a job go on running against a state its `keepWhile` forbids.
-- A listener registered after the controller had finished closing is refused;
-  it was kept in memory for good.
+- A listener added after the controller had finished closing is ignored: it is
+  neither registered nor kept, and nothing is thrown. It used to be kept in
+  memory for good.
 - One pass of notifying is linear in the number of listeners; it was quadratic.
 
 ### Documentation
