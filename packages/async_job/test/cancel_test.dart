@@ -96,7 +96,7 @@ void main() {
     fakeAsync((async) {
       var callbackFired = false;
       late Job<void> job;
-      late Job<void> child;
+      late ChildJob<void> child;
       var seenInsideStep = true;
       job = Job<void>((ctx) async {
         ctx.onCancel(() => callbackFired = true);
@@ -228,7 +228,7 @@ void main() {
 
   test('the cancellation of a parent reaches a child', () {
     fakeAsync((async) {
-      late final Job<void> child;
+      late final ChildJob<void> child;
       final parent = Job<void>((ctx) async {
         child = Job.deferred<void>((ctx) => ctx.abandonable(() => delay(100)));
         await ctx.run(child);
@@ -539,7 +539,7 @@ void main() {
   test('a body that gave up keeps its own cancellation against a later one',
       () {
     fakeAsync((async) {
-      late Job<void> child;
+      late ChildJob<void> child;
       final job = Job<void>((ctx) async {
         // A child that outlives the body: the job waits for it once the
         // body has ended, and that wait is the window.

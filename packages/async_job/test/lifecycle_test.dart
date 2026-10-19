@@ -54,20 +54,31 @@ void main() {
     });
   });
 
-  test('a job that starts itself cannot be a child', () {
+  test('a job that starts itself is not a child', () {
+    // `ctx.run` takes a [ChildJob], and `Job(body)` makes none: the
+    // compiler turns it away before anything runs.
+    fakeAsync((async) {
+      final job = Job<void>((ctx) async {});
+      expect(job, isNot(isA<ChildJob<void>>()));
+      async.flushMicrotasks();
+    });
+  });
+
+  test('an engine cannot adopt a job that starts itself', () {
     fakeAsync((async) {
       // Made inside the parent's body, before its own microtask came
-      // round: `run` would still have found it `created` and adopted it.
+      // round: the door would still have found it `created` and adopted it.
       late final Job<void> orphan;
       Object? thrown;
-      final parent = Job<void>((ctx) async {
+      final parent = ProbeJob<void>((ctx) async {
         orphan = Job<void>((ctx) async {});
         try {
-          ctx.run(orphan).ignore();
+          (ctx as ProbeContext).adopt(orphan);
         } on Object catch (error) {
           thrown = error;
         }
-      });
+      })
+        ..launch();
       async.flushMicrotasks();
       expect(thrown, isA<ArgumentError>());
       expect(orphan.isChild, isFalse);
@@ -80,13 +91,17 @@ void main() {
     });
   });
 
-  test('a job that already started itself cannot be a child either', () {
+  test('an engine cannot adopt one that already started itself either', () {
     fakeAsync((async) {
       final early = Job<void>((ctx) async {});
       async.flushMicrotasks();
       // `ignoreFailure` before the microtasks run: an unobserved Failed would
       // otherwise reach the zone and fail the test on its own.
-      final parent = Job<void>((ctx) async => ctx.run(early))..ignoreFailure();
+      final parent = ProbeJob<void>(
+        (ctx) async => (ctx as ProbeContext).adopt(early),
+      )
+        ..ignoreFailure()
+        ..launch();
       async.flushMicrotasks();
       expect(parent.outcome, isA<Failed>());
       // The same answer as in the stripe above: which of the two got

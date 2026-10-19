@@ -8,6 +8,7 @@ import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart';
 
 import 'support/cancel_reason.dart';
+import 'support/compile_errors.dart';
 import 'support/delay.dart';
 import 'support/error_observer.dart';
 import 'support/journal.dart';
@@ -78,10 +79,10 @@ void main() {
       late JobContext outlived;
       final parent = ProbeJob<void>((ctx) async {
         outlived = ctx;
-        values = await ctx.runAll(const <Job<int>>[]);
+        values = await ctx.runAll(const <ChildJob<int>>[]);
         ctx.unattended(() {
           try {
-            ctx.runAll(const <Job<int>>[]).ignore();
+            ctx.runAll(const <ChildJob<int>>[]).ignore();
           } on Object catch (error) {
             fromUnattended = error;
           }
@@ -99,13 +100,13 @@ void main() {
         ),
       );
       try {
-        outlived.runAll(const <Job<int>>[]).ignore();
+        outlived.runAll(const <ChildJob<int>>[]).ignore();
       } on Object catch (error) {
         fromCancelled = error;
       }
       async.elapse(const Duration(milliseconds: 10));
       try {
-        outlived.runAll(const <Job<int>>[]).ignore();
+        outlived.runAll(const <ChildJob<int>>[]).ignore();
       } on Object catch (error) {
         fromFinished = error;
       }
@@ -165,7 +166,7 @@ void main() {
   test('the list is read once, by copy, before the first start', () {
     fakeAsync((async) {
       var passes = 0;
-      Iterable<Job<int>> twice() sync* {
+      Iterable<ChildJob<int>> twice() sync* {
         passes++;
         yield Job.deferred<int>(key: 'a', (ctx) async => 1);
         yield Job.deferred<int>(key: 'b', (ctx) async => 2);
@@ -182,7 +183,7 @@ void main() {
     fakeAsync((async) {
       // The body of the first branch appends to the list the snapshot was
       // made from: the group neither starts the newcomer nor waits for it.
-      final source = <Job<int>>[];
+      final source = <ChildJob<int>>[];
       final extra = Job.deferred<int>(key: 'extra', (ctx) async => 99);
       source
         ..add(
@@ -206,7 +207,7 @@ void main() {
       // synchronously, and nothing that was listed before it has started.
       final boom = StateError('generator');
       final first = Job.deferred<int>(key: 'a', (ctx) async => 1);
-      Iterable<Job<int>> broken() sync* {
+      Iterable<ChildJob<int>> broken() sync* {
         yield first;
         throw boom;
       }
@@ -499,7 +500,7 @@ void main() {
         fakeAsync((async) {
           final gates = {'a': Completer<void>(), 'b': Completer<void>()};
           final errors = {'a': StateError('a'), 'b': StateError('b')};
-          Job<int> branch(String name) => Job.deferred<int>(
+          ChildJob<int> branch(String name) => Job.deferred<int>(
                 key: name,
                 cancellable: false,
                 (ctx) async {
@@ -810,7 +811,8 @@ void main() {
         Object? thrown;
         Job<void>(key: 'parent', (ctx) async {
           try {
-            await ctx.runAll(<Job<int>>[dropped['a']!, dropped['b']!, slow]);
+            await ctx
+                .runAll(<ChildJob<int>>[dropped['a']!, dropped['b']!, slow]);
           } on Object catch (error) {
             thrown = error;
           }
@@ -937,8 +939,9 @@ void main() {
               observer: withObserver ? ErrorObserver(heard) : null,
               (ctx) async {
                 try {
-                  await ctx
-                      .runAll(<Job<int>>[dropped['a']!, dropped['b']!, slow]);
+                  await ctx.runAll(
+                    <ChildJob<int>>[dropped['a']!, dropped['b']!, slow],
+                  );
                 } on Object catch (_) {
                   // Which one comes out is settled by the arrival order.
                 }
@@ -969,14 +972,33 @@ void main() {
     });
   }
 
+  test(
+    'a job that starts itself is no branch: the compiler turns it away',
+    () async {
+      final errors = await compileErrors('''
+import 'package:async_job/async_job.dart';
+
+final parent = Job<void>((ctx) async {
+  final branches = [Job<int>((ctx) async => 1)];
+  await ctx.runAll(branches);
+});
+''');
+      const refusal = "The argument type 'List<Job<int>>' can't be assigned to "
+          "the parameter type 'Iterable<ChildJob<dynamic>>'.";
+      expect(errors, [refusal]);
+    },
+    timeout: const Timeout(Duration(minutes: 1)),
+  );
+
   test('a handle the core refuses is refused before any branch starts', () {
     fakeAsync((async) {
-      final waiting = <Job<int>>[
+      final waiting = <ChildJob<int>>[
         Job.deferred<int>(key: 'a', (ctx) async => 1),
         Job.deferred<int>(key: 'b', (ctx) async => 2),
       ];
-      // The third handle starts itself: that needs no adoption to see.
-      final refused = Job<int>(key: 'c', (ctx) async => 3)..ignoreFailure();
+      // The third handle is already running: that needs no adoption to
+      // see.
+      final refused = Job.deferred<int>(key: 'c', (ctx) async => 3)..start();
       Object? thrown;
       Job<void>((ctx) async {
         try {
@@ -986,7 +1008,7 @@ void main() {
         }
       }).ignoreFailure();
       async.flushTimers();
-      expect(thrown, isA<ArgumentError>());
+      expect(thrown, isA<StateError>());
       expect('$thrown', contains('Job(c)'), reason: 'named, not its class');
       for (final branch in waiting) {
         expect(branch.isRunning || branch.isFinished, isFalse);
@@ -996,7 +1018,7 @@ void main() {
 
   test('under a cancelled parent every branch is turned away', () {
     fakeAsync((async) {
-      final branches = <Job<int>>[
+      final branches = <ChildJob<int>>[
         Job.deferred<int>(key: 'a', (ctx) async => 1),
         Job.deferred<int>(key: 'b', (ctx) async => 2),
         Job.deferred<int>(key: 'c', (ctx) async => 3),
@@ -1047,7 +1069,7 @@ void main() {
 
   test('a parent cancelled while the list starts turns the rest away', () {
     fakeAsync((async) {
-      late final Job<int> tail;
+      late final ChildJob<int> tail;
       Object? thrown;
       Job<void>((ctx) async {
         tail = Job.deferred<int>(key: 'c', (ctx) async => 3);
@@ -1090,7 +1112,7 @@ void main() {
 
   test('a refusal of admission stops whatever already started', () {
     fakeAsync((async) {
-      final started = <Job<int>>[
+      final started = <ChildJob<int>>[
         Job.deferred<int>(key: 'a', (ctx) async {
           await ctx.abandonable(() => delay(1000));
           return 1;
@@ -1591,7 +1613,7 @@ void main() {
         await ctx.abandonable(() => delay(1000));
         return 2;
       });
-      late Job<int> innerNeighbour;
+      late ChildJob<int> innerNeighbour;
       final branch = Job.deferred<int>(key: 'outer-a', (ctx) async {
         innerNeighbour = Job.deferred<int>(key: 'inner-b', (ctx) async {
           await ctx.abandonable(() => delay(1000));
@@ -1759,8 +1781,8 @@ void main() {
             try {
               await ctx.runAll(
                 barrier == 'first'
-                    ? <Job<int>>[broken, holder, bad]
-                    : <Job<int>>[broken, holder],
+                    ? <ChildJob<int>>[broken, holder, bad]
+                    : <ChildJob<int>>[broken, holder],
               );
             } on Object catch (error) {
               thrown = error;
@@ -1832,7 +1854,7 @@ void main() {
         // asynchronous disposer, and a cancellation arrives there.
         final closes = {'a': 0, 'b': 0};
         final unwinding = Completer<void>();
-        Job<String> holder(String key) => Job.deferred<String>(
+        ChildJob<String> holder(String key) => Job.deferred<String>(
               key: key,
               (ctx) async {
                 if (key == 'b') ctx.onDispose(() => unwinding.future);
@@ -1878,7 +1900,7 @@ void main() {
       // microtasks to pick from.
       var closes = 0;
       List<String>? values;
-      late Job<String> b;
+      late ChildJob<String> b;
       var heardCancelled = 0;
       final a = Job.deferred<String>(
         key: 'a',
@@ -1966,7 +1988,7 @@ void main() {
     // the child's end. A branch turns the cascade away for the same reason.
     final closed = <String>[];
     final finished = <String>[];
-    late final Job<String> branch;
+    late final ChildJob<String> branch;
     late final Job<String> parent;
     List<String>? held;
     bool? branchOverThen;
@@ -2137,7 +2159,7 @@ void main() {
       Object? thrown;
       Job<void>(key: 'parent', observer: journal, (ctx) async {
         try {
-          await ctx.runAll(<Job<int>>[started, unstartable]);
+          await ctx.runAll(<ChildJob<int>>[started, unstartable]);
         } on Object catch (error) {
           thrown = error;
         }
@@ -2210,7 +2232,7 @@ void main() {
   test('a lone child is not held: it ends on its own', () {
     fakeAsync((async) {
       var discarded = 0;
-      late Job<int> child;
+      late ChildJob<int> child;
       var finishedAtReturn = false;
       Job<void>((ctx) async {
         child = Job.deferred<int>(key: 'child', (ctx) async {
@@ -2364,7 +2386,7 @@ void main() {
       fakeAsync((async) {
         final trace = <String>[];
         final lock = SharedSlots(trace);
-        Job<int> branch(String name) =>
+        ChildJob<int> branch(String name) =>
             Job.deferred<int>(key: name, (ctx) async {
               switch (through) {
                 case 'join':
@@ -2431,7 +2453,7 @@ void main() {
       fakeAsync((async) {
         final trace = <String>[];
         final pool = SharedSlots(trace, slots: 2);
-        Job<int> branch(String name) =>
+        ChildJob<int> branch(String name) =>
             Job.deferred<int>(key: name, (ctx) async {
               await ctx.join(
                 () => pool.acquire(name),
@@ -2595,7 +2617,7 @@ void main() {
           return 1;
         }
 
-        Job<int> branch(String name) => form == '.wait'
+        ChildJob<int> branch(String name) => form == '.wait'
             ? Job.deferred<int>(key: name, (ctx) => underLock(ctx, name))
             : Job.deferred<int>(
                 key: name,

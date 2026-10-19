@@ -23,7 +23,7 @@ void main() {
           refusedBodyRan = true;
         });
         try {
-          await ctx.runAll(<Job<void>>[
+          await ctx.runAll(<ChildJob<void>>[
             solo.job<TestState, void>(key: 'a', (ctx) async {
               bodies.add('a');
               await pause(ctx, 50);
@@ -63,7 +63,7 @@ void main() {
           await pause(ctx, 50);
         });
         try {
-          await ctx.runAll(<Job<void>>[
+          await ctx.runAll(<ChildJob<void>>[
             started,
             solo.job<TestState, void>(
               key: 'b',
@@ -105,7 +105,7 @@ void main() {
       Object? thrown;
       solo.run<TestState, void>(key: 'parent', (ctx) async {
         try {
-          await ctx.runAll(<Job<void>>[
+          await ctx.runAll(<ChildJob<void>>[
             solo.job<TestState, void>(key: 'a', (ctx) async => throw chosen),
             solo.job<TestState, void>(
               key: 'b',

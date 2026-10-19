@@ -26,7 +26,7 @@ Job<void> jobWithADeadline() => Job<void>(
     );
 
 /// An engine of a domain, with the protected surface the tests need.
-final class Engine<T> extends JobBase<T> {
+final class Engine<T> extends JobBase<T> implements ChildJob<T> {
   final Future<T> Function(JobContext ctx) _body;
 
   /// Called from [started], the way an engine does its bookkeeping there.
@@ -369,7 +369,7 @@ void main() {
 
   test('children the job waits for after its body', () {
     fakeAsync((async) {
-      late Job<void> child;
+      late ChildJob<void> child;
       final job = Job<void>(timeout: ms(10), (ctx) async {
         child = Job.deferred<void>((ctx) => ctx.abandonable(() => delay(50)));
         ctx.run(child).ignore();
@@ -693,7 +693,7 @@ void main() {
       Zone? work;
       Zone? body;
       Zone? cancel;
-      late Job<void> inner;
+      late ChildJob<void> inner;
       Job<void>((ctx) async {
         ctx.unattended(() {
           work = Zone.current;

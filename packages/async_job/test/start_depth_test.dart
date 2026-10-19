@@ -987,7 +987,7 @@ void main() {
       () {
         root = Job<void>((ctx) async {
           try {
-            await ctx.runAll([sibling, torn]);
+            await ctx.runAll(<ChildJob<void>>[sibling, torn]);
           } on Object catch (error) {
             thrown = error;
           }
@@ -1026,7 +1026,7 @@ void main() {
           // way to answering for it.
           ctx.outOfStack = true;
           try {
-            await ctx.runAll([sibling, torn]);
+            await ctx.runAll(<ChildJob<void>>[sibling, torn]);
           } on Object catch (error) {
             thrown = error;
           }
@@ -1076,7 +1076,7 @@ void main() {
         root = NoStackForGroupJob<void>((ctx) async {
           ctx.outOfStack = true;
           try {
-            await ctx.runAll([sibling, torn]);
+            await ctx.runAll(<ChildJob<void>>[sibling, torn]);
           } on Object {
             // The overflow, as in the test above.
           }

@@ -351,7 +351,7 @@ void main() {
   test('a child inherits correction revocation from a waiting parent', () {
     _run((solo, clock) {
       final cleanup = Completer<void>();
-      late Job<void> child;
+      late SoloJob<void> child;
       solo.run<String, void>(
         keepWhile: (state) => state != 'disconnected',
         (ctx) {

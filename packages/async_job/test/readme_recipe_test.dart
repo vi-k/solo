@@ -86,7 +86,7 @@ final class Database {
     events.add('version written');
   }
 
-  Job<void> readyFlag() => Job.deferred(
+  ChildJob<void> readyFlag() => Job.deferred(
         (ctx) => ctx.join(() async {
           await Future<void>.delayed(const Duration(milliseconds: 10));
           events.add('ready flag written');
@@ -998,7 +998,7 @@ void main() {
     test('without the section a cancellation comes between the two', () {
       fakeAsync((async) {
         Object? thrown;
-        Job<void>? flag;
+        ChildJob<void>? flag;
         final job = Job<void>((ctx) async {
           final database =
               await ctx.join(Database.open, dispose: (db) => db.close());
@@ -1233,7 +1233,7 @@ void main() {
       );
       expect(
         cancelledWhile((ctx, say) {
-          Job<int> child(String name, int ms) {
+          ChildJob<int> child(String name, int ms) {
             final child = Job.deferred<int>((ctx) async {
               await ctx.join(() => delay(ms));
               return ms;

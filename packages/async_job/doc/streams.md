@@ -291,9 +291,9 @@ Three things are different from the child:
   before the call returns. A callback that needs its own job reads `ctx.job`.
 - **It is a root wherever it is made.** Called in the body of another job, it
   is not a child of that job: the body neither waits for it nor cancels it, and
-  `ctx.run` refuses it with an `ArgumentError`. Inside a body, follow the
-  stream with `ctx.each`. A failure nobody reads goes to the zone, as from any
-  root.
+  it is not a `ChildJob`, so `ctx.run` does not take it. Inside a body, follow
+  the stream with `ctx.each`. A failure nobody reads goes to the zone, as from
+  any root.
 - **With `cancellable: false` nothing outside stops it.** Such a job refuses
   every cancellation, and `cancel()` does not return until the job ends by
   itself: the stream ends or fails, or the callback throws — a `Cancelled`

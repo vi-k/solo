@@ -121,9 +121,9 @@ void main() {
         'a child cancellation keeps its child description and cascades',
         () async {
       const childThrown = Cancelled('child stopped');
-      late Job<void> child;
-      late Job<void> neighbor;
-      late Job<void> third;
+      late ChildJob<void> child;
+      late ChildJob<void> neighbor;
+      late ChildJob<void> third;
       var thirdWasRunning = false;
       final parent = Job<void>((ctx) async {
         child = Job.deferred<void>((childContext) async {
@@ -371,7 +371,7 @@ void main() {
     fakeAsyncTest('a foreign cancellation before a child wins', () async {
       const foreign = Cancelled('foreign first');
       final foreignTrace = StackTrace.current;
-      late Job<void> child;
+      late ChildJob<void> child;
       final parent = Job<void>((ctx) async {
         child = Job.deferred<void>((childContext) async {
           throw const Cancelled('child cancellation');
@@ -748,17 +748,17 @@ void main() {
   // cancelled while `b` still runs, the envelope leaves the body after the
   // cancellation and carries a failure that came before it.
   group('an envelope thrown after the cancellation', () {
-    Job<void> failingChild(StateError error) =>
+    ChildJob<void> failingChild(StateError error) =>
         Job.deferred<void>((ctx) async => throw error);
 
-    Job<void> runningChild() => Job.deferred<void>(
+    ChildJob<void> runningChild() => Job.deferred<void>(
           (ctx) => ctx.join(
             () => Future<void>.delayed(const Duration(milliseconds: 10)),
           ),
         );
 
     /// A child whose own body throws an envelope at once.
-    Job<void> envelopingChild(StateError first, StateError second) =>
+    ChildJob<void> envelopingChild(StateError first, StateError second) =>
         Job.deferred<void>(
           (ctx) => [
             Future<void>.error(first, StackTrace.empty),

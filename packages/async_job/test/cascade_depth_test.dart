@@ -131,7 +131,7 @@ void main() {
     final never = Completer<void>();
     final ready = Completer<void>();
     var leafTold = false;
-    late final Job<void> leaf;
+    late final ChildJob<void> leaf;
 
     final root = Job<void>((ctx) async {
       leaf = Job.deferred<void>((ctx) async {

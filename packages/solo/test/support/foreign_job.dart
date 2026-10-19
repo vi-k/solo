@@ -4,7 +4,7 @@ import 'package:async_job/engine.dart';
 ///
 /// Stands in for another engine built on [JobBase] — the kind `solo` must
 /// not adopt from, and must not hand its own jobs to.
-final class ForeignJob<T> extends JobBase<T> {
+final class ForeignJob<T> extends JobBase<T> implements ChildJob<T> {
   final Future<T> Function(JobContext ctx) _body;
 
   ForeignJob(this._body, {super.key, super.describe});

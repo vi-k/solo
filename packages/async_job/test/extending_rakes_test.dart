@@ -22,7 +22,7 @@ import 'support/extending_stubs.dart';
 import 'support/page_code.dart';
 import 'support/reachability.dart';
 
-final class MyJob<T> extends JobBase<T> {
+final class MyJob<T> extends JobBase<T> implements ChildJob<T> {
   // Dropped once the job is over, as the core drops its own: the body
   // holds everything it captured, and a job is held to read its outcome
   // long after.
@@ -194,7 +194,7 @@ Job<void> signOutWithChild(List<String> seen) {
 
 /// A job of the engine that records its lifecycle hooks, and may fail to
 /// join the run.
-final class HookJob extends JobBase<void> {
+final class HookJob extends JobBase<void> implements ChildJob<void> {
   final bool failToStart;
   final hooks = <String>[];
 
@@ -227,7 +227,7 @@ final class HookJob extends JobBase<void> {
 }
 
 /// A job of the engine created with `cancellable: false`.
-final class StubbornJob<T> extends JobBase<T> {
+final class StubbornJob<T> extends JobBase<T> implements ChildJob<T> {
   final Future<T> Function(MyContext ctx) _body;
 
   StubbornJob(this._body) : super(cancellable: false);
@@ -248,7 +248,7 @@ final class StubbornJob<T> extends JobBase<T> {
 }
 
 /// A job of the engine that keeps every cancellation asked of it.
-final class CountingJob extends JobBase<int> {
+final class CountingJob extends JobBase<int> implements ChildJob<int> {
   final Future<int> Function(MyContext ctx) _body;
 
   final cancelsAsked = <String>[];
@@ -305,7 +305,7 @@ final class Answer extends JobObserver with JobAnswerer {
 }
 
 /// A job of the engine that hands an error to the zone by hand.
-final class ReportingJob extends JobBase<void> {
+final class ReportingJob extends JobBase<void> implements ChildJob<void> {
   ReportingJob();
 
   void report(Object error) => reportToZone(error, StackTrace.current);

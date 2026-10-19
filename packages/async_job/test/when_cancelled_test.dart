@@ -138,7 +138,7 @@ void main() {
     // already, and one instance is heard and becomes the outcome.
     fakeAsync((async) {
       final heard = <Cancelled>[];
-      late Job<void> gaveUp;
+      late ChildJob<void> gaveUp;
       gaveUp = Job.deferred<void>((ctx) async {
         await delay(1);
         throw const Cancelled('gave up');
@@ -273,7 +273,7 @@ void main() {
     final seen = <Cancelled>[];
     final error = StateError('callback');
     final zone = <Object>[];
-    late final Job<void> job;
+    late final ChildJob<void> job;
     runZonedGuarded(
       () {
         job = Job.deferred<void>((ctx) async {}, observer: observer)
@@ -299,7 +299,7 @@ void main() {
   test('without an observer a callback error goes to the creation zone', () {
     final errors = <Object>[];
     final error = StateError('callback');
-    late Job<void> job;
+    late ChildJob<void> job;
     runZonedGuarded(
       () {
         job = Job.deferred<void>((ctx) async {});

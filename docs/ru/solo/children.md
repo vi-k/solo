@@ -5,7 +5,7 @@
 ```dart
 // Создан контроллером, но ещё никем не запущен: очередь возьмёт его
 // через `sync` ниже, родитель через `ctx.run`.
-Job<String> _sync(int item) => job<Ready, String>(
+SoloJob<String> _sync(int item) => job<Ready, String>(
       key: _Op.sync,
       (ctx) async {
         // Ребёнок на стриме: прогресс загрузки, который API закрывает,
@@ -229,14 +229,19 @@ Job<void> syncAndReport(int item) =>
 
 Ребёнком продолжение не бывает. Внутри тела контроллера `ctx.run` принимает
 `Job` этого контроллера, те, что делает `job(...)` и никто не поставил
-в очередь, а продолжение не из них: оно является корневой `Job` ядра.
-Контроллер отказывает ему ошибкой `ArgumentError`:
+в очередь, а продолжение не из них: оно корневая `Job` ядра, простая `Job`,
+а не `ChildJob`, поэтому `ctx.run(tail)` не компилируется:
 
 ```text
-Invalid argument (job): was not created by this Solo: "Job(then)"
+The argument type 'Job<void>' can't be assigned to the parameter type 'ChildJob<dynamic>'.
 ```
 
-`Job` ядра, созданной вручную, откажут теми же словами.
+`Job` ядра, созданная вручную через `Job.deferred`, — это `ChildJob`, и она
+компилируется, а контроллер отказывает ей ошибкой `ArgumentError`:
+
+```text
+Invalid argument (job): was not created by this Solo: "Job()"
+```
 
 ## Шаги подряд
 
@@ -246,7 +251,7 @@ Invalid argument (job): was not created by this Solo: "Job(then)"
 
 ```dart
 // То же разделение, что у `sync`: сам шаг и вход через очередь.
-Job<void> _recordPath(String path) => job<Ready, void>(
+SoloJob<void> _recordPath(String path) => job<Ready, void>(
       key: _Op.record,
       (ctx) async => ctx.emit(ctx.state.copyWith(path: path)),
     );

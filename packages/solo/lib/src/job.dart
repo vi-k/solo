@@ -4,8 +4,10 @@ part of 'solo.dart';
 ///
 /// Returned by [Solo.job], [Solo.add] and [Solo.run]. The
 /// queue belongs to the controller, so [isQueued] lives here and not on
-/// the handle every job has.
-abstract interface class SoloJob<T> implements Job<T> {
+/// the handle every job has. It is a [ChildJob], so a body runs one as its
+/// child with `ctx.run`, and it has no `start` of its own: the queue or the
+/// parent starts it.
+abstract interface class SoloJob<T> implements ChildJob<T> {
   /// Whether the job waits in the controller's queue.
   bool get isQueued;
 }

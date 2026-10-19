@@ -420,7 +420,7 @@ void main() {
 
     test('origin follows a cascade from the parent', () {
       fakeAsync((async) {
-        late Job<void> child;
+        late ChildJob<void> child;
         final parent = Job<void>((ctx) async {
           child = Job.deferred<void>((ctx) => ctx.abandonable(() => delay(50)));
           ctx.run(child).ignore();
@@ -440,7 +440,7 @@ void main() {
 
     test('origin follows a cascade from the deadline of the parent', () {
       fakeAsync((async) {
-        late Job<void> child;
+        late ChildJob<void> child;
         const limit = Duration(milliseconds: 5);
         final parent = Job<void>(timeout: limit, (ctx) async {
           child = Job.deferred<void>((ctx) => ctx.abandonable(() => delay(50)));

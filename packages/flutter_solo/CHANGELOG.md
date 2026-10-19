@@ -11,6 +11,9 @@ and
 - **`Job.ignore()` is renamed to `Job.ignoreFailure()`** in `async_job`.
 - **The state handlers of `run` and `job` are renamed in `solo`: `onError` to
   `ifFailed`, `onCancel` to `ifCancelled`.**
+- **`ctx.run` and `ctx.runAll` take a `ChildJob`** in `async_job`, and `solo`'s
+  `SoloJob` is one: a helper that returns `job(...)` for `ctx.run` is declared
+  `SoloJob<T>`, not `Job<T>`.
 - **`SoloListenable` is a mixin on `Solo`,** the way `solo`'s `SoloStream` is:
   `extends SoloListenable<S>` becomes `extends Solo<S> with SoloListenable`.
   See

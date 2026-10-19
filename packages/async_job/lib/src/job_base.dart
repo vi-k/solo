@@ -34,9 +34,9 @@ abstract interface class Job<T> {
   /// `Cancelled(manual)` with `started: false`, and the body is never
   /// called.
   ///
-  /// A job made this way is a root and stays one: [JobContext.run] refuses
-  /// it, its own start being already on the way. A child is made with
-  /// [deferred].
+  /// A job made this way is a root and stays one: its own start is already on
+  /// the way, so it is not a [ChildJob] and [JobContext.run] does not take it.
+  /// A child is made with [deferred].
   ///
   /// The job ends [Failed] with an [ArgumentError] when a body of
   /// `Job<void>` returns a job of [deferred] that nobody has started: `void`
@@ -165,8 +165,9 @@ abstract interface class Job<T> {
   /// outside the job stops it.
   ///
   /// The job is a root wherever it is made: inside the body of another job
-  /// that job neither waits for it nor cancels it, and [JobContext.run]
-  /// refuses it. A body follows a stream with [JobContext.each].
+  /// that job neither waits for it nor cancels it, and it is not a [ChildJob]
+  /// that [JobContext.run] takes. A body follows a stream with
+  /// [JobContext.each].
   ///
   /// ```dart
   /// final saving = Job.each<String>(messages, (ctx, message) {
@@ -373,11 +374,11 @@ abstract interface class Job<T> {
   /// Once started, its body, children and cleanup follow the ordinary [Job]
   /// lifecycle. Awaiting its [cancel] waits for that work as well.
   ///
-  /// This does not start a deferred source. The continuation starts itself
-  /// when ready and cannot be adopted through [JobContext.run]. It is a root
-  /// job of the core, with its own optional [observer]; it inherits no
-  /// observer, domain state, queue slot or rules. Awaiting it from its
-  /// source's body or cleanup deadlocks, just like awaiting its own [done].
+  /// This does not start a deferred source. The continuation starts itself when
+  /// ready and is not a [ChildJob]: [JobContext.run] does not take it. It is a
+  /// root job of the core, with its own optional [observer]; it inherits no
+  /// observer, domain state, queue slot or rules. Awaiting it from its source's
+  /// body or cleanup deadlocks, just like awaiting its own [done].
   ///
   /// Forwarding a failure observes the source and transfers responsibility
   /// to the continuation. A cancelled continuation does not observe a source
@@ -2910,8 +2911,20 @@ abstract class JobBase<T> implements Job<T> {
   }
 }
 
-/// A job that starts when it is told to.
-abstract interface class DeferredJob<T> implements Job<T> {
+/// A job a parent may start: [JobContext.run] and [JobContext.runAll] take
+/// nothing else.
+///
+/// [Job.deferred] makes one. An engine of a domain declares it on a job of its
+/// own that a parent may run, `implements ChildJob<T>`. It adds no `start`: a
+/// parent starts the job through [JobContext.run], the engine through its
+/// queue, and a job that waits for a queue stays with the queue. A job that
+/// starts itself is not one: neither `Job(body)` nor [Job.then] nor [Job.each]
+/// makes a child.
+abstract interface class ChildJob<T> implements Job<T> {}
+
+/// A job that starts when it is told to: by hand, through [start], or by a
+/// parent, through [JobContext.run].
+abstract interface class DeferredJob<T> implements ChildJob<T> {
   /// Runs the body, in the zone this is called from. Called inside the work
   /// of [JobContext.unattended], the job starts in the zone that work was
   /// started from, past any zone forked inside the work, as a job made in
@@ -2987,8 +3000,8 @@ final class _AutoJob<T> extends _Job<T> {
 
 /// The root made by [Job.each], started inside that call.
 ///
-/// A class of its own so that [JobContext.run] can tell it from a job that
-/// merely happens to be running, and say what to do instead.
+/// A class of its own so that [JobContextBase.startChild] can tell it from a
+/// job that merely happens to be running, and say what to do instead.
 final class _EachJob extends _Job<void> {
   _EachJob(
     super.body, {

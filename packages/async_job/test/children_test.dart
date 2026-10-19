@@ -8,6 +8,7 @@ import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart';
 
 import 'support/cancel_reason.dart';
+import 'support/compile_errors.dart';
 import 'support/delay.dart';
 import 'support/journal.dart';
 import 'support/probe_job.dart';
@@ -101,7 +102,7 @@ void main() {
 
   test('a child that is not cancellable refuses the cascade', () {
     fakeAsync((async) {
-      late final Job<void> child;
+      late final ChildJob<void> child;
       var childEndedAt = Duration.zero;
       final parent = Job<void>((ctx) async {
         child = Job.deferred<void>(
@@ -348,7 +349,7 @@ void main() {
         'the parent outcome names the child as the child prints itself: '
         '$named', () {
       fakeAsync((async) {
-        late final Job<void> child;
+        late final ChildJob<void> child;
         final parent = Job<void>((ctx) async {
           child = Job.deferred<void>(
             key: key,
@@ -758,7 +759,25 @@ void main() {
     });
   });
 
-  test('an implementation of Job that is not of this core is refused', () {
+  test(
+    'a child has no start of its own: a DeferredJob adds it',
+    () async {
+      final errors = await compileErrors('''
+import 'package:async_job/async_job.dart';
+
+void attempt(ChildJob<void> child, DeferredJob<void> deferred) {
+  child.start();
+  deferred.start();
+}
+''');
+      expect(errors, [
+        "The method 'start' isn't defined for the type 'ChildJob'.",
+      ]);
+    },
+    timeout: const Timeout(Duration(minutes: 1)),
+  );
+
+  test('an implementation of ChildJob that is not of this core is refused', () {
     fakeAsync((async) {
       Object? thrown;
       Job<void>((ctx) async {
@@ -980,7 +999,7 @@ void main() {
 
   test('a body that cancels itself cancels its children', () {
     fakeAsync((async) {
-      late Job<void> child;
+      late ChildJob<void> child;
       final parent = Job<void>((ctx) async {
         child = Job.deferred<void>(
           key: 'child',
@@ -998,7 +1017,7 @@ void main() {
 
   test('a body that fails leaves its children alone', () {
     fakeAsync((async) {
-      late Job<void> child;
+      late ChildJob<void> child;
       final parent = Job<void>((ctx) async {
         child = Job.deferred<void>(
           key: 'child',
@@ -1122,7 +1141,7 @@ void main() {
     fakeAsync((async) {
       final log = <String>[];
       final journal = JobJournal();
-      late Job<void> child;
+      late ChildJob<void> child;
       final parent = ThrowingRulesJob<int>(observer: journal, (ctx) async {
         // Left half-adopted it would be a job nobody starts and nobody
         // waits for: the rule turns it away, and it is dropped instead.
@@ -1334,8 +1353,8 @@ void main() {
   });
 }
 
-/// A handle that implements [Job] without being a job of this core.
-final class _ForeignJob implements Job<void> {
+/// A handle that implements [ChildJob] without being a job of this core.
+final class _ForeignJob implements ChildJob<void> {
   @override
   dynamic noSuchMethod(Invocation invocation) =>
       throw UnimplementedError('${invocation.memberName}');
@@ -1354,7 +1373,7 @@ final class _OnStartObserver extends JobObserver {
 ///
 /// Stands in for a rule of a domain — `canStart` in `solo` — that lets one
 /// child in and throws over the next.
-final class _SwitchableRulesJob<T> extends JobBase<T> {
+final class _SwitchableRulesJob<T> extends JobBase<T> implements ChildJob<T> {
   final Future<T> Function(_SwitchableRulesContext ctx) _body;
 
   _SwitchableRulesJob(this._body);
@@ -1389,7 +1408,7 @@ final class _SwitchableRulesContext extends JobContextBase {
 }
 
 /// A job of an engine that prints itself its own way.
-final class _NamedJob<T> extends JobBase<T> {
+final class _NamedJob<T> extends JobBase<T> implements ChildJob<T> {
   final Future<T> Function(JobContext ctx) _body;
 
   _NamedJob(this._body) : super(key: 'thumbnail');
@@ -1410,7 +1429,7 @@ final class _NamedContext extends JobContextBase {
 }
 
 /// The protocol implemented rather than extended, the way a mock is.
-final class _ImplementedJobBase implements JobBase<void> {
+final class _ImplementedJobBase implements JobBase<void>, ChildJob<void> {
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

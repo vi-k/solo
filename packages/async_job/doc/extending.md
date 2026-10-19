@@ -29,7 +29,7 @@ Two private wrappers let the rest of the engine start the job and wait for it:
 ```dart
 import 'package:async_job/engine.dart';
 
-final class MyJob<T> extends JobBase<T> {
+final class MyJob<T> extends JobBase<T> implements ChildJob<T> {
   // Dropped once the job is over, as the core drops its own: the body
   // holds everything it captured, and a job is held to read its outcome
   // long after.
@@ -71,6 +71,13 @@ the Dart library of `MyJob`, and nobody else who holds the job can start it
 behind the engine's back. `untilFinished` waits for the job without observing
 its outcome, so a failure nobody looked at still reaches the zone; waiting for
 `done` would count as looking.
+
+A body runs a job of your engine as its child with `ctx.run(job)`, and
+`ctx.run` takes a `ChildJob`: that is why `MyJob` declares
+`implements ChildJob<T>`. A job a body may not run as a child leaves it out.
+`ChildJob` adds no member, `start` included: a parent starts the job through
+`ctx.run`, your engine through its queue. `DeferredJob` is a `ChildJob` with a
+public `start()`, for a job that whoever holds it may start.
 
 `start` runs the body in the zone it is called from, and a queue calls it
 later, from wherever the queue runs. `creationZone.run(start)` starts the job

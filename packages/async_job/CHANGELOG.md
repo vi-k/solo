@@ -31,6 +31,17 @@
   hears the error twice.
 - **`ctx.run` takes `dispose` and `discard`,** the way `ctx.abandonable` does.
   See [Registering on arrival](doc/cleanup.md#registering-on-arrival).
+- **`ctx.run` and `ctx.runAll` take a `ChildJob`,** the new interface of a job
+  a parent may start. `Job.deferred` returns a `DeferredJob`, which is one, so
+  a body that runs those compiles unchanged where the type of the handle is
+  inferred. A handle declared `Job<T>` no longer compiles in `ctx.run`: the
+  return type of a helper, a parameter, a variable, a `List<Job<T>>`. Declare
+  it `ChildJob<T>`, or `DeferredJob<T>` where the code calls `start()`. A job
+  from `Job(body)`, `then` or `Job.each`, which `ctx.run` refused with an
+  `ArgumentError`, no longer compiles there. An engine whose jobs a body runs
+  as children declares `implements ChildJob<T>` on them;
+  `JobContextBase.startChild` still takes any `Job`. See
+  [A job of your own](doc/extending.md#a-job-of-your-own).
 - **`JobContext` gains `runAll`,** which runs children side by side and asks
   the rest to stop as soon as one of them goes wrong; the branches it asks to
   stop get the new `SiblingCancelReason`. An extension named `runAll` on
@@ -186,9 +197,9 @@ new wording.
   through the zone of the work. A job made there under a zone with a microtask
   queue of its own, such as that of `fakeAsync`, no longer leaves its outcome
   waiting in that queue for good.
-- `ctx.run` refuses a continuation, the job `then` returns, with the same
-  `ArgumentError` whenever it is called; once the source had finished it threw
-  a `StateError`.
+- `JobContextBase.startChild` refuses a continuation, the job `then` returns,
+  with the same `ArgumentError` whenever it is called; once the source had
+  finished it threw a `StateError`.
 - `ctx.join` releases the value through `dispose` or `discard` when the
   checkpoint after the action throws anything, not only a `Cancelled`.
 - `ctx.join` and `ctx.abandonable` called from work handed to `ctx.unattended`

@@ -47,7 +47,7 @@ Job<void> childNotAwaited() {
 // A block body: at this language version dart format indents an expression
 // body six columns deep, and the page would show that.
 // ignore: prefer_expression_function_bodies
-Job<void> level(int depth) {
+ChildJob<void> level(int depth) {
   return Job.deferred<void>((ctx) async {
     // Without this await, the whole chain is built on one stack.
     await null;
@@ -121,7 +121,7 @@ Job<List<int>> loadAll() => Job<List<int>>((ctx) async {
       return values;
     });
 
-Job<Source> warmingBranch() {
+ChildJob<Source> warmingBranch() {
   final branch = Job.deferred<Source>((ctx) async {
     final cache =
         await ctx.abandonable(openCache, dispose: (cache) => cache.close());
@@ -134,7 +134,7 @@ Job<Source> warmingBranch() {
   return branch;
 }
 
-Job<Source> lockedBranch() {
+ChildJob<Source> lockedBranch() {
   final branch = Job.deferred<Source>((ctx) async {
     final locked = Job.deferred<Source>((ctx) async {
       await ctx.join(Lock.acquire, dispose: (lock) => lock.release());
@@ -162,7 +162,7 @@ Job<void> refusingBranch() {
   return parent;
 }
 
-Job<void> groupFirstAttempt(List<Job<Source>> branches) =>
+Job<void> groupFirstAttempt(List<ChildJob<Source>> branches) =>
     Job<void>((ctx) async {
       final sources = await ctx.runAll(branches);
       await ctx.join(() => writeArchive(sources));
@@ -171,7 +171,7 @@ Job<void> groupFirstAttempt(List<Job<Source>> branches) =>
       }
     });
 
-Job<void> groupTry(List<Job<Source>> branches) => Job<void>((ctx) async {
+Job<void> groupTry(List<ChildJob<Source>> branches) => Job<void>((ctx) async {
       final sources = await ctx.runAll(branches);
       try {
         await ctx.join(() => writeArchive(sources));
@@ -182,7 +182,8 @@ Job<void> groupTry(List<Job<Source>> branches) => Job<void>((ctx) async {
       }
     });
 
-Job<void> groupRegistered(List<Job<Source>> branches) => Job<void>((ctx) async {
+Job<void> groupRegistered(List<ChildJob<Source>> branches) =>
+    Job<void>((ctx) async {
       final sources = await ctx.runAll(branches);
       for (final source in sources) {
         ctx.onDispose(source.close);
@@ -190,7 +191,7 @@ Job<void> groupRegistered(List<Job<Source>> branches) => Job<void>((ctx) async {
       await ctx.join(() => writeArchive(sources));
     });
 
-Job<List<Source>> handedOutCatch(List<Job<Source>> branches) {
+ChildJob<List<Source>> handedOutCatch(List<ChildJob<Source>> branches) {
   final exported = Job.deferred<List<Source>>((ctx) async {
     final sources = await ctx.runAll(branches);
     try {
@@ -206,7 +207,7 @@ Job<List<Source>> handedOutCatch(List<Job<Source>> branches) {
   return exported;
 }
 
-Job<List<Source>> handedOutDiscard(List<Job<Source>> branches) {
+ChildJob<List<Source>> handedOutDiscard(List<ChildJob<Source>> branches) {
   final exported = Job.deferred<List<Source>>((ctx) async {
     final sources = await ctx.runAll(branches);
     for (final source in sources) {
@@ -279,28 +280,32 @@ Job<String> loadedAwaitingParsed() {
   return (opened, archived);
 }
 
-/// The first attempt of the chain, and the version where the source is the
-/// only child; [adoptTheTail] picks the first.
-Future<void> reportedRows({required bool adoptTheTail}) async {
+/// The first attempt of the chain, as the page shows it. It does not
+/// compile, so it stands here as text, and the test hands it to the
+/// analyzer.
+const adoptedTail = '''
+final child = Job.deferred<int>((ctx) => ctx.abandonable(load));
+final tail = child.then<void>((ctx, rows) => report(rows));
+
+final parent = Job<void>((ctx) async {
+  ctx.log(await ctx.run(child));
+  await ctx.run(tail);
+});
+''';
+
+/// The version where the source is the only child.
+Future<void> reportedRows() async {
   final child = Job.deferred<int>((ctx) => ctx.abandonable(load));
   final tail = child.then<void>((ctx, rows) => report(rows));
 
-  if (adoptTheTail) {
-    final parent = Job<void>((ctx) async {
-      ctx.log(await ctx.run(child));
-      await ctx.run(tail);
-    });
-    await parent.value;
-  } else {
-    final parent = Job<void>((ctx) async {
-      // The source is a child: the parent starts it and waits for it.
-      ctx.log(await ctx.run(child));
-    });
-    parent.done.then((outcome) => stage.trace.add('parent $outcome')).ignore();
+  final parent = Job<void>((ctx) async {
+    // The source is a child: the parent starts it and waits for it.
+    ctx.log(await ctx.run(child));
+  });
+  parent.done.then((outcome) => stage.trace.add('parent $outcome')).ignore();
 
-    await parent.value; // Done, whatever tail is doing.
-    await tail.value; // tail is yours to observe.
-  }
+  await parent.value; // Done, whatever tail is doing.
+  await tail.value; // tail is yours to observe.
 }
 
 Job<void> twoChildrenInARow() {

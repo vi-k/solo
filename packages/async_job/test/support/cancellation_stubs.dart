@@ -93,7 +93,7 @@ final class Database {
 
   /// The second write as a job of its own, for a step that runs it as a
   /// child.
-  Job<void> readyFlag() {
+  ChildJob<void> readyFlag() {
     final job = Job.deferred((ctx) => ctx.join(writeReadyFlag));
     flagJobs.add(job);
     return job;

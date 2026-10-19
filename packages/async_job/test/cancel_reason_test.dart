@@ -88,7 +88,7 @@ void main() {
       () {
     fakeAsync((async) {
       final reason = TestCancelReason('network', error: StateError('failed'));
-      late Job<void> child;
+      late ChildJob<void> child;
       final parent = Job<void>((ctx) async {
         child = Job.deferred<void>((ctx) => ctx.abandonable(() => delay(50)));
         ctx.run(child).ignore();
@@ -108,7 +108,7 @@ void main() {
   // child the parent took down that is where the parent's came from.
   test('a cascade carries the stack trace of the cancel over to the child', () {
     fakeAsync((async) {
-      late Job<void> child;
+      late ChildJob<void> child;
       final parent = Job<void>((ctx) async {
         child = Job.deferred<void>((ctx) => ctx.abandonable(() => delay(50)));
         ctx.run(child).ignore();
@@ -126,7 +126,7 @@ void main() {
 
   test('a cascade carries the stack trace of a body that gave up', () {
     fakeAsync((async) {
-      late Job<void> child;
+      late ChildJob<void> child;
       final parent = Job<void>((ctx) async {
         child = Job.deferred<void>((ctx) => ctx.abandonable(() => delay(50)));
         ctx.run(child).ignore();
@@ -182,7 +182,7 @@ void main() {
   test('a child cancellation escaping the body retains its original data', () {
     fakeAsync((async) {
       final reason = TestCancelReason('network', error: StateError('failed'));
-      late Job<void> child;
+      late ChildJob<void> child;
       final parent = Job<void>((ctx) async {
         child = Job.deferred<void>((ctx) => ctx.abandonable(() => delay(50)));
         await ctx.run(child);
@@ -200,7 +200,7 @@ void main() {
   test('a custom reason named parent still reports an unattended failure', () {
     fakeAsync((async) {
       final errors = <Object>[];
-      late Job<void> child;
+      late ChildJob<void> child;
       final parent = Job<void>(observer: ErrorObserver(errors), (ctx) async {
         child = Job.deferred<void>((ctx) => ctx.abandonable(() => delay(50)));
         ctx.run(child).ignore();
@@ -218,7 +218,7 @@ void main() {
     fakeAsync((async) {
       final errors = <Object>[];
       var disposed = false;
-      late Job<void> child;
+      late ChildJob<void> child;
       final reason = _BrokenLabelReason();
       // Answering: the subject is the parent finishing, not where the
       // label's error goes after the observer.
@@ -243,7 +243,7 @@ void main() {
   test('a public parent reason is not proof of cancellation by the parent', () {
     fakeAsync((async) {
       final errors = <Object>[];
-      late Job<void> child;
+      late ChildJob<void> child;
       final parent = Job<void>(observer: ErrorObserver(errors), (ctx) async {
         child = Job.deferred<void>((ctx) async {
           throw const Cancelled.by(

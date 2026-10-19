@@ -614,7 +614,7 @@ final class _Eligible extends Solo<String> {
         },
       );
 
-  Job<void> _watcher() => watcher = job<String, void>(
+  SoloJob<void> _watcher() => watcher = job<String, void>(
         key: 'watcher',
         keepWhile: _keep,
         ifCancelled: (state, cancelled) => 'watcher corrected',

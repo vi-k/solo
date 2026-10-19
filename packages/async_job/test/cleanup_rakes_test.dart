@@ -27,7 +27,7 @@ import 'support/page_code.dart';
 
 /// The second attempt of "A resource that travels", verbatim: a line away
 /// from the first attempt and from the answer alike.
-DeferredJob<Database> nextLine(Job<Database> connect) {
+DeferredJob<Database> nextLine(ChildJob<Database> connect) {
   final ready = Job.deferred<Database>((ctx) async {
     final database = await ctx.run(connect);
     ctx.onDiscard(database.close);
@@ -781,7 +781,7 @@ void main() {
     fakeAsyncTest('a branch whose group handed the values over keeps its value',
         () async {
       final job = Job<void>(key: 'group', (ctx) async {
-        final values = await ctx.runAll(<Job<Database>>[
+        final values = await ctx.runAll(<ChildJob<Database>>[
           Job.deferred<Database>(
             key: 'left',
             (branch) => branch.abandonable(
@@ -812,7 +812,7 @@ void main() {
         () async {
       final gate = Gate();
       final job = Job<void>(key: 'group', (ctx) async {
-        await ctx.runAll(<Job<Database>>[
+        await ctx.runAll(<ChildJob<Database>>[
           Job.deferred<Database>(key: 'left', (branch) async {
             final db = await branch.abandonable(
               () => open('left'),

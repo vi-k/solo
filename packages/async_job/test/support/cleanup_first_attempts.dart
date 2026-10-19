@@ -30,7 +30,7 @@ DeferredJob<Database> connecting() {
   return connect;
 }
 
-DeferredJob<Database> unregistered(Job<Database> connect) {
+DeferredJob<Database> unregistered(ChildJob<Database> connect) {
   final ready = Job.deferred<Database>((ctx) async {
     final database = await ctx.run(connect);
     // ignore: unnecessary_lambdas

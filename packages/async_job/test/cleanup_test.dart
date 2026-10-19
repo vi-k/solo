@@ -54,7 +54,7 @@ Future<String> _open() async {
 
 /// A job whose checkpoint fails once [failCheck] is raised: a rule of a
 /// domain that throws instead of answering.
-final class _RuleJob<T> extends JobBase<T> {
+final class _RuleJob<T> extends JobBase<T> implements ChildJob<T> {
   final Future<T> Function(JobContext ctx) _body;
 
   /// Whether [JobContext.check] throws from now on.
@@ -1232,7 +1232,7 @@ void main() {
 
   test('passing both to run is an ArgumentError and starts no child', () {
     var started = false;
-    late Job<String> child;
+    late ChildJob<String> child;
     late Job<void> parent;
     fakeAsync((async) {
       child = Job.deferred<String>((ctx) async {

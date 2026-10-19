@@ -10,6 +10,7 @@ import 'package:test/test.dart';
 
 import 'support/children_page.dart' as page;
 import 'support/children_stubs.dart' as stubs;
+import 'support/compile_errors.dart';
 import 'support/delay.dart';
 import 'support/page_code.dart';
 
@@ -102,7 +103,7 @@ void main() {
           'a run future left unhandled hands the zone '
           "${fails ? "the child's error" : "the child's Cancelled"}", () {
         final zone = <Object>[];
-        late final Job<int> child;
+        late final ChildJob<int> child;
         runZonedGuarded(
           () => fakeAsync((async) {
             child = Job.deferred<int>((ctx) async {
@@ -502,58 +503,10 @@ void main() {
   group('Processing streams', () {});
 
   group('Chains', () {
-    // The same answer whichever got there first: in the page's order the
-    // source has finished and the tail is already running, in the other
-    // one the tail still waits for its source.
-    final orders = <String,
-        Future<void> Function(
-      JobContext ctx,
-      Job<int> head,
-      Job<void> tail,
-    )>{
-      'after the source, as on the page': (ctx, head, tail) async {
-        await ctx.run(head);
-        await ctx.run(tail);
-      },
-      'before the source': (ctx, head, tail) async {
-        try {
-          await ctx.run(tail);
-        } finally {
-          await ctx.run(head);
-        }
-      },
-    };
-    for (final MapEntry(key: order, value: body) in orders.entries) {
-      test('ctx.run refuses a continuation $order', () {
-        fakeAsync((async) {
-          Object? thrown;
-          final head = Job.deferred<int>((ctx) async => 1);
-          final tail = head.then<void>((ctx, rows) async {});
-          Job<void>((ctx) async {
-            try {
-              await body(ctx, head, tail);
-            } on Object catch (error) {
-              thrown = error;
-            }
-          }).ignoreFailure();
-
-          async.flushTimers();
-
-          expect(thrown, isA<ArgumentError>());
-          // The page quotes the error whole.
-          expect(
-            '$thrown',
-            'Invalid argument (child): is a continuation, which starts itself '
-                'once its source finishes: "Job(then)"',
-          );
-        });
-      });
-    }
-
     test("two children in a row: the parent's cancellation reaches the second",
         () {
       fakeAsync((async) {
-        late Job<void> second;
+        late ChildJob<void> second;
         final parent = Job<void>((ctx) async {
           final rows = await ctx.run(Job.deferred<int>((ctx) async => 21));
           second = Job.deferred<void>(
@@ -988,7 +941,7 @@ void main() {
         'how deep a tree goes: without the await, the tree runs out of '
         'stack and still ends', () async {
       // The level of the page with its `await null` taken out.
-      Job<void> level(int depth) => Job.deferred<void>((ctx) async {
+      ChildJob<void> level(int depth) => Job.deferred<void>((ctx) async {
             if (depth > 0) await ctx.run(level(depth - 1));
           });
       final zone = <Object>[];
@@ -1167,7 +1120,8 @@ void main() {
 
     test('the same lock taken in the branch itself hangs the group', () {
       fakeAsync((async) {
-        Job<stubs.Source> branch() => Job.deferred<stubs.Source>((ctx) async {
+        ChildJob<stubs.Source> branch() =>
+            Job.deferred<stubs.Source>((ctx) async {
               await ctx.join(
                 stubs.Lock.acquire,
                 dispose: (lock) => lock.release(),
@@ -1239,7 +1193,7 @@ void main() {
       });
     });
 
-    List<Job<stubs.Source>> branches() => [
+    List<ChildJob<stubs.Source>> branches() => [
           Job.deferred<stubs.Source>((ctx) async => stubs.Source('rows')),
           Job.deferred<stubs.Source>((ctx) async => stubs.Source('images')),
         ];
@@ -1356,7 +1310,10 @@ void main() {
     }
 
     /// Runs [exported] next to a sibling that fails after it returned.
-    Job<void> beside(Job<List<stubs.Source>> exported, {bool fails = true}) {
+    Job<void> beside(
+      ChildJob<List<stubs.Source>> exported, {
+      bool fails = true,
+    }) {
       final sibling = Job.deferred<void>((ctx) async {
         await ctx.join(() => delay(80));
         if (fails) throw StateError('sibling');
@@ -1457,21 +1414,38 @@ void main() {
       });
     });
 
-    test('ctx.run refuses the continuation with the error the page quotes', () {
-      fakeAsync((async) {
-        Object? thrown;
-        page.reportedRows(adoptTheTail: true).catchError((Object error) {
-          thrown = error;
-        });
-        async.flushTimers();
+    test(
+      'ctx.run does not take the continuation: the error the page quotes',
+      () async {
+        final errors = await compileErrors('''
+import 'package:async_job/async_job.dart';
+
+Future<int> load() async => 21;
+Future<void> report(int rows) async {}
+
+void attempt() {
+${page.adoptedTail}
+}
+''');
         final text = File('doc/children.md').readAsStringSync();
         final quoted = RegExp(
-          r'throws `ArgumentError`:\n\n```text\n(.*?)\n```',
+          r'does not compile:\n\n```text\n(.*?)\n```',
           dotAll: true,
         );
-        final quote = quoted.firstMatch(text)!.group(1);
-        expect(thrown, isA<ArgumentError>());
-        expect('$thrown', quote);
+        expect(errors, [quoted.firstMatch(text)!.group(1)]);
+      },
+      timeout: const Timeout(Duration(minutes: 1)),
+    );
+
+    test('no link of a chain is a child', () {
+      fakeAsync((async) {
+        final child = Job.deferred<int>((ctx) async => 1);
+        final tail = child.then<int>((ctx, rows) async => rows);
+        final next = tail.then<int>((ctx, rows) async => rows);
+        expect(child, isA<ChildJob<int>>());
+        expect(tail, isNot(isA<ChildJob<int>>()));
+        expect(next, isNot(isA<ChildJob<int>>()));
+        async.flushTimers();
       });
     });
 
@@ -1505,7 +1479,7 @@ void main() {
 
     test('with the source the only child, the parent ends first', () {
       fakeAsync((async) {
-        page.reportedRows(adoptTheTail: false);
+        page.reportedRows();
         async.flushTimers();
         expect(trace(), ['parent Done(null)', 'reported 21']);
       });

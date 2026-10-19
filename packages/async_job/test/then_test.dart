@@ -7,6 +7,8 @@ import 'package:async_job/async_job.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart';
 
+import 'support/probe_job.dart';
+
 class _Observer extends JobObserver {
   final void Function(Job<Object?>)? starting;
   final void Function(Job<Object?>, Object)? error;
@@ -596,21 +598,56 @@ void main() {
     });
   });
 
-  test('a continuation cannot be adopted while it waits for its source', () {
+  test('a continuation is not a child', () {
     fakeAsync((async) {
       final source = Job.deferred<int>((ctx) async => 1);
       final continuation = source.then<int>((ctx, value) => value);
-      final parent = Job<void>((ctx) async {
-        expect(() => ctx.run(continuation), throwsArgumentError);
-      });
-      async.flushMicrotasks();
-      expect(parent.outcome, isA<Done<void>>());
-      expect(continuation.isChild, isFalse);
+      // `ctx.run` takes a [ChildJob], and `then` makes none: the compiler
+      // turns a continuation away before anything runs.
+      expect(continuation, isNot(isA<ChildJob<int>>()));
       source.start();
       async.flushMicrotasks();
       expect(continuation.outcome, isA<Done<int>>());
     });
   });
+
+  // The door of an engine of a domain takes any job, and a continuation
+  // that gets there is refused with the same words whichever got there
+  // first: while it still waits for its source, or once it runs on its own.
+  for (final afterTheSource in [false, true]) {
+    test(
+        'an engine cannot adopt a continuation '
+        '${afterTheSource ? 'once it runs' : 'while it waits'}', () {
+      fakeAsync((async) {
+        Object? thrown;
+        final source = Job.deferred<int>((ctx) async => 1);
+        final continuation = source.then<int>((ctx, value) => value);
+        final parent = ProbeJob<void>((ctx) async {
+          final probe = ctx as ProbeContext;
+          if (afterTheSource) {
+            probe.adopt(source);
+            await source.value;
+          }
+          try {
+            probe.adopt(continuation);
+          } on Object catch (error) {
+            thrown = error;
+          }
+          if (!afterTheSource) probe.adopt(source);
+        })
+          ..launch();
+        async.flushMicrotasks();
+        expect(
+          '$thrown',
+          'Invalid argument (child): is a continuation, which starts itself '
+              'once its source finishes: "Job(then)"',
+        );
+        expect(parent.outcome, isA<Done<void>>());
+        expect(continuation.isChild, isFalse);
+        expect(continuation.outcome, isA<Done<int>>());
+      });
+    });
+  }
 
   test('cancellation from the start observer skips the continuation body', () {
     fakeAsync((async) {

@@ -102,7 +102,7 @@ final class UncheckedOpening extends Solo<CameraState> with CameraParts {
         },
       );
 
-  Job<void> _closeCameraJob() => job<NotDisposed, void>(
+  SoloJob<void> _closeCameraJob() => job<NotDisposed, void>(
         key: CameraKey.closeCamera,
         cancellable: false,
         (ctx) async => hw.close(),
@@ -148,7 +148,7 @@ base class QueuedDisposal extends Solo<CameraState> with CameraParts {
         },
       );
 
-  Job<void> _closeCameraJob() => job<NotDisposed, void>(
+  SoloJob<void> _closeCameraJob() => job<NotDisposed, void>(
         key: CameraKey.closeCamera,
         cancellable: false,
         (ctx) async => hw.close(),

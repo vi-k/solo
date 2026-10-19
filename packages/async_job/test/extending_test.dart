@@ -22,7 +22,7 @@ import 'support/probe_job.dart';
 /// An engine that has its own answer for an error nobody answered for: it
 /// puts an observer of its own on every job, the way `solo` does, and
 /// answers there.
-final class AnsweringJob<T> extends JobBase<T> {
+final class AnsweringJob<T> extends JobBase<T> implements ChildJob<T> {
   final Future<T> Function(JobContext ctx) _body;
   final EngineAnswer _answer;
 
@@ -87,7 +87,7 @@ final class EngineAnswer extends JobObserver with JobAnswerer {
 
 /// An engine that waits for a job the way it waits for a child: without
 /// observing, so a failure nobody looked at still goes to the zone.
-final class WaitingJob<T> extends JobBase<T> {
+final class WaitingJob<T> extends JobBase<T> implements ChildJob<T> {
   WaitingJob(this._body, {super.key});
 
   final Future<T> Function(JobContext ctx) _body;
@@ -105,7 +105,7 @@ final class WaitingJob<T> extends JobBase<T> {
 
 /// An engine that starts a job later, from a queue, in the zone the job
 /// was created in.
-final class QueuedJob<T> extends JobBase<T> {
+final class QueuedJob<T> extends JobBase<T> implements ChildJob<T> {
   QueuedJob(this._body);
 
   final Future<T> Function(JobContext ctx) _body;
@@ -123,7 +123,7 @@ final class QueuedJob<T> extends JobBase<T> {
 
 /// An engine whose context, while it is built, cancels the job it is for:
 /// a rule of its domain asked at creation and found wanting.
-final class RefusingContextJob<T> extends JobBase<T> {
+final class RefusingContextJob<T> extends JobBase<T> implements ChildJob<T> {
   RefusingContextJob(this._body);
 
   final Future<T> Function(JobContext ctx) _body;
@@ -146,7 +146,7 @@ final class RefusingContextJob<T> extends JobBase<T> {
 }
 
 /// An engine whose bookkeeping at the start fails.
-final class FailingStartJob<T> extends JobBase<T> {
+final class FailingStartJob<T> extends JobBase<T> implements ChildJob<T> {
   FailingStartJob(this._body, {super.observer});
 
   final Future<T> Function(JobContext ctx) _body;
@@ -164,7 +164,7 @@ final class FailingStartJob<T> extends JobBase<T> {
 }
 
 /// An engine that wants to say why it is still waiting.
-final class SectionJob<T> extends JobBase<T> {
+final class SectionJob<T> extends JobBase<T> implements ChildJob<T> {
   SectionJob(this._body, {super.key});
 
   final Future<T> Function(JobContext ctx) _body;
@@ -188,7 +188,7 @@ final class SectionJob<T> extends JobBase<T> {
 
 /// An engine that restricts child ownership: the children of `each` are
 /// jobs of its own making.
-final class EachJob<T> extends JobBase<T> {
+final class EachJob<T> extends JobBase<T> implements ChildJob<T> {
   EachJob(this._body, {super.key});
 
   final Future<T> Function(JobContext ctx) _body;
@@ -205,7 +205,7 @@ final class EachJob<T> extends JobBase<T> {
 final class EachContext extends JobContextBase {
   EachContext(super.owner);
 
-  static final made = <Job<void>>[];
+  static final made = <ChildJob<void>>[];
 
   @override
   Job<void> createEachJob(Future<void> Function(JobContext ctx) body) {
@@ -406,7 +406,7 @@ void main() {
       final job = CheckingJob<void>((ctx) async {
         ctx.rules = () => throw const RuleBroken();
         // The call itself comes back: the rule's error is in its future.
-        final group = ctx.runAll(<Job<void>>[]);
+        final group = ctx.runAll(<ChildJob<void>>[]);
         try {
           await group;
         } on RuleBroken catch (error) {

@@ -2635,7 +2635,7 @@ void main() {
       );
       final methods = [
         for (final piece in parts.split(RegExp(r'\n\s*\n')))
-          if (piece.trimLeft().startsWith('Job<'))
+          if (RegExp('^(Solo)?Job<').hasMatch(piece.trimLeft()))
             // Up to the end of the method: the last one is followed by the
             // brace that closes the mixin.
             piece.substring(0, piece.lastIndexOf(');') + 2),
@@ -2785,7 +2785,7 @@ void main() {
 
 /// The first line of a method or of the constructor, at the start of a line.
 final _head = RegExp(
-  r'^(?:Job<\w+> (\w+)\(|(CameraController)\(this|void (onClose)\()',
+  r'^(?:(?:Solo)?Job<\w+> (\w+)\(|(CameraController)\(this|void (onClose)\()',
   multiLine: true,
 );
 

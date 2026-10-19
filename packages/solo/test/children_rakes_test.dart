@@ -11,6 +11,7 @@ import 'package:test/test.dart';
 import 'support/children_first_attempts.dart' as first;
 import 'support/children_page.dart' as page;
 import 'support/children_stubs.dart';
+import 'support/compile_errors.dart';
 import 'support/page_code.dart';
 
 /// The sentinel of `doc/children.md`.
@@ -629,7 +630,7 @@ void main() {
   group('A child of ctx.run', () {
     for (final rule in ['canStart', 'keepWhile', 'the working type']) {
       test('a child turned away by $rule never runs', () {
-        late Job<void> child;
+        late SoloJob<void> child;
         final errors = _zone((async) {
           Solo.observer = _Watch();
           final bench = Bench(const Ready(paused: true));
@@ -740,7 +741,7 @@ void main() {
 
     for (final rule in ['canStart', 'keepWhile']) {
       test('a $rule that throws ends the child Failed, and ctx.run throws', () {
-        late Job<void> child;
+        late SoloJob<void> child;
         late Bench bench;
         final errors = _zone((async) {
           bench = Bench();
@@ -810,7 +811,7 @@ void main() {
 
     test('after a child that succeeds, ctx.run throws the parent cancellation',
         () {
-      late Job<int> child;
+      late SoloJob<int> child;
       final errors = _zone((async) {
         final bench = Bench();
         final parent = bench.run<Ready, void>(key: 'parent', (ctx) async {
@@ -939,7 +940,7 @@ void main() {
       late Job<void> parent;
       final errors = _zone((async) {
         final bench = Bench();
-        late Job<void> child;
+        late SoloJob<void> child;
         parent = bench.run<Ready, void>(key: 'parent', (ctx) async {
           child = bench.job<Ready, void>(
             key: 'child',
@@ -1012,7 +1013,7 @@ void main() {
       test('a write of the child that $rule of the parent refuses', () {
         final errors = _zone((async) {
           final bench = Bench();
-          late Job<void> child;
+          late SoloJob<void> child;
           final parent = bench.run<Ready, void>(
             key: 'parent',
             keepWhile: (state) => !state.paused,
@@ -1051,7 +1052,7 @@ void main() {
     test('a write of the parent that the rules of the child refuse', () {
       final errors = _zone((async) {
         final bench = Bench();
-        late Job<void> child;
+        late SoloJob<void> child;
         final parent = bench.run<AppState, void>(key: 'parent', (ctx) async {
           child = bench.job<Ready, void>(
             key: 'child',
@@ -1222,7 +1223,7 @@ void main() {
       test('a cancellation the parent accepts passes to its children', () {
         final errors = _zone((async) {
           final bench = Bench();
-          late Job<void> child;
+          late SoloJob<void> child;
           final parent = bench.run<Ready, void>(key: 'parent', (ctx) async {
             child = bench.job<Ready, void>(
               key: 'child',
@@ -1245,7 +1246,7 @@ void main() {
       test('a body that fails lets its children finish and waits for them', () {
         final errors = _zone((async) {
           final bench = Bench();
-          late Job<void> child;
+          late SoloJob<void> child;
           final parent = bench.run<Ready, void>(key: 'parent', (ctx) async {
             child = bench.job<Ready, void>(
               key: 'child',
@@ -1685,18 +1686,30 @@ void main() {
           'finished');
     });
 
-    test('ctx.run refuses a continuation in the words the page quotes', () {
+    test(
+      'ctx.run does not take a continuation: the error the page quotes',
+      () async {
+        final errors = await compileErrors('''
+import 'package:solo/solo.dart';
+
+final class Probe extends Solo<int> {
+  Probe() : super(0);
+
+  void attempt() => run<int, void>((ctx) async {
+        final tail = job<int, int>((c) async => 1).then<void>((c, v) {});
+        await ctx.run(tail);
+      });
+}
+''');
+        expect(errors, [_quotes()[1]]);
+        _says('so `ctx.run(tail)` does not compile:');
+      },
+      timeout: const Timeout(Duration(minutes: 1)),
+    );
+
+    test('ctx.run refuses a job of the core in the words the page quotes', () {
       final errors = _zone((async) {
-        final bench = Bench();
-        bench.run<Ready, void>(key: 'parent', (ctx) async {
-          final continuation = bench
-              .job<Ready, int>(key: 'source', (childCtx) async => 1)
-              .then((ctx, value) => value);
-          try {
-            await ctx.run(continuation);
-          } on Object catch (error) {
-            _see('$error');
-          }
+        Bench().run<Ready, void>(key: 'parent', (ctx) async {
           try {
             await ctx.run(Job.deferred<int>((ctx) async => 1));
           } on Object catch (error) {
@@ -1707,17 +1720,9 @@ void main() {
       });
 
       expect(errors, isEmpty);
-      expect(_seen, [
-        _quotes()[1],
-        _quotes()[1].replaceFirst('Job(then)', 'Job()'),
-      ]);
-      expect(
-        _quotes()[1],
-        'Invalid argument (job): was not created by this Solo: "Job(then)"',
-      );
-      expect(_quotes(), hasLength(4));
-      _says('The controller refuses it with an `ArgumentError`:');
-      _says('A job of the core made by hand is refused in the same words.');
+      expect(_seen, [_quotes()[2]]);
+      expect(_quotes(), hasLength(5));
+      _says('and the controller refuses it with an `ArgumentError`:');
     });
 
     test('ctx.run takes the jobs job(...) makes and nobody has queued', () {
@@ -1881,7 +1886,7 @@ void main() {
         });
 
         expect(errors, isEmpty);
-        expect(lines, contains(_quotes()[2]));
+        expect(lines, contains(_quotes()[3]));
         _says('The hang itself shows nothing, but `Solo.debug` warns of it '
             'when the job is queued:');
       });
@@ -1949,7 +1954,7 @@ void main() {
         });
 
         expect(errors, isEmpty);
-        expect(lines, contains(_quotes()[3]));
+        expect(lines, contains(_quotes()[4]));
         expect(_seen, [
           'closed false, job no outcome, cancelled true',
           'attempts 1',

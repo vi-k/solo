@@ -7,6 +7,7 @@ import 'package:fake_async/fake_async.dart';
 import 'package:solo/solo.dart';
 import 'package:test/test.dart';
 
+import 'support/compile_errors.dart';
 import 'support/foreign_job.dart';
 import 'support/run_solo.dart';
 import 'support/test_state.dart';
@@ -580,13 +581,34 @@ void main() {
     });
   });
 
-  test('a continuation and a core job are refused in the same words', () {
+  test(
+    'a job of a controller has no start: the queue or a parent starts it',
+    () async {
+      final errors = await compileErrors('''
+import 'package:solo/solo.dart';
+
+void attempt(SoloJob<void> job) => job.start();
+''');
+      expect(errors, [
+        "The method 'start' isn't defined for the type 'SoloJob'.",
+      ]);
+    },
+    timeout: const Timeout(Duration(minutes: 1)),
+  );
+
+  test('a continuation is not a child, and a core job is refused', () {
     runSolo((solo, journal, async) {
       final refusals = <String>[];
       final source = solo.job<TestState, void>(key: 'source', (ctx) async {});
       final tail = source.then<void>((ctx, value) async {});
+      // `ctx.run` takes a [ChildJob], and `then` makes none: the compiler
+      // turns a continuation away before anything runs.
+      expect(tail, isNot(isA<ChildJob<void>>()));
       solo.run<TestState, void>(key: 'parent', (ctx) async {
-        for (final job in [tail, ForeignJob<void>((_) async {})]) {
+        for (final job in [
+          Job.deferred<void>((_) async {}),
+          ForeignJob<void>((_) async {}),
+        ]) {
           try {
             ctx.run(job).ignore();
           } on Object catch (error) {

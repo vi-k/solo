@@ -1039,7 +1039,7 @@ void main() {
     test('a child created with cancellable: false refuses its parent', () {
       fakeAsync((async) {
         final bench = Bench();
-        late Job<void> child;
+        late SoloJob<void> child;
         final job = bench.run<Ready, void>((ctx) {
           child = bench.job<Ready, void>(
             cancellable: false,
@@ -1622,7 +1622,7 @@ void main() {
           () {
         fakeAsync((async) {
           final bench = Bench();
-          late Job<void> child;
+          late SoloJob<void> child;
           final job = bench.run<Ready, void>((ctx) {
             child = bench.job<Ready, void>(
               (child) =>
@@ -1675,7 +1675,7 @@ void main() {
           'child, with the cause', () {
         fakeAsync((async) {
           final bench = Bench();
-          late Job<void> child;
+          late SoloJob<void> child;
           final job = bench.run<Ready, void>((ctx) {
             child = bench.job<Ready, void>(
               (child) =>
@@ -1756,7 +1756,7 @@ void main() {
       test(
           'SiblingCancelReason: a branch of a group that failed, with the '
           'cause', () {
-        late Job<void> slow;
+        late SoloJob<void> slow;
         late Job<void> group;
         final error = StateError('a branch failed');
         _zone((async) {
@@ -2924,7 +2924,7 @@ void main() {
     test('a body that throws Cancelled ends its job the way cancel() does', () {
       fakeAsync((async) {
         final bench = Bench();
-        late Job<void> child;
+        late SoloJob<void> child;
         final job = bench.run<Ready, void>((ctx) async {
           ctx.onCancel(() => stage.trace.add('ctx.onCancel'));
           child = bench.job<Ready, void>((child) async {

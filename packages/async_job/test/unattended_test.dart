@@ -192,7 +192,7 @@ void main() {
     final journalA = JobJournal();
     final journalB = JobJournal();
     fakeAsync((async) {
-      late final Job<void> c;
+      late final ChildJob<void> c;
       final b = Job<void>(key: 'b', observer: journalB, (ctx) async {
         c = Job.deferred<void>(key: 'c', (cc) async {
           await cc.abandonable(() => delay(100));

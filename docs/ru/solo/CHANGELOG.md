@@ -17,6 +17,13 @@
   Дайте контроллеру метод на каждую операцию, которую вызывают снаружи. См.
   [«Создание и запуск задач»](jobs.md#создание-и-запуск-задач).
 - **`SoloStream.publish` помечен `@protected`.**
+- **`SoloJob` — это `ChildJob`, тип, который теперь принимают `ctx.run`
+  и `ctx.runAll` из `async_job`.** Задача из `job(...)`, которую держат как
+  `Job`, там больше не компилируется: помощнику, который её делает, дайте тип
+  `SoloJob`, как `SoloJob<void> _recordPath(String path) => job(...)`.
+  Продолжение из `then`, которому `ctx.run` отказывал с `ArgumentError`, там
+  тоже больше не компилируется. См.
+  [«Цепочки завершённой работы»](children.md#цепочки-завершённой-работы).
 - **Синхронное чтение контроллера называется `currentState`, а не `state`.**
   Тело читает `ctx.state`. См.
   [«Почему `currentState`, а не `state`»](https://github.com/vi-k/solo/blob/main/packages/solo/README.ru.md#почему-currentstate-а-не-state).

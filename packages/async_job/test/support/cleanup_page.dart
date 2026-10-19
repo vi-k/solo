@@ -34,7 +34,7 @@ Future<Database> keeping(JobContext ctx) async {
   return database;
 }
 
-DeferredJob<Database> onArrival(Job<Database> connect) {
+DeferredJob<Database> onArrival(ChildJob<Database> connect) {
   final ready = Job.deferred<Database>((ctx) async {
     final database = await ctx.run(
       connect,

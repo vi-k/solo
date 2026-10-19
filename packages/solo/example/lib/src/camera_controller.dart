@@ -120,7 +120,7 @@ final class CameraController extends Solo<CameraState> {
     );
   }
 
-  Job<void> _closeCameraJob() => job<NotDisposed, void>(
+  SoloJob<void> _closeCameraJob() => job<NotDisposed, void>(
         key: CameraKey.closeCamera,
         cancellable: false,
         (ctx) async => hw.close(),

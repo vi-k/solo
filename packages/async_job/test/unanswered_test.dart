@@ -152,7 +152,7 @@ List<String> cancelledOutside(JobObserver? observer) => zoneOf((async) {
 /// A child whose body fails 5 ms in while a child of its own still runs:
 /// it waits for that one, and a cancellation arriving 10 ms in covers the
 /// failure.
-Job<int> failingFirst(String key, {JobObserver? observer}) =>
+ChildJob<int> failingFirst(String key, {JobObserver? observer}) =>
     Job.deferred<int>(key: key, observer: observer, (ctx) async {
       ctx
           .run(Job.deferred<void>((ctx) => ctx.abandonable(() => delay(50))))
@@ -164,7 +164,7 @@ Job<int> failingFirst(String key, {JobObserver? observer}) =>
 /// A parent that runs [child] through `ctx.run` and is cancelled 10 ms in.
 List<String> runCancelled(
   JobObserver? observer,
-  Job<int> Function() child,
+  ChildJob<int> Function() child,
 ) =>
     zoneOf((async) {
       final parent = Job<void>(observer: observer, (ctx) async {
@@ -1356,7 +1356,7 @@ void main() {
           });
           Job<void>(observer: observer, (ctx) async {
             try {
-              await ctx.runAll(<Job<int>>[first, second, slow]);
+              await ctx.runAll(<ChildJob<int>>[first, second, slow]);
             } on Object catch (_) {
               // The group throws the first one.
             }

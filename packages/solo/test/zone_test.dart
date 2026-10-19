@@ -620,7 +620,7 @@ void main() {
         }
         final caught = <String>[];
         final solo = _Loud();
-        late final Job<int> child;
+        late final SoloJob<int> child;
         try {
           fakeAsync((async) {
             late final Job<void> parent;

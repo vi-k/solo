@@ -1186,7 +1186,7 @@ void main() {
         throw const Cancelled('why');
       })
         ..ignoreFailure();
-      late Job<void> left;
+      late ChildJob<void> left;
       final threwWithChild = Job<void>((ctx) async {
         ctx.onCancel(() => seen.add('with child: onCancel'));
         left = Job.deferred<void>((ctx) async {

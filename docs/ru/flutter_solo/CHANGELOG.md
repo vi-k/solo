@@ -10,6 +10,9 @@
 - **`Job.ignore()` переименован в `Job.ignoreFailure()`** в `async_job`.
 - **В `solo` обработчики состояния у `run` и `job` переименованы: `onError`
   в `ifFailed`, `onCancel` в `ifCancelled`.**
+- **`ctx.run` и `ctx.runAll` принимают `ChildJob`** в `async_job`, а `SoloJob`
+  из `solo` — это `ChildJob`: помощник, который возвращает `job(...)` для
+  `ctx.run`, объявляется `SoloJob<T>`, а не `Job<T>`.
 - **`SoloListenable` стал миксином на `Solo`,** как `SoloStream` в `solo`:
   `extends SoloListenable<S>` становится `extends Solo<S> with SoloListenable`.
   См.

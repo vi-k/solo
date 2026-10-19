@@ -17,6 +17,13 @@ package's too: see
   the controller a method for each operation called from outside. See
   [Creating and scheduling jobs](doc/jobs.md#creating-and-scheduling-jobs).
 - **`SoloStream.publish` is `@protected`.**
+- **`SoloJob` is a `ChildJob`, the type `ctx.run` and `ctx.runAll` of
+  `async_job` take now.** A job of `job(...)` held as a `Job` no longer
+  compiles there: type the helper that makes it `SoloJob`, as
+  `SoloJob<void> _recordPath(String path) => job(...)`. A continuation of
+  `then`, which `ctx.run` refused with an `ArgumentError`, no longer compiles
+  there either. See
+  [Chaining completed work](doc/children.md#chaining-completed-work).
 - **The controller's synchronous read is `currentState`, not `state`.** A body
   reads `ctx.state`. See
   [Why `currentState` and not `state`](README.md#why-currentstate-and-not-state).

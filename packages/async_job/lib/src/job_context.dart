@@ -412,22 +412,21 @@ abstract interface class JobContext {
   /// observer, otherwise in the zone, unless [Job.ignoreFailure] was called on
   /// [child] or [Job.isCancellationError] names the failure.
   ///
-  /// A child is a job nobody starts by itself: [Job.deferred], or a job of
-  /// an engine whose start belongs to the engine. One from `Job(body)` or
-  /// [Job.then] is refused, whether or not its own start has come round
-  /// yet: which of the two got there first is a matter of microtasks nobody
-  /// can see in the source.
+  /// A child is a [ChildJob]: one from [Job.deferred], or a job of an engine of
+  /// a domain that declares it. A job from `Job(body)`, [Job.then] or
+  /// [Job.each] starts itself and is none, so the compiler turns it away before
+  /// anything runs.
   ///
   /// Admission errors are synchronous: throws [ArgumentError] for a handle that
-  /// is not a job of this core, one an engine of a domain does not own, or one
-  /// that starts itself; [StateError] for a job that has already been started
-  /// or has finished — one cancelled before its start included — and for a call
-  /// made after this job's body has ended — from its cleanup, say — or from
-  /// [unattended] work; and the parent's own [Cancelled], with the child
-  /// cancelled before its start, if the parent is already cancelled. An
-  /// [ArgumentError] or a [StateError] leaves [child] untouched, with the code
-  /// that made it: a job of [Job.deferred] refused that way stays unstarted,
-  /// and its [Job.done] waits until that code starts or cancels it.
+  /// is not a job of this core or one an engine of a domain does not own;
+  /// [StateError] for a job that has already been started or has finished — one
+  /// cancelled before its start included — and for a call made after this job's
+  /// body has ended — from its cleanup, say — or from [unattended] work; and
+  /// the parent's own [Cancelled], with the child cancelled before its start,
+  /// if the parent is already cancelled. An [ArgumentError] or a [StateError]
+  /// leaves [child] untouched, with the code that made it: a job of
+  /// [Job.deferred] refused that way stays unstarted, and its [Job.done] waits
+  /// until that code starts or cancels it.
   ///
   /// [dispose] and [discard] say how the child's value is cleaned up, and they
   /// work as they do in [abandonable]: [dispose] runs whatever the outcome,
@@ -446,7 +445,7 @@ abstract interface class JobContext {
   /// there — and the child, having ended [Done], has already dropped its
   /// own. Nothing would close the database at all.
   Future<T> run<T>(
-    Job<T> child, {
+    ChildJob<T> child, {
     FutureOr<void> Function(T value)? dispose,
     FutureOr<void> Function(T value)? discard,
   });
@@ -565,7 +564,7 @@ abstract interface class JobContext {
   /// of its domain that throws — may arrive after some branches have started:
   /// it stops them and waits for them before it comes out, and the handles
   /// after the refused one are left as they were, never started.
-  Future<List<T>> runAll<T>(Iterable<Job<T>> children);
+  Future<List<T>> runAll<T>(Iterable<ChildJob<T>> children);
 
   /// Starts a child job that processes [stream] one event at a time.
   ///
@@ -1393,7 +1392,7 @@ abstract class JobContextBase implements JobContext {
 
   @override
   Future<T> run<T>(
-    Job<T> child, {
+    ChildJob<T> child, {
     FutureOr<void> Function(T value)? dispose,
     FutureOr<void> Function(T value)? discard,
   }) {
@@ -1406,7 +1405,7 @@ abstract class JobContextBase implements JobContext {
   }
 
   @override
-  Future<List<T>> runAll<T>(Iterable<Job<T>> children) {
+  Future<List<T>> runAll<T>(Iterable<ChildJob<T>> children) {
     // Read once, by copy, before anything starts: an `Iterable` promises
     // neither repeatability nor stability, and the bodies below start
     // synchronously and may change the list this was made from. A
@@ -1505,7 +1504,9 @@ abstract class JobContextBase implements JobContext {
   /// A domain that restricts child ownership overrides this method, performs
   /// its own validation, then calls `super.startChild(child)`. It applies the
   /// synchronous admission rules of [run] and does not observe the child's
-  /// outcome.
+  /// outcome. It takes any [Job], so the type that keeps a job which starts
+  /// itself away from [run] does not guard it: such a job is refused here with
+  /// an [ArgumentError] — one from `Job(body)`, [Job.then] or [Job.each].
   @protected
   @mustCallSuper
   void startChild<T>(Job<T> child) {

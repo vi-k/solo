@@ -42,7 +42,8 @@ class Database {
   /// the body runs as a child. It is made with [Job.deferred], so that
   /// `ctx.run` starts it: a job made with `Job(...)` starts on its own, and
   /// `ctx.run` refuses it.
-  Job<void> readyFlag() => Job.deferred((ctx) => ctx.join(_writeReadyFlag));
+  ChildJob<void> readyFlag() =>
+      Job.deferred((ctx) => ctx.join(_writeReadyFlag));
 
   Future<void> _writeReadyFlag() async {
     await Future<void>.delayed(const Duration(milliseconds: 100));

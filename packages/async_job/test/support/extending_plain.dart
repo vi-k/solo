@@ -3,7 +3,7 @@
 // members, so it lives in a library of its own.
 import 'package:async_job/engine.dart';
 
-final class MyJob<T> extends JobBase<T> {
+final class MyJob<T> extends JobBase<T> implements ChildJob<T> {
   // Dropped once the job is over, as the core drops its own: the body
   // holds everything it captured, and a job is held to read its outcome
   // long after.

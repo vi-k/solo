@@ -475,7 +475,7 @@ void main() {
       // hook runs in the canceller's.
       final caught = <String>[];
       fakeAsync((async) {
-        late Job<void> job;
+        late DeferredJob<void> job;
         runZonedGuarded(
           () => job = Job.deferred<void>(
             observer: ThrowingFinish(),

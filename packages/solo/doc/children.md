@@ -5,7 +5,7 @@ A root job can split its work into child jobs:
 ```dart
 // Made by the controller and started by nobody yet: the queue takes it
 // through `sync` below, a parent takes it through `ctx.run`.
-Job<String> _sync(int item) => job<Ready, String>(
+SoloJob<String> _sync(int item) => job<Ready, String>(
       key: _Op.sync,
       (ctx) async {
         // A stream child: the progress of the upload, which the API
@@ -232,14 +232,19 @@ one already running after the source finished.
 
 A continuation is never a child. Inside a controller's body `ctx.run` takes
 jobs of that controller, the ones `job(...)` makes and nobody has queued, and a
-continuation is none of those: it is a root job of the core. The controller
-refuses it with an `ArgumentError`:
+continuation is none of those: it is a root job of the core, a plain `Job` and
+not a `ChildJob`, so `ctx.run(tail)` does not compile:
 
 ```text
-Invalid argument (job): was not created by this Solo: "Job(then)"
+The argument type 'Job<void>' can't be assigned to the parameter type 'ChildJob<dynamic>'.
 ```
 
-A job of the core made by hand is refused in the same words.
+A job of the core made by hand with `Job.deferred` is a `ChildJob` and
+compiles, and the controller refuses it with an `ArgumentError`:
+
+```text
+Invalid argument (job): was not created by this Solo: "Job()"
+```
 
 ## Steps in a row
 
@@ -249,7 +254,7 @@ the way `sync` is:
 
 ```dart
 // The same split as `sync`: the step itself, and the queue's way in.
-Job<void> _recordPath(String path) => job<Ready, void>(
+SoloJob<void> _recordPath(String path) => job<Ready, void>(
       key: _Op.record,
       (ctx) async => ctx.emit(ctx.state.copyWith(path: path)),
     );

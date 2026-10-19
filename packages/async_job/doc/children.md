@@ -52,9 +52,9 @@ for it and only then ends `Cancelled`. If the body throws another error, the
 parent lets its children finish and waits for them.
 
 Create children with `Job.deferred`, so the parent controls their start.
-`ctx.run` rejects a regular `Job`, because such a job starts automatically: it
-may start before the parent registers it and then run outside the parent's
-cancellation and completion handling.
+`ctx.run` takes a `ChildJob`, and a regular `Job` is not one, because such a
+job starts automatically: it may start before the parent registers it and then
+run outside the parent's cancellation and completion handling.
 
 `run` waits for the child to finish, including its children and cleanup, and
 checks the parent's cancellation before returning the value to the body. If the
@@ -108,11 +108,14 @@ child an observer that answers: a `JobAnswerer` with `onUnanswered` overridden.
 
 ### When `ctx.run` refuses a child
 
-`ctx.run` refuses an invalid start synchronously, before the child runs:
+`ctx.run` takes a `ChildJob`: a `Job.deferred`, or a job of an engine that
+declares it. A job that starts by itself, one from `Job(body)`, `then` or
+`Job.each`, is not one, and the compiler turns it away. What the type does not
+show, `ctx.run` refuses synchronously, before the child runs:
 
 | The child | What `ctx.run` does |
 | --- | --- |
-| A job that starts automatically, or one from another implementation | Throws `ArgumentError` |
+| A job from another implementation | Throws `ArgumentError` |
 | A job that has already started or finished | Throws `StateError` |
 | Any job, once the parent body has ended | Throws `StateError` |
 | Any job, once the parent is cancelled | Cancels the child before its start and throws the parent's `Cancelled` |
@@ -127,7 +130,7 @@ the list untouched.
 ### How deep a tree goes
 
 ```dart
-Job<void> level(int depth) {
+ChildJob<void> level(int depth) {
   return Job.deferred<void>((ctx) async {
     // Without this await, the whole chain is built on one stack.
     await null;
@@ -655,8 +658,8 @@ final stored = parsed.then<void>((ctx, number) {
 `then` does not start its source. A chain hung off a `Job.deferred` stays
 unstarted, every link of it, until the source is started: by `start()`, or by
 `ctx.run(source)` in the body that adopts it. The continuation itself is never
-adopted: it starts by itself once its source finishes, and `ctx.run` refuses
-it.
+adopted: it starts by itself once its source finishes, and `ctx.run` does not
+take it, because `then` returns a plain `Job` and not a `ChildJob`.
 
 A continuation starts once its source has finished, cleanup included, so a
 source that waits for its own continuation waits forever:
@@ -771,7 +774,7 @@ report is done.
 continuation, and the body adopts both:
 
 ```dart
-// The first attempt: ctx.run refuses a continuation.
+// The first attempt: ctx.run does not take a continuation.
 final child = Job.deferred<int>((ctx) => ctx.abandonable(load));
 final tail = child.then<void>((ctx, rows) => report(rows));
 
@@ -781,16 +784,16 @@ final parent = Job<void>((ctx) async {
 });
 ```
 
-The second `ctx.run` throws `ArgumentError`:
+The second `ctx.run` does not compile:
 
 ```text
-Invalid argument (child): is a continuation, which starts itself once its source finishes: "Job(then)"
+The argument type 'Job<void>' can't be assigned to the parameter type 'ChildJob<dynamic>'.
 ```
 
-`ctx.run` takes a job nobody starts by itself, and a continuation is not one of
-those. The length of the chain changes nothing: `child.then(...).then(...)`
-hangs one continuation off another, and every link refuses adoption the same
-way.
+`ctx.run` takes a `ChildJob`, a job its parent starts, and a continuation
+starts itself once its source finishes: `then` returns a plain `Job`. The
+length of the chain changes nothing: `child.then(...).then(...)` hangs one
+continuation off another, and no link of it is a child.
 
 ### Two children in a row
 

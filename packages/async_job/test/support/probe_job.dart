@@ -5,7 +5,7 @@ import 'package:async_job/engine.dart';
 import 'cancel_reason.dart';
 
 /// A job of the core with its protected surface opened for tests.
-final class ProbeJob<T> extends JobBase<T> {
+final class ProbeJob<T> extends JobBase<T> implements ChildJob<T> {
   final Future<T> Function(JobContext ctx) _body;
 
   /// The lifecycle hooks a subclass gets, in the order they were called.
@@ -65,7 +65,7 @@ final class ProbeContext extends JobContextBase {
 }
 
 /// A job of the core that refuses whoever tries to adopt it.
-final class UnadoptableJob<T> extends JobBase<T> {
+final class UnadoptableJob<T> extends JobBase<T> implements ChildJob<T> {
   final Future<T> Function(JobContext ctx) _body;
 
   UnadoptableJob(this._body, {super.key});
@@ -88,7 +88,7 @@ final class UnadoptableJob<T> extends JobBase<T> {
 }
 
 /// A job whose context turns every child away before it starts.
-final class RefusingParentJob<T> extends JobBase<T> {
+final class RefusingParentJob<T> extends JobBase<T> implements ChildJob<T> {
   final Future<T> Function(JobContext ctx) _body;
   final Cancelled? _refusal;
 
@@ -135,7 +135,8 @@ final class RefusingContext extends JobContextBase {
 /// Stands in for a rule of a domain that says yes and, on the way, gives
 /// up on the job it belongs to: `canStart` in `solo` may call `cancel()`
 /// or `close()` and still answer that the child may start.
-final class SelfCancellingRulesJob<T> extends JobBase<T> {
+final class SelfCancellingRulesJob<T> extends JobBase<T>
+    implements ChildJob<T> {
   final Future<T> Function(JobContext ctx) _body;
 
   SelfCancellingRulesJob(this._body, {super.key});
@@ -165,7 +166,7 @@ final class SelfCancellingContext extends JobContextBase {
 ///
 /// Stands in for an engine of a domain whose [JobBase.createContext]
 /// throws: the child never starts, and the parent must not wait for it.
-final class UnstartableJob<T> extends JobBase<T> {
+final class UnstartableJob<T> extends JobBase<T> implements ChildJob<T> {
   UnstartableJob({super.key});
 
   @override
@@ -181,7 +182,8 @@ final class UnstartableJob<T> extends JobBase<T> {
 /// Stands in for the bottom of a stack: [JobBase.createContext] is the
 /// first thing a start calls, and a start cut short there has done nothing
 /// yet.
-final class NoStackForContextJob extends JobBase<void> {
+final class NoStackForContextJob extends JobBase<void>
+    implements ChildJob<void> {
   NoStackForContextJob({super.key});
 
   @override
@@ -197,7 +199,7 @@ final class NoStackForContextJob extends JobBase<void> {
 ///
 /// Stands in for a handle whose start was cut short at the bottom of a
 /// stack before it did a thing, and that is started again higher up.
-final class NoStackAtFirstJob extends JobBase<void> {
+final class NoStackAtFirstJob extends JobBase<void> implements ChildJob<void> {
   final Future<void> Function() _body;
   var _starts = 0;
 
@@ -216,7 +218,7 @@ final class NoStackAtFirstJob extends JobBase<void> {
 /// Stands in for an override of [JobBase.finish] in a domain that throws
 /// before it gets to `super`, the first time it is asked: the job is not
 /// over, and whoever asked hears the error.
-final class HardToEndJob extends JobBase<void> {
+final class HardToEndJob extends JobBase<void> implements ChildJob<void> {
   /// How many times the job was asked to end.
   int asked = 0;
 
@@ -243,7 +245,7 @@ final class HardToEndJob extends JobBase<void> {
 /// Started in a zone that has no stack for a timer, it is cut short after
 /// it began to run, and the routine that comes back for it is thrown out
 /// by an override of [JobBase.finish] in a domain.
-final class HardToEndTimedJob extends JobBase<void> {
+final class HardToEndTimedJob extends JobBase<void> implements ChildJob<void> {
   /// How many times the job was asked to end.
   int asked = 0;
 
@@ -269,7 +271,7 @@ final class HardToEndTimedJob extends JobBase<void> {
 /// Stands in for the bottom of a stack under a group that is still
 /// forming: a child of the group refused to start, and the first thing the
 /// group does about it is ask the context whether the job is cancelled.
-final class NoStackForGroupJob<T> extends JobBase<T> {
+final class NoStackForGroupJob<T> extends JobBase<T> implements ChildJob<T> {
   final Future<T> Function(NoStackForGroupContext ctx) _body;
 
   NoStackForGroupJob(this._body, {super.key});
@@ -306,7 +308,7 @@ final class NoStackForGroupContext extends JobContextBase {
 /// Started in a zone that has no stack for a timer, it is cut short after
 /// it began to run and before its body did: the cleanup is registered, and
 /// only the rest of the job's own routine can release it.
-final class TimedProbeJob extends JobBase<void> {
+final class TimedProbeJob extends JobBase<void> implements ChildJob<void> {
   /// What the job went through, in the order it happened.
   final hooks = <String>[];
 
@@ -330,7 +332,7 @@ final class TimedProbeJob extends JobBase<void> {
 ///
 /// Stands in for whatever may fail in the part of a routine that runs after
 /// the start has returned: the parent of this job asks for it there.
-final class UnwaitableJob extends JobBase<void> {
+final class UnwaitableJob extends JobBase<void> implements ChildJob<void> {
   UnwaitableJob({super.key});
 
   @override
@@ -349,7 +351,7 @@ final class UnwaitableJob extends JobBase<void> {
 /// Stands in for a rule of a domain with a recursion of its own. The stack
 /// the child would have started on is not the one that ran out, and the
 /// child has not joined the waiting list of its parent.
-final class OverflowingRulesJob<T> extends JobBase<T> {
+final class OverflowingRulesJob<T> extends JobBase<T> implements ChildJob<T> {
   final Future<T> Function(JobContext ctx) _body;
 
   OverflowingRulesJob(this._body, {super.key});
@@ -377,7 +379,7 @@ final class OverflowingRulesContext extends JobContextBase {
 ///
 /// Stands in for a rule of a domain — `canStart` in `solo` — that throws
 /// instead of turning the child away.
-final class ThrowingRulesJob<T> extends JobBase<T> {
+final class ThrowingRulesJob<T> extends JobBase<T> implements ChildJob<T> {
   final Future<T> Function(JobContext ctx) _body;
 
   ThrowingRulesJob(this._body, {super.key, super.observer});
@@ -406,7 +408,7 @@ final class ThrowingRulesContext extends JobContextBase {
 /// Stands in for a rule of a domain that gives up on the child — `canStart`
 /// in `solo` calling `cancel()` on it — and throws afterwards: the error
 /// arrives at a child that is already over.
-final class ChildEndingRulesJob<T> extends JobBase<T> {
+final class ChildEndingRulesJob<T> extends JobBase<T> implements ChildJob<T> {
   final Future<T> Function(JobContext ctx) _body;
   final bool _letsIn;
 
@@ -448,7 +450,7 @@ final class ChildEndingRulesContext extends JobContextBase {
 }
 
 /// A job whose `finished` hook throws, the way an engine of a domain can.
-final class FailingHookJob<T> extends JobBase<T> {
+final class FailingHookJob<T> extends JobBase<T> implements ChildJob<T> {
   final Future<T> Function(JobContext ctx) _body;
 
   FailingHookJob(this._body, {super.key, super.observer});
@@ -470,7 +472,7 @@ final class FailingHookJob<T> extends JobBase<T> {
 ///
 /// The rules cancel through a cancellation nobody may refuse: neither a
 /// job created with `cancellable: false` nor an uncancellable section.
-final class RulesJob<T> extends JobBase<T> {
+final class RulesJob<T> extends JobBase<T> implements ChildJob<T> {
   final Future<T> Function(RulesContext ctx) _body;
 
   RulesJob(this._body, {super.key, super.cancellable});
@@ -503,7 +505,7 @@ final class RulesContext extends JobContextBase {
 ///
 /// Two children of one queue are equal to each other and are still two
 /// jobs — the core has to take the right one off the waiting list.
-class KeyedJob<T> extends JobBase<T> {
+class KeyedJob<T> extends JobBase<T> implements ChildJob<T> {
   final Future<T> Function(JobContext ctx) _body;
 
   KeyedJob(this._body, {required Object super.key});
@@ -542,7 +544,7 @@ final class UnstartableKeyedJob<T> extends KeyedJob<T> {
 /// The group checks its parent before it commits, and in `solo` that check
 /// runs `keepWhile`. Here [CheckingContext.rules] is that predicate: it
 /// may throw, and it may cancel something and still answer yes.
-final class CheckingJob<T> extends JobBase<T> {
+final class CheckingJob<T> extends JobBase<T> implements ChildJob<T> {
   final Future<T> Function(CheckingContext ctx) _body;
 
   CheckingJob(this._body, {super.key, super.observer});
@@ -584,7 +586,7 @@ final class CheckingContext extends JobContextBase {
 ///
 /// Stands in for an engine whose own `cancelWith` fails: whoever asked has
 /// to go on, or the rest of a group would stand at its barriers for good.
-final class UncancellableByBugJob<T> extends JobBase<T> {
+final class UncancellableByBugJob<T> extends JobBase<T> implements ChildJob<T> {
   final Future<T> Function(JobContext ctx) _body;
 
   UncancellableByBugJob(this._body, {super.key});

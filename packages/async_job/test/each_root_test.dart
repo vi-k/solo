@@ -9,6 +9,7 @@ import 'package:test/test.dart';
 
 import 'support/delay.dart';
 import 'support/journal.dart';
+import 'support/probe_job.dart';
 
 void main() {
   test('a stream followed to its end', () {
@@ -224,19 +225,32 @@ void main() {
     });
   });
 
-  test('handed to ctx.run', () {
+  test('not a child', () {
+    fakeAsync((async) {
+      final controller = StreamController<int>();
+      final root = Job.each(controller.stream, (ctx, event) {});
+      // `ctx.run` and `ctx.runAll` take a [ChildJob], and `Job.each` makes
+      // none: the compiler turns it away before anything runs.
+      expect(root, isNot(isA<ChildJob<void>>()));
+      root.cancel().ignore();
+      async.flushMicrotasks();
+      controller.close().ignore();
+    });
+  });
+
+  test('handed to an engine as a child', () {
     fakeAsync((async) {
       final controller = StreamController<int>();
       Object? refusal;
       late final Job<void> root;
-      Job<void>((ctx) async {
+      ProbeJob<void>((ctx) async {
         root = Job.each(controller.stream, (ctx, event) {});
         try {
-          await ctx.run(root);
+          (ctx as ProbeContext).adopt(root);
         } on Object catch (error) {
           refusal = error;
         }
-      });
+      }).launch();
       async.flushMicrotasks();
       expect(refusal, isA<ArgumentError>());
       expect(
@@ -244,36 +258,6 @@ void main() {
         contains('follows its stream by itself; a child is made with ctx.each'),
       );
       expect(root.isRunning, isTrue, reason: 'a refusal cancels nothing');
-      root.cancel().ignore();
-      async.flushMicrotasks();
-      controller.close().ignore();
-    });
-  });
-
-  test('handed to ctx.runAll next to a deferred sibling', () {
-    fakeAsync((async) {
-      final controller = StreamController<int>();
-      Object? refusal;
-      var siblingRan = false;
-      late final Job<void> root;
-      Job<void>((ctx) async {
-        root = Job.each(controller.stream, (ctx, event) {});
-        try {
-          await ctx.runAll([
-            Job.deferred<void>((ctx) async => siblingRan = true),
-            root,
-          ]);
-        } on Object catch (error) {
-          refusal = error;
-        }
-      });
-      async.flushMicrotasks();
-      expect(refusal, isA<ArgumentError>());
-      expect(
-        '$refusal',
-        contains('follows its stream by itself; a child is made with ctx.each'),
-      );
-      expect(siblingRan, isFalse);
       root.cancel().ignore();
       async.flushMicrotasks();
       controller.close().ignore();
