@@ -89,11 +89,12 @@ Override `started()` and `finished()` to follow the lifecycle. `started()` runs
 as the body is about to start, with the job already running. `finished()` runs
 once the job has its outcome — for a job dropped before its body ran too, with
 no `started()` before it. An error either of them throws goes to `onError` and
-on to the answer of the observer, as [An observer](observing.md#an-observer) on
-the observing page describes for an error no outcome carries, and the job goes
-on as it would have. Your own bookkeeping is what is left half-done, so keep
-both short and unconditional. `MyJob` drops its body in `finished()`: kept, it
-would hold everything it captured for as long as anyone holds the job.
+then to the zone, unless the observer catches it in `onUnanswered`, as
+[An observer](observing.md#an-observer) on the observing page describes for an
+error no outcome carries, and the job goes on as it would have. Your own
+bookkeeping is what is left half-done, so keep both short and unconditional.
+`MyJob` drops its body in `finished()`: kept, it would hold everything it
+captured for as long as anyone holds the job.
 
 For the engine to answer for such errors itself, put an observer of your own on
 every job, mix `JobAnswerer` into it and override its `onUnanswered`, the way
@@ -329,11 +330,11 @@ outcome: Cancelled(signed out)
 
 A sign-out now ends the job the way a cancellation does: the connection is
 closed, and the outcome is `Cancelled`. The body lets the rule's `Cancelled`
-out and gives itself up with it, and a job whose body gives itself up stops the
-way a cancelled one does: its `onCancel` callbacks run and its children stop.
-The job accepts the rule's cancellation as the body lets it out, not before: a
-body that catches it in a `try`/`catch` and goes on is not cancelled. Nobody
-asked the job for this cancellation, so it does not come through `cancelWith`.
+out and so cancels itself, and a job whose body cancels itself stops the way a
+cancelled one does: its `onCancel` callbacks run and its children stop. The job
+accepts the rule's cancellation as the body lets it out, not before: a body
+that catches it in a `try`/`catch` and goes on is not cancelled. Nobody asked
+the job for this cancellation, so it does not come through `cancelWith`.
 Neither `cancellable: false` nor `ctx.uncancellable` stands in the rule's way:
 they refuse or hold a cancellation asked of the job, and the rule's is an
 exception: `check()` throws it inside the call that asked the rule, here
@@ -408,8 +409,8 @@ of `runAll` after its group heard that the body failed comes too late for the
 group. The group hears of the failure right after `onError` does, or, for a
 body that is not `async` and threw while `runAll` was starting the branches,
 once all of them have started. The group then goes by the failure, as if the
-branch had ended with it, and throws it, or answers for it as for any failure
-of a branch it did not throw, which `ignoreFailure()` on the branch silences.
+branch had ended with it, and throws it, or sends it where any failure of a
+branch it did not throw goes, which `ignoreFailure()` on the branch silences.
 The value stays in the outcome of the branch alone.
 
 A `Cancelled` handed to `cancelWith` or to `finish` belongs to one job, the way

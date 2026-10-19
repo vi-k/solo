@@ -124,7 +124,7 @@ void main() {
     });
   });
 
-  test('a cascade carries the stack trace of a body that gave up', () {
+  test('a cascade carries the stack trace of a body that cancelled itself', () {
     fakeAsync((async) {
       late ChildJob<void> child;
       final parent = Job<void>((ctx) async {

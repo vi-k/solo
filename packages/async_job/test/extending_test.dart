@@ -1,4 +1,4 @@
-// The protected surface an engine of a domain stands on.
+// The protected surface an engine stands on.
 //
 // Five of its members are held by `solo` alone and by nothing in here, so
 // a change to their contract would leave this package green and redden the
@@ -536,7 +536,7 @@ void main() {
     });
   });
 
-  test('a body that gives itself up drops what a section it left open holds',
+  test('a body that cancels itself drops what a section it left open holds',
       () {
     fakeAsync((async) {
       final job = SectionJob<void>((ctx) async {

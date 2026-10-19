@@ -7,9 +7,8 @@ part of 'job_base.dart';
 /// the group.
 final class _GroupHold {
   /// The body of the branch has ended with this outcome. Nothing is decided by
-  /// that, except that a value an engine of a domain hands the branch once the
-  /// group has heard of a failure comes too late for the group: see
-  /// [takeFailure].
+  /// that, except that a value an engine hands the branch once the group has
+  /// heard of a failure comes too late for the group: see [takeFailure].
   final void Function(Outcome<Object?> outcome) bodyEnded;
 
   /// Stands at the first barrier until the group lets the branch unwind.
@@ -19,10 +18,10 @@ final class _GroupHold {
   /// `true` when it has committed the value of this branch.
   final Future<bool> Function() beforeOutcome;
 
-  /// An engine of a domain has ended the branch by hand with a value. The
-  /// answer is `true` when the group heard by the early word that the body
-  /// failed before that: it then goes by that failure, throws it or answers for
-  /// it, and the value is too late for it.
+  /// An engine has ended the branch by hand with a value. The answer is `true`
+  /// when the group heard by the early word that the body failed before that:
+  /// it then goes by that failure, throws it or answers for it, and the value
+  /// is too late for it.
   final bool Function() takeFailure;
 
   _GroupHold({
@@ -70,7 +69,7 @@ final class _GroupBranch<T> {
   bool heard = false;
 
   /// Whether the group goes by the failure of the body, which it heard first,
-  /// and not by the value an engine of a domain handed in later.
+  /// and not by the value an engine handed in later.
   bool failureTaken = false;
 
   _GroupBranch(this.job);
@@ -177,11 +176,11 @@ final class _RunAllGroup<T> {
       // barrier is then always one the group knows, wherever this loop is
       // cut short.
       _branches.add(branch);
-      // A branch that is over already -- an engine of a domain ended it by hand
-      // in its start -- stands at no barrier, and its outcome is all the group
-      // goes by. A hold would carry word of a failure of the body that comes
-      // too late, and keep the group reachable from the branch for good: the
-      // finish that would let go of it has run already.
+      // A branch that is over already -- an engine ended it by hand in its
+      // start -- stands at no barrier, and its outcome is all the group goes
+      // by. A hold would carry word of a failure of the body that comes too
+      // late, and keep the group reachable from the branch for good: the finish
+      // that would let go of it has run already.
       if (!branch.job.isFinished) {
         branch.job._hold = _holdFor(branch);
       }
@@ -231,9 +230,9 @@ final class _RunAllGroup<T> {
   /// branch would be observed with nobody listening, and its failure would
   /// reach no one. A failure of the body of a branch that ends [Cancelled] is
   /// in no outcome, and the group never sees it: the branch answers for that
-  /// one itself, as any job does. So does a branch an engine of a domain ended
-  /// by hand, unless the group heard of the failure before the value came: the
-  /// group then goes by the failure — see [_takeFailure].
+  /// one itself, as any job does. So does a branch an engine ended by hand,
+  /// unless the group heard of the failure before the value came: the group
+  /// then goes by the failure — see [_takeFailure].
   void _hear(_GroupBranch<T> branch) {
     branch.job._done.future
         .then((outcome) => _branchFinished(branch, outcome))
@@ -392,11 +391,10 @@ final class _RunAllGroup<T> {
       try {
         branch.job.cancelWith(cancelled);
       } on Object catch (error, stackTrace) {
-        // An engine of a domain threw while being asked to stop. That is
-        // not an outcome of any branch, and above all it must not leave
-        // the rest of them standing at their barriers: the loop goes on,
-        // and the error comes out of the group the way a refusal of
-        // admission does.
+        // An engine threw while being asked to stop. That is not an outcome of
+        // any branch, and above all it must not leave the rest of them standing
+        // at their barriers: the loop goes on, and the error comes out of the
+        // group the way a refusal of admission does.
         _ownError ??= (error, stackTrace);
       }
     }
@@ -627,11 +625,11 @@ final class _RunAllGroup<T> {
       }
       // Received and not chosen. Every [Failed] the group goes by has been
       // announced already — a failure the body threw where it was caught, taken
-      // in place of a value or not, one an engine of a domain handed in by
-      // [JobBase.finish] — so only the route for an error nobody answered for
-      // is left, and the group is the last one holding it. A branch that
-      // [Job.ignoreFailure] was called on wants no answer: the notice stays, as
-      // it does for a failure of the body of a cancelled job.
+      // in place of a value or not, one an engine handed in by [JobBase.finish]
+      // — so only the route for an error nobody answered for is left, and the
+      // group is the last one holding it. A branch that [Job.ignoreFailure] was
+      // called on wants no answer: the notice stays, as it does for a failure
+      // of the body of a cancelled job.
       if (!branch.job._ignored) {
         branch.job._handleUnanswered(outcome.error, outcome.stackTrace);
       }

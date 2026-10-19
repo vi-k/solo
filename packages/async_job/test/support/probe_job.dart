@@ -28,18 +28,17 @@ final class ProbeJob<T> extends JobBase<T> implements ChildJob<T> {
   /// The phase the job is in; protected on [JobBase].
   bool get isDisposingNow => isDisposing;
 
-  /// Starts the body the way an engine of a domain would.
+  /// Starts the body the way an engine would.
   void launch() => start();
 
-  /// Ends the job from the outside, the way an engine of a domain would.
+  /// Ends the job from the outside, the way an engine would.
   void drop(Outcome<T> outcome) => finish(outcome);
 
-  /// Cancels the job with a cancellation of its own, the way an engine of
-  /// a domain does.
+  /// Cancels the job with a cancellation of its own, the way an engine does.
   void cancelBy(Cancelled cancelled) => cancelWith(cancelled);
 
-  /// Sends an error to the zone the way an engine of a domain does, when
-  /// its own route for one with nowhere to go ends with nobody.
+  /// Sends an error to the zone the way an engine does, when its own route for
+  /// one with nowhere to go ends with nobody.
   void report(Object error, StackTrace stackTrace) =>
       reportToZone(error, stackTrace);
 
@@ -54,8 +53,8 @@ final class ProbeJob<T> extends JobBase<T> implements ChildJob<T> {
 final class ProbeContext extends JobContextBase {
   ProbeContext(super.owner);
 
-  /// Starts [child] the way an engine of a domain does, through the
-  /// protected door, with nobody looking at its outcome.
+  /// Starts [child] the way an engine does, through the protected door, with
+  /// nobody looking at its outcome.
   void adopt(Job<Object?> child) => startChild(child);
 
   /// Registers [callback] raw, unguarded, the way the race inside `abandonable`
@@ -73,7 +72,7 @@ final class UnadoptableJob<T> extends JobBase<T> implements ChildJob<T> {
   /// Where the job is in its life; protected on [JobBase].
   JobStatus get statusNow => status;
 
-  /// Starts the body the way an engine of a domain would.
+  /// Starts the body the way an engine would.
   void launch() => start();
 
   @override
@@ -101,7 +100,7 @@ final class RefusingParentJob<T> extends JobBase<T> implements ChildJob<T> {
     Cancelled? refusal,
   }) : _refusal = refusal;
 
-  /// Starts the body the way an engine of a domain would.
+  /// Starts the body the way an engine would.
   void launch() => start();
 
   @override
@@ -141,7 +140,7 @@ final class SelfCancellingRulesJob<T> extends JobBase<T>
 
   SelfCancellingRulesJob(this._body, {super.key});
 
-  /// Starts the body the way an engine of a domain would.
+  /// Starts the body the way an engine would.
   void launch() => start();
 
   @override
@@ -164,8 +163,8 @@ final class SelfCancellingContext extends JobContextBase {
 
 /// A job of the core whose context refuses to be built.
 ///
-/// Stands in for an engine of a domain whose [JobBase.createContext]
-/// throws: the child never starts, and the parent must not wait for it.
+/// Stands in for an engine whose [JobBase.createContext] throws: the child
+/// never starts, and the parent must not wait for it.
 final class UnstartableJob<T> extends JobBase<T> implements ChildJob<T> {
   UnstartableJob({super.key});
 
@@ -276,7 +275,7 @@ final class NoStackForGroupJob<T> extends JobBase<T> implements ChildJob<T> {
 
   NoStackForGroupJob(this._body, {super.key});
 
-  /// Starts the body the way an engine of a domain would.
+  /// Starts the body the way an engine would.
   void launch() => start();
 
   @override
@@ -356,7 +355,7 @@ final class OverflowingRulesJob<T> extends JobBase<T> implements ChildJob<T> {
 
   OverflowingRulesJob(this._body, {super.key});
 
-  /// Starts the body the way an engine of a domain would.
+  /// Starts the body the way an engine would.
   void launch() => start();
 
   @override
@@ -384,7 +383,7 @@ final class ThrowingRulesJob<T> extends JobBase<T> implements ChildJob<T> {
 
   ThrowingRulesJob(this._body, {super.key, super.observer});
 
-  /// Starts the body the way an engine of a domain would.
+  /// Starts the body the way an engine would.
   void launch() => start();
 
   @override
@@ -424,7 +423,7 @@ final class ChildEndingRulesJob<T> extends JobBase<T> implements ChildJob<T> {
   /// The waiting list, as a subclass of the core sees it.
   List<JobBase<Object?>> get childrenList => children;
 
-  /// Starts the body the way an engine of a domain would.
+  /// Starts the body the way an engine would.
   void launch() => start();
 
   @override
@@ -449,13 +448,13 @@ final class ChildEndingRulesContext extends JobContextBase {
   }
 }
 
-/// A job whose `finished` hook throws, the way an engine of a domain can.
+/// A job whose `finished` hook throws, the way an engine can.
 final class FailingHookJob<T> extends JobBase<T> implements ChildJob<T> {
   final Future<T> Function(JobContext ctx) _body;
 
   FailingHookJob(this._body, {super.key, super.observer});
 
-  /// Starts the body the way an engine of a domain would.
+  /// Starts the body the way an engine would.
   void launch() => start();
 
   @override
@@ -477,7 +476,7 @@ final class RulesJob<T> extends JobBase<T> implements ChildJob<T> {
 
   RulesJob(this._body, {super.key, super.cancellable});
 
-  /// Starts the body the way an engine of a domain would.
+  /// Starts the body the way an engine would.
   void launch() => start();
 
   @override
@@ -510,7 +509,7 @@ class KeyedJob<T> extends JobBase<T> implements ChildJob<T> {
 
   KeyedJob(this._body, {required Object super.key});
 
-  /// Starts the body the way an engine of a domain would.
+  /// Starts the body the way an engine would.
   void launch() => start();
 
   // A job is mutable by nature, and the equality here is the point of the
@@ -549,11 +548,10 @@ final class CheckingJob<T> extends JobBase<T> implements ChildJob<T> {
 
   CheckingJob(this._body, {super.key, super.observer});
 
-  /// Starts the body the way an engine of a domain would.
+  /// Starts the body the way an engine would.
   void launch() => start();
 
-  /// Cancels the job with a cancellation of its own, the way an engine of
-  /// a domain does.
+  /// Cancels the job with a cancellation of its own, the way an engine does.
   void cancelBy(Cancelled cancelled) => cancelWith(cancelled);
 
   @override

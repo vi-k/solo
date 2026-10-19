@@ -925,7 +925,7 @@ void main() {
         expect(
           seen,
           ['the step stopped: Cancelled(signed out)', 'told to stop'],
-          reason: 'the step throws, and the body gives itself up after it',
+          reason: 'the step throws, and the body cancels itself after it',
         );
         expect('${job.outcome}', 'Cancelled(signed out)');
       });
@@ -970,7 +970,7 @@ void main() {
       });
     });
 
-    test('a body that gives itself up does not come through cancelWith', () {
+    test('a body that cancels itself does not come through cancelWith', () {
       fakeAsync((async) {
         final job = CountingJob((ctx) async {
           account.signedIn = false;

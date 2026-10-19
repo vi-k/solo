@@ -20,8 +20,8 @@ abstract class CancelReason {
 
 /// An explicit cancellation: the default reason of [Job.cancel].
 ///
-/// An engine of a domain may give it to removals of its own — `solo`, for
-/// example, to a job taken out of its queue.
+/// An engine may give it to removals of its own — `solo`, for example, to a job
+/// taken out of its queue.
 final class ManualCancelReason extends CancelReason {
   /// Creates an explicit cancellation reason.
   const ManualCancelReason();
@@ -34,8 +34,8 @@ final class ManualCancelReason extends CancelReason {
 final class ParentCancelReason extends CancelReason {
   /// The parent's cancellation, including its original reason and data.
   ///
-  /// Set by the core when it cascades; optional for domain engines that
-  /// have no parent cancellation to attach.
+  /// Set by the core when it cascades; optional for engines that have no parent
+  /// cancellation to attach.
   final Cancelled? cause;
 
   /// Creates a parent cancellation reason with its optional [cause].
@@ -103,7 +103,8 @@ final class TimeoutCancelReason extends CancelReason {
   String get name => 'timeout';
 }
 
-/// The body gave up, directly or by letting a child's cancellation escape.
+/// The body cancelled itself, directly or by letting a child's cancellation
+/// escape.
 final class HandlerCancelReason extends CancelReason {
   /// The child's cancellation when it escaped through the parent's body.
   ///
@@ -145,8 +146,7 @@ final class Done<T> extends Outcome<T> {
   String toString() => 'Done($value)';
 }
 
-/// The job body threw [error], or an engine of a domain ended the job with
-/// it by hand.
+/// The job body threw [error], or an engine ended the job with it by hand.
 ///
 /// The core hands it to [JobObserver.onError] first, once. If nobody then
 /// observes the job through [Job.done], [Job.value], [Job.ignoreFailure] or
@@ -165,11 +165,11 @@ final class Done<T> extends Outcome<T> {
 /// The errors with no outcome to carry them — a late failure of an action
 /// [JobContext.abandonable] walked away from, a disposer, a callback of
 /// [JobContext.onCancel], [Job.whenCancelled] or [Job.whenFinished], a failure
-/// of work handed over with [JobContext.unattended], a failure an engine of a
-/// domain hands to a job already over — take the other path:
-/// [JobObserver.onError] hears them, and an observer that is a [JobAnswerer]
-/// answers for them, by default in the zone the job was created in, where they
-/// go straight away without such an observer.
+/// of work handed over with [JobContext.unattended], a failure an engine hands
+/// to a job already over — take the other path: [JobObserver.onError] hears
+/// them, and an observer that is a [JobAnswerer] answers for them, by default
+/// in the zone the job was created in, where they go straight away without such
+/// an observer.
 final class Failed extends Outcome<Never> {
   /// The thrown error.
   final Object error;
@@ -207,8 +207,8 @@ final class Cancelled extends Outcome<Never> implements Exception {
   final bool started;
 
   /// Details within [reason]: the text passed by the body, or whatever an
-  /// engine of a domain writes there — `solo`, for example, writes
-  /// `'is not Ready'`, `'canStart'` and `'keepWhile'`.
+  /// engine writes there — `solo`, for example, writes `'is not Ready'`,
+  /// `'canStart'` and `'keepWhile'`.
   final String? description;
 
   /// Where the cancellation came from, not where the body died.
@@ -222,10 +222,9 @@ final class Cancelled extends Outcome<Never> implements Exception {
 
   /// Creates a cancellation with a reason of your own.
   ///
-  /// A body may throw this to keep a custom [reason] and its data. The
-  /// core records the throw's stack trace and sets [started] to `true`.
-  /// Domain engines also use it for their own cancellations, such as rules
-  /// and closing in `solo`.
+  /// A body may throw this to keep a custom [reason] and its data. The core
+  /// records the throw's stack trace and sets [started] to `true`. Engines also
+  /// use it for their own cancellations, such as rules and closing in `solo`.
   ///
   /// The reason is kept whoever built it, and a body that lets another
   /// job's cancellation through — `await other.value` on a job it does not

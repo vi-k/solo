@@ -471,7 +471,7 @@ void main() {
     });
   });
 
-  test('a continuation that gives up cancels its successors', () {
+  test('a continuation that cancels itself cancels its successors too', () {
     fakeAsync((async) {
       final a = Job<int>((ctx) async => 1);
       final b = a.then<int>((ctx, value) => throw const Cancelled('stop'));
@@ -611,9 +611,9 @@ void main() {
     });
   });
 
-  // The door of an engine of a domain takes any job, and a continuation
-  // that gets there is refused with the same words whichever got there
-  // first: while it still waits for its source, or once it runs on its own.
+  // The door of an engine takes any job, and a continuation that gets there is
+  // refused with the same words whichever got there first: while it still waits
+  // for its source, or once it runs on its own.
   for (final afterTheSource in [false, true]) {
     test(
         'an engine cannot adopt a continuation '
@@ -758,10 +758,9 @@ void main() {
       final b = a.then<int>((ctx, value) async => value + 1);
       async.flushMicrotasks();
       expect(b.outcome, isA<Done<int>>());
-      // A continuation is a root job of its own, and the observer of an
-      // engine of a domain answers for the jobs that engine owns. Handed
-      // down, it would hear the hooks of a job the controller never made
-      // and does not hold.
+      // A continuation is a root job of its own, and the observer of an engine
+      // answers for the jobs that engine owns. Handed down, it would hear the
+      // hooks of a job the controller never made and does not hold.
       expect(
         started,
         ['a'],

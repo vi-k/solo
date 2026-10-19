@@ -641,7 +641,7 @@ void main() {
       ]);
     });
 
-    test('a body that gives itself up counts from its throw', () {
+    test('a body that cancels itself counts from its throw', () {
       // The body throws at 10 ms, the child it cannot cancel runs to 110 ms,
       // and the cleanup takes 50 ms more: the child and the cleanup are both
       // in the count, as for a cancellation from outside.
@@ -790,7 +790,7 @@ void main() {
     );
 
     test(
-      'a body that gives itself up counts its child and cleanup',
+      'a body that cancels itself counts its child and cleanup',
       () async {
         final lines = await timed((ctx) async {
           ctx
@@ -1796,7 +1796,7 @@ void main() {
     test("a wait left behind, the job's cancellation after the body: nobody",
         () {
       // The table holds `abandonable` to the zone only until the body ends. A
-      // body that gives itself up ends as the job accepts its cancellation, and
+      // body that cancels itself ends as the job accepts its cancellation, and
       // one from outside may arrive while the job waits for a child.
       expect(
         play(

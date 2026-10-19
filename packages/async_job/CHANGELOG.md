@@ -52,7 +52,7 @@
   parent `Cancelled`, where it ended it `Failed`; an envelope that carries a
   real failure is untouched. See
   [Registered on arrival, waited for in one envelope](doc/children.md#registered-on-arrival-waited-for-in-one-envelope).
-- **A body that gives itself up is cancelled the way a cancelled job is.** When
+- **A body that cancels itself is cancelled the way a cancelled job is.** When
   a body throws `Cancelled`, or lets out the cancellation of a child, the
   children are asked to stop, then the `ctx.onCancel` callbacks run and
   `whenCancelled` fires.
@@ -75,8 +75,8 @@ job was created in. In a test that zone is the test's, and the test fails:
   stops at a token the job cancels through `ctx.onCancel` throws one on every
   cancellation, and so does a body that wraps its own cancellation in an
   exception of its own;
-- the failure of the body of a job that an engine of a domain ends by hand with
-  an outcome of its own, earlier or later than the body throws;
+- the failure of the body of a job that an engine ends by hand with an outcome
+  of its own, earlier or later than the body throws;
 - the late failure of an action under `ctx.abandonable` that the body left
   through `.timeout` or `Future.any`, arriving once the job is over;
 - an error no outcome carries, of a job that has an observer;
@@ -129,7 +129,7 @@ new wording.
 - **`started` of `Cancelled.by` is optional and defaults to `true`.**
 - **`Job.whenFinished` hears the end of a job without observing its outcome.**
   A screen that redraws when the job is over no longer takes over a failure the
-  job's owner answers for, as waiting for `done` does. See
+  job's owner is responsible for, as waiting for `done` does. See
   [Hearing the end without the failure](doc/outcomes.md#hearing-the-end-without-the-failure).
 - **`timeout` gives a job a deadline of its own.** `Job(...)`,
   `Job.deferred(...)` and the constructor of `JobBase` take it; when it runs
@@ -184,7 +184,7 @@ new wording.
   thousands of children took time quadratic in their number.
 - Two jobs equal by `==` are no longer taken for one another inside work handed
   to `ctx.unattended`.
-- A body that gives itself up with `throw Cancelled(...)` has accepted that
+- A body that cancels itself with `throw Cancelled(...)` has accepted that
   cancellation there and then: until the job had waited for its children,
   `isCancelled` answered `false`, and a `cancel()` put its own reason over the
   one the body chose.

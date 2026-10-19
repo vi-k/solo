@@ -57,14 +57,14 @@ void main() {
     );
   });
 
-  test('a body giving itself up reports a cascade out of stack', () async {
+  test('a body cancelling itself reports a cascade out of stack', () async {
     final chain = _Chain(depth);
     final errors = <Object>[];
     final root = Job<void>(
       (ctx) async {
         ctx.run(chain.deferred()).ignore();
         await chain.bottom.future;
-        // The body gives itself up, the way one does when it catches a
+        // The body cancels itself, the way one does when it catches a
         // cancellation of somebody else: the children go from inside the
         // engine, and there is no caller to hand a failure of that to.
         throw Cancelled.by(
@@ -163,9 +163,9 @@ void main() {
 
   test('the window closes when the engine ends the job by hand', () async {
     // Three things at once, which is why it is worth a test of its own: a
-    // cascade deep enough to run out of stack, an engine of a domain that
-    // ends the job from a callback of a child, and a listener registered
-    // afterwards with a bug of its own.
+    // cascade deep enough to run out of stack, an engine that ends the job from
+    // a callback of a child, and a listener registered afterwards with a bug of
+    // its own.
     final chain = _Chain(depth);
     final errors = <Object>[];
     final never = Completer<void>();
@@ -218,7 +218,7 @@ void main() {
     expect(errors.last, isA<StackOverflowError>());
   });
 
-  test('the window closes for a body that gave itself up too', () async {
+  test('the window closes for a body that cancelled itself too', () async {
     final chain = _Chain(depth);
     final errors = <Object>[];
     final never = Completer<void>();

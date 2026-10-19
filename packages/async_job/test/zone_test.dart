@@ -613,7 +613,7 @@ void main() {
     expect(caught, isEmpty);
   });
 
-  test('the zone route of an engine of a domain refuses a cancellation', () {
+  test('the zone route of an engine refuses a cancellation', () {
     final caught = <Object>[];
     runZonedGuarded(
       () {
@@ -630,7 +630,7 @@ void main() {
     expect(
       caught.map((error) => '$error').toList(),
       ['Bad state: boom'],
-      reason: 'the rule holds at the door an engine of a domain uses too',
+      reason: 'the rule holds at the door an engine uses too',
     );
   });
 
@@ -713,8 +713,7 @@ void main() {
     expect(
       order,
       ['onFinish job'],
-      reason:
-          'an engine of a domain calling ignoreFailure at finish is in time: '
+      reason: 'an engine calling ignoreFailure at finish is in time: '
           'the answer follows onFinish',
     );
   });
@@ -888,16 +887,16 @@ final class _TouchAfterFinish extends JobObserver {
   void onFinish(Job<Object?> job) => scheduleMicrotask(_touch);
 }
 
-/// Cancels the job from inside `onError`, the way an engine of a domain
-/// that treats a failure as a reason to give up would.
+/// Cancels the job from inside `onError`, the way an engine that treats a
+/// failure as a reason to give up would.
 final class _CancelOnError extends JobObserver {
   @override
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
       job.cancel().ignore();
 }
 
-/// Takes the outcome the moment the job finishes, the way an engine of a
-/// domain that routes failures itself would.
+/// Takes the outcome the moment the job finishes, the way an engine that routes
+/// failures itself would.
 final class _IgnoreOnFinish extends JobObserver {
   final List<String> order;
 

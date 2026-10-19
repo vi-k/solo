@@ -183,9 +183,9 @@ final class Answering extends JobObserver with JobAnswerer {
   );
 }
 
-/// A body that fails once the gate opens, after an engine of a domain ended the
-/// job by hand: the value is the outcome, and the failure is in none. It goes
-/// to the answer, and the observer answers for it and keeps nothing.
+/// A body that fails once the gate opens, after an engine ended the job by
+/// hand: the value is the outcome, and the failure is in none. It goes to the
+/// answer, and the observer answers for it and keeps nothing.
 (ProbeJob<void>, WeakReference<Payload>, Completer<void>) failureAfterAHand() {
   final payload = Payload();
   final gate = Completer<void>();
@@ -199,9 +199,9 @@ final class Answering extends JobObserver with JobAnswerer {
   return (job, WeakReference(payload), gate);
 }
 
-/// A body that returns once the gate opens, after an engine of a domain ended
-/// the job by hand with a value of its own: that value is the outcome, and
-/// the body's is in none.
+/// A body that returns once the gate opens, after an engine ended the job by
+/// hand with a value of its own: that value is the outcome, and the body's is
+/// in none.
 (ProbeJob<Object?>, WeakReference<Payload>, Completer<void>) valueAfterAHand() {
   final payload = Payload();
   final gate = Completer<void>();

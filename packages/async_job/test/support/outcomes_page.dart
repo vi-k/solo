@@ -26,7 +26,7 @@ Job<void> startBackup() {
 /// Hearing the end without the failure: the status line redraws when the
 /// backup ends. Returns the function that unregisters the listener.
 void Function() redrawOnEnd(Job<void> backup) {
-  // Runs when the backup is over, and does not answer for its failure.
+  // Runs when the backup is over, and does not observe its failure.
   final unregister = backup.whenFinished((outcome) {
     print('status redrawn: $outcome');
   });

@@ -25,7 +25,7 @@ Job<void> jobWithADeadline() => Job<void>(
       (ctx) => ctx.abandonable(() => delay(50)),
     );
 
-/// An engine of a domain, with the protected surface the tests need.
+/// An engine, with the protected surface the tests need.
 final class Engine<T> extends JobBase<T> implements ChildJob<T> {
   final Future<T> Function(JobContext ctx) _body;
 
@@ -844,7 +844,7 @@ void main() {
       });
     });
 
-    test('when the body gives itself up', () {
+    test('when the body cancels itself', () {
       fakeAsync((async) {
         final section = Completer<void>();
         final body = Completer<void>();

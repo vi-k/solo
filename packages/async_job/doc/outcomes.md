@@ -128,7 +128,7 @@ it gets the cancellation, not the error, and the status line says
 ### Hearing the end without the failure
 
 ```dart
-// Runs when the backup is over, and does not answer for its failure.
+// Runs when the backup is over, and does not observe its failure.
 final unregister = backup.whenFinished((outcome) {
   print('status redrawn: $outcome');
 });
@@ -140,13 +140,13 @@ zone: Bad state: disk full
 ```
 
 A status line that waits for `done` to redraw itself observes the failure, and
-the zone stops hearing about it, even when the line is not the code that
-answers for the backup. `whenFinished` calls its listener with the outcome once
-the job is over — after its cleanup, before anything waiting on `done`
-resumes — and observes nothing: the failure reaches the zone as in the first
-attempt, and the owner of `backup` keeps the choice of who answers for it. A
-screen that closes before the job ends calls `unregister()`; a listener
-registered on a job that is already over runs at once.
+the zone stops hearing about it, even when the line is not the code responsible
+for the backup. `whenFinished` calls its listener with the outcome once the job
+is over — after its cleanup, before anything waiting on `done` resumes — and
+observes nothing: the failure reaches the zone as in the first attempt, and the
+owner of `backup` keeps the choice of who observes it. A screen that closes
+before the job ends calls `unregister()`; a listener registered on a job that
+is already over runs at once.
 
 ## Why a job was cancelled
 
@@ -214,7 +214,7 @@ cancelled: handler
 
 The request cancelled `fetch`, not `report`. The cancellation of `fetch`
 escaped through the body of `report`, and `report` ended with a `Cancelled` of
-its own, whose reason is `HandlerCancelReason`: its body gave up. The
+its own, whose reason is `HandlerCancelReason`: its body cancelled itself. The
 `RequestCancelReason` is one step down, in the `cause` of that reason.
 
 ### Following the cause
@@ -368,7 +368,7 @@ When the listener runs depends on how the job is cancelled:
   cascaded to children and `ctx.onCancel` callbacks have run, without waiting
   for the body to finish.
 - For a job cancelled before start, it runs when the job is cancelled.
-- If the body gives itself up — throws `Cancelled` itself or lets another job's
+- If the body cancels itself — throws `Cancelled` itself or lets another job's
   cancellation through while nothing has cancelled the job — it runs as the
   body ends, after cancellation has cascaded to children and `ctx.onCancel`
   callbacks have run, without waiting for the children to end.
@@ -388,7 +388,7 @@ order, using a snapshot of the list: removing a listener during the pass does
 not take it out of the pass. Unregistering more than once is safe.
 
 A synchronous listener error goes to `onError` and then to the job's creation
-zone, unless the observer answers for it, as
+zone, unless the observer catches it in `onUnanswered`, as
 [Where errors go](observing.md#where-errors-go) on the observing page shows.
 Without an observer, it goes straight to that zone. A thrown `Cancelled` is
 never forwarded to the zone. Listener errors do not change cancellation or
@@ -399,9 +399,9 @@ the future of such a callback, and none of the callback's errors reaches
 before its first `await` goes into the future it returns. The error is an
 uncaught one of the zone the listener was called in. For a cancellation
 accepted inside `cancel()`, that is the zone of the code that called it. For a
-cancellation an `uncancellable` section held, and for a body that gave itself
-up, it is the zone the body runs in. A job made with `Job(...)` runs its body
-in the zone it was created in, and one made with `Job.deferred` in the zone it
-was started from. If a job made with `Job(...)` was created, or one made with
-`Job.deferred` started, inside work handed to `ctx.unattended`, its body runs
-in the zone that work was started from.
+cancellation an `uncancellable` section held, and for a body that cancelled
+itself, it is the zone the body runs in. A job made with `Job(...)` runs its
+body in the zone it was created in, and one made with `Job.deferred` in the
+zone it was started from. If a job made with `Job(...)` was created, or one
+made with `Job.deferred` started, inside work handed to `ctx.unattended`, its
+body runs in the zone that work was started from.

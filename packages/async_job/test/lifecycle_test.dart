@@ -143,9 +143,9 @@ void main() {
       })
         ..launch();
       async.elapse(const Duration(milliseconds: 10));
-      // An engine of a domain ended the job itself: the outcome is not
-      // ours, nobody waited for the children, and the stack stays where it
-      // is — as the dartdoc of `finish` promises.
+      // An engine ended the job itself: the outcome is not ours, nobody waited
+      // for the children, and the stack stays where it is — as the dartdoc of
+      // `finish` promises.
       job
         ..drop(const Done(null))
         ..ignoreFailure();
@@ -232,7 +232,7 @@ void main() {
         },
       )..launch();
       async.elapse(const Duration(milliseconds: 10));
-      // An engine of a domain ends the job while its body is still going.
+      // An engine ends the job while its body is still going.
       job.drop(const Done(99));
       async.flushTimers();
       expect((job.outcome! as Done<int>).value, 99);

@@ -1364,9 +1364,8 @@ final class _Answers extends JobObserver with JobAnswerer {
   }
 }
 
-/// Calls `ignoreFailure()` on the parent in `onFinish`, as an engine of a
-/// domain may in `finished`, and records what it is asked to answer for all
-/// the same.
+/// Calls `ignoreFailure()` on the parent in `onFinish`, as an engine may in
+/// `finished`, and records what it is asked to answer for all the same.
 final class _IgnoresOnFinish extends JobObserver with JobAnswerer {
   final List<Object> answered;
 

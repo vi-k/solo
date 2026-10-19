@@ -461,8 +461,8 @@ void main() {
   });
   test('an engine that finishes the job from a cancel callback', () {
     fakeAsync((async) {
-      // The callbacks of the children run inside the cascade, and one of
-      // them reaches the engine of a domain, which ends the job by hand.
+      // The callbacks of the children run inside the cascade, and one of them
+      // reaches the engine, which ends the job by hand.
       Object? thrown;
       late ProbeJob<void> parent;
       parent = ProbeJob<void>((ctx) async {
@@ -536,8 +536,9 @@ void main() {
     );
   });
 
-  test('a body that gave up keeps its own cancellation against a later one',
-      () {
+  test(
+      'a body that cancelled itself keeps its own cancellation '
+      'against a later one', () {
     fakeAsync((async) {
       late ChildJob<void> child;
       final job = Job<void>((ctx) async {
@@ -603,10 +604,9 @@ void main() {
         (ctx) async => ctx.abandonable(() => delay(50)),
       )..launch();
       async.elapse(const Duration(milliseconds: 10));
-      // An engine of a domain builds its own cancellation, and it may
-      // build one that says the job never ran. It ran: the journal would
-      // otherwise say `dropped` about a job with a body behind it and a
-      // cleanup stack already unwound.
+      // An engine builds its own cancellation, and it may build one that says
+      // the job never ran. It ran: the journal would otherwise say `dropped`
+      // about a job with a body behind it and a cleanup stack already unwound.
       job.cancelBy(
         Cancelled.by(
           reason: const TestCancelReason('by the engine'),
@@ -632,11 +632,10 @@ void main() {
         ..launch();
       async.elapse(const Duration(milliseconds: 10));
       job.cancel().ignore();
-      // An engine of a domain racing its own body, with a value in hand.
-      // The mark has been answering for this job since the line above:
-      // `isCancelled`, `check` and `whenCancelled` all say cancelled, and
-      // an outcome of `Done(42)` would leave the handle contradicting
-      // itself for good.
+      // An engine racing its own body, with a value in hand. The mark has been
+      // answering for this job since the line above: `isCancelled`, `check` and
+      // `whenCancelled` all say cancelled, and an outcome of `Done(42)` would
+      // leave the handle contradicting itself for good.
       job.drop(const Done(42));
       async.flushTimers();
       expect(job.isCancelled, isTrue);

@@ -1104,8 +1104,8 @@ void attempt(ChildJob<void> child, DeferredJob<void> deferred) {
       'a child started from a cancel callback of a self-cancelled body is '
       'refused', () {
     fakeAsync((async) {
-      // The same window as the cascade of an outside cancellation, on the
-      // path the body opens by giving itself up.
+      // The same window as the cascade of an outside cancellation, on the path
+      // the body opens by cancelling itself.
       Object? thrown;
       final parent = Job<void>((ctx) async {
         ctx
@@ -1381,7 +1381,7 @@ final class _SwitchableRulesJob<T> extends JobBase<T> implements ChildJob<T> {
   /// The waiting list itself, as a subclass of the core sees it.
   List<JobBase<Object?>> get childrenList => children;
 
-  /// Starts the body the way an engine of a domain would.
+  /// Starts the body the way an engine would.
   void launch() => start();
 
   @override

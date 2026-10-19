@@ -223,7 +223,7 @@ List<String> eachCancelled(
 
 /// Hands both hooks on to [inner], and without one answers the default way;
 /// with [ignoresOnFinish], calls `ignoreFailure` on the job from `onFinish`,
-/// the way an engine of a domain that routes failures itself would.
+/// the way an engine that routes failures itself would.
 class Forwarding extends JobObserver with JobAnswerer {
   final JobObserver? inner;
   final bool ignoresOnFinish;
@@ -289,9 +289,8 @@ List<String> continuationCancelled(
       async.flushTimers();
     });
 
-/// A root an engine of a domain ends by hand with [outcome], 10 ms after a
-/// cancellation marked it. With [ignored], `ignoreFailure` was called on it
-/// first.
+/// A root an engine ends by hand with [outcome], 10 ms after a cancellation
+/// marked it. With [ignored], `ignoreFailure` was called on it first.
 List<String> rootDroppedOverTheMark(
   JobObserver? observer,
   Outcome<int> Function() outcome, {
@@ -313,7 +312,7 @@ List<String> rootDroppedOverTheMark(
       async.flushTimers();
     });
 
-/// A [Failed] an engine of a domain built around a cancellation on purpose.
+/// A [Failed] an engine built around a cancellation on purpose.
 Failed builtCancellation() => Failed(
       Cancelled.by(
         reason: const ManualCancelReason(),

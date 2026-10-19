@@ -193,17 +193,17 @@ abstract interface class Job<T> {
 
   /// Tracing of the job lifecycle for debugging; `null` by default.
   ///
-  /// Every job reports here, one made by an engine of a domain included: the
-  /// start, a cancellation, an error and where it went, the outcome and a
-  /// value handed over.
+  /// Every job reports here, one made by an engine included: the start, a
+  /// cancellation, an error and where it went, the outcome and a value handed
+  /// over.
   ///
   /// ```dart
   /// Job.debug = print;
   /// ```
   ///
-  /// An engine of a domain prints its own side elsewhere — `solo`, for example,
-  /// puts the queue, the state and the closing into `Solo.debug`. To follow
-  /// both sides, set both.
+  /// An engine prints its own side elsewhere — `solo`, for example, puts the
+  /// queue, the state and the closing into `Solo.debug`. To follow both sides,
+  /// set both.
   static void Function(String message)? debug;
 
   /// Says which errors an operation throws because the cancellation of its job
@@ -296,8 +296,8 @@ abstract interface class Job<T> {
   /// The key given at creation.
   ///
   /// The core does not read it: it is there for [toString], for the observer,
-  /// and for whatever an engine of a domain does with it — `solo`, for example,
-  /// compares keys with `==` in its queue policies.
+  /// and for whatever an engine does with it — `solo`, for example, compares
+  /// keys with `==` in its queue policies.
   Object? get key;
 
   /// The description given at creation, or an empty string.
@@ -402,11 +402,11 @@ abstract interface class Job<T> {
   /// Registers [callback] for cancellation and returns an unregister function.
   ///
   /// Calls it synchronously with the [Cancelled] carrying the reason,
-  /// description, start status and stack trace. For a running job this is
-  /// after cancellation has cascaded to its children and [JobContext.onCancel]
-  /// callbacks have run: before the body finishes, or, for a body that gives
-  /// itself up by throwing [Cancelled], as it ends. For a job cancelled
-  /// before start, it is when the job is dropped.
+  /// description, start status and stack trace. For a running job this is after
+  /// cancellation has cascaded to its children and [JobContext.onCancel]
+  /// callbacks have run: before the body finishes, or, for a body that cancels
+  /// itself by throwing [Cancelled], as it ends. For a job cancelled before
+  /// start, it is when the job is dropped.
   ///
   /// If cancellation has already been accepted and its callbacks have run,
   /// calls [callback] immediately, even if the job has finished. Registering
@@ -443,13 +443,12 @@ abstract interface class Job<T> {
   /// Registers [callback] for the end of the job and returns an unregister
   /// function.
   ///
-  /// Calls it synchronously with the outcome once the job has finished:
-  /// after its cleanup, after the [whenCancelled] listeners of a cancelled
-  /// job and [JobObserver.onFinish], and before anything waiting on [done]
-  /// or [value] resumes. A job cancelled before its start calls it as it is
-  /// dropped; one that never starts never calls it. An engine of a domain
-  /// that ends the job by hand calls it then, ahead of any cleanup still to
-  /// run.
+  /// Calls it synchronously with the outcome once the job has finished: after
+  /// its cleanup, after the [whenCancelled] listeners of a cancelled job and
+  /// [JobObserver.onFinish], and before anything waiting on [done] or [value]
+  /// resumes. A job cancelled before its start calls it as it is dropped; one
+  /// that never starts never calls it. An engine that ends the job by hand
+  /// calls it then, ahead of any cleanup still to run.
   ///
   /// Registering does not observe the outcome: a [Failed] handed to
   /// [callback] still reaches the zone, unless somebody observes it — reads
@@ -473,28 +472,28 @@ abstract interface class Job<T> {
 
   /// Cancels the job with [reason] and waits for it to actually finish.
   ///
-  /// Pass a custom [CancelReason] subclass to carry data to [whenCancelled]
-  /// and the [Cancelled] outcome. The accepted reason is kept by identity;
-  /// another cancellation does not replace it. Nor does a later one replace
-  /// a cancellation an `uncancellable` section holds, with one exception: a
-  /// cancellation the job cannot refuse, such as the one an engine of a
-  /// domain makes for its rules, is not held, and the job accepts it at
-  /// once and drops the held one. A body that gives itself up accepts one
-  /// the same way, from the moment it throws: this call then finds the job
-  /// already cancelled and waits for it, exactly as a second call does.
+  /// Pass a custom [CancelReason] subclass to carry data to [whenCancelled] and
+  /// the [Cancelled] outcome. The accepted reason is kept by identity; another
+  /// cancellation does not replace it. Nor does a later one replace a
+  /// cancellation an `uncancellable` section holds, with one exception: a
+  /// cancellation the job cannot refuse, such as the one an engine makes for
+  /// its rules, is not held, and the job accepts it at once and drops the held
+  /// one. A body that cancels itself accepts one the same way, from the moment
+  /// it throws: this call then finds the job already cancelled and waits for
+  /// it, exactly as a second call does.
   ///
-  /// A job created with `cancellable: false` refuses this once it has
-  /// started; before that there is no body to protect, and a job cancelled
-  /// then is dropped like any other — unless an engine of a domain holds
-  /// it before the start and refuses on its behalf, as `solo` does for a
-  /// job waiting in its queue: there `cancellable: false` turns this call
-  /// down already, and the job runs when its turn comes. A job inside
-  /// [JobContext.uncancellable] is cancelled when that section closes.
-  /// Either way the returned future waits for it to finish.
+  /// A job created with `cancellable: false` refuses this once it has started;
+  /// before that there is no body to protect, and a job cancelled then is
+  /// dropped like any other — unless an engine holds it before the start and
+  /// refuses on its behalf, as `solo` does for a job waiting in its queue:
+  /// there `cancellable: false` turns this call down already, and the job runs
+  /// when its turn comes. A job inside [JobContext.uncancellable] is cancelled
+  /// when that section closes. Either way the returned future waits for it to
+  /// finish.
   ///
-  /// Awaited from inside the body it never completes: the waiting is for
-  /// the job, and the job is this body. A body gives itself up with
-  /// `throw Cancelled('why')` instead.
+  /// Awaited from inside the body it never completes: the waiting is for the
+  /// job, and the job is this body. A body cancels itself with `throw
+  /// Cancelled('why')` instead.
   Future<void> cancel({CancelReason reason = const ManualCancelReason()});
 
   /// Tells the core that nobody is interested in this job's failure.
@@ -516,24 +515,24 @@ abstract interface class Job<T> {
   /// Waiting for [done] or [value] observes a [Failed] too: the one waiting has
   /// the error. A failure of the body of a job that ends [Cancelled] is not in
   /// the outcome, and the one waiting gets the [Cancelled]; nor is one of a job
-  /// an engine of a domain ended by hand with an outcome of its own. Such a
-  /// failure is answered through [JobAnswerer.onUnanswered] of an observer that
-  /// answers, otherwise in the zone, however the outcome was read, and this is
-  /// what silences it. [JobObserver.onError] hears it either way. An error an
+  /// an engine ended by hand with an outcome of its own. Such a failure is
+  /// answered through [JobAnswerer.onUnanswered] of an observer that answers,
+  /// otherwise in the zone, however the outcome was read, and this is what
+  /// silences it. [JobObserver.onError] hears it either way. An error an
   /// operation throws because the cancellation stopped it is better named once,
   /// in [Job.isCancellationError], than silenced job by job.
   ///
   /// So it is for a child of [JobContext.run] and a branch of
   /// [JobContext.runAll] as well. A [Failed] their parent takes reaches the
   /// parent's caller whether or not this was called, and so does the failure of
-  /// the body of a branch the group throws in place of a value an engine of a
-  /// domain handed in once the group had heard of that failure — see
-  /// [JobBase.finish]. A failure of the body of a child that ends [Cancelled],
-  /// and that of a branch the group did not throw, do not reach the parent's
-  /// caller, and this, called on the child, silences them. Called on their
-  /// parent, it silences neither. To answer for them differently instead, give
-  /// the child an observer that is a [JobAnswerer] — the parent's is the
-  /// child's unless the child has one of its own.
+  /// the body of a branch the group throws in place of a value an engine handed
+  /// in once the group had heard of that failure — see [JobBase.finish]. A
+  /// failure of the body of a child that ends [Cancelled], and that of a branch
+  /// the group did not throw, do not reach the parent's caller, and this,
+  /// called on the child, silences them. Called on their parent, it silences
+  /// neither. To answer for them differently instead, give the child an
+  /// observer that is a [JobAnswerer] — the parent's is the child's unless the
+  /// child has one of its own.
   ///
   /// Call it before the job ends, or at the latest from [JobObserver.onFinish]
   /// or a callback of [whenCancelled] or [whenFinished] registered before it
@@ -686,12 +685,12 @@ abstract class JobBase<T> implements Job<T> {
   /// The child behind an outcome of a child, for the description of this
   /// job's own.
   ///
-  /// The key is the outcome instance itself, so two children of one job
-  /// must never end with one instance, const or not: they would share one
-  /// entry, and the job would name the one that finished last. Every
-  /// cancellation the core builds is an instance of its own; an engine of a
-  /// domain that hands one to [finish] or [cancelWith] builds one per job
-  /// too, and with asserts on [finish] says so when it did not.
+  /// The key is the outcome instance itself, so two children of one job must
+  /// never end with one instance, const or not: they would share one entry, and
+  /// the job would name the one that finished last. Every cancellation the core
+  /// builds is an instance of its own; an engine that hands one to [finish] or
+  /// [cancelWith] builds one per job too, and with asserts on [finish] says so
+  /// when it did not.
   ///
   /// `late final` and not `final`, the way `_cascadeChild` below already
   /// is: only a parent whose child's outcome came out through its body
@@ -725,10 +724,9 @@ abstract class JobBase<T> implements Job<T> {
 
   /// The reason the timer cancelled this job with, once it has fired.
   ///
-  /// The request of the deadline is told apart by this very instance, not
-  /// by the [Cancelled] that carries it: an engine of a domain may wrap a
-  /// cancellation into a new [Cancelled] with the same reason before it
-  /// calls `super`.
+  /// The request of the deadline is told apart by this very instance, not by
+  /// the [Cancelled] that carries it: an engine may wrap a cancellation into a
+  /// new [Cancelled] with the same reason before it calls `super`.
   TimeoutCancelReason? _timeoutReason;
 
   /// A rejectable cancellation that arrived while a section held the
@@ -753,12 +751,11 @@ abstract class JobBase<T> implements Job<T> {
   ///
   /// More than [_observed]. Whoever reads the outcome has the failure the
   /// outcome carries. A failure of the body of a job that ends [Cancelled], or
-  /// of one an engine of a domain ended by hand with an outcome of its own, is
-  /// in no outcome, and one of a branch the group did not throw is in nothing
-  /// the group passes on; only this keeps them all from being answered for —
-  /// see [_reportCovered] and `_RunAllGroup._conclude`.
-  /// [Job.isCancellationError] keeps out the failures of a cancelled job it
-  /// names, and those alone.
+  /// of one an engine ended by hand with an outcome of its own, is in no
+  /// outcome, and one of a branch the group did not throw is in nothing the
+  /// group passes on; only this keeps them all from being answered for — see
+  /// [_reportCovered] and `_RunAllGroup._conclude`. [Job.isCancellationError]
+  /// keeps out the failures of a cancelled job it names, and those alone.
   bool _ignored = false;
 
   /// The key of the mark a fork of [JobContext.unattended] made by this job
@@ -768,12 +765,12 @@ abstract class JobBase<T> implements Job<T> {
   /// for the outer one.
   final _forkKey = Object();
 
-  /// The error of the last failure the core has announced for this job:
-  /// the body's, where it was caught, the one a continuation received from
-  /// its source, or one an engine of a domain handed to [finish]. The same
-  /// error arriving by a second route — a body that throws what the engine
-  /// has already ended the job with, say — is not announced again. By
-  /// identity: two errors equal by `==` are still two errors.
+  /// The error of the last failure the core has announced for this job: the
+  /// body's, where it was caught, the one a continuation received from its
+  /// source, or one an engine handed to [finish]. The same error arriving by a
+  /// second route — a body that throws what the engine has already ended the
+  /// job with, say — is not announced again. By identity: two errors equal by
+  /// `==` are still two errors.
   ///
   /// Held weakly. A failure of the body of a job that ends [Cancelled] is in no
   /// outcome, and the handle of that job would otherwise keep the error, and
@@ -930,9 +927,8 @@ abstract class JobBase<T> implements Job<T> {
   bool _committedByGroup = false;
 
   /// Whether the group of [JobContext.runAll] goes by the failure of the body
-  /// of this branch instead of the value an engine of a domain handed in after
-  /// the group heard of that failure. The group throws that failure or answers
-  /// for it.
+  /// of this branch instead of the value an engine handed in after the group
+  /// heard of that failure. The group throws that failure or answers for it.
   ///
   /// Set in [finish], once, and read by the body's route, which then leaves
   /// that failure to the group.
@@ -1023,10 +1019,10 @@ abstract class JobBase<T> implements Job<T> {
     final count = '${_skipped.length} conditional '
         'cleanup${_skipped.length == 1 ? '' : 's'}';
     // Two ways to leave them behind, and the message must not mix them up.
-    // Normally the job is still deciding and the value went to somebody.
-    // But an engine of a domain may finish a job by hand while it unwinds,
-    // and then the outcome is already something else and the value went
-    // nowhere — saying it was handed over would be a plain lie.
+    // Normally the job is still deciding and the value went to somebody. But an
+    // engine may finish a job by hand while it unwinds, and then the outcome is
+    // already something else and the value went nowhere — saying it was handed
+    // over would be a plain lie.
     final finishedAs = isFinished ? _outcome : null;
     return () => _debug(
           () => finishedAs != null
@@ -1229,11 +1225,11 @@ abstract class JobBase<T> implements Job<T> {
   /// cancellation twice. The rules of a domain pass `false` and go through
   /// both.
   ///
-  /// A subclass extends this member rather than replacing it: `solo` adds
-  /// the branch for a job still waiting in its queue and then calls
-  /// `super`. An override that forgets the call silently switches
-  /// cancellation off — for [Job.cancel], for the cascade from a parent and
-  /// for whatever an engine of a domain adds.
+  /// A subclass extends this member rather than replacing it: `solo` adds the
+  /// branch for a job still waiting in its queue and then calls `super`. An
+  /// override that forgets the call silently switches cancellation off — for
+  /// [Job.cancel], for the cascade from a parent and for whatever an engine
+  /// adds.
   @protected
   @mustCallSuper
   void cancelWith(Cancelled cancelled, {bool rejectable = true}) {
@@ -1319,14 +1315,14 @@ abstract class JobBase<T> implements Job<T> {
           // a second `cancel()` turns around at the early return above.
           // The error still reaches whoever asked.
           //
-          // Skipped when a callback of a child reached the engine of a
-          // domain and it ended the job by hand. A no-op by then rather
-          // than a defect waiting to happen -- `finish` clears the
-          // callbacks and tells the listeners itself -- and kept because
-          // the phase a job is in decides who announces its cancellation,
-          // and reading that off the status is cheaper than trusting the
-          // two to stay in step. The window still has to close: it is
-          // `_markCancelled` that closes it, and that path skips it.
+          // Skipped when a callback of a child reached the engine and it ended
+          // the job by hand. A no-op by then rather than a defect waiting to
+          // happen -- `finish` clears the callbacks and tells the listeners
+          // itself -- and kept because the phase a job is in decides who
+          // announces its cancellation, and reading that off the status is
+          // cheaper than trusting the two to stay in step. The window still has
+          // to close: it is `_markCancelled` that closes it, and that path
+          // skips it.
           if (_status != JobStatus.finished) {
             _markCancelled(marked);
           } else {
@@ -1370,13 +1366,12 @@ abstract class JobBase<T> implements Job<T> {
         if (error is StackOverflowError) {
           _outOfStack = true;
         }
-        // One child is not the rest of them. A subtree deep enough to run
-        // the stack out, or an engine of a domain whose `cancelWith`
-        // threw, must not take the cancellation away from the siblings
-        // that come after it here -- and those siblings are not deep by
-        // association: the one that overflows may be a chain of thousands
-        // next to a leaf. The first failure is the one that leaves, the
-        // way the first refusal leaves a group.
+        // One child is not the rest of them. A subtree deep enough to run the
+        // stack out, or an engine whose `cancelWith` threw, must not take the
+        // cancellation away from the siblings that come after it here -- and
+        // those siblings are not deep by association: the one that overflows
+        // may be a chain of thousands next to a leaf. The first failure is the
+        // one that leaves, the way the first refusal leaves a group.
         failure ??= (error, stackTrace);
       }
     }
@@ -1442,18 +1437,17 @@ abstract class JobBase<T> implements Job<T> {
 
   /// The cancellation an open section is holding back, or `null`.
   ///
-  /// Set when a cancellation the job may refuse arrives inside a section
-  /// opened by [enterUncancellable], and cleared when the outermost section
-  /// closes and lets it through. The job does not accept it meanwhile —
-  /// [pendingCancel] stays `null` — so this is the only place such a
-  /// request shows. A cancellation the job cannot refuse is not held: the
-  /// job accepts it at once, and the one held until then is dropped and
-  /// cleared here. So is one a section the body walked away from still
-  /// holds when the body gives itself up or the job ends: it would land on
-  /// a job already cancelled or over. And so is the request of the job's
-  /// own deadline once the body and the children are over: the deadline
-  /// ends there, and a rejectable request that arrived behind it shows here
-  /// in its place.
+  /// Set when a cancellation the job may refuse arrives inside a section opened
+  /// by [enterUncancellable], and cleared when the outermost section closes and
+  /// lets it through. The job does not accept it meanwhile — [pendingCancel]
+  /// stays `null` — so this is the only place such a request shows. A
+  /// cancellation the job cannot refuse is not held: the job accepts it at
+  /// once, and the one held until then is dropped and cleared here. So is one a
+  /// section the body walked away from still holds when the body cancels itself
+  /// or the job ends: it would land on a job already cancelled or over. And so
+  /// is the request of the job's own deadline once the body and the children
+  /// are over: the deadline ends there, and a rejectable request that arrived
+  /// behind it shows here in its place.
   @protected
   Cancelled? get heldCancel => _heldCancel;
 
@@ -1622,9 +1616,9 @@ abstract class JobBase<T> implements Job<T> {
     // leaves the job as it was, and not running with no body.
     final ctx = createContext();
     if (_status != JobStatus.created) {
-      // Ended while the context was being built -- an engine of a domain
-      // asked a rule there and cancelled, or finished the job by hand. It
-      // has its outcome, and a finished job does not run.
+      // Ended while the context was being built -- an engine asked a rule there
+      // and cancelled, or finished the job by hand. It has its outcome, and a
+      // finished job does not run.
       return;
     }
     _status = JobStatus.running;
@@ -1670,11 +1664,11 @@ abstract class JobBase<T> implements Job<T> {
     _timeoutTimer = null;
     final reason = TimeoutCancelReason(_timeout!);
     _timeoutReason = reason;
-    // Caught: the cascade is recursive and an engine of a domain may throw
-    // from its `cancelWith`, and nobody called this callback to hand the
-    // error to. Left to escape, it would reach the zone of the start and no
-    // observer; caught, it goes out the door `_execute` sends such an error
-    // through after a cascade: the observer, else the zone of the job.
+    // Caught: the cascade is recursive and an engine may throw from its
+    // `cancelWith`, and nobody called this callback to hand the error to. Left
+    // to escape, it would reach the zone of the start and no observer; caught,
+    // it goes out the door `_execute` sends such an error through after a
+    // cascade: the observer, else the zone of the job.
     try {
       cancelWith(
         Cancelled.by(
@@ -1711,9 +1705,9 @@ abstract class JobBase<T> implements Job<T> {
   /// Ends the job with [outcome].
   ///
   /// On a job that has already finished the outcome stays, the same as with
-  /// [cancel]: an outcome is final, and an engine of a domain racing its own
-  /// body must not be able to replace one. A [Failed] handed in there has no
-  /// outcome to carry it, and it goes where the errors with no outcome go: to
+  /// [cancel]: an outcome is final, and an engine racing its own body must not
+  /// be able to replace one. A [Failed] handed in there has no outcome to carry
+  /// it, and it goes where the errors with no outcome go: to
   /// [JobObserver.onError] and to the answer of the observer — the zone unless
   /// it is a [JobAnswerer] — or to [JobObserver.onError] alone once
   /// [Job.ignoreFailure] was called.
@@ -1783,11 +1777,10 @@ abstract class JobBase<T> implements Job<T> {
     // leave the handle contradicting itself for good -- cancelled and
     // `Done(42)` at the same time. So the mark decides those.
     //
-    // A [Cancelled] handed in is not that: the handle stays coherent, and
-    // an engine of a domain ending a job from inside the cascade says how
-    // it ended it -- that description is the whole diagnosis it has. The
-    // route of the core hands the mark in itself, so nothing here is
-    // about it.
+    // A [Cancelled] handed in is not that: the handle stays coherent, and an
+    // engine ending a job from inside the cascade says how it ended it -- that
+    // description is the whole diagnosis it has. The route of the core hands
+    // the mark in itself, so nothing here is about it.
     final decided =
         outcome is Cancelled ? outcome : (_pendingCancel ?? outcome);
     final replaced = identical(decided, outcome) ? null : outcome;
@@ -1816,8 +1809,8 @@ abstract class JobBase<T> implements Job<T> {
     // it would land on a job that is over, which drops it.
     _heldCancel = null;
     _heldBehindTimeout = null;
-    // However the job ended — the core's route has lifted the deadline
-    // already, an engine of a domain ending it by hand has not.
+    // However the job ended — the core's route has lifted the deadline already,
+    // an engine ending it by hand has not.
     _timeoutTimer?.cancel();
     _timeoutTimer = null;
     // The list of children is a waiting list, so it shrinks; the link from
@@ -1839,22 +1832,22 @@ abstract class JobBase<T> implements Job<T> {
         parent._outcomeChild[decided] = this;
       }
     }
-    // A failure an engine of a domain hands in has been told to nobody, unless
-    // the body threw the same error first. Announced here, once the job is
-    // over, so an `onError` that cancels finds a finished job instead of
-    // marking one that is about to end `Failed`; and before `finished`, so the
-    // observer hears the error before the engine's bookkeeping and `onFinish`.
-    // One handed in over the mark goes the way of a failure of the body of a
-    // cancelled job, below.
+    // A failure an engine hands in has been told to nobody, unless the body
+    // threw the same error first. Announced here, once the job is over, so an
+    // `onError` that cancels finds a finished job instead of marking one that
+    // is about to end `Failed`; and before `finished`, so the observer hears
+    // the error before the engine's bookkeeping and `onFinish`. One handed in
+    // over the mark goes the way of a failure of the body of a cancelled job,
+    // below.
     if (decided is Failed &&
         replaced == null &&
         !_wasAnnounced(decided.error)) {
       _noteAnnounced(decided.error);
       notifyObserver(decided.error, decided.stackTrace);
     }
-    // Guarded: the hook belongs to an engine of a domain, and its error
-    // must not stand between the job and its outcome — an unfinished job
-    // holds its parent, its waiters and the engine itself forever.
+    // Guarded: the hook belongs to an engine, and its error must not stand
+    // between the job and its outcome — an unfinished job holds its parent, its
+    // waiters and the engine itself forever.
     try {
       finished();
     } on Object catch (error, stackTrace) {
@@ -1865,11 +1858,11 @@ abstract class JobBase<T> implements Job<T> {
     // They hold whatever the body gave them — a subscription, a buffer, a
     // token — for as long as anyone holds the handle.
     _onCancel.clear();
-    // Nor will anything run the cleanups of a job an engine of a domain
-    // ended by hand before its unwinding: the core's route turns around on
-    // a job that is over. Inside the unwinding the routine that runs the
-    // stack is still alive; it reads what is left and lets go of it itself,
-    // and the registrations put aside exist only in there.
+    // Nor will anything run the cleanups of a job an engine ended by hand
+    // before its unwinding: the core's route turns around on a job that is
+    // over. Inside the unwinding the routine that runs the stack is still
+    // alive; it reads what is left and lets go of it itself, and the
+    // registrations put aside exist only in there.
     if (!_disposing) _cleanups.clear();
     _done.complete(decided);
     // Notify only after the domain has detached this job and delivered its
@@ -1925,9 +1918,9 @@ abstract class JobBase<T> implements Job<T> {
   /// one error is worse than once. When the job ends [Cancelled], the outcome
   /// does not carry it, and it is answered later without being announced again
   /// — unless [Job.ignoreFailure] was called or [Job.isCancellationError] names
-  /// it, and then nobody answers for it. A [Failed] an engine of a domain hands
-  /// to [finish] needs no call here: [finish] announces it itself.
-  /// [notifyError] starts here too, and goes on to the answer.
+  /// it, and then nobody answers for it. A [Failed] an engine hands to [finish]
+  /// needs no call here: [finish] announces it itself. [notifyError] starts
+  /// here too, and goes on to the answer.
   ///
   /// The observer is told about one error at a time: a `ParallelWaitError` is
   /// walked as [Job.visitErrors] walks it, and each failure and each
@@ -1990,14 +1983,13 @@ abstract class JobBase<T> implements Job<T> {
   /// Hands [error] to the zone the job was created in, unless it is a
   /// cancellation.
   ///
-  /// For an engine of a domain whose own answer for an error with nowhere to go
-  /// ends with the zone: `solo`, for example, sends one here when neither an
-  /// override of `Solo.onUnanswered` nor `Solo.unansweredHandler` took it.
-  /// The core reaches the zone by itself, through the default body of
+  /// For an engine whose own answer for an error with nowhere to go ends with
+  /// the zone: `solo`, for example, sends one here when neither an override of
+  /// `Solo.onUnanswered` nor `Solo.unansweredHandler` took it. The core reaches
+  /// the zone by itself, through the default body of
   /// [JobAnswerer.onUnanswered], through [notifyError] without an observer that
   /// answers and through an unobserved [Failed]. A cancellation is held back
-  /// here as it is there, so an engine of a domain does not write that rule
-  /// again.
+  /// here as it is there, so an engine does not write that rule again.
   @protected
   void reportToZone(Object error, StackTrace stackTrace) =>
       _toZone(error, stackTrace);
@@ -2008,14 +2000,13 @@ abstract class JobBase<T> implements Job<T> {
   /// in when the observer does not answer or there is none. [notifyError] ends
   /// here, and so do three failures of a body: that of a branch of
   /// [JobContext.runAll] the group did not throw, that of a job that ends
-  /// [Cancelled], and that of a job an engine of a domain ended by hand with an
-  /// outcome of its own, unless [Job.ignoreFailure] was called on the job. The
-  /// last is the group's when the group took that failure in place of a value
-  /// handed in after the group heard of it (see [_failureWentToGroup]), and
-  /// comes here only as the first, when the group does not throw it. The job
-  /// told its observer itself, where its body was caught, and one error is
-  /// announced once — but an error nobody answered for still has to reach
-  /// somebody.
+  /// [Cancelled], and that of a job an engine ended by hand with an outcome of
+  /// its own, unless [Job.ignoreFailure] was called on the job. The last is the
+  /// group's when the group took that failure in place of a value handed in
+  /// after the group heard of it (see [_failureWentToGroup]), and comes here
+  /// only as the first, when the group does not throw it. The job told its
+  /// observer itself, where its body was caught, and one error is announced
+  /// once — but an error nobody answered for still has to reach somebody.
   ///
   /// The answer is asked for one failure at a time: a `ParallelWaitError` is
   /// walked as [Job.visitErrors] walks it, each failure in it goes to the
@@ -2025,8 +2016,8 @@ abstract class JobBase<T> implements Job<T> {
   /// of such a job here, and only here, so that [JobObserver.onError] has
   /// heard it like any other.
   ///
-  /// An engine of a domain answers through the observer it puts on its
-  /// jobs, as `solo` does: there is no second door.
+  /// An engine answers through the observer it puts on its jobs, as `solo`
+  /// does: there is no second door.
   void _handleUnanswered(Object error, StackTrace stackTrace) {
     final observer = _observer;
     // Read once for the whole walk, and only for a job that has accepted a
@@ -2133,9 +2124,9 @@ abstract class JobBase<T> implements Job<T> {
   /// Called for every job that gets an outcome, including one dropped before
   /// its body ever ran — then there was no [started] to match it. An error
   /// thrown here goes to [notifyError] and the job finishes all the same, but
-  /// the engine of the domain is left half-way through its own bookkeeping:
-  /// keep it short and unconditional. `solo`, for example, clears `current`
-  /// here and moves its queue on.
+  /// the engine is left half-way through its own bookkeeping: keep it short
+  /// and unconditional. `solo`, for example, clears `current` here and moves
+  /// its queue on.
   @visibleForOverriding
   void finished() {}
 
@@ -2193,20 +2184,20 @@ abstract class JobBase<T> implements Job<T> {
     try {
       _routineEntered = true;
       Outcome<T> outcome;
-      // The body gave itself up: the children go, the same as they do for a
+      // The body cancelled itself: the children go, the same as they do for a
       // job cancelled from outside. Not from inside the `catch`: the cascade
-      // runs the callbacks of the children, which is the caller's code, and
-      // it must find a parent that already refuses to start anything.
+      // runs the callbacks of the children, which is the caller's code, and it
+      // must find a parent that already refuses to start anything.
       Cancelled? selfCancelled;
-      // Whether the error the body threw was announced before it threw it:
-      // an engine of a domain handed that very error to [finish], and it was
-      // answered for there. The body's route does not answer for it again.
-      // The first pass of a start cut short announces it too, but answers
-      // for nothing: the second pass throws it again on a job still running.
+      // Whether the error the body threw was announced before it threw it: an
+      // engine handed that very error to [finish], and it was answered for
+      // there. The body's route does not answer for it again. The first pass of
+      // a start cut short announces it too, but answers for nothing: the second
+      // pass throws it again on a job still running.
       var announcedBefore = false;
       // The outcome of a body that threw [cancelled]: the mark if there is
-      // one, and otherwise its own decision to give up.
-      Cancelled gaveUp(Cancelled cancelled, StackTrace stackTrace) {
+      // one, and otherwise the body's own cancellation.
+      Cancelled ownCancellation(Cancelled cancelled, StackTrace stackTrace) {
         if (_pendingCancel case final pending?) {
           return pending;
         }
@@ -2245,11 +2236,11 @@ abstract class JobBase<T> implements Job<T> {
         }
         outcome = Done(value);
       } on Cancelled catch (cancelled, stackTrace) {
-        outcome = gaveUp(cancelled, stackTrace);
+        outcome = ownCancellation(cancelled, stackTrace);
       } on Object catch (error, stackTrace) {
         final envelope = _analyzeEnvelope(error);
         if (envelope != null && envelope.isCleanCancellation) {
-          outcome = gaveUp(
+          outcome = ownCancellation(
             envelope.firstCancelled!,
             envelope.firstStackTrace!,
           );
@@ -2268,15 +2259,14 @@ abstract class JobBase<T> implements Job<T> {
       _bodyEnded = true;
       _bodyOutcome = outcome;
       if (selfCancelled != null) {
-        // Marked before the children are waited for, and only marked. The
-        // body gave itself up, so from here the job is cancelled to anyone
-        // who asks -- `isCancelled`, `check`, a `cancel()` from outside --
-        // and the decision it made is the one that stands: `cancelWith`
-        // turns around at its own early return instead of laying another
-        // reason over this one. Without the mark that whole wait was a
-        // window: `isCancelled` answered `false`, a cancellation arriving
-        // in it won by `??=`, and the children were left carrying a cause
-        // their parent never had.
+        // Marked before the children are waited for, and only marked. The body
+        // cancelled itself, so from here the job is cancelled to anyone who
+        // asks -- `isCancelled`, `check`, a `cancel()` from outside -- and the
+        // decision it made is the one that stands: `cancelWith` turns around at
+        // its own early return instead of laying another reason over this one.
+        // Without the mark that whole wait was a window: `isCancelled` answered
+        // `false`, a cancellation arriving in it won by `??=`, and the children
+        // were left carrying a cause their parent never had.
         //
         // And marked before the group below hears of it: asking the siblings
         // to stop runs their `onCancel` callbacks, which are the caller's
@@ -2293,24 +2283,23 @@ abstract class JobBase<T> implements Job<T> {
       }
       // The early word of a branch to its group: the siblings are asked to stop
       // while this one is still waiting for its own descendants. It hands
-      // nothing over, and decides only that a value an engine of a domain hands
-      // in after it comes too late for the group — see
-      // [_RunAllGroup._takeFailure]. What comes out of a group is settled by
-      // the final outcomes, later and elsewhere. After the classification and
-      // not before it: a clean envelope thrown by a child is a cancellation
-      // here, not a failure.
+      // nothing over, and decides only that a value an engine hands in after it
+      // comes too late for the group — see [_RunAllGroup._takeFailure]. What
+      // comes out of a group is settled by the final outcomes, later and
+      // elsewhere. After the classification and not before it: a clean envelope
+      // thrown by a child is a cancellation here, not a failure.
       _hold?.bodyEnded(outcome);
       if (selfCancelled case final cancelled?) {
         // The rest of what `cancelWith` does, in its order: the children are
         // asked first, then the `onCancel` callbacks run and `whenCancelled`
-        // hears it. A job whose body gives itself up no longer needs what
-        // the body started any more than one cancelled from outside does.
+        // hears it. A job whose body cancels itself no longer needs what the
+        // body started any more than one cancelled from outside does.
         try {
           try {
             _cascadeToChildren(cancelled);
           } finally {
-            // Skipped when a callback of a child reached the engine of a
-            // domain and it ended the job by hand, as in `cancelWith`.
+            // Skipped when a callback of a child reached the engine and it
+            // ended the job by hand, as in `cancelWith`.
             if (_status != JobStatus.finished) {
               _markCancelled(cancelled);
             } else {
@@ -2337,10 +2326,10 @@ abstract class JobBase<T> implements Job<T> {
       }
       await _awaitChildren();
       if (isFinished) {
-        // An engine of a domain ended the job by hand while the body was
-        // playing out: the outcome is not ours, the children were not waited
-        // for, and the stack is not unwound -- `finish` let go of it. A
-        // failure of the body still has to be answered for.
+        // An engine ended the job by hand while the body was playing out: the
+        // outcome is not ours, the children were not waited for, and the stack
+        // is not unwound -- `finish` let go of it. A failure of the body still
+        // has to be answered for.
         _answerForHandFinished(outcome, announcedBefore: announcedBefore);
         return;
       }
@@ -2350,11 +2339,11 @@ abstract class JobBase<T> implements Job<T> {
       // work into `Cancelled` and closes its value through `discard`.
       _liftTimeout();
       // The outcome is decided, and the mark is already on: the body either
-      // caught the one that was there or gave itself up and was marked
-      // above. Asserted rather than assigned, so a path that ever arrives
-      // here unmarked shows up as the defect it is instead of quietly
-      // changing the reason the job ends with. Nothing is told here: both
-      // paths told everyone when the mark went on.
+      // caught the one that was there or cancelled itself and was marked above.
+      // Asserted rather than assigned, so a path that ever arrives here
+      // unmarked shows up as the defect it is instead of quietly changing the
+      // reason the job ends with. Nothing is told here: both paths told
+      // everyone when the mark went on.
       if (outcome is Cancelled) {
         assert(
           identical(_pendingCancel, outcome),
@@ -2378,11 +2367,11 @@ abstract class JobBase<T> implements Job<T> {
         // documented, not fixed.
         await hold.beforeDisposal();
         if (isFinished) {
-          // An engine of a domain ended the branch by hand while it stood
-          // there. A bare `return` would leave the phase where it is, and
-          // the job would read as disposing for good. Nothing is put aside
-          // yet -- the passes below are what fill that list -- so there is
-          // nothing to say on the debug channel either.
+          // An engine ended the branch by hand while it stood there. A bare
+          // `return` would leave the phase where it is, and the job would read
+          // as disposing for good. Nothing is put aside yet -- the passes below
+          // are what fill that list -- so there is nothing to say on the debug
+          // channel either.
           _disposing = false;
           _answerForHandFinished(outcome, announcedBefore: announcedBefore);
           return;
@@ -2410,11 +2399,11 @@ abstract class JobBase<T> implements Job<T> {
         _skipped.clear();
         _disposing = false;
         final decided = _pendingCancel ?? outcome;
-        // An engine of a domain may have ended the job by hand while the
-        // stack unwound -- from a cleanup, or while one was awaited. The
-        // outcome is the engine's then, and nothing is handed to `finish`:
-        // on a finished job it would answer for a failure of the body, and
-        // the answer below does that already.
+        // An engine may have ended the job by hand while the stack unwound --
+        // from a cleanup, or while one was awaited. The outcome is the engine's
+        // then, and nothing is handed to `finish`: on a finished job it would
+        // answer for a failure of the body, and the answer below does that
+        // already.
         final endedByHand = isFinished;
         if (!endedByHand) finish(decided);
         // Said after `finish` and not before: the debug channel is the
@@ -2425,10 +2414,10 @@ abstract class JobBase<T> implements Job<T> {
         // After `finish` the cancellation finds the job over.
         sayDropped?.call();
         // After `finish`, not before, and on the spot. `finished` and
-        // `onFinish` run first, and an engine of a domain may still call
+        // `onFinish` run first, and an engine may still call
         // [Job.ignoreFailure] there; a parent's body hears the cancellation
-        // only after the answer. Reading the outcome settles nothing here,
-        // so there is no window to wait for.
+        // only after the answer. Reading the outcome settles nothing here, so
+        // there is no window to wait for.
         if (endedByHand) {
           _answerForHandFinished(outcome, announcedBefore: announcedBefore);
         } else if (outcome is Failed && !identical(decided, outcome)) {
@@ -2590,9 +2579,9 @@ abstract class JobBase<T> implements Job<T> {
   /// stopped an operation and the body threw that operation's error — so the
   /// path that reports an unobserved [Failed] never runs. The same goes for the
   /// failures inside an envelope the body threw next to the job's own
-  /// cancellation. An engine of a domain can bring one here too: a [Failed] it
-  /// hands to [finish] over the mark, or to a job that is already over. Whoever
-  /// reads the outcome — [Job.value], [Job.done], [JobContext.run], a group of
+  /// cancellation. An engine can bring one here too: a [Failed] it hands to
+  /// [finish] over the mark, or to a job that is already over. Whoever reads
+  /// the outcome — [Job.value], [Job.done], [JobContext.run], a group of
   /// [JobContext.runAll] — gets the cancellation, or whatever the job ended
   /// with first, and not this, so reading it settles nothing. It is an error no
   /// outcome carries, answered the way the failure of a branch the group did
@@ -2601,18 +2590,18 @@ abstract class JobBase<T> implements Job<T> {
   /// about it on the way, as about any failure of a job that has accepted a
   /// cancellation. [announced] says whether [JobObserver.onError] has heard it
   /// already — a failure of the body was told where it was caught, one an
-  /// engine of a domain handed to [finish] was told nowhere.
+  /// engine handed to [finish] was told nowhere.
   ///
   /// [Job.ignoreFailure] takes the answer away and leaves the notice: one
   /// handed to [finish] is still told to [JobObserver.onError], once. An
   /// uncovered [Failed] needs no notice to be seen — the outcome shows it; this
   /// one the outcome does not show, and without the notice it would vanish.
   ///
-  /// A failure of the body of a job an engine of a domain ended by hand comes
-  /// here too, whether the body threw before that or after, unless the engine
-  /// handed in that very failure: the outcome is the engine's, and the failure
-  /// is in none. Nor does one the group of [JobContext.runAll] took in place of
-  /// a value handed in after the group heard of it: the group throws it or
+  /// A failure of the body of a job an engine ended by hand comes here too,
+  /// whether the body threw before that or after, unless the engine handed in
+  /// that very failure: the outcome is the engine's, and the failure is in
+  /// none. Nor does one the group of [JobContext.runAll] took in place of a
+  /// value handed in after the group heard of it: the group throws it or
   /// answers for it — see [_failureWentToGroup].
   void _reportCovered(Failed outcome, {required bool announced}) {
     if (_ignored) {
@@ -2628,14 +2617,14 @@ abstract class JobBase<T> implements Job<T> {
     }
   }
 
-  /// Answers for the failure of the body of a job an engine of a domain ended
-  /// by hand, at whatever point of the run it did so. The outcome is the
-  /// engine's, and the failure is in it only when the engine handed in that
-  /// very error; otherwise it goes where the failure of the body of a cancelled
-  /// job goes. One the engine handed in before the body threw it was answered
-  /// for in [finish] already: [announcedBefore]. One the group of
-  /// [JobContext.runAll] took in place of a value is the group's to throw or
-  /// answer for: [_failureWentToGroup].
+  /// Answers for the failure of the body of a job an engine ended by hand, at
+  /// whatever point of the run it did so. The outcome is the engine's, and the
+  /// failure is in it only when the engine handed in that very error; otherwise
+  /// it goes where the failure of the body of a cancelled job goes. One the
+  /// engine handed in before the body threw it was answered for in [finish]
+  /// already: [announcedBefore]. One the group of [JobContext.runAll] took in
+  /// place of a value is the group's to throw or answer for:
+  /// [_failureWentToGroup].
   void _answerForHandFinished(
     Outcome<T> body, {
     required bool announcedBefore,
@@ -2923,12 +2912,11 @@ abstract class JobBase<T> implements Job<T> {
 /// A job a parent may start: [JobContext.run] and [JobContext.runAll] take
 /// nothing else.
 ///
-/// [Job.deferred] makes one. An engine of a domain declares it on a job of its
-/// own that a parent may run, `implements ChildJob<T>`. It adds no `start`: a
-/// parent starts the job through [JobContext.run], the engine through its
-/// queue, and a job that waits for a queue stays with the queue. A job that
-/// starts itself is not one: neither `Job(body)` nor [Job.then] nor [Job.each]
-/// makes a child.
+/// [Job.deferred] makes one. An engine declares it on a job of its own that a
+/// parent may run, `implements ChildJob<T>`. It adds no `start`: a parent
+/// starts the job through [JobContext.run], the engine through its queue, and a
+/// job that waits for a queue stays with the queue. A job that starts itself is
+/// not one: neither `Job(body)` nor [Job.then] nor [Job.each] makes a child.
 abstract interface class ChildJob<T> implements Job<T> {}
 
 /// A job that starts when it is told to: by hand, through [start], or by a

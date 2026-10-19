@@ -136,9 +136,9 @@ void main() {
       })
         ..launch();
       async.elapse(const Duration(milliseconds: 10));
-      // An engine of a domain ended the job itself: the children were not
-      // waited for and the stack was not unwound, so a line about the
-      // cleanups left behind is all there is.
+      // An engine ended the job itself: the children were not waited for and
+      // the stack was not unwound, so a line about the cleanups left behind is
+      // all there is.
       job
         ..drop(const Done(null))
         ..ignoreFailure();
@@ -171,8 +171,8 @@ void main() {
       async.elapse(const Duration(milliseconds: 5));
       job.cancel().ignore();
       async.elapse(const Duration(milliseconds: 15));
-      // The value came at 10 and was released there; the job still waits
-      // for its child when an engine of a domain ends it by hand.
+      // The value came at 10 and was released there; the job still waits for
+      // its child when an engine ends it by hand.
       job.drop(const Cancelled('by hand'));
       async.flushTimers();
     });
@@ -360,9 +360,9 @@ void main() {
     fakeAsync((async) {
       job = ProbeJob<String>(key: 'j', (ctx) async {
         final db = await ctx.abandonable(() => 'db', discard: closed.add);
-        // The unwinding is inside this disposer when an engine of a domain
-        // ends the job, so the loop carries on with an outcome that is no
-        // longer the one it is reading.
+        // The unwinding is inside this disposer when an engine ends the job, so
+        // the loop carries on with an outcome that is no longer the one it is
+        // reading.
         ctx.onDispose(() async {
           job.drop(const Cancelled('by hand'));
           await delay(5);

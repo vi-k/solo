@@ -12,7 +12,7 @@ final class ForeignJob<T> extends JobBase<T> implements ChildJob<T> {
   /// How many children are still being waited for.
   int get childCount => children.length;
 
-  /// Starts the body the way an engine of a domain would.
+  /// Starts the body the way an engine would.
   void launch() => start();
 
   @override

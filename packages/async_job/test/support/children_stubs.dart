@@ -205,8 +205,8 @@ Future<String> loadText() async => '21';
 Future<void> saveNumber(int number) async =>
     stage.trace.add('saved number $number');
 
-/// What a branch throws to give itself up.
-Cancelled givenUp() => Cancelled.by(
+/// What a branch throws to cancel itself.
+Cancelled selfCancel() => Cancelled.by(
       reason: const ManualCancelReason(),
       stackTrace: StackTrace.current,
     );

@@ -131,29 +131,30 @@ void main() {
     });
   });
 
-  test('a branch giving itself up is heard with its own reason, once', () {
+  test('a branch cancelling itself is heard with its own reason, once', () {
     // The group asks the siblings to stop as soon as this branch's body
     // ends, and a sibling's `onCancel` cancels the branch in turn. The
     // body decided first: that cancellation finds the branch cancelled
     // already, and one instance is heard and becomes the outcome.
     fakeAsync((async) {
       final heard = <Cancelled>[];
-      late ChildJob<void> gaveUp;
-      gaveUp = Job.deferred<void>((ctx) async {
+      late ChildJob<void> selfCancelling;
+      selfCancelling = Job.deferred<void>((ctx) async {
         await delay(1);
         throw const Cancelled('gave up');
       })
         ..whenCancelled(heard.add);
       final sibling = Job.deferred<void>((ctx) async {
         ctx.onCancel(
-          () => gaveUp.cancel(reason: const TestCancelReason('sibling')),
+          () =>
+              selfCancelling.cancel(reason: const TestCancelReason('sibling')),
         );
         await delay(50);
       });
       Object? thrown;
       Job<void>((ctx) async {
         try {
-          await ctx.runAll<void>([gaveUp, sibling]);
+          await ctx.runAll<void>([selfCancelling, sibling]);
         } on Cancelled catch (cancelled) {
           thrown = cancelled;
         }
@@ -161,12 +162,13 @@ void main() {
       async.flushTimers();
       expect(heard, hasLength(1));
       expect(heard.single.description, 'gave up');
-      expect(gaveUp.outcome, same(heard.single));
+      expect(selfCancelling.outcome, same(heard.single));
       expect(thrown, same(heard.single));
     });
   });
 
-  test('a cancellation made while the body gives up is the one heard', () {
+  test('a cancellation made while the body cancels itself is the one heard',
+      () {
     // Putting the body's cancellation into words formats the child's key,
     // which is the caller's code, and this one cancels the parent right
     // then. That cancellation came first and stands.

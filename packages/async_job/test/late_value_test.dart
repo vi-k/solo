@@ -247,8 +247,8 @@ void main() {
       })
         ..launch();
       async.flushMicrotasks();
-      // An engine of a domain ending the job by hand, while the body is
-      // still inside a call that has a resource coming.
+      // An engine ending the job by hand, while the body is still inside a call
+      // that has a resource coming.
       job.drop(const Done<void>(null));
       action.complete('db');
       async.flushTimers();
@@ -348,12 +348,11 @@ void main() {
           ctx.abandonable(open, dispose: dispose, discard: discard),
     };
 
-    /// The body hands `take` to unattended work and returns, or gives
-    /// itself up with [givesUp]; `open` brings the value back [opensIn] ms
-    /// later and `make` right away, and a child keeps the job alive for
-    /// [childFor] ms. With [cancelAt] the job is cancelled from outside
-    /// that many ms in. What the work saw, and whether the resource ended
-    /// up closed.
+    /// The body hands `take` to unattended work and returns, or cancels itself
+    /// with [cancelsItself]; `open` brings the value back [opensIn] ms later
+    /// and `make` right away, and a child keeps the job alive for [childFor]
+    /// ms. With [cancelAt] the job is cancelled from outside that many ms in.
+    /// What the work saw, and whether the resource ended up closed.
     List<String> scenario(
       Future<_Resource> Function(
         JobContext ctx,
@@ -363,7 +362,7 @@ void main() {
       int opensIn = 10,
       int childFor = 0,
       int? cancelAt,
-      bool givesUp = false,
+      bool cancelsItself = false,
     }) {
       final seen = <String>[];
       fakeAsync((async) {
@@ -389,7 +388,7 @@ void main() {
               seen.add('$error');
             }
           });
-          if (givesUp) {
+          if (cancelsItself) {
             throw const Cancelled('gave up');
           }
         });
@@ -459,20 +458,21 @@ void main() {
           ['cancelled', 'in the end closed: true'],
         );
       });
-      test('$member, the body gave itself up', () {
+      test('$member, the body cancelled itself', () {
         expect(
           scenario(
             childFor: 40,
-            givesUp: true,
+            cancelsItself: true,
             (ctx, open, _) => call(ctx, open, discard: close),
           ),
           ['cancelled', 'in the end closed: true'],
-          reason: 'the callbacks run for a body that gives itself up too',
+          reason: 'the callbacks run for a body that cancels itself too',
         );
       });
     }
-    for (final givesUp in [true, false]) {
-      final how = givesUp ? 'the body gave itself up' : 'cancelled outside';
+    for (final cancelsItself in [true, false]) {
+      final how =
+          cancelsItself ? 'the body cancelled itself' : 'cancelled outside';
       test('abandonable, the job ended by hand in the cascade, $how', () {
         // A callback of the child reaches the engine, and it ends the parent
         // by hand: the mark is on, and the callbacks that would have told
@@ -505,14 +505,14 @@ void main() {
               }
             });
             await delay(5);
-            if (givesUp) {
+            if (cancelsItself) {
               throw const Cancelled('gave up');
             }
             await delay(100);
           })
             ..ignoreFailure()
             ..launch();
-          if (!givesUp) {
+          if (!cancelsItself) {
             async.elapse(const Duration(milliseconds: 5));
             parent.cancel().ignore();
           }
@@ -522,8 +522,9 @@ void main() {
         expect(seen, ['cancelled', 'in the end closed: true']);
       });
     }
-    test('abandonable, a raw callback before it threw, the body gave itself up',
-        () {
+    test(
+        'abandonable, a raw callback before it threw, '
+        'the body cancelled itself', () {
       // The pass over the callbacks stops at the throw, and the race of the
       // call never hears the cancellation from it.
       final seen = <String>[];

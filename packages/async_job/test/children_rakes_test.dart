@@ -964,7 +964,7 @@ void main() {
           ..rowsTake = 20
           ..rowsError = StateError('disk')
           ..imagesTake = 40
-          ..imagesError = stubs.givenUp();
+          ..imagesError = stubs.selfCancel();
         final parent = page.exportWithFutureWait()..ignoreFailure();
         async.flushTimers();
         expect(parent.outcome, isA<Failed>());
@@ -979,7 +979,7 @@ void main() {
           ..rowsTake = 40
           ..rowsError = StateError('disk')
           ..imagesTake = 20
-          ..imagesError = stubs.givenUp();
+          ..imagesError = stubs.selfCancel();
         final parent = page.exportWithFutureWait()..ignoreFailure();
         async.flushTimers();
         // The failure of `rows` is nowhere in the outcome.
@@ -1039,10 +1039,11 @@ void main() {
       });
     });
 
-    test('.wait: a branch giving up ends the parent with that cancellation',
-        () {
+    test(
+        '.wait: a branch cancelling itself ends the parent '
+        'with that cancellation', () {
       fakeAsync((async) {
-        stubs.stage.imagesError = stubs.givenUp();
+        stubs.stage.imagesError = stubs.selfCancel();
         final parent = page.exportWithWait()..ignoreFailure();
         async.flushTimers();
         expect(parent.outcome, isA<Cancelled>());

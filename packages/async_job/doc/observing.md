@@ -2,7 +2,10 @@
 
 A job's outcome says how the job ended. A `JobObserver` hears the rest: when
 the job starts and ends, what its body logs, and the errors that no outcome
-carries. The last section shows how to test a job without waiting in real time.
+carries. Such an error goes to whoever answers for it: the zone, where it is an
+uncaught error, or an observer that mixes in `JobAnswerer` and catches it in
+`onUnanswered`, as [Answering for errors](#answering-for-errors) shows. The
+last section shows how to test a job without waiting in real time.
 
 The lines under the code are what the code prints:
 
@@ -119,7 +122,7 @@ Three things decide the count:
   `ctx.uncancellable` holds a cancellation back, and the job accepts it when
   the section ends: a 100 ms section cancelled 10 ms in shows 0 ms, while the
   caller of `cancel` waited 90 ms.
-- A body that gives itself up, by throwing `Cancelled` or by letting a child's
+- A body that cancels itself, by throwing `Cancelled` or by letting a child's
   cancellation out, accepts the cancellation as it throws, and the count starts
   there.
 

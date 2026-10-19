@@ -1338,10 +1338,32 @@ M11 владелец закрыл документами: ожидание вс�
 
 M12, M13 и пилот: мета-вступления сняты со всех страниц `doc/` ядра, итог
 первой части в вердикте M13. Владелец решил переписывать страницы по образцу
-`observing.md`; README (короткий старт, «Why»), разбивка `children.md`
-и словарь («answers for», «engine of a domain») — в обсуждении. У страниц
-`solo` такие же вступления, их тесты на них ссылаются — это вопрос пилота
-`solo`.
+`observing.md`. Владелец 2026-10-19 согласился с порядком волн, каждая —
+с переводом, ревью на Opus и своим коммитом:
+1. Словарь — сделан и закоммичен: «engine of a domain» → «engine», «gives
+   itself up» → «cancels itself» по `lib`, тестам, `doc/`, README и переводам;
+   «answer for» остаётся термином `JobAnswerer`, определён один раз
+   во вступлении `observing.md`, а вне этого API сказано проще: «unless the
+   observer catches it in `onUnanswered`»; «reaches nobody» остаётся.
+2. Разбивка `children.md` без правки текста на три страницы: Children
+   (вступление о трёх способах, `ctx.run`, отказ, глубина; раздел о стримах —
+   абзацем со ссылкой на `streams.md`), Groups (`.wait`, `runAll`, что группа
+   отдаёт, список группы), Chains (`then`, продолжение ребёнка, Steps in a
+   row). Якоря, тесты страницы, меню сайта, Guides.
+3. README: Quick start — блок на 12 строк из «Why» с выводом под кодом; «Why»
+   сжать до 30–40 строк (флаг с `finally`, `Future.timeout`
+   и `CancelableOperation`, что добавляет задача); нынешний пример — ниже как
+   «A fuller example» с пояснениями по две-три строки; `doc/why.md`
+   не заводить. Сторож — `readme_recipe_test.dart`.
+4. Переписывание по образцу `observing.md`: `children`, `cancellation`,
+   `cleanup`, `extending`, лёгкий проход по `outcomes`. У страниц `solo`
+   такие же вступления, их тесты на них ссылаются — это вопрос пилота `solo`.
+
+Сейчас следующая — волна 2. Для неё: `solo/doc/children.md` ссылается на якоря
+страницы ядра полными адресами GitHub (`#children`,
+`#waiting-for-several-children`, `#chains`); пары перевода —
+в `tool/check_translations.py`, меню — `site/astro.config.mjs`,
+`tool/build_site_test.py` переписывает `#chains`.
 
 Дальше по порядку ждут владельца: ядро — пилот с M12 и M13, `observing.md`, L1,
 L6 и L8; `solo` — M4, M5, M6 и пилот.

@@ -424,9 +424,9 @@ void main() {
               ),
             )
             .ignore();
-        // A value, and the early seam hears one. A body that gave itself
-        // up would not do here: it is marked the moment it does, and from
-        // then on nothing replaces the reason it chose.
+        // A value, and the early seam hears one. A body that cancelled itself
+        // would not do here: it is marked the moment it does, and from then on
+        // nothing replaces the reason it chose.
         return 1;
       });
       Object? thrown;
@@ -922,9 +922,9 @@ void main() {
       runZonedGuarded(
         () {
           fakeAsync((async) {
-            // An engine of a domain may end a branch by hand while it
-            // stands at a barrier. Such a failure went through no body, so
-            // nobody announced it: the group is the last one holding it.
+            // An engine may end a branch by hand while it stands at a barrier.
+            // Such a failure went through no body, so nobody announced it: the
+            // group is the last one holding it.
             final gate = Completer<void>();
             final dropped = {
               for (final name in ['a', 'b'])
@@ -1747,11 +1747,11 @@ final parent = Job<void>((ctx) async {
         'barrier: $barrier', () {
       fakeAsync((async) {
         // The code of the group itself throws while branches stand at a
-        // barrier: at the first one an engine of a domain fails to stop,
-        // at the second one the rules of the parent throw. Neither may
-        // leave a branch held, and neither may turn the stop into a bare
-        // release — a branch let go without being cancelled would keep
-        // what it took for a caller that gets nothing.
+        // barrier: at the first one an engine fails to stop, at the second one
+        // the rules of the parent throw. Neither may leave a branch held, and
+        // neither may turn the stop into a bare release — a branch let go
+        // without being cancelled would keep what it took for a caller that
+        // gets nothing.
         var disposed = 0;
         var discarded = 0;
         final slow = Completer<void>();

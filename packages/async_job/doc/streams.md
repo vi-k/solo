@@ -242,10 +242,10 @@ The future returned by the underlying subscription's `cancel()` is the source's
 own cleanup: a connection shutting down, a file being flushed. The child lets
 go of the stream and ends without waiting for it, so the job can be over while
 the source is still closing. If that future fails, the error goes to `onError`
-of the child's observer and, unless that observer answers for it, to the zone.
-An `await for` left early waits for that future instead: the code after the
-loop runs once the source has closed, and a failure of that future is thrown
-from the loop.
+of the child's observer and, unless that observer catches it in `onUnanswered`,
+to the zone. An `await for` left early waits for that future instead: the code
+after the loop runs once the source has closed, and a failure of that future is
+thrown from the loop.
 
 A job that must not end before the source has closed puts that closing on its
 own cleanup stack, as above. `feed.close()` here returns a future that

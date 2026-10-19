@@ -1,6 +1,6 @@
 // Every `Failed` a job ends with is announced to `onError` once: the body's
-// where it was caught, one a continuation receives from its source, and one
-// an engine of a domain hands to `finish` — even to a job already over.
+// where it was caught, one a continuation receives from its source, and one an
+// engine hands to `finish` — even to a job already over.
 import 'dart:async';
 
 import 'package:async_job/engine.dart';

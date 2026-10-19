@@ -48,7 +48,7 @@ have already run, and one registered now never would. `onDispose`, `onDiscard`,
 `disown` and `unattended` remain available so the body can arrange cleanup
 after cancellation.
 
-A body that gives itself up, by throwing `Cancelled` or by letting out the
+A body that cancels itself, by throwing `Cancelled` or by letting out the
 cancellation of a child, accepts the cancellation as it throws, and the job is
 cancelled the same way: the cancellation passes to its children, its `onCancel`
 callbacks run, and it ends `Cancelled`.
@@ -173,12 +173,11 @@ database. A request to abort or a subscription to cancel goes through
 
 The `onError:` line is that `DatabaseStopped`. `join` throws an error of its
 action as it is, even after a cancellation, and the body does not catch it. The
-job still ends `Cancelled`, so the error is nobody's outcome, and the job
-answers for it as for any failure of its body: from the observer it goes on to
-the zone, unless the observer answers for it, and each stop would reach the
-crash reports of the app as a failure. So the app names the stop of its
-database client once, in `main`, and every job on this page runs with that
-line:
+job still ends `Cancelled`, so no outcome carries the error. It goes the way of
+any such failure of the body: to the observer, then to the zone, unless the
+observer catches it in `onUnanswered`. Each stop would reach the crash reports
+of the app as a failure. So the app names the stop of its database client once,
+in `main`, and every job on this page runs with that line:
 
 ```dart
 Job.isCancellationError = (error) => error is DatabaseStopped;
@@ -327,17 +326,17 @@ returns a value, so whatever has to happen after the step anyway belongs inside
 the same section.
 
 If the step fails and the body lets the error through, the job still ends
-`Cancelled`, and the failure goes on to the answer, as any failure of the body
-of a cancelled job does: the observer hears it, and then the zone does, unless
-the observer answers for it. [Where errors go](observing.md#where-errors-go) on
-the observing page has the table.
+`Cancelled`, and the failure goes where any failure of the body of a cancelled
+job goes: the observer hears it, and then the zone does, unless the observer
+catches it in `onUnanswered`. [Where errors go](observing.md#where-errors-go)
+on the observing page has the table.
 
 Always await `ctx.uncancellable`. The section opens when called, even if you do
 not await its future. An unawaited section can outlive the body; if the job
 finishes first, the held cancellation is lost: `cancel()` completes, and the
 outcome is `Done`. If the body goes on without awaiting the section and then
-gives itself up, by throwing `Cancelled` or by letting out the cancellation of
-a child, the job accepts that cancellation at once: a section holds back a
+cancels itself, by throwing `Cancelled` or by letting out the cancellation of a
+child, the job accepts that cancellation at once: a section holds back a
 cancellation request, not a cancellation the body throws itself. `onCancel`
 runs while the section is still open, and `abandonable` inside it throws.
 

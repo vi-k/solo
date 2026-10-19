@@ -791,7 +791,7 @@ void main() {
     });
 
     test(
-        'a body that goes on past an unawaited section and gives itself up '
+        'a body that goes on past an unawaited section and cancels itself '
         'is cancelled at once', () {
       fakeAsync((async) {
         final seen = <String>[];
@@ -1177,7 +1177,7 @@ void main() {
     });
   });
 
-  test('a body that gives itself up runs its onCancel, after the children', () {
+  test('a body that cancels itself runs its onCancel, after the children', () {
     fakeAsync((async) {
       final seen = <String>[];
       final threw = Job<void>((ctx) async {

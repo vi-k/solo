@@ -91,15 +91,16 @@ If the child ends `Cancelled` and its body failed, the error does not arrive
 through that future. That happens, for instance, when the cancellation stops an
 operation and the body throws that operation's error. `await ctx.run(child)`
 throws `Cancelled`, and the error goes where an error nobody handled goes: to
-the child's observer and, unless that observer answers for it, to the zone, as
-in [Where errors go](observing.md#where-errors-go) on the observing page. An
-error the app names in `Job.isCancellationError` goes no further than the
-child's observer, as in
+the child's observer and, unless that observer catches it in `onUnanswered`, to
+the zone, as in [Where errors go](observing.md#where-errors-go) on the
+observing page. An error the app names in `Job.isCancellationError` goes no
+further than the child's observer, as in
 [Errors of a cancellation](observing.md#errors-of-a-cancellation).
 `child.ignoreFailure()` silences the error, whatever it is.
 `ctx.run(child).ignore()` does not: it silences what the future throws, and the
-future throws the cancellation. To answer for the error differently, give the
-child an observer that answers: a `JobAnswerer` with `onUnanswered` overridden.
+future throws the cancellation. To send the error somewhere else, give the
+child an observer that catches it: a `JobAnswerer` with `onUnanswered`
+overridden.
 
 ### When `ctx.run` refuses a child
 
@@ -278,12 +279,12 @@ the branch the trouble came from is not, or its error would turn into a
 cancellation and be lost. What comes out is decided by the final outcomes: a
 real failure if there is one, otherwise the first cancellation that arrived,
 thrown as the object that outcome carries — exactly what `await ctx.run(child)`
-would have thrown. It goes otherwise for a branch an engine of a domain ends by
-hand with a value after the group heard its body fail:
+would have thrown. It goes otherwise for a branch an engine ends by hand with a
+value after the group heard its body fail:
 [Not waiting for the checkpoint](extending.md#not-waiting-for-the-checkpoint)
 on the extending page says what comes out then. A failure the group received
-and did not throw is not dropped; it goes where an error nobody answered for
-goes.
+and did not throw is not dropped; it goes the way of an error no outcome
+carries.
 
 The branches of a group wait for one another. A branch whose body has returned
 a value does not unwind until the group has decided, and its `dispose`
@@ -684,9 +685,9 @@ moving the await into the cleanup of `loaded`.
 Each continuation is a root job of the core, wherever `then` is called: made in
 the body of another job, it is not that job's child, and the job does not wait
 for it. It has an optional `observer` argument and inherits neither the
-source's observer nor anything an engine of a domain attaches to the source.
-Cleanup registered by the source has already run when the continuation receives
-its value; a resource closed by the source's `onDispose` is therefore already
+source's observer nor anything an engine attaches to the source. Cleanup
+registered by the source has already run when the continuation receives its
+value; a resource closed by the source's `onDispose` is therefore already
 closed at that point.
 
 A `discard` of the source is the other way round. Here `opened` hands out the
@@ -719,8 +720,8 @@ An observer on the last link hears a failure from anywhere up the chain, as
 that link's own: the failure comes down the chain and ends every link after it.
 An error with no outcome, such as a failure of `ctx.unattended` work or of a
 disposer, stays with the link where it happened: it goes to that link's
-observer and, unless the observer answers for it, to the zone the link was made
-in — for a continuation, the zone `then` was called in.
+observer and, unless the observer catches it in `onUnanswered`, to the zone the
+link was made in — for a continuation, the zone `then` was called in.
 
 ### A continuation of a child
 

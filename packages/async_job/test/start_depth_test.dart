@@ -426,8 +426,8 @@ void main() {
       () {
         child = ProbeJob<void>(
           (ctx) {
-            // An engine of a domain ending the job by hand as the second
-            // pass unwinds the stack.
+            // An engine ending the job by hand as the second pass unwinds the
+            // stack.
             ctx.onDispose(() => child.drop(const Done(null)));
             throw StateError('of the body');
           },
@@ -541,7 +541,7 @@ void main() {
     );
   });
 
-  test('a child that gave itself up before it was cut short ends cancelled',
+  test('a child that cancelled itself before it was cut short ends cancelled',
       () async {
     final heard = <String>[];
     late ProbeJob<void> child;
@@ -1278,8 +1278,8 @@ void main() {
     );
   });
 
-  // The same, and an engine of a domain hands the branch a value after its body
-  // failed: the group takes no failure of a branch it never heard.
+  // The same, and an engine hands the branch a value after its body failed: the
+  // group takes no failure of a branch it never heard.
   test('a branch the group never heard answers for its failure past a value',
       () async {
     final gate = Completer<void>();

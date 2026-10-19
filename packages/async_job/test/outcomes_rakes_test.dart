@@ -99,7 +99,7 @@ final class Finishing extends JobObserver {
   void onFinish(Job<Object?> job) => hook(job);
 }
 
-/// A body that gives itself up 5 ms in.
+/// A body that cancels itself 5 ms in.
 Future<void> givingUp(JobContext ctx) async {
   await delay(5);
   throw const Cancelled('why');
@@ -1036,7 +1036,7 @@ void main() {
       );
     });
 
-    for (final path in ['a section held it', 'the body gave itself up']) {
+    for (final path in ['a section held it', 'the body cancelled itself']) {
       test('an async listener fails in the zone of the body when $path',
           () async {
         final zones = <String>[];

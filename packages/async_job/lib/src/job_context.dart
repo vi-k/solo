@@ -173,9 +173,9 @@ abstract interface class JobContext {
   /// The counterpart of [abandonable], for a step that cannot be taken back: a
   /// payment on its way to the server, a write already on the wire. While
   /// [action] runs the job accepts no cancellation it may refuse, so
-  /// [Job.cancel], a cancelled parent and whatever an engine of a domain adds —
-  /// a queue, a closing — reach neither an [onCancel] callback nor a child, and
-  /// the core waits for the body instead of interrupting it.
+  /// [Job.cancel], a cancelled parent and whatever an engine adds — a queue, a
+  /// closing — reach neither an [onCancel] callback nor a child, and the core
+  /// waits for the body instead of interrupting it.
   ///
   /// ```dart
   /// final receipt = await ctx.uncancellable(() => api.pay(order));
@@ -201,29 +201,28 @@ abstract interface class JobContext {
   ///
   /// **Always await this call.** The section belongs to the job, not to the
   /// future returned here: it opens on the call and holds a cancellation
-  /// whether the body waits for it or not. A body that walked on can end
-  /// while the section is still open, and then the held cancellation lands
-  /// on a job that is already over and is dropped — [Job.cancel] returns on
-  /// a job whose outcome is [Done], and nothing says otherwise. What
-  /// [action] throws has nowhere to go either: nobody awaits this future,
-  /// so its error reaches the zone instead of the observer. And if the job
-  /// is not over yet — its body ended but a child of it is still running —
-  /// the held cancellation lands on a job that is very much alive: it
-  /// becomes the outcome over the value the body returned, and the
-  /// registrations of [JobContext.onDiscard] run. A body that walked on and
-  /// then gives itself up accepts a cancellation no section holds: the
-  /// [onCancel] callbacks run while the section is still open, and a call of
-  /// [abandonable] inside it throws.
+  /// whether the body waits for it or not. A body that walked on can end while
+  /// the section is still open, and then the held cancellation lands on a job
+  /// that is already over and is dropped — [Job.cancel] returns on a job whose
+  /// outcome is [Done], and nothing says otherwise. What [action] throws has
+  /// nowhere to go either: nobody awaits this future, so its error reaches the
+  /// zone instead of the observer. And if the job is not over yet — its body
+  /// ended but a child of it is still running — the held cancellation lands on
+  /// a job that is very much alive: it becomes the outcome over the value the
+  /// body returned, and the registrations of [JobContext.onDiscard] run. A body
+  /// that walked on and then cancels itself accepts a cancellation no section
+  /// holds: the [onCancel] callbacks run while the section is still open, and a
+  /// call of [abandonable] inside it throws.
   ///
   /// This is what separates it from [join], which accepts the cancellation as
   /// it arrives and only keeps waiting: there the job accepts it at once, and a
   /// token handed to [onCancel] stops the very call being waited for.
   ///
-  /// The rules an engine of a domain adds are not covered: `solo`, for example,
-  /// cancels a job whose state left its working type whatever this does, and
-  /// the body learns about it at its next read as always. A cancellation the
-  /// section held until then gives way: the job ends with the reason of the
-  /// rule, and the held one never lands.
+  /// The rules an engine adds are not covered: `solo`, for example, cancels a
+  /// job whose state left its working type whatever this does, and the body
+  /// learns about it at its next read as always. A cancellation the section
+  /// held until then gives way: the job ends with the reason of the rule, and
+  /// the held one never lands.
   ///
   /// Throws [Cancelled] if the job is already cancelled, the same as
   /// [abandonable]: a step that cannot be taken back must not begin for a job
@@ -305,10 +304,10 @@ abstract interface class JobContext {
   /// thrown outside the body, and the job still ends with its cancellation.
   /// Whatever has to happen on the cancellation, the callback does itself.
   ///
-  /// A body that gives itself up — throws [Cancelled], or lets out the
-  /// cancellation of a child — accepts its cancellation as it throws, and
-  /// these callbacks run then: what the body started is no more needed
-  /// than when the job is cancelled from outside.
+  /// A body that cancels itself — throws [Cancelled], or lets out the
+  /// cancellation of a child — accepts its cancellation as it throws, and these
+  /// callbacks run then: what the body started is no more needed than when the
+  /// job is cancelled from outside.
   ///
   /// [callback] is synchronous, and only what it throws synchronously is
   /// caught. `void Function()` takes an `async` function without a word
@@ -386,8 +385,8 @@ abstract interface class JobContext {
   /// inside the same uncancellable section, when it is asynchronous.
   bool disown(Object value);
 
-  /// Starts [child] right now, as a child of this job, ahead of whatever
-  /// an engine of a domain would have put it through.
+  /// Starts [child] right now, as a child of this job, ahead of whatever an
+  /// engine would have put it through.
   ///
   /// Starts synchronously, then returns a future with the child's value after
   /// the child, its children and its cleanup finish. Keep [child] itself when
@@ -412,21 +411,20 @@ abstract interface class JobContext {
   /// observer, otherwise in the zone, unless [Job.ignoreFailure] was called on
   /// [child] or [Job.isCancellationError] names the failure.
   ///
-  /// A child is a [ChildJob]: one from [Job.deferred], or a job of an engine of
-  /// a domain that declares it. A job from `Job(body)`, [Job.then] or
-  /// [Job.each] starts itself and is none, so the compiler turns it away before
-  /// anything runs.
+  /// A child is a [ChildJob]: one from [Job.deferred], or a job of an engine
+  /// that declares it. A job from `Job(body)`, [Job.then] or [Job.each] starts
+  /// itself and is none, so the compiler turns it away before anything runs.
   ///
   /// Admission errors are synchronous: throws [ArgumentError] for a handle that
-  /// is not a job of this core or one an engine of a domain does not own;
-  /// [StateError] for a job that has already been started or has finished — one
-  /// cancelled before its start included — and for a call made after this job's
-  /// body has ended — from its cleanup, say — or from [unattended] work; and
-  /// the parent's own [Cancelled], with the child cancelled before its start,
-  /// if the parent is already cancelled. An [ArgumentError] or a [StateError]
-  /// leaves [child] untouched, with the code that made it: a job of
-  /// [Job.deferred] refused that way stays unstarted, and its [Job.done] waits
-  /// until that code starts or cancels it.
+  /// is not a job of this core or one an engine does not own; [StateError] for
+  /// a job that has already been started or has finished — one cancelled before
+  /// its start included — and for a call made after this job's body has ended —
+  /// from its cleanup, say — or from [unattended] work; and the parent's own
+  /// [Cancelled], with the child cancelled before its start, if the parent is
+  /// already cancelled. An [ArgumentError] or a [StateError] leaves [child]
+  /// untouched, with the code that made it: a job of [Job.deferred] refused
+  /// that way stays unstarted, and its [Job.done] waits until that code starts
+  /// or cancels it.
   ///
   /// [dispose] and [discard] say how the child's value is cleaned up, and they
   /// work as they do in [abandonable]: [dispose] runs whatever the outcome,
@@ -468,14 +466,14 @@ abstract interface class JobContext {
   /// cancellation that arrived. The object thrown is the one the outcome
   /// carries — exactly what `await ctx.run(child)` would have thrown — so a
   /// cancellation arrives as a cancellation and there is no envelope to take
-  /// apart. One case goes by the early word: a branch an engine of a domain
-  /// ends by hand with a value after the group heard its body fail counts as
-  /// ending with that failure. The value comes too late for the group and stays
-  /// in the outcome of the branch alone: see [JobBase.finish]. A failure the
-  /// group received and did not throw is not lost either: it goes the way an
-  /// error nobody answered for goes, once. Nor is a failure of the body of a
-  /// branch that ends [Cancelled]: the outcome carries the cancellation, and
-  /// the branch answers for the failure the same way. [Job.ignoreFailure] on a
+  /// apart. One case goes by the early word: a branch an engine ends by hand
+  /// with a value after the group heard its body fail counts as ending with
+  /// that failure. The value comes too late for the group and stays in the
+  /// outcome of the branch alone: see [JobBase.finish]. A failure the group
+  /// received and did not throw is not lost either: it goes the way an error
+  /// nobody answered for goes, once. Nor is a failure of the body of a branch
+  /// that ends [Cancelled]: the outcome carries the cancellation, and the
+  /// branch answers for the failure the same way. [Job.ignoreFailure] on a
   /// branch silences both: [JobObserver.onError] hears them, and nobody answers
   /// for them.
   ///
@@ -562,10 +560,10 @@ abstract interface class JobContext {
   /// that is already cancelled every branch is turned away the way [run] turns
   /// away its child, and so is the rest of the list when a branch cancels the
   /// parent before its first `await`, while the list starts. A refusal only the
-  /// adoption can give — an engine of a domain turning the parent down, a rule
-  /// of its domain that throws — may arrive after some branches have started:
-  /// it stops them and waits for them before it comes out, and the handles
-  /// after the refused one are left as they were, never started.
+  /// adoption can give — an engine turning the parent down, a rule of its
+  /// domain that throws — may arrive after some branches have started: it stops
+  /// them and waits for them before it comes out, and the handles after the
+  /// refused one are left as they were, never started.
   Future<List<T>> runAll<T>(Iterable<ChildJob<T>> children);
 
   /// Starts a child job that processes [stream] one event at a time.
@@ -690,8 +688,8 @@ abstract interface class JobContext {
   /// ```
   ///
   /// **Unfinished work holds the job**, its outcome and the body's closure with
-  /// everything it captured — and whatever an engine of a domain hangs on the
-  /// job: in `solo`, for example, the controller itself, with its state and its
+  /// everything it captured — and whatever an engine hangs on the job: in
+  /// `solo`, for example, the controller itself, with its state and its
   /// listeners, after `close()` too. A periodic timer left running in here
   /// leaks all of that.
   ///
@@ -732,11 +730,11 @@ abstract interface class JobContext {
 /// otherwise: the body is gone, and no rule is asked for it any more.
 ///
 /// A rule that no longer holds throws a [Cancelled] with a reason of the
-/// engine's own. The body lets it out and gives itself up, and a job whose body
-/// gives itself up is cancelled the way [Job.cancel] cancels it: its children
+/// engine's own. The body lets it out and cancels itself, and a job whose body
+/// cancels itself is cancelled the way [Job.cancel] cancels it: its children
 /// stop and its [onCancel] callbacks run. The job accepts that cancellation as
-/// the throw leaves the body, not before: a body that catches it and goes on
-/// is not cancelled. To stop the job whatever the body does, cancel it through
+/// the throw leaves the body, not before: a body that catches it and goes on is
+/// not cancelled. To stop the job whatever the body does, cancel it through
 /// [cancelOwnJob].
 abstract class JobContextBase implements JobContext {
   final JobBase<Object?> _owner;
@@ -785,9 +783,9 @@ abstract class JobContextBase implements JobContext {
   @protected
   Cancelled? get pendingCancel => _owner._pendingCancel;
 
-  /// Throws the cancellation the job has accepted, or the one it ended
-  /// with: a job an engine of a domain finished by hand has no
-  /// [pendingCancel], and its cancellation lives in the outcome alone.
+  /// Throws the cancellation the job has accepted, or the one it ended with: a
+  /// job an engine finished by hand has no [pendingCancel], and its
+  /// cancellation lives in the outcome alone.
   @protected
   void throwIfCancelled() {
     final cancelled = _owner._pendingCancel;
@@ -914,13 +912,13 @@ abstract class JobContextBase implements JobContext {
     final result = await action();
     if (_owner.bodyEnded && _inOwnFork) {
       // Called from work handed over with `unattended`, and that work is
-      // waiting for the value: it is the receiver, on the body's terms. A
-      // job marked cancelled -- from outside, or by a body that gave itself
-      // up -- releases the value and throws the cancellation, the rules of
-      // a domain aside: they speak to the body, which is gone. Otherwise
-      // the value is the work's on the terms the call asked for, and on a
-      // job that is over it is released and the call throws, as for a job
-      // an engine finished by hand.
+      // waiting for the value: it is the receiver, on the body's terms. A job
+      // marked cancelled -- from outside, or by a body that cancelled itself --
+      // releases the value and throws the cancellation, the rules of a domain
+      // aside: they speak to the body, which is gone. Otherwise the value is
+      // the work's on the terms the call asked for, and on a job that is over
+      // it is released and the call throws, as for a job an engine finished by
+      // hand.
       try {
         throwIfCancelled();
       } on Cancelled {
@@ -983,14 +981,14 @@ abstract class JobContextBase implements JobContext {
       return;
     }
     if (_owner.isFinished) {
-      // The job ended while the call was in flight, and an engine of a
-      // domain finishing by hand is the only way in. There is no stack
-      // left to register on: `addCleanup` would throw a complaint about
-      // registering on a finished job, the caller would see that instead
-      // of its value, and the value itself would be left to nobody.
-      // Released on the spot, the way one that came back too late is, and
-      // the caller hears the plain truth about the job instead. With no
-      // disposer there is nothing to lose, so nothing changes there.
+      // The job ended while the call was in flight, and an engine finishing by
+      // hand is the only way in. There is no stack left to register on:
+      // `addCleanup` would throw a complaint about registering on a finished
+      // job, the caller would see that instead of its value, and the value
+      // itself would be left to nobody. Released on the spot, the way one that
+      // came back too late is, and the caller hears the plain truth about the
+      // job instead. With no disposer there is nothing to lose, so nothing
+      // changes there.
       unawaited(_dispose(disposer, value));
       throwIfFinished('take the value of a call it made');
     }
@@ -1293,11 +1291,11 @@ abstract class JobContextBase implements JobContext {
           cancelled,
           cancelled.stackTrace ?? StackTrace.current,
         );
-        // A body that has ended walked away from this call, and a body
-        // that gives itself up is told here as much as one cancelled from
-        // outside. The cancellation is the job's own outcome, and its
-        // copy must not reach the zone as an error of an abandoned call;
-        // the error branch of `forward` does the same.
+        // A body that has ended walked away from this call, and a body that
+        // cancels itself is told here as much as one cancelled from outside.
+        // The cancellation is the job's own outcome, and its copy must not
+        // reach the zone as an error of an abandoned call; the error branch of
+        // `forward` does the same.
         if (_owner.bodyEnded) {
           completer.future.ignore();
         }
@@ -1312,13 +1310,13 @@ abstract class JobContextBase implements JobContext {
           // nobody: cleaned up whatever the outcome, and at once.
           _releaseAbandoned(dispose, discard, value);
         } else if (fromFork && pendingCancel != null) {
-          // The work waits for the value, and the job is marked without
-          // this race having heard it: the pass over the callbacks never
-          // reached it. An engine of a domain ended the job by hand while
-          // its cancellation went down to the children, and `finish`
-          // dropped the callbacks; or a raw callback registered before this
-          // one threw and stopped the pass. The work gets what the body
-          // would: the cancellation, and the value is released.
+          // The work waits for the value, and the job is marked without this
+          // race having heard it: the pass over the callbacks never reached it.
+          // An engine ended the job by hand while its cancellation went down to
+          // the children, and `finish` dropped the callbacks; or a raw callback
+          // registered before this one threw and stopped the pass. The work
+          // gets what the body would: the cancellation, and the value is
+          // released.
           onCancel();
           final disposer = dispose ?? discard;
           if (disposer != null) {
@@ -1437,12 +1435,11 @@ abstract class JobContextBase implements JobContext {
       _checkChild(child, 'children');
     }
     if (_owner.pendingCancel case final pending?) {
-      // Every branch turned away, not the first one alone: the rest would
-      // be left `created`, and whoever awaits one of them would wait for
-      // good.
-      // An engine of a domain refusing the adoption is a different answer,
-      // and the one `run` would give: the first such refusal comes out
-      // instead of the cancellation, once the rest are turned away.
+      // Every branch turned away, not the first one alone: the rest would be
+      // left `created`, and whoever awaits one of them would wait for good. An
+      // engine refusing the adoption is a different answer, and the one `run`
+      // would give: the first such refusal comes out instead of the
+      // cancellation, once the rest are turned away.
       (Object, StackTrace)? refusal;
       for (final child in branches) {
         try {
@@ -1719,9 +1716,8 @@ abstract class JobContextBase implements JobContext {
     if (error is! Cancelled) {
       return false;
     }
-    // `_outcome` and not only `_pendingCancel`: an engine of a domain
-    // that finishes a job by hand never marks it, and the cancellation
-    // lives in the outcome alone.
+    // `_outcome` and not only `_pendingCancel`: an engine that finishes a job
+    // by hand never marks it, and the cancellation lives in the outcome alone.
     if (identical(error, _owner._pendingCancel) ||
         identical(error, _owner._outcome)) {
       return true;
