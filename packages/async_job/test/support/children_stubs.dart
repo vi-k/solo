@@ -42,6 +42,19 @@ final class Stage {
 
 Stage stage = Stage();
 
+/// The observer of `doc/observing.md`: it prints what a body logs and how a
+/// job ended.
+final class Log extends JobObserver {
+  @override
+  void onFinish(Job<Object?> job) => print('$job: ${job.outcome}');
+
+  @override
+  void onLog(Job<Object?> job, Object? message) {
+    final data = message is Object? Function() ? message() : message;
+    print('$job: $data');
+  }
+}
+
 /// One lock for the whole stage: a second taker waits for the release.
 final class Lock {
   static Future<Lock> acquire() async {
@@ -211,3 +224,31 @@ Cancelled selfCancel() => Cancelled.by(
       reason: const ManualCancelReason(),
       stackTrace: StackTrace.current,
     );
+
+/// The stop signal of the database client, the kind `onCancel` is for.
+final class CancelToken {
+  bool cancelled = false;
+
+  void cancel() => cancelled = true;
+}
+
+/// How the database client stops when its token is cancelled.
+final class DatabaseStopped implements Exception {
+  const DatabaseStopped();
+
+  @override
+  String toString() => 'DatabaseStopped';
+}
+
+/// The database a child migrates.
+final class Database {
+  /// Three steps of 10 ms; the token is read before every one.
+  Future<void> migrate(CancelToken stop) async {
+    for (var step = 1; step <= 3; step++) {
+      if (stop.cancelled) throw const DatabaseStopped();
+      await delay(10);
+    }
+  }
+}
+
+final database = Database();

@@ -1360,13 +1360,19 @@ M12, M13 и пилот: мета-вступления сняты со всех �
    `cleanup`, `extending`, лёгкий проход по `outcomes`. У страниц `solo`
    такие же вступления, их тесты на них ссылаются — это вопрос пилота `solo`.
 
-Сейчас следующая — волна 4, переписывание страниц по образцу `observing.md`;
-волны 1–3 закоммичены. Волна 2 оставила одно на волну 4: на `children.md`
-заголовок страницы и раздел `## Children` называются одинаково, и `#children`
-на GitHub ведёт к началу страницы — раздел стоит переименовать. Тесты трёх
-страниц пока в одном `children_rakes_test.dart`; разнести их — тоже волна 4.
-`solo/doc/children.md` ссылается на `groups.md` и `chains.md` полными адресами
-GitHub: до push в `main` этих страниц там нет.
+Сейчас идёт волна 4, страница за страницей, каждая своим коммитом: `children`,
+затем `groups` и `chains` (они вышли из `children.md` и тоже в счёт волны),
+`cancellation`, `cleanup`, `extending`, лёгкий проход по `outcomes`.
+`children.md` переписана и закоммичена после ревью на Opus, итог в вердикте
+M13. На ней сцены с выводом наблюдателя `Log` под кодом, раздел `## Children`
+стал `## Running a child` (ссылки в `extending.md` и `solo/doc/children.md`
+с переводами поправлены), новые разделы «When the parent is cancelled» и «When
+a cancelled child fails». Тесты страницы — в новом `children_page_test.dart`,
+он сверяет вывод с блоками `text` страницы; в `children_rakes_test.dart`
+остались `groups` и `chains`, их разнести по своим файлам, когда до них дойдёт
+волна. Следующие — `groups.md` и `chains.md`. `solo/doc/children.md` ссылается
+на `groups.md` и `chains.md` полными адресами GitHub: до push в `main` этих
+страниц там нет.
 
 Дальше по порядку ждут владельца: ядро — пилот с M12 и M13, `observing.md`, L1,
 L6 и L8; `solo` — M4, M5, M6 и пилот.

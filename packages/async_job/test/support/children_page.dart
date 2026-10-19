@@ -1,7 +1,8 @@
 // The code of `doc/children.md`, `doc/groups.md` and `doc/chains.md`,
 // verbatim: every block of the three pages is a run of lines of this file,
-// and `children_rakes_test.dart` runs it. A block that declares names another
-// block declares too lives in a function of its own.
+// and `children_page_test.dart` and `children_rakes_test.dart` run it. A
+// block that declares names another block declares too lives in a function
+// of its own.
 import 'dart:async';
 
 import 'package:async_job/async_job.dart';
@@ -26,10 +27,38 @@ Job<void> overview() {
 }
 
 Job<void> children() {
-  final parent = Job<void>((ctx) async {
-    final child = Job.deferred<int>((ctx) => ctx.abandonable(load));
+  final parent = Job<void>(key: 'parent', observer: Log(), (ctx) async {
+    final child = Job.deferred<int>(key: 'rows', (c) => c.abandonable(load));
     final rows = await ctx.run(child);
     ctx.log('$rows rows');
+  });
+  return parent;
+}
+
+/// The parent of [children] with a child that refuses the cancellation.
+Job<void> refusingChild() {
+  final parent = Job<void>(key: 'parent', observer: Log(), (ctx) async {
+    final child = Job.deferred<int>(
+      key: 'rows',
+      cancellable: false,
+      (c) => c.abandonable(load),
+    );
+    final rows = await ctx.run(child);
+    ctx.log('$rows rows');
+  });
+  return parent;
+}
+
+/// The parent of a child whose body fails once its migration stops.
+Job<void> cancelledChildFails() {
+  final parent = Job<void>(key: 'parent', observer: Log(), (ctx) async {
+    final child = Job.deferred<void>(key: 'migration', (ctx) async {
+      final stop = CancelToken();
+      ctx.onCancel(stop.cancel);
+
+      await ctx.join(() => database.migrate(stop));
+    });
+    await ctx.run(child);
   });
   return parent;
 }

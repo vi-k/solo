@@ -43,12 +43,11 @@ closed the progress.
 
 What passes between a parent and its child beyond what this page shows is the
 core's, and
-[Children](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/children.md#children)
-on the children page of `async_job` has it — that a cancellation the parent
-accepts passes to its children, that a body that fails lets them finish and
-waits for them, and why `child.ignoreFailure()` is no substitute for handling
-the future of `ctx.run`. Several children side by side are a group of
-`ctx.runAll`, under
+[the children page](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/children.md)
+of `async_job` has it — that a cancellation the parent accepts passes to its
+children, that a body that fails lets them finish and waits for them, and why
+`child.ignoreFailure()` is no substitute for handling the future of `ctx.run`.
+Several children side by side are a group of `ctx.runAll`, under
 [Waiting for several children](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/groups.md#waiting-for-several-children)
 on the groups page. Where those pages make a child with `Job.deferred`, a
 controller makes it with `job(...)`: its `ctx.run` and `ctx.runAll` take no

@@ -429,7 +429,7 @@ A regular `Job` schedules its own start on the next microtask. If the caller
 needs to choose when work begins, use `Job.deferred(body)` instead. It returns
 a `DeferredJob<T>` with a public `start()` method. You can call it yourself,
 let a queue start the job, or pass it to a parent with `ctx.run(child)`, as in
-[Children](children.md#children) on the children page.
+[Running a child](children.md#running-a-child) on the children page.
 
 ```dart
 final job = Job.deferred<void>((ctx) => ctx.abandonable(work));

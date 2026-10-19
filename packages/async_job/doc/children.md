@@ -2,8 +2,8 @@
 
 A body can hand work to another job in three ways:
 
-1. A child is started by the body and waited for by it. Several children waited
-   for together make a [group](groups.md).
+1. The body starts a child and waits for it. Several children waited for
+   together make a [group](groups.md).
 2. A [stream](streams.md) is processed one event at a time in a child that owns
    the subscription.
 3. A [continuation](chains.md) made by `then` starts when the job it follows
@@ -27,44 +27,99 @@ final job = Job<void>((ctx) async {
 });
 ```
 
-## Children
+The lines under the code below are what that code prints:
 
-A body delegates work to another job by registering it as a child:
+- `cancel`: the user cancels the parent;
+- `Job(…)`: a message a body logged, or how a job ended, as the `Log` observer
+  from [Observer](observing.md#observer) on the observing page prints them;
+- `zone:` an error that reached the zone uncaught.
+
+## Running a child
+
+A job loads rows in a child and logs how many there are. The job has the `Log`
+observer, and the child has none of its own:
 
 ```dart
-final parent = Job<void>((ctx) async {
-  final child = Job.deferred<int>((ctx) => ctx.abandonable(load));
+final parent = Job<void>(key: 'parent', observer: Log(), (ctx) async {
+  final child = Job.deferred<int>(key: 'rows', (c) => c.abandonable(load));
   final rows = await ctx.run(child);
   ctx.log('$rows rows');
 });
 ```
 
-`ctx.run(child)` starts the child immediately and returns a future of its
-result. The parent waits for all its children before finishing. When the parent
-is cancelled, it passes the cancellation on to its children, and it does the
-same when its body throws `Cancelled`. A child with `cancellable: false`
-refuses the cancellation either way: it runs to its end, and the parent waits
-for it and only then ends `Cancelled`. If the body throws another error, the
-parent lets its children finish and waits for them.
+```text
+Job(rows): Done(21)
+Job(parent): 21 rows
+Job(parent): Done(null)
+```
 
-Create children with `Job.deferred`, so the parent controls their start.
-`ctx.run` takes a `ChildJob`, and a regular `Job` is not one, because such a
-job starts automatically: it may start before the parent registers it and then
-run outside the parent's cancellation and completion handling.
+`ctx.run(child)` starts the child at once and returns a future of its value.
+The future completes once the child is over, its own children and cleanup
+included. The child takes the parent's observer, so the observer prints the
+child's outcome as well. A child with an `observer` of its own keeps it. The
+parent waits for every child it ran before it ends. The body keeps `child` to
+cancel it with `child.cancel()` or read its outcome from `child.done`.
 
-`run` waits for the child to finish, including its children and cleanup, and
-checks the parent's cancellation before returning the value to the body. If the
-child refuses cancellation, `run` still waits for it; after the child succeeds,
-`run` throws the parent's cancellation instead of continuing to the log call. A
-child's error or cancellation is thrown through the returned future with its
-stack trace. Use `child.cancel()` to request cancellation and `child.done` to
-inspect the outcome.
+A child is made with `Job.deferred`, which leaves its start to whoever runs it.
+`ctx.run` takes a `ChildJob`: a `Job.deferred`, or a job of an engine that
+declares it. `Job(body)`, `then` and `Job.each` make jobs that start by
+themselves. Such a job could start before the parent takes it in and run
+outside the parent's cancellation, so the compiler turns it away.
 
-A child inherits the parent's observer unless it has its own. If a child's
-cancellation escapes through `await ctx.run(child)` or `child.value`, the
-parent ends with `HandlerCancelReason` and a description naming the child.
+## When the parent is cancelled
 
-### A child the body does not await
+The user leaves the screen while the rows load, and the parent is cancelled:
+
+```text
+cancel
+Job(rows): Cancelled(parent)
+Job(parent): Cancelled(manual)
+```
+
+The parent passes the cancellation to its child and ends after it. The child
+waits for `load` through `ctx.abandonable`, so it ends at once, and `load` runs
+on with nobody waiting for it.
+
+A child made with `cancellable: false` refuses the cancellation:
+
+```dart
+final child = Job.deferred<int>(
+  key: 'rows',
+  cancellable: false,
+  (c) => c.abandonable(load),
+);
+```
+
+```text
+cancel
+Job(rows): Done(21)
+Job(parent): Cancelled(manual)
+```
+
+The child loads its rows, and the parent waits for it. Before `ctx.run` hands
+the value to the body, it checks the parent's cancellation. The parent is
+cancelled, so `ctx.run` throws the parent's `Cancelled`, and the line that logs
+the rows never runs.
+
+What the parent does to its children depends on how it ends:
+
+| What happens to the parent | Its children | The parent ends |
+| --- | --- | --- |
+| It is cancelled | Are cancelled, except those made with `cancellable: false` | `Cancelled`, once they are over |
+| Its body throws `Cancelled` | Are cancelled the same way | `Cancelled`, once they are over |
+| Its body throws another error | Run to their end | `Failed`, once they are over |
+| Its body returns | Run to their end | `Done`, once they are over |
+
+A child's error comes back through the future `ctx.run` returned, with the
+child's stack trace, and so does its `Cancelled`. A child's `Cancelled` that
+the body lets out of `await ctx.run(child)` or `child.value` cancels the
+parent. The parent then ends with a `HandlerCancelReason` whose description
+names the child.
+
+## A child the body does not await
+
+A job loads rows and warms a cache at the same time. Nobody reads the cache
+here:
 
 ```dart
 final parent = Job<void>((ctx) async {
@@ -75,56 +130,94 @@ final parent = Job<void>((ctx) async {
 });
 ```
 
-Both children start at once. `rows` is the future `ctx.run` returned, kept and
-awaited later; a future kept this way must be awaited or have its errors
-handled. `child` warms a cache nobody reads here, and `ctx.run(child).ignore()`
-says the result is not wanted. The parent still waits for both before
-finishing. `child.ignoreFailure()` is no substitute for
-`ctx.run(child).ignore()`. `child.ignoreFailure()` quenches the core's report
-of a failure nobody looked at, and here `run` looks — it waits for the child's
-value. If `child` fails, its error arrives through the future `run` returned,
-an ordinary Dart future: left unhandled, it goes to the zone, and so does the
-child's `Cancelled`. `ctx.run(child).ignore()` silences the error of that
-future and nothing more: the child's observer still hears the error through
-`onError`.
+Both children start at once. `rows` is the future that `ctx.run` returned, and
+the body awaits it later. Nobody wants the future of the cache, and `ignore()`
+says so. The parent waits for both children before it ends, awaited or not.
 
-If the child ends `Cancelled` and its body failed, the error does not arrive
-through that future. That happens, for instance, when the cancellation stops an
-operation and the body throws that operation's error. `await ctx.run(child)`
-throws `Cancelled`, and the error goes where an error nobody handled goes: to
-the child's observer and, unless that observer catches it in `onUnanswered`, to
-the zone, as in [Where errors go](observing.md#where-errors-go) on the
-observing page. An error the app names in `Job.isCancellationError` goes no
-further than the child's observer, as in
-[Errors of a cancellation](observing.md#errors-of-a-cancellation).
-`child.ignoreFailure()` silences the error, whatever it is.
-`ctx.run(child).ignore()` does not: it silences what the future throws, and the
-future throws the cancellation. To send the error somewhere else, give the
-child an observer that catches it: a `JobAnswerer` with `onUnanswered`
-overridden.
+The future of `ctx.run` is an ordinary Dart future. It throws the child's error
+if the child fails, and the child's `Cancelled` if the child is cancelled. Left
+unhandled, either goes to the zone. So a future kept for later must be awaited
+or have its errors handled. `ignore()` keeps the error of the cache from the
+zone, and the child's observer still hears it in `onError`.
 
-### When `ctx.run` refuses a child
+`child.ignoreFailure()` would not do here. It quenches the report the core
+makes of a failure nobody looked at, as
+[Telling the core it is handled](outcomes.md#telling-the-core-it-is-handled)
+describes. Here `ctx.run` looks at the failure: the future it returned carries
+the error.
 
-`ctx.run` takes a `ChildJob`: a `Job.deferred`, or a job of an engine that
-declares it. A job that starts by itself, one from `Job(body)`, `then` or
-`Job.each`, is not one, and the compiler turns it away. What the type does not
-show, `ctx.run` refuses synchronously, before the child runs:
+## When a cancelled child fails
 
-| The child | What `ctx.run` does |
-| --- | --- |
-| A job from another implementation | Throws `ArgumentError` |
-| A job that has already started or finished | Throws `StateError` |
-| Any job, once the parent body has ended | Throws `StateError` |
-| Any job, once the parent is cancelled | Cancels the child before its start and throws the parent's `Cancelled` |
+A child migrates the database, and a cancellation stops the migration at its
+token, as in
+[A token through `onCancel`](cancellation.md#a-token-through-oncancel) on the
+cancellation page. A parent like the one in [Running a child](#running-a-child)
+runs it. The app has not named `DatabaseStopped` in `Job.isCancellationError`,
+and the user leaves the screen while the migration runs:
 
-An `ArgumentError` or a `StateError` leaves the child untouched, with the code
-that made it: a `Job.deferred` that `ctx.run` refused that way stays unstarted,
-and its `done` waits until that code starts or cancels it.
+```dart
+final child = Job.deferred<void>(key: 'migration', (ctx) async {
+  final stop = CancelToken();
+  ctx.onCancel(stop.cancel);
+
+  await ctx.join(() => database.migrate(stop));
+});
+await ctx.run(child);
+```
+
+```text
+cancel
+Job(migration): Cancelled(parent)
+zone: DatabaseStopped
+Job(parent): Cancelled(manual)
+```
+
+The migration stops by throwing its own `DatabaseStopped`, and the child's body
+fails with it. The child still ends `Cancelled`, and `await ctx.run(child)`
+throws that `Cancelled`. The body's error does not come with it. It goes where
+an error that no outcome carries goes: to the child's observer and, unless that
+observer catches it in `onUnanswered`, to the zone.
+[Where errors go](observing.md#where-errors-go) on the observing page has the
+whole route.
+
+Three things keep that error out of the zone:
+
+- `Job.isCancellationError`, where the app names the error once. Then it goes
+  no further than the child's observer, as in
+  [Errors of a cancellation](observing.md#errors-of-a-cancellation).
+- An observer of the child that catches the error: a `JobAnswerer` with
+  `onUnanswered` overridden.
+- `child.ignoreFailure()`, which silences the error, whatever it is.
+
+`ctx.run(child).ignore()` does not help here. It silences what the future
+throws, and the future throws the cancellation.
+
+## When `ctx.run` refuses a child
+
+What the type of `ctx.run` does not show, `ctx.run` refuses synchronously,
+before the child runs:
+
+| The child | What `ctx.run` does | What happens to the child |
+| --- | --- | --- |
+| A job from another implementation | Throws `ArgumentError` | Nothing |
+| A job that has already started or finished | Throws `StateError` | Nothing |
+| Any job, once the parent body has ended | Throws `StateError` | Nothing |
+| Any job, once the parent is cancelled | Throws the parent's `Cancelled` | It is cancelled before its start |
+
+A child refused with `ArgumentError` or `StateError` stays with the code that
+made it. A `Job.deferred` stays unstarted, and its `done` waits until that code
+starts or cancels it.
+
 [`ctx.runAll`](groups.md) makes the same checks for every job of its list
-before the first start and refuses the same job twice with an `ArgumentError`;
-such a refusal leaves every job of the list untouched.
+before the first start. It also refuses the same job twice with an
+`ArgumentError`. A refusal with `ArgumentError` or `StateError` leaves every
+job of the list as it was. Under a cancelled parent, every job of the list is
+cancelled before its start.
 
-### How deep a tree goes
+## How deep a tree goes
+
+A tree of children can be as deep as the stack lets it be. Each level here runs
+the next one as a child:
 
 ```dart
 ChildJob<void> level(int depth) {
@@ -136,19 +229,22 @@ ChildJob<void> level(int depth) {
 }
 ```
 
-How deep a tree may go is bounded by the stack, and by two different walks of
-it. Starting a child runs the child's body up to its first `await`. Without the
-`await null` above, each level makes its own child before it suspends, and the
-whole chain is built on one stack: about a thousand levels on a desktop VM, and
-the overflow lands while the tree is still being built. A tree that overflows
-there still ends: `ctx.run` throws the `StackOverflowError` into the body that
-called it, and the jobs whose start the overflow cut short end once that body
-is over. With `await null`, building goes by microtasks, and the limit moves to
-the other walk — cancellation, which descends the tree recursively and reaches
-about three thousand. Neither number is a promise; both follow from the size of
-a body's frame.
+Two walks of the tree use the stack, and either of them can bound the depth.
 
-A cascade that runs out of stack stops where the stack ran out, and the jobs
+The first walk builds the tree. Starting a child runs its body up to its first
+`await`. Without the `await null` above, each level makes its own child before
+it suspends, so the whole chain is built on one stack. On a desktop VM that
+stack runs out at about a thousand levels, while the tree is still being built.
+Such a tree still ends: `ctx.run` throws the `StackOverflowError` into the body
+that called it. The jobs whose start the overflow cut short end once that body
+is over.
+
+With `await null`, each level is built on a microtask of its own, and the limit
+moves to the second walk, the cancellation. A cancellation descends the tree
+recursively and runs out of stack at about three thousand levels. Neither
+number is a promise; both follow from the size of a body's frame.
+
+A cancellation that runs out of stack stops where it ran out, and the jobs
 below that depth go on running. The overflow comes out of `cancel()` itself,
 before it returns a future, so `cancel().ignore()` does not catch it. Recursion
 measured in thousands of nested jobs wants flattening, not a deeper stack.

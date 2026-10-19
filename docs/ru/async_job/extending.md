@@ -442,7 +442,8 @@ outcome: Cancelled(signed out)
 запуска должен выбрать вызывающий код, используйте `Job.deferred(body)`. Он
 возвращает `DeferredJob<T>` с публичным методом `start()`. Его можно вызвать
 самостоятельно, поручить запуск очереди или передать задачу родителю через
-`ctx.run(child)`, как в разделе [«Дети»](children.md#дети) страницы о детях.
+`ctx.run(child)`, как в разделе [«Запуск ребёнка»](children.md#запуск-ребёнка)
+страницы о детях.
 
 ```dart
 final job = Job.deferred<void>((ctx) => ctx.abandonable(work));
