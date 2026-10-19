@@ -57,7 +57,7 @@ class Database {
   String toString() => 'database';
 }
 
-/// The job of the Quick start in README.md.
+/// The job of "A fuller example" in README.md.
 Job<Database> openDatabase() => Job<Database>((ctx) async {
       // `join` stays with the call: a database half-opened is not left
       // behind, and `discard` closes the one nobody wants any more.
@@ -81,8 +81,8 @@ Job<Database> openDatabase() => Job<Database>((ctx) async {
       return database;
     });
 
-/// Runs the job of the Quick start four times: once to the end, and then
-/// cancelled at each of its steps.
+/// Runs that job four times: once to the end, and then cancelled at each of
+/// its steps.
 Future<void> main() async {
   print('Nobody changes their mind:');
   final outcome = await openDatabase().done;

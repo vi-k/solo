@@ -792,8 +792,9 @@ void main() {
   });
   test('a discard of a call is silent when the value reaches the body', () {
     fakeAsync((async) {
-      // The pattern of the Quick start: the call gives the body a resource
-      // and the body hands it out. Nothing may close it on the way.
+      // The pattern of the README's fuller example: the call gives the body
+      // a resource and the body hands it out. Nothing may close it on the
+      // way.
       final closed = <String>[];
       final job = Job<String>((ctx) async {
         final db = await ctx.join(_open, discard: closed.add);

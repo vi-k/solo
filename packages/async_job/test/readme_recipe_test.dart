@@ -4,7 +4,7 @@
 //
 // It is a showcase, so it is the one page a reader is most likely to copy
 // and the one a reader is most likely to check under a debugger. Its
-// Quick start used to prove nothing: `cancel` stood next to the
+// first Quick start used to prove nothing: `cancel` stood next to the
 // constructor, the body never started, and the promised line --
 // `Cancelled(manual)` -- printed while the database was never opened and
 // never closed. The example printed that one path, while its comments
@@ -135,6 +135,56 @@ final class Answering extends Listening with JobAnswerer {
 /// The Quick start of the README, as it is written there.
 Future<void> quickStart() async {
   // README: begin
+  final job = Job<void>((ctx) async {
+    // Checked before the call and again before the value comes back,
+    // and the database is closed whichever way the job ends.
+    final db = await ctx.join(Database.open, dispose: (db) => db.close());
+    use(await ctx.join(db.readAll));
+  });
+
+  // Somebody left the screen while the read was in flight.
+  await Future<void>.delayed(const Duration(milliseconds: 50));
+
+  // Waits for the body, its children and its cleanup.
+  await job.cancel();
+  print(job.outcome); // Cancelled(manual)
+  // README: end
+}
+
+// README: begin
+// ignore: type_annotate_public_apis
+var cancelled = false;
+
+Future<void> load() async {
+  final db = await Database.open();
+  try {
+    if (cancelled) return;
+    final rows = await db.readAll();
+    if (cancelled) return;
+    use(rows);
+  } finally {
+    await db.close();
+  }
+}
+// README: end
+
+/// The operation of the README that catches a late database, as it is
+/// written there.
+CancelableOperation<Database> lateOpenCaught() {
+  // README: begin
+  final open = Database.open();
+  final operation = CancelableOperation.fromFuture(
+    open,
+    // cancel() stops the waiting; this closes the database once it opens.
+    onCancel: () async => (await open).close(),
+  );
+  // README: end
+  return operation;
+}
+
+/// The fuller example of the README, as it is written there.
+Future<void> fullerExample() async {
+  // README: begin
   final job = Job<Database>((ctx) async {
     final database = await ctx.join(
       Database.open,
@@ -160,56 +210,6 @@ Future<void> quickStart() async {
   final outcome = await job.done; // Cancelled(manual)
   // README: end
   print(outcome);
-}
-
-// README: begin
-// ignore: type_annotate_public_apis
-var cancelled = false;
-
-Future<void> load() async {
-  final db = await Database.open();
-  try {
-    if (cancelled) return;
-    final rows = await db.readAll();
-    if (cancelled) return;
-    use(rows);
-  } finally {
-    await db.close();
-  }
-}
-// README: end
-
-/// The job of "Why" in the README, as it is written there.
-Future<void> openingJob() async {
-  // README: begin
-  final job = Job<void>((ctx) async {
-    // Checked before the call and again before the value comes back,
-    // and the database is closed whichever way the job ends.
-    final db = await ctx.join(Database.open, dispose: (db) => db.close());
-    use(await ctx.join(db.readAll));
-  });
-
-  // Somebody left the screen while the read was in flight.
-  await Future<void>.delayed(const Duration(milliseconds: 50));
-
-  // Waits for the body, its children and its cleanup.
-  await job.cancel();
-  print(job.outcome); // Cancelled(manual)
-  // README: end
-}
-
-/// The operation of the README that catches a late database, as it is
-/// written there.
-CancelableOperation<Database> lateOpenCaught() {
-  // README: begin
-  final open = Database.open();
-  final operation = CancelableOperation.fromFuture(
-    open,
-    // cancel() stops the waiting; this closes the database once it opens.
-    onCancel: () async => (await open).close(),
-  );
-  // README: end
-  return operation;
 }
 
 /// What [run] prints, on fake time, once every timer has fired.
@@ -266,6 +266,17 @@ String quotedAfter(String page, String code) {
       .map((line) => line.trim())
       .singleWhere((line) => line.startsWith(code));
   return line.substring(line.indexOf('// ') + 3);
+}
+
+/// The outputs [page] quotes: the Quick start's, then the example's.
+List<String> quotedOutputs(String page) {
+  final outputs = [
+    for (final match
+        in RegExp(r'```text\n(.*?)\n```', dotAll: true).allMatches(read(page)))
+      match.group(1)!,
+  ];
+  expect(outputs, hasLength(2), reason: page);
+  return outputs;
 }
 
 /// The members of `JobContext`, in the order of its source, the deprecated
@@ -455,8 +466,8 @@ void main() {
     });
   });
 
-  test('the job of "Why" earns every line of it', () {
-    final printed = printedBy(openingJob);
+  test('the Quick start earns every line of it', () {
+    final printed = printedBy(quickStart);
 
     expect(
       Database.events,
@@ -478,6 +489,30 @@ void main() {
         reason: page,
       );
     }
+
+    // With a database that prints when it opens and when it closes, the
+    // program prints what the block under it quotes. The prints go to the
+    // same journal as the database, so the order is the run's own.
+    Database.events.clear();
+    fakeAsync((async) {
+      runZoned(
+        () => unawaited(quickStart()),
+        zoneSpecification: ZoneSpecification(
+          print: (self, parent, zone, line) => Database.events.add(line),
+        ),
+      );
+      async.flushTimers();
+    });
+    final output = [
+      for (final event in Database.events)
+        if (event == 'opened' || event == 'closed')
+          'database $event'
+        else if (event != 'read')
+          event,
+    ];
+    for (final page in readmes) {
+      expect(output.join('\n'), quotedOutputs(page).first, reason: page);
+    }
   });
 
   test('cancelled next to its constructor the same job does none of it', () {
@@ -489,8 +524,8 @@ void main() {
       job.cancel().ignore();
       async.flushTimers();
 
-      // The outcome the README promises for it. This is what the Quick start
-      // used to show, and why the wait in it is not decoration.
+      // The outcome the README promises for it. This is what the first
+      // Quick start used to show, and why the wait in it is not decoration.
       final outcome = job.outcome! as Cancelled;
       for (final page in readmes) {
         final promised = RegExp(
@@ -611,17 +646,27 @@ void main() {
       for (final MapEntry(key: observer, value: expected) in heard.entries) {
         Database.openError = StateError('database locked');
         Outcome<Database>? ended;
+        Object? thrown;
         final zone = zoneErrorsOf((async) {
-          final job = Job<Database>(
-            observer: observer,
-            (ctx) => ctx.join(Database.open, discard: (db) => db.close()),
-          );
+          final job = Job<Database>(observer: observer, (ctx) async {
+            try {
+              return await ctx.join(
+                Database.open,
+                discard: (db) => db.close(),
+              );
+            } catch (error) {
+              thrown = error;
+              rethrow;
+            }
+          });
           async.elapse(const Duration(milliseconds: 10));
           job.cancel().ignore();
           async.flushTimers();
           ended = job.outcome;
         });
 
+        // `join` throws the open's own error, not `Cancelled`.
+        expect('$thrown', 'Bad state: database locked');
         expect('$ended', 'Cancelled(manual)');
         expect(zone, expected.zone);
         expect(observer?.heard, expected.heard);
@@ -891,9 +936,9 @@ void main() {
     });
   });
 
-  group('the Quick start', () {
+  group('the fuller example', () {
     test('as the README writes it, closes the database', () {
-      final printed = printedBy(quickStart);
+      final printed = printedBy(fullerExample);
 
       expect(Database.events, ['opened', 'closed']);
       for (final page in readmes) {
@@ -910,8 +955,8 @@ void main() {
         'the body goes on to return', () {
       fakeAsync((async) {
         final job = Job<Database>((ctx) async {
-          // Not the Quick start's own lines, so that the check of the
-          // README finds those in `quickStart` alone.
+          // Not the fuller example's own lines, so that the check of the
+          // README finds those in `fullerExample` alone.
           final database =
               await ctx.join(Database.open, discard: (db) => db.close());
           ctx.onCancel(() => Database.events.add('onCancel'));
@@ -949,7 +994,7 @@ void main() {
         final heard = Listening();
         Outcome<Database>? ended;
         final zone = zoneErrorsOf((async) {
-          // Not the Quick start's own lines, as above; the steps after the
+          // Not the fuller example's own lines, as above; the steps after the
           // migration are left out, since the cancellation comes during it.
           final job = Job<Database>(observer: heard, (ctx) async {
             final database =
@@ -982,7 +1027,8 @@ void main() {
       }
     });
 
-    test('the Quick start names that filter and the page that takes it apart',
+    test(
+        'the fuller example names that filter and the page that takes it apart',
         () {
       for (final page in readmes) {
         final item = RegExp(
@@ -1031,11 +1077,7 @@ void main() {
   test('the example prints what the README quotes', () {
     final printed = printedBy(example.main);
     for (final page in readmes) {
-      final quoted = RegExp(r'```text\n(.*?)\n```', dotAll: true)
-          .allMatches(read(page))
-          .single
-          .group(1)!;
-      expect(printed.join('\n'), quoted, reason: page);
+      expect(printed.join('\n'), quotedOutputs(page).last, reason: page);
     }
 
     // The README counts the runs in a word, and each run opens with a
@@ -1474,7 +1516,7 @@ void main() {
     );
   });
 
-  test('the example runs the job of the Quick start as the README writes it',
+  test('the example runs the job of the fuller example as the README writes it',
       () {
     // Comments aside: the example explains the body in its own comments,
     // and the README in the list under the block.
