@@ -1502,6 +1502,11 @@ void main() {
     });
 
     test('the listeners go when closing finishes, and so does the write', () {
+      expect(
+        _page().replaceAll(RegExp(r'\s+'), ' '),
+        contains('drops the listeners for good when closing finishes, the '
+            'moment `isFinished` turns true, and not when `close()` is called'),
+      );
       fakeAsync((async) {
         final any = _Any();
         final job = any.cancelledWithHandler(Completer<void>());
