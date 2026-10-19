@@ -1407,11 +1407,13 @@ M5 ревью `solo` закрыт 2026-10-20 по согласию владел�
 M6 ревью `solo` и пилот: владелец 2026-10-20 выбрал первый вариант. Волна 1
 сделана и закоммичена: мета-вступления сняты со страниц `solo` и `flutter_solo`
 с переводами, «Why `currentState`» в README `solo` стоит после «The dozen
-calls». Дальше по странице за коммит, каждая с ревью на Opus, по образцу
-`observing.md`: `errors.md` с таблицей маршрутов, README `flutter_solo`
-с «Testing» на новой `doc/testing.md`, `state.md`, `resources.md`. README
-`solo`, `mistakes.md`, `reference.md` и `vs-bloc.md` не трогать. Итоги —
-в вердикте M6.
+calls». Волна 2 сделана: `errors.md` с переводом переписана по образцу
+`observing.md`, с таблицей маршрутов «Where each error goes», каждая строка
+которой закреплена в тесте своего маршрута; ревью на Opus пройдено, находки
+закрыты. Дальше по странице за коммит, каждая с ревью на Opus: README
+`flutter_solo` с «Testing» на новой `doc/testing.md`, `state.md`,
+`resources.md`. README `solo`, `mistakes.md`, `reference.md` и `vs-bloc.md`
+не трогать. Итоги — в вердикте M6.
 
 После M6 по порядку ждут владельца следующие вопросы
 `2026-10-17-solo-project-review.md`.

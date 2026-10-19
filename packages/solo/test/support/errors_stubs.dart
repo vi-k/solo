@@ -32,6 +32,11 @@ final class Stage {
   /// What `reportCrash` was handed, in order.
   final crashes = <String>[];
 
+  /// The lines the page prints under its code: what `reportCrash` was
+  /// handed, as `report:`, and what a test saw reach the zone, as `zone:`,
+  /// in the order they came.
+  final printed = <String>[];
+
   /// What `Sentry.captureException` was handed, in order.
   final sentry = <String>[];
 
@@ -127,8 +132,10 @@ class ProfileApi {
 }
 
 /// The crash reporter of the application.
-void reportCrash(Object error, StackTrace stackTrace) =>
-    stage.crashes.add(text(error));
+void reportCrash(Object error, StackTrace stackTrace) {
+  stage.crashes.add(text(error));
+  stage.printed.add('report: $error');
+}
 
 /// What the handler of the page reports to.
 // ignore: avoid_classes_with_only_static_members

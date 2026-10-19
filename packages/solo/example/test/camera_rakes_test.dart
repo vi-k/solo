@@ -2529,10 +2529,9 @@ void main() {
 
       expect(
         section,
-        contains("A `Failed` that nobody observed goes to the job's creation "
-            'zone'),
+        contains('A `Failed` that nobody observed goes to the creation zone'),
       );
-      expect(section, contains('leaves reporting to the hooks'));
+      expect(section, contains('leaves the reporting to the hooks'));
     });
 
     test('the state page stops a source in onClose', () {

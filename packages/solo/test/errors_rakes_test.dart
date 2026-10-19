@@ -351,6 +351,10 @@ void _says(String phrase) => expect(
       reason: 'doc/errors.md no longer says this',
     );
 
+/// Asserts that the table of where each error goes has this row.
+void _row(String error, String hears, String answers) =>
+    _says('| $error | $hears | $answers |');
+
 /// The rows of the table under [header], first cell to second.
 Map<String, String> _rows(String header) {
   final lines = _page().split('\n');
@@ -466,9 +470,10 @@ void main() {
   group('Reporting an error', () {
     test('a controller that overrides the eight hooks the page names', () {
       _says(
-        'A controller can override `onStart`, `onFinish`, `onError`, '
-        '`onUnanswered`, `onLog`, `onChange` and `onClose`, and '
-        '`onListenerError` for a listener that throws while being notified',
+        'A controller has a hook for each thing that happens to it and '
+        'its jobs: `onStart`, `onFinish`, `onError`, `onUnanswered`, '
+        '`onLog`, `onChange` and `onClose`, and `onListenerError` for a '
+        'listener that throws while it is notified',
       );
       final called = <String>[];
       final ran = _run((async) {
@@ -533,12 +538,15 @@ void main() {
       expect(ran.errors, ['late'], reason: 'nobody answered for it');
     });
 
-    test('every error its jobs run into, once', () {
+    test('the errors its jobs run into, once', () {
       _says(
-        'The hook is told about every error its jobs run into — the failure '
-        'of a body, an error from cleanup or from an operation abandoned by '
-        '`abandonable`, a rule that threw instead of answering — and it is '
-        'told once for each job',
+        '`onError` hears the errors the jobs of the controller run '
+        'into: - the failure of a body; - an error of cleanup, or of an '
+        'operation that `abandonable` stopped waiting for; - a rule '
+        'that threw instead of answering.',
+      );
+      _says(
+        'It hears each error once for each job',
       );
       late Bench bench;
       _run((async) {
@@ -574,9 +582,9 @@ void main() {
 
     test('an error a child throws and its parent lets through', () {
       _says(
-        'An error a child throws and its parent lets through is the failure '
-        'of both: the hook hears it twice, and the `job` it is given tells '
-        'the two calls apart',
+        'An error that a child throws and its parent lets through is a '
+        'failure of both, so the hook hears it twice, and the `job` it '
+        'is given tells the two calls apart',
       );
       late Bench bench;
       late Job<void> job;
@@ -624,9 +632,9 @@ void main() {
 
     test('a crash reporter fed from the hook gets one error three times', () {
       _says(
-        'A crash reporter fed from here may get one error three times: from '
-        "the child, from the parent and, when nobody observes the parent's "
-        'outcome, from the creation zone',
+        'A crash reporter fed from here can get one error three times: '
+        'from the child, from the parent and, when nobody observes the '
+        "parent's outcome, from the creation zone",
       );
       late Bench bench;
       final ran = _run((async) {
@@ -651,7 +659,7 @@ void main() {
     ]) {
       test('overriding it moves no error anywhere: ${make().runtimeType}', () {
         _says(
-          'the hook answers for nothing, and overriding it moves no error '
+          'It answers for nothing, and overriding it moves no error '
           'anywhere',
         );
         final handled = <String>[];
@@ -673,7 +681,7 @@ void main() {
   group('Answering for an error', () {
     test('the override of the page answers, and the error stops there', () {
       _says(
-        'The override above answers for them here, and they reach nothing '
+        'The override above answers for them, and they reach nothing '
         'else',
       );
       final handled = <String>[];
@@ -696,10 +704,18 @@ void main() {
     });
 
     test('the failure of a body: the outcome carries it', () {
+      _row(
+        'An error of the body, and the job ends `Failed` with it',
+        '`onError`',
+        'Whoever observes the outcome; the creation zone if nobody does',
+      );
       _says(
-        'The failure of a body becomes `Failed`, where `run(ifFailed: ...)` '
-        'computes a state from it, and an outcome nobody observes reaches '
-        "the job's creation zone by itself",
+        '`run(ifFailed: ...)` turns the failure into the state the '
+        'screen shows',
+      );
+      _says(
+        'When nobody observes the outcome, the error goes to the '
+        'creation zone, the zone the job was created in',
       );
       final handled = <String>[];
       late Bench bench;
@@ -725,12 +741,21 @@ void main() {
 
     group('what no outcome carries:', () {
       test('the list of the page', () {
-        _says('What no outcome carries is the rest:');
+        _says(
+          'These are the errors that no outcome carries:',
+        );
+        final section =
+            _page().split(RegExp('^(?=## )', multiLine: true)).singleWhere(
+                  (part) => part.startsWith('## Answering for an error'),
+                );
         expect(
-          RegExp('^- ', multiLine: true).allMatches(_page()),
+          RegExp('^- ', multiLine: true).allMatches(section),
           hasLength(6),
         );
-        _says('- an operation abandoned by `abandonable` that fails later;');
+        _says(
+          '- an operation that `abandonable` stopped waiting for, which '
+          'fails later;',
+        );
         _says(
           '- what the job calls outside its body: a disposer, a '
           '`ctx.onCancel` callback, a `whenCancelled` or `whenFinished` '
@@ -749,12 +774,17 @@ void main() {
           'reads that outcome gets the cancellation.',
         );
         _says(
-          'Somebody has to answer for those, and the one asked is always the '
-          'same: `onUnanswered`, on the controller whose job it was',
+          'Some errors have no outcome to ride on, and the controller '
+          'whose job it was answers for them in `onUnanswered`',
         );
       });
 
       test('an operation abandoned by abandonable that fails later', () {
+        _row(
+          'A late error of an operation `abandonable` stopped waiting for',
+          '`onError`',
+          '`onUnanswered`',
+        );
         late Bench bench;
         late Job<void> job;
         final ran = _run((async) {
@@ -773,6 +803,13 @@ void main() {
       });
 
       test('a disposer', () {
+        _row(
+          'An error of a disposer, a `ctx.onCancel` callback, a '
+              '`whenCancelled` or `whenFinished` listener, or a state handler '
+              'of `run`',
+          '`onError`',
+          '`onUnanswered`',
+        );
         late Bench bench;
         late Job<void> job;
         final ran = _run((async) {
@@ -839,6 +876,11 @@ void main() {
       });
 
       test('a keepWhile that throws when a change of state re-checks it', () {
+        _row(
+          'A `keepWhile` that throws when a change of state re-checks it',
+          '`onError`',
+          '`onUnanswered`',
+        );
         late Bench bench;
         late Job<void> job;
         var cancelledByIt = true;
@@ -865,6 +907,11 @@ void main() {
       });
 
       test('work handed to ctx.unattended', () {
+        _row(
+          'An error of work handed to `ctx.unattended`',
+          '`onError`',
+          '`onUnanswered`',
+        );
         late Bench bench;
         late Job<void> job;
         final ran = _run((async) {
@@ -884,6 +931,11 @@ void main() {
 
       test('the failure of a branch of runAll that the group did not throw',
           () {
+        _row(
+          'An error of a branch of `ctx.runAll` that the group did not throw',
+          '`onError`',
+          '`onUnanswered`, unless `ignoreFailure()` was called on the branch',
+        );
         late Bench bench;
         late Job<void> job;
         final caught = <String>[];
@@ -922,6 +974,11 @@ void main() {
 
       test('a failure, and a cancellation before the error leaves the body',
           () {
+        _row(
+          'An error of the body, and the job ends `Cancelled`',
+          '`onError`',
+          '`onUnanswered`, unless `ignoreFailure()` was called on the job',
+        );
         late Bench bench;
         late Job<void> job;
         Object? thrown;
@@ -1007,17 +1064,22 @@ void main() {
                   'further than onError'
               : 'a failure after the cancellation is answered for', () {
         if (named) {
+          _row(
+            'An error that `Job.isCancellationError` names, on a cancelled job',
+            '`onError`',
+            'Nobody',
+          );
           _says(
-            'A failure of a cancelled job that it names reaches the hook '
-            '`onError` and goes no further: neither `onUnanswered` nor '
+            'A failure of a cancelled job that it names reaches `onError` '
+            'and goes no further: neither `onUnanswered` nor '
             '`Solo.unansweredHandler` hears it',
           );
         } else {
           _says(
-            'The last item of that list comes most often from the '
-            'cancellation itself: a call that `ctx.join` is still waiting out '
-            'stops at a token that `ctx.onCancel` cancelled, and throws as it '
-            'stops',
+            'The last item of the list comes most often from the '
+            'cancellation itself. A call that `ctx.join` is still waiting '
+            'out stops at a token that `ctx.onCancel` cancelled, and throws '
+            'as it stops',
           );
         }
         final handled = <String>[];
@@ -1053,7 +1115,7 @@ void main() {
 
     test('the handler of the page: one for the app, given the controller', () {
       _says(
-        'One handler for the whole application, set once at startup',
+        'one handler for the whole application, set once at startup',
       );
       final served = <String>[];
       final ran = _run((async) {
@@ -1069,7 +1131,7 @@ void main() {
 
     test('with no handler set: the zone the job was created in', () {
       _says(
-        'With none set, these errors go to the zone the job was created in',
+        'With no handler set, the error goes to the creation zone',
       );
       final where = <String, List<String>>{};
       fakeAsync((async) {
@@ -1096,10 +1158,12 @@ void main() {
 
     test('each controller decides whether the handler hears its jobs', () {
       _says(
-        'The error arrives at `onUnanswered`, and `onUnanswered` calls '
-        '`Solo.unansweredHandler`, so each controller decides for its own '
-        'jobs whether the '
-        'application-wide handler hears them at all',
+        'A controller without such an override keeps the default body. '
+        'It hands the error to `Solo.unansweredHandler`',
+      );
+      _says(
+        'So each controller decides whether the handler of the '
+        'application hears its errors at all',
       );
       final served = <String>[];
       final ran = _run((async) {
@@ -1158,10 +1222,10 @@ void main() {
 
     test('the hook and the handler get one failure at a time', () {
       _says(
-        '`onUnanswered` and `Solo.unansweredHandler` get one failure at a '
-        'time. When the error is a `ParallelWaitError` that `[a, b].wait` '
-        'throws with several errors in it, each failure comes in a call of '
-        'its own, with its own stack trace',
+        '`onUnanswered` and `Solo.unansweredHandler` get one failure at '
+        'a time. A `ParallelWaitError` that `[a, b].wait` throws with '
+        'several errors in it comes as several calls, each failure with '
+        'its own stack trace',
       );
       _says(
         'An uncaught `Cancelled`, alone or inside one, does not come at all',
@@ -1182,8 +1246,8 @@ void main() {
 
     test('the reporting hook hears them one at a time, each Cancelled too', () {
       _says(
-        'The reporting hook `onError` hears them the same way, one at a time, '
-        'and each `Cancelled` too',
+        '`onError` hears them one at a time too, each `Cancelled` '
+        'included',
       );
       late Bench bench;
       _run((async) {
@@ -1227,7 +1291,7 @@ void main() {
 
     test('a SoloObserver set, and still nobody answers', () {
       _says(
-        'Setting a `SoloObserver` is not it either — watching is not '
+        'neither does setting a `SoloObserver`: watching is not '
         'answering',
       );
       final watching = _Watching();
@@ -1285,15 +1349,17 @@ void main() {
 
     test('what the observer is told, and what stays with the controller', () {
       _says(
-        '`SoloObserver` is told what the controllers are told — `onStart`, '
-        '`onFinish`, `onError`, `onLog`, `onChange` and `onClose` — for '
-        'every controller of the process, plus `onCreate`',
+        '`SoloObserver` is told what the controllers are told, '
+        '`onStart`, `onFinish`, `onError`, `onLog`, `onChange` and '
+        '`onClose`, for every controller of the process, and `onCreate` '
+        'besides',
       );
       _says(
         '`onUnanswered` and `onListenerError` stay with the controller alone',
       );
       _says(
-        "The observer is called before the controller's corresponding hook",
+        'The observer is called before the corresponding hook of the '
+        'controller',
       );
       final order = <String>[];
       final ran = _run((async) {
@@ -1333,9 +1399,10 @@ void main() {
     test('the job of a transition: an emit, a child, a handler, the outside',
         () {
       _says(
-        'The `job` is the one whose `emit` made the change or whose state '
-        'handler returned it: `null` for an `externalSetState`, and a child '
-        'of the running job rather than the root it belongs to',
+        'The `job` is the one whose `emit` made the change or whose '
+        'state handler returned it. It is `null` for an '
+        '`externalSetState`, and it is a child of the running job when '
+        'the child made the change, not the root the child belongs to',
       );
       late _Journal journal;
       _run((async) {
@@ -1375,9 +1442,9 @@ void main() {
     test('a hook that changes the state again from inside the first change',
         () {
       _says(
-        'a `revision` that grows by one per change, so two transitions are '
-        'in order even when a hook changed the state again from inside the '
-        'first',
+        'a `revision` that grows by one per change. The revision keeps '
+        'two transitions in order even when a hook changed the state '
+        'again from inside the first',
       );
       final nesting = _Nesting()..externalSetState(1);
 
@@ -1387,14 +1454,19 @@ void main() {
 
     for (final thrower in ['observer', 'controller']) {
       test('the $thrower hook throws', () {
-        _says(
-          'Each call is independent; omitting `super` in a controller hook '
-          'does not disable the observer',
+        _row(
+          'An error a hook throws',
+          'Nobody',
+          'The current zone',
         );
         _says(
-          'An error thrown by either hook is sent to the current Dart zone '
-          "without changing the job's outcome, stopping the queue, or "
-          'preventing the other hook from running',
+          'Each call stands on its own: a controller hook that leaves out '
+          '`super` does not switch the observer off',
+        );
+        _says(
+          'An error either hook throws goes to the current zone. It does '
+          'not change the outcome of the job, stop the queue or keep the '
+          'other hook from running',
         );
         final order = <String>[];
         late Job<void> job;
@@ -1433,7 +1505,7 @@ void main() {
 
     test('both hooks throw a Cancelled', () {
       _says(
-        'A `Cancelled` thrown by a hook neither reaches the zone nor '
+        'A `Cancelled` a hook throws neither reaches the zone nor '
         'cancels the job',
       );
       late Job<void> job;
@@ -1494,7 +1566,7 @@ void main() {
 
   group('What is holding the controller', () {
     test('the page quotes three lines of a close, two of a hang, one more', () {
-      expect(_quoted().map((block) => block.length), [3, 2, 1]);
+      expect(_quoted().map((block) => block.length), [2, 1, 3, 2, 1]);
     });
 
     test('the line of the page: close() on a job that has not stopped', () {
@@ -1512,16 +1584,16 @@ void main() {
         _end(async, 'op');
       });
 
-      expect(stage.lines, [_quoted()[0][0]]);
+      expect(stage.lines, [_quoted()[2][0]]);
       expect(closed, isFalse, reason: 'the close is still held');
     });
 
     test('the same line under a drain: the queue it has still to run', () {
       _says(
-        'A drain waits for the queue as well, and a group of `collect` or '
-        '`accumulate` stays queued until its timing lets it go: with no job '
-        'running, `pending` is a `SoloPendingQueue`, and its `jobs` are '
-        'what the drain has still to run',
+        'A drain waits for the queue as well. A group of `collect` or '
+        '`accumulate` stays queued until its timing lets it go. With no '
+        'job running, `pending` is a `SoloPendingQueue`, and its `jobs` '
+        'are what the drain still has to run',
       );
       SoloPending? pending;
       SoloPending? withoutClose;
@@ -1547,7 +1619,7 @@ void main() {
         pending = bench.pending;
       });
 
-      expect(stage.lines, [_quoted()[0][1]]);
+      expect(stage.lines, [_quoted()[2][1]]);
       expect(pending, isA<SoloPendingQueue>());
       expect(
         (pending! as SoloPendingQueue).jobs.map((job) => job.key),
@@ -1559,10 +1631,10 @@ void main() {
 
     test('the same line with SoloStream: a subscription left paused', () {
       _says(
-        'With `SoloStream` the stream closes after the engine and waits for '
-        'every subscription to take its done event: one left paused holds '
-        '`close()` with `isFinished` already true, and `pending` is a '
-        '`SoloPendingStream`',
+        'With `SoloStream`, the stream closes after the engine and '
+        'waits for every subscription to take its done event. One left '
+        'paused holds `close()` with `isFinished` already true, and '
+        '`pending` is a `SoloPendingStream`',
       );
       _says('The three print alike, so the line above needs no switch');
       SoloPending? pending;
@@ -1583,7 +1655,7 @@ void main() {
         unawaited(subscription.cancel());
       });
 
-      expect(stage.lines, [_quoted()[0][2]]);
+      expect(stage.lines, [_quoted()[2][2]]);
       expect(pending, isA<SoloPendingStream>());
       expect(finished, isTrue, reason: 'finished, and close() not back');
       expect(back, isTrue, reason: 'the resumed subscription let it go');
@@ -1668,9 +1740,9 @@ void main() {
 
       test('a job created with cancellable: false, asked twice and closed', () {
         _says(
-          'A job whose `cancellable` is false turns down the ones it may turn '
-          'down, so nothing is pending on it however often it was asked to '
-          'stop',
+          'A job whose `cancellable` is false turns down the '
+          'cancellations it may turn down, so nothing is pending on it '
+          'however often it was asked to stop',
         );
         fakeAsync((async) {
           final bench = Bench();
@@ -1771,9 +1843,10 @@ void main() {
         () {
       _says('`null` says that nothing the controller knows of holds the close');
       _says(
-        'A timer reads `pending` between the steps of a close, a synchronous '
-        'hook in the middle of one: `onFinish` of the last job and `onClose` '
-        'read `null`, though `close()` has not come back yet',
+        'A timer reads `pending` between the steps of a close, and a '
+        'synchronous hook reads it in the middle of one: `onFinish` of '
+        'the last job and `onClose` read `null`, though `close()` has '
+        'not come back yet',
       );
       fakeAsync((async) {
         final journal = _Journal()
@@ -1817,7 +1890,7 @@ void main() {
           _end(async, 'op');
         });
 
-        expect(stage.lines, [_quoted()[1][0]]);
+        expect(stage.lines, [_quoted()[3][0]]);
       });
 
       test('a job that holds a cancellation, as the page quotes it', () {
@@ -1830,7 +1903,7 @@ void main() {
           _end(async, 'op');
         });
 
-        expect(stage.lines, [_quoted()[1][1]]);
+        expect(stage.lines, [_quoted()[3][1]]);
       });
 
       test('a job that ends in time', () {
@@ -1852,9 +1925,9 @@ void main() {
 
       test('a child that hangs under its root', () {
         _says(
-          'One that does not is named at the front of its line. The snapshot '
-          'beside the name is of the root job the controller is on, which is '
-          'the same job unless the one that hangs is a child',
+          'One that does not is named at the front of its line. The '
+          'snapshot beside the name is of the root job the controller is '
+          'on. That is the same job, unless the one that hangs is a child',
         );
         _run((async) {
           Solo.observer = page.Hangs();
@@ -1930,10 +2003,10 @@ void main() {
 
       test('the two recipes that read onFinish say nothing about a hang', () {
         _says(
-          '`onFinish` never comes for a job that never finishes. The recipe '
-          'of [Why cancellation was slow](#why-cancellation-was-slow) works '
-          'out its delay right there, on `onFinish`, and so says nothing '
-          'about a hang',
+          '`onFinish` never comes for a job that never finishes. The '
+          'recipe of [Why cancellation was '
+          'slow](#why-cancellation-was-slow) works out its delay in '
+          '`onFinish`, and so it says nothing about a hang',
         );
         _run((async) {
           Solo.observer = SoloObserver.all([
@@ -1952,9 +2025,9 @@ void main() {
 
     test('the phase of a body: through the context, bare, inside a call', () {
       _says(
-        'The phase says where the job is, not why: while the body runs the '
-        'phase is `body`, whatever it waits on, and the engine does not '
-        'guess',
+        'The phase says where the job is, not why. While the body runs, '
+        'the phase is `body` whatever it waits on, and the engine does '
+        'not guess',
       );
       fakeAsync((async) {
         final snapshots = <String>[];
@@ -2071,12 +2144,12 @@ void main() {
 
       test('the same wait through ctx.abandonable and as ctx.pause', () {
         _says(
-          'the same call through `ctx.abandonable` stops waiting at once, and '
-          'so does a delay written as `ctx.pause`',
+          'The same call through `ctx.abandonable` stops waiting at once, '
+          'and so does a delay written as `ctx.pause`',
         );
         _says(
-          'Only the first row is a line in the log: the other two stay under '
-          'the 50 ms the observer starts reporting at',
+          'Only the first row is a line in the log: the other two stay '
+          'under the 50 ms where the observer starts to report',
         );
         final outcomes = <String>[];
         _run((async) {
@@ -2149,9 +2222,9 @@ void main() {
 
       test('a job whose child and cleanup take time after it is cancelled', () {
         _says(
-          'The number is counted from the moment the job accepted the '
-          'cancellation, not from `cancel()`, to the outcome, children and '
-          'cleanup included',
+          'The number counts from the moment the job accepted the '
+          'cancellation, not from `cancel()`, to the outcome, children '
+          'and cleanup included',
         );
         _run((async) {
           Solo.observer = page.SlowCancellations();
@@ -2181,9 +2254,8 @@ void main() {
 
       test('a job cancelled before it started', () {
         _says(
-          'A job cancelled before it started reports nothing, because '
-          '`onStart` never runs for it and so nothing was ever registered or '
-          'stamped',
+          'A job cancelled before it started reports nothing. `onStart` '
+          'never runs for it, so nothing was registered or stamped',
         );
         final started = <String>[];
         late Job<void> queued;
@@ -2221,8 +2293,9 @@ void main() {
 
       test('clock.now() and DateTime.now() under fake time', () {
         _says(
-          '`clock.now()` rather than `DateTime.now()`: under `fake_async` the '
-          'first moves with the fake time and the second stands still',
+          'The observer reads `clock.now()` rather than `DateTime.now()`. '
+          'Under `fake_async` the first moves with the fake time and the '
+          'second stands still',
         );
         fakeAsync((async) {
           final byClock = clock.now();
@@ -2252,7 +2325,7 @@ void main() {
           _end(async, 'op');
         });
 
-        expect(stage.lines, [_quoted()[2][0]]);
+        expect(stage.lines, [_quoted()[4][0]]);
       });
 
       test('a job nobody cancelled, one that holds, one that stops', () {
@@ -2260,10 +2333,9 @@ void main() {
           'A job nobody cancelled arms nothing here, however long it runs',
         );
         _says(
-          'While a `ctx.uncancellable` section is open, it does not see a '
-          'job cancelled in the meantime either: the section holds that '
-          'cancellation back, and `whenCancelled` fires when the section '
-          'closes',
+          'A `ctx.uncancellable` section holds back a cancellation that '
+          'comes while it is open, and `whenCancelled` fires when the '
+          'section closes',
         );
         final timers = <int>[];
         _run((async) {
@@ -2293,7 +2365,9 @@ void main() {
       });
 
       test('the five seconds are counted from the close of the section', () {
-        _says('The five seconds are counted from there');
+        _says(
+          'The five seconds count from there',
+        );
         _run((async) {
           Solo.observer = page.StuckCancellations();
           final holds = Bench().run<int, void>(key: 'holds', (ctx) async {
@@ -2386,8 +2460,8 @@ void main() {
       test('three observers, and the first of them throws', () {
         _says(
           'Every hook goes to each of them in the order of the list, each '
-          'call on its own: one that throws hands its error to the zone, and '
-          'the next is called all the same',
+          'call on its own. One that throws hands its error to the zone, '
+          'and the next is called all the same',
         );
         final order = <String>[];
         final ran = _run((async) {
@@ -2430,13 +2504,56 @@ void main() {
   });
 
   group('Handled and unhandled failures', () {
+    /// Runs [body] under fake time and returns the lines of the page it
+    /// printed: the reports, and what reached the zone.
+    List<String> printed(void Function() body) {
+      fakeAsync((async) {
+        runZonedGuarded(
+          body,
+          (error, stackTrace) => stage.printed.add('zone: $error'),
+        );
+        async.flushTimers();
+      });
+
+      return stage.printed;
+    }
+
+    test('the lines of the page: a report, then the zone', () {
+      final lines = printed(() {
+        Solo.observer = first.Failures();
+        Bench().run<int, void>(
+          key: 'load',
+          (ctx) async => throw StateError('no network'),
+        );
+      });
+
+      expect(lines, _quoted()[0]);
+    });
+
+    test('the line of the page: a report, and the outcome observed', () {
+      final lines = printed(() {
+        Solo.observer = first.Failures();
+        Bench()
+            .run<int, void>(
+              key: 'load',
+              (ctx) async => throw StateError('no network'),
+            )
+            .ignoreFailure();
+      });
+
+      expect(lines, _quoted()[1]);
+    });
+
     group('the first attempt:', () {
       test('a load that fails, and nobody waits for the result', () {
         _says('An observer only watches');
-        _says('being told of a failure marks no outcome as observed');
         _says(
-          "A `Failed` that nobody observed goes to the job's creation zone "
-          'through `Zone.handleUncaughtError` as well',
+          'A hook that is told of a failure does not observe the outcome, '
+          'whichever hook it is',
+        );
+        _says(
+          'A `Failed` that nobody observed goes to the creation zone '
+          'through `Zone.handleUncaughtError`',
         );
         late Bench bench;
         final ran = _run((async) {
@@ -2467,7 +2584,9 @@ void main() {
       });
 
       test('a load that fails just before a cancellation reaches it', () {
-        _says('Every failure now reaches the reporter');
+        _says(
+          'The report goes out, and then the same error reaches the zone',
+        );
         late Bench bench;
         final ran = _run((async) {
           Solo.observer = first.Failures();
@@ -2486,7 +2605,9 @@ void main() {
 
       test('reported from onFinish, the failure reaches the zone all the same',
           () {
-        _says('whatever hook it reports from');
+        _says(
+          'whichever hook it is',
+        );
         late Bench bench;
         final ran = _run((async) {
           Solo.observer = _FailuresOnFinish();
@@ -2506,8 +2627,8 @@ void main() {
     group('observing the outcome:', () {
       test('the line of the page: load() and ignoreFailure()', () {
         _says(
-          '`ignoreFailure()` is for the caller that needs no result and leaves '
-          'reporting to the hooks',
+          '`ignoreFailure()` is for a caller that needs no result and '
+          'leaves the reporting to the hooks',
         );
         late page.ProfileController profile;
         final ran = _run((async) {
@@ -2525,8 +2646,8 @@ void main() {
       test('done, value with the error caught, outcome read and nothing more',
           () {
         _says(
-          'Accessing `job.done` or `job.value`, or calling '
-          '`job.ignoreFailure()`, marks the outcome as observed',
+          'Reading `job.done` or `job.value`, or calling '
+          '`job.ignoreFailure()`, observes the outcome',
         );
         _says('Reading `job.outcome` does not.');
         final caught = <String>[];
@@ -2563,9 +2684,9 @@ void main() {
 
       test('the load fails, and a cancellation reaches the job afterwards', () {
         _says(
-          'One failure it cannot catch: if the job ends `Cancelled` and the '
-          'load failed, `await job.value` throws the `Cancelled`, and the '
-          'failure goes to `onUnanswered` like the errors below',
+          'That caller cannot catch one failure. If the job ends '
+          '`Cancelled` after the load failed, `await job.value` throws '
+          'the `Cancelled`, and the failure goes to `onUnanswered`',
         );
         final handled = <String>[];
         Object? thrown;
@@ -2590,7 +2711,9 @@ void main() {
       });
 
       test('the same with ignoreFailure() on the job', () {
-        _says('`ignoreFailure()` silences that one too');
+        _says(
+          '`ignoreFailure()` lets that failure go too',
+        );
         final handled = <String>[];
         late Job<String> job;
         final ran = _run((async) {
@@ -2609,17 +2732,25 @@ void main() {
     });
 
     test('an abandoned call that fails once its job has completed', () {
-      _says(
-        'Errors from cleanup, cancellation callbacks and operations abandoned '
-        'by `abandonable` go to the reporting hooks, and the controller is '
-        'asked to answer for them through `onUnanswered`',
+      _row(
+        'A late error of an operation `abandonable` stopped waiting for',
+        '`onError`',
+        '`onUnanswered`',
       );
       _says(
-        'Either an override of it or an installed `Solo.unansweredHandler` '
-        "takes them; with neither, they fall back to the job's creation zone",
+        'An override of `onUnanswered` or an installed '
+        '`Solo.unansweredHandler` closes the second',
       );
-      _says('Such an error can arrive after the job has already completed');
-      _says('It does not replace an existing cancellation outcome');
+      _says(
+        'With no handler set, the error goes to the creation zone',
+      );
+      _says(
+        'An error that `onUnanswered` takes can come after the job has '
+        'completed',
+      );
+      _says(
+        'It does not replace the outcome the job already has',
+      );
       late Bench bench;
       late Job<void> job;
       var heardBefore = -1;
@@ -2644,11 +2775,11 @@ void main() {
       test(
           'an abandoned call that ends in a Cancelled, '
           '${withHandler ? 'a handler set' : 'no handler'}', () {
-        _says(
-          'A `Cancelled` that arrives this way — an abandoned action that '
-          'ended in the cancellation of another job, say — is told to the '
-          'reporting hooks, and nobody is asked to answer for it: it reaches '
-          'neither `onUnanswered` nor `Solo.unansweredHandler` nor the zone',
+        _row(
+          'A `Cancelled` from outside the body, such as an abandoned '
+              "operation that ended in another job's cancellation",
+          '`onError`',
+          'Nobody',
         );
         final handled = <String>[];
         final watching = _Watching();
@@ -2677,9 +2808,10 @@ void main() {
     }
 
     test('an abandoned call that throws back the cancellation of its job', () {
-      _says(
-        "The job's own cancellation, thrown back by such an action, is news "
-        'to nobody and is not reported at all',
+      _row(
+        "The job's own cancellation, thrown back by an abandoned operation",
+        'Nobody',
+        'Nobody',
       );
       final watching = _Watching();
       late Bench bench;
@@ -2709,9 +2841,13 @@ void main() {
 
     test('the value of a cancelled job, taken and not handled', () {
       _says(
-        'An unhandled error of `job.value` or `ctx.run(child)` is still an '
-        "unhandled Future error under Dart's rules, even if that error is "
-        "`Cancelled`: that route to the zone is Dart's own, not the engine's",
+        'Dart has a way of its own to the zone, and the engine does not '
+        'stand on it',
+      );
+      _says(
+        'An unhandled error of `job.value` or of `ctx.run(child)` is an '
+        'unhandled future error under the rules of Dart, even when that '
+        'error is `Cancelled`',
       );
       late Bench bench;
       final ran = _run((async) {
@@ -2751,12 +2887,12 @@ void main() {
 
     test('job.ignoreFailure() on a job whose value is already taken', () {
       _says(
-        'Handle those futures like any other: `await` them where the error '
-        'is caught, or give them `onError` or `Future.ignore()`. '
-        '`job.ignoreFailure()` does not do it for them: it tells the job '
-        'that nobody needs its failure, and a future already taken from '
-        '`job.value` stays an ordinary future whose error somebody has to '
-        'handle',
+        'Handle those futures like any other: `await` them where the '
+        'error is caught, or give them `onError` or `Future.ignore()`. '
+        '`job.ignoreFailure()` does not do it for them. It tells the '
+        'job that nobody needs its failure, and a future already taken '
+        'from `job.value` stays an ordinary future whose error somebody '
+        'has to handle',
       );
       final caught = <String>[];
       final ran = _run((async) {
@@ -2788,6 +2924,211 @@ void main() {
     });
   });
 
+  group('Where each error goes', () {
+    // Each row is pinned by the test that runs it, in the section it comes
+    // from or below; this test holds the order and the number of rows.
+    test('the table names who hears each error and who answers for it', () {
+      final lines = _page().split('\n');
+      final start = lines.indexOf(
+        '| The error | Who hears it | Who answers for it |',
+      );
+      final rows = [
+        for (final line
+            in lines.skip(start + 2).takeWhile((l) => l.startsWith('|')))
+          [for (final cell in line.split('|').skip(1).take(3)) cell.trim()],
+      ];
+
+      const callbacks = 'An error of a disposer, a `ctx.onCancel` callback, a '
+          '`whenCancelled` or `whenFinished` listener, or a state handler of '
+          '`run`';
+      const fromOutside = 'A `Cancelled` from outside the body, such as an '
+          "abandoned operation that ended in another job's cancellation";
+      expect(rows, [
+        [
+          'An error of the body, and the job ends `Failed` with it',
+          '`onError`',
+          'Whoever observes the outcome; the creation zone if nobody does',
+        ],
+        [
+          'An error of a start rule: `canStart` throws instead of answering',
+          '`onError`',
+          'The same: the job ends `Failed` with it',
+        ],
+        [
+          'An error of the body, and the job ends `Cancelled`',
+          '`onError`',
+          '`onUnanswered`, unless `ignoreFailure()` was called on the job',
+        ],
+        [
+          'A late error of an operation `abandonable` stopped waiting for',
+          '`onError`',
+          '`onUnanswered`',
+        ],
+        [
+          callbacks,
+          '`onError`',
+          '`onUnanswered`',
+        ],
+        [
+          'A `keepWhile` that throws when a change of state re-checks it',
+          '`onError`',
+          '`onUnanswered`',
+        ],
+        [
+          'An error of work handed to `ctx.unattended`',
+          '`onError`',
+          '`onUnanswered`',
+        ],
+        [
+          'An error of a branch of `ctx.runAll` that the group did not throw',
+          '`onError`',
+          '`onUnanswered`, unless `ignoreFailure()` was called on the branch',
+        ],
+        [
+          'An error that `Job.isCancellationError` names, on a cancelled job',
+          '`onError`',
+          'Nobody',
+        ],
+        [
+          fromOutside,
+          '`onError`',
+          'Nobody',
+        ],
+        [
+          'A `Cancelled` the body lets out, such as that of a cancelled child',
+          'Nobody',
+          'Nobody: the job ends `Cancelled` with it',
+        ],
+        [
+          "The job's own cancellation, thrown back by an abandoned operation",
+          'Nobody',
+          'Nobody',
+        ],
+        [
+          'An error of a future the body did not await',
+          'Nobody',
+          'The zone the body runs in',
+        ],
+        ['An error a hook throws', 'Nobody', 'The current zone'],
+        [
+          'An error a listener throws while it is notified',
+          '`onListenerError`',
+          '`onListenerError`; by default the current zone',
+        ],
+      ]);
+    });
+
+    test('a listener that throws: onListenerError, by default the zone', () {
+      _row(
+        'An error a listener throws while it is notified',
+        '`onListenerError`',
+        '`onListenerError`; by default the current zone',
+      );
+      late Bench bench;
+      final errors = _zoneOf(() {
+        bench = Bench()
+          ..addListener(() => throw StateError('listener'))
+          ..reflect(1);
+      });
+
+      expect(errors, ['listener'], reason: 'the current zone');
+      expect(bench.heard, isEmpty, reason: 'onError hears no listener');
+      expect(bench.unanswered, isEmpty);
+    });
+
+    test('a Cancelled the body lets out: nobody, the outcome is that', () {
+      _row(
+        'A `Cancelled` the body lets out, such as that of a cancelled child',
+        'Nobody',
+        'Nobody: the job ends `Cancelled` with it',
+      );
+      final watching = _Watching();
+      late Bench bench;
+      late Job<void> job;
+      final ran = _run((async) {
+        Solo.observer = watching;
+        bench = Bench();
+        late SoloJob<void> child;
+        job = bench.run<int, void>(key: 'parent', (ctx) async {
+          child = bench.job<int, void>(
+            key: 'child',
+            (c) => c.abandonable(() => stage.start<void>('op', null)),
+          );
+          await ctx.run(child);
+        });
+        async.flushMicrotasks();
+        unawaited(child.cancel());
+      });
+
+      expect(job.outcome, isA<Cancelled>());
+      expect(bench.heard, isEmpty);
+      expect(watching.heard, isEmpty);
+      expect(bench.unanswered, isEmpty);
+      expect(ran.errors, isEmpty);
+    });
+
+    test('a branch of runAll the group did not throw, and ignoreFailure()', () {
+      late Bench bench;
+      final ran = _run((async) {
+        bench = Bench();
+        final second = bench.job<int, void>(
+          key: 'second',
+          cancellable: false,
+          (child) => child.abandonable(() => stage.start<void>('second', null)),
+        )..ignoreFailure();
+        bench.run<int, void>(key: 'group', (ctx) async {
+          try {
+            await ctx.runAll([
+              bench.job<int, void>(
+                key: 'first',
+                (child) =>
+                    child.abandonable(() => stage.start<void>('first', null)),
+              ),
+              second,
+            ]);
+          } on Object catch (_) {}
+        });
+        async.flushMicrotasks();
+        _fail(async, 'first', StateError('first'));
+        _fail(async, 'second', StateError('second'));
+      });
+
+      expect(bench.heard, ['first: first', 'second: second']);
+      expect(bench.unanswered, isEmpty);
+      expect(ran.errors, isEmpty);
+    });
+
+    test('a hook of a job throws into the zone the job was created in', () {
+      _says(
+        'For what happens in a job, that is the zone the job was created '
+        'in; for a change made by `externalSetState`, the zone of its '
+        'caller',
+      );
+      final where = <String, List<String>>{};
+      fakeAsync((async) {
+        late _EveryHook controller;
+        where['the controller was created'] = _zoneOf(
+          () => controller = _EveryHook([], throwOn: 'onFinish'),
+        );
+        where['the job was created'] = _zoneOf(
+          () => controller.run<int, void>(
+            key: 'job',
+            (ctx) => ctx.abandonable(() => stage.start<void>('op', null)),
+          ),
+        );
+        where['the job started'] = _zoneOf(async.flushMicrotasks);
+        where['the job ended'] = _zoneOf(() => _end(async, 'op'));
+      });
+
+      expect(where, {
+        'the controller was created': isEmpty,
+        'the job was created': ['controller.onFinish threw'],
+        'the job started': isEmpty,
+        'the job ended': isEmpty,
+      });
+    });
+  });
+
   group('Catching errors inside a body', () {
     /// The two versions of the page on one scenario each: the first attempt
     /// and the catch that asks the job.
@@ -2811,20 +3152,26 @@ void main() {
         test('cancelled while hw.setZoom is in flight', () {
           if (asks) {
             _says(
-              '`ctx.check()` asks the job, not the error: it throws the '
+              '`ctx.check()` asks the job, not the error. It throws the '
               "job's `Cancelled` if the job has accepted one, whatever the "
-              'catch took, and what follows handles the failures of a job '
+              'catch took. What follows it handles the failures of a job that '
               'nobody cancelled',
             );
           } else {
             _says(
-              'Cancel this job while `hw.setZoom` is in flight: `join` waits '
-              'the call out and throws `Cancelled` in place of its result, '
-              'and the catch reads that as a failure of the camera. It '
-              'resets a camera that opened and took its zoom',
+              'The user cancels this job while `hw.setZoom` is in flight. '
+              'Nothing failed, and the camera is reset',
             );
             _says(
-              'the job ends exactly as a cancelled job should, neither the '
+              '`join` waits the call out and then throws `Cancelled` in place '
+              'of its result',
+            );
+            _says(
+              'so the broad `catch` takes it and reads it as a failure of the '
+              'camera. It resets a camera that opened and took its zoom',
+            );
+            _says(
+              'The job ends exactly as a cancelled job should. Neither the '
               'hooks nor the zone mention anything, and the only trace is on '
               'the device',
             );
@@ -2882,7 +3229,7 @@ void main() {
             () {
           if (!asks) {
             _says(
-              'whoever cancelled the job has to wait for the reset as well',
+              'whoever cancelled the job waits for the reset as well',
             );
           }
           var backAfterTheCall = false;
@@ -2948,7 +3295,7 @@ void main() {
         test('cancelled, and then hw.open fails on its own', () {
           if (asks) {
             _says(
-              'a camera that fails on its own once the job has accepted a '
+              'A camera that fails on its own after the job accepted a '
               'cancellation is not reset by this catch either, and no hook '
               'hears of the failure',
             );
@@ -2994,18 +3341,21 @@ void main() {
 
     test('Cancelled implements Exception', () {
       _says(
-        '`Cancelled` implements `Exception`, so a broad `catch` takes it '
-        'along with the device failures',
+        '`Cancelled` implements `Exception`, so the broad `catch` takes '
+        'it',
       );
       expect(const Cancelled('why'), isA<Exception>());
     });
 
     test('on a cancelled job emit throws, and the rethrow never runs', () {
       _says(
-        '`ctx.emit` on a cancelled job throws `Cancelled` in turn, so '
-        '`Broken` never reaches the screen and the `rethrow` under it never '
-        'runs — and the outcome is the same `Cancelled` that `rethrow` would '
-        'have given',
+        '`ctx.emit` on a cancelled job throws `Cancelled` in turn. '
+        '`Broken` never reaches the screen, and the `rethrow` under it '
+        'never runs',
+      );
+      _says(
+        'The outcome is the same `Cancelled` that `rethrow` would have '
+        'given',
       );
       fakeAsync((async) {
         final bench = Bench();
@@ -3044,9 +3394,9 @@ void main() {
     for (final clause in ['on Cancelled', 'error is Cancelled']) {
       test('a clause for the error, "$clause", and a camera with a token', () {
         _says(
-          '`on Cancelled { rethrow; }` in front of the broad clause, or '
-          '`if (error is Cancelled) rethrow;` as its first line, holds while '
-          'every call in the `try` runs to its end',
+          'Take `on Cancelled { rethrow; }` in front of the broad clause, '
+          'or `if (error is Cancelled) rethrow;` as its first line. It '
+          'holds while every call in the `try` runs to its end',
         );
         _says(
           'The clause lets that error by, and the camera is reset for a '
@@ -3092,8 +3442,9 @@ void main() {
 
     test('the catch that asks the job, and a camera with a token', () {
       _says(
-        'stops by throwing sends the catch an error of its own in place of '
-        'the `Cancelled`: `join` throws an error of its call as it is',
+        'may stop by throwing. Then the catch gets an error of the call '
+        'in place of the `Cancelled`, because `join` throws an error of '
+        'its call as it is',
       );
       late _TokenCamera camera;
       late Job<void> job;
@@ -3113,7 +3464,7 @@ void main() {
 
     test('a body that catches its cancellation and returns a value', () {
       _says(
-        'Once a job has accepted cancellation, its outcome remains '
+        'Once a job has accepted a cancellation, its outcome stays '
         '`Cancelled` even if the body catches it',
       );
       fakeAsync((async) {
@@ -3138,8 +3489,8 @@ void main() {
 
     test('the failure state through the ifFailed parameter of run', () {
       _says(
-        'For a final failure state, prefer the `ifFailed` parameter of `run` '
-        'rather than writing that correction inside a broad catch',
+        'For a final failure state, use the `ifFailed` parameter of '
+        '`run` rather than a broad catch',
       );
       fakeAsync((async) {
         SoloJob<void> open(Bench bench) => bench.run<int, void>(
@@ -3210,8 +3561,8 @@ void main() {
         test('cancelled while the first call is in flight', () {
           if (pauses) {
             _says(
-              'A cancellation the catch has taken is thrown again by the '
-              'pause up front',
+              'If the catch has taken a cancellation, the pause throws it '
+              'again before it waits',
             );
             _says(
               'the pause asks the job, not the error, so the catch needs no '
@@ -3219,13 +3570,13 @@ void main() {
             );
           } else {
             _says(
-              '`abandonable` throws `Cancelled`, and the catch counts it as a '
-              'failed attempt and waits a second. A plain `Future.delayed` is '
-              'no checkpoint, so the job sits that second out. The next '
+              '1. `abandonable` throws `Cancelled`. The catch counts it as a '
+              'failed attempt and waits a second. 2. A plain `Future.delayed` '
+              'is no checkpoint, so the job sits that second out. 3. The next '
               '`abandonable` throws at once, without calling `fetchName`, and '
-              'the catch waits two seconds more. Only the third throw goes '
-              'out: the job ends `Cancelled` three seconds after it was '
-              'cancelled, and all that time it holds the queue. The next job '
+              'the catch waits two seconds more. 4. Only the third throw goes '
+              'out. The job ends `Cancelled` three seconds after it was '
+              'cancelled. All that time the job holds the queue. The next job '
               'waits for a body that has nothing left to do',
             );
           }
@@ -3281,7 +3632,7 @@ void main() {
         test('three failures end the job Failed with the third', () {
           if (pauses) {
             _says(
-              'After the third failure of the network, `rethrow` lets it out '
+              'After the third failure of the network, `rethrow` lets it out, '
               'and the job ends `Failed` with that error',
             );
           }
@@ -3355,10 +3706,10 @@ void main() {
 
     test('a clause for the network lets a bug end the job at once', () {
       _says(
-        '`on Object` repeats every failure of the call, a bug in reading the '
-        'answer among them. A clause for the failures worth repeating, such '
-        'as `on SocketException`, lets a bug end the job at once, and still '
-        'needs nothing for the cancellation',
+        '`on Object` repeats every failure of the call, a bug in '
+        'reading the answer among them. A clause for the failures worth '
+        'repeating, such as `on SocketException`, lets a bug end the '
+        'job at once. It still needs nothing for the cancellation',
       );
       // Not on the page: the loop of the page with the narrower clause.
       SoloJob<String> load(Bench bench) => bench.run<int, String>(
@@ -3415,8 +3766,9 @@ void main() {
 
     test('a cancellation during a pause ends it there, timer and all', () {
       _says(
-        'one that comes during a pause ends it there, its timer cancelled '
-        'with it: either way the job ends `Cancelled` at once',
+        'A cancellation that comes during a pause ends the pause there '
+        'and cancels its timer. Either way the job ends `Cancelled` at '
+        'once',
       );
       late SoloJob<String> job;
       final events = <String>[];
@@ -3461,10 +3813,13 @@ void main() {
     });
 
     test('the loop in the body stays Loading between the attempts', () {
-      _says('with the loop in the body the state stays `Loading` throughout');
       _says(
-        'where the loop in the body let it hear only the failure that '
-        'ended the job',
+        'With the loop in the body, the state stays `Loading` '
+        'throughout',
+      );
+      _says(
+        'the loop in the body let it hear only the failure that ended '
+        'the job',
       );
       final states = <String>[];
       late page.RetryingProfile profile;
@@ -3566,12 +3921,12 @@ void main() {
           'the screen shows the error until the next attempt emits `Loading`',
         );
         _says(
-          'Every failed attempt reaches `onError` as well, so the crash '
+          'Every failed attempt reaches `onError` too, so the crash '
           'reporter hears each one',
         );
         _says(
-          '`done` marks each outcome observed, so no failure of an attempt '
-          'goes on to the zone',
+          '`done` observes each outcome, so no failure of an attempt goes '
+          'on to the zone',
         );
         final events = <String>[];
         final states = <String>[];
@@ -3625,8 +3980,9 @@ void main() {
 
       test('cancelAll() during an attempt ends the loop', () {
         _says(
-          'A `Cancelled` ends the loop as a `Done` does. `cancelAll()` while '
-          'an attempt runs cancels it, and the loop returns that `Cancelled`',
+          '- A `Cancelled` ends the loop as a `Done` does. - '
+          '`cancelAll()` while an attempt runs cancels it, and the loop '
+          'returns that `Cancelled`',
         );
         final events = <String>[];
         final ran = _run((async) {
@@ -3760,13 +4116,13 @@ void main() {
     group('the first attempt:', () {
       test('no free slot', () {
         _says(
-          'The error goes to the reporting hooks — a crash report for an '
-          'ordinary "not now" — and the job ends `Failed`, which reaches the '
-          'creation zone as well unless somebody observes that outcome',
+          '1. The error goes to `onError`: a crash report for an ordinary '
+          '"not now". 2. The job ends `Failed`, and that outcome reaches '
+          'the creation zone unless somebody observes it',
         );
         _says(
-          'The state handler passed as `ifFailed` to that same `run` is not '
-          'called for it: a state handler computes the state after a job '
+          'The state handler passed as `ifFailed` to that same `run` is '
+          'not called. A state handler computes the state after a job '
           'that ran, and this one never started',
         );
         _says('The queue goes on to the next job');
@@ -3826,8 +4182,9 @@ void main() {
     group('a rule answers:', () {
       test('no free slot', () {
         _says(
-          'A rule that answers `false` is not an error: it cancels the job, '
-          'and the trace of that `Cancelled` is taken where the rule said no',
+          'A rule that answers `false` is not an error: it cancels the '
+          'job. The trace of that `Cancelled` is taken where the rule '
+          'said no',
         );
         late page.Pool pool;
         late Job<void> job;
@@ -3877,8 +4234,8 @@ void main() {
 
       test('keepWhile re-checked on an externalSetState', () {
         _says(
-          'A `keepWhile` re-checked on a change says no from inside it, so '
-          'the trace leads to the change — the `emit` or the '
+          'A `keepWhile` re-checked on a change says no from inside that '
+          'change, so the trace leads to the `emit` or the '
           '`externalSetState` whose state broke the rule',
         );
         fakeAsync((async) {
@@ -3964,10 +4321,10 @@ void main() {
       for (final MapEntry(key: kind, value: member) in checkpoints.entries) {
         test('a job that breaks its own rule, and then reaches $kind', () {
           _says(
-            'A job that breaks its own rule is not re-evaluated on its own '
-            '`emit`: it finds out at its next checkpoint — a `ctx.state`, a '
-            '`ctx.check()`, a waiting method, a `ctx.each` — and the trace '
-            'names that checkpoint',
+            'A job that breaks its own rule is not re-checked on its own '
+            '`emit`. It finds out at its next checkpoint, such as '
+            '`ctx.state`, `ctx.check()`, a waiting method or `ctx.each`, '
+            'and the trace names that checkpoint',
           );
           fakeAsync((async) {
             final job = breaksItsOwnRule(_Traced(), kind);
@@ -4235,9 +4592,10 @@ void main() {
 
       test('the zone of last resort for a rule that throws on a change', () {
         _says(
-          "Re-evaluation errors fall back to the job's creation zone when "
-          'neither an override of `onUnanswered` nor a '
-          '`Solo.unansweredHandler` answers for them',
+          'An error of a re-evaluation takes the way the table of [Where '
+          'each error goes](#where-each-error-goes) gives a `keepWhile`: '
+          '`onError`, then `onUnanswered`, and the creation zone when '
+          'nobody answers',
         );
         final where = <String, List<String>>{};
         fakeAsync((async) {
@@ -4265,9 +4623,15 @@ void main() {
   group('Background work and logs', () {
     group('the first attempt:', () {
       test('the send fails once the job is over', () {
+        _row(
+          'An error of a future the body did not await',
+          'Nobody',
+          'The zone the body runs in',
+        );
         _says(
-          "The future's error belongs to nobody in the job: the hooks never "
-          'see it, `Solo.unansweredHandler` is never asked',
+          'The error of the future belongs to nobody in the job. The '
+          'hooks never see it, and `Solo.unansweredHandler` is never '
+          'asked',
         );
         final handled = <String>[];
         late first.BroadCamera camera;
@@ -4290,9 +4654,9 @@ void main() {
 
       test('the zone it surfaces in is the one the job was created in', () {
         _says(
-          'it surfaces as an unhandled error in the zone the body runs in, the '
-          'one the job was created in for a job from the queue, with nothing '
-          'there to name the job it came from',
+          'It surfaces as an unhandled error in the zone the body runs '
+          'in, which for a job from the queue is the zone the job was '
+          'created in. Nothing there names the job it came from',
         );
         final where = <String, List<String>>{};
         fakeAsync((async) {
@@ -4328,10 +4692,9 @@ void main() {
     group('work with a life of its own:', () {
       test('the send fails once the job is over', () {
         _says(
-          'Its errors stay with the job, even after the job finishes: the '
-          'reporting hooks are told, `onUnanswered` is asked to answer, and '
-          'with nothing to answer they end in the zone the job was created '
-          'in',
+          'Its errors stay with the job, even after the job finishes: '
+          '`onError` hears them, `onUnanswered` is asked to answer, and '
+          'with nothing to answer they end in the creation zone',
         );
         late page.Camera camera;
         late Job<void> job;
@@ -4421,15 +4784,17 @@ void main() {
         });
         expect(bench.heard, isEmpty);
         expect(bench.unanswered, isEmpty);
-        _says('Start that work inside the callback: a future made before the '
-            'call and only awaited inside fails past the hooks, into the zone '
-            'it was made in.');
+        _says(
+          'Start that work inside the callback. A future made before the '
+          'call and only awaited inside fails past the hooks, into the '
+          'zone it was made in.',
+        );
       });
 
       test('the job is cancelled, and then closed, while the work goes on', () {
         _says(
-          '`ctx.unattended(action)` starts work that the job does not wait '
-          'for or cancel',
+          '`ctx.unattended(action)` starts work that the job neither '
+          'waits for nor cancels',
         );
         fakeAsync((async) {
           final camera = page.Camera(Hardware());
@@ -4454,9 +4819,10 @@ void main() {
       test('what the context refuses inside the work, and what it lets do', () {
         _says(
           'Unattended work is not the job, and the context refuses there '
-          'whatever acts on the job: `ctx.run`, `ctx.runAll`, `ctx.each` and '
-          '`ctx.uncancellable` all throw a `StateError` that names the call — '
-          '`cannot run a child inside unattended work` for `ctx.run`',
+          'whatever acts on the job. `ctx.run`, `ctx.runAll`, `ctx.each` '
+          'and `ctx.uncancellable` all throw a `StateError` that names '
+          'the call: `cannot run a child inside unattended work` for '
+          '`ctx.run`',
         );
         final refused = <String, String>{};
         final let = <String>[];
@@ -4511,7 +4877,7 @@ void main() {
       test('a refusal nobody catches inside the work', () {
         _says(
           'That throw is an error of the work it happened in, so it takes '
-          'the road above, to the hooks, and the job itself still ends '
+          'the way above, to the hooks, and the job itself still ends '
           '`Done`',
         );
         late Bench bench;
@@ -4533,9 +4899,9 @@ void main() {
 
       test('a captured context: an active job, a cancelled one, one over', () {
         _says(
-          'A captured context still belongs to the original job: `emit` can '
-          'work while that job is active, but is rejected after cancellation '
-          'or completion',
+          'A captured context still belongs to the original job. `emit` '
+          'works while that job is active and is rejected after a '
+          'cancellation or after the job completes',
         );
         fakeAsync((async) {
           final bench = Bench();
@@ -4584,7 +4950,7 @@ void main() {
     group('logs:', () {
       test('the data of the page, handed on as it is', () {
         _says(
-          '`ctx.log(data)` forwards application data to log hooks and '
+          '`ctx.log(data)` hands application data to the log hooks and '
           'observers as it is, so a listener that wants a line makes one',
         );
         final watching = <Object?>[];
@@ -4599,8 +4965,9 @@ void main() {
 
       test('the lazy line of the page, with the logger at FINE', () {
         _says(
-          'The body logs unconditionally, and the line is built, the call of '
-          '`describe()` included, only where somebody listens at that level',
+          'The body logs every time. The line is built, the call of '
+          '`describe()` included, only where somebody listens at that '
+          'level',
         );
         _run((async) {
           page.Camera(Hardware()).zoomTo(2, page.logLazily);
@@ -4612,7 +4979,7 @@ void main() {
 
       test('the lazy line of the page, with the logger at INFO', () {
         _says(
-          'Everywhere else the message stays a closure nobody called',
+          'Everywhere else the message stays a closure that nobody called',
         );
         _says('`ctx.log` calls nothing on the way either');
         final watching = <Object?>[];
@@ -4642,13 +5009,13 @@ void main() {
 
       test('the two channels of the page', () {
         _says(
-          "`Solo.debug` additionally traces the controller's internal queue "
-          'and lifecycle operations',
+          '`Solo.debug` traces the queue of the controller and its '
+          'lifecycle as well',
         );
         _says(
           'Each job reports its start, its errors, a cancellation that '
-          "reaches it and its outcome to `Job.debug`, the core's channel; "
-          'both sides show when both are set',
+          'reaches it and its outcome to `Job.debug`, the channel of the '
+          'core; when both are set, both show',
         );
         final ran = _run((async) {
           page.traceTheEngine();
@@ -4722,7 +5089,7 @@ void main() {
     const attempts = 'test/support/errors_first_attempts.dart';
     const holders = {
       '## Reporting an error': answers,
-      '### Answering for an error': answer,
+      '## Answering for an error': answer,
       '## Watching every controller': answers,
       '## What is holding the controller': answers,
       '### The first attempt': attempts,
