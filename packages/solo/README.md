@@ -325,6 +325,12 @@ player.setVolume(0.4);
 await player.close(mode: SoloCloseMode.drain);
 ```
 
+`setVolume` hands back a job too, and the call site drops it on purpose:
+nothing here can answer for a volume the device refuses. Its failure goes on to
+the zone, as [Quick start](#quick-start) says, and ends this plain Dart
+program. A caller that can answer for it reads the job's `done`, as the call
+site does for `play`.
+
 ## Guides
 
 Also on the [documentation site](https://docs.yet-another.dev/solo/), with

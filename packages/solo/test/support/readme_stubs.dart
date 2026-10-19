@@ -16,6 +16,7 @@ final class Stage {
   int stopTake = 5;
   int loadStep = 10;
   int volumeTake = 5;
+  Object? volumeError;
   int nameTake = 10;
   String name = 'Ada King';
 }
@@ -153,6 +154,11 @@ class Device {
 
   Future<void> setVolume(double value) async {
     await _delay(stage.volumeTake);
+    if (stage.volumeError case final error?) {
+      // The fake throws whatever the test handed it.
+      // ignore: only_throw_errors
+      throw error;
+    }
     volumes.add(value);
     stage.trace.add('volume $value');
   }

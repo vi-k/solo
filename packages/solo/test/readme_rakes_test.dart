@@ -792,6 +792,34 @@ void main() {
       expect(device.onDisconnect, isNull, reason: 'onClose let it go');
     });
 
+    test('the call site drops the volume job, and its failure reaches the zone',
+        () {
+      expect(
+        _page().replaceAll(RegExp(r'\s+'), ' '),
+        contains('`setVolume` hands back a job too, and the call site drops '
+            'it on purpose: nothing here can answer for a volume the device '
+            'refuses. Its failure goes on to the zone'),
+      );
+      stubs.stage.volumeError = StateError('device refused the volume');
+      final device = stubs.Device();
+      final errors = <String>[];
+      // Nothing is asserted inside the zone: an `expect` that failed there
+      // would be one more error of the zone.
+      fakeAsync((async) {
+        runZonedGuarded(
+          () => tour.callSite(stubs.Api(), device),
+          (error, stackTrace) => errors.add('$error'),
+          zoneSpecification: ZoneSpecification(
+            print: (self, parent, zone, line) {},
+          ),
+        );
+        async.flushTimers();
+      });
+
+      expect(errors, ['Bad state: device refused the volume']);
+      expect(device.volumes, isEmpty);
+    });
+
     test('a drain refuses new work at the call and runs what was queued', () {
       fakeAsync((async) {
         open();

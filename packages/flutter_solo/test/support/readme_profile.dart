@@ -79,6 +79,9 @@ class ProfileApi {
   /// What `fetchName` throws instead of answering, when it is set.
   final Object? error;
 
+  /// What `saveName` throws instead of storing, when it is set.
+  final Object? saveError;
+
   /// Every name `saveName` was given, in the order the calls came back.
   final saved = <String>[];
 
@@ -86,7 +89,11 @@ class ProfileApi {
   final trace = <String>[];
 
   /// An API that answers [delay] after the call.
-  ProfileApi({this.delay = const Duration(milliseconds: 10), this.error});
+  ProfileApi({
+    this.delay = const Duration(milliseconds: 10),
+    this.error,
+    this.saveError,
+  });
 
   /// The name of the profile.
   Future<String> fetchName() async {
@@ -107,6 +114,12 @@ class ProfileApi {
   Future<void> saveName(String name) async {
     trace.add('save begins');
     await Future<void>.delayed(delay);
+    final saveError = this.saveError;
+    if (saveError != null) {
+      // The fake throws whatever the test handed it.
+      // ignore: only_throw_errors
+      throw saveError;
+    }
     saved.add(name);
     trace.add('save ends');
   }

@@ -529,6 +529,31 @@ void main() {
   });
 
   group('Selecting one value', () {
+    test('the Save button drops the job, and a failed save reaches the zone',
+        () async {
+      Profile? state;
+      final reported = await _asWidgetTest((binding) async {
+        final controller = ProfileController(
+          ProfileApi(saveError: StateError('save offline')),
+        );
+        controller.load().ignoreFailure();
+        await binding.pump(const Duration(milliseconds: 10));
+        // What `onPressed: canSave ? controller.save : null` calls on a
+        // loaded profile: the job it hands back goes nowhere.
+        final VoidCallback onPressed = controller.save;
+        onPressed();
+        await binding.pump(const Duration(milliseconds: 10));
+        state = controller.currentState;
+        await controller.close();
+      });
+
+      expect(state, isA<Loaded>(), reason: 'nothing on the screen says so');
+      expect('${reported.single.exception}', 'Bad state: save offline');
+      _says('A save that fails leaves the state `Loaded`, and nothing on the '
+          'screen says so: `save` has no `ifFailed`, so its failure goes on '
+          'to the zone');
+    });
+
     testWidgets('the selector rebuilds only when the pick changes',
         (tester) async {
       final controller = ProfileController(ProfileApi());

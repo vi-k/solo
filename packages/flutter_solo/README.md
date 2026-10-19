@@ -222,6 +222,13 @@ SoloSelector<Profile, bool>(
 )
 ```
 
+The button drops the job that `save` hands back, on purpose, and so does
+`SaveButton` below. A save that fails leaves the state `Loaded`, and nothing on
+the screen says so: `save` has no `ifFailed`, so its failure goes on to the
+zone, in an app towards `PlatformDispatcher.onError`. `ignoreFailure()` would
+leave it unheard. A screen that tells the user waits for `save().done`, as in
+[Outcomes](#outcomes).
+
 Picks count as changed when they are `!=`, unless `changed:` answers that
 question itself. The selector runs once for every change of the state, so keep
 it a cheap pick that gives the same answer for the same state. `solo` is any
