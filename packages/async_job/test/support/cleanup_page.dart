@@ -63,6 +63,20 @@ Future<void> unregisteringInside(JobContext ctx) async {
   });
 }
 
+Job<Database> afterTheReturn() {
+  final job = Job<Database>((ctx) async {
+    final database = await ctx.join(
+      Database.open,
+      discard: (database) => database.close(),
+    );
+    // The body does not wait for the cache; the job does.
+    ctx.run(Job.deferred<void>((c) => c.join(database.warmCache))).ignore();
+
+    return database;
+  });
+  return job;
+}
+
 Job<Database> plainAwait() {
   final job = Job<Database>((ctx) async {
     final database = await Database.open();

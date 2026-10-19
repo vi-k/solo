@@ -12,7 +12,7 @@ final class Stage {
   int openTake = 10;
   Error? openError;
   int migrateTake = 10;
-  Error? migrateError;
+  Exception? migrateError;
   int readTake = 10;
 
   /// Whether there is one lock for everybody: a second `acquire` waits
@@ -59,14 +59,14 @@ final class Database {
   final String name;
   int closes = 0;
 
-  Database([this.name = 'db']);
+  Database([this.name = 'database']);
 
   static Future<Database> open() async {
     await delay(stage.openTake);
     if (stage.openError case final error?) {
       throw error;
     }
-    stage.trace.add('db opened');
+    stage.trace.add('database opened');
     return Database();
   }
 
@@ -81,10 +81,24 @@ final class Database {
     stage.trace.add('$name migrated');
   }
 
+  Future<void> warmCache() async {
+    await delay(10);
+    stage.trace.add('cache warmed');
+  }
+
   Future<void> close() async {
     closes += 1;
     stage.trace.add('$name closed');
   }
+
+  @override
+  String toString() => name;
+}
+
+/// The error of a migration that fails.
+final class MigrationFailed implements Exception {
+  @override
+  String toString() => 'MigrationFailed';
 }
 
 /// A cursor that `readAll` closes once it has read everything.

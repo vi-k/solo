@@ -120,8 +120,8 @@ passed to `abandonable`. While the body or the job's children still run, that
 callback runs at once and the job awaits it; if the job is already running its
 cleanup stack, the callback joins the stack, and once the job has finished, the
 callback runs on its own.
-[Cleanup order and late results](cleanup.md#cleanup-order-and-late-results) on
-the cleanup page takes this order apart.
+[A value that comes late](cleanup.md#a-value-that-comes-late) on the cleanup
+page takes this order apart.
 
 ### The second attempt
 

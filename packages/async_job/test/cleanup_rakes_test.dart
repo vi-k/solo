@@ -3,7 +3,7 @@
 // and the answers in `support/cleanup_page.dart`, the first attempts in
 // `support/cleanup_first_attempts.dart`, and the second attempt of "A
 // resource that travels" in this file. The code under each heading is
-// held to the file of that heading, the line the page quotes is what its
+// held to the file of that heading, the lines the page quotes are what its
 // code prints, and what the page says about cleanup without code of its
 // own is pinned here as well.
 @Timeout(Duration(seconds: 5))
@@ -47,17 +47,103 @@ DeferredJob<Database> stubborn() => Job.deferred<Database>(
     );
 
 /// Opens a database at once, under the name the trace will show.
-Future<Database> open([String name = 'db']) async {
+Future<Database> open([String name = 'database']) async {
   stage.trace.add('$name opened');
   return Database(name);
 }
 
-/// The lines of the `text` blocks of the page, in its order.
-List<String> quotedLines() => [
-      for (final block in RegExp(r'```text\n(.*?)\n```', dotAll: true)
-          .allMatches(File('doc/cleanup.md').readAsStringSync()))
-        ...block.group(1)!.split('\n'),
-    ];
+/// What each `text` block of the page says, in the order of the page.
+const quoted = [
+  [
+    'lock acquired',
+    'database opened',
+    'outcome: Done(database)',
+  ],
+  [
+    'lock acquired',
+    'database opened',
+    'lock released',
+    'outcome: Done(database)',
+  ],
+  [
+    'database opened',
+    'database migration failed',
+    'outcome: Failed(MigrationFailed)',
+  ],
+  [
+    'Job(connect) handed its value over: 1 conditional cleanup dropped',
+  ],
+  [
+    'database opened',
+    'cancel',
+    'outcome: Cancelled(manual)',
+  ],
+  [
+    'database opened',
+    'cancel',
+    'database closed',
+    'outcome: Cancelled(manual)',
+  ],
+  [
+    'cancel',
+    'cursor read',
+    'cursor closed',
+    'cursor closed',
+    'outcome: Cancelled(manual)',
+  ],
+  [
+    'cancel',
+    'cursor read',
+    'cursor closed',
+    'outcome: Cancelled(manual)',
+  ],
+  [
+    'cancel',
+    'database opened',
+    'database closed',
+    'outcome: Cancelled(manual)',
+  ],
+  [
+    'database opened',
+    'cancel',
+    'cache warmed',
+    'database closed',
+    'outcome: Cancelled(manual)',
+  ],
+];
+
+/// Cancels [job] the way the user does, and says so in the trace.
+void cancel(Job<Object?> job) {
+  stage.trace.add('cancel');
+  job.cancel().ignore();
+}
+
+/// What a scene of the page prints: the trace of the stubs, `cancel` when
+/// the user cancels [cancelAt] ms in, and the outcome once the job ends.
+List<String> scene(Job<Object?> Function() start, {int? cancelAt}) {
+  fakeAsync((async) {
+    final job = start();
+    job.done.then((outcome) => stage.trace.add('outcome: $outcome')).ignore();
+    if (cancelAt != null) {
+      async.elapse(Duration(milliseconds: cancelAt));
+      cancel(job);
+    }
+    async.flushTimers();
+  });
+  return stage.trace;
+}
+
+/// The jobs of "A resource that travels", with `ready` cancelled the moment
+/// `connect` ends: between its `Done` and the checkpoint `run` makes before
+/// it hands the value to the body.
+Job<Database> cancelledOnceConnected(
+  DeferredJob<Database> Function(ChildJob<Database> connect) version,
+) {
+  final connect = first.connecting();
+  final ready = version(connect);
+  connect.done.then((_) => cancel(ready)).ignore();
+  return ready..start();
+}
 
 /// The members of the context the page says belong to the body and throw
 /// `StateError` in a callback of the cleanup stack, as its sentence lists
@@ -141,8 +227,8 @@ void main() {
         expect(job.outcome, isA<Done<Database>>());
         expect(trace, [
           'lock acquired',
-          'db opened',
-          'db migrated',
+          'database opened',
+          'database migrated',
           'lock released',
         ]);
       });
@@ -150,16 +236,16 @@ void main() {
 
     test('a failed migration closes the database, then releases the lock', () {
       fakeAsync((async) {
-        stage.migrateError = StateError('migration');
+        stage.migrateError = MigrationFailed();
         final job = Job<Database>(page.opening)..ignoreFailure();
         async.flushTimers();
         expect(job.outcome, isA<Failed>());
         // The stack unwinds from the last registration.
         expect(trace, [
           'lock acquired',
-          'db opened',
-          'db migration failed',
-          'db closed',
+          'database opened',
+          'database migration failed',
+          'database closed',
           'lock released',
         ]);
       });
@@ -172,7 +258,7 @@ void main() {
         final job = Job<Database>(first.sameCallback)..ignoreFailure();
         async.flushTimers();
         expect(job.outcome, isA<Done<Database>>());
-        expect(trace, ['lock acquired', 'db opened']);
+        expect(trace, ['lock acquired', 'database opened']);
       });
     });
 
@@ -185,8 +271,8 @@ void main() {
         expect(job.outcome, isA<Cancelled>());
         expect(trace, [
           'lock acquired',
-          'db opened',
-          'db closed',
+          'database opened',
+          'database closed',
           'lock released',
         ]);
       });
@@ -207,7 +293,7 @@ void main() {
         final job = Job<Database>(page.keeping)..ignoreFailure();
         async.flushTimers();
         expect(job.outcome, isA<Done<Database>>());
-        expect(trace, ['lock acquired', 'db opened', 'lock released']);
+        expect(trace, ['lock acquired', 'database opened', 'lock released']);
       });
     });
 
@@ -220,8 +306,8 @@ void main() {
         expect(job.outcome, isA<Cancelled>());
         expect(trace, [
           'lock acquired',
-          'db opened',
-          'db closed',
+          'database opened',
+          'database closed',
           'lock released',
         ]);
       });
@@ -239,7 +325,7 @@ void main() {
         )..ignoreFailure();
         async.flushTimers();
         expect(group.isFinished, isFalse);
-        expect(trace, ['lock acquired', 'lock waits', 'db opened']);
+        expect(trace, ['lock acquired', 'lock waits', 'database opened']);
 
         // The waiting branch is inside `join`, which waits its action
         // out, and the one holding the lock unwinds only after it.
@@ -254,7 +340,7 @@ void main() {
   group('A resource that travels', () {
     test('the first attempt leaves the database open when migration fails', () {
       fakeAsync((async) {
-        stage.migrateError = StateError('migration');
+        stage.migrateError = MigrationFailed();
         final connect = first.connecting();
         final ready = first.unregistered(connect)
           ..ignoreFailure()
@@ -262,7 +348,7 @@ void main() {
         async.flushTimers();
         expect(connect.outcome, isA<Done<Database>>());
         expect(ready.outcome, isA<Failed>());
-        expect(trace, ['db opened', 'db migration failed']);
+        expect(trace, ['database opened', 'database migration failed']);
       });
     });
 
@@ -275,7 +361,7 @@ void main() {
       });
       expect(
         printed.where((line) => line.contains('handed its value over')),
-        quotedLines(),
+        quoted[3],
       );
     });
 
@@ -287,18 +373,22 @@ void main() {
         page.onArrival(first.connecting()).start();
         async.flushTimers();
       });
-      expect(printed, containsAll(quotedLines()));
+      expect(printed, containsAll(quoted[3]));
     });
 
     test('the second attempt closes the database when migration fails', () {
       fakeAsync((async) {
-        stage.migrateError = StateError('migration');
+        stage.migrateError = MigrationFailed();
         final ready = nextLine(first.connecting())
           ..ignoreFailure()
           ..start();
         async.flushTimers();
         expect(ready.outcome, isA<Failed>());
-        expect(trace, ['db opened', 'db migration failed', 'db closed']);
+        expect(trace, [
+          'database opened',
+          'database migration failed',
+          'database closed',
+        ]);
       });
     });
 
@@ -323,7 +413,7 @@ void main() {
           async.flushTimers();
           expect(connect.outcome, isA<Done<Database>>());
           expect(ready.outcome, isA<Cancelled>());
-          expect(trace, ['db opened', if (closes) 'db closed']);
+          expect(trace, ['database opened', if (closes) 'database closed']);
         });
       });
 
@@ -342,7 +432,7 @@ void main() {
             isA<ParentCancelReason>(),
           );
           expect(ready.outcome, isA<Cancelled>());
-          expect(trace, ['db opened', 'db closed']);
+          expect(trace, ['database opened', 'database closed']);
         });
       });
 
@@ -358,20 +448,24 @@ void main() {
           async.flushTimers();
           expect(connect.outcome, isA<Done<Database>>());
           expect(ready.outcome, isA<Cancelled>());
-          expect(trace, ['db opened', if (closes) 'db closed']);
+          expect(trace, ['database opened', if (closes) 'database closed']);
         });
       });
     }
 
     test('registering on arrival closes the database when migration fails', () {
       fakeAsync((async) {
-        stage.migrateError = StateError('migration');
+        stage.migrateError = MigrationFailed();
         final ready = page.onArrival(first.connecting())
           ..ignoreFailure()
           ..start();
         async.flushTimers();
         expect(ready.outcome, isA<Failed>());
-        expect(trace, ['db opened', 'db migration failed', 'db closed']);
+        expect(trace, [
+          'database opened',
+          'database migration failed',
+          'database closed',
+        ]);
       });
     });
 
@@ -382,13 +476,13 @@ void main() {
           ..start();
         async.flushTimers();
         expect(ready.outcome, isA<Done<Database>>());
-        expect(trace, ['db opened', 'db migrated']);
+        expect(trace, ['database opened', 'database migrated']);
       });
     });
 
     test('the value of connect is the database the receiver closed', () {
       fakeAsync((async) {
-        stage.migrateError = StateError('migration');
+        stage.migrateError = MigrationFailed();
         final connect = first.connecting();
         page.onArrival(connect)
           ..ignoreFailure()
@@ -765,12 +859,12 @@ void main() {
       expect(
         trace,
         <String>[
-          'db opened',
+          'database opened',
           'disposer D',
           'disposer B waits',
           'disposer B done',
           'disposer A',
-          'db closed',
+          'database closed',
         ],
         reason: 'strict reverse order would close the database before A '
             'and B, registered before the discard; the second pass closes it '
@@ -1075,7 +1169,7 @@ void main() {
         async.flushTimers();
         // The body waits `open` out and registers what it opened.
         expect(job.outcome, isA<Cancelled>());
-        expect(trace, ['db opened', 'db closed']);
+        expect(trace, ['database opened', 'database closed']);
       });
     });
 
@@ -1084,8 +1178,66 @@ void main() {
         final job = page.plainAwait()..ignoreFailure();
         async.flushTimers();
         expect(job.outcome, isA<Done<Database>>());
-        expect(trace, ['db opened']);
+        expect(trace, ['database opened']);
       });
+    });
+  });
+
+  group('The page', () {
+    test('quotes what its code prints', () {
+      final text = File('doc/cleanup.md').readAsStringSync();
+      final blocks = RegExp(r'```text\n(.*?)\n```', dotAll: true)
+          .allMatches(text)
+          .map((match) => match.group(1)!.split('\n'))
+          .toList();
+
+      expect(blocks, quoted);
+    });
+
+    test('the first attempt of the callback keeps the lock', () {
+      expect(scene(() => Job<Database>(first.sameCallback)), quoted[0]);
+    });
+
+    test('dispose releases the lock the job keeps', () {
+      expect(scene(() => Job<Database>(page.keeping)), quoted[1]);
+    });
+
+    test('the first attempt of the hand-over leaks the database', () {
+      stage.migrateError = MigrationFailed();
+      expect(
+        scene(() => first.unregistered(first.connecting())..start()),
+        quoted[2],
+      );
+    });
+
+    test('the second attempt loses the database to the checkpoint of run', () {
+      expect(scene(() => cancelledOnceConnected(nextLine)), quoted[4]);
+    });
+
+    test('registering on arrival closes the database on that cancellation', () {
+      expect(scene(() => cancelledOnceConnected(page.onArrival)), quoted[5]);
+    });
+
+    test('the first attempt of unregistering closes the cursor twice', () {
+      expect(
+        scene(() => Job<void>(first.unregisteringAfter), cancelAt: 5),
+        quoted[6],
+      );
+    });
+
+    test('unregistering inside the action closes the cursor once', () {
+      expect(
+        scene(() => Job<void>(page.unregisteringInside), cancelAt: 5),
+        quoted[7],
+      );
+    });
+
+    test('a cancellation after the return closes what the body returned', () {
+      expect(scene(page.afterTheReturn, cancelAt: 15), quoted[9]);
+    });
+
+    test('a plain await closes what it opened once the job is cancelled', () {
+      expect(scene(page.plainAwait, cancelAt: 5), quoted[8]);
     });
   });
 
@@ -1103,7 +1255,8 @@ void main() {
     '### Registering on arrival': 'test/support/cleanup_page.dart',
     '## Registering without a call': 'test/support/cleanup_page.dart',
     '### Unregistering inside the action': 'test/support/cleanup_page.dart',
-    '## Cleanup order and late results': 'test/support/cleanup_page.dart',
+    '### Cancellation after the body returns': 'test/support/cleanup_page.dart',
+    '### Registering after a plain `await`': 'test/support/cleanup_page.dart',
   };
   for (final MapEntry(key: heading, value: holder) in holders.entries) {
     test('the code under "$heading" is a run of lines of $holder', () {
