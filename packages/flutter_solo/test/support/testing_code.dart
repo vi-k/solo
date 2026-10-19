@@ -1,6 +1,6 @@
-// The code of "Testing" in `README.md`, verbatim. The page writes a test and
-// two fragments of one: the test is declared by a function, so that
-// `test/readme_rakes_test.dart` decides where it stands in the suite, and
+// The code of `doc/testing.md`, verbatim. The page writes a test and two
+// fragments of one: the test is declared by a function, so that
+// `test/testing_rakes_test.dart` decides where it stands in the suite, and
 // each fragment is the body of a function that has a tester and a
 // controller.
 

@@ -149,6 +149,7 @@ export default defineConfig({
           items: [
             page('flutter_solo', 'Overview', 'Обзор'),
             page('flutter_solo/mixins', 'Mixins', 'Миксины'),
+            page('flutter_solo/testing', 'Testing', 'Тестирование'),
             changelog('flutter_solo'),
           ],
         },

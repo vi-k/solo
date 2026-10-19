@@ -7,10 +7,13 @@ cannot show code is not a section -- it belongs inside a neighbour, or its
 rules belong in a reference table.
 
 So a heading must be followed, within LEAD lines of prose, by a fenced
-code block, a table, or a deeper heading. Two kinds of heading are exempt
-outright. A page title (`#`): an intro paragraph before the first section
-is the page saying what it is. And a section shorter than LEAD lines
-altogether, which is a pointer rather than an explanation.
+code block, a table, or a deeper heading. A page title (`#`) is exempt
+outright: an intro paragraph before the first section is the page saying
+what it is. A section is not exempt for being short: one that reaches the
+next heading of its level with prose alone fails however few its lines,
+since a pointer of three lines belongs inside a neighbour as well. The
+last section of a page is the exception: no heading follows it, so it is
+held to the LEAD budget alone.
 
 A container -- a section whose next heading is a deeper one -- is cleared
 by that heading, because the code lives in its subsections. It is not

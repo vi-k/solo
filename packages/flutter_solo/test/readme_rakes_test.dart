@@ -11,16 +11,15 @@ import 'support/page_code.dart';
 import 'support/readme_install.dart';
 import 'support/readme_listenable.dart' as listenable;
 import 'support/readme_profile.dart';
-import 'support/readme_tests.dart';
 import 'support/readme_variants.dart';
 import 'support/readme_widgets.dart';
 
 /// The sentinel of `README.md`.
 ///
-/// The code of the page stands verbatim in three files of `test/support/`:
-/// `readme_profile.dart` holds the model of "Usage",
-/// `readme_widgets.dart` the fragments between "Why" and "Outcomes", and
-/// `readme_tests.dart` the code of "Testing". The tests below run it. The
+/// The code of the page stands verbatim in two files of `test/support/`:
+/// `readme_profile.dart` holds the model of "Usage", and
+/// `readme_widgets.dart` the fragments between "Why" and "Outcomes". The
+/// tests below run it. The
 /// one block the page cuts short, the controller of "Usage" with the mixin
 /// and `// ...same as above...` for a body, stands in full in
 /// `readme_listenable.dart`, imported here as `listenable`: a test over a
@@ -45,7 +44,6 @@ const _cutShort = 'final class ProfileController extends Solo<Profile> '
 const _support = [
   'test/support/readme_profile.dart',
   'test/support/readme_widgets.dart',
-  'test/support/readme_tests.dart',
   'test/support/readme_install.dart',
 ];
 
@@ -159,7 +157,7 @@ void main() {
       expect(strayFences(_doc), ['```sh']);
       expect(
         RegExp(r'^```dart$', multiLine: true).allMatches(_page()),
-        hasLength(16),
+        hasLength(13),
         reason: 'a new block of the page needs a place in the support files '
             'and a test that runs it',
       );
@@ -302,7 +300,8 @@ void main() {
       expect(done.outcome, isA<Done<String>>());
       expect(failed.outcome, isA<Failed>());
       expect(cancelled.outcome, isA<Cancelled>());
-      _says('an outcome for every job — `Done`, `Failed` or `Cancelled` —');
+      _says('an outcome for every job, one of `Done`, `Failed` and '
+          '`Cancelled`,');
     });
   });
 
@@ -370,8 +369,8 @@ void main() {
       expect(cancelled.currentState, isA<Empty>());
 
       await tester.pump(const Duration(milliseconds: 10));
-      _says('they say what state a load that failed or was cancelled leaves '
-          'behind');
+      _says('They say what state a load that failed or was cancelled leaves '
+          'behind.');
     });
 
     testWidgets('without them the state stays on Loading', (tester) async {
@@ -387,8 +386,8 @@ void main() {
       expect(cancelled.value, isA<Loading>());
 
       await tester.pump(const Duration(milliseconds: 10));
-      _says('without them the screen would keep the spinner of a job that is '
-          'no longer running');
+      _says('Without them the screen would keep the spinner of a job that '
+          'is no longer running.');
     });
 
     testWidgets('a tap on Load that fails puts Empty back and fails no test',
@@ -428,11 +427,11 @@ void main() {
 
       expect(state, isA<Empty>(), reason: 'ifFailed has answered on screen');
       expect(reported.single.exception, isA<StateError>());
-      _says('The button drops the job that `load` hands back, and a failure '
+      _says('The button drops the job that `load` hands back. A failure '
           'nobody reads goes on to the zone even after `ifFailed` has put '
           '`Empty` on the screen: in an app towards '
-          '`PlatformDispatcher.onError`, in a widget test into the test, which '
-          'fails.');
+          '`PlatformDispatcher.onError`, in a widget test into the test, '
+          'which fails.');
     });
 
     testWidgets('save does not start over a state that is not Loaded',
@@ -454,9 +453,9 @@ void main() {
       expect(api.saved, ['Ada Lovelace']);
 
       await controller.close();
-      _says('`save` narrows that to `Loaded`, so it does not start in any '
-          'other state — it ends `Cancelled` there — and its body reads a '
-          '`Loaded` with a `name` in it');
+      _says('`save` narrows that to `Loaded`: it does not start in any '
+          'other state, it ends `Cancelled` there, and its body reads a '
+          '`Loaded` with a `name` in it.');
     });
 
     testWidgets('abandonable gives up at once, join waits its call out',
@@ -486,9 +485,10 @@ void main() {
       expect(api.saved, ['Ada Lovelace']);
 
       await controller.close();
-      _says('`ctx.abandonable` awaits like `await` except that it gives up the '
-          'moment the job is cancelled, and `ctx.join` waits its call out '
-          'either way — a save is not cut in half');
+      _says('`ctx.abandonable` awaits like `await`, except that it gives up '
+          'the moment the job is cancelled;');
+      _says('`ctx.join` waits its call out either way, so a save is not cut '
+          'in half.');
     });
 
     testWidgets('the builder rebuilds on every change and leaves child alone',
@@ -618,8 +618,8 @@ void main() {
 
       expect(built, [0, 3]);
       await bench.close();
-      _says('Picks count as changed when they are `!=`, unless `changed:` '
-          'answers that question itself.');
+      _says('picks count as changed when they are `!=`, unless `changed:` '
+          'answers that question itself;');
     });
 
     testWidgets('the selector runs once for every change', (tester) async {
@@ -645,7 +645,7 @@ void main() {
       expect(_texts(tester), ['true']);
 
       await plain.close();
-      _says('The selector runs once for every change of the state');
+      _says('the selector runs once for every change of the state');
       _says('`solo` is any controller, a `ValueListenable` or not.');
     });
 
@@ -713,9 +713,9 @@ void main() {
       await plain.close();
       _says('The selector and `changed:` can be closures written in place, '
           'as the selector is above.');
-      _says('Such a closure is a new one on every build of the parent, and it '
-          'may pick something else, so the widget picks once more and puts '
-          'the pick to `changed:`.');
+      _says('Such a closure is a new one on every build of the parent, and '
+          'it may pick something else. So the widget picks once more and '
+          'puts the pick to `changed:`.');
       _says('It moves no subscription for that');
     });
 
@@ -758,7 +758,7 @@ void main() {
 
       expect(await shown(inline: false), ['0', '0', '3']);
       expect(await shown(inline: true), ['0', '0', '3']);
-      _says('and `changed:` still compares against the last pick the widget '
+      _says('`changed:` still compares against the last pick the widget '
           'accepted.');
     });
 
@@ -817,7 +817,8 @@ void main() {
       expect(endsApartAt, '3');
       _says('The builder has usually been given that pick, but not always: '
           'when two changes come before a frame and the first is accepted, '
-          'the second is put against it, and the builder has not seen it yet.');
+          'the second is put against it, and the builder has not seen it '
+          'yet.');
       _says('So where the screen ends up depends on the changes alone, not on '
           'how they fall into frames.');
 
@@ -833,7 +834,7 @@ void main() {
       );
       expect(rebuiltEndsAt, '3');
       expect(rebuiltApartEndsAt, '3');
-      _says('and `changed:` still compares against the last pick the widget '
+      _says('`changed:` still compares against the last pick the widget '
           'accepted.');
     });
 
@@ -901,7 +902,7 @@ void main() {
       _says('The initializer of the field runs once, though, and reads '
           '`widget.controller` as it is at that moment.');
       _says('The `State` outlives the widget: a parent that rebuilds can '
-          'hand it a new `SaveButton` with another controller, and without '
+          'hand it a new `SaveButton` with another controller. Without '
           '`didUpdateWidget` the button would go on taking its permission '
           'from the old controller while its tap went to the new one.');
     });
@@ -942,10 +943,10 @@ void main() {
 
       await tester.pumpWidget(const SizedBox());
       await bench.close();
-      _says('One built inside `build` is a new object on every build: the '
-          'builder under it unsubscribes from the old one and subscribes to '
-          'the new, and the value a selection holds notifications back with '
-          'starts over each time.');
+      _says('One built inside `build` is a new object on every build. The '
+          'builder under it then unsubscribes from the old one and '
+          'subscribes to the new, and the value a selection holds '
+          'notifications back with starts over each time.');
     });
 
     test('the source is subscribed to only while somebody listens', () async {
@@ -1199,8 +1200,8 @@ void main() {
       await second.close();
       _says('One thing sets it apart from `ValueListenableBuilder`: it '
           'compares controllers by identity.');
-      _says('Handed a new controller that equals the old one by `==` but '
-          'not by `identical`, `SoloBuilder` moves to it and '
+      _says('Given a new controller that equals the old one by `==` but not '
+          'by `identical`, `SoloBuilder` moves to it, and '
           '`ValueListenableBuilder` goes on listening to the old one.');
     });
   });
@@ -1321,7 +1322,7 @@ void main() {
       expect(Plain(), isNot(isA<Listenable>()));
       scroll.dispose();
       await bench.close();
-      _says('`listen` works on any `Listenable` — a controller with '
+      _says('`listen` works on any `Listenable`: a controller with '
           '`SoloListenable`, a selection, a `ScrollController` of the '
           "framework's own.");
     });
@@ -1346,9 +1347,9 @@ void main() {
       bench.set(Loading());
       expect(heard, isEmpty);
       await bench.close();
-      _says('Cancelling twice does nothing the second time, and a group that '
-          'has been cancelled cancels what it is handed rather than keeping '
-          'it.');
+      _says('cancelling twice does nothing the second time;');
+      _says('a group that has been cancelled cancels what it is handed '
+          'rather than keeping it;');
     });
 
     test('a member that will not let go costs the others nothing', () async {
@@ -1374,8 +1375,8 @@ void main() {
       expect(heard, isEmpty);
       expect(reported, [isA<StateError>(), isA<StateError>()]);
       await bench.close();
-      _says('If one member refuses to let go, the others are cancelled all '
-          'the same and every failure goes to `FlutterError.reportError`.');
+      _says('if one member refuses to let go, the others are cancelled all '
+          'the same, and every failure goes to `FlutterError.reportError`.');
       _says('Cancelling a group never throws');
     });
 
@@ -1482,8 +1483,9 @@ void main() {
         File('lib/src/subscription.dart').readAsStringSync(),
         contains('extension SoloListen on Listenable {'),
       );
-      _says("They are extensions, and they sit on the framework's own "
-          '`ValueListenable` and `Listenable`');
+      _says("They are extensions on the framework's own `ValueListenable` "
+          "and `Listenable`, where another package's `select` and `listen` "
+          'sit too.');
     });
 
     test('without the methods the same things are still done', () async {
@@ -1505,9 +1507,10 @@ void main() {
       subscription.cancel();
       await bench.close();
       _says('`SoloSelection(controller, (state) => state.canSave)` is the '
-          'same selection, `SoloSelector` needs no method at all, and '
-          '`addListener` with a callback you keep yourself is what `listen` '
-          'does for you');
+          'same selection;');
+      _says('`SoloSelector` needs no method at all;');
+      _says('`addListener` with a callback you keep yourself is what '
+          '`listen` does for you.');
     });
 
     test('a select of the controller itself wins over the extension', () async {
@@ -1515,9 +1518,8 @@ void main() {
 
       expect(picker.picked, [7]);
       await picker.close();
-      _says('Being extensions is also why a controller of your own with a '
-          '`select` method keeps it: an extension always steps aside for a '
-          'member.');
+      _says('A controller of your own with a `select` method keeps it, '
+          'because an extension always steps aside for a member.');
     });
   });
 
@@ -1561,7 +1563,7 @@ void main() {
 
       expect(tester.takeException(), isNull);
       await tester.pump(const Duration(milliseconds: 10));
-      _says('It is safe on either side of `super.dispose()`.');
+      _says('`close()` is safe on either side of `super.dispose()`.');
     });
 
     testWidgets('close() cancels what is queued and what is running',
@@ -1612,7 +1614,7 @@ void main() {
 
       expect(log, ['first step', 'second step']);
       expect(closed, isTrue);
-      _says('a running body stops at its next context call');
+      _says('A running body stops at its next context call');
     });
 
     testWidgets('it drops every listener and stops notifying for good',
@@ -1695,7 +1697,7 @@ void main() {
     testWidgets('mounted holds the toast back once the screen is gone',
         (tester) async {
       expect(await tapped(tester, ProfileApi(), leaveMeanwhile: true), isEmpty);
-      _says('`mounted` after an `await` is the usual Flutter rule and it '
+      _says('`mounted` after an `await` is the usual Flutter rule, and it '
           'applies here too.');
     });
 
@@ -1721,7 +1723,7 @@ void main() {
       await failing.close();
       await cancelling.close();
       await loading.close();
-      _says('`done` never throws; `value` gives the value, rethrows the '
+      _says('`done` never throws. `value` gives the value, rethrows the '
           'failure of a job that failed and throws the `Cancelled` of one '
           'that was cancelled.');
     });
@@ -1758,8 +1760,9 @@ void main() {
         isEmpty,
       );
       expect(tester.takeException(), isNull);
-      _says('an unobserved `Failed` reaches the zone that created the job, so '
-          'a fire-and-forget call is `controller.load().ignoreFailure()`');
+      _says('An unobserved `Failed` reaches the zone that created the job, '
+          'so a fire-and-forget call is '
+          '`controller.load().ignoreFailure()`.');
     });
 
     testWidgets('unattended work that fails takes the same road',
@@ -1789,10 +1792,10 @@ void main() {
       expect(handled, [isA<StateError>()]);
       Solo.unansweredHandler = null;
 
-      _says('The same road carries the errors no outcome holds — the failure '
-          'of work a body handed to `ctx.unattended`, say — unless the '
-          'controller overrides `onUnanswered` or a `Solo.unansweredHandler` '
-          'is set to answer for them');
+      _says('The same road carries the errors no outcome holds, such as the '
+          'failure of work a body handed to `ctx.unattended`. A controller '
+          'that overrides `onUnanswered`, or a `Solo.unansweredHandler`, '
+          'answers for them instead.');
     });
 
     testWidgets('an observer sees such a failure and does not take it',
@@ -1850,328 +1853,9 @@ void main() {
 
       await bare.close();
       await guarded.close();
-      _says('the error travels the zones outwards, so an error zone of your '
-          'own around `runApp` sees it first. Past that it reaches '
-          '`PlatformDispatcher.instance.onError` if you set one.');
-    });
-  });
-
-  group('Testing', () {
-    testWidgets('the first attempt stands until the clock moves',
-        (tester) async {
-      final controller = ProfileController(FakeApi());
-      await tester.pumpWidget(
-        MaterialApp(home: ProfileView(controller: controller)),
-      );
-
-      var through = false;
-      unawaited(firstAttempt(tester, controller).then((_) => through = true));
-      await tester.pump();
-      await tester.pump();
-      await tester.idle();
-      expect(through, isFalse);
-      expect(controller.currentState, isA<Loading>());
-
-      // It is the clock it was waiting for, and nothing else. The clock is
-      // moved without a pump: the attempt pumps a frame of its own as it
-      // comes through, and the tester takes one call at a time.
-      await tester.binding.delayed(const Duration(milliseconds: 9));
-      await tester.idle();
-      expect(through, isFalse);
-      await tester.binding.delayed(const Duration(milliseconds: 1));
-      await tester.idle();
-      expect(through, isTrue);
-      expect(find.text('Ada Lovelace'), findsOneWidget);
-
-      await controller.close();
-      _says('it answers with the name ten milliseconds after the call');
-      _says('The test never gets past the first line');
-      _says('nothing inside it moves that clock but the test');
-    });
-
-    theProfileAppears();
-
-    testWidgets('pumpAndSettle waits for the screen, not for the job',
-        (tester) async {
-      const second = Duration(seconds: 1);
-
-      // A slow load under the spinner of the page: the spinner keeps asking
-      // for frames, and the clock runs until the name is there.
-      final spinning = ProfileController(FakeApi(delay: second));
-      await tester.pumpWidget(
-        MaterialApp(home: ProfileView(controller: spinning)),
-      );
-      await tester.tap(find.text('Load'));
-      var before = tester.binding.clock.now();
-      await tester.pumpAndSettle();
-      expect(
-        tester.binding.clock.now().difference(before),
-        greaterThan(second),
-      );
-      expect(find.text('Ada Lovelace'), findsOneWidget);
-
-      // The same load with nothing animating.
-      final quiet = ProfileController(FakeApi(delay: second));
-      await tester.pumpWidget(
-        MaterialApp(home: QuietView(controller: quiet)),
-      );
-      await tester.tap(find.text('Load'));
-      before = tester.binding.clock.now();
-      final frames = await tester.pumpAndSettle();
-      expect(frames, lessThanOrEqualTo(2));
-      expect(
-        tester.binding.clock.now().difference(before),
-        const Duration(milliseconds: 100) * frames,
-      );
-      expect(quiet.currentState, isA<Loading>());
-      expect(find.text('Loading'), findsOneWidget);
-
-      await tester.pump(second);
-      await spinning.close();
-      await quiet.close();
-      _says('`pumpAndSettle` pumps a frame every hundred milliseconds for as '
-          'long as another frame is asked for.');
-      _says('a slower one would be waited for as well, because the spinner '
-          'of `Loading` keeps asking for frames');
-      _says('with nothing animating, `pumpAndSettle` stops after a frame or '
-          'two, and a load that takes longer than that is still waiting');
-    });
-
-    testWidgets('the handle waits for the job, and its pump leaves the frame',
-        (tester) async {
-      final controller = ProfileController(FakeApi());
-      await tester.pumpWidget(
-        MaterialApp(home: ProfileView(controller: controller)),
-      );
-
-      final outcome = await theHandle(tester, controller);
-
-      expect(outcome, isA<Done<String>>());
-      expect(find.text('Ada Lovelace'), findsOneWidget);
-      await controller.close();
-      _says('`pump` with a duration moves the clock and then draws, so the '
-          'frame it leaves shows the last state.');
-    });
-
-    testWidgets('twenty milliseconds are more than the fake takes',
-        (tester) async {
-      // The handle of the page over a fake that takes longer than its pump
-      // gives it: the outcome is not there yet.
-      final controller = ProfileController(
-        FakeApi(delay: const Duration(milliseconds: 21)),
-      );
-      final done = controller.load().done;
-      Outcome<String>? outcome;
-      unawaited(done.then((value) => outcome = value));
-      await tester.pump(const Duration(milliseconds: 20));
-      expect(outcome, isNull);
-      await tester.pump(const Duration(milliseconds: 1));
-      expect(outcome, isA<Done<String>>());
-
-      expect(FakeApi().delay, const Duration(milliseconds: 10));
-      await controller.close();
-    });
-
-    testWidgets('read before the clock moves, a load that fails is no trouble',
-        (tester) async {
-      final controller = ProfileController(
-        FakeApi(error: StateError('no network')),
-      );
-      await tester.pumpWidget(
-        MaterialApp(home: ProfileView(controller: controller)),
-      );
-
-      final outcome = await theHandle(tester, controller);
-
-      expect(outcome, isA<Failed>());
-      expect(find.text('Load'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-      await controller.close();
-      _says('`done` is read on the first line, before the clock moves, and '
-          'the order matters');
-    });
-
-    test('read after the pump, the same load fails the test', () async {
-      Object? taken = 'never asked';
-      Outcome<String>? outcome;
-      final reported = await _asWidgetTest((binding) async {
-        final controller = ProfileController(
-          FakeApi(error: StateError('no network')),
-        );
-        final job = controller.load();
-        await binding.pump(const Duration(milliseconds: 20));
-        taken = binding.takeException();
-        outcome = await job.done;
-        await controller.close();
-      });
-
-      expect(reported.single.exception, isA<StateError>());
-      expect(taken, isNull);
-      expect(outcome, isA<Failed>(), reason: 'the test did read done');
-      _says('a `Failed` nobody has asked about is reported as the job ends, '
-          'to the zone it was created in. Here that is the zone of the test, '
-          'which fails the test on the spot, and `tester.takeException()` '
-          'has nothing to take afterwards.');
-      _says('A load that fails makes a test red even though it reads `done`, '
-          'if it reads it after the pump.');
-    });
-
-    testWidgets('a job the test drops says so with ignoreFailure()',
-        (tester) async {
-      final controller = ProfileController(
-        FakeApi(error: StateError('no network')),
-      );
-      controller.load().ignoreFailure();
-      await tester.pump(const Duration(milliseconds: 20));
-
-      expect(controller.currentState, isA<Empty>());
-      await controller.close();
-      _says('A job the test starts and drops says so with `ignoreFailure()`.');
-    });
-
-    testWidgets('one pump after load() moves the state and not the screen',
-        (tester) async {
-      final controller = ProfileController(FakeApi());
-      await tester.pumpWidget(
-        MaterialApp(home: ProfileView(controller: controller)),
-      );
-      // The frame a `MaterialApp` asks for after its first.
-      await tester.pump();
-      expect(tester.binding.hasScheduledFrame, isFalse);
-
-      controller.load().ignoreFailure();
-      await tester.pump();
-      expect(controller.currentState, isA<Loading>());
-      expect(find.text('Load'), findsOneWidget);
-      expect(find.byType(CircularProgressIndicator), findsNothing);
-
-      await tester.pump();
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
-
-      await tester.pump(const Duration(milliseconds: 10));
-      await controller.close();
-      _says('after `controller.load()` and one `pump()` the state has moved '
-          'and the screen has not');
-      _says('A second `pump()` draws it.');
-    });
-
-    testWidgets('right after a MaterialApp has been pumped, one pump draws it',
-        (tester) async {
-      final controller = ProfileController(FakeApi());
-      await tester.pumpWidget(
-        MaterialApp(home: ProfileView(controller: controller)),
-      );
-      expect(tester.binding.hasScheduledFrame, isTrue);
-
-      controller.load().ignoreFailure();
-      await tester.pump();
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
-
-      await tester.pump(const Duration(milliseconds: 10));
-      await controller.close();
-      _says('unless a frame was already asked for, as one is right after a '
-          '`MaterialApp` has been pumped');
-    });
-
-    testWidgets('closed in the body, a controller with a load running lets go',
-        (tester) async {
-      final controller = ProfileController(FakeApi());
-      await tester.pumpWidget(
-        MaterialApp(home: ProfileView(controller: controller)),
-      );
-      await tester.tap(find.text('Load'));
-      await tester.pump();
-      expect(controller.currentState, isA<Loading>());
-
-      await controller.close();
-
-      expect(controller.isFinished, isTrue);
-      // The call the load walked away from is the fake's own timer.
-      await tester.pump(const Duration(milliseconds: 10));
-      _says('And the controller is closed in the body of the test, not in '
-          '`addTearDown`');
-    });
-
-    test('awaited once the clock has stopped, the same close() never returns',
-        () async {
-      late ProfileController controller;
-      final reported = await _asWidgetTest((binding) async {
-        // The answer of this API never comes, so the load is still running
-        // when the body ends, as it is when an expectation fails halfway
-        // through one.
-        controller = ProfileController(SilentApi());
-        controller.load().ignoreFailure();
-        await binding.pump();
-        expect(controller.currentState, isA<Loading>());
-      });
-      expect(reported, isEmpty);
-
-      // What a tear-down does next.
-      var back = false;
-      unawaited(controller.close().then((_) => back = true));
-      await Future<void>.delayed(const Duration(milliseconds: 100));
-
-      expect(back, isFalse);
-      expect(controller.isFinished, isFalse);
-      _says('a tear-down runs after the fake clock has stopped, and a '
-          '`close()` awaited there with a job still running — an '
-          'expectation that failed halfway through a load is enough — never '
-          'comes back.');
-    });
-
-    for (final timed in [true, false]) {
-      test(
-          'a job ${timed ? 'with' : 'without'} a deadline left running when '
-          'the body ends', () async {
-        late Solo<Profile> controller;
-        final reported = await _asWidgetTest((binding) async {
-          if (timed) {
-            final load = TimedLoad(SilentApi());
-            controller = load;
-            load.load().ignoreFailure();
-          } else {
-            final load = ProfileController(SilentApi());
-            controller = load;
-            load.load().ignoreFailure();
-          }
-          await binding.pump();
-          expect(controller.currentState, isA<Loading>());
-        });
-
-        expect(
-          [for (final details in reported) '${details.exception}'],
-          [
-            if (timed)
-              contains(
-                'A Timer is still pending even after the widget tree was '
-                'disposed',
-              ),
-          ],
-        );
-        _says('Left running when the body of a `testWidgets` ends, such a job '
-            'fails the test with '
-            '`A Timer is still pending even after the widget tree was '
-            'disposed`, where the same job without a deadline lets the test '
-            'pass.');
-        unawaited(controller.close());
-      });
-    }
-
-    test('closed in the body, a job with a deadline takes its timer along',
-        () async {
-      late TimedLoad controller;
-      final reported = await _asWidgetTest((binding) async {
-        controller = TimedLoad(SilentApi());
-        final job = controller.load()..ignoreFailure();
-        await binding.pump();
-        await controller.close();
-        expect('${job.outcome}', 'Cancelled(closed)');
-      });
-
-      expect(reported, isEmpty);
-      expect(controller.isFinished, isTrue);
-      _says('Closing the controller in the body, as above, ends the job and '
-          'takes its timer along.');
+      _says('An error zone of your own around `runApp` sees it first.');
+      _says('Past that it reaches `PlatformDispatcher.instance.onError`, if '
+          'you set one.');
     });
   });
 
@@ -2378,6 +2062,22 @@ void main() {
       expect(mixin, isNot(contains('set value')));
       _says('There is no setter.');
     });
+
+    testWidgets('a timer of a job fires when the test moves the clock',
+        (tester) async {
+      final controller = ProfileController(ProfileApi());
+      final job = controller.load()..ignoreFailure();
+      await tester.pump();
+      await tester.idle();
+      expect(job.outcome, isNull);
+
+      await tester.pump(const Duration(milliseconds: 10));
+      expect(job.outcome, isA<Done<String>>());
+      await controller.close();
+      _says('On the fake clock of `testWidgets`: a timer a job waits on, '
+          'such as the delay of a fake API, fires only when the test moves '
+          'the clock.');
+    });
   });
 
   group('solo', () {
@@ -2398,7 +2098,7 @@ void main() {
       await subscription.cancel();
       await both.close();
       expect(arrivesWithOneImport, contains(SoloStream<Object>));
-      _says('the rest of the API, which this package re-exports whole — '
+      _says('the rest of the API. This package re-exports all of it, '
           '`SoloStream` included');
     });
   });

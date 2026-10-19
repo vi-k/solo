@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Builds runnable screens from the README of flutter_solo and from its
-doc/mixins.md.
+doc/mixins.md and doc/testing.md.
 
 Every snippet is copied out of the markdown and wrapped in a file that
 runs: fakes above it, a driver below it. That is what keeps the document
@@ -37,8 +37,10 @@ a user of the package copies from. That README went without a bench until
 2026-09-19 and did not compile: the model it declared had neither the
 `canSave` nor the `save` the rest of the page used. doc/mixins.md takes
 the model of that README, the states of `Profile`, and is built against
-them. A Dart block of either page that no driver takes stops the build:
-a block nobody builds is a block nobody runs.
+them; doc/testing.md tests the controller and the screen of that model,
+and its blocks are built into the driver of the README. A Dart block of
+any of the three pages that no driver takes stops the build: a block
+nobody builds is a block nobody runs.
 
 The section of doc/mixins.md on a base class shows two versions of the
 same two classes, and a name declared twice in a section answers to
@@ -75,6 +77,7 @@ ROOT = sys.argv[1] if len(sys.argv) > 1 else '/tmp/solo-flutter-check'
 DOC = os.path.join(REPO, 'packages', 'flutter_solo', 'doc', 'mixins.md')
 README = os.path.join(REPO, 'packages', 'solo', 'README.md')
 FLUTTER_README = os.path.join(REPO, 'packages', 'flutter_solo', 'README.md')
+TESTING = os.path.join(REPO, 'packages', 'flutter_solo', 'doc', 'testing.md')
 
 PUBSPEC = """name: flutter_check
 publish_to: none
@@ -154,6 +157,7 @@ class Blocks(dict):
 
 _taken_doc = set()
 _taken_readme = set()
+_taken_testing = set()
 snips = Blocks(doc_blocks.blocks(
     open(DOC).read(), 'dart', doc_blocks.DECLARES['dart']), _taken_doc)
 # Two blocks of the quick start and no more: the rest of that README is
@@ -163,6 +167,11 @@ readme = doc_blocks.blocks(
 _fr = Blocks(doc_blocks.blocks(
     open(FLUTTER_README).read(), 'dart', doc_blocks.DECLARES['dart']),
     _taken_readme)
+# doc/testing.md tests the model of that README, and its blocks are built
+# into the same driver.
+_ft = Blocks(doc_blocks.blocks(
+    open(TESTING).read(), 'dart', doc_blocks.DECLARES['dart']),
+    _taken_testing)
 
 
 def subsections(text, section, taken):
@@ -1168,8 +1177,8 @@ class ProfileApi {
   }
 }
 
-/// The fake of the testing section: "it answers with the name ten
-/// milliseconds after the call".
+/// The fake of doc/testing.md: "it answers with the name ten milliseconds
+/// after the call".
 class FakeApi extends ProfileApi {}
 
 /// The same API with nobody at the other end.
@@ -1258,12 +1267,12 @@ class _LoadButtonState extends State<LoadButton> {
       TextButton(onPressed: _load, child: const Text('Load'));
 }
 
-/// The two lines of the first attempt of the testing section.
+/// The two lines of the first attempt of doc/testing.md.
 Future<void> firstAttempt(
   WidgetTester tester,
   ProfileController controller,
 ) async {''',
-    _fr['testing/the-first-attempt-the-test-wai'],
+    _ft['the-first-attempt/the-first-attempt-the-test-wai'],
     '''}
 
 /// The three lines of the handle.
@@ -1271,7 +1280,7 @@ Future<Outcome<String>> theHandle(
   WidgetTester tester,
   ProfileController controller,
 ) async {''',
-    _fr['testing/final-done-controller-load-don'],
+    _ft['waiting-for-the-job/final-done-controller-load-don'],
     '''  return outcome;
 }
 ''' + README_HELPERS + '''
@@ -1323,7 +1332,7 @@ void main() {
     debugPrint('the first attempt: stands until the test moves the clock');
   });
 ''',
-    _fr['testing/testwidgets-the-profile-appear'],
+    _ft['moving-the-clock/testwidgets-the-profile-appear'],
     '''
   testWidgets('the handle waits for the end of the work', (tester) async {
     final controller = ProfileController(FakeApi());
@@ -1722,7 +1731,8 @@ void main() {
 # A block of either page that no driver took is a block nobody builds: it
 # could stop compiling, or stop being true, and every step after this one
 # would stay green.
-for _path, _taken in ((DOC, _taken_doc), (FLUTTER_README, _taken_readme)):
+for _path, _taken in ((DOC, _taken_doc), (FLUTTER_README, _taken_readme),
+                      (TESTING, _taken_testing)):
     _left = [
         block for block in re.findall(
             r'```dart\n(.*?)```', open(_path).read(), re.S)

@@ -201,10 +201,10 @@ jobs:
           (cd packages/flutter_solo && flutter test)
           (cd packages/flutter_solo/example && flutter test)
 
-      # The bench of the README of `flutter_solo` and of its `doc/mixins.md`
-      # runs here rather than in `snippets`, which has no Flutter: what those
-      # documents show are widgets, and a widget needs a binding to be built
-      # and read back.
+      # The bench of the README of `flutter_solo`, of its `doc/mixins.md` and
+      # of its `doc/testing.md` runs here rather than in `snippets`, which has
+      # no Flutter: what those documents show are widgets, and a widget needs
+      # a binding to be built and read back.
       # Outside the checkout, like the other benches, which is what lets the
       # last step of this job mean anything.
       - name: Build the screens out of the document

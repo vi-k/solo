@@ -3,7 +3,8 @@
 // shows and nothing else. `test/readme_rakes_test.dart` runs it.
 //
 // What the page takes as the application's own stands below the page's
-// code: the API behind the controller and the fake of the "Testing" section.
+// code: the API behind the controller, and the fake `doc/testing.md` tests
+// the controller with.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_solo/flutter_solo.dart';
@@ -125,8 +126,8 @@ class ProfileApi {
   }
 }
 
-/// The fake of "Testing": "it answers with the name ten milliseconds after
-/// the call".
+/// The fake of `doc/testing.md`: "it answers with the name ten milliseconds
+/// after the call".
 class FakeApi extends ProfileApi {
   /// The fake as the page uses it.
   FakeApi({super.delay, super.error});

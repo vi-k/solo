@@ -614,11 +614,12 @@ Dart у этой беты 3.14. Поэтому цена перехода — н�
   есть провал. Вопрос и итог — раздел «Вопросы владельцу»
   в `2026-10-04-solo-errors-reread-report.md`.
 
-- README `flutter_solo` остаётся одной страницей, 2026-10-12: раздел «Testing»
-  и раздел о подписках на свои страницы не выносятся, хотя карта
-  `2026-09-11[16]-docs-structure-design.md` числила страницу в 325 строк,
-  а в ней 565. Вопрос — раздел «Вопросы владельцу»
-  в `2026-10-04-flutter-solo-readme-reread-report.md`.
+- Раздел README `flutter_solo` о подписках на свою страницу не выносится,
+  2026-10-12, хотя карта `2026-09-11[16]-docs-structure-design.md` числила
+  страницу в 325 строк, а в ней 565. Вопрос — раздел «Вопросы владельцу»
+  в `2026-10-04-flutter-solo-readme-reread-report.md`. Раздел «Testing» тогда
+  тоже оставался, но 2026-10-20 по M6 ревью `solo` ушёл на свою страницу
+  `doc/testing.md`.
 
 - Обход ошибок, 2026-10-01: распаковка `ParallelWaitError`, а не предикат «это
   отмена?»; шаблон visitor, статический метод
@@ -1076,10 +1077,10 @@ M6 и M15; на `92c8f016` зелёные `gate` и `site`, коммит с эт
 
 **Стенды есть не у всех страниц.** Они есть у `vs-bloc.md`
 (`tool/doc_snippets.py`), `accumulation.md` (`tool/accumulation_snippets.py`),
-README `flutter_solo` с его `doc/mixins.md` и быстрого старта README `solo`
-(`tool/flutter_snippets.py`). Код `jobs.md` с 2026-10-03 стоит в support-файлах
-`packages/solo/test/support/jobs_*.dart` и запускается тестами
-`jobs_rakes_test.dart`, `queue_pause_recipe_test.dart`
+README `flutter_solo` с его `doc/mixins.md` и `doc/testing.md` и быстрого
+старта README `solo` (`tool/flutter_snippets.py`). Код `jobs.md` с 2026-10-03
+стоит в support-файлах `packages/solo/test/support/jobs_*.dart` и запускается
+тестами `jobs_rakes_test.dart`, `queue_pause_recipe_test.dart`
 и `droppable_recipe_test.dart`, всего 109. Код `cancellation.md` с 2026-10-04
 стоит в `packages/solo/test/support/cancellation_*.dart` и запускается тестом
 `cancellation_rakes_test.dart`, 146 тестов; код `resources.md` —
@@ -1410,10 +1411,14 @@ M6 ревью `solo` и пилот: владелец 2026-10-20 выбрал п�
 calls». Волна 2 сделана: `errors.md` с переводом переписана по образцу
 `observing.md`, с таблицей маршрутов «Where each error goes», каждая строка
 которой закреплена в тесте своего маршрута; ревью на Opus пройдено, находки
-закрыты. Дальше по странице за коммит, каждая с ревью на Opus: README
-`flutter_solo` с «Testing» на новой `doc/testing.md`, `state.md`,
-`resources.md`. README `solo`, `mistakes.md`, `reference.md` и `vs-bloc.md`
-не трогать. Итоги — в вердикте M6.
+закрыты. Волна 3 сделана: README `flutter_solo` с переводом переписан,
+«Testing» ушёл на новую `doc/testing.md` с переводом, её сторож
+`testing_rakes_test.dart` и стенд в `tool/flutter_snippets.py`; ревью на Opus
+пройдено, находки закрыты. Дальше по странице за коммит, каждая с ревью
+на Opus: `state.md`, `resources.md`; скрипты правки обеих лежат
+в `~/.claude/jobs/b7a261de/tmp/` (`w4_state_*.py`, `w5_res_*.py`). README
+`solo`, `mistakes.md`, `reference.md` и `vs-bloc.md` не трогать. Итоги —
+в вердикте M6.
 
 После M6 по порядку ждут владельца следующие вопросы
 `2026-10-17-solo-project-review.md`.
