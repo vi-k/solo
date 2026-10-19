@@ -29,6 +29,9 @@ final class Stage {
   /// How long `load` takes; none by default.
   int loadTake = 0;
 
+  /// How long `loadText` takes; none by default.
+  int textTake = 0;
+
   bool lockHeld = false;
   final lockQueue = <Completer<void>>[];
 
@@ -214,7 +217,10 @@ final class Store {
 
 final store = Store();
 
-Future<String> loadText() async => '21';
+Future<String> loadText() async {
+  if (stage.textTake > 0) await delay(stage.textTake);
+  return '21';
+}
 
 Future<void> saveNumber(int number) async =>
     stage.trace.add('saved number $number');

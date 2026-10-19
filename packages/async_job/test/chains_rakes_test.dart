@@ -418,6 +418,111 @@ void main() {
       });
     });
 
+    test('the page quotes what the cancelled chain prints', () {
+      final printed = <String>[];
+      runZoned(
+        () => fakeAsync((async) {
+          stubs.stage.textTake = 30;
+          page.cancelledChain();
+          async.flushTimers();
+        }),
+        zoneSpecification: ZoneSpecification(
+          print: (self, parent, zone, line) => printed.add(line),
+        ),
+      );
+      expect(printed, [
+        'loaded: Cancelled(chain)',
+        'parsed: Cancelled(chain)',
+        'saved: Cancelled(manual)',
+      ]);
+      final text = File('doc/chains.md').readAsStringSync();
+      final quoted = RegExp(
+        r"print\('saved: \$\{saved.outcome\}'\);\n```\n\n```text\n(.*?)\n```",
+        dotAll: true,
+      );
+      expect(quoted.firstMatch(text)!.group(1)!.split('\n'), printed);
+      expect(trace(), isEmpty, reason: 'nothing was saved');
+    });
+
+    (Job<String>, Job<int>, Job<void>) slowChain({bool cancellable = true}) {
+      final loaded = Job<String>(
+        cancellable: cancellable,
+        (ctx) => ctx.join(() async {
+          await delay(30);
+          return '21';
+        }),
+      );
+      final parsed = loaded.then<int>((ctx, text) => int.parse(text));
+      final saved = parsed.then<void>((ctx, number) async {});
+      return (loaded, parsed, saved);
+    }
+
+    for (final (cancel, expected) in [
+      (0, ['manual', 'chain', 'chain']),
+      (1, ['chain', 'manual', 'chain']),
+      (2, ['chain', 'chain', 'manual']),
+    ]) {
+      test('the cancel table: cancelling link $cancel while the text loads',
+          () {
+        fakeAsync((async) {
+          final (loaded, parsed, saved) = slowChain();
+          async.elapse(const Duration(milliseconds: 10));
+          [loaded, parsed, saved][cancel].cancel().ignore();
+          async.flushTimers();
+          expect(
+            [
+              for (final job in [loaded, parsed, saved])
+                (job.outcome! as Cancelled).reason.name,
+            ],
+            expected,
+          );
+        });
+      });
+    }
+
+    test('a loaded that refuses stops the cancellation there', () {
+      fakeAsync((async) {
+        final (loaded, parsed, saved) = slowChain(cancellable: false);
+        async.elapse(const Duration(milliseconds: 10));
+        loaded.cancel().ignore();
+        async.flushTimers();
+        expect(loaded.outcome, isA<Done<String>>());
+        expect(parsed.outcome, isA<Done<int>>());
+        expect(saved.outcome, isA<Done<void>>());
+      });
+    });
+
+    test('a continuation of a wider type takes a deferred job for its value',
+        () {
+      fakeAsync((async) {
+        final saving = Job.deferred<void>((ctx) async {});
+        final parsed = Job<int>((ctx) async => 21);
+        final stored = parsed.then<Object>((ctx, number) => saving);
+        async.flushTimers();
+        expect(
+          stored.outcome,
+          isA<Done<Object>>().having((done) => done.value, 'value', saving),
+        );
+        expect(saving.isFinished, isFalse);
+        saving.cancel().ignore();
+        async.flushTimers();
+      });
+    });
+
+    test('the first attempt: the continuation takes the job for its value', () {
+      fakeAsync((async) {
+        final parsed = Job<int>((ctx) async => 21);
+        final stored = page.storeParsedWithoutWaiting(parsed);
+        async.flushTimers();
+        expect(
+          stored.outcome,
+          isA<Done<void>>()
+              .having((done) => done.value, 'value', isA<Job<void>>()),
+        );
+        expect(trace(), ['saved number 21']);
+      });
+    });
+
     test(
       'ctx.run does not take the continuation: the error the page quotes',
       () async {

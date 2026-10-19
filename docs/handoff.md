@@ -1374,10 +1374,14 @@ a cancelled child fails». Тесты страницы — в новом `childr
 блокировки и блокировка в ребёнке ветки) и «What `runAll` does not promise»
 в конце; ссылка `cleanup.md` (с переводом) ведёт теперь в раздел о блокировке.
 `children_rakes_test.dart` удалён и разнесён на `groups_rakes_test.dart`
-и `chains_rakes_test.dart`; первая попытка с блокировкой живёт
-в `test/support/groups_first_attempts.dart`. Следующая — `chains.md`.
-`solo/doc/children.md` ссылается на `groups.md` и `chains.md` полными адресами
-GitHub: до push в `main` этих страниц там нет.
+и `chains_rakes_test.dart`; первые попытки страницы живут
+в `test/support/groups_first_attempts.dart`, и код под их заголовками сверяется
+с этим файлом одним. Закоммичено после ревью на Opus, итог в вердикте M13.
+`chains.md` переписана тем же порядком и закоммичена после ревью на Opus, итог
+в вердикте M13. Следующая — `cancellation.md`: она уже почти в нужном стиле
+(попытки, вывод под кодом), правка легче. `solo/doc/children.md` ссылается
+на `groups.md` и `chains.md` полными адресами GitHub: до push в `main` этих
+страниц там нет.
 
 Дальше по порядку ждут владельца: ядро — пилот с M12 и M13, `observing.md`, L1,
 L6 и L8; `solo` — M4, M5, M6 и пилот.

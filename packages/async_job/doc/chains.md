@@ -1,8 +1,9 @@
 # Chains
 
-Use `then` to continue a job with its result. Each call returns a new `Job` and
-gives its callback a separate context. The next callback starts after the
-previous job succeeds, including its children and cleanup:
+A chain continues a job with its result. Here the app loads a number as text,
+parses it and saves it. `then` returns a new job that starts once its source
+has succeeded, children and cleanup included, and gives its callback the value
+and a context of its own:
 
 ```dart
 final loaded = Job<String>((ctx) => ctx.join(loadText));
@@ -14,43 +15,107 @@ final saved = parsed.then<void>((ctx, number) => ctx.join(
 await saved.value;
 ```
 
-Cancelling `saved` also asks unfinished `parsed` and `loaded` to cancel.
-Cancelling `parsed` asks unfinished `loaded` to cancel and cancels `saved`.
-Cancelling `loaded` passes cancellation forward through both continuations.
-Each forwarded request carries `ChainCancelReason` with the adjacent job's
-`Cancelled` in `cause`. Completed jobs keep their outcomes. If you attach
-several continuations to one job, cancelling one can cancel their shared source
-and the others too.
+The output blocks of this page hold:
 
-A continuation starts only when its source has finished, so a link that is
-running has nothing unfinished behind it. Once `parsed` works, `loaded` is over
-and `loaded.cancel()` does nothing: `parsed` goes on, and `saved` after it. The
-same holds one link down: with `saved` running, cancelling `loaded` or `parsed`
-leaves it alone. To stop a link that is running, cancel that link or one after
-it.
+- `loaded:`, `parsed:`, `saved:` the outcome of that link;
+- `parent:`, `child:` the outcomes after `tail.cancel()` in
+  [A continuation of a child](#a-continuation-of-a-child).
 
-`await saved.cancel()` waits for the unfinished predecessors, their children
-and cleanup, and any work and cleanup already started by `saved`. Sources
-retain their normal cancellation rules: `cancellable: false` refuses a request,
-and `uncancellable` holds it. A cancelled continuation still waits for that
-source, then finishes without calling its callback. While waiting, it can be
-`isCancelled` without being `isFinished`; its outcome has `started: false` if
-it was cancelled while waiting for its source.
+## Cancelling a chain
 
-A failed predecessor forwards its error and stack without calling the callback.
-Observe the continuation through `value`, `done` or `ignoreFailure` to handle
-that failure. If a cancelled continuation cannot forward a source failure, it
-does not observe it either: for example, a source that refuses cancellation and
-later fails still needs its own error handling.
+The text is still loading when the user leaves the screen, and the screen
+cancels the last link:
+
+```dart
+// The user left the screen while the text was loading.
+await saved.cancel();
+print('loaded: ${loaded.outcome}');
+print('parsed: ${parsed.outcome}');
+print('saved: ${saved.outcome}');
+```
+
+```text
+loaded: Cancelled(chain)
+parsed: Cancelled(chain)
+saved: Cancelled(manual)
+```
+
+A cancellation travels along the chain both ways. It asks the unfinished links
+before the cancelled one to cancel, and it cancels the links after it. Each
+link it reaches gets `ChainCancelReason`, with the `Cancelled` of the link it
+came from in `cause`:
+
+| You cancel | Asked to cancel, if unfinished | Cancelled once the link you cancel accepts |
+| --- | --- | --- |
+| `loaded` | none | `parsed` and `saved` |
+| `parsed` | `loaded` | `saved` |
+| `saved` | `loaded` and `parsed` | none |
+
+
+A link that refuses stops the cancellation there: cancel a `loaded` made with
+`cancellable: false`, and `parsed` and `saved` go on. Finished links keep their
+outcomes. If several continuations hang off one job, cancelling one of them can
+cancel the shared source, and the other continuations with it.
+
+A continuation starts only when its source has finished, so a running link has
+nothing unfinished behind it. While `parsed` runs, `loaded` is over, and
+`loaded.cancel()` does nothing: `parsed` goes on, and `saved` after it. While
+`saved` runs, cancelling `loaded` or `parsed` leaves it alone. To stop a
+running link, cancel that link or one after it.
+
+`await saved.cancel()` returns once the unfinished links before `saved` have
+ended, with their children and cleanup, and once `saved` has ended the work and
+cleanup it started. A source keeps its own rules: `cancellable: false` refuses
+the request, and `uncancellable` holds it back. A cancelled continuation still
+waits for such a source and then ends without calling its callback. Meanwhile
+it is `isCancelled` but not `isFinished`. Its outcome has `started: false` if
+it was cancelled while it waited for its source.
+
+## When a link fails
+
+A failed link passes its error and stack on without calling the next callback.
+The failure comes down the chain and ends every link after it, so whoever
+observes the last link through `value`, `done` or `ignoreFailure` handles a
+failure from anywhere up the chain. The `JobObserver` of the last link hears it
+as that link's own failure.
+
+Where an error goes depends on what failed:
+
+| What failed | Where the error goes |
+| --- | --- |
+| The body of a link or the callback of a continuation | Down the chain, to whoever observes the last link. Unobserved, it goes to the zone the last `then` was called in |
+| A source that refused the cancellation of its continuation and failed later | To the zone the source was made in, unless something observes the source. The cancelled continuation does not forward the error, so it does not observe it either |
+| Work of `ctx.unattended` or a disposer, which no outcome carries | The observer of the link where it happened, then, unless the observer catches it in `onUnanswered`, the zone the link was made in. For a continuation, that is the zone `then` was called in |
+
+## What the callback returns
 
 The callback returns a value or a future, and the continuation waits for the
-future. A `Job` is not a future. A callback that returns one,
-`then<void>((ctx, number) => saving)`, compiles, and the continuation does not
-wait for `saving`: it finishes `Done` at once, and a `saving` that starts by
-itself goes on alone. Nothing here starts a deferred `saving`, so there the
-continuation fails with an `ArgumentError` instead; that check is made for
-`void` only, because a wider type may hold a job as its value. A continuation
-waits for a job it runs as its child:
+future. Here a job of its own saves the number.
+
+### The first attempt
+
+```dart
+// The first attempt: the continuation does not wait for a job.
+final stored = parsed.then<void>((ctx, number) {
+  final saving = Job<void>((ctx) => ctx.join(() => saveNumber(number)));
+  return saving;
+});
+```
+
+The code compiles. The `void_checks` lint, which `package:lints` turns on,
+marks this callback, but not the arrow form `(ctx, number) => saving`, and the
+compiler marks neither. `stored` does not wait for `saving`. This is what
+happens:
+
+1. `then` waits for a future, and a `Job` is not a future. The continuation
+   takes `saving` for its value and ends `Done` at once.
+2. `saving` starts by itself and goes on alone, and nobody waits for it.
+3. A `saving` made with `Job.deferred` would never start, because nothing here
+   starts it. For a `void` continuation the core checks this, and `stored`
+   fails with an `ArgumentError`. A continuation of a wider type takes the job
+   for its value: a job may be the value it means to hand on.
+
+### A job the continuation runs as its child
 
 ```dart
 final stored = parsed.then<void>((ctx, number) {
@@ -61,40 +126,31 @@ final stored = parsed.then<void>((ctx, number) {
 });
 ```
 
+`ctx.run` starts `saving` and returns a future of its value, and the
+continuation waits for it.
+
+## A continuation is not a child
+
+Each continuation is a root job of the core, wherever `then` is called. Made in
+the body of another job, it is not that job's child, and that job does not wait
+for it. It has an optional `observer` argument and inherits neither the
+source's observer nor anything an engine attaches to the source.
+
+| | A child | A continuation |
+| --- | --- | --- |
+| Made by | `Job.deferred` | `then` |
+| Starts | when its parent runs it with `ctx.run` | by itself, once its source has succeeded |
+| Waited for by | its parent | nobody: it is a root job |
+| `ctx.run` takes it | yes, it is a `ChildJob` | no, it is a plain `Job` |
+
 `then` does not start its source. A chain hung off a `Job.deferred` stays
 unstarted, every link of it, until the source is started: by `start()`, or by
-`ctx.run(source)` in the body that adopts it. The continuation itself is never
-adopted: it starts by itself once its source finishes, and `ctx.run` does not
-take it, because `then` returns a plain `Job` and not a `ChildJob`.
+`ctx.run(source)` in the body that adopts it.
 
-A continuation starts once its source has finished, cleanup included, so a
-source that waits for its own continuation waits forever:
+## What the source hands out
 
-```dart
-late final Job<int> parsed;
-final loaded = Job<String>((ctx) async {
-  final text = await ctx.join(loadText);
-  await parsed.value;
-  return text;
-});
-parsed = loaded.then<int>((ctx, text) => int.parse(text));
-```
-
-`parsed` starts once `loaded` has finished, and `loaded` is waiting for
-`parsed`. Neither ends, and `loaded.cancel()` does not return either.
-`parsed.done` in place of `parsed.value` changes nothing, and neither does
-moving the await into the cleanup of `loaded`.
-
-Each continuation is a root job of the core, wherever `then` is called: made in
-the body of another job, it is not that job's child, and the job does not wait
-for it. It has an optional `observer` argument and inherits neither the
-source's observer nor anything an engine attaches to the source. Cleanup
-registered by the source has already run when the continuation receives its
-value; a resource closed by the source's `onDispose` is therefore already
-closed at that point.
-
-A `discard` of the source is the other way round. Here `opened` hands out the
-rows it opened, and `archived` receives them:
+`opened` opens the rows and hands them out, and `archived` writes them to an
+archive:
 
 ```dart
 final opened = Job<Source>(
@@ -106,25 +162,23 @@ final archived = opened.then<void>((ctx, rows) async {
 });
 ```
 
+Cleanup the source registered has run by the time the continuation receives its
+value: a resource closed by the source's `onDispose` is already closed then.
+`discard` is the other way round: it runs only for a value that reached nobody.
 `opened` ended `Done`, so its `discard` did not run and never will. The
 receiver is the continuation: `rows` comes as its argument, and it registers
 the closing in its own body, on the first line.
 
 One case has no receiver at all. `archived.cancel()` while `opened` is still
-opening finishes `archived` without ever calling its callback, so there is no
-body to register anything in. The cancellation goes on to `opened`. If `opened`
-takes it, its `discard` closes the rows when they arrive. If `opened` refuses
-it — `cancellable: false`, or already finished when the request arrived — it
-ends `Done` all the same, with the rows open. The caller then closes them
-through the handle, `(await opened.value).close()`, exactly as for
-[a branch that refuses a group's stop](groups.md#what-a-group-hands-back).
+opening ends `archived` without calling its callback, so there is no body to
+register anything in. The cancellation goes on to `opened`, and who closes the
+rows depends on what `opened` does with it:
 
-An observer on the last link hears a failure from anywhere up the chain, as
-that link's own: the failure comes down the chain and ends every link after it.
-An error with no outcome, such as a failure of `ctx.unattended` work or of a
-disposer, stays with the link where it happened: it goes to that link's
-observer and, unless the observer catches it in `onUnanswered`, to the zone the
-link was made in — for a continuation, the zone `then` was called in.
+| How the chain goes | Who closes the rows |
+| --- | --- |
+| `archived` receives the rows | `archived`, through `ctx.onDispose` |
+| `archived` is cancelled while `opened` opens, and `opened` takes the cancellation | `opened`, through its `discard`, when the rows arrive |
+| The same, and `opened` refuses it: `cancellable: false`, or it has finished by the time the request arrives | The caller, through the handle: `(await opened.value).close()`, as for [a branch that refuses a group's stop](groups.md#what-a-group-hands-back) |
 
 ## A continuation of a child
 
@@ -145,20 +199,20 @@ await tail.value; // tail is yours to observe.
 
 The parent waits for its children, not for what hangs off them. Once
 `ctx.run(child)` has returned and the body ends, the parent finishes `Done`
-while a slow continuation is still running. The parent's cancellation reaches
-the continuation only while it still waits for its source: cancelling the
-parent cancels the child, and the child's cancellation travels forward to the
-continuation as `ChainCancelReason`. Once the source has finished and the
-continuation runs, nothing the parent does reaches it; only the continuation's
-own handle stops it, `tail.cancel()`, or
-`ctx.onCancel(() => tail.cancel().ignore())` in a parent body that is still
-running.
+while a slow continuation is still running. What stops `tail` depends on
+whether it still waits for the child:
+
+| What | While `tail` waits for the child | While `tail` runs |
+| --- | --- | --- |
+| Cancelling the parent | Stops it: the parent cancels the child, and the child's cancellation travels forward as `ChainCancelReason` | Does not reach it |
+| `tail.cancel()` | Stops it | Stops it |
+| `ctx.onCancel(() => tail.cancel().ignore())` in a parent body that still runs | Stops it | Stops it |
 
 The other way round, the continuation does reach its source while the source
 runs. `tail.cancel()` while the child still loads travels back along the chain,
-as the opening of this page describes, and asks the child to cancel.
-`ctx.run(child)` throws the child's cancellation into the parent's body, and
-the parent ends `Cancelled` too, with `HandlerCancelReason`:
+as [Cancelling a chain](#cancelling-a-chain) describes, and asks the child to
+cancel. `ctx.run(child)` throws the child's cancellation into the parent's
+body, and the parent ends `Cancelled` too, with `HandlerCancelReason`:
 
 ```text
 parent: Cancelled(handler: Job(): Cancelled(chain)), child: Cancelled(chain)
@@ -216,3 +270,23 @@ starts once the first has returned its value, the parent waits for both, and
 its cancellation reaches whichever of them is running. A chain is for the
 opposite case, a step that outlives the operation or runs outside it:
 [A continuation of a child](#a-continuation-of-a-child).
+
+## A source that waits for its continuation
+
+A continuation starts once its source has finished, cleanup included, so a
+source that waits for its own continuation waits forever:
+
+```dart
+late final Job<int> parsed;
+final loaded = Job<String>((ctx) async {
+  final text = await ctx.join(loadText);
+  await parsed.value;
+  return text;
+});
+parsed = loaded.then<int>((ctx, text) => int.parse(text));
+```
+
+`parsed` starts once `loaded` has finished, and `loaded` is waiting for
+`parsed`. Neither ends, and `loaded.cancel()` does not return either.
+`parsed.done` in place of `parsed.value` changes nothing, and neither does
+moving the await into the cleanup of `loaded`.

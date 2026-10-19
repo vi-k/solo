@@ -9,6 +9,7 @@ import 'dart:async';
 import 'package:async_job/async_job.dart';
 
 import 'children_stubs.dart';
+import 'delay.dart';
 
 Job<void> overview() {
   final job = Job<void>((ctx) async {
@@ -227,6 +228,34 @@ Future<void> chain() async {
       ));
 
   await saved.value;
+}
+
+/// Chains: the chain of [chain], cancelled at its last link while the text
+/// loads.
+Future<void> cancelledChain() async {
+  final loaded = Job<String>((ctx) => ctx.join(loadText));
+  final parsed = loaded.then<int>((ctx, text) => int.parse(text));
+  final saved = parsed.then<void>((ctx, number) => ctx.join(
+        () => saveNumber(number),
+        // ignore: require_trailing_commas
+      ));
+  await delay(10);
+
+  // The user left the screen while the text was loading.
+  await saved.cancel();
+  print('loaded: ${loaded.outcome}');
+  print('parsed: ${parsed.outcome}');
+  print('saved: ${saved.outcome}');
+}
+
+/// Chains, the first attempt: the continuation does not wait for a job.
+Job<void> storeParsedWithoutWaiting(Job<int> parsed) {
+  // ignore: void_checks
+  final stored = parsed.then<void>((ctx, number) {
+    final saving = Job<void>((ctx) => ctx.join(() => saveNumber(number)));
+    return saving;
+  });
+  return stored;
 }
 
 /// Chains: the continuation that waits for a job, by running it as a child.
