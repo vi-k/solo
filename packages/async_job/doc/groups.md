@@ -435,7 +435,6 @@ Three things one might expect do not happen:
 | The children of the branch that failed are cancelled | They play out. A failure never passes down to children, and the group waits for them as for everything else |
 | A branch whose body returned a value has its outcome | Its `outcome` is `null` and its `isCancelled` is `false` until the group decides. It can still end `Cancelled`: when another branch ends without a value, the group cancels it with `SiblingCancelReason`, and `isCancelled` becomes `true` |
 
-
 Once the group has handed the list over, the decision is final. Every branch
 ends `Done` with the value it gave. A cancellation that reaches a branch while
 it is still unwinding is turned away, the parent's cascade included.

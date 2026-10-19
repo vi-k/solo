@@ -51,7 +51,6 @@ came from in `cause`:
 | `parsed` | `loaded` | `saved` |
 | `saved` | `loaded` and `parsed` | none |
 
-
 A link that refuses stops the cancellation there: cancel a `loaded` made with
 `cancellable: false`, and `parsed` and `saved` go on. Finished links keep their
 outcomes. If several continuations hang off one job, cancelling one of them can
