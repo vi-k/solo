@@ -1208,13 +1208,11 @@ void main() {
   });
 
   group('The page', () {
-    test('both sections open with a first attempt, as the introduction says',
-        () {
+    test('both sections open with a first attempt', () {
       expect(
         RegExp(r'^### The first attempt$', multiLine: true).allMatches(_page()),
         hasLength(2),
       );
-      _says('Both sections below open with the version');
     });
 
     test('has no fence the checks do not read', () {

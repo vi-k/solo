@@ -188,46 +188,6 @@ The guides below explain results, queue policies and cancellation in more
 detail. In particular, cancellation of a job does not automatically stop an API
 request that has already been sent.
 
-## Why `currentState` and not `state`
-
-Say the name is fetched for the user of the session. The session is another
-controller, and `ProfileController` keeps it in the field `session`. The
-profile API now takes the user: `fetchName(user)`. A method that reloads a
-loaded profile:
-
-```dart
-Job<String> reload() => run<Loaded, String>(
-      (ctx) async {
-        // Another controller's snapshot: a plain read, and the name says
-        // as much.
-        final user = session.currentState.user;
-        final name = await ctx.abandonable(() => api.fetchName(user));
-        // This job's own state: a checkpoint that throws `Cancelled` if
-        // the job has been cancelled or the state is no longer `Loaded`.
-        if (ctx.state.name != name) {
-          ctx.emit(Loaded(name));
-        }
-        return name;
-      },
-    );
-```
-
-A job body is a closure inside a method of the controller, so every member of
-the controller is in scope there. `ctx.state` is a checkpoint. Before it reads,
-it checks that the job has not been cancelled and that its rules still hold:
-the working type, here `Loaded`, and the `keepWhile` rule of a job that has
-one, like `play` below. A plain read named `state` would look exactly like
-`ctx.state`, and a body that typed it out of habit would read past a
-cancellation it was supposed to honour: no `Cancelled`, no check of the rules,
-and the whole of `S` instead of `W`, with no `name` to read. So the
-controller's own read is named `currentState`: a bare `state` in a body does
-not compile, and nobody types `currentState` by habit where a checkpoint is
-meant.
-
-Outside a job `currentState` is the read to use. Inside one it stays right for
-a different controller: `session.currentState` above is somebody else's
-snapshot, and this job's rules have nothing to say about it.
-
 ## The dozen calls
 
 Everything reached for day to day, in one controller. `PlayerState` with its
@@ -330,6 +290,46 @@ nothing here can answer for a volume the device refuses. Its failure goes on to
 the zone, as [Quick start](#quick-start) says, and ends this plain Dart
 program. A caller that can answer for it reads the job's `done`, as the call
 site does for `play`.
+
+## Why `currentState` and not `state`
+
+Say the name in [Quick start](#quick-start) is fetched for the user of the
+session. The session is another controller, and `ProfileController` keeps it in
+the field `session`. The profile API now takes the user: `fetchName(user)`. A
+method that reloads a loaded profile:
+
+```dart
+Job<String> reload() => run<Loaded, String>(
+      (ctx) async {
+        // Another controller's snapshot: a plain read, and the name says
+        // as much.
+        final user = session.currentState.user;
+        final name = await ctx.abandonable(() => api.fetchName(user));
+        // This job's own state: a checkpoint that throws `Cancelled` if
+        // the job has been cancelled or the state is no longer `Loaded`.
+        if (ctx.state.name != name) {
+          ctx.emit(Loaded(name));
+        }
+        return name;
+      },
+    );
+```
+
+A job body is a closure inside a method of the controller, so every member of
+the controller is in scope there. `ctx.state` is a checkpoint. Before it reads,
+it checks that the job has not been cancelled and that its rules still hold:
+the working type, here `Loaded`, and the `keepWhile` rule of a job that has
+one, like `play` above. A plain read named `state` would look exactly like
+`ctx.state`, and a body that typed it out of habit would read past a
+cancellation it was supposed to honour: no `Cancelled`, no check of the rules,
+and the whole of `S` instead of `W`, with no `name` to read. So the
+controller's own read is named `currentState`: a bare `state` in a body does
+not compile, and nobody types `currentState` by habit where a checkpoint is
+meant.
+
+Outside a job `currentState` is the read to use. Inside one it stays right for
+a different controller: `session.currentState` above is somebody else's
+snapshot, and this job's rules have nothing to say about it.
 
 ## Guides
 

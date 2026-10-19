@@ -2675,11 +2675,6 @@ void main() {
     });
 
     test('the section on the shot opens with the answer', () {
-      _says(
-        _part(_intro),
-        'The section on commands that arrive during a shot has nothing to '
-        'trip over and opens with the answer.',
-      );
       final section = _part(_shot);
 
       expect(
@@ -2690,12 +2685,6 @@ void main() {
     });
 
     test('a second attempt follows a first one, and an answer follows it', () {
-      _says(
-        _part(_intro),
-        'Where the version that repairs it still falls short, it stands as '
-        'a second attempt. The version the example uses follows under its '
-        'own heading.',
-      );
       final headings = [
         for (final part in _parts()) part.split('\n').first,
       ];

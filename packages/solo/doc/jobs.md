@@ -2,11 +2,7 @@
 
 A method of a controller queues a job and returns its handle. This page covers
 the handle, the queue and the policies that decide what a second call does to
-the first. Two sections below open with the version this API's own vocabulary
-leads to — the key the other methods have, the call a method normally makes —
-and say what it does instead of what it was meant to do. Where the next version
-repairs that and brings a fault of its own, it stands as a second attempt. The
-version that works follows under its own heading.
+the first.
 
 ## Jobs and results
 

@@ -60,13 +60,9 @@ above follows the progress of the upload. [Streams](streams.md) is about such
 children in a controller: what a subscription made by hand in a body does, how
 long the child holds the queue, and how to follow another controller.
 
-One section below opens with the version the names of this API lead to — the
-`then` that reads like "and then" — and says what that version does instead of
-what it was meant to do. The next version repairs that and brings a fault of
-its own, so it stands as a second attempt. The version that works follows under
-its own heading. `api` and `analytics` belong to the application these examples
-come from, and `Ready` is the state its controller works in, with the fields
-`sent`, `path` and `paused`.
+`api` and `analytics` belong to the application these examples come from, and
+`Ready` is the state its controller works in, with the fields `sent`, `path`
+and `paused`.
 
 ## The future of `ctx.run`
 

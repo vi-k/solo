@@ -2645,16 +2645,11 @@ void main() {
   });
 
   group('The page', () {
-    test('four sections open with a first attempt, as the introduction says',
-        () {
+    test('four sections open with a first attempt', () {
       final attempts = RegExp(r'^#{3,4} The first attempt$', multiLine: true)
           .allMatches(_page())
           .length;
       expect(attempts, 4);
-      expect(
-        _page(),
-        contains(RegExp(r'Four sections below\s+open with the version')),
-      );
     });
 
     test('has no fence the checks do not read', () {

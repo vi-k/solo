@@ -337,7 +337,8 @@ void main() {
     test('every fence is dart or text, and twelve of them are quotes', () {
       expect(strayFences(_doc), isEmpty);
       expect(_quotes(), hasLength(12));
-      _says('Under each version is what the scenario above it leads to');
+      _says('Under each version of a controller is what the scenario above it '
+          'leads to');
     });
 
     test('a first attempt opens every recipe, the accumulator closes it', () {

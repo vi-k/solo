@@ -1573,16 +1573,11 @@ void main() {
   });
 
   group('The page', () {
-    test('two sections open with a first attempt, as the introduction says',
-        () {
+    test('two sections open with a first attempt', () {
       final attempts = RegExp(r'^#### The first attempt$', multiLine: true)
           .allMatches(_page())
           .length;
       expect(attempts, 2);
-      expect(
-        _page(),
-        contains('Two sections below open with the version'),
-      );
     });
 
     test('one of them goes on to a second attempt', () {

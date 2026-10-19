@@ -28,12 +28,6 @@ and a job created with `cancellable: false` refuses it. The other kind comes
 from the job's own state rules, and neither a section nor `cancellable: false`
 stops it. Both are taken apart below.
 
-Four sections below open with the version this vocabulary leads to — the method
-whose name sounds like the requirement, or a plain `await` — and say what it
-does instead of what it was meant to do. Where the next version repairs that
-and brings a fault of its own, it stands as a second attempt. The version that
-works follows under its own heading.
-
 ## Stopping the underlying operation
 
 A player seeks while the user drags the slider, and every new position replaces

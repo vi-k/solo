@@ -36,14 +36,9 @@ member you pick decides who releases the resource and when:
 | `ctx.onDiscard(callback)` | whatever the callback closes, and only if the job ends cancelled or failed |
 | `ctx.disown(value)` | nothing — it drops the registration one of those three calls made for the value |
 
-Four sections below open with the version habit or this vocabulary leads to —
-the registration on the line after the call, or the member whose name matches
-the requirement — and say what that version does instead of what it was meant
-to do. Where the next version repairs that and brings a fault of its own, it
-stands as a second attempt. The version that works follows under its own
-heading. `Database`, `device`, `openTemp` and `archive` belong to the
-application these examples come from, and `Idle`, `Loaded(rows)` and
-`Ready(db)` are the states of its controller.
+`Database`, `device`, `openTemp` and `archive` belong to the application these
+examples come from, and `Idle`, `Loaded(rows)` and `Ready(db)` are the states
+of its controller.
 
 ## Taking a resource from a call
 

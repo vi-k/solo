@@ -4704,13 +4704,11 @@ void main() {
   });
 
   group('The page', () {
-    test('six sections open with a first attempt, as the introduction says',
-        () {
+    test('six sections open with a first attempt', () {
       expect(
         RegExp(r'^### The first attempt$', multiLine: true).allMatches(_page()),
         hasLength(6),
       );
-      _says('Six sections below open with the version');
     });
 
     test('has no fence the checks do not read', () {

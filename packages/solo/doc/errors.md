@@ -6,12 +6,6 @@ State handlers and reporting hooks have different responsibilities.
 reporting, including errors from cleanup and abandoned operations, and
 `onUnanswered` answers for the ones no outcome carries.
 
-Six sections below open with the version habit or the vocabulary of this API
-leads to — a broad `catch`, a `Future.delayed` between attempts, a `throw` for
-a refusal, the member named for the question you are asking — and say what that
-version does instead of what it was meant to do. The version that works follows
-under its own heading.
-
 ## Reporting an error
 
 A controller can override `onStart`, `onFinish`, `onError`, `onUnanswered`,

@@ -3110,13 +3110,11 @@ void main() {
   });
 
   group('The page', () {
-    test('four sections open with a first attempt, as the introduction says',
-        () {
+    test('four sections open with a first attempt', () {
       expect(
         RegExp(r'^### The first attempt$', multiLine: true).allMatches(_page()),
         hasLength(4),
       );
-      expect(_prose(), contains('Four sections below open with the version'));
     });
 
     test('one subsection opens with a first attempt of its own', () {

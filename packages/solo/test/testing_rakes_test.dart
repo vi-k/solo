@@ -1696,7 +1696,6 @@ final name = await ctx.abandonable(
         RegExp(r'^### The first attempt$', multiLine: true).allMatches(_page()),
         hasLength(8),
       );
-      _says('Every section below opens with the version');
     });
 
     test('every section states what the test is after before its attempt', () {

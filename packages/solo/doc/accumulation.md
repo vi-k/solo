@@ -20,11 +20,8 @@ Four controllers, each with more events arriving than there is work worth
 doing. What differs is what survives: the last value, a merge of all of them,
 or every event in a list.
 
-Each recipe opens with the version the controller's own vocabulary leads to —
-what you write when you reach for `run` and stop there. Where the obvious fix
-is worth seeing on its own, a second attempt follows it. Under each version is
-what the scenario above it leads to: what reaches the server or the device, and
-what the controller's state ends up as.
+Under each version of a controller is what the scenario above it leads to: what
+reaches the server or the device, and what the controller's state ends up as.
 
 ### A search that fires on every keystroke
 

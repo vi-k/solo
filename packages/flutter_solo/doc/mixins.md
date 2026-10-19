@@ -12,13 +12,7 @@ stream, and a base class of controllers in a package without Flutter, where
 `SoloListenable` cannot go.
 
 The lines under a block of code are what a run of it shows: the text on the
-screen after each step, or where a listener's failure was reported. Two
-sections open with the version the vocabulary of the framework and of the
-engine leads to — a widget that takes a stream, a hook named after the failure
-it reports — and show what that code does. Where the version that repairs it
-still falls short, it stands as a second attempt, and the version to use
-follows under its own heading. The section on both deliveries has nothing to
-trip over and opens with the answer.
+screen after each step, or where a listener's failure was reported.
 
 ## A controller with both deliveries
 

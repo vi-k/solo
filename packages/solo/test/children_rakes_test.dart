@@ -2022,13 +2022,11 @@ final class Probe extends Solo<int> {
   });
 
   group('The page', () {
-    test('one section opens with a first attempt, as the introduction says',
-        () {
+    test('one section opens with a first attempt', () {
       expect(
         RegExp(r'^### The first attempt$', multiLine: true).allMatches(_page()),
         hasLength(1),
       );
-      _says('One section below opens with the version');
     });
 
     test('it goes on to a second attempt', () {

@@ -8,12 +8,8 @@ subscription. This page is about what a controller adds to such a child: the
 queue it holds, `close()`, the start rules, and the stream of another
 controller.
 
-Both sections below open with the version habit or the names of this API lead
-to — the `listen` every Dart program already has, the stream that is there to
-be followed — and say what that version does instead of what it was meant to
-do. The version that works follows under its own heading. `hw` belongs to the
-application these examples come from, and `Ready` is the state its controller
-works in, with the field `position`.
+`hw` belongs to the application these examples come from, and `Ready` is the
+state its controller works in, with the field `position`.
 
 ## Processing a stream
 
