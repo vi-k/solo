@@ -148,11 +148,13 @@ void main() {
       [
         'Bad state: onStart',
         'Bad state: onError',
+        'Bad state: disposer',
         'Bad state: onUnanswered',
         'Bad state: onFinish',
       ],
       reason: 'the disposer failed, both hooks failed on hearing it, and '
-          'each went to the zone on its own',
+          'each went to the zone on its own; the answer that threw did not '
+          'take the failure of the disposer with it',
     );
   });
 

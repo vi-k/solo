@@ -51,14 +51,29 @@ class Base {}
 final class Mixed extends Base with JobObserver {}
 
 final class ThrowingAnswer extends JobObserver with JobAnswerer {
+  /// What [onUnanswered] throws.
+  final Object thrown;
+
   final finished = <String>[];
+
+  ThrowingAnswer([Object? thrown])
+      : thrown = thrown ?? StateError('onUnanswered');
 
   @override
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
-      throw StateError('onUnanswered');
+      // The fake throws whatever the test handed it.
+      // ignore: only_throw_errors
+      throw thrown;
 
   @override
   void onFinish(Job<Object?> job) => finished.add('$job');
+}
+
+/// Throws back the error it was asked about.
+final class Rethrowing extends JobObserver with JobAnswerer {
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      Error.throwWithStackTrace(error, stackTrace);
 }
 
 final class ThrowingNotice extends JobObserver with JobAnswerer {
@@ -1530,7 +1545,12 @@ void main() {
       }).ignoreFailure();
       async.flushTimers();
     });
-    expect(zone, ['Bad state: onUnanswered', 'Bad state: onUnanswered']);
+    expect(zone, [
+      'Bad state: a',
+      'Bad state: onUnanswered',
+      'Bad state: b',
+      'Bad state: onUnanswered',
+    ]);
   });
 
   test('nobody is asked about a cancellation', () {
@@ -1594,8 +1614,76 @@ void main() {
       async.flushTimers();
     });
     expect(job.outcome, isA<Done<void>>());
-    expect(zone, ['Bad state: onUnanswered']);
+    expect(zone, ['Bad state: cleanup', 'Bad state: onUnanswered']);
     expect(observer.finished, ['Job(j)'], reason: 'the next hook still ran');
+  });
+
+  test(
+      'an onUnanswered that throws: the error to the zone of the job, its own '
+      'to the current one', () {
+    final created = <String>[];
+    final current = <String>[];
+    fakeAsync((async) {
+      late final Job<void> job;
+      runZonedGuarded(
+        () => job = Job<void>(observer: ThrowingAnswer(), (ctx) async {
+          ctx.onCancel(() => throw StateError('onCancel'));
+          await ctx.abandonable(() => delay(100));
+        }),
+        (error, stackTrace) => created.add('$error'),
+      );
+      async.elapse(const Duration(milliseconds: 10));
+      runZonedGuarded(
+        () => unawaited(job.cancel()),
+        (error, stackTrace) => current.add('$error'),
+      );
+      async.flushTimers();
+    });
+    expect(created, ['Bad state: onCancel']);
+    expect(current, ['Bad state: onUnanswered']);
+  });
+
+  test('an onUnanswered that throws the error back hands it to the zone once',
+      () {
+    final zone = zoneOf((async) {
+      Job<void>(observer: Rethrowing(), (ctx) async {
+        ctx.onDispose(() => throw StateError('cleanup'));
+      });
+      async.flushTimers();
+    });
+    expect(zone, ['Bad state: cleanup']);
+  });
+
+  test('an onUnanswered that throws only cancellations leaves the error alone',
+      () {
+    final zone = zoneOf((async) {
+      Job<void>(
+        observer: ThrowingAnswer(
+          ParallelWaitError<List<Object?>, List<AsyncError?>>(
+            [null, null],
+            [
+              AsyncError(const Cancelled('a'), StackTrace.empty),
+              AsyncError(const Cancelled('b'), StackTrace.empty),
+            ],
+          ),
+        ),
+        (ctx) async {
+          ctx.onDispose(() => throw StateError('cleanup'));
+        },
+      );
+      async.flushTimers();
+    });
+    expect(zone, ['Bad state: cleanup']);
+  });
+
+  test('an onUnanswered that throws a cancellation leaves the error alone', () {
+    final zone = zoneOf((async) {
+      Job<void>(observer: ThrowingAnswer(const Cancelled('hook')), (ctx) async {
+        ctx.onDispose(() => throw StateError('cleanup'));
+      });
+      async.flushTimers();
+    });
+    expect(zone, ['Bad state: cleanup']);
   });
 
   test('an onError that throws does not cost the error its answer', () {

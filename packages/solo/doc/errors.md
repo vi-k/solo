@@ -89,6 +89,13 @@ controller decides for its own jobs whether the application-wide handler hears
 them at all. An override keeps that route as well by calling
 `super.onUnanswered(job, error, stackTrace)`.
 
+If a handler or an override throws, say because the reporter is down, the error
+it was asked about is not lost. The error goes to the zone the job was created
+in, and then what the hook threw goes to the current zone; a `Cancelled` it
+throws stays out, and so does the error itself thrown back, so the error goes
+there once. A hook that reported the error before it threw has it reported
+twice.
+
 `onUnanswered` and `Solo.unansweredHandler` get one failure at a time. When the
 error is a `ParallelWaitError` that `[a, b].wait` throws with several errors in
 it, each failure comes in a call of its own, with its own stack trace. An

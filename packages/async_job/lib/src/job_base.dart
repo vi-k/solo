@@ -524,14 +524,20 @@ abstract class JobBase<T> implements Job<T> {
     try {
       hook();
     } on Object catch (error, stackTrace) {
-      // The same rule as `_toZone`: a cancellation is a decision, not a
-      // failure. A lazy message whose closure asks a job that has accepted
-      // one throws it from `onLog`, and the zone can do nothing with it.
-      if (_isCancellation(error)) {
-        return;
-      }
-      Zone.current.handleUncaughtError(error, stackTrace);
+      _hookErrorToZone(error, stackTrace);
     }
+  }
+
+  /// Hands what a hook threw to the current zone.
+  ///
+  /// The same rule as `_toZone`: a cancellation is a decision, not a
+  /// failure. A lazy message whose closure asks a job that has accepted one
+  /// throws it from `onLog`, and the zone can do nothing with it.
+  static void _hookErrorToZone(Object error, StackTrace stackTrace) {
+    if (_isCancellation(error)) {
+      return;
+    }
+    Zone.current.handleUncaughtError(error, stackTrace);
   }
 
   @override
@@ -1495,9 +1501,19 @@ abstract class JobBase<T> implements Job<T> {
           _debug(() => '$this error nobody answered for: $error');
         }
         if (observer is JobAnswerer) {
-          _notify(
-            () => observer.onUnanswered(this, failure, failureStackTrace),
-          );
+          try {
+            observer.onUnanswered(this, failure, failureStackTrace);
+          } on Object catch (hookError, hookStackTrace) {
+            // The answer is the channel here, not the fact, and a broken
+            // channel is a second problem rather than a reason to lose the
+            // first: nothing else holds this error. Both reach the zone,
+            // this one first; a cancellation the answer throws stays out,
+            // and so does the error itself thrown back, which is there once.
+            _toZone(failure, failureStackTrace);
+            if (!identical(hookError, failure)) {
+              _hookErrorToZone(hookError, hookStackTrace);
+            }
+          }
         } else {
           _toZone(failure, failureStackTrace);
         }

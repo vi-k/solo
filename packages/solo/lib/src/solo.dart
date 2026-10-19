@@ -32,12 +32,13 @@ part 'queue.dart';
 /// [onChange], [onClose] and the [observer]'s — are a cross-cutting channel, so
 /// an error thrown by one goes to the current zone and changes nothing else:
 /// the job's outcome, the queue and [close] carry on as if the hook had
-/// returned. [onUnanswered] is the one with a body of its own: what reaches it
-/// and has nowhere else to go — a disposer, an `onCancel` callback, a late
+/// returned. [onUnanswered] is the one with a body of its own: what reaches
+/// it and has nowhere else to go — a disposer, an `onCancel` callback, a late
 /// failure of an abandoned call or of work handed to `JobContext.unattended`,
 /// the failure of the body of a job that ends [Cancelled], a rule that threw —
-/// goes on to [unansweredHandler], or to the zone when none is set. [publish]
-/// is not one of them: it is how a subclass delivers the state, and an error
+/// goes on to [unansweredHandler], or to the zone when none is set. If it
+/// throws, the error it was asked about goes to the zone first. [publish] is
+/// not one of them: it is how a subclass delivers the state, and an error
 /// there is the subclass's own business.
 abstract class Solo<S extends Object> {
   /// A global observer for all controllers; `null` by default.
@@ -59,7 +60,10 @@ abstract class Solo<S extends Object> {
   /// One global handler, set once at startup, the way [observer] is. It is
   /// separate from the observer on purpose: answering for an error is a
   /// responsibility somebody takes, not a side effect of switching a log
-  /// on. An error it throws itself goes to the zone.
+  /// on. A handler that throws does not take the error with it: the error
+  /// goes to the zone the job was created in, and then what the handler
+  /// threw goes to the current zone. A [Cancelled] it throws stays out, and
+  /// so does the error itself thrown back: the error goes there alone.
   ///
   /// ```dart
   /// Solo.unansweredHandler = (solo, job, error, stackTrace) =>
@@ -1031,15 +1035,17 @@ abstract class Solo<S extends Object> {
   /// its jobs failed at reports to its own system and stops there. An
   /// override that says nothing keeps these errors out of the handler and
   /// out of the zone; call `super.onUnanswered(job, error, stackTrace)` to
-  /// keep the default route as well.
+  /// keep the default route as well. An override that throws does not take
+  /// the error with it, as a [unansweredHandler] that throws does not; one
+  /// that reported the error before it threw has it reported twice.
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
     final handler = unansweredHandler;
     if (handler == null) {
       // Every job that reaches this hook is one of this controller's.
       (job as _SoloJob)._reportToZone(error, stackTrace);
     } else {
-      // Already inside `_callHook`, so a handler that throws reaches the
-      // zone without a wrapper of its own.
+      // A handler that throws is caught by the core, which sends the error
+      // to the zone and then what the handler threw.
       handler(this, job, error, stackTrace);
     }
   }
@@ -1405,10 +1411,13 @@ final class _SoloJobObserver<S extends Object>
   /// The controller answers for its jobs: [Solo.onUnanswered], and the
   /// [Solo.unansweredHandler] behind it. [Solo.observer] is not asked —
   /// watching every controller is not answering for any of them.
+  ///
+  /// Not called through [Solo._callHook]: what the answer throws goes back
+  /// to the core, which sends the error it was asked about to the zone
+  /// first and then what it threw, as `onListenerError` does here.
   @override
-  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
-    Solo._callHook(() => _solo.onUnanswered(job, error, stackTrace));
-  }
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      _solo.onUnanswered(job, error, stackTrace);
 
   @override
   void onLog(Job<Object?> job, Object? message) {

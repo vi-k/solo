@@ -452,7 +452,8 @@ void main() {
     expect(calls, ['failure @a']);
   });
 
-  test('a Cancelled thrown inside onUnanswered goes nowhere', () async {
+  test('a Cancelled thrown inside onUnanswered stays out of the zone',
+      () async {
     final calls = <String>[];
     final zone = <Object>[];
     final done = Completer<void>();
@@ -480,7 +481,9 @@ void main() {
     // The job asks about each failure in a call of its own, so the second
     // answer is not lost with the first.
     expect(calls, ['failure @a', 'failure @b']);
-    expect(zone, isEmpty);
+    // An answer that throws does not take the failure with it, and the
+    // cancellation it threw is a decision, not a failure.
+    expect(zone, [failure, failure]);
   });
 }
 

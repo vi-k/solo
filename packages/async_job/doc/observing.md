@@ -78,7 +78,9 @@ If a hook throws, its error goes to the current zone, and nothing else changes:
 the job ends as it would have, and the other hooks are still called. A
 `Cancelled` thrown by a hook does not reach the zone and does not cancel the
 job. To cancel the job from a hook, call `job.cancel()`; the job is cancelled
-as it would be from anywhere else.
+as it would be from anywhere else. One hook adds a step: an `onUnanswered` that
+throws first hands the zone the error it was asked to answer for, as
+[Answering for errors](#answering-for-errors) shows.
 
 ### A job's name
 
@@ -350,8 +352,8 @@ hears it, and then it goes on to the answer.
 An error can reach both `onError` and the zone, and an app that reports in both
 places hears it twice. The table shows two ways to the zone. The first: nobody
 observed the outcome. The second: nobody answers for the error, or
-`onUnanswered` sends it on. Observing the outcome closes the first way. An
-observer that answers (`with JobAnswerer`) closes the second.
+`onUnanswered` sends it on or throws. Observing the outcome closes the first
+way. An observer that answers (`with JobAnswerer`) closes the second.
 
 Two kinds of body failure are not carried by the outcome, and they go to
 `onUnanswered` or the zone even when the outcome is observed. In the first, the
@@ -531,6 +533,13 @@ that inherit it, at any depth. To answer for every job at once, the app uses
 its zone, where it already reports what nobody caught: the default
 implementation brings these errors there. The zone gets the error and its stack
 trace but not the job, so a report that names the job needs an override.
+
+An override that throws does not take the error with it. The error goes to the
+zone the job was created in, and then what the override threw goes to the
+current zone, as from any hook; a `Cancelled` it throws stays out, and so does
+the error itself thrown back, so the error goes there once. An override that
+reported the error before it threw has it reported twice: to its own system and
+to the zone.
 
 ### Several failures in one error
 

@@ -6,7 +6,9 @@ part of 'job_base.dart';
 /// that throws hands its error to the current zone and changes nothing
 /// else: not the job's outcome, not the hook standing next to it. A
 /// [Cancelled] a hook throws neither reaches the zone nor cancels the job: a
-/// hook that has to calls [Job.cancel].
+/// hook that has to calls [Job.cancel]. A [JobAnswerer.onUnanswered] that
+/// throws does not take the error it was asked about with it: that error
+/// goes to the zone first.
 ///
 /// An observer watches: [onError] is told about the errors the job catches,
 /// all but its own cancellation, and answers for none. The errors no outcome
@@ -193,6 +195,13 @@ mixin JobAnswerer on JobObserver {
   /// its own system and stops there. An override that says nothing keeps
   /// these errors out of the zone. Call
   /// `super.onUnanswered(job, error, stackTrace)` to keep the zone as well.
+  ///
+  /// **An override that throws** does not take the error with it: the error
+  /// goes to the zone the job was created in, and then what the override
+  /// threw goes to the current zone, as from any hook. A [Cancelled] it
+  /// throws stays out of the zone, and so does the error itself thrown back:
+  /// the error goes there alone. An override that answered before it threw
+  /// has the error answered twice.
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) {
     if (job is JobBase<Object?> && (JobBase._builtOnCore[job] ?? false)) {
       job._toZone(error, stackTrace);

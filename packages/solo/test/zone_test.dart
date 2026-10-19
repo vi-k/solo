@@ -106,7 +106,7 @@ void main() {
     expect(caught, isEmpty, reason: 'the handler answered for it');
   });
 
-  test('an error handler that throws reaches the zone', () {
+  test('an error handler that throws reaches the zone after the error', () {
     final caught = <String>[];
     Solo.unansweredHandler =
         (solo, job, error, stackTrace) => throw StateError('handler boom');
@@ -128,7 +128,115 @@ void main() {
     } finally {
       Solo.unansweredHandler = null;
     }
-    expect(caught, ['Bad state: handler boom']);
+    expect(
+      caught,
+      ['Bad state: abandoned boom', 'Bad state: handler boom'],
+      reason: 'a broken channel does not take the error it was handed',
+    );
+  });
+
+  test('a handler that throws a cancellation leaves the error alone', () {
+    final caught = <String>[];
+    Solo.unansweredHandler =
+        (solo, job, error, stackTrace) => throw const Cancelled('handler');
+    try {
+      fakeAsync((async) {
+        final solo = TestSolo();
+        _inZone(caught, () {
+          solo.run<TestState, void>(key: 'j', (ctx) async {
+            ctx.unattended(() async {
+              await Future<void>.delayed(const Duration(milliseconds: 10));
+              throw StateError('abandoned boom');
+            });
+          });
+        });
+        async.flushTimers();
+        solo.close();
+        async.flushTimers();
+      });
+    } finally {
+      Solo.unansweredHandler = null;
+    }
+    expect(caught, ['Bad state: abandoned boom']);
+  });
+
+  test(
+      'a handler that throws: the error to the zone of the job, its own to '
+      'the current one', () {
+    final created = <String>[];
+    final current = <String>[];
+    Solo.unansweredHandler =
+        (solo, job, error, stackTrace) => throw StateError('handler boom');
+    try {
+      fakeAsync((async) {
+        final solo = TestSolo();
+        late final Job<void> job;
+        _inZone(created, () {
+          job = solo.run<TestState, void>(key: 'j', (ctx) async {
+            ctx.onCancel(() => throw StateError('onCancel'));
+            await ctx.abandonable(
+              () => Future<void>.delayed(const Duration(milliseconds: 100)),
+            );
+          });
+        });
+        async.elapse(const Duration(milliseconds: 10));
+        _inZone(current, () => unawaited(job.cancel()));
+        async.flushTimers();
+        solo.close();
+        async.flushTimers();
+      });
+    } finally {
+      Solo.unansweredHandler = null;
+    }
+    expect(created, ['Bad state: onCancel']);
+    expect(current, ['Bad state: handler boom']);
+  });
+
+  test('a handler that throws the error back hands it to the zone once', () {
+    expect(
+      _answeredBy(
+        (solo, job, error, stackTrace) =>
+            Error.throwWithStackTrace(error, stackTrace),
+      ),
+      ['Bad state: abandoned boom'],
+    );
+  });
+
+  test('a handler that throws only cancellations leaves the error alone', () {
+    expect(
+      _answeredBy(
+        (solo, job, error, stackTrace) =>
+            throw ParallelWaitError<List<Object?>, List<AsyncError?>>(
+          [null, null],
+          [
+            AsyncError(const Cancelled('a'), StackTrace.empty),
+            AsyncError(const Cancelled('b'), StackTrace.empty),
+          ],
+        ),
+      ),
+      ['Bad state: abandoned boom'],
+    );
+  });
+
+  test(
+      'an override of onUnanswered that throws reaches the zone after the '
+      'error', () {
+    final caught = <String>[];
+    final solo = _Broken();
+    fakeAsync((async) {
+      _inZone(caught, () {
+        solo.run<TestState, void>(key: 'j', (ctx) async {
+          ctx.unattended(() async {
+            await Future<void>.delayed(const Duration(milliseconds: 10));
+            throw StateError('abandoned boom');
+          });
+        });
+      });
+      async.flushTimers();
+      solo.close();
+      async.flushTimers();
+    });
+    expect(caught, ['Bad state: abandoned boom', 'Bad state: override boom']);
   });
 
   test('an override of onUnanswered keeps the error out of the zone', () {
@@ -832,6 +940,41 @@ final class _Quiet extends Solo<TestState> with OpenSolo<TestState> {
   @override
   void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
       errors.add('$error');
+}
+
+/// What reaches the zone when [handler] answers for a failure of work
+/// handed to `ctx.unattended`.
+List<String> _answeredBy(SoloUnansweredHandler handler) {
+  final caught = <String>[];
+  Solo.unansweredHandler = handler;
+  try {
+    fakeAsync((async) {
+      final solo = TestSolo();
+      _inZone(caught, () {
+        solo.run<TestState, void>(key: 'j', (ctx) async {
+          ctx.unattended(() async {
+            await Future<void>.delayed(const Duration(milliseconds: 10));
+            throw StateError('abandoned boom');
+          });
+        });
+      });
+      async.flushTimers();
+      solo.close();
+      async.flushTimers();
+    });
+  } finally {
+    Solo.unansweredHandler = null;
+  }
+  return caught;
+}
+
+/// Answers by throwing, the way a reporter that is down does.
+final class _Broken extends Solo<TestState> with OpenSolo<TestState> {
+  _Broken() : super(const Initial());
+
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      throw StateError('override boom');
 }
 
 /// Notes every error and answers for none: the route stands as it is.
