@@ -10,19 +10,18 @@ import 'package:test/test.dart';
 
 import 'support/children_page.dart' as page;
 import 'support/children_stubs.dart' as stubs;
-import 'support/compile_errors.dart';
 import 'support/delay.dart';
+import 'support/groups_first_attempts.dart' as attempts;
 import 'support/page_code.dart';
 
-/// The first attempts of `doc/groups.md` and `doc/chains.md`, and what each
-/// one costs; `children_page_test.dart` checks `doc/children.md`.
+/// The first attempts of `doc/groups.md`, and what each one costs.
 ///
-/// Three sections of the pages open with the version the vocabulary of the
-/// API leads to and say what that version does instead of what it was
-/// meant to do. Nothing else guards those statements: the pages have no
-/// bench, so an outcome or an order quoted there rots silently. Every
-/// claim the pages make about a first attempt is pinned here, next to the
-/// version they then show.
+/// The sections of the page open with the version the vocabulary of the API
+/// leads to and say what that version does instead of what it was meant to
+/// do. Nothing else guards those statements: the page has no bench, so an
+/// outcome or an order quoted there rots silently. Every claim the page
+/// makes about a first attempt is pinned here, next to the version it then
+/// shows.
 
 /// A resource a branch opens, and a trace of who closed it.
 final class Source {
@@ -42,6 +41,13 @@ final class Listening extends JobObserver {
   void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
       heard.add('$job: $error');
 }
+
+/// The lines of every `text` block of the page, block by block.
+List<List<String>> quotedOutputs() => [
+      for (final block in RegExp(r'```text\n(.*?)\n```', dotAll: true)
+          .allMatches(File('doc/groups.md').readAsStringSync()))
+        block.group(1)!.split('\n'),
+    ];
 
 void main() {
   group('Waiting for several children', () {
@@ -384,387 +390,6 @@ void main() {
     });
   });
 
-  group('Chains', () {
-    test("two children in a row: the parent's cancellation reaches the second",
-        () {
-      fakeAsync((async) {
-        late ChildJob<void> second;
-        final parent = Job<void>((ctx) async {
-          final rows = await ctx.run(Job.deferred<int>((ctx) async => 21));
-          second = Job.deferred<void>(
-            (ctx) => ctx.join(() => delay(80 + rows)),
-          );
-          await ctx.run(second);
-        })
-          ..ignoreFailure();
-
-        async.elapse(const Duration(milliseconds: 10));
-        parent.cancel().ignore();
-        async.flushTimers();
-
-        expect(
-          (second.outcome! as Cancelled).reason,
-          isA<ParentCancelReason>(),
-        );
-      });
-    });
-
-    test(
-        "the parent's cancellation reaches a continuation still waiting "
-        'for its source', () {
-      fakeAsync((async) {
-        final head = Job.deferred<int>((ctx) async {
-          await ctx.abandonable(() => delay(50));
-          return 1;
-        });
-        final tail = head.then<void>((ctx, rows) async {})..ignoreFailure();
-        final parent = Job<void>((ctx) async {
-          await ctx.run(head);
-        })
-          ..ignoreFailure();
-
-        async.elapse(const Duration(milliseconds: 10));
-        parent.cancel().ignore();
-        async.flushTimers();
-
-        expect((tail.outcome! as Cancelled).reason, isA<ChainCancelReason>());
-      });
-    });
-
-    test(
-        "the parent's cancellation does not reach a continuation already "
-        'running', () {
-      fakeAsync((async) {
-        final head = Job.deferred<int>((ctx) async => 1);
-        final tail = head.then<void>((ctx, rows) async {
-          await ctx.abandonable(() => delay(80));
-        });
-        final parent = Job<void>((ctx) async {
-          await ctx.run(head);
-          await ctx.abandonable(() => delay(50));
-        })
-          ..ignoreFailure();
-
-        async.elapse(const Duration(milliseconds: 10));
-        expect(tail.isRunning, isTrue);
-        parent.cancel().ignore();
-        async.flushTimers();
-
-        expect(parent.outcome, isA<Cancelled>());
-        expect(tail.outcome, isA<Done<void>>());
-      });
-    });
-
-    test('cancelling a finished link leaves the running one alone', () {
-      fakeAsync((async) {
-        final loaded = Job<String>((ctx) async => '1');
-        final parsed = loaded.then<int>((ctx, text) async {
-          await ctx.abandonable(() => delay(50));
-          return int.parse(text);
-        });
-        final saved = parsed.then<int>((ctx, number) async {
-          await ctx.abandonable(() => delay(50));
-          return number;
-        });
-
-        async.elapse(const Duration(milliseconds: 10));
-        expect('${loaded.outcome}', 'Done(1)');
-        expect(parsed.isFinished, isFalse);
-        loaded.cancel().ignore();
-        async.flushMicrotasks();
-        expect(parsed.isCancelled, isFalse);
-        expect(saved.isCancelled, isFalse);
-
-        async.elapse(const Duration(milliseconds: 50));
-        expect('${parsed.outcome}', 'Done(1)');
-        expect(saved.isFinished, isFalse);
-        loaded.cancel().ignore();
-        parsed.cancel().ignore();
-        async.flushMicrotasks();
-        expect(saved.isCancelled, isFalse);
-
-        async.flushTimers();
-        expect('${saved.outcome}', 'Done(1)');
-      });
-    });
-
-    test('the parent ends Done while the continuation is still running', () {
-      fakeAsync((async) {
-        final trace = <String>[];
-        final head = Job.deferred<int>((ctx) async => 1);
-        final tail = head.then<void>((ctx, rows) async {
-          trace.add('the tail starts');
-          await ctx.abandonable(() => delay(80));
-          trace.add('the tail ends');
-        });
-        final parent = Job<void>((ctx) async {
-          await ctx.run(head);
-        })
-          ..ignoreFailure();
-
-        async.elapse(const Duration(milliseconds: 20));
-
-        // The parent waits for its children, not for what hangs off them.
-        expect(parent.outcome, isA<Done<void>>());
-        expect(trace, ['the tail starts']);
-
-        async.flushTimers();
-        expect(trace, ['the tail starts', 'the tail ends']);
-        expect(tail.outcome, isA<Done<void>>());
-      });
-    });
-
-    test(
-        'a parent still running stops a running continuation through '
-        'onCancel', () {
-      fakeAsync((async) {
-        final head = Job.deferred<int>((ctx) async => 1);
-        final tail = head.then<void>((ctx, rows) async {
-          await ctx.abandonable(() => delay(80));
-        })
-          ..ignoreFailure();
-        final parent = Job<void>((ctx) async {
-          ctx.onCancel(() => tail.cancel().ignore());
-          await ctx.run(head);
-          await ctx.abandonable(() => delay(50));
-        })
-          ..ignoreFailure();
-
-        async.elapse(const Duration(milliseconds: 10));
-        expect(tail.isRunning, isTrue);
-        parent.cancel().ignore();
-        async.flushTimers();
-
-        expect(tail.outcome, isA<Cancelled>());
-      });
-    });
-
-    test('a running job the callback returns is not waited for', () {
-      fakeAsync((async) {
-        final saving = Job<void>(
-          (ctx) => ctx.pause(const Duration(seconds: 1)),
-        );
-        final parsed = Job<int>((ctx) async => 21);
-        // The page says this compiles under `then<void>`.
-        final stored = parsed.then<void>((ctx, number) => saving);
-
-        async.elapse(const Duration(milliseconds: 1));
-
-        expect(stored.outcome, isA<Done<void>>());
-        expect(saving.isFinished, isFalse);
-        async.flushTimers();
-      });
-    });
-
-    test(
-        'a deferred job the callback returns never starts, and the '
-        'continuation fails', () {
-      fakeAsync((async) {
-        var ran = false;
-        final saving = Job.deferred<void>((ctx) async {
-          ran = true;
-        });
-        final parsed = Job<int>((ctx) async => 21);
-        final stored = parsed.then<void>((ctx, number) => saving);
-        Outcome<void>? outcome;
-        stored.done.then((done) => outcome = done).ignore();
-
-        async.flushTimers();
-
-        expect(
-          outcome,
-          isA<Failed>().having(
-            (failed) => failed.error,
-            'error',
-            isA<ArgumentError>(),
-          ),
-        );
-        expect(ran, isFalse);
-        expect(saving.isFinished, isFalse);
-        saving.cancel().ignore();
-        async.flushTimers();
-      });
-    });
-
-    test('a continuation waits for the job it runs as its child', () {
-      fakeAsync((async) {
-        stubs.stage = stubs.Stage();
-        final parsed = Job<int>((ctx) async => 21);
-        final stored = page.storeParsed(parsed);
-        stored.done
-            .then((outcome) => stubs.stage.trace.add('stored $outcome'))
-            .ignore();
-
-        async.flushTimers();
-
-        expect(stubs.stage.trace, ['saved number 21', 'stored Done(null)']);
-      });
-    });
-
-    test('then does not start a deferred source, whatever the length', () {
-      fakeAsync((async) {
-        var ran = false;
-        final source = Job.deferred<int>((ctx) async {
-          ran = true;
-          return 1;
-        });
-        final last = source
-            .then<int>((ctx, value) => value + 1)
-            .then<int>((ctx, value) => value + 1);
-
-        async.flushTimers();
-        expect(ran, isFalse);
-        expect(last.isFinished, isFalse);
-
-        source.start();
-        async.flushTimers();
-        expect(last.outcome, isA<Done<int>>().having((d) => d.value, 'v', 3));
-      });
-    });
-
-    test('a continuation made in a body is a root the body does not wait for',
-        () {
-      fakeAsync((async) {
-        late final Job<void> tail;
-        final parent = Job<void>((ctx) async {
-          final rows = Job.deferred<int>((ctx) async => 1);
-          tail = rows.then<void>((ctx, value) => ctx.join(() => delay(50)))
-            ..ignoreFailure();
-          await ctx.run(rows);
-        });
-
-        async.elapse(const Duration(milliseconds: 10));
-
-        expect(parent.outcome, isA<Done<void>>());
-        expect(tail.isChild, isFalse);
-        expect(tail.isRunning, isTrue);
-        async.flushTimers();
-        expect(tail.outcome, isA<Done<void>>());
-      });
-    });
-
-    test('the continuation closes the source it receives', () {
-      fakeAsync((async) {
-        stubs.stage = stubs.Stage();
-        final (opened, archived) = page.archiveOpened();
-
-        async.flushTimers();
-
-        expect(opened.outcome, isA<Done<stubs.Source>>());
-        expect(archived.outcome, isA<Done<void>>());
-        expect(stubs.stage.trace, ['archive of 1', 'rows closed']);
-      });
-    });
-
-    test(
-        'cancelled while it waited, the continuation never runs, and the '
-        'discard of the source closes what arrives', () {
-      fakeAsync((async) {
-        stubs.stage = stubs.Stage()..rowsTake = 50;
-        final (opened, archived) = page.archiveOpened();
-        opened.ignoreFailure();
-
-        async.elapse(const Duration(milliseconds: 10));
-        archived.cancel().ignore();
-        async.flushMicrotasks();
-        expect(archived.outcome, isA<Cancelled>());
-        expect(opened.outcome, isA<Cancelled>());
-        expect(stubs.stage.trace, isEmpty);
-
-        async.flushTimers();
-        expect(stubs.stage.trace, ['rows closed']);
-      });
-    });
-
-    test(
-        'a source that refuses the cancellation ends Done with the source '
-        'open, and the handle closes it', () {
-      fakeAsync((async) {
-        stubs.stage = stubs.Stage()..rowsTake = 50;
-        final opened = Job<stubs.Source>(
-          cancellable: false,
-          (ctx) => ctx.abandonable(
-            stubs.openRows,
-            discard: (source) => source.close(),
-          ),
-        );
-        final archived = opened.then<void>((ctx, rows) async {
-          ctx.onDispose(rows.close);
-        });
-
-        async.elapse(const Duration(milliseconds: 10));
-        archived.cancel().ignore();
-        async.flushTimers();
-
-        expect(opened.outcome, isA<Done<stubs.Source>>());
-        expect(archived.outcome, isA<Cancelled>());
-        expect(stubs.stage.trace, isEmpty);
-
-        opened.value.then((source) => source.close()).ignore();
-        async.flushMicrotasks();
-        expect(stubs.stage.trace, ['rows closed']);
-      });
-    });
-
-    test('a source whose body awaits its continuation never finishes', () {
-      fakeAsync((async) {
-        final loaded = page.loadedAwaitingParsed();
-
-        async.flushTimers();
-        expect(loaded.isFinished, isFalse);
-
-        var back = false;
-        loaded.cancel().then((_) => back = true).ignore();
-        async.flushTimers();
-        expect(back, isFalse);
-        expect(loaded.isFinished, isFalse);
-      });
-    });
-
-    test('the same with done in place of value', () {
-      fakeAsync((async) {
-        late final Job<int> tail;
-        final source = Job<int>((ctx) async {
-          await tail.done;
-          return 1;
-        });
-        tail = source.then<int>((ctx, value) => value)..ignoreFailure();
-
-        async.flushTimers();
-        expect(source.isFinished, isFalse);
-        expect(tail.isFinished, isFalse);
-
-        var back = false;
-        source.cancel().then((_) => back = true).ignore();
-        async.flushTimers();
-        expect(back, isFalse);
-      });
-    });
-
-    test(
-        'a source whose cleanup awaits its continuation never finishes, '
-        'and cancel() does not return', () {
-      fakeAsync((async) {
-        late final Job<int> tail;
-        final source = Job<int>((ctx) async {
-          ctx.onDispose(() => tail.done);
-          return 1;
-        });
-        tail = source.then<int>((ctx, value) => value)..ignoreFailure();
-
-        async.flushTimers();
-        expect(source.isFinished, isFalse);
-        expect(tail.isFinished, isFalse);
-
-        var back = false;
-        source.cancel().then((_) => back = true).ignore();
-        async.flushTimers();
-        expect(back, isFalse);
-        expect(source.isFinished, isFalse);
-      });
-    });
-  });
-
   group('The code of the page', () {
     setUp(() => stubs.stage = stubs.Stage());
 
@@ -777,7 +402,7 @@ void main() {
           ..rowsError = StateError('disk')
           ..imagesTake = 40
           ..imagesError = stubs.selfCancel();
-        final parent = page.exportWithFutureWait()..ignoreFailure();
+        final parent = attempts.exportWithFutureWait()..ignoreFailure();
         async.flushTimers();
         expect(parent.outcome, isA<Failed>());
         expect((parent.outcome! as Failed).error, isA<StateError>());
@@ -792,7 +417,7 @@ void main() {
           ..rowsError = StateError('disk')
           ..imagesTake = 20
           ..imagesError = stubs.selfCancel();
-        final parent = page.exportWithFutureWait()..ignoreFailure();
+        final parent = attempts.exportWithFutureWait()..ignoreFailure();
         async.flushTimers();
         // The failure of `rows` is nowhere in the outcome.
         expect(parent.outcome, isA<Cancelled>());
@@ -809,7 +434,7 @@ void main() {
         stubs.stage
           ..imagesTake = 20
           ..imagesError = StateError('disk');
-        final parent = page.exportWithFutureWait()..ignoreFailure();
+        final parent = attempts.exportWithFutureWait()..ignoreFailure();
         async.flushTimers();
         expect(parent.outcome, isA<Failed>());
         expect(trace(), isEmpty);
@@ -822,7 +447,7 @@ void main() {
           ..rowsTake = 20
           ..rowsError = StateError('disk')
           ..imagesTake = 80;
-        final parent = page.exportWithEagerError();
+        final parent = attempts.exportWithEagerError();
         async.elapse(const Duration(milliseconds: 40));
         expect(trace(), ['the body wakes', 'the body returns']);
         expect(parent.isFinished, isFalse, reason: 'images still opens');
@@ -876,46 +501,102 @@ void main() {
       });
     });
 
-    test(
-        'a lock taken in a child of the branch: two branches share it, '
-        'and the group ends', () {
-      fakeAsync((async) {
-        final parent = Job<void>((ctx) async {
-          final sources =
-              await ctx.runAll([page.lockedBranch(), page.lockedBranch()]);
-          for (final source in sources) {
-            source.close();
+    test('the page quotes what the export and the lock scenes report', () {
+      List<String> run(Job<Object?> Function() start) {
+        stubs.stage = stubs.Stage();
+        late List<String> printed;
+        fakeAsync((async) {
+          if (start == page.exportWithWait) {
+            stubs.stage.imagesError = StateError('disk');
           }
+          final parent = start()..ignoreFailure();
+          parent.done.then((o) => trace().add('outcome: $o')).ignore();
+          async.flushTimers();
+          printed = [...trace()];
+          if (!parent.isFinished) parent.cancel().ignore();
+          async.flushTimers();
         });
+        return printed;
+      }
+
+      final registered = run(page.exportWithWait);
+      final hung = run(attempts.readingTwice);
+      final locked = run(page.readingTwice);
+
+      expect(registered, [
+        'rows closed',
+        'outcome: Failed(ParallelWaitError: Bad state: disk)',
+      ]);
+      expect(hung, ['lock acquired', 'lock waits']);
+      expect(locked, [
+        'lock acquired',
+        'lock waits',
+        'lock released',
+        'lock acquired',
+        'lock released',
+        'outcome: Done([21, 21])',
+      ]);
+      expect(quotedOutputs(), [registered, hung, locked]);
+    });
+
+    test('a cancelled parent does not untie the lock of the first attempt', () {
+      fakeAsync((async) {
+        final parent = attempts.readingTwice()..ignoreFailure();
         async.flushTimers();
-        expect(parent.outcome, isA<Done<void>>());
-        expect(trace(), [
-          'lock acquired',
-          'lock waits',
-          'lock released',
-          'lock acquired',
-          'lock released',
-          'rows closed',
-          'rows closed',
-        ]);
+        parent.cancel().ignore();
+        async.flushTimers();
+        expect(parent.isFinished, isFalse);
+        expect(trace(), ['lock acquired', 'lock waits']);
+      });
+    });
+
+    test('cancelling the branch that holds the lock unties nothing', () {
+      fakeAsync((async) {
+        final holding = attempts.reading();
+        final parent = Job<List<int>>(
+          (ctx) => ctx.runAll([holding, attempts.reading()]),
+        )..ignoreFailure();
+        async.flushTimers();
+        holding.cancel().ignore();
+        async.flushTimers();
+        expect(holding.isFinished, isFalse);
+        expect(parent.isFinished, isFalse);
+        expect(trace(), ['lock acquired', 'lock waits']);
       });
     });
 
     test(
-        'a lock taken in a child of the branch: when the group fails, the '
-        'branch closes the source after the child released the lock', () {
+        'a branch that gets its source from a child closes it when the '
+        'group fails', () {
       fakeAsync((async) {
         final fails = Job.deferred<stubs.Source>((ctx) async {
           await ctx.abandonable(() => delay(50));
           throw StateError('disk');
         });
         final parent = Job<void>((ctx) async {
-          await ctx.runAll([page.lockedBranch(), fails]);
+          await ctx.runAll<stubs.Source>([page.openingBranch(), fails]);
         })
           ..ignoreFailure();
         async.flushTimers();
         expect(parent.outcome, isA<Failed>());
-        expect(trace(), ['lock acquired', 'lock released', 'rows closed']);
+        expect(trace(), ['rows closed']);
+      });
+    });
+
+    test(
+        'a branch that gets its source from a child hands it over open when '
+        'the group succeeds', () {
+      fakeAsync((async) {
+        final parent = Job<void>((ctx) async {
+          final sources = await ctx.runAll<stubs.Source>([
+            page.openingBranch(),
+            page.openingBranch(),
+          ]);
+          trace().add('${sources.length} arrived');
+        });
+        async.flushTimers();
+        expect(parent.outcome, isA<Done<void>>());
+        expect(trace(), ['2 arrived']);
       });
     });
 
@@ -928,30 +609,6 @@ void main() {
         async.flushTimers();
         expect(parent.outcome, isA<Failed>());
         expect(trace(), ['rows closed']);
-      });
-    });
-
-    test('the same lock taken in the branch itself hangs the group', () {
-      fakeAsync((async) {
-        ChildJob<stubs.Source> branch() =>
-            Job.deferred<stubs.Source>((ctx) async {
-              await ctx.join(
-                stubs.Lock.acquire,
-                dispose: (lock) => lock.release(),
-              );
-              return ctx.abandonable(
-                stubs.openRows,
-                discard: (source) => source.close(),
-              );
-            });
-        final parent = Job<void>((ctx) async {
-          await ctx.runAll([branch(), branch()]);
-        })
-          ..ignoreFailure();
-        async.flushTimers();
-        expect(parent.isFinished, isFalse);
-        expect(trace(), ['lock acquired', 'lock waits']);
-        parent.cancel().ignore();
       });
     });
 
@@ -1015,7 +672,7 @@ void main() {
         'the first attempt of the group closes the list when nothing '
         'interrupts it', () {
       fakeAsync((async) {
-        final parent = page.groupFirstAttempt(branches());
+        final parent = attempts.groupFirstAttempt(branches());
         async.flushTimers();
         expect(parent.outcome, isA<Done<void>>());
         expect(trace(), ['archive of 2', 'rows closed', 'images closed']);
@@ -1026,7 +683,7 @@ void main() {
         'the first attempt of the group leaks the list on a stop during '
         'the archive', () {
       fakeAsync((async) {
-        final parent = page.groupFirstAttempt(branches())..ignoreFailure();
+        final parent = attempts.groupFirstAttempt(branches())..ignoreFailure();
         async.elapse(const Duration(milliseconds: 20));
         parent.cancel().ignore();
         async.flushTimers();
@@ -1041,7 +698,7 @@ void main() {
         () {
       fakeAsync((async) {
         stubs.stage.archiveError = StateError('disk');
-        final parent = page.groupFirstAttempt(branches())..ignoreFailure();
+        final parent = attempts.groupFirstAttempt(branches())..ignoreFailure();
         async.flushTimers();
         expect(parent.outcome, isA<Failed>());
         expect(trace(), isEmpty);
@@ -1199,103 +856,28 @@ void main() {
         expect(trace(), ['archive of 2', '2 arrived']);
       });
     });
-
-    test('the chain saves the parsed number', () {
-      fakeAsync((async) {
-        page.chain();
-        async.flushTimers();
-        expect(trace(), ['saved number 21']);
-      });
-    });
-
-    test(
-      'ctx.run does not take the continuation: the error the page quotes',
-      () async {
-        final errors = await compileErrors('''
-import 'package:async_job/async_job.dart';
-
-Future<int> load() async => 21;
-Future<void> report(int rows) async {}
-
-void attempt() {
-${page.adoptedTail}
-}
-''');
-        final text = File('doc/chains.md').readAsStringSync();
-        final quoted = RegExp(
-          r'does not compile:\n\n```text\n(.*?)\n```',
-          dotAll: true,
-        );
-        expect(errors, [quoted.firstMatch(text)!.group(1)]);
-      },
-      timeout: const Timeout(Duration(minutes: 1)),
-    );
-
-    test('no link of a chain is a child', () {
-      fakeAsync((async) {
-        final child = Job.deferred<int>((ctx) async => 1);
-        final tail = child.then<int>((ctx, rows) async => rows);
-        final next = tail.then<int>((ctx, rows) async => rows);
-        expect(child, isA<ChildJob<int>>());
-        expect(tail, isNot(isA<ChildJob<int>>()));
-        expect(next, isNot(isA<ChildJob<int>>()));
-        async.flushTimers();
-      });
-    });
-
-    test(
-        'a cancelled continuation cancels its running source and the parent, '
-        'as the page quotes', () {
-      fakeAsync((async) {
-        stubs.stage.loadTake = 50;
-        final child = Job.deferred<int>((ctx) => ctx.abandonable(stubs.load));
-        final tail = child.then<void>((ctx, rows) => stubs.report(rows))
-          ..ignoreFailure();
-        final parent = Job<void>((ctx) async {
-          ctx.log(await ctx.run(child));
-        })
-          ..ignoreFailure();
-        async.elapse(const Duration(milliseconds: 20));
-        tail.cancel().ignore();
-        async.flushTimers();
-        final text = File('doc/chains.md').readAsStringSync();
-        final quoted = RegExp(
-          r'with `HandlerCancelReason`:\n\n```text\n(.*?)\n```',
-          dotAll: true,
-        );
-        expect(
-          'parent: ${parent.outcome}, child: ${child.outcome}',
-          quoted.firstMatch(text)!.group(1),
-        );
-        expect(trace(), isEmpty, reason: 'the report never ran');
-      });
-    });
-
-    test('with the source the only child, the parent ends first', () {
-      fakeAsync((async) {
-        page.reportedRows();
-        async.flushTimers();
-        expect(trace(), ['parent Done(null)', 'reported 21']);
-      });
-    });
-
-    test('two children in a row: the parent waits for both', () {
-      fakeAsync((async) {
-        final parent = page.twoChildrenInARow();
-        parent.done.then((outcome) => stubs.stage.trace.add('parent $outcome'));
-        async.flushTimers();
-        expect(trace(), ['reported 21', 'parent Done(null)']);
-      });
-    });
   });
 
-  for (final page in ['groups', 'chains']) {
-    test('every piece of code on $page.md is a run of lines of these files',
-        () {
-      expect(
-        codeMissingFrom('doc/$page.md', 'test/support/children_page.dart'),
-        isEmpty,
-      );
-    });
-  }
+  test('every piece of code on groups.md is a run of lines of these files', () {
+    expect(
+      codeMissingFrom(
+        'doc/groups.md',
+        'test/support/children_page.dart',
+        alsoIn: ['test/support/groups_first_attempts.dart'],
+      ),
+      isEmpty,
+    );
+    expect(strayFences('doc/groups.md'), isEmpty);
+  });
+
+  test('the code under every first attempt is the first attempt', () {
+    expect(
+      codeMissingFrom(
+        'doc/groups.md',
+        'test/support/groups_first_attempts.dart',
+        under: '### The first attempt',
+      ),
+      isEmpty,
+    );
+  });
 }

@@ -281,5 +281,6 @@ void main() {
       codeMissingFrom('doc/children.md', 'test/support/children_page.dart'),
       isEmpty,
     );
+    expect(strayFences('doc/children.md'), isEmpty);
   });
 }

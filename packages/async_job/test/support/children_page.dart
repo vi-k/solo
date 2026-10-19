@@ -1,8 +1,9 @@
 // The code of `doc/children.md`, `doc/groups.md` and `doc/chains.md`,
 // verbatim: every block of the three pages is a run of lines of this file,
-// and `children_page_test.dart` and `children_rakes_test.dart` run it. A
-// block that declares names another block declares too lives in a function
-// of its own.
+// or of `groups_first_attempts.dart` for a first attempt of the groups page.
+// `children_page_test.dart`, `groups_rakes_test.dart` and
+// `chains_rakes_test.dart` run it. A block that declares names another block
+// declares too lives in a function of its own.
 import 'dart:async';
 
 import 'package:async_job/async_job.dart';
@@ -84,46 +85,6 @@ ChildJob<void> level(int depth) {
   });
 }
 
-Job<void> exportWithFutureWait() {
-  final parent = Job<void>((ctx) async {
-    final rows = Job.deferred<Source>(
-      (ctx) => ctx.abandonable(openRows, discard: (source) => source.close()),
-    );
-    final images = Job.deferred<Source>(
-      (ctx) => ctx.abandonable(openImages, discard: (source) => source.close()),
-    );
-
-    final sources = await Future.wait([ctx.run(rows), ctx.run(images)]);
-    await ctx.join(() => writeArchive(sources));
-  });
-  return parent;
-}
-
-/// The first attempt with `eagerError: true`; the body says when it wakes
-/// and when it returns.
-Job<void> exportWithEagerError() {
-  final parent = Job<void>((ctx) async {
-    final rows = Job.deferred<Source>(
-      (ctx) => ctx.abandonable(openRows, discard: (source) => source.close()),
-    );
-    final images = Job.deferred<Source>(
-      (ctx) => ctx.abandonable(openImages, discard: (source) => source.close()),
-    );
-
-    try {
-      final sources = await Future.wait(
-        [ctx.run(rows), ctx.run(images)],
-        eagerError: true,
-      );
-      await ctx.join(() => writeArchive(sources));
-    } on Object {
-      stage.trace.add('the body wakes');
-    }
-    stage.trace.add('the body returns');
-  });
-  return parent;
-}
-
 Job<void> exportWithWait() {
   final parent = Job<void>((ctx) async {
     final rows = Job.deferred<Source>(
@@ -163,14 +124,32 @@ ChildJob<Source> warmingBranch() {
   return branch;
 }
 
-ChildJob<Source> lockedBranch() {
-  final branch = Job.deferred<Source>((ctx) async {
-    final locked = Job.deferred<Source>((ctx) async {
+/// Groups: a branch that reads under the lock its sibling shares, through
+/// a child that holds the lock.
+// A block body, for the indentation the page shows.
+// ignore: prefer_expression_function_bodies
+ChildJob<int> reading() {
+  return Job.deferred<int>((ctx) async {
+    final locked = Job.deferred<int>((ctx) async {
       await ctx.join(Lock.acquire, dispose: (lock) => lock.release());
-      return ctx.abandonable(openRows, discard: (source) => source.close());
+      return ctx.abandonable(loadRows);
     });
+    return ctx.run(locked);
+  });
+}
 
-    return ctx.run(locked, discard: (source) => source.close());
+Job<List<int>> readingTwice() {
+  final parent = Job<List<int>>((ctx) => ctx.runAll([reading(), reading()]));
+  return parent;
+}
+
+/// Groups: a branch that gets its source from a child of its own.
+ChildJob<Source> openingBranch() {
+  final branch = Job.deferred<Source>((ctx) async {
+    final opening = Job.deferred<Source>(
+      (ctx) => ctx.abandonable(openRows, discard: (source) => source.close()),
+    );
+    return ctx.run(opening, discard: (source) => source.close());
   });
   return branch;
 }
@@ -190,15 +169,6 @@ Job<void> refusingBranch() {
   });
   return parent;
 }
-
-Job<void> groupFirstAttempt(List<ChildJob<Source>> branches) =>
-    Job<void>((ctx) async {
-      final sources = await ctx.runAll(branches);
-      await ctx.join(() => writeArchive(sources));
-      for (final source in sources) {
-        source.close();
-      }
-    });
 
 Job<void> groupTry(List<ChildJob<Source>> branches) => Job<void>((ctx) async {
       final sources = await ctx.runAll(branches);

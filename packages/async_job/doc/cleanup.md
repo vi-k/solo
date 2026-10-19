@@ -75,8 +75,8 @@ only when every branch of the group has ended its body and waited for its
 children, or when the body of one of them has ended in anything but a value. A
 lock two branches share stays taken until then, and the branch waiting for it
 keeps the group from getting there, so the group hangs.
-[When one failure makes the rest pointless](groups.md#when-one-failure-makes-the-rest-pointless)
-on the groups page says what unties it and how to take such a lock.
+[Branches that wait for each other](groups.md#branches-that-wait-for-each-other)
+on the groups page shows the hang and how to take such a lock.
 
 ## A resource that travels
 
