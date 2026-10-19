@@ -26,13 +26,6 @@ return database;
 `ctx.onDiscard` register a callback where there is no call to wrap. Passing a
 `dispose` and a `discard` to one call is an `ArgumentError`.
 
-Three sections below open with the version habit or the names of the API lead
-to — the same callback for two resources, a registration left with the job that
-made it, an unregistration on the line after the call — and say what that
-version does instead of what it was meant to do. Where the next version repairs
-that and brings a fault of its own, it stands as a second attempt. The version
-that works follows under its own heading.
-
 ## Choosing the callback
 
 A job takes a lock for the work it does and opens a database it returns to

@@ -8,12 +8,7 @@ over, `null` before that. `Outcome<T>` is sealed, so a `switch` covering these
 three cases is exhaustive.
 
 The lines under the code are what it prints when it runs, and `zone:` is an
-error that reached the zone uncaught. Each section below opens with the version
-the API leads to and shows what that code does: in the first three, the member
-named after the question you ask — `value` for the value, `outcome` for how the
-job went, `reason` for why it was cancelled; in the last, the outcome read
-through `done`, the way the first section reads it. The version that works
-follows under its own heading.
+error that reached the zone uncaught.
 
 ## Reading the result
 

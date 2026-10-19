@@ -5,12 +5,6 @@ that child, delivers the events to a callback one at a time, and ends the
 subscription with the job. `Job.each` is the same for a job with nothing else
 to do.
 
-Three sections below open with the version habit leads to — the `await for`,
-the `listen` and the `asyncMap` every Dart program already has, a plain
-`await`, the `dispose` a body would use — and say what that version does
-instead of what it was meant to do. The version that works follows under its
-own heading. The other sections have no such version, and open with the answer.
-
 ## Processing a stream
 
 A job saves every message of a stream: one at a time, failing when a save

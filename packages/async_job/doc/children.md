@@ -26,11 +26,6 @@ final job = Job<void>((ctx) async {
 });
 ```
 
-Three sections below open with the version habit or the names of the API lead
-to — the plain `Future.wait` every Dart program already has, or the method
-whose name matches the requirement — and say what that version does instead of
-what it was meant to do. The version that works follows under its own heading.
-
 ## Children
 
 A body delegates work to another job by registering it as a child:

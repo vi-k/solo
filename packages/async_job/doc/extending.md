@@ -16,10 +16,7 @@ of `async_job.dart`: `engine.dart` exports everything `async_job.dart` does.
 The lines under the code are what it prints when it runs. The job's observer
 prints what reaches it, `onError:` for an error; `cancel` and `sign out` are
 the moments the user cancels the job or signs out, and `outcome:` is what
-`job.done` completes with. Two parts of the page below open with the version
-habit leads to — a queue that counts on `cancellable: false` to protect a job
-while it waits, a rule that throws an error of its own from `check()` — and
-show what that code does. The version that works follows under its own heading.
+`job.done` completes with.
 
 ## A job of your own
 

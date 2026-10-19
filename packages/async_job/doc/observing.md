@@ -4,11 +4,7 @@ A job's outcome says how the job ended. A `JobObserver` hears the rest: when
 the job starts and ends, what its body logs, and the errors that no outcome
 carries. The last section shows how to test a job without waiting in real time.
 
-The sections on the observer itself and on answering for errors start with code
-that works. The other sections start with a common first attempt and show what
-that code does. Under a heading of its own comes a version that works, or,
-where the first attempt works already, a simpler one. The lines under the code
-are what the code prints:
+The lines under the code are what the code prints:
 
 - `cancel`: the user cancels the job;
 - `outcome:` what `job.done` completes with;
