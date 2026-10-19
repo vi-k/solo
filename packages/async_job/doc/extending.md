@@ -3,11 +3,11 @@
 An engine, on this page, is a library with its own state, queue or scheduling
 rules. Build yours on the core: extend `JobBase<T>` for the job and
 `JobContextBase` for the context its body gets. The base classes keep the
-lifetime the other pages describe — the start, the [children](children.md), the
+lifetime the other pages describe: the start, the [children](children.md), the
 [cancellation](cancellation.md), the [cleanup](cleanup.md) and the
-[outcome](outcomes.md) — while your subclasses add the engine's behavior
-through their protected API. The third type, `JobStatus`, says where a job is
-in its life: `created`, `running` or `finished`.
+[outcome](outcomes.md). Your subclasses add the engine's behavior through their
+protected API. The third type, `JobStatus`, says where a job is in its life:
+`created`, `running` or `finished`.
 
 The three live in `package:async_job/engine.dart`, not in the main import: an
 app that only runs jobs never needs them. An engine imports that file in place
@@ -87,14 +87,14 @@ was started from, the one `start` itself moves to when called inside the work.
 
 Override `started()` and `finished()` to follow the lifecycle. `started()` runs
 as the body is about to start, with the job already running. `finished()` runs
-once the job has its outcome — for a job dropped before its body ran too, with
-no `started()` before it. An error either of them throws goes to `onError` and
-then to the zone, unless the observer catches it in `onUnanswered`, as
-[An observer](observing.md#an-observer) on the observing page describes for an
-error no outcome carries, and the job goes on as it would have. Your own
-bookkeeping is what is left half-done, so keep both short and unconditional.
-`MyJob` drops its body in `finished()`: kept, it would hold everything it
-captured for as long as anyone holds the job.
+once the job has its outcome. It runs for a job dropped before its body ran
+too, with no `started()` before it. An error either of them throws goes to
+`onError` and then to the zone, unless the observer catches it in
+`onUnanswered`, as [An observer](observing.md#an-observer) on the observing
+page describes for an error no outcome carries, and the job goes on as it would
+have. Your own bookkeeping is what is left half-done, so keep both short and
+unconditional. `MyJob` drops its body in `finished()`: kept, it would hold
+everything it captured for as long as anyone holds the job.
 
 For the engine to answer for such errors itself, put an observer of your own on
 every job, mix `JobAnswerer` into it and override its `onUnanswered`, the way
@@ -181,12 +181,18 @@ second: Cancelled(manual)
 ```
 
 The queue skipped the second job and went on to the third, as it should with a
-job the user may cancel. But this one was not to be cancelled. The core
-finishes a job that has not started on the spot, whatever `cancellable` says.
-`cancellable: false` keeps a body that has begun from being cut short, and
-before the start there is nothing to cut. Nor can the core tell whether such a
-job will ever be started: one that refused and was never started would never
-finish. The queue does know: it gives every job its turn.
+job the user may cancel. But this one was not to be cancelled. This is what
+happens:
+
+1. The user cancels the second job while it waits. The core finishes a job that
+   has not started on the spot, whatever `cancellable` says:
+   `cancellable: false` keeps a body that has begun from being cut short, and
+   before the start there is nothing to cut.
+2. The check in the loop finds the job finished and skips it.
+
+Nor can the core tell whether such a job will ever be started: one that refused
+and was never started would never finish. The queue knows what the core does
+not: it gives every job its turn.
 
 ### Refusing while the job waits
 
@@ -216,14 +222,24 @@ The queue tells each job whose it is:
   void add(MyJob<Object?> job) => _waiting.add(job.._queue = this);
 ```
 
+Only a job that waits in the queue refuses. Who answers a cancellation of a
+`cancellable: false` job depends on where the job is:
+
+| Where the job is | Who answers the cancellation |
+| --- | --- |
+| Not added to the queue yet | the core: the job ends `Cancelled`, and the check in the loop skips it |
+| Waiting in the queue | `MyJob`, which refuses it |
+| Queued by nobody, such as one a cancelled parent turns away from its `ctx.run` | the core: refused there, the job would never start and never finish |
+| Taken out of the queue to start | the core, which refuses it |
+
 The check in the loop stays for a job cancelled before it was added to the
-queue. Only a job that waits in the queue refuses. A `MyJob` nobody queued is
-left to the core, such as one a cancelled parent turns away from its `ctx.run`:
-refused there, it would never start and never finish. Once the queue has taken
-the job out to start it, the core refuses for it. `rejectable` is `false` for a
-cancellation no job may refuse, such as one the engine sends through a wrapper
-around `cancelWith` to drop a job whatever `cancellable` says, and that one
-goes on to `super`. The same run now gives the second job its turn:
+queue.
+
+
+`rejectable` is `false` for a cancellation no job may refuse, such as one the
+engine sends through a wrapper around `cancelWith` to drop a job whatever
+`cancellable` says, and that one goes on to `super`. The same run now gives the
+second job its turn:
 
 ```text
 second runs
@@ -289,10 +305,13 @@ onError: SignedOut
 outcome: Failed(SignedOut)
 ```
 
-A rule that no longer holds should not be a failure, and here the job ends
-`Failed` with an error of the engine's own. The observer hears an error, nobody
-closes the connection, and a child of the job, if it had one, would run on to
-its end.
+A rule that no longer holds should not be a failure. This is what happens:
+
+1. `check()` throws `SignedOut` inside `join`, and the body lets it out.
+2. The job ends `Failed` with an error of the engine's own, and the observer
+   hears an error.
+3. Nobody closes the connection: `onCancel` runs only on a cancellation.
+4. A child of the job, if it had one, would run on to its end.
 
 ### A cancellation of the engine's own
 
@@ -331,16 +350,22 @@ outcome: Cancelled(signed out)
 A sign-out now ends the job the way a cancellation does: the connection is
 closed, and the outcome is `Cancelled`. The body lets the rule's `Cancelled`
 out and so cancels itself, and a job whose body cancels itself stops the way a
-cancelled one does: its `onCancel` callbacks run and its children stop. The job
-accepts the rule's cancellation as the body lets it out, not before: a body
-that catches it in a `try`/`catch` and goes on is not cancelled. Nobody asked
-the job for this cancellation, so it does not come through `cancelWith`.
-Neither `cancellable: false` nor `ctx.uncancellable` stands in the rule's way:
-they refuse or hold a cancellation asked of the job, and the rule's is an
-exception: `check()` throws it inside the call that asked the rule, here
-`join`. The rule is asked where `check()` is asked and nowhere else: a sign-out
-during the download is noticed when `join` comes back, and one during
-`abandonable` only at the next call that asks.
+cancelled one does: its `onCancel` callbacks run and its children stop. Nobody
+asked the job for this cancellation, so it does not come through `cancelWith`,
+and what holds back a cancellation asked of the job does not hold it:
+
+| What | Against the rule's cancellation |
+| --- | --- |
+| `cancellable: false` | does not refuse it: it refuses only a cancellation asked of the job |
+| `ctx.uncancellable` | does not hold it: the rule's cancellation is an exception `check()` throws inside the call that asked the rule, here `join` |
+
+The job accepts the rule's cancellation as the body lets it out, not before: a
+body that catches it in a `try`/`catch` and goes on is not cancelled.
+
+
+The rule is asked where `check()` is asked and nowhere else: a sign-out during
+the download is noticed when `join` comes back, and one during `abandonable`
+only at the next call that asks.
 
 ### Not waiting for the checkpoint
 
@@ -392,37 +417,6 @@ run there, and `abandonable` throws at once. With `rejectable: false` the job
 cannot refuse that cancellation, and no `ctx.uncancellable` holds it. A wrapper
 around `cancelOwnJob` of the context does the same: it passes `false` itself.
 
-`finish` ends a job with the outcome handed in, and it is no way to stop a
-running one: it waits for no children and stops none, runs no `onCancel`
-callback and unwinds no cleanup stack, so no `dispose` and no `discard` runs,
-and what the body opened stays open. Only the debug channel, switched on with
-`Job.debug = print;`, says how many cleanups were left behind. A job that has
-accepted a cancellation ends `Cancelled` whatever `finish` is handed: a `Done`
-or a `Failed` gives way to the cancellation the job accepted, a value handed in
-goes nowhere, and only another `Cancelled` handed in stands. An engine that
-finishes a running job by hand anyway releases what the job holds first. A
-failure of the body, thrown before `finish` or after, is then in no outcome,
-unless it is the very one handed in: `onError` hears it, and it goes on to
-`onUnanswered` or the zone, as the failure of the body of a cancelled job does.
-`ignoreFailure()` on the job stops it at `onError`. A `Done` handed to a branch
-of `runAll` after its group heard that the body failed comes too late for the
-group. The group hears of the failure right after `onError` does, or, for a
-body that is not `async` and threw while `runAll` was starting the branches,
-once all of them have started. The group then goes by the failure, as if the
-branch had ended with it, and throws it, or sends it where any failure of a
-branch it did not throw goes, which `ignoreFailure()` on the branch silences.
-The value stays in the outcome of the branch alone.
-
-A `Cancelled` handed to `cancelWith` or to `finish` belongs to one job, the way
-`onSignOut` above builds one at every call. A parent finds the child behind a
-cancellation by the instance: with one instance for two of its children, its
-outcome names the child that ended last, not the one its body waited for, and a
-`const` one is one instance for the whole program. With asserts on, the second
-child of one parent to end with the instance sends an `AssertionError` to the
-zone it was created in, and ends the way it does without them. A `Cancelled`
-that a body throws, or a rule from `check()`, is not bound by this: the job
-ends with one the core builds from it.
-
 ## Deferred start
 
 A regular `Job` schedules its own start on the next microtask. If the caller
@@ -441,3 +435,48 @@ job.start();
 later, from a zone of its own, should keep the zone the job was made in,
 `final zone = Zone.current;` next to `Job.deferred`, and start the job there,
 with `zone.run(job.start)`: [A job of your own](#a-job-of-your-own) says why.
+
+## Finishing a job by hand
+
+`finish` ends a job with the outcome handed in. An engine may reach for it to
+drop a running job, but it is no way to do that: it skips what a cancellation
+does.
+
+| A cancellation | `finish` |
+| --- | --- |
+| Waits for the children and stops them | waits for none and stops none |
+| Runs the `onCancel` callbacks | runs none |
+| Unwinds the cleanup stack, `dispose` and `discard` included | unwinds nothing: what the body opened stays open |
+
+Only the debug channel, switched on with `Job.debug = print;`, says how many
+cleanups were left behind. A job that has accepted a cancellation ends
+`Cancelled` whatever `finish` is handed: a `Done` or a `Failed` gives way to
+the cancellation the job accepted, a value handed in goes nowhere, and only
+another `Cancelled` handed in stands. An engine that finishes a running job by
+hand anyway releases what the job holds first.
+
+When an engine finishes a running job by hand, a failure of the body, thrown
+before `finish` or after, is in no outcome unless it is the very one handed in:
+`onError` hears it, and it goes on to `onUnanswered` or the zone, as the
+failure of the body of a cancelled job does. `ignoreFailure()` on the job stops
+it at `onError`.
+
+A `Done` handed to a branch of `runAll` after its group heard that the body
+failed comes too late for the group. The group hears of the failure right after
+`onError` does, or, for a body that is not `async` and threw while `runAll` was
+starting the branches, once all of them have started. The group then goes by
+the failure, as if the branch had ended with it, and throws it, or sends it
+where any failure of a branch it did not throw goes, which `ignoreFailure()` on
+the branch silences. The value stays in the outcome of the branch alone.
+
+A `Cancelled` handed to `cancelWith` or to `finish` belongs to one job, the way
+`onSignOut` in
+[Not waiting for the checkpoint](#not-waiting-for-the-checkpoint) builds one at
+every call. A parent finds the child behind a cancellation by the instance:
+with one instance for two of its children, its outcome names the child that
+ended last, not the one its body waited for, and a `const` one is one instance
+for the whole program. With asserts on, the second child of one parent to end
+with the instance sends an `AssertionError` to the zone it was created in, and
+ends the way it does without them. A `Cancelled` that a body throws, or a rule
+from `check()`, is not bound by this: the job ends with one the core builds
+from it.
