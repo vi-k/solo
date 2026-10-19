@@ -250,7 +250,8 @@ search.
 | [Chains](doc/chains.md) | `then`, a continuation of a child, steps in a row |
 | [Streams](doc/streams.md) | `ctx.each`, `Job.each`, and what `await for` and `listen` do in a body |
 | [Cleanup](doc/cleanup.md) | `dispose`, `discard`, `onDispose`, ordering |
-| [Observing and testing](doc/observing.md) | `JobObserver`, `JobAnswerer`, `Job.visitErrors`, logs, `unattended`, fake time |
+| [Observing](doc/observing.md) | `JobObserver`, `JobAnswerer`, `Job.visitErrors`, logs, `unattended`, `Job.debug` |
+| [Testing](doc/testing.md) | A job under `fakeAsync`, and what moves its time |
 | [Building on the core](doc/extending.md) | `JobBase`, `JobContextBase`, your own engine |
 
 ## solo

@@ -1,9 +1,9 @@
-// `doc/observing.md` runs here. The code of the page stands verbatim in
-// `support/observing_page.dart`, its first attempts in
+// `doc/observing.md` and `doc/testing.md` run here. The code of the pages
+// stands verbatim in `support/observing_page.dart`, their first attempts in
 // `support/observing_first_attempts.dart`, and what that code takes for
-// granted in `support/observing_stubs.dart`. Every block of the page runs in
+// granted in `support/observing_stubs.dart`. Every block of the pages runs in
 // a test below, every quote is compared with what its block prints, and every
-// piece of code on the page has to be a run of lines of those files: a piece
+// piece of code on the pages has to be a run of lines of those files: a piece
 // or a quote that drifts turns this file red. The rules the page states in
 // prose and in its table are held with code of the tests' own where the page
 // shows none.
@@ -92,6 +92,18 @@ List<String> withTheStopNamed(List<String> Function() run) {
     return run();
   } finally {
     Job.isCancellationError = null;
+  }
+}
+
+/// What [run] returns with the debug channel of the page switched on as
+/// `main` switches it: its lines go where the job prints. The field is put
+/// back after it.
+List<String> debugged(List<String> Function() run) {
+  debugToTheConsole();
+  try {
+    return quotable(run());
+  } finally {
+    Job.debug = null;
   }
 }
 
@@ -261,16 +273,6 @@ final class MigrationFailed implements Exception {
   }
 }
 
-/// The error of the page that a body throws in place of what it caught.
-final class AppException implements Exception {
-  final Object cause;
-
-  const AppException(this.cause);
-
-  @override
-  String toString() => 'AppException($cause)';
-}
-
 /// A key that cannot be put into words.
 final class BrokenKey {
   @override
@@ -312,6 +314,7 @@ void main() {
         quotable(play(first.migrating, cancelAt: 10)),
         withTheStopNamed(() => quotable(play(first.migrating, cancelAt: 10))),
         quotable(play(openingReported, cancelAt: 10)),
+        debugged(() => play(first.migrating, cancelAt: 10)),
         play(first.sendingUnawaited),
         play(() => sendingHandedOver(Reporter())),
         play(saving),
@@ -335,15 +338,18 @@ void main() {
     const firstAttempts = 'test/support/observing_first_attempts.dart';
     const holders = {
       '## Observer': page,
+      '### Timing a cancellation': page,
       '### The first attempt': firstAttempts,
       '### Formatting left to the observer': page,
       '### Errors of a cancellation': page,
       '### An observer': page,
+      '### The debug channel': page,
+      '### Limits of the filter': page,
       '### Work handed to the job': page,
       '## Answering for errors': page,
+      '### Several failures in one error': page,
       '## Several observers': page,
       '### Observers in one list': page,
-      '### Time moved by the test': page,
     };
     for (final MapEntry(key: heading, value: holder) in holders.entries) {
       test('the code under "$heading" is a run of lines of $holder', () {
@@ -1039,8 +1045,7 @@ void main() {
         ],
         reason: 'the filter of the stop does not name the wrapper',
       );
-      Job.isCancellationError =
-          (error) => error is AppException && error.cause is Cancelled;
+      nameTheWrapper();
       try {
         expect(
           quotable(play(wrapping, cancelAt: 10)),
@@ -1927,17 +1932,6 @@ void main() {
       );
     });
 
-    // The debug channel of the paragraph after the table, switched on the
-    // way the paragraph writes it: its lines go where the job prints.
-    List<String> debugged(List<String> Function() run) {
-      Job.debug = print;
-      try {
-        return quotable(run());
-      } finally {
-        Job.debug = null;
-      }
-    }
-
     // The line the page quotes after [lead], in the original and in the
     // translation.
     void quotes(Map<String, String> lead, String line) {
@@ -1970,15 +1964,6 @@ void main() {
         'Job() error went to the zone: DatabaseStopped',
         'zone: DatabaseStopped',
       ]);
-      quotes(
-        {
-          'doc/observing.md':
-              r'first\s+attempt\s+above,\s+the\s+channel\s+prints\s+',
-          '../../docs/ru/async_job/observing.md':
-              r'первой\s+попытки\s+выше\s+канал\s+печатает\s+',
-        },
-        lines[3],
-      );
     });
 
     test('with the filter it says why the error went no further', () {
@@ -1998,9 +1983,9 @@ void main() {
       ]);
       quotes(
         {
-          'doc/observing.md': r'With\s+the\s+filter,\s+it\s+prints\s+',
+          'doc/observing.md': r'give\s+way\s+to\s+one:\s+',
           '../../docs/ru/async_job/observing.md':
-              r'С\s+фильтром\s+он\s+печатает\s+',
+              r'канал\s+печатает\s+одну:\s+',
         },
         lines.last,
       );
@@ -2397,6 +2382,32 @@ void main() {
 
   group('Testing', () {
     setUp(() => stage = Stage());
+
+    const testingPage = 'doc/testing.md';
+    const page = 'test/support/observing_page.dart';
+    const firstAttempts = 'test/support/observing_first_attempts.dart';
+
+    test('the page has no fence the checks do not read', () {
+      expect(strayFences(testingPage), isEmpty);
+    });
+
+    const holders = {
+      '### The first attempt': firstAttempts,
+      '### Time moved by the test': page,
+    };
+    for (final MapEntry(key: heading, value: holder) in holders.entries) {
+      test('the code under "$heading" is a run of lines of $holder', () {
+        expect(codeMissingFrom(testingPage, holder, under: heading), isEmpty);
+      });
+    }
+
+    test('every piece of code on the page is a run of lines of these files',
+        () {
+      expect(
+        codeMissingFrom(testingPage, page, alsoIn: [firstAttempts]),
+        isEmpty,
+      );
+    });
 
     group('the first attempt, as the page writes it,', () {
       first.cancelledOpenAwaited(test, expect);

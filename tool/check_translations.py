@@ -143,6 +143,10 @@ PAIRS = [
         REPO / "docs" / "ru" / "async_job" / "observing.md",
     ),
     (
+        REPO / "packages" / "async_job" / "doc" / "testing.md",
+        REPO / "docs" / "ru" / "async_job" / "testing.md",
+    ),
+    (
         REPO / "packages" / "async_job" / "doc" / "extending.md",
         REPO / "docs" / "ru" / "async_job" / "extending.md",
     ),

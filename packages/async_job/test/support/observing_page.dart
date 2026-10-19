@@ -1,9 +1,10 @@
-// The code of `doc/observing.md` as the page answers it, verbatim: every
-// block of the page but its first attempts is a run of lines of this file,
-// and `observing_rakes_test.dart` runs it. The first attempts live in
-// `observing_first_attempts.dart`: a line of an answer turned into a line of
-// a first attempt must not be found among the answers. A block that declares
-// names another block declares too lives in a function of its own.
+// The code of `doc/observing.md` and `doc/testing.md` as the pages answer
+// it, verbatim: every block of the pages but their first attempts is a run
+// of lines of this file, and `observing_rakes_test.dart` runs it. The first
+// attempts live in `observing_first_attempts.dart`: a line of an answer
+// turned into a line of a first attempt must not be found among the
+// answers. A block that declares names another block declares too lives in
+// a function of its own.
 import 'package:async_job/async_job.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart' show isA;
@@ -82,6 +83,19 @@ void nameTheStopAfter() {
   final previous = Job.isCancellationError;
   Job.isCancellationError =
       (error) => error is DatabaseStopped || (previous?.call(error) ?? false);
+}
+
+/// The filter that names a cancellation the body wrapped in its own error.
+/// A test that calls it puts the field back.
+void nameTheWrapper() {
+  Job.isCancellationError =
+      (error) => error is AppException && error.cause is Cancelled;
+}
+
+/// What the app sets in `main` to see the debug channel. A test that calls
+/// it puts the field back.
+void debugToTheConsole() {
+  Job.debug = print;
 }
 
 final class Reporter extends JobObserver {

@@ -238,11 +238,12 @@ new wording.
 
 ### Documentation
 
-- The README is a starting page, and the reference moved to seven pages:
+- The README is a starting page, and the reference moved to ten pages:
   [Outcomes](doc/outcomes.md), [Cancellation](doc/cancellation.md),
-  [Children, streams and chains](doc/children.md), [Streams](doc/streams.md),
-  [Cleanup](doc/cleanup.md), [Observing and testing](doc/observing.md) and
-  [Building on the core](doc/extending.md).
+  [Children](doc/children.md), [Groups](doc/groups.md),
+  [Chains](doc/chains.md), [Streams](doc/streams.md),
+  [Cleanup](doc/cleanup.md), [Observing](doc/observing.md),
+  [Testing](doc/testing.md) and [Building on the core](doc/extending.md).
 - One recommendation of the `0.2.0` README is replaced:
   `on Cancelled { rethrow; }` in front of the `catch` logs an operation stopped
   by its token as a failure.

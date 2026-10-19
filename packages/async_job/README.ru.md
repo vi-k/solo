@@ -253,7 +253,8 @@ Cancelled(manual)
 | [Цепочки](../../docs/ru/async_job/chains.md) | `then`, продолжение ребёнка, шаги подряд |
 | [Стримы](../../docs/ru/async_job/streams.md) | `ctx.each`, `Job.each` и что делают `await for` и `listen` в теле |
 | [Уборка](../../docs/ru/async_job/cleanup.md) | `dispose`, `discard`, `onDispose`, порядок |
-| [Наблюдение и тестирование](../../docs/ru/async_job/observing.md) | `JobObserver`, `JobAnswerer`, `Job.visitErrors`, логи, `unattended`, время под управлением теста |
+| [Наблюдение](../../docs/ru/async_job/observing.md) | `JobObserver`, `JobAnswerer`, `Job.visitErrors`, логи, `unattended`, `Job.debug` |
+| [Тестирование](../../docs/ru/async_job/testing.md) | Задача под `fakeAsync` и что двигает её время |
 | [Своё поверх ядра](../../docs/ru/async_job/extending.md) | `JobBase`, `JobContextBase`, свой движок |
 
 ## solo

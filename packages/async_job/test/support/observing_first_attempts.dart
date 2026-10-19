@@ -1,5 +1,5 @@
-// The first attempts of `doc/observing.md`, verbatim: the versions its
-// sections open with. They live apart from the answers in
+// The first attempts of `doc/observing.md` and `doc/testing.md`, verbatim:
+// the versions their sections open with. They live apart from the answers in
 // `observing_page.dart`, because a line of an answer turned into a line of a
 // first attempt must not be found among the answers.
 import 'dart:async';

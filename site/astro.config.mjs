@@ -134,11 +134,8 @@ export default defineConfig({
             page('async_job/chains', 'Chains', 'Цепочки'),
             page('async_job/streams', 'Streams', 'Стримы'),
             page('async_job/cleanup', 'Cleanup', 'Уборка'),
-            page(
-              'async_job/observing',
-              'Observing and testing',
-              'Наблюдение и тестирование',
-            ),
+            page('async_job/observing', 'Observing', 'Наблюдение'),
+            page('async_job/testing', 'Testing', 'Тестирование'),
             page(
               'async_job/extending',
               'Building on the core',

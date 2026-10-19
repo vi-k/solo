@@ -109,3 +109,13 @@ final class Analytics {
 
 /// The analytics of the page.
 final analytics = Analytics();
+
+/// The error of the page that a body throws in place of what it caught.
+final class AppException implements Exception {
+  final Object cause;
+
+  const AppException(this.cause);
+
+  @override
+  String toString() => 'AppException($cause)';
+}

@@ -90,11 +90,11 @@ as the body is about to start, with the job already running. `finished()` runs
 once the job has its outcome. It runs for a job dropped before its body ran
 too, with no `started()` before it. An error either of them throws goes to
 `onError` and then to the zone, unless the observer catches it in
-`onUnanswered`, as [An observer](observing.md#an-observer) on the observing
-page describes for an error no outcome carries, and the job goes on as it would
-have. Your own bookkeeping is what is left half-done, so keep both short and
-unconditional. `MyJob` drops its body in `finished()`: kept, it would hold
-everything it captured for as long as anyone holds the job.
+`onUnanswered`, as [Where each error goes](observing.md#where-each-error-goes)
+on the observing page describes for an error no outcome carries, and the job
+goes on as it would have. Your own bookkeeping is what is left half-done, so
+keep both short and unconditional. `MyJob` drops its body in `finished()`:
+kept, it would hold everything it captured for as long as anyone holds the job.
 
 For the engine to answer for such errors itself, put an observer of your own on
 every job, mix `JobAnswerer` into it and override its `onUnanswered`, the way
