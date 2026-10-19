@@ -509,6 +509,8 @@ abstract interface class JobContext {
   /// until the group is sure the caller will get it, and closed by the
   /// branch itself when it will not. While a branch is held, its outcome
   /// is not final: a body that returned a value may still end [Cancelled].
+  /// The hold has a price, and the next two paragraphs name it: a branch
+  /// that waits for another branch can hang the group.
   ///
   /// **A branch must not wait for another branch of the same group.** Awaiting
   /// a sibling's [Job.value] or [Job.done] hangs the group: the sibling is held

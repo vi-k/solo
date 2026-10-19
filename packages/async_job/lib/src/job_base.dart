@@ -2367,6 +2367,15 @@ abstract class JobBase<T> implements Job<T> {
         // the outcome is counted — but it is not final, and nothing has
         // looked at the cleanup stack yet. The group gathers every branch
         // here before any of them starts unwinding.
+        //
+        // The hold is deliberate. It is what lets a branch that returned a
+        // value close it through `discard` when a sibling fails later: let
+        // go, the branch would hand the value to a group that hands it to
+        // nobody. Its price is the hang of a branch waiting for a sibling,
+        // or for what a sibling releases in its cleanup, which the dartdoc
+        // of `runAll` names. A core change that unwinds a branch before
+        // this barrier has been tried and did not converge; the hang stays
+        // documented, not fixed.
         await hold.beforeDisposal();
         if (isFinished) {
           // An engine of a domain ended the branch by hand while it stood

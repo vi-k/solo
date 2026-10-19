@@ -290,6 +290,13 @@ on the extending page says what comes out then. A failure the group received
 and did not throw is not dropped; it goes where an error nobody answered for
 goes.
 
+The branches of a group wait for one another. A branch whose body has returned
+a value does not unwind until the group has decided, and its `dispose`
+callbacks wait with it. So a branch that waits for a sibling — for its value,
+or for a lock the sibling releases in its `dispose` — can hang the group, with
+no error and no timer. The last two of the five points below say when, and how
+to take such a lock; for branches that depend on each other, use `[...].wait`.
+
 | Form | Waits for | Stops the others | Values of the branches that succeeded |
 | --- | --- | --- | --- |
 | `Future.wait` | every branch | no | dropped before the body sees them |
