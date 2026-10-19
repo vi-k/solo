@@ -191,6 +191,14 @@ final class Failed extends Outcome<Never> {
 /// cleanup go on working — and stored in [Job.outcome]. A body may also
 /// `throw Cancelled('why')` to cancel itself; the core records that as
 /// [HandlerCancelReason] and cancels the children of that body.
+///
+/// A `catch` in a body takes a cancellation along with the failures:
+/// `on Object`, a `catch` with no type and `on Exception` all catch it, and
+/// code in the clause then runs on a job that is already cancelled. A clause
+/// that handles a failure opens with [JobContext.check], which throws the
+/// job's cancellation if it has accepted one. That also covers an error an
+/// action throws because the job was cancelled, which no clause for
+/// `Cancelled` would let by.
 final class Cancelled extends Outcome<Never> implements Exception {
   /// Who cancelled the job.
   final CancelReason reason;
