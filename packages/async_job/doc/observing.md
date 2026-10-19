@@ -252,8 +252,8 @@ The filter does not see an error that Dart hands to the zone itself, past the
 job: that of a context call the body did not await, such as
 `unawaited(ctx.join(() => database.migrate(stop)))`, and that of an `async`
 callback of `ctx.onCancel`. Row 7 of the table below and
-[A token through `onCancel`](cancellation.md#a-token-through-oncancel) take
-these apart.
+[A stop that takes time](cancellation.md#a-stop-that-takes-time) take these
+apart.
 
 An error that the body makes of its own cancellation reaches the filter too,
 but the type test above does not know it. A body that catches everything around

@@ -105,34 +105,6 @@ void nameTheStop() {
   // #enddocregion
 }
 
-/// A stop that takes time, run as work the job does not wait for.
-Job<void> stopTheDevice() {
-  final job = Job<void>(observer: printing, (ctx) async {
-    ctx.onDispose(device.release);
-    // #docregion
-    // ignore: cascade_invocations
-    ctx.onCancel(() => ctx.unattended(device.stop));
-    // #enddocregion
-    // The job records until it is cancelled and walks away from the
-    // recording: nothing here waits for the stop.
-    await ctx.abandonable(device.record);
-  });
-  return job;
-}
-
-/// The job that ends only after the device has stopped.
-Job<void> waitForTheDevice() {
-  final job = Job<void>(observer: printing, (ctx) async {
-    ctx.onDispose(device.release);
-    // #docregion
-    // ignore: cascade_invocations
-    ctx.onCancel(() => ctx.unattended(device.stop));
-    await ctx.join(device.record);
-    // #enddocregion
-  });
-  return job;
-}
-
 /// The first attempt of "A step that must finish".
 Job<void> twoJoins() {
   final job = Job<void>(observer: printing, (ctx) async {
@@ -379,6 +351,34 @@ Job<String> thumbnailWithADeadline() {
         rethrow;
       }
     }
+    // #enddocregion
+  });
+  return job;
+}
+
+/// A stop that takes time, run as work the job does not wait for. The job
+/// records until it is cancelled and walks away from the recording: nothing
+/// here waits for the stop.
+Job<void> stopTheDevice() {
+  final job = Job<void>(observer: printing, (ctx) async {
+    // #docregion
+    ctx.onDispose(device.release);
+    // ignore: cascade_invocations
+    ctx.onCancel(() => ctx.unattended(device.stop));
+    await ctx.abandonable(device.record);
+    // #enddocregion
+  });
+  return job;
+}
+
+/// The job that ends only after the device has stopped.
+Job<void> waitForTheDevice() {
+  final job = Job<void>(observer: printing, (ctx) async {
+    // #docregion
+    ctx.onDispose(device.release);
+    // ignore: cascade_invocations
+    ctx.onCancel(() => ctx.unattended(device.stop));
+    await ctx.join(device.record);
     // #enddocregion
   });
   return job;

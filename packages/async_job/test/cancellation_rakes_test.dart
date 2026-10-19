@@ -108,6 +108,18 @@ const quoted = [
   [
     'outcome: Done(page without a thumbnail after 15 ms)',
   ],
+  [
+    'cancel',
+    'device released',
+    'outcome: Cancelled(manual)',
+    'device stopped',
+  ],
+  [
+    'cancel',
+    'device stopped',
+    'device released',
+    'outcome: Cancelled(manual)',
+  ],
 ];
 
 /// When the user cancels in the sections on the migration: the page's
@@ -593,12 +605,7 @@ void main() {
     });
 
     test('the job does not wait for the stop it handed to unattended', () {
-      expect(watch(page.stopTheDevice, cancelAt: 5), [
-        'cancel',
-        'device released',
-        'outcome: Cancelled(manual)',
-        'device stopped',
-      ]);
+      expect(watch(page.stopTheDevice, cancelAt: 5), quoted[12]);
     });
 
     test('a failed stop through unattended reaches onError, then the zone', () {
@@ -638,12 +645,7 @@ void main() {
     });
 
     test('a join around the operation the stop interrupts waits for it', () {
-      expect(watch(page.waitForTheDevice, cancelAt: 5), [
-        'cancel',
-        'device stopped',
-        'device released',
-        'outcome: Cancelled(manual)',
-      ]);
+      expect(watch(page.waitForTheDevice, cancelAt: 5), quoted[13]);
     });
 
     test('a join around an operation that ends first waits for nothing more',

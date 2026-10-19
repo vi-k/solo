@@ -104,12 +104,16 @@ step 2 on a closed database
 step 3 on a closed database
 ```
 
-`abandonable` ends the waiting, not the migration. The cancellation comes out
-of `abandonable` at once, the job ends, and `discard` closes the database with
-two steps of the migration still to write. Whatever the migration throws
-afterwards goes to `onError` and, by default, on to the zone. `abandonable` is
-for an operation the job may walk away from, such as a read whose result nobody
-needs any more.
+`abandonable` ends the waiting, not the migration. This is what happens:
+
+1. The cancellation comes out of `abandonable` at once, and the job ends.
+2. `discard` closes the database with two steps of the migration still to
+   write.
+3. Whatever the migration throws afterwards goes to `onError` and, by default,
+   on to the zone.
+
+`abandonable` is for an operation the job may walk away from, such as a read
+whose result nobody needs any more.
 
 A result arriving that late is dropped, or goes to the `dispose` or `discard`
 passed to `abandonable`. While the body or the job's children still run, that
@@ -169,7 +173,9 @@ the cancellation, before the body reaches a checkpoint. Here it cancels the
 token, the migration reads it before the third step and throws
 `DatabaseStopped`, and `join` waits for that before the job closes the
 database. A request to abort or a subscription to cancel goes through
-`onCancel` the same way.
+`onCancel` the same way. A stop that takes a while needs more, and
+[A stop that takes time](#a-stop-that-takes-time) at the end of the page shows
+what.
 
 The `onError:` line is that `DatabaseStopped`. `join` throws an error of its
 action as it is, even after a cancellation, and the body does not catch it. The
@@ -188,39 +194,6 @@ An error it names reaches the observer and stops there.
 observing page takes the filter apart. What a `catch` around this `join` sees
 is the subject of
 [Catching errors of the operation](#catching-errors-of-the-operation), below.
-
-A stop that takes time, such as a device's, needs more than `onCancel` alone.
-`onCancel` takes a `void Function()`, and Dart lets an `async` function
-through: the future it returns is awaited by nobody, and its error goes past
-the observer to the zone the callback was called in, which for a cancellation
-accepted inside `cancel()` is the zone of the code that called `cancel()`. Only
-what the callback throws synchronously reaches `onError`, and an `async`
-function never throws synchronously: even an error before its first `await`
-goes into its future. For a device that takes a while to stop, run the stop as
-work the job does not wait for:
-
-```dart
-ctx.onCancel(() => ctx.unattended(device.stop));
-```
-
-`ctx.unattended` keeps the errors of the stop with the job: they reach the
-observer, and after it, by default, the zone the job was created in;
-[Work the job does not wait for](observing.md#work-the-job-does-not-wait-for)
-on the observing page takes it apart. That is all it does: the job does not
-wait for the stop, and a device released in `onDispose` is released while it is
-still stopping. To end only after the device has stopped, the job waits with
-`join` for an operation the stop interrupts, here a recording that ends only
-once the device has stopped:
-
-```dart
-ctx.onCancel(() => ctx.unattended(device.stop));
-await ctx.join(device.record);
-```
-
-`join` waits until the stop has ended the recording, as it waits for the
-migration to stop at the token. An operation that ends as soon as the stop
-begins leaves `join` nothing to wait for, and the job ends while the device is
-still stopping.
 
 ## A step that must finish
 
@@ -340,20 +313,26 @@ child, the job accepts that cancellation at once: a section holds back a
 cancellation request, not a cancellation the body throws itself. `onCancel`
 runs while the section is still open, and `abandonable` inside it throws.
 
-To protect the entire body instead of one section, create
-`Job(body, cancellable: false)`. It refuses ordinary cancellation once the body
-starts.
+## A job that refuses cancellation
 
-Before that the job can still be cancelled: it ends `Cancelled` with
-`started: false`, and the body never runs. The flag keeps a body that has begun
-from being cut short, and before the start there is nothing to cut. A job made
-with `Job(body)` starts on the next microtask, so only a cancellation that
-comes sooner finds it not started. A job made with `Job.deferred` waits until
-someone starts it, by `start()` or by `ctx.run` of a parent, and the core
-cannot tell whether anyone will. Had such a job refused the cancellation and
-then never been started, it would never finish: its `done` would not complete,
-the `cancel()` it refused would wait forever, and `cancel()` has no stronger
-form to drop the job with.
+The job writes a backup, and a backup cut short is worse than none: the whole
+body is a step that must finish. To protect the entire body instead of one
+section, create `Job(body, cancellable: false)`. It refuses ordinary
+cancellation once the body starts, and before that it can still be cancelled:
+
+| When the cancellation comes | What the job does |
+| --- | --- |
+| Before the body starts | Ends `Cancelled` with `started: false`, and the body never runs |
+| Once the body has started | Refuses an ordinary cancellation: the body goes on, and `cancel()` waits until the job ends |
+
+The flag keeps a body that has begun from being cut short, and before the start
+there is nothing to cut. A job made with `Job(body)` starts on the next
+microtask, so only a cancellation that comes sooner finds it not started. A job
+made with `Job.deferred` waits until someone starts it, by `start()` or by
+`ctx.run` of a parent, and the core cannot tell whether anyone will. Had such a
+job refused the cancellation and then never been started, it would never
+finish: its `done` would not complete, the `cancel()` it refused would wait
+forever, and `cancel()` has no stronger form to drop the job with.
 
 An engine that holds jobs before their start knows what the core does not: it
 starts them itself. `solo`, built on this core, starts the jobs of its queue,
@@ -400,16 +379,20 @@ log: migration failed: DatabaseStopped
 outcome: Cancelled(manual)
 ```
 
-The log calls a cancellation a failed migration. The token stopped the
-migration, and what came out of `join` is the migration's own
-`DatabaseStopped`, not a `Cancelled`: `join` throws an error of its action as
-it is. The clause for `Cancelled` lets it by, `on Exception` takes it, and the
-code inside `on Exception` runs on a job that is already cancelled. The job
-still ends `Cancelled`: the `join` of the next step throws before its action
-starts. Without the token the clause for `Cancelled` holds: the migration runs
-to its end, and `join` throws the `Cancelled`. Without that clause,
-`on Exception` takes that `Cancelled` too, because `Cancelled` implements
-`Exception`, and logs `migration failed: Cancelled(manual)`.
+The log calls a cancellation a failed migration. This is what happens:
+
+1. The token stops the migration, and what comes out of `join` is the
+   migration's own `DatabaseStopped`, not a `Cancelled`: `join` throws an error
+   of its action as it is.
+2. The clause for `Cancelled` lets it by, and `on Exception` takes it. The code
+   inside `on Exception` runs on a job that is already cancelled.
+3. The job still ends `Cancelled`: the `join` of the next step throws before
+   its action starts.
+
+Without the token the clause for `Cancelled` holds: the migration runs to its
+end, and `join` throws the `Cancelled`. Without that clause, `on Exception`
+takes that `Cancelled` too, because `Cancelled` implements `Exception`, and
+logs `migration failed: Cancelled(manual)`.
 
 ### Asking the job
 
@@ -456,14 +439,18 @@ If the job has already accepted cancellation, catching its `Cancelled` does not
 undo it. Code after the catch runs, but the next checkpoint throws again, and
 the outcome is still `Cancelled` even if the body returns a value.
 
-A `Cancelled` caught in the body is not always the job's own. An operation
+### A `Cancelled` that is not the job's
+
+A page shows a thumbnail when it renders and goes out without one when it does
+not. A thumbnail that failed goes to the log, and one that was cancelled does
+not. A `Cancelled` caught in the body is not always the job's own. An operation
 throws one when it waits for `value` of a job that was cancelled, and a child
 started with `ctx.run` and cancelled directly, not through its parent, throws
 its `Cancelled` out of `run`. `ctx.check()` passes then, because the job itself
-was not cancelled, and the body goes on and can end `Done`. The clause above
-logs such a `Cancelled` as a failure. Past `ctx.check()` a `Cancelled` is not
-the job's, so a test of its type tells an optional child that was cancelled
-from one that failed:
+was not cancelled, and the body goes on and can end `Done`. The clause of
+[Asking the job](#asking-the-job) logs such a `Cancelled` as a failure. Past
+`ctx.check()` a `Cancelled` is not the job's, so a test of its type tells an
+optional child that was cancelled from one that failed:
 
 ```dart
 final thumbnail = Job.deferred<String>(renderThumbnail);
@@ -634,13 +621,19 @@ of a `Job.deferred` for its `start()` or for the `ctx.run` of a parent. When
 the deadline runs out, the job is cancelled with `TimeoutCancelReason`, whose
 `timeout` is the limit, and the outcome says so: `Cancelled(timeout)`, where
 the timer of the first attempt left `Cancelled(manual)`, the same as the
-user's. The deadline is a cancellation like that of `cancel()`, not the
-`TimeoutException` of `Future.timeout`: the body stops at its next checkpoint,
-an `uncancellable` section holds the request until it closes, a job cancelled
-already keeps its own reason, and the children hear the deadline as the cause
-of their `ParentCancelReason`. If the body and the children it waits for are
-over while the section still holds the request, the request goes with the
-timer, and the job ends with what the body returned.
+user's.
+
+The deadline is a cancellation like that of `cancel()`, not the
+`TimeoutException` of `Future.timeout`:
+
+- the body stops at its next checkpoint;
+- an `uncancellable` section holds the request until it closes;
+- a job cancelled already keeps its own reason;
+- the children hear the deadline as the cause of their `ParentCancelReason`.
+
+If the body and the children it waits for are over while the section still
+holds the request, the request goes with the timer, and the job ends with what
+the body returned.
 
 The deadline bounds the body and the children the job waits for after it, not
 the cleanup stack. The core cancels the timer before the stack unwinds: a
@@ -696,3 +689,64 @@ cancellation, and a thumbnail somebody else cancelled. Let out, the child's
 deadline ends the parent
 `Cancelled(handler: Job(thumbnail): Cancelled(timeout))`. The key is there for
 that line: a child without one prints as `Job()`.
+
+## A stop that takes time
+
+The job records from a device and releases it in `onDispose`. The device takes
+a while to stop, and the user cancels while it records.
+
+The stop runs as work the job does not wait for:
+
+```dart
+ctx.onDispose(device.release);
+ctx.onCancel(() => ctx.unattended(device.stop));
+await ctx.abandonable(device.record);
+```
+
+```text
+cancel
+device released
+outcome: Cancelled(manual)
+device stopped
+```
+
+`onCancel` takes a `void Function()`. Dart lets an `async` function through
+too, but the job does not hear what becomes of it:
+
+1. Nobody awaits the future it returns.
+2. Its error goes past the observer to the zone the callback was called in. For
+   a cancellation accepted inside `cancel()`, that is the zone of the code that
+   called `cancel()`.
+3. Only what the callback throws synchronously reaches `onError`, and an
+   `async` function never throws synchronously: even an error before its first
+   `await` goes into its future.
+
+`ctx.unattended` keeps the errors of the stop with the job: they reach the
+observer, and after it, by default, the zone the job was created in;
+[Work the job does not wait for](observing.md#work-the-job-does-not-wait-for)
+on the observing page takes it apart. That is all it does: the job does not
+wait for the stop, and the device is released while it is still stopping.
+
+### Waiting for the stop
+
+To end only after the device has stopped, the job waits with `join` for an
+operation the stop interrupts, here a recording that ends only once the device
+has stopped:
+
+```dart
+ctx.onDispose(device.release);
+ctx.onCancel(() => ctx.unattended(device.stop));
+await ctx.join(device.record);
+```
+
+```text
+cancel
+device stopped
+device released
+outcome: Cancelled(manual)
+```
+
+`join` waits until the stop has ended the recording, as it waits for the
+migration in [A token through `onCancel`](#a-token-through-oncancel). An
+operation that ends as soon as the stop begins leaves `join` nothing to wait
+for, and the job ends while the device is still stopping.
