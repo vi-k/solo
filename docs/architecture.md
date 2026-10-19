@@ -399,13 +399,14 @@ BLE-устройство, плеер, синхронизация), где сос
 Движок — `solo` и чужие — импортирует `engine.dart`, приложение его не видит.
 `packages/async_job/lib/src/`:
 
-- `job_base.dart` — библиотека с частями (`part`): `outcome.dart`,
+- `job_base.dart` — библиотека с частями (`part`): `job.dart`, `outcome.dart`,
   `job_context.dart`, `job_stream.dart`, `job_then.dart`, `envelope.dart`,
-  `run_all.dart`, `observer.dart`. Держит `Job<T>` с фабрикой, `Job.deferred`
-  и `Job.visitErrors`, `ChildJob<T>`, `DeferredJob<T>`, `JobStatus`, основу
-  `JobBase<T>` и реализации ядра `_Job`, `_AutoJob`, `_DeferredJob`. Части
-  нужны потому, что `JobContextBase` зовёт защищённые члены задачи, не будучи
-  её наследником.
+  `run_all.dart`, `observer.dart`. Держит основу `JobBase<T>` и реализации ядра
+  `_Job`, `_AutoJob`, `_EachJob`, `_DeferredJob`. Части нужны потому, что
+  `JobContextBase` зовёт защищённые члены задачи, не будучи её наследником.
+- `job.dart` — `part`: публичный контракт задачи — `Job<T>` с фабрикой,
+  `Job.deferred` и `Job.visitErrors`, `ChildJob<T>`, `DeferredJob<T>`
+  и `JobStatus`. Движок `JobBase<T>` живёт отдельно, в `job_base.dart`.
 - `outcome.dart` — `part`: `Outcome`, `Done`, `Failed`, `Cancelled`
   с публичными конструкторами `Cancelled([description])` и `Cancelled.by`,
   открытый абстрактный `CancelReason`, причины `ManualCancelReason`,
@@ -435,7 +436,7 @@ BLE-устройство, плеер, синхронизация), где сос
   не `final`-класс и подкласс с переопределённым `==` выдал бы вложенный
   конверт за цикл. Чистый конверт решает исход как та отмена, которую он несёт;
   конверт с настоящим отказом остаётся `Failed` — провал не прячется
-  за отменой. Тот же обход публичен: `Job.visitErrors` в `job_base.dart` зовёт
+  за отменой. Тот же обход публичен: `Job.visitErrors` в `job.dart` зовёт
   приватный `_visitErrors` отсюда, и разбор ради исхода идёт через него же.
   Им же идут оба хука ошибки. `notifyObserver` зовёт `onError` на каждый провал
   и каждую отмену конверта отдельно; собственную отмену задачи внутри конверта
