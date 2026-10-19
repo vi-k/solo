@@ -298,7 +298,7 @@ void main() {
             'whatever the callback closes, and only if the job ends cancelled '
                 'or failed',
         '`ctx.disown(value)`':
-            'nothing — it drops the registration one of those three calls '
+            'nothing: it drops the registration one of those three calls '
                 'made for the value',
       });
     });
@@ -478,8 +478,12 @@ void main() {
       test('cancelled while the database opens, it leaves the database open',
           () {
         _says(
-          'then `join` throws `Cancelled` in place of the value, and the body '
+          'Then `join` throws `Cancelled` in place of the value, and the body '
           'never reaches the line below',
+        );
+        _says(
+          'The cleanup stack is empty: nothing in this job knows that a '
+          'database exists',
         );
         fakeAsync((async) {
           final loader = first.LoaderRegisteringUnder();
@@ -756,9 +760,10 @@ void main() {
     group('the first attempt', () {
       test('hands the caller a database closed a moment earlier', () {
         _says(
-          "the caller's `await` then completes with a handle that was closed a "
+          "The caller's `await` then completes with a handle that was closed a "
           'moment earlier',
         );
+        _says('Cleanup runs before the outcome is delivered');
         fakeAsync((async) {
           final job = first.OpenerDisposing().open();
           final caller = _Caller(job);
@@ -1053,7 +1058,7 @@ void main() {
       test('cancelled while the migration runs, leaves nobody holding it', () {
         _says('Cancel this job while the migration runs');
         _says(
-          'the state never received the database, the cleanup stack no longer '
+          'The state never received the database, the cleanup stack no longer '
           'knows about it, and nobody closes it',
         );
         fakeAsync((async) {
@@ -1114,8 +1119,9 @@ void main() {
       test('cancelled while the migration runs: cleanup closes the database',
           () {
         _says(
-          '`check` throws first if the job is cancelled or its rules no longer '
-          'hold, and the database is still registered: cleanup closes it',
+          'If `check` throws, which it does first when the job is cancelled or '
+          'its rules no longer hold, the database is still registered, and '
+          'cleanup closes it',
         );
         fakeAsync((async) {
           final handover = page.Handover();
@@ -1163,6 +1169,10 @@ void main() {
       });
 
       test('a listener cancelling from inside emit: the state owns it', () {
+        _says(
+          'If `emit` writes the state and then throws, because a synchronous '
+          'listener cancelled the job, the state already owns the database',
+        );
         _says('Either way exactly one owner is left');
         fakeAsync((async) {
           final handover = page.Handover();
@@ -1938,7 +1948,7 @@ void main() {
           () {
         _says(
           "An error thrown by cleanup is told to the controller's `onError` "
-          'hook and to `Solo.observer`, and then handed to '
+          'hook and to `Solo.observer`. Then it is handed to '
           '`Solo.unansweredHandler`, or to the zone when no handler is set',
         );
         _says('cleanup that throws leaves a `Done` job `Done`');
