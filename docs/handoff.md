@@ -1345,11 +1345,12 @@ M12, M13 и пилот: мета-вступления сняты со всех �
    «answer for» остаётся термином `JobAnswerer`, определён один раз
    во вступлении `observing.md`, а вне этого API сказано проще: «unless the
    observer catches it in `onUnanswered`»; «reaches nobody» остаётся.
-2. Разбивка `children.md` без правки текста на три страницы: Children
-   (вступление о трёх способах, `ctx.run`, отказ, глубина; раздел о стримах —
-   абзацем со ссылкой на `streams.md`), Groups (`.wait`, `runAll`, что группа
-   отдаёт, список группы), Chains (`then`, продолжение ребёнка, Steps in a
-   row). Якоря, тесты страницы, меню сайта, Guides.
+2. Разбивка `children.md` без правки текста на три страницы — сделана
+   и закоммичена: Children (вступление о трёх способах, `ctx.run`, отказ,
+   глубина; раздел о стримах — абзацем со ссылкой на `streams.md`), Groups
+   (`.wait`, `runAll`, что группа отдаёт, список группы), Chains (`then`,
+   продолжение ребёнка, Steps in a row). Якоря, тесты страницы, меню сайта,
+   Guides.
 3. README: Quick start — блок на 12 строк из «Why» с выводом под кодом; «Why»
    сжать до 30–40 строк (флаг с `finally`, `Future.timeout`
    и `CancelableOperation`, что добавляет задача); нынешний пример — ниже как
@@ -1359,11 +1360,12 @@ M12, M13 и пилот: мета-вступления сняты со всех �
    `cleanup`, `extending`, лёгкий проход по `outcomes`. У страниц `solo`
    такие же вступления, их тесты на них ссылаются — это вопрос пилота `solo`.
 
-Сейчас следующая — волна 2. Для неё: `solo/doc/children.md` ссылается на якоря
-страницы ядра полными адресами GitHub (`#children`,
-`#waiting-for-several-children`, `#chains`); пары перевода —
-в `tool/check_translations.py`, меню — `site/astro.config.mjs`,
-`tool/build_site_test.py` переписывает `#chains`.
+Сейчас следующая — волна 3, README. Волна 2 оставила одно на волну 4:
+на `children.md` заголовок страницы и раздел `## Children` называются
+одинаково, и `#children` на GitHub ведёт к началу страницы — раздел стоит
+переименовать. Тесты трёх страниц пока в одном `children_rakes_test.dart`;
+разнести их — тоже волна 4. `solo/doc/children.md` ссылается на `groups.md`
+и `chains.md` полными адресами GitHub: до push в `main` этих страниц там нет.
 
 Дальше по порядку ждут владельца: ядро — пилот с M12 и M13, `observing.md`, L1,
 L6 и L8; `solo` — M4, M5, M6 и пилот.

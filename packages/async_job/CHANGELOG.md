@@ -46,12 +46,12 @@
   the rest to stop as soon as one of them goes wrong; the branches it asks to
   stop get the new `SiblingCancelReason`. An extension named `runAll` on
   `JobContext` is shadowed by it without a warning. See
-  [When one failure makes the rest pointless](doc/children.md#when-one-failure-makes-the-rest-pointless).
+  [When one failure makes the rest pointless](doc/groups.md#when-one-failure-makes-the-rest-pointless).
 - **A cancellation that travels inside a `ParallelWaitError` is a cancellation
   again.** A child cancelled under `[ctx.run(a), ctx.run(b)].wait` ends the
   parent `Cancelled`, where it ended it `Failed`; an envelope that carries a
   real failure is untouched. See
-  [Registered on arrival, waited for in one envelope](doc/children.md#registered-on-arrival-waited-for-in-one-envelope).
+  [Registered on arrival, waited for in one envelope](doc/groups.md#registered-on-arrival-waited-for-in-one-envelope).
 - **A body that cancels itself is cancelled the way a cancelled job is.** When
   a body throws `Cancelled`, or lets out the cancellation of a child, the
   children are asked to stop, then the `ctx.onCancel` callbacks run and
@@ -119,7 +119,7 @@ children of one job with one `Cancelled` instance. See
 A `Job<void>` whose body returns a job of `Job.deferred` that nobody has
 started, and a `then<void>` continuation whose callback does the same, end
 `Failed` with an `ArgumentError`, where `0.2.0` ended them `Done`. See
-[Chains](doc/children.md#chains).
+[Chains](doc/chains.md).
 
 Several error messages are reworded: a test that matches them by text needs the
 new wording.

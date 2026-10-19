@@ -14,14 +14,15 @@ import 'support/compile_errors.dart';
 import 'support/delay.dart';
 import 'support/page_code.dart';
 
-/// The first attempts of `doc/children.md`, and what each one costs.
+/// The first attempts of `doc/groups.md` and `doc/chains.md`, and what each
+/// one costs; the code of `doc/children.md` is checked here too.
 ///
-/// Three sections of the page open with the version the vocabulary of the
+/// Three sections of the pages open with the version the vocabulary of the
 /// API leads to and say what that version does instead of what it was
-/// meant to do. Nothing else guards those statements: the page has no
+/// meant to do. Nothing else guards those statements: the pages have no
 /// bench, so an outcome or an order quoted there rots silently. Every
-/// claim the page makes about a first attempt is pinned here, next to the
-/// version it then shows.
+/// claim the pages make about a first attempt is pinned here, next to the
+/// version they then show.
 
 /// A resource a branch opens, and a trace of who closed it.
 final class Source {
@@ -499,8 +500,6 @@ void main() {
       });
     });
   });
-
-  group('Processing streams', () {});
 
   group('Chains', () {
     test("two children in a row: the parent's cancellation reaches the second",
@@ -1388,25 +1387,6 @@ void main() {
       });
     });
 
-    test('saveMessages saves one message after the other', () {
-      fakeAsync((async) {
-        final messages = StreamController<String>();
-        var over = false;
-        page.saveMessages(messages.stream, (message) async {
-          stubs.stage.trace.add('$message begins');
-          await delay(10);
-          stubs.stage.trace.add('$message saved');
-        }).then((_) => over = true);
-        messages
-          ..add('a')
-          ..add('b')
-          ..close().ignore();
-        async.flushTimers();
-        expect(trace(), ['a begins', 'a saved', 'b begins', 'b saved']);
-        expect(over, isTrue);
-      });
-    });
-
     test('the chain saves the parsed number', () {
       fakeAsync((async) {
         page.chain();
@@ -1428,7 +1408,7 @@ void attempt() {
 ${page.adoptedTail}
 }
 ''');
-        final text = File('doc/children.md').readAsStringSync();
+        final text = File('doc/chains.md').readAsStringSync();
         final quoted = RegExp(
           r'does not compile:\n\n```text\n(.*?)\n```',
           dotAll: true,
@@ -1465,7 +1445,7 @@ ${page.adoptedTail}
         async.elapse(const Duration(milliseconds: 20));
         tail.cancel().ignore();
         async.flushTimers();
-        final text = File('doc/children.md').readAsStringSync();
+        final text = File('doc/chains.md').readAsStringSync();
         final quoted = RegExp(
           r'with `HandlerCancelReason`:\n\n```text\n(.*?)\n```',
           dotAll: true,
@@ -1496,13 +1476,13 @@ ${page.adoptedTail}
     });
   });
 
-  test('every piece of code on the page is a run of lines of these files', () {
-    expect(
-      codeMissingFrom(
-        'doc/children.md',
-        'test/support/children_page.dart',
-      ),
-      isEmpty,
-    );
-  });
+  for (final page in ['children', 'groups', 'chains']) {
+    test('every piece of code on $page.md is a run of lines of these files',
+        () {
+      expect(
+        codeMissingFrom('doc/$page.md', 'test/support/children_page.dart'),
+        isEmpty,
+      );
+    });
+  }
 }

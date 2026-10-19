@@ -49,8 +49,8 @@ accepts passes to its children, that a body that fails lets them finish and
 waits for them, and why `child.ignoreFailure()` is no substitute for handling
 the future of `ctx.run`. Several children side by side are a group of
 `ctx.runAll`, under
-[Waiting for several children](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/children.md#waiting-for-several-children)
-on the same page. Where that page makes a child with `Job.deferred`, a
+[Waiting for several children](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/groups.md#waiting-for-several-children)
+on the groups page. Where those pages make a child with `Job.deferred`, a
 controller makes it with `job(...)`: its `ctx.run` and `ctx.runAll` take no
 other job, and each branch of a group answers to its start rules as a child of
 `ctx.run` does.
@@ -224,11 +224,11 @@ has to run. The report above can be on its way after the job queued behind
 has no business waiting for. Where that would be wrong, the steps belong inside
 one job, as in [Steps in a row](#steps-in-a-row) below.
 
-Cancellation travels along a chain both ways, as
-[Chains](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/children.md#chains)
-on the children page of `async_job` describes. For a controller that means that
-`close()` reaches a continuation through an unfinished source, but does not own
-one already running after the source finished.
+Cancellation travels along a chain both ways, as the
+[Chains](https://github.com/vi-k/solo/blob/main/packages/async_job/doc/chains.md)
+page of `async_job` describes. For a controller that means that `close()`
+reaches a continuation through an unfinished source, but does not own one
+already running after the source finished.
 
 A continuation is never a child. Inside a controller's body `ctx.run` takes
 jobs of that controller, the ones `job(...)` makes and nobody has queued, and a

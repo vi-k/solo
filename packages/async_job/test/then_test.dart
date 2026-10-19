@@ -214,7 +214,7 @@ void main() {
   });
 
   test('what a cancelled chain leaves open depends on the source', () {
-    // What `doc/children.md` promises about a `discard` of the source: the
+    // What `doc/chains.md` promises about a `discard` of the source: the
     // continuation is the receiver, and a continuation cancelled while it
     // waited never becomes one. Which of the two ways that goes is decided
     // by the source, because cancelling a continuation cancels it too.

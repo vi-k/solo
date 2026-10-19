@@ -302,7 +302,9 @@ search.
 | --- | --- |
 | [Outcomes](doc/outcomes.md) | `Done`, `Failed`, `Cancelled`, and observing a failure |
 | [Cancellation](doc/cancellation.md) | Checkpoints, `onCancel`, `uncancellable`, `timeout` |
-| [Children, streams and chains](doc/children.md) | `Job.deferred`, `ctx.run`, `ctx.runAll`, `ctx.each`, `then` |
+| [Children](doc/children.md) | `Job.deferred`, `ctx.run`, a child the body does not await, how deep a tree goes |
+| [Groups](doc/groups.md) | `.wait`, `ctx.runAll`, what a group hands back |
+| [Chains](doc/chains.md) | `then`, a continuation of a child, steps in a row |
 | [Streams](doc/streams.md) | `ctx.each`, `Job.each`, and what `await for` and `listen` do in a body |
 | [Cleanup](doc/cleanup.md) | `dispose`, `discard`, `onDispose`, ordering |
 | [Observing and testing](doc/observing.md) | `JobObserver`, `JobAnswerer`, `Job.visitErrors`, logs, `unattended`, fake time |

@@ -1156,7 +1156,7 @@ void main() {
 
     fakeAsyncTest('eagerError moves when the body wakes, and nothing else',
         () async {
-      // What `doc/children.md` promises about the three forms: only the
+      // What `doc/groups.md` promises about the three forms: only the
       // moment of waking differs. Either way a body that catches and
       // returns leaves the job successful with a branch failed, and a value
       // the slow branch returned is gone -- except under `.wait`, which

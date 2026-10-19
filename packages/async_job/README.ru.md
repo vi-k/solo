@@ -304,7 +304,9 @@ final operation = CancelableOperation.fromFuture(
 | --- | --- |
 | [Исходы](../../docs/ru/async_job/outcomes.md) | `Done`, `Failed`, `Cancelled` и наблюдение за провалом |
 | [Отмена](../../docs/ru/async_job/cancellation.md) | Контрольные точки, `onCancel`, `uncancellable`, `timeout` |
-| [Дети, стримы и цепочки](../../docs/ru/async_job/children.md) | `Job.deferred`, `ctx.run`, `ctx.runAll`, `ctx.each`, `then` |
+| [Дети](../../docs/ru/async_job/children.md) | `Job.deferred`, `ctx.run`, ребёнок без `await`, глубина дерева |
+| [Группы](../../docs/ru/async_job/groups.md) | `.wait`, `ctx.runAll`, что группа отдаёт обратно |
+| [Цепочки](../../docs/ru/async_job/chains.md) | `then`, продолжение ребёнка, шаги подряд |
 | [Стримы](../../docs/ru/async_job/streams.md) | `ctx.each`, `Job.each` и что делают `await for` и `listen` в теле |
 | [Уборка](../../docs/ru/async_job/cleanup.md) | `dispose`, `discard`, `onDispose`, порядок |
 | [Наблюдение и тестирование](../../docs/ru/async_job/observing.md) | `JobObserver`, `JobAnswerer`, `Job.visitErrors`, логи, `unattended`, время под управлением теста |

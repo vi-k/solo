@@ -1,7 +1,7 @@
-// The code of `doc/children.md`, verbatim: every block of the page is a run
-// of lines of this file, and `children_rakes_test.dart` runs it. A block
-// that declares names another block declares too lives in a function of
-// its own.
+// The code of `doc/children.md`, `doc/groups.md` and `doc/chains.md`,
+// verbatim: every block of the three pages is a run of lines of this file,
+// and `children_rakes_test.dart` runs it. A block that declares names another
+// block declares too lives in a function of its own.
 import 'dart:async';
 
 import 'package:async_job/async_job.dart';
@@ -217,21 +217,6 @@ ChildJob<List<Source>> handedOutDiscard(List<ChildJob<Source>> branches) {
     return sources;
   });
   return exported;
-}
-
-Future<void> saveMessages(
-  Stream<String> messages,
-  Future<void> Function(String message) save,
-) async {
-  final job = Job<void>((ctx) async {
-    // ignore: prefer_expression_function_bodies
-    final processing = ctx.each(messages, (childCtx, message) {
-      return childCtx.join(() => save(message));
-    });
-    await processing.value;
-  });
-
-  await job.value;
 }
 
 Future<void> chain() async {

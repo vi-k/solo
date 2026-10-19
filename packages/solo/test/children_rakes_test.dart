@@ -1399,7 +1399,7 @@ void main() {
           expect(_seen, [
             'Invalid argument (job): was not created by this Solo: "Job()"',
           ]);
-          _says('Where that page makes a child with `Job.deferred`, a '
+          _says('Where those pages make a child with `Job.deferred`, a '
               'controller makes it with `job(...)`: its `ctx.run` and '
               '`ctx.runAll` take no other job');
         });

@@ -1,6 +1,7 @@
-// What the code of `doc/children.md` takes for granted: the sources, the
-// operations and the stream it reads. Each test sets the stage first, so
-// one stub can open in time, fail or give the branch up.
+// What the code of `doc/children.md`, `doc/groups.md` and `doc/chains.md`
+// takes for granted: the sources, the operations and the stream it reads.
+// Each test sets the stage first, so one stub can open in time, fail or make
+// the branch cancel itself.
 import 'dart:async';
 
 import 'package:async_job/async_job.dart';

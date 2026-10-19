@@ -5,8 +5,9 @@
 /// children and cleanup. A `Job` is not a `Future` itself: await `job.done`
 /// for its outcome or `job.value` for what the body returned.
 ///
-/// The guides — outcomes, cancellation, children, cleanup, observing and
-/// building on the core — are on the documentation site:
+/// The guides — outcomes, cancellation, children, groups, chains, streams,
+/// cleanup, observing and building on the core — are on the documentation
+/// site:
 /// https://docs.yet-another.dev/async_job/
 ///
 /// This is the import for code that runs jobs. The protocol for building an

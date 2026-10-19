@@ -129,11 +129,9 @@ export default defineConfig({
             page('async_job', 'Overview', 'Обзор'),
             page('async_job/outcomes', 'Outcomes', 'Исходы'),
             page('async_job/cancellation', 'Cancellation', 'Отмена'),
-            page(
-              'async_job/children',
-              'Children, streams and chains',
-              'Дети, стримы и цепочки',
-            ),
+            page('async_job/children', 'Children', 'Дети'),
+            page('async_job/groups', 'Groups', 'Группы'),
+            page('async_job/chains', 'Chains', 'Цепочки'),
             page('async_job/streams', 'Streams', 'Стримы'),
             page('async_job/cleanup', 'Cleanup', 'Уборка'),
             page(

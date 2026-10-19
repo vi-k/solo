@@ -75,8 +75,8 @@ only when every branch of the group has ended its body and waited for its
 children, or when the body of one of them has ended in anything but a value. A
 lock two branches share stays taken until then, and the branch waiting for it
 keeps the group from getting there, so the group hangs.
-[When one failure makes the rest pointless](children.md#when-one-failure-makes-the-rest-pointless)
-on the children page says what unties it and how to take such a lock.
+[When one failure makes the rest pointless](groups.md#when-one-failure-makes-the-rest-pointless)
+on the groups page says what unties it and how to take such a lock.
 
 ## A resource that travels
 
@@ -167,9 +167,8 @@ The same value stays reachable through the child's `Job.value` for as long as
 anyone holds the handle, but closing it there closes it a second time. Where
 the value reaches no receiver at all, closing falls to whoever holds the
 handle: a branch that refused the group's stop, in
-[What a group hands back](children.md#what-a-group-hands-back), and a chain
-whose `then` was cancelled while it waited, in [Chains](children.md#chains),
-both on the children page.
+[What a group hands back](groups.md#what-a-group-hands-back), and a chain whose
+`then` was cancelled while it waited, on the [Chains](chains.md) page.
 
 The debug channel, switched on with `Job.debug = print;`, names every hand-over
 that drops a registration, whether or not the receiver registered anything, so

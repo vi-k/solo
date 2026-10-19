@@ -234,8 +234,8 @@ class AChangelog(unittest.TestCase):
 class WhatIsLeftAlone(unittest.TestCase):
     def test_a_section_of_the_page_itself(self):
         self.assertEqual(
-            rewrite('#chains', 'packages/async_job/doc/children.md'),
-            '#chains',
+            rewrite('#steps-in-a-row', 'packages/async_job/doc/chains.md'),
+            '#steps-in-a-row',
         )
 
     def test_an_external_link(self):

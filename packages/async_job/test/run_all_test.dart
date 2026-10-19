@@ -694,7 +694,7 @@ void main() {
   });
 
   test('a branch registers on arrival what a child of its own opened', () {
-    // The promise of `doc/children.md`: the branch that did not take the
+    // The promise of `doc/groups.md`: the branch that did not take the
     // resource itself is covered by the same recipe as anyone else, and
     // then everything the group promises holds for it too.
     final closed = <String>[];
