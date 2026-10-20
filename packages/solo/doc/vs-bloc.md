@@ -15,6 +15,23 @@ follows under its own heading. Reading the attempts before the answer is the
 point of the section; a reader who already knows the trap can skip to the bloc
 heading and `### Solo`.
 
+The scenarios in order, with what the first attempt does and what the solo
+version uses:
+
+| Scenario | What the first attempt does | What solo uses |
+| --- | --- | --- |
+| [Ordering updates to shared state](#ordering-updates-to-shared-state) | Two registrations run upload and refresh at once, and the new note is lost | The one queue of the controller |
+| [An observer fails during a state update](#an-observer-fails-during-a-state-update) | A throwing observer breaks the handler, and the state stays `Idle` | `Solo.observer`, whose failure does not reach the job |
+| [Closing and cancelling in-flight work](#closing-and-cancelling-in-flight-work) | `close()` waits for the reply, and the handler publishes it into a closing bloc | `close()`, which cancels the running job at `ctx.abandonable` |
+| [Leaving a loading state when the work is cancelled](#leaving-a-loading-state-when-the-work-is-cancelled) | The reset in `finally` goes to a cancelled emitter, and the state stays `Loading` | `ifCancelled`, and `lastJobWhere` to find the job to cancel |
+| [Restarting one operation within a shared queue](#restarting-one-operation-within-a-shared-queue) | Five commands run on the device at once, and the replaced seeks are not stopped | `Policy.restart` on `seek`, with `ctx.onCancel` and `ctx.join` |
+| [Typed methods with queued execution](#typed-methods-with-queued-execution) | `Cubit` methods overlap, and the oldest position can win | Methods that return a `Job`, with `Policy.restart` |
+| [Removing selected pending work](#removing-selected-pending-work) | A leaving flag lets a stale read run when the screen comes back before the queue drains | `queue.removeWhere`, and `cancellable: false` on what has to run |
+| [Awaiting a particular request](#awaiting-a-particular-request) | `droppable()` drops the other order too, and two callers in three are never answered | A key per order with `Policy.droppable`, and the job the caller awaits |
+| [Reacting to an independent external state change](#reacting-to-an-independent-external-state-change) | The revocation waits behind the build it makes worthless | `externalSetState`, and `run<SignedIn, void>` on the build |
+| [Finishing an in-flight write before restarting](#finishing-an-in-flight-write-before-restarting) | Both upload loops go on writing, and their chunks interleave | `Policy.restart`, with `ctx.join` around each write |
+| [Releasing a resource returned after cancellation](#releasing-a-resource-returned-after-cancellation) | The stale native buffer is never released | `dispose` on `ctx.abandonable` |
+
 `Bloc` processes events in handlers, and each `on<E>` call is one registration:
 a handler for the events of type `E` and the transformer that determines how
 those events are scheduled. `Cubit` exposes methods that update state directly;
