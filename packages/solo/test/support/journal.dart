@@ -55,12 +55,14 @@ final class JournalObserver extends SoloObserver {
   @override
   void onClose(Solo<Object> solo) => lines.add('closed');
 
-  /// Answers for an error with nowhere else to go, so the journal above is
-  /// the only place it shows up; see `Solo.unansweredHandler`.
+  /// Answers for an error with nowhere else to go, so the journal is the
+  /// only place it shows up: an `unanswered` line, after the `error` line
+  /// `onError` wrote for it; see `Solo.unansweredHandler`.
   void answerForErrors(
     Solo<Object> solo,
     Job<Object?> job,
     Object error,
     StackTrace stackTrace,
-  ) {}
+  ) =>
+      lines.add('${_label(job)} unanswered $error');
 }

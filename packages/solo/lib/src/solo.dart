@@ -139,6 +139,10 @@ abstract class Solo<S extends Object> {
   /// a list moves everything behind the head down on every one.
   final _unpublished = Queue<(S, S)>();
   bool _publishing = false;
+
+  /// How many `keepWhile` calls are answering right now: a write of the
+  /// state from inside one is refused.
+  int _askingKeepWhile = 0;
   static const Object _closedListeners = Object();
   Object? _listeners;
 
@@ -283,7 +287,9 @@ abstract class Solo<S extends Object> {
   /// `canStart` is checked once, when the job is taken from the queue or, run
   /// as a child, when [JobContext.run] starts it; `keepWhile` is checked at
   /// start, on every state change while the job runs, and on every read through
-  /// the context. `cancellable: false` turns down every cancellation that may
+  /// the context. `keepWhile` answers about the state and does not change
+  /// it: a write from inside it throws [StateError], and the rule throws
+  /// with it. `cancellable: false` turns down every cancellation that may
   /// be turned down — `cancel`, `clear` without `force`, parent cancellation
   /// and `close` — but not a state that stopped matching `W` or `keepWhile`.
   ///
@@ -479,6 +485,14 @@ abstract class Solo<S extends Object> {
   /// other, so a job added `first` after it starts ahead of it — cancelling
   /// the running job does not reserve the slot after it.
   ///
+  /// [Policy.replace] and [Policy.restart] queue [job] before they cancel
+  /// the jobs it replaces. Their `onFinish` and cancellation listeners run
+  /// inside this call, and a job they queue under the same key replaces
+  /// [job] in turn: the job asked for last is the one that runs. So a hook
+  /// that queues a job of the key every time one is cancelled, replaced
+  /// included, replaces its own jobs one after another and runs out of
+  /// stack; such a hook leaves a [ReplacedCancelReason] alone.
+  ///
   /// Throws [StateError] if [job] was already added or run, and
   /// [ArgumentError] if [policy] is not [Policy.sequential] and the job has
   /// no key, if [job] was created by another controller, or if
@@ -487,7 +501,10 @@ abstract class Solo<S extends Object> {
   /// refused for one of those reasons is untouched and can be added again;
   /// the [StateError] is about a handle that has been taken once already.
   /// After `close` the job finishes at once with `Cancelled(closed)`, and a
-  /// key held by another result type is not looked for at all.
+  /// key held by another result type is not looked for at all — except by
+  /// [Policy.droppable] during a [SoloCloseMode.drain]: the queue it runs
+  /// still holds jobs that will do their work, and one with the key is
+  /// handed back as before the close.
   @protected
   SoloJob<T> add<T>(
     Job<T> job, {
@@ -507,8 +524,10 @@ abstract class Solo<S extends Object> {
     // below: a key shared with a job of another result type is the
     // caller's mistake, and `add` must not bury the job it then refuses to
     // hand back. Nothing between here and the branch touches the queue. A
-    // closed controller never reaches a policy and keeps its own answer.
-    final duplicate = !isClosed && policy == Policy.droppable
+    // closed controller takes no new work, but a `drain` still runs what it
+    // had: a duplicate found there is handed back as before the close, since
+    // its work is going to be done, and only new work gets the closed answer.
+    final duplicate = (!isClosed || _draining) && policy == Policy.droppable
         ? _lastJobWhere((other) => other.key == impl.key)
         : null;
     // The two jobs are compared with each other, not with `T`: the type
@@ -527,7 +546,7 @@ abstract class Solo<S extends Object> {
     // Set before anything can go wrong below: a job dropped by a closed
     // controller has been added too, and one handle is one add.
     impl._added = true;
-    if (isClosed) {
+    if (isClosed && duplicate == null) {
       _debug(() => 'add $impl: closed');
       impl._drop(
         Cancelled.by(
@@ -538,77 +557,46 @@ abstract class Solo<S extends Object> {
       );
       return impl;
     }
-    switch (policy) {
-      case Policy.sequential:
-        break;
-      case Policy.droppable:
-        if (duplicate != null) {
-          _debug(() {
-            final name = '$duplicate';
-            final line = 'add $impl: duplicate of $name';
-            final current = _current;
-            // A droppable method called from inside the running job -- its
-            // body, a child of it, its cleanup -- hands back that very job,
-            // and a wait for it there is a wait for itself. A duplicate of a
-            // queued job hands back that one, which starts only after the
-            // running job ends, like any job queued from inside it. Who
-            // called is not known here, so the line says what holds for any
-            // caller.
-            if (current == null) {
-              return line;
-            }
-            if (identical(duplicate, current)) {
-              return '$line, which is running: if awaited from inside $name, '
-                  'it waits for itself';
-            }
-            final running = '$current';
-            return '$line, which is queued while $running is running: '
-                'it starts after $running ends';
-          });
-          impl._drop(
-            Cancelled.by(
-              reason: const DuplicateCancelReason(),
-              started: false,
-              stackTrace: StackTrace.current,
-            ),
-          );
-          // The type was checked before the job was marked as added.
-          return duplicate as SoloJob<T>;
-        }
-      case Policy.replace:
-        _queue.removeWhere(
-          (other) => other.key == impl.key,
-          reason: const ReplacedCancelReason(),
-        );
-      case Policy.restart:
-        _queue.removeWhere(
-          (other) => other.key == impl.key,
-          reason: const ReplacedCancelReason(),
-        );
+    // Found by [Policy.droppable] only.
+    if (duplicate != null) {
+      _debug(() {
+        final name = '$duplicate';
+        final line = 'add $impl: duplicate of $name';
         final current = _current;
-        if (current != null && current.key == impl.key) {
-          unawaited(current.cancel(reason: const ReplacedCancelReason()));
+        // A droppable method called from inside the running job -- its
+        // body, a child of it, its cleanup -- hands back that very job,
+        // and a wait for it there is a wait for itself. A duplicate of a
+        // queued job hands back that one, which starts only after the
+        // running job ends, like any job queued from inside it. Who
+        // called is not known here, so the line says what holds for any
+        // caller.
+        if (current == null) {
+          return line;
         }
-    }
-    if (isClosed) {
-      // A policy above removes jobs, and removing one finishes it: its
-      // `onFinish` is a hook of a domain, and a hook may close the
-      // controller. The check at the top of this method is stale by then,
-      // and a job inserted into a drained queue would wait for a pump that
-      // never comes.
-      _debug(() => 'add $impl: closed while the policy was applied');
+        if (identical(duplicate, current)) {
+          return '$line, which is running: if awaited from inside $name, '
+              'it waits for itself';
+        }
+        final running = '$current';
+        return '$line, which is queued while $running is running: '
+            'it starts after $running ends';
+      });
       impl._drop(
         Cancelled.by(
-          reason: const ClosedCancelReason(),
+          reason: const DuplicateCancelReason(),
           started: false,
-          stackTrace: _closeStackTrace,
+          stackTrace: StackTrace.current,
         ),
       );
-      return impl;
+      // The type was checked before the job was marked as added.
+      return duplicate as SoloJob<T>;
     }
-    // A removed job's synchronous cancellation listener may cancel the
-    // incoming job. It must not occupy a queue slot or match a later policy.
-    if (impl.isFinished) return impl;
+    // Queued before the others are cancelled, not after: cancelling one
+    // runs its `onFinish` and its cancellation listeners synchronously, and
+    // that code may queue a job of its own under the same key. Inserted
+    // first, this job is the one such a call finds and replaces; inserted
+    // afterwards, it would land behind that call and replace it instead,
+    // and the job queued last would not be the one to run last.
     _queue._insert(impl, first: first);
     _debug(() {
       final line = 'add $impl${first ? ' first' : ''}';
@@ -623,6 +611,24 @@ abstract class Solo<S extends Object> {
       final name = '$current';
       return '$line while $name is running: it starts after $name ends';
     });
+    if (policy == Policy.replace || policy == Policy.restart) {
+      // What the cancelled jobs' code does to this one is the queue's usual
+      // business from here: a cancellation removes it, a `close` drops it
+      // with the rest.
+      _queue.removeWhere(
+        (other) => other.key == impl.key && !identical(other, impl),
+        reason: const ReplacedCancelReason(),
+      );
+      // Unless that code took [job] out again: the running job is cancelled
+      // for a job that is going to run, not for one that already ended.
+      final current = _current;
+      if (policy == Policy.restart &&
+          !impl.isFinished &&
+          current != null &&
+          current.key == impl.key) {
+        unawaited(current.cancel(reason: const ReplacedCancelReason()));
+      }
+    }
     _schedulePump();
     return impl;
   }
@@ -842,7 +848,9 @@ abstract class Solo<S extends Object> {
   /// [SoloCloseMode.drain] leaves the queue alone and closes once it has
   /// run: new root jobs are refused from the call onwards, and the ones
   /// already accepted go by the usual rules, children, cleanup and
-  /// accumulation windows included.
+  /// accumulation windows included. A [Policy.droppable] call whose key a
+  /// draining job holds gets that job back, as before the close: it is not
+  /// new work.
   ///
   /// A plain `close()` over a running drain stops it where it is: the
   /// queue is dropped and the current job cancelled, and the same future
@@ -1089,6 +1097,16 @@ abstract class Solo<S extends Object> {
   }
 
   void _setState(S next, {required _SoloJob<S, S, Object?>? emitter}) {
+    // A change asks every running job's `keepWhile` again, and a rule that
+    // writes the state while it answers asks itself again: one that writes
+    // every time it is asked never comes back. Refused at the first write,
+    // as an accumulator refuses an `add` from inside its `merge`.
+    if (_askingKeepWhile > 0) {
+      throw StateError(
+        'Cannot set the state of $runtimeType while a keepWhile is '
+        'answering; a rule answers about the state, it does not change it',
+      );
+    }
     // Every write comes through here, and none can arrive once closing has
     // finished: `externalSetState` throws before the call, and a job that
     // could still emit is a job `close` is waiting for. Asserted rather

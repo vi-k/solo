@@ -121,6 +121,12 @@ own zone waited for good when the future failed while the body ran under a
 different `runZonedGuarded`. See
 [Creating and scheduling jobs](doc/jobs.md#creating-and-scheduling-jobs).
 
+`keepWhile` may not set the state: a write while it answers throws a
+`StateError`, and the rule throws with it, as any rule that throws. `0.2.0` let
+the write through and asked the rule again about the new state, and a rule that
+wrote every time it was asked ran out of stack. `canStart` may still write: it
+is asked once.
+
 ### Added
 
 - **`timeout` gives a job of the controller a deadline of its own.** `job`,
@@ -151,8 +157,15 @@ different `runZonedGuarded`. See
 
 ### Fixed
 
-- A state the start rules write while they answer is held to `W` and
-  `keepWhile`: the job started under it even when it no longer matched them.
+- A state `canStart` writes while it answers is held to `W` and `keepWhile`:
+  the job started under it even when it no longer matched them.
+- `Policy.replace` and `Policy.restart` queue the new job before they cancel
+  the jobs it replaces. A job of the same key that `onFinish` or
+  `whenCancelled` queued as a replaced job ended came in ahead of the new job,
+  and both ran: the last request lost to the one before it.
+- A child that its own `canStart` cancels while it answers yes reaches its
+  parent as its cancellation, as a refusal does: the parent ended `Failed` with
+  a `StateError` that the child had already finished.
 - A child that a start rule of its own runs again is refused with a
   `StateError`: the parent stopped waiting for the child, whose body went on
   running, and the child's `onDispose` never ran.

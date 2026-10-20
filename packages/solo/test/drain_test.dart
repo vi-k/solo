@@ -280,4 +280,73 @@ void main() {
       ]);
     });
   });
+
+  test('a droppable call during a drain gets back the job that holds its key',
+      () {
+    runSolo((solo, journal, async) {
+      SoloJob<void> keyed(String key, Policy policy) =>
+          solo.run<TestState, void>(
+            key: key,
+            policy: policy,
+            (ctx) async {
+              await delay(50);
+              ctx.emit(const Preparing());
+            },
+          );
+      final running = keyed('running', Policy.droppable);
+      final queued = keyed('queued', Policy.droppable);
+      async.flushMicrotasks();
+      solo.close(mode: SoloCloseMode.drain).ignore();
+      expect(identical(keyed('running', Policy.droppable), running), isTrue);
+      expect(identical(keyed('queued', Policy.droppable), queued), isTrue);
+      final fresh = keyed('fresh', Policy.droppable);
+      async.flushTimers();
+      expect(running.outcome, isA<Done<void>>());
+      expect(queued.outcome, isA<Done<void>>());
+      expect(fresh.outcome, isA<Cancelled>());
+      expect(journal.take(), [
+        '[running] started',
+        '[running] dropped Cancelled(duplicate)',
+        '[queued] dropped Cancelled(duplicate)',
+        '[fresh] dropped Cancelled(closed)',
+        'state: Preparing(progress: 0)',
+        '[running] finished Done(null)',
+        '[queued] started',
+        'state: Preparing(progress: 0)',
+        '[queued] finished Done(null)',
+        'closed',
+      ]);
+    });
+  });
+
+  // The other policies with a key bring new work, and a drain takes none:
+  // the queued job is neither replaced nor restarted.
+  for (final policy in [Policy.sequential, Policy.replace, Policy.restart]) {
+    test('a $policy call during a drain is refused and leaves the queue', () {
+      runSolo((solo, journal, async) {
+        SoloJob<void> keyed() => solo.run<TestState, void>(
+              key: 'k',
+              policy: policy,
+              (ctx) async {
+                await delay(50);
+                ctx.emit(const Preparing());
+              },
+            );
+        final running = keyed();
+        async.flushMicrotasks();
+        solo.close(mode: SoloCloseMode.drain).ignore();
+        final late = keyed();
+        async.flushTimers();
+        expect(running.outcome, isA<Done<void>>());
+        expect(late.outcome, isA<Cancelled>());
+        expect(journal.take(), [
+          '[k] started',
+          '[k] dropped Cancelled(closed)',
+          'state: Preparing(progress: 0)',
+          '[k] finished Done(null)',
+          'closed',
+        ]);
+      });
+    });
+  }
 }

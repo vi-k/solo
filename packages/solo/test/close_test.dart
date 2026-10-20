@@ -227,8 +227,8 @@ void main() {
       async.flushMicrotasks();
       journal.take();
       // Closing from the hook that the policy's own removal fires: the
-      // incoming job has passed the check at the top of `add` and is not
-      // in the queue yet.
+      // incoming job has passed the check at the top of `add` and is in the
+      // queue already, so the close drops it with the rest.
       Solo.observer = _ClosingObserver(solo, key: 'x');
       final incoming = solo.run<TestState, void>(
         key: 'x',
@@ -244,6 +244,33 @@ void main() {
         isA<ClosedCancelReason>(),
       );
       expect(solo.queue.isEmpty, isTrue);
+    });
+  });
+
+  test('a job added while a policy hook drained the controller runs', () {
+    runSolo((solo, journal, async) {
+      solo
+        ..run<TestState, void>(key: 'busy', (ctx) => pause(ctx, 50))
+        ..run<TestState, void>(key: 'x', (ctx) async {});
+      async.flushMicrotasks();
+      journal.take();
+      // The incoming job is in the queue before the policy removes the
+      // other one, so the drain that the removal starts finds it there:
+      // accepted before the close, it is work the drain runs.
+      Solo.observer = _ClosingObserver(
+        solo,
+        key: 'x',
+        mode: SoloCloseMode.drain,
+      );
+      final incoming = solo.run<TestState, void>(
+        key: 'x',
+        policy: Policy.replace,
+        (ctx) async {},
+      );
+      Solo.observer = journal;
+      expect(solo.isClosed, isTrue);
+      async.flushTimers();
+      expect(incoming.outcome, isA<Done<void>>());
     });
   });
 
@@ -316,17 +343,22 @@ final class _Recorder extends Solo<TestState> with OpenSolo<TestState> {
 
 /// Closes the controller from the finish hook of the job with [key].
 final class _ClosingObserver extends SoloObserver {
-  _ClosingObserver(this._solo, {required this.key});
+  _ClosingObserver(
+    this._solo, {
+    required this.key,
+    this.mode = SoloCloseMode.cancel,
+  });
 
   final Solo<Object> _solo;
   final Object? key;
+  final SoloCloseMode mode;
   var _fired = false;
 
   @override
   void onFinish(Solo<Object> solo, Job<Object?> job) {
     if (job.key == key && !_fired) {
       _fired = true;
-      _solo.close().ignore();
+      _solo.close(mode: mode).ignore();
     }
   }
 }

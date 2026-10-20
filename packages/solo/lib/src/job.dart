@@ -149,8 +149,9 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
 
   /// A rejection description if [state] fails the keep rules, else null.
   ///
-  /// Once this says null, the rules hold for the state the controller has
-  /// now, whatever `keepWhile` wrote while it answered.
+  /// `keepWhile` cannot write the state while it answers — the write
+  /// throws [StateError] — so the answer is about the state the controller
+  /// has now.
   String? _rejectKeep(S state) {
     if (state is! W) {
       return 'is not $W';
@@ -159,16 +160,14 @@ final class _SoloJob<S extends Object, W extends S, T> extends JobBase<T>
     if (keepWhile == null) {
       return null;
     }
-    if (!keepWhile(state)) {
-      return 'keepWhile';
+    final bool keep;
+    _solo._askingKeepWhile++;
+    try {
+      keep = keepWhile(state);
+    } finally {
+      _solo._askingKeepWhile--;
     }
-    // `keepWhile` is the caller's code too, and it may write the state
-    // while it answers. A running job is asked again by that change itself;
-    // one about to start is not, and its body would run under a state the
-    // rules have not seen. So they are asked here, against the state as it
-    // became, until it holds still.
-    final now = _solo._state;
-    return identical(now, state) ? null : _rejectKeep(now);
+    return keep ? null : 'keepWhile';
   }
 
   /// A snapshot of what this job is doing, for [Solo.pending].

@@ -133,8 +133,8 @@ final class _SoloContext<S extends Object, W extends S, R>
     // member that called it start its action on a job already marked.
     throwIfCancelled();
 
-    // Not `current`: `keepWhile` may have written the state while it
-    // answered, and the rules have held for the state as it became.
+    // The state the rules held for: `keepWhile` cannot write it while it
+    // answers.
     return _solo._state as W;
   }
 
@@ -160,7 +160,15 @@ final class _SoloContext<S extends Object, W extends S, R>
   void emit(S next) {
     throwIfFinished('emit');
     throwIfCancelled();
-    Solo._debug(() => '$_job emit: $next');
+    // `W` is a condition of the whole run, not only of the start, and a
+    // body that emits its way out of it is cancelled by the rules at its
+    // next checkpoint — far from this line, which is where the mistake is.
+    Solo._debug(
+      () => next is W
+          ? '$_job emit: $next'
+          : '$_job emit: $next, which is not $W: the rules cancel $_job at '
+              'its next checkpoint',
+    );
     _solo._setState(next, emitter: _job);
     // The write is a checkpoint on both sides: hooks, observers and
     // listeners run inside `_setState` and may cancel this job — through a
@@ -178,14 +186,24 @@ final class _SoloContext<S extends Object, W extends S, R>
     // `Failed`, tells its observer and hands the error to the body of the
     // parent, which may catch it.
     final rejection = impl._rejectStart(_solo._state);
-    return rejection == null
-        ? null
-        : Cancelled.by(
-            reason: const RulesCancelReason(),
-            started: false,
-            description: rejection,
-            stackTrace: StackTrace.current,
-          );
+    if (rejection != null) {
+      return Cancelled.by(
+        reason: const RulesCancelReason(),
+        started: false,
+        description: rejection,
+        stackTrace: StackTrace.current,
+      );
+    }
+    // A rule is the caller's code, and it may end the child while saying
+    // yes: `cancel()` on a job that has not started finishes it where it
+    // stands. Started anyway, it would throw `has already finished` into
+    // the body of the parent; handed back, its own cancellation reaches
+    // the parent the way a refusal does, as the root pump steps over such
+    // a job.
+    if (impl.outcome case final Cancelled cancelled) {
+      return cancelled;
+    }
+    return null;
   }
 
   @override

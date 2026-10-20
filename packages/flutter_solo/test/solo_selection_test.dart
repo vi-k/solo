@@ -700,6 +700,83 @@ void main() {
     inside = false;
     expect(calls, 0, reason: 'nothing may arrive before addListener returns');
   });
+
+  test('a value of the source is never taken for the empty pick', () {
+    final reports = _captureReports();
+    final source = ValueNotifier<Object>(Object());
+    final selection = SoloSelection<Object, String>(source, (value) {
+      if (identical(value, const Object())) {
+        throw StateError('cannot pick this value');
+      }
+      return 'old pick';
+    });
+    void listener() {}
+    selection.addListener(listener);
+    addTearDown(() => selection.removeListener(listener));
+    // The selector throws on the change and keeps no pick; a `const
+    // Object()` of the caller's used to be the marker of that.
+    source.value = const Object();
+    expect(reports.single, isStateError);
+    expect(() => selection.value, throwsStateError);
+  });
+
+  test('a listener added while a failed subscription was made is let go', () {
+    final source = _ReentrantFailingSource();
+    final selection = SoloSelection<int, int>(source, (value) => value);
+    final heard = <String>[];
+    source.duringAdd = () => selection.addListener(() => heard.add('second'));
+    expect(() => selection.addListener(() {}), throwsStateError);
+    void third() => heard.add('third');
+    selection.addListener(third);
+    addTearDown(() => selection.removeListener(third));
+    expect(source.listeners, hasLength(1), reason: 'subscribed again');
+    source.set(1);
+    expect(heard, ['third']);
+  });
+
+  test('a source that removes by identity loses the subscription', () {
+    final source = _IdentitySource();
+    final selection = SoloSelection<int, int>(source, (value) => value);
+    void listener() {}
+    selection.addListener(listener);
+    expect(source.listeners, hasLength(1));
+    selection.removeListener(listener);
+    expect(source.listeners, isEmpty);
+  });
+
+  test('a listener added while the last one is being removed is kept', () {
+    final reports = _captureReports();
+    final source = _RemovalHookSource();
+    addTearDown(source.dispose);
+    final selection = SoloSelection<int, int>(source, (value) => value);
+    final heard = <int>[];
+    void first() {}
+    void second() => heard.add(selection.value);
+    selection.addListener(first);
+    source.onRemove = () => selection.addListener(second);
+    selection.removeListener(first);
+    addTearDown(() => selection.removeListener(second));
+    source.value = 1;
+    expect(reports, isEmpty);
+    expect(heard, [1]);
+  });
+
+  test('a source that fails to subscribe and to let go keeps nobody', () {
+    final reports = _captureReports();
+    final source = _DoubleFailureSource();
+    final selection = SoloSelection<int, int>(source, (value) => value);
+    var calls = 0;
+    expect(
+      () => selection.addListener(() => calls++),
+      throwsA(isStateError.having((e) => e.message, 'message', 'subscribe')),
+    );
+    expect(
+      reports.single,
+      isStateError.having((e) => e.message, 'message', 'remove'),
+    );
+    source.publish();
+    expect(calls, 0);
+  });
 }
 
 /// A selection that picked a payload while subscribed and then lost its
@@ -785,5 +862,100 @@ class EagerSource extends ValueNotifier<int> {
   void addListener(VoidCallback listener) {
     super.addListener(listener);
     value = 1;
+  }
+}
+
+/// Collects what [FlutterError.onError] is handed until the test ends.
+List<Object> _captureReports() {
+  final reports = <Object>[];
+  final previous = FlutterError.onError;
+  FlutterError.onError = (details) => reports.add(details.exception);
+  addTearDown(() => FlutterError.onError = previous);
+  return reports;
+}
+
+/// Calls [duringAdd] from inside `addListener` and fails the first one.
+final class _ReentrantFailingSource implements ValueListenable<int> {
+  final listeners = <VoidCallback>[];
+  VoidCallback? duringAdd;
+  var _fail = true;
+
+  @override
+  int value = 0;
+
+  @override
+  void addListener(VoidCallback listener) {
+    listeners.add(listener);
+    final callback = duringAdd;
+    duringAdd = null;
+    callback?.call();
+    if (_fail) {
+      _fail = false;
+      throw StateError('subscribe');
+    }
+  }
+
+  @override
+  void removeListener(VoidCallback listener) => listeners.remove(listener);
+
+  void set(int next) {
+    value = next;
+    for (final listener in listeners.toList()) {
+      listener();
+    }
+  }
+}
+
+/// Takes listeners off by identity rather than by `==`.
+final class _IdentitySource implements ValueListenable<int> {
+  final listeners = <VoidCallback>[];
+
+  @override
+  int value = 0;
+
+  @override
+  void addListener(VoidCallback listener) => listeners.add(listener);
+
+  @override
+  void removeListener(VoidCallback listener) =>
+      listeners.removeWhere((entry) => identical(entry, listener));
+}
+
+/// Calls [onRemove] from inside `removeListener`, before it removes.
+final class _RemovalHookSource extends ValueNotifier<int> {
+  _RemovalHookSource() : super(0);
+
+  VoidCallback? onRemove;
+
+  @override
+  void removeListener(VoidCallback listener) {
+    final hook = onRemove;
+    onRemove = null;
+    hook?.call();
+    super.removeListener(listener);
+  }
+}
+
+/// Keeps the listener and throws on subscribing, then throws on letting go.
+final class _DoubleFailureSource implements ValueListenable<int> {
+  final listeners = <VoidCallback>[];
+
+  @override
+  int value = 0;
+
+  @override
+  void addListener(VoidCallback listener) {
+    listeners.add(listener);
+    throw StateError('subscribe');
+  }
+
+  @override
+  void removeListener(VoidCallback listener) => throw StateError('remove');
+
+  void publish() {
+    value++;
+    for (final listener in listeners.toList()) {
+      listener();
+    }
   }
 }

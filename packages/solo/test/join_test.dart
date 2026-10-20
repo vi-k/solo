@@ -290,6 +290,7 @@ void main() {
       expect(journal.take(), [
         '[job] started',
         '[job] error Bad state: cannot dispose 7',
+        '[job] unanswered Bad state: cannot dispose 7',
         '[job] finished Cancelled(manual)',
       ]);
     });
@@ -314,6 +315,7 @@ void main() {
         '[job] started',
         '[job] error FormatException: the device said no',
         '[job] finished Cancelled(manual)',
+        '[job] unanswered FormatException: the device said no',
       ]);
     });
   });

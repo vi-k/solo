@@ -96,7 +96,15 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
   /// Set when the source notifies while it is being subscribed to.
   var _heardWhileSubscribing = false;
 
-  static const _none = Object();
+  /// What [_pickedFrom] holds when nothing has been picked: an instance of
+  /// a private class, so that no value of a source can be identical to it —
+  /// a `const Object()` of the caller's is one object with every other.
+  static const _none = _Unpicked();
+
+  /// The one callback the source is given. Two tear-offs of a method are
+  /// equal but need not be identical, and a source that takes listeners off
+  /// by identity would not find the one it was given.
+  late final VoidCallback _sourceListener = _onSourceChanged;
 
   /// Picks [selector] out of [source]; [changed] answers whether the pick
   /// changed, `!=` when it is omitted.
@@ -172,7 +180,7 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
         _subscribing = true;
         _heardWhileSubscribing = false;
         subscriptionAttempted = true;
-        _source.addListener(_onSourceChanged);
+        _source.addListener(_sourceListener);
         _subscribing = false;
 
         // Picked again only when the source moved while it was being
@@ -189,12 +197,30 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
           }
         }
       } on Object catch (_) {
+        // Everything listening now came in with this attempt — the list was
+        // empty before it — the ones the source's own `addListener` added
+        // from inside it too, and none of them has a source to hear from.
+        // Taken back before the source is asked to let go, which is foreign
+        // code that may throw as well: whatever it does, nothing here is
+        // left listening to a subscription that failed.
         _subscribing = false;
-        if (subscriptionAttempted) {
-          _source.removeListener(_onSourceChanged);
-        }
-        _listeners.remove(listener);
+        _listeners.clear();
+        _epoch++;
         _forget();
+        if (subscriptionAttempted) {
+          try {
+            _source.removeListener(_sourceListener);
+          } on Object catch (error, stackTrace) {
+            // The failure to subscribe is the caller's answer; this one is
+            // a second fault of the same source, reported like a listener's.
+            _reportIn(
+              error,
+              stackTrace,
+              'unsubscribing ${describeIdentity(this)} from its source '
+              'after a failed subscription',
+            );
+          }
+        }
         rethrow;
       }
     }
@@ -207,9 +233,12 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
     if (!_listeners.remove(listener) || !_listeners.isEmpty) {
       return;
     }
-    _source.removeListener(_onSourceChanged);
+    // Idle before the source hears of it: its `removeListener` is foreign
+    // code, and a listener added from in there starts a subscription of its
+    // own, which must not have its state wiped on the way back.
     _epoch++;
     _forget();
+    _source.removeListener(_sourceListener);
   }
 
   /// Lets go of what the selection kept for its listeners: an idle one
@@ -225,16 +254,22 @@ final class SoloSelection<S, T> implements ValueListenable<T> {
   ///
   /// A reporter that throws does not take the listener's failure with it:
   /// both go to the zone, the listener's first.
-  void _report(Object error, StackTrace stackTrace) {
+  void _report(Object error, StackTrace stackTrace) => _reportIn(
+        error,
+        stackTrace,
+        'notifying a listener of ${describeIdentity(this)}',
+      );
+
+  /// Reports [error] through [FlutterError] with [context], or both errors
+  /// to the zone if the reporter throws.
+  void _reportIn(Object error, StackTrace stackTrace, String context) {
     try {
       FlutterError.reportError(
         FlutterErrorDetails(
           exception: error,
           stack: stackTrace,
           library: 'flutter_solo',
-          context: ErrorDescription(
-            'notifying a listener of ${describeIdentity(this)}',
-          ),
+          context: ErrorDescription(context),
         ),
       );
     } on Object catch (reporterError, reporterStackTrace) {
@@ -315,4 +350,9 @@ extension SoloSelect<S> on ValueListenable<S> {
     bool Function(T previous, T current)? changed,
   }) =>
       SoloSelection<S, T>(this, selector, changed: changed);
+}
+
+/// The class of [SoloSelection._none].
+final class _Unpicked {
+  const _Unpicked();
 }

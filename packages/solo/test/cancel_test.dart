@@ -96,6 +96,7 @@ void main() {
         '[job] started',
         '[job] error Bad state: late',
         '[job] finished Cancelled(manual)',
+        '[job] unanswered Bad state: late',
       ]);
     });
   });

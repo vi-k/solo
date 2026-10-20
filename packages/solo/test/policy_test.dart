@@ -3,6 +3,7 @@ library;
 
 import 'dart:async';
 
+import 'package:fake_async/fake_async.dart';
 import 'package:solo/solo.dart';
 import 'package:test/test.dart';
 
@@ -610,4 +611,105 @@ void main() {
       });
     });
   });
+
+  // Cancelling a replaced job runs its code synchronously, inside the `add`
+  // that replaces it, and that code may ask for the same key again. The job
+  // asked for last is the one that has to run last.
+  group('a job queued from the code of a job it replaces', () {
+    for (final policy in [Policy.replace, Policy.restart]) {
+      for (final hook in ['onFinish', 'whenCancelled']) {
+        for (final running in [
+          false,
+          if (policy == Policy.restart) true,
+        ]) {
+          final where = running ? 'running' : 'queued';
+          // The `onFinish` of a running job comes after `add` has returned,
+          // so that variant never reaches the reentrant path; it holds what
+          // was right before the order changed.
+          test('${policy.name}, from $hook of a $where job, runs last', () {
+            fakeAsync((async) {
+              final solo =
+                  _Rerequesting(policy, fromOnFinish: hook == 'onFinish');
+              final a = solo.request('A');
+              if (running) async.flushMicrotasks();
+              if (hook == 'whenCancelled') {
+                a.whenCancelled((_) => solo.request('C'));
+              }
+              final b = solo.request('B');
+              async.flushTimers();
+              expect(solo.requested, ['A', 'B', 'C']);
+              expect(solo.started, [if (running) 'A', 'C']);
+              expect(solo.currentState, 'C');
+              expect(
+                b.outcome,
+                isA<Cancelled>().having(
+                  (cancelled) => cancelled.reason,
+                  'reason',
+                  isA<ReplacedCancelReason>(),
+                ),
+              );
+              unawaited(solo.close());
+              async.flushTimers();
+            });
+          });
+        }
+      }
+    }
+
+    test('restart taken back by that code leaves the running job alone', () {
+      fakeAsync((async) {
+        final solo = _Rerequesting(Policy.restart, fromOnFinish: false);
+        final a = solo.request('A');
+        async.flushMicrotasks();
+        solo
+            .run<String, void>(key: 'search', (ctx) async => ctx.emit('Q'))
+            .whenCancelled((_) => solo.queue.clear());
+        final b = solo.request('B');
+        async.flushTimers();
+        expect(
+          b.outcome,
+          isA<Cancelled>().having(
+            (cancelled) => cancelled.reason,
+            'reason',
+            isA<ManualCancelReason>(),
+          ),
+        );
+        expect(a.outcome, isA<Done<void>>());
+        expect(solo.started, ['A']);
+        expect(solo.currentState, 'A');
+        unawaited(solo.close());
+        async.flushTimers();
+      });
+    });
+  });
+}
+
+final class _Rerequesting extends Solo<String> with OpenSolo<String> {
+  final Policy policy;
+  final bool fromOnFinish;
+  final requested = <String>[];
+  final started = <String>[];
+
+  _Rerequesting(this.policy, {required this.fromOnFinish}) : super('');
+
+  SoloJob<void> request(String value) {
+    requested.add(value);
+    return run<String, void>(
+      key: 'search',
+      policy: policy,
+      (ctx) async {
+        started.add(value);
+        if (value == 'A') await ctx.abandonable(() => delay(100));
+        ctx.emit(value);
+      },
+    );
+  }
+
+  @override
+  void onFinish(Job<Object?> job) {
+    super.onFinish(job);
+    if (fromOnFinish && requested.length == 2 && job.outcome is Cancelled) {
+      request('C');
+    }
+  }
 }

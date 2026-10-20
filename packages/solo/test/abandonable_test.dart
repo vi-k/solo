@@ -99,7 +99,10 @@ void main() {
         '[job] finished Cancelled(manual)',
       ]);
       async.elapse(const Duration(milliseconds: 50));
-      expect(journal.take(), ['[job] error Bad state: late']);
+      expect(journal.take(), [
+        '[job] error Bad state: late',
+        '[job] unanswered Bad state: late',
+      ]);
     });
   });
 
@@ -248,6 +251,7 @@ void main() {
         '[job] started',
         '[job] finished Cancelled(manual)',
         '[job] error Bad state: late',
+        '[job] unanswered Bad state: late',
       ]);
     });
   });
@@ -270,6 +274,7 @@ void main() {
         '[job] started',
         '[job] finished Cancelled(manual)',
         '[job] error Bad state: cannot dispose 7',
+        '[job] unanswered Bad state: cannot dispose 7',
       ]);
     });
   });

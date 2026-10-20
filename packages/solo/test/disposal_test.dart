@@ -53,7 +53,7 @@ void main() {
       // disposer reaches nobody in `solo`, and this test would be green on
       // silence.
       expect(
-        journal.lines.where((line) => line.contains('error Bad state')),
+        journal.take().where((line) => line.contains('error Bad state')),
         hasLength(1),
       );
     });

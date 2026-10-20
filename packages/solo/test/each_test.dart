@@ -453,6 +453,7 @@ void main() {
           '[job] started',
           'state: Preparing(progress: 0)',
           '[job] error $_unattendedEach',
+          '[job] unanswered $_unattendedEach',
           '[job] finished Done(null)',
         ]);
         events.close();

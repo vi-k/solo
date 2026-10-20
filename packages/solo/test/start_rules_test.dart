@@ -135,94 +135,89 @@ void main() {
     });
   });
 
-  test('a state keepWhile writes at the start is held to W', () {
+  // A change asks every running job's `keepWhile` again, so a rule that
+  // writes the state asks itself again, and one that writes every time it
+  // is asked never comes back. The write throws instead, and the rule
+  // throws with it, as any rule that throws.
+  const refused = 'Bad state: Cannot set the state of TestSolo while a '
+      'keepWhile is answering; a rule answers about the state, it does not '
+      'change it';
+
+  test('a keepWhile that writes the state at the start is refused', () {
     runSolo((solo, journal, async) {
-      // The job is not running yet, so the change its own rule makes
-      // re-asks nobody: the start has to look at the state again.
       final ran = <String>[];
-      solo.run<Initial, void>(
+      final root = solo.job<Initial, void>(
         key: 'root',
         keepWhile: (state) {
           solo.externalSetState(const Preparing());
           return true;
         },
         (ctx) async => ran.add('root'),
-      );
+      )..ignoreFailure();
+      solo.add(root);
       async.flushTimers();
-      solo
-        ..externalSetState(const Initial())
-        ..run<TestState, void>(key: 'parent', (ctx) async {
-          final child = solo.job<Initial, void>(
-            key: 'child',
-            keepWhile: (state) {
-              solo.externalSetState(const Preparing(progress: 1));
-              return true;
-            },
-            (childCtx) async => ran.add('child'),
-          );
-          ctx.run(child).ignore();
-          await child.done;
-        });
+      solo.run<TestState, void>(key: 'parent', (ctx) async {
+        final child = solo.job<Initial, void>(
+          key: 'child',
+          keepWhile: (state) {
+            solo.externalSetState(const Preparing(progress: 1));
+            return true;
+          },
+          (childCtx) async => ran.add('child'),
+        )..ignoreFailure();
+        ctx.run(child).ignore();
+        await child.done;
+      }).ignoreFailure();
       async.flushTimers();
       expect(journal.take(), [
-        'state: Preparing(progress: 0)',
-        '[root] dropped Cancelled(rules: is not Initial)',
-        'state: Initial()',
+        '[root] error $refused',
+        '[root] finished Failed($refused)',
         '[parent] started',
-        'state: Preparing(progress: 1)',
-        '> [child] dropped Cancelled(rules: is not Initial)',
-        '[parent] finished Done(null)',
+        '> [child] error $refused',
+        '> [child] finished Failed($refused)',
+        // A start rule of a child that throws is handed to the parent's
+        // body, by `run` itself.
+        '[parent] error $refused',
+        '[parent] finished Failed($refused)',
       ]);
       expect(ran, isEmpty);
+      expect(solo.currentState, const Initial());
     });
   });
 
-  test('a state keepWhile writes at the start is held to keepWhile too', () {
-    runSolo(initialState: const Preparing(), (solo, journal, async) {
-      // The answer was given about the state before the write, and the
-      // body would run under one the rule turns down.
-      final ran = <String>[];
-      bool keep(Preparing state) {
-        if (state.progress == 0) {
-          solo.externalSetState(const Preparing(progress: 5));
-        }
-        return state.progress < 5;
-      }
-
-      solo.run<Preparing, void>(
-        key: 'root',
-        keepWhile: keep,
-        (ctx) async => ran.add('root'),
+  test('a keepWhile that writes on every change is refused once a change', () {
+    runSolo((solo, journal, async) {
+      var armed = false;
+      var written = 0;
+      solo.run<TestState, void>(
+        key: 'restless',
+        keepWhile: (state) {
+          if (armed) {
+            solo.externalSetState(Preparing(progress: ++written));
+          }
+          return true;
+        },
+        (ctx) => pause(ctx, 100),
       );
-      async.flushTimers();
-      solo
-        ..externalSetState(const Preparing())
-        ..run<TestState, void>(key: 'parent', (ctx) async {
-          final child = solo.job<Preparing, void>(
-            key: 'child',
-            keepWhile: keep,
-            (childCtx) async => ran.add('child'),
-          );
-          ctx.run(child).ignore();
-          await child.done;
-        });
+      async.flushMicrotasks();
+      armed = true;
+      solo.externalSetState(const Preparing());
       async.flushTimers();
       expect(journal.take(), [
-        'state: Preparing(progress: 5)',
-        '[root] dropped Cancelled(rules: keepWhile)',
+        '[restless] started',
         'state: Preparing(progress: 0)',
-        '[parent] started',
-        'state: Preparing(progress: 5)',
-        '> [child] dropped Cancelled(rules: keepWhile)',
-        '[parent] finished Done(null)',
+        '[restless] error $refused',
+        '[restless] unanswered $refused',
+        '[restless] finished Done(null)',
       ]);
-      expect(ran, isEmpty);
+      expect(written, 1, reason: 'one attempt, and no state from it');
+      expect(solo.currentState, const Preparing());
     });
   });
 
-  test('a read answers with the state keepWhile writes while it answers', () {
+  test('a keepWhile that writes the state from a read fails the read', () {
     runSolo(initialState: const Preparing(), (solo, journal, async) {
-      final read = <int>[];
+      Object? caught;
       var armed = false;
       solo.run<Preparing, void>(
         key: 'reader',
@@ -235,11 +230,16 @@ void main() {
         },
         (ctx) async {
           armed = true;
-          read.add(ctx.state.progress);
+          try {
+            ctx.state;
+          } on Object catch (error) {
+            caught = error;
+          }
         },
       );
       async.flushTimers();
-      expect(read, [7], reason: 'not the state the rule was asked about');
+      expect(caught, isStateError);
+      expect(solo.currentState, const Preparing());
     });
   });
 
@@ -622,6 +622,45 @@ void main() {
       expect(journal.take(), contains('[second] started'));
     });
   });
+
+  for (final answer in [true, false]) {
+    test(
+        'a child whose own start rule gives it up and says $answer '
+        'reaches its parent as its cancellation', () {
+      runSolo((solo, journal, async) {
+        var ran = false;
+        late final SoloJob<void> child;
+        child = solo.job<TestState, void>(
+          key: 'child',
+          canStart: (state) {
+            child.cancel().ignore();
+            return answer;
+          },
+          (ctx) async => ran = true,
+        );
+        Object? caught;
+        final parent = solo.run<TestState, void>(key: 'parent', (ctx) async {
+          try {
+            await ctx.run(child);
+          } on Object catch (error) {
+            caught = error;
+          }
+        });
+        async.flushTimers();
+        expect(ran, isFalse);
+        expect(
+          child.outcome,
+          isA<Cancelled>().having(
+            (cancelled) => cancelled.reason,
+            'reason',
+            isA<ManualCancelReason>(),
+          ),
+        );
+        expect(caught, same(child.outcome), reason: 'not a StateError');
+        expect(parent.outcome, isA<Done<void>>());
+      });
+    });
+  }
 
   test('a keepWhile that gives the job up stops the next action', () {
     runSolo((solo, journal, async) {

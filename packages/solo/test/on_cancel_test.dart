@@ -127,6 +127,7 @@ void main() {
       expect(journal.take(), [
         '[job] started',
         '[job] error Bad state: boom',
+        '[job] unanswered Bad state: boom',
         '[job] finished Cancelled(manual)',
       ]);
     });

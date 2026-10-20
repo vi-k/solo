@@ -11,6 +11,36 @@ import 'support/test_solo.dart';
 import 'support/test_state.dart';
 
 void main() {
+  // The first attempt of `camera.md`: the working type is a condition of the
+  // whole run, and the body emits its way out of it. The line says so where
+  // the mistake is made, not at the checkpoint that cancels the job.
+  test('the debug line of an emit out of W names the trap', () {
+    final lines = <String>[];
+    Solo.debug = lines.add;
+    addTearDown(() => Solo.debug = null);
+    runSolo((solo, journal, async) {
+      solo.run<Initial, void>(key: 'init', (ctx) async {
+        ctx
+          ..emit(const Initial())
+          ..emit(const Preparing())
+          ..check();
+      });
+      async.flushTimers();
+      expect(journal.take(), [
+        '[init] started',
+        'state: Initial()',
+        'state: Preparing(progress: 0)',
+        '[init] finished Cancelled(rules: is not Initial)',
+      ]);
+    });
+    const trap = 'Job(init) emit: Preparing(progress: 0), which is not '
+        'Initial: the rules cancel Job(init) at its next checkpoint';
+    expect(
+      lines.where((line) => line.contains(' emit: ')),
+      ['Job(init) emit: Initial()', trap],
+    );
+  });
+
   test('emit gives up on a cancellation that arrived inside it', () {
     fakeAsync((async) {
       final journal = JournalObserver();
