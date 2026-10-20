@@ -8,14 +8,13 @@ import 'solo.dart';
 
 /// Adds a broadcast [stream] of states to [Solo].
 ///
-/// The stream is fed from [publish]: put `SoloStream` first among the
-/// mixins in `with` unless a neighbor's own delivery should decide what
-/// the stream sees. A neighbor that calls `super.publish` and then
-/// throws still lets the stream receive the change when it sits above
-/// `SoloStream`; sitting below it, the throw happens on the way back
-/// through `SoloStream`'s own line, and the stream never sees the
-/// event. Either order, the error itself still escapes to whoever wrote
-/// the state — see "A failure should stay in `publish`" in
+/// The stream is fed from [publish]: put `SoloStream` first among the mixins in
+/// `with` unless a neighbor's own delivery should decide what the stream sees.
+/// A neighbor that calls `super.publish` and then throws still lets the stream
+/// receive the change when it sits above `SoloStream`; sitting below it, the
+/// throw happens on the way back through `SoloStream`'s own line, and the
+/// stream never sees the event. Either order, the error itself still escapes to
+/// whoever wrote the state — see "A failure should stay in `publish`" in
 /// `doc/state.md`.
 mixin SoloStream<S extends Object> on Solo<S> {
   final _controller = StreamController<S>.broadcast();

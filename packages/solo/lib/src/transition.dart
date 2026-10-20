@@ -28,9 +28,9 @@ final class SoloTransition<S extends Object> {
 
   /// How many changes this controller has made, this one included.
   ///
-  /// It only ever grows, and it grows by one per change, so two
-  /// transitions of one controller are ordered by it even when the second
-  /// happened from inside a hook of the first.
+  /// It only ever grows, and it grows by one per change, so two transitions of
+  /// one controller are ordered by it even when the second happened from inside
+  /// a hook of the first.
   final int revision;
 
   /// Creates a transition; the engine makes these, a domain reads them.

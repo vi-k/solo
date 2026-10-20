@@ -199,6 +199,7 @@ Map<String, FutureOr<Object?> Function()> contextMembers(JobContext ctx) => {
       'pause': ctx.pause,
       'uncancellable': () => ctx.uncancellable(() async => 1),
       'run': () => ctx.run(Job.deferred<int>((ctx) async => 1)),
+      'start': () => ctx.start(Job.deferred<int>((ctx) async => 1)),
       'runAll': () => ctx.runAll([Job.deferred<int>((ctx) async => 1)]),
       'each': () => ctx.each(Stream.value(1), (ctx, event) {}).done,
       'onCancel': () => ctx.onCancel(() {}),

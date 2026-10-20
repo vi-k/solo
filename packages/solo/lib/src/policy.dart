@@ -12,8 +12,8 @@ enum Policy {
   /// Append to the queue; keys are ignored.
   sequential,
 
-  /// If a job with the same key is queued or is the root job the
-  /// controller is running, return that job and finish the new one with
+  /// If a job with the same key is queued or is the root job the controller is
+  /// running, return that job and finish the new one with
   /// `Cancelled(duplicate)`, whose reason is a `DuplicateCancelReason`.
   ///
   /// A child is not looked at, running or not: it runs inside another job

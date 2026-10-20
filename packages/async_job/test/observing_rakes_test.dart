@@ -278,7 +278,9 @@ void main() {
 
       expect(errors.map((error) => '$error'), [
         'Bad state: Job(twice: $mark) is already running',
-        'Bad state: Job(finished: $mark) has already finished',
+        equals(
+            'Bad state: Job(finished: $mark) has already finished; a job runs '
+            'once, and a child needs a new Job.deferred'),
         startsWith(
           'Invalid argument(s): Job(lost: $mark) '
           'returned Job(), a deferred job that never started',

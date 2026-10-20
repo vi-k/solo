@@ -17,10 +17,9 @@ abstract interface class Job<T> {
   /// Creates a job and starts it on the next microtask.
   ///
   /// Not inside the constructor: the caller puts the handle in a variable
-  /// first, listens to [done] if it wants to, and may cancel before the
-  /// body ever runs — a job cancelled by then ends as
-  /// `Cancelled(manual)` with `started: false`, and the body is never
-  /// called.
+  /// first, listens to [done] if it wants to, and may cancel before the body
+  /// ever runs — a job cancelled by then ends as `Cancelled(manual)` with
+  /// `started: false`, and the body is never called.
   ///
   /// A job made this way is a root and stays one: its own start is already on
   /// the way, so it is not a [ChildJob] and [JobContext.run] does not take it.
@@ -143,8 +142,10 @@ abstract interface class Job<T> {
   /// The cleanup stack unwinds when the job ends, not after an event: a
   /// [JobContext.onDispose] registered for every event piles up for as long
   /// as the stream lasts, and so does a `dispose` or a `discard` of
-  /// [JobContext.join]. What one event opens belongs to a child started for
-  /// that event with [JobContext.run]: its stack unwinds when it ends.
+  /// [JobContext.join]. A [JobContext.onCancel] callback piles up the same
+  /// way unless the event takes it back with the function `onCancel`
+  /// returns. What one event opens belongs to a child started for that event
+  /// with [JobContext.run]: its stack unwinds when it ends.
   ///
   /// The named parameters are those of [Job.new] but `timeout`: a deadline on
   /// following a stream is set from outside. With `cancellable: false`
@@ -332,15 +333,17 @@ abstract interface class Job<T> {
   /// Completes with the outcome; never throws.
   ///
   /// Reading it marks the job observed, so nobody is asked to answer for a
-  /// [Failed] outcome: the one reading has it.
+  /// [Failed] outcome: the one reading has it. Any read counts, a `print` or
+  /// a debugger's watch on the getter as well.
   Future<Outcome<T>> get done;
 
   /// Completes with the returned value, or throws [Cancelled] with the
   /// cancellation stack trace, or throws the body's error.
   ///
   /// Reading it marks the job observed, so nobody is asked to answer for a
-  /// [Failed] outcome. Handle the error the future carries, or it becomes an
-  /// unhandled `Future` error instead.
+  /// [Failed] outcome; any read counts, a `print` or a debugger's watch on
+  /// the getter as well. Handle the error the future carries, or it becomes
+  /// an unhandled `Future` error instead.
   Future<T> get value;
 
   /// Creates a job that runs [onValue] after this job succeeds and cleans up.
@@ -448,14 +451,14 @@ abstract interface class Job<T> {
   /// its source first; a cancelled handle never reaches its source.
   ///
   /// If cancellation has already been accepted and its callbacks have run,
-  /// calls [callback] immediately, even if the job has finished. Registering
-  /// in between, while the cancellation cascades onto the children or the
-  /// job's [JobContext.onCancel] callbacks run, puts the callback in that
-  /// pass instead, after the ones registered before it. A refused or held
+  /// calls [callback] immediately, even if the job has finished. Registering in
+  /// between, while the cancellation cascades onto the children or the job's
+  /// [JobContext.onCancel] callbacks run, puts the callback in that pass
+  /// instead, after the ones registered before it. A refused or held
   /// cancellation does not trigger it; a held one triggers it when it is
   /// accepted. A job that ends [Done] or [Failed] without cancellation never
-  /// calls it and releases its registrations on finish.
-  /// Registering does not observe a [Failed] outcome.
+  /// calls it and releases its registrations on finish. Registering does not
+  /// observe a [Failed] outcome.
   ///
   /// Each registration runs once. Pending callbacks run in registration
   /// order, from a snapshot: unregistering during notification does not remove
@@ -579,9 +582,8 @@ abstract interface class Job<T> {
   ///
   /// Call it before the job ends, or at the latest from [JobObserver.onFinish]
   /// or a callback of [whenCancelled] or [whenFinished] registered before it
-  /// ends. A failure the
-  /// outcome does not carry is answered as the job finishes, and a call from a
-  /// listener of [done] comes too late for it.
+  /// ends. A failure the outcome does not carry is answered as the job
+  /// finishes, and a call from a listener of [done] comes too late for it.
   ///
   /// A job is not background work: it has an outcome and an observer of
   /// its own, and this is how it is quenched. Work with neither goes to

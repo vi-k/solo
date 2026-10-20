@@ -54,6 +54,39 @@ void main() {
     });
   });
 
+  test('a child started before ctx.run is refused with the way out', () {
+    fakeAsync((async) {
+      final early = Job.deferred<void>(
+        key: 'early',
+        (ctx) => ctx.abandonable(() => Completer<void>().future),
+      )..start();
+      final done = Job.deferred<void>(key: 'done', (ctx) async {})..start();
+      async.flushMicrotasks();
+      final errors = <String>[];
+      final parent = Job<void>((ctx) async {
+        for (final child in [early, done]) {
+          try {
+            await ctx.run(child);
+          } on Object catch (error) {
+            errors.add('$error');
+          }
+        }
+      });
+      async.flushMicrotasks();
+      expect(errors, [
+        equals(
+            'Bad state: Job(early) is already running; a child is started by '
+            'the call that takes it, and not before'),
+        equals(
+            'Bad state: Job(done) has already finished; a job runs once, and a '
+            'child needs a new Job.deferred'),
+      ]);
+      expect(parent.outcome, isA<Done<void>>());
+      early.cancel().ignore();
+      async.flushMicrotasks();
+    });
+  });
+
   test('a job that starts itself is not a child', () {
     // `ctx.run` takes a [ChildJob], and `Job(body)` makes none: the
     // compiler turns it away before anything runs.

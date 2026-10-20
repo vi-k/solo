@@ -118,13 +118,12 @@ final class _RunAllGroup<T> {
 
   /// Whether [_settle] is alive: entered, and not thrown out.
   ///
-  /// Written by that routine and by nobody else. A group on the chain of
-  /// its owner that is neither forming nor settling has no routine
-  /// deciding for its branches: it was cut short while it was forming.
-  /// The stack ran out under [run], and whatever the handlers on the way
-  /// up called ran out of it again, so nothing is done down there. The
-  /// owner takes the group up once its own body is over, on a stack of
-  /// its own -- see [_concludeTorn].
+  /// Written by that routine and by nobody else. A group on the chain of its
+  /// owner that is neither forming nor settling has no routine deciding for its
+  /// branches: it was cut short while it was forming. The stack ran out under
+  /// [run], and whatever the handlers on the way up called ran out of it again,
+  /// so nothing is done down there. The owner takes the group up once its own
+  /// body is over, on a stack of its own -- see [_concludeTorn].
   bool _settling = false;
 
   /// The group that went on the chain of the owner before this one -- see

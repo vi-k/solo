@@ -128,8 +128,8 @@ abstract class JobBase<T> implements Job<T> {
   final Object? _key;
   final String Function()? _describe;
 
-  /// Not final: a child created without one inherits the parent's
-  /// observer when it is adopted.
+  /// Not final: a child created without one inherits the parent's observer when
+  /// it is adopted.
   JobObserver? _observer;
 
   /// The zone the job was created in; an unobserved [Failed] goes here unless
@@ -2284,8 +2284,8 @@ abstract class JobBase<T> implements Job<T> {
   /// instead of running. Each one is read as it comes off the stack, and
   /// one may register more while it runs.
   ///
-  /// The only loop that sleeps over the stack: why it is not in
-  /// [_execute], and why nothing else loops there, is said on [_execute].
+  /// The only loop that sleeps over the stack: why it is not in [_execute], and
+  /// why nothing else loops there, is said on [_execute].
   Future<void> _unwind(
     bool Function() passOver,
     FutureOr<void> Function() then,

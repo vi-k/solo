@@ -325,10 +325,10 @@ abstract interface class JobContext {
 
   /// Registers [disposer] to run when the job ends, whatever the outcome.
   ///
-  /// The core unwinds the stack after the children and before the
-  /// outcome, last registration first, and it waits for every disposer.
-  /// Returns a function that unregisters this one; calling it twice, or
-  /// after the disposer has run, is safe.
+  /// The core unwinds the stack after the children and before the outcome, last
+  /// registration first, and it waits for every disposer. Returns a function
+  /// that unregisters this one; calling it twice, or after the disposer has
+  /// run, is safe.
   ///
   /// A disposer runs outside the body: nothing cancels it and nothing
   /// interrupts it, so keep it short and unconditional. It must not wait
@@ -513,16 +513,15 @@ abstract interface class JobContext {
   ///
   /// **When which.** `[ctx.run(a), ctx.run(b)].wait` and [Future.wait] wait
   /// for every branch and stop none, so a branch whose sibling has already
-  /// failed runs to its end and settles its own registrations on the way.
-  /// They differ in what comes out: `.wait` throws a `ParallelWaitError`
-  /// holding the values and the errors of every branch at once, and
-  /// [Future.wait] throws the first error to reach it and lets the rest go.
-  /// Take either when the branches do not depend on each other's failure,
-  /// or when one of them waits for another.
-  /// Take this one when a result missing one of its parts is of no use
-  /// anyway: it asks the rest to stop, holds every branch until the decision
-  /// is made, and throws the outcome itself. `eagerError: true` is not the
-  /// middle ground it looks like: it wakes the body on the first error and
+  /// failed runs to its end and settles its own registrations on the way. They
+  /// differ in what comes out: `.wait` throws a `ParallelWaitError` holding the
+  /// values and the errors of every branch at once, and [Future.wait] throws
+  /// the first error to reach it and lets the rest go. Take either when the
+  /// branches do not depend on each other's failure, or when one of them waits
+  /// for another. Take this one when a result missing one of its parts is of no
+  /// use anyway: it asks the rest to stop, holds every branch until the
+  /// decision is made, and throws the outcome itself. `eagerError: true` is not
+  /// the middle ground it looks like: it wakes the body on the first error and
   /// asks nobody to stop, so the job still ends with its last child.
   ///
   /// **The stop is cooperative.** A branch that waits through [abandonable]
@@ -534,15 +533,14 @@ abstract interface class JobContext {
   /// for them too.
   ///
   /// **No branch ends before the group has decided.** A branch stands
-  /// twice: once when its body and its children are over and before it
-  /// unwinds, once between
-  /// the two passes of its unwinding. That is what keeps a resource a
-  /// branch took for the caller — one registered through `discard` — alive
-  /// until the group is sure the caller will get it, and closed by the
-  /// branch itself when it will not. While a branch is held, its outcome
-  /// is not final: a body that returned a value may still end [Cancelled].
-  /// The hold has a price, and the next two paragraphs name it: a branch
-  /// that waits for another branch can hang the group.
+  /// twice: once when its body and its children are over and before it unwinds,
+  /// once between the two passes of its unwinding. That is what keeps a
+  /// resource a branch took for the caller — one registered through `discard` —
+  /// alive until the group is sure the caller will get it, and closed by the
+  /// branch itself when it will not. While a branch is held, its outcome is not
+  /// final: a body that returned a value may still end [Cancelled]. The hold
+  /// has a price, and the next two paragraphs name it: a branch that waits for
+  /// another branch can hang the group.
   ///
   /// **A branch must not wait for another branch of the same group.** Awaiting
   /// a sibling's [Job.value] or [Job.done] hangs the group: the sibling is held
@@ -622,6 +620,13 @@ abstract interface class JobContext {
   /// cleanup. A plain future inside the callback cannot be interrupted; use the
   /// child's [abandonable] or [join] as appropriate. Do not await the child's
   /// own completion or cancellation from its callback.
+  ///
+  /// The child's cleanup stack unwinds when the child ends, not after an
+  /// event: an [onDispose] registered for every event piles up for as long as
+  /// the stream lasts, and so does a `dispose` or a `discard` of [join]. An
+  /// [onCancel] callback piles up the same way unless the event takes it back
+  /// with the function [onCancel] returns. What one event opens belongs to a
+  /// child started for that event with [run]: its stack unwinds when it ends.
   ///
   /// The future returned by the subscription's cancellation is not awaited:
   /// cleanup owned by the source is the source's to finish. If it fails, the
@@ -733,11 +738,11 @@ abstract interface class JobContext {
   /// A job created in here is not this work: it has an outcome and an observer
   /// of its own. Its unobserved failure goes to the answer of its own observer,
   /// or to the zone this work was started from, rather than to this job's
-  /// observer, and a job that starts itself runs
-  /// its body there. So does a job started in here by hand, wherever it was
-  /// made: it starts in that zone, past any zone forked inside the work. When
-  /// the work of one job runs inside the work of another, that zone is the one
-  /// the outer work was started from. Quench it with [Job.ignoreFailure].
+  /// observer, and a job that starts itself runs its body there. So does a job
+  /// started in here by hand, wherever it was made: it starts in that zone,
+  /// past any zone forked inside the work. When the work of one job runs inside
+  /// the work of another, that zone is the one the outer work was started from.
+  /// Quench it with [Job.ignoreFailure].
   ///
   /// Legal on a job that has already accepted a cancellation, and legal while
   /// the core unwinds the cleanup stack — a disposer starting work nobody waits
@@ -863,15 +868,13 @@ abstract class JobContextBase implements JobContext {
   /// Throws [StateError] when called from inside this job's own
   /// [JobContext.unattended] work.
   ///
-  /// Four members act on the whole job, [JobContext.run],
-  /// [JobContext.runAll], [JobContext.each] and [JobContext.uncancellable],
-  /// and unattended work is not the job: a child started there would hang
-  /// on the fork's boundary with the parent waiting for it forever, and a
-  /// section opened there would hold a cancellation of a body that stands
-  /// in no section at all.
-  /// Another job's fork is not this job's business, and the key is the
-  /// job's own: forks nest, and a shared key would let the inner one pass
-  /// for the outer.
+  /// Four members act on the whole job, [JobContext.run], [JobContext.runAll],
+  /// [JobContext.each] and [JobContext.uncancellable], and unattended work is
+  /// not the job: a child started there would hang on the fork's boundary with
+  /// the parent waiting for it forever, and a section opened there would hold a
+  /// cancellation of a body that stands in no section at all. Another job's
+  /// fork is not this job's business, and the key is the job's own: forks nest,
+  /// and a shared key would let the inner one pass for the outer.
   @protected
   void throwIfUnattended(String action) {
     if (_inOwnFork) {
@@ -1033,13 +1036,12 @@ abstract class JobContextBase implements JobContext {
 
   /// Cleans up [value] that came out after the body had ended.
   ///
-  /// It did not reach the body, so the outcome does not matter: on a job
-  /// that has finished the disposer runs on the spot and nobody waits for
-  /// it, and while the job is still alive the registration is
-  /// unconditional and waits for the unwinding. Not sooner: the call still
-  /// hands the value to whoever holds its future, and a body that walked
-  /// away may have handed that future to a child, which the job waits for
-  /// before the unwinding.
+  /// It did not reach the body, so the outcome does not matter: on a job that
+  /// has finished the disposer runs on the spot and nobody waits for it, and
+  /// while the job is still alive the registration is unconditional and waits
+  /// for the unwinding. Not sooner: the call still hands the value to whoever
+  /// holds its future, and a body that walked away may have handed that future
+  /// to a child, which the job waits for before the unwinding.
   Future<void> _keepLate<T>(
     FutureOr<void> Function(T value)? dispose,
     FutureOr<void> Function(T value)? discard,
@@ -1382,15 +1384,14 @@ abstract class JobContextBase implements JobContext {
         }
       } on Object catch (error, stackTrace) {
         if (!completer.isCompleted && _owner.bodyEnded && !fromFork) {
-          // The body is gone, and it is not the one still holding this
-          // future. Whatever is -- a `.timeout` that fired, a
-          // `Future.any` that took another branch -- walked away from it
-          // and swallows what it is handed, so handing the error over and
-          // saying nothing would lose it for good. Announced here, the
-          // way the failure of any abandoned action is, and the future
-          // completed all the same, so that nothing left waiting on it
-          // waits for ever; `ignore` keeps that copy from being announced
-          // a second time by the zone.
+          // The body is gone, and it is not the one still holding this future.
+          // Whatever is -- a `.timeout` that fired, a `Future.any` that took
+          // another branch -- walked away from it and swallows what it is
+          // handed, so handing the error over and saying nothing would lose it
+          // for good. Announced here, the way the failure of any abandoned
+          // action is, and the future completed all the same, so that nothing
+          // left waiting on it waits for ever; `ignore` keeps that copy from
+          // being announced a second time by the zone.
           if (!_isOwnCancellation(error)) {
             notifyError(error, stackTrace);
           }
@@ -1630,10 +1631,14 @@ abstract class JobContextBase implements JobContext {
       );
     }
     if (child.status != JobStatus.created) {
+      // Words of the way out too, as the refusals above give: a handle
+      // started by hand, or passed to a second call, is the usual cause.
       throw StateError(
         child.status == JobStatus.running
-            ? '$child is already running'
-            : '$child has already finished',
+            ? '$child is already running; a child is started by the call '
+                'that takes it, and not before'
+            : '$child has already finished; a job runs once, and a child '
+                'needs a new Job.deferred',
       );
     }
   }

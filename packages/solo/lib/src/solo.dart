@@ -23,24 +23,23 @@ part 'queue.dart';
 /// [publish] is the seam for a delivery of another kind; `SoloStream`
 /// adds a broadcast stream through it.
 ///
-/// A controller's operations are methods of its own, such as `load()`,
-/// built from [run], or from [job] and [add], and from [collect] and
-/// [accumulate] where several events share one job. The five are
-/// protected: a caller sees the operations, not how they are queued.
+/// A controller's operations are methods of its own, such as `load()`, built
+/// from [run], or from [job] and [add], and from [collect] and [accumulate]
+/// where several events share one job. The five are protected: a caller sees
+/// the operations, not how they are queued.
 ///
 /// The hooks — [onStart], [onFinish], [onError], [onUnanswered], [onLog],
 /// [onChange], [onClose] and the [observer]'s — are a cross-cutting channel, so
 /// an error thrown by one goes to the current zone and changes nothing else:
 /// the job's outcome, the queue and [close] carry on as if the hook had
-/// returned. [onUnanswered] is the one with a body of its own: what reaches
-/// it and has nowhere else to go — a disposer, an `onCancel` callback, a late
+/// returned. [onUnanswered] is the one with a body of its own: what reaches it
+/// and has nowhere else to go — a disposer, an `onCancel` callback, a late
 /// failure of an abandoned call or of work handed to `JobContext.unattended`,
-/// the failure of the body of a job that ends [Cancelled], a rule that threw,
-/// a [Failed] nobody observes — goes on to [unansweredHandler], or to the zone
-/// when none is set. If it
-/// throws, the error it was asked about goes to the zone first. [publish] is
-/// not one of them: it is how a subclass delivers the state, and an error
-/// there is the subclass's own business.
+/// the failure of the body of a job that ends [Cancelled], a rule that threw, a
+/// [Failed] nobody observes — goes on to [unansweredHandler], or to the zone
+/// when none is set. If it throws, the error it was asked about goes to the
+/// zone first. [publish] is not one of them: it is how a subclass delivers the
+/// state, and an error there is the subclass's own business.
 abstract class Solo<S extends Object> {
   /// A global observer for all controllers; `null` by default.
   ///
@@ -319,14 +318,13 @@ abstract class Solo<S extends Object> {
   /// reported. A handler error goes to the error hook and observer without
   /// replacing the original outcome.
   ///
-  /// Neither runs on success or when the body never started. An external
-  /// state change that violates `W` or [keepWhile] permanently suppresses
-  /// both handlers, including during cancellation, child waiting or
-  /// cleanup. A parent's lost permission also suppresses its descendants'
-  /// handlers. A parent without state handlers stops checking its rules
-  /// when its body ends, as usual. A rule error suppresses correction and
-  /// is reported.
-  /// [canStart] is not repeated, and the job's own emit is exempt.
+  /// Neither runs on success or when the body never started. An external state
+  /// change that violates `W` or [keepWhile] permanently suppresses both
+  /// handlers, including during cancellation, child waiting or cleanup. A
+  /// parent's lost permission also suppresses its descendants' handlers. A
+  /// parent without state handlers stops checking its rules when its body ends,
+  /// as usual. A rule error suppresses correction and is reported. [canStart]
+  /// is not repeated, and the job's own emit is exempt.
   ///
   /// Handlers receive `S`, which may differ from the body's working `W`,
   /// and should only compute the next state: the value they return is
@@ -389,17 +387,16 @@ abstract class Solo<S extends Object> {
   /// Creates an accumulator that collects events into an immutable list.
   ///
   /// No job is created until [SoloAccumulator.add]. Events retain their order
-  /// and duplicates; the list is copied once when the group is sealed.
-  /// The handler receives a regular context and runs under the same rules as
-  /// [job]. It changes state only when it runs, never when an event is added.
-  /// [policy] chooses the waiting group and its position; the default joins
-  /// the last open group of this accumulator wherever it stands, so a job of
-  /// another kind queued between two events is not a boundary. Take
-  /// [AccumulationPolicy.adjacent] where it has to be one. [key] is an
-  /// ordinary job key and does not make different accumulators compatible.
-  /// [timing]
-  /// can debounce each group or throttle starts across this accumulator;
-  /// ready jobs later in the queue can bypass a group waiting for its window.
+  /// and duplicates; the list is copied once when the group is sealed. The
+  /// handler receives a regular context and runs under the same rules as [job].
+  /// It changes state only when it runs, never when an event is added. [policy]
+  /// chooses the waiting group and its position; the default joins the last
+  /// open group of this accumulator wherever it stands, so a job of another
+  /// kind queued between two events is not a boundary. Take
+  /// [AccumulationPolicy.adjacent] where it has to be one. [key] is an ordinary
+  /// job key and does not make different accumulators compatible. [timing] can
+  /// debounce each group or throttle starts across this accumulator; ready jobs
+  /// later in the queue can bypass a group waiting for its window.
   ///
   /// [timeout] is a deadline for each job the accumulator queues, not for
   /// the accumulator, and it lands as the `timeout` of [job] does. It is
@@ -744,14 +741,14 @@ abstract class Solo<S extends Object> {
   /// ));
   /// ```
   ///
-  /// A timer reads it between the steps of a close; a synchronous hook
-  /// reads it in the middle of one. A close that is finishing reads `null`
-  /// from `onFinish` of its last job and from [onClose], though the
-  /// returned future has not completed yet, and an idle controller reads
-  /// `null` right after `close()`. The last subscription's `onDone` still
-  /// reads [SoloPendingStream]. A subclass whose `close` waits for
-  /// something of its own before or after `super.close` holds it where
-  /// the controller does not see: domain cleanup belongs in [onClose].
+  /// A timer reads it between the steps of a close; a synchronous hook reads it
+  /// in the middle of one. A close that is finishing reads `null` from
+  /// `onFinish` of its last job and from [onClose], though the returned future
+  /// has not completed yet, and an idle controller reads `null` right after
+  /// `close()`. The last subscription's `onDone` still reads
+  /// [SoloPendingStream]. A subclass whose `close` waits for something of its
+  /// own before or after `super.close` holds it where the controller does not
+  /// see: domain cleanup belongs in [onClose].
   ///
   /// It reports and does not diagnose. A body that holds on for reasons of
   /// its own — a bare `await` on a slow call, an external operation it is
@@ -839,11 +836,10 @@ abstract class Solo<S extends Object> {
   /// finished.
   static bool _goingOn(Job<Object?> job) => !job.isCancelled && !job.isFinished;
 
-  /// Reflects state already changed by an external source, such as a
-  /// device or socket. Re-evaluates the rules of running bodies and the
-  /// permission of finishing jobs to apply their state handlers.
-  /// Use the state handlers of [run] or [job] for an operation's own
-  /// failure or cancellation.
+  /// Reflects state already changed by an external source, such as a device or
+  /// socket. Re-evaluates the rules of running bodies and the permission of
+  /// finishing jobs to apply their state handlers. Use the state handlers of
+  /// [run] or [job] for an operation's own failure or cancellation.
   ///
   /// Accepted for as long as the engine is running, a [close] with
   /// [SoloCloseMode.drain] included. Once closing has finished the state is
@@ -967,12 +963,12 @@ abstract class Solo<S extends Object> {
     if (completer.isCompleted) {
       return;
     }
-    // Both ways of closing end here, and a drain arrives with its timers
-    // still running: `_stopWork` takes them down at the call, the pump
-    // does not. An interval timer that outlives the controller holds its
-    // accumulator and the accumulator holds this -- in a widget test that
-    // is "A Timer is still pending even after the widget tree was
-    // disposed" for somebody who only closed a controller.
+    // Both ways of closing end here, and a drain arrives with its timers still
+    // running: `_stopWork` takes them down at the call, the pump does not. An
+    // interval timer that outlives the controller holds its accumulator and the
+    // accumulator holds this -- in a widget test that is "A Timer is still
+    // pending even after the widget tree was disposed" for somebody who only
+    // closed a controller.
     _cancelTimers();
     _draining = false;
     _debug(() => 'closed');
@@ -1062,10 +1058,9 @@ abstract class Solo<S extends Object> {
   /// neither: watching is not answering.
   ///
   /// **One failure at a time.** This hook is called for each failure inside
-  /// a `ParallelWaitError` on its own, with the stack trace of that
-  /// failure. An uncaught [Cancelled],
-  /// alone or inside one, does not come here: a cancellation is a decision
-  /// somebody made, not a failure.
+  /// a `ParallelWaitError` on its own, with the stack trace of that failure. An
+  /// uncaught [Cancelled], alone or inside one, does not come here: a
+  /// cancellation is a decision somebody made, not a failure.
   ///
   /// **Override it to answer here instead** — a controller that owns what
   /// its jobs failed at reports to its own system and stops there. An
@@ -1255,8 +1250,8 @@ abstract class Solo<S extends Object> {
       }
       final String? rejection;
       try {
-        // Observers may change a predicate's captured data without
-        // replacing S. Always ask again after delivering the transition.
+        // Observers may change a predicate's captured data without replacing S.
+        // Always ask again after delivering the transition.
         rejection = job._rejectKeep(_state);
       } on Object catch (error, stackTrace) {
         if (job._hasStateHandlers) job._stateCorrectionRevoked = true;
@@ -1273,8 +1268,8 @@ abstract class Solo<S extends Object> {
           Cancelled.by(
             reason: const RulesCancelReason(),
             description: rejection,
-            // Still inside the change, so the trace leads back to
-            // whoever made it.
+            // Still inside the change, so the trace leads back to whoever made
+            // it.
             stackTrace: StackTrace.current,
           ),
           rejectable: false,
@@ -1355,10 +1350,10 @@ abstract class Solo<S extends Object> {
 
         return;
       }
-      // Off the queue, not started, and not yet `_current`: while the
-      // rules are asked — the caller's code — this job belongs to nobody,
-      // and only `_inTransition` can hand it to a `cancelAll` or a
-      // `close` made from in there.
+      // Off the queue, not started, and not yet `_current`: while the rules are
+      // asked — the caller's code — this job belongs to nobody, and only
+      // `_inTransition` can hand it to a `cancelAll` or a `close` made from in
+      // there.
       _inTransition = job;
       try {
         final String? rejection;

@@ -12,23 +12,22 @@ import 'solo_selector.dart';
 /// and not when the progress does.
 ///
 /// [value] picks out of the source's value, with or without listeners — a
-/// selector is a pick and is expected to be cheap, and to answer the same
-/// for the same value of the source. That lets a subscribed selection pick
-/// once per change: while the source holds the object the last pick was
-/// made from, [value] hands that pick back, and the pick made to decide
-/// whether to notify is the one a listener reads. A source that changes its
-/// value in place keeps the object, so [value] sees such a change once the
-/// selection has taken it in: a listener that reads [value] before then —
-/// one the source calls ahead of the selection, say — gets the pick from
-/// before the change. A controller of `solo` whose state is immutable, as
-/// its state is meant to be, puts in a new object for every change and
-/// never meets this.
-/// What the selection keeps besides, while somebody listens, is the last
-/// value it announced, and it keeps it to hold notifications back:
-/// listeners hear only a pick that `changed` calls changed — `!=` unless
-/// another answer is given — so a change of the source that leaves the
-/// pick alone reaches nobody here. With nobody listening the source is not
-/// subscribed to at all, and nothing picked out of it is kept.
+/// selector is a pick and is expected to be cheap, and to answer the same for
+/// the same value of the source. That lets a subscribed selection pick once per
+/// change: while the source holds the object the last pick was made from,
+/// [value] hands that pick back, and the pick made to decide whether to notify
+/// is the one a listener reads. A source that changes its value in place keeps
+/// the object, so [value] sees such a change once the selection has taken it
+/// in: a listener that reads [value] before then — one the source calls ahead
+/// of the selection, say — gets the pick from before the change. A controller
+/// of `solo` whose state is immutable, as its state is meant to be, puts in a
+/// new object for every change and never meets this. What the selection keeps
+/// besides, while somebody listens, is the last value it announced, and it
+/// keeps it to hold notifications back: listeners hear only a pick that
+/// `changed` calls changed — `!=` unless another answer is given — so a change
+/// of the source that leaves the pick alone reaches nobody here. With nobody
+/// listening the source is not subscribed to at all, and nothing picked out of
+/// it is kept.
 ///
 /// ```dart
 /// class _ProfileState extends State<Profile> {
@@ -46,20 +45,18 @@ import 'solo_selector.dart';
 /// }
 /// ```
 ///
-/// Hold the selection, do not build one in `build`: a new object on every
-/// build makes the builder under it unsubscribe from the old one and
-/// subscribe to the new, and the kept value it exists for is thrown away
-/// with it. The initializer of a field runs once, though, and a `State`
-/// outlives its widget: one that can be handed a widget with another
-/// source builds the selection again in `didUpdateWidget`, or it goes on
-/// picking from the old one.
-/// [SoloSelector] is the same pick over a controller, with nowhere to hold
-/// it — the widget keeps the subscription and the picked value itself and
-/// follows a new controller on its own.
-/// Nothing has to be disposed of — the last listener to go takes the
-/// subscription with it — and a selection outlives its source harmlessly:
-/// a closed [SoloListenable] no longer changes state, while [value] keeps
-/// reading the source's final state.
+/// Hold the selection, do not build one in `build`: a new object on every build
+/// makes the builder under it unsubscribe from the old one and subscribe to the
+/// new, and the kept value it exists for is thrown away with it. The
+/// initializer of a field runs once, though, and a `State` outlives its widget:
+/// one that can be handed a widget with another source builds the selection
+/// again in `didUpdateWidget`, or it goes on picking from the old one.
+/// [SoloSelector] is the same pick over a controller, with nowhere to hold it —
+/// the widget keeps the subscription and the picked value itself and follows a
+/// new controller on its own. Nothing has to be disposed of — the last listener
+/// to go takes the subscription with it — and a selection outlives its source
+/// harmlessly: a closed [SoloListenable] no longer changes state, while [value]
+/// keeps reading the source's final state.
 ///
 /// The selector runs inside the change that triggered it, so it should
 /// only pick: over a [SoloListenable] that means it must not change the

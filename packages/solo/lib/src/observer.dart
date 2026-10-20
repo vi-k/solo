@@ -84,12 +84,12 @@ abstract class SoloObserver {
   /// at a time: each failure and each cancellation inside a `ParallelWaitError`
   /// comes in a call of its own.
   ///
-  /// Watching changes nothing about where the error then goes: an error
-  /// with nowhere else to go reaches the zone the job was created in
-  /// whether an observer is set or not. To take that route over, set
-  /// [Solo.unansweredHandler] — answering for an error is a job of its own,
-  /// and setting up a log must not quietly turn reporting off. See
-  /// [Failed] for the errors that also reach the zone.
+  /// Watching changes nothing about where the error then goes: an error with
+  /// nowhere else to go reaches the zone the job was created in whether an
+  /// observer is set or not. To take that route over, set
+  /// [Solo.unansweredHandler] — answering for an error is a job of its own, and
+  /// setting up a log must not quietly turn reporting off. See [Failed] for the
+  /// errors that also reach the zone.
   void onError(
     Solo<Object> solo,
     Job<Object?> job,

@@ -192,7 +192,9 @@ puts it on the cleanup stack of the child, and that stack unwinds when the
 child ends, not when the callback returns. Two messages in, both drafts are
 written and neither is closed; they close together when the stream ends, and on
 a stream that does not end they never do. `ctx.onDispose` and `discard` in the
-callback register on the same stack.
+callback register on the same stack. A `ctx.onCancel` in the callback piles up
+the same way, on a list of its own, unless the callback takes it back with the
+function `onCancel` returns.
 
 ### A child for the event
 

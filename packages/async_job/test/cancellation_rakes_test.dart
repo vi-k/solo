@@ -1177,8 +1177,13 @@ void main() {
           await probe('check', ctx.check);
           await probe('abandonable', () => ctx.abandonable(() => 1));
           await probe('join', () => ctx.join(() => 1));
+          await probe('pause', ctx.pause);
           await probe('uncancellable', () => ctx.uncancellable(() => 1));
           await probe('run', () => ctx.run(Job.deferred((ctx) async => 1)));
+          await probe(
+            'start',
+            () => ctx.start(Job.deferred<int>((ctx) async => 1)),
+          );
           await probe('runAll', () => ctx.runAll<int>([]));
           await probe('runAll of a job', () => ctx.runAll<int>([branch]));
           await probe(
@@ -1201,8 +1206,10 @@ void main() {
         'check throws',
         'abandonable throws',
         'join throws',
+        'pause throws',
         'uncancellable throws',
         'run throws',
+        'start throws',
         'runAll throws',
         'runAll of a job throws',
         'each throws',
@@ -1220,6 +1227,26 @@ void main() {
           isA<ParentCancelReason>(),
         ),
         reason: 'the group started nothing and cancelled its branch',
+      );
+
+      // The page names the members that throw, all but `onCancel`, which
+      // it names on its own, and the second call of `runAll` above.
+      final page = File('doc/cancellation.md')
+          .readAsStringSync()
+          .replaceAll(RegExp(r'\s+'), ' ');
+      final sentence = RegExp(
+        r'From then on ((?:`\w+`(?:, | and ))+`\w+`) throw `Cancelled`',
+      ).firstMatch(page);
+      expect(sentence, isNotNull);
+      expect(
+        {
+          for (final name in RegExp(r'`(\w+)`').allMatches(sentence!.group(1)!))
+            name.group(1),
+        },
+        {
+          for (final line in seen)
+            if (line.endsWith(' throws')) line.split(' ').first,
+        }..remove('onCancel'),
       );
     });
   });

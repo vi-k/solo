@@ -121,10 +121,9 @@ abstract mixin class JobObserver {
   /// throws it or answers for it as for a failure it did not throw (see
   /// [JobBase.finish]). Any other failure of the job is carried by the outcome,
   /// and one nobody observes goes on to [JobAnswerer.onUnanswered] as well.
-  /// Once the job has accepted a
-  /// cancellation, a failure [Job.isCancellationError] names stops here too: an
-  /// operation stopping at the job's token throws such an error, and only this
-  /// hook hears it.
+  /// Once the job has accepted a cancellation, a failure
+  /// [Job.isCancellationError] names stops here too: an operation stopping at
+  /// the job's token throws such an error, and only this hook hears it.
   ///
   /// A [Cancelled] reaches this hook whenever one is thrown where there is no
   /// outcome to carry it — never the job giving up, which is not an error and
@@ -211,8 +210,8 @@ mixin JobAnswerer on JobObserver {
   /// it is a decision somebody made, not a failure.
   ///
   /// **What the default body does.** It hands the error to the zone the
-  /// job was created in — where the error goes when the job has no
-  /// observer, or one that does not answer.
+  /// job was created in — where the error goes when the job has no observer, or
+  /// one that does not answer.
   ///
   /// **Override it to answer here instead** — an observer that reports to
   /// its own system and stops there. An override that says nothing keeps

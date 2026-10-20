@@ -84,11 +84,10 @@ final class SoloSubscription {
 /// A group of subscriptions cancelled together, for a screen or an object
 /// that listens to several things at once.
 ///
-/// The group holds what it would cancel and nothing else: a member
-/// cancelled on its own is forgotten, so a long-lived group — a screen
-/// that resubscribes on every update, a service that listens to whatever
-/// it is handed — does not grow one dead entry per subscription that
-/// ended by itself.
+/// The group holds what it would cancel and nothing else: a member cancelled on
+/// its own is forgotten, so a long-lived group — a screen that resubscribes on
+/// every update, a service that listens to whatever it is handed — does not
+/// grow one dead entry per subscription that ended by itself.
 ///
 /// ```dart
 /// final _listening = SoloSubscriptions();

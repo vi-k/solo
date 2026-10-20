@@ -4,9 +4,9 @@ import 'package:meta/meta.dart';
 /// What a job the controller is waiting for is doing, as far as the
 /// engine knows.
 enum SoloPhase {
-  /// The body has not come back yet, whatever it is waiting on: a
-  /// checkpoint of its context, a bare `await`, an external call. The
-  /// engine knows the body is still out, not what holds it.
+  /// The body has not come back yet, whatever it is waiting on: a checkpoint of
+  /// its context, a bare `await`, an external call. The engine knows the body
+  /// is still out, not what holds it.
   body,
 
   /// The body is over and the job is waiting for its children.
@@ -103,11 +103,10 @@ final class SoloPendingJob extends SoloPending {
   /// before this one is over. Taken when the snapshot is: the queue moving
   /// on does not change it.
   ///
-  /// A body that calls a method of its own controller and awaits the job
-  /// that comes back waits for one of these: that job waits for the slot
-  /// the body is holding, and neither moves until `close` or `cancelAll`
-  /// cancels both; a drain waits for them for good.
-  /// The snapshot names them side by side.
+  /// A body that calls a method of its own controller and awaits the job that
+  /// comes back waits for one of these: that job waits for the slot the body is
+  /// holding, and neither moves until `close` or `cancelAll` cancels both; a
+  /// drain waits for them for good. The snapshot names them side by side.
   final List<Job<Object?>> queued;
 
   /// Creates a snapshot; the engine makes these, a domain reads them.

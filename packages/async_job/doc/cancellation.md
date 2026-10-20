@@ -42,11 +42,11 @@ A running job accepts the request inside `cancel()` itself, unless an
 `cancellable: false`. Accepting it makes the job cancelled: the cancellation
 passes to the children it has started, its `onCancel` callbacks run, and the
 job ends `Cancelled` whatever the body does next. From then on `check`,
-`abandonable`, `join`, `pause`, `uncancellable`, `run`, `runAll` and `each`
-throw `Cancelled` at their checkpoints. `onCancel` throws too: its callbacks
-have already run, and one registered now never would. `onDispose`, `onDiscard`,
-`disown` and `unattended` remain available so the body can arrange cleanup
-after cancellation.
+`abandonable`, `join`, `pause`, `uncancellable`, `run`, `start`, `runAll` and
+`each` throw `Cancelled` at their checkpoints. `onCancel` throws too: its
+callbacks have already run, and one registered now never would. `onDispose`,
+`onDiscard`, `disown` and `unattended` remain available so the body can arrange
+cleanup after cancellation.
 
 A body that cancels itself, by throwing `Cancelled` or by letting out the
 cancellation of a child, accepts the cancellation as it throws, and the job is
@@ -476,9 +476,12 @@ that job's own reason. The page on outcomes takes these reasons apart in
 The job records from a device and releases it in `onDispose`. The device takes
 a while to stop, and the user cancels while it records.
 
+### The first attempt
+
 The stop runs as work the job does not wait for:
 
 ```dart
+// The first attempt: the device is released while it is still stopping.
 ctx.onDispose(device.release);
 ctx.onCancel(() => ctx.unattended(device.stop));
 await ctx.abandonable(device.record);
@@ -491,22 +494,13 @@ outcome: Cancelled(manual)
 device stopped
 ```
 
-`onCancel` takes a `void Function()`. Dart lets an `async` function through
-too, but the job does not hear what becomes of it:
-
-1. Nobody awaits the future it returns.
-2. Its error goes past the observer to the zone the callback was called in. For
-   a cancellation accepted inside `cancel()`, that is the zone of the code that
-   called `cancel()`.
-3. Only what the callback throws synchronously reaches `onError`, and an
-   `async` function never throws synchronously: even an error before its first
-   `await` goes into its future.
-
-`ctx.unattended` keeps the errors of the stop with the job: they reach the
-observer, and after it, by default, the zone the job was created in;
+The job does not wait for the stop. `abandonable` lets the cancellation out at
+once, the cleanup stack releases the device, and the device stops after that.
+`ctx.unattended` keeps the errors of the stop with the job, and that is all it
+does: they reach the observer, and after it, by default, the zone the job was
+created in;
 [Work the job does not wait for](errors.md#work-the-job-does-not-wait-for) on
-the errors page takes it apart. That is all it does: the job does not wait for
-the stop, and the device is released while it is still stopping.
+the errors page takes it apart.
 
 ### Waiting for the stop
 
@@ -531,3 +525,15 @@ outcome: Cancelled(manual)
 migration in [A token through `onCancel`](#a-token-through-oncancel). An
 operation that ends as soon as the stop begins leaves `join` nothing to wait
 for, and the job ends while the device is still stopping.
+
+The stop goes through `ctx.unattended` and not straight into an `async`
+callback. `onCancel` takes a `void Function()`. Dart lets an `async` function
+through too, but the job does not hear what becomes of it:
+
+1. Nobody awaits the future it returns.
+2. Its error goes past the observer to the zone the callback was called in. For
+   a cancellation accepted inside `cancel()`, that is the zone of the code that
+   called `cancel()`.
+3. Only what the callback throws synchronously reaches `onError`, and an
+   `async` function never throws synchronously: even an error before its first
+   `await` goes into its future.
