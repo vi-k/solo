@@ -713,7 +713,9 @@ runZonedGuarded(
 `Reports` answers for the errors no outcome carries, so they stop there and do
 not reach the zone. A failure whose outcome nobody observed goes to the zone
 and not to `onUnanswered`, and so does whatever the app throws outside its
-jobs. `onError` stays out of the report: a failure it hears may reach the zone
-as well, and it hears one failure once on each job whose outcome that failure
-is. The zone does not know the job, so its report does not name it.
+jobs. An observer cannot keep such a failure from the zone: the core sends it
+there itself, and the observer only hears it in `onError`. `onError` stays out
+of the report: a failure it hears may reach the zone as well, and it hears one
+failure once on each job whose outcome that failure is. The zone does not know
+the job, so its report does not name it.
 [Where each error goes](#where-each-error-goes) shows every way an error takes.
