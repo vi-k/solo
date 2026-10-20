@@ -19,7 +19,7 @@ The sections of the page, by what the application needs:
 | --- | --- | --- |
 | A report of every error of a job | `onError` of the controller, or of a `SoloObserver` for every controller | [Reporting an error](#reporting-an-error) |
 | A failure kept out of the zone | Observing the outcome: `await job.value` where the error is caught, or `job.ignoreFailure()` | [Handled and unhandled failures](#handled-and-unhandled-failures) |
-| An answer for an error that no outcome carries | `onUnanswered`, or `Solo.unansweredHandler` for the whole application | [Answering for an error](#answering-for-an-error) |
+| An answer for an error that no outcome carries, or for a `Failed` nobody observes | `onUnanswered`, or `Solo.unansweredHandler` for the whole application | [Answering for an error](#answering-for-an-error) |
 | A catch that lets a cancellation through | `ctx.check()` at the top of the catch | [Catching errors inside a body](#catching-errors-inside-a-body) |
 | Another attempt after a failure | `ctx.pause` between attempts, or a loop in the caller | [Retrying a failed call](#retrying-a-failed-call) |
 | A rule that refuses | A rule that answers `false` instead of throwing | [Errors in state rules](#errors-in-state-rules) |
@@ -61,7 +61,8 @@ It hears each error once for each job. An error that a child throws and its
 parent lets through is a failure of both, so the hook hears it twice, and the
 `job` it is given tells the two calls apart. A crash reporter fed from here can
 get one error three times: from the child, from the parent and, when nobody
-observes the parent's outcome, from the creation zone.
+observes the parent's outcome, from `onUnanswered`, which by default hands it
+to `Solo.unansweredHandler` or the creation zone.
 
 The hook reports and returns. It answers for nothing, and overriding it moves
 no error anywhere.

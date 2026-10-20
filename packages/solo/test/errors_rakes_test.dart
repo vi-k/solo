@@ -387,28 +387,41 @@ void main() {
       expect('${job.outcome}', 'Done(null)');
     });
 
-    test('a crash reporter fed from the hook gets one error three times', () {
-      _says(
-        'A crash reporter fed from here can get one error three times: '
-        'from the child, from the parent and, when nobody observes the '
-        "parent's outcome, from the creation zone",
-      );
-      late Bench bench;
-      final ran = runFaked((async) {
-        bench = Bench();
-        bench.run<int, void>(key: 'parent', (ctx) async {
-          await ctx.run(
-            bench.job<int, void>(
-              key: 'child',
-              (child) async => throw StateError('the child'),
-            ),
-          );
+    for (final handlerSet in [false, true]) {
+      final third = handlerSet ? 'the handler' : 'the zone';
+      test(
+          'a crash reporter fed from the hook gets one error three times, '
+          'the third from $third', () {
+        _says(
+          'A crash reporter fed from here can get one error three times: '
+          'from the child, from the parent and, when nobody observes the '
+          "parent's outcome, from `onUnanswered`, which by default hands it "
+          'to `Solo.unansweredHandler` or the creation zone',
+        );
+        final handled = <String>[];
+        late Bench bench;
+        final ran = runFaked((async) {
+          if (handlerSet) {
+            Solo.unansweredHandler =
+                (solo, job, error, stackTrace) => handled.add(text(error));
+          }
+          bench = Bench();
+          bench.run<int, void>(key: 'parent', (ctx) async {
+            await ctx.run(
+              bench.job<int, void>(
+                key: 'child',
+                (child) async => throw StateError('the child'),
+              ),
+            );
+          });
         });
-      });
 
-      expect(bench.heard, ['child: the child', 'parent: the child']);
-      expect(ran.errors, ['the child']);
-    });
+        expect(bench.heard, ['child: the child', 'parent: the child']);
+        expect(bench.unanswered, ['parent: the child']);
+        expect(handled, handlerSet ? ['the child'] : isEmpty);
+        expect(ran.errors, handlerSet ? isEmpty : ['the child']);
+      });
+    }
 
     for (final make in <OpenSolo<int> Function()>[
       _ReportsAndCallsSuper.new,
