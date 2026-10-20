@@ -12,8 +12,6 @@ uncaught error can end the application. Some errors have no outcome to ride on,
 and `onUnanswered` answers for those.
 [Where each error goes](#where-each-error-goes) lists every kind.
 
-
-
 The lines under some blocks are what the code prints. `report:` is an error
 handed to the crash reporter, and `zone:` is an error that reached the creation
 zone uncaught.

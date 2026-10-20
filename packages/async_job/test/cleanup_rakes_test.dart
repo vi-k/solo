@@ -46,6 +46,19 @@ DeferredJob<Database> stubborn() => Job.deferred<Database>(
       (ctx) => ctx.abandonable(Database.open, discard: (db) => db.close()),
     );
 
+/// The answer of "A value the job keeps back" without its `disown`.
+Future<Database?> closingWithoutDisown(JobContext ctx) async {
+  final database = await ctx.join(
+    Database.open,
+    discard: (database) => database.close(),
+  );
+  if (!await ctx.join(database.isCurrent)) {
+    await database.close();
+    return null;
+  }
+  return database;
+}
+
 /// Opens a database at once, under the name the trace will show.
 Future<Database> open([String name = 'database']) async {
   stage.trace.add('$name opened');
@@ -64,6 +77,15 @@ const quoted = [
     'database opened',
     'lock released',
     'outcome: Done(database)',
+  ],
+  [
+    'database opened',
+    'outcome: Done(null)',
+  ],
+  [
+    'database opened',
+    'database closed',
+    'outcome: Done(null)',
   ],
   [
     'database opened',
@@ -337,7 +359,80 @@ void main() {
     });
   });
 
+  group('A value the job keeps back', () {
+    setUp(() => stage.schemaCurrent = false);
+
+    test('the first attempt leaves the database it keeps back open', () {
+      fakeAsync((async) {
+        final job = Job<Database?>(first.keptBack);
+        async.flushTimers();
+        expect((job.outcome! as Done<Database?>).value, isNull);
+        expect(trace, ['database opened']);
+      });
+    });
+
+    test('a current schema hands the database over open, as before', () {
+      stage.schemaCurrent = true;
+      fakeAsync((async) {
+        final job = Job<Database?>(page.closingKeptBack);
+        async.flushTimers();
+        expect(job.outcome, isA<Done<Database?>>());
+        expect(trace, ['database opened']);
+      });
+    });
+
+    test('a cancellation during the close closes it once with disown', () {
+      for (final (version, closes) in [
+        (page.closingKeptBack, 1),
+        (closingWithoutDisown, 2),
+      ]) {
+        stage = Stage()
+          ..schemaCurrent = false
+          ..closeTake = 10;
+        Database? opened;
+        fakeAsync((async) {
+          final job = Job<Database?>(version)..ignoreFailure();
+          // Open at 10, current asked until 15, the close from 15 to 25.
+          async.elapse(const Duration(milliseconds: 20));
+          expect(stage.trace, ['database opened']);
+          job.cancel().ignore();
+          async.flushTimers();
+          expect(job.outcome, isA<Cancelled>());
+          opened = Database.lastOpened;
+        });
+        expect(opened!.closes, closes);
+      }
+    });
+  });
+
   group('A resource that travels', () {
+    test(
+        'a checkpoint of run that throws closes the value before the body '
+        'hears it', () {
+      stage.closeTake = 10;
+      fakeAsync((async) {
+        final connect = first.connecting();
+        final ready = Job.deferred<void>((ctx) async {
+          try {
+            await ctx.run(connect, discard: (database) => database.close());
+          } on Cancelled {
+            stage.trace.add('body heard');
+            rethrow;
+          }
+        });
+        connect.done.then((_) => cancel(ready)).ignore();
+        ready.start();
+        async.flushTimers();
+        expect(ready.outcome, isA<Cancelled>());
+        expect(trace, [
+          'database opened',
+          'cancel',
+          'database closed',
+          'body heard',
+        ]);
+      });
+    });
+
     test('the first attempt leaves the database open when migration fails', () {
       fakeAsync((async) {
         stage.migrateError = MigrationFailed();
@@ -361,7 +456,7 @@ void main() {
       });
       expect(
         printed.where((line) => line.contains('handed its value over')),
-        quoted[3],
+        quoted[5],
       );
     });
 
@@ -373,7 +468,7 @@ void main() {
         page.onArrival(first.connecting()).start();
         async.flushTimers();
       });
-      expect(printed, containsAll(quoted[3]));
+      expect(printed, containsAll(quoted[5]));
     });
 
     test('the second attempt closes the database when migration fails', () {
@@ -1202,42 +1297,52 @@ void main() {
       expect(scene(() => Job<Database>(page.keeping)), quoted[1]);
     });
 
+    test('the first attempt of keeping back leaves the database open', () {
+      stage.schemaCurrent = false;
+      expect(scene(() => Job<Database?>(first.keptBack)), quoted[2]);
+    });
+
+    test('the body that keeps the database back closes it', () {
+      stage.schemaCurrent = false;
+      expect(scene(() => Job<Database?>(page.closingKeptBack)), quoted[3]);
+    });
+
     test('the first attempt of the hand-over leaks the database', () {
       stage.migrateError = MigrationFailed();
       expect(
         scene(() => first.unregistered(first.connecting())..start()),
-        quoted[2],
+        quoted[4],
       );
     });
 
     test('the second attempt loses the database to the checkpoint of run', () {
-      expect(scene(() => cancelledOnceConnected(nextLine)), quoted[4]);
+      expect(scene(() => cancelledOnceConnected(nextLine)), quoted[6]);
     });
 
     test('registering on arrival closes the database on that cancellation', () {
-      expect(scene(() => cancelledOnceConnected(page.onArrival)), quoted[5]);
+      expect(scene(() => cancelledOnceConnected(page.onArrival)), quoted[7]);
     });
 
     test('the first attempt of unregistering closes the cursor twice', () {
       expect(
         scene(() => Job<void>(first.unregisteringAfter), cancelAt: 5),
-        quoted[6],
+        quoted[8],
       );
     });
 
     test('unregistering inside the action closes the cursor once', () {
       expect(
         scene(() => Job<void>(page.unregisteringInside), cancelAt: 5),
-        quoted[7],
+        quoted[9],
       );
     });
 
     test('a cancellation after the return closes what the body returned', () {
-      expect(scene(page.afterTheReturn, cancelAt: 15), quoted[9]);
+      expect(scene(page.afterTheReturn, cancelAt: 15), quoted[11]);
     });
 
     test('a plain await closes what it opened once the job is cancelled', () {
-      expect(scene(page.plainAwait, cancelAt: 5), quoted[8]);
+      expect(scene(page.plainAwait, cancelAt: 5), quoted[10]);
     });
   });
 
@@ -1251,6 +1356,7 @@ void main() {
     '# Cleanup': 'test/support/cleanup_page.dart',
     '### The first attempt': 'test/support/cleanup_first_attempts.dart',
     '### `dispose` for what the job keeps': 'test/support/cleanup_page.dart',
+    '### Closing what the job keeps back': 'test/support/cleanup_page.dart',
     '### The second attempt': 'test/cleanup_rakes_test.dart',
     '### Registering on arrival': 'test/support/cleanup_page.dart',
     '## Registering without a call': 'test/support/cleanup_page.dart',

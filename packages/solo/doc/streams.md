@@ -165,4 +165,3 @@ subscription of its own instead, made in its constructor and cancelled in
 update is a fact the running work has to hear at once, writes it with
 `externalSetState`. [External state](state.md#external-state) on the state page
 shows such a subscription and says which of the two an update calls for.
-

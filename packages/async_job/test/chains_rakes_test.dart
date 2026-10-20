@@ -444,6 +444,92 @@ void main() {
       expect(trace(), isEmpty, reason: 'nothing was saved');
     });
 
+    List<String> printedBy(Future<void> Function() code) {
+      final printed = <String>[];
+      runZoned(
+        () => fakeAsync((async) {
+          stubs.stage.textTake = 30;
+          code();
+          async.flushTimers();
+        }),
+        zoneSpecification: ZoneSpecification(
+          print: (self, parent, zone, line) => printed.add(line),
+        ),
+      );
+      return printed;
+    }
+
+    /// The output blocks that follow a block ending with the print of
+    /// `shown`, in the order of the page.
+    List<List<String>> shownQuotes() => [
+          for (final match in RegExp(
+            r"print\('shown: \$\{shown.outcome\}'\);\n```\n\n```text\n"
+            r'(.*?)\n```',
+            dotAll: true,
+          ).allMatches(File('doc/chains.md').readAsStringSync()))
+            match.group(1)!.split('\n'),
+        ];
+
+    test('two continuations: cancelling one cancels the source and the other',
+        () {
+      final printed = printedBy(page.twoContinuations);
+      expect(printed, [
+        'loaded: Cancelled(chain)',
+        'shown: Cancelled(chain)',
+      ]);
+      expect(shownQuotes().first, printed);
+      expect(trace(), isEmpty, reason: 'nothing was shown');
+    });
+
+    test('two jobs that wait: cancelling one leaves the source and the other',
+        () {
+      final printed = printedBy(page.twoWaiting);
+      expect(printed, [
+        'parsed: Cancelled(manual)',
+        'loaded: Done(21)',
+        'shown: Done(null)',
+      ]);
+      expect(shownQuotes(), hasLength(2));
+      expect(shownQuotes().last, printed);
+      expect(trace(), ['shown 21']);
+    });
+
+    test(
+        'a source that fails after one job left: that job hears it late, '
+        'the other as its failure', () {
+      final zone = <String>[];
+      final heard = <String>[];
+      runZonedGuarded(
+        () => fakeAsync((async) {
+          final observer = _Heard(heard);
+          final loaded = Job<String>(
+            (ctx) => ctx.join(() async {
+              await delay(30);
+              throw StateError('offline');
+            }),
+          );
+          final parsed = Job<int>(
+            observer: observer,
+            (ctx) async => int.parse(await ctx.abandonable(() => loaded.value)),
+          );
+          final shown = Job<void>(
+            (ctx) async =>
+                stubs.showText(await ctx.abandonable(() => loaded.value)),
+          );
+          // The screen that stays reads the outcome of its job.
+          unawaited(shown.done);
+          async.elapse(const Duration(milliseconds: 10));
+          parsed.cancel().ignore();
+          async.flushTimers();
+          expect('${shown.outcome}', 'Failed(Bad state: offline)');
+          expect('${parsed.outcome}', 'Cancelled(manual)');
+        }),
+        (error, stackTrace) => zone.add('$error'),
+      );
+      expect(heard, ['Bad state: offline']);
+      expect(zone, ['Bad state: offline']);
+    });
+
     (Job<String>, Job<int>, Job<void>) slowChain({bool cancellable = true}) {
       final loaded = Job<String>(
         cancellable: cancellable,
@@ -479,6 +565,23 @@ void main() {
         });
       });
     }
+
+    test('the cancel table: parsed, with another continuation of loaded', () {
+      fakeAsync((async) {
+        final (loaded, parsed, saved) = slowChain();
+        final shown = loaded.then<void>((ctx, text) {});
+        async.elapse(const Duration(milliseconds: 10));
+        parsed.cancel().ignore();
+        async.flushTimers();
+        expect(
+          [
+            for (final job in [loaded, parsed, saved, shown])
+              (job.outcome! as Cancelled).reason.name,
+          ],
+          ['chain', 'manual', 'chain', 'chain'],
+        );
+      });
+    });
 
     test('a loaded that refuses stops the cancellation there', () {
       fakeAsync((async) {
@@ -611,4 +714,15 @@ ${page.adoptedTail}
     );
     expect(strayFences('doc/chains.md'), isEmpty);
   });
+}
+
+/// Writes down each error `onError` hears.
+final class _Heard extends JobObserver {
+  _Heard(this.heard);
+
+  final List<String> heard;
+
+  @override
+  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      heard.add('$error');
 }

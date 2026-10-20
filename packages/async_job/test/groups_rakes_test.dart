@@ -307,6 +307,115 @@ void main() {
     });
   });
 
+  group('What ctx.runAll waits for', () {
+    // The table of forms: on success the cleanup of every branch, except
+    // one a branch registers after running it, and the values come out
+    // before the branches end; on failure every branch to its end.
+    for (final fails in [false, true]) {
+      test(
+          'on ${fails ? 'failure' : 'success'} the group comes out after the '
+          'cleanup, ${fails ? 'after' : 'before'} the end of the branches', () {
+        fakeAsync((async) {
+          final trace = <String>[];
+          final branches = <Job<int>>[];
+          ChildJob<int> branch(String name, {bool failing = false}) {
+            final job = Job.deferred<int>((ctx) async {
+              ctx.onDispose(() async {
+                await delay(30);
+                trace.add('$name cleaned up');
+              });
+              await ctx.abandonable(() => delay(10));
+              if (failing) throw StateError(name);
+              return 1;
+            });
+            branches.add(job);
+            return job;
+          }
+
+          String ended() => [
+                for (final job in branches)
+                  if (job.isFinished) 'ended' else 'not',
+              ].join(' ');
+          Job<void>((ctx) async {
+            try {
+              await ctx.runAll([branch('a'), branch('b', failing: fails)]);
+              trace.add('values, branches ${ended()}');
+            } on Object {
+              trace.add('error, branches ${ended()}');
+            }
+          });
+          async.flushTimers();
+          expect(trace, [
+            'a cleaned up',
+            'b cleaned up',
+            if (fails)
+              'error, branches ended ended'
+            else
+              'values, branches not not',
+          ]);
+        });
+      });
+    }
+
+    test(
+        'a cleanup a branch registers after its own has run comes after the '
+        'values', () {
+      fakeAsync((async) {
+        final trace = <String>[];
+        final early = Job.deferred<int>((ctx) async {
+          // By the time the timer fires, the group has decided and this
+          // branch has run its cleanup: it waits for the cleanup of `late`.
+          Timer(const Duration(milliseconds: 30), () {
+            trace.add('a registered late');
+            ctx.onDispose(() => trace.add('a late cleanup'));
+          });
+          return 1;
+        });
+        final late = Job.deferred<int>((ctx) async {
+          ctx.onDispose(() async {
+            await delay(30);
+            trace.add('b cleaned up');
+          });
+          await ctx.abandonable(() => delay(20));
+          return 2;
+        });
+        Job<void>((ctx) async {
+          final values = await ctx.runAll([early, late]);
+          trace.add('values $values');
+        });
+        async.flushTimers();
+        expect(trace, [
+          'a registered late',
+          'b cleaned up',
+          'values [1, 2]',
+          'a late cleanup',
+        ]);
+      });
+    });
+
+    test('a cleanup a branch registers before its own has run comes first', () {
+      fakeAsync((async) {
+        final trace = <String>[];
+        final early = Job.deferred<int>((ctx) async {
+          Timer(const Duration(milliseconds: 5), () {
+            ctx.onDispose(() => trace.add('a cleanup'));
+          });
+          return 1;
+        });
+        final late = Job.deferred<int>((ctx) async {
+          await ctx.abandonable(() => delay(20));
+          return 2;
+        });
+        Job<void>((ctx) async {
+          final values = await ctx.runAll([early, late]);
+          trace.add('values $values');
+        });
+        async.flushTimers();
+        expect(trace, ['a cleanup', 'values [1, 2]']);
+      });
+    });
+  });
+
   group('When one failure makes the rest pointless', () {
     test('a branch held for the group has no outcome yet', () {
       fakeAsync((async) {

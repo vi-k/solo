@@ -86,3 +86,112 @@ test('a cancelled open still closes what it opened', () {
 | --- | --- |
 | Запуска задачи, чьё тело начинается в микротаске | `flushMicrotasks()` |
 | Работы, запланированной через `Future(...)` или `Future.delayed(...)`, которые используют таймеры | `flushTimers()` или `elapse(...)` |
+| Паузы `ctx.pause(duration)`, которая ждёт на таймере | `elapse(duration)` или `flushTimers()` |
+| Срока из `timeout: limit`, который ядро держит на таймере | `elapse(limit)` или `flushTimers()` |
+
+## Провал, которого тест ждёт
+
+Тест проверяет, что открытие запертой базы падает.
+
+### Первая попытка
+
+```dart
+// Первая попытка: проверка проходит, а тест падает.
+test('a locked database fails the open', () {
+  fakeAsync((async) {
+    final job = Job<Database>((ctx) => ctx.join(Database.open));
+    async.flushTimers();
+
+    expect(job.outcome, isA<Failed>());
+  });
+});
+```
+
+```text
+Bad state: database locked
+```
+
+`expect` проходит, а тест падает с той самой ошибкой, которую проверяет. Чтение
+`outcome` провал не наблюдает: никто не прочитал `done` или `value` и не вызвал
+`ignoreFailure()`, поэтому провал уходит в зону, где задачу создали. Это зона
+теста, а `package:test` роняет тест, до зоны которого дошла ошибка. Ошибки,
+которых не несёт ни один исход, например ошибки уборки или `ctx.unattended`,
+попадают туда же, если за них не отвечает наблюдатель: см.
+[«Куда идёт каждая ошибка»](observing.md#куда-идёт-каждая-ошибка).
+
+### Провал читает тест
+
+```dart
+test('a locked database fails the open', () {
+  fakeAsync((async) {
+    final job = Job<Database>((ctx) => ctx.join(Database.open))
+      ..ignoreFailure(); // провал тест читает из исхода
+    async.flushTimers();
+
+    expect(job.outcome, isA<Failed>());
+  });
+});
+```
+
+`ignoreFailure()` говорит, что о провале кто-то позаботится, и здесь это тест.
+Тест, который читает `job.done` или `job.value`, тоже его наблюдает.
+
+## Сравнение исходов
+
+Тест проверяет значение задачи через её исход.
+
+### Первая попытка
+
+```dart
+// Первая попытка: два исхода, которые печатаются одинаково, не равны.
+test('the job loads three', () {
+  fakeAsync((async) {
+    final job = Job<int>((ctx) => ctx.join(load));
+    async.flushTimers();
+
+    expect(job.outcome, const Done(3));
+  });
+});
+```
+
+```text
+Expected: Done<int>:<Done(3)>
+  Actual: Done<int>:<Done(3)>
+```
+
+Своего `==` у исхода нет, поэтому два исхода равны, только когда это один
+объект, а исход задачи никогда не тот, который строит тест.
+
+### По типу и значению
+
+```dart
+test('the job loads three', () {
+  fakeAsync((async) {
+    final job = Job<int>((ctx) => ctx.join(load));
+    async.flushTimers();
+
+    expect(
+      job.outcome,
+      isA<Done<int>>().having((done) => done.value, 'value', 3),
+    );
+  });
+});
+```
+
+С остальными так же: `isA<Cancelled>()` с `having` по `reason`
+и `isA<Failed>()` с `having` по `error`.
+
+## Настройки между тестами
+
+```dart
+setUp(() {
+  final previous = Job.isCancellationError;
+  Job.isCancellationError = (error) => error is DatabaseStopped;
+  addTearDown(() => Job.isCancellationError = previous);
+});
+```
+
+`Job.isCancellationError` и `Job.debug` статические. Тест, который задаёт одно
+из них, задаёт его и для каждого теста после себя в том же файле: оставленный
+фильтр не пускает названные им ошибки в зону этих тестов. `addTearDown`
+возвращает то, что было.

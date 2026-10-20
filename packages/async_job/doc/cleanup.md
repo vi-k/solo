@@ -20,7 +20,7 @@ return database;
 | Callback | When it runs |
 | --- | --- |
 | `dispose` | on every outcome |
-| `discard` | when the job ends without handing its value over |
+| `discard` | unless the job ends `Done` |
 
 `abandonable`, `join` and `run` take either; `ctx.onDispose` and
 `ctx.onDiscard` register a callback where there is no call to wrap. Passing a
@@ -61,8 +61,9 @@ outcome: Done(database)
 
 The lock is never released. This is what happens:
 
-1. `discard` runs only when the job ends without handing its value over.
-2. A job that returns the database hands it over, so neither `discard` runs.
+1. `discard` runs only when the job does not end `Done`.
+2. A job that returns the database ends `Done(database)`, so neither `discard`
+   runs.
 3. The database stays open for the caller, as it should, and the lock stays
    held for as long as the process lives.
 
@@ -102,12 +103,72 @@ keeps the group from getting there, so the group hangs.
 [Branches that wait for each other](groups.md#branches-that-wait-for-each-other)
 on the groups page shows the hang and how to take such a lock.
 
+## A value the job keeps back
+
+A job opens a database for its caller and hands it over only when the schema is
+current. Otherwise it returns `null`, and the caller migrates first. This time
+the schema is out of date.
+
+### The first attempt
+
+```dart
+// The first attempt: the database the job keeps back stays open.
+final database = await ctx.join(
+  Database.open,
+  discard: (database) => database.close(),
+);
+
+if (!await ctx.join(database.isCurrent)) {
+  return null;
+}
+
+return database;
+```
+
+```text
+database opened
+outcome: Done(null)
+```
+
+The database is never closed, and nobody holds it. This is what happens:
+
+1. `discard` runs only when the job does not end `Done`.
+2. `return null` ends the job `Done(null)`. `discard` asks how the job ended,
+   not where the database went, so it does not run.
+
+### Closing what the job keeps back
+
+```dart
+final database = await ctx.join(
+  Database.open,
+  discard: (database) => database.close(),
+);
+
+if (!await ctx.join(database.isCurrent)) {
+  ctx.disown(database);
+  await database.close();
+  return null;
+}
+
+return database;
+```
+
+```text
+database opened
+database closed
+outcome: Done(null)
+```
+
+The body that keeps the value back closes it itself, and takes the registration
+back first: a cancellation that comes while the database closes ends the job
+`Cancelled`, and without `ctx.disown` the `discard` would close the database a
+second time.
+
 ## A resource that travels
 
 A resource can be opened by one job and handed to another: `connect` opens the
 database, `ready` migrates it and passes it on. Whoever holds it last must
 still be able to close it.
-
 
 ### The first attempt
 
@@ -204,7 +265,7 @@ final ready = Job.deferred<Database>((ctx) async {
   );
   await ctx.join(() => database.migrate());
 
-    return database;
+  return database;
 });
 ```
 
@@ -217,11 +278,13 @@ database closed
 outcome: Cancelled(manual)
 ```
 
-Handed to `run`, the registration is made the moment the value comes back,
-before that checkpoint. Now `ready` closes the database when it ends in
-anything but a value, and hands it on untouched when it succeeds, to a receiver
-that registers it the same way. When the cancellation comes decides who closes
-the database:
+Handed to `run`, the cleanup takes the value the moment it comes back, and the
+checkpoint can no longer take it away. When the checkpoint throws, `run` closes
+the database on the spot and waits for the close before the body hears the
+cancellation; when it passes, the registration goes on the stack of `ready`.
+Now `ready` closes the database when it ends in anything but a value, and hands
+it on untouched when it succeeds, to a receiver that registers it the same way.
+When the cancellation comes decides who closes the database:
 
 | When `ready` is cancelled | The second attempt | Registering on arrival |
 | --- | --- | --- |

@@ -63,6 +63,13 @@ final class MyJob<T> extends JobBase<T> implements ChildJob<T> {
     _queue?._waiting.remove(this);
     super.cancelWith(cancelled, rejectable: rejectable);
   }
+
+  @override
+  void adoptedBy(JobContextBase parent) {
+    if (_queue?._waiting.contains(this) ?? false) {
+      throw StateError('$this waits in its queue');
+    }
+  }
 }
 
 /// The three copies of the page's job: as it is first shown, in the first
@@ -109,15 +116,25 @@ final class MyContext extends JobContextBase {
 
 final class MyQueue {
   final _waiting = <MyJob<Object?>>[];
+  Future<void>? _running;
 
   void add(MyJob<Object?> job) => _waiting.add(job.._queue = this);
 
-  Future<void> run() async {
-    while (_waiting.isNotEmpty) {
-      final job = _waiting.removeAt(0);
-      if (job.isFinished) continue;
-      job._launch();
-      await job._untilFinished;
+  // One loop at a time: a second call gets the future of the loop that
+  // runs. Started in a microtask, the loop clears `_running` after it is
+  // set, even when there is nothing to run.
+  Future<void> run() => _running ??= Future.microtask(_loop);
+
+  Future<void> _loop() async {
+    try {
+      while (_waiting.isNotEmpty) {
+        final job = _waiting.removeAt(0);
+        if (job.isFinished) continue;
+        job._launch();
+        await job._untilFinished;
+      }
+    } finally {
+      _running = null;
     }
   }
 }
@@ -633,6 +650,7 @@ void main() {
           ..add(MyJob<void>((_) async => seen.add('third runs')));
         var over = false;
         queue.run().then((_) => over = true).ignore();
+        async.flushMicrotasks();
         second.cancel().ignore();
         expect('${second.outcome}', 'Cancelled(manual)', reason: 'on the spot');
         expect(queue._waiting, hasLength(1), reason: 'the third is left');
@@ -725,21 +743,96 @@ void main() {
       });
     });
 
+    test('a second run waits for the loop that runs: one job at a time', () {
+      fakeAsync((async) {
+        final seen = <String>[];
+        MyJob<void> job(String name) => MyJob<void>((ctx) async {
+              seen.add('$name starts');
+              await ctx.abandonable(upload);
+              seen.add('$name ends');
+            });
+        final queue = MyQueue()
+          ..add(job('first'))
+          ..add(job('second'));
+        final running = queue.run();
+        expect(identical(queue.run(), running), isTrue);
+        async.flushTimers();
+        expect(seen, [
+          'first starts',
+          'first ends',
+          'second starts',
+          'second ends',
+        ]);
+      });
+    });
+
+    test('a run that found nothing leaves the next run its own loop', () {
+      fakeAsync((async) {
+        final seen = <String>[];
+        final queue = MyQueue()..run().ignore();
+        async.flushMicrotasks();
+        queue
+          ..add(MyJob<void>((_) async => seen.add('runs')))
+          ..run().ignore();
+        async.flushTimers();
+        expect(seen, ['runs']);
+      });
+    });
+
+    test('ctx.run turns away a job that waits in the queue', () {
+      fakeAsync((async) {
+        final seen = <String>[];
+        final queued =
+            MyJob<void>(key: 'queued', (_) async => seen.add('runs'));
+        final queue = MyQueue()
+          ..add(
+            MyJob<void>((ctx) async {
+              try {
+                await ctx.run(queued);
+              } on Object catch (error) {
+                seen.add('$error');
+              }
+            }),
+          )
+          ..add(queued)
+          ..add(MyJob<void>((_) async => seen.add('third runs')));
+        queue.run().ignore();
+        async.flushTimers();
+        expect(seen, [
+          'Bad state: Job(queued) waits in its queue',
+          'runs',
+          'third runs',
+        ]);
+      });
+    });
+
     test('the answer keeps the run and the loop of the first attempt', () {
-      for (final (opening, closing) in [
-        ('Future<void> runQueue() async {', '}'),
-        ('  Future<void> run() async {', '  }'),
-      ]) {
-        expect(
-          _declaration('test/extending_rakes_test.dart', opening, closing),
-          _declaration(
-            'test/support/extending_first_attempts.dart',
-            opening,
-            closing,
-          ),
-          reason: 'the page shows them once and says "the same run"',
-        );
-      }
+      expect(
+        _declaration(
+          'test/extending_rakes_test.dart',
+          'Future<void> runQueue() async {',
+          '}',
+        ),
+        _declaration(
+          'test/support/extending_first_attempts.dart',
+          'Future<void> runQueue() async {',
+          '}',
+        ),
+        reason: 'the page shows it once and says "the same run"',
+      );
+      // The answer moves the loop into a `try`, one level deeper.
+      String loop(String file, String indent) => [
+            for (final line in _declaration(
+              file,
+              '$indent  while (_waiting.isNotEmpty) {',
+              '$indent  }',
+            ).split('\n'))
+              line.trim(),
+          ].join('\n');
+      expect(
+        loop('test/extending_rakes_test.dart', '    '),
+        loop('test/support/extending_first_attempts.dart', '  '),
+      );
     });
 
     test('the cascade and cancelOwnJob arrive at cancelWith as well', () {
@@ -1198,6 +1291,8 @@ void main() {
   final holders = {
     '### The first attempt': 'test/support/extending_first_attempts.dart',
     '### Refusing while the job waits': 'test/extending_rakes_test.dart',
+    '### One loop, and no other way to start': 'test/extending_rakes_test.dart',
+    '### The whole engine': 'test/extending_rakes_test.dart',
     "### A cancellation of the engine's own": 'test/extending_rakes_test.dart',
     '### Not waiting for the checkpoint': 'test/extending_rakes_test.dart',
   };

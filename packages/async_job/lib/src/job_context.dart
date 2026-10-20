@@ -76,11 +76,12 @@ abstract interface class JobContext {
   /// itself.
   ///
   /// On the stack the two differ: [dispose] runs whatever the outcome,
-  /// [discard] only if the value reaches nobody. So [discard] is for what
-  /// the body returns or hands outside, and a lock, a temporary file or a
+  /// [discard] unless the job ends [Done]. So [discard] is for what the
+  /// body returns or hands outside, and a lock, a temporary file or a
   /// subscription takes [dispose] — or it leaks on the successful path,
-  /// where no test on cancellation will see it. Passing both is an
-  /// [ArgumentError].
+  /// where no test on cancellation will see it. [discard] does not look at
+  /// the value the job returns: a body that ends [Done] without returning
+  /// this value disposes of it itself. Passing both is an [ArgumentError].
   ///
   /// The core catches a late value from the moment it learns the body
   /// has ended, not from its `return`: a call the body walked away from
@@ -136,9 +137,10 @@ abstract interface class JobContext {
   /// spot — and here that is awaited before the [Cancelled] is thrown, so an
   /// engine waiting for the job waits for the disposal too and the next job
   /// starts with the resource gone; a value that did reach the body goes on the
-  /// cleanup stack, [dispose] to run whatever the outcome and [discard] only if
-  /// the value reaches nobody. Passing both is an [ArgumentError]. Only a value
-  /// is handed over: an [action] that threw has nothing to dispose of.
+  /// cleanup stack, [dispose] to run whatever the outcome and [discard] unless
+  /// the job ends [Done], as in [abandonable]. Passing both is an
+  /// [ArgumentError]. Only a value is handed over: an [action] that threw has
+  /// nothing to dispose of.
   ///
   /// ```dart
   /// final db = await ctx.join(
@@ -334,13 +336,15 @@ abstract interface class JobContext {
   /// complete after the cleanup that would be waiting for them.
   void Function() onDispose(FutureOr<void> Function() disposer);
 
-  /// Registers [disposer] to run only if the job ends without handing its
-  /// value over: cancelled, or failed.
+  /// Registers [disposer] to run unless the job ends [Done]: when it is
+  /// cancelled, or fails.
   ///
   /// For what the body returns or hands outside; everything else — a
   /// lock, a temporary file, a subscription — takes [onDispose], or it
   /// leaks on the successful path where no test on cancellation will see
-  /// it. Returns a function that unregisters it.
+  /// it. The outcome decides, not the value: a body that ends [Done]
+  /// without returning what it registered here disposes of it itself.
+  /// Returns a function that unregisters it.
   ///
   /// In a branch of [runAll] the hand-over is the group's to declare, not
   /// the branch's: once the group has handed the values to the caller this
@@ -428,11 +432,13 @@ abstract interface class JobContext {
   ///
   /// [dispose] and [discard] say how the child's value is cleaned up, and they
   /// work as they do in [abandonable]: [dispose] runs whatever the outcome,
-  /// [discard] only if the value reaches nobody, and passing both is an
+  /// [discard] unless the parent ends [Done], and passing both is an
   /// [ArgumentError] thrown before the child starts. They are how a value that
-  /// travels is registered again on arrival, and the registration is made the
-  /// moment the value comes back — before the checkpoint above, because that
-  /// checkpoint is what takes the value away:
+  /// travels is registered again on arrival, and they take the value the
+  /// moment it comes back, because the checkpoint above is what would take
+  /// it away: when that checkpoint throws, the disposer runs on the spot and
+  /// is awaited before the [Cancelled] is thrown; when it passes, the
+  /// registration goes on the cleanup stack.
   ///
   /// ```dart
   /// final db = await ctx.run(connect, discard: (db) => db.close());

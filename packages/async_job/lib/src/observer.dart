@@ -91,11 +91,22 @@ abstract mixin class JobObserver {
   /// [JobContext.abandonable] failing later, a disposer, a cancellation
   /// callback, work handed over with [JobContext.unattended], a failure while
   /// formatting a child's cancellation description, or a failure an engine
-  /// handed to a job already over. Each is told here once, and one error at a
-  /// time: when the error is a `ParallelWaitError`, each failure and each
-  /// cancellation inside it comes in a call of its own, with its own stack
-  /// trace, as [Job.visitErrors] walks it. The outcome keeps the error as it
-  /// was thrown.
+  /// handed to a job already over. Each is told here once per job, and one
+  /// error at a time: when the error is a `ParallelWaitError`, each failure
+  /// and each cancellation inside it comes in a call of its own, with its own
+  /// stack trace, as [Job.visitErrors] walks it. The outcome keeps the error
+  /// as it was thrown.
+  ///
+  /// A failure can be the outcome of several jobs, and then it comes here
+  /// once on each of them. A child of [JobContext.run] fails, its parent lets
+  /// the failure out of its body, and an observer the child inherited hears
+  /// the same object on the child and then on the parent. A branch of
+  /// [JobContext.runAll] and its parent do the same, and so do a source and
+  /// its continuation of [Job.then] given one observer. An observer that
+  /// counts failures tells the second call from a new error by [identical],
+  /// and an [Expando] remembers the errors it has heard without keeping them
+  /// alive. An error thrown as a constant is the same object at every throw,
+  /// and two such failures count as one.
   ///
   /// Notification only: overriding it changes nothing about where the error
   /// goes. The errors with no outcome go on to [JobAnswerer.onUnanswered] of an

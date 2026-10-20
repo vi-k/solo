@@ -25,22 +25,25 @@ throws `Cancelled`. `dispose` closes the database whichever way the job ends:
 ```dart
 import 'package:async_job/async_job.dart';
 
-final job = Job<void>((ctx) async {
-  // Checked before the call and again before the value comes back,
-  // and the database is closed whichever way the job ends.
-  final db = await ctx.join(Database.open, dispose: (db) => db.close());
-  use(await ctx.join(db.readAll));
-});
+Future<void> main() async {
+  final job = Job<void>((ctx) async {
+    // Checked before the call and again before the value comes back,
+    // and the database is closed whichever way the job ends.
+    final db = await ctx.join(Database.open, dispose: (db) => db.close());
+    use(await ctx.join(db.readAll));
+  });
 
-// Somebody left the screen while the read was in flight.
-await Future<void>.delayed(const Duration(milliseconds: 50));
+  // Somebody left the screen while the read was in flight.
+  await Future<void>.delayed(const Duration(milliseconds: 50));
 
-// Waits for the body, its children and its cleanup.
-await job.cancel();
-print(job.outcome); // Cancelled(manual)
+  // Waits for the body, its children and its cleanup.
+  await job.cancel();
+  print(job.outcome); // Cancelled(manual)
+}
 ```
 
-With a `Database` that prints when it opens and when it closes, this prints:
+`example/quick_start.dart` runs this block with a `Database` that prints when
+it opens and when it closes. It prints:
 
 ```text
 database opened
@@ -152,8 +155,9 @@ final outcome = await job.done; // Cancelled(manual)
 ```
 
 - **`ctx.join(Database.open)`** waits for the open even after a cancellation,
-  then throws `Cancelled`, or the open's own error if it failed. No outcome
-  carries that error; see [Where errors go](doc/observing.md#where-errors-go).
+  then throws `Cancelled`, or the open's own error if it failed. An error that
+  comes after the cancellation has no outcome to carry it; see
+  [Where errors go](doc/observing.md#where-errors-go).
 - **`discard: (database) => database.close()`** closes the database when the
   job ends `Failed` or `Cancelled`; with `Done(database)` it stays open for the
   caller. See
@@ -220,15 +224,15 @@ what a cancellation that comes while it runs does to it:
 | `ctx.abandonable(action)` | Runs the action and waits for it, but no longer than the job lives | Throws `Cancelled` | Throws at once; the action runs on |
 | `ctx.uncancellable(action)` | Runs a step with the cancellation held back | Throws `Cancelled` | Holds the cancellation until the step ends; the next checkpoint throws |
 | `ctx.pause(duration)` | Lets time pass | Throws `Cancelled` | Ends the pause and throws |
-| `ctx.run(child)` | Starts a child made with `Job.deferred` and waits for its value | Throws `Cancelled` | Passes the cancellation to the child, waits for it and throws |
+| `ctx.run(child)` | Starts a `ChildJob`, such as one made with `Job.deferred`, and waits for its value; a future the body does not await takes `.ignore()` | Throws `Cancelled` | Passes the cancellation to the child, waits for it and throws |
 | `ctx.runAll(children)` | Runs children side by side and stops the rest as soon as one ends without a value | Throws `Cancelled` | Passes the cancellation to the children, waits for them and throws |
 | `ctx.each(stream, onData)` | Starts a child that takes the events of a stream one at a time | Throws `Cancelled` | Passes the cancellation to the child |
 | `ctx.onCancel(callback)` | Calls back the moment the job accepts a cancellation | Throws `Cancelled` |  |
 | `ctx.onDispose(disposer)` | Cleans up when the job ends, whatever the outcome | Works as usual |  |
-| `ctx.onDiscard(disposer)` | Cleans up when the value reaches nobody | Works as usual |  |
+| `ctx.onDiscard(disposer)` | Cleans up unless the job ends `Done`; a body that ends `Done` without returning the value disposes of it itself | Works as usual |  |
 | `ctx.disown(value)` | Drops the cleanup registered for a value | Works as usual |  |
 | `ctx.unattended(action)` | Starts work the job does not wait for; its errors go where those of cleanup go | Works as usual | The work is not cancelled |
-| `ctx.log(message)` | Hands a message to the observer | Works as usual |  |
+| `ctx.log(message)` | Hands a message to the observer; a closure is called by the observer that builds the line | Works as usual |  |
 | `ctx.job` | The job of this context | Works as usual |  |
 
 The last column holds where the job accepts the cancellation as it comes.

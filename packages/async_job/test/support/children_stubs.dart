@@ -225,6 +225,8 @@ Future<String> loadText() async {
 Future<void> saveNumber(int number) async =>
     stage.trace.add('saved number $number');
 
+void showText(String text) => stage.trace.add('shown $text');
+
 /// What a branch throws to cancel itself.
 Cancelled selfCancel() => Cancelled.by(
       reason: const ManualCancelReason(),

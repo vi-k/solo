@@ -68,12 +68,11 @@ moment the user cancels, and `outcome:` is what `job.done` completes with.
 ## Stopping the operation
 
 The job opens a database, migrates it and hands it over; `discard` closes it
-when the job ends without handing it over. The migration takes three steps of
-10 ms and reads a `CancelToken` before each, the database client's stop signal
-and not a type of this package; finding it cancelled, it stops by throwing
-`DatabaseStopped`. When the user cancels, the migration should stop, and the
-database should close once nothing writes into it. The user cancels during the
-second step, 15 ms in.
+unless the job ends `Done`. The migration takes three steps of 10 ms and reads
+a `CancelToken` before each, the database client's stop signal and not a type
+of this package; finding it cancelled, it stops by throwing `DatabaseStopped`.
+When the user cancels, the migration should stop, and the database should close
+once nothing writes into it. The user cancels during the second step, 15 ms in.
 
 ### The first attempt
 

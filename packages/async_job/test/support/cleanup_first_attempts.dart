@@ -19,6 +19,19 @@ Future<Database> sameCallback(JobContext ctx) async {
   return database;
 }
 
+Future<Database?> keptBack(JobContext ctx) async {
+  final database = await ctx.join(
+    Database.open,
+    discard: (database) => database.close(),
+  );
+
+  if (!await ctx.join(database.isCurrent)) {
+    return null;
+  }
+
+  return database;
+}
+
 DeferredJob<Database> connecting() {
   final connect = Job.deferred<Database>(
     key: 'connect',

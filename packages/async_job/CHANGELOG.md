@@ -60,6 +60,8 @@
   `creationZone`.**
 - **`JobContext` gains `pause`,** a delay a cancellation ends. See
   [Letting time pass](doc/cancellation.md#letting-time-pass).
+- **A class that implements `JobContext` itself adds `abandonable`, `pause` and
+  `runAll`.** One that extends `JobContextBase` inherits them.
 
 ### Deprecated
 
@@ -308,9 +310,9 @@ new wording.
 Initial release. The job kernel taken out of `solo` before its own first
 release.
 
-- `Job<T>`: a cancellable `Future` with an outcome, children and a cooperative
-  cancellation. Created by `Job(body)`, which starts on the next microtask, or
-  by `Job.deferred(body)`, which waits for `start()`.
+- `Job<T>`: a cancellable piece of asynchronous work with an outcome, children
+  and a cooperative cancellation. Created by `Job(body)`, which starts on the
+  next microtask, or by `Job.deferred(body)`, which waits for `start()`.
 - `Outcome<T>`: `Done`, `Failed`, `Cancelled` with an open `CancelReason` and a
   public `Cancelled.by` for engines built on this one.
 - A waiting family that says what a cancellation does to a call: `ctx.wait`
@@ -322,7 +324,7 @@ release.
   stream for as long as the job lives, waiting for an asynchronous `onData` and
   taking the subscription with it whatever the outcome.
 - A cleanup stack: `ctx.onDispose` releases whatever the outcome,
-  `ctx.onDiscard` only when the value reaches nobody, and `wait` and `join`
+  `ctx.onDiscard` only when the job does not end `Done`, and `wait` and `join`
   take the same two as `dispose` and `discard` for the value they hand over.
   The engine unwinds the stack after the children and before the outcome,
   waiting for every disposer; `ctx.disown(value)` takes a registration back

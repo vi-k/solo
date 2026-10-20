@@ -84,3 +84,112 @@ What moves the time depends on what the test waits for:
 | --- | --- |
 | The start of a job, whose body starts in a microtask | `flushMicrotasks()` |
 | Work scheduled with `Future(...)` or `Future.delayed(...)`, which use timers | `flushTimers()` or `elapse(...)` |
+| `ctx.pause(duration)`, which waits on a timer | `elapse(duration)` or `flushTimers()` |
+| The deadline of `timeout: limit`, which the core keeps on a timer | `elapse(limit)` or `flushTimers()` |
+
+## A failure the test expects
+
+A test checks that an open of a locked database fails.
+
+### The first attempt
+
+```dart
+// The first attempt: the check passes, and the test fails.
+test('a locked database fails the open', () {
+  fakeAsync((async) {
+    final job = Job<Database>((ctx) => ctx.join(Database.open));
+    async.flushTimers();
+
+    expect(job.outcome, isA<Failed>());
+  });
+});
+```
+
+```text
+Bad state: database locked
+```
+
+The `expect` passes, and the test fails with the very error it checks for.
+Reading `outcome` does not observe the failure: nobody read `done` or `value`
+or called `ignoreFailure()`, so the failure goes to the zone the job was made
+in. That is the zone of the test, and `package:test` fails a test whose zone
+hears an error. The errors that no outcome carries, such as those of cleanup or
+of `ctx.unattended`, get there the same way unless an observer answers for
+them: see [Where each error goes](observing.md#where-each-error-goes).
+
+### The failure read by the test
+
+```dart
+test('a locked database fails the open', () {
+  fakeAsync((async) {
+    final job = Job<Database>((ctx) => ctx.join(Database.open))
+      ..ignoreFailure(); // the test reads the failure from the outcome
+    async.flushTimers();
+
+    expect(job.outcome, isA<Failed>());
+  });
+});
+```
+
+`ignoreFailure()` says that somebody takes care of the failure, and here it is
+the test. A test that reads `job.done` or `job.value` observes it as well.
+
+## Comparing outcomes
+
+A test checks the value of a job through its outcome.
+
+### The first attempt
+
+```dart
+// The first attempt: two outcomes printed alike are not equal.
+test('the job loads three', () {
+  fakeAsync((async) {
+    final job = Job<int>((ctx) => ctx.join(load));
+    async.flushTimers();
+
+    expect(job.outcome, const Done(3));
+  });
+});
+```
+
+```text
+Expected: Done<int>:<Done(3)>
+  Actual: Done<int>:<Done(3)>
+```
+
+An outcome has no `==` of its own, so two outcomes are equal only when they are
+one object, and the outcome of a job is never the one the test builds.
+
+### By type and value
+
+```dart
+test('the job loads three', () {
+  fakeAsync((async) {
+    final job = Job<int>((ctx) => ctx.join(load));
+    async.flushTimers();
+
+    expect(
+      job.outcome,
+      isA<Done<int>>().having((done) => done.value, 'value', 3),
+    );
+  });
+});
+```
+
+The same goes for the rest: `isA<Cancelled>()` with `having` on `reason`, and
+`isA<Failed>()` with `having` on `error`.
+
+## Settings between tests
+
+```dart
+setUp(() {
+  final previous = Job.isCancellationError;
+  Job.isCancellationError = (error) => error is DatabaseStopped;
+  addTearDown(() => Job.isCancellationError = previous);
+});
+```
+
+`Job.isCancellationError` and `Job.debug` are static. A test that sets one sets
+it for each test after it in the same file: a filter left behind keeps the
+errors it names away from the zone of those tests. `addTearDown` puts back what
+was there.

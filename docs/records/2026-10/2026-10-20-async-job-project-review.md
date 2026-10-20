@@ -3,7 +3,10 @@
 > **Состояние на 2026-10-20:** ревью проведено, у каждой находки стоит
 > вердикт. Владелец сказал «чини всё, что можешь»; код ядра — M1, M2, L10,
 > L13 — исправлен, отчёт `2026-10-20-async-job-code-fixes-report.md`.
-> Документы ядра ещё не правились.
+> Документы ядра — M3–M7, L1–L4, L8, L12, L15–L19 — исправлены, отчёт
+> `2026-10-20-async-job-docs-fixes-report.md`. Форма страниц (M8, L20) идёт
+> следующей волной; код M4 и M6, подсказка `Job.debug` из M5 и `ctx.start`
+> из L4 ждут решения владельца.
 > **Что это:** третье полное ревью `async_job` четырьмя ревьюерами после волн
 > правок по второму — Astra и Sol 6.1 через Codex, Fable и Opus через Claude
 > Code, — с оценкой из десяти, ответом на вопрос «что сделать, чтобы поставить
@@ -282,6 +285,14 @@ guide-queue-two-runs: peak=2, first=Done(null), second=Done(null)
 отказывает, — или передаёт явно. Собранный окончательный пример. С переводом
 и сторожами стенда. Воспроизведено зондами обоих.
 
+Итог: сделано, без явной передачи. `MyQueue` держит один цикл:
+`run() => _running ??= Future.microtask(_loop)`, а `_loop` в `finally` снимает
+поле. `MyJob.adoptedBy` отказывает задаче, которая стоит в очереди, и `ctx.run`
+бросает `Bad state: Job(queued) waits in its queue`; передать её явно страница
+не учит. Новые разделы «One loop, and no other way to start» и «The whole
+engine» с полным листингом. Три теста, каждый держит свою мутацию.
+Подробности — `2026-10-20-async-job-docs-fixes-report.md`.
+
 ### M4. Веер `then`: отмена одного продолжения отменяет общий источник и соседей
 
 **Нашёл:** Opus (C1). **Где:** `packages/async_job/lib/src/job_then.dart`,
@@ -305,6 +316,11 @@ R4 user=Cancelled(chain) name=Cancelled(manual) avatar=Cancelled(chain)
 ход только при одном незавершённом продолжении; это меняет правило, а не чинит
 дефект.
 
+Итог: документом сделано, как предложено: строка веера в таблице отмены
+и раздел «Two continuations of one source» — первая попытка с двумя `then`
+и ответ задачами, которые ждут источник через `ctx.abandonable`. Код остаётся
+вопросом владельцу. Подробности — `2026-10-20-async-job-docs-fixes-report.md`.
+
 ### M5. `discard` решается видом исхода, а документ говорит «когда значение не дошло ни до кого»
 
 **Нашёл:** Opus (C2). **Где:** dartdoc `JobContext.abandonable`, `join`, `run`,
@@ -326,6 +342,14 @@ that ends `Done` without returning the value disposes of it itself» — во в
 местах выше, с переводом; на `cleanup.md` первая попытка с условным
 `return null`. Подсказка в `Job.debug` о `discard`-записи, чьё значение
 не совпало со значением `Done`, — отдельная работа, в вопрос владельцу.
+
+Итог: документом сделано, как предложено: «unless the job ends `Done`»
+в dartdoc четырёх членов и `_Cleanup`, в README, `CHANGELOG.md` 0.1.0,
+на `cleanup.md`, `cancellation.md` и `groups.md`, на `resources.md`
+и в `CHANGELOG.md` `solo`; на `cleanup.md` раздел «A value the job keeps back»
+с первой попыткой `return null` и ответом `ctx.disown` и `close()` в теле.
+Подсказка в `Job.debug` остаётся вопросом владельцу. Подробности —
+`2026-10-20-async-job-docs-fixes-report.md`.
 
 ### M6. Общий наблюдатель слышит одну ошибку на каждой задаче, через которую она прошла
 
@@ -352,6 +376,12 @@ once» верно для одной задачи, но читается как �
 не объявлять ошибку, которую тот же наблюдатель уже слышал от потомка, или
 признак `forwarded` в `onError`. Воспроизведено зондом Fable.
 
+Итог: документом сделано в dartdoc `onError` и на `observing.md`. Рецепт —
+отсеять по `identical` и помнить услышанное в `Expando`, с оговоркой
+о константных ошибках; без `job.isChild`: источник и продолжение `then` оба
+корни, и признак их не разделяет. Код остаётся вопросом владельцу.
+Подробности — `2026-10-20-async-job-docs-fixes-report.md`.
+
 ### M7. `testing.md` держит одну ловушку, а с остальными вопросами тестов туда идти бесполезно
 
 **Нашли:** Opus (D1), Fable (D4). **Где:** `packages/async_job/doc/testing.md`,
@@ -368,6 +398,13 @@ once» верно для одной задачи, но читается как �
 за краткость, поэтому не раздувать: короткие разделы «A failure the test did
 not expect», «Comparing outcomes», «Settings between tests» и строки таблицы
 «what moves the time» для `pause` и `timeout`. С переводом и сторожами стенда.
+
+Итог: сделано тремя разделами и двумя строками таблицы. Первый назван «A
+failure the test expects», а не «did not expect»: ловушка в провале, которого
+тест ждёт и проверяет по исходу, а зона роняет тест всё равно. Цитаты провалов
+сняты настоящим `dart test`. Порядок событий журналом своего раздела
+не получил: его показывает `observing.md`. Подробности —
+`2026-10-20-async-job-docs-fixes-report.md`.
 
 ### M8. Форма длинных страниц и dartdoc
 
@@ -408,6 +445,9 @@ arrivalDisposalOrder events=[discard value, body catch, parent cleanup]; outcome
 
 Вердикт: принято, документом: две ветки явно. С переводом.
 
+Итог: сделано: обе ветки названы на странице и в dartdoc `run`, тест держит
+порядок. Подробности — `2026-10-20-async-job-docs-fixes-report.md`.
+
 ### L2. `groups.md`: `ctx.runAll` «waits for every branch»
 
 **Нашёл:** Sol (D2). **Где:** `doc/groups.md`, таблица форм ожидания, строка
@@ -423,6 +463,11 @@ group-before-tail: values=[slow, fast], fastFinished=false, parentFinished=false
 Вердикт: принято, документом: успех и провал ждут разного, сказать в строке
 и рядом. С переводом.
 
+Итог: сделано: при успехе группа ждёт уборки веток, а не их конца, кроме
+уборки, которую ветка регистрирует уже после своей, при провале — конца каждой;
+строка таблицы, абзац и тесты. Подробности —
+`2026-10-20-async-job-docs-fixes-report.md`.
+
 ### L3. Quick start не запускается как есть
 
 **Нашли:** Astra (D4), Sol (D3), Opus (D9).
@@ -432,6 +477,10 @@ group-before-tail: values=[slow, fast], fastFinished=false, parentFinished=false
 
 Вердикт: принято: обернуть в `main` и дать ссылку на запускаемый файл именно
 этого фрагмента. С переводом.
+
+Итог: сделано: блок в `main`, рядом названа его программа
+`example/quick_start.dart`, тест сверяет блок с файлом и вывод с трассой.
+Подробности — `2026-10-20-async-job-docs-fixes-report.md`.
 
 ### L4. Неожидаемый `ctx.run` приносит `Cancelled` в зону
 
@@ -448,6 +497,9 @@ group-before-tail: values=[slow, fast], fastFinished=false, parentFinished=false
 `.ignore()` стоит в первом же примере раздела. В строке README — `ChildJob`
 и `.ignore()` для future, который тело не ждёт. Публичный `ctx.start` —
 в вопрос об API.
+
+Итог: сделано в строке README, как предложено. `ctx.start` остаётся вопросом
+владельцу. Подробности — `2026-10-20-async-job-docs-fixes-report.md`.
 
 ### L5. `await job.cancel()` из своего тела не возвращается
 
@@ -485,6 +537,9 @@ S1 via=continuation c.isCancelled inside a.whenCancelled=false
 Вердикт: принято, документом: dartdoc `whenCancelled` — соседние продолжения
 могут быть ещё не отменены.
 
+Итог: сделано: абзац в dartdoc `whenCancelled` и два теста, по точке входа.
+Подробности — `2026-10-20-async-job-docs-fixes-report.md`.
+
 ### L9. Группа, где ветки ждут друг друга, виснет без диагностики
 
 **Нашёл:** Opus (C5).
@@ -521,6 +576,8 @@ Q6 dup threw ArgumentError: Invalid argument (children): is in the group more th
 Вердикт: принято, документом: строка в таблице README — сообщение может быть
 замыканием, его зовёт наблюдатель. С переводом.
 
+Итог: сделано. Подробности — `2026-10-20-async-job-docs-fixes-report.md`.
+
 ### L13. Мёртвая ветка в `_RunAllGroup.run`
 
 **Нашёл:** Fable (C9).
@@ -546,6 +603,9 @@ Q6 dup threw ArgumentError: Invalid argument (children): is in the group more th
 Вердикт: принято: `Job` никогда не реализовывал `Future`, README говорит
 обратное. С переводом.
 
+Итог: сделано: «a cancellable piece of asynchronous work». Подробности —
+`2026-10-20-async-job-docs-fixes-report.md`.
+
 ### L16. CHANGELOG молчит о поломке для тех, кто реализует `JobContext`
 
 **Нашёл:** Opus (D3).
@@ -553,6 +613,8 @@ Q6 dup threw ArgumentError: Invalid argument (children): is in the group more th
 `JobContext` получил `abandonable`, `pause`, `runAll`.
 
 Вердикт: принято: строка в «Breaking changes». С переводом.
+
+Итог: сделано. Подробности — `2026-10-20-async-job-docs-fixes-report.md`.
 
 ### L17. Сдвинутый `return` в `cleanup.md` и двойные пустые строки
 
@@ -565,6 +627,10 @@ on arrival», `    return database;`; пустые строки `outcomes.md:126
 Вердикт: принято. Отступ, строки и сторож на две пустые строки подряд — общий
 с L15 `2026-10-20-solo-project-review.md`.
 
+Итог: сделано: отступ, двойные строки в страницах ядра и `solo`, сторож
+`doubled_blanks` в `tool/check_line_width.py` с тестами и шагом гейта.
+Подробности — `2026-10-20-async-job-docs-fixes-report.md`.
+
 ### L18. README: «No outcome carries that error» без условия
 
 **Нашёл:** Fable (D2, Medium). **Где:** `README.md`, строки 154–156.
@@ -574,6 +640,9 @@ on arrival», `    return database;`; пустые строки `outcomes.md:126
 
 Вердикт: принято, Low: «an error that comes after the cancellation has no
 outcome to carry it». С переводом.
+
+Итог: сделано дословно. Подробности —
+`2026-10-20-async-job-docs-fixes-report.md`.
 
 ### L19. Правило «читай `done` до конца задачи» не сказано
 
@@ -587,6 +656,9 @@ for».
 
 Вердикт: принято: одна фраза и строка таблицы «Observes the failure?».
 С переводом.
+
+Итог: сделано: фраза, строка таблицы и тест. Подробности —
+`2026-10-20-async-job-docs-fixes-report.md`.
 
 ### L20. `groups.md` открывается легендой вывода
 

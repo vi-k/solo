@@ -17,7 +17,7 @@ await saved.value;
 
 The output blocks of this page hold:
 
-- `loaded:`, `parsed:`, `saved:` the outcome of that link;
+- `loaded:`, `parsed:`, `saved:`, `shown:` the outcome of that job;
 - `parent:`, `child:` the outcomes after `tail.cancel()` in
   [A continuation of a child](#a-continuation-of-a-child).
 
@@ -50,11 +50,12 @@ came from in `cause`:
 | `loaded` | none | `parsed` and `saved` |
 | `parsed` | `loaded` | `saved` |
 | `saved` | `loaded` and `parsed` | none |
+| `parsed`, while `loaded` has another continuation | `loaded` | `saved`; the other continuation once `loaded` accepts |
 
 A link that refuses stops the cancellation there: cancel a `loaded` made with
 `cancellable: false`, and `parsed` and `saved` go on. Finished links keep their
-outcomes. If several continuations hang off one job, cancelling one of them can
-cancel the shared source, and the other continuations with it.
+outcomes. The last row is the subject of
+[Two continuations of one source](#two-continuations-of-one-source).
 
 A continuation starts only when its source has finished, so a running link has
 nothing unfinished behind it. While `parsed` runs, `loaded` is over, and
@@ -69,6 +70,67 @@ the request, and `uncancellable` holds it back. A cancelled continuation still
 waits for such a source and then ends without calling its callback. Meanwhile
 it is `isCancelled` but not `isFinished`. Its outcome has `started: false` if
 it was cancelled while it waited for its source.
+
+## Two continuations of one source
+
+The screen shows the loaded text and, beside it, the number parsed from it. The
+number leaves the screen while the text is still loading, and the text stays.
+
+### The first attempt
+
+```dart
+// The first attempt: the number leaving takes the text with it.
+final loaded = Job<String>((ctx) => ctx.join(loadText));
+final parsed = loaded.then<int>((ctx, text) => int.parse(text));
+final shown = loaded.then<void>((ctx, text) => showText(text));
+
+// The number left the screen while the text was loading.
+await parsed.cancel();
+print('loaded: ${loaded.outcome}');
+print('shown: ${shown.outcome}');
+```
+
+```text
+loaded: Cancelled(chain)
+shown: Cancelled(chain)
+```
+
+`parsed` asks its source to cancel, as any link asks the unfinished links
+before it, and `loaded` accepts: a source does not know how many continuations
+wait for it. Its cancellation then reaches each of them, and `shown` ends
+without calling its callback. The text never reaches the screen that stayed.
+
+### Jobs that wait for the source
+
+```dart
+final loaded = Job<String>((ctx) => ctx.join(loadText));
+final parsed = Job<int>(
+  (ctx) async => int.parse(await ctx.abandonable(() => loaded.value)),
+);
+final shown = Job<void>(
+  (ctx) async => showText(await ctx.abandonable(() => loaded.value)),
+);
+
+// The number left the screen while the text was loading.
+await parsed.cancel();
+await shown.done;
+print('parsed: ${parsed.outcome}');
+print('loaded: ${loaded.outcome}');
+print('shown: ${shown.outcome}');
+```
+
+```text
+parsed: Cancelled(manual)
+loaded: Done(21)
+shown: Done(null)
+```
+
+`parsed` and `shown` are jobs of their own that wait for `loaded`, not its
+continuations, so a cancellation of one of them stops its own wait and goes no
+further. `loaded` belongs to whoever made it, and that code cancels it when
+nobody needs the text. A failure of `loaded` that comes after `parsed` has left
+reaches `parsed` as the late error of an action `ctx.abandonable` stopped
+waiting for: see [Where each error goes](observing.md#where-each-error-goes).
 
 ## When a link fails
 
@@ -163,8 +225,8 @@ final archived = opened.then<void>((ctx, rows) async {
 
 Cleanup the source registered has run by the time the continuation receives its
 value: a resource closed by the source's `onDispose` is already closed then.
-`discard` is the other way round: it runs only for a value that reached nobody.
-`opened` ended `Done`, so its `discard` did not run and never will. The
+`discard` is the other way round: it runs only when its job does not end
+`Done`. `opened` ended `Done`, so its `discard` did not run and never will. The
 receiver is the continuation: `rows` comes as its argument, and it registers
 the closing in its own body, on the first line.
 

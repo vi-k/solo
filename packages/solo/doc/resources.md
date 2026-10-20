@@ -184,12 +184,12 @@ Job<Database> open() => run<Idle, Database>(
     );
 ```
 
-`discard` runs only when the job ends without handing its value over:
-cancelled, or failed. The corresponding registration member is `ctx.onDiscard`.
-A call takes either `dispose` or `discard`: passing both is an `ArgumentError`,
-thrown before the call starts anything. Everything the job keeps to itself,
-such as a lock, a temporary file or a subscription, stays with `dispose`.
-Otherwise it leaks on the path where no cancellation test looks.
+`discard` runs only when the job does not end `Done`: cancelled, or failed. The
+corresponding registration member is `ctx.onDiscard`. A call takes either
+`dispose` or `discard`: passing both is an `ArgumentError`, thrown before the
+call starts anything. Everything the job keeps to itself, such as a lock, a
+temporary file or a subscription, stays with `dispose`. Otherwise it leaks on
+the path where no cancellation test looks.
 
 The child above is why the distinction earns its keep. `ctx.run` stands between
 the database and the `return`, so the value is in hand while the job can still

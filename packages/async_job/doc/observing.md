@@ -355,6 +355,16 @@ observed the outcome. The second: nobody answers for the error, or
 `onUnanswered` sends it on or throws. Observing the outcome closes the first
 way. An observer that answers (`with JobAnswerer`) closes the second.
 
+One failure can also reach `onError` more than once: once on each job whose
+outcome it is. A child of `ctx.run` fails, its parent lets the failure out of
+its body, and the observer the child inherited hears the same object on the
+child and then on the parent. A branch of `ctx.runAll` and its parent do the
+same, and so do a source and its continuation of `then` given one observer. An
+observer that counts failures tells the second call from a new error by
+`identical`, and an `Expando` remembers the errors it has heard without keeping
+them alive. An error thrown as a constant, such as `throw const SignedOut()`,
+is the same object at every throw, and two such failures count as one.
+
 Two kinds of body failure are not carried by the outcome, and they go to
 `onUnanswered` or the zone even when the outcome is observed. In the first, the
 job ends `Cancelled`, and the outcome carries the cancellation. In the second,

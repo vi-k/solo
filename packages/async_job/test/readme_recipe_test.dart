@@ -30,6 +30,7 @@ import 'package:fake_async/fake_async.dart';
 import 'package:test/test.dart';
 
 import '../example/example.dart' as example;
+import '../example/quick_start.dart' as quick_start;
 import 'support/delay.dart';
 import 'support/page_code.dart';
 
@@ -131,25 +132,6 @@ final class Answering extends Listening with JobAnswerer {
 // The blocks of the README stand between these marks, each as it is
 // written there, with nothing more, in the order of the page; the flag is
 // declared as the block declares it.
-
-/// The Quick start of the README, as it is written there.
-Future<void> quickStart() async {
-  // README: begin
-  final job = Job<void>((ctx) async {
-    // Checked before the call and again before the value comes back,
-    // and the database is closed whichever way the job ends.
-    final db = await ctx.join(Database.open, dispose: (db) => db.close());
-    use(await ctx.join(db.readAll));
-  });
-
-  // Somebody left the screen while the read was in flight.
-  await Future<void>.delayed(const Duration(milliseconds: 50));
-
-  // Waits for the body, its children and its cleanup.
-  await job.cancel();
-  print(job.outcome); // Cancelled(manual)
-  // README: end
-}
 
 // README: begin
 // ignore: type_annotate_public_apis
@@ -467,51 +449,44 @@ void main() {
   });
 
   test('the Quick start earns every line of it', () {
-    final printed = printedBy(quickStart);
-
-    expect(
-      Database.events,
-      ['opened', 'read', 'closed'],
-      reason: 'the body was entered and the database opened; `join` waited '
-          'for the read it had already asked for, and the registration '
-          'closed the database on the way out',
-    );
-    expect(
-      Database.events,
-      isNot(contains('used 1')),
-      reason: 'and the value never reached the body: the cancellation came '
-          'first',
-    );
-    for (final page in readmes) {
-      expect(
-        printed,
-        [quotedAfter(page, 'print(job.outcome);')],
-        reason: page,
-      );
-    }
-
-    // With a database that prints when it opens and when it closes, the
-    // program prints what the block under it quotes. The prints go to the
-    // same journal as the database, so the order is the run's own.
-    Database.events.clear();
+    // The block runs in `example/quick_start.dart`, which the README names,
+    // with a database that prints when it opens and when it closes.
+    final printed = <String>[];
+    Duration? closedAt;
     fakeAsync((async) {
       runZoned(
-        () => unawaited(quickStart()),
+        () => unawaited(quick_start.main()),
         zoneSpecification: ZoneSpecification(
-          print: (self, parent, zone, line) => Database.events.add(line),
+          print: (self, parent, zone, line) {
+            printed.add(line);
+            if (line == 'database closed') {
+              closedAt = async.elapsed;
+            }
+          },
         ),
       );
       async.flushTimers();
     });
-    final output = [
-      for (final event in Database.events)
-        if (event == 'opened' || event == 'closed')
-          'database $event'
-        else if (event != 'read')
-          event,
-    ];
+
+    expect(
+      printed,
+      isNot(contains(startsWith('read '))),
+      reason: 'the value never reached the body: the cancellation came first',
+    );
+    expect(
+      closedAt,
+      const Duration(milliseconds: 120),
+      reason: 'the body was entered and the database opened; `join` waited '
+          'for the read it had already asked for, and the registration '
+          'closed the database on the way out',
+    );
     for (final page in readmes) {
-      expect(output.join('\n'), quotedOutputs(page).first, reason: page);
+      expect(
+        printed.last,
+        quotedAfter(page, 'print(job.outcome);'),
+        reason: page,
+      );
+      expect(printed.join('\n'), quotedOutputs(page).first, reason: page);
     }
   });
 
@@ -1484,7 +1459,11 @@ void main() {
 
   test('every block of the README runs in this file', () {
     expect(
-      codeMissingFrom('README.md', 'test/readme_recipe_test.dart'),
+      codeMissingFrom(
+        'README.md',
+        'test/readme_recipe_test.dart',
+        alsoIn: ['example/quick_start.dart'],
+      ),
       isEmpty,
     );
   });
@@ -1507,11 +1486,14 @@ void main() {
             code(match.group(1)!.split('\n')),
         ];
 
+    // The Quick start is the first block, and its copy is the program of
+    // `example/quick_start.dart`.
+    const marks = r'// README: begin\n(.*?)\n\s*// README: end';
     expect(
-      blocks(
-        r'// README: begin\n(.*?)\n\s*// README: end',
-        'test/readme_recipe_test.dart',
-      ),
+      [
+        ...blocks(marks, 'example/quick_start.dart'),
+        ...blocks(marks, 'test/readme_recipe_test.dart'),
+      ],
       blocks(r'```dart\n(.*?)\n```', 'README.md'),
     );
   });

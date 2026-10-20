@@ -159,11 +159,19 @@ how.
 | `Future.wait` | every branch | no | dropped before the body sees them |
 | `Future.wait(eagerError: true)` | the first error, then the job waits anyway | no | dropped |
 | `[...].wait` | every branch | no | in `ParallelWaitError.values` |
-| `ctx.runAll` | every branch | yes, with `SiblingCancelReason` | returned in order when every branch succeeds |
+| `ctx.runAll` | on success, the cleanup of every branch, except one a branch registers after running it; on failure, every branch to its end | yes, with `SiblingCancelReason` | returned in order when every branch succeeds |
 
 Use `[ctx.run(a), ctx.run(b)].wait` when the branches do not depend on each
 other's failure, or when one of them waits for another. Use `ctx.runAll` when a
 result that misses one of its parts is of no use anyway.
+
+On success `ctx.runAll` hands the values over once every branch has run its
+cleanup, and before the branches end. A branch that has run its cleanup waits
+there for the cleanup of the others, and a cleanup it registers in that wait,
+from a timer or an event of its own, runs after the values arrive, under the
+parent, which waits for its children as always. On failure it waits for every
+branch to end, so by the time the error arrives everything the branches took is
+closed.
 
 None of the forms closes what the branches returned: a form only hands the
 values over or drops them. A value is closed by the registration its receiver
@@ -289,12 +297,12 @@ Job.deferred<Source>((ctx) async {
 
 The child's own `discard` does not close the source. The child hands the source
 over and ends `Done` inside the branch, before the group has decided anything,
-and a `discard` runs only if the value reaches nobody. Here it reached the
-branch. So the branch registers the source again the moment it arrives, with
-the `discard` passed to `ctx.run`. That registration is the branch's own: the
-source lives until the group succeeds in full, and the branch closes it if the
-group ends in anything else. The cleanup page shows the call in
-[Registering on arrival](cleanup.md#registering-on-arrival).
+and a `discard` runs only if its job does not end `Done`. Here the source
+reached the branch. So the branch registers the source again the moment it
+arrives, with the `discard` passed to `ctx.run`. That registration is the
+branch's own: the source lives until the group succeeds in full, and the branch
+closes it if the group ends in anything else. The cleanup page shows the call
+in [Registering on arrival](cleanup.md#registering-on-arrival).
 
 One thing stays open, and it follows from
 [Choosing the callback](cleanup.md#choosing-the-callback) on the cleanup page.
@@ -403,9 +411,10 @@ cancels the branch, as [What a group hands back](#what-a-group-hands-back)
 describes, and the list never reaches the caller. The body left the `try` long
 before, and the sources stay open.
 
-`ctx.onDiscard` runs exactly when the value reaches nobody, so it closes the
-list in that case too, and stays out of the way when the list arrives. Each
-source gets a registration of its own, as in the section above:
+`ctx.onDiscard` runs exactly when the branch does not end `Done`: it fails, or
+the group stops it. So it closes the list in that case too, and stays out of
+the way when the list arrives. Each source gets a registration of its own, as
+in the section above:
 
 ```dart
 final exported = Job.deferred<List<Source>>((ctx) async {

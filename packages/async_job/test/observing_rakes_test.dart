@@ -1367,6 +1367,70 @@ void main() {
       );
     });
 
+    test('one error is heard on each job whose outcome it became', () {
+      // A counter of failures counts by identity: the parent hears the very
+      // object its child heard.
+      final heard = <(Job<Object?>, Object)>[];
+      final observer = _Heard(heard);
+      void expectHeard(Job<Object?> Function() start, String kinds) {
+        heard.clear();
+        play(start, outcomeObserved: false);
+        expect(heard, hasLength(2), reason: kinds);
+        expect(identical(heard.first.$2, heard.last.$2), isTrue, reason: kinds);
+        expect(
+          [for (final (job, _) in heard) job.isChild],
+          [true, false],
+          reason: kinds,
+        );
+      }
+
+      ChildJob<int> failing() =>
+          Job.deferred<int>((ctx) => throw StateError('one'));
+
+      expectHeard(
+        () => Job<int>(observer: observer, (ctx) => ctx.run(failing())),
+        'a child of run, then its parent',
+      );
+      expectHeard(
+        () => Job<List<int>>(
+          observer: observer,
+          (ctx) => ctx.runAll([failing()]),
+        ),
+        'a branch of runAll, then its parent',
+      );
+
+      heard.clear();
+      late Job<int> source;
+      late Job<int> continuation;
+      play(() {
+        source = Job<int>(observer: observer, (ctx) => throw StateError('one'));
+        return continuation =
+            source.then((ctx, value) => value, observer: observer);
+      });
+      expect([for (final (job, _) in heard) job], [source, continuation]);
+      expect(identical(heard.first.$2, heard.last.$2), isTrue);
+    });
+
+    test('an Expando counts a failure once, and a constant error once', () {
+      final counter = _Counted();
+      ChildJob<int> failing() =>
+          Job.deferred<int>((ctx) => throw StateError('one'));
+
+      play(
+        () => Job<int>(observer: counter, (ctx) => ctx.run(failing())),
+        outcomeObserved: false,
+      );
+      expect(counter.count, 1, reason: 'the child and the parent');
+
+      for (var i = 0; i < 2; i++) {
+        play(
+          () => Job<int>(observer: counter, (ctx) => throw const _Stopped()),
+          outcomeObserved: false,
+        );
+      }
+      expect(counter.count, 2, reason: 'two constant failures count as one');
+    });
+
     test('the envelope of .wait of a cancelled job: each failure goes on', () {
       // The open of the child fails at 20 ms, the cancellation comes at 30 ms,
       // and the future the body awaits on its own fails at 40 ms.
@@ -2394,6 +2458,9 @@ void main() {
     const holders = {
       '### The first attempt': firstAttempts,
       '### Time moved by the test': page,
+      '### The failure read by the test': page,
+      '### By type and value': page,
+      '## Settings between tests': page,
     };
     for (final MapEntry(key: heading, value: holder) in holders.entries) {
       test('the code under "$heading" is a run of lines of $holder', () {
@@ -2452,6 +2519,97 @@ void main() {
       expect(checked, [isA<Cancelled>(), 1]);
     });
 
+    /// The output block that follows the code of the test named
+    /// [description] on the page, under its first attempt.
+    List<String> quotedAfter(String description) {
+      final text = File(testingPage).readAsStringSync();
+      final match = RegExp(
+        r"// The first attempt: [^\n]*\ntest\('"
+        '${RegExp.escape(description)}'
+        "'"
+        r'.*?\n```\n\n```text\n(.*?)\n```',
+        dotAll: true,
+      ).firstMatch(text);
+      return match!.group(1)!.split('\n');
+    }
+
+    test('the failure left unread: the check passes, the zone hears it', () {
+      stage.databaseLocked = true;
+      final zone = <String>[];
+      final checked = <Object?>[];
+      runZonedGuarded(
+        () => first.failureLeftUnread(
+          (description, body) => body(),
+          (actual, matcher) {
+            checked.add(actual);
+            expect(actual, matcher);
+          },
+        ),
+        (error, stackTrace) => zone.add('$error'),
+      );
+
+      expect(checked, [isA<Failed>()]);
+      expect(zone, quotedAfter('a locked database fails the open'));
+    });
+
+    group('the failure read by the test, as the page writes it,', () {
+      setUp(() => stage.databaseLocked = true);
+      failureReadByTheTest(test, expect);
+    });
+
+    test('the outcome compared with an outcome: the failure the page quotes',
+        () {
+      expect(
+        () => first.comparedWithAnOutcome(
+          (description, body) => body(),
+          expect,
+        ),
+        throwsA(
+          isA<TestFailure>().having(
+            (failure) => failure.message!.trim().split('\n'),
+            'message',
+            quotedAfter('the job loads three'),
+          ),
+        ),
+      );
+    });
+
+    group('compared by type and value, as the page writes it,', () {
+      comparedByTypeAndValue(test, expect);
+    });
+
+    group('the settings, as the page writes them,', () {
+      settingsBetweenTests(setUp, addTearDown);
+
+      test('are set inside the group', () {
+        expect(Job.isCancellationError, isNotNull);
+        expect(Job.isCancellationError!(const DatabaseStopped()), isTrue);
+      });
+    });
+
+    test('and are put back after it', () {
+      expect(Job.isCancellationError, isNull);
+    });
+
+    test('elapse moves a pause and a deadline; microtasks alone do not', () {
+      fakeAsync((async) {
+        final paused = Job<void>(
+          (ctx) => ctx.pause(const Duration(milliseconds: 30)),
+        );
+        final limited = Job<void>(
+          timeout: const Duration(milliseconds: 30),
+          (ctx) => ctx.abandonable(() => Completer<void>().future),
+        );
+        async.flushMicrotasks();
+        expect(paused.isFinished, isFalse);
+        expect(limited.isFinished, isFalse);
+
+        async.elapse(const Duration(milliseconds: 30));
+        expect(paused.outcome, isA<Done<void>>());
+        expect('${limited.outcome}', 'Cancelled(timeout)');
+      });
+    });
+
     test('flushMicrotasks is enough to start a job', () {
       fakeAsync((async) {
         var started = false;
@@ -2469,4 +2627,33 @@ void main() {
   test('the filter of cancellation errors is left as it was found', () {
     expect(Job.isCancellationError, isNull);
   });
+}
+
+/// Writes down each job `onError` hears about, with the error.
+final class _Heard extends JobObserver {
+  _Heard(this.heard);
+
+  final List<(Job<Object?>, Object)> heard;
+
+  @override
+  void onError(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      heard.add((job, error));
+}
+
+/// The counter of failures of `observing.md`: by identity, in an [Expando].
+final class _Counted extends JobObserver {
+  final _heard = Expando<bool>();
+  int count = 0;
+
+  @override
+  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
+    if (_heard[error] ?? false) return;
+    _heard[error] = true;
+    count++;
+  }
+}
+
+/// An error thrown as a constant: one object at every throw.
+final class _Stopped implements Exception {
+  const _Stopped();
 }

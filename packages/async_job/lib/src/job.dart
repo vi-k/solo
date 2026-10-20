@@ -396,6 +396,13 @@ abstract interface class Job<T> {
   /// itself by throwing [Cancelled], as it ends. For a job cancelled before
   /// start, it is when the job is dropped.
   ///
+  /// The continuations of [then] are not children, and when they are
+  /// cancelled depends on where the cancellation came from. Cancelling a
+  /// source cancels its continuations before these callbacks run. A
+  /// continuation that is cancelled cancels its source first and the other
+  /// continuations of that source after: inside a callback of the source,
+  /// they may still not be [isCancelled].
+  ///
   /// If cancellation has already been accepted and its callbacks have run,
   /// calls [callback] immediately, even if the job has finished. Registering
   /// in between, while the cancellation cascades onto the children or the

@@ -684,6 +684,32 @@ void main() {
     });
   });
 
+  for (final fromSource in [true, false]) {
+    test(
+        'whenCancelled of a source sees its other continuation '
+        '${fromSource ? 'cancelled' : 'not yet cancelled'} when the '
+        'cancellation comes from the ${fromSource ? 'source' : 'continuation'}',
+        () {
+      fakeAsync((async) {
+        final gate = Completer<int>();
+        final a = Job<int>((ctx) => ctx.abandonable(() => gate.future));
+        final b = a.then<int>((ctx, value) => mustNotRun('must not run'));
+        final c = a.then<int>((ctx, value) => mustNotRun('must not run'));
+        final seen = <bool>[];
+        a.whenCancelled((_) => seen.add(c.isCancelled));
+        async.flushMicrotasks();
+        (fromSource ? a : b).cancel().ignore();
+        async.flushMicrotasks();
+        // The dartdoc of whenCancelled says so: the siblings of the
+        // continuation the cancellation came from go down after.
+        expect(seen, [fromSource]);
+        expect(c.outcome, isA<Cancelled>());
+        gate.complete(1);
+        async.flushMicrotasks();
+      });
+    });
+  }
+
   for (final cancelTail in [false, true]) {
     test('a 5000-link cascade from the ${cancelTail ? 'tail' : 'source'}', () {
       fakeAsync((async) {

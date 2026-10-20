@@ -161,7 +161,7 @@ final class MyQueue {
 ```
 
 Вторая задача создана с `cancellable: false`, и пользователь отменяет её, пока
-работает первая:
+она ждёт в очереди:
 
 ```dart
 final first = MyJob<void>(key: 'first', (ctx) => ctx.abandonable(upload));
@@ -241,7 +241,6 @@ second: Cancelled(manual)
 Проверка в цикле остаётся для задачи, которую отменили до того, как добавили
 в очередь.
 
-
 `rejectable` равен `false` у отмены, которую не может отклонить ни одна задача,
 например у той, которую движок шлёт через обёртку вокруг `cancelWith`, чтобы
 снять задачу, что бы ни говорил `cancellable`, и такая отмена уходит в `super`.
@@ -255,6 +254,135 @@ second: Done(null)
 
 `cancel()` возвращает future, которая ждёт конца задачи, отклонена отмена или
 нет, поэтому здесь она завершается, когда вторая задача отработала.
+
+### Один цикл и никакого другого старта
+
+```dart
+  Future<void>? _running;
+
+  // Один цикл за раз: второй вызов получает future цикла, который идёт.
+  // Запущенный в микротаске, цикл обнуляет `_running` после того, как её
+  // присвоили, даже когда выполнять нечего.
+  Future<void> run() => _running ??= Future.microtask(_loop);
+
+  Future<void> _loop() async {
+    try {
+      while (_waiting.isNotEmpty) {
+        final job = _waiting.removeAt(0);
+        if (job.isFinished) continue;
+        job._launch();
+        await job._untilFinished;
+      }
+    } finally {
+      _running = null;
+    }
+  }
+```
+
+Второй вызов `run()`, пока цикл идёт, получает future этого цикла. Два цикла
+брали бы каждый следующую задачу из `_waiting`, и две задачи работали бы
+одновременно. Запущенный сразу, цикл, которому нечего выполнять, кончился бы
+раньше, чем `_running` получила свою future, и оставил бы эту завершённую
+future каждому следующему вызову.
+
+`MyJob` — это `ChildJob`, поэтому тело, у которого есть задача очереди, может
+передать её в `ctx.run`. Прежде чем запустить ребёнка, ядро спрашивает его
+в `adoptedBy`, и задача, которая ждёт в своей очереди, отказывает:
+
+```dart
+  @override
+  void adoptedBy(JobContextBase parent) {
+    if (_queue?._waiting.contains(this) ?? false) {
+      throw StateError('$this waits in its queue');
+    }
+  }
+```
+
+`StateError` выходит из этого `ctx.run`, а задача сохраняет своё место
+в очереди. Запущенную родителем, её запустила бы ещё раз и очередь, и ошибка
+этого второго старта кончила бы цикл и оставила задачи за ней ждать навсегда.
+
+### Движок целиком
+
+```dart
+import 'package:async_job/engine.dart';
+
+final class MyJob<T> extends JobBase<T> implements ChildJob<T> {
+  // Отпускается, когда задача кончилась, как ядро отпускает своё: тело
+  // держит всё, что захватило, а задачу держат, чтобы прочесть исход
+  // много позже.
+  Future<T> Function(MyContext ctx)? _body;
+
+  MyQueue? _queue;
+
+  MyJob(
+    Future<T> Function(MyContext ctx) body, {
+    super.key,
+    super.observer,
+    super.cancellable,
+  }) : _body = body;
+
+  @override
+  JobContextBase createContext() => MyContext(this);
+
+  @override
+  Future<T> execute(covariant MyContext ctx) => _body!(ctx);
+
+  @override
+  void finished() => _body = null;
+
+  // `start` и `untilFinished` защищены: остальной движок вызывает их
+  // через эти обёртки, приватные для его библиотеки. Очередь запускает
+  // задачу позже, из своей зоны, поэтому `_launch` запускает её в зоне,
+  // где задачу создали.
+  void _launch() => creationZone.run(start);
+
+  Future<void> get _untilFinished => untilFinished;
+
+  @override
+  void cancelWith(Cancelled cancelled, {bool rejectable = true}) {
+    final waits = _queue?._waiting.contains(this) ?? false;
+    if (waits && !cancellable && rejectable) return;
+    _queue?._waiting.remove(this);
+    super.cancelWith(cancelled, rejectable: rejectable);
+  }
+
+  @override
+  void adoptedBy(JobContextBase parent) {
+    if (_queue?._waiting.contains(this) ?? false) {
+      throw StateError('$this waits in its queue');
+    }
+  }
+}
+
+final class MyQueue {
+  final _waiting = <MyJob<Object?>>[];
+  Future<void>? _running;
+
+  void add(MyJob<Object?> job) => _waiting.add(job.._queue = this);
+
+  // Один цикл за раз: второй вызов получает future цикла, который идёт.
+  // Запущенный в микротаске, цикл обнуляет `_running` после того, как её
+  // присвоили, даже когда выполнять нечего.
+  Future<void> run() => _running ??= Future.microtask(_loop);
+
+  Future<void> _loop() async {
+    try {
+      while (_waiting.isNotEmpty) {
+        final job = _waiting.removeAt(0);
+        if (job.isFinished) continue;
+        job._launch();
+        await job._untilFinished;
+      }
+    } finally {
+      _running = null;
+    }
+  }
+}
+```
+
+`MyContext` остаётся таким, каким его показывает раздел
+[«Своя задача»](#своя-задача), пока следующий раздел не даст ему правило.
 
 ## Своё правило
 
@@ -371,7 +499,6 @@ outcome: Cancelled(signed out)
 
 Задача принимает отмену правила, когда тело выпускает её, не раньше: тело,
 которое поймало её через `try`/`catch` и пошло дальше, не отменено.
-
 
 Правило спрашивают там же, где спрашивают `check()`, и больше нигде: выход
 из аккаунта во время скачивания замечают, когда `join` возвращается, а выход

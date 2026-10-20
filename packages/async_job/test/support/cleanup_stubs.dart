@@ -15,6 +15,12 @@ final class Stage {
   Exception? migrateError;
   int readTake = 10;
 
+  /// Whether the schema of the database is current, as `isCurrent` says.
+  bool schemaCurrent = true;
+
+  /// How long a close takes: at once by default.
+  int closeTake = 0;
+
   /// Whether there is one lock for everybody: a second `acquire` waits
   /// until the holder releases it.
   bool exclusive = false;
@@ -61,13 +67,16 @@ final class Database {
 
   Database([this.name = 'database']);
 
+  /// The database [open] opened last.
+  static Database? lastOpened;
+
   static Future<Database> open() async {
     await delay(stage.openTake);
     if (stage.openError case final error?) {
       throw error;
     }
     stage.trace.add('database opened');
-    return Database();
+    return lastOpened = Database();
   }
 
   bool get closed => closes > 0;
@@ -81,6 +90,11 @@ final class Database {
     stage.trace.add('$name migrated');
   }
 
+  Future<bool> isCurrent() async {
+    await delay(5);
+    return stage.schemaCurrent;
+  }
+
   Future<void> warmCache() async {
     await delay(10);
     stage.trace.add('cache warmed');
@@ -88,6 +102,9 @@ final class Database {
 
   Future<void> close() async {
     closes += 1;
+    if (stage.closeTake > 0) {
+      await delay(stage.closeTake);
+    }
     stage.trace.add('$name closed');
   }
 

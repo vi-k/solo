@@ -18,9 +18,9 @@ typedef _Void = void;
 /// One registration on the cleanup stack of a job.
 ///
 /// [always] tells the two kinds apart: a `dispose` registration runs whatever
-/// the outcome, a `discard` one only when the value reached nobody. [value] is
-/// set for registrations made by `abandonable`, `join` and `run`, and it is
-/// what `disown` looks up.
+/// the outcome, a `discard` one only when the job did not end [Done].
+/// [value] is set for registrations made by `abandonable`, `join` and `run`,
+/// and it is what `disown` looks up.
 final class _Cleanup {
   final FutureOr<void> Function() run;
   final bool always;

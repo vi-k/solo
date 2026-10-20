@@ -115,3 +115,25 @@ void cancelledOpenAwaited(Declare test, Check expect) {
     });
   });
 }
+
+void failureLeftUnread(Declare test, Check expect) {
+  test('a locked database fails the open', () {
+    fakeAsync((async) {
+      final job = Job<Database>((ctx) => ctx.join(Database.open));
+      async.flushTimers();
+
+      expect(job.outcome, isA<Failed>());
+    });
+  });
+}
+
+void comparedWithAnOutcome(Declare test, Check expect) {
+  test('the job loads three', () {
+    fakeAsync((async) {
+      final job = Job<int>((ctx) => ctx.join(load));
+      async.flushTimers();
+
+      expect(job.outcome, const Done(3));
+    });
+  });
+}

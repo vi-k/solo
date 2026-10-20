@@ -384,7 +384,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Line width
+      # It also reports a second blank line in a row outside code: the
+      # site renders the two as one, so only the source shows them.
+      - name: Line width and doubled blank lines
         run: python3 tool/check_line_width.py
 
       # And this says which wide line is an offence: one a fill could

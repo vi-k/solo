@@ -155,7 +155,7 @@ final class MyQueue {
 ```
 
 The second job is created with `cancellable: false`, and the user cancels it
-while the first one runs:
+while it waits in the queue:
 
 ```dart
 final first = MyJob<void>(key: 'first', (ctx) => ctx.abandonable(upload));
@@ -235,7 +235,6 @@ Only a job that waits in the queue refuses. Who answers a cancellation of a
 The check in the loop stays for a job cancelled before it was added to the
 queue.
 
-
 `rejectable` is `false` for a cancellation no job may refuse, such as one the
 engine sends through a wrapper around `cancelWith` to drop a job whatever
 `cancellable` says, and that one goes on to `super`. The same run now gives the
@@ -249,6 +248,135 @@ second: Done(null)
 
 `cancel()` returns a future that waits for the job to be over, refused or not,
 so here it completes once the second job has run.
+
+### One loop, and no other way to start
+
+```dart
+  Future<void>? _running;
+
+  // One loop at a time: a second call gets the future of the loop that
+  // runs. Started in a microtask, the loop clears `_running` after it is
+  // set, even when there is nothing to run.
+  Future<void> run() => _running ??= Future.microtask(_loop);
+
+  Future<void> _loop() async {
+    try {
+      while (_waiting.isNotEmpty) {
+        final job = _waiting.removeAt(0);
+        if (job.isFinished) continue;
+        job._launch();
+        await job._untilFinished;
+      }
+    } finally {
+      _running = null;
+    }
+  }
+```
+
+A second call of `run()` while the loop runs gets the future of that loop. Two
+loops would each take the next job from `_waiting`, and two jobs would run at
+once. Started at once, a loop with nothing to run would end before `_running`
+got its future and leave that finished future to every later call.
+
+`MyJob` is a `ChildJob`, so a body that holds a job of the queue may pass it to
+`ctx.run`. The core asks the child in `adoptedBy` before it starts it, and a
+job that waits in its queue refuses:
+
+```dart
+  @override
+  void adoptedBy(JobContextBase parent) {
+    if (_queue?._waiting.contains(this) ?? false) {
+      throw StateError('$this waits in its queue');
+    }
+  }
+```
+
+The `StateError` comes out of that `ctx.run`, and the job keeps its turn.
+Started by a parent, it would be started again by the queue, and the error of
+that second start would end the loop and leave the jobs behind it waiting for
+good.
+
+### The whole engine
+
+```dart
+import 'package:async_job/engine.dart';
+
+final class MyJob<T> extends JobBase<T> implements ChildJob<T> {
+  // Dropped once the job is over, as the core drops its own: the body
+  // holds everything it captured, and a job is held to read its outcome
+  // long after.
+  Future<T> Function(MyContext ctx)? _body;
+
+  MyQueue? _queue;
+
+  MyJob(
+    Future<T> Function(MyContext ctx) body, {
+    super.key,
+    super.observer,
+    super.cancellable,
+  }) : _body = body;
+
+  @override
+  JobContextBase createContext() => MyContext(this);
+
+  @override
+  Future<T> execute(covariant MyContext ctx) => _body!(ctx);
+
+  @override
+  void finished() => _body = null;
+
+  // `start` and `untilFinished` are protected: the rest of the engine calls
+  // them through these wrappers, private to its library. The queue starts
+  // a job later, from a zone of its own, so `_launch` starts it in the zone
+  // it was created in.
+  void _launch() => creationZone.run(start);
+
+  Future<void> get _untilFinished => untilFinished;
+
+  @override
+  void cancelWith(Cancelled cancelled, {bool rejectable = true}) {
+    final waits = _queue?._waiting.contains(this) ?? false;
+    if (waits && !cancellable && rejectable) return;
+    _queue?._waiting.remove(this);
+    super.cancelWith(cancelled, rejectable: rejectable);
+  }
+
+  @override
+  void adoptedBy(JobContextBase parent) {
+    if (_queue?._waiting.contains(this) ?? false) {
+      throw StateError('$this waits in its queue');
+    }
+  }
+}
+
+final class MyQueue {
+  final _waiting = <MyJob<Object?>>[];
+  Future<void>? _running;
+
+  void add(MyJob<Object?> job) => _waiting.add(job.._queue = this);
+
+  // One loop at a time: a second call gets the future of the loop that
+  // runs. Started in a microtask, the loop clears `_running` after it is
+  // set, even when there is nothing to run.
+  Future<void> run() => _running ??= Future.microtask(_loop);
+
+  Future<void> _loop() async {
+    try {
+      while (_waiting.isNotEmpty) {
+        final job = _waiting.removeAt(0);
+        if (job.isFinished) continue;
+        job._launch();
+        await job._untilFinished;
+      }
+    } finally {
+      _running = null;
+    }
+  }
+}
+```
+
+`MyContext` stays as [A job of your own](#a-job-of-your-own) shows it until the
+next section gives it a rule.
 
 ## A rule of your own
 
@@ -361,7 +489,6 @@ and what holds back a cancellation asked of the job does not hold it:
 
 The job accepts the rule's cancellation as the body lets it out, not before: a
 body that catches it in a `try`/`catch` and goes on is not cancelled.
-
 
 The rule is asked where `check()` is asked and nowhere else: a sign-out during
 the download is noticed when `join` comes back, and one during `abandonable`

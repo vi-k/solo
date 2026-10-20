@@ -273,6 +273,20 @@ void main() {
       expect(observedAfter(2), ['zone: Bad state: disk full'], reason: 'late');
     });
 
+    test('done read after the zone heard: the outcome, and the zone stays', () {
+      final lines = printed((async) {
+        final backup = Job<void>(upload);
+        async.flushTimers();
+        backup.done.then((outcome) => print('done: $outcome')).ignore();
+        async.flushTimers();
+      });
+
+      expect(lines, [
+        'zone: Bad state: disk full',
+        'done: Failed(Bad state: disk full)',
+      ]);
+    });
+
     for (final (name, touch) in <(String, void Function(Job<void>))>[
       ('done', (backup) => backup.done.ignore()),
       ('value', (backup) => backup.value.ignore()),

@@ -34,6 +34,21 @@ Future<Database> keeping(JobContext ctx) async {
   return database;
 }
 
+Future<Database?> closingKeptBack(JobContext ctx) async {
+  final database = await ctx.join(
+    Database.open,
+    discard: (database) => database.close(),
+  );
+
+  if (!await ctx.join(database.isCurrent)) {
+    ctx.disown(database);
+    await database.close();
+    return null;
+  }
+
+  return database;
+}
+
 DeferredJob<Database> onArrival(ChildJob<Database> connect) {
   final ready = Job.deferred<Database>((ctx) async {
     final database = await ctx.run(

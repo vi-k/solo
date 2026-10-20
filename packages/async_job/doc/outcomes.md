@@ -94,7 +94,9 @@ status: backup failed: Bad state: disk full
 A failure nobody observes goes to the job's creation zone on the microtask
 after the job finishes: that keeps it visible when no caller waits for the
 result. In a test that zone is the test's, and the test fails. Reading
-`outcome` does not count as observing.
+`outcome` does not count as observing. A read that comes after that microtask
+still works, `done` with the `Failed` and `value` with its error, but the zone
+has heard the error by then.
 
 ### Telling the core it is handled
 
@@ -114,6 +116,7 @@ only way to observe a failure:
 | --- | --- |
 | Reads `done` | yes, even without awaiting it, and `done` never throws |
 | Reads `value` | yes, even without awaiting it, and the waiting code gets the error itself and has to handle it, as with any `Future` |
+| Reads `done` or `value` after the microtask that follows the end | too late: the zone has heard the error |
 | Forwards the failure through `then` | yes, and the continuation takes responsibility for it |
 | Reads `outcome` | no |
 | Awaits `job.cancel()` | no |
@@ -122,7 +125,6 @@ only way to observe a failure:
 
 So code that waits for the job and handles its result needs no
 `ignoreFailure()`.
-
 
 Waiting does not observe the failure of the body of a job that ends
 `Cancelled`. If `backup` is cancelled and its body fails, the code waiting for

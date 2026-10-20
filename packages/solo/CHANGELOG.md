@@ -289,10 +289,10 @@ that followed the package before it went out.
   not on this route at all: it becomes a `Failed` outcome and reaches the zone
   as any unobserved failure does, whatever the observer.
 - A cleanup stack instead of a `finally` in the body: `ctx.onDispose` releases
-  whatever the outcome, `ctx.onDiscard` only when the value reaches nobody, and
-  `wait` and `join` take the same two as `dispose` and `discard` for the value
-  they hand over — a connection or a file an abandoned action opened is still
-  closed. The engine unwinds the stack after the children and before the
+  whatever the outcome, `ctx.onDiscard` only when the job does not end `Done`,
+  and `wait` and `join` take the same two as `dispose` and `discard` for the
+  value they hand over — a connection or a file an abandoned action opened is
+  still closed. The engine unwinds the stack after the children and before the
   outcome, and `close` waits for it; `ctx.disown(value)` takes a registration
   back when the body hands the value over itself.
 - `JobContext.uncancellable` is `wait`'s counterpart: it runs a step that

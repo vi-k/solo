@@ -16,8 +16,11 @@ section of a neighbouring page.
 `docs/records/` is not checked: a record is history, written on its day and
 kept as it was.
 
-`docs/records/` is not checked: a record is history, written on its day and
-kept as it was.
+Two blank lines in a row outside a code block are reported here too. They
+render as one, so nothing on the site shows them, and the filler keeps
+blank lines as they are. Before 2026-10-20 three stood in a row in
+`errors.md` of `solo`, and two in five more places of the pages of both
+packages.
 """
 
 import pathlib
@@ -56,8 +59,24 @@ def offenders(path):
         yield number, len(line), line
 
 
+def doubled_blanks(path):
+    """The numbers of blank lines that follow a blank line, outside code."""
+    fenced = False
+    blank = False
+    for number, line in enumerate(path.read_text().split('\n'), start=1):
+        if line.startswith('```'):
+            fenced = not fenced
+        if fenced or line.strip():
+            blank = False
+            continue
+        if blank:
+            yield number
+        blank = True
+
+
 def main():
     found = 0
+    doubled = 0
     for root in ROOTS:
         for path in sorted(pathlib.Path(root).rglob('*.md')):
             parts = path.parts
@@ -69,10 +88,16 @@ def main():
                 found += 1
                 print(f'{path}:{number}: {width} columns')
                 print(f'  {line}')
-    if found:
-        print(f'\n{found} lines over {WIDTH} columns.')
+            for number in doubled_blanks(path):
+                doubled += 1
+                print(f'{path}:{number}: a second blank line in a row')
+    if found or doubled:
+        if found:
+            print(f'\n{found} lines over {WIDTH} columns.')
+        if doubled:
+            print(f'\n{doubled} blank lines after a blank line.')
         return 1
-    print(f'no Markdown line over {WIDTH} columns')
+    print(f'no Markdown line over {WIDTH} columns, no blank line doubled')
     return 0
 
 

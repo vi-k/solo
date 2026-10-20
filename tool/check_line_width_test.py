@@ -5,6 +5,9 @@ Run from the repository root:
     python3 -m unittest tool/check_line_width_test.py
 """
 
+import contextlib
+import io
+import os
 import pathlib
 import sys
 import tempfile
@@ -75,6 +78,52 @@ class WhatIsNotProseAtAll(WidthCase):
             self.offences('```dart\n' + 'x ' * 50 + '\n```\n'), []
         )
 
+
+class TwoBlankLinesInARow(WidthCase):
+    def doubled(self, text):
+        path = self.root / 'a.md'
+        path.write_text(text)
+        return list(check_line_width.doubled_blanks(path))
+
+    def test_one_blank_line_between_paragraphs(self):
+        self.assertEqual(self.doubled('a\n\nb\n'), [])
+
+    def test_two_blank_lines_between_paragraphs(self):
+        self.assertEqual(self.doubled('a\n\n\nb\n'), [3])
+
+    def test_three_name_both_extra_lines(self):
+        # `errors.md` of `solo` had three, and both extra ones are offences.
+        self.assertEqual(self.doubled('a\n\n\n\nb\n'), [3, 4])
+
+    def test_a_line_of_spaces_is_blank(self):
+        self.assertEqual(self.doubled('a\n\n  \nb\n'), [3])
+
+    def test_blank_lines_inside_code_are_code(self):
+        self.assertEqual(self.doubled('```dart\na();\n\n\nb();\n```\n'), [])
+
+    def test_a_fence_ends_a_run(self):
+        self.assertEqual(self.doubled('a\n\n```dart\n\nb();\n```\n'), [])
+
+
+
+class TheExitCode(WidthCase):
+    def run_main(self, text):
+        (self.root / 'packages').mkdir()
+        (self.root / 'packages' / 'a.md').write_text(text)
+        here = os.getcwd()
+        os.chdir(self.root)
+        self.addCleanup(os.chdir, here)
+        with contextlib.redirect_stdout(io.StringIO()):
+            return check_line_width.main()
+
+    def test_a_clean_tree_passes(self):
+        self.assertEqual(self.run_main('a\n\nb\n'), 0)
+
+    def test_a_doubled_blank_line_alone_fails(self):
+        self.assertEqual(self.run_main('a\n\n\nb\n'), 1)
+
+    def test_a_wide_line_alone_fails(self):
+        self.assertEqual(self.run_main('word ' * 20 + '\n'), 1)
 
 if __name__ == '__main__':
     unittest.main()

@@ -202,3 +202,40 @@ void timeMovedByTheTest(Declare test, Check expect) {
     });
   });
 }
+
+void failureReadByTheTest(Declare test, Check expect) {
+  test('a locked database fails the open', () {
+    fakeAsync((async) {
+      final job = Job<Database>((ctx) => ctx.join(Database.open))
+        ..ignoreFailure(); // the test reads the failure from the outcome
+      async.flushTimers();
+
+      expect(job.outcome, isA<Failed>());
+    });
+  });
+}
+
+void comparedByTypeAndValue(Declare test, Check expect) {
+  test('the job loads three', () {
+    fakeAsync((async) {
+      final job = Job<int>((ctx) => ctx.join(load));
+      async.flushTimers();
+
+      expect(
+        job.outcome,
+        isA<Done<int>>().having((done) => done.value, 'value', 3),
+      );
+    });
+  });
+}
+
+void settingsBetweenTests(
+  void Function(void Function() body) setUp,
+  void Function(void Function() callback) addTearDown,
+) {
+  setUp(() {
+    final previous = Job.isCancellationError;
+    Job.isCancellationError = (error) => error is DatabaseStopped;
+    addTearDown(() => Job.isCancellationError = previous);
+  });
+}
