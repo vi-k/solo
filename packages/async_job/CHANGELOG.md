@@ -9,6 +9,14 @@
   renames its own.
 - **`Job` gains `whenFinished`.** A class that implements `Job` itself adds it,
   and a subclass of `JobBase` with a member of that name renames its own.
+- **A job is continued once: by one `then`, or by handles of the new
+  `Job.shared`.** A second `then` on a job, `then` on a job with a handle and
+  `shared` on a job with a `then` throw a `StateError` before anything is made.
+  In `0.2.0`, cancelling one of two continuations cancelled the source and the
+  other. Give each branch a handle of `shared()`: cancelling a handle ends it
+  at once and leaves the source alone. A class that implements `Job` itself
+  adds `shared`. See
+  [A handle for each branch](doc/chains.md#a-handle-for-each-branch).
 - **`JobObserver.onError` is a notice, and the new `JobAnswerer` answers for an
   error nobody else has: one no outcome carries, and a `Failed` nobody
   observes.** An observer from `0.2.0` compiles unchanged, and the errors it

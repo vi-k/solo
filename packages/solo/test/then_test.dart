@@ -66,13 +66,17 @@ void main() {
       Object? read;
       runZonedGuarded(
         () {
-          final source = solo.run<int, int>(key: 'source', (ctx) async => 1)
-            ..then<void>((ctx, _) {
-              ctx
-                ..log('hello')
-                ..unattended(() => throw StateError('unattended'));
-            });
-          source.then<void>((ctx, _) => throw StateError('body')).value.then(
+          final source = solo.run<int, int>(key: 'source', (ctx) async => 1);
+          source.shared().then<void>((ctx, _) {
+            ctx
+              ..log('hello')
+              ..unattended(() => throw StateError('unattended'));
+          });
+          source
+              .shared()
+              .then<void>((ctx, _) => throw StateError('body'))
+              .value
+              .then(
             (_) {},
             onError: (Object error) {
               read = error;

@@ -248,17 +248,29 @@ Future<void> cancelledChain() async {
   print('saved: ${saved.outcome}');
 }
 
-/// Chains, the first attempt: two continuations of one source, and one of
-/// them is cancelled while the text loads.
-Future<void> twoContinuations() async {
-  // The first attempt: the number leaving takes the text with it.
+/// Chains, the first attempt: two continuations of one source. The second
+/// `then` throws.
+void twoContinuations() {
+  // The first attempt: the second continuation throws.
   final loaded = Job<String>((ctx) => ctx.join(loadText));
+  // ignore: unused_local_variable
   final parsed = loaded.then<int>((ctx, text) => int.parse(text));
+  // ignore: unused_local_variable
   final shown = loaded.then<void>((ctx, text) => showText(text));
+}
+
+/// Chains: a handle of `shared()` for each branch, and one branch is
+/// cancelled while the text loads.
+Future<void> twoHandles() async {
+  final loaded = Job<String>((ctx) => ctx.join(loadText));
+  final parsed = loaded.shared().then<int>((ctx, text) => int.parse(text));
+  final shown = loaded.shared().then<void>((ctx, text) => showText(text));
   await delay(10);
 
   // The number left the screen while the text was loading.
   await parsed.cancel();
+  await shown.done;
+  print('parsed: ${parsed.outcome}');
   print('loaded: ${loaded.outcome}');
   print('shown: ${shown.outcome}');
 }

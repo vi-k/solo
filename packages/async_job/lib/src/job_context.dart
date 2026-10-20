@@ -1583,6 +1583,13 @@ abstract class JobContextBase implements JobContext {
         'is a continuation, which starts itself once its source finishes',
       );
     }
+    if (child is _SharedJob) {
+      throw ArgumentError.value(
+        '$child',
+        name,
+        'is a continuation, which finishes with its source',
+      );
+    }
     if (child is _EachJob) {
       // Running since the call that made it, so the status below would
       // refuse it too — with words about a job somebody started, which say

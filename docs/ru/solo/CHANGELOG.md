@@ -7,6 +7,8 @@
 ### Ломающие изменения
 
 - **`Job.ignore()` переименован в `Job.ignoreFailure()`** в `async_job`.
+- **Задача продолжается один раз, одним `then` или ручками `shared()`,**
+  в `async_job`: второй `then` на задаче из `run` бросает `StateError`.
 - **Обработчики состояния у `run` и `job` переименованы: `onError`
   в `ifFailed`, `onCancel` в `ifCancelled`.**
 - **`SoloBase` переименован в `Solo`, а прежний `Solo`, класс, который нёс

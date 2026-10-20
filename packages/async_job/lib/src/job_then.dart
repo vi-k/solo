@@ -78,10 +78,10 @@ final class _ThenJob<T, R> extends JobBase<R> {
         // but nobody is left to answer it for. Unobserved, it would be
         // answered for a second time -- and so would it from a continuation
         // of this one, which is why the mark passes on.
-        final heardAlready = source._failureAnswered;
+        _answerMark = source._answer;
+        final heardAlready = _failureAnswered;
         if (heardAlready) {
           _observed = true;
-          _failureAnswered = true;
         }
         _noteAnnounced(result.error);
         notifyObserver(result.error, result.stackTrace);

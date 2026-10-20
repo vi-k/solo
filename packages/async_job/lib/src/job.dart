@@ -349,9 +349,14 @@ abstract interface class Job<T> {
   /// return a value or a future. A failed source forwards its error and stack
   /// trace without calling [onValue]; cancellation cancels the continuation.
   ///
+  /// A job is continued once. A second call throws a [StateError] before
+  /// anything is made, and so does a call on a job that [shared] has
+  /// continued: the count is for the whole life of the job, the way a
+  /// single-subscription stream counts its one `listen`. To continue one job
+  /// in several branches, give each branch a handle of [shared].
+  ///
   /// Cancellation also travels backwards: cancelling the continuation asks
-  /// its unfinished source to cancel, back through earlier links. Other
-  /// continuations of that source receive its accepted cancellation too.
+  /// its unfinished source to cancel, back through earlier links.
   /// [ChainCancelReason.cause] preserves each cancellation that was forwarded.
   /// Completed jobs keep their outcomes. Sources may refuse or hold a request
   /// under their usual cancellation rules.
@@ -388,6 +393,42 @@ abstract interface class Job<T> {
     JobObserver? observer,
   });
 
+  /// Creates a handle that finishes with the outcome of this job and cannot
+  /// reach it: one branch of a job continued in several.
+  ///
+  /// A job is continued once: by one [then], or by handles of this. Each call
+  /// makes a new handle, independent of the others. A call on a job that
+  /// [then] has continued throws a [StateError] before anything is made, and
+  /// so does [then] on a job that has a handle.
+  ///
+  /// The handle has no body. It ends with the [Done] or [Failed] of this job,
+  /// and with a [Cancelled] whose reason is a [ChainCancelReason] as soon as
+  /// this job accepts a cancellation, without waiting for its cleanup. While
+  /// this job refuses or holds a cancellation, the handle waits. Cancelling
+  /// the handle, or a continuation after it, ends the handle at once and
+  /// leaves this job alone. Nor does the handle start a job of
+  /// [Job.deferred] that nobody has started.
+  ///
+  /// A failure the handle carries observes this job, and the handle answers
+  /// for it unless somebody observes the handle. Several handles that carry
+  /// one failure answer for it once. A handle cancelled before this job
+  /// failed carries nothing, and this job answers for its own failure.
+  ///
+  /// The handle is a root job of the core with its own optional [observer],
+  /// which hears [JobObserver.onFinish] and not [JobObserver.onStart]. It
+  /// inherits nothing and is not a [ChildJob]: [JobContext.run] does not take
+  /// it. It is continued like any job, by one [then] or by handles of its
+  /// own.
+  ///
+  /// ```dart
+  /// final text = Job<String>((ctx) async => 'hello');
+  /// final length = text.shared().then<int>((ctx, text) => text.length);
+  /// final loud = text.shared().then((ctx, text) => text.toUpperCase());
+  /// length.cancel(); // text and loud run on
+  /// print(await loud.value); // HELLO
+  /// ```
+  Job<T> shared({JobObserver? observer});
+
   /// Registers [callback] for cancellation and returns an unregister function.
   ///
   /// Calls it synchronously with the [Cancelled] carrying the reason,
@@ -397,12 +438,12 @@ abstract interface class Job<T> {
   /// itself by throwing [Cancelled], as it ends. For a job cancelled before
   /// start, it is when the job is dropped.
   ///
-  /// The continuations of [then] are not children, and when they are
-  /// cancelled depends on where the cancellation came from. Cancelling a
-  /// source cancels its continuations before these callbacks run. A
-  /// continuation that is cancelled cancels its source first and the other
-  /// continuations of that source after: inside a callback of the source,
-  /// they may still not be [isCancelled].
+  /// The continuation of [then] is not a child, and when it is cancelled
+  /// depends on where the cancellation came from. Cancelling a source
+  /// cancels its continuation before these callbacks run; a continuation
+  /// that is cancelled cancels its source first. A handle of [shared]
+  /// registers here when it is made, so it is cancelled in this pass, in
+  /// registration order; a cancelled handle never reaches its source.
   ///
   /// If cancellation has already been accepted and its callbacks have run,
   /// calls [callback] immediately, even if the job has finished. Registering

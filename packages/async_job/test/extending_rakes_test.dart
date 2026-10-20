@@ -454,12 +454,14 @@ void main() {
         runZonedGuarded(
           () {
             job
+                .shared()
                 .then<void>((ctx, _) {
                   ctx.unattended(() => throw StateError('then'));
                 })
                 .done
                 .ignore();
             job
+                .shared()
                 .then<void>(
                   (ctx, _) {
                     ctx.unattended(() => throw StateError('then with its own'));

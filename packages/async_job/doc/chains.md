@@ -50,11 +50,11 @@ came from in `cause`:
 | `loaded` | none | `parsed` and `saved` |
 | `parsed` | `loaded` | `saved` |
 | `saved` | `loaded` and `parsed` | none |
-| `parsed`, while `loaded` has another continuation | `loaded` | `saved`; the other continuation once `loaded` accepts |
+| `parsed`, made on a handle of `loaded.shared()` | the handle, which ends at once; `loaded` is not asked | `saved` |
 
 A link that refuses stops the cancellation there: cancel a `loaded` made with
 `cancellable: false`, and `parsed` and `saved` go on. Finished links keep their
-outcomes. The last row is the subject of
+outcomes. The handle of the last row is the subject of
 [Two continuations of one source](#two-continuations-of-one-source).
 
 A continuation starts only when its source has finished, so a running link has
@@ -79,26 +79,50 @@ number leaves the screen while the text is still loading, and the text stays.
 ### The first attempt
 
 ```dart
-// The first attempt: the number leaving takes the text with it.
+// The first attempt: the second continuation throws.
 final loaded = Job<String>((ctx) => ctx.join(loadText));
 final parsed = loaded.then<int>((ctx, text) => int.parse(text));
 final shown = loaded.then<void>((ctx, text) => showText(text));
+```
+
+```text
+Bad state: Job() already has a continuation: a job is continued once; call shared() for each branch
+```
+
+A job is continued once, and the second `then` throws before anything is made.
+A continuation asks its unfinished source to cancel, as any link asks the links
+before it, and a source does not know how many continuations wait for it. With
+two of them, the number leaving would cancel `loaded`, and the text would never
+reach the screen that stayed.
+
+### A handle for each branch
+
+```dart
+final loaded = Job<String>((ctx) => ctx.join(loadText));
+final parsed = loaded.shared().then<int>((ctx, text) => int.parse(text));
+final shown = loaded.shared().then<void>((ctx, text) => showText(text));
 
 // The number left the screen while the text was loading.
 await parsed.cancel();
+await shown.done;
+print('parsed: ${parsed.outcome}');
 print('loaded: ${loaded.outcome}');
 print('shown: ${shown.outcome}');
 ```
 
 ```text
-loaded: Cancelled(chain)
-shown: Cancelled(chain)
+parsed: Cancelled(manual)
+loaded: Done(21)
+shown: Done(null)
 ```
 
-`parsed` asks its source to cancel, as any link asks the unfinished links
-before it, and `loaded` accepts: a source does not know how many continuations
-wait for it. Its cancellation then reaches each of them, and `shown` ends
-without calling its callback. The text never reaches the screen that stayed.
+`shared()` makes a handle that ends with the outcome of `loaded` and cannot
+reach it. `parsed` asks its source to cancel, and its source is the handle: the
+handle ends at once and leaves `loaded` be. Each call makes another handle, so
+each branch has a source of its own. A cancellation that `loaded` accepts still
+reaches every handle, and each ends `Cancelled(chain)` without waiting for the
+cleanup of `loaded`. A failure of `loaded` reaches every handle still there,
+and it is answered for once however many of them carry it.
 
 ### Jobs that wait for the source
 

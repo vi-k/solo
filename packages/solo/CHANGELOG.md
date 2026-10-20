@@ -7,6 +7,8 @@ package's too: see
 ### Breaking changes
 
 - **`Job.ignore()` is renamed to `Job.ignoreFailure()`** in `async_job`.
+- **A job is continued once, by one `then` or by handles of `shared()`,** in
+  `async_job`: a second `then` on a job of `run` throws a `StateError`.
 - **The state handlers of `run` and `job` are renamed: `onError` to `ifFailed`,
   `onCancel` to `ifCancelled`.**
 - **`SoloBase` is renamed to `Solo`, and the former `Solo` — the class that

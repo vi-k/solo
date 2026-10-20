@@ -1,0 +1,335 @@
+@Timeout(Duration(seconds: 5))
+library;
+
+import 'dart:async';
+
+import 'package:async_job/async_job.dart';
+import 'package:fake_async/fake_async.dart';
+import 'package:test/test.dart';
+
+import 'support/probe_job.dart';
+
+// A job is continued once: by one `then`, or by handles of `shared()`. A
+// handle ends with the outcome of its source and never reaches back to it.
+
+/// Answers for every failure it is asked about and keeps the list.
+final class Answers extends JobObserver with JobAnswerer {
+  final answered = <String>[];
+  final finished = <String>[];
+  final started = <String>[];
+
+  @override
+  void onStart(Job<Object?> job) => started.add('$job');
+
+  @override
+  void onFinish(Job<Object?> job) => finished.add('$job');
+
+  @override
+  void onUnanswered(Job<Object?> job, Object error, StackTrace stackTrace) =>
+      answered.add('$job: $error');
+}
+
+/// A source that runs until [gate] completes.
+Job<int> gated(Completer<int> gate, {String? key, JobObserver? observer}) =>
+    Job<int>(
+      key: key,
+      observer: observer,
+      (ctx) => ctx.abandonable(() => gate.future),
+    );
+
+/// What reached the zone while [body] and the fake time ran.
+List<String> zoneOf(void Function(FakeAsync async) body) {
+  final errors = <String>[];
+  fakeAsync((async) {
+    runZonedGuarded(() => body(async), (error, _) => errors.add('$error'));
+    async.flushTimers();
+  });
+  return errors;
+}
+
+const continuedOnce = 'Bad state: Job(load) already has a continuation: a job '
+    'is continued once; call shared() for each branch';
+
+void main() {
+  group('a job is continued once', () {
+    test('a second then throws before anything is made', () {
+      fakeAsync((async) {
+        final load = Job<int>(key: 'load', (ctx) async => 1);
+        final first = load.then<int>((ctx, value) => value + 1);
+        expect(
+          () => load.then<int>((ctx, value) => value),
+          throwsA(isA<StateError>().having((e) => '$e', 'text', continuedOnce)),
+        );
+        async.flushMicrotasks();
+        expect('${first.outcome}', 'Done(2)');
+      });
+    });
+
+    test('a then that has ended still holds its place', () {
+      fakeAsync((async) {
+        final load = Job<int>(key: 'load', (ctx) async => 1);
+        final first = load.then<int>((ctx, value) => value);
+        async.flushMicrotasks();
+        expect(first.isFinished, isTrue);
+        expect(() => load.then<int>((ctx, value) => value), throwsStateError);
+      });
+    });
+
+    test('then on a job with a handle throws', () {
+      fakeAsync((async) {
+        final load = Job<int>(key: 'load', (ctx) async => 1)..shared();
+        expect(
+          () => load.then<int>((ctx, value) => value),
+          throwsA(isA<StateError>().having((e) => '$e', 'text', continuedOnce)),
+        );
+        async.flushMicrotasks();
+      });
+    });
+
+    test('shared on a job with a then throws', () {
+      fakeAsync((async) {
+        final load = Job<int>(key: 'load', (ctx) async => 1)
+          ..then<int>((ctx, value) => value);
+        expect(
+          load.shared,
+          throwsA(isA<StateError>().having((e) => '$e', 'text', continuedOnce)),
+        );
+        async.flushMicrotasks();
+      });
+    });
+
+    test('a handle is continued once too', () {
+      fakeAsync((async) {
+        final handle = Job<int>((ctx) async => 1).shared()
+          ..then<int>((ctx, value) => value);
+        expect(handle.shared, throwsStateError);
+        expect(() => handle.then<int>((ctx, value) => value), throwsStateError);
+        async.flushMicrotasks();
+      });
+    });
+  });
+
+  group('a handle of shared()', () {
+    test('ends with the Done of its source', () {
+      fakeAsync((async) {
+        final source = Job<int>((ctx) async => 21);
+        final one = source.shared();
+        final two = source.shared();
+        async.flushMicrotasks();
+        expect('${one.outcome}', 'Done(21)');
+        expect('${two.outcome}', 'Done(21)');
+        expect('$one', 'Job(shared)');
+      });
+    });
+
+    test(
+        'cancelled, ends at once and leaves the source and the other '
+        'handle', () {
+      fakeAsync((async) {
+        final gate = Completer<int>();
+        final source = gated(gate);
+        final one = source.shared();
+        final two = source.shared();
+        async.flushMicrotasks();
+        var returned = false;
+        one.cancel().then((_) => returned = true);
+        async.flushMicrotasks();
+        expect(returned, isTrue, reason: 'cancel() does not wait for source');
+        expect(one.outcome, isA<Cancelled>());
+        expect((one.outcome! as Cancelled).reason, isA<ManualCancelReason>());
+        expect(source.isCancelled, isFalse);
+        expect(two.isFinished, isFalse);
+        gate.complete(3);
+        async.flushMicrotasks();
+        expect('${source.outcome}', 'Done(3)');
+        expect('${two.outcome}', 'Done(3)');
+        expect('${one.outcome}', startsWith('Cancelled'));
+      });
+    });
+
+    test('a cancelled continuation of a handle leaves the source', () {
+      fakeAsync((async) {
+        final gate = Completer<int>();
+        final source = gated(gate);
+        final handle = source.shared();
+        final tail = handle.then<int>((ctx, value) => value);
+        async.flushMicrotasks();
+        tail.cancel().ignore();
+        async.flushMicrotasks();
+        expect((handle.outcome! as Cancelled).reason, isA<ChainCancelReason>());
+        expect(tail.outcome, isA<Cancelled>());
+        expect(source.isCancelled, isFalse);
+        gate.complete(3);
+        async.flushMicrotasks();
+        expect('${source.outcome}', 'Done(3)');
+      });
+    });
+
+    test(
+        'ends Cancelled(chain) at the mark when the source accepts a '
+        'cancellation, before its cleanup', () {
+      fakeAsync((async) {
+        final cleanup = Completer<void>();
+        final source = Job<int>((ctx) async {
+          ctx.onDispose(() => cleanup.future);
+          return ctx.abandonable(() => Completer<int>().future);
+        });
+        final one = source.shared();
+        final two = source.shared();
+        async.flushMicrotasks();
+        source.cancel().ignore();
+        async.flushMicrotasks();
+        expect(source.isFinished, isFalse, reason: 'cleanup is still on');
+        for (final handle in [one, two]) {
+          final reason = (handle.outcome! as Cancelled).reason;
+          expect(reason, isA<ChainCancelReason>());
+        }
+        cleanup.complete();
+        async.flushMicrotasks();
+        expect(source.outcome, isA<Cancelled>());
+      });
+    });
+
+    test('waits while its source refuses a cancellation', () {
+      fakeAsync((async) {
+        final gate = Completer<int>();
+        final source = Job<int>(
+          cancellable: false,
+          (ctx) => ctx.join(() => gate.future),
+        );
+        final handle = source.shared();
+        async.flushMicrotasks();
+        source.cancel().ignore();
+        async.flushMicrotasks();
+        expect(handle.isFinished, isFalse);
+        gate.complete(5);
+        async.flushMicrotasks();
+        expect('${handle.outcome}', 'Done(5)');
+      });
+    });
+
+    test('does not start a deferred source', () {
+      fakeAsync((async) {
+        final source = Job.deferred<int>((ctx) async => 1);
+        final handle = source.shared();
+        async.flushTimers();
+        expect(source.isRunning || source.isFinished, isFalse);
+        expect(handle.isFinished, isFalse);
+        source.start();
+        async.flushMicrotasks();
+        expect('${handle.outcome}', 'Done(1)');
+      });
+    });
+
+    test('is not a child: run does not take it', () {
+      fakeAsync((async) {
+        final handle = Job<int>((ctx) async => 1).shared();
+        expect(handle, isNot(isA<ChildJob<int>>()));
+        Object? thrown;
+        final parent = ProbeJob<void>((ctx) async {
+          try {
+            (ctx as ProbeContext).adopt(handle);
+          } on Object catch (error) {
+            thrown = error;
+          }
+        })
+          ..launch();
+        async.flushMicrotasks();
+        expect(
+          '$thrown',
+          'Invalid argument (child): is a continuation, which finishes with '
+              'its source: "Job(shared)"',
+        );
+        expect(parent.outcome, isA<Done<void>>());
+        expect('${handle.outcome}', 'Done(1)');
+      });
+    });
+
+    test('has an observer of its own that hears onFinish, not onStart', () {
+      fakeAsync((async) {
+        final answers = Answers();
+        final handle = Job<int>((ctx) async => 1).shared(observer: answers);
+        async.flushMicrotasks();
+        expect(handle.outcome, isA<Done<int>>());
+        expect(answers.started, isEmpty);
+        expect(answers.finished, ['Job(shared)']);
+      });
+    });
+  });
+
+  group('a failure the handles carry', () {
+    test('two unobserved handles answer for it once', () {
+      final answers = Answers();
+      final errors = zoneOf((async) {
+        Job<int>(
+          key: 'load',
+          observer: answers,
+          (ctx) async => throw StateError('load'),
+        )
+          ..shared(observer: answers)
+          ..shared(observer: answers);
+      });
+      expect(answers.answered, ['Job(shared): Bad state: load']);
+      expect(errors, isEmpty);
+    });
+
+    test('an observed handle hears it, and the other answers', () {
+      final answers = Answers();
+      final heard = <String>[];
+      final errors = zoneOf((async) {
+        final source = Job<int>(
+          key: 'load',
+          observer: answers,
+          (ctx) async => throw StateError('load'),
+        );
+        source.shared().done.then((outcome) => heard.add('$outcome'));
+        source.shared(observer: answers);
+      });
+      expect(heard, ['Failed(Bad state: load)']);
+      expect(answers.answered, ['Job(shared): Bad state: load']);
+      expect(errors, isEmpty);
+    });
+
+    test('with no answerer, it reaches the zone once', () {
+      final errors = zoneOf((async) {
+        Job<int>((ctx) async => throw StateError('load'))
+          ..shared()
+          ..shared();
+      });
+      expect(errors, ['Bad state: load']);
+    });
+
+    test('a handle cancelled before the failure leaves it to the source', () {
+      final answers = Answers();
+      final errors = zoneOf((async) {
+        final gate = Completer<int>();
+        final source = gated(gate, key: 'load', observer: answers);
+        final handle = source.shared(observer: answers);
+        async.flushMicrotasks();
+        handle.cancel().ignore();
+        async.flushMicrotasks();
+        gate.completeError(StateError('load'));
+      });
+      expect(answers.answered, ['Job(load): Bad state: load']);
+      expect(errors, isEmpty);
+    });
+
+    test('a handle made after the answer carries it with no answer', () {
+      final answers = Answers();
+      late Job<int> handle;
+      final errors = zoneOf((async) {
+        final source = Job<int>(
+          key: 'load',
+          observer: answers,
+          (ctx) async => throw StateError('load'),
+        );
+        async.flushMicrotasks();
+        expect(answers.answered, ['Job(load): Bad state: load']);
+        handle = source.shared(observer: answers);
+      });
+      expect(handle.outcome, isA<Failed>());
+      expect(answers.answered, ['Job(load): Bad state: load']);
+      expect(errors, isEmpty);
+    });
+  });
+}

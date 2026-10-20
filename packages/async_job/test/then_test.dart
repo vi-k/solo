@@ -667,48 +667,47 @@ void main() {
     });
   });
 
-  test('cancelling one branch cancels the shared source and its sibling', () {
+  test('cancelling one branch leaves the shared source and its sibling', () {
     fakeAsync((async) {
       final gate = Completer<int>();
       final a = Job<int>((ctx) => ctx.abandonable(() => gate.future));
-      final b = a.then<int>((ctx, value) => mustNotRun('must not run'));
-      final c = a.then<int>((ctx, value) => mustNotRun('must not run'));
+      final b =
+          a.shared().then<int>((ctx, value) => mustNotRun('must not run'));
+      final c = a.shared().then<int>((ctx, value) => value + 1);
       async.flushMicrotasks();
       b.cancel().ignore();
       async.flushMicrotasks();
-      expect(a.outcome, isA<Cancelled>());
+      expect(b.outcome, isA<Cancelled>());
+      expect(a.isCancelled, isFalse);
+      expect(c.isFinished, isFalse);
+      gate.complete(1);
+      async.flushMicrotasks();
+      expect('${a.outcome}', 'Done(1)');
+      expect('${c.outcome}', 'Done(2)');
+    });
+  });
+
+  test('whenCancelled of a source sees its branches cancelled at the mark', () {
+    fakeAsync((async) {
+      final gate = Completer<int>();
+      final a = Job<int>((ctx) => ctx.abandonable(() => gate.future));
+      final b =
+          a.shared().then<int>((ctx, value) => mustNotRun('must not run'));
+      final c =
+          a.shared().then<int>((ctx, value) => mustNotRun('must not run'));
+      final seen = <bool>[];
+      a.whenCancelled((_) => seen.add(b.isCancelled && c.isCancelled));
+      async.flushMicrotasks();
+      a.cancel().ignore();
+      async.flushMicrotasks();
+      // The handles were made first, so they hear the mark first.
+      expect(seen, [true]);
       expect(b.outcome, isA<Cancelled>());
       expect(c.outcome, isA<Cancelled>());
       gate.complete(1);
       async.flushMicrotasks();
     });
   });
-
-  for (final fromSource in [true, false]) {
-    test(
-        'whenCancelled of a source sees its other continuation '
-        '${fromSource ? 'cancelled' : 'not yet cancelled'} when the '
-        'cancellation comes from the ${fromSource ? 'source' : 'continuation'}',
-        () {
-      fakeAsync((async) {
-        final gate = Completer<int>();
-        final a = Job<int>((ctx) => ctx.abandonable(() => gate.future));
-        final b = a.then<int>((ctx, value) => mustNotRun('must not run'));
-        final c = a.then<int>((ctx, value) => mustNotRun('must not run'));
-        final seen = <bool>[];
-        a.whenCancelled((_) => seen.add(c.isCancelled));
-        async.flushMicrotasks();
-        (fromSource ? a : b).cancel().ignore();
-        async.flushMicrotasks();
-        // The dartdoc of whenCancelled says so: the siblings of the
-        // continuation the cancellation came from go down after.
-        expect(seen, [fromSource]);
-        expect(c.outcome, isA<Cancelled>());
-        gate.complete(1);
-        async.flushMicrotasks();
-      });
-    });
-  }
 
   for (final cancelTail in [false, true]) {
     test('a 5000-link cascade from the ${cancelTail ? 'tail' : 'source'}', () {

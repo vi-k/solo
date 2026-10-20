@@ -470,15 +470,40 @@ void main() {
             match.group(1)!.split('\n'),
         ];
 
-    test('two continuations: cancelling one cancels the source and the other',
-        () {
-      final printed = printedBy(page.twoContinuations);
+    test('two continuations: the second then throws, as the page quotes', () {
+      fakeAsync((async) {
+        stubs.stage.textTake = 30;
+        final text = File('doc/chains.md').readAsStringSync();
+        final quoted = RegExp(
+          r'showText\(text\)\);\n```\n\n```text\n(.*?)\n```',
+          dotAll: true,
+        );
+        expect(
+          page.twoContinuations,
+          throwsA(
+            isA<StateError>().having(
+              (error) => '$error',
+              'text',
+              quoted.firstMatch(text)!.group(1),
+            ),
+          ),
+        );
+        async.flushTimers();
+        expect(trace(), isEmpty, reason: 'nothing was shown');
+      });
+    });
+
+    test(
+        'a handle for each branch: cancelling one leaves the source and '
+        'the other', () {
+      final printed = printedBy(page.twoHandles);
       expect(printed, [
-        'loaded: Cancelled(chain)',
-        'shown: Cancelled(chain)',
+        'parsed: Cancelled(manual)',
+        'loaded: Done(21)',
+        'shown: Done(null)',
       ]);
       expect(shownQuotes().first, printed);
-      expect(trace(), isEmpty, reason: 'nothing was shown');
+      expect(trace(), ['shown 21']);
     });
 
     test('two jobs that wait: cancelling one leaves the source and the other',
@@ -566,20 +591,33 @@ void main() {
       });
     }
 
-    test('the cancel table: parsed, with another continuation of loaded', () {
+    test('the cancel table: parsed, made on a handle of loaded', () {
       fakeAsync((async) {
-        final (loaded, parsed, saved) = slowChain();
-        final shown = loaded.then<void>((ctx, text) {});
+        final loaded = Job<String>(
+          (ctx) => ctx.join(() async {
+            await delay(30);
+            return '21';
+          }),
+        );
+        final handle = loaded.shared();
+        final parsed = handle.then<int>((ctx, text) => int.parse(text));
+        final saved = parsed.then<void>((ctx, number) async {});
+        final shown = loaded.shared().then<void>((ctx, text) {});
         async.elapse(const Duration(milliseconds: 10));
         parsed.cancel().ignore();
+        async.flushMicrotasks();
+        expect(handle.outcome, isA<Cancelled>(), reason: 'at once');
+        expect(loaded.isFinished, isFalse, reason: 'and loaded is not asked');
         async.flushTimers();
         expect(
           [
-            for (final job in [loaded, parsed, saved, shown])
+            for (final job in [handle, parsed, saved])
               (job.outcome! as Cancelled).reason.name,
           ],
-          ['chain', 'manual', 'chain', 'chain'],
+          ['chain', 'manual', 'chain'],
         );
+        expect('${loaded.outcome}', 'Done(21)');
+        expect('${shown.outcome}', 'Done(null)');
       });
     });
 

@@ -6,6 +6,7 @@ import 'package:meta/meta.dart';
 part 'envelope.dart';
 part 'job.dart';
 part 'job_context.dart';
+part 'job_shared.dart';
 part 'job_stream.dart';
 part 'job_then.dart';
 part 'observer.dart';
@@ -197,7 +198,23 @@ abstract class JobBase<T> implements Job<T> {
   /// observed it in time — see [_reportUnobserved] — or it is the failure of
   /// a source that was answered for, carried on. A continuation attached
   /// later still carries it, and must not answer for it a second time.
-  bool _failureAnswered = false;
+  ///
+  /// One mark along a chain: a job that carries the failure of its source
+  /// takes the source's mark, so one failure is answered for once however
+  /// many handles of [shared] carry it.
+  _AnswerMark? _answerMark;
+
+  /// The mark of this job, made on first use.
+  _AnswerMark get _answer => _answerMark ??= _AnswerMark();
+
+  bool get _failureAnswered => _answerMark?.answered ?? false;
+
+  /// How this job is continued: by one [then] or by handles of [shared].
+  /// Counted for the life of the job, the way a single-subscription stream
+  /// counts its one `listen`: a continuation that has ended still holds its
+  /// place, or a second [then] would pass or throw by how fast the first one
+  /// ran.
+  _Continuation _continuation = _Continuation.none;
 
   /// Whether [Job.ignoreFailure] was called: nobody wants this job's failure.
   ///
@@ -596,8 +613,31 @@ abstract class JobBase<T> implements Job<T> {
   Job<R> then<R>(
     FutureOr<R> Function(JobContext ctx, T value) onValue, {
     JobObserver? observer,
-  }) =>
-      _ThenJob<T, R>(this, onValue, observer: observer);
+  }) {
+    _continueBy(_Continuation.then);
+    return _ThenJob<T, R>(this, onValue, observer: observer);
+  }
+
+  @override
+  Job<T> shared({JobObserver? observer}) {
+    _continueBy(_Continuation.shared);
+    return _SharedJob<T>(this, observer: observer);
+  }
+
+  /// Takes the one way this job is continued, or throws before anything is
+  /// made: a second [then], [then] next to [shared], or [shared] next to
+  /// [then].
+  void _continueBy(_Continuation how) {
+    final current = _continuation;
+    if (current != _Continuation.none &&
+        !(current == _Continuation.shared && how == _Continuation.shared)) {
+      throw StateError(
+        '$this already has a continuation: a job is continued once; '
+        'call shared() for each branch',
+      );
+    }
+    _continuation = how;
+  }
 
   /// [callback], with its errors gone where the errors of a listener go.
   void Function(A) _guardListener<A>(void Function(A) callback) => (event) {
@@ -2265,7 +2305,13 @@ abstract class JobBase<T> implements Job<T> {
         _reportUnobserved(outcome);
         return;
       }
-      _failureAnswered = true;
+      final answer = _answer;
+      if (answer.answered) {
+        // Carried by another handle of the same source, which got there
+        // first: one failure, one answer.
+        return;
+      }
+      answer.answered = true;
       if (_isCancellation(outcome.error)) {
         // Made of a cancellation on purpose: the outcome decides here, not
         // the object it carries, and an answer never sees a cancellation.
@@ -2477,3 +2523,12 @@ final class _DeferredJob<T> extends _Job<T> implements DeferredJob<T> {
   @override
   void start() => super.start();
 }
+
+/// Whether a failure has been answered for; one for every job that carries
+/// it.
+final class _AnswerMark {
+  bool answered = false;
+}
+
+/// How a job is continued; see [JobBase._continueBy].
+enum _Continuation { none, then, shared }
