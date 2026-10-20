@@ -160,7 +160,7 @@ is asked once.
   its outcome.** A listener gets the outcome, and a failure nobody observes is
   still answered for. See [Jobs and results](doc/jobs.md#jobs-and-results).
 - **`SoloObserver.all` makes one observer of several** for `Solo.observer`. See
-  [A cancellation that never lands](doc/errors.md#a-cancellation-that-never-lands).
+  [A cancellation that never lands](doc/diagnostics.md#a-cancellation-that-never-lands).
 - `Solo` carries its own listeners: `addListener` and `removeListener`, and the
   protected `hasListeners` and `onListenerError` beside them. See
   [Observing state](doc/state.md#observing-state).
@@ -168,7 +168,7 @@ is asked once.
   come back, or `null` when nothing does. It is a `SoloPending`, one of three:
   a `SoloPendingJob` with its `SoloPhase`, a `SoloPendingQueue` or a
   `SoloPendingStream`. See
-  [What is holding the controller](doc/errors.md#what-is-holding-the-controller).
+  [What is holding the controller](doc/diagnostics.md#what-is-holding-the-controller).
 - `AccumulationTiming.throttle` takes `startAtOnce`. With `startAtOnce: false`
   the interval is counted before the first group as well.
 - `package:solo/listeners.dart`: `Listeners`, the list of listeners a notifier
@@ -217,8 +217,9 @@ is asked once.
   [Cancellation](doc/cancellation.md),
   [Resources and cleanup](doc/resources.md),
   [Children and chains](doc/children.md), [Streams](doc/streams.md),
-  [Errors and observation](doc/errors.md), [Testing](doc/testing.md) and
-  [Camera example](doc/camera.md). The Flutter section went to `flutter_solo`.
+  [Diagnostics](doc/diagnostics.md), [Errors](doc/errors.md),
+  [Testing](doc/testing.md) and [Camera example](doc/camera.md). The Flutter
+  section went to `flutter_solo`.
 - Two pages to look things up: [Reference](doc/reference.md), every member of
   `Solo`, its context, jobs, queue and accumulators and every parameter of
   `run`, `job`, `collect` and `accumulate` with the section that explains it,

@@ -2159,7 +2159,7 @@ void main() {
         'replace moves the job, keeps the handle and the events, and says '
         'so in Solo.debug', () {
       _says("`Solo.debug`, the engine's own trace from "
-          '[Logs](errors.md#logs) on the errors page, says '
+          '[Logs](diagnostics.md#logs) on the diagnostics page, says '
           '`move <job> to the tail`');
       _says('a group that is already at the tail keeps the place it has');
       final seen = <String>[];

@@ -1,11 +1,11 @@
-// The code of `doc/errors.md`, verbatim, less the first attempts and the
-// two blocks under "Answering for an error", which stand in
-// `errors_page_answering.dart`: the page shows two versions of one class,
-// and a library holds one. Every piece of the other blocks is a run of lines
-// of this file, and `errors_rakes_test.dart` runs it. The page shows
-// observers, a method of a controller and a few statements on their own;
-// here the statements stand in functions and in bodies of methods, marked
-// "Not on the page".
+// The code of `doc/errors.md` and `doc/diagnostics.md`, verbatim, less the
+// first attempts and the two blocks under "Answering for an error", which
+// stand in `errors_page_answering.dart`: the errors page shows two versions
+// of one class, and a library holds one. Every piece of the other blocks is
+// a run of lines of this file, and `errors_rakes_test.dart` and
+// `diagnostics_rakes_test.dart` run it. The pages show observers, a method
+// of a controller and a few statements on their own; here the statements
+// stand in functions and in bodies of methods, marked "Not on the page".
 // ignore_for_file: unreachable_from_main
 import 'dart:async';
 

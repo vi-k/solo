@@ -106,11 +106,8 @@ export default defineConfig({
               'Event accumulation',
               'Накопление событий',
             ),
-            page(
-              'solo/errors',
-              'Errors and observation',
-              'Ошибки и наблюдение',
-            ),
+            page('solo/diagnostics', 'Diagnostics', 'Диагностика'),
+            page('solo/errors', 'Errors', 'Ошибки'),
             page('solo/testing', 'Testing', 'Тестирование'),
             page('solo/mistakes', 'Common mistakes', 'Частые ошибки'),
             page('solo/reference', 'Reference', 'Справочник'),

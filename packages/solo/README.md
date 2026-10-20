@@ -357,7 +357,8 @@ bloc.
 | [Children and chains](doc/children.md) | Child jobs, chains, steps in a row |
 | [Streams](doc/streams.md) | `ctx.each` in a controller, following another controller |
 | [Event accumulation](doc/accumulation.md) | `collect`, `accumulate`, debounce and throttle |
-| [Errors and observation](doc/errors.md) | `SoloObserver`, `unansweredHandler`, `pending`, logs |
+| [Diagnostics](doc/diagnostics.md) | `SoloObserver`, `pending`, logs, a slow cancellation |
+| [Errors](doc/errors.md) | `onError`, `unansweredHandler`, catching and retrying, `ctx.unattended` |
 | [Testing](doc/testing.md) | Awaiting outcomes, fake time, timeouts |
 | [Common mistakes](doc/mistakes.md) | Seven mistakes that often pass a first test, and the right way for each |
 | [Reference](doc/reference.md) | Every member of `Solo`, its context, jobs, queue and accumulators, with the section that explains it |
@@ -377,8 +378,8 @@ section linked beside it.
 | A later request must not be dropped as a duplicate of an earlier one | a record key, `(_Op.load, id)` | [A key for each request](doc/jobs.md#a-key-for-each-request) |
 | Queued work is made pointless by what just arrived | `queue.removeWhere` before submitting, or `cancelAll()` if it may be running | [When they are separate jobs after all](doc/accumulation.md#when-they-are-separate-jobs-after-all) |
 | A last batch has to go out before the screen goes away | `close(mode: SoloCloseMode.drain)` | [Cancelling and closing a controller](doc/cancellation.md#cancelling-and-closing-a-controller) |
-| `close()` does not come back | `controller.pending` | [What is holding the controller](doc/errors.md#what-is-holding-the-controller) |
-| A journal needs to say which operation changed the state | `SoloTransition` in `onChange` | [Watching every controller](doc/errors.md#watching-every-controller) |
+| `close()` does not come back | `controller.pending` | [What is holding the controller](doc/diagnostics.md#what-is-holding-the-controller) |
+| A journal needs to say which operation changed the state | `SoloTransition` in `onChange` | [Watching every controller](doc/diagnostics.md#watching-every-controller) |
 | A call must finish before the queue goes on | `ctx.join` | [Cancellation](doc/cancellation.md) |
 | A call fails now and then and should be tried again | a loop in the body with `ctx.pause` between attempts | [Retrying a failed call](doc/errors.md#retrying-a-failed-call) |
 | A step of several calls must not be interrupted halfway | `ctx.uncancellable` | [Protecting a step or a whole job](doc/cancellation.md#protecting-a-step-or-a-whole-job) |

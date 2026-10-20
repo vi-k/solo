@@ -816,9 +816,9 @@ event added to that group. The handle is the one every addition to this group
 got, the events already accepted stay in it, and a group that is already at the
 tail keeps the place it has. Nothing is cancelled on the way, so no
 cancellation callback runs in the middle of the move. `Solo.debug`, the
-engine's own trace from [Logs](errors.md#logs) on the errors page, says
-`move <job> to the tail`; there is no observer event, because no job started or
-finished.
+engine's own trace from [Logs](diagnostics.md#logs) on the diagnostics page,
+says `move <job> to the tail`; there is no observer event, because no job
+started or finished.
 
 The move starts a fresh debounce window and preserves the accumulator's
 throttle interval. It applies to a queued group, including one configured with

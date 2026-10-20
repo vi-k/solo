@@ -165,9 +165,9 @@ Other running bodies are checked after a state update: a job's children run
 beside it, and each body answers to its own rules. A job's own emit is excluded
 from that rule check, but still checks cancellation before and after writing.
 Both `onChange` (see
-[Watching every controller](errors.md#watching-every-controller) on the errors
-page) and a listener run synchronously inside the write. Neither has a `ctx`,
-so the only write open to either one is
+[Watching every controller](diagnostics.md#watching-every-controller) on the
+diagnostics page) and a listener run synchronously inside the write. Neither
+has a `ctx`, so the only write open to either one is
 [`externalSetState`](#externalsetstate). A hook that corrects a state this way,
 turning one job's `Preparing` straight into `Working`, can therefore cancel the
 emitting job before its own `emit` returns.

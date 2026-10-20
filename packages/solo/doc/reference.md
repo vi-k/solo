@@ -18,9 +18,9 @@ the subclass.
 
 | Member | What it does | Where |
 | --- | --- | --- |
-| `Solo.observer` | One observer of every controller of the process; it watches and answers for nothing | [Watching every controller](errors.md#watching-every-controller) |
+| `Solo.observer` | One observer of every controller of the process; it watches and answers for nothing | [Watching every controller](diagnostics.md#watching-every-controller) |
 | `Solo.unansweredHandler` | A `SoloUnansweredHandler` that takes the errors nobody answered for, in place of the zone | [Answering for an error](errors.md#answering-for-an-error) |
-| `Solo.debug` | A callback that traces the queue, the state and the closing of every controller; the life of each job is on `Job.debug` | [Logs](errors.md#logs) |
+| `Solo.debug` | A callback that traces the queue, the state and the closing of every controller; the life of each job is on `Job.debug` | [Logs](diagnostics.md#logs) |
 
 ### What a caller sees
 
@@ -32,7 +32,7 @@ the subclass.
 | `isClosed` | Whether `close()` was called | [Three ways to stop](cancellation.md#three-ways-to-stop) |
 | `isDraining` | Whether a `close()` that drains is still running the queue | [Three ways to stop](cancellation.md#three-ways-to-stop) |
 | `isFinished` | Whether closing has finished and the state can no longer change | [externalSetState](state.md#externalsetstate) |
-| `pending` | What is holding the controller right now, or `null` | [What is holding the controller](errors.md#what-is-holding-the-controller) |
+| `pending` | What is holding the controller right now, or `null` | [What is holding the controller](diagnostics.md#what-is-holding-the-controller) |
 | `cancelAll()` | Clears the queue and cancels the running job; the controller stays open | [Three ways to stop](cancellation.md#three-ways-to-stop) |
 | `close()` | Stops taking work and closes: cancels what is queued and running, or with `mode: SoloCloseMode.drain` runs the queue first | [Three ways to stop](cancellation.md#three-ways-to-stop) |
 
@@ -63,12 +63,12 @@ hand an error on, and `publish` delivers the state: an override calls
 
 | Member | What it does | Where |
 | --- | --- | --- |
-| `onStart(job)` | A job body is about to run | [Watching every controller](errors.md#watching-every-controller) |
-| `onFinish(job)` | A job has an outcome, a job dropped before its start included | [Watching every controller](errors.md#watching-every-controller) |
+| `onStart(job)` | A job body is about to run | [Watching every controller](diagnostics.md#watching-every-controller) |
+| `onFinish(job)` | A job has an outcome, a job dropped before its start included | [Watching every controller](diagnostics.md#watching-every-controller) |
 | `onError(job, error, stackTrace)` | Hears every error a job runs into; it reports and moves nothing | [Reporting an error](errors.md#reporting-an-error) |
 | `onUnanswered(job, error, stackTrace)` | Answers for an error no outcome carries and a `Failed` nobody observes; by default hands it to `Solo.unansweredHandler` or the zone | [Answering for an error](errors.md#answering-for-an-error) |
-| `onLog(job, message)` | A job called `ctx.log` | [Logs](errors.md#logs) |
-| `onChange(transition)` | The state changed; the `SoloTransition` says which job changed it | [Watching every controller](errors.md#watching-every-controller) |
+| `onLog(job, message)` | A job called `ctx.log` | [Logs](diagnostics.md#logs) |
+| `onChange(transition)` | The state changed; the `SoloTransition` says which job changed it | [Watching every controller](diagnostics.md#watching-every-controller) |
 | `onClose()` | The engine is about to finish closing: the place to release what the controller holds beside its jobs | [externalSetState](state.md#externalsetstate) |
 | `onListenerError(error, stackTrace)` | A listener threw; by default the error goes to the zone | [Observing state](state.md#observing-state) |
 | `publish(previous, current)` | Calls the listeners; the seam for a delivery of another kind | [A delivery of your own](state.md#a-delivery-of-your-own) |
@@ -157,9 +157,9 @@ field: events combine only within one accumulator, even under the same key.
 | --- | --- | --- |
 | `Policy` | What `add` and `run` do with a job whose key is already queued or running: `sequential`, `droppable`, `replace` or `restart`; a job `droppable` may hand back is continued through `shared()` | [Queue and policies](jobs.md#queue-and-policies) |
 | `SoloCloseMode` | How `close()` stops: `cancel` or `drain` | [Three ways to stop](cancellation.md#three-ways-to-stop) |
-| `SoloObserver` | What `Solo.observer` takes: `onStart`, `onFinish`, `onError`, `onLog`, `onChange` and `onClose` of every controller, plus `onCreate`; `SoloObserver.all` joins several | [Watching every controller](errors.md#watching-every-controller) |
-| `SoloTransition` | One change of the state: the states before and after, the job that made it and a revision that grows by one per change | [Watching every controller](errors.md#watching-every-controller) |
-| `SoloPending` | What `pending` returns: a `SoloPendingJob` with its `SoloPhase`, a `SoloPendingQueue` or a `SoloPendingStream` | [What is holding the controller](errors.md#what-is-holding-the-controller) |
+| `SoloObserver` | What `Solo.observer` takes: `onStart`, `onFinish`, `onError`, `onLog`, `onChange` and `onClose` of every controller, plus `onCreate`; `SoloObserver.all` joins several | [Watching every controller](diagnostics.md#watching-every-controller) |
+| `SoloTransition` | One change of the state: the states before and after, the job that made it and a revision that grows by one per change | [Watching every controller](diagnostics.md#watching-every-controller) |
+| `SoloPending` | What `pending` returns: a `SoloPendingJob` with its `SoloPhase`, a `SoloPendingQueue` or a `SoloPendingStream` | [What is holding the controller](diagnostics.md#what-is-holding-the-controller) |
 | `SoloStream` | A mixin that adds a broadcast `stream` of the states | [Observing state](state.md#observing-state) |
 | `AccumulationPolicy` | Which waiting group an event joins: `join`, `adjacent` or `replace` | [Choosing where events join](accumulation.md#choosing-where-events-join) |
 | `AccumulationTiming` | When a group may start: `debounce` or `throttle` | [Choosing when a group is ready](accumulation.md#choosing-when-a-group-is-ready) |

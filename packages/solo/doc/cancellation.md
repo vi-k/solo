@@ -454,10 +454,10 @@ accepts cancellation.
 `Cancelled(closed)` and requests cancellation of the running job. It waits for
 that job, including children and cleanup, even if cancellation is refused;
 `pending` says what it is waiting for, as
-[What is holding the controller](errors.md#what-is-holding-the-controller) on
-the errors page shows. Repeated calls return the same future. Later submissions
-return already cancelled jobs rather than throwing, so callers do not need an
-`isClosed` check before submitting.
+[What is holding the controller](diagnostics.md#what-is-holding-the-controller)
+on the diagnostics page shows. Repeated calls return the same future. Later
+submissions return already cancelled jobs rather than throwing, so callers do
+not need an `isClosed` check before submitting.
 
 `SoloCloseMode.drain` closes by running the queue instead of dropping it, and
 that is the whole fix the first attempt needs: the three batches go out in

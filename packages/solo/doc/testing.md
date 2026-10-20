@@ -451,8 +451,8 @@ queue is dropped inside the call, with its outcome there on the next line.
 
 `elapse` moves `clock.now()` along with the timers, so a recipe that stamps
 time — the observer of
-[Stamping the cancellation](errors.md#stamping-the-cancellation) on the errors
-page — is tested here too, without the test waiting for any of it.
+[Stamping the cancellation](diagnostics.md#stamping-the-cancellation) on the
+diagnostics page — is tested here too, without the test waiting for any of it.
 
 ## What one test leaves for the next
 

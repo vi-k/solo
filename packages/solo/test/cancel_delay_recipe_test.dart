@@ -10,10 +10,10 @@ import 'package:test/test.dart';
 import 'support/run_solo.dart';
 import 'support/test_state.dart';
 
-/// The stamping of the recipe from `doc/errors.md`, with its threshold of
-/// 50 ms taken off: every stamped job says its number, so the rows of the
+/// The stamping of the recipe from `doc/diagnostics.md`, with its threshold
+/// of 50 ms taken off: every stamped job says its number, so the rows of the
 /// page's table that stay under the threshold can be read as well. The
-/// recipe as the page shows it runs in `errors_rakes_test.dart`.
+/// recipe as the page shows it runs in `diagnostics_rakes_test.dart`.
 ///
 /// The page promises three things about the number, and all three are
 /// promises about cancellation rather than about the observer, so they are
@@ -40,14 +40,14 @@ final class _SlowCancellations extends SoloObserver {
 /// The number the table of the page gives for [how] the body waits, in
 /// milliseconds.
 String _number(String how) {
-  final page = File('doc/errors.md').readAsLinesSync();
+  final page = File('doc/diagnostics.md').readAsLinesSync();
   final row = page.singleWhere((line) => line.startsWith('| `$how'));
 
   return row.split('|')[2].trim().replaceFirst(' ms', '');
 }
 
 /// Whether the page says [phrase], wherever its lines were broken.
-bool _says(String phrase) => File('doc/errors.md')
+bool _says(String phrase) => File('doc/diagnostics.md')
     .readAsStringSync()
     .replaceAll(RegExp(r'\s+'), ' ')
     .contains(phrase);
@@ -207,7 +207,7 @@ void main() {
           'of `cancel` or `close` waited 90 ms',
         ),
         isTrue,
-        reason: 'doc/errors.md no longer says this',
+        reason: 'doc/diagnostics.md no longer says this',
       );
       expect(observer.lines, ['section 0']);
       expect(waited, const Duration(milliseconds: 90));

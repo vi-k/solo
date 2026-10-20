@@ -1,8 +1,9 @@
-// The first attempts of `doc/errors.md`, verbatim: every piece of the code
-// under a "The first attempt" heading is a run of lines of this file, and
-// `errors_rakes_test.dart` runs it. The page shows two observers and four
-// fragments; here each fragment stands in a method or a function, marked
-// "Not on the page".
+// The first attempts of `doc/errors.md` and `doc/diagnostics.md`, verbatim:
+// every piece of the code under a "The first attempt" heading is a run of
+// lines of this file, and `errors_rakes_test.dart` and
+// `diagnostics_rakes_test.dart` run it. The pages show two observers and
+// four fragments; here each fragment stands in a method or a function,
+// marked "Not on the page".
 import 'dart:async';
 
 import 'package:clock/clock.dart';
@@ -105,7 +106,7 @@ final class DelayingProfile extends Solo<ProfileState>
       );
 }
 
-/// The first attempt of "Background work and logs". Not on the page: the
+/// The first attempt of "Background work". Not on the page: the
 /// function around the statement.
 void sendZoomUnawaited() {
   unawaited(analytics.send('zoom'));

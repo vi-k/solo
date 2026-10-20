@@ -1,10 +1,11 @@
-// What the code of `doc/errors.md` takes for granted: the profile of the
-// quick start, the crash reporter, Sentry, the log, the camera, the slots,
-// the analytics and the logger. Every call of a stub runs until the test
-// ends it, unless its name is in `Stage.endsByItself`, so the order of what
-// happened is the test's to set. `Desk` is what the tests need of a
-// controller beside the page's own members, and `Bench` is a controller
-// whose bodies are written where they are run.
+// What the code of `doc/errors.md` and `doc/diagnostics.md` takes for
+// granted: the profile of the quick start, the crash reporter, Sentry, the
+// log, the camera, the slots, the analytics and the logger. Every call of a
+// stub runs until the test ends it, unless its name is in
+// `Stage.endsByItself`, so the order of what happened is the test's to set.
+// `Desk` is what the tests need of a controller beside the pages' own
+// members, and `Bench` is a controller whose bodies are written where they
+// are run.
 import 'dart:async';
 
 import 'package:solo/solo.dart';

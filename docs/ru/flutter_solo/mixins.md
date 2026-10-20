@@ -54,8 +54,8 @@ final class Session extends Solo<SessionState> with SoloStream, SoloListenable {
 не ждёт никого из своих слушателей: `await for` по `stream` держит `close()`,
 пока его тело ещё чего-то ждёт. Всё это время `pending` равен
 `SoloPendingStream`, а как его спросить, показывает раздел
-[«Что удерживает контроллер»](../solo/errors.md#что-удерживает-контроллер)
-страницы об ошибках `solo`.
+[«Что удерживает контроллер»](../solo/diagnostics.md#что-удерживает-контроллер)
+страницы о диагностике `solo`.
 
 ## Экран на стриме
 

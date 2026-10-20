@@ -54,8 +54,8 @@ the zone it subscribed in. And `await close()` waits until every subscriber of
 alone waits for none of its listeners: an `await for` over the `stream` holds
 `close()` while its body is still awaiting. `pending` is a `SoloPendingStream`
 all that time, and
-[What is holding the controller](https://github.com/vi-k/solo/blob/main/packages/solo/doc/errors.md#what-is-holding-the-controller)
-on the errors page of `solo` shows how to ask for it.
+[What is holding the controller](https://github.com/vi-k/solo/blob/main/packages/solo/doc/diagnostics.md#what-is-holding-the-controller)
+on the diagnostics page of `solo` shows how to ask for it.
 
 ## A screen built on the stream
 
