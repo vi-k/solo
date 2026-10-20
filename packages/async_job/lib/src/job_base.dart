@@ -472,7 +472,7 @@ abstract class JobBase<T> implements Job<T> {
   /// is theirs to do. Forget that, and nothing looks wrong until the
   /// receiver ends badly — and then the resource is simply lost, with no
   /// trace anywhere.
-  void _traceDroppedCleanups() => _droppedCleanupsTrace()?.call();
+  void _traceDroppedCleanups() => _droppedCleanupsTrace(null)?.call();
 
   /// The line of [_traceDroppedCleanups], taken in two steps.
   ///
@@ -481,18 +481,41 @@ abstract class JobBase<T> implements Job<T> {
   /// included, is built and said when called: the unwinding calls it after
   /// `finish`, and the caller's code that builds or hears the line finds the
   /// job over.
-  void Function()? _droppedCleanupsTrace() {
+  ///
+  /// [decided] is the outcome the job is ending with, when the caller knows
+  /// it: a [Done] whose value is not the value of a registration says that
+  /// registration's value went nowhere.
+  void Function()? _droppedCleanupsTrace(Outcome<T>? decided) {
     if (_skipped.isEmpty) {
       return null;
     }
-    final count = '${_skipped.length} conditional '
-        'cleanup${_skipped.length == 1 ? '' : 's'}';
+    String cleanups(int count) =>
+        '$count conditional cleanup${count == 1 ? '' : 's'}';
+    final count = cleanups(_skipped.length);
     // Two ways to leave them behind, and the message must not mix them up.
     // Normally the job is still deciding and the value went to somebody. But an
     // engine may finish a job by hand while it unwinds, and then the outcome is
     // already something else and the value went nowhere — saying it was handed
     // over would be a plain lie.
     final finishedAs = isFinished ? _outcome : null;
+    // A value the job did not hand over: the value of the registration is
+    // not the one the job ended with. Unless it is inside the result, nobody
+    // holds it now, and nothing will dispose of it.
+    if (finishedAs == null && decided is Done<T>) {
+      final value = decided.value;
+      final kept = [
+        for (final cleanup in _skipped)
+          if (cleanup.value != null && !identical(cleanup.value, value))
+            cleanup.value,
+      ];
+      if (kept.isNotEmpty) {
+        return () => _debug(
+              () => '$this ended $decided without the value of '
+                  '${cleanups(kept.length)} (${kept.join(', ')}): unless it '
+                  'is inside the result, nothing will dispose of it',
+            );
+      }
+    }
     return () => _debug(
           () => finishedAs != null
               ? '$this was finished as $finishedAs with $count left aside'
@@ -1904,7 +1927,7 @@ abstract class JobBase<T> implements Job<T> {
         // closures for as long as anyone holds the handle — the job is
         // over, and the list is a field now, not a local that dies with the
         // call.
-        final sayDropped = _droppedCleanupsTrace();
+        final sayDropped = _droppedCleanupsTrace(_pendingCancel ?? outcome);
         _skipped.clear();
         _disposing = false;
         final decided = _pendingCancel ?? outcome;

@@ -414,6 +414,109 @@ void main() {
     );
   });
 
+  group('a value the job did not hand over', () {
+    const kept = 'Job(open) ended Done(null) without the value of 1 '
+        'conditional cleanup (db): unless it is inside the result, nothing '
+        'will dispose of it';
+
+    List<String> tracesOf(void Function() body) {
+      final traces = <String>[];
+      Job.debug = traces.add;
+      fakeAsync((async) {
+        body();
+        async.flushTimers();
+      });
+      return [
+        for (final line in traces)
+          if (line.contains('conditional cleanup')) line,
+      ];
+    }
+
+    test('a body that returns null instead of the value is named', () {
+      expect(
+        tracesOf(() {
+          Job<String?>(key: 'open', (ctx) async {
+            await ctx.abandonable(() => 'db', discard: (db) {});
+            return null;
+          });
+        }),
+        [kept],
+      );
+    });
+
+    test('so is a branch of a group', () {
+      expect(
+        tracesOf(() {
+          Job<List<String?>>(
+            (ctx) => ctx.runAll([
+              Job.deferred<String?>(key: 'open', (ctx) async {
+                await ctx.abandonable(() => 'db', discard: (db) {});
+                return null;
+              }),
+            ]),
+          );
+        }),
+        [kept],
+      );
+    });
+
+    test('and a job of void', () {
+      expect(
+        tracesOf(() {
+          Job<void>(key: 'open', (ctx) async {
+            await ctx.abandonable(() => 'db', discard: (db) {});
+          });
+        }),
+        [kept],
+      );
+    });
+
+    test('a value inside the result is named too: the line says unless', () {
+      const inside = 'Job(open) ended Done((db, 1)) without the value of 1 '
+          'conditional cleanup (db): unless it is inside the result, nothing '
+          'will dispose of it';
+      expect(
+        tracesOf(() {
+          Job<(String, int)>(key: 'open', (ctx) async {
+            final db = await ctx.abandonable(() => 'db', discard: (db) {});
+            return (db, 1);
+          });
+        }),
+        [inside],
+      );
+    });
+
+    test('a registration that was disowned says nothing', () {
+      final closed = <String>[];
+      expect(
+        tracesOf(() {
+          Job<void>(key: 'open', (ctx) async {
+            final db = await ctx.abandonable(
+              () => 'db',
+              discard: (db) => closed.add('discard $db'),
+            );
+            ctx.disown(db);
+            closed.add('closed $db');
+          });
+        }),
+        isEmpty,
+      );
+      expect(closed, ['closed db']);
+    });
+
+    test('a value returned is handed over, as before', () {
+      expect(
+        tracesOf(() {
+          Job<String>(
+            key: 'open',
+            (ctx) => ctx.abandonable(() => 'db', discard: (db) {}),
+          );
+        }),
+        ['Job(open) handed its value over: 1 conditional cleanup dropped'],
+      );
+    });
+  });
+
   test('a branch finished by hand at the second barrier says so too', () {
     final traces = <String>[];
     Job.debug = traces.add;

@@ -136,6 +136,13 @@ The database is never closed, and nobody holds it. This is what happens:
 2. `return null` ends the job `Done(null)`. `discard` asks how the job ended,
    not where the database went, so it does not run.
 
+The debug channel, switched on with `Job.debug = print;`, names the value the
+job ended without:
+
+```text
+Job() ended Done(null) without the value of 1 conditional cleanup (database): unless it is inside the result, nothing will dispose of it
+```
+
 ### Closing what the job keeps back
 
 ```dart

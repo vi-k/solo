@@ -1501,7 +1501,16 @@ CHANGELOG обоих пакетов с переводами. Пункт 8 `docs/
 и `JobContextBase`, наборы `start_test.dart` ядра и `solo`, строка `ctx.start`
 в таблице «The context at a glance» README ядра с переводом и её сторож, записи
 CHANGELOG. Ответ `ctx.start` на `children.md` и разница
-с `ctx.run(child).ignore()` — в волне документов. Следующий — M5.
+с `ctx.run(child).ignore()` — в волне документов. M5 закоммичен:
+`_droppedCleanupsTrace` получает исход, с которым задача кончается, и `Done`,
+чьё значение не значение регистрации, называет строкой «ended Done(…) without
+the value of …»; строка процитирована в первой попытке «A value the job keeps
+back» `cleanup.md` с переводом, тесты — в `debug_test.dart`
+и `cleanup_rakes_test.dart`. Код 0.3.0 весь в `main`. Следующее — волна
+документов: разбиение `observing.md` и `errors.md`, `docs/settled.md` (пункт 8
+и прочие), страницы, которые задевают M7, M4 и L4 (`jobs.md`, `mistakes.md`,
+`testing.md`, `children.md` обоих пакетов, `outcomes.md`, `extending.md`,
+README трёх пакетов), потом полное ревью перед выпуском.
 
 Имя ядра решено 2026-09-19: держатель `job` ответил, и владелец остаётся
 на `async_job`. Напоминаний больше не нужно, переписку не продолжать; разбор —

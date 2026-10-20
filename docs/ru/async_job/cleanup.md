@@ -137,6 +137,13 @@ outcome: Done(null)
 2. `return null` кончает задачу `Done(null)`. `discard` смотрит, чем кончилась
    задача, а не куда ушла база, поэтому не выполняется.
 
+Отладочный канал, который включается строкой `Job.debug = print;`, называет
+значение, без которого задача кончилась:
+
+```text
+Job() ended Done(null) without the value of 1 conditional cleanup (database): unless it is inside the result, nothing will dispose of it
+```
+
 ### Закрыть то, что задача не отдаёт
 
 ```dart

@@ -595,7 +595,7 @@ final class _RunAllGroup<T> {
       // Traced by the group and not by the branch: by the time it reaches
       // the end of its own unwinding the list is already empty, and the
       // receiver of the values would learn nothing.
-      final trace = branch.job._droppedCleanupsTrace();
+      final trace = branch.job._droppedCleanupsTrace(_provisionalOf(branch));
       if (trace != null) {
         traces.add(trace);
       }

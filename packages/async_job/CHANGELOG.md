@@ -175,7 +175,11 @@ new wording.
   [Answering for errors](doc/observing.md#answering-for-errors).
 - The debug channel names a job that handed its value over and dropped the
   conditional registrations that went with it. See
-  [Registering on arrival](doc/cleanup.md#registering-on-arrival).
+  [Registering on arrival](doc/cleanup.md#registering-on-arrival). A job that
+  ended `Done` without the value of such a registration is named with that
+  value instead: unless the value is inside the result, nothing will dispose of
+  it. See
+  [A value the job keeps back](doc/cleanup.md#a-value-the-job-keeps-back).
 
 ### Fixed
 

@@ -65,6 +65,11 @@ Future<Database> open([String name = 'database']) async {
   return Database(name);
 }
 
+/// The line of the debug channel for the first attempt of keeping back.
+const keptBackLine = 'Job() ended Done(null) without the value of 1 '
+    'conditional cleanup (database): unless it is inside the result, nothing '
+    'will dispose of it';
+
 /// What each `text` block of the page says, in the order of the page.
 const quoted = [
   [
@@ -82,6 +87,7 @@ const quoted = [
     'database opened',
     'outcome: Done(null)',
   ],
+  [keptBackLine],
   [
     'database opened',
     'database closed',
@@ -371,6 +377,19 @@ void main() {
       });
     });
 
+    test('the debug channel names the value, as the page quotes', () {
+      final printed = <String>[];
+      Job.debug = printed.add;
+      fakeAsync((async) {
+        Job<Database?>(first.keptBack);
+        async.flushTimers();
+      });
+      expect(
+        printed.where((line) => line.contains('conditional cleanup')),
+        quoted[3],
+      );
+    });
+
     test('a current schema hands the database over open, as before', () {
       stage.schemaCurrent = true;
       fakeAsync((async) {
@@ -456,7 +475,7 @@ void main() {
       });
       expect(
         printed.where((line) => line.contains('handed its value over')),
-        quoted[5],
+        quoted[6],
       );
     });
 
@@ -468,7 +487,7 @@ void main() {
         page.onArrival(first.connecting()).start();
         async.flushTimers();
       });
-      expect(printed, containsAll(quoted[5]));
+      expect(printed, containsAll(quoted[6]));
     });
 
     test('the second attempt closes the database when migration fails', () {
@@ -1304,45 +1323,45 @@ void main() {
 
     test('the body that keeps the database back closes it', () {
       stage.schemaCurrent = false;
-      expect(scene(() => Job<Database?>(page.closingKeptBack)), quoted[3]);
+      expect(scene(() => Job<Database?>(page.closingKeptBack)), quoted[4]);
     });
 
     test('the first attempt of the hand-over leaks the database', () {
       stage.migrateError = MigrationFailed();
       expect(
         scene(() => first.unregistered(first.connecting())..start()),
-        quoted[4],
+        quoted[5],
       );
     });
 
     test('the second attempt loses the database to the checkpoint of run', () {
-      expect(scene(() => cancelledOnceConnected(nextLine)), quoted[6]);
+      expect(scene(() => cancelledOnceConnected(nextLine)), quoted[7]);
     });
 
     test('registering on arrival closes the database on that cancellation', () {
-      expect(scene(() => cancelledOnceConnected(page.onArrival)), quoted[7]);
+      expect(scene(() => cancelledOnceConnected(page.onArrival)), quoted[8]);
     });
 
     test('the first attempt of unregistering closes the cursor twice', () {
       expect(
         scene(() => Job<void>(first.unregisteringAfter), cancelAt: 5),
-        quoted[8],
+        quoted[9],
       );
     });
 
     test('unregistering inside the action closes the cursor once', () {
       expect(
         scene(() => Job<void>(page.unregisteringInside), cancelAt: 5),
-        quoted[9],
+        quoted[10],
       );
     });
 
     test('a cancellation after the return closes what the body returned', () {
-      expect(scene(page.afterTheReturn, cancelAt: 15), quoted[11]);
+      expect(scene(page.afterTheReturn, cancelAt: 15), quoted[12]);
     });
 
     test('a plain await closes what it opened once the job is cancelled', () {
-      expect(scene(page.plainAwait, cancelAt: 5), quoted[10]);
+      expect(scene(page.plainAwait, cancelAt: 5), quoted[11]);
     });
   });
 
