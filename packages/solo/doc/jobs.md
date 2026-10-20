@@ -78,6 +78,17 @@ Job<void> setZoom(double zoom) => run<Ready, void>(
     );
 ```
 
+The code of this section and of the ones below belongs to one controller of a
+camera, a `Solo<CameraState>`. The two type arguments of `job` and `run` are
+the working type — the states the body works in, here `Ready`, one of the
+states of the camera — and the type of the result.
+[State and rules](state.md#state-and-rules) on the state page is about the
+first.
+
+A `key` is what queue policies match on, and `describe` supplies the label used
+by logs, observers and `toString()`: `Job(key: label)`. Without a description
+the representation is `Job(key)`.
+
 `job`, `add` and `run` all return `SoloJob<T>`, which implements `Job<T>` and
 adds `isQueued`. All three are protected, as are `collect` and `accumulate`: a
 controller exposes domain methods such as `load()` or `setZoom()`, and callers
@@ -98,17 +109,6 @@ the job's failure goes when nobody reads its outcome and nothing else answers
 for it. Inside `ctx.unattended` the zone is the one that work was started from,
 as in the core. A child is not the queue's to start: it runs where `ctx.run`
 starts it, like any `Job.deferred`.
-
-The code of this section and of the ones below belongs to one controller of a
-camera, a `Solo<CameraState>`. The two type arguments of `job` and `run` are
-the working type — the states the body works in, here `Ready`, one of the
-states of the camera — and the type of the result.
-[State and rules](state.md#state-and-rules) on the state page is about the
-first.
-
-A `key` is what queue policies match on, and `describe` supplies the label used
-by logs, observers and `toString()`: `Job(key: label)`. Without a description
-the representation is `Job(key)`.
 
 ## Queue and policies
 

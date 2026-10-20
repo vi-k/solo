@@ -380,7 +380,7 @@ section linked beside it.
 | A last batch has to go out before the screen goes away | `close(mode: SoloCloseMode.drain)` | [Cancelling and closing a controller](doc/cancellation.md#cancelling-and-closing-a-controller) |
 | `close()` does not come back | `controller.pending` | [What is holding the controller](doc/diagnostics.md#what-is-holding-the-controller) |
 | A journal needs to say which operation changed the state | `SoloTransition` in `onChange` | [Watching every controller](doc/diagnostics.md#watching-every-controller) |
-| A call must finish before the queue goes on | `ctx.join` | [Cancellation](doc/cancellation.md) |
+| A cancelled job must wait for the call it started | `ctx.join` | [Each wait in its place](doc/cancellation.md#each-wait-in-its-place) |
 | A call fails now and then and should be tried again | a loop in the body with `ctx.pause` between attempts | [Retrying a failed call](doc/errors.md#retrying-a-failed-call) |
 | A step of several calls must not be interrupted halfway | `ctx.uncancellable` | [Protecting a step or a whole job](doc/cancellation.md#protecting-a-step-or-a-whole-job) |
 | A resource opened by a call nobody waited for still has to close | `dispose` or `discard` on `ctx.abandonable` and `ctx.join` | [Taking a resource from a call](doc/resources.md#taking-a-resource-from-a-call) |
