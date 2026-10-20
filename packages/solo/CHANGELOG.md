@@ -6,6 +6,16 @@ package's too: see
 
 ### Breaking changes
 
+- **`Solo.onError` is a notice, and the new `Solo.onUnanswered` answers for an
+  error nobody else has: one no outcome carries, and a `Failed` nobody
+  observes.** Setting `Solo.observer`, or overriding `onError` without calling
+  `super`, no longer keeps such an error out of the zone: set
+  `Solo.unansweredHandler`, a `SoloUnansweredHandler`, or override
+  `onUnanswered`. A `Failed` nobody observes reaches the zone as it did in
+  `0.2.0` only while neither is there: with a handler set, or `onUnanswered`
+  overridden, it goes there, a microtask after the job ends, and not to the
+  zone. So does the failure of a `canStart` that threw. See
+  [Answering for an error](doc/errors.md#answering-for-an-error).
 - **`Job.ignore()` is renamed to `Job.ignoreFailure()`** in `async_job`.
 - **A job is continued once, by one `then` or by handles of `shared()`,** in
   `async_job`: a second `then` on a job of `run` throws a `StateError`.
@@ -29,16 +39,6 @@ package's too: see
 - **The controller's synchronous read is `currentState`, not `state`.** A body
   reads `ctx.state`. See
   [Why `currentState` and not `state`](README.md#why-currentstate-and-not-state).
-- **`Solo.onError` is a notice, and the new `Solo.onUnanswered` answers for an
-  error nobody else has: one no outcome carries, and a `Failed` nobody
-  observes.** Setting `Solo.observer`, or overriding `onError` without calling
-  `super`, no longer keeps such an error out of the zone: set
-  `Solo.unansweredHandler`, a `SoloUnansweredHandler`, or override
-  `onUnanswered`. A `Failed` nobody observes reaches the zone as it did in
-  `0.2.0` only while neither is there: with a handler set, or `onUnanswered`
-  overridden, it goes there, a microtask after the job ends, and not to the
-  zone. So does the failure of a `canStart` that threw. See
-  [Answering for an error](doc/errors.md#answering-for-an-error).
 - **The state of a closed controller is final.** Once the engine has finished
   closing, `externalSetState` throws a `StateError`: the new `Solo.isFinished`
   is the guard, and the new hook `Solo.onClose` is the last place a write goes
@@ -53,6 +53,8 @@ package's too: see
   or overrides it.** The new instance members are `currentState`, `isFinished`,
   `isDraining`, `pending`, `onClose`, `onUnanswered`, `addListener`,
   `removeListener`, `hasListeners` and `onListenerError`.
+- **A class that implements `SoloContext` itself adds `abandonable`, `pause`,
+  `runAll` and `start`,** the new members of `JobContext` in `async_job`.
 - **`Policy.droppable` refuses a key held by a job of another result type with
   an `ArgumentError`, and refuses before it takes the new job.** See
   [A key for each request](doc/jobs.md#a-key-for-each-request).
@@ -102,7 +104,9 @@ let go of no longer reaches `onError` as a failure.
 
 `onError` of the controller and of the observer hears each failure and each
 `Cancelled` inside a `ParallelWaitError` in a call of its own, where `0.2.0`
-handed it the whole error once. See
+handed it the whole error once. A `Failed` with such an error that nobody
+observes reaches `Solo.unansweredHandler`, or the zone, failure by failure and
+without its cancellations, where `0.2.0` passed the zone the whole error. See
 [Answering for an error](doc/errors.md#answering-for-an-error).
 
 A dropped duplicate prints `Cancelled(duplicate)`, a job replaced under

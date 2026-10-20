@@ -2,6 +2,15 @@
 
 ### Breaking changes
 
+- **`JobObserver.onError` is a notice, and the new `JobAnswerer` answers for an
+  error nobody else has: one no outcome carries, and a `Failed` nobody
+  observes.** An observer from `0.2.0` compiles unchanged, and the errors it
+  used to swallow reach the zone; one that mixes in `JobAnswerer` and overrides
+  `onUnanswered` answers for them there. A `Failed` nobody observes reaches the
+  zone as it did in `0.2.0` only while nobody answers: an observer that answers
+  gets it in `onUnanswered`, a microtask after the job ends, and the zone does
+  not. A `Failed` made of a cancellation still goes to the zone. See
+  [Answering for errors](doc/observing.md#answering-for-errors).
 - **`Job.ignore()` is renamed to `Job.ignoreFailure()`.**
 - **`JobBase.whenDone` is renamed to `JobBase.untilFinished`,** so that a
   `when` member is always a listener: `whenCancelled` and the new
@@ -15,17 +24,9 @@
   In `0.2.0`, cancelling one of two continuations cancelled the source and the
   other. Give each branch a handle of `shared()`: cancelling a handle ends it
   at once and leaves the source alone. A class that implements `Job` itself
-  adds `shared`. See
+  adds `shared`, and a subclass of `JobBase` with a member of that name renames
+  its own. See
   [A handle for each branch](doc/chains.md#a-handle-for-each-branch).
-- **`JobObserver.onError` is a notice, and the new `JobAnswerer` answers for an
-  error nobody else has: one no outcome carries, and a `Failed` nobody
-  observes.** An observer from `0.2.0` compiles unchanged, and the errors it
-  used to swallow reach the zone; one that mixes in `JobAnswerer` and overrides
-  `onUnanswered` answers for them there. A `Failed` nobody observes reaches the
-  zone as it did in `0.2.0` only while nobody answers: an observer that answers
-  gets it in `onUnanswered`, a microtask after the job ends, and the zone does
-  not. A `Failed` made of a cancellation still goes to the zone. See
-  [Answering for errors](doc/observing.md#answering-for-errors).
 - **`JobBase`, `JobContextBase` and `JobStatus` moved to
   `package:async_job/engine.dart`.** `JobBase.debug` is `Job.debug` now. See
   [Building on the core](doc/extending.md).
@@ -73,7 +74,9 @@
 - **`JobContext` gains `pause`,** a delay a cancellation ends. See
   [Letting time pass](doc/time.md#letting-time-pass).
 - **A class that implements `JobContext` itself adds `abandonable`, `pause`,
-  `runAll` and `start`.** One that extends `JobContextBase` inherits them.
+  `runAll` and `start`.** One that extends `JobContextBase` inherits them. An
+  extension named `start` on `JobContext` is shadowed by the new `start`
+  without a warning.
 
 ### Deprecated
 
@@ -115,7 +118,10 @@ on to the zone. See
 [Cleanup order and late results](doc/cleanup.md#cleanup-order-and-late-results).
 
 `onError` hears each failure and each cancellation inside a `ParallelWaitError`
-in a call of its own, where `0.2.0` handed it the whole error once. See
+in a call of its own, where `0.2.0` handed it the whole error once. A `Failed`
+with such an error that nobody observes is answered for failure by failure, and
+its cancellations stay out: the zone gets each failure on its own, where
+`0.2.0` passed it the whole error. See
 [Answering for errors](doc/observing.md#answering-for-errors).
 
 A child's cancellation that the body lets out names the child as the job prints

@@ -8,6 +8,12 @@ and
 
 ### Breaking changes
 
+- **`Solo.onError` is a notice in `solo`, and the new `Solo.onUnanswered`
+  answers for an error nobody else has: one no outcome carries, and a `Failed`
+  nobody observes.** Setting `Solo.observer`, or overriding `onError` without
+  calling `super`, no longer keeps such an error out of the zone: see the same
+  entry of
+  [the `solo` changelog](https://github.com/vi-k/solo/blob/main/packages/solo/CHANGELOG.md).
 - **`Job.ignore()` is renamed to `Job.ignoreFailure()`** in `async_job`.
 - **The state handlers of `run` and `job` are renamed in `solo`: `onError` to
   `ifFailed`, `onCancel` to `ifCancelled`.**

@@ -29,6 +29,21 @@ final class Answers extends JobObserver with JobAnswerer {
       answered.add('$job: $error');
 }
 
+/// Answers like [Answers], keeps what it hears, and with [cancels] cancels
+/// the job it hears an error of.
+final class Hears extends Answers {
+  final bool cancels;
+  final heard = <String>[];
+
+  Hears({this.cancels = false});
+
+  @override
+  void onError(Job<Object?> job, Object error, StackTrace stackTrace) {
+    heard.add('$job: $error');
+    if (cancels) job.cancel().ignore();
+  }
+}
+
 /// A source that runs until [gate] completes.
 Job<int> gated(Completer<int> gate, {String? key, JobObserver? observer}) =>
     Job<int>(
@@ -190,6 +205,37 @@ void main() {
       });
     });
 
+    for (final alternate in [false, true]) {
+      test(
+          'a 5000-deep nest of '
+          '${alternate ? 'handles and continuations' : 'handles'} is '
+          'cancelled from the source', () {
+        late List<Job<int>> jobs;
+        late bool allCancelled;
+        final errors = zoneOf((async) {
+          final gate = Completer<int>();
+          final source = gated(gate);
+          jobs = <Job<int>>[source];
+          for (var i = 0; i < 5000; i++) {
+            final last = jobs.last;
+            jobs.add(
+              alternate && i.isOdd
+                  ? last.then<int>((ctx, value) => value)
+                  : last.shared(),
+            );
+          }
+          async.flushMicrotasks();
+          source.cancel().ignore();
+          async.flushMicrotasks();
+          allCancelled = jobs.every((job) => job.outcome is Cancelled);
+          gate.complete(1);
+        });
+        expect(errors, isEmpty);
+        expect(allCancelled, isTrue);
+        expect(jobs.every((job) => job.outcome is Cancelled), isTrue);
+      });
+    }
+
     test('waits while its source refuses a cancellation', () {
       fakeAsync((async) {
         final gate = Completer<int>();
@@ -317,6 +363,7 @@ void main() {
     test('a handle made after the answer carries it with no answer', () {
       final answers = Answers();
       late Job<int> handle;
+      late List<String> answeredBefore;
       final errors = zoneOf((async) {
         final source = Job<int>(
           key: 'load',
@@ -324,10 +371,167 @@ void main() {
           (ctx) async => throw StateError('load'),
         );
         async.flushMicrotasks();
-        expect(answers.answered, ['Job(load): Bad state: load']);
+        answeredBefore = [...answers.answered];
         handle = source.shared(observer: answers);
       });
+      expect(answeredBefore, ['Job(load): Bad state: load']);
       expect(handle.outcome, isA<Failed>());
+      expect(answers.answered, ['Job(load): Bad state: load']);
+      expect(errors, isEmpty);
+    });
+
+    test('a branch the group answers for and its handle answer once', () {
+      final answers = Answers();
+      late Job<int> handle;
+      final errors = zoneOf((async) {
+        // `a` refuses the cancellation the failure of `b` brings, and fails
+        // after the group chose `b`: the group answers for `a`, and the
+        // handle carries the same failure.
+        final a = Job.deferred<int>(
+          key: 'a',
+          cancellable: false,
+          (ctx) async {
+            await Future<void>.delayed(const Duration(milliseconds: 1));
+            throw StateError('a');
+          },
+        );
+        final b = Job.deferred<int>(
+          key: 'b',
+          (ctx) async => throw StateError('b'),
+        );
+        Job<void>(key: 'parent', observer: answers, (ctx) async {
+          handle = a.shared(observer: answers);
+          await ctx.runAll([b, a]);
+        }).ignoreFailure();
+      });
+      expect(handle.outcome, isA<Failed>());
+      expect(answers.answered.where((line) => line.endsWith('state: a')), [
+        anyOf('Job(a): Bad state: a', 'Job(shared): Bad state: a'),
+      ]);
+      expect(errors, isEmpty);
+    });
+
+    test('a handle made after the group answered for a branch carries it', () {
+      final answers = Answers();
+      late ChildJob<int> a;
+      late Job<int> handle;
+      late List<String> answeredBefore;
+      final errors = zoneOf((async) {
+        a = Job.deferred<int>(
+          key: 'a',
+          cancellable: false,
+          (ctx) async {
+            await Future<void>.delayed(const Duration(milliseconds: 1));
+            throw StateError('a');
+          },
+        );
+        final b = Job.deferred<int>(
+          key: 'b',
+          (ctx) async => throw StateError('b'),
+        );
+        Job<void>(
+          key: 'parent',
+          observer: answers,
+          (ctx) => ctx.runAll([b, a]),
+        ).ignoreFailure();
+        async.elapse(const Duration(milliseconds: 2));
+        answeredBefore = [...answers.answered];
+        handle = a.shared(observer: answers);
+      });
+      expect(answeredBefore, ['Job(a): Bad state: a']);
+      expect(handle.outcome, isA<Failed>());
+      expect(answers.answered, ['Job(a): Bad state: a']);
+      expect(errors, isEmpty);
+    });
+
+    test('the observer of a handle hears it once', () {
+      final answers = Answers();
+      final hears = Hears();
+      final errors = zoneOf((async) {
+        Job<int>(
+          key: 'load',
+          observer: answers,
+          (ctx) async => throw StateError('load'),
+        ).shared(observer: hears);
+      });
+      expect(hears.heard, ['Job(shared): Bad state: load']);
+      expect(hears.answered, ['Job(shared): Bad state: load']);
+      expect(answers.answered, isEmpty);
+      expect(errors, isEmpty);
+    });
+
+    test('a handle its observer cancels on hearing it answers for it', () {
+      final answers = Answers();
+      final cancels = Hears(cancels: true);
+      late Job<int> handle;
+      final errors = zoneOf((async) {
+        handle = Job<int>(
+          key: 'load',
+          observer: answers,
+          (ctx) async => throw StateError('load'),
+        ).shared(observer: cancels);
+      });
+      expect(handle.outcome, isA<Cancelled>());
+      expect(cancels.answered, ['Job(shared): Bad state: load']);
+      expect(answers.answered, isEmpty);
+      expect(errors, isEmpty);
+    });
+
+    test('a handle cancelled on hearing it and another answer once', () {
+      final answers = Answers();
+      final cancels = Hears(cancels: true);
+      final errors = zoneOf((async) {
+        Job<int>(
+          key: 'load',
+          observer: answers,
+          (ctx) async => throw StateError('load'),
+        )
+          ..shared(observer: cancels)
+          ..shared(observer: answers);
+      });
+      expect(
+        [...cancels.answered, ...answers.answered],
+        ['Job(shared): Bad state: load'],
+      );
+      expect(errors, isEmpty);
+    });
+
+    test('a continuation cancelled on hearing it and a handle answer once', () {
+      final answers = Answers();
+      final cancels = Hears(cancels: true);
+      final errors = zoneOf((async) {
+        final source = Job<int>(
+          key: 'load',
+          observer: answers,
+          (ctx) async => throw StateError('load'),
+        );
+        source.shared().then<int>((ctx, value) => value, observer: cancels);
+        source.shared(observer: answers);
+      });
+      expect(
+        [...cancels.answered, ...answers.answered],
+        hasLength(1),
+      );
+      expect(errors, isEmpty);
+    });
+
+    test('a handle cancelled on hearing an answered failure gives no answer',
+        () {
+      final answers = Answers();
+      final cancels = Hears(cancels: true);
+      late Job<int> handle;
+      final errors = zoneOf((async) {
+        final source = Job<int>(
+          key: 'load',
+          observer: answers,
+          (ctx) async => throw StateError('load'),
+        );
+        async.flushMicrotasks();
+        handle = source.shared(observer: cancels);
+      });
+      expect(handle.outcome, isA<Cancelled>());
+      expect(cancels.heard, ['Job(shared): Bad state: load']);
+      expect(cancels.answered, isEmpty);
       expect(answers.answered, ['Job(load): Bad state: load']);
       expect(errors, isEmpty);
     });

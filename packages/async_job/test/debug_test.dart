@@ -5,6 +5,7 @@ import 'dart:async';
 
 import 'package:async_job/async_job.dart';
 import 'package:fake_async/fake_async.dart';
+import 'package:meta/meta.dart';
 import 'package:test/test.dart';
 
 import 'support/cancel_reason.dart';
@@ -504,6 +505,42 @@ void main() {
       expect(closed, ['closed db']);
     });
 
+    test('a value equal to the result but another object is named', () {
+      const equal = 'Job(open) ended Done(db) without the value of 1 '
+          'conditional cleanup (db): unless it is inside the result, nothing '
+          'will dispose of it';
+      expect(
+        tracesOf(() {
+          Job<_Name>(key: 'open', (ctx) async {
+            await ctx.abandonable(() => const _Name('db'), discard: (db) {});
+            return _Name(['d', 'b'].join());
+          });
+        }),
+        [equal],
+      );
+    });
+
+    test('a job finished by hand while it unwinds says that instead', () {
+      const aside = 'Job(open) was finished as Cancelled(handler: by hand) '
+          'with 1 conditional cleanup left aside';
+      late ProbeJob<String?> job;
+      expect(
+        tracesOf(() {
+          job = ProbeJob<String?>(key: 'open', (ctx) async {
+            await ctx.abandonable(() => 'db', discard: (db) {});
+            ctx.onDispose(() async {
+              job.drop(const Cancelled('by hand'));
+              await delay(5);
+            });
+            return null;
+          })
+            ..launch()
+            ..ignoreFailure();
+        }),
+        [aside],
+      );
+    });
+
     test('a value returned is handed over, as before', () {
       expect(
         tracesOf(() {
@@ -757,4 +794,21 @@ final class _RecordingObserver extends JobObserver {
 
   @override
   void onLog(Job<Object?> job, Object? message) {}
+}
+
+/// A value equal to another of the same text, and not the same object.
+@immutable
+final class _Name {
+  final String text;
+
+  const _Name(this.text);
+
+  @override
+  bool operator ==(Object other) => other is _Name && other.text == text;
+
+  @override
+  int get hashCode => text.hashCode;
+
+  @override
+  String toString() => text;
 }

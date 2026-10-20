@@ -1,10 +1,47 @@
 part of 'job_base.dart';
 
+/// Cancellations a chain passes along, drained by the call that queued the
+/// first of them. One queue for continuations and handles of [Job.shared]:
+/// a chain may alternate the two.
+final _chainCancellations = Queue<void Function()>();
+var _drainingChainCancellations = false;
+
+/// Cancels [target] for [cause] with a [ChainCancelReason]; an error the
+/// cancellation throws goes to [by].
+///
+/// Drains within this synchronous call, but does not recurse through every
+/// link of the chain: a long chain must not grow the call stack.
+void _forwardCancellation(
+  JobBase<Object?> by,
+  JobBase<Object?> target,
+  Cancelled cause,
+) {
+  _chainCancellations.add(() {
+    try {
+      target.cancelWith(
+        Cancelled.by(
+          reason: ChainCancelReason(cause: cause),
+          started: target.isRunning,
+          stackTrace: cause.stackTrace,
+        ),
+      );
+    } on Object catch (error, stackTrace) {
+      by.notifyError(error, stackTrace);
+    }
+  });
+  if (_drainingChainCancellations) return;
+  _drainingChainCancellations = true;
+  try {
+    while (_chainCancellations.isNotEmpty) {
+      _chainCancellations.removeFirst()();
+    }
+  } finally {
+    _drainingChainCancellations = false;
+  }
+}
+
 /// A self-starting root that waits for another job before running its body.
 final class _ThenJob<T, R> extends JobBase<R> {
-  static final _cancellations = Queue<void Function()>();
-  static var _drainingCancellations = false;
-
   JobBase<T>? _source;
   FutureOr<R> Function(JobContext ctx, T value)? _onValue;
   Done<T>? _sourceValue;
@@ -24,39 +61,13 @@ final class _ThenJob<T, R> extends JobBase<R> {
     _zone.run(() => unawaited(source._done.future.then(_sourceFinished)));
   }
 
-  void _cancelFromSource(Cancelled cause) => _forwardCancellation(this, cause);
+  void _cancelFromSource(Cancelled cause) =>
+      _forwardCancellation(this, this, cause);
 
   void _cancelSource(Cancelled cause) {
     final source = _source;
     if (source == null || source.isFinished) return;
-    _forwardCancellation(source, cause);
-  }
-
-  void _forwardCancellation(JobBase<Object?> target, Cancelled cause) {
-    // Drain within this synchronous call, but do not recurse through every
-    // predecessor and successor. A long chain must not grow the call stack.
-    _cancellations.add(() {
-      try {
-        target.cancelWith(
-          Cancelled.by(
-            reason: ChainCancelReason(cause: cause),
-            started: target.isRunning,
-            stackTrace: cause.stackTrace,
-          ),
-        );
-      } on Object catch (error, stackTrace) {
-        notifyError(error, stackTrace);
-      }
-    });
-    if (_drainingCancellations) return;
-    _drainingCancellations = true;
-    try {
-      while (_cancellations.isNotEmpty) {
-        _cancellations.removeFirst()();
-      }
-    } finally {
-      _drainingCancellations = false;
-    }
+    _forwardCancellation(this, source, cause);
   }
 
   void _sourceFinished(Outcome<T> result) {
@@ -88,9 +99,12 @@ final class _ThenJob<T, R> extends JobBase<R> {
         // An observer may cancel this continuation while hearing the error.
         // The failure is this continuation's now, and a cancellation that
         // decides its outcome covers it, as it would a failure of a body.
+        // The answer goes on the mark: a handle beside the source's other
+        // carriers shares it with them.
         final decided = outcome ?? _pendingCancel ?? result;
         finish(decided);
         if (decided is Cancelled && !heardAlready) {
+          if (!_ignored) _answer.answered = true;
           _reportCovered(result, announced: true);
         }
       case Cancelled():

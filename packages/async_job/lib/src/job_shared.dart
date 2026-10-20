@@ -26,14 +26,11 @@ final class _SharedJob<T> extends JobBase<T> {
   }
 
   /// At the mark: the outcome of the source is decided, and its cleanup is
-  /// nothing this handle waits for.
-  void _sourceCancelled(Cancelled cause) => cancelWith(
-        Cancelled.by(
-          reason: ChainCancelReason(cause: cause),
-          started: false,
-          stackTrace: cause.stackTrace,
-        ),
-      );
+  /// nothing this handle waits for. Through the queue a chain of
+  /// continuations uses: handles nest, and a deep nest must not grow the
+  /// call stack.
+  void _sourceCancelled(Cancelled cause) =>
+      _forwardCancellation(this, this, cause);
 
   /// Lets go of the source: it no longer waits for this handle before it
   /// answers for an unobserved failure, and no longer tells it of a
@@ -67,14 +64,19 @@ final class _SharedJob<T> extends JobBase<T> {
         _noteAnnounced(failed.error);
         notifyObserver(failed.error, failed.stackTrace);
         // An observer that cancels the handle while hearing the error ends
-        // it there and then, and the cancellation covers the failure.
+        // it there and then, and the cancellation covers the failure. The
+        // handle answers for it then, on the mark the other carriers read.
         if (isFinished) {
           if (!heardAlready) {
+            if (!_ignored) _answer.answered = true;
             _reportCovered(failed, announced: true);
           }
           return;
         }
         finish(failed);
+      // Not reached as things stand: a cancellation the source accepts
+      // comes through [Job.whenCancelled] before its outcome, and detaches
+      // the handle. Kept for the switch, and in case that order changes.
       case final Cancelled cancelled:
         _sourceCancelled(cancelled);
     }

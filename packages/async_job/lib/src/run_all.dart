@@ -637,9 +637,12 @@ final class _RunAllGroup<T> {
       // — so only the route for an error nobody answered for is left, and the
       // group is the last one holding it. A branch that [Job.ignoreFailure] was
       // called on wants no answer: the notice stays, as it does for a failure
-      // of the body of a cancelled job.
-      if (!branch.job._ignored) {
-        branch.job._handleUnanswered(outcome.error, outcome.stackTrace);
+      // of the body of a cancelled job. A handle of [Job.shared] carries the
+      // same failure on the branch's mark: whichever answers first answers.
+      final job = branch.job;
+      if (!job._ignored && !job._failureAnswered) {
+        job._answer.answered = true;
+        job._handleUnanswered(outcome.error, outcome.stackTrace);
       }
     }
     if (refusal != null) {

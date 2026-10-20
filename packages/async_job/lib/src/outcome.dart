@@ -45,7 +45,8 @@ final class ParentCancelReason extends CancelReason {
   String get name => 'parent';
 }
 
-/// A cancellation forwarded between jobs connected by [Job.then].
+/// A cancellation forwarded between jobs connected by [Job.then], or from a
+/// source to a handle of [Job.shared].
 final class ChainCancelReason extends CancelReason {
   /// The cancellation of the adjacent job that caused this request.
   final Cancelled cause;
@@ -150,14 +151,15 @@ final class Done<T> extends Outcome<T> {
 ///
 /// The core hands it to [JobObserver.onError] first, once. If nobody then
 /// observes the job through [Job.done], [Job.value], [Job.ignoreFailure] or
-/// failure forwarding by [Job.then], somebody answers for [error]:
-/// [JobAnswerer.onUnanswered] of an observer that answers, by default the
-/// job's creation zone through [Zone.handleUncaughtError], where it goes
-/// straight away without such an observer. The check runs on the microtask
-/// after completion; a continuation attached within that grace period gets a
-/// chance to receive the outcome first. A [Failed] made of a cancellation — a
-/// [Cancelled], or a `ParallelWaitError` of nothing but cancellations — goes
-/// to that zone past the answer, which never sees a cancellation.
+/// failure forwarding by [Job.then] or a handle of [Job.shared], somebody
+/// answers for [error]: [JobAnswerer.onUnanswered] of an observer that answers,
+/// by default the job's creation zone through [Zone.handleUncaughtError], where
+/// it goes straight away without such an observer. The check runs on the
+/// microtask after completion; a continuation attached within that grace period
+/// gets a chance to receive the outcome first. A [Failed] made of a
+/// cancellation — a [Cancelled], or a `ParallelWaitError` of nothing but
+/// cancellations — goes to that zone past the answer, which never sees a
+/// cancellation.
 ///
 /// This is the error that has an outcome of its own. The failure of the body of
 /// a job that ends [Cancelled] has none: whoever reads that outcome gets the

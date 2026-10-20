@@ -10,8 +10,9 @@ part of 'job_base.dart';
 /// A job that ends with [Failed] and is never observed hands its error to
 /// [JobAnswerer.onUnanswered] of its observer, and without one that answers
 /// to the zone that created the job, the way Dart reports an unhandled
-/// `Future` error. Touching [done], [value] or [ignoreFailure], or forwarding a
-/// failure through [then], counts as observing it; see [ignoreFailure].
+/// `Future` error. Touching [done], [value] or [ignoreFailure], or carrying a
+/// failure on through [then] or a handle of [shared], counts as observing it;
+/// see [ignoreFailure].
 abstract interface class Job<T> {
   /// Creates a job and starts it on the next microtask.
   ///
@@ -438,12 +439,11 @@ abstract interface class Job<T> {
   /// itself by throwing [Cancelled], as it ends. For a job cancelled before
   /// start, it is when the job is dropped.
   ///
-  /// The continuation of [then] is not a child, and when it is cancelled
-  /// depends on where the cancellation came from. Cancelling a source
-  /// cancels its continuation before these callbacks run; a continuation
-  /// that is cancelled cancels its source first. A handle of [shared]
-  /// registers here when it is made, so it is cancelled in this pass, in
-  /// registration order; a cancelled handle never reaches its source.
+  /// The continuation of [then] is not a child. It registers here when it is
+  /// made, as a handle of [shared] does, and cancelling the source cancels
+  /// both through that registration: a callback registered before them may
+  /// find them not yet cancelled. A continuation that is cancelled cancels
+  /// its source first; a cancelled handle never reaches its source.
   ///
   /// If cancellation has already been accepted and its callbacks have run,
   /// calls [callback] immediately, even if the job has finished. Registering
